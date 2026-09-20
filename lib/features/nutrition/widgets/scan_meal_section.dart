@@ -280,7 +280,12 @@ class _ScanMealSectionState extends ConsumerState<ScanMealSection> {
 
   Future<void> _pickAndScan(ImageSource source) async {
     final picker = ImagePicker();
-    final image = await picker.pickImage(source: source);
+    final image = await picker.pickImage(
+      source: source,
+      imageQuality: 85,
+      maxWidth: 1600,
+      maxHeight: 1600,
+    );
     if (image == null) return;
 
     final imageBytes = await image.readAsBytes();

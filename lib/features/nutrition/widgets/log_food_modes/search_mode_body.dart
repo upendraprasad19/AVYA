@@ -17,8 +17,7 @@ import '../saved_meals_section.dart';
 /// SEARCH mode body for `LogFoodSheet`. Three sub-filters at the top:
 ///   `[All] [Saved Meals] [Recent]`.
 /// Body switches based on the active filter:
-///   * All        — full-text food search field (same UI as the
-///                  legacy showFoodSearchSheet).
+///   * All        — full-text food search field.
 ///   * Saved Meals — embedded SavedMealsSection.
 ///   * Recent     — most-recent foodlog rows from nutritionBox.
 class SearchModeBody extends ConsumerStatefulWidget {
@@ -204,7 +203,7 @@ class _SearchResultsList extends ConsumerWidget {
                 (item['standard_serving_g'] as num?)?.toDouble() ?? 100.0;
             await ref.read(foodLogProvider.notifier).logFood(
                   food: item,
-                  mealType: _mealTypeForNow(),
+                  mealType: ref.read(mealTypeProvider),
                   quantityG: qty,
                 );
             onLogged();
@@ -303,7 +302,7 @@ Future<void> _relogFromHistory(
   );
   await NutritionWriteService.instance.logMeal(
     date: DateTime.now(),
-    mealType: _mealTypeForNow(),
+    mealType: ref.read(mealTypeProvider),
     items: [item],
     source: NutritionWriteSource.manualSearch,
   );
@@ -313,12 +312,4 @@ Future<void> _relogFromHistory(
   // tree (defensive — matches the pattern used elsewhere).
   ref.invalidate(dailyNutritionProvider);
   ref.invalidate(recentFoodLogsProvider);
-}
-
-String _mealTypeForNow() {
-  final hour = DateTime.now().hour;
-  if (hour < 11) return 'breakfast';
-  if (hour < 15) return 'lunch';
-  if (hour < 19) return 'dinner';
-  return 'snacks';
 }

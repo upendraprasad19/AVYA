@@ -37,7 +37,12 @@ class NutritionWriteService {
   NutritionWriteService._();
   static final instance = NutritionWriteService._();
 
-  /// Allowed values for `mealType`.
+  /// Allowed values for `mealType`. Keep in sync with `mealSlotKeys`
+  /// (lib/features/nutrition/services/meal_slot_inference.dart) — not
+  /// imported directly since core/services must not depend on features/.
+  /// A mismatch here silently drops every write for the disagreeing value
+  /// (round-2 plan review, 2026-09-20 — the singular 'snack' vs this set's
+  /// plural 'snacks' was exactly this class of drift).
   static const Set<String> _allowedMealTypes = {
     'breakfast',
     'lunch',
@@ -349,6 +354,132 @@ class NutritionWriteService {
     }
 
     return WriteResult.ok(logKey);
+  }
+
+  /// Moves a logged meal to a different meal-type slot (obs 1 retag), and
+  /// optionally applies macro edits in the same atomic write.
+  ///
+  /// Mirrors `WorkoutWriteService.moveExerciseLogs` (workout_write_service.dart
+  /// :728-854): recompute the canonical key with the new slot, write there
+  /// (merging item lists on collision), delete the old key.
+  ///
+  /// LOCAL-ONLY cloud consistency, same accepted residual as
+  /// moveExerciseLogs and as this file's own deleteLog/editLog: this method
+  /// just mutates Hive and fires the general `syncNutritionData()` fan-out,
+  /// which upserts the NEW slot by natural key (user_id, date, meal_type).
+  /// The vacated OLD slot's cloud row is not explicitly tombstoned here —
+  /// neither is it by deleteLog or editLog anywhere else in this file, so
+  /// this does not introduce a new class of gap, only inherits the existing
+  /// one. See sync_nutrition.dart:296-314 for the natural-key upsert this
+  /// depends on (id deliberately omitted per diagnose c9f2a7).
+  Future<WriteResult> moveMealLog({
+    required String logKey,
+    required String newMealType,
+    Map<String, dynamic>? macroUpdates,
+  }) async {
+    if (!isAllowedMealType(newMealType)) {
+      return WriteResult.fail(
+        'moveMealLog: mealType "$newMealType" not in {breakfast,lunch,dinner,snacks}',
+      );
+    }
+    final box = HiveService.instance.nutritionBox;
+    final raw = box.get(logKey);
+    if (raw == null) {
+      return WriteResult.fail('logKey $logKey not found');
+    }
+    final row = Map<String, dynamic>.from(raw as Map);
+    if (row['meal_type'] == newMealType) {
+      // No-op move — just apply macro updates via the existing path.
+      if (macroUpdates != null && macroUpdates.isNotEmpty) {
+        return editLog(logKey: logKey, updates: macroUpdates);
+      }
+      return WriteResult.ok(logKey);
+    }
+
+    final rawItems = ((row['items'] as List?) ?? const [])
+        .map((e) => FoodItem.fromMap(Map<String, dynamic>.from(e as Map)))
+        .toList();
+    final dateStr = row['date'] as String?;
+    if (dateStr == null || dateStr.isEmpty) {
+      return WriteResult.fail('moveMealLog: source row has no date');
+    }
+    final date = DateTime.parse(dateStr);
+    final newKey =
+        computeLogKey(istDate: date, mealType: newMealType, items: rawItems);
+
+    row['meal_type'] = newMealType;
+    row['id'] = newKey;
+    row['log_key'] = newKey;
+    row['logged_at'] = DateTime.now().toUtc().toIso8601String();
+
+    final existingAtDestination = box.get(newKey);
+    if (existingAtDestination is Map) {
+      // Collision — two logs landing in the same slot+item-hash bucket.
+      // Merge items (union) and recompute totals, same shape as editLog's
+      // items-changed branch.
+      final destRow = Map<String, dynamic>.from(existingAtDestination);
+      final destItems = ((destRow['items'] as List?) ?? const [])
+          .map((e) => FoodItem.fromMap(Map<String, dynamic>.from(e as Map)))
+          .toList();
+      final mergedItems = [...destItems, ...rawItems];
+      row['items'] = mergedItems.map((i) => i.toMap()).toList();
+      row['total_calories'] = mergedItems.fold<double>(
+          0, (a, i) => a + i.kcalWithFallback).round();
+      row['total_protein'] =
+          mergedItems.fold<double>(0, (a, i) => a + i.protein).round();
+      row['total_carbs'] =
+          mergedItems.fold<double>(0, (a, i) => a + i.carbs).round();
+      row['total_fat'] =
+          mergedItems.fold<double>(0, (a, i) => a + i.fat).round();
+      row['total_fiber'] =
+          mergedItems.fold<double>(0, (a, i) => a + i.fiber).round();
+    }
+
+    if (macroUpdates != null) {
+      // Applied AFTER any collision-merge recompute above (B-pass finding,
+      // 2026-09-20) — the merge branch unconditionally recomputes every
+      // total_* field from the merged item list, so applying macroUpdates
+      // BEFORE it let a caller's explicit macro edit be silently discarded
+      // whenever the destination slot already held a log. Reject an
+      // `items` key here the same way editLog's own recompute branch owns
+      // `items` exclusively — a caller passing items through macroUpdates
+      // would otherwise silently bypass the totals recompute and corrupt
+      // the row (no current caller does this; guarded defensively per
+      // review round 1).
+      final safeMacroUpdates = Map<String, dynamic>.from(macroUpdates)
+        ..remove('items');
+      row.addAll(safeMacroUpdates);
+    }
+
+    // FC6 — clamp AFTER the collision-merge recompute AND macroUpdates
+    // (not before either), so whichever version of `row` actually gets
+    // written (moved-only, merged-with-destination, or macro-overridden)
+    // has its totals + per-item values bounded. Mirrors editLog/
+    // appendItemsToMeal, which both clamp after their own recompute for
+    // the same reason (review round 1 finding).
+    _clampMealPayload(row);
+
+    try {
+      await box.put(newKey, row);
+      await box.delete(logKey);
+    } catch (e, st) {
+      debugPrint('[NutritionWriteService] moveMealLog put/delete failed: $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'nutrition_write_service_move_meal_log'));
+      return WriteResult.fail('Hive write failed: $e');
+    }
+
+    _invalidateNutritionProviders();
+    try {
+      unawaited(SyncService.instance.syncNutritionData());
+      unawaited(SyncService.instance.pushSnapshot());
+    } catch (e, st) {
+      debugPrint('[NutritionWriteService] sync skipped (non-fatal): $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'nutrition_write_service_sync_skipped'));
+    }
+
+    return WriteResult.ok(newKey);
   }
 
   /// Soft-deletes with undo (matches DeleteNutritionLogNotifier pattern).

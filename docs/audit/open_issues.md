@@ -5056,6 +5056,36 @@ hash against `backups/applied_migrations.json` (the ledger Gate 14 already valid
 instead of by live version prefix — then the gate would be a ledger-vs-disk check, which
 Gate 14 already is, which is the argument for retiring.
 
+## OI-226 — ai-proxy chat/tool-calling Gemini exhaustion paths have no reportGeminiExhaustion alert wiring
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-09-20 · filed via mint_oi.sh from branch `claude/food-logging-observations-126ab3`
+
+The `food-logging-observations` batch (Tasks 9-10, commits `72a4aa7d`/`c84eb796`) wired
+`reportGeminiExhaustion` at exactly the three `ai-proxy` call sites its own plan named —
+`food_text_analysis` (`:443`), `scan_meal` (`:603`), `cart_auditor` (`:646`) — because that
+plan was scoped to the nutrition/food-logging observations, not to ai-proxy as a whole.
+Round-2 plan review (2026-09-20) correctly noted that ai-proxy has at least two more
+`geminiChat`/`geminiChatWithTools` call sites with no equivalent wiring: the plain chat
+path (`index.ts:692`, destructures `{ content, modelUsed, tokensUsed }` — no `lastError`)
+and the 3-round tool-calling path (around `:1009`, `geminiChatWithTools`). A terminal Gemini
+failure on either path currently degrades silently to the client with zero founder
+visibility, the exact gap Task 9/10 closed for the nutrition endpoints.
+
+**This is accepted as an explicit plan-scope boundary, not a defect in the delivered
+work** — the plan's Task 10 brief names the three call sites verbatim in its Files section,
+and extending coverage to the chat/tool-calling paths is a separate unit of work (the
+`geminiChatWithTools` path has a materially different retry/round shape than the
+single-shot `geminiChat` calls Task 9 instrumented). Filed here per §4.2 so the gap has a
+tracked terminal state rather than living only in a round-2 review nobody re-reads.
+
+**Fix direction:** wire `reportGeminiExhaustion` (or a `lastError`-carrying equivalent) at
+`index.ts:692` and inside `geminiChatWithTools`'s exhaustion path, using the same
+`endpoint` discriminator pattern (`"chat"` / `"chat_tool_call"`) Task 10 established for
+the three existing sites.
+
 ## OI-224 — alert_cron_function_dead threshold unreachable, cron_call_log pruned at 7 days
 
 - **Status**: OPEN
@@ -5111,4 +5141,3 @@ worth keeping.
 (simplest, lowest blast-radius) unless the per-function-silent-forever gap
 above is also worth closing in the same pass — if so, do the per-function
 spare instead, since it fixes both.
-

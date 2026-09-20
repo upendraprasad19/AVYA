@@ -168,7 +168,12 @@ class CartAuditorSection extends ConsumerWidget {
     }
 
     final picker = ImagePicker();
-    final image = await picker.pickImage(source: ImageSource.gallery);
+    final image = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+      maxWidth: 1600,
+      maxHeight: 1600,
+    );
     if (image == null) return;
 
     final imageBytes = await image.readAsBytes();

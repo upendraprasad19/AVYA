@@ -11,6 +11,7 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/features/nutrition/widgets/custom_food_sheet.dart';
+import '../providers/nutrition_provider.dart' show mealTypeProvider;
 
 /// Opens the barcode scanner as a full-screen bottom sheet.
 void showBarcodeScanSheet(BuildContext context) {
@@ -120,20 +121,6 @@ class _BarcodeBodyState extends ConsumerState<BarcodeBody> {
   BarcodeFood? _food;
   String? _error;
   double _servingG = 100;
-  String _mealType = 'snacks';
-
-  @override
-  void initState() {
-    super.initState();
-    final hour = DateTime.now().hour;
-    if (hour < 11) {
-      _mealType = 'breakfast';
-    } else if (hour < 15) {
-      _mealType = 'lunch';
-    } else if (hour < 19) {
-      _mealType = 'dinner';
-    }
-  }
 
   @override
   void dispose() {
@@ -185,7 +172,7 @@ class _BarcodeBodyState extends ConsumerState<BarcodeBody> {
     // Barcode source is free + unlimited (no counter increment).
     final result = await NutritionWriteService.instance.logMeal(
       date: DateTime.now(),
-      mealType: _mealType,
+      mealType: ref.read(mealTypeProvider),
       items: [
         FoodItem(
           name: food.brand != null
@@ -572,13 +559,17 @@ class _BarcodeBodyState extends ConsumerState<BarcodeBody> {
   Widget _buildMealTypeSelector() {
     const types = ['breakfast', 'lunch', 'dinner', 'snacks'];
     const labels = ['Breakfast', 'Lunch', 'Dinner', 'Snacks'];
+    // Watch so the pills rebuild when the user picks a different slot,
+    // or when the sheet's lockedSlot postFrameCallback selects one —
+    // mirrors scan_meal_section.dart's MealSlotChip pattern.
+    final mealType = ref.watch(mealTypeProvider);
 
     return Row(
       children: List.generate(types.length, (i) {
-        final isActive = _mealType == types[i];
+        final isActive = mealType == types[i];
         return Expanded(
           child: GestureDetector(
-            onTap: () => setState(() => _mealType = types[i]),
+            onTap: () => ref.read(mealTypeProvider.notifier).select(types[i]),
             child: Container(
               margin: EdgeInsets.only(right: i < types.length - 1 ? 6 : 0),
               padding: const EdgeInsets.symmetric(vertical: 8),

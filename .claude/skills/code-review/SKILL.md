@@ -267,6 +267,25 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   (`test/contracts/induction_screen_commit_error_reset_test.dart`). A
   finding's "same class, other site" clause is a second, separate fix
   obligation — not satisfied by fixing only the site named first.
+- **2026-09-20 (a)** — blast-radius **platform** — branch
+  `claude/food-logging-observations-126ab3` (food-logging-observations: 10-task
+  whole-branch diff, split across 2 parallel reviewers for lenses 1-5 / 6-8).
+  **6 findings (0 P0, 2 P1, 2 P2, 2 P3); 0 false_alarm — all 6 fixed in-batch,
+  mutation-proven individually.** Review:
+  `docs/reviews/food-logging-observations-bpass.md`.
+  **Tuning — a platform-tier finding can recur IDENTICALLY across two
+  independent files in the same batch.** Both `hive_user_session.dart` (a
+  perf refactor) and `ai-proxy`/`_shared/gemini_failure_alert.ts` (a new
+  alert feature) were platform-tier per `blast_radius.yaml` and shipped with
+  no `feature_flag`, even though each task's own review had separately
+  assessed the change as low-risk on functional-correctness grounds. The
+  lens (`blast_radius_mismatch`) does not need the reviewer to disagree with
+  that risk assessment — it only needs to check whether the STRUCTURAL
+  requirement (§4.6, keyed on the file's blast-radius tier, not the
+  reviewer's confidence) was satisfied. Confirming this lens on EVERY
+  platform/catastrophic-tier file touched, independently of how safe any
+  single task's own review judged its own change, catches exactly this
+  class — worth keeping as a checklist item rather than a judgment call.
 - **2026-09-19 (c)** — blast-radius **platform** — branch `oi204-delta-sync`
   (OI-204: extends the proven `_syncScheduledWorkouts` fingerprint-skip
   pattern to `_syncExerciseLogs`/`_syncNutritionLogs`, plus the

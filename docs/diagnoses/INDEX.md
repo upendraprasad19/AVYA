@@ -10,6 +10,34 @@ Re-run: `dart run scripts/build_bug_index.dart`
 - 2026-09-20 d3e8a1 — CI went red on `main` twice in a row (merge-triggered run 35485792369, then its rerun) on the "Supabase Integration Tests" job: `test/edge_functions/ai_proxy_test.dart`'s "AI Proxy — Free Tier T19: AI…
 - 2026-09-16 a1c6b9 — Founder reported (APK 1.0.0+43, two screenshots) that the AI Coach chat showed "I had trouble reaching the model. Try again in a moment." on every turn since the previous day, including a plain "hi"…
 
+### diet_plan_immediate_load_no_modal (1 bugs)
+- 2026-09-20 6642b5 — Opening the Diet Plan screen shows a blank spinner behind a "Saved Diet Plan Found — load it or generate fresh?" modal, even though the saved plan is already available synchronously from local Hive…
+
+### gemini_failure_alert (2 bugs)
+- 2026-09-20 c7f4d1 — `reportGeminiExhaustion` used a constant `source` string ("ai_proxy_gemini_exhausted") for every one of the 3 ai-proxy request types (food_text_analysis, scan_meal, cart_auditor) it is called from —…
+- 2026-09-20 b6e2a4 — Tasks 9-10 of this batch (commits 72a4aa7d, c84eb796) added `reportGeminiExhaustion` — a new write into the `public.alerts` table, reused by the existing `trg_dispatch_critical_alert_notify` trigger…
+
+### not_applicable (1 bugs)
+- 2026-09-20 a8f3c6 — Merging `claude/food-logging-observations-126ab3` into `main` (a conflicted merge, resolved with `git commit`, which runs `pre-commit` -> the merge-commit regression-catalog walk) reported "at least…
+
+### auth_hive_owner_agreement (3 bugs)
+- 2026-09-20 f4c8b1 — Task 8 of this batch (commit 5bb7a995) changed HiveUserSession's 7 user-scoped box opens from a sequential `for` loop to `Future.wait(userScopedBoxRoots.map(openOne))`. `hive_user_session.dart` is…
+- 2026-07-02 a7f2e1 — In-session account switch (sign-out userA → sign-in userB as a DIFFERENT user) leaves every mixin tab (Home/Train/Nutrition/Profile) stuck on the loading SKELETON forever, until a full page reload.…
+- 2026-06-21 b8e3f1 — Full-charter web E2E (2026-06-21, OBS-6): in-session sign-out → sign-in as a DIFFERENT user → blank Home (and a cold-boot deep-link to /coach/induction showed "Something went wrong"). Root cause:…
+
+### meal_slot_inference_drift (1 bugs)
+- 2026-09-20 1261a4 — Opening "LOG TO LUNCH" (or any locked-slot CTA) and logging via the Search tab or the Barcode tab could silently write to a different meal slot than the one the user explicitly tapped — the sheet's…
+
+### meal_slot_ui_selection (1 bugs)
+- 2026-09-20 e1c5b8 — Four related defects surfaced across B-pass reviewer B and the round-2 context-blind plan review, all in the same meal-slot vocabulary/ reactivity surface Task 5-7 of this batch introduced or touched:…
+
+### nutrition_log_retag (2 bugs)
+- 2026-09-20 a3f6c9 — NutritionWriteService.moveMealLog's collision-merge branch (two logs retagged into the same destination slot+item-hash bucket) wrote merged totals (total_calories/protein/carbs/fat/fiber) WITHOUT ever…
+- 2026-09-20 d9a3f7 — NutritionWriteService.moveMealLog applied a caller's `macroUpdates` map to `row` BEFORE the collision-merge branch (destination slot already holds a log) ran. The collision-merge branch…
+
+### scan_meal_image_downscale (1 bugs)
+- 2026-09-20 1dded5 — Scan Meal fails instantly on any full-resolution camera photo with "Check your connection and try again." ai-proxy rejects base64-encoded images over ~5.6MB decoded before calling Gemini.
+
 ### exercise_log_sync_fingerprint_skip (1 bugs)
 - 2026-09-19 d3f8a6 — OI-204 (docs/audit/open_issues.md:4432-4485, filed 2026-09-16). Live `client_errors` telemetry on the founder's account showed 34x `sync_exercise_logs` timeouts + 11x `sync_nutrition_logs` timeouts in…
 
@@ -609,10 +637,6 @@ rather than a Hive box. (1 bugs)
 
 ### workout_schedule_write_path (1 bugs)
 - 2026-07-03 f3b2e8 — WorkoutScheduleWriteService.pauseRange (workout_schedule_write_service.dart:120,140) aliased `final box = _hive.workoutBox;` then did a bare `await box.put(key, map)` for each paused day, with…
-
-### auth_hive_owner_agreement (2 bugs)
-- 2026-07-02 a7f2e1 — In-session account switch (sign-out userA → sign-in userB as a DIFFERENT user) leaves every mixin tab (Home/Train/Nutrition/Profile) stuck on the loading SKELETON forever, until a full page reload.…
-- 2026-06-21 b8e3f1 — Full-charter web E2E (2026-06-21, OBS-6): in-session sign-out → sign-in as a DIFFERENT user → blank Home (and a cold-boot deep-link to /coach/induction showed "Something went wrong"). Root cause:…
 
 ### urine_color_logs (1 bugs)
 - 2026-06-28 b6d3f9 — HealthWriteService.logUrine writes urine_color_<date> into healthBox, then fires SyncService.syncNutritionData(). But syncNutritionData's fan-out is _syncNutritionLogs + _syncWaterLogs +…
@@ -1277,6 +1301,16 @@ rather than a Hive box. (1 bugs)
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
 | 2026-09-20 | d3e8a1 | CI went red on `main` twice in a row (merge-triggered run 35485792369, then its rerun) on the "Supabase Integration Tests" job: `test/edge_functions/ai_proxy_test.dart`'s "AI Proxy — Free Tier T19: AI… | coach_chat_history_replay | test/edge_functions/ai_proxy_hard_failure_lib_test.dart |
+| 2026-09-20 | 6642b5 | Opening the Diet Plan screen shows a blank spinner behind a "Saved Diet Plan Found — load it or generate fresh?" modal, even though the saved plan is already available synchronously from local Hive… | diet_plan_immediate_load_no_modal | test/widgets/diet_plan_screen_no_modal_test.dart |
+| 2026-09-20 | c7f4d1 | `reportGeminiExhaustion` used a constant `source` string ("ai_proxy_gemini_exhausted") for every one of the 3 ai-proxy request types (food_text_analysis, scan_meal, cart_auditor) it is called from —… | gemini_failure_alert | supabase/functions/_shared/gemini_failure_alert_test.ts |
+| 2026-09-20 | b6e2a4 | Tasks 9-10 of this batch (commits 72a4aa7d, c84eb796) added `reportGeminiExhaustion` — a new write into the `public.alerts` table, reused by the existing `trg_dispatch_critical_alert_notify` trigger… | gemini_failure_alert | supabase/functions/_shared/gemini_failure_alert_test.ts |
+| 2026-09-20 | a8f3c6 | Merging `claude/food-logging-observations-126ab3` into `main` (a conflicted merge, resolved with `git commit`, which runs `pre-commit` -> the merge-commit regression-catalog walk) reported "at least… | not_applicable | test/contracts/hive_user_session_box_open_parallel_test.dart |
+| 2026-09-20 | f4c8b1 | Task 8 of this batch (commit 5bb7a995) changed HiveUserSession's 7 user-scoped box opens from a sequential `for` loop to `Future.wait(userScopedBoxRoots.map(openOne))`. `hive_user_session.dart` is… | auth_hive_owner_agreement | test/contracts/hive_user_session_box_open_parallel_test.dart |
+| 2026-09-20 | 1261a4 | Opening "LOG TO LUNCH" (or any locked-slot CTA) and logging via the Search tab or the Barcode tab could silently write to a different meal slot than the one the user explicitly tapped — the sheet's… | meal_slot_inference_drift | test/widgets/log_food_sheet_search_respects_locked_slot_test.dart |
+| 2026-09-20 | e1c5b8 | Four related defects surfaced across B-pass reviewer B and the round-2 context-blind plan review, all in the same meal-slot vocabulary/ reactivity surface Task 5-7 of this batch introduced or touched:… | meal_slot_ui_selection | test/nutrition/meal_slot_vocabulary_test.dart |
+| 2026-09-20 | a3f6c9 | NutritionWriteService.moveMealLog's collision-merge branch (two logs retagged into the same destination slot+item-hash bucket) wrote merged totals (total_calories/protein/carbs/fat/fiber) WITHOUT ever… | nutrition_log_retag | test/contracts/nutrition_log_retag_writer_to_reader_test.dart |
+| 2026-09-20 | d9a3f7 | NutritionWriteService.moveMealLog applied a caller's `macroUpdates` map to `row` BEFORE the collision-merge branch (destination slot already holds a log) ran. The collision-merge branch… | nutrition_log_retag | test/contracts/nutrition_log_retag_writer_to_reader_test.dart |
+| 2026-09-20 | 1dded5 | Scan Meal fails instantly on any full-resolution camera photo with "Check your connection and try again." ai-proxy rejects base64-encoded images over ~5.6MB decoded before calling Gemini. | scan_meal_image_downscale | test/contracts/scan_meal_image_downscale_test.dart |
 | 2026-09-19 | d3f8a6 | OI-204 (docs/audit/open_issues.md:4432-4485, filed 2026-09-16). Live `client_errors` telemetry on the founder's account showed 34x `sync_exercise_logs` timeouts + 11x `sync_nutrition_logs` timeouts in… | exercise_log_sync_fingerprint_skip | test/contracts/sync_exercise_log_payload_hash_index_writer_to_reader_test.dart |
 | 2026-09-19 | c7d2e4 | `dart run scripts/check_sot_behavioral_test_paths.dart` printed `[Gate 42] PASS: all 133 SoT concepts have behavioral_test_path; 7 carry presence_only: true` for ANY non-empty value — a fixture… | sot_registry_behavioral_test_path_resolution | test/scripts/sot_behavioral_test_paths_gate_test.dart |
 | 2026-09-19 | d6f1b8 | Founder-flagged verbosity + a live writer/reader-drift bug found while investigating it. Muster asked 3 questions (injuries, wake/workout time, physique focus) AFTER the induction narrative's "I… | muster_to_profile_bridge | test/contracts/muster_to_profile_bridge_behavioral_test.dart |

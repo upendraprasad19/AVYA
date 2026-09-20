@@ -615,6 +615,44 @@ concepts:
       Hive nlog_* contract: total_calories computed from items[];
       per-item shape {name, quantity_g, calories, protein, carbs, fat, fiber}.
 
+  - concept: nutrition_log_retag
+    domain: nutrition
+    behavioral_test_path: test/contracts/nutrition_log_retag_writer_to_reader_test.dart
+    description: |
+      Moving a logged meal to a different meal-type slot (obs 1, 2026-09-20
+      brainstorm). Rekeys the nlog_* Hive row (meal_type is embedded in the
+      key: nlog_<date>_<mealType>_<hash>) rather than a field-only update,
+      because the cloud natural key is (user_id, date, meal_type) and a
+      field-only update risks the FK-violation class fixed by diagnose
+      c9f2a7. LOCAL-ONLY cloud consistency (same accepted residual as
+      moveExerciseLogs and this file's own deleteLog/editLog) — the vacated
+      old slot's cloud row is not explicitly tombstoned.
+    writers:
+      - file: lib/core/services/nutrition_write_service.dart
+        line_range: 359-483
+        method: moveMealLog
+        notes: |
+          Reads the row at the old key, recomputes the key via
+          computeLogKey with the new mealType, merges on collision,
+          writes at the new key, deletes the old key. macroUpdates is
+          applied AFTER the collision-merge recompute (not before) so an
+          explicit caller override survives a merge instead of being
+          silently overwritten by it (diagnose
+          2026-09-20-movemeal-log-macro-updates-clobbered-d9a3f7).
+    reader_manifest_complete: true
+    readers:
+      - file: lib/features/nutrition/widgets/todays_meals_card.dart
+        line_range: 73-86
+        method: TodaysMealsCard.build (grouping by meal_type)
+        semantic: aggregated
+        fields_read: [meal_type, meal_type_label]
+        notes: |
+          Corrected 2026-09-20 (review round 1) — the brief's original
+          entry listed [meal_type, id, log_key], but this line range only
+          reads meal_type_label (falling back to meal_type) to bucket the
+          row into a slot; id/log_key are read elsewhere in this same
+          widget (rendering/dismissible keys), not by this grouping loop.
+
   - concept: food_log_delete_with_undo
     domain: nutrition
     behavioral_test_path: test/contracts/food_log_delete_with_undo_behavioral_test.dart
@@ -5237,7 +5275,7 @@ concepts:
         method: deleteAll
         notes: delegates to Hive box.deleteAll; wrapped for auto-open guard
       - file: lib/core/services/hive_user_session.dart
-        line_range: 402-423
+        line_range: 425-456
         method: deleteAllFilesForCurrentUser
         notes: hard-wipes all Hive boxes for current user on account deletion
       - file: lib/core/services/workout_write_service.dart
@@ -5249,9 +5287,9 @@ concepts:
         method: deleteLog
         notes: removes an exlog_* entry + updates exercise_log_index; fires cloud delete
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 351-428
+        line_range: 473-558
         method: deleteLog
-        notes: removes nlog_* entry from nutritionBox + fires cloud delete (shifted +~56 lines by the FC6 _clampMealPayload helper, diagnose 4e8f1b)
+        notes: removes nlog_* entry from nutritionBox + fires cloud delete (shifted by the moveMealLog insertion, obs 1 2026-09-20 batch — see nutrition_log_retag)
     reader_manifest_complete: true
     readers:
       - file: lib/features/profile/screens/delete_account_screen.dart
@@ -6534,11 +6572,11 @@ concepts:
         fields_read: []
         notes: Fired at :58/:285/:883; invalidates subscriptionInfoProvider + messageLimitProvider.
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 755-755
+        line_range: 886-886
         method: onStateChanged
         semantic: callback-invocation
         fields_read: []
-        notes: Fired at :780; invalidates the 6 nutrition providers.
+        notes: Fired at :911; invalidates the 6 nutrition providers (shifted again by the food-logging-observations fix-round's moveMealLog macroUpdates reorder, 2026-09-20).
       - file: lib/core/services/rank_service.dart
         line_range: 53-53
         method: onStateChanged
@@ -6798,9 +6836,9 @@ concepts:
       - { file: lib/core/services/seed_service.dart, line: 36, method: "SeedService._() constructor → _registerLifecycle()", notes: "Seeds are shared-box; reset is a no-op placeholder." }
     reader_manifest_complete: true
     readers:
-      - { file: lib/core/services/hive_user_session.dart, line: 268, method: "_openForUserLocked → SingletonLifecycleRegistry.notifyUserChanged()", semantic: pass-through, fields_read: [registered callback table], notes: "Fires after static owner fields + listenable flip to the new user." }
-      - { file: lib/core/services/hive_user_session.dart, line: 400, method: "_closeAllLocked → SingletonLifecycleRegistry.notifyUserChanged()", semantic: pass-through, fields_read: [registered callback table], notes: "Sign-out path." }
-      - { file: lib/core/services/hive_user_session.dart, line: 437, method: "_deleteAllFilesForCurrentUserLocked → SingletonLifecycleRegistry.notifyUserChanged()", semantic: pass-through, fields_read: [registered callback table], notes: "DPDP delete-account / factory-reset path." }
+      - { file: lib/core/services/hive_user_session.dart, line: 286, method: "_openForUserLocked → SingletonLifecycleRegistry.notifyUserChanged()", semantic: pass-through, fields_read: [registered callback table], notes: "Fires after static owner fields + listenable flip to the new user." }
+      - { file: lib/core/services/hive_user_session.dart, line: 418, method: "_closeAllLocked → SingletonLifecycleRegistry.notifyUserChanged()", semantic: pass-through, fields_read: [registered callback table], notes: "Sign-out path." }
+      - { file: lib/core/services/hive_user_session.dart, line: 455, method: "_deleteAllFilesForCurrentUserLocked → SingletonLifecycleRegistry.notifyUserChanged()", semantic: pass-through, fields_read: [registered callback table], notes: "DPDP delete-account / factory-reset path." }
     hive:
       box: in_memory_only
       key_prefix: ""

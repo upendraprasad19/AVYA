@@ -20,12 +20,12 @@ import 'package:icanbefitter/shared/widgets/screen_loading_skeleton.dart';
 import 'package:icanbefitter/shared/widgets/error_state.dart';
 import '../providers/nutrition_provider.dart';
 import '../providers/diet_plan_provider.dart';
+import '../services/meal_slot_inference.dart';
 import '../widgets/todays_meals_card.dart';
 import '../widgets/weekly_chart_card.dart';
 import '../widgets/hydration_card.dart';
 import '../widgets/your_foods_section.dart';
 import '../widgets/log_food_sheet.dart';
-import '../widgets/log_to_slot_sheet.dart';
 
 class NutritionScreen extends ConsumerStatefulWidget {
   const NutritionScreen({super.key});
@@ -292,7 +292,7 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
               onEdit: (meal) => _showEditMacrosSheet(context, meal),
               onLongPressMeal: (meal) => _showLogActionMenu(context, meal),
               onLogSlot: (slot) =>
-                  LogToSlotSheet.show(context, slot: slot),
+                  showLogFoodSheet(context, lockedSlot: slot),
             );
           }),
         ),
@@ -973,6 +973,22 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
     // items[] names → meal_type label → "Logged meal".
     final foodName = _deriveMealTitle(meal);
 
+    // Task 5 (Obs 1 — retag) — the slot selector defaults to the log's
+    // current meal_type, falling back to 'snacks' for any legacy/unknown
+    // value (e.g. the singular 'snack' TodaysMealsCard's slot vocabulary
+    // can still produce on old rows) so the selector never lands on an
+    // unselectable slot.
+    // The SAVE predicate below must compare against the SELECTOR's own
+    // initial value, not the raw `currentMealType` field — round-2 plan
+    // review finding, 2026-09-20: comparing against the raw field meant a
+    // legacy row with meal_type=='snack' (a value the selector can never
+    // hold) always read as "changed" even when the user picked no new
+    // slot, silently retagging on every macros-only edit. Both the
+    // selector's initial value and the SAVE comparison now go through the
+    // same extracted, unit-tested function so they cannot diverge again.
+    final initialSlot = resolveInitialMealSlot(meal);
+    final selectedMealType = ValueNotifier<String>(initialSlot);
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -1029,6 +1045,17 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
                   _macroField('Fiber (g)', fiberCtrl, AppColors.ok),
                 ],
               ),
+              const SizedBox(height: 14),
+              Text(
+                'MEAL SLOT',
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 2,
+                  fontSize: 10,
+                ),
+              ),
+              const SizedBox(height: 6),
+              MealSlotSelector(selectedMealType: selectedMealType),
               const SizedBox(height: 18),
               SizedBox(
                 width: double.infinity,
@@ -1043,14 +1070,30 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                   onPressed: () {
-                    ref.read(foodLogProvider.notifier).updateFoodLog(
-                          logId: logId,
-                          calories: double.tryParse(calCtrl.text) ?? 0,
-                          protein: double.tryParse(proteinCtrl.text) ?? 0,
-                          carbs: double.tryParse(carbsCtrl.text) ?? 0,
-                          fat: double.tryParse(fatCtrl.text) ?? 0,
-                          fiber: double.tryParse(fiberCtrl.text) ?? 0,
-                        );
+                    final newSlot = selectedMealType.value;
+                    final macroUpdates = {
+                      'total_calories': double.tryParse(calCtrl.text) ?? 0,
+                      'total_protein': double.tryParse(proteinCtrl.text) ?? 0,
+                      'total_carbs': double.tryParse(carbsCtrl.text) ?? 0,
+                      'total_fat': double.tryParse(fatCtrl.text) ?? 0,
+                      'total_fiber': double.tryParse(fiberCtrl.text) ?? 0,
+                    };
+                    if (newSlot != initialSlot) {
+                      NutritionWriteService.instance.moveMealLog(
+                        logKey: logId,
+                        newMealType: newSlot,
+                        macroUpdates: macroUpdates,
+                      );
+                    } else {
+                      ref.read(foodLogProvider.notifier).updateFoodLog(
+                            logId: logId,
+                            calories: macroUpdates['total_calories']!,
+                            protein: macroUpdates['total_protein']!,
+                            carbs: macroUpdates['total_carbs']!,
+                            fat: macroUpdates['total_fat']!,
+                            fiber: macroUpdates['total_fiber']!,
+                          );
+                    }
                     Navigator.of(context).pop();
                   },
                   child: Text(
@@ -1274,5 +1317,48 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
       return '${mealType[0].toUpperCase()}${mealType.substring(1)}';
     }
     return 'Logged meal';
+  }
+}
+
+/// Meal-slot selector row for the Edit Macros sheet (Task 5,
+/// food-logging-observations batch, Obs 1 — retag). Highlights whichever
+/// slot [selectedMealType] currently holds; tapping another slot's chip
+/// updates the notifier so `_showEditMacrosSheet`'s SAVE handler can read
+/// the final choice.
+///
+/// Deliberately a top-level widget (not inline sheet markup, as the plan
+/// brief originally sketched it) so it can be pumped directly in a widget
+/// test without booting the full `NutritionScreen` + its Hive/Riverpod
+/// dependency graph — see `test/widgets/edit_macros_sheet_retag_test.dart`
+/// header for the reasoning.
+class MealSlotSelector extends StatelessWidget {
+  const MealSlotSelector({super.key, required this.selectedMealType});
+
+  final ValueNotifier<String> selectedMealType;
+
+  static const slots = mealSlotKeys;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<String>(
+      valueListenable: selectedMealType,
+      builder: (context, value, _) => Row(
+        children: [
+          for (final slot in slots)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: GestureDetector(
+                onTap: () => selectedMealType.value = slot,
+                child: WardChip(
+                  label: mealSlotLabel(slot),
+                  tone: value == slot
+                      ? WardChipTone.gold
+                      : WardChipTone.neutral,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }

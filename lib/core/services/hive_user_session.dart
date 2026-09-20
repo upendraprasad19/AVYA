@@ -175,7 +175,11 @@ class HiveUserSession {
     await _migrateLegacySharedBoxes(userId);
 
     final hash = userId.replaceAll('-', '').substring(0, 8);
-    for (final root in userScopedBoxRoots) {
+    // Obs 4 (cold-start perf): open all 7 user-scoped boxes in parallel,
+    // mirroring the shared-box pattern already used in hive_service.dart
+    // :77-82. No box here has a documented open-order dependency on
+    // another — each box's adapter registration is independent.
+    Future<void> openOne(String root) async {
       final boxName = namespacedBoxName(root, userId);
       try {
         await Hive.openBox(boxName);
@@ -187,6 +191,38 @@ class HiveUserSession {
         await Hive.deleteBoxFromDisk(boxName);
         await Hive.openBox(boxName);
       }
+    }
+    // §4.6 feature-flag protocol (platform-tier path, B-pass finding
+    // 2026-09-20): `disable_parallel_hive_box_open` restores the exact
+    // pre-Obs-4 sequential behavior verbatim, in case a device-specific
+    // Hive/IO quirk makes concurrent opens of the 7 user-scoped boxes
+    // unsafe in practice despite there being no documented open-order
+    // dependency among them.
+    bool disableParallelOpen = false;
+    try {
+      disableParallelOpen = HiveService.instance.configBox
+              .get('disable_parallel_hive_box_open') ==
+          true;
+    } catch (e, st) {
+      // configBox not yet initialised (very early cold start), OR — the
+      // case this diagnose actually caught — a shared test-setup helper
+      // whose HiveService singleton's `_initialized` flag outlived a
+      // prior test's teardown (which really closed/deleted the box),
+      // so this read is the first thing in the whole suite to touch
+      // configBox from inside the ubiquitous openForUser path. Mirror
+      // the migrationBox pattern above: fall through to the default
+      // (parallel) behavior rather than let the read crash session open.
+      debugPrint(
+          '[HiveUserSession] configBox unavailable for parallel-open flag: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'hive_user_session_config_box_unavailable'));
+    }
+    if (disableParallelOpen) {
+      for (final root in userScopedBoxRoots) {
+        await openOne(root);
+      }
+    } else {
+      await Future.wait(userScopedBoxRoots.map(openOne));
     }
 
     _currentOwnerHash = hash;

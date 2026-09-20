@@ -84,6 +84,13 @@ export interface GeminiResult {
   modelUsed: string | null;
   /** Approximate token usage — totalTokenCount from Gemini's usageMetadata. */
   tokensUsed: number;
+  /**
+   * Present only when content is null: the LAST attempt's raw failure,
+   * for server-side classification/alerting (obs 6, 2026-09-20). Never
+   * surfaced to the client — callers pass this to reportGeminiExhaustion,
+   * never into an HTTP response body.
+   */
+  lastError?: { status: number | null; message: string } | null;
 }
 
 /**
@@ -110,7 +117,12 @@ export async function geminiChat(options: GeminiOptions): Promise<GeminiResult> 
 
   if (!GEMINI_API_KEY) {
     console.error("[geminiChat] GEMINI_API_KEY not configured");
-    return { content: null, modelUsed: null, tokensUsed: 0 };
+    return {
+      content: null,
+      modelUsed: null,
+      tokensUsed: 0,
+      lastError: { status: null, message: "GEMINI_API_KEY not configured" },
+    };
   }
 
   // Try primary, then (optionally) Flash-Lite. Never chain Lite → Lite.
@@ -131,6 +143,7 @@ export async function geminiChat(options: GeminiOptions): Promise<GeminiResult> 
   // roughly one full attempt list.
   const retryStartedAt = Date.now();
   const retryDeadlineMs = 20_000;
+  let lastFailure: GeminiResult | null = null;
   for (let pass = 0; pass <= retries; pass++) {
     for (const attemptModel of attempts) {
       const result = await _callOnce({
@@ -155,6 +168,7 @@ export async function geminiChat(options: GeminiOptions): Promise<GeminiResult> 
         }
         return result;
       }
+      lastFailure = result;
       console.warn(
         `[geminiChat] ${attemptModel} returned null — ${attempts.indexOf(attemptModel) < attempts.length - 1 ? "trying fallback" : "attempt list exhausted"}`,
       );
@@ -174,7 +188,7 @@ export async function geminiChat(options: GeminiOptions): Promise<GeminiResult> 
   console.error(
     `[geminiChat] All attempts failed for primary=${model} (retries=${retries})`,
   );
-  return { content: null, modelUsed: null, tokensUsed: 0 };
+  return { content: null, modelUsed: null, tokensUsed: 0, lastError: lastFailure?.lastError ?? null };
 }
 
 // ── Private: single HTTP call to Gemini. Returns null on any failure. ──
@@ -266,7 +280,12 @@ async function _callOnce(opts: {
       console.warn(
         `[geminiChat] ${opts.model} HTTP ${status}: ${preview}`,
       );
-      return { content: null, modelUsed: null, tokensUsed: 0 };
+      return {
+        content: null,
+        modelUsed: null,
+        tokensUsed: 0,
+        lastError: { status, message: preview || `HTTP ${status}` },
+      };
     }
 
     const data = await response.json();
@@ -274,10 +293,16 @@ async function _callOnce(opts: {
 
     // Safety-filter blocks or missing candidate: treat as failure.
     if (!candidate || !candidate.content?.parts) {
+      const finishReason = candidate?.finishReason ?? "unknown";
       console.warn(
-        `[geminiChat] ${opts.model} no candidate (finishReason=${candidate?.finishReason ?? "unknown"})`,
+        `[geminiChat] ${opts.model} no candidate (finishReason=${finishReason})`,
       );
-      return { content: null, modelUsed: null, tokensUsed: 0 };
+      return {
+        content: null,
+        modelUsed: null,
+        tokensUsed: 0,
+        lastError: { status: null, message: `no candidate (finishReason=${finishReason})` },
+      };
     }
 
     // Stitch multi-part responses into one string.
@@ -287,7 +312,12 @@ async function _callOnce(opts: {
       .trim();
 
     if (!text) {
-      return { content: null, modelUsed: null, tokensUsed: 0 };
+      return {
+        content: null,
+        modelUsed: null,
+        tokensUsed: 0,
+        lastError: { status: null, message: "empty text in candidate" },
+      };
     }
 
     const tokensUsed = data.usageMetadata?.totalTokenCount ?? 0;
@@ -299,14 +329,20 @@ async function _callOnce(opts: {
     };
   } catch (err) {
     clearTimeout(timer);
+    let message: string;
     if (err instanceof DOMException && err.name === "AbortError") {
-      console.warn(
-        `[geminiChat] ${opts.model} timed out (${opts.timeoutMs}ms)`,
-      );
+      message = `timed out after ${opts.timeoutMs}ms`;
+      console.warn(`[geminiChat] ${opts.model} ${message}`);
     } else {
-      console.warn(`[geminiChat] ${opts.model} threw: ${err}`);
+      message = `threw: ${String(err).slice(0, 200)}`;
+      console.warn(`[geminiChat] ${opts.model} ${message}`);
     }
-    return { content: null, modelUsed: null, tokensUsed: 0 };
+    return {
+      content: null,
+      modelUsed: null,
+      tokensUsed: 0,
+      lastError: { status: null, message },
+    };
   }
 }
 

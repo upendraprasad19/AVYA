@@ -16,10 +16,13 @@ import '../providers/diet_plan_provider.dart';
 ///   earliest time, total kcal on the right, items joined by ` · ` below.
 /// * Empty slots — [WardDashedBorder] (accent @ 27% alpha), greyed eyebrow,
 ///   `+ LOG` CTA in accent mono. When a matching entry is present in
-///   [plannedSlots] (saved diet plan), a "FROM YOUR DIET PLAN" hint row is
-///   rendered between the eyebrow and the CTA with planned kcal + item
-///   summary. Tapping invokes [onLogSlot] so the parent can open
-///   `showFoodSearchSheet` pre-filled with the planned food name.
+///   [plannedSlots] (saved diet plan), a bordered "SUGGESTED" chip + the
+///   planned item summary (dimmed, italic) render between the eyebrow and
+///   the CTA (obs 7, 2026-09-20 — replaces the earlier plain "FROM YOUR
+///   DIET PLAN" eyebrow label so a suggestion can't be mistaken for a real
+///   entry). Tapping either way invokes [onLogSlot] with just the slot
+///   key — the planned food name is NOT currently passed through to
+///   pre-fill the logging sheet.
 ///
 /// The slot order is fixed — DINNER still renders as a dashed empty slot
 /// even when SNACK is populated (do NOT collapse empties). This matches the
@@ -35,8 +38,12 @@ class TodaysMealsCard extends StatelessWidget {
   final void Function(Map<String, dynamic> meal)? onLongPressMeal;
 
   /// Invoked when the `+ LOG` CTA on an empty slot is tapped. The string is
-  /// the slot key in lowercase (`breakfast` / `lunch` / `dinner` / `snack`),
-  /// safe to pass directly as `mealType:` to `showFoodSearchSheet`.
+  /// the DISPLAY slot key from [_slotOrder] (`breakfast` / `lunch` /
+  /// `dinner` / `snack` — note the singular `snack`). Pass it straight to
+  /// `showLogFoodSheet(context, lockedSlot: slot)`
+  /// (`log_food_sheet.dart`) — `MealTypeNotifier.select` normalizes
+  /// `'snack'` to the write-vocabulary `'snacks'` before anything reads it,
+  /// so callers don't need to normalize it themselves.
   final void Function(String slot)? onLogSlot;
 
   /// Optional planned-meal hints keyed by slot (`breakfast` / `lunch` /
@@ -420,13 +427,26 @@ class _EmptySlotCard extends StatelessWidget {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'FROM YOUR DIET PLAN',
-                      style: AppTypography.monoXs.copyWith(
-                        fontSize: 9,
-                        color: AppColors.accent.withValues(alpha: 0.75),
-                        letterSpacing: 1.5,
-                        fontWeight: FontWeight.w700,
+                    // Obs 7 fix: a visible chip (not just an eyebrow label)
+                    // so a planned-but-unlogged slot can't be mistaken for
+                    // a real entry — mirrors the state-chip vocabulary
+                    // Train's DayCard already uses for planned vs done.
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                            color: AppColors.accent.withValues(alpha: 0.4)),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        'SUGGESTED',
+                        style: AppTypography.monoXs.copyWith(
+                          fontSize: 8,
+                          color: AppColors.accent.withValues(alpha: 0.75),
+                          letterSpacing: 1.5,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -435,7 +455,8 @@ class _EmptySlotCard extends StatelessWidget {
                         planned!.summary,
                         style: AppTypography.body.copyWith(
                           fontSize: 12,
-                          color: AppColors.textDim,
+                          fontStyle: FontStyle.italic,
+                          color: AppColors.textGhost,
                           height: 1.4,
                         ),
                         maxLines: 1,

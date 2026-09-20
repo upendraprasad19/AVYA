@@ -54,12 +54,15 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
     _dietPref =
         (profile['diet_preference'] as String?)?.toLowerCase() ?? 'veg';
 
-    // Check for saved plan on first entry only
+    // Check for saved plan on first entry only. Obs 8 fix: load it
+    // immediately instead of gating behind a dialog — the AppBar's
+    // existing Regenerate (:498) and Save (:514) icons already give
+    // the user both actions without a blocking modal.
     if (!_checkedSaved) {
       _checkedSaved = true;
       final savedPlan = UserRepository.instance.getSavedDietPlan();
       if (savedPlan != null) {
-        _showLoadSavedPlanDialog(savedPlan);
+        _loadSavedPlan(savedPlan);
         return;
       }
     }
@@ -293,57 +296,6 @@ class _DietPlanScreenState extends ConsumerState<DietPlanScreen> {
           textColor: AppColors.accent,
           onPressed: _sharePlanAsPdf,
         ),
-      ),
-    );
-  }
-
-  void _showLoadSavedPlanDialog(Map<String, dynamic> savedPlan) {
-    final createdAt = savedPlan['created_at'] as String?;
-    String dateLabel = 'a previous session';
-    if (createdAt != null) {
-      final dt = DateTime.tryParse(createdAt);
-      if (dt != null) {
-        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-        dateLabel = '${dt.day} ${months[dt.month - 1]}';
-      }
-    }
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          'Saved Diet Plan Found',
-          style: AppTypography.body.copyWith(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
-        ),
-        content: Text(
-          'You have a saved plan from $dateLabel. Would you like to load it or generate a fresh one?',
-          style: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              _generateFreshPlan();
-            },
-            child: Text(
-              'Generate New',
-              style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textDim),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              _loadSavedPlan(savedPlan);
-            },
-            child: Text(
-              'Load Saved',
-              style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.accent),
-            ),
-          ),
-        ],
       ),
     );
   }
