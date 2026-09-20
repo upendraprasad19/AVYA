@@ -72,7 +72,8 @@ void main() {
       'disable_parallel_hive_box_open restores the sequential fallback and '
       'still opens every box (B-pass finding, 2026-09-20 — §4.6 feature-flag '
       'protocol for a platform-tier path)', () async {
-    HiveService.instance.configBox.put('disable_parallel_hive_box_open', true);
+    await HiveService.instance.configBox
+        .put('disable_parallel_hive_box_open', true);
     addTearDown(() =>
         HiveService.instance.configBox.delete('disable_parallel_hive_box_open'));
 
