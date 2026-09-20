@@ -420,13 +420,26 @@ class _EmptySlotCard extends StatelessWidget {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'FROM YOUR DIET PLAN',
-                      style: AppTypography.monoXs.copyWith(
-                        fontSize: 9,
-                        color: AppColors.accent.withValues(alpha: 0.75),
-                        letterSpacing: 1.5,
-                        fontWeight: FontWeight.w700,
+                    // Obs 7 fix: a visible chip (not just an eyebrow label)
+                    // so a planned-but-unlogged slot can't be mistaken for
+                    // a real entry — mirrors the state-chip vocabulary
+                    // Train's DayCard already uses for planned vs done.
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                            color: AppColors.accent.withValues(alpha: 0.4)),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        'SUGGESTED',
+                        style: AppTypography.monoXs.copyWith(
+                          fontSize: 8,
+                          color: AppColors.accent.withValues(alpha: 0.75),
+                          letterSpacing: 1.5,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -435,7 +448,8 @@ class _EmptySlotCard extends StatelessWidget {
                         planned!.summary,
                         style: AppTypography.body.copyWith(
                           fontSize: 12,
-                          color: AppColors.textDim,
+                          fontStyle: FontStyle.italic,
+                          color: AppColors.textGhost,
                           height: 1.4,
                         ),
                         maxLines: 1,
