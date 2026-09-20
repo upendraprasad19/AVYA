@@ -27,6 +27,23 @@
 // text scan) already accepts that tradeoff for gates whose false-positive
 // surface is small. A block containing string literals with unbalanced braces
 // (rare in test source) could defeat the brace counter; not handled here.
+//
+// COMMENTS ARE BLANKED BEFORE ANY SCAN (diagnose d3e8a1, 2026-09-20 --
+// feedback_source_grep_strip_comments_first.md EXCEPTION 2, third instance of
+// this exact class in this repo). This gate scans the RAW `await` keyword
+// with no comment-awareness, so a tearDown block's own explanatory comment
+// discussing a PAST bare-await bug -- prose that necessarily contains the
+// word "await" -- was misread as a second, unguarded await sibling.
+// `test/edge_functions/ai_proxy_test.dart`'s `tearDownAll` has exactly this
+// shape: a single guarded `await client.auth.signOut();` preceded by a
+// multi-line comment recounting the 2026-09-10 incident that made this
+// exact call need guarding in the first place, and the comment's own prose
+// ("A bare await here turned a fully-passing file RED") tripped the gate
+// that exists to prevent a REGRESSION of it. `_blankComments` replaces every
+// `//` and `/* */` comment's characters with spaces (newlines preserved), so
+// every absolute index and line number computed downstream is unaffected --
+// the scan is simply blind to comment content, for BOTH the await keyword
+// and (as a side effect) any brace a comment might contain.
 
 /// One flagged tearDown/tearDownAll block.
 class TeardownFinding {
@@ -45,6 +62,22 @@ class TeardownFinding {
 
 int _lineOf(String s, int index) =>
     '\n'.allMatches(s.substring(0, index)).length + 1;
+
+/// [source] with every `//`-to-end-of-line and `/* ... */` comment's
+/// characters replaced by spaces (newlines preserved). Length and every
+/// newline position are IDENTICAL to [source], so an index or line number
+/// computed from the result is valid against the original text too --
+/// blanking, not stripping, is load-bearing here.
+String _blankComments(String source) {
+  var out = source.replaceAllMapped(
+    RegExp(r'/\*[\s\S]*?\*/'),
+    (m) => m.group(0)!.replaceAll(RegExp(r'[^\n]'), ' '),
+  );
+  return out.replaceAllMapped(
+    RegExp(r'//[^\n]*'),
+    (m) => ' ' * m.group(0)!.length,
+  );
+}
 
 /// Index of the '{' at [openIndex]'s matching '}', or -1 if unbalanced.
 int _matchBrace(String s, int openIndex) {
@@ -104,9 +137,10 @@ List<TeardownFinding> findUnguardedSiblingAwaits(
 }) {
   final findings = <TeardownFinding>[];
   final keyword = RegExp(r'\btearDown(All)?\s*\(');
+  final blanked = _blankComments(sourceContent);
 
-  for (final span in _blockBodies(sourceContent, keyword)) {
-    final block = sourceContent.substring(span.start, span.end + 1);
+  for (final span in _blockBodies(blanked, keyword)) {
+    final block = blanked.substring(span.start, span.end + 1);
     final guardSpans = _tryCatchSpans(block);
 
     final guardedAwaitFound =
