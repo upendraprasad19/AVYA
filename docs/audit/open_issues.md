@@ -4431,7 +4431,16 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
 
 ## OI-204 — Full-rescan sync architecture (_syncExerciseLogs/_syncNutritionLogs) times out at 45s under growing history
 
-- **Status**: OPEN
+- **Status**: CLOSED · 2026-09-19 · Both halves shipped in the
+  `oi204-delta-sync` batch: exercise-log fingerprint-skip (`a44dafb5`, Task 2)
+  and nutrition-log fingerprint-skip (Task 3, this commit — closes-diagnose
+  `d3f8a6`). Extends the proven H1b Part A pattern
+  (`sync_scheduled_payload_hash_index`) to both `_syncExerciseLogs` and
+  `_syncNutritionLogs`: a sync-owned fingerprint index lets an unchanged
+  key/slot skip its idempotent re-upsert instead of re-walking the entire
+  historical log every coalesced pass. See
+  `docs/diagnoses/2026-09-19-full-rescan-sync-timeout-d3f8a6.md` for the
+  full root cause + fix + verification detail on both domains.
 - **Blocked on**: none
 - **Verified**: 2026-09-16, `client_errors` telemetry for user `d7a67a37` (founder's
   device) + live read of `lib/core/services/sync/sync_workout.dart:185-308` and

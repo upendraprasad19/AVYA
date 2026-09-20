@@ -27,18 +27,19 @@ void main() {
 
   setUpAll(() {
     syncSrc = loadSyncServiceSource().readAsStringSync();
-    // Scope assertions to the projection block built right before the
-    // workout_log_exercises upsert call, so a coincidental match
-    // elsewhere in the file doesn't pass the test.
-    final upsertMarker = "from('workout_log_exercises').upsert(";
-    final upsertStart = syncSrc.indexOf(upsertMarker);
-    expect(upsertStart, greaterThan(0),
-        reason: 'workout_log_exercises upsert call must exist');
-    // The map literal opens within ~50 chars after `.upsert(` and closes
-    // before the `}, onConflict:` clause.
-    final blockEnd = syncSrc.indexOf('}, onConflict:', upsertStart);
-    expect(blockEnd, greaterThan(upsertStart));
-    projectionBlock = syncSrc.substring(upsertStart, blockEnd);
+    // OI-204 (plan-review round 1, finding C3): repointed from the old
+    // "}, onConflict:" slice-end anchor, which the OI-204 restructure moves
+    // away from this projection entirely -- the old anchor would have kept
+    // "passing" by silently matching the wrong region. summaryPayload is a
+    // STRONGER anchor: it also pins that the payload is a single named map
+    // the OI-204 fingerprint function can consume.
+    final payloadMarker = 'final summaryPayload = <String, dynamic>{';
+    final payloadStart = syncSrc.indexOf(payloadMarker);
+    expect(payloadStart, greaterThan(0),
+        reason: 'workout_log_exercises summaryPayload map must exist');
+    final payloadEnd = syncSrc.indexOf('};', payloadStart);
+    expect(payloadEnd, greaterThan(payloadStart));
+    projectionBlock = syncSrc.substring(payloadStart, payloadEnd);
   });
 
   group('workout_log_exercises.duration_seconds aggregate populated', () {

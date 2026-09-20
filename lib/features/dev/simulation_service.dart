@@ -124,14 +124,25 @@ class SimulationService {
       // sim re-drive's scheduled_workouts push. The full key equals this
       // prefix, so startsWith deletes exactly it.
       'sync_sched_payload_hash_index',
+      // OI-204 — same reasoning as sync_sched_payload_hash_index immediately
+      // above: a single reserved key, not an `exlog_`-prefixed one, so the
+      // entries above miss it. A survivor would mis-skip the sim re-drive's
+      // exercise-log push after resetJourney wipes cloud out-of-band.
+      'sync_exlog_payload_hash_index',
     ]);
     await _clearKeysWithPrefixes(HiveService.instance.healthBox,
         const ['weight_', 'sleep_log_', 'water_ml_', 'hydration_', 'step_']);
     await HiveService.instance.healthBox.delete('streaks');
     await HiveService.instance.healthBox.delete('steps_today');
     await HiveService.instance.healthBox.delete('steps_date');
-    await _clearKeysWithPrefixes(
-        HiveService.instance.nutritionBox, const ['nlog_']);
+    await _clearKeysWithPrefixes(HiveService.instance.nutritionBox, const [
+      'nlog_',
+      // OI-204 — same reasoning as sync_sched_payload_hash_index /
+      // sync_exlog_payload_hash_index above: a single reserved key, not an
+      // `nlog_`-prefixed one. A survivor mis-skips the sim re-drive's
+      // nutrition-log push.
+      'sync_nlog_payload_hash_index',
+    ]);
 
     // Free tier.
     await ref.read(subscriptionServiceProvider).writeSubscriptionState(
