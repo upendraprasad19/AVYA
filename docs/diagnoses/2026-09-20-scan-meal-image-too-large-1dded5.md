@@ -2,7 +2,6 @@
 bug_id: 1dded5
 date: 2026-09-20
 batch: food-logging-observations
-tier: s_fix
 status: fixed
 blast_radius: feature
 symptom: Scan Meal fails instantly on any full-resolution camera photo with "Check your connection and try again." ai-proxy rejects base64-encoded images over ~5.6MB decoded before calling Gemini.
@@ -102,3 +101,23 @@ Two test files verify the fix:
 - **Telemetry addition:** The catch block in `ScanMealNotifier.scanImage` previously swallowed exceptions with no observability. This fix adds `ErrorTelemetry.recordNonFatal(reason: 'scan_meal_notifier_scan_image')` so any future failures (image too large, network error, Gemini failure) are logged to `client_errors` for diagnosis.
 - **Test seam:** Added `ScanMealNotifier.throwBeforeScanForTest` static variable (test-only; `assert` could guard it if desired) to inject failures during unit testing, mirroring the pattern already established in `AiBreakdownNotifier`.
 - **Same fix applies to cart-auditor:** Cart auditor uses the same `ai-proxy` endpoint with identical size constraints, so both call sites receive identical parameter values.
+
+## Mutation proof (rule §4.4.21)
+
+**Mutation:** Changed `imageQuality: 85` → `imageQuality: 1` in `lib/features/nutrition/widgets/scan_meal_section.dart:285`.
+
+**Test output (RED):**
+```
+00:00 +0 -1: scan_meal_section.dart downscales the picked image with exact values [E]
+  Expected: '85'
+    Actual: '1'
+     Which: is different.
+  scan_meal_section.dart must use imageQuality: 85 for downscaling
+```
+
+**After revert to `imageQuality: 85` (GREEN):**
+```
+00:00 +2: All tests passed!
+```
+
+This proves the test `test/contracts/scan_meal_image_downscale_test.dart` catches the regression when downscaling values drift from their specified values.
