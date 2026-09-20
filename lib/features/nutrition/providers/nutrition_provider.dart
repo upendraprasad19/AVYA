@@ -1370,6 +1370,9 @@ final mealTypeProvider =
 // ── Scan Meal State ─────────────────────────────────────────────
 
 class ScanMealNotifier extends Notifier<ScanMealState> {
+  // Test seam for injecting failures in unit tests
+  static Object? throwBeforeScanForTest;
+
   @override
   ScanMealState build() => const ScanMealState();
 
@@ -1378,6 +1381,10 @@ class ScanMealNotifier extends Notifier<ScanMealState> {
     state = state.copyWith(isScanning: true, error: null);
 
     try {
+      if (throwBeforeScanForTest != null) {
+        throw throwBeforeScanForTest!;
+      }
+
       final base64Image = base64Encode(imageBytes);
 
       final response = await SupabaseService.instance.callFunction(
@@ -1418,7 +1425,9 @@ class ScanMealNotifier extends Notifier<ScanMealState> {
         isScanning: false,
         error: 'Could not analyse the image. Please try again.',
       );
-    } catch (e) {
+    } catch (e, st) {
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'scan_meal_notifier_scan_image'));
       state = state.copyWith(
         isScanning: false,
         error: 'Scan failed. Check your connection and try again.',
