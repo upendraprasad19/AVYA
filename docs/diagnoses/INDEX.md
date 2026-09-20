@@ -21,8 +21,10 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### meal_slot_inference_drift (1 bugs)
 - 2026-09-20 1261a4 — Opening "LOG TO LUNCH" (or any locked-slot CTA) and logging via the Search tab or the Barcode tab could silently write to a different meal slot than the one the user explicitly tapped — the sheet's…
 
-### nutrition_log_retag (3 bugs)
+### meal_slot_ui_selection (1 bugs)
 - 2026-09-20 e1c5b8 — Four related defects surfaced across B-pass reviewer B and the round-2 context-blind plan review, all in the same meal-slot vocabulary/ reactivity surface Task 5-7 of this batch introduced or touched:…
+
+### nutrition_log_retag (2 bugs)
 - 2026-09-20 a3f6c9 — NutritionWriteService.moveMealLog's collision-merge branch (two logs retagged into the same destination slot+item-hash bucket) wrote merged totals (total_calories/protein/carbs/fat/fiber) WITHOUT ever…
 - 2026-09-20 d9a3f7 — NutritionWriteService.moveMealLog applied a caller's `macroUpdates` map to `row` BEFORE the collision-merge branch (destination slot already holds a log) ran. The collision-merge branch…
 
@@ -1299,7 +1301,7 @@ rather than a Hive box. (1 bugs)
 | 2026-09-20 | b6e2a4 | Tasks 9-10 of this batch (commits 72a4aa7d, c84eb796) added `reportGeminiExhaustion` — a new write into the `public.alerts` table, reused by the existing `trg_dispatch_critical_alert_notify` trigger… | gemini_failure_alert | supabase/functions/_shared/gemini_failure_alert_test.ts |
 | 2026-09-20 | f4c8b1 | Task 8 of this batch (commit 5bb7a995) changed HiveUserSession's 7 user-scoped box opens from a sequential `for` loop to `Future.wait(userScopedBoxRoots.map(openOne))`. `hive_user_session.dart` is… | auth_hive_owner_agreement | test/contracts/hive_user_session_box_open_parallel_test.dart |
 | 2026-09-20 | 1261a4 | Opening "LOG TO LUNCH" (or any locked-slot CTA) and logging via the Search tab or the Barcode tab could silently write to a different meal slot than the one the user explicitly tapped — the sheet's… | meal_slot_inference_drift | test/widgets/log_food_sheet_search_respects_locked_slot_test.dart |
-| 2026-09-20 | e1c5b8 | Four related defects surfaced across B-pass reviewer B and the round-2 context-blind plan review, all in the same meal-slot vocabulary/ reactivity surface Task 5-7 of this batch introduced or touched:… | nutrition_log_retag | test/nutrition/meal_slot_vocabulary_test.dart |
+| 2026-09-20 | e1c5b8 | Four related defects surfaced across B-pass reviewer B and the round-2 context-blind plan review, all in the same meal-slot vocabulary/ reactivity surface Task 5-7 of this batch introduced or touched:… | meal_slot_ui_selection | test/nutrition/meal_slot_vocabulary_test.dart |
 | 2026-09-20 | a3f6c9 | NutritionWriteService.moveMealLog's collision-merge branch (two logs retagged into the same destination slot+item-hash bucket) wrote merged totals (total_calories/protein/carbs/fat/fiber) WITHOUT ever… | nutrition_log_retag | test/contracts/nutrition_log_retag_writer_to_reader_test.dart |
 | 2026-09-20 | d9a3f7 | NutritionWriteService.moveMealLog applied a caller's `macroUpdates` map to `row` BEFORE the collision-merge branch (destination slot already holds a log) ran. The collision-merge branch… | nutrition_log_retag | test/contracts/nutrition_log_retag_writer_to_reader_test.dart |
 | 2026-09-20 | 1dded5 | Scan Meal fails instantly on any full-resolution camera photo with "Check your connection and try again." ai-proxy rejects base64-encoded images over ~5.6MB decoded before calling Gemini. | scan_meal_image_downscale | test/contracts/scan_meal_image_downscale_test.dart |

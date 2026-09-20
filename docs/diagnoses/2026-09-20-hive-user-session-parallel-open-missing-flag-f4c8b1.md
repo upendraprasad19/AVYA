@@ -22,7 +22,7 @@ sot_registry_entry: auth_hive_owner_agreement
 writers:
   - { file: lib/core/services/hive_user_session.dart, method_or_widget: _openForUserLocked, line: 157 }
 readers:
-  - { file: lib/core/services/hive_user_session.dart, method_or_widget: ensureOpenedForCurrentSession, line: 129 }
+  - { file: lib/core/services/hive_user_session.dart, method_or_widget: ensureOpenedForCurrentSession, line: 123 }
 hive_key_prefix: (n/a — this fix gates the OPEN of the 7 user-scoped boxes, not a data key)
 hive_key_formula: (n/a)
 sync_methods: []

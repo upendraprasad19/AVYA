@@ -1,17 +1,17 @@
 # Closure ledger — food-logging-observations batch (branch
-# claude/food-logging-observations-126ab3): 10 B-pass/round-2 review findings
-# surfaced across the 10-task implementation. Gate 40 (validate_audit_closure.dart).
-# One terminal_state per finding; no `deferred:` key. 10 items, over the §4.2
-# >=4 threshold.
+# claude/food-logging-observations-126ab3): 11 B-pass/round-2/scoped-re-review
+# findings surfaced across the 10-task implementation. Gate 40
+# (validate_audit_closure.dart). One terminal_state per finding; no
+# `deferred:` key. 11 items, over the §4.2 >=4 threshold.
 #
 # No single diagnose-doc covers the whole batch — each fix has its own
 # diagnose-doc (rule 22), cited per finding below. Fix-round commits (all on
 # this branch, none pushed/merged): e3c96e08 / 7fa29427 / d9ca0c32 / 07941c4b /
-# f939fb3c / d522a3ca.
+# f939fb3c / d522a3ca, plus a final doc-correction commit for FLO-11.
 
 batch: food-logging-observations
-total_findings: 10
-closed_count: 10
+total_findings: 11
+closed_count: 11
 
 findings:
   - id: FLO-1
@@ -82,3 +82,10 @@ findings:
     commit: d522a3ca
     verification: "Confirmed via `grep -n reportGeminiExhaustion supabase/functions/ai-proxy/index.ts` — exactly 3 call sites (lines 443/603/646), none at :692 or in the tool-calling path. Confirmed via Task 10's own brief (.superpowers/sdd/2026-09-20-food-logging-observations/task-10-brief.md) that the plan explicitly named exactly these 3 call sites in its Files section — this is a plan-scope boundary, not an omission. Filed as OI-226 (docs/audit/open_issues.md) with fix direction, so the gap has a tracked terminal state per §4.2 rather than living only in a review nobody re-reads."
     notes: "Round-2 plan review finding P2-5. Closed by FILING (the finding itself is closed — the underlying gap stays OPEN as OI-226, same 'closed by being filed' pattern as unit4-cruft-triage's U4-6)."
+
+  - id: FLO-11
+    title: "Scoped re-review of the fix round (SDD closing pattern): nested lib/features/nutrition/CLAUDE.md still documented the deleted food_search_sheet.dart and mis-described log_food_sheet.dart's corrected reactive behavior as 'locks for the sheet's lifetime'; docs/sot_registry.yaml's nutrition_log_retag concept was cited by diagnose e1c5b8 for a writer/reader that isn't actually that concept's durable Hive/cloud contract; two file:line citations had drifted by one line; supabase/functions/CLAUDE.md never documented the new gemini_failure_alert feature at all"
+    terminal_state: closed_in_commit
+    commit: "food-logging-observations (uncommitted at authoring — lands in this fix-round's doc-correction commit)"
+    verification: "lib/features/nutrition/CLAUDE.md: `grep -n food_search_sheet lib/features/nutrition/CLAUDE.md` now returns zero hits; the log_food_sheet.dart and diet-plan-hint rows corrected to match current behavior. docs/diagnoses/2026-09-20-meal-slot-vocabulary-and-reactivity-e1c5b8.md: concept/sot_registry_entry changed to not_applicable (consistent with its own cross_account_guard field); line citations corrected to 1363/117 (verified via sed -n against the real files). supabase/functions/CLAUDE.md: added the gemini_failure_alert SoT contract row, including the OI-226 scope-boundary note."
+    notes: "Found by a fresh context-blind scoped re-review dispatched per the subagent-driven-development skill's own closing pattern ('Final findings? ONE fix dispatch, one scoped re-review, adjudicate residuals'). All 4 sub-findings verified independently before fixing (none taken on the reviewer's word alone). A 5th finding from the same review — a one-frame header-flicker risk on LogFoodSheet's very first build, from the deferred addPostFrameCallback seed write — was investigated, a fix drafted and mutation-tested, and REJECTED: the mutation reddened zero tests (Flutter's TestWidgetsFlutterBinding resolves initState's postFrameCallbacks within the same pumpWidget() call, so no widget-test pump() can observe the race window), so both the fix and its non-discriminating test were reverted per root CLAUDE.md §4.4 rule 21 rather than shipped unverified — documented in e1c5b8's own 'Residual, examined and rejected' section rather than silently dropped."

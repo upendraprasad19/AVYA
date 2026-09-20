@@ -27,12 +27,12 @@ symptom: |
   initial value, so a legacy row with `meal_type == 'snack'` (a value no
   selector can ever hold) always read as "the user changed the slot",
   silently retagging the log on every macros-only edit.
-concept: nutrition_log_retag
-sot_registry_entry: nutrition_log_retag
+concept: meal_slot_ui_selection
+sot_registry_entry: not_applicable
 writers:
-  - { file: lib/features/nutrition/providers/nutrition_provider.dart, method_or_widget: MealTypeNotifier.select, line: 1362 }
+  - { file: lib/features/nutrition/providers/nutrition_provider.dart, method_or_widget: MealTypeNotifier.select, line: 1363 }
 readers:
-  - { file: lib/features/nutrition/widgets/log_food_sheet.dart, method_or_widget: _LogFoodSheetState._buildHeader, line: 121 }
+  - { file: lib/features/nutrition/widgets/log_food_sheet.dart, method_or_widget: _LogFoodSheetState._buildHeader, line: 117 }
 hive_key_prefix: nlog_
 hive_key_formula: "nlog_<istDate>_<mealType>_<itemsHash>"
 sync_methods: [_syncNutritionLogs]
@@ -182,5 +182,49 @@ actually does.
   `test/widgets/log_food_sheet_search_respects_locked_slot_test.dart`.
 - Modified: `lib/features/nutrition/CLAUDE.md` (corrected the
   `log_food_sheet_locked_slot_test.dart` test-coverage description, which previously
-  overclaimed "durability" for what is actually reactive/live behavior).
+  overclaimed "durability" for what is actually reactive/live behavior; also removed
+  the stale `food_search_sheet.dart` listing and its "locks... for the sheet's
+  lifetime" description of `log_food_sheet.dart`, and corrected the "Diet-plan meals
+  not visible" pitfall row's dead `showFoodSearchSheet` reference — all found by a
+  scoped re-review of this fix round, 2026-09-20).
+- Modified: `supabase/functions/CLAUDE.md` (added the missing `gemini_failure_alert`
+  SoT contract row for the feature Tasks 9-10 shipped with no nested-CLAUDE.md entry
+  at all — found by the same scoped re-review, filed alongside this doc rather than
+  its own since it is a documentation gap, not a code defect).
+- Corrected `concept`/`sot_registry_entry` in this doc's own frontmatter from
+  `nutrition_log_retag` to `not_applicable` (was internally inconsistent with this
+  doc's own `cross_account_guard` field, which already correctly describes
+  `mealTypeProvider` as transient UI state — `nutrition_log_retag` is the durable
+  Hive/cloud rekey concept `moveMealLog` owns, a different contract). Corrected two
+  `line:` citations (1362→1363, 121→117) that had drifted by one line each. Both
+  found by the scoped re-review of this fix round.
 - Created: this diagnose-doc.
+
+## Residual, examined and rejected as not worth shipping
+
+The scoped re-review also flagged a real but low-severity **P3**: `LogFoodSheet`'s
+header seed write is deferred to a `WidgetsBinding.instance.addPostFrameCallback`
+(required — mutating a Riverpod provider synchronously in `initState` throws), so the
+sheet's very first `build()` reads whatever slot `mealTypeProvider` held BEFORE this
+sheet opened, not the slot it was just opened locked to. In a live app this could
+theoretically flash the wrong locked-slot label for one frame before self-correcting.
+
+A fix was drafted (an `_initialSlot`/`_providerSeeded` fallback, read on the first
+frame only) and a regression test written to catch it (pre-seed the provider with a
+different slot, `pumpWidget`, then a single `tester.pump()` — not `pumpAndSettle` —
+before asserting). **Mutation-proof reddened ZERO tests**: `TestWidgetsFlutterBinding`
+resolves `addPostFrameCallback`s scheduled during a widget's `initState` within the
+SAME `pumpWidget()` call, before it returns — so there is no window a standard
+widget-test `pump()` can observe between "first build" and "seed write landed." The
+test provided no discriminating power; per root CLAUDE.md §4.4 rule 21 ("a mutation
+that reddens ZERO tests is not proof the case is already covered"), a green check
+with no discriminating input is worse than no check, so both the fix and the test
+were reverted rather than shipped unverified.
+
+**Accepted as-is**: the flash, if it exists at all in a real rendering pipeline
+(untested — the widget-test harness cannot observe it), is a single frame (~16ms) on
+sheet open, for the locked-slot title text only, self-correcting on the very next
+frame. Lower severity than the residual this doc's own P2-4-equivalent items
+document, and fixing it would add new state (`_initialSlot`/`_providerSeeded`) with
+zero test coverage protecting it against a future regression — a worse trade than
+leaving the existing, well-tested reactive-header behavior alone.
