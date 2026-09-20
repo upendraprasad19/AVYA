@@ -196,11 +196,8 @@ assertion still applies to that case exactly as it did before this fix.
   being the first two).
 - `.claude/skills/e2e-sim-testing/SKILL.md` §5 — the shared-Gemini-quota
   pacing discipline this test file's own T15→T19 sequence does not follow.
-  NOT fixed here and NOT yet filed as an OI (an attempt to mint one via
-  `scripts/mint_oi.sh` from this session was refused by the harness's
-  worktree-isolation sandbox, which cannot statically verify the script's
-  `$GH`-variable-indirected git operations stay scoped to this worktree) —
-  a dedicated pacing/backoff change to a live-quota-dependent test file's
-  overall shape is a larger, separable decision than recognizing an
-  already-emitted signal, and should be filed on the OI board by whoever
-  next has working `mint_oi.sh` access, citing this diagnose-doc.
+  NOT fixed here. Filed as **OI-225** (2026-09-20, by the founder directly —
+  `scripts/mint_oi.sh` refused to run from this session, blocked by the
+  harness's worktree-isolation sandbox, which cannot statically verify the
+  script's `$GH`-variable-indirected git operations stay scoped to the
+  worktree; see `docs/audit/open_issues.md` OI-225 for status).
