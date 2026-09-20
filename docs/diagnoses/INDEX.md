@@ -6,6 +6,10 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### coach_chat_history_replay (2 bugs)
+- 2026-09-20 d3e8a1 — CI went red on `main` twice in a row (merge-triggered run 35485792369, then its rerun) on the "Supabase Integration Tests" job: `test/edge_functions/ai_proxy_test.dart`'s "AI Proxy — Free Tier T19: AI…
+- 2026-09-16 a1c6b9 — Founder reported (APK 1.0.0+43, two screenshots) that the AI Coach chat showed "I had trouble reaching the model. Try again in a moment." on every turn since the previous day, including a plain "hi"…
+
 ### exercise_log_sync_fingerprint_skip (1 bugs)
 - 2026-09-19 d3f8a6 — OI-204 (docs/audit/open_issues.md:4432-4485, filed 2026-09-16). Live `client_errors` telemetry on the founder's account showed 34x `sync_exercise_logs` timeouts + 11x `sync_nutrition_logs` timeouts in…
 
@@ -68,9 +72,6 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### error_telemetry_helper (2 bugs)
 - 2026-09-16 d8e2f4 — Founder reported (APK 1.0.0+43, one screenshot) being able to save breakfast, lunch, and dinner via the AI food-logging tab, but repeatedly seeing a red "Could not save — try again." snackbar when…
 - 2026-05-08 b0fd76 — Telemetry payload had no contract (any shape was accepted, breaking structured log queries); restore had a race condition where stale tmpl_* keys from earlier broken restores accumulated and caused…
-
-### coach_chat_history_replay (1 bugs)
-- 2026-09-16 a1c6b9 — Founder reported (APK 1.0.0+43, two screenshots) that the AI Coach chat showed "I had trouble reaching the model. Try again in a moment." on every turn since the previous day, including a plain "hi"…
 
 ### device_session_identity_binding (2 bugs)
 - 2026-09-16 d4a8f6 — The email-confirm-ux batch's new "already signed in" guard state (`ConfirmEmailScreen._buildAlreadySignedInState`, OI-205's interim guard) ships a SIGN OUT button whose `onTap` called…
@@ -1275,6 +1276,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-20 | d3e8a1 | CI went red on `main` twice in a row (merge-triggered run 35485792369, then its rerun) on the "Supabase Integration Tests" job: `test/edge_functions/ai_proxy_test.dart`'s "AI Proxy — Free Tier T19: AI… | coach_chat_history_replay | test/edge_functions/ai_proxy_hard_failure_lib_test.dart |
 | 2026-09-19 | d3f8a6 | OI-204 (docs/audit/open_issues.md:4432-4485, filed 2026-09-16). Live `client_errors` telemetry on the founder's account showed 34x `sync_exercise_logs` timeouts + 11x `sync_nutrition_logs` timeouts in… | exercise_log_sync_fingerprint_skip | test/contracts/sync_exercise_log_payload_hash_index_writer_to_reader_test.dart |
 | 2026-09-19 | c7d2e4 | `dart run scripts/check_sot_behavioral_test_paths.dart` printed `[Gate 42] PASS: all 133 SoT concepts have behavioral_test_path; 7 carry presence_only: true` for ANY non-empty value — a fixture… | sot_registry_behavioral_test_path_resolution | test/scripts/sot_behavioral_test_paths_gate_test.dart |
 | 2026-09-19 | d6f1b8 | Founder-flagged verbosity + a live writer/reader-drift bug found while investigating it. Muster asked 3 questions (injuries, wake/workout time, physique focus) AFTER the induction narrative's "I… | muster_to_profile_bridge | test/contracts/muster_to_profile_bridge_behavioral_test.dart |

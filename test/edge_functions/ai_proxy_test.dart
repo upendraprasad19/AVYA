@@ -7,6 +7,18 @@
 // normally answers in a few seconds; the job had passed on the three prior
 // main runs, so this is live latency, not a regression.
 //
+// ⚠ SECOND manifestation, same root class (2026-09-20, diagnose d3e8a1): CI
+// went red again on `main`, this time with T19 completing normally (200,
+// ~9-16s) but the Edge Function's OWN reply being its hardcoded
+// "I had trouble reaching the model" apology -- Gemini itself failed/
+// exhausted its bounded retry on this specific call. T19 fires immediately
+// after T15's live call in the SAME shared-quota QA account, with zero
+// pacing (Gemini free-tier RPM is low -- e2e-sim-testing skill §5). T19 now
+// recognizes this via the Edge Function's own `had_hard_failure` flag and
+// skips the content assertion for that one outcome, mirroring how the 429
+// (daily-cap) branch below is already skipped -- see
+// ai_proxy_hard_failure_lib.dart.
+//
 // TWO budgets, and the ORDER MATTERS: the HTTP budget in callEdgeFunction
 // (httpBudget) must be SMALLER than this one. If the test budget fired first
 // we would get "test timed out" again -- which names no function, no URL and
@@ -31,6 +43,7 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../supabase/supabase_test_helper.dart';
+import 'ai_proxy_hard_failure_lib.dart';
 
 /// Layer 3: AI proxy Edge Function API tests.
 ///
@@ -280,6 +293,23 @@ void main() {
 
       final data = chatBodyOrAssertCapped(response);
       if (data == null) return; // capped — the cap contract was asserted
+
+      // Diagnose d3e8a1 (recurrence of a7c3e9, 2026-09-07): T15 just above
+      // fires one live Gemini call in this same shared-quota QA account;
+      // this is the SECOND, fired immediately after with no pacing (Gemini
+      // free-tier RPM is low -- e2e-sim-testing skill §5, "space them"). When
+      // Gemini itself fails/exhausts its bounded retry on THIS attempt, the
+      // Edge Function correctly degrades to its hardcoded apology and says
+      // so via `had_hard_failure` -- that reply never reached the model, so
+      // asserting it mentions the user's goal is asserting content from a
+      // call that never happened. Skip it here exactly as the capped (429)
+      // branch above is skipped; see ai_proxy_hard_failure_lib_test.dart.
+      if (isHardFailureReply(data)) {
+        final reply = (data['reply'] ?? data['response'] ?? '') as String;
+        expect(reply.isNotEmpty, isTrue,
+            reason: 'even a hard-failure apology must be non-empty text');
+        return;
+      }
 
       final reply =
           ((data['reply'] ?? data['response']) as String).toLowerCase();
