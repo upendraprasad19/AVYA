@@ -2994,9 +2994,9 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
 
 ## OI-155 — six gates are wired to no runner, and Gate 33 cannot detect it (P1)
 
-- **Status**: OPEN
-- **Blocked on**: re-enumerate the skip block mechanically
-- **Verified**: 2026-09-03 — greps with positive control
+- **Status**: CLOSED (2026-09-19, `gate-integrity`) — diagnose `b3e7a1`
+- **Blocked on**: none
+- **Verified**: 2026-09-19 — Gate 33's `_allowList` is now `Map<String, List<GateRunner>>` (`file(path)` / `loop(preCommit|ci)` / `manual(OI-NNN)`), each runner machine-checked on every commit by `scripts/gate_scripts_wired_lib.dart` (22 pure tests + 5 lib mutations = 9 reds; two real-gate mutations — a `manual` target changed to OI-9999 and one pointed at a CLOSED OI — both FAIL exit 1; coordinator re-ran both legs by hand on the integrated branch). The six: `snapshot_contract` → runs in BOTH loops (skip lines deleted; passes today); `unawaited_has_error_sink` → `loop(ci)` (advisory; pre-commit's `>/dev/null` loop has no reader); `migrations_live` → `manual(OI-223)` — cannot pass by construction (125/139 never registered live, 75 founder raw-SQL applies; RETIRE recommended, founder's call). **Founder chose retire, same batch, same commit as this row's last edit: `check_migrations_live.dart` deleted, its allowlist entry with it — the five remaining runners above are current, `migrations_live` is no longer among them (96 `check_*`, not 97).** `onconflict_live_arbiter` + `two_user_cross_account` → `manual(OI-165)` (403); `test_runtime_budget` → `manual(OI-101)`. A `manual` runner must name an OPEN/IN_PROGRESS OI on the merged boards, so closing OI-223/165/101 turns Gate 33 red until that gate gets a real runner. Wiring inference now requires an INVOCATION (`run scripts/<gate>` on a non-comment line), not a mention; a stale allowlist key is a violation. Counts re-derived: 97 `check_*`, pre-commit loop 84 (13 case-skipped), 86 of 97 + 1 on a merge; test.yml skip 13 → 11.
 - **What**: audit findings INFRA-2, INFRA-11 (Slice D). `check_gate_scripts_wired.dart` allow-lists
   gates with a free-text reason such as *"runs in /build-apk skill Gate 14b"*. For six of them
   `.claude/commands/build-apk.md` contains **0** occurrences (control: `check_apk_size_within_bounds`
@@ -3650,9 +3650,10 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
 - **Class**: `feedback_green_check_input_set_width` — the gate's input set silently excluded 4.5% of the citations it exists to police. Also `feedback_bad_news_vs_no_news`: an unchecked citation and a valid one both report nothing.
 ## OI-181 — nothing catches a MISSING plan-review record at merge time; both prechecks miss the plain absent case (P1)
 
-- **Status**: OPEN
+- **Status**: CLOSED (2026-09-19, `gate-integrity`) — diagnose `b7e2d4`
 - **Blocked on**: none
-- **Verified**: 2026-09-10 — live, by causing it. Branch `hipri-parity` (blast-radius `account`, `supabase/functions/**`) was merged as `dcb94a93` with no `docs/plan-reviews/hipri-parity.md`. Neither merge-time guard fired. The warning arrived from `git_safety_hook.dart` at PUSH time — after the merge — and CI's keystone gate reads the record from the tree AT the merge commit, so no later commit can repair that commit's evaluation.
+- **Verified**: 2026-09-19 — `scripts/safe_merge.sh:235-` classifies the three-dot `refs/heads/main...refs/heads/$BRANCH` range with the real classifier and WARNS (advisory; `NO plan-review record` / `unwinding this merge`) when the tier is ≥ account and `git show $BRANCH:docs/plan-reviews/<slug>.md` is empty — the keystone gate's own predicate (`check_plan_review_record_exists.dart:617-620`) mirrored BEFORE the merge; one `NOTE:` when the classifier yields no tier for a non-empty path list; every other failure path silent; the gate's version-bump exemption deliberately NOT mirrored (OI-222). `test/scripts/safe_merge_test.dart` 12 → 15; 3 mutations = 4 reds (block deleted 1, case arm widened 2, three-dot → two-dot 1; the last re-run by hand by the coordinator). Third instance closed (2026-08-30, `dcb94a93` 2026-09-10, `0768a0ce` 2026-09-19).
+- **Verified (pre-fix, kept)**: 2026-09-10 — live, by causing it. Branch `hipri-parity` (blast-radius `account`, `supabase/functions/**`) was merged as `dcb94a93` with no `docs/plan-reviews/hipri-parity.md`. Neither merge-time guard fired. The warning arrived from `git_safety_hook.dart` at PUSH time — after the merge — and CI's keystone gate reads the record from the tree AT the merge commit, so no later commit can repair that commit's evaluation.
 - **The two-sided gap, and why "there are two prechecks" reads like coverage**:
   - `scripts/safe_merge.sh` warns when a record CLAIMS `bpass: accepted` while its `bpass_review:` file lacks `verdict: accepted`. It says nothing when the record is **absent entirely** — its whole predicate starts by reading a file that is not there, and every failure path falls through silently BY DESIGN (advisory, must never wedge the only path onto main).
   - `scripts/git_safety_hook.dart` DOES detect the missing record — and runs on `git push`. By then the merge commit exists and is immutable for this purpose.
@@ -4154,9 +4155,10 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
 
 ## OI-195 — Gate 42 accepts any non-empty `behavioral_test_path:` / `presence_only:` text and never checks the cited file EXISTS (P3, gate gap, zero live violations)
 
-- **Status**: OPEN
-- **Blocked on**: none — one `File(path).existsSync()` per cited path in `check_sot_behavioral_test_paths.dart`, plus a red-path test and a rule-24 ledger entry
-- **Verified**: 2026-09-13 — `grep -n "existsSync\|File(" scripts/check_sot_behavioral_test_paths.dart` → only `docs/sot_registry.yaml` itself is opened; a census of the registry's 134 distinct `behavioral_test_path:` values found **0 missing** today (`test -e` over each), so this is a gap, not a live breach
+- **Status**: CLOSED (2026-09-19, `gate-integrity`) — diagnose `c7d2e4`
+- **Blocked on**: none
+- **Verified**: 2026-09-19 — every `behavioral_test_path(_*)` value (comment-stripped; sibling `_cqrs` key at registry `:826` included) and every repo-shaped path inside `presence_only` prose / `presence_only_reason` blocks (block scalar, blank lines kept, or plain) is resolved on disk via ONE helper (`_missingOnDisk`, `FileSystemEntity.typeSync` — a DIRECTORY citation is valid; `File.existsSync` would have flagged `test/sql/` as missing, caught at integration). Real registry: `138 behavioral_test_path value(s) + 4 presence_only prose citation(s) resolved on disk`, 0 missing; positive control with 2 injected fakes → exit 1 naming exactly those two. `test/scripts/sot_behavioral_test_paths_gate_test.dart` 10 tests; 5 mutations = 12 reds; ledger promoted out of the grandfathered set. The tally now counts every `presence_only: true` line: **17 (10 also cite a behavioral path; 7 presence-only)** — the "7" the gate printed before, and the "6" CLAUDE.md rule 21 carried, both counted only the presence-only-WITHOUT-behavioral subset, which is the under-report OI-161 documents as its third instance.
+- **Verified (pre-fix, kept)**: 2026-09-13 — `grep -n "existsSync\|File(" scripts/check_sot_behavioral_test_paths.dart` → only `docs/sot_registry.yaml` itself is opened; a census of the registry's 134 distinct `behavioral_test_path:` values found **0 missing** today (`test -e` over each), so this is a gap, not a live breach
 - **What**: rule 21 says every SoT concept MUST have a `behavioral_test_path:` (or `presence_only: true` with a justification). Gate 42 enforces the FIELD is present and non-empty; it never resolves the value. A concept can cite a test that was never written — or, the case the OI-153 B-pass caught (its finding 2), a `presence_only:` justification can cite a live-verify SQL file that did not exist yet — and the gate is green. `check_sot_registry_parity.dart` DOES resolve writer/reader `file:` citations, so the asymmetry is within one registry: the writer/reader half is checked, the test half is not.
 - **Why it is cheap and worth doing**: the fix is the same `existsSync` the parity gate already runs; the `presence_only:` prose is free text and should be scanned for repo-shaped paths (`test/…`, `docs/…`) the same way `check_sot_registry_citations.dart` scans diagnose-docs for identifier-shaped citations.
 - **Blast radius**: `scripts/**` pinned platform (gate script); rule 24 applies (mutation-proven test + ledger entry).
@@ -4429,7 +4431,16 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
 
 ## OI-204 — Full-rescan sync architecture (_syncExerciseLogs/_syncNutritionLogs) times out at 45s under growing history
 
-- **Status**: OPEN
+- **Status**: CLOSED · 2026-09-19 · Both halves shipped in the
+  `oi204-delta-sync` batch: exercise-log fingerprint-skip (`a44dafb5`, Task 2)
+  and nutrition-log fingerprint-skip (Task 3, this commit — closes-diagnose
+  `d3f8a6`). Extends the proven H1b Part A pattern
+  (`sync_scheduled_payload_hash_index`) to both `_syncExerciseLogs` and
+  `_syncNutritionLogs`: a sync-owned fingerprint index lets an unchanged
+  key/slot skip its idempotent re-upsert instead of re-walking the entire
+  historical log every coalesced pass. See
+  `docs/diagnoses/2026-09-19-full-rescan-sync-timeout-d3f8a6.md` for the
+  full root cause + fix + verification detail on both domains.
 - **Blocked on**: none
 - **Verified**: 2026-09-16, `client_errors` telemetry for user `d7a67a37` (founder's
   device) + live read of `lib/core/services/sync/sync_workout.dart:185-308` and
@@ -4875,9 +4886,9 @@ material), the telemetry reader sums it across recent records, and M/L counts de
 
 ## OI-220 — Contract-sweep gate: pre-push targeted SoT contract testing
 
-- **Status**: OPEN
-- **Blocked on**: none — founder ratified the GATE form (not a manual checklist step) 2026-09-18; build is the deliverable
-- **Verified**: never
+- **Status**: OPEN — narrowed to the `--warn-only` → hard-fail FLIP; the build shipped 2026-09-19
+- **Blocked on**: one clean batch under `--warn-only` (batch B, OI-204, is the baseline batch); the flip removes BOTH tokens of `--warn-only || true` at the `scripts/pre-push.sh` wiring line and takes the full ×2 review (§4.12.4's flip-on rule)
+- **Verified**: 2026-09-19 — shipped on `gate-integrity` (`scripts/contract_sweep.dart` + pure `scripts/contract_sweep_lib.dart`; wired in `pre-push.sh` for every tier above `run_full_suite()`; guards `CONTRACT_SWEEP_SKIP=1` / `CONTRACT_SWEEP_NESTED=1`). Real-tree measurement for the flip decision: selection 1.9 s / 17 tests on a 15-file range; 18.5 s / 505 tests on a 366-file range (`origin/main~40...HEAD`) — near full-suite size, so on a ≥account push the sweep is ADDITIVE to the full suite until the flip and can never short-circuit under `|| true`; after the flip a red sweep saves the full run on exactly the pushes that would have failed it. The baseline batch records real seconds per push. **Trust model (replaces this entry's original "rule-24 mutation-proven ledger entry" obligation, which is unsatisfiable by construction):** the sweep is deliberately NOT a `check_*` gate — `pre-commit.sh` and `test.yml` enumerate every `check_*.dart`, and `gate_test_ledger_lib.dart` rejects a ledger key with no `check_*` script on disk — so it carries NO ledger entry; its wiring is pinned by `test/contracts/contract_sweep_wired_test.dart` (+ a behavioural assertion in `pre_push_analyze_always_e2e_test.dart` that the real hook reaches the line) and its proof is rule 21: 6 mutations, 9 reds (+2 for un-wiring the line), one leg re-run by the coordinator. Tests: `test/scripts/contract_sweep_lib_test.dart` (10), `contract_sweep_e2e_test.dart` (7), `contract_sweep_wired_test.dart` (1). Riders (1) and (2) below landed as CLAUDE.md §4.1.5 item 6 and §4.12.7; the riverpod-3 playbook section landed in `docs/playbook/common-pitfalls.md`.
 - **Identified**: 2026-09-18 · filed via mint_oi.sh from branch `main`
 - **Detail**: From the ai-coach-ux-tool-integrity retro (memory
   `project_ai_coach_ux_tool_integrity_2026_09_18.md`): ~2h of that batch went
@@ -5002,3 +5013,45 @@ or equivalent), never via worktree+merge, unless the author is prepared to also 
 plan-review record for the merge. Out of scope for the fix that discovered this (kept
 feature-tier deliberately, to avoid the exact recursion this OI describes) — CLAUDE.md is
 pinned `platform` tier, so this edit needs its own appropriately-reviewed commit.
+
+## OI-223 — check_migrations_live cannot pass by construction: 125/139 local migrations never registered live (75 founder raw-SQL applies) -- retire in favour of Gate 14 or redesign the matcher
+
+- **Status**: CLOSED (2026-09-19, `gate-integrity`) — retired (no diagnose-doc: a deletion, not a `fix`/`bug`/`regression` commit)
+- **Blocked on**: none
+- **Verified**: 2026-09-19 — founder chose RETIRE. Six sites done: `scripts/check_migrations_live.dart` deleted; `docs/audit/gate_test_ledger.yaml` entry removed; `check_gate_scripts_wired.dart`'s `_allowList` entry removed (Gate 33 PASS on the real tree, 96 `check_*`, down from 97); the two case-skip lines removed from `pre-commit.sh` and `test.yml`; `test/contracts/phase_c_oi_closures_test.dart`'s OI-34 group INVERTED (asserts the file no longer exists, not deleted, so a reintroduction with no ledger/allowlist entry is caught — 58/58 green); `docs/runbooks/restore-drill.md` step 5 repointed at Gate 14 (`check_migrations_applied.dart`) + a manual cross-check note. Original verification kept below.
+- **Verified (pre-retirement, kept)**: 2026-09-19 — exact run from the primary with the PAT: exit 1, `local migrations: 139, live migrations: 130`, `FAIL — 125 local migration(s) NOT applied live`; 14/139 prefix matches
+- **Identified**: 2026-09-19 · filed via mint_oi.sh from branch `worktree-agent-a57ce47ba764ba91c` (gate-integrity batch, OI-155 unit)
+
+`scripts/check_migrations_live.dart` compares every local `supabase/migrations/*.sql`
+numeric prefix (139 distinct prefixes over 142 files; `all_*` skipped) against the live
+versions the Management API lists at `/v1/projects/<id>/database/migrations` (`:58`). Its own header
+(`:27-32`) admits the local→live matcher is a prefix HEURISTIC. It cannot pass by
+construction: `backups/applied_migrations.json` records **75 `applier: founder`** raw-SQL
+applies (25 `claude`), and a raw-SQL apply never registers a version in Supabase's
+migrations table, so those files are "unapplied" to this gate forever. Only 14 of 139
+prefixes match a live version.
+
+Where it runs today: NOWHERE automated. Case-skipped in `scripts/pre-commit.sh:333` and
+`.github/workflows/test.yml:243`; its allowlist prose in `check_gate_scripts_wired.dart`
+claimed "runs in /build-apk skill Gate 14b" — `grep -ic 14b .claude/commands/build-apk.md`
+→ 0, and build-apk's "first failure stops the build" would have stopped every full-gate
+build had it been wired. Its ONLY documented runner is by hand
+(`docs/runbooks/restore-drill.md:63`), where it fails. The OI-155 fix (gate-integrity
+batch) replaces that prose with a machine-checked `GateRunner.manual('OI-223', …)` entry:
+Gate 33 now re-verifies on every commit that THIS OI is still OPEN/IN_PROGRESS — closing
+it without giving the gate a real runner (or deleting the gate) turns Gate 33 red.
+
+**Recommendation: RETIRE.** Gate 14 (`scripts/check_migrations_applied.dart`) +
+`backups/applied_migrations.json` already own "applied live", and the live matcher
+contradicts the project's own raw-SQL apply history. **Retire checklist (six sites, all
+in one commit):** delete `scripts/check_migrations_live.dart`; its
+`docs/audit/gate_test_ledger.yaml` entry (`:391`); its `_allowList` entry in
+`scripts/check_gate_scripts_wired.dart` (the stale-key mirror there FAILS if the file
+goes and the entry stays); its case-skip lines `scripts/pre-commit.sh:333` +
+`.github/workflows/test.yml:243`; the exists-assertion at
+`test/contracts/phase_c_oi_closures_test.dart:81-85` (OI-34's "exists" pin — repoint it
+to the retirement, do not just delete the group); and the by-hand invocation at
+`docs/runbooks/restore-drill.md:63`. **Redesign alternative:** match by file CONTENT
+hash against `backups/applied_migrations.json` (the ledger Gate 14 already validates)
+instead of by live version prefix — then the gate would be a ledger-vs-disk check, which
+Gate 14 already is, which is the argument for retiring.

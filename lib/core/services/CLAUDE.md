@@ -58,6 +58,8 @@ concept. Selected mappings (full list in `docs/sot_registry.yaml`):
 | `water_target` | `water_target_service.dart` | `waterTargetProvider` |
 | `error_telemetry_helper` | `error_telemetry.dart` `recordNonFatal` | every catch block app-wide |
 | `sync_fanout_workout_domain` / `sync_fanout_nutrition_domain` | `sync/sync_workout.dart` / `sync/sync_nutrition.dart` | callers fire `unawaited(syncWorkoutData())` after a mutation |
+| `sync_exercise_log_payload_hash_index` | `sync/sync_workout.dart` `_syncExerciseLogs` | same method — sole writer AND reader (skip decision reads its own index; OI-204) |
+| `sync_nutrition_log_payload_hash_index` | `sync/sync_nutrition.dart` `_syncNutritionLogs` | same method — sole writer AND reader (skip decision reads its own index; OI-204) |
 | `restore_completeness` | `sync_service.dart` `restoreFromCloud` | `restoring_screen.dart` |
 | `user_scoped_hive_keys` / `hive_deletion_and_session_helpers` | `hive_user_session.dart` + `hive_service.dart` | `wrapUserScopedBox` (helper used everywhere) |
 | `auth_hive_owner_agreement` | `hive_user_session.dart` + `wrapUserScopedBox` | every WriteService + every Hive-touching Riverpod provider |

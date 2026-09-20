@@ -96,6 +96,21 @@ paths:
   # exemption this block exists to close.
   - { glob: "scripts/check_code_review_pass_exists.dart", tier: platform }
   - { glob: "scripts/check_gate_scripts_wired.dart", tier: platform }
+  # gate-integrity batch (2026-09-19, spec D16): the same "a change to the
+  # reviewer must not be exempt from review" rule, applied to the files that
+  # batch made load-bearing and that fell through scripts/** to feature tier
+  # (verified with the classifier before pinning). The pre-push contract sweep
+  # and its pure selection lib; Gate 33's typed-allowlist lib (the check_*
+  # script above was already pinned, its lib was not); Gate 42, which now
+  # resolves every SoT-registry test citation on disk; and the two libs Gate
+  # 33's `manual:` verdicts READ (an edit that made mergedBoardStatuses report
+  # every OI as OPEN would silently re-inert four gates).
+  - { glob: "scripts/contract_sweep.dart", tier: platform }
+  - { glob: "scripts/contract_sweep_lib.dart", tier: platform }
+  - { glob: "scripts/gate_scripts_wired_lib.dart", tier: platform }
+  - { glob: "scripts/check_sot_behavioral_test_paths.dart", tier: platform }
+  - { glob: "scripts/oi_closure_lib.dart", tier: platform }
+  - { glob: "scripts/check_closes_oi_cited.dart", tier: platform }
   - { glob: "scripts/blast_radius_from_diff.dart", tier: platform }
   - { glob: "scripts/blast_radius_content_rules_lib.dart", tier: platform }
   - { glob: "scripts/pre-commit.sh", tier: platform }

@@ -212,6 +212,25 @@ extension SyncServiceNutrition on SyncService {
     final logsToSync = mergeEnabled
         ? _nutritionLogsMergedBySlot()
         : _nutritionLogsRaw();
+
+    // OI-204 preamble, inserted between the existing `logsToSync` assignment
+    // and `for (final log in logsToSync)`. Uses the extracted
+    // nlogHashSkipDisabledFor (plan-review round 1, finding I12) rather than
+    // an inline `||`/`!` expression, so the composition itself is unit-tested.
+    final bool nlogHashSkipDisabled = SyncService.nlogHashSkipDisabledFor(
+      killSwitchDisabled: _nlogHashSkipDisabled,
+      mergeEnabled: mergeEnabled,
+    );
+    final Map<String, String> nlogHashIndex = <String, String>{};
+    if (!nlogHashSkipDisabled) {
+      final rawIndex = _hive.nutritionBox.get(SyncService._nlogHashIndexKey);
+      if (rawIndex is Map) {
+        rawIndex.forEach((k, v) {
+          if (k is String && v is String) nlogHashIndex[k] = v;
+        });
+      }
+    }
+
     for (final log in logsToSync) {
       try {
         // Diagnosed 2026-04-18: the parent-table payload used to spread
@@ -293,6 +312,48 @@ extension SyncServiceNutrition on SyncService {
           'total_fiber': log['total_fiber'] ?? 0,
           if (log['created_at'] != null) 'created_at': log['created_at'],
         };
+
+        // OI-204 — skip-check, inserted here (before ownerChangedSince): a
+        // skip means no write happens for this slot, so the account-race
+        // guard below is moot on the skip path. A fingerprint-computation
+        // failure must never cause a silent skip (spec §5.4): default to
+        // "push normally" / "don't store" on any exception.
+        final slotId = '$nlogDate $nlogMeal';
+        bool nlogShouldSkip = false;
+        String? nlogFp;
+        try {
+          // `computedFp` (not `nlogFp`) feeds `currentFingerprint:` below —
+          // non-nullable by inference, sidesteps any doubt about `nlogFp`'s
+          // declared-nullable type needing an explicit `!`.
+          final computedFp = SyncService.nlogPayloadFingerprint(
+              parentPayload, (log['items'] as List?) ?? const []);
+          nlogFp = computedFp;
+          nlogShouldSkip = SyncService.nlogShouldSkipUpsert(
+            killSwitchDisabled: nlogHashSkipDisabled,
+            storedFingerprint: nlogHashIndex[slotId],
+            currentFingerprint: computedFp,
+          );
+        } catch (e) {
+          // OI-204 — fail-open to "push normally, never store" (spec §5.4),
+          // never SILENTLY (plan-review round 1, finding I13 — same as
+          // Task 2's exlog catch; this repo tracks a silent collapse as its
+          // own class, feedback_bad_news_vs_no_news).
+          unawaited(ErrorTelemetry.logEvent(
+            'sync_nlog_fingerprint_failed',
+            message: 'slot=$slotId error=$e',
+          ));
+          nlogFp = null;
+          nlogShouldSkip = false;
+        }
+        if (nlogShouldSkip) {
+          continue; // cloud already holds this exact slot
+        }
+
+        // OI-204 — set false in the item/vacuum catches below; the
+        // fingerprint is recorded only if this stays true. Guarded by
+        // scripts/check_sync_hash_skip_atomicity.dart.
+        bool nlogSlotSynced = true;
+
         // closes-diagnose e5c2d1, CLASS 1 — the guard sits AT THE SINK, one
         // statement before the write, NOT at function entry. Per
         // feedback_pause_flag_guard_the_sink: an in-flight call that is
@@ -382,14 +443,28 @@ extension SyncServiceNutrition on SyncService {
               //
               // Closure R2-N9 asked whether returning here abandons a
               // half-written parent and skips the tail vacuum below. It does —
-              // and that is the correct trade, because it SELF-HEALS. Verified,
-              // not assumed: `_syncNutritionLogs` has no fingerprint/skip-
-              // unchanged optimisation (unlike `_syncScheduledWorkouts`), so it
-              // re-walks EVERY nutrition Hive row on every pass. The next pass
-              // under the right owner re-upserts the parent on its natural key,
-              // re-writes the items and re-runs the vacuum, fully repairing the
-              // row. The alternative — finishing the unit under a session that
-              // now belongs to someone else — is not repairable.
+              // and that is the correct trade, because it SELF-HEALS. OI-204
+              // changed the premise this used to rest on ("`_syncNutritionLogs`
+              // has no fingerprint/skip-unchanged optimisation") — that is no
+              // longer true, so the argument is RE-DERIVED here, not merely
+              // re-asserted: an abandoned pass persists NOTHING to
+              // nlogHashIndex, because the postamble's store-on-success write
+              // sits after the postamble's OWN `ownerChangedSince` guard
+              // (added this batch), which an abandoned pass never reaches —
+              // so an interrupted push is still safe to retry, and if content
+              // changed since the last CONFIRMED push the fingerprint no
+              // longer matches, so the next pass re-pushes it in full.
+              //
+              // One residue, NOT structurally closed this batch (plan-review
+              // round 1, finding M2): content C1 fully pushed (fingerprint
+              // stored) -> edited to C2 -> a pass pushes part of C2 then
+              // abandons here via ownerChangedSince (nothing persisted,
+              // self-heals) -> reverted back to C1 before the next pass ->
+              // the next pass fingerprint-matches C1 and SKIPS, while cloud
+              // may still hold a half-written C2. Narrow: requires an
+              // edit-then-exact-revert during an account-switch race.
+              // Documented as a known limitation in the diagnose-doc
+              // addendum, not fixed here.
               if (ownerChangedSince(userId)) return;
               await _supabase.client.from('nutrition_log_items').upsert({
                 // `id` OMITTED (gen_random_uuid default) — Diagnose f7e3a1
@@ -424,6 +499,8 @@ extension SyncServiceNutrition on SyncService {
               try {
                 await _reportSyncFailure(opType: 'upsert_nutrition_log_item', error: itemErr);
               } catch (_) {}
+              // OI-204 — an item failed; the slot is NOT fully synced.
+              nlogSlotSynced = false;
             }
           }
         }
@@ -448,7 +525,16 @@ extension SyncServiceNutrition on SyncService {
             debugPrint('[SyncService._syncNutritionLogs] item vacuum: $vErr');
             unawaited(ErrorTelemetry.recordNonFatal(vErr, vSt,
                 reason: 'sync_service_nlog_item_vacuum'));
+            // OI-204 — vacuum failed; the slot is NOT fully synced (a stale
+            // tail item could resurrect on restore).
+            nlogSlotSynced = false;
           }
+        }
+
+        // OI-204 — store-on-full-success-only. Gate checked by
+        // scripts/check_sync_hash_skip_atomicity.dart.
+        if (nlogSlotSynced && nlogFp != null) {
+          nlogHashIndex[slotId] = nlogFp;
         }
       } catch (e, st) {
         debugPrint('[SyncService._syncNutritionLogs] $e');
@@ -459,6 +545,44 @@ extension SyncServiceNutrition on SyncService {
           await _reportSyncFailure(opType: 'upsert_nutrition_log', error: e);
         } catch (_) {}
       }
+    }
+
+    // OI-204 postamble, after the for loop, before the function closes.
+    //
+    // ownerChangedSince guard (plan-review round 1, finding B's-C3): every
+    // OTHER write in this function is preceded by its own `if
+    // (ownerChangedSince(userId)) return;` immediately at the sink
+    // (diagnose e5c2d1 CLASS 1's established idiom) — this Hive write is a
+    // NEW sink this batch introduces and must follow the same idiom, or an
+    // account switch mid-call (especially on an all-skip pass, where the
+    // loop body never reaches an ownerChangedSince check even once) can
+    // write into whatever nutritionBox _hive currently resolves to, which
+    // may by then belong to a different signed-in user. NOT extended to
+    // sched/exlog's own postambles — sync_workout.dart has ZERO
+    // ownerChangedSince calls anywhere (verified by grep), so this guard is
+    // a nutrition-specific idiom this function already established, not a
+    // repo-wide norm OI-204 should silently expand into an unrelated file.
+    if (ownerChangedSince(userId)) return;
+    if (!nlogHashSkipDisabled) {
+      final liveSlots = logsToSync
+          .map((l) => '${l['date']} ${l['meal_type']}')
+          .toSet();
+      await _hive.nutritionBox.put(
+        SyncService._nlogHashIndexKey,
+        SyncService.nlogPrunedHashIndex(nlogHashIndex, liveSlots),
+      );
+    } else {
+      // OI-204 (plan-review round 1, finding I9) — while the merge-disable
+      // emergency kill switch is set, do not merely skip READING the index;
+      // CLEAR it. `_nutritionLogsRaw()`'s legacy per-key path (the one this
+      // switch reverts to) can let "multiple raw keys share one slot, later
+      // ones overwriting earlier ones in cloud" (sync_nutrition.dart's own
+      // comment on that path). A stale index surviving the revert would
+      // fingerprint-match the (unchanged) local content and SKIP re-pushing
+      // exactly the slots the legacy path just corrupted in cloud, turning
+      // the emergency revert into the thing that makes the corruption
+      // permanent once slot-merge is re-enabled and the index is read again.
+      await _hive.nutritionBox.delete(SyncService._nlogHashIndexKey);
     }
   }
 

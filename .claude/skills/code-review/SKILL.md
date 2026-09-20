@@ -267,6 +267,97 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   (`test/contracts/induction_screen_commit_error_reset_test.dart`). A
   finding's "same class, other site" clause is a second, separate fix
   obligation — not satisfied by fixing only the site named first.
+- **2026-09-19 (c)** — blast-radius **platform** — branch `oi204-delta-sync`
+  (OI-204: extends the proven `_syncScheduledWorkouts` fingerprint-skip
+  pattern to `_syncExerciseLogs`/`_syncNutritionLogs`, plus the
+  gate-before-refactor atomicity checker CLAUDE.md §4.11 required before the
+  first refactor commit). **4 findings (1 P1, 1 P2, 2 P3); 0 false_alarm —
+  all 4 accepted and closed in-batch** (3 fixed in code/docs, 1 verified
+  already correctly — if under-emphasized — disclosed, wording strengthened).
+  Review: `docs/reviews/oi204-delta-sync-bpass.md`. Two fresh reviewers,
+  lenses 1-5 / 6-8, against the three-dot `main...HEAD` diff (23 files; the
+  naive two-dot form is a live trap on any branch whose base independently
+  gained commits after the fork — confirmed here, since `main` picked up 8
+  unrelated gates from a sibling branch mid-session).
+  **Tuning — lens 6 (`guard_without_its_mirror`) gains a specific sub-shape
+  for gates that scan SOURCE TEXT in two passes at different granularities:
+  a whole-text existence check and a per-line follow-up scan can silently
+  disagree, and the disagreement IS the defeat.** Finding 1 (P1): the
+  atomicity gate's `hasStore` matched a store statement against the WHOLE
+  file (tolerating `\s*` spanning a newline, which Dart's `\s` always does),
+  then separately re-ran the SAME regex per INDIVIDUAL LINE to locate which
+  line(s) to guard-scan from. A store wrapped across two lines — a plausible
+  `dart format` output past 80 columns, not a contrived shape — matched the
+  first pass and matched NEITHER half of the second, so the guard-scan list
+  came back empty and an unguarded multi-line store silently passed. Reviewer
+  B reproduced this live against the real gate with a positive control
+  (single-line form correctly failed) before reporting it. **Add to lens 6's
+  method: when a gate computes the same property twice at different
+  granularities (whole-file vs per-line, whole-statement vs per-token), ask
+  whether both passes are guaranteed to agree — a regex whose match spans
+  newlines but whose re-application is scoped per-line is exactly this
+  shape, and it generalizes past this one gate.**
+  **Second — a lens-6 finding whose correct triage was "verify the existing
+  disclosure, then strengthen wording" rather than "write new code."**
+  Finding 2 (P2) reproduced a second, DIFFERENT blind spot in the same gate
+  (a new swallowing catch that forgets to flip its flag false leaves an
+  aggregate COUNT check unchanged) — and this one was ALREADY disclosed
+  accurately in `docs/architecture/sync.md`, confirmed by reading the cited
+  section directly rather than trusting the citation. The finding's real
+  value was that the disclosure's WORDING undersold the severity ("the gate
+  can't distinguish X from Y" reads as benign ambiguity; the actual
+  consequence is a false-skip, the dangerous direction the whole mechanism
+  exists to prevent). **Not every accepted finding needs a code fix — some
+  need the existing accurate-but-underselling prose corrected to name the
+  real consequence, and that's a legitimate, cheaper terminal state than the
+  heavier structural fix the finding's own author correctly declined to
+  demand.**
+  False-alarm rate 0/4 → no lens removed; lens 6 extended per above.
+
+- **2026-09-19 (b)** — blast-radius **platform** — branch `gate-integrity`
+  (OI-220 pre-push contract sweep · OI-155 Gate 33 typed allowlist · OI-195
+  Gate 42 path resolution · OI-181 safe_merge absent-record precheck; four
+  forks in isolated worktrees, coordinator-integrated). **2 findings (0 P0,
+  0 P1, 1 P2, 1 P3); 0 false_alarm — both fixed in-batch** (`e993a345`).
+  Review: `docs/reviews/gate-integrity-bpass.md`. The reviewer ran in its OWN
+  worktree (`isolation: worktree` + `git reset --hard <sha>`) so its mutation
+  probes could not collide with the coordinator's concurrent
+  `flutter test test/scripts/` run — do this whenever a review and a test run
+  overlap in time; it is the same lesson as "serialise review rounds" without
+  paying the serialisation.
+  **Tuning 1 — lens 6 gains a sub-shape: "the hardening one function ABOVE
+  did not travel."** `extractCaseSkips` had been hardened against
+  comment-restated names; `invokesGate`, directly below it in the same file
+  and backing every `file()` runner, shipped as a bare `contains()` and read
+  heredoc bodies and invoker-less prose as invocations. When a file contains
+  a documented past hardening, ask which SIBLING predicates in that file make
+  the same class of decision and whether the hardening reached them.
+  **Tuning 2 — lens 7 (missing_input) for CHECK SCRIPTS: a non-`check_*`
+  runner is invisible to every gate that enumerates `check_*`.** The sweep is
+  deliberately `contract_sweep.dart` (both loops enumerate `check_*`; the
+  rule-24 ledger rejects non-`check_*` keys), so its wiring needs its OWN pin
+  (`test/contracts/contract_sweep_wired_test.dart` + a behavioural assertion
+  that the real hook reaches the line). Reviewer question: "what enumerates
+  this, and if nothing does, what pins it?"
+  **Tuning 3 — lens 8 (asserted_fixture_value) for REGEXES written into a
+  plan: `grep -c` the regex against the REAL file before believing any
+  selection it drives.** The v1 registry arm matched `^\s+file:` — zero hits
+  against 896 `- file:` items and 176 `{ file: }` maps — and would have
+  shipped inert; caught by plan-review round 1, not by reading.
+  **Tuning 4 — Windows-specific red flag for anything that spawns `flutter`
+  from Dart under a test that stubs `flutter` on PATH:** `Process.runSync(
+  'flutter', …, runInShell: true)` goes through cmd.exe, which cannot execute
+  an extensionless POSIX stub and finds the REAL flutter — a recursion the
+  file-level `@Timeout` cannot interrupt (`runSync` blocks the isolate).
+  Guard with an env sentinel set on the spawn (`CONTRACT_SWEEP_NESTED=1`) and
+  a kill switch the e2e sets; probe `flutter --version` from Dart to see which
+  binary answers.
+  **Tuning 5 — L25 adjacency greps miss LINE-WRAPPED citations.** Finding 2's
+  three wrong dates were found with a `0768a0ce.{0,3}2026-09-18` adjacency
+  grep, which missed the closure YAML's instance because YAML `>` folding put
+  the date on the next line; `git grep <sha> | grep <date>` (two passes, no
+  adjacency) is the widest form. Same family as the analyzer `^\s+` trap.
+
 - **2026-09-19** — blast-radius **feature** (record commit; the underlying
   bump commit `a4eb42ab` self-declared **platform**) — branch
   `plan-review-record-versionbump44`, filling in a plan-review record the
@@ -283,6 +374,33 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   genuinely has no lesson beyond the process gap already named in the plan-
   review record itself (`mechanical_only: true` per CLAUDE.md §4.12.6 has no
   effect in the gate script — confirmed by grep, zero hits).
+- **2026-09-19 (c)** — blast-radius **feature** — branch
+  `discipline-gates-tier12` (8 new mechanically-gateable `check_*.dart`
+  gates derived from the repo's 2 highest-recurrence `feedback_*.md` files —
+  `feedback_green_check_input_set_width.md` and
+  `feedback_mistake_guard_without_its_mirror.md`). **4 findings (0 P0, 0 P1,
+  0 P2, 4 P3 — all low); 0 false_alarm — all 4 fixed in-batch.** Review:
+  `docs/reviews/ab9c36f14353-review.md`. All 4 were documentation-only: 2
+  arithmetic errors in `docs/audit/gate_test_ledger.yaml`'s own
+  `evidence:` prose (test totals that didn't sum after the coordinating
+  session's own manual mutation re-runs — the reviewer independently re-ran
+  all 8 gates' mutations rather than trusting the ledger text, and found the
+  2 gates nobody had personally re-verified were exactly the 2 with wrong
+  arithmetic), and 2 wording-precision issues in
+  `gate_existssync_file_vs_dir_lib.dart`'s header comment (a stale,
+  self-referential calibration count; and a past-tense framing of a
+  caught-in-review spec defect that could misread as a confirmed live
+  incident against the cited OI's actual "0 missing, not a live breach"
+  status). No functional defect in any of the 8 gates' detection logic.
+  **Tuning — a new sub-instance of the ledger's own trust model, not a new
+  lesson:** rule 21/24's `mutation_proven:` and `evidence:` fields are
+  self-attested by design (CLAUDE.md §4.4 rule 21 says so explicitly), and
+  this review is a concrete case of that self-attestation drifting on
+  exactly the arithmetic a human proofreader tends to skim past — the
+  fresh-agent B-pass is doing real work here, not rubber-stamping. No skill
+  change warranted; the existing "mutate it and run it, personally" discipline
+  is what caught this, both in the coordinating session (6 of 8 gates,
+  independently) and in this B-pass (the remaining 2).
 - **2026-09-18 (b)** — blast-radius **platform** — branch `discipline-v2`
   (S/M/L fix tiering + batch telemetry + hook wiring). **6 findings (0 P0, 0 P1,
   6 P2); 0 false_alarm — all 6 fixed in-batch** (`7de94167`). Review:
