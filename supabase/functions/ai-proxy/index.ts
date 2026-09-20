@@ -440,7 +440,7 @@ Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the ex
           JSON.stringify({ error: "Gemini returned no content" }),
           0,
         );
-        await reportGeminiExhaustion(supabaseClient, "ai_proxy_gemini_exhausted", lastError ?? null);
+        await reportGeminiExhaustion(supabaseClient, "ai_proxy_gemini_exhausted", lastError ?? null, "food_text_analysis");
         return err(502, "Food analysis failed");
       }
 
@@ -600,7 +600,7 @@ Rules: identify every distinct food item, estimate realistic portion sizes for a
 
       if (!content) {
         await resolveVisionPlaceholder("failed_gemini", JSON.stringify({ error: "Gemini returned no content" }), 0);
-        await reportGeminiExhaustion(supabaseClient, "ai_proxy_gemini_exhausted", lastError ?? null);
+        await reportGeminiExhaustion(supabaseClient, "ai_proxy_gemini_exhausted", lastError ?? null, "scan_meal");
         return err(502, "Image analysis failed");
       }
 
@@ -643,7 +643,7 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
 
       if (!content) {
         await resolveVisionPlaceholder("failed_gemini", JSON.stringify({ error: "Gemini returned no content" }), 0);
-        await reportGeminiExhaustion(supabaseClient, "ai_proxy_gemini_exhausted", lastError ?? null);
+        await reportGeminiExhaustion(supabaseClient, "ai_proxy_gemini_exhausted", lastError ?? null, "cart_auditor");
         return err(502, "Cart analysis failed");
       }
 

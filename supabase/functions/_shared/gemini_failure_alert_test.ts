@@ -93,3 +93,40 @@ Deno.test(
     assertEquals(client.inserted.length, 1);
   },
 );
+
+Deno.test(
+  "endpoint distinguishes otherwise-identical alerts in summary + context_json (B-pass finding, 2026-09-20)",
+  async () => {
+    const client = fakeClient({ selectResult: { data: [], error: null } });
+    await reportGeminiExhaustion(
+      client,
+      "ai_proxy_gemini_exhausted",
+      { status: 500, message: "server error" },
+      "scan_meal",
+    );
+    assertEquals(
+      (client.inserted[0].summary as string).startsWith("scan_meal:"),
+      true,
+    );
+    assertEquals(
+      (client.inserted[0].context_json as Record<string, unknown>).endpoint,
+      "scan_meal",
+    );
+  },
+);
+
+Deno.test(
+  "endpoint omitted falls back to source in summary + null in context_json (mirror case)",
+  async () => {
+    const client = fakeClient({ selectResult: { data: [], error: null } });
+    await reportGeminiExhaustion(client, "ai_proxy_gemini_exhausted", { status: 500, message: "server error" });
+    assertEquals(
+      (client.inserted[0].summary as string).startsWith("ai_proxy_gemini_exhausted:"),
+      true,
+    );
+    assertEquals(
+      (client.inserted[0].context_json as Record<string, unknown>).endpoint,
+      null,
+    );
+  },
+);
