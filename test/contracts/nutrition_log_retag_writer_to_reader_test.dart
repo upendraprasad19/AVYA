@@ -235,6 +235,71 @@ void main() {
               'per-source value');
     });
 
+    test(
+        'moveMealLog applies macroUpdates on top of a collision-merge, not '
+        'the other way around (B-pass finding, 2026-09-20)', () async {
+      // Pre-fix: the collision branch unconditionally recomputed every
+      // total_* field from the merged item list AFTER macroUpdates had
+      // already been applied to `row`, silently discarding the caller's
+      // explicit macro edit whenever the destination slot already held a
+      // log. This is exactly the Edit Macros sheet's real call shape: a
+      // user can both retag AND edit macros in one SAVE.
+      const items = [
+        FoodItem(
+          name: 'Oats',
+          quantityG: 100,
+          calories: 300,
+          protein: 10,
+          carbs: 50,
+          fat: 5,
+          fiber: 4,
+        ),
+      ];
+      final date = DateTime(2026, 9, 20);
+
+      final firstLog = await NutritionWriteService.instance.logMeal(
+        date: date,
+        mealType: 'breakfast',
+        items: items,
+        source: NutritionWriteSource.manualSearch,
+      );
+      final secondLog = await NutritionWriteService.instance.logMeal(
+        date: date,
+        mealType: 'lunch',
+        items: items,
+        source: NutritionWriteSource.manualSearch,
+      );
+
+      final firstMove = await NutritionWriteService.instance.moveMealLog(
+        logKey: firstLog.logKey!,
+        newMealType: 'dinner',
+      );
+      final destinationKey = firstMove.logKey!;
+
+      // Second move collides at `destinationKey` AND carries an explicit
+      // macro override — the two effects the pre-fix ordering couldn't
+      // combine correctly.
+      final secondMove = await NutritionWriteService.instance.moveMealLog(
+        logKey: secondLog.logKey!,
+        newMealType: 'dinner',
+        macroUpdates: const {'total_calories': 42},
+      );
+      expect(secondMove.success, isTrue);
+      expect(secondMove.logKey, destinationKey,
+          reason: 'both moves must collide at the same destination key');
+
+      final merged = Map<String, dynamic>.from(
+          HiveService.instance.nutritionBox.get(destinationKey) as Map);
+      // Pre-fix this would read 600 (the merged item-fold total), silently
+      // discarding the caller's macroUpdates.
+      expect(merged['total_calories'], 42,
+          reason: 'an explicit macroUpdates value must win over the '
+              'collision-merge recompute, not be silently discarded by it');
+      // The item merge itself must still have happened — macroUpdates
+      // overriding totals must not skip the items union.
+      expect(merged['items'], hasLength(2));
+    });
+
     test('moveMealLog rejects an unknown mealType', () async {
       final logResult = await NutritionWriteService.instance.logMeal(
         date: DateTime(2026, 9, 20),

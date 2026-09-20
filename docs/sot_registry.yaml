@@ -629,12 +629,16 @@ concepts:
       old slot's cloud row is not explicitly tombstoned.
     writers:
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 354-471
+        line_range: 359-483
         method: moveMealLog
         notes: |
           Reads the row at the old key, recomputes the key via
           computeLogKey with the new mealType, merges on collision,
-          writes at the new key, deletes the old key.
+          writes at the new key, deletes the old key. macroUpdates is
+          applied AFTER the collision-merge recompute (not before) so an
+          explicit caller override survives a merge instead of being
+          silently overwritten by it (diagnose
+          2026-09-20-movemeal-log-macro-updates-clobbered-d9a3f7).
     reader_manifest_complete: true
     readers:
       - file: lib/features/nutrition/widgets/todays_meals_card.dart
@@ -6568,11 +6572,11 @@ concepts:
         fields_read: []
         notes: Fired at :58/:285/:883; invalidates subscriptionInfoProvider + messageLimitProvider.
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 874-874
+        line_range: 886-886
         method: onStateChanged
         semantic: callback-invocation
         fields_read: []
-        notes: Fired at :899; invalidates the 6 nutrition providers (shifted by the moveMealLog insertion, obs 1 2026-09-20 batch).
+        notes: Fired at :911; invalidates the 6 nutrition providers (shifted again by the food-logging-observations fix-round's moveMealLog macroUpdates reorder, 2026-09-20).
       - file: lib/core/services/rank_service.dart
         line_range: 53-53
         method: onStateChanged

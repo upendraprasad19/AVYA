@@ -9,7 +9,8 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### diet_plan_immediate_load_no_modal (1 bugs)
 - 2026-09-20 6642b5 — Opening the Diet Plan screen shows a blank spinner behind a "Saved Diet Plan Found — load it or generate fresh?" modal, even though the saved plan is already available synchronously from local Hive…
 
-### gemini_failure_alert (1 bugs)
+### gemini_failure_alert (2 bugs)
+- 2026-09-20 c7f4d1 — `reportGeminiExhaustion` used a constant `source` string ("ai_proxy_gemini_exhausted") for every one of the 3 ai-proxy request types (food_text_analysis, scan_meal, cart_auditor) it is called from —…
 - 2026-09-20 b6e2a4 — Tasks 9-10 of this batch (commits 72a4aa7d, c84eb796) added `reportGeminiExhaustion` — a new write into the `public.alerts` table, reused by the existing `trg_dispatch_critical_alert_notify` trigger…
 
 ### auth_hive_owner_agreement (3 bugs)
@@ -1294,6 +1295,7 @@ rather than a Hive box. (1 bugs)
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
 | 2026-09-20 | 6642b5 | Opening the Diet Plan screen shows a blank spinner behind a "Saved Diet Plan Found — load it or generate fresh?" modal, even though the saved plan is already available synchronously from local Hive… | diet_plan_immediate_load_no_modal | test/widgets/diet_plan_screen_no_modal_test.dart |
+| 2026-09-20 | c7f4d1 | `reportGeminiExhaustion` used a constant `source` string ("ai_proxy_gemini_exhausted") for every one of the 3 ai-proxy request types (food_text_analysis, scan_meal, cart_auditor) it is called from —… | gemini_failure_alert | supabase/functions/_shared/gemini_failure_alert_test.ts |
 | 2026-09-20 | b6e2a4 | Tasks 9-10 of this batch (commits 72a4aa7d, c84eb796) added `reportGeminiExhaustion` — a new write into the `public.alerts` table, reused by the existing `trg_dispatch_critical_alert_notify` trigger… | gemini_failure_alert | supabase/functions/_shared/gemini_failure_alert_test.ts |
 | 2026-09-20 | f4c8b1 | Task 8 of this batch (commit 5bb7a995) changed HiveUserSession's 7 user-scoped box opens from a sequential `for` loop to `Future.wait(userScopedBoxRoots.map(openOne))`. `hive_user_session.dart` is… | auth_hive_owner_agreement | test/contracts/hive_user_session_box_open_parallel_test.dart |
 | 2026-09-20 | 1261a4 | Opening "LOG TO LUNCH" (or any locked-slot CTA) and logging via the Search tab or the Barcode tab could silently write to a different meal slot than the one the user explicitly tapped — the sheet's… | meal_slot_inference_drift | test/widgets/log_food_sheet_search_respects_locked_slot_test.dart |

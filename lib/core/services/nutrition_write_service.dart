@@ -37,7 +37,12 @@ class NutritionWriteService {
   NutritionWriteService._();
   static final instance = NutritionWriteService._();
 
-  /// Allowed values for `mealType`.
+  /// Allowed values for `mealType`. Keep in sync with `mealSlotKeys`
+  /// (lib/features/nutrition/services/meal_slot_inference.dart) — not
+  /// imported directly since core/services must not depend on features/.
+  /// A mismatch here silently drops every write for the disagreeing value
+  /// (round-2 plan review, 2026-09-20 — the singular 'snack' vs this set's
+  /// plural 'snacks' was exactly this class of drift).
   static const Set<String> _allowedMealTypes = {
     'breakfast',
     'lunch',
@@ -405,16 +410,6 @@ class NutritionWriteService {
     row['meal_type'] = newMealType;
     row['id'] = newKey;
     row['log_key'] = newKey;
-    if (macroUpdates != null) {
-      // Reject an `items` key here the same way editLog's own recompute
-      // branch owns `items` exclusively — a caller passing items through
-      // macroUpdates would otherwise silently bypass the totals recompute
-      // below and corrupt the row (no current caller does this; guarded
-      // defensively per review round 1).
-      final safeMacroUpdates = Map<String, dynamic>.from(macroUpdates)
-        ..remove('items');
-      row.addAll(safeMacroUpdates);
-    }
     row['logged_at'] = DateTime.now().toUtc().toIso8601String();
 
     final existingAtDestination = box.get(newKey);
@@ -440,11 +435,28 @@ class NutritionWriteService {
           mergedItems.fold<double>(0, (a, i) => a + i.fiber).round();
     }
 
-    // FC6 — clamp AFTER the collision-merge recompute (not before), so
-    // whichever version of `row` actually gets written (moved-only OR
-    // merged-with-destination) has its totals + per-item values bounded.
-    // Mirrors editLog/appendItemsToMeal, which both clamp after their own
-    // recompute for the same reason (review round 1 finding).
+    if (macroUpdates != null) {
+      // Applied AFTER any collision-merge recompute above (B-pass finding,
+      // 2026-09-20) — the merge branch unconditionally recomputes every
+      // total_* field from the merged item list, so applying macroUpdates
+      // BEFORE it let a caller's explicit macro edit be silently discarded
+      // whenever the destination slot already held a log. Reject an
+      // `items` key here the same way editLog's own recompute branch owns
+      // `items` exclusively — a caller passing items through macroUpdates
+      // would otherwise silently bypass the totals recompute and corrupt
+      // the row (no current caller does this; guarded defensively per
+      // review round 1).
+      final safeMacroUpdates = Map<String, dynamic>.from(macroUpdates)
+        ..remove('items');
+      row.addAll(safeMacroUpdates);
+    }
+
+    // FC6 — clamp AFTER the collision-merge recompute AND macroUpdates
+    // (not before either), so whichever version of `row` actually gets
+    // written (moved-only, merged-with-destination, or macro-overridden)
+    // has its totals + per-item values bounded. Mirrors editLog/
+    // appendItemsToMeal, which both clamp after their own recompute for
+    // the same reason (review round 1 finding).
     _clampMealPayload(row);
 
     try {
