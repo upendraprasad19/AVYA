@@ -175,7 +175,11 @@ class HiveUserSession {
     await _migrateLegacySharedBoxes(userId);
 
     final hash = userId.replaceAll('-', '').substring(0, 8);
-    for (final root in userScopedBoxRoots) {
+    // Obs 4 (cold-start perf): open all 7 user-scoped boxes in parallel,
+    // mirroring the shared-box pattern already used in hive_service.dart
+    // :77-82. No box here has a documented open-order dependency on
+    // another — each box's adapter registration is independent.
+    Future<void> openOne(String root) async {
       final boxName = namespacedBoxName(root, userId);
       try {
         await Hive.openBox(boxName);
@@ -188,6 +192,7 @@ class HiveUserSession {
         await Hive.openBox(boxName);
       }
     }
+    await Future.wait(userScopedBoxRoots.map(openOne));
 
     _currentOwnerHash = hash;
     _currentOwnerFullId = userId;
