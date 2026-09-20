@@ -9,17 +9,22 @@ import 'log_food_modes/scan_mode_body.dart';
 import 'log_food_modes/cart_mode_body.dart';
 import 'log_food_modes/barcode_mode_body.dart';
 import 'log_food_modes/search_mode_body.dart';
+import '../providers/nutrition_provider.dart' show mealTypeProvider;
+import '../services/meal_slot_inference.dart' show mealSlotLabel;
 
 /// The five modes hosted by [LogFoodSheet]. AI is the default tab.
 enum LogFoodMode { ai, scan, cart, barcode, search }
 
 /// Opens the LogFoodSheet bottom sheet (75% screen height).
-void showLogFoodSheet(BuildContext context, {LogFoodMode? initial}) {
+void showLogFoodSheet(BuildContext context, {LogFoodMode? initial, String? lockedSlot}) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => LogFoodSheet(initial: initial ?? LogFoodMode.ai),
+    builder: (_) => LogFoodSheet(
+      initial: initial ?? LogFoodMode.ai,
+      lockedSlot: lockedSlot,
+    ),
   );
 }
 
@@ -32,8 +37,13 @@ void showLogFoodSheet(BuildContext context, {LogFoodMode? initial}) {
 ///         AI is default. Each mode dismisses the sheet via [_dismiss]
 ///         on successful save.
 class LogFoodSheet extends ConsumerStatefulWidget {
-  const LogFoodSheet({super.key, required this.initial});
+  const LogFoodSheet({super.key, required this.initial, this.lockedSlot});
   final LogFoodMode initial;
+
+  /// When set (opened from a specific meal-slot's `+ LOG` CTA), the sheet
+  /// locks `mealTypeProvider` to this slot for the sheet's lifetime and
+  /// titles itself "LOG TO {SLOT}" instead of the generic "LOG FOOD".
+  final String? lockedSlot;
 
   @override
   ConsumerState<LogFoodSheet> createState() => _LogFoodSheetState();
@@ -49,6 +59,15 @@ class _LogFoodSheetState extends ConsumerState<LogFoodSheet> {
   void initState() {
     super.initState();
     _active = widget.initial;
+    final slot = widget.lockedSlot;
+    if (slot != null) {
+      // Deferred so Riverpod isn't mutated during build/init — mirrors
+      // the retired LogToSlotSheet's identical pattern.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ref.read(mealTypeProvider.notifier).select(slot);
+      });
+    }
   }
 
   void _dismiss() {
@@ -102,7 +121,9 @@ class _LogFoodSheetState extends ConsumerState<LogFoodSheet> {
           ),
           const Spacer(),
           Text(
-            'LOG FOOD',
+            widget.lockedSlot == null
+                ? 'LOG FOOD'
+                : 'LOG TO ${mealSlotLabel(widget.lockedSlot!)}',
             style: AppTypography.mono.copyWith(
               color: AppColors.textPrimary,
               letterSpacing: 2,

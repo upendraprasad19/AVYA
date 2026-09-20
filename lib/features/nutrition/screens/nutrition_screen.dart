@@ -26,7 +26,6 @@ import '../widgets/weekly_chart_card.dart';
 import '../widgets/hydration_card.dart';
 import '../widgets/your_foods_section.dart';
 import '../widgets/log_food_sheet.dart';
-import '../widgets/log_to_slot_sheet.dart';
 
 class NutritionScreen extends ConsumerStatefulWidget {
   const NutritionScreen({super.key});
@@ -301,7 +300,7 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
               onEdit: (meal) => _showEditMacrosSheet(context, meal),
               onLongPressMeal: (meal) => _showLogActionMenu(context, meal),
               onLogSlot: (slot) =>
-                  LogToSlotSheet.show(context, slot: slot),
+                  showLogFoodSheet(context, lockedSlot: slot),
             );
           }),
         ),
