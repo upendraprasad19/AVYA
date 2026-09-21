@@ -53,6 +53,28 @@ Iterable<File> _edgeFunctionSources() => Directory(_functionsDir)
     .whereType<File>()
     .where((f) => f.path.endsWith('.ts'));
 
+/// File + exact literal snippet for the ONE reviewed exception to the rule
+/// below (2026-09-22, diagnose 9c4f2e). `founder_digest_content.ts`'s
+/// `lapsedYesterday` metric deliberately reads `subscription_status` to
+/// COUNT how often it drifts from `subscription_expires_at` — a
+/// founder-facing "churn proxy" KPI, not a tier/access decision (see that
+/// file's own doc comment on `lapsedYesterday` for the full reasoning: it
+/// measures the exact cache-vs-truth drift this test exists to keep OUT of
+/// tier decisions elsewhere; no user's access or AI-generated content
+/// changes based on this read). Rewriting it to use fetchProUserIds()
+/// instead would defeat the metric's own purpose — that helper reports who
+/// is AUTHORITATIVELY pro right now, not who the stale cache still claims
+/// is pro after expiry, which is the drift being measured.
+///
+/// Exempted by exact snippet removal, not a file-level skip, so a
+/// DIFFERENT, illegitimate read added later to this same file is still
+/// caught by the patterns below — and the companion `expect` in the loop
+/// fails loudly if this literal ever stops matching, so the exemption
+/// cannot silently widen or go stale.
+const _metricsOnlyExemptFile =
+    'supabase/functions/_shared/founder_digest_content.ts';
+const _metricsOnlyExemptSnippet = '.eq("subscription_status", "pro")';
+
 /// Strips block and line comments so prose describing the bug (including this
 /// file's own rationale, mirrored into the helper's docstring) is not mistaken
 /// for code. Per `feedback_source_grep_strip_comments_first`.
@@ -90,7 +112,19 @@ void main() {
     test('no Edge Function READS users.subscription_status to decide tier', () {
       final violations = <String>[];
       for (final file in _edgeFunctionSources()) {
-        final src = _stripComments(file.readAsStringSync());
+        var src = _stripComments(file.readAsStringSync());
+        final relPath = file.path.replaceAll('\\', '/');
+        if (relPath == _metricsOnlyExemptFile) {
+          final before = src;
+          src = src.replaceFirst(_metricsOnlyExemptSnippet, '');
+          expect(src, isNot(before),
+              reason: 'the reviewed metrics-only exemption snippet '
+                  '($_metricsOnlyExemptSnippet) no longer appears verbatim '
+                  'in $relPath — either it moved/was reformatted (update '
+                  '_metricsOnlyExemptSnippet to match the new text) or it '
+                  'was removed entirely (delete the now-unused exemption '
+                  'too). Do not let this assertion go red silently.');
+        }
         for (final p in _readPatterns) {
           if (p.hasMatch(src)) {
             violations.add('${file.path} matches ${p.pattern}');

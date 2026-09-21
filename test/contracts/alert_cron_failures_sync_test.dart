@@ -61,8 +61,9 @@ void main() {
         reason: 'migration fire-floor must equal yaml fire_at=$fireAt');
   });
 
-  test('migration query counts failed (1h) OR currently-stuck rows — each '
-      'branch with its OWN time bound, no shared outer window', () {
+  test('migration query counts failed (1h) OR currently-stuck (1h-6h) rows '
+      '— each branch with its OWN independent time bound, no single shared '
+      'outer window', () {
     expect(
       sql.contains(
         "(status = 'failed' AND started_at >= now() - interval '1 hour')",
@@ -74,16 +75,29 @@ void main() {
           'digest metric paired with a 1h dedup, which re-pages hourly for '
           'up to 24h after an already-resolved single failure.',
     );
+    final stuckBranch = RegExp(
+      r"OR\s*\(status = 'started'\s*"
+      r"AND started_at < now\(\) - interval '1 hour'\s*"
+      r"AND started_at >= now\(\) - interval '6 hours'\)",
+    ).hasMatch(sql);
     expect(
-      sql.contains(
-        "(status = 'started' AND started_at < now() - interval '1 hour')",
-      ),
+      stuckBranch,
       isTrue,
-      reason: 'a stuck job is an ONGOING condition, not a discrete past '
-          'event — it must have NO upper time bound, or a job stuck for '
-          'longer than that bound would become permanently invisible once '
-          'its started_at ages past it, which is worse than the re-paging '
-          'bug a shared bound would have been patching around.',
+      reason: 'a stuck job is an ONGOING condition, so its branch needs its '
+          "own bound distinct from the failed branch's — but NOT an "
+          'unbounded one: migration 139 originally shipped exactly that '
+          '("no upper bound so a genuinely-stuck job stays visible '
+          "forever\") and it was ALREADY misfiring live within the same "
+          'batch (Hermes L31/L35, diagnose h1a2b3) — cron_call_log rows from '
+          'a crashed tick never get updated by logCronEnd, so "still '
+          '\'started\'" cannot be told apart from "crashed and abandoned", '
+          'and an unbounded lookback re-pages roughly hourly forever on a '
+          'dead incident. Migration 140 bounds the stuck branch to '
+          '[1h, 6h): long enough not to mask a genuinely still-running '
+          'function, short enough that an abandoned row stops paging once '
+          "it is old enough to be dead rather than running — and a job "
+          'still broken past 6h remains covered by the sibling '
+          "alert_cron_function_dead's own 8-day horizon.",
     );
   });
 

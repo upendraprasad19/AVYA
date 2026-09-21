@@ -6,6 +6,19 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### alert_cron_failures_threshold_sync (1 bugs)
+- 2026-09-22 k7d3n5 — `sh scripts/safe_push.sh` FAILED with "Some tests failed." inside the pre-push hook's full CI-equivalent `flutter test test/ --exclude-tags golden` run, blocking the push of this batch's 2…
+
+### cart_auditor_counter_increment_test_window (1 bugs)
+- 2026-09-22 m5q8t1 — Full-suite pre-push run failed `test/features/nutrition/counter_increment_on_analyse_test.dart`: "Test #11 M1 — counter at API-call site, not save site CartAuditorNotifier.analyseCart calls…
+
+### support_contact_email (2 bugs)
+- 2026-09-22 r2w6y9 — Full-suite pre-push run failed `test/features/profile/delete_account_screen_test.dart`: "H1-B — Source invariants Support email present in error copy" — Expected contains 'support@icanbefitter.com',…
+- 2026-09-21 a1e6f2 — Founder observation #7: "email wrong. check our email." The app showed 2 different, both-wrong support addresses across 2 screens: the Profile contact card showed `support@avya.app` (a leftover from…
+
+### pro_predicate_adoption_gate (1 bugs)
+- 2026-09-22 9c4f2e — Full-suite pre-push run failed on `test/contracts/pro_predicate_adoption_test.dart`: "no Edge Function READS users.subscription_status to decide tier" — Expected empty, Actual:…
+
 ### ai_failure_telemetry_coverage (1 bugs)
 - 2026-09-21 f7a2c9 — OI-226 (open_issues.md:5059): "ai-proxy chat/tool-calling Gemini exhaustion paths have no reportGeminiExhaustion alert wiring." The OI's own text names TWO distinct gaps on the server — re-verified…
 
@@ -30,9 +43,6 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ### nutrition_ai_gemini_resilience (1 bugs)
 - 2026-09-21 f7a2c9 — Investigation finding (gate check under A5, expanded across two plan-review rounds): 9 production `geminiChat(...)` call sites had no `retries` argument (default 0), so a single transient…
-
-### support_contact_email (1 bugs)
-- 2026-09-21 a1e6f2 — Founder observation #7: "email wrong. check our email." The app showed 2 different, both-wrong support addresses across 2 screens: the Profile contact card showed `support@avya.app` (a leftover from…
 
 ### (new — no prior SoT concept; UI-lifecycle fix, not a data contract) (1 bugs)
 - 2026-09-21 b4e7f1 — Founder observation #1 (screenshot): the swap "UNDO" snackbar banner stayed visible even after the workout reached 100% completion. Investigation found the gap was wider than the report: the snackbar…
@@ -1328,6 +1338,10 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-22 | k7d3n5 | `sh scripts/safe_push.sh` FAILED with "Some tests failed." inside the pre-push hook's full CI-equivalent `flutter test test/ --exclude-tags golden` run, blocking the push of this batch's 2… | alert_cron_failures_threshold_sync | test/contracts/alert_cron_failures_sync_test.dart |
+| 2026-09-22 | m5q8t1 | Full-suite pre-push run failed `test/features/nutrition/counter_increment_on_analyse_test.dart`: "Test #11 M1 — counter at API-call site, not save site CartAuditorNotifier.analyseCart calls… | cart_auditor_counter_increment_test_window | test/features/nutrition/counter_increment_on_analyse_test.dart |
+| 2026-09-22 | r2w6y9 | Full-suite pre-push run failed `test/features/profile/delete_account_screen_test.dart`: "H1-B — Source invariants Support email present in error copy" — Expected contains 'support@icanbefitter.com',… | support_contact_email | test/features/profile/delete_account_screen_test.dart |
+| 2026-09-22 | 9c4f2e | Full-suite pre-push run failed on `test/contracts/pro_predicate_adoption_test.dart`: "no Edge Function READS users.subscription_status to decide tier" — Expected empty, Actual:… | pro_predicate_adoption_gate | test/contracts/pro_predicate_adoption_test.dart |
 | 2026-09-21 | f7a2c9 | OI-226 (open_issues.md:5059): "ai-proxy chat/tool-calling Gemini exhaustion paths have no reportGeminiExhaustion alert wiring." The OI's own text names TWO distinct gaps on the server — re-verified… | ai_failure_telemetry_coverage | test/contracts/ai_media_proxy_telemetry_test.dart
 test/contracts/ai_breakdown_notifier_cart_auditor_telemetry_test.dart
 supabase/functions/_shared/tool-loop_gemini_exhaustion_alert_test.ts

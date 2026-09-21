@@ -74,7 +74,7 @@ thresholds:
     cron_cadence:        "*/15 * * * *"
     dedup_window_hours:  1
     phase: 1   # Phase-1 placeholder (B4, 2026-09-21) — 0 'failed' rows observed in the last 30 days as of this date, so no baseline exists yet to tune a higher floor
-    defined_in_migration: "139_alert_cron_failures.sql; stuck-branch upper bound added by 140_hermes_pass_fixes_138_139.sql"
+    defined_in_migration: "140_hermes_pass_fixes_138_139.sql"
 
 # Notes on suppression / acknowledgement
 # --------------------------------------
