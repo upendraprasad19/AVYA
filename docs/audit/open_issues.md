@@ -5141,3 +5141,387 @@ worth keeping.
 (simplest, lowest blast-radius) unless the per-function-silent-forever gap
 above is also worth closing in the same pass — if so, do the per-function
 spare instead, since it fixes both.
+
+## OI-227 — Telegram coach connect is broken (no linking token, bot says no user found) — remove UI entry points, revisit phase 2
+
+- **Status**: OPEN
+- **Blocked on**: none — UI removal is self-contained; the real fix needs the separate bot project
+- **Verified**: 2026-09-21 — founder tapped "Connect @AVYACoachBot" live, bot replied "no user found"
+- **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/food-logging-observations-126ab3`
+
+Founder tapped "Connect @AVYACoachBot" from the AI Coach tab and Telegram
+replied "no user found" — the account-linking handshake between the app and
+the bot doesn't work end to end.
+
+Root cause on the app side: `_openTelegramBot()`
+(`lib/features/ai_coach/screens/ai_coach/recording_body.dart:13`) opens a bare
+`https://t.me/AVYACoachBot` deep link with **no linking token** — no `?start=`
+param identifying the app user. Without one, the bot (a separate project on
+OpenClaw VPS, NOT in this repo — root `CLAUDE.md:269`) has no way to associate
+the incoming Telegram chat with an `icanbefitter` account. This repo cannot fix
+the bot-side half of that handshake; it needs access to the bot project.
+
+Confirmed while investigating: this is a **different bot** from the founder's
+admin console. `@AVYACoachBot` (user-facing, meant to carry coach
+conversations + proactive nudges via `telegram_connections`, referenced in
+`morning-alert/index.ts:456-464` as a push fallback) is separate from
+`@ICanbeFitterBot` / `@IcanbefitterBot` (root `CLAUDE.md:269`,
+`supabase/functions/CLAUDE.md:55` — the `telegram-admin-bot` Edge Function,
+read-only, founder-only, allowlisted to a single chat id, powers `/digest`
+etc.). No relation between the two; fixing one says nothing about the other.
+
+Live in-app entry points that let a user reach the broken flow:
+- `lib/features/ai_coach/screens/ai_coach/compact_header.dart` — popup menu
+  item `telegram` ("Connect @AVYACoachBot").
+- `lib/features/ai_coach/screens/ai_coach/telegram_view.dart` — the
+  "CONNECT @AVYACOACHBOT" CTA on the in-app Telegram card.
+
+Founder decision 2026-09-21: full fix (proper linking token + bot-side
+handling) is phase 2. **Done in this session, uncommitted:** removed the
+"Connect @AVYACoachBot" menu item (`compact_header.dart`) and the matching CTA
+in `telegram_view.dart` (its not-connected copy now reads "Telegram — Coming
+Soon" with no button). Deliberately **kept** the `switch_channel` toggle
+("Switch to Telegram" / "Switch to In-App Chat") — `channelProvider`
+(`ai_coach_provider.dart:1075-1086`) persists `coach_channel` to Hive, so any
+user already on `channel == 'telegram'` needs that toggle to get back to chat;
+removing it too would trade this bug for a worse one (a stranded user with no
+UI path back). Verified with `flutter analyze lib/` (both touched files are
+`part of 'screen.dart'`, so only a whole-tree analyze is valid per this
+board's own common-pitfalls note) — 0 errors/warnings, 45 pre-existing infos
+unrelated to these files. `telegram_view.dart` / `channelProvider` /
+`_openTelegramBot()` left in place (dead but harmless) for phase 2.
+
+Two related items surfaced, deliberately NOT resolved by this OI:
+- `lib/shared/widgets/paywall_sheet.dart:120` markets "Weekly AI nutrition
+  report + Telegram push" as a PRO perk bullet. With the connect entry points
+  gone, no new user can ever receive that. Founder to decide whether to reword
+  it now or leave it for the phase-2 fix.
+- `lib/features/ai_coach/widgets/telegram_card.dart` (`TelegramCard`) appears
+  unreferenced anywhere else in `lib/` — looks like dead code predating
+  `telegram_view.dart`. Not touched here; separate small cleanup if confirmed.
+
+**Recommendation**: Phase 2 — design a real linking handshake (token minted
+app-side, passed via the deep link's `start` param, exchanged by the bot for
+the user's id) with whoever owns the bot project, then re-add the UI entry
+points. Until then, this OI stays open as the pointer for "why is Telegram
+missing from the Coach menu."
+
+## OI-228 — AI coach shortenWorkout tool calls get stuck at status:queued with no resolution; log_workout_sheet shows wrong copy for a completed day
+
+- **Status**: OPEN
+- **Blocked on**: none — Bug A is a small isolated fix; Bug B needs live tool-call-lifecycle tracing before a fix can be proposed
+- **Verified**: 2026-09-21 — both citations below re-read live this session; Bug B's stuck-queued ROOT CAUSE is not yet isolated (see below)
+- **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/food-logging-observations-126ab3`
+
+Two related but distinct AI-coach tool-dispatch bugs surfaced from founder
+screenshots of a completed workout day.
+
+**Bug A — log_workout_sheet shows wrong "no workout" copy for a completed day.**
+`lib/features/ai_coach/widgets/log_workout_sheet.dart:99-115` (`_load()`)
+treats any `schedule_<date>.status` other than `'planned'`/`'paused'` —
+including `'completed'` — as "not loggable" and renders the generic empty
+state `'NO WORKOUT SCHEDULED TODAY'` (`:208`). For a day the user actually
+completed, this is misleading: the workout WAS scheduled and IS done, not
+absent. Needs a distinct completed-state copy branch (e.g. "Today's workout
+is already logged.").
+
+**Bug B — shortenWorkout tool call sat at `status: "queued"` and never
+resolved, while the model narrated success anyway.**
+This is NOT a missing-guard bug — verified live in this session:
+`WorkoutScheduleService.shortenDay` (`lib/core/services/swap_service.dart:350-354`)
+correctly throws `ShortenDayException('workout_completed', 'Cannot shorten a
+completed workout')` for a completed day, and the swap tool's own inline
+check (`tool_dispatcher.dart:283-286`, `_executeSwapExercise`) is symmetric
+and correct. `_executeShortenWorkout` (`tool_dispatcher.dart:577-595`) has no
+inline check of its own but correctly delegates to `shortenDay`, which DOES
+guard. **The observed tool call never reached this code at all** — the
+founder's `ai_coach_interactions.tool_calls[]` entry for the shorten intent
+sat at `status: "queued"` indefinitely, and the model's text reply
+prematurely narrated "I have queued... you will see the revised plan
+shortly" — directly violating `captain_manual.ts:435`'s hard rule: "Never
+narrate what you are about to do. Do it, then report the result in one
+line."
+
+**Not yet isolated:** why the tool call got stuck at `queued` and never
+actually dispatched. Needs tracing the tool-call lifecycle between the
+model's `tool_call` emission (ai-proxy `tool-loop.ts`) and the client's
+`ToolDispatcher` intent processing — worth checking live `ai_coach_interactions`
+rows for other stuck-`queued` instances to see if this is rare or systemic
+before assuming a specific mechanism.
+
+**Recommendation**: (1) Fix log_workout_sheet's copy for the completed-day
+case — small, isolated, no root-cause investigation needed first. (2)
+Investigate live why the shorten intent stalled at `queued` — reproduce with
+a fresh shorten-on-completed-day request, inspect `tool-loop.ts`'s
+round-trip and the client dispatch path, before proposing a fix. (3)
+Separately: the premature "queued... shortly" narration is a
+captain_manual.ts instruction-adherence gap the model should be tightened
+against regardless of Bug B's root cause.
+
+## OI-229 — AI coach chat replies violate captain_manual.ts hard rules: 100-word cap breached, fabricated free-tier message count shown to a PRO user
+
+- **Status**: OPEN
+- **Blocked on**: none — both are prompt-adherence gaps in `captain_manual.ts`'s
+  existing rules, not missing code; needs a prompt-engineering iteration + live
+  re-testing, not a one-line code fix
+- **Verified**: 2026-09-21 — both cited captain_manual.ts lines re-read live
+  this session and match the founder's observed reply exactly
+- **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/food-logging-observations-126ab3`
+
+Founder (confirmed PRO) sent "Hi" to the AI coach. The reply violated two of
+`captain_manual.ts`'s own hard rules for the `chat` channel.
+
+**Violation 1 — reply length.** `captain_manual.ts:432-433`: "REPLY LENGTH
+(chat) — HARD RULES: Default reply: 100 words or fewer." The actual reply
+ran to roughly 230 words — more than double the cap, with no photo attached
+(the 60-word photo case doesn't apply).
+
+**Violation 2 — fabricated free-tier cap shown to a PRO user.** The reply
+included "You have 10 messages remaining today on the free tier."
+`captain_manual.ts:122-124` is the only place in the system prompt resembling
+this text: "When free user approaches/hits the 10/day cap: ... 'Free tier —
+10 messages today, you're at 8. Want unlimited? PRO is ₹349...'" — an
+ILLUSTRATIVE EXAMPLE scoped explicitly to a free user near the cap. No field
+in the snapshot sent to the model carries a literal "messages remaining"
+count (PRO is unlimited server-side — no counter is even meaningful). The
+model appears to have pattern-matched this example phrasing into a reply for
+a user its own snapshot should have shown as PRO — i.e. it did not correctly
+gate this instruction block on `snapshot.subscription`/PRO status before
+using it.
+
+**Not yet investigated:** whether `snapshot.subscription` (or whatever field
+carries PRO status) was correctly populated in the actual request that
+produced this reply — if the snapshot itself was wrong, this is a data bug,
+not a pure model-adherence gap. Needs a live snapshot inspection on a repro.
+
+**Recommendation**: (1) Verify live that the snapshot sent for this request
+correctly marked the user PRO — rule out a data bug before assuming pure
+prompt drift. (2) If the snapshot was correct, tighten
+`captain_manual.ts:122-124`'s instruction to be more explicitly conditional
+("ONLY if snapshot.subscription is NOT pro") and/or move the illustrative
+example further from ambiguous phrasing a model could echo verbatim
+regardless of gating. (3) Consider a server-side deterministic safety net for
+both violations — e.g. truncate/warn on replies exceeding the word cap, and
+strip/refuse any reply containing free-tier cap language when
+`snapshot.subscription == 'pro'` — since prompt-only fixes are probabilistic
+and this is exactly the kind of hard, checkable rule a deterministic
+post-check can backstop.
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/food-logging-observations-126ab3`
+
+## OI-230 — AI coach snapshot rank-promotion math is self-contradictory: _getNextRankFromLadder / _getEtaNextPromotion
+
+- **Status**: OPEN
+- **Blocked on**: none — mechanism is fully understood and fixable directly
+- **Verified**: 2026-09-21 — read both functions live this session, confirmed
+  the mechanism below by tracing the code (the original founder-observed
+  contradictory screenshot text itself was not preserved in writing from the
+  earlier investigation and is not re-quoted here — the mechanism below is
+  independently derived from the current source, not from that screenshot)
+- **Identified**: originally from founder APK screenshots (Phase 1, this
+  session, exact date/wording not preserved) · filed 2026-09-21 via
+  mint_oi.sh from branch `claude/food-logging-observations-126ab3`
+
+Founder observed self-contradictory rank/promotion info in an AI coach reply
+(exact wording not preserved in writing). Re-deriving the mechanism directly
+from `lib/features/ai_coach/services/ai_snapshot_builder.dart` finds a
+concrete, precisely-locatable defect that would produce exactly this shape
+of contradiction:
+
+`_getNextRankFromLadder()` (`:1400-1459`) computes a `remaining` map keyed by
+whichever of `workouts` / `streak_days` / `weeks` / `deployments` the next
+rank's gate actually requires (`kRankGates[next.code]`), and picks a
+`binding_constraint` — the requirement with the MAX remaining value (`:1430,
+1442-1445`). So `binding_constraint` can legitimately be `'weeks'`,
+`'streak_days'`, or `'deployments'` — NOT `'workouts'` — whenever the user
+has already satisfied the workout count but not the other gate(s).
+
+`_getEtaNextPromotion()` (`:1585-1619`) calls `_getNextRankFromLadder()` and
+then reads **only** `remaining['workouts']` (`:1590`) to decide the ETA.
+If `remainingWorkouts == 0`, it unconditionally returns `{days: 0, date:
+<today>}` for BOTH `at_current_cadence` and `at_plan_cadence` (`:1592-1597`)
+— i.e. "promotion happens today" — **regardless of whether
+`remaining['streak_days']`, `remaining['weeks']`, or
+`remaining['deployments']` are still nonzero.** Even in the non-zero branch
+(`:1604-1607`), the day/week cadence math is computed purely from
+`remainingWorkouts` and never references the other three keys at all.
+
+**Net effect:** any user whose binding constraint is weeks/streak/deployments
+rather than workouts gets a snapshot where `next_rank.binding_constraint`
+correctly names the real bottleneck (e.g. `"weeks"`, with
+`next_rank.remaining.weeks: 3`), while `eta_next_promotion` simultaneously
+claims `{days: 0, date: today}` — because it only ever looked at
+`remaining.workouts`, which happened to already be 0. The Captain, fed both
+fields in the same snapshot, has no way to reconcile "3 weeks still needed"
+against "promotion today" — because the snapshot itself contains both, and
+they disagree.
+
+**Recommendation**: `_getEtaNextPromotion()` must compute ETA from the
+ACTUAL `binding_constraint` `_getNextRankFromLadder()` selected, not
+hardcode `workouts`. For a `weeks`-bound or `streak_days`-bound promotion,
+the "0 days" short-circuit is simply wrong — a weeks-gate can only be
+satisfied by calendar time passing, and a streak-gate needs the streak
+itself extended, neither of which `remainingWorkouts == 0` says anything
+about. Needs a per-constraint-type ETA formula (workouts → cadence-based, as
+today; weeks → calendar days remaining; streak → the specific streak
+mechanics; deployments → deployment cadence), or at minimum an honest
+"cannot estimate" response when the binding constraint isn't workouts, rather
+than a false "today."
+
+## OI-231 — AI coach addressed a promoted user by their OLD rank term (Recruit instead of Sailor) — current_rank_code read directly from Hive, bypassing rank_service's canonical reader
+
+- **Status**: OPEN
+- **Blocked on**: live verification (need to check the live `current_rank_code`
+  Hive/Postgres value for the affected user at the time of the reply to
+  distinguish a stale-data bug from a pure model instruction-adherence miss)
+- **Verified**: 2026-09-21 — the title's own implied mechanism was
+  investigated this session and found NOT to be the defect (see below); the
+  real root cause is still open
+- **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/food-logging-observations-126ab3`
+
+Founder is confirmed rank SD1 (per this session's earlier investigation) but
+was addressed "Recruit" — the term for rank SD2 — in the "hi" reply.
+
+**How rank-address is supposed to work:** `captain_manual.ts:27-28`
+instructs the model: "RANK-AWARE ADDRESS (use snapshot.current_rank.code):
+SD2 → 'Recruit'" (with the SD1 term "Sailor" listed alongside it,
+`captain_manual.ts:214-215`). The model is told to derive the address
+directly from `snapshot.current_rank.code`, which `ai_snapshot_builder.dart`
+builds via `_getCurrentRankFromLadder()` (`:1384-1398`).
+
+**This OI's own title names a mechanism that was checked and ruled out.**
+`_getCurrentRankFromLadder()` (`:1386`) and `_getNextRankFromLadder()`
+(`:1402`) both read `profile['current_rank_code']` directly off
+`_hive.userBox.get('profile')` rather than calling
+`rank_service.dart`'s canonical `getCurrentRank()` (`:217-229`, the reader
+named in the `rank_monotonic_current_code` SoT registry entry,
+`lib/core/services/CLAUDE.md`) — a real code-hygiene violation of this
+repo's "always read through the canonical SoT reader" rule, worth fixing
+regardless. **But `getCurrentRank()` itself does the exact same read**
+(`profile['current_rank_code'] as String? ?? 'SD2'`, `rank_service.dart:220`)
+— identical key, identical default. So the duplicate-reader pattern reads
+the SAME value either way; it cannot by itself explain a stale rank shown to
+the user, and is not confirmed as this bug's cause.
+
+**Not yet isolated — two remaining hypotheses, not distinguished:**
+1. **Stale data.** `profile['current_rank_code']` in Hive genuinely still
+   held `'SD2'` at the moment this snapshot was built, even though the app's
+   own Profile screen (which also ultimately reads this field) showed SD1 —
+   meaning the promotion write (`rank_service.dart:140-174`,
+   `evaluateAndPromote`) either hadn't run yet, or ran but didn't reach this
+   Hive key in time, for this specific request.
+2. **Pure model miss.** The snapshot's `current_rank.code` was already
+   correctly `'SD1'` and the model simply didn't use it — echoing "Recruit"
+   from conversational habit/training bias rather than reading
+   `snapshot.current_rank.code` as instructed.
+
+These have different fixes (a data/sync bug vs a prompt-engineering
+tightening) and need to be told apart before proposing one.
+
+**Recommendation**: (1) On a repro, inspect the live snapshot payload
+actually sent to the model for that request (or the `ai_coach_interactions`
+row's stored context, if captured) to see what `current_rank.code` literally
+said — this alone settles hypothesis 1 vs 2. (2) Independently of the root
+cause: fix `ai_snapshot_builder.dart:1386` and `:1402` to call
+`RankService.instance.getCurrentRank()` instead of duplicating its read —
+even though it isn't this bug's cause, it's a live SoT-reader duplication
+this repo's own conventions forbid, and duplicated reads are exactly the
+pattern that silently drifts later (`feedback_writer_reader_field_drift_recurring.md`).
+
+## OI-232 — AI coach chat scrolls to top on every switch between in-app chat and Telegram channel
+
+- **Status**: OPEN
+- **Blocked on**: none — mechanism is understood and fixable directly
+- **Verified**: 2026-09-21 — founder reported live; mechanism re-derived from
+  source this session (not yet fixed or regression-tested)
+- **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/food-logging-observations-126ab3`
+
+Founder: switching to Telegram then back to in-app chat scrolls the chat to
+the top (oldest message), requiring a manual re-scroll down every time.
+
+**Mechanism**, traced in `lib/features/ai_coach/screens/ai_coach/screen.dart`:
+`channel == 'in_app' ? _buildChatArea(messages, isSending) :
+_buildTelegramView(telegramConnected)` (`:447-449`) means the chat's
+scrollable widget tree is entirely REMOVED from the tree when switching to
+Telegram and rebuilt fresh when switching back — Flutter does not preserve a
+`ScrollController`'s offset across that kind of unmount/remount (no
+`PageStorageKey`/keep-alive is used here).
+
+The one thing that WOULD re-scroll it to the bottom on remount,
+`_jumpToBottom()` (`:275-281`, jumps to `maxScrollExtent`, guarded by
+`_scrollController.hasClients`), is only ever invoked from ONE call site
+(`:423-426`):
+```
+if (!_initialScrollDone && messages.isNotEmpty) {
+  _initialScrollDone = true;
+  _jumpToBottom();
+}
+```
+`_initialScrollDone` (`:159`, declared once per `_AiCoachScreenState`) is a
+**one-shot flag for the screen's entire lifetime** — it was added
+specifically to fix first-paint landing position (comment at `:416-422`,
+`closes-diagnose: 2026-05-10-coach-scroll-init`, APK Test #15 / Bug E) and
+was never intended to fire more than once. Because `_AiCoachScreenState`
+itself is NOT recreated when `channel` changes (only the conditional child
+widget swaps), `_initialScrollDone` is already `true` well before the first
+channel switch — so the guard's condition never re-fires, `_jumpToBottom()`
+never runs again, and the freshly-remounted chat ListView is left at
+whatever its own default initial position is (the top).
+
+**Recommendation**: re-scroll to bottom on every remount of the chat area,
+not just the screen's first paint — e.g. call `_jumpToBottom()` whenever
+`channel` transitions TO `'in_app'` (not just on the one-shot initial
+load), or give the chat `ListView`/`CustomScrollView` a
+`PageStorageKey`/`AutomaticKeepAliveClientMixin` so Flutter preserves its
+scroll position across the unmount caused by the channel swap instead of
+disposing it. The existing one-shot `_initialScrollDone` guard should stay
+for its original first-paint purpose — this needs an ADDITIONAL trigger, not
+a replacement of that one (removing the one-shot guard would reintroduce
+`2026-05-10-coach-scroll-init`).
+
+## OI-233 — user_daily_snapshots' 4 cron/client writers are not atomic against each other — residual race left open by the d8a2f6 merge-safe fix
+
+- **Status**: OPEN
+- **Blocked on**: none — scope and fix shape are already known, just not
+  proportionate to bundle into the fix that surfaced it
+- **Verified**: 2026-09-21 — explicitly scoped out in
+  `docs/diagnoses/2026-09-21-morning-alert-snapshot-clobber-d8a2f6.md`'s own
+  `impact_analysis`, filed here per that doc's own note ("worth its own OI
+  if the founder wants the race closed too")
+- **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/food-logging-observations-126ab3`
+
+`docs/diagnoses/2026-09-21-morning-alert-snapshot-clobber-d8a2f6.md` fixed
+`daily-snapshot/index.ts`'s blind wholesale-replace upsert into
+`user_daily_snapshots.snapshot_json` — it now reads the existing row,
+merges via `mergeSnapshotJson` (`_shared/snapshot_merge.ts`), and upserts
+the merged result. This makes the CLIENT writer safe against a cron having
+written earlier.
+
+**What it does NOT do:** make the 4 writers (`daily-snapshot`,
+`morning-alert`, `rolling-context`, `future-prediction`, `beat-my-coach`)
+atomic against EACH OTHER. Each still does its own application-level
+read-modify-write (SELECT, merge in application code, then UPSERT) — so two
+of them racing the exact same row at the exact same instant could still
+lose an update to each other: both read the same pre-race row, both merge
+their own key in locally, and whichever UPSERT lands second overwrites the
+first's change (the first's key survives only if the second writer's merge
+happened to include it too, which it won't for a key it doesn't own).
+
+This is a narrower, lower-probability window than the bug d8a2f6 fixed (that
+one was a GUARANTEED clobber on every client sync after any cron write, not
+a race requiring near-simultaneous writes) — which is why d8a2f6 deliberately
+did not bundle this fix in: the diagnose-doc's own `impact_analysis` names
+the proportionate fix (a Postgres RPC doing an atomic `snapshot_json ||
+$delta`, the same approach `e4a1b7`/OI-98's final fix used for
+`notification_preferences`) but notes it requires a migration touching a
+table 4 live Edge Functions read/write — disproportionate to the actual
+reported symptom, which the read-modify-write fix already closes completely.
+
+**Recommendation**: if the founder wants this residual race closed too,
+follow `e4a1b7`/OI-98's precedent: a SECURITY DEFINER (or INVOKER, per that
+migration's own later correction) Postgres RPC that does the merge
+atomically inside a single statement (`snapshot_json = snapshot_json ||
+$delta`), called by all 5 writers instead of each doing its own
+SELECT-then-UPSERT. Needs its own migration + live verification pass per
+this repo's migration protocol, not a quick follow-on to d8a2f6.

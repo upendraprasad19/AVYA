@@ -231,6 +231,47 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-21 (b)** — blast-radius **platform** — branch
+  `claude/food-logging-observations-126ab3` (diagnose d8a2f6: daily-snapshot's
+  merge-safe upsert fix + the Telegram-connect UI removal, OI-227). **6
+  findings (0 P0, 2 P1, 3 P2, 1 P4); 0 false_alarm — all 6 fixed in-batch,**
+  the two mutation-sensitive fixes independently reproduced red-then-green.
+  Review: `docs/reviews/b87e8a1f3f2a-review.md`.
+  **Tuning 1 — lens 1 (`writer_reader_drift`) needs a specific sub-question for
+  ANY fix that closes a server-side clobber: does the CLIENT also round-trip a
+  copy of the same field back up, through a DIFFERENT code path than the one
+  just fixed?** Finding 1 was the headline: the diagnose-doc's own fix made
+  `daily-snapshot`'s merge safe against everything the client's payload does
+  NOT mention — and `fitness_summary` was cron-owned exactly like the
+  originally-reported `morning_alert`, but the client DOES carry a stale local
+  mirror of it (for an unrelated, legitimate reason — the same builder feeds
+  the live chat request body too), so the merge-safety fix could not protect
+  it: `incoming` always wins on a key it carries, merge-safe or not. **The
+  general shape: a server-side merge/idempotency fix is not sufficient by
+  itself when the SAME data flows back through the client under a shared
+  builder function serving two different consumers with different
+  correctness requirements** — one consumer (live chat) legitimately wants
+  the client's current view; the other (a durable server row multiple crons
+  own pieces of) must never receive it. Ask, for every field the fix's own
+  mechanism does NOT touch: does anything else make that field reach the
+  write path anyway?
+  **Tuning 2 — fixing a code-review finding can re-break the SAME registry
+  citation the review didn't even look at, and the gate is what has to catch
+  it, not re-reading.** Fixing Finding 1 inserted ~18 lines into
+  `sync_service.dart` above two UNRELATED, pre-existing SoT registry
+  citations (`applyRestoreCeiling`, `restoreFailureReason`) — `pre-commit`'s
+  `check_sot_registry_parity.dart` caught both as stale, not a second review
+  pass. This is the SAME class Finding 5 itself was (a stale citation from an
+  earlier edit), recurring a SECOND time WHILE FIXING Finding 5 — because
+  Finding 5's own remediation (the kill-switch addition) shifted
+  `daily-snapshot/index.ts`'s citation AGAIN after the review had already
+  named it once. **When a fix-round's remediation touches a file that ALSO
+  carries citations FROM OTHER, unrelated SoT concepts, re-run the parity
+  gate after every edit to that file, not once at the end** — a review
+  dispatched against one staged diff cannot see citation drift its OWN
+  remediation introduces afterward.
+  False-alarm rate 0/6 → no lens removed; lens 1 extended per above.
+
 - **2026-09-20** — blast-radius **account** — branch
   `web-app-bugs-onboarding-a5a020` (onboarding picker text-wrap/unresponsive
   fix + muster/induction drift-and-reorder, e2b8a4 + d6f1b8). **5 findings

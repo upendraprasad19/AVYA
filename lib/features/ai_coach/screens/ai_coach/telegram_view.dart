@@ -30,49 +30,45 @@ extension _TelegramView on _AiCoachScreenState {
             Text(
               telegramConnected
                   ? 'Telegram Connected'
-                  : 'Connect to Telegram',
+                  : 'Telegram — Coming Soon',
               style: AppTypography.h2,
             ),
             const SizedBox(height: 8),
             Text(
               telegramConnected
                   ? 'Your AI coach is available on Telegram. Open the app to continue your conversation.'
-                  : 'Chat with your AI coach on Telegram for quick access anytime.',
+                  // OI-227 — connect flow removed 2026-09-21: no working
+                  // account-linking handshake yet. Revisit in phase 2.
+                  : 'We\'re rebuilding Telegram sign-in. Check back soon.',
               textAlign: TextAlign.center,
               style: AppTypography.body.copyWith(
                 color: AppColors.textDim,
                 height: 1.5,
               ),
             ),
-            const SizedBox(height: 24),
-            // Sharp 2-px slab CTA
-            GestureDetector(
-              onTap: () => _openTelegramBot(),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 13),
-                decoration: BoxDecoration(
-                  color: telegramConnected
-                      ? AppColors.info.withValues(alpha: 0.14)
-                      : AppColors.accent,
-                  borderRadius: BorderRadius.circular(AppRadius.sharp),
-                  border: telegramConnected
-                      ? Border.all(color: AppColors.info, width: 2)
-                      : null,
-                ),
-                child: Text(
-                  telegramConnected
-                      ? 'OPEN TELEGRAM'
-                      : 'CONNECT @AVYACOACHBOT',
-                  style: AppTypography.mono.copyWith(
-                    color: telegramConnected
-                        ? AppColors.info
-                        : AppColors.bgDeep,
-                    letterSpacing: 1.8,
+            if (telegramConnected) ...[
+              const SizedBox(height: 24),
+              // Sharp 2-px slab CTA
+              GestureDetector(
+                onTap: () => _openTelegramBot(),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 24, vertical: 13),
+                  decoration: BoxDecoration(
+                    color: AppColors.info.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(AppRadius.sharp),
+                    border: Border.all(color: AppColors.info, width: 2),
+                  ),
+                  child: Text(
+                    'OPEN TELEGRAM',
+                    style: AppTypography.mono.copyWith(
+                      color: AppColors.info,
+                      letterSpacing: 1.8,
+                    ),
                   ),
                 ),
               ),
-            ),
+            ],
           ],
         ),
       ),

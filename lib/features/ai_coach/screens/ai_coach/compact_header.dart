@@ -135,9 +135,6 @@ extension _CompactHeader on _AiCoachScreenState {
                                   .read(channelProvider.notifier)
                                   .setChannel(newChannel);
                               break;
-                            case 'telegram':
-                              _openTelegramBot();
-                              break;
                             case 'clear':
                               ref.invalidate(chatHistoryProvider);
                               break;
@@ -147,8 +144,8 @@ extension _CompactHeader on _AiCoachScreenState {
                               break;
                           }
                         },
-                        itemBuilder: (context) => _menuItemsForChannel(
-                            channel, telegramConnected, isPro),
+                        itemBuilder: (context) =>
+                            _menuItemsForChannel(channel, isPro),
                       ),
                     ],
                   ),
@@ -177,8 +174,10 @@ extension _CompactHeader on _AiCoachScreenState {
 
   // F11 · Test #9 — extracted PopupMenu items so the header body
   // stays readable. Behaviour preserved verbatim from the prior inline list.
+  // Code-review finding 6 (2026-09-21) — telegramConnected dropped: OI-227
+  // removed the only case that read it (the connect-flow menu item).
   List<PopupMenuEntry<String>> _menuItemsForChannel(
-      String channel, bool telegramConnected, bool isPro) {
+      String channel, bool isPro) {
     return [
       PopupMenuItem(
         value: 'switch_channel',
@@ -201,22 +200,9 @@ extension _CompactHeader on _AiCoachScreenState {
           ],
         ),
       ),
-      if (!telegramConnected)
-        PopupMenuItem(
-          value: 'telegram',
-          child: Row(
-            children: [
-              const Icon(Icons.link, size: 16, color: AppColors.info),
-              const SizedBox(width: 10),
-              Text(
-                'Connect @AVYACoachBot',
-                style: AppTypography.body.copyWith(
-                  color: AppColors.textPrimary,
-                ),
-              ),
-            ],
-          ),
-        ),
+      // OI-227 — connect flow removed 2026-09-21: no linking token in the
+      // deep link, bot (separate project) can't match the Telegram session
+      // to an app account ("no user found"). Revisit in phase 2.
       PopupMenuItem(
         value: 'clear',
         child: Row(

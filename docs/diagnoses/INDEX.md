@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### daily_snapshot_server_key_preservation (1 bugs)
+- 2026-09-21 d8a2f6 — Founder (PRO) reported never receiving a morning brief push notification. Live-verified via the app's own "hi" chat reply, which read the same broken data: "Your last proactive nudge was a morning…
+
 ### coach_chat_history_replay (2 bugs)
 - 2026-09-20 d3e8a1 — CI went red on `main` twice in a row (merge-triggered run 35485792369, then its rerun) on the "Supabase Integration Tests" job: `test/edge_functions/ai_proxy_test.dart`'s "AI Proxy — Free Tier T19: AI…
 - 2026-09-16 a1c6b9 — Founder reported (APK 1.0.0+43, two screenshots) that the AI Coach chat showed "I had trouble reaching the model. Try again in a moment." on every turn since the previous day, including a plain "hi"…
@@ -1300,6 +1303,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-21 | d8a2f6 | Founder (PRO) reported never receiving a morning brief push notification. Live-verified via the app's own "hi" chat reply, which read the same broken data: "Your last proactive nudge was a morning… | daily_snapshot_server_key_preservation | supabase/functions/_shared/snapshot_merge_test.ts |
 | 2026-09-20 | d3e8a1 | CI went red on `main` twice in a row (merge-triggered run 35485792369, then its rerun) on the "Supabase Integration Tests" job: `test/edge_functions/ai_proxy_test.dart`'s "AI Proxy — Free Tier T19: AI… | coach_chat_history_replay | test/edge_functions/ai_proxy_hard_failure_lib_test.dart |
 | 2026-09-20 | 6642b5 | Opening the Diet Plan screen shows a blank spinner behind a "Saved Diet Plan Found — load it or generate fresh?" modal, even though the saved plan is already available synchronously from local Hive… | diet_plan_immediate_load_no_modal | test/widgets/diet_plan_screen_no_modal_test.dart |
 | 2026-09-20 | c7f4d1 | `reportGeminiExhaustion` used a constant `source` string ("ai_proxy_gemini_exhausted") for every one of the 3 ai-proxy request types (food_text_analysis, scan_meal, cart_auditor) it is called from —… | gemini_failure_alert | supabase/functions/_shared/gemini_failure_alert_test.ts |
