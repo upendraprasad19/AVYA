@@ -297,16 +297,47 @@ class CoachInteractionRepository {
   /// ascending by `created_at` (ISO8601, lexicographically == chronologically)
   /// before the last-[limit] slice — mirrors the render path's sort in
   /// `ChatHistoryNotifier.build`. SoT concept `coach_chat_history_replay`.
-  /// Coach-CHAT channels. A locally-written coach row has no `channel`; a
-  /// restored row carries its cloud `channel` (see `_restoreCoachInteractions`),
-  /// so a non-chat interaction (`food_text_analysis` / `scan_meal` /
-  /// `cart_auditor` / `weekly_report`) is excluded from the replayed history
-  /// (Hermes P2 — restored non-chat rows must not masquerade as prior coach
-  /// turns). `verify_payment_attempt` was dropped from this example list
-  /// (OI-162 slice 4, f2c8d5) — that channel is retired and no row carries
-  /// it any more; this is illustrative example-list drift only, since the
-  /// exclusion below is allowlist-based, not a check against this comment.
-  static const Set<String> _coachChatChannels = {'app', 'chat', 'in_app_orphan'};
+  /// Coach-CHAT channels, for the Gemini-HISTORY reader ONLY
+  /// ([recentHistoryExchanges]). A locally-written coach row has no
+  /// `channel`; a restored row carries its cloud `channel` (see
+  /// `_restoreCoachInteractions`), so a non-chat interaction
+  /// (`food_text_analysis` / `scan_meal` / `cart_auditor` / `weekly_report`)
+  /// is excluded from what gets replayed into the model's own conversation
+  /// history (Hermes P2 — restored non-chat rows must not masquerade as
+  /// prior coach turns). `verify_payment_attempt` was dropped from this
+  /// example list (OI-162 slice 4, f2c8d5) — that channel is retired and no
+  /// row carries it any more; this is illustrative example-list drift only.
+  ///
+  /// Deliberately NARROW, and deliberately NOT shared with the chat-BUBBLE
+  /// renderer (`ChatHistoryNotifier.build`) — see [nonChatAnalysisChannels]
+  /// for that reader's own, differently-shaped filter and why a single
+  /// shared set was wrong (A2c/A2d, 2026-09-21).
+  static const Set<String> coachChatChannels = {'app', 'chat', 'in_app_orphan'};
+
+  /// Channels that are raw AI-ANALYSIS output, never a conversational turn —
+  /// excluded from the chat-BUBBLE render path (`ChatHistoryNotifier.build`).
+  /// A DENYLIST, not an allowlist, and deliberately so (A2d, 2026-09-21,
+  /// review round on A2c): the first version of this fix reused
+  /// [coachChatChannels] as an allowlist for the render path too, which
+  /// silently dropped every LEGITIMATE proactive/paywall channel that isn't
+  /// `'app'`/`'chat'`/`'in_app_orphan'` — confirmed live writers
+  /// `'in_app'` (proactive-coach-promotion), `'promotion_ceremony'`
+  /// (evaluate-rank-promotions), `'proactive_i_see_you'` (i-see-you-callout),
+  /// `'image_paywall'`/`'video_paywall'` (ai-media-proxy) all vanished from a
+  /// user's restored chat history with no error. The analysis-channel set
+  /// below is small, closed, and IS the actual thing the original bug
+  /// (a restored `food_text_analysis` failure rendering as a garbled chat
+  /// bubble) needs excluded; a denylist of it can't miss a future proactive
+  /// channel the way an allowlist of "known good" channels demonstrably did
+  /// twice in one review pass. `'app_event'` (`AppEventsService`) is
+  /// analytics-only and never a chat exchange either way.
+  static const Set<String> nonChatAnalysisChannels = {
+    'food_text_analysis',
+    'scan_meal',
+    'cart_auditor',
+    'weekly_report',
+    'app_event',
+  };
 
   List<Map<String, dynamic>> recentHistoryExchanges(
       {int limit = 8, String? excludeKey}) {
@@ -331,7 +362,7 @@ class CoachInteractionRepository {
       if (map['mode'] == 'media') continue; // '[Photo] …' placeholder text
       // Only genuine coach-chat rows (null channel = local coach write).
       final channel = map['channel'] as String?;
-      if (channel != null && !_coachChatChannels.contains(channel)) continue;
+      if (channel != null && !coachChatChannels.contains(channel)) continue;
       final user = (map['user_message'] as String?)?.trim() ?? '';
       final ai = (map['ai_response'] as String?)?.trim() ?? '';
       if (user.isEmpty || ai.isEmpty) continue;

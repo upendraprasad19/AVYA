@@ -166,6 +166,7 @@ Return ONLY valid JSON — no markdown, no code fences:
       timeoutMs: 20_000,
       jsonMode: true,
       fallbackToLite: false, // already on Flash-Lite
+      retries: 2, // f7a2c9 — no other retry on this path
     });
 
     if (!rawText) {

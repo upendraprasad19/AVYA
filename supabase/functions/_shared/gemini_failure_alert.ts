@@ -34,6 +34,14 @@ export async function reportGeminiExhaustion(
   source: string,
   lastError: { status: number | null; message: string } | null,
   endpoint?: string,
+  // Hermes L34 #4 (2026-09-21): tool-loop.ts's chat path can hit this on the
+  // SUMMARIZATION round after an earlier round already queued a real write
+  // (e.g. logSet) — the user still got their logged action via the FC2
+  // queued-intent acknowledgment, just no chat reply. Without this flag the
+  // alert reads identically to a total loss, which is not true and would
+  // misdirect triage. Additive only — never changes whether the alert fires
+  // or its severity; the underlying Gemini failure is equally real either way.
+  extra?: Record<string, unknown>,
 ): Promise<void> {
   // §4.6 feature-flag protocol (platform-tier path, B-pass finding
   // 2026-09-20): this function's own alerts-table write is new and
@@ -75,7 +83,7 @@ export async function reportGeminiExhaustion(
       source,
       severity,
       summary,
-      context_json: { status, message, endpoint: endpoint ?? null },
+      context_json: { status, message, endpoint: endpoint ?? null, ...extra },
       suggested_action: suggestedAction,
     });
     if (insertErr) {

@@ -186,6 +186,30 @@ function extractLogActions(rawReply: string): {
     cleanReply = cleanReply.replace(match[0], "").trim();
   }
 
+  // A2a (2026-09-21) — cheap heuristic belt-and-braces: the CLIENT strips a
+  // JSON-shaped reply before rendering it (detectAndStripJsonShapedReply,
+  // ai_coach_provider.dart), but nothing server-side previously noticed when
+  // this happens at all. Warn (informational — the client already handles
+  // it) so a recurrence is visible in function logs without waiting on a
+  // user report. Cheap: a `{`/`[` prefix check plus one JSON.parse, not a
+  // re-implementation of the client's fuller detection logic.
+  const trimmedClean = cleanReply.trim();
+  if (trimmedClean.startsWith("{") || trimmedClean.startsWith("[")) {
+    try {
+      JSON.parse(trimmedClean);
+      console.warn(
+        "[ai-proxy.extractLogActions] JSON-shaped chat reply detected " +
+          `(len=${trimmedClean.length}, preview=${
+            JSON.stringify(trimmedClean.slice(0, 120))
+          })`,
+      );
+    } catch {
+      // Starts with { or [ but isn't valid JSON — not the shape being
+      // watched for here; the client's own artefact-stripping fallback
+      // already handles this case.
+    }
+  }
+
   return { reply: cleanReply, actions };
 }
 
@@ -397,6 +421,10 @@ Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the ex
         temperature: 0.2,
         timeoutMs: 15_000,
         jsonMode: true,
+        // f7a2c9: a one-shot empty here fails the whole meal log with no
+        // other retry on this path — same reasoning as food_parser.ts's
+        // logMealByText tool.
+        retries: 2,
       });
 
       // audit-2026-05-16 F6-3 — placeholder resolution contract.
@@ -596,6 +624,7 @@ Rules: identify every distinct food item, estimate realistic portion sizes for a
         timeoutMs: 20_000,
         jsonMode: true,
         fallbackToLite: false, // already Flash-Lite; no point
+        retries: 2, // f7a2c9 — no other retry on this path
       });
 
       if (!content) {
@@ -639,6 +668,7 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
         timeoutMs: 25_000,
         jsonMode: true,
         fallbackToLite: false,
+        retries: 2, // f7a2c9 — no other retry on this path
       });
 
       if (!content) {
@@ -689,7 +719,7 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
         { maxLen: 4000 },
       );
 
-      const { content, modelUsed, tokensUsed } = await geminiChat({
+      const { content, modelUsed, tokensUsed, lastError } = await geminiChat({
         model: MODEL_FLASH,
         systemPrompt,
         userPrompt: asPrincipalMessage(message),
@@ -697,9 +727,17 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
         temperature: 0.7,
         timeoutMs: 15_000,
         jsonMode: true,
+        retries: 2, // f7a2c9 — no other retry on this path
       });
 
-      if (!content) return err(502, "AI temporarily unavailable");
+      if (!content) {
+        // A5/OI-226 (f7a2c9, 2026-09-21): this was the OTHER half of OI-226 —
+        // the prediction handler never destructured lastError, so it could
+        // not report exhaustion at all. Mirrors the 3 nutrition sites' own
+        // pattern exactly (same source, distinct endpoint).
+        await reportGeminiExhaustion(supabaseClient, "ai_proxy_gemini_exhausted", lastError ?? null, "prediction");
+        return err(502, "AI temporarily unavailable");
+      }
 
       return new Response(
         JSON.stringify({

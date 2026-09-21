@@ -302,7 +302,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                         size: 16, color: AppColors.accent),
                     const SizedBox(width: 10),
                     Text(
-                      'support@avya.app',
+                      'upendra@icanbefitter.com',
                       style: AppTypography.body.copyWith(
                         color: AppColors.textPrimary,
                         fontWeight: FontWeight.w500,

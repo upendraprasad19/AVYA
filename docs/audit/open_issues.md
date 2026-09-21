@@ -5056,36 +5056,6 @@ hash against `backups/applied_migrations.json` (the ledger Gate 14 already valid
 instead of by live version prefix — then the gate would be a ledger-vs-disk check, which
 Gate 14 already is, which is the argument for retiring.
 
-## OI-226 — ai-proxy chat/tool-calling Gemini exhaustion paths have no reportGeminiExhaustion alert wiring
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-09-20 · filed via mint_oi.sh from branch `claude/food-logging-observations-126ab3`
-
-The `food-logging-observations` batch (Tasks 9-10, commits `72a4aa7d`/`c84eb796`) wired
-`reportGeminiExhaustion` at exactly the three `ai-proxy` call sites its own plan named —
-`food_text_analysis` (`:443`), `scan_meal` (`:603`), `cart_auditor` (`:646`) — because that
-plan was scoped to the nutrition/food-logging observations, not to ai-proxy as a whole.
-Round-2 plan review (2026-09-20) correctly noted that ai-proxy has at least two more
-`geminiChat`/`geminiChatWithTools` call sites with no equivalent wiring: the plain chat
-path (`index.ts:692`, destructures `{ content, modelUsed, tokensUsed }` — no `lastError`)
-and the 3-round tool-calling path (around `:1009`, `geminiChatWithTools`). A terminal Gemini
-failure on either path currently degrades silently to the client with zero founder
-visibility, the exact gap Task 9/10 closed for the nutrition endpoints.
-
-**This is accepted as an explicit plan-scope boundary, not a defect in the delivered
-work** — the plan's Task 10 brief names the three call sites verbatim in its Files section,
-and extending coverage to the chat/tool-calling paths is a separate unit of work (the
-`geminiChatWithTools` path has a materially different retry/round shape than the
-single-shot `geminiChat` calls Task 9 instrumented). Filed here per §4.2 so the gap has a
-tracked terminal state rather than living only in a round-2 review nobody re-reads.
-
-**Fix direction:** wire `reportGeminiExhaustion` (or a `lastError`-carrying equivalent) at
-`index.ts:692` and inside `geminiChatWithTools`'s exhaustion path, using the same
-`endpoint` discriminator pattern (`"chat"` / `"chat_tool_call"`) Task 10 established for
-the three existing sites.
-
 ## OI-224 — alert_cron_function_dead threshold unreachable, cron_call_log pruned at 7 days
 
 - **Status**: OPEN
@@ -5141,3 +5111,56 @@ worth keeping.
 (simplest, lowest blast-radius) unless the per-function-silent-forever gap
 above is also worth closing in the same pass — if so, do the per-function
 spare instead, since it fixes both.
+
+## OI-238 — 5 Gemini-calling Edge Functions have no server-side reportGeminiExhaustion telemetry (weekly-report, ai-media-proxy, assess-body-composition, daily-snapshot, rolling-context)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-09-22 · filed via mint_oi.sh from branch `claude/strange-merkle-c2d0b9`
+
+Found by the self-triggered Hermes pass on `observation-batch-and-digest-redesign`
+(`docs/diagnoses/2026-09-21-ai-failure-telemetry-gap-oi226-f7a2c9.md`'s own fix wired
+`reportGeminiExhaustion` into `ai-proxy`'s 4 internal `type` handlers plus `tool-loop.ts`'s
+chat/tool-calling path — 5 call sites total, all inside ONE function, `ai-proxy`). This is a
+DIFFERENT, wider gap: per `supabase/functions/CLAUDE.md`'s own AI Architecture section, **6**
+functions call Gemini in total, and the other **5** — `weekly-report`, `ai-media-proxy`,
+`assess-body-composition`, `daily-snapshot`, `rolling-context` — each call `geminiChat`/
+`geminiChatWithTools` directly with NO server-side exhaustion alert of any kind. A total Gemini
+failure in any of these 5 is currently invisible to the founder until a user complains (or, for
+`rolling-context`, silently produces zero nightly summaries with no page at all).
+Explicitly out of scope for OI-226 — that OI's own filed text names only ai-proxy's two
+previously-uncovered call sites, not this wider surface; scope-creeping this batch to cover 5
+more functions was rejected in favour of tracking it here.
+
+**Fix direction:** wire `reportGeminiExhaustion` (or a function-appropriate variant — some of
+these are user-invoked, not cron, so the `endpoint`/dedup semantics may need adjustment) into
+each of the 5 call sites' failure path, matching the pattern `ai-proxy`/`tool-loop.ts` already
+establish.
+
+## OI-239 — Acknowledging an alert re-arms its dedup window instead of waiting out the original interval — a systemic property shared by all 6 alert_* cron jobs
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-09-22 · filed via mint_oi.sh from branch `claude/strange-merkle-c2d0b9`
+
+Surfaced while fixing migration 140's `alert_cron_failures` stuck-window bug
+(`docs/diagnoses/2026-09-21-hermes-pass-migration-138-139-fixes-h1a2b3.md`): every `alert_*` cron
+job (`alert_cron_failures`, `alert_client_errors_spike`, `alert_cron_silence`,
+`alert_cron_function_dead`, `alert_edge_function_health`, and any future sibling following the
+same convention) dedups on `NOT EXISTS (SELECT 1 FROM public.alerts WHERE source = '<job>' AND
+acknowledged = false AND detected_at > now() - interval '<window>')`. Acknowledging the alert
+(the founder's own normal triage action) sets `acknowledged = true`, which makes that
+`NOT EXISTS` check true again on the VERY NEXT cron tick (as soon as 15 minutes later) rather
+than waiting out the original dedup window from `detected_at`. So the founder's own act of
+reading and dismissing a page can cause a near-immediate re-page for the same underlying,
+still-ongoing condition — the opposite of what acknowledging is supposed to signal. Not unique to
+`alert_cron_failures`; every job sharing this INSERT-with-`NOT EXISTS`-dedup idiom has the same
+property.
+
+**Fix direction:** either dedup on `detected_at` alone regardless of `acknowledged` (so
+acknowledging never shortens the window), or add a separate `snoozed_until` concept distinct
+from `acknowledged` so triage and re-page timing are decoupled. Needs a design decision, not a
+one-line fix, since it touches the shared convention all 6 jobs rely on — a design change here
+should update all 6 in the same batch, not just the one that surfaced it.

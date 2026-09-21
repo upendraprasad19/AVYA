@@ -54,6 +54,7 @@ import {
   geminiChatWithTools,
   type GeminiToolsResult,
 } from "./gemini.ts";
+import { reportGeminiExhaustion } from "./gemini_failure_alert.ts";
 
 const MAX_ROUNDS = 3;
 
@@ -286,12 +287,41 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
         `[tool-loop] gemini call failed round=${round} request_id=${opts.ctx.requestId}`,
         e,
       );
+      // A5/OI-226 (f7a2c9): this path had ZERO telemetry for a terminal
+      // Gemini failure — confirmed live via client_errors returning zero
+      // rows across a fully-reproduced incident window. Reuses the SAME
+      // dedup source as the 3 nutrition endpoints (ai-proxy/index.ts) so a
+      // 30-minute window spans chat + nutrition together; endpoint:"chat"
+      // keeps them distinguishable in the alert summary/context_json.
+      // {status, geminiMessage} come from gemini.ts's geminiChatWithTools,
+      // which now attaches them to the thrown Error (Object.assign) since
+      // this catch block is the only production consumer of that shape.
+      // Never throws (reportGeminiExhaustion's own documented contract).
+      // Hermes L34 #4 (2026-09-21): `hadQueuedIntent` mirrors the SAME
+      // `intents.length > 0` check the FC2 guard below uses for the
+      // user-facing apology — the alert always fires (the Gemini failure is
+      // equally real either way), but the founder reading it in Telegram
+      // needs to know whether the user actually got their action done
+      // (logSet etc. queued) or got nothing at all. Read BEFORE the FC2
+      // block below so both consult the identical, un-mutated `intents`.
+      const hadQueuedIntent = intents.length > 0;
+      await reportGeminiExhaustion(
+        opts.ctx.sb,
+        "ai_proxy_gemini_exhausted",
+        {
+          status: (e as { status?: number | null } | null)?.status ?? null,
+          message: (e as { geminiMessage?: string } | null)?.geminiMessage ??
+            (e instanceof Error ? e.message : String(e)),
+        },
+        "chat",
+        { hadQueuedIntent },
+      );
       // FC2 (diagnose 7fbe21): only apologize when NOTHING was queued. If an
       // earlier round already produced a write intent (queued for the APPLY
       // card), a failure of the SUMMARIZATION round must NOT surface as "I had
       // trouble reaching the model" over a working "Logged" card — the
       // loop-exit confirmation below handles the intents.length>0 case.
-      if (!finalText && intents.length === 0) {
+      if (!finalText && !hadQueuedIntent) {
         finalText = HARD_FAILURE_APOLOGY_GEMINI_CALL_FAILED;
         hadHardFailure = true;
       }
