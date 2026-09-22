@@ -164,12 +164,16 @@ written.
   open (`open_issues.md`), `OPEN_INDEX.md` regenerated (137 open issues
   indexed — up from 134 pre-rebase: origin/main's OI-227/229/233 merged
   in, netted against this batch's own OI-230/232 closures).
-- **Rebased onto `origin/main` (PR #31 merged mid-batch — see Residual
-  below) and re-committed as `f4ff083b` (code) + `ef295a63` (this
-  record), superseding the pre-rebase `7af6123c`/`1c6b3941` shas.** Not
-  yet pushed, merged, or built into an APK — per CLAUDE.md §4.3, each of
-  those three gated actions requires its own explicit, separate founder
-  approval, which this record does not carry.
+- **Rebased onto `origin/main` twice (PR #31, then PR #34, both merged
+  mid-batch — see Residual below) and re-committed as `29425fa8` (code)
+  + `5e4348bb` (this record) + `cf7d9c11` (the first rebase's repoint
+  fixup, carried through unchanged) — superseding the first-rebase
+  `f4ff083b`/`ef295a63`/`bfa921da` shas, which themselves superseded the
+  original `7af6123c`/`1c6b3941`.** Pushed and opened as PR #33 after the
+  first rebase (founder-approved); the second rebase (below) updates that
+  same open PR. Not yet merged or built into an APK — per CLAUDE.md §4.3,
+  each of those two remaining gated actions requires its own explicit,
+  separate founder approval, which this record does not carry.
 
 ## Residual, stated rather than hidden
 
@@ -201,4 +205,26 @@ written.
   for OI-226 (from the same original reservation batch, resolved via
   `be63f5cf`'s merge-integration review, per this repo's own
   `.claude/skills/code-review/SKILL.md` tuning history) — this is the
-  second occurrence, now also closed.
+  second occurrence, now also closed. Captured as its own feedback memory
+  (`feedback_oi_adoption_content_collision.md`, harness-local) since it is
+  a distinct class from mint_oi.sh's number-only uniqueness guarantee.
+- **Second, unrelated collision: PR #34 merged to `origin/main` after
+  this branch's first push, moving GitHub's mergeability check to
+  CONFLICTING.** Founder-approved rebase again (same per-action-approval
+  pattern as the first). Verified the overlap was narrow before touching
+  anything: `git diff --name-only` on both sides showed PR #34 touched
+  only `tool_dispatcher.dart` + its own diagnose-doc/review/test files —
+  zero overlap with this batch's `ai_snapshot_builder.dart`/`screen.dart`/
+  `log_workout_sheet.dart`. Of the two files that DID appear on both
+  sides, `git merge-tree` (dry-run, no working-tree changes) showed
+  `.claude/skills/code-review/SKILL.md` auto-merges cleanly (each
+  branch's dated tuning-history entry landed in a different spot) and
+  only `docs/diagnoses/INDEX.md` conflicted — expected, since it is
+  auto-generated and both branches regenerated it independently from
+  different diagnose-doc sets. Resolved by regenerating (`dart run
+  scripts/build_bug_index.dart`, via `. scripts/_dart_bin.sh &&
+  DART_BIN="$(resolve_dart_bin)"` — not `"$DART_BIN" run` directly off a
+  bare `source`, which sets no variable), not hand-merging — confirmed
+  all 4 new entries (this batch's 3 + PR #34's `tool_dispatcher` one)
+  present post-regeneration. Ordinary concurrent-edit conflict, not the
+  OI-adoption class above — no new feedback memory needed for this one.
