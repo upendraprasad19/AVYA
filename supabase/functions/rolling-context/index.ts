@@ -97,6 +97,17 @@ async function summarizeMessages(
     }`,
     maxTokens: 300,
     timeoutMs: 15_000,
+    // Hermes L21 F3 (2026-09-21): this call sits inside a per-user loop with
+    // no other retry on the path (f7a2c9), so its worst case multiplies by
+    // every active user in one nightly run — at retries:2 that was up to
+    // (2+1 passes) x 2 models = 6 Gemini calls per user, all against the
+    // SAME shared quota ai-proxy's live user-facing chat depends on, and
+    // heaviest exactly when Gemini is already degraded (every pass failing
+    // is what triggers the next one). Halved to 1 retry (4 calls/user worst
+    // case) — still one extra pass beyond the immediate Lite fallback for a
+    // genuine transient blip, without doubling this cron's contribution to
+    // quota pressure during a real outage.
+    retries: 1,
   });
 
   return content;

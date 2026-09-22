@@ -541,7 +541,7 @@ concepts:
         semantic: aggregated
         fields_read: [total_calories, date]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1603-1627
+        line_range: 1640-1699
         method: WeeklyNutritionNotifier.build
         semantic: historical-series
         fields_read: [total_calories, total_protein, date, is_saved_meal]
@@ -702,7 +702,7 @@ concepts:
           to NutritionWriteService.restoreFoodLog. Same provider also
           delegates DeleteNutritionLogNotifier.delete to WriteService.deleteLog.
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1671-1695
+        line_range: 1708-1723
         method: DeleteNutritionLogNotifier.delete
         semantic: pass-through
         fields_read: [via NutritionWriteService.deleteLog(allowUndo: true)]
@@ -857,7 +857,7 @@ concepts:
       of e4a1b7/OI-98 on a different key inside the same blob.
     writers:
       - { file: supabase/functions/_shared/snapshot_merge.ts, line_range: 16-28, method: mergeSnapshotJson, notes: "Pure merge — existing row spread first, incoming client payload layered on top so it wins on any shared key. Mutation-proven: reverting to `return incoming;` reddens 2 of 4 tests in snapshot_merge_test.ts." }
-      - { file: supabase/functions/daily-snapshot/index.ts, line_range: 339-397, method: "serve handler", notes: "Reads the existing row via .maybeSingle() at :362 (never .single() — a first-ever snapshot of the day has no existing row, which is a legitimate empty merge base, not an error; a genuine query error is logged at :373 rather than silently degrading), merges via mergeSnapshotJson at :383, upserts the MERGED result at :396. Gated behind DISABLE_SNAPSHOT_MERGE_SAFE_UPSERT (:356, code-review finding 2 — platform tier's feature_flag requirement) which falls back to the verbatim pre-fix blind-replace. Wiring pinned by index_test.ts (source-grep — importing this module boots a real server, no import.meta.main guard, so the test reads source text rather than importing)." }
+      - { file: supabase/functions/daily-snapshot/index.ts, line_range: 340-398, method: "serve handler", notes: "Reads the existing row via .maybeSingle() at :363 (never .single() — a first-ever snapshot of the day has no existing row, which is a legitimate empty merge base, not an error; a genuine query error is logged at :378 (the console.error call itself, not the surrounding comment — a pre-existing imprecision in this note, corrected while re-deriving the other citations here) rather than silently degrading), merges via mergeSnapshotJson at :384, upserts the MERGED result at :397. Gated behind DISABLE_SNAPSHOT_MERGE_SAFE_UPSERT (:357, code-review finding 2 — platform tier's feature_flag requirement) which falls back to the verbatim pre-fix blind-replace. Wiring pinned by index_test.ts (source-grep — importing this module boots a real server, no import.meta.main guard, so the test reads source text rather than importing). Line numbers shifted +1 by the observation-batch-and-digest-redesign merge (PR #32, 2026-09-22) inserting one unrelated line earlier in the same file — re-verify by grep, not by citation." }
       - { file: lib/core/services/sync_service.dart, line: 1211, method: "compileDailySnapshot", notes: "Code-review finding 1 (2026-09-21): fitness_summary is ALSO cron-owned (rolling-context writes it), but unlike morning_alert the client DOES carry a local mirror of it in aiContext (buildAiContext() serves both this push and the live ai-proxy chat body, and the chat use case needs it). Sending it here would let the client's lagging/possibly-empty mirror win the merge on a key it does carry. Explicitly removed from the push payload only — buildAiContext()'s direct chat-context use is untouched. Behavioral: test/contracts/daily_snapshot_fitness_summary_omission_test.dart (mutation-proven — reverting the .remove() call reddens both tests)." }
     reader_manifest_complete: false
     readers:
@@ -1725,7 +1725,7 @@ concepts:
         semantic: aggregated
         fields_read: [date, meal_type, is_saved_meal, items[]]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1603-1627
+        line_range: 1640-1699
         method: WeeklyNutritionNotifier.build
         semantic: historical-series
         fields_read: [total_calories, total_protein, date, is_saved_meal]
@@ -11578,3 +11578,138 @@ concepts:
       - "adding weight_logs realtime without a teardown on downgrade — the re-entrancy early-return means an attached channel never re-enters the gate"
       - "adding a table to the supabase_realtime publication with no PRO-gated consumer"
     contract_test_path: test/contracts/realtime_pro_gate_behavioral_test.dart
+
+  # observation-batch-and-digest-redesign 2026-09-21 / A2a — a JSON-shaped
+  # Gemini reply rendered raw in chat instead of natural language, both live
+  # and (a distinct gap) on every relaunch via the restore path.
+  - concept: coach_chat_reply_sanitization
+    domain: ai_coach
+    hive_key_prefix: ""
+    presence_only: true
+    presence_only_reason: >-
+      Pure-function transform applied at render time — there is no separate
+      Hive round-trip to pin beyond the source-grep + behavioral coverage
+      already in the test file (the Hive-persisted ai_response value is
+      deliberately left untouched by this concept).
+    behavioral_test_path: test/contracts/coach_chat_reply_sanitization_test.dart
+    description: |
+      Gemini sometimes returns a JSON/code-fence/YAML-shaped reply instead of
+      prose. detectAndStripJsonShapedReply (pure, no side effects) detects
+      and cleans this shape before it becomes chat-bubble text. Extracted
+      from the pre-existing, Profile-tab-only PredictionNotifier's impure
+      sanitiser (which also writes back to a global prediction_text Hive
+      key — NOT reused directly for chat to avoid corrupting that key).
+    writers:
+      - file: supabase/functions/_shared/tool-loop.ts
+        line_range: 306
+        method: runToolLoop
+        notes: the raw Gemini text this concept cleans on the client side.
+    readers:
+      - file: lib/features/ai_coach/providers/ai_coach_provider.dart
+        line_range: 676
+        method: "SendMessageNotifier.sendWithMedia"
+        semantic: display-only
+      - file: lib/features/ai_coach/providers/ai_coach_provider.dart
+        line_range: 911
+        method: "SendMessageNotifier.send (primary)"
+        semantic: display-only
+      - file: lib/features/ai_coach/providers/ai_coach_provider.dart
+        line_range: 986
+        method: "SendMessageNotifier.send (auth-retry)"
+        semantic: display-only
+      - file: lib/features/ai_coach/providers/ai_coach_provider.dart
+        line_range: 291
+        method: "ChatHistoryNotifier.build (success render)"
+        semantic: display-only
+      - file: lib/features/ai_coach/providers/ai_coach_provider.dart
+        line_range: 267
+        method: "ChatHistoryNotifier.build (isFailed fallback render)"
+        semantic: display-only
+    forbidden_legacy_patterns:
+      - "calling PredictionNotifier._sanitisePredictionText (or _writeBackToHive) from any chat-path render — writes the global prediction_text Hive key, corrupting the unrelated Profile-tab prediction card"
+      - "a render site added later that shows aiResponse.reply or a restored ai_response value with no detectAndStripJsonShapedReply guard"
+    contract_test_path: test/contracts/coach_chat_reply_sanitization_test.dart
+
+  # observation-batch-and-digest-redesign 2026-09-21 / A2c — a restored
+  # non-chat-channel row (food_text_analysis/scan_meal/cart_auditor/
+  # weekly_report) rendered as an ordinary chat bubble because the bubble
+  # renderer had no channel filter, unlike the Gemini-history reader.
+  # ⚠ NOT named coach_chat_history_replay — that name is ALREADY a
+  # registered concept above governing a DIFFERENT writer/reader pair
+  # (recentHistoryExchanges' exclusion from what's sent TO Gemini). Reusing
+  # it would collide with Gate 9's test-filename derivation from `concept:`.
+  - concept: coach_chat_history_render_channel_filter
+    domain: ai_coach
+    hive_key_prefix: coach_
+    behavioral_test_path: test/contracts/coach_chat_history_render_channel_filter_writer_to_reader_test.dart
+    description: |
+      Which restored ai_coach_interactions rows are allowed to render as a
+      chat bubble at all. A DENYLIST (CoachInteractionRepository.
+      nonChatAnalysisChannels — 'food_text_analysis', 'scan_meal',
+      'cart_auditor', 'weekly_report', 'app_event'), NOT an allowlist:
+      corrected A2d (same day as A2c, self-triggered B-pass review) after the
+      first cut reused the Gemini-history reader's coachChatChannels
+      allowlist here too, which silently dropped every real proactive/
+      paywall channel outside {'app','chat','in_app_orphan'} — 'in_app',
+      'promotion_ceremony', 'proactive_i_see_you', 'image_paywall',
+      'video_paywall' all vanished from restored chat history. A null
+      channel (local coach write) always renders; everything not in the
+      denylist renders — this is deliberately the wider default so a future
+      proactive channel can't repeat the same silent drop.
+    writers:
+      - file: lib/core/services/sync/sync_coach.dart
+        line_range: 225
+        method: _restoreCoachInteractions
+        notes: pulls ALL ai_coach_interactions rows for the user, no channel filter of its own — the filter lives entirely on the render side.
+    readers:
+      - file: lib/features/ai_coach/providers/ai_coach_provider.dart
+        line_range: 226-241
+        method: "ChatHistoryNotifier.build"
+        semantic: flag-check
+    hive:
+      box: coachBox
+      key: "coach_<ms> (channel field within the row map)"
+      shape: "String? channel — null for a local write, else the cloud-restored channel value"
+    cloud:
+      table: ai_coach_interactions
+      columns: [channel]
+    sync_methods: []
+    restore_methods: [_restoreCoachInteractions]
+    forbidden_legacy_patterns:
+      - "a re-typed literal {'food_text_analysis','scan_meal','cart_auditor','weekly_report','app_event'} set anywhere other than CoachInteractionRepository.nonChatAnalysisChannels — one definition, one reader"
+      - "reusing CoachInteractionRepository.coachChatChannels (the Gemini-history allowlist) as the render-path filter — that is the A2c regression this concept exists to prevent recurring"
+      - "rendering a restored row's ai_response/user_message without first checking its channel"
+    contract_test_path: test/contracts/coach_chat_history_render_channel_filter_writer_to_reader_test.dart
+
+  # observation-batch-and-digest-redesign 2026-09-21 / A7 — support email drifted
+  # to 3 different literal strings across 2 files (support@avya.app,
+  # support@icanbefitter.com). A literal-string SoT: no Hive key, no cloud
+  # column — registered so a future drift is at least documented, even though
+  # no gate can mechanically enforce a literal string across files.
+  - concept: support_contact_email
+    domain: profile
+    hive_key_prefix: ""
+    presence_only: true
+    presence_only_reason: >-
+      Literal UI string, not a Hive/cloud round-trip — a source-grep drift
+      detector is the only meaningful test shape here.
+    behavioral_test_path: test/contracts/support_contact_email_writer_to_reader_test.dart
+    description: |
+      The canonical founder support address shown to users, on the Profile
+      screen's contact card and in the delete-account subscription-cancel
+      error message. Canonical value (founder decision, 2026-09-21):
+      upendra@icanbefitter.com.
+    writers:
+      - file: lib/features/profile/screens/profile/screen.dart
+        line_range: 305
+        method: build (contact card)
+        semantic: display-only
+      - file: lib/features/profile/screens/delete_account_screen.dart
+        line_range: 165
+        method: razorpay_cancel_failed error branch
+        semantic: display-only
+    readers: []
+    forbidden_legacy_patterns:
+      - "support@avya.app"
+      - "support@icanbefitter.com (old variant — canonical is upendra@icanbefitter.com)"
+    contract_test_path: test/contracts/support_contact_email_writer_to_reader_test.dart

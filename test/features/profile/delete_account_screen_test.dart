@@ -205,7 +205,11 @@ void main() {
     });
 
     test('Support email present in error copy', () {
-      expect(src, contains('support@icanbefitter.com'));
+      // A7 (diagnose a1e6f2, 2026-09-21) moved the canonical support address
+      // from support@icanbefitter.com (unmonitored) to the founder's real
+      // inbox — this pre-existing assertion was never swept when that fix
+      // landed, so it kept pinning the old, now-wrong address.
+      expect(src, contains('upendra@icanbefitter.com'));
     });
 
     // ── 429 rate-limit handling (OI-162 slice 4, f2c8d5) ─────────────────

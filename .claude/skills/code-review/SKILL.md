@@ -199,6 +199,23 @@ When invoked, this skill should:
      would move the hash exactly the way staging the review itself would have, with no
      clean iterative fix. Use the three-pathspec command above, not the two-pathspec
      is meant to satisfy.
+   - **`docs/plan-reviews/` is NOT excluded, and citing this review's filename from
+     there is a fourth hash-fixed-point source** (found 2026-09-21,
+     `observation-batch-and-digest-redesign` batch, Round 2): the plan-review
+     record's `bpass_review:` field must name this file, but staging that
+     citation moves the hash the citation names, exactly like staging
+     `docs/reviews/` itself would if it weren't excluded. Unlike the review file
+     and this SKILL.md, the plan-review record is NOT hash-excluded by design —
+     excluding it would let the record's OWN content (branch, verdict,
+     review_rounds) go unreviewed as part of "the diff". **Break the cycle by
+     landing the plan-review record in its own separate, later commit** (this
+     file's own 2026-09-11 "second entry today" precedent, generalized): the
+     catastrophic-tier code commit's review file settles to a stable name with
+     `docs/plan-reviews/` left OUT of that commit entirely, then the
+     plan-review record — citing that now-stable name — lands as its own
+     small, typically feature-tier follow-on commit. `check_plan_review_record_exists.dart`
+     only requires the record to exist on the branch BY THE MERGE COMMIT
+     (keyed on branch name, not staged-diff hash), so this split is always safe.
 4. **Dispatch a FRESH Sonnet subagent** via `Agent({subagent_type: 'general-purpose', model: 'sonnet', ...})` with:
    - The diff inline (or list of changed files to Read)
    - The 6 lens prompts
@@ -230,6 +247,146 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 - Bundle this with `/hermes-pass`. That's a different skill (per-batch, all 53 lenses, Opus, slower).
 
 ## 7. Tuning history
+
+- **2026-09-22** — blast-radius **catastrophic** (inherited — migration 138's
+  `SECURITY DEFINER` trigger, arriving via `main`) — a MERGE-INTEGRATION review,
+  not a normal feature-commit review: `claude/food-logging-observations-126ab3`
+  (own review `b87e8a1f3f2a`, accepted) merging `origin/main`, which by then
+  already contained `claude/strange-merkle-c2d0b9` / PR #32 (own review
+  `f81f7ae899e1`, accepted). **1 finding (P2, writer_reader_drift); 0
+  false_alarm — fixed in-batch.** Review: `docs/reviews/be0c54291fcc-review.md`
+  (renamed once from `ee6c346ffd80` — see Tuning 2 below).
+  **Tuning 1 — a merge of two independently-reviewed branches needs its OWN
+  review, scoped to the interaction surface, not a re-review of either half.**
+  `check_code_review_pass_exists.dart` correctly computed the merge's own
+  staging hash as catastrophic (migration 138 forces the tier regardless of
+  which branch introduced it) and found no matching review — neither branch's
+  own accepted review satisfies a gate keyed to a DIFFERENT diff (the combined
+  one). The dispatch brief for this pass explicitly scoped the reviewer to
+  "did combining these two changesets break something neither branch's own
+  review could see" rather than re-auditing internal correctness already
+  covered — the one real finding (citation drift: a 1-line insertion from
+  Branch B shifted 4 line-number citations Branch A had authored, in
+  `docs/sot_registry.yaml` and a diagnose-doc, both pointing into
+  `supabase/functions/daily-snapshot/index.ts`) is exactly the class this
+  narrower scope is *for*: invisible to either individual review because
+  the citations were verified correct in each branch's own isolated HEAD,
+  and only became wrong once combined.
+  **Tuning 2 — fixing a merge-review's own finding can move the SAME merge's
+  staging hash, a second time, in the SAME commit.** Fixing Finding 1 required
+  editing `docs/sot_registry.yaml` and the diagnose-doc — neither excluded
+  from the hash (only `docs/reviews/` and this file are) — so the fix moved
+  `ee6c346ffd80` → `be0c54291fcc` and the review had to be renamed again before
+  the gate would accept it. This is the same hash-fixed-point class documented
+  repeatedly below (2026-09-21, 2026-09-14, 2026-09-11 entries) — worth a
+  second entry here specifically because a MERGE commit makes it more likely,
+  not less: any citation fix inside a merge review necessarily touches files
+  from one of the two merged branches, which are almost never review-excluded.
+  Checked whether a gate could catch the citation drift itself going forward:
+  `check_sot_registry_parity.dart` validates the structured `line_range:`
+  field is in-bounds and that a named symbol exists somewhere in the file —
+  it does not parse free-text `:NNN` sub-references inside prose `notes:`/
+  `method:` strings, so this class lands silently unless a review (or the
+  author) catches it by hand. Not proposed as a new gate here — scope
+  decision, not an oversight; filed as awareness for whoever next touches
+  that validator.
+
+- **2026-09-21** — blast-radius **catastrophic** (migration 138's
+  `SECURITY DEFINER` trigger forced the tier up from a path-glob-computed
+  `platform`) — branch `observation-batch-and-digest-redesign` (Part A: 8
+  independent bug fixes; Part B: founder-digest redesign — 3 new metrics
+  RPCs, a privacy-respecting name lookup, MRR/cancelled/lapsed computation;
+  2 new migrations). **3 findings (1 P0, 2 P1); 0 false_alarm — all 3 fixed
+  in-batch, each with its own mutation-proof confirming the NEW regression
+  test(s) specifically catch the defect found.** Review:
+  `docs/reviews/f81f7ae899e1-review.md` (renamed FIVE times — first from
+  `6f688776ce48` to `7aff4322b5ac` after the 3 findings were fixed in place,
+  then to `f52dbb8ddc2b` after staging the migration-apply ledger updates
+  changed the staged diff's hash again post-acceptance (no reviewed code
+  changed between the second rename and the first), then to `d37b5f18b623`
+  after a Round 2 B-pass (below) fixed 6 more findings, then twice more
+  same-day to `86195c3cc274` then `f81f7ae899e1` — both the hash-fixed-point
+  trap this file's own 2026-09-11 entries document, here from TWO sources
+  at once: `pre-commit.sh` regenerating `INDEX.md`/`OPEN_INDEX.md`/
+  `GATE_INDEX.md`, and `docs/plan-reviews/` (unlike `docs/reviews/` and this
+  skill's own `SKILL.md`) NOT being excluded from the hash, so citing this
+  file's name from the plan-review record moved the hash every time the
+  citation was corrected. Resolved by moving the plan-review record to its
+  own separate, later commit rather than staging it alongside this diff —
+  see the review file's own header note and "Founder triage notes"/
+  "Round 2" sections for the full trail).
+  **Tuning 1 — lens 6 (guard_without_its_mirror) found the SAME shape twice
+  in one pass, at two very different scales, and the smaller one is the more
+  instructive.** Finding 1 (P0): a render-path filter reused a sibling
+  reader's allowlist verbatim and silently dropped 3 real, live proactive
+  channels — the fix-round's own verification grep then found an 8TH
+  affected channel (`image_paywall`/`video_paywall`) the review itself had
+  missed, confirming the review's own suggested-fix option (b) — "widen the
+  allowlist" — would likely have missed a channel too; a denylist of the
+  small, closed, actually-bad set was chosen instead. Finding 2 (P1): the
+  MECHANICAL GATE this same batch shipped to prevent regressions had the
+  exact defeatable-by-comment shape lens 6 already knows to distrust in
+  hand-written guards — a `.contains()` check run against raw,
+  comment-inclusive extracted text. **The lesson: a gate is a guard like any
+  other and needs the same "assume it is defeatable" scrutiny lens 6 already
+  applies to application code** — this batch's OWN diagnose-doc had already
+  named the identical class (a comment satisfying a presence/absence check)
+  in a TEST's mutation methodology hours earlier and had not yet generalized
+  that lesson to the gate the same commit was shipping.
+  **Tuning 2 — a "pick better numbers" suggested-fix can be a trap; hand-trace
+  the timing before accepting it.** Finding 3 (P1, blast_radius_mismatch)
+  correctly identified a 24h-lookback vs 1h-dedup ratio as an alert-storm
+  risk and suggested shrinking the lookback OR widening the dedup — both
+  framed as picking different numbers for the SAME shared-bound query shape.
+  Hand-tracing the fix before applying it found that shrinking the shared
+  bound to anything ≥ the stuck-job threshold makes an actually-still-stuck
+  job permanently invisible once its age exceeds that bound — trading the
+  reported bug for a worse, silent one. The real fix was structural (split
+  one shared time bound into two independently-bounded branches matching
+  each status's own semantics — a discrete past event vs. an ongoing
+  condition), not a number change. When a suggested-fix is framed as
+  "adjust the constant," check whether the two things being balanced
+  actually have the same shape before trusting that framing.
+  **Round 2 (same branch, dispatched after a self-triggered Hermes pass
+  landed 11 more fixes on the SAME batch that Round 1 never saw): 6
+  findings (1 P1, 2 P2, 3 P3); 0 false_alarm — 5 fixed in-batch, 1 (an
+  applied-migrations.json citation to a since-renamed review file)
+  correctly accepted with no code fix.**
+  **Tuning 3 — the headline finding of Round 2, and it is exactly the
+  scenario this skill's own dispatch brief warned about: code the AUTHOR
+  had already mutation-tested is not the same as code an INDEPENDENT
+  reviewer has tested.** Every one of the 5 fixed findings sat in code from
+  the Hermes-pass remediation round — `redactSecrets`'s own completeness,
+  `gemini.ts`'s response-body redaction ordering, a migration's own
+  live-verify coverage — all of which the author had personally
+  mutation-proven before this B-pass ran. Two were real gaps a
+  self-authored test structurally could not see: (a) a redact-BEFORE-slice
+  vs slice-BEFORE-redact ordering bug, invisible to a test asserting only
+  "the full key literal is absent" (a truncated fragment isn't the full
+  literal); (b) a per-attempt log line one call deep from the message
+  actually asserted on, protected only by an inner call the author had
+  proven correct in isolation but never traced forward to every consumer —
+  reverting that inner call left the log line leaking while **all 22
+  pre-existing tests, including two the author had written specifically to
+  prove no leak, stayed green.** Both gaps were about COMPLETENESS
+  (does the fix reach every site) not correctness (is the fix's own logic
+  right), and completeness gaps are exactly what a fresh reader checking
+  "does this cover every point" finds and a mutation-proof scoped to the
+  ONE site the author was thinking about does not.
+  **Tuning 4 — lens 6's "follow the return value to its call site" method
+  note (2026-08-17) has a log-line-shaped instance, not just a
+  caller-collapses-a-bool shape.** Finding 5's defect was structurally the
+  SAME lesson as the 2026-08-17 entry below — a value redacted at its
+  SOURCE was trusted by a CONSUMER one hop away without re-verifying the
+  trust still holds if the source's own protection is ever touched. The
+  fix (redact again, defense-in-depth, at the consumer) is the same answer
+  this repo already reaches for elsewhere (`redactSecrets` itself is named
+  and commented as applying "at every point," which is precisely the
+  standard this log line failed to meet). Add to lens 6's checklist: when a
+  value is redacted/sanitized ONCE at its source and consumed at multiple
+  sinks, check whether EACH sink is independently safe if the source's
+  protection were ever reverted — a shared upstream fix is not the same
+  guarantee as N independent ones.
 
 - **2026-09-21 (b)** — blast-radius **platform** — branch
   `claude/food-logging-observations-126ab3` (diagnose d8a2f6: daily-snapshot's

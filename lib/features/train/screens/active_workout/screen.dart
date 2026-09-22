@@ -64,9 +64,29 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
   /// fallback automatically advances to the next non-done exercise.
   int? _focusedExerciseIndex;
 
+  /// Obs 1 (2026-09-21, diagnose swap-undo-snackbar-completion-dismiss) — the
+  /// swap-undo SnackBar is shown via `ScaffoldMessenger.of(context)` from
+  /// `_openCreateAndAutoSwap` (swap_sheets.dart), a top-level function that
+  /// does not otherwise outlive the sheet it's called from. Captured here so
+  /// BOTH exit paths below can dismiss the SAME messenger instance: the
+  /// immediate completion listener (screen stays mounted, only its build
+  /// output changes) and dispose() (the backstop for every path that DOES
+  /// unmount the screen — cancel dialog's context.go, system back-gesture —
+  /// without needing to enumerate each one).
+  ScaffoldMessengerState? _swapUndoMessenger;
+
+  void _dismissSwapUndoSnackBar() {
+    _swapUndoMessenger?.hideCurrentSnackBar();
+    _swapUndoMessenger = null;
+  }
+
   @override
   void dispose() {
     _scrollController.dispose();
+    // Backstop for the swap-undo snackbar: covers every exit path that
+    // unmounts this screen (cancel dialog's context.go, back-gesture pop)
+    // without needing to name each one individually.
+    _dismissSwapUndoSnackBar();
     // A7: clear mid-workout snapshot on any screen exit (back-button, system
     // nav, or auto-dismiss). Completion/cancellation paths also call this
     // explicitly so the AI coach sees null state immediately rather than
@@ -142,6 +162,16 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
   Widget build(BuildContext context) {
     final data = ref.watch(activeWorkoutProvider);
     ref.watch(restTimerProvider);
+
+    // Obs 1 — completion doesn't unmount this screen (build() just switches
+    // to _buildCompleteScreen below), so dispose() never fires here. Dismiss
+    // the swap-undo snackbar immediately on the false->true transition
+    // instead of leaving it to linger until its own 5s timer elapses.
+    ref.listen<ActiveWorkoutData>(activeWorkoutProvider, (previous, next) {
+      if (next.isComplete && previous?.isComplete != true) {
+        _dismissSwapUndoSnackBar();
+      }
+    });
 
     // No workout started
     if (data.workoutDay == null) {
@@ -414,7 +444,7 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                                 );
                               }
                             },
-                            onSwap: () => _showSwapSheet(context, ref, exIdx),
+                            onSwap: () => _showSwapSheet(context, ref, exIdx, this),
                             onLongPressHeader: () {
                               if (data.isSupersetGroupMode) {
                                 ref.read(activeWorkoutProvider.notifier).pairSuperset(exIdx);

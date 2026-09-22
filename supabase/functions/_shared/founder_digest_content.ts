@@ -31,7 +31,8 @@
 
 import { escapeHtml, TELEGRAM_MAX_CHARS } from "./telegram.ts";
 import { IST_OFFSET_MS, istYesterdayWindow } from "./ist_date.ts";
-import { fetchAllPages } from "./paged_fetch.ts";
+import { fetchAllByIds, fetchAllPages } from "./paged_fetch.ts";
+import { sanitizeIdentifier } from "./sanitize_for_prompt.ts";
 
 /** The lifetime sentinel `'epoch'::timestamptz`, as PostgREST renders it. */
 export const LIFETIME_WINDOW = "1970-01-01T00:00:00+00:00";
@@ -103,6 +104,123 @@ export interface SubscriptionRow {
 }
 
 /**
+ * `founder_metrics_for_admin_api()` RPC row (delegates to `private.founder_metrics()`).
+ * ⚠ `signups_today_ist` and `pro_expired` are deliberately NEVER rendered from
+ * this row (B1, review round 2) — see the render-site comments in
+ * `buildDigestText` for why each is unsafe to surface here.
+ */
+export interface AdminMetricsRow {
+  total_users: number;
+  signups_today_ist: number;
+  signups_7d: number;
+  signups_30d: number;
+  pro_active: number;
+  pro_expired: number;
+  free_users: number;
+  active_subscriptions: number;
+  active_last_7d: number;
+  generated_at: string;
+}
+
+/**
+ * `founder_metrics_ops()` RPC row.
+ * ⚠ `client_errors_today` is deliberately NEVER rendered — same partial-day
+ * defect as `AdminMetricsRow.signups_today_ist` (both are "since IST midnight
+ * TODAY" gauges, and the digest cron runs at 08:00 IST reporting YESTERDAY).
+ */
+export interface OpsMetricsRow {
+  client_errors_today: number;
+  client_errors_7d: number;
+  open_alerts_count: number;
+  cron_failures_24h: number;
+  generated_at: string;
+}
+
+/**
+ * `founder_metrics_engagement()` RPC row.
+ * ⚠ `workouts_logged_today`, `food_logs_today`, `ai_messages_today` and
+ * `holds_started_today` are deliberately NEVER rendered — all four share the
+ * exact same "since IST midnight TODAY" partial-day shape B1 fixed for
+ * `signups_today_ist`; this RPC was never reviewed for that class in the
+ * spec, but the underlying SQL (verified live) has the identical defect.
+ */
+export interface EngagementMetricsRow {
+  workouts_logged_today: number;
+  food_logs_today: number;
+  ai_messages_today: number;
+  streak_maintained_current_week: number;
+  holds_started_today: number;
+  holds_started_7d: number;
+  holders_total: number;
+  generated_at: string;
+}
+
+/**
+ * Per CLAUDE.md §1: ₹349/month or ₹2,999/year for PRO — these are BOOKING
+ * prices (what a signup pays at that cadence), not monthly-recurring
+ * contributions. `computeNewMrr` below divides the yearly price by 12 before
+ * summing; never sum this map's raw values directly into an "MRR" figure.
+ *
+ * A known, deliberately-free plan value (`referral_trial`) contributes ₹0
+ * and must NOT be added here (see `KNOWN_ZERO_PRICE_PLANS` below) — adding a
+ * price for it would make New MRR silently start booking revenue that was
+ * never collected. Any OTHER plan value not in this map contributes ₹0 and
+ * is counted separately (`computeNewMrr`'s `unknownPlanCount`) so a genuinely
+ * unrecognized or future plan value is visible in the digest rather than
+ * silently mispriced or silently dropped.
+ */
+export const PLAN_PRICES_RUPEES: Readonly<Record<string, number>> = {
+  monthly: 349,
+  yearly: 2999,
+};
+
+/**
+ * Plan values that are REAL, live `subscriptions.plan` values but are
+ * deliberately priced at ₹0 — excluded from `unknownPlanCount` so the
+ * digest's "add to PLAN_PRICES_RUPEES" warning never tells the founder to
+ * price a free trial (Hermes L22 F1, 2026-09-21: `referral_trial` is a live
+ * plan value, 4 active rows confirmed, and the original warning copy would
+ * have led the founder to add `referral_trial: 349` — silently turning every
+ * future referral trial into booked revenue that was never collected).
+ */
+const KNOWN_ZERO_PRICE_PLANS = new Set(["referral_trial"]);
+
+/**
+ * New MRR (yesterday), computed from the SAME `subscriptions.rows` the
+ * "Subscriptions (new, yesterday)" section already reads — no separate DB
+ * read. Gross, before promo discounts: `razorpay-webhook/index.ts:130-143`
+ * shows promo codes discount the captured amount, and the discount is never
+ * persisted on the row, so a promo-redeemed signup overstates this figure by
+ * the discount amount (B3, review round 1) — the caller must render the
+ * "gross, before promo discounts" caveat alongside this number.
+ *
+ * A YEARLY plan contributes its price DIVIDED BY 12 — MRR is a *monthly*
+ * figure by definition. Fixed by a Hermes pass (L1/L21, 2026-09-21): the
+ * first cut summed the full ₹2,999 booking price per yearly signup, a 12x
+ * overstatement caught by cross-referencing `telegram-admin-bot/index.ts`'s
+ * OWN `/revenue` command, which already divides yearly by 12 for exactly
+ * this reason — this function failed to reuse that established pattern.
+ * Rounded to the nearest rupee only in the final sum, not per-row, so
+ * rounding error cannot compound across many yearly rows.
+ */
+export function computeNewMrr(
+  rows: readonly SubscriptionRow[],
+): { rupees: number; unknownPlanCount: number } {
+  let rupeesExact = 0;
+  let unknownPlanCount = 0;
+  for (const r of rows) {
+    if (KNOWN_ZERO_PRICE_PLANS.has(r.plan)) continue;
+    const price = PLAN_PRICES_RUPEES[r.plan];
+    if (price === undefined) {
+      unknownPlanCount++;
+      continue;
+    }
+    rupeesExact += r.plan === "yearly" ? price / 12 : price;
+  }
+  return { rupees: Math.round(rupeesExact), unknownPlanCount };
+}
+
+/**
  * A section's read result: rows, or the reason it could not be read.
  * `total` is the exact server-side count when the read was CAPPED (alerts
  * fetch only the lines they render) — a header that counted the page would
@@ -123,6 +241,45 @@ export interface DigestInput {
   subscriptions: SectionRead<SubscriptionRow>;
   /** Users whose `subscription_expires_at` falls within 7d / 30d of `now`. */
   expiringSoon: { count7d: number; count30d: number } | { unreadable: string };
+
+  /**
+   * Genuinely-windowed count of NEW user signups (`users.created_at`) inside
+   * yesterday's IST day. NOT `AdminMetricsRow.signups_today_ist`, which is a
+   * partial "since IST midnight TODAY" gauge (B1, review round 2).
+   */
+  signupsYesterday: { count: number } | { unreadable: string };
+  /** `founder_metrics_for_admin_api()` RPC row (B1). See its own doc comment for which fields are safe to render. */
+  adminMetrics: SectionRead<AdminMetricsRow>;
+  /** `founder_metrics_ops()` RPC row (B1). See its own doc comment for which fields are safe to render. */
+  opsMetrics: SectionRead<OpsMetricsRow>;
+  /** `founder_metrics_engagement()` RPC row (B1). See its own doc comment for which fields are safe to render. */
+  engagementMetrics: SectionRead<EngagementMetricsRow>;
+  /**
+   * `user_id` -> a display-ready first name, or `null` when unavailable
+   * (no/empty `full_name`) or opted out via `coach_memory.private_mode`
+   * (B2). Covers every distinct `user_id` present in `windowed.rows` — a
+   * superset of whichever 5 end up in `buildDigestText`'s Top Users ranking,
+   * computed there and only there, so this map itself is never filtered to
+   * a top-N ahead of time. Built ONCE here (impure) so the PURE
+   * `buildDigestText` never queries the database itself.
+   */
+  userNames: ReadonlyMap<string, string | null>;
+  /**
+   * Count of `subscriptions.cancelled_at` (migration 138) falling inside
+   * yesterday's IST window — manual-dashboard-action only today. Reads 0 for
+   * every day before that migration lands (no retroactive backfill,
+   * founder-accepted) — the digest copy states this explicitly (B3).
+   */
+  cancelledYesterday: { count: number } | { unreadable: string };
+  /**
+   * Count of `users` rows whose PRO access lapsed (`subscription_expires_at`
+   * fell inside yesterday's IST window while `subscription_status` is still
+   * `'pro'` — never reconciled by any job, per `_shared/subscription.ts`).
+   * The corrected "churn" proxy (B3, review round 2) — NOT
+   * `AdminMetricsRow.pro_expired`, which is an un-windowed cumulative total
+   * that would read as a "yesterday" figure but isn't one.
+   */
+  lapsedYesterday: { count: number } | { unreadable: string };
 }
 
 /** 8-char prefix of a user id — enough to correlate, never a whole uuid. */
@@ -267,11 +424,89 @@ export function buildDigestText(input: DigestInput): string {
   const top = [...perUser.entries()]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .slice(0, TOP_USERS);
+  // B2: a display-ready first name when one is available (not opted out via
+  // coach_memory.private_mode, and full_name is non-empty) — falls back to
+  // the pre-existing id-prefix format otherwise, exactly as before B2.
   lines.push(
     top.length === 0
       ? "<b>Top users</b>: none"
-      : `<b>Top users</b> (id prefix): ${top.map(([u, n]) => `${idPrefix(u)} ×${n}`).join(" · ")}`,
+      : `<b>Top users</b>: ${
+        top.map(([u, n]) => {
+          const name = input.userNames.get(u);
+          const label = name ? escapeHtml(name) : idPrefix(u);
+          return `${label} ×${n}`;
+        }).join(" · ")
+      }`,
   );
+
+  // B1: new signups (yesterday), genuinely windowed — NOT
+  // adminMetrics.signups_today_ist (a partial "since IST midnight TODAY"
+  // gauge). signups_7d / signups_30d from the RPC ARE safe rolling windows.
+  lines.push("");
+  lines.push("<b>New signups (yesterday)</b>");
+  if ("unreadable" in input.signupsYesterday) {
+    lines.push(unreadableLine("new signups", input.signupsYesterday.unreadable));
+  } else {
+    lines.push(`${input.signupsYesterday.count}`);
+  }
+  if ("unreadable" in input.adminMetrics) {
+    lines.push(unreadableLine("signups 7d/30d", input.adminMetrics.unreadable));
+  } else if (input.adminMetrics.rows.length > 0) {
+    const m = input.adminMetrics.rows[0];
+    lines.push(`7d: ${m.signups_7d} · 30d: ${m.signups_30d}`);
+  }
+
+  // B1: account totals — a current snapshot, not a "yesterday" figure.
+  // pro_expired is deliberately NEVER rendered here (B3 computes its own
+  // genuinely-windowed "Lapsed" figure below — rendering both would
+  // duplicate/contradict with no cross-reference).
+  lines.push("");
+  lines.push("<b>Account totals</b>");
+  if ("unreadable" in input.adminMetrics) {
+    lines.push(unreadableLine("account totals", input.adminMetrics.unreadable));
+  } else if (input.adminMetrics.rows.length === 0) {
+    lines.push("none");
+  } else {
+    const m = input.adminMetrics.rows[0];
+    lines.push(
+      `Total: ${m.total_users} · PRO: ${m.pro_active} · Free: ${m.free_users}`,
+    );
+    lines.push(
+      `Active subscriptions: ${m.active_subscriptions} · active last 7d: ${m.active_last_7d}`,
+    );
+  }
+
+  // B1: engagement — only the rolling/cumulative/current-snapshot fields.
+  // workouts_logged_today, food_logs_today, ai_messages_today and
+  // holds_started_today are deliberately NEVER rendered — see
+  // EngagementMetricsRow's own doc comment for why (same partial-day defect
+  // as signups_today_ist).
+  lines.push("");
+  lines.push("<b>Engagement</b>");
+  if ("unreadable" in input.engagementMetrics) {
+    lines.push(unreadableLine("engagement", input.engagementMetrics.unreadable));
+  } else if (input.engagementMetrics.rows.length === 0) {
+    lines.push("none");
+  } else {
+    const m = input.engagementMetrics.rows[0];
+    lines.push(`Streak maintained (current week): ${m.streak_maintained_current_week}`);
+    lines.push(`Hold starts (7d): ${m.holds_started_7d} · total ever: ${m.holders_total}`);
+  }
+
+  // B1: ops — client_errors_today is deliberately NEVER rendered (same
+  // partial-day defect). open_alerts_count and cron_failures_24h are
+  // current-snapshot / rolling-24h figures, safe as-is.
+  lines.push("");
+  lines.push("<b>Ops</b>");
+  if ("unreadable" in input.opsMetrics) {
+    lines.push(unreadableLine("ops", input.opsMetrics.unreadable));
+  } else if (input.opsMetrics.rows.length === 0) {
+    lines.push("none");
+  } else {
+    const m = input.opsMetrics.rows[0];
+    lines.push(`Client errors (7d): ${m.client_errors_7d}`);
+    lines.push(`Open alerts: ${m.open_alerts_count} · cron failures (24h): ${m.cron_failures_24h}`);
+  }
 
   lines.push("");
   if ("unreadable" in input.alerts) {
@@ -310,6 +545,35 @@ export function buildDigestText(input: DigestInput): string {
     for (const [plan, n] of byPlan) {
       lines.push(`${escapeHtml(plan)}: ${n}`);
     }
+    // B3: New MRR, computed from this SAME already-fetched rows array — no
+    // separate read. Gross, before promo discounts (razorpay-webhook applies
+    // a discount that is never persisted on the row — review round 1).
+    const mrr = computeNewMrr(input.subscriptions.rows);
+    lines.push(`New MRR: ₹${mrr.rupees} (gross, before promo discounts)`);
+    if (mrr.unknownPlanCount > 0) {
+      lines.push(
+        `⚠ ${mrr.unknownPlanCount} subscription(s) with an unpriced plan value excluded from MRR — add to PLAN_PRICES_RUPEES`,
+      );
+    }
+  }
+
+  // B3: two genuinely-windowed figures, never merged into one "Churn" line
+  // (a merged figure would hide which of the two — manual cancellation vs.
+  // silent non-renewal — actually happened). Both read 0 for every day
+  // before migration 138 lands — expected, stated explicitly rather than
+  // shown as a silent bare zero.
+  lines.push("");
+  lines.push("<b>Cancelled / lapsed (yesterday)</b>");
+  lines.push("<i>Manual-cancellation tracking started 2026-09-21 — 0 before that date is expected, not \"no churn\"</i>");
+  if ("unreadable" in input.cancelledYesterday) {
+    lines.push(unreadableLine("cancelled (manual)", input.cancelledYesterday.unreadable));
+  } else {
+    lines.push(`Cancelled (manual): ${input.cancelledYesterday.count}`);
+  }
+  if ("unreadable" in input.lapsedYesterday) {
+    lines.push(unreadableLine("lapsed", input.lapsedYesterday.unreadable));
+  } else {
+    lines.push(`Lapsed (PRO access expired, not renewed): ${input.lapsedYesterday.count}`);
   }
 
   lines.push("");
@@ -349,8 +613,13 @@ export function buildDigestText(input: DigestInput): string {
  * `supabase/functions/`, this file included) — extracting the filters into
  * table-less helpers would have moved them out of that gate's input set.
  */
+// `rpc` is OPTIONAL: `readDigestSections` never calls it (only
+// `gatherDigestInput`'s 3 new RPC reads do, B1), and widening this one
+// shared type to REQUIRE it broke every pre-existing test fixture that
+// passes a `.from()`-only fake client to `readDigestSections` — none of
+// them exercise the RPC path, so they should not need to implement it.
 // deno-lint-ignore no-explicit-any
-export type DigestClient = { from(table: string): any };
+export type DigestClient = { from(table: string): any; rpc?(fn: string): any };
 
 /** Runs a section read; a failure becomes that section's "unreadable" state. */
 async function readSection<T>(
@@ -520,6 +789,220 @@ export async function gatherDigestInput(
     }
   })();
 
-  const [subscriptions, expiringSoon] = await Promise.all([subscriptionsRead, expiringSoonRead]);
-  return { dayLabel: window.label, windowed, lifetime, alerts, subscriptions, expiringSoon };
+  // `rpc` is optional on DigestClient (see its own doc comment) — a caller
+  // that never provides one (every pre-existing test fake) degrades an RPC
+  // section to "unreadable" via readSection's own try/catch, rather than
+  // throwing a raw TypeError out of gatherDigestInput.
+  async function callRpc<T>(fnName: string): Promise<T[]> {
+    if (typeof supabase.rpc !== "function") {
+      throw new Error(`DigestClient has no rpc() — cannot call ${fnName}`);
+    }
+    const { data, error } = await supabase.rpc(fnName);
+    if (error) throw new Error(error.message);
+    return (data ?? []) as T[];
+  }
+
+  // B1: three existing SECURITY DEFINER metrics functions, previously unused
+  // by the digest. Each independently three-state via readSection, same as
+  // every other section — a failed RPC degrades that ONE section to
+  // "unreadable", never the whole digest.
+  const adminMetricsRead = readSection<AdminMetricsRow>(
+    async () => ({ rows: await callRpc<AdminMetricsRow>("founder_metrics_for_admin_api") }),
+    callerLabel,
+  );
+
+  const opsMetricsRead = readSection<OpsMetricsRow>(
+    async () => ({ rows: await callRpc<OpsMetricsRow>("founder_metrics_ops") }),
+    callerLabel,
+  );
+
+  const engagementMetricsRead = readSection<EngagementMetricsRow>(
+    async () => ({ rows: await callRpc<EngagementMetricsRow>("founder_metrics_engagement") }),
+    callerLabel,
+  );
+
+  // B1 (review round 2): `AdminMetricsRow.signups_today_ist` is a partial
+  // "since IST midnight TODAY" gauge, not "yesterday" — a genuinely windowed
+  // replacement, reusing the SAME yStart/tStart every other section already
+  // uses.
+  const signupsYesterdayRead: Promise<DigestInput["signupsYesterday"]> = (async () => {
+    try {
+      const { count, error } = await supabase
+        .from("users")
+        .select("id", { count: "exact", head: true })
+        .gte("created_at", yStart)
+        .lt("created_at", tStart);
+      if (error) throw new Error(error.message);
+      return { count: count ?? 0 };
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      console.error(`[${callerLabel}] section read failed:`, reason.slice(0, 300));
+      return { unreadable: reason };
+    }
+  })();
+
+  // B3: manual-cancellation count (migration 138's cancelled_at). Reads
+  // "unreadable" (column does not exist) until that migration is applied —
+  // a live-apply is a separate, explicitly-authorized action, so this code
+  // ships ahead of it deliberately, per this file's own three-state
+  // contract (an unreadable section is never rendered as a bare zero).
+  // The `.eq('status', 'cancelled')` filter is belt-and-suspenders on top of
+  // migration 140's trigger fix (Hermes L22 F2, 2026-09-21): the trigger now
+  // clears `cancelled_at` on reactivation, but this filter means the count
+  // stays correct even for any row a future writer stamps out of band.
+  const cancelledYesterdayRead: Promise<DigestInput["cancelledYesterday"]> = (async () => {
+    try {
+      const { count, error } = await supabase
+        .from("subscriptions")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "cancelled")
+        .gte("cancelled_at", yStart)
+        .lt("cancelled_at", tStart);
+      if (error) throw new Error(error.message);
+      return { count: count ?? 0 };
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      console.error(`[${callerLabel}] section read failed:`, reason.slice(0, 300));
+      return { unreadable: reason };
+    }
+  })();
+
+  // B3 (review round 2, corrected): the real "churn" proxy — a user whose
+  // `subscription_expires_at` fell inside yesterday's IST window while
+  // `subscription_status` is still 'pro' (never reconciled to 'expired' by
+  // any job — `_shared/subscription.ts`). NOT `AdminMetricsRow.pro_expired`,
+  // which is an un-windowed cumulative total.
+  const lapsedYesterdayRead: Promise<DigestInput["lapsedYesterday"]> = (async () => {
+    try {
+      const { count, error } = await supabase
+        .from("users")
+        .select("id", { count: "exact", head: true })
+        .eq("subscription_status", "pro")
+        .gte("subscription_expires_at", yStart)
+        .lt("subscription_expires_at", tStart);
+      if (error) throw new Error(error.message);
+      return { count: count ?? 0 };
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      console.error(`[${callerLabel}] section read failed:`, reason.slice(0, 300));
+      return { unreadable: reason };
+    }
+  })();
+
+  // B2: batch-fetch a display name for every distinct user_id already
+  // present in `windowed.rows` — a superset of whichever 5 end up in
+  // buildDigestText's Top Users ranking (computed there, purely, from this
+  // same `windowed` data). Two separate plain `.from()` queries rather than
+  // a PostgREST embedded join, matching this file's own established
+  // "literal, inline .from() chains" convention (so
+  // check_schema_column_refs.dart keeps validating both tables' columns).
+  // Never queries anything if `windowed` itself is unreadable — the ranking
+  // that would consume this map is empty in that case regardless.
+  const userNamesRead: Promise<DigestInput["userNames"]> = (async () => {
+    if ("unreadable" in windowed) return new Map<string, string | null>();
+    const ids = [...new Set(windowed.rows.map((r) => r.user_id))];
+    if (ids.length === 0) return new Map<string, string | null>();
+    try {
+      // Both `.in()` reads are bounded via fetchAllByIds (OI-79 class,
+      // check_unbounded_cron_reads.dart): chunking the id list alone bounds
+      // the request URL but not the response row count, so an unpaged
+      // `.in()` read can still be silently truncated at PostgREST's
+      // db-max-rows. Each throws on a page error, caught by this try/catch.
+      const [names, memory] = await Promise.all([
+        fetchAllByIds<{ id: string; full_name: string | null }>(
+          (chunk) => supabase.from("users").select("id, full_name").in("id", chunk),
+          ids,
+          { orderBy: "id", label: `${callerLabel} userNames`, maxPages: MAX_PAGES },
+        ),
+        fetchAllByIds<{ user_id: string; private_mode: boolean }>(
+          (chunk) =>
+            supabase.from("coach_memory").select("user_id, private_mode").in(
+              "user_id",
+              chunk,
+            ),
+          ids,
+          {
+            orderBy: "user_id",
+            label: `${callerLabel} userNames privacy`,
+            maxPages: MAX_PAGES,
+          },
+        ),
+      ]);
+      // Default-DENY on identity exposure (Hermes L40 F3, 2026-09-21): a user
+      // with NO coach_memory row at all (never opened the AI coach) used to
+      // fall through to "shown" — opted OUT by construction, with no surface
+      // on which they could ever have expressed the preference this control
+      // exists for. Build the set of users EXPLICITLY confirmed
+      // private_mode=false instead of the inverse; everyone else (no row, or
+      // private_mode=true) is suppressed to the id prefix.
+      const explicitlyVisibleIds = new Set<string>(
+        memory.filter((m) => m.private_mode === false).map((m) => m.user_id),
+      );
+      const map = new Map<string, string | null>();
+      for (const row of names) {
+        if (!explicitlyVisibleIds.has(row.id)) {
+          map.set(row.id, null);
+          continue;
+        }
+        // sanitizeIdentifier (Hermes L23 #2, 2026-09-21): a bare
+        // escapeHtml + .split(" ")[0] does not strip newlines/control
+        // characters or cap length — `users.full_name` is attacker-adjacent
+        // (seeded verbatim from signup metadata), so an unsanitised name
+        // could inject forged lines into this admin-only Telegram message
+        // or push the digest past TELEGRAM_MAX_CHARS, silently truncating
+        // sections below it. Same helper `re-engagement` already uses for
+        // this exact purpose.
+        const first = sanitizeIdentifier(row.full_name, {
+          maxLen: 32,
+          fallback: "",
+        }).split(" ")[0];
+        map.set(row.id, first.length === 0 ? null : first);
+      }
+      return map;
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      console.error(`[${callerLabel}] section read failed:`, reason.slice(0, 300));
+      // A failed name lookup degrades to "no names available" — every user
+      // renders under the pre-existing id-prefix format. Never a hard
+      // failure: a name is a display nicety, not load-bearing data.
+      return new Map<string, string | null>();
+    }
+  })();
+
+  const [
+    subscriptions,
+    expiringSoon,
+    adminMetrics,
+    opsMetrics,
+    engagementMetrics,
+    signupsYesterday,
+    cancelledYesterday,
+    lapsedYesterday,
+    userNames,
+  ] = await Promise.all([
+    subscriptionsRead,
+    expiringSoonRead,
+    adminMetricsRead,
+    opsMetricsRead,
+    engagementMetricsRead,
+    signupsYesterdayRead,
+    cancelledYesterdayRead,
+    lapsedYesterdayRead,
+    userNamesRead,
+  ]);
+  return {
+    dayLabel: window.label,
+    windowed,
+    lifetime,
+    alerts,
+    subscriptions,
+    expiringSoon,
+    adminMetrics,
+    opsMetrics,
+    engagementMetrics,
+    signupsYesterday,
+    cancelledYesterday,
+    lapsedYesterday,
+    userNames,
+  };
 }

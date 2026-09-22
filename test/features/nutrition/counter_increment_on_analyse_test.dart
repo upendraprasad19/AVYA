@@ -134,8 +134,16 @@ void main() {
       expect(analyseCartIdx, isNot(-1),
           reason: 'Could not find analyseCart in nutrition_provider');
 
+      // 2000 chars, matching scanImageBody's own window above — 1000 was
+      // enough only until this batch's A5/OI-226 telemetry fix (test seam +
+      // unawaited(ErrorTelemetry.logEvent(...)) ahead of the increment call)
+      // pushed the real .increment call to offset ~993, straddling a fixed
+      // 1000-char cutoff and chopping the token mid-word. Same class as
+      // logMeal's own "find the next method" technique above exists to
+      // avoid — a fixed offset is a size assumption about code that will
+      // keep growing.
       final analyseCartBody =
-          source.substring(analyseCartIdx, analyseCartIdx + 1000);
+          source.substring(analyseCartIdx, analyseCartIdx + 2000);
       // Same A7 migration as scanImage — accept both singleton + provider forms.
       final hasSingletonForm =
           analyseCartBody.contains('UsageCounterService.instance.increment');

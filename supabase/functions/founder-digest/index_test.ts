@@ -26,18 +26,24 @@ import {
   assertStringIncludes,
 } from "https://deno.land/std@0.224.0/testing/asserts.ts";
 import {
+  type AdminMetricsRow,
   buildDigestText,
+  computeNewMrr,
   DIGEST_KEYS,
   type DigestInput,
+  type EngagementMetricsRow,
   escapeHtml,
+  gatherDigestInput,
   idPrefix,
   istClock,
   istYesterdayWindow,
   LIFETIME_WINDOW,
   MAX_ALERT_LINES,
   MAX_PAGES,
+  type OpsMetricsRow,
   readDigestSections,
   sendTelegram,
+  type SubscriptionRow,
   TELEGRAM_MAX_CHARS,
   telegramErrorSummary,
   type UsageRow,
@@ -46,6 +52,7 @@ import {
 const DAY = "2026-09-11";
 const U1 = "0a1b2c3d-1111-4222-8333-444455556666";
 const U2 = "9f8e7d6c-1111-4222-8333-444455556666";
+const U3 = "5d4c3b2a-1111-4222-8333-444455556666";
 
 function row(
   user_id: string,
@@ -68,6 +75,16 @@ function input(over: Partial<DigestInput> = {}): DigestInput {
     // compiling and rendering exactly as before.
     subscriptions: { rows: [] },
     expiringSoon: { count7d: 0, count30d: 0 },
+    // B1/B2/B3 (observation-batch-and-digest-redesign, 2026-09-21) grew
+    // DigestInput by 7 more fields; same "readable-empty default, override
+    // via `over` when a test actually exercises one" pattern as above.
+    signupsYesterday: { count: 0 },
+    adminMetrics: { rows: [] },
+    opsMetrics: { rows: [] },
+    engagementMetrics: { rows: [] },
+    userNames: new Map<string, string | null>(),
+    cancelledYesterday: { count: 0 },
+    lapsedYesterday: { count: 0 },
     ...over,
   };
 }
@@ -225,7 +242,8 @@ Deno.test("an unlisted LIFETIME key reports MOVERS, never a summed cumulative co
 // Top users: 8-char prefixes, sorted, capped, never a whole uuid.
 // ---------------------------------------------------------------------------
 
-Deno.test("top users shows 8-char id prefixes sorted by usage and never a whole uuid", () => {
+Deno.test("top users shows 8-char id prefixes sorted by usage and never a whole uuid " +
+    "when no name is available (B2 — no userNames entry for either user)", () => {
   const text = buildDigestText(input({
     windowed: {
       rows: [
@@ -235,7 +253,13 @@ Deno.test("top users shows 8-char id prefixes sorted by usage and never a whole 
       ],
     },
   }));
-  assertStringIncludes(text, "<b>Top users</b> (id prefix): 9f8e7d6c ×10 · 0a1b2c3d ×7");
+  // B2 (observation-batch-and-digest-redesign): the label dropped the
+  // literal "(id prefix)" suffix because the value shown is no longer
+  // always an id prefix — it is a first name when userNames has one, the
+  // id prefix otherwise. This fixture supplies no userNames map (the
+  // input() helper defaults it to an empty Map), so every entry still
+  // falls back to the id-prefix format, which is what this test pins.
+  assertStringIncludes(text, "<b>Top users</b>: 9f8e7d6c ×10 · 0a1b2c3d ×7");
   assertNotIncludes(text, U1);
   assertNotIncludes(text, U2);
   assertEquals(idPrefix(U1), "0a1b2c3d");
@@ -605,6 +629,13 @@ Deno.test("a failing alerts table makes the alerts section unreadable — never 
     dayLabel: DAY,
     subscriptions: { rows: [] },
     expiringSoon: { count7d: 0, count30d: 0 },
+    signupsYesterday: { count: 0 },
+    adminMetrics: { rows: [] },
+    opsMetrics: { rows: [] },
+    engagementMetrics: { rows: [] },
+    userNames: new Map<string, string | null>(),
+    cancelledYesterday: { count: 0 },
+    lapsedYesterday: { count: 0 },
     ...out,
   });
   assertStringIncludes(text, "⚠ alerts unreadable");
@@ -619,4 +650,377 @@ Deno.test("rows served by the client reach the sections unchanged", async () => 
   // comes first — the windowed read — and [] to the lifetime one.
   assertEquals(out.windowed, { rows: [r] });
   assertEquals(out.lifetime, { rows: [] });
+});
+
+// ---------------------------------------------------------------------------
+// B1/B2/B3 (observation-batch-and-digest-redesign, 2026-09-21)
+// ---------------------------------------------------------------------------
+
+function adminMetricsRow(over: Partial<AdminMetricsRow> = {}): AdminMetricsRow {
+  return {
+    total_users: 32,
+    signups_today_ist: 999, // deliberately absurd — must NEVER be rendered
+    signups_7d: 4,
+    signups_30d: 11,
+    pro_active: 9,
+    pro_expired: 777, // deliberately absurd — must NEVER be rendered
+    free_users: 23,
+    active_subscriptions: 9,
+    active_last_7d: 6,
+    generated_at: "2026-09-11T02:30:00Z",
+    ...over,
+  };
+}
+
+function opsMetricsRow(over: Partial<OpsMetricsRow> = {}): OpsMetricsRow {
+  return {
+    client_errors_today: 888, // deliberately absurd — must NEVER be rendered
+    client_errors_7d: 42,
+    open_alerts_count: 2,
+    cron_failures_24h: 0,
+    generated_at: "2026-09-11T02:30:00Z",
+    ...over,
+  };
+}
+
+function engagementMetricsRow(
+  over: Partial<EngagementMetricsRow> = {},
+): EngagementMetricsRow {
+  return {
+    workouts_logged_today: 111, // deliberately absurd — must NEVER be rendered
+    food_logs_today: 222, // deliberately absurd — must NEVER be rendered
+    ai_messages_today: 333, // deliberately absurd — must NEVER be rendered
+    streak_maintained_current_week: 12,
+    holds_started_today: 444, // deliberately absurd — must NEVER be rendered
+    holds_started_7d: 3,
+    holders_total: 8,
+    generated_at: "2026-09-11T02:30:00Z",
+    ...over,
+  };
+}
+
+Deno.test("B1: renders adminMetrics' safe fields, NEVER signups_today_ist or pro_expired", () => {
+  const text = buildDigestText(input({ adminMetrics: { rows: [adminMetricsRow()] } }));
+  assertStringIncludes(text, "7d: 4");
+  assertStringIncludes(text, "30d: 11");
+  assertStringIncludes(text, "Total: 32");
+  assertStringIncludes(text, "PRO: 9");
+  assertStringIncludes(text, "Free: 23");
+  assertStringIncludes(text, "Active subscriptions: 9");
+  assertStringIncludes(text, "active last 7d: 6");
+  assertNotIncludes(text, "999", "signups_today_ist must never be rendered");
+  assertNotIncludes(text, "777", "pro_expired must never be rendered — B3 owns churn");
+});
+
+Deno.test("B1: renders opsMetrics' safe fields, NEVER client_errors_today", () => {
+  const text = buildDigestText(input({ opsMetrics: { rows: [opsMetricsRow()] } }));
+  assertStringIncludes(text, "Client errors (7d): 42");
+  assertStringIncludes(text, "Open alerts: 2");
+  assertStringIncludes(text, "cron failures (24h): 0");
+  assertNotIncludes(text, "888", "client_errors_today must never be rendered");
+});
+
+Deno.test("B1: renders engagementMetrics' safe fields, NEVER the four *_today fields", () => {
+  const text = buildDigestText(
+    input({ engagementMetrics: { rows: [engagementMetricsRow()] } }),
+  );
+  assertStringIncludes(text, "Streak maintained (current week): 12");
+  assertStringIncludes(text, "Hold starts (7d): 3");
+  assertStringIncludes(text, "total ever: 8");
+  for (const absurd of ["111", "222", "333", "444"]) {
+    assertNotIncludes(text, absurd, `*_today field (${absurd}) must never be rendered`);
+  }
+});
+
+Deno.test("B1: adminMetrics/opsMetrics/engagementMetrics each render their OWN " +
+    "unreadable marker independently, never a silent zero", () => {
+  const text = buildDigestText(input({
+    adminMetrics: { unreadable: "admin rpc timeout" },
+    opsMetrics: { unreadable: "ops rpc timeout" },
+    engagementMetrics: { unreadable: "engagement rpc timeout" },
+  }));
+  assertStringIncludes(text, "admin rpc timeout");
+  assertStringIncludes(text, "ops rpc timeout");
+  assertStringIncludes(text, "engagement rpc timeout");
+});
+
+Deno.test("B1: new signups (yesterday) is genuinely windowed, independent of adminMetrics", () => {
+  const text = buildDigestText(input({ signupsYesterday: { count: 5 } }));
+  assertStringIncludes(text, "<b>New signups (yesterday)</b>\n5");
+});
+
+Deno.test("B2: a user with a real, non-empty full_name shows their first name, escaped", () => {
+  const text = buildDigestText(input({
+    windowed: { rows: [row(U1, "chat_app", 10)] },
+    userNames: new Map([[U1, "Priya"]]),
+  }));
+  assertStringIncludes(text, "<b>Top users</b>: Priya ×10");
+  assertNotIncludes(text, idPrefix(U1));
+});
+
+Deno.test("B2: a name is HTML-escaped before interpolation into the Telegram message", () => {
+  // Not a realistic full_name, but the render site must not trust it — same
+  // discipline every other user-controlled string in this file already gets.
+  const text = buildDigestText(input({
+    windowed: { rows: [row(U1, "chat_app", 10)] },
+    userNames: new Map([[U1, "<b>hacked</b>"]]),
+  }));
+  assertStringIncludes(text, "&lt;b&gt;hacked&lt;/b&gt;");
+  assertNotIncludes(text, "<b>hacked</b>");
+});
+
+Deno.test("B2: userNames absent for a user (opted out via private_mode, or empty " +
+    "full_name) falls back to the pre-existing id-prefix format", () => {
+  const text = buildDigestText(input({
+    windowed: { rows: [row(U1, "chat_app", 10)] },
+    userNames: new Map([[U1, null]]),
+  }));
+  assertStringIncludes(text, `<b>Top users</b>: ${idPrefix(U1)} ×10`);
+});
+
+Deno.test("B3: computeNewMrr prices monthly/yearly correctly (yearly ÷12 — " +
+    "MRR is a monthly figure), treats referral_trial as a KNOWN zero-price " +
+    "plan (not unknown), and excludes a genuinely unrecognized plan from " +
+    "the price sum while counting it as unknown", () => {
+  const rows: SubscriptionRow[] = [
+    { plan: "monthly", created_at: "2026-09-11T00:00:00Z" },
+    { plan: "monthly", created_at: "2026-09-11T00:00:00Z" },
+    { plan: "yearly", created_at: "2026-09-11T00:00:00Z" },
+    { plan: "referral_trial", created_at: "2026-09-11T00:00:00Z" },
+    { plan: "some_future_plan", created_at: "2026-09-11T00:00:00Z" },
+  ];
+  const mrr = computeNewMrr(rows);
+  // Hermes L1/L21 (2026-09-21): this assertion previously read
+  // `349 + 349 + 2999` (= 3697) — summing the yearly BOOKING price raw
+  // instead of dividing by 12, the exact pre-fix bug. Correct:
+  // 2×349 + 2999/12 = 698 + 249.9166... = 947.9166... rounds to 948.
+  assertEquals(mrr.rupees, 948);
+  // referral_trial is a real, live plan value (discovered during the same
+  // Hermes pass) deliberately priced at ₹0 — it must NOT inflate
+  // unknownPlanCount, or the digest's own warning would tell the founder to
+  // add a price for a free trial. Only some_future_plan is genuinely
+  // unrecognized.
+  assertEquals(mrr.unknownPlanCount, 1);
+});
+
+Deno.test("B3: New MRR renders with the gross-before-promo-discounts caveat, " +
+    "and surfaces an unknown-plan warning for a genuinely unrecognized " +
+    "plan — but never for referral_trial, a known free plan", () => {
+  const text = buildDigestText(input({
+    subscriptions: {
+      rows: [
+        { plan: "monthly", created_at: "2026-09-11T00:00:00Z" },
+        { plan: "referral_trial", created_at: "2026-09-11T00:00:00Z" },
+        { plan: "some_future_plan", created_at: "2026-09-11T00:00:00Z" },
+      ],
+    },
+  }));
+  // Only the one monthly plan prices in — referral_trial (known, ₹0) and
+  // some_future_plan (unknown, ₹0) both contribute nothing to the sum.
+  assertStringIncludes(text, "New MRR: ₹349 (gross, before promo discounts)");
+  // Exactly 1 — referral_trial must not be double-counted into this warning
+  // alongside the genuinely unrecognized plan (Hermes L1/L21, 2026-09-21).
+  assertStringIncludes(text, "⚠ 1 subscription(s) with an unpriced plan value excluded from MRR");
+});
+
+Deno.test("B3: no unknown-plan warning line when every plan is recognized", () => {
+  const text = buildDigestText(input({
+    subscriptions: { rows: [{ plan: "yearly", created_at: "2026-09-11T00:00:00Z" }] },
+  }));
+  assertNotIncludes(text, "unpriced plan");
+});
+
+Deno.test("B3: Cancelled/Lapsed render their counts, always carry the " +
+    "manual-cancellation-tracking-started caveat, and each fails " +
+    "independently to 'unreadable' rather than a silent zero", () => {
+  const readable = buildDigestText(
+    input({ cancelledYesterday: { count: 2 }, lapsedYesterday: { count: 1 } }),
+  );
+  assertStringIncludes(readable, "Cancelled (manual): 2");
+  assertStringIncludes(readable, "Lapsed (PRO access expired, not renewed): 1");
+  assertStringIncludes(readable, "Manual-cancellation tracking started 2026-09-21");
+
+  const degraded = buildDigestText(input({
+    cancelledYesterday: { unreadable: "column cancelled_at does not exist" },
+    lapsedYesterday: { count: 0 },
+  }));
+  assertStringIncludes(degraded, "column cancelled_at does not exist");
+  // The sibling section still reads fine — one section's failure never
+  // blanks another (this file's own three-state contract).
+  assertStringIncludes(degraded, "Lapsed (PRO access expired, not renewed): 0");
+});
+
+// --- gatherDigestInput wiring (B1/B2) — a hand-rolled fake with .rpc() and
+// .in() support, distinct from the shared `fakeClient` above (which is
+// scoped to readDigestSections's narrower select/eq/gte/lt/order/limit/range
+// surface and deliberately not widened here, to avoid destabilizing its 33
+// existing call sites for a need only this block has). ---
+
+/**
+ * Extends the `.from()`/chain shape with `.in()` (B2's name-lookup batch
+ * query, via `fetchAllByIds`) and `.rpc()` (B1's 3 metrics functions). Kept
+ * separate from `fakeClient` above rather than widening it in place, so its
+ * 33 existing `readDigestSections`-level call sites are never put at risk by
+ * a change only this block needs.
+ *
+ * Unlike `fakeClient`'s "first builder call serves rows, later ones serve
+ * []" trick (needed there because its `.range()` is a no-op terminal), this
+ * builder does REAL slicing: every fresh `.from(table)` call starts from
+ * that table's full configured row set (optionally narrowed by `.in()`), and
+ * `.range(from, to)` slices it. That makes `fetchAllPages`/`fetchAllByIds`
+ * terminate correctly (a `.range()` past the end returns `[]`) without
+ * depending on call ORDER — load-bearing here because `windowed` and
+ * `lifetime` (and, for `.in()`, `users` and `coach_memory`) issue
+ * INDEPENDENT `.from()` calls against the same table, each of which must see
+ * the full configured set on its own first page, not whichever call
+ * happened to run first.
+ */
+function wiringFakeClient(opts: {
+  rows?: Record<string, unknown[]>;
+  rpcResults?: Record<string, unknown[]>;
+  users?: { id: string; full_name: string | null }[];
+  coachMemory?: { user_id: string; private_mode: boolean }[];
+}) {
+  const rpcCalls: string[] = [];
+  const inCalls: { table: string; column: string; values: unknown[] }[] = [];
+  const client = {
+    from(table: string) {
+      let data: Record<string, unknown>[] =
+        table === "users"
+          ? ((opts.users ?? []) as unknown as Record<string, unknown>[])
+          : table === "coach_memory"
+          ? ((opts.coachMemory ?? []) as unknown as Record<string, unknown>[])
+          : ((opts.rows?.[table] ?? []) as Record<string, unknown>[]);
+      const builder: Record<string, unknown> = {};
+      for (const m of ["select", "eq", "gte", "lt", "order", "not", "lte"]) {
+        builder[m] = () => builder;
+      }
+      builder.in = (column: string, values: unknown[]) => {
+        inCalls.push({ table, column, values });
+        data = data.filter((row) => values.includes(row[column]));
+        return builder;
+      };
+      builder.limit = (n: number) =>
+        Promise.resolve({ data: data.slice(0, n), error: null, count: data.length });
+      builder.range = (from: number, to: number) =>
+        Promise.resolve({ data: data.slice(from, to + 1), error: null });
+      // A query with no terminal `.range()`/`.limit()` call (e.g. a
+      // `{count:'exact', head:true}` count-only read) is awaited directly —
+      // resolve to the full (possibly `.in()`-narrowed) set.
+      builder.then = (resolve: (v: unknown) => void) =>
+        resolve({ data, error: null, count: data.length });
+      return builder;
+    },
+    rpc(fn: string) {
+      rpcCalls.push(fn);
+      return Promise.resolve({ data: opts.rpcResults?.[fn] ?? [], error: null });
+    },
+  };
+  return { client, rpcCalls, inCalls };
+}
+
+Deno.test("B1: gatherDigestInput calls all 3 metrics RPCs by their exact live names", async () => {
+  const { client, rpcCalls } = wiringFakeClient({});
+  // deno-lint-ignore no-explicit-any
+  await gatherDigestInput(client as any, new Date("2026-09-11T08:00:00Z"));
+  assert(rpcCalls.includes("founder_metrics_for_admin_api"));
+  assert(rpcCalls.includes("founder_metrics_ops"));
+  assert(rpcCalls.includes("founder_metrics_engagement"));
+});
+
+Deno.test("B1: a DigestClient with no rpc() degrades all 3 metrics sections to " +
+    "unreadable instead of throwing out of gatherDigestInput", async () => {
+  const { client } = fakeClient({});
+  // deno-lint-ignore no-explicit-any
+  const out = await gatherDigestInput(client as any, new Date("2026-09-11T08:00:00Z"));
+  assert("unreadable" in out.adminMetrics);
+  assert("unreadable" in out.opsMetrics);
+  assert("unreadable" in out.engagementMetrics);
+});
+
+Deno.test("B2: gatherDigestInput's userNames map respects private_mode and " +
+    "empty-full_name, batched over exactly the distinct user_ids in " +
+    "windowed.rows", async () => {
+  const { client, inCalls } = wiringFakeClient({
+    rows: { usage_counters: [row(U1, "chat_app", 3), row(U2, "chat_app", 5)] },
+    users: [
+      { id: U1, full_name: "Priya Sharma" },
+      { id: U2, full_name: "" },
+    ],
+    coachMemory: [{ user_id: U1, private_mode: true }],
+  });
+  // deno-lint-ignore no-explicit-any
+  const out = await gatherDigestInput(client as any, new Date("2026-09-11T08:00:00Z"));
+  assertEquals(out.userNames.get(U1), null, "private_mode=true must suppress the name");
+  assertEquals(out.userNames.get(U2), null, "empty full_name must fall back to null");
+  const userIdCall = inCalls.find((c) => c.table === "users");
+  assert(userIdCall, "must query users.id with .in()");
+  assertEquals(new Set(userIdCall!.values), new Set([U1, U2]));
+});
+
+Deno.test("Hermes L40 F3 (2026-09-21): a user with NO coach_memory row at all " +
+    "defaults to SUPPRESSED, not shown — privacy-by-default, not privacy-by-" +
+    "explicit-opt-out", async () => {
+  const { client } = wiringFakeClient({
+    rows: { usage_counters: [row(U1, "chat_app", 3), row(U3, "chat_app", 2)] },
+    users: [
+      { id: U1, full_name: "Priya Sharma" },
+      // U3 has a real, non-empty name but NEVER opened the AI coach, so it
+      // has no coach_memory row of any kind — the pre-fix logic only
+      // suppressed a user with an EXPLICIT private_mode=true row, so an
+      // absent row fell through to "shown". A user who never had a surface
+      // to express the preference this control exists for must not be
+      // treated as having opted IN by omission.
+      { id: U3, full_name: "Rahul Verma" },
+    ],
+    coachMemory: [{ user_id: U1, private_mode: false }],
+  });
+  // deno-lint-ignore no-explicit-any
+  const out = await gatherDigestInput(client as any, new Date("2026-09-11T08:00:00Z"));
+  assertEquals(out.userNames.get(U1), "Priya", "explicit private_mode=false must show the name");
+  assertEquals(
+    out.userNames.get(U3),
+    null,
+    "no coach_memory row at all must default to suppressed, not shown",
+  );
+});
+
+Deno.test("Hermes L23 #2 (2026-09-21): a full_name carrying control characters " +
+    "or excess length is sanitized before rendering, not passed through raw", async () => {
+  const { client } = wiringFakeClient({
+    rows: { usage_counters: [row(U1, "chat_app", 3)] },
+    users: [{ id: U1, full_name: "Priya\nSharma <script>" }],
+    coachMemory: [{ user_id: U1, private_mode: false }],
+  });
+  // deno-lint-ignore no-explicit-any
+  const out = await gatherDigestInput(client as any, new Date("2026-09-11T08:00:00Z"));
+  const name = out.userNames.get(U1);
+  assert(name !== null, "a sanitizable name must still render, not fall back to null");
+  assert(!name!.includes("\n"), `sanitized name must not carry a newline, got ${JSON.stringify(name)}`);
+  // sanitizeIdentifier caps at 32 chars before the .split(" ")[0] first-name
+  // extraction runs on it — the first "word" of a newline-stripped string is
+  // what should survive here.
+  assertEquals(name, "Priya");
+});
+
+Deno.test("Hermes L23 #4 / L21 F4 (2026-09-21): both userNames fetchAllByIds " +
+    "calls pass an explicit maxPages bound — a page count is invisible to " +
+    "any fake DB client (it only ever sees .range() calls, never the loop " +
+    "bound that decides how many to issue), so this is a source-pin, " +
+    "narrowly scoped to userNamesRead's own body only", () => {
+  const source = Deno.readTextFileSync(
+    new URL("../_shared/founder_digest_content.ts", import.meta.url),
+  );
+  const start = source.indexOf("const userNamesRead");
+  assert(start >= 0, "userNamesRead not found in source");
+  const end = source.indexOf("\n  })();", start);
+  assert(end > start, "could not find the end of the userNamesRead IIFE");
+  const body = source.slice(start, end);
+  const maxPagesCount = (body.match(/maxPages:\s*MAX_PAGES/g) ?? []).length;
+  assertEquals(
+    maxPagesCount,
+    2,
+    "expected exactly 2 maxPages: MAX_PAGES occurrences (users + coach_memory " +
+      `fetchAllByIds calls) inside userNamesRead, found ${maxPagesCount}`,
+  );
 });

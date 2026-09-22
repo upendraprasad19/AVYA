@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**137 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**138 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -136,12 +136,13 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-220 | Contract-sweep gate: pre-push targeted SoT contract testing | one clean batch under `--warn-only`… | 2026-09-19 — shipped on `gate-integrity`… | [:4887](open_issues.md#L4887) |
 | OI-221 | tool_dispatcher defensive date-parse fallbacks can clobber the wrong date… | none | never | [:4973](open_issues.md#L4973) |
 | OI-222 | Document versionCode-bump-via-merge CI gap in CLAUDE.md §4.9 | none | never | [:4991](open_issues.md#L4991) |
-| OI-224 | alert_cron_function_dead threshold unreachable, cron_call_log pruned at 7… | none | 2026-09-20 — live on… | [:5089](open_issues.md#L5089) |
-| OI-226 | ai-proxy chat/tool-calling Gemini exhaustion paths have no… | none | never | [:5059](open_issues.md#L5059) |
-| OI-227 | Telegram coach connect is broken (no linking token, bot says no user… | none — UI removal is self-contained; the… | 2026-09-21 — founder tapped "Connect… | [:5145](open_issues.md#L5145) |
-| OI-228 | AI coach shortenWorkout tool calls get stuck at status:queued with no… | none — Bug A is a small isolated fix;… | 2026-09-21 — both citations below… | [:5209](open_issues.md#L5209) |
-| OI-229 | AI coach chat replies violate captain_manual.ts hard rules: 100-word cap… | none — both are prompt-adherence gaps in… | 2026-09-21 — both cited… | [:5261](open_issues.md#L5261) |
-| OI-230 | AI coach snapshot rank-promotion math is self-contradictory:… | none — mechanism is fully understood and… | 2026-09-21 — read both functions live… | [:5313](open_issues.md#L5313) |
-| OI-231 | AI coach addressed a promoted user by their OLD rank term (Recruit instead… | live verification (need to check the… | 2026-09-21 — the title's own implied… | [:5372](open_issues.md#L5372) |
-| OI-232 | AI coach chat scrolls to top on every switch between in-app chat and… | none — mechanism is understood and… | 2026-09-21 — founder reported live;… | [:5432](open_issues.md#L5432) |
-| OI-233 | user_daily_snapshots' 4 cron/client writers are not atomic against each… | none — scope and fix shape are already… | 2026-09-21 — explicitly scoped out in | [:5483](open_issues.md#L5483) |
+| OI-224 | alert_cron_function_dead threshold unreachable, cron_call_log pruned at 7… | none | 2026-09-20 — live on… | [:5059](open_issues.md#L5059) |
+| OI-227 | Telegram coach connect is broken (no linking token, bot says no user… | none — UI removal is self-contained; the… | 2026-09-21 — founder tapped "Connect… | [:5115](open_issues.md#L5115) |
+| OI-228 | AI coach shortenWorkout tool calls get stuck at status:queued with no… | none — Bug A is a small isolated fix;… | 2026-09-21 — both citations below… | [:5179](open_issues.md#L5179) |
+| OI-229 | AI coach chat replies violate captain_manual.ts hard rules: 100-word cap… | none — both are prompt-adherence gaps in… | 2026-09-21 — both cited… | [:5231](open_issues.md#L5231) |
+| OI-230 | AI coach snapshot rank-promotion math is self-contradictory:… | none — mechanism is fully understood and… | 2026-09-21 — read both functions live… | [:5283](open_issues.md#L5283) |
+| OI-231 | AI coach addressed a promoted user by their OLD rank term (Recruit instead… | live verification (need to check the… | 2026-09-21 — the title's own implied… | [:5342](open_issues.md#L5342) |
+| OI-232 | AI coach chat scrolls to top on every switch between in-app chat and… | none — mechanism is understood and… | 2026-09-21 — founder reported live;… | [:5402](open_issues.md#L5402) |
+| OI-233 | user_daily_snapshots' 4 cron/client writers are not atomic against each… | none — scope and fix shape are already… | 2026-09-21 — explicitly scoped out in | [:5453](open_issues.md#L5453) |
+| OI-238 | 5 Gemini-calling Edge Functions have no server-side reportGeminiExhaustion… | none | never | [:5499](open_issues.md#L5499) |
+| OI-239 | Acknowledging an alert re-arms its dedup window instead of waiting out the… | none | never | [:5525](open_issues.md#L5525) |

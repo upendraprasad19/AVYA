@@ -97,6 +97,19 @@ e7c1a9). Two rules this imposes on callers:
   behavior. `_syncScheduledWorkouts` additionally skips an unchanged *planned*
   row via a sync-owned fingerprint index — but NEVER a `completed` row (d9b2c5).
 
+**Re-audited clean 2026-09-21 (A3-follow, observation-batch-and-digest-redesign).**
+Grepped every `unawaited(SyncService.instance.<sync|push>...)`-shaped call site
+across the whole `lib/` tree (~50+, spanning every WriteService plus screens/
+providers added after Unit H landed — e.g. `deload_evaluator.dart`, 2026-07-17):
+100% call the coalesced entry (`syncWorkoutData()` / `syncNutritionData()` /
+`pushSnapshot()`), none call a raw `*Now()` directly. The 5 raw `*Now()` call
+sites found match this doc's documented exception list exactly — resync
+migrator, sim harness (×2), onboarding first-context (`pushSnapshotNow()`,
+`onboarding_provider.dart:701`, fires once per completion not in a loop),
+`coach_memory_service`, and `checkAndSync` (`pushSnapshotNow()`,
+`sync_service.dart:1110`) — no undocumented bypass reintroduced the pre-Unit-H
+flood. No fix needed; no diagnose-doc per rule 22 (nothing was broken).
+
 ## Common pitfalls
 
 | Pitfall | How to avoid | Source |

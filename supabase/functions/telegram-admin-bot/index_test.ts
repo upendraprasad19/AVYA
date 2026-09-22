@@ -1162,6 +1162,12 @@ function makeEmptyDigestFake() {
 
   return {
     from: (_table: string) => makeBuilder(),
+    // B1 (2026-09-21): gatherDigestInput's adminMetrics/opsMetrics/
+    // engagementMetrics sections read via .rpc(), not .from() — an absent
+    // .rpc() degrades them to "unreadable" (DigestClient's own guard), which
+    // would fail this fixture's "every section renders none, never
+    // unreadable" premise below.
+    rpc: (_fn: string) => Promise.resolve({ data: [], error: null }),
   };
 }
 

@@ -18,7 +18,7 @@ concept: daily_snapshot_server_key_preservation
 sot_registry_entry: daily_snapshot_server_key_preservation
 writers:
   - { file: supabase/functions/_shared/snapshot_merge.ts, method: "mergeSnapshotJson — pure merge, existing row spread first, incoming client payload layered on top", line: 23 }
-  - { file: supabase/functions/daily-snapshot/index.ts, method: "serve handler — reads existing row via .maybeSingle() (:362), merges via mergeSnapshotJson (:383), upserts the MERGED result (:396) instead of the raw request body; gated behind DISABLE_SNAPSHOT_MERGE_SAFE_UPSERT (:356, added in code-review remediation)", line_range: "339-397" }
+  - { file: supabase/functions/daily-snapshot/index.ts, method: "serve handler — reads existing row via .maybeSingle() (:363), merges via mergeSnapshotJson (:384), upserts the MERGED result (:397) instead of the raw request body; gated behind DISABLE_SNAPSHOT_MERGE_SAFE_UPSERT (:357, added in code-review remediation). Line numbers shifted +1 by the observation-batch-and-digest-redesign merge (PR #32, 2026-09-22) inserting one unrelated line earlier in the same file (extractCoachingNotes' retries: 2) — re-verify by grep, not by citation, per this repo's own common-pitfalls row on line-count drift.", line_range: "340-398" }
   - { file: supabase/functions/morning-alert/index.ts, method: "generate mode — already correct: reads existing row, spreads it, layers morning_alert/morning_alert_type/morning_alert_generated_at on top", line: 286 }
 readers:
   - { file: supabase/functions/morning-alert/index.ts, method_or_widget: "deliver mode — const alertMsg = snap.snapshot_json?.morning_alert; if (!alertMsg) return;", line: 413 }
@@ -36,7 +36,7 @@ cloud_table: user_daily_snapshots
 cloud_columns: [user_id, snapshot_date, snapshot_json]
 contract_test_path: supabase/functions/_shared/snapshot_merge_test.ts
 ist_handling:
-  - { file: supabase/functions/daily-snapshot/index.ts, line: 338, fn: "getTodayIST — unchanged; snapshotDate is the same IST-day key already used by the pre-fix upsert, now reused to scope the new pre-read." }
+  - { file: supabase/functions/daily-snapshot/index.ts, line: 340, fn: "getTodayIST — unchanged; snapshotDate is the same IST-day key already used by the pre-fix upsert, now reused to scope the new pre-read. (This citation was already off by one pre-merge — corrected here to the call site's actual current line, not just shifted.)" }
 provider_invalidations: >
   None — no Riverpod provider is touched. This is a server-side Edge Function fix; the client
   is unmodified.

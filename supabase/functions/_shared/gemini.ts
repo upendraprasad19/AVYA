@@ -36,6 +36,30 @@ const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY")!;
 const GEMINI_URL_TEMPLATE =
   "https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent?key={KEY}";
 
+/**
+ * Strips GEMINI_API_KEY from a string before it can reach a log line, an
+ * `alerts` row, or (via `reportGeminiExhaustion`) the founder's Telegram
+ * digest — none of which are secret-safe destinations. Deno's `fetch`
+ * rejects a network-level failure with a TypeError whose `.message` embeds
+ * the full request URL, and our request URL carries the key as a `?key=...`
+ * query param — the exact "Telegram token in a fetch error" shape this
+ * repo's own CLAUDE.md already documents for `_shared/telegram.ts`, applied
+ * here to a different secret (Hermes L40 F1, 2026-09-21).
+ *
+ * Applied at every point in this file where an exception or an upstream
+ * response body becomes part of `lastError.message` / `reason` — not just
+ * the one confirmed leak — because any of them can reach the same sink and
+ * a fetch/URL implementation detail changing later must not reopen this.
+ * Idempotent and cheap on a string that never contained the key.
+ */
+export function redactSecrets(input: string): string {
+  let out = input;
+  if (GEMINI_API_KEY) {
+    out = out.split(GEMINI_API_KEY).join("[REDACTED]");
+  }
+  return out.replace(/([?&]key=)[^&\s"']+/gi, "$1[REDACTED]");
+}
+
 // Stable SKU names — colocated here so callers pick from a canonical list.
 export const MODEL_FLASH = "gemini-2.5-flash";
 export const MODEL_FLASH_LITE = "gemini-2.5-flash-lite";
@@ -275,16 +299,19 @@ async function _callOnce(opts: {
       const status = response.status;
       let preview = "";
       try {
-        preview = (await response.text()).slice(0, 200);
+        // Redact BEFORE truncating — a key straddling the 200-char cut
+        // would survive un-redacted if sliced first (B-pass F2, 2026-09-21).
+        preview = redactSecrets(await response.text()).slice(0, 200);
       } catch (_) { /* body read may also fail */ }
+      const safePreview = preview;
       console.warn(
-        `[geminiChat] ${opts.model} HTTP ${status}: ${preview}`,
+        `[geminiChat] ${opts.model} HTTP ${status}: ${safePreview}`,
       );
       return {
         content: null,
         modelUsed: null,
         tokensUsed: 0,
-        lastError: { status, message: preview || `HTTP ${status}` },
+        lastError: { status, message: safePreview || `HTTP ${status}` },
       };
     }
 
@@ -334,7 +361,7 @@ async function _callOnce(opts: {
       message = `timed out after ${opts.timeoutMs}ms`;
       console.warn(`[geminiChat] ${opts.model} ${message}`);
     } else {
-      message = `threw: ${String(err).slice(0, 200)}`;
+      message = `threw: ${redactSecrets(String(err)).slice(0, 200)}`;
       console.warn(`[geminiChat] ${opts.model} ${message}`);
     }
     return {
@@ -499,6 +526,7 @@ export async function geminiChatWithTools(
   let lastError: unknown = null;
   let lastReason = "";
   let lastRetriable = true;
+  let lastStatus: number | null = null;
 
   for (let pass = 0; pass < TOOLS_MAX_PASSES; pass++) {
     for (const attemptModel of attempts) {
@@ -531,8 +559,17 @@ export async function geminiChatWithTools(
       lastError = result.error;
       lastReason = result.reason;
       lastRetriable = result.retriable;
+      lastStatus = result.status ?? null;
+      // Redact again at this log sink, defense-in-depth: result.reason is
+      // already redacted at its source (_callOnceWithTools), but this line
+      // must not depend on that staying true — a B-pass mutation proved
+      // that reverting the inner redaction leaves THIS log line leaking
+      // the key on every retriable failure while every existing test (which
+      // only inspects the final exhaustion message) stays green, because
+      // geminiChatWithTools separately re-redacts lastReason for THAT
+      // message (2026-09-21).
       console.warn(
-        `[geminiChatWithTools] ${attemptModel} failed (${result.reason}) retriable=${result.retriable} pass=${pass} request_id=${requestId ?? "n/a"}`,
+        `[geminiChatWithTools] ${attemptModel} failed (${redactSecrets(result.reason)}) retriable=${result.retriable} pass=${pass} request_id=${requestId ?? "n/a"}`,
       );
     }
 
@@ -547,11 +584,21 @@ export async function geminiChatWithTools(
     await _sleepMs(TOOLS_PASS_BACKOFF_MS);
   }
 
-  throw new Error(
+  const exhaustionError = new Error(
     `geminiChatWithTools: all attempts failed for primary=${model}` +
-      ` lastReason=${lastReason}` +
-      (lastError ? ` lastError=${String(lastError)}` : ""),
+      ` lastReason=${redactSecrets(lastReason)}` +
+      (lastError ? ` lastError=${redactSecrets(String(lastError))}` : ""),
   );
+  // A5/OI-226 (f7a2c9): attach structured failure info so a catcher (i.e.
+  // tool-loop.ts) can feed reportGeminiExhaustion's {status, message} shape
+  // without re-parsing the hand-composed .message string above. Additive —
+  // .message is unchanged, and tool-loop.ts (the sole production caller) only
+  // ever logs it, never parses it (confirmed by grep before this change).
+  Object.assign(exhaustionError, {
+    status: lastStatus,
+    geminiMessage: lastReason,
+  });
+  throw exhaustionError;
 }
 
 interface CallOnceWithToolsArgs {
@@ -567,7 +614,17 @@ interface CallOnceWithToolsArgs {
 
 type CallOnceResult =
   | { ok: true; value: Omit<GeminiToolsResult, "usedFallback"> }
-  | { ok: false; reason: string; retriable: boolean; error?: unknown };
+  | {
+    ok: false;
+    reason: string;
+    retriable: boolean;
+    error?: unknown;
+    // A5/OI-226 (f7a2c9): the real HTTP status for an HTTP failure, null for
+    // every other failure shape (timeout / empty candidate / transport
+    // error) — mirrors geminiChat's own GeminiResult.lastError.status
+    // convention so both paths feed reportGeminiExhaustion identically.
+    status?: number | null;
+  };
 
 // ── Private: single HTTP call to Gemini with tool config. ──────────
 async function _callOnceWithTools(
@@ -624,7 +681,9 @@ async function _callOnceWithTools(
       const status = response.status;
       let preview = "";
       try {
-        preview = (await response.text()).slice(0, 200);
+        // Redact BEFORE truncating — see the identical fix + comment in
+        // _callOnce above (B-pass F2, 2026-09-21).
+        preview = redactSecrets(await response.text()).slice(0, 200);
       } catch (_) { /* body read may also fail */ }
       // 429 + 5xx are the retriable bucket — a spaced retry / fallback can
       // help. Other 4xx (e.g. 400 malformed request) won't be helped by a
@@ -633,6 +692,7 @@ async function _callOnceWithTools(
         ok: false,
         reason: `HTTP ${status}: ${preview}`,
         retriable: status === 429 || status >= 500,
+        status,
       };
     }
 
@@ -732,7 +792,7 @@ async function _callOnceWithTools(
     // Network blip / transport error — a spaced retry can recover.
     return {
       ok: false,
-      reason: `threw: ${err}`,
+      reason: `threw: ${redactSecrets(String(err))}`,
       retriable: true,
       error: err,
     };
