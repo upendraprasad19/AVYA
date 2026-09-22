@@ -291,6 +291,47 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   decision, not an oversight; filed as awareness for whoever next touches
   that validator.
 
+- **2026-09-22** — blast-radius **account** — branch `oi-batching-strategy-e5e359`,
+  Batch A (3 independent AI-coach bug fixes: OI-230 rank/ETA binding-constraint
+  fix, OI-232 channel-switch scroll fix, OI-228 Bug A log-workout-sheet
+  completed-day copy fix — plus a Gate 19 false-positive suppression fix and
+  supporting OI-board/SoT-registry updates). **3 findings (0 P0, 1 P1, 1 P2,
+  1 P3); 0 false_alarm — all 3 fixed in-batch.** Review:
+  `docs/reviews/5ebf78e29706-review.md` (renamed once from
+  `a4bcd634b7a7-review.md` after the fixes below were staged — the standard
+  hash-fixed-point rename, `docs/reviews/` being hash-excluded made the
+  rename itself free). Run as one agent (16 files, but the real code diff is
+  6 files — the rest is diagnose-doc/OI-board prose).
+  **No new lens — all 3 findings are confirmed recurrences of already-documented
+  patterns, worth recording as data points rather than tuning.** Finding 1
+  (P1, guard_without_its_mirror) reproduced the lens's own standing
+  "if the guard is a SOURCE GREP, assume it is defeatable" method exactly:
+  the reviewer mutated the OI-232 fix by commenting it out (not deleting it —
+  the realistic re-entry the method note calls for) and the sole regression
+  test, a raw source-presence check with no comment-stripping, stayed green.
+  Fixed by adding a `readScreenSourceStripped()` helper (wrapping the
+  existing private `_stripComments`, previously only used by
+  `readLibrarySource`) and switching the file's shared `setUpAll` to it —
+  re-mutated post-fix, now reddens exactly the intended test. Finding 2 (P2)
+  is another `self_attesting_artifact` instance (lens minted 2026-08-25):
+  two closure-board entries cited `docs/diagnoses/<pending>.md` for
+  diagnose-docs this SAME diff already created with fully-known names —
+  unlike the repo's legitimate `commit <pending>` convention (genuinely
+  unknowable pre-commit), a diagnose-doc's identity was already fixed on
+  disk. Finding 3 (P3) is another "a citation lives in a field a gate reads,
+  but the gate's parser cannot actually read this value" instance
+  (2026-09-03 entry's class): a two-method `method: A / B` field failed the
+  registry-parity gate's bare-identifier regex, so a stale `line_range` (off
+  by 6 lines — missing exactly the `remaining`/`binding_constraint` fields
+  this batch is about) passed silently. All three were independently
+  re-verified by the implementing session before being trusted (the mutation
+  re-run live, the diagnose-doc filenames confirmed via `ls`, the real method
+  span re-read directly) rather than accepted from the review's prose alone.
+  False-alarm rate 0/3 → no lens removed; recorded as a third data point for
+  lens 6's comment-defeat sub-shape and a further recurrence for the
+  self-attesting-artifact and gate-blind-citation classes, neither of which
+  needs a new lens to keep finding real instances.
+
 - **2026-09-21** — blast-radius **catastrophic** (migration 138's
   `SECURITY DEFINER` trigger forced the tier up from a path-glob-computed
   `platform`) — branch `observation-batch-and-digest-redesign` (Part A: 8

@@ -113,3 +113,14 @@ String readLibrarySource(String headPath) {
 /// moves `_AnimatedDots` next) cannot silently narrow what the test reads.
 String readRestoringScreenSource() =>
     readLibrarySource('lib/features/auth/screens/restoring_screen.dart');
+
+/// [readScreenSource] with comments stripped (see [_stripComments]).
+///
+/// A bare `readScreenSource` presence check (`src.contains(...)`) cannot tell
+/// "the code is live" from "the code is present but commented out" — a
+/// regression that comments out a fix instead of deleting it still leaves
+/// every substring intact. Use this whenever a source-grep test's own
+/// findings/history flags that defeat vector (B-pass, 2026-09-22,
+/// OI-232/`a4bcd634b7a7`-review Finding 1) for the screen in question.
+String readScreenSourceStripped(String screenName) =>
+    _stripComments(readScreenSource(screenName));

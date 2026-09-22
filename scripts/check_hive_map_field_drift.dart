@@ -429,4 +429,15 @@ const _alwaysOk = <String>{
   // mis-attributes them because ai_snapshot_builder.dart also reads those
   // log prefixes elsewhere for the PR/meals/logs snapshot.
   'wake_up_time', 'preferred_workout_time',
+  // OI-230/231 (a8f3e2, 2026-09-22) — `code` / `binding_constraint` are
+  // fields of the LOCAL `next` map returned by
+  // ai_snapshot_builder._getNextRankFromLadder() (:1461/:1469), built from
+  // `kRankLadder` / `kRankGates` — compile-time rank-ladder constants in
+  // lib/core/services/rank_ladder_data.dart, never Hive. `_getEtaNextPromotion()`
+  // reads `next['code']` (kRankGates lookup) and `next['binding_constraint']`
+  // (its own ETA branch selector). NOT exlog_*/nlog_*/wlog_* fields (no such
+  // writer emits either); the prefix heuristic mis-attributes them because
+  // ai_snapshot_builder.dart also reads those log prefixes elsewhere for the
+  // PR/meals/logs snapshot.
+  'code', 'binding_constraint',
 };

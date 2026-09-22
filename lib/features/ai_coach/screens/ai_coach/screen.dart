@@ -305,13 +305,14 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
     });
   }
 
-  /// APK Test #15 / Bug E — instant (no animation) jump used ONLY by the
-  /// first-paint initial scroll. `_scrollToBottom`'s 300 ms animation is
-  /// fine for "new message arrived, ease into view" but for the initial
-  /// landing there's nothing to ease from — the user just opened the
-  /// screen and expects the latest exchange + input row already in view.
-  /// `jumpTo` removes the visible scroll-from-top animation that would
-  /// otherwise flash on every open.
+  /// APK Test #15 / Bug E — instant (no animation) jump to the bottom.
+  /// `_scrollToBottom`'s 300 ms animation is fine for "new message
+  /// arrived, ease into view" but wrong here — nothing is on screen yet
+  /// to ease from, whether this is the first paint or the chat subtree
+  /// remounting after a Telegram round-trip (OI-232). `jumpTo` removes
+  /// the visible scroll-from-top animation that would otherwise flash.
+  /// Two call sites: the one-shot first-paint gate below, and the
+  /// channel-switch-back listener in build() above.
   void _jumpToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -451,6 +452,17 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
     ref.listen(pendingToolIntentsProvider, (_, _) => _scrollToBottom());
     ref.listen(workoutDraftProvider, (_, next) {
       if (next != null) _scrollToBottom();
+    });
+    // OI-232 — switching to Telegram and back unmounts/remounts the chat
+    // subtree (channel == 'in_app' ? _buildChatArea(...) : _buildTelegramView
+    // (...) below), and Flutter does not preserve a fresh ScrollController's
+    // offset across that. _initialScrollDone above is a ONE-SHOT gate for the
+    // screen's first paint only — it has already fired long before any later
+    // channel switch, so it never re-fires. Re-land at the bottom every time
+    // the user switches BACK into chat, instant (no animation) since there is
+    // nothing on screen yet to animate from.
+    ref.listen(channelProvider, (previous, next) {
+      if (next == 'in_app' && previous != 'in_app') _jumpToBottom();
     });
 
     // APK Test #15 / Bug E — first-paint scroll-to-bottom. Fires once,

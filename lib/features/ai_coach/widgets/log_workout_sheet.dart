@@ -83,6 +83,12 @@ class LogWorkoutSheet extends ConsumerStatefulWidget {
 class _LogWorkoutSheetState extends ConsumerState<LogWorkoutSheet> {
   List<_ExerciseCapture> _captures = const [];
   bool _loaded = false;
+  // OI-228 (Bug A) — distinguishes "nothing scheduled today" from "today's
+  // workout is scheduled but already completed" so _buildEmpty() doesn't
+  // show the same "NO WORKOUT SCHEDULED" copy for both. Only set when the
+  // schedule row's status is 'completed'; other terminal statuses (e.g.
+  // 'moved') still fall through to the generic empty state below.
+  bool _alreadyCompleted = false;
   // e8f4a3 B-pass P3c — double-tap latch: the button stays live until the
   // route finishes popping, and intent ids embed millisecondsSinceEpoch, so
   // a second tap lands a NEW id that addIntents' id-dedup and the
@@ -110,7 +116,10 @@ class _LogWorkoutSheetState extends ConsumerState<LogWorkoutSheet> {
     // PAUSED stays loggable (paused = pending — same contract the dispatcher
     // and the swap sheet honor; R2-B2 consistency).
     if (status != null && status != 'planned' && status != 'paused') {
-      setState(() => _loaded = true);
+      setState(() {
+        _alreadyCompleted = status == 'completed';
+        _loaded = true;
+      });
       return;
     }
     final exercisesRaw = row['exercises'];
@@ -205,7 +214,9 @@ class _LogWorkoutSheetState extends ConsumerState<LogWorkoutSheet> {
       children: [
         const SizedBox(height: 24),
         Text(
-          'NO WORKOUT SCHEDULED TODAY',
+          _alreadyCompleted
+              ? 'WORKOUT ALREADY LOGGED'
+              : 'NO WORKOUT SCHEDULED TODAY',
           style: AppTypography.mono.copyWith(
             fontSize: 11,
             letterSpacing: 2,
@@ -216,8 +227,10 @@ class _LogWorkoutSheetState extends ConsumerState<LogWorkoutSheet> {
         ),
         const SizedBox(height: 10),
         Text(
-          'Log anything you did from the Train screen — or ask the coach for '
-          'a travel workout.',
+          _alreadyCompleted
+              ? "Today's workout is already logged. Head to Train to review it."
+              : 'Log anything you did from the Train screen — or ask the '
+                  'coach for a travel workout.',
           style: AppTypography.bodyS.copyWith(color: AppColors.textMute),
           textAlign: TextAlign.center,
         ),
