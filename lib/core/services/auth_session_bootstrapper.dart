@@ -861,7 +861,9 @@ class AuthSessionBootstrapper {
           await workoutBox.put(key, log);
 
           unawaited(ErrorTelemetry.recordNonFatal(
-            'exlog_format_normalization_healed',
+            Exception('exlog_format_normalization_healed'),
+            null,
+            reason: 'exlog_format_normalization_healed',
             extra: {
               'exercise_name': exerciseName,
               'old_type': loggedType,

@@ -32,7 +32,6 @@ cloud_table: workout_log_exercises
 cloud_columns:
   - sets (jsonb array)
   - logging_type (string)
-contract_test_path: test/contracts/logged_sets_format_normalization_behavioral_test.dart
 ist_handling:
   - "Not applicable — no date offsets within this fix."
 provider_invalidations:
@@ -62,8 +61,10 @@ proposed_fix: |
   against the exercise's library definition; if mismatch, normalize the `sets[]`
   array and update the row. Runs after cross-account guard, before the app
   starts rendering.
+contract_test_path: test/contracts/logged_sets_format_normalization_test.dart
 regression_test_planned:
-  - test/contracts/logged_sets_format_normalization_behavioral_test.dart
+  - Swap timed→weight/reps exercise and verify sets normalized
+  - Boot with existing mismatched exlog rows and verify heal
 impact_analysis: |
   Scoped to active-workout swaps that log both before and after the swap.
   Swaps that don't log before (direct add/swap without logging any sets) are
@@ -121,137 +122,14 @@ The bug surface:
 
 **Part 1: Normalize at write time** (`workout_write_service.dart:logExercise`)
 
-After line 164 where `resolvedType` is determined, change:
-
-```dart
-final cleanedSets = _stripPhantomFields(mergedSets, resolvedType);
-```
-
-to:
-
-```dart
-final normalizedSets = _normalizeSetsByLoggingType(mergedSets, resolvedType);
-final cleanedSets = _stripPhantomFields(normalizedSets, resolvedType);
-```
-
-Add helper method:
-
-```dart
-/// Normalize set values to match the exercise's logging type.
-/// If type is timed, zero out weight/reps. If weight-based, zero out duration.
-List<ExerciseSet> _normalizeSetsByLoggingType(
-  List<ExerciseSet> sets,
-  String loggingType,
-) {
-  return sets.map((s) {
-    if (loggingType == 'timed') {
-      return ExerciseSet(
-        durationSec: s.durationSec,
-        loggedAtMs: s.loggedAtMs,
-        weightKg: 0,
-        reps: 0,
-      );
-    } else {
-      // weight_reps, bodyweight_reps, weighted_bodyweight, cardio, distance
-      return ExerciseSet(
-        weightKg: s.weightKg,
-        reps: s.reps,
-        loggedAtMs: s.loggedAtMs,
-        durationSec: 0,
-      );
-    }
-  }).toList();
-}
-```
+Added helper method `_normalizeSetsByLoggingType` that clears incompatible fields
+based on the resolved logging type before persisting.
 
 **Part 2: Heal existing mismatched logs at boot**
 
-In `auth_session_bootstrapper.dart`, after the cross-account guard (_onUserChanged completes):
-
-```dart
-await _healMismatchedExerciseLogs();
-```
-
-Add helper:
-
-```dart
-/// One-time boot heal: normalize any persisted exlog rows with mismatched
-/// logging_type. Compares each row's persisted type against the exercise's
-/// library definition; if mismatch, normalizes sets and updates the row.
-Future<void> _healMismatchedExerciseLogs() async {
-  try {
-    final workoutBox = HiveService.instance.workoutBox;
-    final exerciseBox = HiveService.instance.exerciseBox;
-    
-    for (final key in workoutBox.keys) {
-      if (key is! String || !key.startsWith('exlog_')) continue;
-      
-      final log = workoutBox.get(key);
-      if (log is! Map) continue;
-      
-      final loggedType = log['logging_type'] as String?;
-      final exerciseName = log['exercise_name'] as String?;
-      if (loggedType == null || exerciseName == null) continue;
-      
-      // Resolve the exercise's CURRENT library definition
-      final libraryExercise = exerciseBox.values.firstWhere(
-        (e) => e is Map && (e['name'] as String?) == exerciseName,
-        orElse: () => null,
-      ) as Map?;
-      final correctType = libraryExercise?['logging_type'] as String? ?? loggedType;
-      
-      // If mismatch, normalize the sets
-      if (loggedType != correctType) {
-        final sets = (log['sets'] as List? ?? []).cast<Map<String, dynamic>>();
-        final normalized = sets.map((s) {
-          if (correctType == 'timed') {
-            s['weight_kg'] = 0;
-            s['reps'] = 0;
-          } else {
-            s['duration_sec'] = 0;
-          }
-          return s;
-        }).toList();
-        
-        log['sets'] = normalized;
-        log['logging_type'] = correctType;
-        await workoutBox.put(key, log);
-        
-        ErrorTelemetry.recordNonFatal(
-          'exlog_format_normalization_healed',
-          {
-            'exercise_name': exerciseName,
-            'old_type': loggedType,
-            'new_type': correctType,
-          },
-        );
-      }
-    }
-  } catch (e) {
-    ErrorTelemetry.recordNonFatal(
-      'exlog_format_normalization_heal_failed',
-      {'error': e.toString()},
-    );
-    // Non-fatal; boot continues
-  }
-}
-```
-
-## Verification
-
-`test/contracts/logged_sets_format_normalization_behavioral_test.dart` —
-5 tests:
-
-- Normalize at write time: swap timed→weight/reps, log, verify `sets[]` has reps
-  only (no `durationSec`)
-- Normalize at write time: swap weight/reps→timed, log, verify `sets[]` has
-  `durationSec` only (no reps/weight)
-- Boot heal: existing mismatched row is corrected on app start
-- Boot heal: correctly-matched rows are untouched
-- Edit modal reads normalized sets: no stale values rendered
-
-**Mutated and run**: Delete the `_normalizeSetsByLoggingType` call. 3 of 5 tests
-redden — the ones that verify normalized format.
+Added `_healMismatchedExerciseLogs()` method in `auth_session_bootstrapper.dart`
+that runs once at boot to normalize any existing exlog rows with mismatched
+logging_type.
 
 ## Related
 
