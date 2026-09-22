@@ -21,6 +21,7 @@ import 'package:icanbefitter/features/train/providers/train_provider.dart'
 import 'package:supabase_flutter/supabase_flutter.dart' show FileOptions;
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import '../../providers/ai_coach_provider.dart';
@@ -169,6 +170,38 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
     _messageController.addListener(() {
       if (mounted) setState(() {});
     });
+    // A4 (2026-09-21) — AI Coach deliberately does NOT use
+    // HiveTabScaffoldMixin (fundamentally different mount shape — see that
+    // file's own header + the check_tab_screen_uses_hive_scaffold.dart
+    // allow-list), so it never got that mixin's background-restore-
+    // invalidation wiring either. ChatHistoryNotifier.build() reads coachBox
+    // synchronously once at build time with no reactive link to
+    // _restoreCoachInteractions completing, so a restore landing after this
+    // screen already built showed stale history until the NEXT unrelated
+    // rebuild. Wired directly to the same underlying signal the mixin uses
+    // internally, without adopting the mixin itself.
+    try {
+      SyncService.instance.restoreCompletedTick
+          .addListener(_onRestoreCompleted);
+    } catch (e, s) {
+      // A screen must never fail to mount because sync isn't initialised
+      // (widget tests pump this screen without SyncService) — mirrors
+      // HiveTabScaffoldMixin's own guard for the identical listener.
+      debugPrint('[AiCoachScreen] restore tick listen failed: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, s,
+          reason: 'ai_coach_screen_restore_tick_listen'));
+    }
+  }
+
+  /// A4 — a completed background restore rewrote coachBox underneath a
+  /// screen that already built chatHistoryProvider. Invalidate it so the
+  /// next build re-reads Hive; the existing ref.listen(chatHistoryProvider,
+  /// ...) below already scrolls to bottom on any value change, so a fresh
+  /// history re-triggers that too, with no separate scroll-specific fix
+  /// needed.
+  void _onRestoreCompleted() {
+    if (!mounted) return;
+    ref.invalidate(chatHistoryProvider);
   }
 
   Future<void> _initSpeech() async {
@@ -245,6 +278,13 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
 
   @override
   void dispose() {
+    try {
+      SyncService.instance.restoreCompletedTick
+          .removeListener(_onRestoreCompleted);
+    } catch (_) {
+      // Symmetric with the guarded add in initState(): if the listener was
+      // never registered there, there is nothing to remove.
+    }
     _speech?.stop();
     _recordingTicker?.cancel();
     _messageController.dispose();

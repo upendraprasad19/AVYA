@@ -3485,3 +3485,56 @@ any change must keep honouring.
 - **Blast radius**: `lib/core/services/**` → `account` (`docs/blast_radius.yaml:326`); the fix did not touch `sync/**`. The BATCH that shipped it is `platform`, but for OI-170's sake, not this one's
 - ~~**Not folded into the OI-166 batch**~~ — **superseded 2026-09-08: it WAS folded in.** The bullet read *"it is a defect in the deload lift's own durability sequencing, not in either regeneration path"*. That is still an accurate description of the defect and a poor reason to file it separately: it was one line, it was discovered while verifying an OI-166 review finding, and the batch was already re-testing the deload lift's dual write. §4.2 makes the same point structurally — a bug surfaced by a batch is fixed by that batch
 
+## OI-226 — ai-proxy chat/tool-calling Gemini exhaustion paths have no reportGeminiExhaustion alert wiring
+
+- **Status**: CLOSED (2026-09-21, `observation-batch-and-digest-redesign`, A5) — diagnose `f7a2c9`
+- **Blocked on**: none
+- **Shipped**: BOTH gaps this OI named. (1) `geminiChatWithTools` (`gemini.ts`) now attaches
+  `{status, geminiMessage}` onto its total-exhaustion throw via `Object.assign` (the pre-existing
+  thrown Error carried no structured field `reportGeminiExhaustion` could consume); `tool-loop.ts`'s
+  `runToolLoop` hard-failure catch (`:300`) now calls `reportGeminiExhaustion` with the same
+  `source="ai_proxy_gemini_exhausted"` the 3 nutrition sites use and `endpoint="chat"`. (2) The
+  `prediction` handler's own single-shot `geminiChat()` call (`ai-proxy/index.ts`, originally cited
+  below as `:692`, drifted to `:722` by this same batch's own A2b `retries: 2` insertions earlier in
+  the file) never destructured `lastError` at all — now does, and its `!content` branch calls
+  `reportGeminiExhaustion` with `endpoint="prediction"`. ai-proxy now has 5 total call sites (was 3).
+  ⚠ **An earlier pass at this fix closed only (1) and nearly reported this OI closed while (2) was
+  still open** — caught by re-reading this entry's own full body (specifically the "at least two
+  more … call sites" sentence below) before writing the closure claim, not by any tooling. Mechanical
+  gate `scripts/check_gemini_retry_and_telemetry_coverage.dart` covers client-side telemetry +
+  `geminiChat` retries going forward; this server-side `reportGeminiExhaustion` wiring itself has no
+  mechanical gate (scope decision, 5 call sites judged too small a surface to warrant one — see the
+  diagnose-doc).
+- **Verified**: 2026-09-21 — `grep -c "reportGeminiExhaustion(" supabase/functions/ai-proxy/index.ts`
+  → 4 (3 pre-existing + `prediction`); `tool-loop.ts` has exactly 1 more. `deno check
+  --node-modules-dir=none` clean on `gemini.ts`, `tool-loop.ts`, `ai-proxy/index.ts`. Both new sites
+  mutation-proven (deleted each `reportGeminiExhaustion` call independently, confirmed exactly its
+  own test reddened, reverted, confirmed green) — see the diagnose-doc's `mutation_proven` field for
+  exact pass/fail counts.
+- **Identified**: 2026-09-20 · filed via mint_oi.sh from branch `claude/food-logging-observations-126ab3`
+
+The `food-logging-observations` batch (Tasks 9-10, commits `72a4aa7d`/`c84eb796`) wired
+`reportGeminiExhaustion` at exactly the three `ai-proxy` call sites its own plan named —
+`food_text_analysis` (`:443`), `scan_meal` (`:603`), `cart_auditor` (`:646`) — because that
+plan was scoped to the nutrition/food-logging observations, not to ai-proxy as a whole.
+Round-2 plan review (2026-09-20) correctly noted that ai-proxy has at least two more
+`geminiChat`/`geminiChatWithTools` call sites with no equivalent wiring: the plain chat
+path (`index.ts:692`, destructures `{ content, modelUsed, tokensUsed }` — no `lastError`)
+and the 3-round tool-calling path (around `:1009`, `geminiChatWithTools`). A terminal Gemini
+failure on either path currently degrades silently to the client with zero founder
+visibility, the exact gap Task 9/10 closed for the nutrition endpoints.
+
+**This is accepted as an explicit plan-scope boundary, not a defect in the delivered
+work** — the plan's Task 10 brief names the three call sites verbatim in its Files section,
+and extending coverage to the chat/tool-calling paths is a separate unit of work (the
+`geminiChatWithTools` path has a materially different retry/round shape than the
+single-shot `geminiChat` calls Task 9 instrumented). Filed here per §4.2 so the gap has a
+tracked terminal state rather than living only in a round-2 review nobody re-reads.
+
+**Fix direction (as filed — see Shipped above for what actually landed):** wire
+`reportGeminiExhaustion` (or a `lastError`-carrying equivalent) at `index.ts:692` and inside
+`geminiChatWithTools`'s exhaustion path, using the same `endpoint` discriminator pattern
+(`"chat"` / `"chat_tool_call"`) Task 10 established for the three existing sites. (Shipped used
+`endpoint="chat"` for the tool-calling path and added `endpoint="prediction"` for the
+previously-unnamed-by-fix-direction second site.)
+

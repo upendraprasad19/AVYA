@@ -16,6 +16,7 @@ import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import '../repositories/ai_coach_repository.dart';
+import '../repositories/coach_interaction_repository.dart';
 import 'pending_tool_intents_provider.dart';
 import '../models/tool_intent.dart';
 
@@ -222,6 +223,23 @@ class ChatHistoryNotifier extends Notifier<List<ChatMessage>> {
         continue;
       }
 
+      // A2c (2026-09-21), corrected A2d (same day, review round on A2c) — a
+      // restored row from a non-chat ANALYSIS channel (food_text_analysis /
+      // scan_meal / cart_auditor / weekly_report / app_event) must never
+      // render as a chat bubble — _restoreCoachInteractions (sync_coach.dart)
+      // pulls ALL ai_coach_interactions rows with no channel filter of its
+      // own. A2c's first cut reused recentHistoryExchanges' coachChatChannels
+      // ALLOWLIST here too, which silently dropped every legitimate
+      // proactive/paywall channel outside {'app','chat','in_app_orphan'} —
+      // see CoachInteractionRepository.nonChatAnalysisChannels for the
+      // corrected DENYLIST and why. A null channel means a local coach write,
+      // always chat.
+      final channel = interaction['channel'] as String?;
+      if (channel != null &&
+          CoachInteractionRepository.nonChatAnalysisChannels.contains(channel)) {
+        continue;
+      }
+
       final userMsg = interaction['user_message'] as String?;
       final aiResponse = interaction['ai_response'] as String?;
       final mediaUrl = interaction['media_url'] as String?;
@@ -264,7 +282,9 @@ class ChatHistoryNotifier extends Notifier<List<ChatMessage>> {
       if (isFailed) {
         final errText = (interaction['error_text'] as String?) ??
             (aiResponse != null && aiResponse.isNotEmpty
-                ? aiResponse
+                ? (detectAndStripJsonShapedReply(aiResponse,
+                        allowYamlHeuristic: false) ??
+                    aiResponse)
                 : 'Sorry, something went wrong. Tap Retry to try again.');
         messages.add(ChatMessage(
           text: errText,
@@ -287,8 +307,16 @@ class ChatHistoryNotifier extends Notifier<List<ChatMessage>> {
           coachKey: entry.key,
         ));
       } else if (aiResponse != null && aiResponse.isNotEmpty) {
+        // A2a (2026-09-21) — this is the RESTORE-path render (build() runs
+        // on every cold boot / after a background sync writes new rows), so
+        // a JSON-shaped reply stored before this fix shipped would otherwise
+        // keep reappearing raw on every relaunch even after the live-send
+        // sites below are fixed. The Hive value itself stays untouched —
+        // only the rendered bubble text is cleaned.
         messages.add(ChatMessage(
-          text: aiResponse,
+          text: detectAndStripJsonShapedReply(aiResponse,
+                  allowYamlHeuristic: false) ??
+              aiResponse,
           isUser: false,
           timestamp: createdAt.add(const Duration(seconds: 1)),
           mode: mode,
@@ -663,8 +691,13 @@ class SendMessageNotifier extends Notifier<bool> {
         context,
       );
 
+      // A2a (2026-09-21) — strip a JSON/YAML-shaped Gemini reply before it
+      // ever reaches the chat bubble. The Hive-persisted copy below keeps
+      // the ORIGINAL aiResponse.reply — only the rendered bubble is cleaned.
       chatNotifier.replaceLastMessage(ChatMessage(
-        text: aiResponse.reply,
+        text: detectAndStripJsonShapedReply(aiResponse.reply,
+                allowYamlHeuristic: false) ??
+            aiResponse.reply,
         isUser: false,
         timestamp: DateTime.now(),
       ));
@@ -711,6 +744,19 @@ class SendMessageNotifier extends Notifier<bool> {
       }
     } catch (e) {
       final errStr2 = e.toString();
+      // A5/OI-226 (f7a2c9, 2026-09-21): every branch below shows the user a
+      // distinct AI/network-failure chat bubble (no internet, photo too
+      // large, storage upload incomplete, Gemini 502/503/504, PRO-required),
+      // but pre-fix only the generic fallback branch called ErrorTelemetry —
+      // confirmed live via client_errors returning ZERO rows for a
+      // fully-reproduced Gemini-error/storage-timeout incident window. The
+      // sibling send() method's catch (below) already logs unconditionally
+      // at the top before branching; this mirrors that exact pattern so
+      // every branch here is covered too.
+      final clippedTop =
+          errStr2.length > 500 ? errStr2.substring(0, 500) : errStr2;
+      unawaited(ErrorTelemetry.logEvent('ai_coach_send_with_media_failed',
+          message: clippedTop));
       final String errorMsg;
       // Bug 2026-05-16 photo-analysis-500 — true when the server reported
       // `error_type='storage'` (image upload incomplete) OR when the
@@ -895,8 +941,13 @@ class SendMessageNotifier extends Notifier<bool> {
           .chat(message, context, history: coachHistory);
 
       // Replace loading with actual response
+      // A2a (2026-09-21) — strip a JSON/YAML-shaped Gemini reply before it
+      // ever reaches the chat bubble. The Hive-persisted copy below keeps
+      // the ORIGINAL aiResponse.reply — only the rendered bubble is cleaned.
       chatNotifier.replaceLastMessage(ChatMessage(
-        text: aiResponse.reply,
+        text: detectAndStripJsonShapedReply(aiResponse.reply,
+                allowYamlHeuristic: false) ??
+            aiResponse.reply,
         isUser: false,
         timestamp: DateTime.now(),
       ));
@@ -967,8 +1018,13 @@ class SendMessageNotifier extends Notifier<bool> {
               .chat(message, retryEnriched, history: coachHistory);
 
           // Retry succeeded — update UI and return
+          // A2a (2026-09-21) — same guard as the primary send path above;
+          // the auth-retry path renders a Gemini reply too and must not be
+          // the one untouched site that reintroduces this bug.
           chatNotifier.replaceLastMessage(ChatMessage(
-            text: retryResponse.reply,
+            text: detectAndStripJsonShapedReply(retryResponse.reply,
+                    allowYamlHeuristic: false) ??
+                retryResponse.reply,
             isUser: false,
             timestamp: DateTime.now(),
           ));
@@ -1097,6 +1153,151 @@ final channelProvider =
 
 // ── Prediction Card ──────────────────────────────────────────────
 
+/// Detects a JSON / code-fence / YAML-style-flat-key:value shaped AI reply
+/// and strips it down to plain prose. Gemini sometimes returns one of these
+/// shapes (e.g. `{"predictions":[...]}` or `outcome_3_months: weight_kg:77.5`)
+/// even when the prompt asks for plain prose. PURE — no Hive access, no side
+/// effects. Extracted from the prediction-card-only
+/// `PredictionNotifier._sanitisePredictionText` (observation-batch-and-digest-
+/// redesign 2026-09-21 / A2a) so the chat-reply path can reuse the SAME
+/// detection logic WITHOUT that method's Hive write-back, which targets a
+/// single global `prediction_text` key read by the unrelated Profile-tab
+/// prediction card — reusing the impure version for chat would silently
+/// overwrite that card with unrelated chat content.
+///
+/// Returns [raw] unchanged (by identity) when no structured shape is
+/// detected, so a caller can test `result != raw` to know whether cleaning
+/// actually happened.
+///
+/// [allowYamlHeuristic] gates step 2 below (any line matching
+/// `snake_case_key:`) — the JSON/code-fence path (step 1) stays active
+/// either way. **Defaults to true, matching the prediction card's original,
+/// unchanged behavior; every CHAT call site passes false explicitly.**
+/// Fixed by a Hermes pass (L1, 2026-09-21): the YAML heuristic is a safe fit
+/// for the prediction card's contract (always a single short tagline, so ANY
+/// key:value line is already anomalous) but not for free-form chat replies,
+/// where a line like `protein: 150g` or `rest: 90s` is completely normal
+/// coaching prose, not a malformed-output signal. Applying it to chat
+/// shredded real multi-line replies into `150g · 200g · 60g`, silently
+/// dropping the surrounding sentences. The JSON/code-fence path has no such
+/// false-positive risk for either caller — nothing starts a legitimate reply
+/// with a literal `{`, `[`, or code fence.
+String? detectAndStripJsonShapedReply(
+  String? raw, {
+  bool allowYamlHeuristic = true,
+}) {
+  if (raw == null) return null;
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty) return null;
+
+  // 1. JSON / code-fence path.
+  if (trimmed.startsWith('{') || trimmed.startsWith('[') || trimmed.startsWith('```')) {
+    var body = trimmed;
+    if (body.startsWith('```')) {
+      body = body.replaceFirst(RegExp(r'^```(json)?\n?'), '');
+      if (body.endsWith('```')) body = body.substring(0, body.length - 3);
+      body = body.trim();
+    }
+
+    try {
+      final decoded = json.decode(body);
+      if (decoded is Map) {
+        for (final key in ['summary', 'tagline', 'text', 'prediction']) {
+          final v = decoded[key];
+          if (v is String && v.trim().isNotEmpty) {
+            return v.trim();
+          }
+        }
+        final preds = decoded['predictions'];
+        if (preds is List && preds.isNotEmpty) {
+          final first = preds.first;
+          if (first is Map) {
+            for (final key in ['summary', 'tagline', 'text', 'timeframe']) {
+              final v = first[key];
+              if (v is String && v.trim().isNotEmpty) {
+                return v.trim();
+              }
+            }
+          } else if (first is String && first.trim().isNotEmpty) {
+            return first.trim();
+          }
+        }
+      } else if (decoded is List && decoded.isNotEmpty) {
+        final first = decoded.first;
+        if (first is String && first.trim().isNotEmpty) {
+          return first.trim();
+        }
+      }
+    } catch (_) {
+      // Fall through to artefact-stripping fallback below.
+    }
+
+    // Last-ditch: remove obvious JSON syntax so the user sees something
+    // readable rather than `{"predictions":[{...`.
+    final stripped = body
+        .replaceAll(RegExp(r'[\{\}\[\]"]'), '')
+        .replaceAll(RegExp(r'\s*,\s*'), ' · ')
+        .replaceAll(RegExp(r'\s*:\s*'), ': ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    if (stripped.isNotEmpty) {
+      return stripped;
+    }
+    return null;
+  }
+
+  // 2. YAML-style flat key:value detection — prediction-card ONLY, see
+  // [allowYamlHeuristic] doc above for why chat must never reach this.
+  // Heuristic: 1+ lines starting with "snake_case_word:" suggests Gemini
+  // chose a structured shape despite the prompt forbidding JSON.
+  final keyValuePattern = RegExp(r'^[a-z_][a-z_0-9]*\s*:', multiLine: true);
+  final matches =
+      allowYamlHeuristic ? keyValuePattern.allMatches(trimmed).toList() : const [];
+  if (matches.isNotEmpty) {
+    final lines = trimmed.split('\n');
+    String? bestProseLine;
+
+    for (final line in lines) {
+      final colonIdx = line.indexOf(':');
+      if (colonIdx == -1) continue;
+      final key = line.substring(0, colonIdx).trim();
+      // Only treat as a "key" if it looks like a snake_case identifier
+      if (!RegExp(r'^[a-z_][a-z_0-9]*$').hasMatch(key)) continue;
+      final value = line.substring(colonIdx + 1).trim();
+
+      // Pick the longest value that looks like prose (>20 chars, has spaces)
+      if (value.length > 20 && value.contains(' ')) {
+        if (bestProseLine == null || value.length > bestProseLine.length) {
+          bestProseLine = value;
+        }
+      }
+    }
+
+    if (bestProseLine != null) {
+      return bestProseLine;
+    }
+
+    // No long prose value — strip keys, join values
+    final values = <String>[];
+    for (final line in lines) {
+      final colonIdx = line.indexOf(':');
+      if (colonIdx == -1) {
+        final trimmedLine = line.trim();
+        if (trimmedLine.isNotEmpty) values.add(trimmedLine);
+        continue;
+      }
+      final value = line.substring(colonIdx + 1).trim();
+      if (value.isNotEmpty) values.add(value);
+    }
+    if (values.isNotEmpty) {
+      return values.join(' · ');
+    }
+  }
+
+  // 3. Plain prose — pass through unchanged (same identity as raw).
+  return raw;
+}
+
 class PredictionData {
   final String? predictionText;
   final DateTime? generatedAt;
@@ -1125,127 +1326,22 @@ class PredictionNotifier extends Notifier<PredictionData> {
   ///
   /// The cleaned value is written back to Hive via [_writeBackToHive] so
   /// the decode path runs at most once per stored value.
+  ///
+  /// Thin wrapper (A2a, 2026-09-21): the detection/stripping logic itself
+  /// now lives in the PURE, Hive-free [detectAndStripJsonShapedReply], so the
+  /// chat-reply path can reuse it without this method's Hive write-back —
+  /// see that function's doc for why reusing THIS method directly would have
+  /// been a data-corruption hazard.
   static String? _sanitisePredictionText(String? raw) {
-    if (raw == null) return null;
-    final trimmed = raw.trim();
-    if (trimmed.isEmpty) return null;
-
-    // 1. JSON / code-fence path (existing logic — preserved byte-for-byte)
-    if (trimmed.startsWith('{') || trimmed.startsWith('[') || trimmed.startsWith('```')) {
-      var body = trimmed;
-      if (body.startsWith('```')) {
-        body = body.replaceFirst(RegExp(r'^```(json)?\n?'), '');
-        if (body.endsWith('```')) body = body.substring(0, body.length - 3);
-        body = body.trim();
-      }
-
-      try {
-        final decoded = json.decode(body);
-        if (decoded is Map) {
-          for (final key in ['summary', 'tagline', 'text', 'prediction']) {
-            final v = decoded[key];
-            if (v is String && v.trim().isNotEmpty) {
-              final cleaned = v.trim();
-              _writeBackToHive(cleaned);
-              return cleaned;
-            }
-          }
-          final preds = decoded['predictions'];
-          if (preds is List && preds.isNotEmpty) {
-            final first = preds.first;
-            if (first is Map) {
-              for (final key in ['summary', 'tagline', 'text', 'timeframe']) {
-                final v = first[key];
-                if (v is String && v.trim().isNotEmpty) {
-                  final cleaned = v.trim();
-                  _writeBackToHive(cleaned);
-                  return cleaned;
-                }
-              }
-            } else if (first is String && first.trim().isNotEmpty) {
-              final cleaned = first.trim();
-              _writeBackToHive(cleaned);
-              return cleaned;
-            }
-          }
-        } else if (decoded is List && decoded.isNotEmpty) {
-          final first = decoded.first;
-          if (first is String && first.trim().isNotEmpty) {
-            final cleaned = first.trim();
-            _writeBackToHive(cleaned);
-            return cleaned;
-          }
-        }
-      } catch (_) {
-        // Fall through to artefact-stripping fallback below.
-      }
-
-      // Last-ditch: remove obvious JSON syntax so the user sees something
-      // readable rather than `{"predictions":[{...`.
-      final stripped = body
-          .replaceAll(RegExp(r'[\{\}\[\]"]'), '')
-          .replaceAll(RegExp(r'\s*,\s*'), ' · ')
-          .replaceAll(RegExp(r'\s*:\s*'), ': ')
-          .replaceAll(RegExp(r'\s+'), ' ')
-          .trim();
-      if (stripped.isNotEmpty) {
-        _writeBackToHive(stripped);
-        return stripped;
-      }
-      return null;
+    final cleaned = detectAndStripJsonShapedReply(raw);
+    // `cleaned == raw` (identity) means the plain-prose passthrough ran —
+    // matches the original's behavior of returning `raw` unchanged with no
+    // write-back. Any other non-null result came from an actual cleaning
+    // branch and must be persisted, exactly as the original did inline.
+    if (cleaned != null && cleaned != raw) {
+      _writeBackToHive(cleaned);
     }
-
-    // 2. NEW — YAML-style flat key:value detection (F4)
-    // Heuristic: 1+ lines starting with "snake_case_word:" suggests Gemini
-    // chose a structured shape despite the prompt forbidding JSON.
-    final keyValuePattern = RegExp(r'^[a-z_][a-z_0-9]*\s*:', multiLine: true);
-    final matches = keyValuePattern.allMatches(trimmed).toList();
-    if (matches.isNotEmpty) {
-      final lines = trimmed.split('\n');
-      String? bestProseLine;
-
-      for (final line in lines) {
-        final colonIdx = line.indexOf(':');
-        if (colonIdx == -1) continue;
-        final key = line.substring(0, colonIdx).trim();
-        // Only treat as a "key" if it looks like a snake_case identifier
-        if (!RegExp(r'^[a-z_][a-z_0-9]*$').hasMatch(key)) continue;
-        final value = line.substring(colonIdx + 1).trim();
-
-        // Pick the longest value that looks like prose (>20 chars, has spaces)
-        if (value.length > 20 && value.contains(' ')) {
-          if (bestProseLine == null || value.length > bestProseLine.length) {
-            bestProseLine = value;
-          }
-        }
-      }
-
-      if (bestProseLine != null) {
-        _writeBackToHive(bestProseLine);
-        return bestProseLine;
-      }
-
-      // No long prose value — strip keys, join values
-      final values = <String>[];
-      for (final line in lines) {
-        final colonIdx = line.indexOf(':');
-        if (colonIdx == -1) {
-          final trimmedLine = line.trim();
-          if (trimmedLine.isNotEmpty) values.add(trimmedLine);
-          continue;
-        }
-        final value = line.substring(colonIdx + 1).trim();
-        if (value.isNotEmpty) values.add(value);
-      }
-      if (values.isNotEmpty) {
-        final joined = values.join(' · ');
-        _writeBackToHive(joined);
-        return joined;
-      }
-    }
-
-    // 3. Plain prose — pass through unchanged
-    return raw;
+    return cleaned;
   }
 
   /// Writes a sanitised prediction text back to Hive so the decode path

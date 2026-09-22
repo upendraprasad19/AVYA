@@ -225,6 +225,9 @@ class ToolDispatcher {
 
       return result;
     } on ConcurrentEditException catch (e) {
+      unawaited(ErrorTelemetry.logEvent(
+          'tool_dispatch_${intent.type}_concurrent_edit_failed',
+          message: e.reason));
       return ToolExecutionResult.failure(
         'Things changed since I suggested this — re-ask the coach to refresh: ${e.reason}',
       );
@@ -293,6 +296,8 @@ class ToolDispatcher {
       );
       return ToolExecutionResult.success(data: result);
     } on SwapExerciseException catch (e) {
+      unawaited(ErrorTelemetry.logEvent('tool_dispatch_swap_exercise_failed',
+          message: '${e.code}: ${e.message}'));
       return ToolExecutionResult.failure(_swapExerciseErrorMessage(e));
     }
   }
@@ -566,6 +571,9 @@ class ToolDispatcher {
         'name': name,
       });
     } on CreateCustomExerciseException catch (e) {
+      unawaited(ErrorTelemetry.logEvent(
+          'tool_dispatch_create_custom_exercise_failed',
+          message: '${e.code}: ${e.message}'));
       return ToolExecutionResult.failure(
         e.code == 'duplicate_name'
             ? 'You already have an exercise called "$name".'
@@ -590,6 +598,8 @@ class ToolDispatcher {
       );
       return ToolExecutionResult.success(data: result);
     } on ShortenDayException catch (e) {
+      unawaited(ErrorTelemetry.logEvent('tool_dispatch_shorten_workout_failed',
+          message: '${e.code}: ${e.message}'));
       return ToolExecutionResult.failure(_shortenWorkoutErrorMessage(e));
     }
   }
@@ -1321,6 +1331,12 @@ class ToolDispatcher {
       // Profile already changed but plan regen totally failed — surface the
       // partial state so the user knows. Profile rollback would require a
       // second write that could itself fail.
+      final aggregated = errors.join('; ');
+      final clipped = aggregated.length > 500
+          ? aggregated.substring(0, 500)
+          : aggregated;
+      unawaited(ErrorTelemetry.logEvent('tool_dispatch_switch_goal_failed',
+          message: clipped));
       return ToolExecutionResult.failure(
         'Goal updated but plan regenerate failed: ${errors.join("; ")}',
       );
@@ -1388,6 +1404,9 @@ class ToolDispatcher {
         'days_count': days.length,
       });
     } on CreateTemplateException catch (e) {
+      unawaited(ErrorTelemetry.logEvent(
+          'tool_dispatch_create_custom_template_validation_failed',
+          message: '${e.code}: ${e.message}'));
       return ToolExecutionResult.failure(
         e.code == 'duplicate_name'
             ? 'A template called "$name" already exists in your library.'

@@ -1174,7 +1174,7 @@ class SyncService {
         ? null
         : NotificationPrefsRepository.emissionMap();
 
-    return {
+    final snapshot = {
       'snapshot_date': today,
       ...aiContext,
       // Unit D — notification preferences, emitted AFTER the spread ON PURPOSE.
@@ -1193,6 +1193,24 @@ class SyncService {
       // would be swallowed by pushSnapshotNow and kill the whole snapshot.
       'notification_preferences': ?notificationPrefs,
     };
+
+    // Code-review finding 1 (2026-09-21, diagnose d8a2f6's own B-pass) —
+    // `fitness_summary` is CRON-OWNED: rolling-context writes it server-side
+    // into the exact same `user_daily_snapshots.snapshot_json` row this push
+    // targets (read-modify-write, correct on that side). `aiContext` also
+    // carries it, because AiSnapshotBuilder.buildAiContext() is shared with
+    // the LIVE ai-proxy chat request body, where the client's own locally
+    // synced-down mirror (`_syncFitnessSummary`, defaults to '' when absent)
+    // is exactly what's wanted. Re-sending that same lagging/possibly-blank
+    // mirror here would let it win daily-snapshot's merge-safe upsert
+    // (`incoming` wins on any shared key) and clobber the cron's fresher
+    // write — the identical clobber class d8a2f6 exists to close, recurring
+    // on the one cron-owned key the client happens to round-trip. Strip it
+    // from the PUSH payload only; buildAiContext()'s direct chat-context use
+    // is untouched.
+    snapshot.remove('fitness_summary');
+
+    return snapshot;
   }
 
   /// H1b Part B1 — coalesced fire-and-forget snapshot entry. The ~50 per-write

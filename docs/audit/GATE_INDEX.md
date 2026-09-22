@@ -10,7 +10,7 @@ wiring surface uses. A gate **number is an optional alias**: most gates have non
 the next free number: **55**. Declare it canonically as `// Gate: N` on its
 own line in the first 10 lines — that exact form is the only one this generator reads.
 
-Total gates: **106** (48 numbered, 58 by filename only).
+Total gates: **107** (48 numbered, 59 by filename only).
 
 | Gate | Script | Purpose | Test ledger |
 |---|---|---|---|
@@ -54,6 +54,7 @@ Total gates: **106** (48 numbered, 58 by filename only).
 | 33 | `check_gate_scripts_wired.dart` | assert that every `scripts/check_*.dart` file is invoked from BOTH: - scripts/pre-commit.sh (local enforcement) | mutation_proven |
 | — | `check_gate_source_literal_whitespace_brittleness.dart` | WARN-ONLY advisory: flags a NEW `.contains('...')` / `== '...'` literal | mutation_proven |
 | — | `check_gate_test_ledger.dart` | rule 24 enforcement — every `scripts/check_*.dart` carries exactly one state | mutation_proven |
+| — | `check_gemini_retry_and_telemetry_coverage.dart` | A5/OI-226 (f7a2c9, 2026-09-21). See gemini_retry_coverage_lib.dart's own | mutation_proven |
 | 15 | `check_generic_error_telemetry.dart` | every user-facing generic error message in lib/ must be | grandfathered |
 | — | `check_goal_token_exhaustiveness.dart` | guarantees a fitness-goal | grandfathered |
 | 43 | `check_god_screen_max_lines.dart` | God-screen line ceiling. | grandfathered |
