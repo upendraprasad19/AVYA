@@ -5698,3 +5698,78 @@ at least surfacing the current rate + target so the coach can reference
 concrete progress). (2) For deployments, evaluate whether a client-side
 cached count (synced periodically, accepting some staleness) is safer than
 either the current always-0 or a live network call on every snapshot build.
+
+## OI-242 — realtime_pro_gate_behavioral_test.dart flakes on full-suite CI run with a Box-not-found HiveError, passes clean in isolation
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical. Needs a test-isolation investigation
+  (what earlier file in the full `test/` run leaves state this test depends
+  on) before a fix can be proposed.
+- **Verified**: 2026-09-22 — reproduced the CI failure signature exactly via
+  GitHub Actions logs; ruled out as unrelated to the PR that surfaced it by
+  running the file alone locally (9/9 green) and by confirming the same
+  failure independently hit an unrelated merge's CI run too.
+- **Identified**: 2026-09-22 · filed via mint_oi.sh from branch `claude/oi-batching-strategy-e5e359`
+
+Found while checking CI on PR #37 (Batch B, a docs-only investigation commit
+touching only `docs/audit/open_issues.md`/`OPEN_INDEX.md` — no Dart/Hive code
+whatsoever). The "Unit Tests" job failed on
+`test/contracts/realtime_pro_gate_behavioral_test.dart`'s "e4a7c9 — the
+teardown half (an attached channel never re-enters the gate) THE SECOND BUG:
+a downgrade fires onDowngrade" case:
+
+```
+Expected: true
+  Actual: <false>
+an expiry downgrade must release PRO-owned resources
+
+[MigratedKey.delete] userBox expiresAt threw: HiveError: Box not found. Did you forget to call Hive.openBox()?
+...
+HiveError: Box not found. Did you forget to call Hive.openBox()?
+  package:hive/src/hive_impl.dart 186:7           HiveImpl._getBoxInternal
+  package:hive/src/hive_impl.dart 197:33          HiveImpl.box
+  .../guarded_box.dart 341:20                     wrapUserScopedBox
+  .../hive_service.dart 235:7                     HiveService.userBoxGuarded
+  .../hive_service.dart 226:22                    HiveService.userBox
+  .../user_repository.dart 159:23                 UserRepository.getProgress
+  .../streak_progress_service.dart 246:46         StreakProgressService.resetToFreeCapOnLapse
+  .../subscription_service.dart 1225:38           SubscriptionService._downgradeLocally
+```
+
+**This is genuinely NOT related to PR #37's diff** — a docs-only merge
+cannot affect this code path. Checking `main`'s own recent CI history
+(`gh run list --branch main`) confirms it's flapping independently of any
+single PR: the merge-to-main run for PR #34 (`024d7a82`) also FAILED, the
+merge-to-main run for PR #36 (`e7733cb8`, in between) PASSED, and this
+PR #37 run failed again on the exact same test. **Confirmed NOT
+reproducible in isolation**: `flutter test
+test/contracts/realtime_pro_gate_behavioral_test.dart --exclude-tags golden`
+run alone, locally, against current `main` — all 9 tests pass, INCLUDING the
+exact case that failed on CI. Re-running the failed CI job (`gh run rerun
+--failed`) is the practical workaround used so far and it clears the check,
+consistent with order/state-leak-dependent flakiness rather than a
+deterministic regression.
+
+**Hypothesis, not yet confirmed:** some earlier test file in the full
+`test/` suite run leaves global/static state (a Hive box left open, or a
+singleton — `SubscriptionService`/`HiveService`/`UserRepository` are all
+involved in the failure's call chain) that this test's `setUp`/`tearDown`
+assumes is clean. This is the SAME general class CLAUDE.md's own
+common-pitfalls table already documents for GoogleFonts/`path_provider`
+box-lifecycle races and for concurrent-session Hive temp-dir contention —
+but this instance reproduces WITHIN a single suite run on an isolated CI
+runner (no concurrent session possible there), so it is a distinct,
+narrower case: ordering/state-leak between test FILES in one process, not
+cross-process contention.
+
+**Recommendation**: (1) Bisect by running larger and larger prefixes of the
+full `test/` suite (or binary-search which OTHER file, run immediately
+before this one in suite order, causes the box to be left in the state that
+trips `userBoxGuarded`) to find the actual leaking test. (2) Once found, fix
+via proper `tearDown`/`tearDownAll` box closure in the leaking file, or make
+this test's own `setUp` more defensive (re-open/re-verify the box it needs
+rather than assuming a clean slate). (3) Short-term mitigation already in
+use: `gh run rerun --failed` clears it reliably when it fires — acceptable
+for now given it does not block any specific PR's own correctness, but
+should not become a standing habit given CLAUDE.md rule 20's ban on treating
+CI flakiness as permanently acceptable.

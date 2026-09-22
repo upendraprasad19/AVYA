@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**136 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**137 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -144,3 +144,4 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-233 | user_daily_snapshots' 4 cron/client writers are not atomic against each… | none — scope and fix shape are already… | 2026-09-21 — explicitly scoped out in | [:5554](open_issues.md#L5554) |
 | OI-239 | Acknowledging an alert re-arms its dedup window instead of waiting out the… | none | never | [:5600](open_issues.md#L5600) |
 | OI-240 | _getNextRankFromLadder's remaining/binding_constraint is inaccurate for 3… | none — bounded work, but a genuinely… | 2026-09-22 — every claim below re-read… | [:5627](open_issues.md#L5627) |
+| OI-242 | realtime_pro_gate_behavioral_test.dart flakes on full-suite CI run with a… | nothing technical. Needs a… | 2026-09-22 — reproduced the CI failure… | [:5702](open_issues.md#L5702) |
