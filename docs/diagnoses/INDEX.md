@@ -32,6 +32,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 - 2026-05-30 f4b2c9 — Surfaced during live web E2E. After onboarding, amar@gmail.com had ZERO rank_promotions rows (not even the SD2 floor) and the browser console showed "[RankService.evaluateAndPromote]…
 - 2026-05-27 3a7b9f — Founder-as-user "upendra" (auth.users d7a67a37-0b05-4f0a-b13c-388bff3cb59b) earned SD1 (ordinal 1) on 2026-05-21 14:35 UTC at streak=7, week=2, 15 workouts. Approximately 7 hours later (2026-05-21…
 
+### logged_sets_format_normalization (1 bugs)
+- 2026-09-22 a4c7d1 — Founder-reported (2026-09-22, session "supabase-outage-check"): Single Leg Front Lever exercise swapped mid-active-workout from timed to weight/reps. Active workout screen showed "8 reps" (correct).…
+
 ### tool_dispatcher_failure_telemetry (1 bugs)
 - 2026-09-22 b4e7d2 — tool_dispatcher.dart's own comment near _executePausePlan asserts "every dispatcher failure path logs ErrorTelemetry" (C5 comment, originally added to justify that method's own telemetry call). This…
 
@@ -1358,6 +1361,7 @@ rather than a Hive box. (1 bugs)
 | 2026-09-22 | e6a2f8 | OI-228 Bug A (founder observed live, one of two bugs in the original filing — Bug B is unrelated and remains open): opening "Log Workout" from the AI coach chat on a day whose scheduled workout is… | log_workout_sheet_completed_day_state | test/widgets/log_workout_sheet_completed_day_test.dart |
 | 2026-09-22 | 9c4f2e | Full-suite pre-push run failed on `test/contracts/pro_predicate_adoption_test.dart`: "no Edge Function READS users.subscription_status to decide tier" — Expected empty, Actual:… | pro_predicate_adoption_gate | test/contracts/pro_predicate_adoption_test.dart |
 | 2026-09-22 | a8f3e2 | OI-230 (founder APK screenshot, Phase 1): AI coach snapshot showed self-contradictory rank-promotion info — next_rank.binding_constraint correctly named the real bottleneck (e.g. "weeks",… | rank_monotonic_current_code | test/ai_coach/snapshot_keys_test.dart |
+| 2026-09-22 | a4c7d1 | Founder-reported (2026-09-22, session "supabase-outage-check"): Single Leg Front Lever exercise swapped mid-active-workout from timed to weight/reps. Active workout screen showed "8 reps" (correct).… | logged_sets_format_normalization | test/contracts/logged_sets_format_normalization_test.dart |
 | 2026-09-22 | b4e7d2 | tool_dispatcher.dart's own comment near _executePausePlan asserts "every dispatcher failure path logs ErrorTelemetry" (C5 comment, originally added to justify that method's own telemetry call). This… | tool_dispatcher_failure_telemetry | test/contracts/tool_dispatcher_telemetry_gaps_test.dart |
 | 2026-09-21 | f7a2c9 | OI-226 (open_issues.md:5059): "ai-proxy chat/tool-calling Gemini exhaustion paths have no reportGeminiExhaustion alert wiring." The OI's own text names TWO distinct gaps on the server — re-verified… | ai_failure_telemetry_coverage | test/contracts/ai_media_proxy_telemetry_test.dart
 test/contracts/ai_breakdown_notifier_cart_auditor_telemetry_test.dart
