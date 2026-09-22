@@ -248,6 +248,32 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-22 (Batch C)** — blast-radius **platform** — branch
+  `oi-batching-strategy-e5e359`, Batch C (OI-238: wiring `reportGeminiExhaustion`
+  into 5 Gemini-calling Edge Functions — `weekly-report`, `ai-media-proxy`,
+  `assess-body-composition`, `daily-snapshot`, `rolling-context` — that had none;
+  a direct sibling of OI-226's earlier ai-proxy-only fix). **0 findings; 0
+  false_alarm.** Review: `docs/reviews/50ef49a5910c-review.md`. **No new lens —
+  the reviewer verified rather than trusted throughout**: independently ran
+  `deno check` + `deno test` (44/44, matching the diagnose-doc's own claimed
+  counts) rather than accepting them from prose, hand-traced every
+  `geminiChat()` return path in `gemini.ts` to prove `lastError` is always
+  populated whenever content is null (closing the obvious guard_without_its_mirror
+  question for this shape of fix before it could be a finding), grepped the
+  WHOLE repo (not just the touched file) for other callers of
+  `rolling-context`'s newly-2-arg `summarizeMessages`, and hand-walked each of
+  the 5 new source-grep tests' brace-boundary computations against the live
+  file text to rule out an early-nested-`}` false match — the exact fragile-match
+  failure mode this skill's lens 8 warns about. Attempted a live mutation
+  spot-check of the diagnose-doc's own mutation-proof claim but the harness's
+  auto-mode classifier blocked re-running `deno test` on a mutated tree
+  ("Irreversible Local Destruction"); reverted immediately via `git checkout --`
+  and substituted a hand-trace of the affected test's boundary logic instead.
+  Worth recording precisely because it is a clean run with real verification
+  work behind it, not a rubber stamp — the alternative (a reviewer that reads
+  the diff, finds it plausible, and reports 0 findings without running
+  anything) would be indistinguishable in the output file alone.
+
 - **2026-09-22** — blast-radius **catastrophic** (inherited — migration 138's
   `SECURITY DEFINER` trigger, arriving via `main`) — a MERGE-INTEGRATION review,
   not a normal feature-commit review: `claude/food-logging-observations-126ab3`

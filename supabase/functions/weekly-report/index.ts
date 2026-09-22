@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { geminiChat, MODEL_PRO } from "../_shared/gemini.ts";
+import { reportGeminiExhaustion } from "../_shared/gemini_failure_alert.ts";
 import { CAPTAIN_MANUAL } from "../_shared/captain_manual.ts";
 import { istDateStr } from "../_shared/ist_date.ts";
 import {
@@ -545,7 +546,7 @@ ${Object.entries(dailyTotals)
     // jsonMode: false — Captain Brief returns plain text, not JSON.
     // The JSON parse below will fall through to fallback, which places
     // the full brief in report.summary (correct client behaviour).
-    const { content: aiContent, modelUsed, tokensUsed } = await geminiChat({
+    const { content: aiContent, modelUsed, tokensUsed, lastError } = await geminiChat({
       model: MODEL_PRO,
       systemPrompt,
       userPrompt: asAuthoredPrompt(userMessage),
@@ -562,6 +563,19 @@ ${Object.entries(dailyTotals)
     });
 
     if (!aiContent) {
+      // OI-238 (sibling of A5/OI-226 — the same gap, on the 5 Gemini-calling
+      // functions that fix didn't cover): reuse the SAME dedup source as
+      // ai-proxy/tool-loop.ts ("ai_proxy_gemini_exhausted") since this is a
+      // live, user-invoked request sharing the same GEMINI_API_KEY/quota as
+      // chat + nutrition — a real outage should page the founder ONCE, not
+      // once per surface. `endpoint: "weekly_report"` keeps this call site
+      // distinguishable in the alert summary/context_json.
+      await reportGeminiExhaustion(
+        supabase,
+        "ai_proxy_gemini_exhausted",
+        lastError ?? null,
+        "weekly_report",
+      );
       return jsonResponse(
         { error: "Empty response from AI. Please try again." },
         502,
