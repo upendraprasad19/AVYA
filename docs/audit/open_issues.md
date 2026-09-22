@@ -5239,7 +5239,7 @@ UNCHANGED and still needs the live tracing this entry's own recommendation
 outside a ready-to-fix batch's scope).
 
 **Update 2026-09-22 (Batch B investigation, branch
-`claude/oi-batching-strategy-e5e359`):** Bug B's root cause is now
+`worktree-agent-a8d2441cb81c6553b`):** Bug B's root cause is now
 REFRAMED, not fully closed — the "stuck at queued" premise itself does not
 describe a broken lifecycle.
 
@@ -5372,7 +5372,7 @@ post-check can backstop.
 - **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/food-logging-observations-126ab3`
 
 **Update 2026-09-22 (Batch B investigation, branch
-`claude/oi-batching-strategy-e5e359`):** Recommendation (1) — live snapshot
+`worktree-agent-a8d2441cb81c6553b`):** Recommendation (1) — live snapshot
 verification — is now DONE. Confirmed: the snapshot WAS correctly PRO at
 generation time. **Both violations are pure prompt drift, not a data bug.**
 
@@ -5506,7 +5506,7 @@ writer uses `current_rank_achieved_at`. Fixed as part of the same change;
 see OI-230's closure note in `docs/audit/closed_issues.md`.)
 
 **Update 2026-09-22 (Batch B investigation, branch
-`claude/oi-batching-strategy-e5e359`):** Hypothesis 1 vs 2 is now SETTLED —
+`worktree-agent-a8d2441cb81c6553b`):** Hypothesis 1 vs 2 is now SETTLED —
 **confirmed hypothesis 2 (pure model miss). Hypothesis 1 (stale data) is
 REFUTED.**
 
