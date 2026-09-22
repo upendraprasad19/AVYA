@@ -5597,32 +5597,6 @@ $delta`), called by all 5 writers instead of each doing its own
 SELECT-then-UPSERT. Needs its own migration + live verification pass per
 this repo's migration protocol, not a quick follow-on to d8a2f6.
 
-## OI-238 — 5 Gemini-calling Edge Functions have no server-side reportGeminiExhaustion telemetry (weekly-report, ai-media-proxy, assess-body-composition, daily-snapshot, rolling-context)
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-09-22 · filed via mint_oi.sh from branch `claude/strange-merkle-c2d0b9`
-
-Found by the self-triggered Hermes pass on `observation-batch-and-digest-redesign`
-(`docs/diagnoses/2026-09-21-ai-failure-telemetry-gap-oi226-f7a2c9.md`'s own fix wired
-`reportGeminiExhaustion` into `ai-proxy`'s 4 internal `type` handlers plus `tool-loop.ts`'s
-chat/tool-calling path — 5 call sites total, all inside ONE function, `ai-proxy`). This is a
-DIFFERENT, wider gap: per `supabase/functions/CLAUDE.md`'s own AI Architecture section, **6**
-functions call Gemini in total, and the other **5** — `weekly-report`, `ai-media-proxy`,
-`assess-body-composition`, `daily-snapshot`, `rolling-context` — each call `geminiChat`/
-`geminiChatWithTools` directly with NO server-side exhaustion alert of any kind. A total Gemini
-failure in any of these 5 is currently invisible to the founder until a user complains (or, for
-`rolling-context`, silently produces zero nightly summaries with no page at all).
-Explicitly out of scope for OI-226 — that OI's own filed text names only ai-proxy's two
-previously-uncovered call sites, not this wider surface; scope-creeping this batch to cover 5
-more functions was rejected in favour of tracking it here.
-
-**Fix direction:** wire `reportGeminiExhaustion` (or a function-appropriate variant — some of
-these are user-invoked, not cron, so the `endpoint`/dedup semantics may need adjustment) into
-each of the 5 call sites' failure path, matching the pattern `ai-proxy`/`tool-loop.ts` already
-establish.
-
 ## OI-239 — Acknowledging an alert re-arms its dedup window instead of waiting out the original interval — a systemic property shared by all 6 alert_* cron jobs
 
 - **Status**: OPEN
