@@ -553,6 +553,12 @@ ${Object.entries(dailyTotals)
       temperature: 0.7,
       timeoutMs: 40_000,
       jsonMode: false,
+      // f7a2c9 — no other retry on this path. Safe despite the 40s base
+      // timeout: geminiChat's own retryDeadlineMs (20s) is checked BETWEEN
+      // passes, not within one, so on this single-report-per-week endpoint
+      // the added worst-case latency is bounded, not multiplicative with
+      // timeoutMs (confirmed in plan review round 2).
+      retries: 2,
     });
 
     if (!aiContent) {

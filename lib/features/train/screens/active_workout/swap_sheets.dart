@@ -38,7 +38,8 @@ void _showExercisePickerSheet(BuildContext context, WidgetRef ref) {
   );
 }
 
-void _showSwapSheet(BuildContext context, WidgetRef ref, int exerciseIndex) {
+void _showSwapSheet(BuildContext context, WidgetRef ref, int exerciseIndex,
+    _ActiveWorkoutScreenState screenState) {
   final data = ref.read(activeWorkoutProvider);
   final currentExercise = data.exercises[exerciseIndex];
   final canDelete = data.exercises.length > 1;
@@ -130,7 +131,7 @@ void _showSwapSheet(BuildContext context, WidgetRef ref, int exerciseIndex) {
           // host against a shadowed context — but exercise_swap_sheet.dart's
           // own self-pop (added independently) already solves that; this
           // extra pop was a double-pop regression, not a needed fix.
-          _openCreateAndAutoSwap(context, ref, exerciseIndex);
+          _openCreateAndAutoSwap(context, ref, exerciseIndex, screenState);
         }
       },
     ),
@@ -145,6 +146,7 @@ void _openCreateAndAutoSwap(
   BuildContext context,
   WidgetRef ref,
   int exerciseIndex,
+  _ActiveWorkoutScreenState screenState,
 ) {
   final data = ref.read(activeWorkoutProvider);
   if (exerciseIndex < 0 || exerciseIndex >= data.exercises.length) return;
@@ -193,7 +195,12 @@ void _openCreateAndAutoSwap(
         ref.invalidate(calendarWeekProvider);
 
         if (!context.mounted) return;
-        ScaffoldMessenger.of(context)
+        // Obs 1 — captured on the screen state so it can be dismissed
+        // immediately on workout completion, or as a dispose() backstop for
+        // every other exit path (cancel dialog, back-gesture).
+        final messenger = ScaffoldMessenger.of(context);
+        screenState._swapUndoMessenger = messenger;
+        messenger
           ..hideCurrentSnackBar()
           ..showSnackBar(
             SnackBar(

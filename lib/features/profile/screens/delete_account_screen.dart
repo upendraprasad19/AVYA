@@ -162,7 +162,7 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
         break;
       case 'razorpay_cancel_failed':
         message =
-            "Couldn't cancel your subscription. Contact support@icanbefitter.com.";
+            "Couldn't cancel your subscription. Contact upendra@icanbefitter.com.";
         break;
       case 'confirmation_token_mismatch':
         message = "Confirmation didn't match. Please try again.";

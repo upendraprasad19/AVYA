@@ -1478,6 +1478,11 @@ final scanMealProvider =
 // ── Cart Auditor State ──────────────────────────────────────────
 
 class CartAuditorNotifier extends Notifier<CartAuditorState> {
+  // Test seam for injecting failures in unit tests — mirrors
+  // ScanMealNotifier.throwBeforeScanForTest above (A5/OI-226, f7a2c9).
+  @visibleForTesting
+  static Object? throwBeforeAnalyseForTest;
+
   @override
   CartAuditorState build() => const CartAuditorState();
 
@@ -1486,6 +1491,9 @@ class CartAuditorNotifier extends Notifier<CartAuditorState> {
     state = state.copyWith(isAnalysing: true, error: null);
 
     try {
+      if (throwBeforeAnalyseForTest != null) {
+        throw throwBeforeAnalyseForTest!;
+      }
       final base64Image = base64Encode(imageBytes);
 
       final response = await SupabaseService.instance.callFunction(
@@ -1518,11 +1526,21 @@ class CartAuditorNotifier extends Notifier<CartAuditorState> {
         return;
       }
 
+      // A5/OI-226 (f7a2c9, 2026-09-21): mirrors scanImage's own non-200
+      // branch fix (round-2 plan review, 2026-09-20) — this is a real
+      // ai-proxy failure, just not a thrown exception, and had zero
+      // telemetry, the identical gap on this method's sibling one class up.
+      unawaited(ErrorTelemetry.logEvent(
+        'cart_auditor_notifier_non_200_response',
+        message: 'status=${response.status}',
+      ));
       state = state.copyWith(
         isAnalysing: false,
         error: 'Could not analyse the cart. Please try again.',
       );
-    } catch (e) {
+    } catch (e, st) {
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'cart_auditor_notifier_analyse_cart'));
       state = state.copyWith(
         isAnalysing: false,
         error: 'Analysis failed. Check your connection and try again.',

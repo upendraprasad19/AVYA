@@ -915,3 +915,54 @@ check_gate_source_literal_whitespace_brittleness.dart:
     5 GOOD/empty-diff cases stayed green (8 total, not 9; corrected
     2026-09-19 B-pass finding, this line previously said 9 total/6 green).
     Reverted; 8/8 green, analyze clean.
+
+check_gemini_retry_and_telemetry_coverage.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/gemini_retry_coverage_lib_test.dart
+  evidence: >
+    NEW check 2026-09-21 (A5/OI-226, f7a2c9). Hard-fail, zero grandfathered
+    exemptions — part (a) confirmed all 9 real `geminiChat(` call sites in
+    supabase/functions/ already pass `retries:` (A2b landed first, same
+    batch); part (b)'s registry of 5 AI/network entry points in
+    lib/features/ai_coach/ and lib/features/nutrition/ was confirmed clean
+    by an exhaustive human+subagent sweep before this gate shipped. Part
+    (b) uses an EXPLICIT registry (`aiNetworkEntryPoints`), not a text
+    heuristic for "this catch wraps a network call" — confirmed by grep
+    that ai_coach_provider.dart's send/sendWithMedia never reference
+    AppConstants.aiProxyFunction directly (the real call lives behind
+    AiService, a different file), so no such heuristic would reliably
+    cover exactly the methods this gate exists for. Building this gate's
+    OWN design against the real files caught two real false positives
+    before shipping: "first catch after the method anchor" landed on a
+    deliberately-silent inner catch in BOTH send() (catches at lines
+    913/976/1044; telemetry is in the 2nd) and analyse() (717/784;
+    telemetry is in the 2nd) — neither "first" nor "last" catch would have
+    found the right one in both cases at once, which is why the shipped
+    logic checks ALL catches in an 8000-char window (sized against the
+    real 6610-char anchor-to-telemetry distance in send(), the longest
+    registered method) rather than picking one to inspect. Mutation:
+    forcing `findGeminiChatMissingRetries` to return `const []` reddened 3
+    of 17 tests (the BAD case plus both multi-site/multi-file cases;
+    part-b's tests were unaffected); reverted, forcing
+    `findAiEntryPointsMissingTelemetry` to return `const []` reddened 4 of
+    17 (all part-b BAD cases; part-a's tests were unaffected). Reverted;
+    17/17 green, analyze clean, gate itself re-run clean against the real
+    repo after each revert.
+
+    CORRECTED same day by the self-triggered B-pass review on this batch's
+    own staged diff, before merge: both `.contains()` checks ran against
+    the RAW extracted block/catch-body text, comments included, so a
+    comment mentioning `retries:` or `ErrorTelemetry.` (explaining a
+    deliberate removal, or leftover commented-out code) would have
+    satisfied the check while the real call was gone — the exact
+    green-check-input-set-width class this repo's own memory documents
+    repeatedly, and the same batch's `alert_cron_failures_sync_test.dart`
+    independently hit on a different file the same day. Added a
+    `stripComments()` helper applied to the extracted block/catch-body
+    ONLY (never to the raw source used for brace-matching or line-number
+    computation) before each `.contains()` check. 2 new tests added (one
+    per part), now 19 total. Mutation: reverted both call sites to the raw,
+    comment-blind `.contains()` — reddened EXACTLY the 2 new tests (nothing
+    else), confirming they and only they detect this specific class.
+    Reverted; 19/19 green.

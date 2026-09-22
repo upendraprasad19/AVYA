@@ -6,6 +6,47 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### alert_cron_failures_threshold_sync (1 bugs)
+- 2026-09-22 k7d3n5 — `sh scripts/safe_push.sh` FAILED with "Some tests failed." inside the pre-push hook's full CI-equivalent `flutter test test/ --exclude-tags golden` run, blocking the push of this batch's 2…
+
+### cart_auditor_counter_increment_test_window (1 bugs)
+- 2026-09-22 m5q8t1 — Full-suite pre-push run failed `test/features/nutrition/counter_increment_on_analyse_test.dart`: "Test #11 M1 — counter at API-call site, not save site CartAuditorNotifier.analyseCart calls…
+
+### support_contact_email (2 bugs)
+- 2026-09-22 r2w6y9 — Full-suite pre-push run failed `test/features/profile/delete_account_screen_test.dart`: "H1-B — Source invariants Support email present in error copy" — Expected contains 'support@icanbefitter.com',…
+- 2026-09-21 a1e6f2 — Founder observation #7: "email wrong. check our email." The app showed 2 different, both-wrong support addresses across 2 screens: the Profile contact card showed `support@avya.app` (a leftover from…
+
+### pro_predicate_adoption_gate (1 bugs)
+- 2026-09-22 9c4f2e — Full-suite pre-push run failed on `test/contracts/pro_predicate_adoption_test.dart`: "no Edge Function READS users.subscription_status to decide tier" — Expected empty, Actual:…
+
+### ai_failure_telemetry_coverage (1 bugs)
+- 2026-09-21 f7a2c9 — OI-226 (open_issues.md:5059): "ai-proxy chat/tool-calling Gemini exhaustion paths have no reportGeminiExhaustion alert wiring." The OI's own text names TWO distinct gaps on the server — re-verified…
+
+### coach_chat_history_render_channel_filter (1 bugs)
+- 2026-09-21 d3f7b2 — Founder observation #2 (second half): after force-closing and reopening the app, the AI Coach chat showed 4 repeated `{"error":"Gemini returned no content"}` bubbles for "curd" — a food-logging…
+
+### ai_coach_chat_history (2 bugs)
+- 2026-09-21 e8a3b1 — Founder observation #4: reopening the app after a background restore (cold start, `_restoreCoachInteractions` pulling new/updated rows into coachBox) kept showing the AI Coach chat thread as it looked…
+- 2026-05-10 e8a3b1 — Opening the AI coach screen lands the scroll position at 0 (oldest message at top). User has to manually scroll down through the entire transcript just to see the latest exchange and reach the input…
+
+### coach_chat_reply_sanitization (1 bugs)
+- 2026-09-21 c9e2a5 — Founder observation #2: AI Coach chat rendered a raw JSON-shaped Gemini reply (e.g. `{"summary": "..."}`) instead of natural language. A SECOND, related symptom in the same report — after…
+
+### founder_digest_new_mrr / founder_digest_user_names_privacy (1 bugs)
+- 2026-09-21 e5c8a2 — Four independent defects in the SAME batch's own new founder-digest B2/B3 code (the digest redesign shipped earlier in this batch), all found by the self-triggered Hermes pass before merge: (1) L1/L21…
+
+### gemini_secret_redaction / rolling_context_retry_budget / gemini_exhaustion_alert_context (1 bugs)
+- 2026-09-21 f9d3b7 — Three independent defects in the shared Gemini call path, all found by the self-triggered Hermes pass before merge: (1) L40 F1 — Deno's `fetch` rejects a network-level failure with a TypeError whose…
+
+### cron_alert_dedup_window / subscription_cancelled_at_lifecycle (1 bugs)
+- 2026-09-21 h1a2b3 — Two independent live defects in migrations 138 and 139, both shipped earlier in this SAME batch, found by an 8-lens self-triggered Hermes pass run before merge (required because this batch's…
+
+### nutrition_ai_gemini_resilience (1 bugs)
+- 2026-09-21 f7a2c9 — Investigation finding (gate check under A5, expanded across two plan-review rounds): 9 production `geminiChat(...)` call sites had no `retries` argument (default 0), so a single transient…
+
+### (new — no prior SoT concept; UI-lifecycle fix, not a data contract) (1 bugs)
+- 2026-09-21 b4e7f1 — Founder observation #1 (screenshot): the swap "UNDO" snackbar banner stayed visible even after the workout reached 100% completion. Investigation found the gap was wider than the report: the snackbar…
+
 ### coach_chat_history_replay (2 bugs)
 - 2026-09-20 d3e8a1 — CI went red on `main` twice in a row (merge-triggered run 35485792369, then its rerun) on the "Supabase Integration Tests" job: `test/edge_functions/ai_proxy_test.dart`'s "AI Proxy — Free Tier T19: AI…
 - 2026-09-16 a1c6b9 — Founder reported (APK 1.0.0+43, two screenshots) that the AI Coach chat showed "I had trouble reaching the model. Try again in a moment." on every turn since the previous day, including a plain "hi"…
@@ -1250,9 +1291,6 @@ rather than a Hive box. (1 bugs)
 - 2026-05-10 b3d8f9 — PRO user who burns all 3 streak freezes in week 1 gets back to 3 the following Monday — full reset, no incentive to save freezes.
 - 2026-05-10 c5d2a8 — Streak pill showed only ❄ <available> (single digit), so a PRO user with 1 freeze remaining had no signal that capacity was 3 — and a user at 0 freezes had the snowflake section invisible entirely.
 
-### ai_coach_chat_history (1 bugs)
-- 2026-05-10 e8a3b1 — Opening the AI coach screen lands the scroll position at 0 (oldest message at top). User has to manually scroll down through the entire transcript just to see the latest exchange and reach the input…
-
 ### cross_account_isolation (1 bugs)
 - 2026-05-10 f4d6c2 — 3 cross-account isolation tests in test/auth/cross_account_isolation_test.dart were stubbed with `skip:` referencing HiveService.lastAuthenticatedUserIdKey — a constant from an abandoned Plan A…
 
@@ -1300,6 +1338,24 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-22 | k7d3n5 | `sh scripts/safe_push.sh` FAILED with "Some tests failed." inside the pre-push hook's full CI-equivalent `flutter test test/ --exclude-tags golden` run, blocking the push of this batch's 2… | alert_cron_failures_threshold_sync | test/contracts/alert_cron_failures_sync_test.dart |
+| 2026-09-22 | m5q8t1 | Full-suite pre-push run failed `test/features/nutrition/counter_increment_on_analyse_test.dart`: "Test #11 M1 — counter at API-call site, not save site CartAuditorNotifier.analyseCart calls… | cart_auditor_counter_increment_test_window | test/features/nutrition/counter_increment_on_analyse_test.dart |
+| 2026-09-22 | r2w6y9 | Full-suite pre-push run failed `test/features/profile/delete_account_screen_test.dart`: "H1-B — Source invariants Support email present in error copy" — Expected contains 'support@icanbefitter.com',… | support_contact_email | test/features/profile/delete_account_screen_test.dart |
+| 2026-09-22 | 9c4f2e | Full-suite pre-push run failed on `test/contracts/pro_predicate_adoption_test.dart`: "no Edge Function READS users.subscription_status to decide tier" — Expected empty, Actual:… | pro_predicate_adoption_gate | test/contracts/pro_predicate_adoption_test.dart |
+| 2026-09-21 | f7a2c9 | OI-226 (open_issues.md:5059): "ai-proxy chat/tool-calling Gemini exhaustion paths have no reportGeminiExhaustion alert wiring." The OI's own text names TWO distinct gaps on the server — re-verified… | ai_failure_telemetry_coverage | test/contracts/ai_media_proxy_telemetry_test.dart
+test/contracts/ai_breakdown_notifier_cart_auditor_telemetry_test.dart
+supabase/functions/_shared/tool-loop_gemini_exhaustion_alert_test.ts
+supabase/functions/_shared/gemini_backoff_retry_test.ts
+test/scripts/gemini_retry_coverage_lib_test.dart |
+| 2026-09-21 | d3f7b2 | Founder observation #2 (second half): after force-closing and reopening the app, the AI Coach chat showed 4 repeated `{"error":"Gemini returned no content"}` bubbles for "curd" — a food-logging… | coach_chat_history_render_channel_filter | test/contracts/coach_chat_history_render_channel_filter_writer_to_reader_test.dart |
+| 2026-09-21 | e8a3b1 | Founder observation #4: reopening the app after a background restore (cold start, `_restoreCoachInteractions` pulling new/updated rows into coachBox) kept showing the AI Coach chat thread as it looked… | ai_coach_chat_history | test/features/ai_coach/coach_chat_restore_invalidation_test.dart |
+| 2026-09-21 | c9e2a5 | Founder observation #2: AI Coach chat rendered a raw JSON-shaped Gemini reply (e.g. `{"summary": "..."}`) instead of natural language. A SECOND, related symptom in the same report — after… | coach_chat_reply_sanitization | test/contracts/coach_chat_reply_sanitization_test.dart |
+| 2026-09-21 | e5c8a2 | Four independent defects in the SAME batch's own new founder-digest B2/B3 code (the digest redesign shipped earlier in this batch), all found by the self-triggered Hermes pass before merge: (1) L1/L21… | founder_digest_new_mrr / founder_digest_user_names_privacy | supabase/functions/founder-digest/index_test.ts |
+| 2026-09-21 | f9d3b7 | Three independent defects in the shared Gemini call path, all found by the self-triggered Hermes pass before merge: (1) L40 F1 — Deno's `fetch` rejects a network-level failure with a TypeError whose… | gemini_secret_redaction / rolling_context_retry_budget / gemini_exhaustion_alert_context | supabase/functions/_shared/gemini_backoff_retry_test.ts |
+| 2026-09-21 | h1a2b3 | Two independent live defects in migrations 138 and 139, both shipped earlier in this SAME batch, found by an 8-lens self-triggered Hermes pass run before merge (required because this batch's… | cron_alert_dedup_window / subscription_cancelled_at_lifecycle | test/sql/migration_140_stuck_alert_and_cancelled_at_live_verify.sql |
+| 2026-09-21 | f7a2c9 | Investigation finding (gate check under A5, expanded across two plan-review rounds): 9 production `geminiChat(...)` call sites had no `retries` argument (default 0), so a single transient… | nutrition_ai_gemini_resilience | supabase/functions/_shared/gemini_backoff_retry_test.ts |
+| 2026-09-21 | a1e6f2 | Founder observation #7: "email wrong. check our email." The app showed 2 different, both-wrong support addresses across 2 screens: the Profile contact card showed `support@avya.app` (a leftover from… | support_contact_email | test/contracts/support_contact_email_writer_to_reader_test.dart |
+| 2026-09-21 | b4e7f1 | Founder observation #1 (screenshot): the swap "UNDO" snackbar banner stayed visible even after the workout reached 100% completion. Investigation found the gap was wider than the report: the snackbar… | (new — no prior SoT concept; UI-lifecycle fix, not a data contract) | test/features/train/swap_undo_snackbar_dismisses_test.dart |
 | 2026-09-20 | d3e8a1 | CI went red on `main` twice in a row (merge-triggered run 35485792369, then its rerun) on the "Supabase Integration Tests" job: `test/edge_functions/ai_proxy_test.dart`'s "AI Proxy — Free Tier T19: AI… | coach_chat_history_replay | test/edge_functions/ai_proxy_hard_failure_lib_test.dart |
 | 2026-09-20 | 6642b5 | Opening the Diet Plan screen shows a blank spinner behind a "Saved Diet Plan Found — load it or generate fresh?" modal, even though the saved plan is already available synchronously from local Hive… | diet_plan_immediate_load_no_modal | test/widgets/diet_plan_screen_no_modal_test.dart |
 | 2026-09-20 | c7f4d1 | `reportGeminiExhaustion` used a constant `source` string ("ai_proxy_gemini_exhausted") for every one of the 3 ai-proxy request types (food_text_analysis, scan_meal, cart_auditor) it is called from —… | gemini_failure_alert | supabase/functions/_shared/gemini_failure_alert_test.ts |

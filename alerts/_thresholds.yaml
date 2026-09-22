@@ -65,6 +65,17 @@ thresholds:
     cron_cadence:      "7 * * * *"
     dedup_window_hours: 6
 
+  cron_failures:
+    description: "cron_call_log rows with status='failed' in the last 1h, OR status='started' and currently stuck (started_at between 1h and 6h ago — bounded BOTH sides since migration 140). CORRECTED same day (B-pass review): the first draft used a 24h outer bound borrowed from private.founder_metrics_ops()'s cron_failures_24h DIGEST column, which is right for a once-a-day summary and wrong for a 15-min paging alert — paired with a 1h dedup window it would have re-paged hourly for up to 24h after an already-resolved single failure. failed_window_hours now matches dedup_window_hours (1:1, same ratio alert_client_errors_spike already uses) so a resolved failure self-quiets. CORRECTED AGAIN same day (Hermes pass, diagnose h1a2b3): the stuck branch's stated 'no upper bound' was already misfiring live — a job stuck 2.5 days kept paging roughly every 15 minutes indefinitely. Migration 140 added the 6-hour upper bound below so the stuck branch stops paging once a job is old enough to be treated as dead/abandoned rather than genuinely still running."
+    fire_at:            1   # any failure/stuck job pages — single-tier, no info/warn split
+    failed_window_hours: 1
+    stuck_started_after_hours: 1
+    stuck_window_upper_bound_hours: 6   # added by migration 140 (was unbounded — see corrected description above)
+    cron_cadence:        "*/15 * * * *"
+    dedup_window_hours:  1
+    phase: 1   # Phase-1 placeholder (B4, 2026-09-21) — 0 'failed' rows observed in the last 30 days as of this date, so no baseline exists yet to tune a higher floor
+    defined_in_migration: "140_hermes_pass_fixes_138_139.sql"
+
 # Notes on suppression / acknowledgement
 # --------------------------------------
 # Every cron job dedup-checks for an unacknowledged alert from the same

@@ -24,12 +24,29 @@
  * rendered as zeros.
  *
  * What leaves the project (to Telegram's servers — a third party, not E2E):
- * per-key totals, distinct-user and at-cap COUNTS, up to five 8-char user-id
- * PREFIXES with their day's usage, and the alert rows' source/severity/
- * summary (templated counts and function names — the alert writers
- * interpolate no user data). The prefix is a correlation key, not
- * anonymisation: at today's scale every user has a distinct one. No message
- * text, no health data, no media and no email ever enters this text.
+ * per-key totals, distinct-user and at-cap COUNTS, and the alert rows'
+ * source/severity/summary (templated counts and function names — the alert
+ * writers interpolate no user data, but see the caveat on Gemini-failure
+ * alerts below). Top users render EITHER an 8-char user-id prefix OR — since
+ * the founder-digest-redesign batch (2026-09-21, B2) — the user's real FIRST
+ * NAME, sanitized via `sanitizeIdentifier` (control chars/newlines stripped,
+ * length-capped), UNLESS the user has opted out via `coach_memory
+ * .private_mode = true`, in which case the id prefix is used instead (fails
+ * CLOSED to the prefix on any read error too). This was a deliberate,
+ * reviewed scope change (see `docs/superpowers/specs/2026-09-21-observation-
+ * batch-and-digest-redesign-design.md` B2) — it is NOT the "id prefix only"
+ * design this comment described before that batch, and any future widening
+ * of what this function sends to Telegram must update this paragraph in the
+ * SAME commit, not leave it describing stale behavior. No message text, no
+ * health data, no media and no email ever enters this text as an intentional
+ * field — but see the Gemini-failure-alert caveat: `alerts.summary`/
+ * `context_json` for `source='ai_proxy_gemini_exhausted'` rows can, on an
+ * unusual transport failure or a malformed-request Gemini response, carry a
+ * classified/truncated fragment of upstream error text (never the raw
+ * request URL or API key — see `_shared/gemini_failure_alert.ts` and
+ * `_shared/gemini.ts`'s `redactSecrets` for the specific guard this batch
+ * added after a Hermes pass found the untruncated form could leak
+ * GEMINI_API_KEY).
  *
  * The Telegram send is a private twin of morning-alert's, with ONE deliberate
  * difference: the fetch is wrapped in its own try/catch and NEITHER the error
@@ -56,19 +73,25 @@ import {
 // unchanged — the definitions now live in the shared module (telegram-admin-bot
 // Task 4), this file just forwards them.
 export {
+  type AdminMetricsRow,
   buildDigestText,
+  computeNewMrr,
   DIGEST_KEYS,
   type DigestClient,
   type DigestInput,
   type DigestKey,
+  type EngagementMetricsRow,
   gatherDigestInput,
   idPrefix,
   istClock,
   LIFETIME_WINDOW,
   MAX_ALERT_LINES,
   MAX_PAGES,
+  type OpsMetricsRow,
+  PLAN_PRICES_RUPEES,
   readDigestSections,
   type SectionRead,
+  type SubscriptionRow,
   TOP_USERS,
   type UsageRow,
   type AlertRow,
