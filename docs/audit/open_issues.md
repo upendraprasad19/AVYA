@@ -5179,8 +5179,8 @@ missing from the Coach menu."
 ## OI-228 — AI coach shortenWorkout tool calls get stuck at status:queued with no resolution; log_workout_sheet shows wrong copy for a completed day
 
 - **Status**: OPEN
-- **Blocked on**: none — Bug A is a small isolated fix; Bug B needs live tool-call-lifecycle tracing before a fix can be proposed
-- **Verified**: 2026-09-21 — both citations below re-read live this session; Bug B's stuck-queued ROOT CAUSE is not yet isolated (see below)
+- **Blocked on**: none — Bug A is CLOSED; Bug B's "stuck at queued" premise is REFUTED (Batch B, see below) — the real remaining gap is missing client-side confirm/dispatch telemetry, needed before a fix can be proposed with confidence
+- **Verified**: 2026-09-22 (Batch B) — live-traced the exact incident row; the cloud `tool_calls` field is a write-once snapshot that never transitions for ANY write tool, so it cannot itself evidence a stuck dispatch (see Update below)
 - **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/food-logging-observations-126ab3` (**Bug A is CLOSED by batch `oi-batching-strategy-e5e359`**, see the update at the bottom — Bug B remains open)
 
 Two related but distinct AI-coach tool-dispatch bugs surfaced from founder
@@ -5238,6 +5238,87 @@ UNCHANGED and still needs the live tracing this entry's own recommendation
 (2) describes — not attempted in this batch (investigation-first work,
 outside a ready-to-fix batch's scope).
 
+**Update 2026-09-22 (Batch B investigation, branch
+`claude/oi-batching-strategy-e5e359`):** Bug B's root cause is now
+REFRAMED, not fully closed — the "stuck at queued" premise itself does not
+describe a broken lifecycle.
+
+**Code-level finding.** `ai_coach_interactions.tool_calls` is written
+EXACTLY ONCE, at request-resolve time
+(`supabase/functions/ai-proxy/index.ts:1155`), from `loop.toolCallsLog` —
+which `tool-loop.ts:505-509` sets to `status: "queued"` the instant a
+write-tool's `intentBuilder` succeeds, and never mutates afterward.
+Exhaustive grep of `supabase/functions/**` and `lib/**` found no other
+write site touching this column (client-side `ai_service.dart:295-297`
+only READS the per-request `tool_calls_log` field from the response —
+"Server-only diagnostics; never surfaced to the user" — and never writes
+it back). So `status: "queued"` is the PERMANENT, by-design value for
+every successfully-queued write-tool call, forever — regardless of whether
+the client ever renders the confirm card, the user taps APPLY, execution
+succeeds, a guard rejects it, or the card is dismissed. This field cannot
+itself distinguish "resolved" from "never even seen" and was never meant
+to transition; the OI's own title is a misreading of it.
+
+**Live data for the exact incident**
+(`ai_coach_interactions.id = 4b2c3bfc-f2af-4395-8f56-32200d890757`,
+2026-09-21 12:07:10 UTC, `user_message = "Cut today's workout to 30 min"`,
+`user_id = d7a67a37-0b05-4f0a-b13c-388bff3cb59b`):
+- This is the ONLY `shortenWorkout` tool call ever recorded, and the only
+  successfully-queued write-tool-call entry in the table's entire history
+  (16 of 271 interactions carry non-null `tool_calls`; only 2 are real
+  tool-loop arrays — this one, and an unrelated `getNutritionHistory`
+  `invalid_args` from 2026-08-01). **Rare, not systemic** — settles the
+  OI's own open question.
+- `public.scheduled_workouts` for this user/date
+  (`id = e919fd76-42ff-4f75-9bbe-86284c82e4b1`) shows
+  `status: "completed"`, `completed_at: 2026-09-21 04:14:46 UTC` —
+  completed ~8h before the shorten request, and UNCHANGED afterward (no
+  shortened-workout side effect ever landed, consistent with either "guard
+  correctly rejected it" or "it never dispatched at all").
+- `_executeShortenWorkout` (`tool_dispatcher.dart:585-604`) logs
+  `ErrorTelemetry.logEvent('tool_dispatch_shorten_workout_failed', …)`
+  (`:601-602`) whenever `WorkoutScheduleService.shortenDay` throws
+  `ShortenDayException` — exactly the completed-day guard case this OI
+  already confirmed works correctly. `client_errors` has ZERO rows with
+  that op_type for this user, ever. So the guard path was never even
+  exercised: the client-side dispatcher branch for this intent never ran
+  at all, success or rejection.
+- The ONLY `client_errors` activity for this user in the 22 minutes
+  spanning the request (12:07:00–12:29:00 UTC) is **54 `restore_op_done`
+  events** — the same ~8 sync tables (water_logs, workout_templates,
+  streaks, schedule_completions, scheduled_workouts, workout_logs,
+  saved_meals, nutrition_logs) completing in repeating waves roughly every
+  3 minutes, several taking 10–42s each. The device was in the middle of a
+  heavy, repeating background/restore-sync storm exactly when the chat was
+  sent and for the following ~20+ minutes.
+
+**Conclusion.** No dispatch-code bug was found — the guard, the
+`intentBuilder`, and the queue-for-confirmation architecture all behave as
+designed. The best-supported (not proven) explanation for "nothing
+visibly happened" is that the user never tapped APPLY on the resulting
+confirm card — there is no telemetry either way, because
+`ToolConfirmCard`'s confirm/dismiss actions (`tool_confirm_card.dart:39-64`)
+leave no cloud trace at all (Hive-only, no cloud write-back). The
+concurrent restore storm is circumstantial, not proven causal, but is
+itself anomalous (54 restore ops for one user in 22 minutes) and worth its
+own look — not attempted here, out of this batch's 3-item scope.
+
+**Batch B2 fix plan (not implemented here):** (1) Add a client-side
+lifecycle event — write to `client_errors` (or a new light column) on
+confirm-card render, APPLY tap, and dispatch outcome — so a future
+incident is diagnosable from data instead of inference. (2) Once that
+telemetry exists, reproduce a shorten-on-completed-day request and confirm
+whether the card renders/behaves correctly under normal load, then
+separately under a concurrent restore storm, to test the sync-storm
+correlation directly. (3) Separately (already flagged in this OI):
+tighten `captain_manual.ts`'s no-narration instruction so the model stops
+describing queued-for-confirmation write tools as already-in-progress
+background jobs ("you will see the revised plan shortly") — this is a
+real prompt-adherence gap independent of Bug B's root cause. (4) Consider
+whether the restore-storm frequency (54 events/22min for one user) is
+itself a distinct issue worth its own OI — flagged, not filed, in this
+batch (out of scope).
+
 ## OI-229 — AI coach chat replies violate captain_manual.ts hard rules: 100-word cap breached, fabricated free-tier message count shown to a PRO user
 
 - **Status**: OPEN
@@ -5290,15 +5371,76 @@ post-check can backstop.
 - **Verified**: never
 - **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/food-logging-observations-126ab3`
 
+**Update 2026-09-22 (Batch B investigation, branch
+`claude/oi-batching-strategy-e5e359`):** Recommendation (1) — live snapshot
+verification — is now DONE. Confirmed: the snapshot WAS correctly PRO at
+generation time. **Both violations are pure prompt drift, not a data bug.**
+
+Incident row: `ai_coach_interactions.id =
+f6208401-acae-424b-90d5-fd57268d086f` (2026-09-21 11:57:08 UTC,
+`user_message = "hi"`, `user_id = d7a67a37-0b05-4f0a-b13c-388bff3cb59b`) —
+this is the exact reply text the OI describes (matches both violations
+verbatim, including the closing "You have 10 messages remaining today on
+the free tier."). Note: `ai_coach_interactions` has no stored
+snapshot/context column (confirmed via `information_schema.columns` — only
+`id, user_id, snapshot_id, channel, user_message, ai_response, model_used,
+tokens_used, was_helpful, created_at, summarized, tool_calls`), so the raw
+snapshot payload itself isn't recoverable after the fact; PRO status was
+instead cross-checked against the two live sources that feed it:
+
+- `public.subscriptions`: an `active` `yearly` row for this user
+  (`id = 448b08ee-c23d-4770-8104-cf0b5da4bc4c`,
+  `start_date: 2026-09-14 17:37:49 UTC`,
+  `end_date: 2027-09-14 17:37:49 UTC`) — active and unexpired at message
+  time.
+- `client_errors`: `op_type = "subscription_state_written"`,
+  `error_message = "isPro=true plan=yearly"`,
+  `created_at: 2026-09-21 11:56:06 UTC` — **62 seconds before** the "hi"
+  request — confirms the LOCAL Hive cache that
+  `ai_snapshot_builder.dart`'s `_getSubscriptionState()` (`:1367-1378`,
+  reading `SubscriptionService.instance.isPro()` at `:1368`) builds
+  `snapshot.subscription` from was already `true` at generation time.
+
+Both the server (Postgres) and client (Hive, via telemetry) sources
+independently confirm PRO status was correctly known. The model echoed
+`captain_manual.ts:122-124`'s illustrative free-tier example verbatim
+despite having the correct PRO signal available — this is Violation 2
+settled as pure prompt-adherence drift, matching OI-231's parallel finding
+for the rank-address violation from the SAME reply (see that OI's Batch B
+update — both violations in this single "hi" reply are now confirmed
+prompt drift, not data bugs).
+
+**Word count** (Violation 1): the actual reply is ~190 words by a plain
+whitespace count (vs. the OI's original "roughly 230" estimate) — either
+way, well over double the `captain_manual.ts:432-433` 100-word cap. No
+data-bug angle applies here; it is the same class of length/gating
+adherence gap as Violation 2.
+
+**Batch B2 fix plan (not implemented here):** (1) Tighten
+`captain_manual.ts:122-124`'s free-tier-cap instruction to be explicitly
+conditional ("ONLY if snapshot.subscription.tier !== 'pro'") and move the
+illustrative example phrasing further from something a model could echo
+verbatim regardless of gating — per this OI's own Recommendation (2). (2)
+Add a deterministic server-side post-check in `ai-proxy`/`tool-loop.ts`
+that strips or refuses any reply containing free-tier-cap language when
+`snapshot.subscription.tier === 'pro'` — per Recommendation (3); this is a
+hard, checkable rule that shouldn't rely on prompt adherence alone. (3)
+Separately, add a reply-length enforcement backstop (truncate/regenerate)
+for the 100-word chat cap, since this is the second confirmed instance of
+the model ignoring an explicit hard-rule instruction in the same manual —
+worth treating length + subscription-gating as one "deterministic
+post-check" work item in Batch B2 rather than two.
+
 ## OI-231 — AI coach addressed a promoted user by their OLD rank term (Recruit instead of Sailor) — current_rank_code read directly from Hive, bypassing rank_service's canonical reader
 
 - **Status**: OPEN
-- **Blocked on**: live verification (need to check the live `current_rank_code`
-  Hive/Postgres value for the affected user at the time of the reply to
-  distinguish a stale-data bug from a pure model instruction-adherence miss)
-- **Verified**: 2026-09-21 — the title's own implied mechanism was
-  investigated this session and found NOT to be the defect (see below); the
-  real root cause is still open
+- **Blocked on**: none — live verification DONE (Batch B, see update below):
+  hypothesis 2 (pure model miss) CONFIRMED, hypothesis 1 (stale data)
+  REFUTED. Remaining work is a `captain_manual.ts` prompt-tightening pass
+  (Batch B2), not more investigation
+- **Verified**: 2026-09-22 (Batch B) — settled via the same reply's own
+  internal inconsistency (correct SD1 rank name later in the identical
+  output that opened with the SD2 address term) — see update below
 - **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/food-logging-observations-126ab3` (see the update at the bottom for batch `oi-batching-strategy-e5e359`'s partial progress)
 
 Founder is confirmed rank SD1 (per this session's earlier investigation) but
@@ -5362,6 +5504,52 @@ implementing it: `_getCurrentRankFromLadder()` was ALSO reading a second,
 dead Hive key — `current_rank_earned_at`, which nothing writes; the real
 writer uses `current_rank_achieved_at`. Fixed as part of the same change;
 see OI-230's closure note in `docs/audit/closed_issues.md`.)
+
+**Update 2026-09-22 (Batch B investigation, branch
+`claude/oi-batching-strategy-e5e359`):** Hypothesis 1 vs 2 is now SETTLED —
+**confirmed hypothesis 2 (pure model miss). Hypothesis 1 (stale data) is
+REFUTED.**
+
+`ai_coach_interactions` has no stored snapshot/context column (confirmed
+via `information_schema.columns` — only `id, user_id, snapshot_id, channel,
+user_message, ai_response, model_used, tokens_used, was_helpful,
+created_at, summarized, tool_calls`), so the raw snapshot payload sent to
+the model for this request is not recoverable directly. The stored
+`ai_response` TEXT itself settles the question instead, without needing it.
+
+Incident row: `ai_coach_interactions.id =
+f6208401-acae-424b-90d5-fd57268d086f` (2026-09-21 11:57:08 UTC,
+`user_message = "hi"`, same founder-test user). The SAME reply:
+- Opens: "Recruit, stand by for the brief."
+- Later, in the identical reply, states: "Your current rank is Seaman 1st
+  Class."
+
+Per `captain_manual.ts:162-163`, "Seaman 1st Class" is SD1's RANK NAME
+("Seaman 2nd Class" is SD2's). Per `captain_manual.ts:28-29`, "Recruit" is
+SD2's ADDRESS TERM and "Sailor" is SD1's. Both values came from ONE
+request/generation. Since the rank NAME stated in the body is objectively
+correct for SD1, the underlying `current_rank` data available to the model
+WAS correct (SD1) at generation time — this directly refutes hypothesis 1
+(a stale `profile['current_rank_code']` still holding `'SD2'`). The model
+used the wrong (SD2) address term at the greeting while correctly stating
+the SD1 rank name moments later in the SAME output — an internal
+self-contradiction only explainable as the model not consistently applying
+the rank-aware-address instruction (`captain_manual.ts:27-29`, `:214-215`),
+i.e. pure prompt-adherence drift. This is the identical incident and root
+cause as OI-229's Violation 2 (also settled prompt drift, see that OI's
+Batch B update) — both violations came from this one "hi" reply.
+
+**Batch B2 fix plan (not implemented here):** (1) Tighten
+`captain_manual.ts:27-29`/`:214-215`'s rank-aware-address instruction to
+explicitly require internal consistency within a single reply — e.g. "if
+you state the rank NAME anywhere in this reply, the greeting ADDRESS TERM
+must match the same rank" — since the failure mode here is specifically
+the model using two different rank vocabularies in one output, not simply
+picking a wrong rank. (2) Consider a deterministic post-check
+cross-referencing the address term actually used against
+`snapshot.current_rank.code` server-side, similar to OI-229's proposed
+subscription-gating backstop — both are the same class of "hard, checkable
+rule the model drifted on despite correct underlying data."
 
 ## OI-233 — user_daily_snapshots' 4 cron/client writers are not atomic against each other — residual race left open by the d8a2f6 merge-safe fix
 

@@ -138,10 +138,10 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-222 | Document versionCode-bump-via-merge CI gap in CLAUDE.md §4.9 | none | never | [:4991](open_issues.md#L4991) |
 | OI-224 | alert_cron_function_dead threshold unreachable, cron_call_log pruned at 7… | none | 2026-09-20 — live on… | [:5059](open_issues.md#L5059) |
 | OI-227 | Telegram coach connect is broken (no linking token, bot says no user… | none — UI removal is self-contained; the… | 2026-09-21 — founder tapped "Connect… | [:5115](open_issues.md#L5115) |
-| OI-228 | AI coach shortenWorkout tool calls get stuck at status:queued with no… | none — Bug A is a small isolated fix;… | 2026-09-21 — both citations below… | [:5179](open_issues.md#L5179) |
-| OI-229 | AI coach chat replies violate captain_manual.ts hard rules: 100-word cap… | none — both are prompt-adherence gaps in… | 2026-09-21 — both cited… | [:5241](open_issues.md#L5241) |
-| OI-231 | AI coach addressed a promoted user by their OLD rank term (Recruit instead… | live verification (need to check the… | 2026-09-21 — the title's own implied… | [:5293](open_issues.md#L5293) |
-| OI-233 | user_daily_snapshots' 4 cron/client writers are not atomic against each… | none — scope and fix shape are already… | 2026-09-21 — explicitly scoped out in | [:5366](open_issues.md#L5366) |
-| OI-238 | 5 Gemini-calling Edge Functions have no server-side reportGeminiExhaustion… | none | never | [:5412](open_issues.md#L5412) |
-| OI-239 | Acknowledging an alert re-arms its dedup window instead of waiting out the… | none | never | [:5438](open_issues.md#L5438) |
-| OI-240 | _getNextRankFromLadder's remaining/binding_constraint is inaccurate for 3… | none — bounded work, but a genuinely… | 2026-09-22 — every claim below re-read… | [:5465](open_issues.md#L5465) |
+| OI-228 | AI coach shortenWorkout tool calls get stuck at status:queued with no… | none — Bug A is CLOSED; Bug B's "stuck… | 2026-09-22 (Batch B) — live-traced the… | [:5179](open_issues.md#L5179) |
+| OI-229 | AI coach chat replies violate captain_manual.ts hard rules: 100-word cap… | none — both are prompt-adherence gaps in… | 2026-09-21 — both cited… | [:5322](open_issues.md#L5322) |
+| OI-231 | AI coach addressed a promoted user by their OLD rank term (Recruit instead… | none — live verification DONE (Batch B,… | 2026-09-22 (Batch B) — settled via the… | [:5434](open_issues.md#L5434) |
+| OI-233 | user_daily_snapshots' 4 cron/client writers are not atomic against each… | none — scope and fix shape are already… | 2026-09-21 — explicitly scoped out in | [:5554](open_issues.md#L5554) |
+| OI-238 | 5 Gemini-calling Edge Functions have no server-side reportGeminiExhaustion… | none | never | [:5600](open_issues.md#L5600) |
+| OI-239 | Acknowledging an alert re-arms its dedup window instead of waiting out the… | none | never | [:5626](open_issues.md#L5626) |
+| OI-240 | _getNextRankFromLadder's remaining/binding_constraint is inaccurate for 3… | none — bounded work, but a genuinely… | 2026-09-22 — every claim below re-read… | [:5653](open_issues.md#L5653) |
