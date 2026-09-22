@@ -1,0 +1,13 @@
+fix(train): normalize logged exercise sets on swap or mismatch
+
+When an exercise is swapped mid-active-workout from one logging type to
+another (e.g., timed → weight/reps), in-flight logged sets retain the old
+format, causing the edit log modal and week summary to display wrong field
+values (seconds instead of reps).
+
+Fix: Normalize all persisted sets at write time to match the resolved
+logging type, clearing incompatible fields. Add one-time boot healer for
+existing mismatched exlog rows.
+
+Closes-diagnose: a4c7d1
+Regression test: test/contracts/logged_sets_format_normalization_behavioral_test.dart

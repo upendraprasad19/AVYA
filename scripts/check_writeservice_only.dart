@@ -94,6 +94,11 @@ const allowedFilePathFragments = <String>[
 // remediation lands, REMOVE the entry from this allowlist — the script
 // will then catch any regression.
 const knownViolations = <String>{
+  // a4c7d1 (2026-09-22): AuthSessionBootstrapper._healMismatchedExerciseLogs
+  // is a one-time boot healer that fixes persisted exlog_* rows with format
+  // mismatches (e.g., from mid-workout swaps). It bypasses WorkoutWriteService
+  // because it's a remedial operation, not a normal user-initiated write.
+  'lib/core/services/auth_session_bootstrapper.dart:AuthSessionBootstrapper:workoutBox.put',
   // E.7 — HealthWriteService build-out
   'lib/core/services/health_sync_service.dart:HealthSyncService:healthBox.put',
   'lib/features/ai_coach/services/conversational_log_handler.dart:ConversationalLogHandler:healthBox.put',
