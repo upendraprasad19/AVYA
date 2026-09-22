@@ -5181,7 +5181,7 @@ missing from the Coach menu."
 - **Status**: OPEN
 - **Blocked on**: none — Bug A is a small isolated fix; Bug B needs live tool-call-lifecycle tracing before a fix can be proposed
 - **Verified**: 2026-09-21 — both citations below re-read live this session; Bug B's stuck-queued ROOT CAUSE is not yet isolated (see below)
-- **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/food-logging-observations-126ab3`
+- **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/food-logging-observations-126ab3` (**Bug A is CLOSED by batch `oi-batching-strategy-e5e359`**, see the update at the bottom — Bug B remains open)
 
 Two related but distinct AI-coach tool-dispatch bugs surfaced from founder
 screenshots of a completed workout day.
@@ -5227,6 +5227,16 @@ round-trip and the client dispatch path, before proposing a fix. (3)
 Separately: the premature "queued... shortly" narration is a
 captain_manual.ts instruction-adherence gap the model should be tightened
 against regardless of Bug B's root cause.
+
+**Update 2026-09-22 (Batch A, branch `claude/oi-batching-strategy-e5e359`):**
+Bug A CLOSED — `log_workout_sheet.dart` now distinguishes a `'completed'`
+schedule row (new `_alreadyCompleted` flag) and shows "WORKOUT ALREADY
+LOGGED" / "Today's workout is already logged." instead of the generic empty
+state. Behavioral widget-pump test + mutation-proof in
+`test/widgets/log_workout_sheet_completed_day_test.dart`. Bug B is
+UNCHANGED and still needs the live tracing this entry's own recommendation
+(2) describes — not attempted in this batch (investigation-first work,
+outside a ready-to-fix batch's scope).
 
 ## OI-229 — AI coach chat replies violate captain_manual.ts hard rules: 100-word cap breached, fabricated free-tier message count shown to a PRO user
 
@@ -5280,65 +5290,6 @@ post-check can backstop.
 - **Verified**: never
 - **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/food-logging-observations-126ab3`
 
-## OI-230 — AI coach snapshot rank-promotion math is self-contradictory: _getNextRankFromLadder / _getEtaNextPromotion
-
-- **Status**: OPEN
-- **Blocked on**: none — mechanism is fully understood and fixable directly
-- **Verified**: 2026-09-21 — read both functions live this session, confirmed
-  the mechanism below by tracing the code (the original founder-observed
-  contradictory screenshot text itself was not preserved in writing from the
-  earlier investigation and is not re-quoted here — the mechanism below is
-  independently derived from the current source, not from that screenshot)
-- **Identified**: originally from founder APK screenshots (Phase 1, this
-  session, exact date/wording not preserved) · filed 2026-09-21 via
-  mint_oi.sh from branch `claude/food-logging-observations-126ab3`
-
-Founder observed self-contradictory rank/promotion info in an AI coach reply
-(exact wording not preserved in writing). Re-deriving the mechanism directly
-from `lib/features/ai_coach/services/ai_snapshot_builder.dart` finds a
-concrete, precisely-locatable defect that would produce exactly this shape
-of contradiction:
-
-`_getNextRankFromLadder()` (`:1400-1459`) computes a `remaining` map keyed by
-whichever of `workouts` / `streak_days` / `weeks` / `deployments` the next
-rank's gate actually requires (`kRankGates[next.code]`), and picks a
-`binding_constraint` — the requirement with the MAX remaining value (`:1430,
-1442-1445`). So `binding_constraint` can legitimately be `'weeks'`,
-`'streak_days'`, or `'deployments'` — NOT `'workouts'` — whenever the user
-has already satisfied the workout count but not the other gate(s).
-
-`_getEtaNextPromotion()` (`:1585-1619`) calls `_getNextRankFromLadder()` and
-then reads **only** `remaining['workouts']` (`:1590`) to decide the ETA.
-If `remainingWorkouts == 0`, it unconditionally returns `{days: 0, date:
-<today>}` for BOTH `at_current_cadence` and `at_plan_cadence` (`:1592-1597`)
-— i.e. "promotion happens today" — **regardless of whether
-`remaining['streak_days']`, `remaining['weeks']`, or
-`remaining['deployments']` are still nonzero.** Even in the non-zero branch
-(`:1604-1607`), the day/week cadence math is computed purely from
-`remainingWorkouts` and never references the other three keys at all.
-
-**Net effect:** any user whose binding constraint is weeks/streak/deployments
-rather than workouts gets a snapshot where `next_rank.binding_constraint`
-correctly names the real bottleneck (e.g. `"weeks"`, with
-`next_rank.remaining.weeks: 3`), while `eta_next_promotion` simultaneously
-claims `{days: 0, date: today}` — because it only ever looked at
-`remaining.workouts`, which happened to already be 0. The Captain, fed both
-fields in the same snapshot, has no way to reconcile "3 weeks still needed"
-against "promotion today" — because the snapshot itself contains both, and
-they disagree.
-
-**Recommendation**: `_getEtaNextPromotion()` must compute ETA from the
-ACTUAL `binding_constraint` `_getNextRankFromLadder()` selected, not
-hardcode `workouts`. For a `weeks`-bound or `streak_days`-bound promotion,
-the "0 days" short-circuit is simply wrong — a weeks-gate can only be
-satisfied by calendar time passing, and a streak-gate needs the streak
-itself extended, neither of which `remainingWorkouts == 0` says anything
-about. Needs a per-constraint-type ETA formula (workouts → cadence-based, as
-today; weeks → calendar days remaining; streak → the specific streak
-mechanics; deployments → deployment cadence), or at minimum an honest
-"cannot estimate" response when the binding constraint isn't workouts, rather
-than a false "today."
-
 ## OI-231 — AI coach addressed a promoted user by their OLD rank term (Recruit instead of Sailor) — current_rank_code read directly from Hive, bypassing rank_service's canonical reader
 
 - **Status**: OPEN
@@ -5348,7 +5299,7 @@ than a false "today."
 - **Verified**: 2026-09-21 — the title's own implied mechanism was
   investigated this session and found NOT to be the defect (see below); the
   real root cause is still open
-- **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/food-logging-observations-126ab3`
+- **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/food-logging-observations-126ab3` (see the update at the bottom for batch `oi-batching-strategy-e5e359`'s partial progress)
 
 Founder is confirmed rank SD1 (per this session's earlier investigation) but
 was addressed "Recruit" — the term for rank SD2 — in the "hi" reply.
@@ -5399,56 +5350,18 @@ even though it isn't this bug's cause, it's a live SoT-reader duplication
 this repo's own conventions forbid, and duplicated reads are exactly the
 pattern that silently drifts later (`feedback_writer_reader_field_drift_recurring.md`).
 
-## OI-232 — AI coach chat scrolls to top on every switch between in-app chat and Telegram channel
-
-- **Status**: OPEN
-- **Blocked on**: none — mechanism is understood and fixable directly
-- **Verified**: 2026-09-21 — founder reported live; mechanism re-derived from
-  source this session (not yet fixed or regression-tested)
-- **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/food-logging-observations-126ab3`
-
-Founder: switching to Telegram then back to in-app chat scrolls the chat to
-the top (oldest message), requiring a manual re-scroll down every time.
-
-**Mechanism**, traced in `lib/features/ai_coach/screens/ai_coach/screen.dart`:
-`channel == 'in_app' ? _buildChatArea(messages, isSending) :
-_buildTelegramView(telegramConnected)` (`:447-449`) means the chat's
-scrollable widget tree is entirely REMOVED from the tree when switching to
-Telegram and rebuilt fresh when switching back — Flutter does not preserve a
-`ScrollController`'s offset across that kind of unmount/remount (no
-`PageStorageKey`/keep-alive is used here).
-
-The one thing that WOULD re-scroll it to the bottom on remount,
-`_jumpToBottom()` (`:275-281`, jumps to `maxScrollExtent`, guarded by
-`_scrollController.hasClients`), is only ever invoked from ONE call site
-(`:423-426`):
-```
-if (!_initialScrollDone && messages.isNotEmpty) {
-  _initialScrollDone = true;
-  _jumpToBottom();
-}
-```
-`_initialScrollDone` (`:159`, declared once per `_AiCoachScreenState`) is a
-**one-shot flag for the screen's entire lifetime** — it was added
-specifically to fix first-paint landing position (comment at `:416-422`,
-`closes-diagnose: 2026-05-10-coach-scroll-init`, APK Test #15 / Bug E) and
-was never intended to fire more than once. Because `_AiCoachScreenState`
-itself is NOT recreated when `channel` changes (only the conditional child
-widget swaps), `_initialScrollDone` is already `true` well before the first
-channel switch — so the guard's condition never re-fires, `_jumpToBottom()`
-never runs again, and the freshly-remounted chat ListView is left at
-whatever its own default initial position is (the top).
-
-**Recommendation**: re-scroll to bottom on every remount of the chat area,
-not just the screen's first paint — e.g. call `_jumpToBottom()` whenever
-`channel` transitions TO `'in_app'` (not just on the one-shot initial
-load), or give the chat `ListView`/`CustomScrollView` a
-`PageStorageKey`/`AutomaticKeepAliveClientMixin` so Flutter preserves its
-scroll position across the unmount caused by the channel swap instead of
-disposing it. The existing one-shot `_initialScrollDone` guard should stay
-for its original first-paint purpose — this needs an ADDITIONAL trigger, not
-a replacement of that one (removing the one-shot guard would reintroduce
-`2026-05-10-coach-scroll-init`).
+**Update 2026-09-22 (Batch A, branch `claude/oi-batching-strategy-e5e359`):**
+Recommendation (2) DONE — both call sites now route through
+`RankService.instance.getCurrentRank()`. As this entry's own text already
+anticipated, this does NOT close the OI: the live-verification half
+(recommendation 1, hypothesis 1 vs 2) is still unresolved and needs a repro
+with live snapshot/interaction inspection, which is investigation-first work
+outside a ready-to-fix batch's scope. Stays OPEN, blocked on the same live
+verification as before. (Side benefit of the hygiene fix, found while
+implementing it: `_getCurrentRankFromLadder()` was ALSO reading a second,
+dead Hive key — `current_rank_earned_at`, which nothing writes; the real
+writer uses `current_rank_achieved_at`. Fixed as part of the same change;
+see OI-230's closure note in `docs/audit/closed_issues.md`.)
 
 ## OI-233 — user_daily_snapshots' 4 cron/client writers are not atomic against each other — residual race left open by the d8a2f6 merge-safe fix
 
@@ -5548,3 +5461,78 @@ acknowledging never shortens the window), or add a separate `snoozed_until` conc
 from `acknowledged` so triage and re-page timing are decoupled. Needs a design decision, not a
 one-line fix, since it touches the shared convention all 6 jobs rely on — a design change here
 should update all 6 in the same batch, not just the one that surfaced it.
+
+## OI-240 — _getNextRankFromLadder's remaining/binding_constraint is inaccurate for 3 of 4 constraint types: officer/MCPO completionRateMinimum gate not modeled at all, deployments 'current' hardcoded 0 (intentional, matches RankService)
+
+- **Status**: OPEN
+- **Blocked on**: none — bounded work, but a genuinely different/larger unit than OI-230's fix (new requirement type + a fundamentally different, adherence-dependent ETA semantic)
+- **Verified**: 2026-09-22 — every claim below re-read live this session (`kRankGates` full literal, `rank_service.dart:439-444`)
+- **Identified**: 2026-09-22 · surfaced while fixing OI-230 (`ai_snapshot_builder.dart` `_getNextRankFromLadder`/`_getEtaNextPromotion`) · filed via mint_oi.sh from branch `claude/oi-batching-strategy-e5e359`
+
+Found while making OI-230's ETA fix binding-constraint-aware: the `remaining`
+map `_getNextRankFromLadder()` (`lib/features/ai_coach/services/ai_snapshot_builder.dart:1400-1465`)
+computes for the AI snapshot is accurate for exactly ONE of the four
+constraint types it can select as `binding_constraint`, and the OI-230 fix
+had to work around the other three rather than trust them:
+
+**1. Officer/MCPO ranks (`completionRateMinimum` gate) — not modeled at all.**
+`kRankGates` (`lib/core/services/rank_ladder_data.dart:196-249`) gates MCPO,
+SubLt, Lt, LtCdr, Cdr and Capt primarily by `completionRateMinimum` +
+`completionRateWindowWeeks`. `_getNextRankFromLadder`'s `reqs` map
+(`:1419-1431`) never reads either field — only `totalWorkoutsAtLeast`,
+`streakAtLeast`, `minWeeksSinceSignup`, `deploymentsCompleteAtLeast`. For
+these ranks, `binding_constraint` can only ever resolve to `'weeks'` (the
+only other requirement most of them carry), even when completion rate is
+the REAL blocker — a user could be weeks-eligible and still nowhere near
+promotion, with the snapshot claiming weeks is the only gap. OI-230's fix
+guards against this specific case (any rank with `completionRateMinimum`
+set gets an honest "cannot estimate" ETA regardless of what
+`binding_constraint` says), but the `next_rank.remaining`/`binding_constraint`
+FIELDS THEMSELVES — read directly by the model, separate from
+`eta_next_promotion` — are still silently wrong for these ranks.
+
+**2. `deployments` — `current` hardcoded 0 (NOT fixed by OI-230, and correctly so).**
+The `reqs.forEach` loop (`:1437-1456`) never computes `current` for the
+`'deployments'` key — it stays 0 regardless of the user's actual deployment
+count, so `remaining['deployments']` always shows the FULL requirement.
+This is left as-is deliberately: `RankService.getNextRank()`
+(`rank_service.dart:439-444`) documents the identical tradeoff for its own,
+separate implementation — an accurate deployments-complete count requires a
+network call (counting `rank_promotions` rows with
+`trigger_type='deployment_complete'`), which a synchronous snapshot-builder
+call can't cheaply do, and the comment there explicitly notes staying at 0
+avoids flipping the PO/CPO gate prematurely on a stale/wrong signal. Worth
+fixing PROPERLY (e.g. a cached/synced local count, or accepting the network
+call) but not as a quick mechanical add — same shape of work as item 1.
+
+**3. `streak_days` — FIXED by OI-230's batch, noted here for completeness.**
+Same missing-`current` pattern as `deployments`, but `WorkoutRepository.currentStreak()`
+is a cheap, synchronous, already-used-in-this-file local reader (no network
+call needed) — fixed directly as part of OI-230's fix rather than filed
+here. See OI-230's closure note.
+
+**4. `workouts` — dead by construction, not a modeling gap.** No `kRankGate`
+entry ever sets `totalWorkoutsAtLeast` (F18, `rank_service.dart:18-19`), so
+this key never enters `reqs` at all. Not a bug to fix — see OI-230.
+
+**Why filed separately rather than fixed alongside OI-230:** item 1 needs a
+NEW requirement type (`completion_rate`) threaded through `reqs`/`remaining`/
+`binding_constraint`, PLUS a materially different ETA semantic for it — you
+cannot estimate "N days until your completion rate is 80%" from a count the
+way you can for streak/weeks/workouts, since it depends on the user's own
+future adherence over a rolling window, not a monotonic count ticking down.
+Item 2 needs either new sync plumbing or an accepted network call inside a
+snapshot builder that is otherwise entirely synchronous/local. Both are
+genuinely larger, riskier units of work than OI-230's binding-constraint
+generalization — bundling them would have meant either a much bigger,
+harder-to-review diff, or shipping OI-230's real fix later than necessary.
+
+**Recommendation**: (1) For officer/MCPO ranks, thread `completionRateMinimum`/
+`completionRateWindowWeeks` into `reqs` as a `'completion_rate'` requirement
+type, with its `remaining` value expressed as a rate GAP (e.g. `0.80 -
+actualRate`) rather than a count, and design an ETA response that's honest
+about being adherence-dependent (likely still "cannot estimate a date," but
+at least surfacing the current rate + target so the coach can reference
+concrete progress). (2) For deployments, evaluate whether a client-side
+cached count (synced periodically, accepting some staleness) is safer than
+either the current always-0 or a live network call on every snapshot build.

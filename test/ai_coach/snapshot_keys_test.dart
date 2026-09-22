@@ -485,6 +485,27 @@ void main() {
       final r = ctx['current_rank'] as Map;
       expect(r['total_workouts'], 5);
     });
+
+    test(
+        'earned_at reflects current_rank_achieved_at, not the dead '
+        'current_rank_earned_at key (OI-231)', () async {
+      // OI-231 hygiene fix: this used to read Hive key
+      // `current_rank_earned_at`, which nothing in the codebase writes —
+      // RankService's real writer (rank_service.dart evaluateAndPromote)
+      // uses `current_rank_achieved_at`. Seed BOTH: the dead key with an
+      // obviously-wrong sentinel, the real key with the expected value.
+      final achievedIso = DateTime.now()
+          .subtract(const Duration(days: 10))
+          .toIso8601String();
+      await HiveService.instance.userBox.put('profile', {
+        'current_rank_code': 'PO',
+        'current_rank_earned_at': '2020-01-01T00:00:00.000Z',
+        'current_rank_achieved_at': achievedIso,
+      });
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      final r = ctx['current_rank'] as Map;
+      expect(r['earned_at'], achievedIso);
+    });
   });
 
   group('next_rank', () {
@@ -535,8 +556,40 @@ void main() {
       final remaining = next['remaining'] as Map;
       // SD1 has streak_days and weeks gates — no workouts gate
       expect(remaining.containsKey('workouts'), isFalse);
-      // streak_days must be present (7 required; 0 current — conservative)
+      // streak_days must be present. No schedule-based streak seeded here
+      // (only raw wlog_ rows, which WorkoutRepository.currentStreak() does
+      // not read) — current streak is genuinely 0, so remaining is the
+      // full 7 required.
       expect(remaining['streak_days'], isA<int>());
+    });
+
+    test(
+        'remaining.streak_days reflects an ACTUAL current streak, not a '
+        'hardcoded 0 (OI-230)', () async {
+      // Pre-fix, _getNextRankFromLadder never computed `current` for
+      // streak_days — it stayed hardcoded 0 regardless of the user's real
+      // streak, so remaining['streak_days'] always equalled the FULL
+      // requirement no matter how close the user actually was. Seed a
+      // genuine 3-day streak (schedule-based, completed — the shape
+      // WorkoutRepository.currentStreak() reads) against SD1's
+      // streakAtLeast:7 and confirm remaining reflects the gap (7-3=4).
+      await HiveService.instance.userBox.put('profile', {
+        'current_rank_code': 'SD2',
+      });
+      final today = DateTime.now();
+      for (int i = 0; i < 3; i++) {
+        final d = today.subtract(Duration(days: i));
+        final key = istDateStr(d);
+        await HiveService.instance.workoutBox.put('schedule_$key', {
+          'type': 'workout',
+          'status': 'completed',
+          'date': key,
+        });
+      }
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      final next = ctx['next_rank'] as Map;
+      final remaining = next['remaining'] as Map;
+      expect(remaining['streak_days'], 4);
     });
   });
 
@@ -582,39 +635,90 @@ void main() {
       expect(ctx['eta_next_promotion'], isNull);
     });
 
-    test('computes days at plan cadence when no workouts yet', () async {
+    test(
+        'returns "cannot estimate" (not a false 0-days-today) when '
+        'streak_days is the binding constraint (OI-230)', () async {
+      // Pre-fix: eta_next_promotion read ONLY remaining['workouts'], which
+      // kRankGates never populates for ANY rank (no rank ever sets
+      // totalWorkoutsAtLeast — see rank_service.dart:18-19) — so this
+      // UNCONDITIONALLY fell into the "0 days, today" branch regardless of
+      // the real binding constraint. SD2 → SD1 with no streak/history
+      // seeded binds on streak_days (7 remaining > 1 remaining weeks);
+      // streak progress can't be reliably forecast from a cadence figure,
+      // so the honest answer is "cannot estimate", not a fabricated
+      // "today".
       await HiveService.instance.userBox.put('profile', {
         'current_rank_code': 'SD2',
         'days_per_week': 4,
       });
-      // No workouts seeded — SD1 gate is streakAtLeast:7, minWeeks:1
       final ctx = AiCoachRepository.instance.buildAiContext();
+      final next = ctx['next_rank'] as Map;
+      expect(next['binding_constraint'], 'streak_days');
       final eta = ctx['eta_next_promotion'] as Map;
-      expect(eta['at_plan_cadence'], isNotNull);
       final atPlan = eta['at_plan_cadence'] as Map;
-      expect(atPlan['days'], isA<int>());
+      final atCurrent = eta['at_current_cadence'] as Map;
+      expect(atPlan['days'], isNull);
+      expect(atPlan['date'], isNull);
+      expect(atCurrent['days'], isNull);
+      expect(atCurrent['date'], isNull);
     });
 
-    test('computes days at current cadence and plan cadence', () async {
+    test(
+        'computes a deterministic day count when weeks is the binding '
+        'constraint (OI-230)', () async {
+      // Satisfy SD1's streak gate (7) via a real schedule-based streak, so
+      // remaining['streak_days'] drops to 0 and 'weeks' (still unmet)
+      // becomes the binding constraint — weeks is calendar-bound, not
+      // cadence-dependent, so the ETA is deterministic and identical at
+      // both cadences.
       await HiveService.instance.userBox.put('profile', {
         'current_rank_code': 'SD2',
         'days_per_week': 4,
       });
-      // 4 workouts in last 28 days = 1/wk; SD1 gate: streakAtLeast:7
-      for (int i = 0; i < 4; i++) {
-        final d = DateTime.now().subtract(Duration(days: i * 7));
-        await HiveService.instance.workoutBox.put(
-          'wlog_${d.millisecondsSinceEpoch}',
-          {'date': d.toIso8601String().substring(0, 10), 'workout_name': 'X'},
-        );
+      final today = DateTime.now();
+      for (int i = 0; i < 7; i++) {
+        final d = today.subtract(Duration(days: i));
+        final key = istDateStr(d);
+        await HiveService.instance.workoutBox.put('schedule_$key', {
+          'type': 'workout',
+          'status': 'completed',
+          'date': key,
+        });
       }
       final ctx = AiCoachRepository.instance.buildAiContext();
+      final next = ctx['next_rank'] as Map;
+      expect(next['binding_constraint'], 'weeks');
+      final remainingWeeks = (next['remaining'] as Map)['weeks'] as int;
       final eta = ctx['eta_next_promotion'] as Map;
-      expect(eta['at_current_cadence'], isNotNull);
-      expect(eta['at_plan_cadence'], isNotNull);
-      expect((eta['at_current_cadence'] as Map)['days'], isA<int>());
-      expect((eta['at_plan_cadence'] as Map)['days'], isA<int>());
-      expect((eta['at_current_cadence'] as Map)['date'], isA<String>());
+      final atPlan = eta['at_plan_cadence'] as Map;
+      final atCurrent = eta['at_current_cadence'] as Map;
+      expect(atPlan['days'], remainingWeeks * 7);
+      expect(atCurrent['days'], remainingWeeks * 7);
+      expect(atPlan['date'], isA<String>());
+      expect(atPlan['date'], atCurrent['date']);
+    });
+
+    test(
+        'returns "cannot estimate" for a completion-rate-gated rank even '
+        'though binding_constraint would otherwise resolve (officer/MCPO '
+        'track)', () async {
+      // MCPO (and every officer-track rank above it) is gated primarily by
+      // completionRateMinimum, which _getNextRankFromLadder does not model
+      // in `remaining`/`binding_constraint` at all (filed separately).
+      // CPO → MCPO's ONLY other requirement is minWeeksSinceSignup, so
+      // WITHOUT the completionRateMinimum guard this would confidently
+      // resolve binding_constraint to 'weeks' and return a deterministic
+      // (but silently wrong — ignores the real completion-rate gate)
+      // day count. Confirms the guard fires before that can happen.
+      await HiveService.instance.userBox.put('profile', {
+        'current_rank_code': 'CPO',
+        'days_per_week': 4,
+      });
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      final eta = ctx['eta_next_promotion'] as Map;
+      final atPlan = eta['at_plan_cadence'] as Map;
+      expect(atPlan['days'], isNull);
+      expect(atPlan['date'], isNull);
     });
   });
 

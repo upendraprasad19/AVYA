@@ -65,7 +65,7 @@ concept. Selected mappings (full list in `docs/sot_registry.yaml`):
 | `auth_hive_owner_agreement` | `hive_user_session.dart` + `wrapUserScopedBox` | every WriteService + every Hive-touching Riverpod provider |
 | `day_rollover_provider_invalidation` | `day_rollover_service.dart` | `splash_screen` + `home_screen` mount |
 | `singleton_lifecycle_registry` | `singleton_lifecycle_registry.dart` | hot-restart cleanup |
-| `rank_monotonic_current_code` | `rank_service.dart` `evaluateAndPromote` (guarded by `shouldPromote(currentCode, qualified)` helper — monotonic-only writer; same pattern mirrored in `evaluate-rank-promotions` Edge Function cron) | `rank_service.dart` `getCurrentRank` (Hive `userBox['profile']`) → Profile rank chip + Home pending promotion |
+| `rank_monotonic_current_code` | `rank_service.dart` `evaluateAndPromote` (guarded by `shouldPromote(currentCode, qualified)` helper — monotonic-only writer; same pattern mirrored in `evaluate-rank-promotions` Edge Function cron) | `rank_service.dart` `getCurrentRank` (Hive `userBox['profile']`) → Profile rank chip + Home pending promotion. Also `ai_snapshot_builder.dart` `_getCurrentRankFromLadder`/`_getNextRankFromLadder` (OI-230/231, 2026-09-22 — now routes through `getCurrentRank()` instead of duplicating its Hive read) → AI coach snapshot `current_rank`/`next_rank`. |
 
 The WriteService pattern enforces three steps every write:
 
