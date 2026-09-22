@@ -231,6 +231,49 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-22** — blast-radius **platform** — branch `claude/next-aab-decision-d1227b`
+  (disk-io-audit-cleanup: pg_cron bookkeeping WAL diagnosis, ivfflat retune, RLS
+  auth-initplan fix, dead-index cleanup, 9→3 cron consolidation). **8 findings
+  (1 P1, 2 P2, 3 P3, 2 P4); 0 false_alarm — 6 fixed in-batch, 1 mitigated where the
+  migration-immutability rule allows (documented as a lesson, not fixable in place),
+  1 a documented judgment call.** Review: `docs/reviews/571c997e56b5-review.md`
+  (renamed from its original hash `e100478657c7` after the fix round moved the
+  staging hash — see the file's own header for the record→fix→rename-to-final-hash
+  flow this entry confirms working end-to-end).
+  **Tuning 1 — `idx_scan=0` is a query-access signal only; it says nothing about
+  FK-constraint-check coverage, which Postgres uses on the REFERENCED table's side
+  regardless of whether any SELECT ever touched the index.** Finding 1 (P1): the
+  diagnose-doc dropped `idx_nutrition_log_items_food_id` as "verified-dead" on
+  `idx_scan=0` alone; it was the sole index backing `nutrition_log_items_food_id_fkey`.
+  Live `get_advisors` confirmed a new `unindexed_foreign_keys` finding that did not
+  exist before the drop — a regression on the exact axis (DB resource pressure) the
+  batch existed to fix, self-introduced. Added to lens 7 (`missing_input`)'s method:
+  before accepting an `idx_scan=0` drop, check `pg_constraint` for a foreign key on
+  the same column(s) — a plain "this index has never been scanned" claim is checking
+  only one of the two things an index does.
+  **Tuning 2 — a review's own numeric claim can be WRONG in the same way it accuses
+  the diff of being wrong, and only a SECOND independent re-derivation (not
+  re-reading the first) settles which one is right.** Finding 8 flagged OI-235's
+  "~93s/~116s avg" figures as "unverifiable" based on a `cron.job_run_details` query
+  that returned a bimodal ~0.1s/~25-30min pattern instead. A fix-round requery with
+  corrected join/filter conditions reproduced the original figures EXACTLY, and a
+  THIRD, fully independent round-2 requery (different agent, own query text)
+  reproduced them a third time — settling that the reviewer's own query, not the
+  original OI, was the one with the defect. Both the bimodal detail AND the average
+  are real and non-contradictory (15 fast runs + 1 slow outlier averages to ~100s).
+  **A finding that says a number is wrong is itself a claim, not a verdict — it gets
+  re-verified with the same rigor as the thing it's correcting, not accepted because
+  it arrived wearing the reviewer's authority.**
+  **Tuning 3 — round 2 (the post-fix scoped re-review this repo's §4.12.1 requires)
+  earns its cost even when round 1's substance was entirely correct**, by catching
+  staleness the FIX round itself created: a dead cross-reference (the diagnose-doc
+  cited the review file by its pre-rename name after the rename), and a ledger note
+  that still said "9/9 passing" for a migration whose own true apply-time count was
+  8/8 (the 9th test, added during the fix round, covers a DIFFERENT, later,
+  not-yet-applied migration). Neither existed when round 1 ran; both are exactly the
+  class of thing a fresh, context-blind re-reader catches and the fix's own author
+  cannot, because the author is reading their own edit as intentional.
+  False-alarm rate 0/8 → no lens removed; lens 7 extended per Tuning 1 above.
 - **2026-09-20** — blast-radius **account** — branch
   `web-app-bugs-onboarding-a5a020` (onboarding picker text-wrap/unresponsive
   fix + muster/induction drift-and-reorder, e2b8a4 + d6f1b8). **5 findings

@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**130 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**134 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -138,3 +138,7 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-222 | Document versionCode-bump-via-merge CI gap in CLAUDE.md §4.9 | none | never | [:4991](open_issues.md#L4991) |
 | OI-224 | alert_cron_function_dead threshold unreachable, cron_call_log pruned at 7… | none | 2026-09-20 — live on… | [:5089](open_issues.md#L5089) |
 | OI-226 | ai-proxy chat/tool-calling Gemini exhaustion paths have no… | none | never | [:5059](open_issues.md#L5059) |
+| OI-234 | alert_edge_function_health never fires — 401s write no cron_call_log row,… | none | never | [:5145](open_issues.md#L5145) |
+| OI-235 | proactive_plateau_alert (~116s avg) and i-see-you-daily (~93s avg) run… | none | 2026-09-22, re-confirmed live by a… | [:5152](open_issues.md#L5152) |
+| OI-236 | 12 of 14 Supabase advisor-flagged unused indexes (idx_scan=0) left… | none | never | [:5159](open_issues.md#L5159) |
+| OI-237 | Extreme update:insert ratios on scheduled_workouts (34:1) and… | none | never | [:5166](open_issues.md#L5166) |

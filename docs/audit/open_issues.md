@@ -5141,3 +5141,31 @@ worth keeping.
 (simplest, lowest blast-radius) unless the per-function-silent-forever gap
 above is also worth closing in the same pass — if so, do the per-function
 spare instead, since it fixes both.
+
+## OI-234 — alert_edge_function_health never fires — 401s write no cron_call_log row, so its err_rate guard structurally never matches an auth outage
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/next-aab-decision-d1227b`
+
+## OI-235 — proactive_plateau_alert (~116s avg) and i-see-you-daily (~93s avg) run unusually long once daily — likely per-user loop instead of set-based query, needs Edge Function code review
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-09-22, re-confirmed live by a B-pass review of the disk-io-audit-cleanup work (diagnose e8b4a1) (`select avg/min/max(extract(epoch from (end_time-start_time))) from cron.job_run_details join cron.job ... where jobname in (...)`) — both averages reproduced exactly (93.1s, 116.0s over 16 runs each). Distribution is genuinely bimodal, not uniformly slow: min=0.1s, max=1488.1s (~24.8min) for i-see-you-daily and max=1853.8s (~30.9min) for proactive_plateau_alert — most runs are fast and one outlier per job pulls the average up. Sharpens the likely cause: a conditional expensive path (e.g. a per-user loop that only fires under some condition) rather than a uniformly slow query.
+- **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/next-aab-decision-d1227b`
+
+## OI-236 — 12 of 14 Supabase advisor-flagged unused indexes (idx_scan=0) left unreviewed — idx_users_email_lower and idx_subscriptions_razorpay_payment_id are auth/payment-adjacent, may be low-frequency not dead
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/next-aab-decision-d1227b`
+
+## OI-237 — Extreme update:insert ratios on scheduled_workouts (34:1) and template_exercises (39:1) — possible sync write-amplification rewriting full rows instead of deltas, needs docs/architecture/sync.md + WriteServices code review
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/next-aab-decision-d1227b`

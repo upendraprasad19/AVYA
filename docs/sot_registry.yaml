@@ -8295,7 +8295,7 @@ concepts:
           RECONSTRUCTION of an already-applied migration, marked DO-NOT-APPLY.
           The four cron.schedule calls here are what input A scans for.
       - file: backups/live_cron_jobs.json
-        line_range: 5-34
+        line_range: 5-31
         method: jobs
         notes: |
           Input B. Snapshot of live cron.job — the only input that can see a
