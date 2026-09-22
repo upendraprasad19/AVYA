@@ -19,6 +19,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### pro_predicate_adoption_gate (1 bugs)
 - 2026-09-22 9c4f2e — Full-suite pre-push run failed on `test/contracts/pro_predicate_adoption_test.dart`: "no Edge Function READS users.subscription_status to decide tier" — Expected empty, Actual:…
 
+### tool_dispatcher_failure_telemetry (1 bugs)
+- 2026-09-22 b4e7d2 — tool_dispatcher.dart's own comment near _executePausePlan asserts "every dispatcher failure path logs ErrorTelemetry" (C5 comment, originally added to justify that method's own telemetry call). This…
+
 ### ai_failure_telemetry_coverage (1 bugs)
 - 2026-09-21 f7a2c9 — OI-226 (open_issues.md:5059): "ai-proxy chat/tool-calling Gemini exhaustion paths have no reportGeminiExhaustion alert wiring." The OI's own text names TWO distinct gaps on the server — re-verified…
 
@@ -1342,6 +1345,7 @@ rather than a Hive box. (1 bugs)
 | 2026-09-22 | m5q8t1 | Full-suite pre-push run failed `test/features/nutrition/counter_increment_on_analyse_test.dart`: "Test #11 M1 — counter at API-call site, not save site CartAuditorNotifier.analyseCart calls… | cart_auditor_counter_increment_test_window | test/features/nutrition/counter_increment_on_analyse_test.dart |
 | 2026-09-22 | r2w6y9 | Full-suite pre-push run failed `test/features/profile/delete_account_screen_test.dart`: "H1-B — Source invariants Support email present in error copy" — Expected contains 'support@icanbefitter.com',… | support_contact_email | test/features/profile/delete_account_screen_test.dart |
 | 2026-09-22 | 9c4f2e | Full-suite pre-push run failed on `test/contracts/pro_predicate_adoption_test.dart`: "no Edge Function READS users.subscription_status to decide tier" — Expected empty, Actual:… | pro_predicate_adoption_gate | test/contracts/pro_predicate_adoption_test.dart |
+| 2026-09-22 | b4e7d2 | tool_dispatcher.dart's own comment near _executePausePlan asserts "every dispatcher failure path logs ErrorTelemetry" (C5 comment, originally added to justify that method's own telemetry call). This… | tool_dispatcher_failure_telemetry | test/contracts/tool_dispatcher_telemetry_gaps_test.dart |
 | 2026-09-21 | f7a2c9 | OI-226 (open_issues.md:5059): "ai-proxy chat/tool-calling Gemini exhaustion paths have no reportGeminiExhaustion alert wiring." The OI's own text names TWO distinct gaps on the server — re-verified… | ai_failure_telemetry_coverage | test/contracts/ai_media_proxy_telemetry_test.dart
 test/contracts/ai_breakdown_notifier_cart_auditor_telemetry_test.dart
 supabase/functions/_shared/tool-loop_gemini_exhaustion_alert_test.ts
