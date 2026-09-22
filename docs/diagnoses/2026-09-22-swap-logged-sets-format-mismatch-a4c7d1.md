@@ -63,8 +63,8 @@ proposed_fix: |
   starts rendering.
 contract_test_path: test/contracts/logged_sets_format_normalization_test.dart
 regression_test_planned:
-  - Swap timed→weight/reps exercise and verify sets normalized
-  - Boot with existing mismatched exlog rows and verify heal
+  - Write-time: swap exercise → log new sets → verify sets format normalized
+  - Boot-time: existing mismatch → app startup → heal fires → verify normalization
 impact_analysis: |
   Scoped to active-workout swaps that log both before and after the swap.
   Swaps that don't log before (direct add/swap without logging any sets) are
