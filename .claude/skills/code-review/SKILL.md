@@ -2582,3 +2582,32 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   fix is a starting hypothesis, not an instruction — verify its OWN blast radius (run the widened
   check, count what turns red) before applying it, the same discipline this skill asks of the
   findings themselves.**
+
+- **2026-09-22** — blast-radius **account** — branch `tool-dispatcher-telemetry-gaps`, the B-pass
+  on the OI-226 follow-up (spawn_task task_f581ec43): adding `ErrorTelemetry` calls to 6
+  previously-untelemetered failure paths in `tool_dispatcher.dart`, plus a new position-scoped
+  source-grep test and diagnose-doc (b4e7d2). **2 findings (0 P0/P1/P2, 1 P3, 1 P4); 0
+  false_alarm — 1 spawned as a follow-up task (task_11039d3d), 1 accepted as `false_alarm` per
+  the reviewer's own stated reasoning.** 0 fixes required in-batch. Review:
+  `docs/reviews/be6f5e9ed80e-review.md`.
+  **Tuning — recurrence, not new, of the 2026-09-16 email-confirm-ux entry's "run the mutation
+  test itself" pattern, and worth logging again because it caught something the diagnose-doc's own
+  self-attested mutation-proof did not cover.** The diagnose-doc mutated all 6 additions AT ONCE
+  and confirmed 6 distinct reds; the reviewer independently re-mutated only the single trickiest
+  site (`CreateTemplateException`, the one with a same-method sibling generic catch) in ISOLATION
+  and confirmed exactly test 6 reddened for the correctly-attributed reason, then restored and
+  diffed the index to confirm zero residue. An all-6-at-once mutation proves the six assertions are
+  jointly capable of catching something; it does not on its own prove test 6 SPECIFICALLY is bound
+  to site 6 and not, say, accidentally satisfied by a coincidence with test 5's window — an
+  isolated single-site mutation is the stronger proof for exactly the risk this test file's design
+  carries (six windows carved out of one shared source string by hand-picked anchors).
+  **Second, smaller pattern:** the reviewer noticed the new test file never `import`s
+  `tool_dispatcher.dart` (pure `readAsStringSync` source-grep, per this file's own established
+  convention for this test class) and so its own green run cannot prove the 6 additions compile —
+  closed that gap itself by running `flutter analyze` directly rather than trusting the
+  diagnose-doc's separate claim of a clean analyze. **General lesson for future dispatches of this
+  lens set: for any source-grep-only test file, explicitly re-run `flutter analyze` on the touched
+  source file as part of the review, don't assume a green source-grep test implies compilability.**
+  No lens prompt changed — both patterns are existing lens 6/8 behaviors firing correctly, logged
+  per §5.1 because the finding-to-resolution mechanics (spawn vs fix vs false_alarm) hadn't been
+  demonstrated in this file's tuning history for an account-tier, near-zero-severity pass before.
