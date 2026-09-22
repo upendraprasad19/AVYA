@@ -6,7 +6,7 @@ review_rounds: 2
 ground_truth_verified: true
 verdict: converged
 bpass: accepted
-bpass_review: docs/reviews/5ebf78e29706-review.md
+bpass_review: docs/reviews/d2ce94ab0a72-review.md
 ---
 
 # Plan-review record — Batch A (OI-230, OI-232, OI-228 Bug A)
@@ -102,11 +102,13 @@ all 3 fixed in the same commit as the diff they were found in**
   span by reading the file directly rather than trusting the finding's
   numbers.
 
-Full detail: `docs/reviews/5ebf78e29706-review.md` (renamed once, after
-the fixes above were staged, from the hash the B-pass was dispatched
-against — the standard hash-fixed-point rename this skill's own tuning
-history documents; `docs/reviews/` is hash-excluded so the rename itself
-did not move the hash again).
+Full detail: `docs/reviews/d2ce94ab0a72-review.md` (renamed twice — once
+after the fixes above were staged, from the hash the B-pass was originally
+dispatched against; once more after rebasing this branch onto a moved
+`origin/main`, per this record's own "Residual" section below — the
+standard hash-fixed-point rename this skill's own tuning history
+documents; `docs/reviews/` is hash-excluded so neither rename moved the
+hash a further time).
 
 ## Convergence
 
@@ -142,11 +144,11 @@ written.
   tests for all three fixes, 0 collateral failures each time.
 - `flutter analyze lib/` clean (45 pre-existing info-level issues
   elsewhere, none in the touched files). Full local `sh scripts/
-  pre-commit.sh` gate loop green, re-run 4 times across the batch (once
-  per round of fixes, including the Gate 19 false-positive fix and the
-  B-pass remediation), each run's real exit code captured to a log file
-  rather than trusted through a pipe (`feedback_git_landing_verification.md`
-  — "exit codes lie").
+  pre-commit.sh` gate loop re-run green after every round of fixes
+  (initial implementation, the Gate 19 false-positive fix, the B-pass
+  remediation, and the post-rebase conflict resolution below), each run's
+  real exit code captured to a log file rather than trusted through a
+  pipe (`feedback_git_landing_verification.md` — "exit codes lie").
 
 ## Verification
 
@@ -155,15 +157,19 @@ written.
   test/widgets/log_workout_sheet_completed_day_test.dart`: 57/57 green,
   run together as one set (not just individually) after all B-pass fixes
   landed.
-- `docs/reviews/5ebf78e29706-review.md` — `verdict: accepted`, all 3
+- `docs/reviews/d2ce94ab0a72-review.md` — `verdict: accepted`, all 3
   findings `status: fixed`.
-- OI board internally consistent post-commit: OI-230/OI-232 closed
-  (`closed_issues.md`), OI-228/OI-231/OI-240 open (`open_issues.md`),
-  `OPEN_INDEX.md` regenerated (134 open issues indexed).
-- Committed as `7af6123c` on this branch. Not yet pushed, merged, or
-  built into an APK — per CLAUDE.md §4.3, each of those three gated
-  actions requires its own explicit, separate founder approval, which
-  this record does not carry.
+- OI board internally consistent post-rebase: OI-230/OI-232 closed
+  (`closed_issues.md`), OI-227/OI-228/OI-229/OI-231/OI-233/OI-238/OI-240
+  open (`open_issues.md`), `OPEN_INDEX.md` regenerated (137 open issues
+  indexed — up from 134 pre-rebase: origin/main's OI-227/229/233 merged
+  in, netted against this batch's own OI-230/232 closures).
+- **Rebased onto `origin/main` (PR #31 merged mid-batch — see Residual
+  below) and re-committed as `f4ff083b` (code) + `ef295a63` (this
+  record), superseding the pre-rebase `7af6123c`/`1c6b3941` shas.** Not
+  yet pushed, merged, or built into an APK — per CLAUDE.md §4.3, each of
+  those three gated actions requires its own explicit, separate founder
+  approval, which this record does not carry.
 
 ## Residual, stated rather than hidden
 
@@ -175,10 +181,24 @@ written.
 - **OI-240** (officer/MCPO `completionRateMinimum` gate-modeling gap) —
   filed as its own, materially larger unit of work rather than absorbed
   into this batch.
-- **Cross-branch OI-number collision risk** — OI-228/230/231/232's
-  adopted text will collide with `claude/food-logging-observations-126ab3`
-  (PR #31)'s own, independently-authored copies of these same numbers
-  when that branch eventually merges — not a text conflict but a real
-  gate-failure risk, the same shape already realized once for OI-226 from
-  the same original reservation batch. Flagged here for founder awareness;
-  not resolvable from this branch alone.
+- **Cross-branch OI-number collision — REALIZED and RESOLVED, not merely
+  risked.** `claude/food-logging-observations-126ab3` (PR #31) merged to
+  `origin/main` mid-batch, bringing its own independently-authored copies
+  of OI-227/228/229/230/231/232/233 (all still OPEN there — that branch
+  filed/re-verified these numbers but fixed none of them). Discovered via
+  a pre-push `git fetch origin main` check (founder asked how to handle
+  it; chose "rebase then push"), confirmed identical underlying diagnosis
+  for OI-230 (no conflicting investigation, just unfixed) before
+  resolving. Rebased this branch onto `origin/main` (`ad88e668`) and
+  hand-resolved the resulting 3-file conflict (`.claude/skills/code-review
+  /SKILL.md`, `docs/audit/OPEN_INDEX.md` — regenerated rather than
+  hand-merged — and `docs/audit/open_issues.md`, the substantive one:
+  reconstructed by hand rather than trusting git's line-based 3-way merge,
+  since the interleaved prose made hunk-level resolution unreliable).
+  Post-resolution board state independently re-verified (grep-confirmed
+  OI-227/228/229/231/233/238/240 open, OI-230/232 closed, no duplication
+  in either file). The same collision shape already realized once before
+  for OI-226 (from the same original reservation batch, resolved via
+  `be63f5cf`'s merge-integration review, per this repo's own
+  `.claude/skills/code-review/SKILL.md` tuning history) — this is the
+  second occurrence, now also closed.
