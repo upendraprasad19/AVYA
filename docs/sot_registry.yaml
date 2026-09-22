@@ -842,6 +842,51 @@ concepts:
       Every nutrition + workout mutation must call pushSnapshot()
       fire-and-forget so the next AI turn sees fresh context.
 
+  - concept: daily_snapshot_server_key_preservation
+    domain: ai_coach
+    behavioral_test_path: supabase/functions/_shared/snapshot_merge_test.ts
+    description: |
+      user_daily_snapshots.snapshot_json is written by two kinds of
+      callers: the client (daily-snapshot, a wholesale rebuild from Hive
+      on every app sync) and several server-side crons that each
+      read-modify-write ONE key into the same row (morning-alert's
+      morning_alert, rolling-context, future-prediction, beat-my-coach).
+      The client writer MUST preserve any key it does not itself know
+      about, via mergeSnapshotJson, or a same-day client sync destroys
+      whatever a cron wrote earlier that day. Diagnose d8a2f6, recurrence
+      of e4a1b7/OI-98 on a different key inside the same blob.
+    writers:
+      - { file: supabase/functions/_shared/snapshot_merge.ts, line_range: 16-28, method: mergeSnapshotJson, notes: "Pure merge — existing row spread first, incoming client payload layered on top so it wins on any shared key. Mutation-proven: reverting to `return incoming;` reddens 2 of 4 tests in snapshot_merge_test.ts." }
+      - { file: supabase/functions/daily-snapshot/index.ts, line_range: 340-398, method: "serve handler", notes: "Reads the existing row via .maybeSingle() at :363 (never .single() — a first-ever snapshot of the day has no existing row, which is a legitimate empty merge base, not an error; a genuine query error is logged at :378 (the console.error call itself, not the surrounding comment — a pre-existing imprecision in this note, corrected while re-deriving the other citations here) rather than silently degrading), merges via mergeSnapshotJson at :384, upserts the MERGED result at :397. Gated behind DISABLE_SNAPSHOT_MERGE_SAFE_UPSERT (:357, code-review finding 2 — platform tier's feature_flag requirement) which falls back to the verbatim pre-fix blind-replace. Wiring pinned by index_test.ts (source-grep — importing this module boots a real server, no import.meta.main guard, so the test reads source text rather than importing). Line numbers shifted +1 by the observation-batch-and-digest-redesign merge (PR #32, 2026-09-22) inserting one unrelated line earlier in the same file — re-verify by grep, not by citation." }
+      - { file: lib/core/services/sync_service.dart, line: 1211, method: "compileDailySnapshot", notes: "Code-review finding 1 (2026-09-21): fitness_summary is ALSO cron-owned (rolling-context writes it), but unlike morning_alert the client DOES carry a local mirror of it in aiContext (buildAiContext() serves both this push and the live ai-proxy chat body, and the chat use case needs it). Sending it here would let the client's lagging/possibly-empty mirror win the merge on a key it does carry. Explicitly removed from the push payload only — buildAiContext()'s direct chat-context use is untouched. Behavioral: test/contracts/daily_snapshot_fitness_summary_omission_test.dart (mutation-proven — reverting the .remove() call reddens both tests)." }
+    reader_manifest_complete: false
+    readers:
+      - { file: supabase/functions/morning-alert/index.ts, line: 413, method_or_widget: "deliver mode — snap.snapshot_json?.morning_alert", semantic: latest, notes: "The concrete consumer whose silent skip (if (!alertMsg) return; — no log, no error) motivated this fix." }
+    cloud:
+      table: user_daily_snapshots
+      columns: [user_id, snapshot_date, snapshot_json]
+    class_constraints: |
+      This does NOT make the (at least) four snapshot_json writers atomic
+      against each other — each still does its own application-level
+      read-modify-write, so two writers racing the exact same row at the
+      exact same instant could still lose an update. That pre-existing
+      race is unchanged by this fix (tracked as OI-233). What it closes is
+      the GUARANTEED clobber — any client sync at any point after a cron
+      write — which was the actual reported symptom (morning_alert null for
+      2 of 7 users sampled live 2026-09-21, both days checked).
+      **Scoping lesson, found by this concept's own B-pass**: the
+      server-side merge fix alone was NOT sufficient — fitness_summary
+      survived the merge-safety fix because the CLIENT independently
+      re-asserts its own stale mirror of that one cron-owned key on every
+      push (see the sync_service.dart writer entry above). A key being
+      cron-owned server-side does not mean the client never carries it;
+      check every writer's payload for round-tripped keys, not just the
+      server-side merge mechanism. reader_manifest_complete is
+      deliberately false: rolling-context/future-prediction/beat-my-coach
+      also read their own keys back from this same blob and are not
+      individually catalogued here — scoped to the reader whose bug this
+      diagnose-doc fixes, not an exhaustive audit of the table.
+
   - concept: subscription_state
     domain: subscription
     behavioral_test_path: test/contracts/subscription_expiry_banner_behavioral_test.dart
@@ -10216,11 +10261,11 @@ concepts:
         method: restoreOpTimeout
         semantic: per-op-ceiling
       - file: lib/core/services/sync_service.dart
-        line_range: 2373-2377
+        line_range: 2391-2395
         method: applyRestoreCeiling
         semantic: apply-ceiling
       - file: lib/core/services/sync_service.dart
-        line_range: 2385-2387
+        line_range: 2403-2405
         method: restoreFailureReason
         semantic: telemetry-reason-split
     readers:

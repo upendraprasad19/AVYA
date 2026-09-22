@@ -248,6 +248,49 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-22** — blast-radius **catastrophic** (inherited — migration 138's
+  `SECURITY DEFINER` trigger, arriving via `main`) — a MERGE-INTEGRATION review,
+  not a normal feature-commit review: `claude/food-logging-observations-126ab3`
+  (own review `b87e8a1f3f2a`, accepted) merging `origin/main`, which by then
+  already contained `claude/strange-merkle-c2d0b9` / PR #32 (own review
+  `f81f7ae899e1`, accepted). **1 finding (P2, writer_reader_drift); 0
+  false_alarm — fixed in-batch.** Review: `docs/reviews/be0c54291fcc-review.md`
+  (renamed once from `ee6c346ffd80` — see Tuning 2 below).
+  **Tuning 1 — a merge of two independently-reviewed branches needs its OWN
+  review, scoped to the interaction surface, not a re-review of either half.**
+  `check_code_review_pass_exists.dart` correctly computed the merge's own
+  staging hash as catastrophic (migration 138 forces the tier regardless of
+  which branch introduced it) and found no matching review — neither branch's
+  own accepted review satisfies a gate keyed to a DIFFERENT diff (the combined
+  one). The dispatch brief for this pass explicitly scoped the reviewer to
+  "did combining these two changesets break something neither branch's own
+  review could see" rather than re-auditing internal correctness already
+  covered — the one real finding (citation drift: a 1-line insertion from
+  Branch B shifted 4 line-number citations Branch A had authored, in
+  `docs/sot_registry.yaml` and a diagnose-doc, both pointing into
+  `supabase/functions/daily-snapshot/index.ts`) is exactly the class this
+  narrower scope is *for*: invisible to either individual review because
+  the citations were verified correct in each branch's own isolated HEAD,
+  and only became wrong once combined.
+  **Tuning 2 — fixing a merge-review's own finding can move the SAME merge's
+  staging hash, a second time, in the SAME commit.** Fixing Finding 1 required
+  editing `docs/sot_registry.yaml` and the diagnose-doc — neither excluded
+  from the hash (only `docs/reviews/` and this file are) — so the fix moved
+  `ee6c346ffd80` → `be0c54291fcc` and the review had to be renamed again before
+  the gate would accept it. This is the same hash-fixed-point class documented
+  repeatedly below (2026-09-21, 2026-09-14, 2026-09-11 entries) — worth a
+  second entry here specifically because a MERGE commit makes it more likely,
+  not less: any citation fix inside a merge review necessarily touches files
+  from one of the two merged branches, which are almost never review-excluded.
+  Checked whether a gate could catch the citation drift itself going forward:
+  `check_sot_registry_parity.dart` validates the structured `line_range:`
+  field is in-bounds and that a named symbol exists somewhere in the file —
+  it does not parse free-text `:NNN` sub-references inside prose `notes:`/
+  `method:` strings, so this class lands silently unless a review (or the
+  author) catches it by hand. Not proposed as a new gate here — scope
+  decision, not an oversight; filed as awareness for whoever next touches
+  that validator.
+
 - **2026-09-21** — blast-radius **catastrophic** (migration 138's
   `SECURITY DEFINER` trigger forced the tier up from a path-glob-computed
   `platform`) — branch `observation-batch-and-digest-redesign` (Part A: 8
@@ -344,6 +387,51 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   sinks, check whether EACH sink is independently safe if the source's
   protection were ever reverted — a shared upstream fix is not the same
   guarantee as N independent ones.
+
+- **2026-09-21 (b)** — blast-radius **platform** — branch
+  `claude/food-logging-observations-126ab3` (diagnose d8a2f6: daily-snapshot's
+  merge-safe upsert fix + the Telegram-connect UI removal, OI-227). **6
+  findings (0 P0, 2 P1, 3 P2, 1 P4); 0 false_alarm — all 6 fixed in-batch,**
+  the two mutation-sensitive fixes independently reproduced red-then-green.
+  Review: `docs/reviews/b87e8a1f3f2a-review.md`.
+  **Tuning 1 — lens 1 (`writer_reader_drift`) needs a specific sub-question for
+  ANY fix that closes a server-side clobber: does the CLIENT also round-trip a
+  copy of the same field back up, through a DIFFERENT code path than the one
+  just fixed?** Finding 1 was the headline: the diagnose-doc's own fix made
+  `daily-snapshot`'s merge safe against everything the client's payload does
+  NOT mention — and `fitness_summary` was cron-owned exactly like the
+  originally-reported `morning_alert`, but the client DOES carry a stale local
+  mirror of it (for an unrelated, legitimate reason — the same builder feeds
+  the live chat request body too), so the merge-safety fix could not protect
+  it: `incoming` always wins on a key it carries, merge-safe or not. **The
+  general shape: a server-side merge/idempotency fix is not sufficient by
+  itself when the SAME data flows back through the client under a shared
+  builder function serving two different consumers with different
+  correctness requirements** — one consumer (live chat) legitimately wants
+  the client's current view; the other (a durable server row multiple crons
+  own pieces of) must never receive it. Ask, for every field the fix's own
+  mechanism does NOT touch: does anything else make that field reach the
+  write path anyway?
+  **Tuning 2 — fixing a code-review finding can re-break the SAME registry
+  citation the review didn't even look at, and the gate is what has to catch
+  it, not re-reading.** Fixing Finding 1 inserted ~18 lines into
+  `sync_service.dart` above two UNRELATED, pre-existing SoT registry
+  citations (`applyRestoreCeiling`, `restoreFailureReason`) — `pre-commit`'s
+  `check_sot_registry_parity.dart` caught both as stale, not a second review
+  pass. This is the SAME class Finding 5 itself was (a stale citation from an
+  earlier edit), recurring a SECOND time WHILE FIXING Finding 5 — because
+  Finding 5's own remediation (the kill-switch addition) shifted
+  `daily-snapshot/index.ts`'s citation AGAIN after the review had already
+  named it once. **When a fix-round's remediation touches a file that ALSO
+  carries citations FROM OTHER, unrelated SoT concepts, re-run the parity
+  gate after every edit to that file, not once at the end** — a review
+  dispatched against one staged diff cannot see citation drift its OWN
+  remediation introduces afterward.
+  False-alarm rate 0/6 → no lens removed; lens 1 extended per above.
+
+- **2026-09-20** — blast-radius **account** — branch
+  `web-app-bugs-onboarding-a5a020` (onboarding picker text-wrap/unresponsive
+  fix + muster/induction drift-and-reorder, e2b8a4 + d6f1b8). **5 findings
   (0 P0, 2 P1, 1 P2, 1 P3, 1 P4); 0 false_alarm — 4 fixed in-batch, 1 (P4)
   accepted as a documented low-priority residual.** Review:
   `docs/reviews/8a61d526f062-review.md`.

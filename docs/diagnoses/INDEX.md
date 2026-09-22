@@ -41,6 +41,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### cron_alert_dedup_window / subscription_cancelled_at_lifecycle (1 bugs)
 - 2026-09-21 h1a2b3 — Two independent live defects in migrations 138 and 139, both shipped earlier in this SAME batch, found by an 8-lens self-triggered Hermes pass run before merge (required because this batch's…
 
+### daily_snapshot_server_key_preservation (1 bugs)
+- 2026-09-21 d8a2f6 — Founder (PRO) reported never receiving a morning brief push notification. Live-verified via the app's own "hi" chat reply, which read the same broken data: "Your last proactive nudge was a morning…
+
 ### nutrition_ai_gemini_resilience (1 bugs)
 - 2026-09-21 f7a2c9 — Investigation finding (gate check under A5, expanded across two plan-review rounds): 9 production `geminiChat(...)` call sites had no `retries` argument (default 0), so a single transient…
 
@@ -1353,6 +1356,7 @@ test/scripts/gemini_retry_coverage_lib_test.dart |
 | 2026-09-21 | e5c8a2 | Four independent defects in the SAME batch's own new founder-digest B2/B3 code (the digest redesign shipped earlier in this batch), all found by the self-triggered Hermes pass before merge: (1) L1/L21… | founder_digest_new_mrr / founder_digest_user_names_privacy | supabase/functions/founder-digest/index_test.ts |
 | 2026-09-21 | f9d3b7 | Three independent defects in the shared Gemini call path, all found by the self-triggered Hermes pass before merge: (1) L40 F1 — Deno's `fetch` rejects a network-level failure with a TypeError whose… | gemini_secret_redaction / rolling_context_retry_budget / gemini_exhaustion_alert_context | supabase/functions/_shared/gemini_backoff_retry_test.ts |
 | 2026-09-21 | h1a2b3 | Two independent live defects in migrations 138 and 139, both shipped earlier in this SAME batch, found by an 8-lens self-triggered Hermes pass run before merge (required because this batch's… | cron_alert_dedup_window / subscription_cancelled_at_lifecycle | test/sql/migration_140_stuck_alert_and_cancelled_at_live_verify.sql |
+| 2026-09-21 | d8a2f6 | Founder (PRO) reported never receiving a morning brief push notification. Live-verified via the app's own "hi" chat reply, which read the same broken data: "Your last proactive nudge was a morning… | daily_snapshot_server_key_preservation | supabase/functions/_shared/snapshot_merge_test.ts |
 | 2026-09-21 | f7a2c9 | Investigation finding (gate check under A5, expanded across two plan-review rounds): 9 production `geminiChat(...)` call sites had no `retries` argument (default 0), so a single transient… | nutrition_ai_gemini_resilience | supabase/functions/_shared/gemini_backoff_retry_test.ts |
 | 2026-09-21 | a1e6f2 | Founder observation #7: "email wrong. check our email." The app showed 2 different, both-wrong support addresses across 2 screens: the Profile contact card showed `support@avya.app` (a leftover from… | support_contact_email | test/contracts/support_contact_email_writer_to_reader_test.dart |
 | 2026-09-21 | b4e7f1 | Founder observation #1 (screenshot): the swap "UNDO" snackbar banner stayed visible even after the workout reached 100% completion. Investigation found the gap was wider than the report: the snackbar… | (new — no prior SoT concept; UI-lifecycle fix, not a data contract) | test/features/train/swap_undo_snackbar_dismisses_test.dart |

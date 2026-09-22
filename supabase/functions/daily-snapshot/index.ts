@@ -13,6 +13,7 @@ import { istDateStr } from "../_shared/ist_date.ts";
 import {
   asAuthoredPrompt, fenceAsData, sanitizeBlock
 } from "../_shared/sanitize_for_prompt.ts";
+import { mergeSnapshotJson } from "../_shared/snapshot_merge.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -338,6 +339,54 @@ serve(async (req: Request) => {
 
     const snapshotDate = getTodayIST();
 
+    // Diagnose d8a2f6 (recurrence of e4a1b7/OI-98 on `morning_alert`):
+    // this payload is a WHOLESALE rebuild from the client's Hive state, but
+    // several server crons (morning-alert generate mode, rolling-context,
+    // future-prediction, beat-my-coach) each read-modify-write ONE key into
+    // the SAME row earlier in the day. A blind upsert here replaced their
+    // work the next time the client synced. Read the existing row first so
+    // any key this payload doesn't mention survives — `.maybeSingle()`,
+    // never `.single()`: an absent row (first snapshot of the day) is a
+    // legitimate empty merge base, not an error.
+    //
+    // Kill-switch (code-review finding 2, 2026-09-21 — platform tier's
+    // §4.6/blast_radius.yaml `feature_flag` requirement): set
+    // DISABLE_SNAPSHOT_MERGE_SAFE_UPSERT=true in the Edge Function secrets
+    // to revert to the verbatim pre-fix blind-replace upsert without a
+    // redeploy, if this ever needs rolling back live.
+    const mergeSafeDisabled =
+      Deno.env.get("DISABLE_SNAPSHOT_MERGE_SAFE_UPSERT") === "true";
+
+    let mergedSnapshotJson: Record<string, unknown> = snapshot_json;
+
+    if (!mergeSafeDisabled) {
+      const { data: existingRow, error: existingRowError } =
+        await supabaseClient
+          .from("user_daily_snapshots")
+          .select("snapshot_json")
+          .eq("user_id", userId)
+          .eq("snapshot_date", snapshotDate)
+          .maybeSingle();
+
+      if (existingRowError) {
+        // Finding 3: a genuine query failure (not "no row exists yet") must
+        // not silently degrade to the pre-fix blind-replace with zero
+        // trace. The merge still proceeds against an empty base below —
+        // the same safe fallback a real absent row takes — but this makes
+        // the degradation OBSERVABLE instead of indistinguishable from the
+        // legitimate case.
+        console.error(
+          "[daily-snapshot] existing-row read failed, merging against empty base:",
+          existingRowError,
+        );
+      }
+
+      mergedSnapshotJson = mergeSnapshotJson(
+        existingRow?.snapshot_json as Record<string, unknown> | null,
+        snapshot_json,
+      );
+    }
+
     // UPSERT: user_id + snapshot_date is unique
     const { error: upsertError } = await supabaseClient
       .from("user_daily_snapshots")
@@ -345,7 +394,7 @@ serve(async (req: Request) => {
         {
           user_id: userId,
           snapshot_date: snapshotDate,
-          snapshot_json,
+          snapshot_json: mergedSnapshotJson,
           created_at: new Date().toISOString(),
         },
         {
