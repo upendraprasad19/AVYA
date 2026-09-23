@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**142 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**143 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -150,3 +150,4 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-237 | Extreme update:insert ratios on scheduled_workouts (34:1) and… | none | never | [:5520](open_issues.md#L5520) |
 | OI-238 | 5 Gemini-calling Edge Functions have no server-side reportGeminiExhaustion… | none | never | [:5527](open_issues.md#L5527) |
 | OI-239 | Acknowledging an alert re-arms its dedup window instead of waiting out the… | none | never | [:5553](open_issues.md#L5553) |
+| OI-241 | Cross-worktree concurrency: no lock prevents multiple sessions running… | none | never | [:5580](open_issues.md#L5580) |

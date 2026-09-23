@@ -5576,3 +5576,30 @@ acknowledging never shortens the window), or add a separate `snoozed_until` conc
 from `acknowledged` so triage and re-page timing are decoupled. Needs a design decision, not a
 one-line fix, since it touches the shared convention all 6 jobs rely on — a design change here
 should update all 6 in the same batch, not just the one that surfaced it.
+
+## OI-241 — Cross-worktree concurrency: no lock prevents multiple sessions running full flutter test simultaneously, causing 3x+ slowdowns
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-09-22 · filed via mint_oi.sh from branch `claude/next-aab-decision-d1227b`
+
+Investigated during this session after the founder asked why a routine commit was taking over an
+hour: comparing `Get-Process`/`Get-CimInstance` CPU-time deltas across the machine's active Claude
+Code worktrees showed genuine, growing CPU usage in OTHER sessions' `dart`/`flutter test`
+processes running concurrently — one command line explicitly referenced a different worktree
+(`supabase-outage-check-e79200`). `scripts/_git_lock.sh`'s mutex is keyed on
+`$(git rev-parse --git-dir)/.safe_git_op.lock`, which for a linked worktree resolves to that
+worktree's own private `.git/worktrees/<name>/` admin directory — structurally per-worktree, so it
+cannot and does not prevent two DIFFERENT worktrees from running the full CPU-bound gate loop
+(`flutter analyze` + `flutter test`) at the same time. On this 16-core machine with 3 sessions'
+worth of contention, a normally ~2-minute `safe_commit.sh`/`safe_push.sh` run measured well over an
+hour.
+
+**Fix direction:** a cross-worktree lock (e.g. keyed on the shared `.git/` common dir rather than
+the per-worktree admin dir) that limits how many `safe_commit.sh`/`safe_push.sh`/pre-push gate
+loops run concurrently across ALL worktrees sharing one repo — the founder's own suggestion was
+"at most one or two pushes at a time." Needs its own design pass (queueing vs. hard refusal,
+timeout/staleness handling matching `_git_lock.sh`'s existing "no automatic reclaim" philosophy)
+before implementation — not a one-line change, since it changes the concurrency model for every
+session working in this repo simultaneously.
