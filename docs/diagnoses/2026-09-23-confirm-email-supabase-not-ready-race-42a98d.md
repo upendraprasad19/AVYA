@@ -47,7 +47,7 @@ symptom: |
   `initialize()` has run throws `LateInitializationError` — NOT
   `AuthException`/`TimeoutException`/`StateError` — which falls into
   `confirmEmailErrorState`'s final generic `catch (e)` branch
-  (`auth_provider.dart:827-830`), producing the exact literal string shown:
+  (`auth_provider.dart:870-873`), producing the exact literal string shown:
   "This confirmation link is invalid or has expired." — before any HTTP
   request is even attempted. This matches every piece of live evidence
   exactly, including why `/resend` (called only from the already-warm
@@ -73,7 +73,7 @@ sot_registry_entry: not_applicable — same reasoning as f92d17's identical
 writers:
   - { file: lib/features/auth/providers/auth_provider.dart, method_or_widget: "AuthNotifier.confirmEmail — new `if (!await ensureSupabaseReady()) return;` guard, placed BEFORE the pre-existing OI-205 already-authenticated guard (reordered from the original draft per B-pass Finding 1 — see below)", line: 736 }
 readers:
-  - { file: lib/features/auth/providers/auth_provider.dart, method_or_widget: "AuthNotifier._performConfirmEmail — the guarded call site; its first statement (`_supabase.client.auth.verifyOTP`) is now only reached once ensureSupabaseReady() has resolved true AND the OI-205 guard (which now correctly reads isAuthenticated post-init) has passed", line: 865 }
+  - { file: lib/features/auth/providers/auth_provider.dart, method_or_widget: "AuthNotifier._performConfirmEmail — the guarded call site; its first statement (`_supabase.client.auth.verifyOTP`) is now only reached once ensureSupabaseReady() has resolved true AND the OI-205 guard (which now correctly reads isAuthenticated post-init) has passed", line: 879 }
 hive_key_prefix: not_applicable
 hive_key_formula: not_applicable
 sync_methods: []
