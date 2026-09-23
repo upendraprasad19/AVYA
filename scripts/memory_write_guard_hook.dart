@@ -20,6 +20,24 @@
 // malformed JSON, unreadable target file, non-Write/Edit tool) it exits 0
 // silently.
 //
+// COST (round-1 review, P1, 2026-09-23 -- "answer the cost question that was
+// asked", not left unstated): this is the FIRST PreToolUse hook in this repo
+// matched on "Write|Edit" rather than "Skill" or "Bash" -- it spawns a `dart
+// run` subprocess on EVERY Write and Edit tool call in the session, not on a
+// comparatively rare event. MEASURED on this machine (2026-09-23, via the
+// flutter/bin/dart wrapper, the invocation `.claude/settings.json` actually
+// uses): ~1.5-1.7 s per call, even for a file the fast-path `isMemoryFilePath`
+// check (below) rejects immediately once the process is already running --
+// the subprocess-spawn cost is paid BEFORE that check runs and cannot be
+// avoided from inside this script. Via the SDK exe `_dart_bin.sh` resolves
+// (bypassing the wrapper's update-lock tax, per CLAUDE.md §0): ~540-800 ms --
+// meaningfully less, but `.claude/settings.json` is NOT currently wired to
+// that resolver, matching the same "separate, unmade decision" this repo's
+// CLAUDE.md already records for discipline_hook.dart / git_safety_hook.dart /
+// batch_close_hook.dart. Unlike those three (which fire on a rare event),
+// this hook's frequency argument for making that wiring change is genuinely
+// stronger -- flagged here as a real, open follow-up, not silently accepted.
+//
 // Edit tool_input carries old_string/new_string, not the whole file -- to
 // validate the RESULTING file (the only thing that actually matters), this
 // hook reads the current on-disk content and simulates the single

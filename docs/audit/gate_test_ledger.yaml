@@ -417,12 +417,18 @@ check_hive_first_pattern.dart:
     `SupabaseService.instance.client.from(` / `_s.client.from(`, all inside
     lib/core/services/ or lib/shared/repositories/ -- zero violations, zero
     false positives, on the real tree, not assumed.
-    TWO mutations, each confirmed applied, each reddening 2-3 of 19 tests, tree
-    restored identical after each: (1) removed the isAllowedPath skip AND the
+    THREE mutations, each confirmed applied, tree restored identical after
+    each, against 21 tests total: (1) removed the isAllowedPath skip AND the
     comment-strip together -- reddened 3 tests (the allowlist test, the
     commented-example test, and the allowed-path-with-violation-shaped-line
-    test); (2) widened the supabaseFromCall regex to bare `\.from\(` -- reddened
-    the Map.from()/List.from() false-positive test.
+    test); (2) widened the supabaseFromCall regex to bare `\.from\(` --
+    reddened 1 test (the Map.from()/List.from() false-positive test); (3)
+    (round-1 review, P2-5, 2026-09-23) narrowed supabaseFromCall from
+    `\b(?:supabase|supa|client)\.from\(` back to the pre-fix
+    `\b(?:supabase|client)\.from\(` -- reddened exactly 1 test (`flags a
+    direct supa.from( call outside an allowed dir`), confirming the widened
+    alias set (added after a live grep found `supa.from(` as a real, unmatched
+    third alias in rank_service.dart) is the thing under test, not incidental.
 
 check_hive_map_field_drift.dart:
   grandfathered: 2026-08-10

@@ -31,10 +31,16 @@
 import 'dart:convert';
 import 'dart:io';
 
-/// Matches `supabase.from(` and `<anything>.client.from(` -- the two real
-/// call shapes this codebase uses for direct Supabase table access (verified
-/// against every live call site before this gate was written; see header).
-final RegExp supabaseFromCall = RegExp(r'\b(?:supabase|client)\.from\(');
+/// Matches `supabase.from(`, `supa.from(` and `<anything>.client.from(` --
+/// the three real call shapes this codebase uses for direct Supabase table
+/// access. WIDENED 2026-09-23 (round-1 review, P2-5): a live grep
+/// (`grep -rnoE '\b\w+\.from\(' lib/ | grep -iE "supa|sb\.|client\."`) found
+/// exactly 3 real aliases in the tree -- `client.from(`, `supa.from(`,
+/// `supabase.from(` -- and the original pattern covered only 2 of them,
+/// missing `rank_service.dart`'s `supa.from(` (itself correctly inside
+/// lib/core/services/, so already allowlisted -- this was a coverage gap in
+/// the detector, not a live violation).
+final RegExp supabaseFromCall = RegExp(r'\b(?:supabase|supa|client)\.from\(');
 
 /// Directories where direct Supabase access is the REPOSITORY/SERVICE layer
 /// itself, not a violation of the pattern -- CLAUDE.md §7 names

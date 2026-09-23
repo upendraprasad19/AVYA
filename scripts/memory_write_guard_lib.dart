@@ -35,6 +35,22 @@ bool isMemoryIndexPath(String path) {
   return norm == 'MEMORY.md' || norm.endsWith('/MEMORY.md');
 }
 
+/// True when [path] is the append-only archive file. It carries NEITHER the
+/// index's byte-cap contract NOR a topic file's `---` frontmatter contract --
+/// it is bare prose headed by a `# Memory Archive Index` heading. ADDED
+/// 2026-09-23 (round-1 review, P1): `isMemoryIndexPath` already excluded it
+/// by design, but nothing filled the gap that exclusion created, so every
+/// write to it fell through to [validateTopicFile] and failed on "missing
+/// opening `---`" -- the single most routinely edited memory file in this
+/// repo's own workflow (every `/consolidate-memory` run appends to it),
+/// producing a warning on every edit. A no-op path, not a stricter one: this
+/// file's own contract is "durable batch/brainstorm history", not a
+/// frontmatter or byte-cap shape worth validating at all.
+bool isMemoryArchivePath(String path) {
+  final norm = path.replaceAll('\\', '/');
+  return norm == 'MEMORY_ARCHIVED.md' || norm.endsWith('/MEMORY_ARCHIVED.md');
+}
+
 /// One issue found in a memory file write.
 class MemoryValidationIssue {
   final String message;
@@ -128,6 +144,7 @@ List<MemoryValidationIssue> validateIndexFile(
 /// [isMemoryFilePath] before calling, but this stays safe either way.
 List<MemoryValidationIssue> validateMemoryWrite(String path, String content) {
   if (!isMemoryFilePath(path)) return const [];
+  if (isMemoryArchivePath(path)) return const []; // no-op -- see isMemoryArchivePath's doc.
   if (isMemoryIndexPath(path)) return validateIndexFile(content);
   return validateTopicFile(content);
 }

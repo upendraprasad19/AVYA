@@ -153,5 +153,31 @@ void main() {
       };
       expect(findViolations(files), isEmpty);
     });
+
+    // REGRESSION (round-1 review, P2-5, 2026-09-23): a live grep of the real
+    // codebase found `supa.from(` as a third real alias (rank_service.dart:
+    // `await supa.from('rank_promotions').upsert(...)` -- a bare variable
+    // named `supa`, verified via Read before writing this test, not guessed),
+    // alongside `supabase.from(` and `client.from(`. The original regex only
+    // covered 2 of 3 -- this pins the widened alias set against both the
+    // real call site's shape (allowed, inside lib/core/services/) and a
+    // fabricated violation (outside any allowed dir).
+    test('flags a direct supa.from( call outside an allowed dir', () {
+      final files = {
+        'lib/features/home/widgets/x.dart':
+            "final row = await supa.from('ranks').select();",
+      };
+      final violations = findViolations(files);
+      expect(violations, hasLength(1));
+      expect(violations.first.file, 'lib/features/home/widgets/x.dart');
+    });
+
+    test('does not flag supa.from( inside lib/core/services/ -- mirrors rank_service.dart', () {
+      final files = {
+        'lib/core/services/rank_service.dart':
+            "await supa.from('rank_promotions').upsert(toInsert);",
+      };
+      expect(findViolations(files), isEmpty);
+    });
   });
 }

@@ -62,6 +62,27 @@ void main() {
     });
   });
 
+  group('isMemoryArchivePath', () {
+    test('matches bare MEMORY_ARCHIVED.md', () {
+      expect(isMemoryArchivePath('MEMORY_ARCHIVED.md'), isTrue);
+    });
+
+    test('matches a full harness path ending in MEMORY_ARCHIVED.md', () {
+      expect(
+        isMemoryArchivePath('C:/Users/upend/.claude/projects/foo/memory/MEMORY_ARCHIVED.md'),
+        isTrue,
+      );
+    });
+
+    test('rejects MEMORY.md', () {
+      expect(isMemoryArchivePath('MEMORY.md'), isFalse);
+    });
+
+    test('rejects a topic file', () {
+      expect(isMemoryArchivePath('memory/project_foo.md'), isFalse);
+    });
+  });
+
   group('validateTopicFile', () {
     const valid = '''
 ---
@@ -190,6 +211,20 @@ type: feedback
 
     test('returns no issues for a path outside any memory dir', () {
       expect(validateMemoryWrite('docs/foo.md', 'anything at all'), isEmpty);
+    });
+
+    // REGRESSION (round-1 review, P1, 2026-09-23): MEMORY_ARCHIVED.md was
+    // excluded from isMemoryIndexPath but the dispatch never gave it its own
+    // branch, so it fell through to validateTopicFile and failed on "missing
+    // opening ---" on EVERY edit -- the most routinely written memory file in
+    // this repo's own /consolidate-memory workflow. Uses the real archive
+    // file's actual opening line, not a fabricated shape.
+    test('MEMORY_ARCHIVED.md is a no-op -- it carries neither contract', () {
+      final issues = validateMemoryWrite(
+        'C:/Users/upend/.claude/projects/foo/memory/MEMORY_ARCHIVED.md',
+        '# Memory Archive Index\n\n> Topic pointers to the on-disk memory files.\n',
+      );
+      expect(issues, isEmpty);
     });
   });
 }

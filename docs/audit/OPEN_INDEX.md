@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**139 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**138 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -146,4 +146,3 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-233 | user_daily_snapshots' 4 cron/client writers are not atomic against each… | none — scope and fix shape are already… | 2026-09-21 — explicitly scoped out in | [:5465](open_issues.md#L5465) |
 | OI-238 | 5 Gemini-calling Edge Functions have no server-side reportGeminiExhaustion… | none | never | [:5511](open_issues.md#L5511) |
 | OI-239 | Acknowledging an alert re-arms its dedup window instead of waiting out the… | none | never | [:5537](open_issues.md#L5537) |
-| OI-243 | Discipline v3 Phase 3: gates, memory-write-guard, hooks-check | none | never | [:5564](open_issues.md#L5564) |

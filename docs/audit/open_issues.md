@@ -5561,9 +5561,3 @@ from `acknowledged` so triage and re-page timing are decoupled. Needs a design d
 one-line fix, since it touches the shared convention all 6 jobs rely on — a design change here
 should update all 6 in the same batch, not just the one that surfaced it.
 
-## OI-243 — Discipline v3 Phase 3: gates, memory-write-guard, hooks-check
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-09-23 · filed via mint_oi.sh from branch `claude/supabase-outage-check-e79200`

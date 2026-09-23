@@ -3538,3 +3538,22 @@ tracked terminal state rather than living only in a round-2 review nobody re-rea
 `endpoint="chat"` for the tool-calling path and added `endpoint="prediction"` for the
 previously-unnamed-by-fix-direction second site.)
 
+## OI-243 — Discipline v3 Phase 3: gates, memory-write-guard, hooks-check
+
+- **Status**: CLOSED (2026-09-23, same session that filed it) — the title-only stub this OI
+  was filed as ("Discipline v3 Phase 3: gates, memory-write-guard, hooks-check") describes
+  exactly the work this very batch ships: `check_hive_first_pattern.dart` +
+  `check_edge_function_scope.dart` (the two new report-mode AST gates), `memory_write_guard_hook.dart`
+  + `memory_write_guard_lib.dart` (the memory write-guard), and the `check_hooks_installed.dart`
+  (Gate 32 / OI-104) freshness-check fix. Confirmed via `git log -S "OI-243"` that the stub was
+  introduced in this same session's own commit `aca0237a`, carried in from uncommitted
+  pre-compaction state swept in by a broad `git add -A` — it was never a separately-scoped ask,
+  it was this batch documenting itself mid-flight before the work was finished.
+- **Blocked on**: none
+- **Verified**: 2026-09-23 — re-read this session's own diff and file list against the stub's
+  three named areas (gates / memory-write-guard / hooks-check); all three are present, tested,
+  and mutation-proven (see `docs/audit/gate_test_ledger.yaml` entries for
+  `check_hive_first_pattern.dart` and `check_edge_function_scope.dart`, and the memory
+  write-guard's own test files).
+- **Identified**: 2026-09-23 · filed via mint_oi.sh from branch `claude/supabase-outage-check-e79200`
+

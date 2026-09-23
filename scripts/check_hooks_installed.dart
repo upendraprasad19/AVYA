@@ -101,7 +101,24 @@ void main(List<String> args) {
     exit(0);
   }
 
-  final installerSource = installerFile.readAsStringSync();
+  // Round-2 review (2026-09-23): the try/catch added around the two hook-
+  // freshness reads below (search "Round-1 review, P2") left THIS read --
+  // the installer itself, which existsSync() confirms present but says
+  // nothing about whether it is READABLE -- as the one remaining unguarded
+  // call in the file, the exact same failure class the other two fixes exist
+  // to close (permission error, bad encoding, or a delete-between-check-and-
+  // read race would throw UNCAUGHT and crash this "never hard-fail" gate).
+  // Degrades to the same "UNDETERMINED (passing)" shape the missing-installer
+  // branch above already uses, rather than crashing.
+  String installerSource;
+  try {
+    installerSource = installerFile.readAsStringSync();
+  } catch (e) {
+    stderr.writeln('[Gate 32] UNDETERMINED (passing): $_installer could not '
+        'be read ($e), so the hook list could not be derived. This is NOT a '
+        'pass.');
+    exit(0);
+  }
   final hooks = parseInstalledHooks(installerSource);
 
   // CROSS-CHECK THE PARSE AGAINST A COUNT THAT DOES NOT DEPEND ON IT.
@@ -174,7 +191,24 @@ void main(List<String> args) {
           'scripts/${h.src}).');
       continue;
     }
-    final content = f.readAsStringSync();
+    // Round-1 review, P2 (2026-09-23): the freshness comparison below reads
+    // TWO files with no surrounding try/catch anywhere in this script -- an
+    // unreadable installed hook (permission error, bad encoding, or a race
+    // where the file is deleted between existsSync() and the read) would
+    // throw UNCAUGHT and crash the process with a non-zero exit, silently
+    // converting this gate's explicitly-designed "WARN, never FAIL" contract
+    // into an accidental hard FAIL for exactly the edge case the surrounding
+    // comments go out of their way to say must never happen. Read failures
+    // now degrade to the SAME "checked for PRESENCE only" warning shape the
+    // missing-source branch below already uses, rather than crashing.
+    String? content;
+    try {
+      content = f.readAsStringSync();
+    } catch (e) {
+      warnings.add('hooks/${h.dst} could not be read ($e) -- checked for '
+          'PRESENCE only, its contents were not verified against anything.');
+      continue;
+    }
 
     // FRESHNESS (OI-104, 2026-09-23) -- full content comparison, the exact
     // "fix shape" the OI itself names: "compare content, not presence -- hash
@@ -202,7 +236,15 @@ void main(List<String> args) {
     // is a separate, explicit escalation decision, not bundled here.
     final srcFile = File('scripts/${h.src}');
     if (srcFile.existsSync()) {
-      final srcContent = srcFile.readAsStringSync();
+      String? srcContent;
+      try {
+        srcContent = srcFile.readAsStringSync();
+      } catch (e) {
+        warnings.add('scripts/${h.src} could not be read ($e) -- hooks/${h.dst} '
+            'was checked for PRESENCE only, its contents were not verified '
+            'against anything.');
+        continue;
+      }
       if (content != srcContent) {
         warnings.add('hooks/${h.dst} content does NOT match scripts/${h.src} '
             '-- STALE installed copy (setup-hooks.sh installs by `cp`, so an '

@@ -173,4 +173,48 @@ void main() {
       dir.deleteSync(recursive: true);
     }
   });
+
+  // REGRESSION (round-1 review, P2, 2026-09-23): the freshness comparison
+  // read two files with no surrounding try/catch, so an unreadable installed
+  // hook would throw UNCAUGHT and crash the process with a non-zero exit --
+  // an accidental hard FAIL for exactly the case the gate's own comments say
+  // must never happen. `File.existsSync()` returns false for a path that is
+  // actually a directory (verified directly before writing this test), so
+  // that shape can't reach the read call at all -- invalid UTF-8 bytes are
+  // used instead: the file genuinely EXISTS (existsSync() stays true) but
+  // `readAsStringSync()`'s default UTF-8 decoder throws a FormatException.
+  test('an unreadable (invalid-UTF-8) installed hook degrades to a WARN, never crashes', () {
+    final dir = _repoWithInstalledHooks();
+    try {
+      final hookPath = '${dir.path}/.git/hooks/pre-push';
+      File(hookPath).writeAsBytesSync([0xFF, 0xFE, 0x00, 0xD8, 0x00, 0x00]);
+      final result = _runGate(dir.path);
+      expect(result.exitCode, 0, reason: 'an unreadable file must WARN, never crash the gate');
+      expect(_combined(result), contains('WARN'));
+      expect(_combined(result), contains('could not be read'));
+    } finally {
+      dir.deleteSync(recursive: true);
+    }
+  });
+
+  // REGRESSION (round-2 review, 2026-09-23): the try/catch above guards the
+  // two hook-freshness reads, but left the INSTALLER read itself (line ~104,
+  // `installerFile.readAsStringSync()`) unguarded -- existsSync() confirms
+  // present, not readable, so an unreadable installer would throw UNCAUGHT
+  // and crash this "never hard-fail" gate. Same invalid-UTF-8 technique as
+  // the test above, applied to setup-hooks.sh instead of an installed hook.
+  test('an unreadable (invalid-UTF-8) installer script degrades to UNDETERMINED, never crashes', () {
+    final dir = _repoWithInstalledHooks();
+    try {
+      File('${dir.path}/scripts/setup-hooks.sh')
+          .writeAsBytesSync([0xFF, 0xFE, 0x00, 0xD8, 0x00, 0x00]);
+      final result = _runGate(dir.path);
+      expect(result.exitCode, 0,
+          reason: 'an unreadable installer must UNDETERMINED-pass, never crash the gate');
+      expect(_combined(result), contains('UNDETERMINED'));
+      expect(_combined(result), contains('could not be read'));
+    } finally {
+      dir.deleteSync(recursive: true);
+    }
+  });
 }
