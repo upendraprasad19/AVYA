@@ -83,6 +83,16 @@ class AppRouter {
   /// Stashed `refresh_token` from the password-recovery URL fragment.
   static String? recoveryRefreshToken;
 
+  /// Stashed `token_hash` from a signup-confirmation link, captured via
+  /// [ConfirmLinkDetector] in [main] before GoRouter initializes — same
+  /// timing reasoning as [recoveryAccessToken] above. Live-verified
+  /// 2026-09-23 (diagnose f92d17): Vercel's `/confirm` redirect puts the
+  /// forwarded `token_hash` in the document's own query string, ONE
+  /// component before the `#`, which HashUrlStrategy/GoRouter never reads —
+  /// `state.uri.queryParameters['token_hash']` in the `/confirm` GoRoute
+  /// below is empty on every real request. This is the fallback source.
+  static String? pendingConfirmTokenHash;
+
   static final GoRouter router = GoRouter(
     navigatorKey: navigatorKey,
     initialLocation: '/splash',
@@ -144,7 +154,8 @@ class AppRouter {
         pageBuilder: (context, state) => CustomTransitionPage(
           key: state.pageKey,
           child: ConfirmEmailScreen(
-            tokenHash: state.uri.queryParameters['token_hash'],
+            tokenHash: state.uri.queryParameters['token_hash'] ??
+                pendingConfirmTokenHash,
           ),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(opacity: animation, child: child);

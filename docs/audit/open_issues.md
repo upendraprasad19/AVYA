@@ -5773,3 +5773,84 @@ use: `gh run rerun --failed` clears it reliably when it fires — acceptable
 for now given it does not block any specific PR's own correctness, but
 should not become a standing habit given CLAUDE.md rule 20's ban on treating
 CI flakiness as permanently acceptable.
+
+## OI-244 — Confirm-link tap left auth.one_time_tokens unconsumed — unexplained low email confirmation completion rate
+
+- **Status**: OPEN
+- **Blocked on**: (1) Vercel deploy authorization (2) founder Play Console check
+- **Verified**: 2026-09-23 — reproduced live on 2 real devices, see f92d17
+- **Identified**: 2026-09-23 · filed via mint_oi.sh from branch `claude/oi-242-flaky-test-filing`
+
+Founder forwarded a screenshot of `sumitk142003@gmail.com` hitting
+"Email not confirmed" on sign-in, and reported having observed Sumit tap
+the confirmation link and be shown what looked like a success/confirmed
+state. Live SQL against `auth.users` (project `dedsavbjuwgarrhphgnl`)
+confirmed `email_confirmed_at` is genuinely NULL, and `auth.one_time_tokens`
+still holds the ORIGINAL, unconsumed `confirmation_token` row for this user
+— a successful `verifyOTP` deletes/consumes that row, so whatever was shown
+on screen, the confirmation call had not actually succeeded against
+Supabase. `client_errors` telemetry has zero rows for this user's confirm
+attempt (no success AND no failure event), so `AuthNotifier.confirmEmail`
+was never observed completing either way.
+
+Widening the query: of the last 9 real external signups (10-day window)
+that ever had a confirmation email sent, only 1 (`chintamani78987@gmail.com`,
+15 min) ever completed confirmation via email. 6 never confirmed at all,
+some over a week old. No hour in the sample exceeded 2 signups (rules out
+built-in-mailer burst rate limiting). Founder confirmed custom SMTP (Brevo)
+is already configured, ruling out this repo's own documented "no custom
+SMTP" cause (`lib/features/auth/CLAUDE.md`'s pitfall table) as the
+explanation.
+
+**Candidate causes, not yet distinguished — `auth.audit_log_entries` is
+empty project-wide (0 rows), so there is no server-side trail to tell
+these apart:**
+1. Android App Link auto-verification failing open to a browser instead of
+   handing control to the app (`autoVerify` intent-filter / `assetlinks.json`
+   — see the existing `web_confirm_link_routing` class, diagnose 9c4e1a,
+   which covers the WEB-side redirect once reached, but not why the call
+   would fail to complete even there).
+2. The founder glimpsing `ConfirmEmailScreen`'s loading state
+   ("Confirming your account...") and reading the "CONFIRM ACCOUNT" header
+   as a completed confirmation rather than an in-progress one.
+3. A second signup/resend attempt invalidating the original link's token
+   before it was tapped.
+
+**UPDATE 2026-09-23 — root cause #1 (of two) found and fixed in code, not
+yet deployed.** Reproduced live with the founder: signed up a fresh account
+(avyaanshfit@gmail.com), tapped the real confirmation email link on an
+iPhone (Safari) AND on the Android device with the app installed. BOTH
+landed on `ConfirmEmailScreen`'s "This confirmation link is missing its
+token" error — including on Android, where the tap opened a browser
+instead of the app (App Links did not claim it — see candidate #1 below,
+still unresolved). Isolated via direct `curl -D-` against the LIVE
+production deployment: `vercel.json`'s `/confirm` redirect issues
+`Location: /?token_hash=X&type=signup#/confirm` — the forwarded query lands
+BEFORE the `#`, not inside it, so it's invisible to GoRouter's
+HashUrlStrategy on every request, unconditionally, regardless of device.
+This is the direct, concrete explanation for the 6-of-9 non-confirmation
+finding above. Full writeup + fix:
+`docs/diagnoses/2026-09-23-confirm-link-token-hash-lost-in-vercel-redirect-f92d17.md`.
+Fix is a client-side `ConfirmLinkDetector` (mirrors the existing
+`PasswordRecoveryDetector` pattern) — written, mutation-proven,
+**NOT YET DEPLOYED** (needs explicit founder go-ahead for the Vercel prod
+deploy per CLAUDE.md §4.3).
+
+Candidate #1 above (Android App Links not claiming the URL) is now
+CONFIRMED as real and STILL UNRESOLVED — reproduced on Android with the app
+installed, link opened a browser. `AndroidManifest.xml`'s intent-filter and
+`web/.well-known/assetlinks.json` (live-verified served correctly, 200,
+correct fingerprints) both look correctly configured; likely explanation is
+Google Play App Signing (this app ships via Play Console internal testing —
+`memory/project_launch_blockers_1_inflight.md`) re-signing the APK with a
+certificate not present in `assetlinks.json`'s two listed fingerprints —
+**needs the founder to check Play Console → Setup → App integrity → App
+signing key certificate → SHA-256** against `assetlinks.json`; not
+checkable from this session. Candidates #2/#3 are superseded — the web
+path failing unconditionally for everyone is sufficient explanation on its
+own, so there's no need to separately adjudicate the founder's brief
+glimpse or a resend-invalidation race.
+
+A self-service "resend confirmation email" affordance shipped separately
+(diagnose f6c2a9) as a mitigation regardless of this root cause — genuinely
+useful once (1) is deployed, since a resent link would then actually work.

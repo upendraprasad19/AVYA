@@ -10282,7 +10282,7 @@ concepts:
         semantic: telemetry-reason-split
     readers:
       - file: lib/core/router/app_router.dart
-        line_range: 789-794
+        line_range: 800-811
         method: postSessionRedirect
         semantic: branch-order-is-the-fix
         notes: signOutInProgress MUST be tested BEFORE the onboarding read.

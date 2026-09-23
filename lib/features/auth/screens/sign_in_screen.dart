@@ -93,6 +93,14 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   int _resendSecondsRemaining = 0;
   static const int _resendCooldownSeconds = 30;
 
+  /// True once a sign-in attempt has failed with Supabase's "Email not
+  /// confirmed" error — surfaces the "Resend confirmation email" affordance
+  /// on the sign-in step. Captured here (rather than read off `authState`
+  /// directly) because the `ref.listen` below calls `authNotifier
+  /// .resetState()` right after showing the transient SnackBar, clearing
+  /// `errorMessage` before a `build()` could otherwise see it.
+  bool _showResendConfirmation = false;
+
   // Overwritten by the main view's CONTINUE handler before _currentView
   // ever switches to .email — the initial value is never read.
   _EmailStep _emailStep = _EmailStep.signIn;
@@ -181,6 +189,18 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       if ((next.status == AuthStatus.error ||
               next.status == AuthStatus.info) &&
           next.errorMessage != null) {
+        // Captured BEFORE resetState() below clears errorMessage — see the
+        // field doc on _showResendConfirmation. Only an `error` outcome
+        // updates the flag: a DIFFERENT error (wrong password, etc.) hides
+        // it, but the "resent" `info` message deliberately leaves it showing
+        // so the user can resend again if the fresh email also goes astray.
+        if (next.status == AuthStatus.error) {
+          final isEmailNotConfirmed =
+              AuthNotifier.isEmailNotConfirmedMessage(next.errorMessage);
+          if (isEmailNotConfirmed != _showResendConfirmation) {
+            setState(() => _showResendConfirmation = isEmailNotConfirmed);
+          }
+        }
         final toastStyle = authToastStyleFor(next.status);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -700,6 +720,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     setState(() {
       _currentView = _SignInView.main;
       _passwordController.clear();
+      _showResendConfirmation = false;
     });
     authNotifier.resetState();
   }
@@ -908,6 +929,10 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                   ),
                 ),
               ),
+              if (_showResendConfirmation) ...[
+                const SizedBox(height: 10),
+                _buildResendConfirmationLink(authNotifier, isLoading),
+              ],
               const SizedBox(height: 12),
               _buildChangeEmailLink(authNotifier, isLoading),
             ],
@@ -915,6 +940,35 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         ),
         const SizedBox(height: 40),
       ],
+    );
+  }
+
+  /// Self-service recovery for "Email not confirmed" — see
+  /// [_showResendConfirmation]. Re-sends via
+  /// [AuthNotifier.resendConfirmationEmail]; Supabase's own per-email rate
+  /// limit is what actually prevents spamming a tap, surfaced through the
+  /// normal error SnackBar like any other auth failure.
+  Widget _buildResendConfirmationLink(
+    AuthNotifier authNotifier,
+    bool isLoading,
+  ) {
+    return GestureDetector(
+      onTap: isLoading
+          ? null
+          : () => authNotifier
+              .resendConfirmationEmail(_emailController.text.trim()),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Text(
+          "Didn't get the confirmation email? Resend it",
+          style: AppTypography.bodySm.copyWith(
+            color: AppColors.accent,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.5,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ),
     );
   }
 
