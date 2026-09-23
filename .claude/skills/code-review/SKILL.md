@@ -2678,3 +2678,16 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   No lens prompt changed — both patterns are existing lens 6/8 behaviors firing correctly, logged
   per §5.1 because the finding-to-resolution mechanics (spawn vs fix vs false_alarm) hadn't been
   demonstrated in this file's tuning history for an account-tier, near-zero-severity pass before.
+
+- **2026-09-23** — blast-radius **platform** — branch `aab-versioncode-ledger-backfill`: a
+  mechanical ledger backfill (`backups/built_versioncodes.json` +44/+45 entries) + versionCode
+  bump to 1.0.0+46, triggered by a live AAB-build-feasibility check surfacing that the ledger
+  had silently fallen 2 versionCodes behind (the `--record` step of `/build-apk` never ran for
+  those two builds). **1 finding (P2, asserted_fixture_value): a ledger note claimed 65bee5d5 was
+  "the very next commit" after a4eb42ab when they were actually 2 days / ~90 commits / 11 merged
+  PRs apart — the underlying conclusion held, only the timing phrasing was wrong.** Fixed same
+  review cycle. **Tuning: even a purely mechanical, no-application-logic commit (JSON + version
+  string edits) can still assert a false historical claim in its own commit message/notes — the
+  asserted_fixture_value lens caught it precisely because it re-derived the claim from git log
+  rather than trusting the prose next to it, consistent with this repo's own most-recurrent
+  mistake class (unverified claims about git/file state).** Review: `docs/reviews/0dd33fc9046e-review.md`.
