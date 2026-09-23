@@ -21,7 +21,7 @@
   "1.0.0+44": {
     "artifact": "none",
     "built_at": "unknown",
-    "note": "bumped in commit a4eb42ab (\"for AAB build\") but immediately re-bumped to +45 in the very next commit (65bee5d5) without a matching record-as-built commit in between -- inferred never actually built; not confirmed live with founder, correct if wrong"
+    "note": "bumped in commit a4eb42ab (\"for AAB build\") on 2026-09-19; the next bump commit for this version, 65bee5d5 (\"for APK +45\"), landed 2026-09-21 after ~90 commits/11 merged PRs in between -- no matching record-as-built commit for +44 anywhere in that window or after, so inferred never actually built; not confirmed live with founder, correct if wrong"
   },
   "1.0.0+45": {
     "artifact": "apk",
