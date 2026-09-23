@@ -5597,6 +5597,34 @@ $delta`), called by all 5 writers instead of each doing its own
 SELECT-then-UPSERT. Needs its own migration + live verification pass per
 this repo's migration protocol, not a quick follow-on to d8a2f6.
 
+## OI-234 — alert_edge_function_health never fires — 401s write no cron_call_log row, so its err_rate guard structurally never matches an auth outage
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/next-aab-decision-d1227b`
+
+## OI-235 — proactive_plateau_alert (~116s avg) and i-see-you-daily (~93s avg) run unusually long once daily — likely per-user loop instead of set-based query, needs Edge Function code review
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-09-22, re-confirmed live by a B-pass review of the disk-io-audit-cleanup work (diagnose e8b4a1) (`select avg/min/max(extract(epoch from (end_time-start_time))) from cron.job_run_details join cron.job ... where jobname in (...)`) — both averages reproduced exactly (93.1s, 116.0s over 16 runs each). Distribution is genuinely bimodal, not uniformly slow: min=0.1s, max=1488.1s (~24.8min) for i-see-you-daily and max=1853.8s (~30.9min) for proactive_plateau_alert — most runs are fast and one outlier per job pulls the average up. Sharpens the likely cause: a conditional expensive path (e.g. a per-user loop that only fires under some condition) rather than a uniformly slow query.
+- **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/next-aab-decision-d1227b`
+
+## OI-236 — 12 of 14 Supabase advisor-flagged unused indexes (idx_scan=0) left unreviewed — idx_users_email_lower and idx_subscriptions_razorpay_payment_id are auth/payment-adjacent, may be low-frequency not dead
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/next-aab-decision-d1227b`
+
+## OI-237 — Extreme update:insert ratios on scheduled_workouts (34:1) and template_exercises (39:1) — possible sync write-amplification rewriting full rows instead of deltas, needs docs/architecture/sync.md + WriteServices code review
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/next-aab-decision-d1227b`
+
 ## OI-239 — Acknowledging an alert re-arms its dedup window instead of waiting out the original interval — a systemic property shared by all 6 alert_* cron jobs
 
 - **Status**: OPEN
@@ -5698,6 +5726,33 @@ at least surfacing the current rate + target so the coach can reference
 concrete progress). (2) For deployments, evaluate whether a client-side
 cached count (synced periodically, accepting some staleness) is safer than
 either the current always-0 or a live network call on every snapshot build.
+
+## OI-241 — Cross-worktree concurrency: no lock prevents multiple sessions running full flutter test simultaneously, causing 3x+ slowdowns
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-09-22 · filed via mint_oi.sh from branch `claude/next-aab-decision-d1227b`
+
+Investigated during this session after the founder asked why a routine commit was taking over an
+hour: comparing `Get-Process`/`Get-CimInstance` CPU-time deltas across the machine's active Claude
+Code worktrees showed genuine, growing CPU usage in OTHER sessions' `dart`/`flutter test`
+processes running concurrently — one command line explicitly referenced a different worktree
+(`supabase-outage-check-e79200`). `scripts/_git_lock.sh`'s mutex is keyed on
+`$(git rev-parse --git-dir)/.safe_git_op.lock`, which for a linked worktree resolves to that
+worktree's own private `.git/worktrees/<name>/` admin directory — structurally per-worktree, so it
+cannot and does not prevent two DIFFERENT worktrees from running the full CPU-bound gate loop
+(`flutter analyze` + `flutter test`) at the same time. On this 16-core machine with 3 sessions'
+worth of contention, a normally ~2-minute `safe_commit.sh`/`safe_push.sh` run measured well over an
+hour.
+
+**Fix direction:** a cross-worktree lock (e.g. keyed on the shared `.git/` common dir rather than
+the per-worktree admin dir) that limits how many `safe_commit.sh`/`safe_push.sh`/pre-push gate
+loops run concurrently across ALL worktrees sharing one repo — the founder's own suggestion was
+"at most one or two pushes at a time." Needs its own design pass (queueing vs. hard refusal,
+timeout/staleness handling matching `_git_lock.sh`'s existing "no automatic reclaim" philosophy)
+before implementation — not a one-line change, since it changes the concurrency model for every
+session working in this repo simultaneously.
 
 ## OI-242 — realtime_pro_gate_behavioral_test.dart flakes on full-suite CI run with a Box-not-found HiveError, passes clean in isolation
 

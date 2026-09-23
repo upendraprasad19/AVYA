@@ -74,7 +74,15 @@ thresholds:
     cron_cadence:        "*/15 * * * *"
     dedup_window_hours:  1
     phase: 1   # Phase-1 placeholder (B4, 2026-09-21) — 0 'failed' rows observed in the last 30 days as of this date, so no baseline exists yet to tune a higher floor
-    defined_in_migration: "140_hermes_pass_fixes_138_139.sql"
+    # defined_in_migration names the LATEST migration whose cron.schedule('alert_cron_failures', ...)
+    # call is what actually runs live today — NOT necessarily the migration that first introduced
+    # the bound. Migration 141 silently reverted 140's bound by re-scheduling the same job from an
+    # older branch snapshot that predated 140 (140's own file was never touched — migration
+    # immutability held — but the LIVE job it defined was superseded by 141's own unrelated
+    # cron.schedule call, invisible to any test reading only 140). Migration 143 restores the
+    # bound. Update this field EVERY TIME a migration re-schedules this job, or the sync test below
+    # goes green forever while checking a file the live database no longer runs.
+    defined_in_migration: "143_restore_alert_cron_failures_stuck_job_bound.sql"
 
 # Notes on suppression / acknowledgement
 # --------------------------------------
