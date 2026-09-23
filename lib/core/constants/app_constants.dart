@@ -1,4 +1,4 @@
-﻿/// App-wide constants: API URLs, feature keys, limits, and thresholds.
+/// App-wide constants: API URLs, feature keys, limits, and thresholds.
 ///
 /// Environment variables (SUPABASE_URL, SUPABASE_ANON_KEY, RAZORPAY_KEY_ID)
 /// are injected at build time via --dart-define-from-file=.env and accessed
@@ -6,7 +6,7 @@
 class AppConstants {
   AppConstants._();
 
-  // â”€â”€ API URLs (injected at build time via --dart-define-from-file) â”€â”€
+  // ── API URLs (injected at build time via --dart-define-from-file) ──
 
   static const String supabaseUrl = String.fromEnvironment('SUPABASE_URL');
   static const String supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
@@ -27,48 +27,48 @@ class AppConstants {
   static const String weeklyReportFunction = 'weekly-report';
   static const String aiMediaProxyFunction = 'ai-media-proxy';
 
-  // â”€â”€ UI hints / placeholders (audit 2026-05-20 / C9) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── UI hints / placeholders (audit 2026-05-20 / C9) ────────────
   /// Canonical referral code placeholder shown in input fields. Centralized
   /// so a brand or format change updates 5 callsites at once. Match the
   /// real referral code grammar: `AVYA-` prefix + 8 alphanumerics.
   static const String referralCodeHint = 'AVYA-XXXXXXXX';
 
-  // â”€â”€ Subscription â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Subscription ──────────────────────────────────────────
 
   static const int monthlyPriceInr = 349;
   static const int yearlyPriceInr = 2999;
 
-  // â”€â”€ PRO Feature Keys â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── PRO Feature Keys ──────────────────────────────────────
 
   static const String featurePhases2To12 = 'phases_2_to_12';
-  // audit-2026-05-16 E.8 â€” `featureActiveWorkoutMode` constant deleted.
+  // audit-2026-05-16 E.8 — `featureActiveWorkoutMode` constant deleted.
   // Active workout has been free since Test #2 Q6 (2026-04-25) and had 0
   // `gate()` callsites. The constant remained @Deprecated for back-compat
   // but accumulated zero references over 3 weeks of testing. Removed cleanly.
   static const String featureAiCoachUnlimited = 'ai_coach_unlimited';
-  // `featureReasoningTab` removed 2026-04-18 â€” Chat/Reasoning toggle
+  // `featureReasoningTab` removed 2026-04-18 — Chat/Reasoning toggle
   // deleted from UI, single AI coach backend, no separate reasoning gate.
   static const String featureWeeklyAiReport = 'weekly_ai_report';
-  // â‘¥ 6 B-pass P2 â€” `featureReadinessTrends` feature-KEY constant removed. The
+  // ⑥ 6 B-pass P2 — `featureReadinessTrends` feature-KEY constant removed. The
   // W3.7 readiness trend gates via a synchronous `ref.watch(subscriptionInfoProvider)
-  // .isPro` teaser in reports_screen, NOT a server-verified `gate()` â€” so the key
+  // .isPro` teaser in reports_screen, NOT a server-verified `gate()` — so the key
   // had 0 gate() callsites (dead), matching the E.8 featureActiveWorkoutMode /
   // featureVoiceNotes removals. Re-add a key only if it gains a real gate() site.
   static const String featureProgressPhotos = 'progress_photos';
   static const String featureScanMealPro = 'scan_meal_pro';         // 10/day PRO (free=3/day)
   static const String featureCartAuditorPro = 'cart_auditor_pro';   // 10/day PRO (free=1/day)
   static const String featureAiTextLogPro = 'ai_text_log_pro';      // Unlimited PRO (free=10/day)
-  // audit-2026-05-16 E.8 â€” `featureVoiceNotes` constant deleted.
+  // audit-2026-05-16 E.8 — `featureVoiceNotes` constant deleted.
   // Voice has been free since Test #9 F13 (zero on-device compute cost via
   // speech_to_text) and the constant had 0 `gate()` callsites.
   static const String featureMorningAlertPro = 'morning_alert_pro'; // AI-personalised (free=generic)
   static const String featurePredictionMonthly = 'prediction_monthly'; // Monthly card (free=once)
   static const String featureAdaptiveWorkouts = 'adaptive_workouts'; // Phase 2
-  // audit-2026-05-16 E.8 â€” `featureDietPlanPdf` constant deleted.
+  // audit-2026-05-16 E.8 — `featureDietPlanPdf` constant deleted.
   // docs/architecture/business-rules.md confirms diet-plan PDF export is FREE. 0 `gate()` callsites.
   static const String featurePhotoAnalysis = 'photo_analysis';     // Photo in chat (PRO)
 
-  // â”€â”€ Free Tier Limits â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Free Tier Limits ──────────────────────────────────────
 
   /// Maximum AI coach messages per day for free users.
   /// Must match FREE_DAILY_LIMIT in ai-proxy Edge Function (10).
@@ -89,16 +89,16 @@ class AppConstants {
   /// PRO cart auditor uses per day (soft cap warning at 7).
   static const int proCartAuditorPerDay = 10;
 
-  /// Beat My Coach challenge interval in days (disabled â€” Phase 2).
+  /// Beat My Coach challenge interval in days (disabled — Phase 2).
   static const int beatMyCoachIntervalDays = 14;
 
-  // â”€â”€ Activity Goals â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Activity Goals ────────────────────────────────────────
   /// Default daily step goal shown on the Home steps card + Today's Workout
   /// card. Centralized 2026-06-07 (in-sync sweep) so the figure is a one-line
   /// edit, not a 4-site literal sweep.
   static const int defaultDailyStepGoal = 10000;
 
-  // â”€â”€ Terms & Privacy â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Terms & Privacy ───────────────────────────────────────
 
   /// Current ToS/Privacy-Policy version. Bumping this re-prompts every user
   /// via [TermsModal] on next launch (Hive flag is stamped with the version
@@ -106,13 +106,13 @@ class AppConstants {
   /// `users.terms_version` column for audit.
   static const String termsVersion = 'v1';
 
-  /// App version (pubspec `version:` field). Audit 2026-05-12 P2-A â€” fixes the
+  /// App version (pubspec `version:` field). Audit 2026-05-12 P2-A — fixes the
   /// hardcoded `0.0.0+release` placeholder in error telemetry so client_errors
   /// rows can be correlated to specific APK builds.
   ///
   /// IMPORTANT: Keep this in sync with `pubspec.yaml` `version:` field.
   ///
-  /// audit-2026-05-16 F10.1 â€” was hardcoded `'1.0.0+23'` since Test #11 but
+  /// audit-2026-05-16 F10.1 — was hardcoded `'1.0.0+23'` since Test #11 but
   /// APKs +24/+25/+26 shipped without bumping the constant. 358 telemetry
   /// rows in the last 30 days were mis-labelled. Bumped to `+27` for the
   /// audit ship; permanent gate `scripts/check_app_version_matches_pubspec.dart`
@@ -122,7 +122,7 @@ class AppConstants {
   /// OneSignal App ID for push notifications.
   static const String oneSignalAppId = 'fd37a411-121e-4022-9929-2af68c2371f5';
 
-  // â”€â”€ Phase Unlock â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Phase Unlock ──────────────────────────────────────────
 
   /// Minimum completion rate to unlock next phase (80%).
   static const double phaseUnlockCompletionRate = 0.8;
@@ -130,16 +130,16 @@ class AppConstants {
   /// Minimum weeks elapsed to unlock next phase.
   static const int phaseUnlockMinWeeks = 4;
 
-  // â”€â”€ Sync Intervals â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Sync Intervals ────────────────────────────────────────
 
   /// Full sync interval in days.
   static const int fullSyncIntervalDays = 7;
 
-  /// Daily snapshot time (IST â€” 11 PM = 17:30 UTC).
+  /// Daily snapshot time (IST — 11 PM = 17:30 UTC).
   static const int snapshotHourUtc = 17;
   static const int snapshotMinuteUtc = 30;
 
-  // â”€â”€ Hive Box Names â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Hive Box Names ────────────────────────────────────────
 
   static const String userBox = 'userBox';
   static const String workoutBox = 'workoutBox';
@@ -152,15 +152,15 @@ class AppConstants {
   static const String syncBox = 'syncBox';
   static const String configBox = 'configBox';
 
-  // â”€â”€ Misc â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Misc ──────────────────────────────────────────────────
 
   /// App display name.
   static const String appName = 'AVYA';
 
-  /// App tagline â€” used on splash, shareable cards, marketing materials.
+  /// App tagline — used on splash, shareable cards, marketing materials.
   static const String appTagline = 'Your AI Fitness Coach';
 
-  /// App website â€” used in QR codes on shareable cards.
+  /// App website — used in QR codes on shareable cards.
   /// TODO: Update to Play Store link before launch.
   static const String appUrl = 'https://www.icanbefitter.com';
 
@@ -168,6 +168,6 @@ class AppConstants {
   /// - share_plus: native OS share sheet
   /// - qr_flutter: client-side QR code generation (zero server cost)
 
-  /// Razorpay key (public, safe for client) â€” injected at build time.
+  /// Razorpay key (public, safe for client) — injected at build time.
   static const String razorpayKeyId = String.fromEnvironment('RAZORPAY_KEY_ID');
 }

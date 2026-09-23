@@ -9,8 +9,14 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### check_hooks_installed_unguarded_reads (1 bugs)
 - 2026-09-23 f2a8c6 — scripts/check_hooks_installed.dart (Gate 32) has always documented its own contract as "never hard-fail unexpectedly" -- a hygiene gate whose freshness/presence checks degrade to a WARN or an…
 
+### confirm_link_token_hash_recovery (1 bugs)
+- 2026-09-23 f92d17 — Live reproduction of OI-244: signed up a fresh account (avyaanshfit@gmail.com) and tapped the real confirmation email link on TWO real devices — an iPhone (Safari, Gmail app), and an Android phone…
+
 ### discipline_hook_memory_index_nudge (1 bugs)
 - 2026-09-23 c8d5b2 — scripts/discipline_hook.dart's SessionStart hook is supposed to warn when the harness MEMORY.md index exceeds its soft byte/line cap, nudging /consolidate-memory. Live-tested 2026-09-23 while building…
+
+### auth_email_confirmation_recovery (1 bugs)
+- 2026-09-23 f6c2a9 — Founder forwarded a screenshot of a real signup (sumitk142003@gmail.com) hitting a persistent "Email not confirmed" red SnackBar on sign-in, despite the founder having observed the user tap the…
 
 ### alert_cron_failures_threshold_sync (1 bugs)
 - 2026-09-22 k7d3n5 — `sh scripts/safe_push.sh` FAILED with "Some tests failed." inside the pre-push hook's full CI-equivalent `flutter test test/ --exclude-tags golden` run, blocking the push of this batch's 2…
@@ -25,12 +31,18 @@ Re-run: `dart run scripts/build_bug_index.dart`
 - 2026-09-22 r2w6y9 — Full-suite pre-push run failed `test/features/profile/delete_account_screen_test.dart`: "H1-B — Source invariants Support email present in error copy" — Expected contains 'support@icanbefitter.com',…
 - 2026-09-21 a1e6f2 — Founder observation #7: "email wrong. check our email." The app showed 2 different, both-wrong support addresses across 2 screens: the Profile contact card showed `support@avya.app` (a leftover from…
 
+### disk_io_budget_exhaustion (1 bugs)
+- 2026-09-22 e8b4a1 — Supabase dashboard showed "Your project is about to deplete its Disk IO Budget" and project health read "Unhealthy"; every direct-DB call including `select 1` timed out. Screenshots confirmed Compute…
+
 ### ai_failure_telemetry_coverage (2 bugs)
 - 2026-09-22 b6e3a8 — OI-238 (open_issues.md, filed 2026-09-22 from the Hermes pass on `observation-batch-and-digest-redesign`): OI-226's own fix (`docs/diagnoses/2026-09-21-ai-failure-telemetry-gap-oi226-f7a2c9.md`) wired…
 - 2026-09-21 f7a2c9 — OI-226 (open_issues.md:5059): "ai-proxy chat/tool-calling Gemini exhaustion paths have no reportGeminiExhaustion alert wiring." The OI's own text names TWO distinct gaps on the server — re-verified…
 
 ### log_workout_sheet_completed_day_state (1 bugs)
 - 2026-09-22 e6a2f8 — OI-228 Bug A (founder observed live, one of two bugs in the original filing — Bug B is unrelated and remains open): opening "Log Workout" from the AI coach chat on a day whose scheduled workout is…
+
+### alert_cron_failures_stuck_job_bound, source_file_encoding (1 bugs)
+- 2026-09-22 a2f6c9 — Merging origin/main into claude/next-aab-decision-d1227b raised the staged diff's blast-radius to catastrophic (origin/main brought in migrations containing SECURITY DEFINER). The self-triggered…
 
 ### pro_predicate_adoption_gate (1 bugs)
 - 2026-09-22 9c4f2e — Full-suite pre-push run failed on `test/contracts/pro_predicate_adoption_test.dart`: "no Edge Function READS users.subscription_status to decide tier" — Expected empty, Actual:…
@@ -1362,17 +1374,21 @@ rather than a Hive box. (1 bugs)
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
 | 2026-09-23 | f2a8c6 | scripts/check_hooks_installed.dart (Gate 32) has always documented its own contract as "never hard-fail unexpectedly" -- a hygiene gate whose freshness/presence checks degrade to a WARN or an… | check_hooks_installed_unguarded_reads | test/scripts/check_hooks_installed_e2e_test.dart |
+| 2026-09-23 | f92d17 | Live reproduction of OI-244: signed up a fresh account (avyaanshfit@gmail.com) and tapped the real confirmation email link on TWO real devices — an iPhone (Safari, Gmail app), and an Android phone… | confirm_link_token_hash_recovery | test/contracts/confirm_link_detector_test.dart |
 | 2026-09-23 | c8d5b2 | scripts/discipline_hook.dart's SessionStart hook is supposed to warn when the harness MEMORY.md index exceeds its soft byte/line cap, nudging /consolidate-memory. Live-tested 2026-09-23 while building… | discipline_hook_memory_index_nudge | test/scripts/discipline_hook_memory_path_test.dart |
+| 2026-09-23 | f6c2a9 | Founder forwarded a screenshot of a real signup (sumitk142003@gmail.com) hitting a persistent "Email not confirmed" red SnackBar on sign-in, despite the founder having observed the user tap the… | auth_email_confirmation_recovery | test/contracts/is_email_not_confirmed_message_test.dart |
 | 2026-09-22 | k7d3n5 | `sh scripts/safe_push.sh` FAILED with "Some tests failed." inside the pre-push hook's full CI-equivalent `flutter test test/ --exclude-tags golden` run, blocking the push of this batch's 2… | alert_cron_failures_threshold_sync | test/contracts/alert_cron_failures_sync_test.dart |
 | 2026-09-22 | m5q8t1 | Full-suite pre-push run failed `test/features/nutrition/counter_increment_on_analyse_test.dart`: "Test #11 M1 — counter at API-call site, not save site CartAuditorNotifier.analyseCart calls… | cart_auditor_counter_increment_test_window | test/features/nutrition/counter_increment_on_analyse_test.dart |
 | 2026-09-22 | c1b9d4 | OI-232 (founder observed live): switching the AI Coach screen's channel toggle to Telegram and then back to in-app chat leaves the message list scrolled to wherever it happened to land on remount,… | ai_coach_channel_scroll_position | test/ai_coach/initial_scroll_to_bottom_test.dart |
 | 2026-09-22 | r2w6y9 | Full-suite pre-push run failed `test/features/profile/delete_account_screen_test.dart`: "H1-B — Source invariants Support email present in error copy" — Expected contains 'support@icanbefitter.com',… | support_contact_email | test/features/profile/delete_account_screen_test.dart |
+| 2026-09-22 | e8b4a1 | Supabase dashboard showed "Your project is about to deplete its Disk IO Budget" and project health read "Unhealthy"; every direct-DB call including `select 1` timed out. Screenshots confirmed Compute… | disk_io_budget_exhaustion | test/contracts/disk_io_audit_cleanup_batch_test.dart |
 | 2026-09-22 | b6e3a8 | OI-238 (open_issues.md, filed 2026-09-22 from the Hermes pass on `observation-batch-and-digest-redesign`): OI-226's own fix (`docs/diagnoses/2026-09-21-ai-failure-telemetry-gap-oi226-f7a2c9.md`) wired… | ai_failure_telemetry_coverage | supabase/functions/weekly-report/index_test.ts
 supabase/functions/ai-media-proxy/index_test.ts
 supabase/functions/assess-body-composition/index_test.ts
 supabase/functions/daily-snapshot/index_test.ts
 supabase/functions/rolling-context/index_test.ts |
 | 2026-09-22 | e6a2f8 | OI-228 Bug A (founder observed live, one of two bugs in the original filing — Bug B is unrelated and remains open): opening "Log Workout" from the AI coach chat on a day whose scheduled workout is… | log_workout_sheet_completed_day_state | test/widgets/log_workout_sheet_completed_day_test.dart |
+| 2026-09-22 | a2f6c9 | Merging origin/main into claude/next-aab-decision-d1227b raised the staged diff's blast-radius to catastrophic (origin/main brought in migrations containing SECURITY DEFINER). The self-triggered… | alert_cron_failures_stuck_job_bound, source_file_encoding | test/contracts/alert_cron_failures_sync_test.dart |
 | 2026-09-22 | 9c4f2e | Full-suite pre-push run failed on `test/contracts/pro_predicate_adoption_test.dart`: "no Edge Function READS users.subscription_status to decide tier" — Expected empty, Actual:… | pro_predicate_adoption_gate | test/contracts/pro_predicate_adoption_test.dart |
 | 2026-09-22 | a8f3e2 | OI-230 (founder APK screenshot, Phase 1): AI coach snapshot showed self-contradictory rank-promotion info — next_rank.binding_constraint correctly named the real bottleneck (e.g. "weeks",… | rank_monotonic_current_code | test/ai_coach/snapshot_keys_test.dart |
 | 2026-09-22 | a4c7d1 | Founder-reported (2026-09-22, session "supabase-outage-check"): Single Leg Front Lever exercise swapped mid-active-workout from timed to weight/reps. Active workout screen showed "8 reps" (correct).… | logged_sets_format_normalization | test/contracts/logged_sets_format_normalization_test.dart |

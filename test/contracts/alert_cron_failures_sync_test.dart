@@ -154,4 +154,71 @@ void main() {
         reason: 'B4 corrected design: no new Edge Function, plain SQL only, '
             'matching the 5 pre-existing alert_* jobs\' idiom');
   });
+
+  test(
+      'defined_in_migration names the LATEST migration that re-schedules '
+      'this job — not just a migration that once got it right', () {
+    // Migration 140 introduced the [1h, 6h) bound and was never edited
+    // (migration immutability) — but migration 141 later called
+    // cron.unschedule+cron.schedule AGAIN, from an older branch snapshot
+    // predating 140, silently reverting the LIVE job to the unbounded
+    // pre-140 form while 140's own file stayed correct and untouched. 141
+    // ALSO folded alert_cron_failures's INSERT into a combined job renamed
+    // 'ops_alerts_30min' (alongside alert_edge_function_health and
+    // alert_client_errors_spike) — so alert_cron_failures no longer gets its
+    // own standalone `cron.schedule('alert_cron_failures', ...)` call at
+    // all from 141 onward; it only appears as the `source` literal inside
+    // ops_alerts_30min's INSERT body. A test keyed on the JOB NAME would
+    // therefore go blind again the moment the job was renamed — this
+    // instead matches the actual alert-emitting INSERT literal
+    // (`'alert_cron_failures', ... 'critical'`), which is stable across the
+    // rename. A test that reads only the migration named in the YAML (as
+    // this file's other tests do) was structurally blind to the original
+    // drift: 140's content never changed, so it stayed green while the live
+    // database diverged from it entirely. Migration 143 restored the bound.
+    // This test makes that class of drift fail loudly instead of silently:
+    // it finds every migration that emits this alert and requires the YAML
+    // to name the numerically LAST one — whichever migration is currently
+    // live-authoritative — rather than trusting a hand-maintained pointer
+    // that can go stale exactly the way it did here.
+    final migrationsDir = Directory('supabase/migrations');
+    final schedulers = <String>[];
+    final emitter = RegExp(r"'alert_cron_failures'\s*,\s*'critical'");
+    for (final entry in migrationsDir
+        .listSync()
+        .whereType<File>()
+        .where((f) => f.path.endsWith('.sql'))) {
+      // Strip every `-- `-commented line before matching: a migration's own
+      // inline rollback section quotes an OLDER version's SQL as a comment
+      // block (e.g. 143's own rollback re-quotes 141's unbounded form), and
+      // that must not count as THIS file scheduling it. Stripped first,
+      // then re-joined, so a real call spanning multiple lines (140's and
+      // 143's `'alert_cron_failures',\n    'critical',` form) still matches
+      // as one contiguous string — `\s*` in the regex below spans the
+      // newline between them.
+      final codeOnly = entry
+          .readAsLinesSync()
+          .where((line) => !line.trimLeft().startsWith('--'))
+          .join('\n');
+      if (emitter.hasMatch(codeOnly)) {
+        schedulers.add(entry.uri.pathSegments.last);
+      }
+    }
+    expect(schedulers, isNotEmpty,
+        reason: 'no migration emits the alert_cron_failures alert at all');
+    // Filenames share the `NNN_` numeric-prefix convention (root CLAUDE.md
+    // §7 filename-scheme table) — sort lexicographically on that prefix.
+    schedulers.sort();
+    final latest = schedulers.last;
+    final migMatch =
+        RegExp(r'defined_in_migration:\s*"([^"]+)"').firstMatch(yamlBlock);
+    expect(migMatch!.group(1), latest,
+        reason: 'alert_cron_failures is actually (re-)scheduled by these '
+            'migrations, in order: $schedulers — the YAML must name the '
+            'LAST one ($latest), since that is the one the live cron.job '
+            'row actually runs. If this fails after adding a NEW migration '
+            'that reschedules the job, update _thresholds.yaml\'s '
+            'defined_in_migration to match, and re-verify the live '
+            "cron.job.command against the new file's SQL body.");
+  });
 }

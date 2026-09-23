@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:icanbefitter/core/router/app_router.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -61,6 +62,16 @@ class _ConfirmEmailScreenState extends ConsumerState<ConfirmEmailScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_startedFor == tokenHash || !mounted) return;
       _startedFor = tokenHash;
+      // Round-1 plan-review Finding 1: AppRouter.pendingConfirmTokenHash is
+      // the one-shot boot-time fallback for a lost query string (see its
+      // own doc comment) and has no gate like isPasswordRecovery's — clear
+      // it the moment verification actually starts, so a LATER re-render of
+      // /confirm (browser back, or any subsequent in-app navigation here)
+      // can't silently re-supply this already-consumed/expired token. Safe
+      // regardless of which source (state.uri.queryParameters vs this
+      // fallback) actually produced `tokenHash`: the field is single-use by
+      // design either way.
+      AppRouter.pendingConfirmTokenHash = null;
       ref.read(authNotifierProvider.notifier).confirmEmail(tokenHash);
     });
   }
@@ -68,7 +79,21 @@ class _ConfirmEmailScreenState extends ConsumerState<ConfirmEmailScreen> {
   @override
   Widget build(BuildContext context) {
     final tokenHash = widget.tokenHash;
-    if (tokenHash == null || tokenHash.isEmpty) {
+    // Round-2 plan-review Finding 2: gating this early return on `tokenHash`
+    // ALONE was wrong once _maybeStartVerification started clearing
+    // AppRouter.pendingConfirmTokenHash on use (Finding 1's own fix). A
+    // LATER rebuild of this SAME State (browser back, or any re-render of
+    // /confirm — go_router reuses the State via didUpdateWidget since
+    // pageKey is path-only) now genuinely arrives with tokenHash == null,
+    // even though a real confirmEmail() call may still be in flight or may
+    // have already resolved. Taking the early return in that case skips the
+    // ref.listen registration below — Riverpod only keeps a listener alive
+    // for builds that actually re-register it — silently dropping the
+    // success -> /restoring routing for a call this State itself started.
+    // Once verification has genuinely started (_startedFor != null), the
+    // true status lives in authState below, never in widget.tokenHash alone.
+    final hasStartedVerification = _startedFor != null;
+    if (!hasStartedVerification && (tokenHash == null || tokenHash.isEmpty)) {
       return _buildErrorState(
         context,
         'This confirmation link is missing its token. Copy the full link '
