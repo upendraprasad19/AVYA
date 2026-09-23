@@ -248,6 +248,64 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-23** — blast-radius **account** — branch `claude/oi-242-flaky-test-filing`
+  (commit f0580c14: `ConfirmLinkDetector` fixes a live production bug where Vercel's
+  `/confirm` redirect puts the forwarded `token_hash` before the `#` instead of
+  inside it, invisible to this app's HashUrlStrategy-only GoRouter; plus a
+  self-service "resend confirmation email" affordance on the sign-in screen).
+  Reviewed post-commit (the diff was already committed; the review targeted
+  `git diff HEAD~1 HEAD` rather than the staged index, since nothing remained
+  staged). **3 findings (0 P0/P1, 3 P2); 0 false_alarm — all 3 fixed in-batch.**
+  Review: `docs/reviews/3aa28693fb6f-review.md`.
+  **Tuning 1 — lens 6 (`guard_without_its_mirror`) found a doc comment's own
+  stated invariant contradicted by the code one screen below it, and the
+  contradiction was invisible to every existing test because both existing
+  tests only ever drove the SUCCESS resend path.** The affordance's doc
+  comment said it stays visible "so the user can resend again if the fresh
+  email also goes astray" — true only for `AuthStatus.info` (the success
+  case). `resendConfirmationEmail`'s own FAILURE paths (rate-limited
+  `AuthException`, generic catch) set a new `errorMessage` that doesn't match
+  `isEmailNotConfirmedMessage`, so the listener's per-error recompute hid the
+  link at exactly the moment — a failed resend — the user most needs to
+  retry. Reproduced live with a throwaway widget test simulating the real
+  `AuthException` arm before reporting it. Fixed by making the flag
+  sticky-once-shown (an `error` outcome only ever turns it ON; only the
+  explicit "change email" path turns it off) rather than recomputed from
+  every error message — the general shape: **a flag recomputed from "does
+  THIS error match" is wrong the moment more than one code path can produce
+  an error while the flag should stay true; sticky-until-explicitly-cleared
+  is the safer default for a recovery affordance.**
+  **Tuning 2 — asserted_fixture_value (lens 8) caught a wrong mutation COUNT
+  in a diagnose-doc that the AUTHOR had actually run, not fabricated — worth
+  recording because it shows the lens catching an off-by-one in real
+  evidence, not just an invented claim.** The doc's `mutation_proven` block
+  claimed "2 of 6 tests reddened" after neutering `ConfirmLinkDetector`'s
+  `fromQuery` fallback; reproducing the exact same mutation gave 1 of 6 — the
+  "prefers fragment when both present" test's URL resolves entirely via the
+  FIRST branch (the fragment segment has its own `?`, so the fragment
+  extraction short-circuits before ever reaching `uri.queryParameters`),
+  so removing the `fromQuery` branch cannot touch it. The underlying fix
+  was still correctly covered by the one test that DOES exercise the
+  removed branch — this was a documentation-accuracy slip, not a coverage
+  gap. **Re-running a mutation-proof claim costs one command and catches
+  exactly this — an author re-deriving "N of M reddened" by eye after
+  watching a scrollback of test output is exactly the kind of arithmetic
+  this repo's own §0 and CLAUDE.md history repeatedly show slipping.**
+  **Tuning 3 — writer_reader_drift extended to catch a missing SoT
+  registration, not just a field-name drift.** The commit's own message and
+  code comments explicitly say the new mechanism "mirrors an existing,
+  already-shipped pattern" (`PasswordRecoveryDetector` / `password_recovery_session`,
+  a REGISTERED SoT concept) — but the new `ConfirmLinkDetector`/
+  `pendingConfirmTokenHash` pair got no equivalent registry entry, and
+  nothing mechanically enforces this (`lib/CLAUDE.md`'s own corrected note:
+  the registration rule is enforced by review, not a gate). **When a diff's
+  own prose claims "this mirrors concept X" and X is a registered SoT
+  concept, check whether the new code got its OWN entry — a self-declared
+  mirror is a self-declared registration obligation that nothing catches if
+  skipped.**
+  False-alarm rate 0/3 → no lens removed; lenses 6, 8 extended per above,
+  and lens 1 (writer_reader_drift) gains the SoT-registration-parity check.
+
 - **2026-09-22 (Batch C)** — blast-radius **platform** — branch
   `oi-batching-strategy-e5e359`, Batch C (OI-238: wiring `reportGeminiExhaustion`
   into 5 Gemini-calling Edge Functions — `weekly-report`, `ai-media-proxy`,

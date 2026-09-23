@@ -10670,6 +10670,55 @@ concepts:
       Re-verify BOTH the implicit-fragment and PKCE query shapes against a
       live link after any supabase_flutter upgrade.
 
+  - concept: confirm_link_token_hash_recovery
+    domain: auth_profile
+    behavioral_test_path: test/contracts/confirm_link_detector_test.dart
+    description: |
+      diagnose f92d17 — Vercel's `/confirm` redirect (`destination:
+      "/#/confirm"`) forwards the confirmation link's `token_hash` query
+      param BEFORE the literal `#/confirm`, not inside it (a standards
+      constraint: a URL can only have one `?query`, and it must precede any
+      `#fragment`). This app's Flutter web build uses HashUrlStrategy
+      exclusively (no `setUrlStrategy` call anywhere), so GoRouter's
+      `state.uri.queryParameters` only ever reads `location.hash` and never
+      sees `token_hash` sitting one component over in `location.search` —
+      every `/confirm` request was affected, regardless of device.
+
+      Deliberately modelled on the `password_recovery_session` concept above
+      (same timing hazard, same fix shape): `ConfirmLinkDetector.detect`
+      reads `Uri.base` in `main()` before `runApp()`, before GoRouter's
+      `initialLocation` navigation can call `history.replaceState` and alter
+      the URL out from under a later read.
+    writers:
+      - file: lib/main.dart
+        line_range: 121-134
+        method: "main() — kIsWeb capture block"
+        semantic: captures-Uri.base-before-GoRouter-boots
+    readers:
+      - file: lib/core/router/app_router.dart
+        line_range: 140-160
+        method: "/confirm GoRoute pageBuilder"
+        semantic: falls-back-to-pendingConfirmTokenHash-when-query-params-empty
+    hive:
+      box: null
+      key: null
+      shape: "Not applicable — transient in-memory static field, cleared implicitly by app restart, never re-read after the /confirm route consumes it."
+    cloud:
+      table: null
+      columns: []
+    forbidden_legacy_patterns:
+      - "reading Uri.base from inside ConfirmEmailScreen's build/initState instead of main() — same timing hazard PasswordRecoveryDetector already documents"
+      - "assuming vercel.json's redirect will always place the query string in the fragment — detect() defends against both possible locations"
+    class_constraints: |
+      Same residual as password_recovery_session: AppRouter.pendingConfirmTokenHash
+      is never explicitly cleared after use (consistent with the sibling
+      recoveryAccessToken/recoveryRefreshToken fields, which are equally
+      never reset — see docs/reviews/3aa28693fb6f-review.md Finding-adjacent
+      note). A stale re-read only re-attempts an already-consumed/expired
+      token on a genuinely fresh mount, which Supabase rejects normally —
+      not a data leak or crash. Re-verify against a live Vercel deploy if
+      the redirect rule's shape ever changes.
+
   - concept: exercise_plate_read_path
     domain: workout
     behavioral_test_path: test/contracts/exercise_plate_resolver_test.dart

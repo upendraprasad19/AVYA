@@ -42,6 +42,35 @@ class _FakeUnconfirmedAuthNotifier extends AuthNotifier {
   }
 }
 
+/// B-pass Finding 1 (docs/reviews/3aa28693fb6f-review.md): the affordance's
+/// own doc comment says it stays visible "so the user can resend again if
+/// the fresh email also goes astray" — but a FAILED resend (rate-limited,
+/// network error, etc.) used to hide it at exactly the moment it's needed
+/// most, because the listener recomputed the flag from every error message.
+class _FakeUnconfirmedThenFailedResendAuthNotifier extends AuthNotifier {
+  int resendCallCount = 0;
+
+  @override
+  Future<bool?> checkEmailRegistered(String email) async => true;
+
+  @override
+  Future<void> signInWithEmail(String email, String password) async {
+    state = state.copyWith(status: AuthStatus.error, errorMessage: 'Email not confirmed');
+  }
+
+  @override
+  Future<void> resendConfirmationEmail(String email) async {
+    resendCallCount++;
+    // Mirrors auth_provider.dart's real `on AuthException catch` arm for a
+    // rate-limited resend — a genuinely different error message than "Email
+    // not confirmed".
+    state = state.copyWith(
+      status: AuthStatus.error,
+      errorMessage: 'email rate limit exceeded',
+    );
+  }
+}
+
 /// Mirror case (feedback_mistake_guard_without_its_mirror.md): a DIFFERENT
 /// sign-in failure must NOT show the resend-confirmation affordance — only
 /// the specific "Email not confirmed" error should.
@@ -167,6 +196,40 @@ void main() {
       // The affordance stays visible after a successful resend so the user
       // can resend again if the fresh email also goes astray.
       expect(find.text(_resendLinkText), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'a FAILED resend attempt keeps the affordance visible — the sticky-once-'
+    'shown fix for B-pass Finding 1 (docs/reviews/3aa28693fb6f-review.md)',
+    (tester) async {
+      final notifier = _FakeUnconfirmedThenFailedResendAuthNotifier();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [authNotifierProvider.overrideWith(() => notifier)],
+          child: const MaterialApp(home: SignInScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _openSignInStepAndSubmit(
+        tester,
+        email: 'sumitk142003@gmail.com',
+        password: 'password123',
+      );
+      expect(find.text(_resendLinkText), findsOneWidget);
+
+      await tester.ensureVisible(find.text(_resendLinkText));
+      await tester.tap(find.text(_resendLinkText));
+      await tester.pumpAndSettle();
+
+      expect(notifier.resendCallCount, 1);
+      expect(
+        find.text(_resendLinkText),
+        findsOneWidget,
+        reason: 'a rate-limited/failed resend is exactly the case where the '
+            'user most needs to retry — the affordance must not disappear',
+      );
     },
   );
 
