@@ -5790,9 +5790,9 @@ CI flakiness as permanently acceptable.
 
 ## OI-244 — Confirm-link tap left auth.one_time_tokens unconsumed — unexplained low email confirmation completion rate
 
-- **Status**: OPEN
-- **Blocked on**: (1) Vercel deploy authorization (2) founder Play Console check
-- **Verified**: 2026-09-23 — reproduced live on 2 real devices, see f92d17
+- **Status**: OPEN — both web-path root causes now found + fixed, pending deploy; Android App Links piece still genuinely open
+- **Blocked on**: (1) Vercel deploy authorization for BOTH f92d17 and 42a98d (2) founder Play Console check (Android App Links, unaffected by either code fix)
+- **Verified**: 2026-09-23 — reproduced live on 2 real devices (see f92d17), then reproduced a SECOND, distinct failure live twice more post-deploy (see 42a98d)
 - **Identified**: 2026-09-23 · filed via mint_oi.sh from branch `claude/oi-242-flaky-test-filing`
 
 Founder forwarded a screenshot of `sumitk142003@gmail.com` hitting
@@ -5868,3 +5868,40 @@ glimpse or a resend-invalidation race.
 A self-service "resend confirmation email" affordance shipped separately
 (diagnose f6c2a9) as a mitigation regardless of this root cause — genuinely
 useful once (1) is deployed, since a resent link would then actually work.
+
+**UPDATE 2026-09-23 — root cause #2 (of two) found and fixed in code, not
+yet deployed.** f92d17's fix went live; the founder immediately
+re-tested by tapping a fresh, real confirmation email link — and hit a
+DIFFERENT error ("This confirmation link is invalid or has expired."),
+reproduced identically a second time from a fresh incognito window
+(ruling out stale-cache/service-worker theories). Live `auth_logs` queries
+across both reproductions showed the same account's `/resend` calls
+succeeding (200) from the founder's device while **zero `/verify` requests
+ever reached Supabase's Auth server** in either window — proving the
+failure was generated client-side, without the link ever actually being
+checked. Root cause: `AuthNotifier.confirmEmail` never called
+`ensureSupabaseReady()` before touching Supabase, unlike its sibling
+methods (`signInWithEmail`/`checkEmailRegistered`), which have used that
+guard since 2026-04-04 — `confirmEmail` was written 2026-09-16, five months
+later, and simply never got the same guard. `/confirm` is a top-level route
+exempted from `_authRedirect` and NOT nested under `/splash` — the only
+place `Supabase.initialize()` runs — so a cold tap on a confirmation link
+(the normal case for a real user, not an edge case) races an uninitialized
+`Supabase.instance`, whose not-ready guard is a bare `assert()` stripped in
+release builds; the underlying `late SupabaseClient client` field then
+throws `LateInitializationError`, landing in the generic catch-all and
+showing "invalid or has expired" before any network request is attempted.
+Full writeup + fix:
+`docs/diagnoses/2026-09-23-confirm-email-supabase-not-ready-race-42a98d.md`.
+Fix is one guarded line reusing the existing `ensureSupabaseReady()` helper
+— written, mutation-proven (the mutated test reproduced the exact live
+error string), **NOT YET DEPLOYED**.
+
+Between f92d17 and 42a98d, both identified causes of confirmation calls
+silently failing on the WEB path are now fixed in code. Once both are
+deployed, the web fallback path (which is what any Android tap ALSO lands
+on for as long as App Links fails to claim the URL — see below) should
+work end-to-end for every real user, not just the founder's test accounts.
+OI-244 stays OPEN because the Android App Links sub-issue is independent
+of both fixes and still requires the founder's own Play Console check —
+not something resolvable from this session.

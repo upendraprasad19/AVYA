@@ -149,4 +149,4 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-240 | _getNextRankFromLadder's remaining/binding_constraint is inaccurate for 3… | none — bounded work, but a genuinely… | 2026-09-22 — every claim below re-read… | [:5614](open_issues.md#L5614) |
 | OI-241 | Cross-worktree concurrency: no lock prevents multiple sessions running… | none | never | [:5689](open_issues.md#L5689) |
 | OI-242 | realtime_pro_gate_behavioral_test.dart flakes on full-suite CI run with a… | nothing technical. Needs a… | 2026-09-22 — reproduced the CI failure… | [:5716](open_issues.md#L5716) |
-| OI-244 | Confirm-link tap left auth.one_time_tokens unconsumed — unexplained low… | (1) Vercel deploy authorization (2)… | 2026-09-23 — reproduced live on 2 real… | [:5791](open_issues.md#L5791) |
+| OI-244 | Confirm-link tap left auth.one_time_tokens unconsumed — unexplained low… | (1) Vercel deploy authorization for BOTH… | 2026-09-23 — reproduced live on 2 real… | [:5791](open_issues.md#L5791) |
