@@ -10256,11 +10256,11 @@ concepts:
       .timeout() frees the AWAITER and does NOT cancel the request.
     writers:
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 804
+        line_range: 913
         method: signOutInProgress
         semantic: teardown-window-flag
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 850-887
+        line_range: 959-996
         method: signOut
         semantic: set-in-try-clear-in-finally
         notes: >-
@@ -10271,7 +10271,13 @@ concepts:
           after the a9c4e2 ceiling added ~100 lines earlier in the file — a
           blanket offset would have been wrong, since signInWithEmail was split
           into signInWithEmail + _performEmailSignIn and the two halves shifted
-          by different amounts.
+          by different amounts. Re-derived AGAIN 2026-09-23 (diagnose 42a98d)
+          after the confirmEmail() ensureSupabaseReady() reordering fix added
+          lines earlier in the file — same class of drift, unrelated edit,
+          confirmed by check_sot_registry_parity.dart flagging the stale
+          850-887 range at commit time; signOutInProgress's 804 was ALSO stale
+          (→913) despite the gate not flagging it, found by grepping the
+          symbol directly rather than trusting the gate's silence on it.
       - file: lib/core/services/sync_service.dart
         line_range: 1996
         method: restoreOpTimeout

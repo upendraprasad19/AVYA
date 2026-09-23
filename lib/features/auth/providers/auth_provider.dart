@@ -700,24 +700,55 @@ class AuthNotifier extends Notifier<AuthState2> {
   /// it can be completed on any device, which is exactly why the recovery
   /// flow above also moved to a token/code shape instead of a raw link.
   Future<void> confirmEmail(String tokenHash) async {
+    state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
+    // diagnose 42a98d: /confirm is reached as a genuinely cold page load —
+    // it's a top-level route exempted from _authRedirect (app_router.dart)
+    // and NOT nested under /splash, so nothing guarantees
+    // SupabaseService.instance.initialize() (which only ever runs inside
+    // SplashScreen, deliberately deferred there per main.dart) has completed
+    // before this fires automatically on ConfirmEmailScreen's first mount.
+    // Without this guard, `_performConfirmEmail` below hits
+    // `Supabase.instance.client` — a `late` field behind an `assert()` that
+    // is stripped in release builds — throwing `LateInitializationError`
+    // before any network request is even attempted. That lands in the
+    // generic catch-all and shows the misleading "invalid or has expired"
+    // message, even though the real link was never actually checked. Same
+    // pattern signInWithEmail already uses; confirmEmail was simply
+    // missing it.
+    //
+    // ORDERING IS LOAD-BEARING — this must run BEFORE the OI-205 guard
+    // below, not after (B-pass Finding 1 on diagnose 42a98d, caught before
+    // merge). `SupabaseAuth.initialize()` restores any PERSISTED session
+    // synchronously as part of this same awaited chain
+    // (`supabase_auth.dart:107-125`, `setInitialSession`) — so
+    // `_supabase.isAuthenticated` is not just unavailable but actively
+    // WRONG (always false) until this resolves. The OI-205 guard used to
+    // run first specifically because touching Supabase at all was
+    // considered unconditionally unsafe pre-fix — that was true only as an
+    // ACCIDENT of the missing guard (an uninitialized Supabase crashed
+    // before anything else could happen); it was never a deliberate safety
+    // property. Checking isAuthenticated before this resolves would let a
+    // cold /confirm load past the guard while reading a stale "not signed
+    // in" for a device that actually has a valid persisted session — i.e.
+    // exactly the silent-account-switch OI-205 exists to block, newly
+    // reachable specifically because this fix now lets the call proceed
+    // instead of crashing first.
+    if (!await ensureSupabaseReady()) return;
     // OI-205 interim guard (2026-09-16, plan-review round 1 Finding 1):
     // /confirm is an autoVerify Android App Link — tapping it from ANY app
     // hands control straight to the already-running Activity, unlike /reset
     // (browser-only, no App Link). Refuse outright rather than silently
     // switching an already-authenticated user's session; the full consent
     // UX (switch vs. cancel) remains a real product decision, tracked by
-    // OI-205, not decided here. Checked BEFORE the loading state so a
-    // blocked attempt never touches Supabase at all — this ORDERING is
-    // correct-by-inspection (the guard is unconditionally the first
-    // statement in this method) but round 2 correctly noted it is not
-    // independently pinned by a test: proving it end-to-end needs
-    // `SupabaseService.instance.isAuthenticated` to read true, which
-    // requires `SupabaseService.instance.initialize()` to have run — that
-    // throws in a test environment with empty `.env` values, and no seam
-    // exists to fake just the initialized flag (same gap
-    // `confirmEmailAuthGuardState`'s own doc comment already names).
-    // Adding one is a real, separate change to a shared core service, not a
-    // one-line addition to slip into this batch.
+    // OI-205, not decided here. `isAuthenticated` is now read only after
+    // ensureSupabaseReady() above has resolved, so a persisted session is
+    // correctly visible here — see that guard's comment for why this
+    // ordering is load-bearing. Not independently behaviorally pinned by a
+    // test: proving the TRUE branch end-to-end needs a real persisted
+    // session in local storage, which this VM test harness cannot produce
+    // (same documented gap this guard's own history already names).
+    // `confirm_email_readiness_behavioral_test.dart`'s source-order test
+    // pins the STRUCTURAL fix (this call precedes the guard) instead.
     final guardState = confirmEmailAuthGuardState(
       state,
       alreadyAuthenticated: _supabase.isAuthenticated,
@@ -726,7 +757,6 @@ class AuthNotifier extends Notifier<AuthState2> {
       state = guardState;
       return;
     }
-    state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
     try {
       // Bounded by the same ceiling as signInWithEmail: verifyOTP + the
       // _ensureLocalUser fan-out below is the identical network-touching
@@ -735,6 +765,19 @@ class AuthNotifier extends Notifier<AuthState2> {
       // (diagnose a9c4e2) — and confirmEmail fires automatically on mount,
       // with no prior user gesture, so an unbounded hang here is worse, not
       // better, than the sign-in case it borrows the ceiling from.
+      //
+      // NOTE (B-pass Finding 2, diagnose 42a98d): this ceiling covers
+      // verifyOTP + _ensureLocalUser, NOT the ensureSupabaseReady() call
+      // above — same gap signInWithEmail already has, not unique to this
+      // fix. Investigated rather than assumed: SupabaseAuth.initialize()'s
+      // session-restore path (setInitialSession, supabase_auth.dart) is
+      // synchronous local-storage-only work, no network I/O, so the
+      // realistic hang surface there is narrow. The always-visible
+      // "GO TO SIGN IN" link in _buildLoadingState remains the manual
+      // escape if it ever does hang. Not wrapped here to avoid duplicating
+      // TimeoutException handling for a risk that's real but proportionally
+      // small; revisit alongside signInWithEmail's identical gap if it ever
+      // shows up in telemetry.
       await boundSignIn(() => _performConfirmEmail(tokenHash));
     } on TimeoutException catch (e, st) {
       unawaited(ErrorTelemetry.logEvent('auth_confirm_email_timeout',

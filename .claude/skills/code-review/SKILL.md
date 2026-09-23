@@ -248,6 +248,73 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-23 (c)** — blast-radius **account** — branch `confirm-email-init-race`
+  (diagnose 42a98d: `AuthNotifier.confirmEmail` gains the `ensureSupabaseReady()`
+  guard its siblings `signInWithEmail`/`checkEmailRegistered` already had, closing
+  the second of OI-244's two identified web-path root causes — a cold `/confirm`
+  load bypasses `/splash`, the only place `Supabase.initialize()` runs, so the
+  auto-fired confirmation call raced an uninitialized `Supabase.instance` and
+  threw `LateInitializationError` before any network request was attempted).
+  **3 findings (1 P1, 1 P2, 1 P3); 0 false_alarm.** Review:
+  `docs/reviews/cac1e4ee9414-review.md`.
+  **Tuning 1 — a NEW sub-shape for lens 6 (`guard_without_its_mirror`): inserting
+  a readiness/initialization guard AFTER an existing state-dependent guard can
+  retroactively invalidate what the EARLIER guard already decided, because the
+  initialization guard's own side effects change the very state the earlier
+  guard read.** Finding 1 (P1): the pre-existing OI-205 "already authenticated"
+  guard (`confirmEmailAuthGuardState`, `auth_provider.dart:721-728`) reads
+  `_supabase.isAuthenticated`, which unconditionally returns `false` while
+  Supabase is uninitialized (`supabase_service.dart:97-100`) — true regardless
+  of whether a real, persisted session exists in local storage. The new
+  `ensureSupabaseReady()` guard, placed AFTER that read (`:743`), then
+  synchronously RESTORES any persisted session as part of its own awaited
+  `Supabase.initialize()` chain (confirmed directly in the pub-cache source,
+  `supabase_flutter-2.17.1/lib/src/supabase_auth.dart:107-125`,
+  `setInitialSession`) — but `confirmEmailAuthGuardState` is never re-checked
+  afterward. Net effect: a device with an existing signed-in session, cold-
+  loading `/confirm` (the now-documented NORMAL case, not an edge case),
+  silently gets switched to whatever account the confirmation link belongs to,
+  with none of OI-205's intended refusal message ever shown — reopening,
+  specifically for the cold-load path this diff newly makes reachable, exactly
+  the class of bug OI-205 was shipped one week earlier to close. Neither the
+  OI-205 guard's own pure-function test (hand-supplied bool, no real Supabase
+  timing) nor the new diff's own regression test (its "real `ensureSupabaseReady`"
+  case hits the empty-`.env` `StateError` branch before `Supabase.initialize()`
+  is ever called, so it structurally cannot reach the session-restoration
+  branch either) can see this. **General method addition: when a diff adds a
+  readiness/init guard anywhere AFTER an existing guard that reads live
+  singleton state, ask whether the readiness guard's own initialization can
+  change the answer the earlier guard already used — not just whether the two
+  guards' conditions individually make sense.** This is a distinct question
+  from the lens's existing "does the new guard change behaviour for the mirror
+  case" framing — here both guards are individually correct in isolation, and
+  the bug is purely in their ORDER relative to a side effect neither guard's
+  own code shows.
+  **Tuning 2 — the task brief's own item 1 named this exact interaction
+  ("does it interact badly with the OI-205 guard's own ordering assumptions")
+  before dispatch, and it still took reading the actual `supabase_flutter`
+  pub-cache source (not just this repo's code) to confirm it was real** — the
+  OI-205 guard's own doc comment already flagged its `isAuthenticated` read as
+  untestable ("requires `SupabaseService.instance.initialize()` to have run")
+  without drawing the further conclusion that a LATER-added initialize() call
+  in the same function could make that pre-condition fire mid-method. Worth
+  recording because the brief essentially pre-identified the right question
+  and independent verification was still required to turn it into a confirmed
+  finding rather than a plausible-sounding hunch — reinforces this skill's own
+  standing instruction (§3.0/§6) to verify every claim against code and live
+  state rather than accept a plausible story, including one the reviewer's own
+  dispatch brief half-suggests.
+  **Tuning 3 — re-confirms the `blast_radius_from_diff.dart` bare-`-`-stdin
+  trap this file's own memory already tracks (`feedback_mistake_blast_radius_positional_mode.md`,
+  5 prior instances): piping full diff CONTENT instead of a name-only path
+  list into `-` silently returns a plausible-looking but wrong tier
+  (`feature` instead of the correct `account`) rather than erroring — caught
+  by re-reading the script's own usage comment before trusting the first
+  result, not by the tool complaining.** 6th instance of this exact trap,
+  self-caught before it reached the report.
+  False-alarm rate 0/3 → no lens removed; lens 6 gains the initialization-
+  guard-invalidates-earlier-guard method note above.
+
 - **2026-09-23** — blast-radius **account** — branch `claude/oi-242-flaky-test-filing`
   (commit f0580c14: `ConfirmLinkDetector` fixes a live production bug where Vercel's
   `/confirm` redirect puts the forwarded `token_hash` before the `#` instead of
