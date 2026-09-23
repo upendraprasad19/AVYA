@@ -710,6 +710,15 @@ Two standing invariants, codified after a 4-round pre-implementation review of t
    parallel, integrated in one pass, with the coordinator re-verifying one mutation per unit by
    hand (§4.4 rule 21) rather than trusting the units' self-reported reds.
 
+8. **Full gate loop before review dispatch (NON-NEGOTIABLE — adopted from ICANBEFITTER, 2026-09-23).**
+   Before dispatching ANY review round that has a diff to look at, run the COMPLETE gate suite:
+   ```bash
+   flutter analyze lib/
+   flutter test
+   dart run scripts/pre-commit.sh   # or attempt git commit to trigger the loop
+   ```
+   NOT a hand-picked subset. Hand-picked subsets miss gates. A review that only runs "the relevant ones" is choosing which gates the next reviewer does NOT see. The measure: a `profile-phase-fixes` batch ran 8 gates by hand, skipped 2, and the commit failed on one of the skipped ones. That gap did not exist in the review because nothing in the review ran that gate. Run the full loop — the loop exists to remove the judgment about which gates are relevant.
+
 These bind the planning / `/code-review` / `/hermes-pass` / brainstorming flows.
 
 ### 4.13 One worktree per session (NON-NEGOTIABLE — codified 2026-07-07 after 2 cross-session mixing incidents)
@@ -892,6 +901,8 @@ a commit from one can silently MIX in the other's staged files (2 incidents 2026
     — deliberately, so a breach cannot be blessed by pasting the command the
     failure message prints.
 [ ] Skill self-evolution: does any .claude/skills/<topic>/SKILL.md need a new bug-class entry, red flag, or trigger phrase?
+[ ] Runtime verified on device — app launched, went through core flow, observed expected state (NON-NEGOTIABLE).
+[ ] After the merge: `dart run scripts/retire_worktree.dart --execute` in the primary (§4.13.6).
 ```
 
 ### 5.1 Skill self-evolution
