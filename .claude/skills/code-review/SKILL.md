@@ -248,6 +248,47 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-23 (merge-integration)** — blast-radius **platform** (self-corrected — see below) —
+  branch `claude/next-aab-decision-d1227b`, a SECOND merge-integration review on the same branch:
+  merge commit `15d43fd9`, bringing 25 further `origin/main` commits (OI-batching A/B/C,
+  Discipline v3, AAB +46) into a branch that had already absorbed an EARLIER `origin/main`
+  snapshot one merge prior (`ad3fed06`, reviewed the same day, entry below). **1 finding (P3,
+  informational, explicitly NOT caused by this merge); 0 false_alarm.** Review:
+  `docs/reviews/15d43fd9-merge-review.md`.
+  **Tuning 1 — a negative result is not "nothing to check": the reviewer's first job on a SECOND
+  merge-integration review of the same branch is confirming the FIRST one's fix actually
+  survived the newer commits, not re-discovering it.** The brief primed the reviewer to hunt for
+  the exact two regressions the earlier same-day merge review had already found and fixed
+  (migration 141 reverting 140's alert_cron_failures bound; BOM/mojibake in the version files).
+  The reviewer correctly identified that `ad3fed06` was itself a nested merge commit predating
+  `15d43fd9`, isolated the actually-new diff range (`e7733cb8..1c791f72`, the 25 commits added
+  AFTER that nested merge), and confirmed neither regression reopened — rather than re-running
+  the same checks against the whole combined history and reporting them clean by coincidence.
+  **Tuning 2 — the review's OWN self-declared `blast_radius: catastrophic` was wrong, caught only
+  by re-running the classifier rather than trusting the frontmatter.** Corrected to `platform`
+  post-dispatch: two independent re-derivations (`git diff <old-HEAD> <merge>` and
+  `git diff <merge>^1 <merge>^2`, both piped through `blast_radius_from_diff.dart -`) returned
+  `account`; a full-repo grep for `SECURITY DEFINER` across every migration in the merge's diff
+  returned zero hits (the one content-rule that forces `catastrophic`); and the value that
+  actually gated the real commit was `platform`, per `pre-commit.sh`'s own live NOTE at commit
+  time. The reviewer likely inherited "catastrophic" from the PRIOR same-day merge-integration
+  entry's tier (which WAS catastrophic, for a genuinely different reason — SECURITY DEFINER
+  migrations that entry's own diff did carry) without recomputing it fresh for this second,
+  narrower diff. **Sibling of this file's own repeated "a review's self-declared tier is a
+  checkable claim, not scene-setting" lesson (lens 3) — here the claim being carried forward
+  was the REVIEWER's own, not the diff's.**
+  **A negative result worth keeping, per this file's own convention:** every one of the 6
+  requested check areas (migration/schema overlap, Edge Function interaction, OI board
+  consistency, SKILL.md citation consistency, version-file corruption, generated-index
+  freshness) was independently verified with a stated command, not accepted from the diff's
+  shape alone — including re-running both index generators against the live merged tree and
+  confirming zero diff, and tracing the one flagged stale citation (a DIFFERENT, unrelated
+  dead reference at line 2532, predating this branch's fork by a month) all the way to
+  confirming its absence at the merge-base itself before ruling it out-of-scope rather than
+  either fixing it inline (scope creep) or silently dropping it (per the brief's explicit ask).
+  Spun off as `task_f7062a7e` rather than either extreme.
+  False-alarm rate 0/1 → no lens removed; no new lens needed, existing set covered it.
+
 - **2026-09-22 (merge-integration)** — blast-radius **catastrophic** (inherited — merging
   `origin/main`'s SECURITY DEFINER migrations into `claude/next-aab-decision-d1227b`) — a
   merge-integration review scoped per this file's own 2026-09-22 precedent (line ~295 below) to
