@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**143 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**142 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -138,16 +138,15 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-222 | Document versionCode-bump-via-merge CI gap in CLAUDE.md §4.9 | none | never | [:4991](open_issues.md#L4991) |
 | OI-224 | alert_cron_function_dead threshold unreachable, cron_call_log pruned at 7… | none | 2026-09-20 — live on… | [:5059](open_issues.md#L5059) |
 | OI-227 | Telegram coach connect is broken (no linking token, bot says no user… | none — UI removal is self-contained; the… | 2026-09-21 — founder tapped "Connect… | [:5115](open_issues.md#L5115) |
-| OI-228 | AI coach shortenWorkout tool calls get stuck at status:queued with no… | none — Bug A is a small isolated fix;… | 2026-09-21 — both citations below… | [:5179](open_issues.md#L5179) |
-| OI-229 | AI coach chat replies violate captain_manual.ts hard rules: 100-word cap… | none — both are prompt-adherence gaps in… | 2026-09-21 — both cited… | [:5231](open_issues.md#L5231) |
-| OI-230 | AI coach snapshot rank-promotion math is self-contradictory:… | none — mechanism is fully understood and… | 2026-09-21 — read both functions live… | [:5283](open_issues.md#L5283) |
-| OI-231 | AI coach addressed a promoted user by their OLD rank term (Recruit instead… | live verification (need to check the… | 2026-09-21 — the title's own implied… | [:5342](open_issues.md#L5342) |
-| OI-232 | AI coach chat scrolls to top on every switch between in-app chat and… | none — mechanism is understood and… | 2026-09-21 — founder reported live;… | [:5402](open_issues.md#L5402) |
-| OI-233 | user_daily_snapshots' 4 cron/client writers are not atomic against each… | none — scope and fix shape are already… | 2026-09-21 — explicitly scoped out in | [:5453](open_issues.md#L5453) |
-| OI-234 | alert_edge_function_health never fires — 401s write no cron_call_log row,… | none | never | [:5499](open_issues.md#L5499) |
-| OI-235 | proactive_plateau_alert (~116s avg) and i-see-you-daily (~93s avg) run… | none | 2026-09-22, re-confirmed live by a… | [:5506](open_issues.md#L5506) |
-| OI-236 | 12 of 14 Supabase advisor-flagged unused indexes (idx_scan=0) left… | none | never | [:5513](open_issues.md#L5513) |
-| OI-237 | Extreme update:insert ratios on scheduled_workouts (34:1) and… | none | never | [:5520](open_issues.md#L5520) |
-| OI-238 | 5 Gemini-calling Edge Functions have no server-side reportGeminiExhaustion… | none | never | [:5527](open_issues.md#L5527) |
-| OI-239 | Acknowledging an alert re-arms its dedup window instead of waiting out the… | none | never | [:5553](open_issues.md#L5553) |
-| OI-241 | Cross-worktree concurrency: no lock prevents multiple sessions running… | none | never | [:5580](open_issues.md#L5580) |
+| OI-228 | AI coach shortenWorkout tool calls get stuck at status:queued with no… | none — Bug A is CLOSED; Bug B's "stuck… | 2026-09-22 (Batch B) — live-traced the… | [:5179](open_issues.md#L5179) |
+| OI-229 | AI coach chat replies violate captain_manual.ts hard rules: 100-word cap… | none — both are prompt-adherence gaps in… | 2026-09-21 — both cited… | [:5322](open_issues.md#L5322) |
+| OI-231 | AI coach addressed a promoted user by their OLD rank term (Recruit instead… | none — live verification DONE (Batch B,… | 2026-09-22 (Batch B) — settled via the… | [:5434](open_issues.md#L5434) |
+| OI-233 | user_daily_snapshots' 4 cron/client writers are not atomic against each… | none — scope and fix shape are already… | 2026-09-21 — explicitly scoped out in | [:5554](open_issues.md#L5554) |
+| OI-234 | alert_edge_function_health never fires — 401s write no cron_call_log row,… | none | never | [:5600](open_issues.md#L5600) |
+| OI-235 | proactive_plateau_alert (~116s avg) and i-see-you-daily (~93s avg) run… | none | 2026-09-22, re-confirmed live by a… | [:5607](open_issues.md#L5607) |
+| OI-236 | 12 of 14 Supabase advisor-flagged unused indexes (idx_scan=0) left… | none | never | [:5614](open_issues.md#L5614) |
+| OI-237 | Extreme update:insert ratios on scheduled_workouts (34:1) and… | none | never | [:5621](open_issues.md#L5621) |
+| OI-239 | Acknowledging an alert re-arms its dedup window instead of waiting out the… | none | never | [:5628](open_issues.md#L5628) |
+| OI-240 | _getNextRankFromLadder's remaining/binding_constraint is inaccurate for 3… | none — bounded work, but a genuinely… | 2026-09-22 — every claim below re-read… | [:5655](open_issues.md#L5655) |
+| OI-241 | Cross-worktree concurrency: no lock prevents multiple sessions running… | none | never | [:5730](open_issues.md#L5730) |
+| OI-242 | realtime_pro_gate_behavioral_test.dart flakes on full-suite CI run with a… | nothing technical. Needs a… | 2026-09-22 — reproduced the CI failure… | [:5757](open_issues.md#L5757) |

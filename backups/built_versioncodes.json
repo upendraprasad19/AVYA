@@ -17,5 +17,19 @@
   "1.0.0+43": {
     "artifact": "aab",
     "built_at": "2026-09-15T14:36:08.747585Z"
+  },
+  "1.0.0+44": {
+    "artifact": "none",
+    "built_at": "unknown",
+    "note": "bumped in commit a4eb42ab (\"for AAB build\") on 2026-09-19; the next bump commit for this version, 65bee5d5 (\"for APK +45\"), landed 2026-09-21 after ~90 commits/11 merged PRs in between -- no matching record-as-built commit for +44 anywhere in that window or after, so inferred never actually built; not confirmed live with founder, correct if wrong"
+  },
+  "1.0.0+45": {
+    "artifact": "apk",
+    "built_at": "unknown",
+    "note": "confirmed by founder 2026-09-23: already uploaded to Play Console internal testing. Bumped in commit 65bee5d5 (food-logging-observations batch, PR #29+#30) but the pipeline's own --record step never ran, so this ledger missed it until Gate 2.5 forced an explicit ask before the next build; seeded, not recorded live by the script"
+  },
+  "1.0.0+46": {
+    "artifact": "aab",
+    "built_at": "2026-09-23T05:38:07.288530Z"
   }
 }

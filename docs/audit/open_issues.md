@@ -5179,9 +5179,9 @@ missing from the Coach menu."
 ## OI-228 — AI coach shortenWorkout tool calls get stuck at status:queued with no resolution; log_workout_sheet shows wrong copy for a completed day
 
 - **Status**: OPEN
-- **Blocked on**: none — Bug A is a small isolated fix; Bug B needs live tool-call-lifecycle tracing before a fix can be proposed
-- **Verified**: 2026-09-21 — both citations below re-read live this session; Bug B's stuck-queued ROOT CAUSE is not yet isolated (see below)
-- **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/food-logging-observations-126ab3`
+- **Blocked on**: none — Bug A is CLOSED; Bug B's "stuck at queued" premise is REFUTED (Batch B, see below) — the real remaining gap is missing client-side confirm/dispatch telemetry, needed before a fix can be proposed with confidence
+- **Verified**: 2026-09-22 (Batch B) — live-traced the exact incident row; the cloud `tool_calls` field is a write-once snapshot that never transitions for ANY write tool, so it cannot itself evidence a stuck dispatch (see Update below)
+- **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/food-logging-observations-126ab3` (**Bug A is CLOSED by batch `oi-batching-strategy-e5e359`**, see the update at the bottom — Bug B remains open)
 
 Two related but distinct AI-coach tool-dispatch bugs surfaced from founder
 screenshots of a completed workout day.
@@ -5227,6 +5227,97 @@ round-trip and the client dispatch path, before proposing a fix. (3)
 Separately: the premature "queued... shortly" narration is a
 captain_manual.ts instruction-adherence gap the model should be tightened
 against regardless of Bug B's root cause.
+
+**Update 2026-09-22 (Batch A, branch `claude/oi-batching-strategy-e5e359`):**
+Bug A CLOSED — `log_workout_sheet.dart` now distinguishes a `'completed'`
+schedule row (new `_alreadyCompleted` flag) and shows "WORKOUT ALREADY
+LOGGED" / "Today's workout is already logged." instead of the generic empty
+state. Behavioral widget-pump test + mutation-proof in
+`test/widgets/log_workout_sheet_completed_day_test.dart`. Bug B is
+UNCHANGED and still needs the live tracing this entry's own recommendation
+(2) describes — not attempted in this batch (investigation-first work,
+outside a ready-to-fix batch's scope).
+
+**Update 2026-09-22 (Batch B investigation, branch
+`worktree-agent-a8d2441cb81c6553b`):** Bug B's root cause is now
+REFRAMED, not fully closed — the "stuck at queued" premise itself does not
+describe a broken lifecycle.
+
+**Code-level finding.** `ai_coach_interactions.tool_calls` is written
+EXACTLY ONCE, at request-resolve time
+(`supabase/functions/ai-proxy/index.ts:1155`), from `loop.toolCallsLog` —
+which `tool-loop.ts:505-509` sets to `status: "queued"` the instant a
+write-tool's `intentBuilder` succeeds, and never mutates afterward.
+Exhaustive grep of `supabase/functions/**` and `lib/**` found no other
+write site touching this column (client-side `ai_service.dart:295-297`
+only READS the per-request `tool_calls_log` field from the response —
+"Server-only diagnostics; never surfaced to the user" — and never writes
+it back). So `status: "queued"` is the PERMANENT, by-design value for
+every successfully-queued write-tool call, forever — regardless of whether
+the client ever renders the confirm card, the user taps APPLY, execution
+succeeds, a guard rejects it, or the card is dismissed. This field cannot
+itself distinguish "resolved" from "never even seen" and was never meant
+to transition; the OI's own title is a misreading of it.
+
+**Live data for the exact incident**
+(`ai_coach_interactions.id = 4b2c3bfc-f2af-4395-8f56-32200d890757`,
+2026-09-21 12:07:10 UTC, `user_message = "Cut today's workout to 30 min"`,
+`user_id = d7a67a37-0b05-4f0a-b13c-388bff3cb59b`):
+- This is the ONLY `shortenWorkout` tool call ever recorded, and the only
+  successfully-queued write-tool-call entry in the table's entire history
+  (16 of 271 interactions carry non-null `tool_calls`; only 2 are real
+  tool-loop arrays — this one, and an unrelated `getNutritionHistory`
+  `invalid_args` from 2026-08-01). **Rare, not systemic** — settles the
+  OI's own open question.
+- `public.scheduled_workouts` for this user/date
+  (`id = e919fd76-42ff-4f75-9bbe-86284c82e4b1`) shows
+  `status: "completed"`, `completed_at: 2026-09-21 04:14:46 UTC` —
+  completed ~8h before the shorten request, and UNCHANGED afterward (no
+  shortened-workout side effect ever landed, consistent with either "guard
+  correctly rejected it" or "it never dispatched at all").
+- `_executeShortenWorkout` (`tool_dispatcher.dart:585-604`) logs
+  `ErrorTelemetry.logEvent('tool_dispatch_shorten_workout_failed', …)`
+  (`:601-602`) whenever `WorkoutScheduleService.shortenDay` throws
+  `ShortenDayException` — exactly the completed-day guard case this OI
+  already confirmed works correctly. `client_errors` has ZERO rows with
+  that op_type for this user, ever. So the guard path was never even
+  exercised: the client-side dispatcher branch for this intent never ran
+  at all, success or rejection.
+- The ONLY `client_errors` activity for this user in the 22 minutes
+  spanning the request (12:07:00–12:29:00 UTC) is **54 `restore_op_done`
+  events** — the same ~8 sync tables (water_logs, workout_templates,
+  streaks, schedule_completions, scheduled_workouts, workout_logs,
+  saved_meals, nutrition_logs) completing in repeating waves roughly every
+  3 minutes, several taking 10–42s each. The device was in the middle of a
+  heavy, repeating background/restore-sync storm exactly when the chat was
+  sent and for the following ~20+ minutes.
+
+**Conclusion.** No dispatch-code bug was found — the guard, the
+`intentBuilder`, and the queue-for-confirmation architecture all behave as
+designed. The best-supported (not proven) explanation for "nothing
+visibly happened" is that the user never tapped APPLY on the resulting
+confirm card — there is no telemetry either way, because
+`ToolConfirmCard`'s confirm/dismiss actions (`tool_confirm_card.dart:39-64`)
+leave no cloud trace at all (Hive-only, no cloud write-back). The
+concurrent restore storm is circumstantial, not proven causal, but is
+itself anomalous (54 restore ops for one user in 22 minutes) and worth its
+own look — not attempted here, out of this batch's 3-item scope.
+
+**Batch B2 fix plan (not implemented here):** (1) Add a client-side
+lifecycle event — write to `client_errors` (or a new light column) on
+confirm-card render, APPLY tap, and dispatch outcome — so a future
+incident is diagnosable from data instead of inference. (2) Once that
+telemetry exists, reproduce a shorten-on-completed-day request and confirm
+whether the card renders/behaves correctly under normal load, then
+separately under a concurrent restore storm, to test the sync-storm
+correlation directly. (3) Separately (already flagged in this OI):
+tighten `captain_manual.ts`'s no-narration instruction so the model stops
+describing queued-for-confirmation write tools as already-in-progress
+background jobs ("you will see the revised plan shortly") — this is a
+real prompt-adherence gap independent of Bug B's root cause. (4) Consider
+whether the restore-storm frequency (54 events/22min for one user) is
+itself a distinct issue worth its own OI — flagged, not filed, in this
+batch (out of scope).
 
 ## OI-229 — AI coach chat replies violate captain_manual.ts hard rules: 100-word cap breached, fabricated free-tier message count shown to a PRO user
 
@@ -5280,75 +5371,77 @@ post-check can backstop.
 - **Verified**: never
 - **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/food-logging-observations-126ab3`
 
-## OI-230 — AI coach snapshot rank-promotion math is self-contradictory: _getNextRankFromLadder / _getEtaNextPromotion
+**Update 2026-09-22 (Batch B investigation, branch
+`worktree-agent-a8d2441cb81c6553b`):** Recommendation (1) — live snapshot
+verification — is now DONE. Confirmed: the snapshot WAS correctly PRO at
+generation time. **Both violations are pure prompt drift, not a data bug.**
 
-- **Status**: OPEN
-- **Blocked on**: none — mechanism is fully understood and fixable directly
-- **Verified**: 2026-09-21 — read both functions live this session, confirmed
-  the mechanism below by tracing the code (the original founder-observed
-  contradictory screenshot text itself was not preserved in writing from the
-  earlier investigation and is not re-quoted here — the mechanism below is
-  independently derived from the current source, not from that screenshot)
-- **Identified**: originally from founder APK screenshots (Phase 1, this
-  session, exact date/wording not preserved) · filed 2026-09-21 via
-  mint_oi.sh from branch `claude/food-logging-observations-126ab3`
+Incident row: `ai_coach_interactions.id =
+f6208401-acae-424b-90d5-fd57268d086f` (2026-09-21 11:57:08 UTC,
+`user_message = "hi"`, `user_id = d7a67a37-0b05-4f0a-b13c-388bff3cb59b`) —
+this is the exact reply text the OI describes (matches both violations
+verbatim, including the closing "You have 10 messages remaining today on
+the free tier."). Note: `ai_coach_interactions` has no stored
+snapshot/context column (confirmed via `information_schema.columns` — only
+`id, user_id, snapshot_id, channel, user_message, ai_response, model_used,
+tokens_used, was_helpful, created_at, summarized, tool_calls`), so the raw
+snapshot payload itself isn't recoverable after the fact; PRO status was
+instead cross-checked against the two live sources that feed it:
 
-Founder observed self-contradictory rank/promotion info in an AI coach reply
-(exact wording not preserved in writing). Re-deriving the mechanism directly
-from `lib/features/ai_coach/services/ai_snapshot_builder.dart` finds a
-concrete, precisely-locatable defect that would produce exactly this shape
-of contradiction:
+- `public.subscriptions`: an `active` `yearly` row for this user
+  (`id = 448b08ee-c23d-4770-8104-cf0b5da4bc4c`,
+  `start_date: 2026-09-14 17:37:49 UTC`,
+  `end_date: 2027-09-14 17:37:49 UTC`) — active and unexpired at message
+  time.
+- `client_errors`: `op_type = "subscription_state_written"`,
+  `error_message = "isPro=true plan=yearly"`,
+  `created_at: 2026-09-21 11:56:06 UTC` — **62 seconds before** the "hi"
+  request — confirms the LOCAL Hive cache that
+  `ai_snapshot_builder.dart`'s `_getSubscriptionState()` (`:1367-1378`,
+  reading `SubscriptionService.instance.isPro()` at `:1368`) builds
+  `snapshot.subscription` from was already `true` at generation time.
 
-`_getNextRankFromLadder()` (`:1400-1459`) computes a `remaining` map keyed by
-whichever of `workouts` / `streak_days` / `weeks` / `deployments` the next
-rank's gate actually requires (`kRankGates[next.code]`), and picks a
-`binding_constraint` — the requirement with the MAX remaining value (`:1430,
-1442-1445`). So `binding_constraint` can legitimately be `'weeks'`,
-`'streak_days'`, or `'deployments'` — NOT `'workouts'` — whenever the user
-has already satisfied the workout count but not the other gate(s).
+Both the server (Postgres) and client (Hive, via telemetry) sources
+independently confirm PRO status was correctly known. The model echoed
+`captain_manual.ts:122-124`'s illustrative free-tier example verbatim
+despite having the correct PRO signal available — this is Violation 2
+settled as pure prompt-adherence drift, matching OI-231's parallel finding
+for the rank-address violation from the SAME reply (see that OI's Batch B
+update — both violations in this single "hi" reply are now confirmed
+prompt drift, not data bugs).
 
-`_getEtaNextPromotion()` (`:1585-1619`) calls `_getNextRankFromLadder()` and
-then reads **only** `remaining['workouts']` (`:1590`) to decide the ETA.
-If `remainingWorkouts == 0`, it unconditionally returns `{days: 0, date:
-<today>}` for BOTH `at_current_cadence` and `at_plan_cadence` (`:1592-1597`)
-— i.e. "promotion happens today" — **regardless of whether
-`remaining['streak_days']`, `remaining['weeks']`, or
-`remaining['deployments']` are still nonzero.** Even in the non-zero branch
-(`:1604-1607`), the day/week cadence math is computed purely from
-`remainingWorkouts` and never references the other three keys at all.
+**Word count** (Violation 1): the actual reply is ~190 words by a plain
+whitespace count (vs. the OI's original "roughly 230" estimate) — either
+way, well over double the `captain_manual.ts:432-433` 100-word cap. No
+data-bug angle applies here; it is the same class of length/gating
+adherence gap as Violation 2.
 
-**Net effect:** any user whose binding constraint is weeks/streak/deployments
-rather than workouts gets a snapshot where `next_rank.binding_constraint`
-correctly names the real bottleneck (e.g. `"weeks"`, with
-`next_rank.remaining.weeks: 3`), while `eta_next_promotion` simultaneously
-claims `{days: 0, date: today}` — because it only ever looked at
-`remaining.workouts`, which happened to already be 0. The Captain, fed both
-fields in the same snapshot, has no way to reconcile "3 weeks still needed"
-against "promotion today" — because the snapshot itself contains both, and
-they disagree.
-
-**Recommendation**: `_getEtaNextPromotion()` must compute ETA from the
-ACTUAL `binding_constraint` `_getNextRankFromLadder()` selected, not
-hardcode `workouts`. For a `weeks`-bound or `streak_days`-bound promotion,
-the "0 days" short-circuit is simply wrong — a weeks-gate can only be
-satisfied by calendar time passing, and a streak-gate needs the streak
-itself extended, neither of which `remainingWorkouts == 0` says anything
-about. Needs a per-constraint-type ETA formula (workouts → cadence-based, as
-today; weeks → calendar days remaining; streak → the specific streak
-mechanics; deployments → deployment cadence), or at minimum an honest
-"cannot estimate" response when the binding constraint isn't workouts, rather
-than a false "today."
+**Batch B2 fix plan (not implemented here):** (1) Tighten
+`captain_manual.ts:122-124`'s free-tier-cap instruction to be explicitly
+conditional ("ONLY if snapshot.subscription.tier !== 'pro'") and move the
+illustrative example phrasing further from something a model could echo
+verbatim regardless of gating — per this OI's own Recommendation (2). (2)
+Add a deterministic server-side post-check in `ai-proxy`/`tool-loop.ts`
+that strips or refuses any reply containing free-tier-cap language when
+`snapshot.subscription.tier === 'pro'` — per Recommendation (3); this is a
+hard, checkable rule that shouldn't rely on prompt adherence alone. (3)
+Separately, add a reply-length enforcement backstop (truncate/regenerate)
+for the 100-word chat cap, since this is the second confirmed instance of
+the model ignoring an explicit hard-rule instruction in the same manual —
+worth treating length + subscription-gating as one "deterministic
+post-check" work item in Batch B2 rather than two.
 
 ## OI-231 — AI coach addressed a promoted user by their OLD rank term (Recruit instead of Sailor) — current_rank_code read directly from Hive, bypassing rank_service's canonical reader
 
 - **Status**: OPEN
-- **Blocked on**: live verification (need to check the live `current_rank_code`
-  Hive/Postgres value for the affected user at the time of the reply to
-  distinguish a stale-data bug from a pure model instruction-adherence miss)
-- **Verified**: 2026-09-21 — the title's own implied mechanism was
-  investigated this session and found NOT to be the defect (see below); the
-  real root cause is still open
-- **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/food-logging-observations-126ab3`
+- **Blocked on**: none — live verification DONE (Batch B, see update below):
+  hypothesis 2 (pure model miss) CONFIRMED, hypothesis 1 (stale data)
+  REFUTED. Remaining work is a `captain_manual.ts` prompt-tightening pass
+  (Batch B2), not more investigation
+- **Verified**: 2026-09-22 (Batch B) — settled via the same reply's own
+  internal inconsistency (correct SD1 rank name later in the identical
+  output that opened with the SD2 address term) — see update below
+- **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/food-logging-observations-126ab3` (see the update at the bottom for batch `oi-batching-strategy-e5e359`'s partial progress)
 
 Founder is confirmed rank SD1 (per this session's earlier investigation) but
 was addressed "Recruit" — the term for rank SD2 — in the "hi" reply.
@@ -5399,56 +5492,64 @@ even though it isn't this bug's cause, it's a live SoT-reader duplication
 this repo's own conventions forbid, and duplicated reads are exactly the
 pattern that silently drifts later (`feedback_writer_reader_field_drift_recurring.md`).
 
-## OI-232 — AI coach chat scrolls to top on every switch between in-app chat and Telegram channel
+**Update 2026-09-22 (Batch A, branch `claude/oi-batching-strategy-e5e359`):**
+Recommendation (2) DONE — both call sites now route through
+`RankService.instance.getCurrentRank()`. As this entry's own text already
+anticipated, this does NOT close the OI: the live-verification half
+(recommendation 1, hypothesis 1 vs 2) is still unresolved and needs a repro
+with live snapshot/interaction inspection, which is investigation-first work
+outside a ready-to-fix batch's scope. Stays OPEN, blocked on the same live
+verification as before. (Side benefit of the hygiene fix, found while
+implementing it: `_getCurrentRankFromLadder()` was ALSO reading a second,
+dead Hive key — `current_rank_earned_at`, which nothing writes; the real
+writer uses `current_rank_achieved_at`. Fixed as part of the same change;
+see OI-230's closure note in `docs/audit/closed_issues.md`.)
 
-- **Status**: OPEN
-- **Blocked on**: none — mechanism is understood and fixable directly
-- **Verified**: 2026-09-21 — founder reported live; mechanism re-derived from
-  source this session (not yet fixed or regression-tested)
-- **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/food-logging-observations-126ab3`
+**Update 2026-09-22 (Batch B investigation, branch
+`worktree-agent-a8d2441cb81c6553b`):** Hypothesis 1 vs 2 is now SETTLED —
+**confirmed hypothesis 2 (pure model miss). Hypothesis 1 (stale data) is
+REFUTED.**
 
-Founder: switching to Telegram then back to in-app chat scrolls the chat to
-the top (oldest message), requiring a manual re-scroll down every time.
+`ai_coach_interactions` has no stored snapshot/context column (confirmed
+via `information_schema.columns` — only `id, user_id, snapshot_id, channel,
+user_message, ai_response, model_used, tokens_used, was_helpful,
+created_at, summarized, tool_calls`), so the raw snapshot payload sent to
+the model for this request is not recoverable directly. The stored
+`ai_response` TEXT itself settles the question instead, without needing it.
 
-**Mechanism**, traced in `lib/features/ai_coach/screens/ai_coach/screen.dart`:
-`channel == 'in_app' ? _buildChatArea(messages, isSending) :
-_buildTelegramView(telegramConnected)` (`:447-449`) means the chat's
-scrollable widget tree is entirely REMOVED from the tree when switching to
-Telegram and rebuilt fresh when switching back — Flutter does not preserve a
-`ScrollController`'s offset across that kind of unmount/remount (no
-`PageStorageKey`/keep-alive is used here).
+Incident row: `ai_coach_interactions.id =
+f6208401-acae-424b-90d5-fd57268d086f` (2026-09-21 11:57:08 UTC,
+`user_message = "hi"`, same founder-test user). The SAME reply:
+- Opens: "Recruit, stand by for the brief."
+- Later, in the identical reply, states: "Your current rank is Seaman 1st
+  Class."
 
-The one thing that WOULD re-scroll it to the bottom on remount,
-`_jumpToBottom()` (`:275-281`, jumps to `maxScrollExtent`, guarded by
-`_scrollController.hasClients`), is only ever invoked from ONE call site
-(`:423-426`):
-```
-if (!_initialScrollDone && messages.isNotEmpty) {
-  _initialScrollDone = true;
-  _jumpToBottom();
-}
-```
-`_initialScrollDone` (`:159`, declared once per `_AiCoachScreenState`) is a
-**one-shot flag for the screen's entire lifetime** — it was added
-specifically to fix first-paint landing position (comment at `:416-422`,
-`closes-diagnose: 2026-05-10-coach-scroll-init`, APK Test #15 / Bug E) and
-was never intended to fire more than once. Because `_AiCoachScreenState`
-itself is NOT recreated when `channel` changes (only the conditional child
-widget swaps), `_initialScrollDone` is already `true` well before the first
-channel switch — so the guard's condition never re-fires, `_jumpToBottom()`
-never runs again, and the freshly-remounted chat ListView is left at
-whatever its own default initial position is (the top).
+Per `captain_manual.ts:162-163`, "Seaman 1st Class" is SD1's RANK NAME
+("Seaman 2nd Class" is SD2's). Per `captain_manual.ts:28-29`, "Recruit" is
+SD2's ADDRESS TERM and "Sailor" is SD1's. Both values came from ONE
+request/generation. Since the rank NAME stated in the body is objectively
+correct for SD1, the underlying `current_rank` data available to the model
+WAS correct (SD1) at generation time — this directly refutes hypothesis 1
+(a stale `profile['current_rank_code']` still holding `'SD2'`). The model
+used the wrong (SD2) address term at the greeting while correctly stating
+the SD1 rank name moments later in the SAME output — an internal
+self-contradiction only explainable as the model not consistently applying
+the rank-aware-address instruction (`captain_manual.ts:27-29`, `:214-215`),
+i.e. pure prompt-adherence drift. This is the identical incident and root
+cause as OI-229's Violation 2 (also settled prompt drift, see that OI's
+Batch B update) — both violations came from this one "hi" reply.
 
-**Recommendation**: re-scroll to bottom on every remount of the chat area,
-not just the screen's first paint — e.g. call `_jumpToBottom()` whenever
-`channel` transitions TO `'in_app'` (not just on the one-shot initial
-load), or give the chat `ListView`/`CustomScrollView` a
-`PageStorageKey`/`AutomaticKeepAliveClientMixin` so Flutter preserves its
-scroll position across the unmount caused by the channel swap instead of
-disposing it. The existing one-shot `_initialScrollDone` guard should stay
-for its original first-paint purpose — this needs an ADDITIONAL trigger, not
-a replacement of that one (removing the one-shot guard would reintroduce
-`2026-05-10-coach-scroll-init`).
+**Batch B2 fix plan (not implemented here):** (1) Tighten
+`captain_manual.ts:27-29`/`:214-215`'s rank-aware-address instruction to
+explicitly require internal consistency within a single reply — e.g. "if
+you state the rank NAME anywhere in this reply, the greeting ADDRESS TERM
+must match the same rank" — since the failure mode here is specifically
+the model using two different rank vocabularies in one output, not simply
+picking a wrong rank. (2) Consider a deterministic post-check
+cross-referencing the address term actually used against
+`snapshot.current_rank.code` server-side, similar to OI-229's proposed
+subscription-gating backstop — both are the same class of "hard, checkable
+rule the model drifted on despite correct underlying data."
 
 ## OI-233 — user_daily_snapshots' 4 cron/client writers are not atomic against each other — residual race left open by the d8a2f6 merge-safe fix
 
@@ -5524,32 +5625,6 @@ this repo's migration protocol, not a quick follow-on to d8a2f6.
 - **Verified**: never
 - **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/next-aab-decision-d1227b`
 
-## OI-238 — 5 Gemini-calling Edge Functions have no server-side reportGeminiExhaustion telemetry (weekly-report, ai-media-proxy, assess-body-composition, daily-snapshot, rolling-context)
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-09-22 · filed via mint_oi.sh from branch `claude/strange-merkle-c2d0b9`
-
-Found by the self-triggered Hermes pass on `observation-batch-and-digest-redesign`
-(`docs/diagnoses/2026-09-21-ai-failure-telemetry-gap-oi226-f7a2c9.md`'s own fix wired
-`reportGeminiExhaustion` into `ai-proxy`'s 4 internal `type` handlers plus `tool-loop.ts`'s
-chat/tool-calling path — 5 call sites total, all inside ONE function, `ai-proxy`). This is a
-DIFFERENT, wider gap: per `supabase/functions/CLAUDE.md`'s own AI Architecture section, **6**
-functions call Gemini in total, and the other **5** — `weekly-report`, `ai-media-proxy`,
-`assess-body-composition`, `daily-snapshot`, `rolling-context` — each call `geminiChat`/
-`geminiChatWithTools` directly with NO server-side exhaustion alert of any kind. A total Gemini
-failure in any of these 5 is currently invisible to the founder until a user complains (or, for
-`rolling-context`, silently produces zero nightly summaries with no page at all).
-Explicitly out of scope for OI-226 — that OI's own filed text names only ai-proxy's two
-previously-uncovered call sites, not this wider surface; scope-creeping this batch to cover 5
-more functions was rejected in favour of tracking it here.
-
-**Fix direction:** wire `reportGeminiExhaustion` (or a function-appropriate variant — some of
-these are user-invoked, not cron, so the `endpoint`/dedup semantics may need adjustment) into
-each of the 5 call sites' failure path, matching the pattern `ai-proxy`/`tool-loop.ts` already
-establish.
-
 ## OI-239 — Acknowledging an alert re-arms its dedup window instead of waiting out the original interval — a systemic property shared by all 6 alert_* cron jobs
 
 - **Status**: OPEN
@@ -5577,6 +5652,81 @@ from `acknowledged` so triage and re-page timing are decoupled. Needs a design d
 one-line fix, since it touches the shared convention all 6 jobs rely on — a design change here
 should update all 6 in the same batch, not just the one that surfaced it.
 
+## OI-240 — _getNextRankFromLadder's remaining/binding_constraint is inaccurate for 3 of 4 constraint types: officer/MCPO completionRateMinimum gate not modeled at all, deployments 'current' hardcoded 0 (intentional, matches RankService)
+
+- **Status**: OPEN
+- **Blocked on**: none — bounded work, but a genuinely different/larger unit than OI-230's fix (new requirement type + a fundamentally different, adherence-dependent ETA semantic)
+- **Verified**: 2026-09-22 — every claim below re-read live this session (`kRankGates` full literal, `rank_service.dart:439-444`)
+- **Identified**: 2026-09-22 · surfaced while fixing OI-230 (`ai_snapshot_builder.dart` `_getNextRankFromLadder`/`_getEtaNextPromotion`) · filed via mint_oi.sh from branch `claude/oi-batching-strategy-e5e359`
+
+Found while making OI-230's ETA fix binding-constraint-aware: the `remaining`
+map `_getNextRankFromLadder()` (`lib/features/ai_coach/services/ai_snapshot_builder.dart:1400-1465`)
+computes for the AI snapshot is accurate for exactly ONE of the four
+constraint types it can select as `binding_constraint`, and the OI-230 fix
+had to work around the other three rather than trust them:
+
+**1. Officer/MCPO ranks (`completionRateMinimum` gate) — not modeled at all.**
+`kRankGates` (`lib/core/services/rank_ladder_data.dart:196-249`) gates MCPO,
+SubLt, Lt, LtCdr, Cdr and Capt primarily by `completionRateMinimum` +
+`completionRateWindowWeeks`. `_getNextRankFromLadder`'s `reqs` map
+(`:1419-1431`) never reads either field — only `totalWorkoutsAtLeast`,
+`streakAtLeast`, `minWeeksSinceSignup`, `deploymentsCompleteAtLeast`. For
+these ranks, `binding_constraint` can only ever resolve to `'weeks'` (the
+only other requirement most of them carry), even when completion rate is
+the REAL blocker — a user could be weeks-eligible and still nowhere near
+promotion, with the snapshot claiming weeks is the only gap. OI-230's fix
+guards against this specific case (any rank with `completionRateMinimum`
+set gets an honest "cannot estimate" ETA regardless of what
+`binding_constraint` says), but the `next_rank.remaining`/`binding_constraint`
+FIELDS THEMSELVES — read directly by the model, separate from
+`eta_next_promotion` — are still silently wrong for these ranks.
+
+**2. `deployments` — `current` hardcoded 0 (NOT fixed by OI-230, and correctly so).**
+The `reqs.forEach` loop (`:1437-1456`) never computes `current` for the
+`'deployments'` key — it stays 0 regardless of the user's actual deployment
+count, so `remaining['deployments']` always shows the FULL requirement.
+This is left as-is deliberately: `RankService.getNextRank()`
+(`rank_service.dart:439-444`) documents the identical tradeoff for its own,
+separate implementation — an accurate deployments-complete count requires a
+network call (counting `rank_promotions` rows with
+`trigger_type='deployment_complete'`), which a synchronous snapshot-builder
+call can't cheaply do, and the comment there explicitly notes staying at 0
+avoids flipping the PO/CPO gate prematurely on a stale/wrong signal. Worth
+fixing PROPERLY (e.g. a cached/synced local count, or accepting the network
+call) but not as a quick mechanical add — same shape of work as item 1.
+
+**3. `streak_days` — FIXED by OI-230's batch, noted here for completeness.**
+Same missing-`current` pattern as `deployments`, but `WorkoutRepository.currentStreak()`
+is a cheap, synchronous, already-used-in-this-file local reader (no network
+call needed) — fixed directly as part of OI-230's fix rather than filed
+here. See OI-230's closure note.
+
+**4. `workouts` — dead by construction, not a modeling gap.** No `kRankGate`
+entry ever sets `totalWorkoutsAtLeast` (F18, `rank_service.dart:18-19`), so
+this key never enters `reqs` at all. Not a bug to fix — see OI-230.
+
+**Why filed separately rather than fixed alongside OI-230:** item 1 needs a
+NEW requirement type (`completion_rate`) threaded through `reqs`/`remaining`/
+`binding_constraint`, PLUS a materially different ETA semantic for it — you
+cannot estimate "N days until your completion rate is 80%" from a count the
+way you can for streak/weeks/workouts, since it depends on the user's own
+future adherence over a rolling window, not a monotonic count ticking down.
+Item 2 needs either new sync plumbing or an accepted network call inside a
+snapshot builder that is otherwise entirely synchronous/local. Both are
+genuinely larger, riskier units of work than OI-230's binding-constraint
+generalization — bundling them would have meant either a much bigger,
+harder-to-review diff, or shipping OI-230's real fix later than necessary.
+
+**Recommendation**: (1) For officer/MCPO ranks, thread `completionRateMinimum`/
+`completionRateWindowWeeks` into `reqs` as a `'completion_rate'` requirement
+type, with its `remaining` value expressed as a rate GAP (e.g. `0.80 -
+actualRate`) rather than a count, and design an ETA response that's honest
+about being adherence-dependent (likely still "cannot estimate a date," but
+at least surfacing the current rate + target so the coach can reference
+concrete progress). (2) For deployments, evaluate whether a client-side
+cached count (synced periodically, accepting some staleness) is safer than
+either the current always-0 or a live network call on every snapshot build.
+
 ## OI-241 — Cross-worktree concurrency: no lock prevents multiple sessions running full flutter test simultaneously, causing 3x+ slowdowns
 
 - **Status**: OPEN
@@ -5603,3 +5753,78 @@ loops run concurrently across ALL worktrees sharing one repo — the founder's o
 timeout/staleness handling matching `_git_lock.sh`'s existing "no automatic reclaim" philosophy)
 before implementation — not a one-line change, since it changes the concurrency model for every
 session working in this repo simultaneously.
+
+## OI-242 — realtime_pro_gate_behavioral_test.dart flakes on full-suite CI run with a Box-not-found HiveError, passes clean in isolation
+
+- **Status**: OPEN
+- **Blocked on**: nothing technical. Needs a test-isolation investigation
+  (what earlier file in the full `test/` run leaves state this test depends
+  on) before a fix can be proposed.
+- **Verified**: 2026-09-22 — reproduced the CI failure signature exactly via
+  GitHub Actions logs; ruled out as unrelated to the PR that surfaced it by
+  running the file alone locally (9/9 green) and by confirming the same
+  failure independently hit an unrelated merge's CI run too.
+- **Identified**: 2026-09-22 · filed via mint_oi.sh from branch `claude/oi-batching-strategy-e5e359`
+
+Found while checking CI on PR #37 (Batch B, a docs-only investigation commit
+touching only `docs/audit/open_issues.md`/`OPEN_INDEX.md` — no Dart/Hive code
+whatsoever). The "Unit Tests" job failed on
+`test/contracts/realtime_pro_gate_behavioral_test.dart`'s "e4a7c9 — the
+teardown half (an attached channel never re-enters the gate) THE SECOND BUG:
+a downgrade fires onDowngrade" case:
+
+```
+Expected: true
+  Actual: <false>
+an expiry downgrade must release PRO-owned resources
+
+[MigratedKey.delete] userBox expiresAt threw: HiveError: Box not found. Did you forget to call Hive.openBox()?
+...
+HiveError: Box not found. Did you forget to call Hive.openBox()?
+  package:hive/src/hive_impl.dart 186:7           HiveImpl._getBoxInternal
+  package:hive/src/hive_impl.dart 197:33          HiveImpl.box
+  .../guarded_box.dart 341:20                     wrapUserScopedBox
+  .../hive_service.dart 235:7                     HiveService.userBoxGuarded
+  .../hive_service.dart 226:22                    HiveService.userBox
+  .../user_repository.dart 159:23                 UserRepository.getProgress
+  .../streak_progress_service.dart 246:46         StreakProgressService.resetToFreeCapOnLapse
+  .../subscription_service.dart 1225:38           SubscriptionService._downgradeLocally
+```
+
+**This is genuinely NOT related to PR #37's diff** — a docs-only merge
+cannot affect this code path. Checking `main`'s own recent CI history
+(`gh run list --branch main`) confirms it's flapping independently of any
+single PR: the merge-to-main run for PR #34 (`024d7a82`) also FAILED, the
+merge-to-main run for PR #36 (`e7733cb8`, in between) PASSED, and this
+PR #37 run failed again on the exact same test. **Confirmed NOT
+reproducible in isolation**: `flutter test
+test/contracts/realtime_pro_gate_behavioral_test.dart --exclude-tags golden`
+run alone, locally, against current `main` — all 9 tests pass, INCLUDING the
+exact case that failed on CI. Re-running the failed CI job (`gh run rerun
+--failed`) is the practical workaround used so far and it clears the check,
+consistent with order/state-leak-dependent flakiness rather than a
+deterministic regression.
+
+**Hypothesis, not yet confirmed:** some earlier test file in the full
+`test/` suite run leaves global/static state (a Hive box left open, or a
+singleton — `SubscriptionService`/`HiveService`/`UserRepository` are all
+involved in the failure's call chain) that this test's `setUp`/`tearDown`
+assumes is clean. This is the SAME general class CLAUDE.md's own
+common-pitfalls table already documents for GoogleFonts/`path_provider`
+box-lifecycle races and for concurrent-session Hive temp-dir contention —
+but this instance reproduces WITHIN a single suite run on an isolated CI
+runner (no concurrent session possible there), so it is a distinct,
+narrower case: ordering/state-leak between test FILES in one process, not
+cross-process contention.
+
+**Recommendation**: (1) Bisect by running larger and larger prefixes of the
+full `test/` suite (or binary-search which OTHER file, run immediately
+before this one in suite order, causes the box to be left in the state that
+trips `userBoxGuarded`) to find the actual leaking test. (2) Once found, fix
+via proper `tearDown`/`tearDownAll` box closure in the leaking file, or make
+this test's own `setUp` more defensive (re-open/re-verify the box it needs
+rather than assuming a clean slate). (3) Short-term mitigation already in
+use: `gh run rerun --failed` clears it reliably when it fires — acceptable
+for now given it does not block any specific PR's own correctness, but
+should not become a standing habit given CLAUDE.md rule 20's ban on treating
+CI flakiness as permanently acceptable.

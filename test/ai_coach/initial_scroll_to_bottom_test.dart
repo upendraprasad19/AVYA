@@ -32,7 +32,10 @@ void main() {
     final dir = Directory('lib/features/ai_coach/screens/ai_coach');
     expect(dir.existsSync(), isTrue,
         reason: 'ai_coach screen folder must exist');
-    src = readScreenSource('ai_coach');
+    // Comment-stripped (not readScreenSource) so a regression that comments
+    // a fix out instead of deleting it cannot satisfy these presence checks
+    // — see readScreenSourceStripped's doc comment / B-pass Finding 1.
+    src = readScreenSourceStripped('ai_coach');
   });
 
   group('AI coach initial-scroll contract', () {
@@ -98,6 +101,45 @@ void main() {
       );
     });
 
+    test(
+        'channel-switch-back re-triggers _jumpToBottom (OI-232)',
+        () {
+      // OI-232 — switching to Telegram and back unmounts/remounts the chat
+      // subtree, and the one-shot _initialScrollDone gate above only ever
+      // fires on the screen's first paint, never again. A second, narrower
+      // trigger is required: a ref.listen on channelProvider that fires
+      // ONLY on the transition INTO 'in_app' (not on every rebuild while
+      // already in_app, and not on the transition OUT to Telegram).
+      expect(
+        src.contains("ref.listen(channelProvider"),
+        isTrue,
+        reason:
+            'AI coach screen must listen to channelProvider so it can '
+            're-scroll when the user switches back from Telegram. '
+            'closes-diagnose: 2026-09-22-coach-scroll-channel-switch-c1b9d4',
+      );
+      final listenWindow = _extractChannelListenWindow(src);
+      expect(
+        listenWindow.contains("next == 'in_app'") &&
+            listenWindow.contains('previous'),
+        isTrue,
+        reason:
+            'the channelProvider listener must condition on the '
+            'TRANSITION (previous != next), not fire on every build while '
+            'channel is already in_app — ref.listen only fires on actual '
+            'value changes, but the condition must still name both sides '
+            'so a reviewer/future edit cannot accidentally drop the guard.',
+      );
+      expect(
+        listenWindow.contains('_jumpToBottom()'),
+        isTrue,
+        reason:
+            'must call _jumpToBottom() (instant), not _scrollToBottom() — '
+            'the remounted ListView has nothing on screen yet to animate '
+            'from, same reasoning as the first-paint gate.',
+      );
+    });
+
     test('forbidden: bare initState scroll without gate', () {
       // A naive fix would be to call `_scrollToBottom()` from initState.
       // That fails because the messages provider may not be loaded yet,
@@ -129,6 +171,19 @@ String _extractGateWindow(String src) {
         'Did the build-time gate get refactored? Update this test.');
   }
   final end = (start + 400).clamp(0, src.length);
+  return src.substring(start, end);
+}
+
+/// Extracts the area around the `ref.listen(channelProvider` call so the
+/// channel-switch-back assertions scope to that block, not the OTHER
+/// ref.listen calls (chatHistoryProvider etc.) just above it.
+String _extractChannelListenWindow(String src) {
+  const marker = 'ref.listen(channelProvider';
+  final start = src.indexOf(marker);
+  if (start < 0) {
+    fail('Could not locate ref.listen(channelProvider in source.');
+  }
+  final end = (start + 200).clamp(0, src.length);
   return src.substring(start, end);
 }
 

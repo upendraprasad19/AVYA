@@ -738,6 +738,11 @@ class AuthSessionBootstrapper {
 
       // F1 · Early-stage subscription refresh.
       unawaited(SubscriptionService.instance.refreshFromSupabase());
+
+      // a4c7d1: One-time heal for mismatched logged exercise sets.
+      // After cross-account guard passes, normalize any persisted exlog rows
+      // with logging_type mismatches (e.g., from a mid-workout swap).
+      unawaited(_healMismatchedExerciseLogs());
     });
   }
 
@@ -805,6 +810,75 @@ class AuthSessionBootstrapper {
       }
     } catch (_) {
       // Offline — SyncService.checkAndSync() will handle on next launch.
+    }
+  }
+
+  /// a4c7d1: One-time boot heal for mismatched logged exercise sets.
+  ///
+  /// When an exercise is swapped mid-workout, in-flight logged sets may carry
+  /// the OLD logging type's format. This method normalizes any persisted
+  /// exlog rows with a type mismatch against the exercise's library definition.
+  /// Runs post-login, after cross-account guard passes.
+  ///
+  /// Non-fatal on error — boot continues even if heal fails.
+  Future<void> _healMismatchedExerciseLogs() async {
+    try {
+      final workoutBox = _hive.workoutBox;
+      final exerciseBox = _hive.exerciseBox;
+
+      for (final key in workoutBox.keys) {
+        if (key is! String || !key.startsWith('exlog_')) continue;
+
+        final log = workoutBox.get(key);
+        if (log is! Map) continue;
+
+        final loggedType = log['logging_type'] as String?;
+        final exerciseName = log['exercise_name'] as String?;
+        if (loggedType == null || exerciseName == null) continue;
+
+        // Resolve the exercise's CURRENT library definition
+        final libraryExercise = exerciseBox.values.firstWhere(
+          (e) => e is Map && (e['name'] as String?) == exerciseName,
+          orElse: () => null,
+        ) as Map?;
+        final correctType = libraryExercise?['logging_type'] as String? ?? loggedType;
+
+        // If mismatch, normalize the sets
+        if (loggedType != correctType) {
+          final sets = (log['sets'] as List? ?? []).cast<Map<String, dynamic>>();
+          final normalized = sets.map((s) {
+            if (correctType == 'timed') {
+              s['weight_kg'] = 0;
+              s['reps'] = 0;
+            } else {
+              s['duration_sec'] = 0;
+            }
+            return s;
+          }).toList();
+
+          log['sets'] = normalized;
+          log['logging_type'] = correctType;
+          await workoutBox.put(key, log);
+
+          unawaited(ErrorTelemetry.recordNonFatal(
+            Exception('exlog_format_normalization_healed'),
+            null,
+            reason: 'exlog_format_normalization_healed',
+            extra: {
+              'exercise_name': exerciseName,
+              'old_type': loggedType,
+              'new_type': correctType,
+            },
+          ));
+        }
+      }
+    } catch (e, st) {
+      unawaited(ErrorTelemetry.recordNonFatal(
+        e,
+        st,
+        reason: 'exlog_format_normalization_heal_failed',
+      ));
+      // Non-fatal; boot continues
     }
   }
 

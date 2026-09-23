@@ -327,6 +327,32 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   cannot, because the author is reading their own edit as intentional.
   False-alarm rate 0/8 → no lens removed; lens 7 extended per Tuning 1 above.
 
+- **2026-09-22 (Batch C)** — blast-radius **platform** — branch
+  `oi-batching-strategy-e5e359`, Batch C (OI-238: wiring `reportGeminiExhaustion`
+  into 5 Gemini-calling Edge Functions — `weekly-report`, `ai-media-proxy`,
+  `assess-body-composition`, `daily-snapshot`, `rolling-context` — that had none;
+  a direct sibling of OI-226's earlier ai-proxy-only fix). **0 findings; 0
+  false_alarm.** Review: `docs/reviews/50ef49a5910c-review.md`. **No new lens —
+  the reviewer verified rather than trusted throughout**: independently ran
+  `deno check` + `deno test` (44/44, matching the diagnose-doc's own claimed
+  counts) rather than accepting them from prose, hand-traced every
+  `geminiChat()` return path in `gemini.ts` to prove `lastError` is always
+  populated whenever content is null (closing the obvious guard_without_its_mirror
+  question for this shape of fix before it could be a finding), grepped the
+  WHOLE repo (not just the touched file) for other callers of
+  `rolling-context`'s newly-2-arg `summarizeMessages`, and hand-walked each of
+  the 5 new source-grep tests' brace-boundary computations against the live
+  file text to rule out an early-nested-`}` false match — the exact fragile-match
+  failure mode this skill's lens 8 warns about. Attempted a live mutation
+  spot-check of the diagnose-doc's own mutation-proof claim but the harness's
+  auto-mode classifier blocked re-running `deno test` on a mutated tree
+  ("Irreversible Local Destruction"); reverted immediately via `git checkout --`
+  and substituted a hand-trace of the affected test's boundary logic instead.
+  Worth recording precisely because it is a clean run with real verification
+  work behind it, not a rubber stamp — the alternative (a reviewer that reads
+  the diff, finds it plausible, and reports 0 findings without running
+  anything) would be indistinguishable in the output file alone.
+
 - **2026-09-22** — blast-radius **catastrophic** (inherited — migration 138's
   `SECURITY DEFINER` trigger, arriving via `main`) — a MERGE-INTEGRATION review,
   not a normal feature-commit review: `claude/food-logging-observations-126ab3`
@@ -369,6 +395,55 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   author) catches it by hand. Not proposed as a new gate here — scope
   decision, not an oversight; filed as awareness for whoever next touches
   that validator.
+
+- **2026-09-22** — blast-radius **account** — branch `oi-batching-strategy-e5e359`,
+  Batch A (3 independent AI-coach bug fixes: OI-230 rank/ETA binding-constraint
+  fix, OI-232 channel-switch scroll fix, OI-228 Bug A log-workout-sheet
+  completed-day copy fix — plus a Gate 19 false-positive suppression fix and
+  supporting OI-board/SoT-registry updates). **3 findings (0 P0, 1 P1, 1 P2,
+  1 P3); 0 false_alarm — all 3 fixed in-batch.** Review:
+  `docs/reviews/d2ce94ab0a72-review.md` (renamed twice: first from
+  `a4bcd634b7a7-review.md` to `5ebf78e29706-review.md` after the fixes below
+  were staged — the standard hash-fixed-point rename, `docs/reviews/` being
+  hash-excluded made the rename itself free — then again to this filename
+  after a mid-batch rebase onto a moved `origin/main`. This entry originally
+  cited the intermediate `5ebf78e29706` name and went stale the moment the
+  second rename landed without a matching update here — caught by
+  `check_skill_tuning_history.dart` failing on the merge that brought this
+  branch and `claude/next-aab-decision-d1227b` together, since that gate
+  requires the review's CURRENT on-disk filename to appear in its own dated
+  block. Corrected as part of that merge, 2026-09-23.). Run as one agent
+  (16 files, but the real code diff is 6 files — the rest is diagnose-doc/
+  OI-board prose).
+  **No new lens — all 3 findings are confirmed recurrences of already-documented
+  patterns, worth recording as data points rather than tuning.** Finding 1
+  (P1, guard_without_its_mirror) reproduced the lens's own standing
+  "if the guard is a SOURCE GREP, assume it is defeatable" method exactly:
+  the reviewer mutated the OI-232 fix by commenting it out (not deleting it —
+  the realistic re-entry the method note calls for) and the sole regression
+  test, a raw source-presence check with no comment-stripping, stayed green.
+  Fixed by adding a `readScreenSourceStripped()` helper (wrapping the
+  existing private `_stripComments`, previously only used by
+  `readLibrarySource`) and switching the file's shared `setUpAll` to it —
+  re-mutated post-fix, now reddens exactly the intended test. Finding 2 (P2)
+  is another `self_attesting_artifact` instance (lens minted 2026-08-25):
+  two closure-board entries cited `docs/diagnoses/<pending>.md` for
+  diagnose-docs this SAME diff already created with fully-known names —
+  unlike the repo's legitimate `commit <pending>` convention (genuinely
+  unknowable pre-commit), a diagnose-doc's identity was already fixed on
+  disk. Finding 3 (P3) is another "a citation lives in a field a gate reads,
+  but the gate's parser cannot actually read this value" instance
+  (2026-09-03 entry's class): a two-method `method: A / B` field failed the
+  registry-parity gate's bare-identifier regex, so a stale `line_range` (off
+  by 6 lines — missing exactly the `remaining`/`binding_constraint` fields
+  this batch is about) passed silently. All three were independently
+  re-verified by the implementing session before being trusted (the mutation
+  re-run live, the diagnose-doc filenames confirmed via `ls`, the real method
+  span re-read directly) rather than accepted from the review's prose alone.
+  False-alarm rate 0/3 → no lens removed; recorded as a third data point for
+  lens 6's comment-defeat sub-shape and a further recurrence for the
+  self-attesting-artifact and gate-blind-citation classes, neither of which
+  needs a new lens to keep finding real instances.
 
 - **2026-09-21** — blast-radius **catastrophic** (migration 138's
   `SECURITY DEFINER` trigger forced the tier up from a path-glob-computed
@@ -2690,3 +2765,16 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   No lens prompt changed — both patterns are existing lens 6/8 behaviors firing correctly, logged
   per §5.1 because the finding-to-resolution mechanics (spawn vs fix vs false_alarm) hadn't been
   demonstrated in this file's tuning history for an account-tier, near-zero-severity pass before.
+
+- **2026-09-23** — blast-radius **platform** — branch `aab-versioncode-ledger-backfill`: a
+  mechanical ledger backfill (`backups/built_versioncodes.json` +44/+45 entries) + versionCode
+  bump to 1.0.0+46, triggered by a live AAB-build-feasibility check surfacing that the ledger
+  had silently fallen 2 versionCodes behind (the `--record` step of `/build-apk` never ran for
+  those two builds). **1 finding (P2, asserted_fixture_value): a ledger note claimed 65bee5d5 was
+  "the very next commit" after a4eb42ab when they were actually 2 days / ~90 commits / 11 merged
+  PRs apart — the underlying conclusion held, only the timing phrasing was wrong.** Fixed same
+  review cycle. **Tuning: even a purely mechanical, no-application-logic commit (JSON + version
+  string edits) can still assert a false historical claim in its own commit message/notes — the
+  asserted_fixture_value lens caught it precisely because it re-derived the claim from git log
+  rather than trusting the prose next to it, consistent with this repo's own most-recurrent
+  mistake class (unverified claims about git/file state).** Review: `docs/reviews/0dd33fc9046e-review.md`.
