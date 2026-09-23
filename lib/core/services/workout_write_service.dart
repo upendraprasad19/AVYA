@@ -162,7 +162,11 @@ class WorkoutWriteService {
       // entries so downstream renderers and the cloud projection don't
       // carry phantom values.
       final resolvedType = _resolveLoggingType(exerciseName, mergedSets);
-      final cleanedSets = _stripPhantomFields(mergedSets, resolvedType);
+      // a4c7d1: Normalize all sets to match the resolved logging type.
+      // When swapping exercises, in-flight logged sets may carry the OLD
+      // format; ensure they're cleared when persisted with a NEW type.
+      final normalizedSets = _normalizeSetsByLoggingType(mergedSets, resolvedType);
+      final cleanedSets = _stripPhantomFields(normalizedSets, resolvedType);
 
       // APK Test #12 / Task A-2 — workout session id. Defaults to
       // `wlog_<date>` (one workout per IST date). Multi-session days
@@ -266,6 +270,39 @@ class WorkoutWriteService {
     if (hasDur && !hasWeight) return 'timed';
     if (hasWeight) return 'weight_reps';
     return 'bodyweight_reps';
+  }
+
+  /// a4c7d1: Normalize set values to match the exercise's logging type.
+  ///
+  /// When an exercise is swapped mid-workout (e.g., timed → weight/reps),
+  /// the in-session values may carry the OLD type's format. This method
+  /// clears incompatible fields before persistence:
+  /// - For timed: zero weight/reps
+  /// - For weight-based: zero durationSec
+  List<ExerciseSet> _normalizeSetsByLoggingType(
+    List<ExerciseSet> sets,
+    String loggingType,
+  ) {
+    if (loggingType == 'timed') {
+      return sets
+          .map((s) => ExerciseSet(
+                durationSec: s.durationSec,
+                loggedAtMs: s.loggedAtMs,
+                weightKg: 0.0,
+                reps: 0,
+              ))
+          .toList();
+    } else {
+      // weight_reps, bodyweight_reps, weighted_bodyweight, cardio, distance
+      return sets
+          .map((s) => ExerciseSet(
+                weightKg: s.weightKg,
+                reps: s.reps,
+                loggedAtMs: s.loggedAtMs,
+                durationSec: 0,
+              ))
+          .toList();
+    }
   }
 
   /// APK Test #12.5 / Class 1b — strip phantom fields when the
