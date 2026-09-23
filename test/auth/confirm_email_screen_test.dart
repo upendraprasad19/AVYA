@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:icanbefitter/core/router/app_router.dart';
 import 'package:icanbefitter/features/auth/providers/auth_provider.dart';
 import 'package:icanbefitter/features/auth/screens/confirm_email_screen.dart';
 
@@ -181,6 +182,47 @@ void main() {
             'guard permanently blocked any second token on the same State.',
       );
       expect(notifier.lastTokenHash, 'token-B');
+    },
+  );
+
+  testWidgets(
+    'starting verification clears AppRouter.pendingConfirmTokenHash — '
+    'round-1 plan-review Finding 1: unlike isPasswordRecovery, this field '
+    'had no gate, so a later re-render of /confirm would silently re-supply '
+    'an already-consumed/expired token',
+    (tester) async {
+      final notifier = _CallCountingAuthNotifier();
+      AppRouter.pendingConfirmTokenHash = 'stale-boot-time-fallback-token';
+      addTearDown(() => AppRouter.pendingConfirmTokenHash = null);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [authNotifierProvider.overrideWith(() => notifier)],
+          child: const MaterialApp(
+            home: ConfirmEmailScreen(
+              tokenHash: 'stale-boot-time-fallback-token',
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        notifier.confirmEmailCallCount,
+        1,
+        reason: 'verification must still start normally for this token',
+      );
+      expect(
+        AppRouter.pendingConfirmTokenHash,
+        isNull,
+        reason:
+            'the one-shot boot-time fallback must be cleared the moment '
+            'verification actually starts for it, so a later re-render of '
+            '/confirm (which always falls back to this field, since '
+            'state.uri.queryParameters is structurally always empty under '
+            'HashUrlStrategy) shows the missing-token error instead of '
+            'silently re-attempting an already-consumed/expired token.',
+      );
     },
   );
 

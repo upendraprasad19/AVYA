@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:icanbefitter/core/router/app_router.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -61,6 +62,16 @@ class _ConfirmEmailScreenState extends ConsumerState<ConfirmEmailScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_startedFor == tokenHash || !mounted) return;
       _startedFor = tokenHash;
+      // Round-1 plan-review Finding 1: AppRouter.pendingConfirmTokenHash is
+      // the one-shot boot-time fallback for a lost query string (see its
+      // own doc comment) and has no gate like isPasswordRecovery's — clear
+      // it the moment verification actually starts, so a LATER re-render of
+      // /confirm (browser back, or any subsequent in-app navigation here)
+      // can't silently re-supply this already-consumed/expired token. Safe
+      // regardless of which source (state.uri.queryParameters vs this
+      // fallback) actually produced `tokenHash`: the field is single-use by
+      // design either way.
+      AppRouter.pendingConfirmTokenHash = null;
       ref.read(authNotifierProvider.notifier).confirmEmail(tokenHash);
     });
   }
