@@ -251,6 +251,25 @@ check_edge_function_payloads.dart:
 check_edge_function_rollback_script.dart:
   grandfathered: 2026-08-10
 
+check_edge_function_scope.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/check_edge_function_scope_lib_test.dart
+  evidence: >
+    NEW gate 2026-09-23 (discipline-v3-phase3 batch, adopted from ICANBEFITTER's
+    Rule 3 AST gate). CLAUDE.md §4.4 rule 9: "Never expose API keys client-side.
+    All AI calls go through Supabase Edge Functions." REPORT MODE ONLY (never
+    fails a commit) -- same trust model as check_hive_first_pattern.dart: a
+    source-grep heuristic cannot prove absence, only flag presence.
+    Verified against the real lib/ tree before writing: zero matches for any
+    AI-provider endpoint domain or Edge-Function-only secret name anywhere in
+    lib/ (the client legitimately reads only SUPABASE_URL, SUPABASE_ANON_KEY,
+    RAZORPAY_KEY_ID per CLAUDE.md §0's env-var table).
+    ONE mutation, confirmed applied, reddening exactly 1 of 15 tests, tree
+    restored identical after: widened the RAZORPAY_KEY_? pattern to also
+    match RAZORPAY_KEY_ID (the client-legitimate key) -- reddened "matches
+    RAZORPAY_KEY_SECRET but NOT ... RAZORPAY_KEY_ID".
+
 check_exlog_key_canonical.dart:
   grandfathered: 2026-08-10
 
@@ -381,6 +400,35 @@ check_god_screen_max_lines.dart:
 
 check_hardcoded_pricing_and_limits.dart:
   grandfathered: 2026-08-10
+
+check_hive_first_pattern.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/check_hive_first_pattern_lib_test.dart
+  evidence: >
+    NEW gate 2026-09-23 (discipline-v3-phase3 batch, adopted from ICANBEFITTER's
+    Rule 2 AST gate). CLAUDE.md §4.4 rule 4: "Repository pattern for all data
+    access. Never call Supabase or Hive directly from widgets." REPORT MODE
+    ONLY (never fails a commit) -- a source-grep heuristic cannot converge
+    against a hypothetical future non-Supabase `.from()`, so tightening the
+    pattern is never the fix (code-review skill lens 6).
+    Verified against the real lib/ tree before writing: grep '\.client\.from\('
+    matched 27 call sites across 9 files, all `_supabase.client.from(` /
+    `SupabaseService.instance.client.from(` / `_s.client.from(`, all inside
+    lib/core/services/ or lib/shared/repositories/ -- zero violations, zero
+    false positives, on the real tree, not assumed.
+    THREE mutations, each confirmed applied, tree restored identical after
+    each, against 21 tests total: (1) removed the isAllowedPath skip AND the
+    comment-strip together -- reddened 3 tests (the allowlist test, the
+    commented-example test, and the allowed-path-with-violation-shaped-line
+    test); (2) widened the supabaseFromCall regex to bare `\.from\(` --
+    reddened 1 test (the Map.from()/List.from() false-positive test); (3)
+    (round-1 review, P2-5, 2026-09-23) narrowed supabaseFromCall from
+    `\b(?:supabase|supa|client)\.from\(` back to the pre-fix
+    `\b(?:supabase|client)\.from\(` -- reddened exactly 1 test (`flags a
+    direct supa.from( call outside an allowed dir`), confirming the widened
+    alias set (added after a live grep found `supa.from(` as a real, unmatched
+    third alias in rank_service.dart) is the thing under test, not incidental.
 
 check_hive_map_field_drift.dart:
   grandfathered: 2026-08-10

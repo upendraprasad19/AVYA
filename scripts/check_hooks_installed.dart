@@ -36,14 +36,20 @@
 // derives the same list for tiering and is what caught the new hook missing
 // from docs/blast_radius.yaml in this very batch.
 //
-// STILL OPEN -- OI-104: this gate checks hook PRESENCE and IDENTITY (the
-// HOOK_SOURCE anchor), not FRESHNESS. Because setup-hooks.sh installs by `cp`,
-// an EDITED hook script is inert until the installer is re-run, and this gate
-// reports green throughout. Content-hash comparison is OI-104's job and is
-// deliberately not smuggled in here.
+// OI-104 (2026-09-23, discipline-v3-phase3 batch) -- ADDRESSED, not CLOSED.
+// This gate now compares FULL CONTENT (scripts/<hook>.sh vs the installed
+// copy), not just a header-line anchor, so it catches a body-only edit --
+// exactly the 2026-08-20 recurrence (`exclude-tags golden` added mid-file,
+// invisible to a 6-line anchor). Still a WARNING, not the OI's suggested
+// hard-fail: setup-hooks.sh writes to the COMMON git dir shared by every
+// worktree (§4.13), so failing hard here would block every worktree's next
+// commit the instant any hook script changes, until someone re-runs the
+// installer once from anywhere. See the per-hook loop below for the full
+// reasoning. Escalating to hard-fail is a separate, explicit decision.
 //
-// Exit 0 = pass: every hook setup-hooks.sh installs is present and canonical.
-// Exit 1 = fail: at least one is missing or is not the canonical script.
+// Exit 0 = pass: every hook setup-hooks.sh installs is present (freshness
+//          mismatches print as WARNINGS, not failures).
+// Exit 1 = fail: at least one hook setup-hooks.sh installs is NOT PRESENT.
 
 import 'dart:convert';
 import 'dart:io';
@@ -95,7 +101,24 @@ void main(List<String> args) {
     exit(0);
   }
 
-  final installerSource = installerFile.readAsStringSync();
+  // Round-2 review (2026-09-23): the try/catch added around the two hook-
+  // freshness reads below (search "Round-1 review, P2") left THIS read --
+  // the installer itself, which existsSync() confirms present but says
+  // nothing about whether it is READABLE -- as the one remaining unguarded
+  // call in the file, the exact same failure class the other two fixes exist
+  // to close (permission error, bad encoding, or a delete-between-check-and-
+  // read race would throw UNCAUGHT and crash this "never hard-fail" gate).
+  // Degrades to the same "UNDETERMINED (passing)" shape the missing-installer
+  // branch above already uses, rather than crashing.
+  String installerSource;
+  try {
+    installerSource = installerFile.readAsStringSync();
+  } catch (e) {
+    stderr.writeln('[Gate 32] UNDETERMINED (passing): $_installer could not '
+        'be read ($e), so the hook list could not be derived. This is NOT a '
+        'pass.');
+    exit(0);
+  }
   final hooks = parseInstalledHooks(installerSource);
 
   // CROSS-CHECK THE PARSE AGAINST A COUNT THAT DOES NOT DEPEND ON IT.
@@ -168,64 +191,72 @@ void main(List<String> args) {
           'scripts/${h.src}).');
       continue;
     }
-    final content = f.readAsStringSync();
+    // Round-1 review, P2 (2026-09-23): the freshness comparison below reads
+    // TWO files with no surrounding try/catch anywhere in this script -- an
+    // unreadable installed hook (permission error, bad encoding, or a race
+    // where the file is deleted between existsSync() and the read) would
+    // throw UNCAUGHT and crash the process with a non-zero exit, silently
+    // converting this gate's explicitly-designed "WARN, never FAIL" contract
+    // into an accidental hard FAIL for exactly the edge case the surrounding
+    // comments go out of their way to say must never happen. Read failures
+    // now degrade to the SAME "checked for PRESENCE only" warning shape the
+    // missing-source branch below already uses, rather than crashing.
+    String? content;
+    try {
+      content = f.readAsStringSync();
+    } catch (e) {
+      warnings.add('hooks/${h.dst} could not be read ($e) -- checked for '
+          'PRESENCE only, its contents were not verified against anything.');
+      continue;
+    }
 
-    // IDENTITY, NOT FRESHNESS -- and the distinction is deliberate.
+    // FRESHNESS (OI-104, 2026-09-23) -- full content comparison, the exact
+    // "fix shape" the OI itself names: "compare content, not presence -- hash
+    // scripts/<hook>.sh against .git/hooks/<hook> and fail on mismatch". This
+    // gate previously compared only a header-line ANCHOR (see the identity
+    // fallback below), which is why OI-104 RECURRED on 2026-08-20 three days
+    // after the anchor check shipped: the drift that day was a body change
+    // (`exclude-tags golden` added mid-file), invisible to any check that
+    // only reads the first 6 lines. Two real incidents (2026-08-11, 2026-08-20)
+    // both cost real debugging time because a fix looked broken while the
+    // STALE INSTALLED COPY, not the fix, was at fault -- "silent-inert-gate,
+    // the highest-consequence shape, because everything downstream looks
+    // green" (OI-104's own words).
     //
-    // setup-hooks.sh installs by `cp`, so an installed hook does NOT reference
-    // its source path; it IS the source. Checking for the string
-    // "scripts/<name>.sh" therefore fails on 3 of the 5 real hooks (only
-    // pre-commit.sh and pre-merge-commit.sh happen to set a HOOK_SOURCE
-    // anchor). That false-positive shape was caught by running this gate before
-    // trusting it.
-    //
-    // So the anchor is the source script's own first comment line, which is
-    // distinctive per hook and survives a `cp`. It answers "is the right script
-    // installed here", which is this gate's question.
-    //
-    // It deliberately does NOT compare full content. That would be OI-104's
-    // freshness check, and folding it in here would hard-FAIL every commit
-    // whenever a hook script is edited but the installer has not been re-run --
-    // i.e. exactly during the batch that improves a hook. Worse, the remedy
-    // (`setup-hooks.sh`) writes to the COMMON git dir shared by every worktree,
-    // so it would force a fix that reaches into other live sessions. A gate
-    // must not make a ship-stop out of a hygiene gap (§4.13 point 6's lesson).
+    // STILL a WARNING, not a hard fail, deliberately diverging from the OI's
+    // suggested fail-on-mismatch: setup-hooks.sh writes to the COMMON git dir
+    // shared by every worktree (§4.13), so a hard fail here would force
+    // EVERY worktree's next commit to block the instant any hook script
+    // changes, until someone re-runs the installer once from anywhere -- a
+    // hygiene gap must not become a ship-stop (§4.13 point 6's own lesson,
+    // and the exact deadlock this file's history already lived through once
+    // for the anchor-only version at 2026-08-17). Full-content comparison
+    // closes the FALSE-NEGATIVE gap OI-104 documents (green when it should
+    // warn) without opening a new false-ship-stop one; flipping to hard-fail
+    // is a separate, explicit escalation decision, not bundled here.
     final srcFile = File('scripts/${h.src}');
-    String? anchor;
     if (srcFile.existsSync()) {
-      for (final line in srcFile.readAsLinesSync().take(6)) {
-        final t = line.trim();
-        if (t.startsWith('#') && !t.startsWith('#!') && t.length > 12) {
-          anchor = t;
-          break;
-        }
+      String? srcContent;
+      try {
+        srcContent = srcFile.readAsStringSync();
+      } catch (e) {
+        warnings.add('scripts/${h.src} could not be read ($e) -- hooks/${h.dst} '
+            'was checked for PRESENCE only, its contents were not verified '
+            'against anything.');
+        continue;
       }
-    }
-    // IDENTITY MISMATCH IS A WARNING, NOT A FAILURE — and that asymmetry is
-    // the whole point of the gate's stated scope.
-    //
-    // The anchor is a line of CONTENT, so it drifts the moment anyone edits a
-    // hook's header comment without re-running the installer. Review round 2
-    // (2026-08-17) executed exactly that: reword line 2 of scripts/pre-commit.sh
-    // and this gate hard-FAILED every commit, in every worktree, with rc=1.
-    //
-    // That is the deadlock this file's own header says it refuses to create.
-    // The remedy it prints (`sh scripts/setup-hooks.sh`) writes to the COMMON
-    // git dir shared by every concurrent session, from whatever branch happens
-    // to be checked out — so a hard failure here forces a fix that reaches into
-    // other people's live sessions, over a cosmetic edit. Presence is the
-    // contract; sameness is OI-104's job and is warned about, not enforced.
-    if (anchor != null && !content.contains(anchor)) {
-      warnings.add('hooks/${h.dst} does not carry scripts/${h.src}\'s header '
-          'line — it may be STALE (setup-hooks.sh installs by `cp`, so an '
-          'edited script is inert until re-installed) or hand-written.');
-    }
-    if (anchor == null) {
-      // Fail-open on a missing source, but say so: with no anchor the identity
-      // check silently degrades to presence-only, and an impostor hook would
-      // pass it unnoticed.
+      if (content != srcContent) {
+        warnings.add('hooks/${h.dst} content does NOT match scripts/${h.src} '
+            '-- STALE installed copy (setup-hooks.sh installs by `cp`, so an '
+            'edited script is inert until re-installed). Fix: '
+            '`sh scripts/setup-hooks.sh`.');
+      }
+    } else {
+      // Fail-open on a missing source, but say so: with no source the
+      // freshness check silently degrades to presence-only, and an impostor
+      // hook would pass it unnoticed.
       warnings.add('scripts/${h.src} is absent, so hooks/${h.dst} was checked '
-          'for PRESENCE only — its contents were not verified against anything.');
+          'for PRESENCE only -- its contents were not verified against anything.');
     }
   }
 

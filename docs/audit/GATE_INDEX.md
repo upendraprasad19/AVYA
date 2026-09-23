@@ -10,7 +10,7 @@ wiring surface uses. A gate **number is an optional alias**: most gates have non
 the next free number: **55**. Declare it canonically as `// Gate: N` on its
 own line in the first 10 lines — that exact form is the only one this generator reads.
 
-Total gates: **107** (48 numbered, 59 by filename only).
+Total gates: **109** (48 numbered, 61 by filename only).
 
 | Gate | Script | Purpose | Test ledger |
 |---|---|---|---|
@@ -45,6 +45,7 @@ Total gates: **107** (48 numbered, 59 by filename only).
 | — | `check_edge_function_auth_pattern.dart` | Edge Function auth-pattern validation (e8a1c3 class, 2026-06-12). | grandfathered |
 | 12 | `check_edge_function_payloads.dart` | Flutter caller body keys ⊆ Edge Function validator shape. | grandfathered |
 | 38 | `check_edge_function_rollback_script.dart` | assert that the Edge Function deploy script supports rollback + post-deploy smoke | grandfathered |
+| — | `check_edge_function_scope.dart` | discipline v3 Phase 3, 2026-09-23. Fitness App's equivalent of | mutation_proven |
 | — | `check_equipment_audit.dart` | ⑦ OI-89 Gate B — flags library rows whose PROSE contradicts their | mutation_proven |
 | — | `check_equipment_vocab_lockstep.dart` | ⑦ OI-89 — pre-commit gate: EquipmentVocab's four token structures must agree. | mutation_proven |
 | — | `check_exercise_seams.dart` | ⑦ OI-89 Gate A — every exercise-emitting seam is enumerated, not eyeballed. | mutation_proven |
@@ -59,6 +60,7 @@ Total gates: **107** (48 numbered, 59 by filename only).
 | — | `check_goal_token_exhaustiveness.dart` | guarantees a fitness-goal | grandfathered |
 | 43 | `check_god_screen_max_lines.dart` | God-screen line ceiling. | grandfathered |
 | — | `check_hardcoded_pricing_and_limits.dart` | ban hardcoded price figures | grandfathered |
+| — | `check_hive_first_pattern.dart` | discipline v3 Phase 3, 2026-09-23. Fitness App's equivalent of | mutation_proven |
 | 19 | `check_hive_map_field_drift.dart` | Hive Map field-key drift detector (Theme G, closes-diagnose | grandfathered |
 | 32 | `check_hooks_installed.dart` | assert that the repo's git | grandfathered |
 | 16 | `check_id_injection_on_get.dart` | repository methods that return List<Map<...>> from a Hive | grandfathered |

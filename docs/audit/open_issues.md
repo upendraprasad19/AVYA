@@ -1550,47 +1550,6 @@ cloud sessions; **this file is the cross-session backlog.**
   (`safe_push.sh:12-17`) that exists precisely so callers don't fall back to raw, unverified git.
 - **Blast radius estimate**: `platform` (`docs/blast_radius.yaml:158`).
 
-## OI-104 — `check_hooks_installed.dart` detects hook PRESENCE, not staleness; installed hooks were 12 days behind their sources (P2)
-
-- **Status**: OPEN
-- **Blocked on**: nothing technical.
-- **Verified**: 2026-08-11 — `.git/hooks/pre-commit` and `pre-push` both dated `Jul 29 10:28`
-  against `scripts/pre-commit.sh` `Aug 10 11:30`; the installed copies were missing the `flutter()`
-  env-unset wrapper and the entire gate-index regen block. Fixed for this machine by re-running
-  `sh scripts/setup-hooks.sh`; the structural gap stays open.
-- **Identified**: 2026-08-11 · ×2 plan review of `safe-push-verifier`.
-- **Risk class**: silent-inert-gate — the highest-consequence shape, because everything downstream
-  looks green.
-- **RECURRED 2026-08-20, and this instance is the strongest evidence yet that presence-checking is
-  the wrong invariant.** Fixing `b2e9f4` (pre-push ran a bare `flutter test` while CI excludes
-  goldens and pins TZ) meant editing `scripts/pre-push.sh`. The edit was correct, its 3-case
-  parity test was green, and all three mutation legs reddened — every signal available said the
-  gate was fixed. The push then failed with **the exact same 4 failures as before the fix**,
-  because `.git/hooks/pre-push` was a stale `cp` dated `Aug 20 06:56` and contained **0**
-  occurrences of `exclude-tags golden`. `check_hooks_installed.dart` was green throughout.
-  Two things this adds to the entry above:
-  1. **The test suite cannot cover this.** `pre_push_matches_ci_invocation_test.dart` reads
-     `scripts/pre-push.sh` — the source — and is right to. No test that reads the source can
-     observe that a different file is what actually runs. So the hash check is not a nicety that
-     duplicates test coverage; it is the ONLY thing that can catch this class.
-  2. **The failure mode is a false NEGATIVE on a fix**, not just a stale gate. The operator sees
-     their own fix appear not to work, with no indication why. The natural next move is to
-     doubt the fix — or to reach for `--no-verify`, which is precisely what `b2e9f4` existed to
-     stop needing.
-  Fixed for this machine again by re-running `sh scripts/setup-hooks.sh` (second time in 9 days);
-  the structural gap stays open, which is the whole point of this entry.
-- **What's wrong**: `scripts/setup-hooks.sh:45` installs by `cp`, not symlink, so `.git/hooks/*`
-  drifts from `scripts/*.sh` the moment either changes. `scripts/check_hooks_installed.dart:40`
-  checks only `if (!content.contains('scripts/pre-commit.sh') && !content.contains('flutter analyze'))`
-  — **any** file containing the string `flutter analyze` passes. So an edit to a hook script is inert
-  until someone remembers to re-run the installer, and the gate that exists to catch that says green.
-  This is a `feedback_green_check_input_set_width` instance sitting under the whole local gate suite.
-- **Fix shape (not attempted)**: compare content, not presence — hash `scripts/<hook>.sh` against
-  `.git/hooks/<hook>` and fail on mismatch with the exact re-run command; or install a symlink where
-  the platform permits and hash-check only where it does not. Prefer the hash check: it is
-  platform-independent and states the real invariant ("the hook that runs IS the hook in git").
-- **Blast radius estimate**: `platform`.
-
 ## OI-106 — local `flutter test` runs ~3.9x slower per file than CI, cause unknown (P3)
 
 - **Status**: OPEN

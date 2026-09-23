@@ -507,11 +507,11 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   hash-excluded made the rename itself free — then again to this filename
   after a mid-batch rebase onto a moved `origin/main`. This entry originally
   cited the intermediate `5ebf78e29706` name and went stale the moment the
-  second rename landed without a matching update here — caught by
-  `check_skill_tuning_history.dart` failing on the merge that brought this
-  branch and `claude/next-aab-decision-d1227b` together, since that gate
-  requires the review's CURRENT on-disk filename to appear in its own dated
-  block. Corrected as part of that merge, 2026-09-23.). Run as one agent
+  second rename landed without a matching update here — caught independently
+  by `check_skill_tuning_history.dart` failing on two separate merges that
+  brought this branch together with other work, since that gate requires the
+  review's CURRENT on-disk filename to appear in its own dated block.
+  Corrected as part of those merges, 2026-09-23.). Run as one agent
   (16 files, but the real code diff is 6 files — the rest is diagnose-doc/
   OI-board prose).
   **No new lens — all 3 findings are confirmed recurrences of already-documented
@@ -2865,6 +2865,22 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   per §5.1 because the finding-to-resolution mechanics (spawn vs fix vs false_alarm) hadn't been
   demonstrated in this file's tuning history for an account-tier, near-zero-severity pass before.
 
+- **2026-09-23** — blast-radius **platform** (discipline-v3-phase3 batch: 3 new/widened gates and
+  a memory write-guard hook) — **1 finding (P3, cosmetic); 0 false_alarm — fixed in-batch.**
+  Review: `docs/reviews/c19c4efc482f-review.md`.
+  **Tuning — a copy/paste artifact from a mutation-revert cycle survived a full mutation-proof
+  cycle undetected, because mutation-proving checks BEHAVIOR, not source hygiene.** The finding
+  was an 8-line explanatory comment duplicated verbatim, back-to-back, in
+  `scripts/check_hooks_installed.dart` — introduced when a fix was applied, then reverted (to
+  confirm its regression test reddens), then re-applied, and the comment block (untouched by the
+  mutation itself, which only removed the try/catch code) ended up written twice across that
+  cycle. Every test stayed green throughout because the duplication was purely cosmetic — no lens
+  in the standard 8 targets dead/duplicate prose inside a function body, and mutation-proving by
+  its nature only exercises runtime behavior. **No lens prompt changed** — this is a real gap
+  (nothing upstream of a human/B-pass read would have caught it), but adding a
+  "duplicate-comment-block" lens for one instance would be over-fitting; logged so a *second*
+  instance of the same author-workflow artifact (edit → mutate → revert → re-edit) is recognized
+  as a recurring class rather than a one-off typo.
 - **2026-09-23** — blast-radius **platform** — branch `aab-versioncode-ledger-backfill`: a
   mechanical ledger backfill (`backups/built_versioncodes.json` +44/+45 entries) + versionCode
   bump to 1.0.0+46, triggered by a live AAB-build-feasibility check surfacing that the ledger
