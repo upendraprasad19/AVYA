@@ -68,3 +68,67 @@ Deno.test("daily-snapshot logs (not swallows) a failed existing-row read", () =>
     "a failed read must be logged so the degradation is observable",
   );
 });
+
+// ── OI-238 (sibling of A5/OI-226, f7a2c9) ────────────────────────────────
+//
+// extractCoachingNotes()'s own geminiChat() call had no reportGeminiExhaustion
+// wiring: `lastError` was never destructured, so the !rawText branch
+// structurally could not alert on total Gemini exhaustion. Same SOURCE-GREP
+// approach as the rest of this file (see header) — position-scoped to the
+// `!rawText` branch and comment-stripped before any `.includes()` check.
+
+function stripComments(s: string): string {
+  return s.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
+}
+
+Deno.test("daily-snapshot imports reportGeminiExhaustion", () => {
+  assert(
+    source.includes(
+      'import { reportGeminiExhaustion } from "../_shared/gemini_failure_alert.ts";',
+    ),
+    "index.ts must import reportGeminiExhaustion",
+  );
+});
+
+Deno.test("extractCoachingNotes destructures lastError from its geminiChat call (OI-238)", () => {
+  const callIdx = source.indexOf("await geminiChat({");
+  assert(callIdx >= 0, "geminiChat call not found");
+  const destructureLine = source.slice(Math.max(0, callIdx - 200), callIdx);
+  assert(
+    destructureLine.includes("lastError"),
+    `expected the geminiChat destructure to include lastError, got: ${destructureLine}`,
+  );
+});
+
+Deno.test(
+  "extractCoachingNotes reports Gemini exhaustion on the !rawText branch, using the caller's own supabase param (OI-238)",
+  () => {
+    const branchIdx = source.indexOf("if (!rawText) {");
+    assert(branchIdx >= 0, "!rawText branch not found");
+    const branchEnd = source.indexOf("return null;\n  }", branchIdx);
+    assert(branchEnd >= 0, "could not bound the !rawText block");
+    const rawBlock = source.slice(branchIdx, branchEnd);
+    const block = stripComments(rawBlock);
+
+    assert(
+      block.includes("reportGeminiExhaustion("),
+      "the !rawText branch must call reportGeminiExhaustion",
+    );
+    assert(
+      block.includes('"ai_proxy_gemini_exhausted"'),
+      "must reuse the shared ai-proxy dedup source (live client-invoked traffic, same quota)",
+    );
+    assert(
+      block.includes('"daily_snapshot_extraction"'),
+      'must tag this call site with endpoint "daily_snapshot_extraction"',
+    );
+    assert(
+      block.includes("lastError ?? null"),
+      "must forward the real lastError (or null), not a fabricated value",
+    );
+    assert(
+      /reportGeminiExhaustion\(\s*supabase,/.test(block),
+      "must pass the function's OWN supabase parameter, not a module-level client",
+    );
+  },
+);

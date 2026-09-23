@@ -3679,3 +3679,54 @@ exact screen), mutation-proven (reverting the fix reddens exactly this one
 new test, the pre-existing 4 stay green).
 **Closes**: diagnose-doc `docs/diagnoses/2026-09-22-coach-scroll-channel-switch-c1b9d4.md`.
 
+## OI-238 — 5 Gemini-calling Edge Functions have no server-side reportGeminiExhaustion telemetry (weekly-report, ai-media-proxy, assess-body-composition, daily-snapshot, rolling-context)
+
+- **Status**: CLOSED (2026-09-22, `oi-batching-strategy` Batch C) — diagnose `b6e3a8`
+- **Blocked on**: none
+- **Shipped**: all 5 named call sites. Each function's `geminiChat()` call now destructures
+  `lastError` and its total-exhaustion branch calls `reportGeminiExhaustion`. Dedup source split
+  by traffic shape rather than reused uniformly: the 4 LIVE user-invoked sites
+  (`weekly-report` `:573`, `ai-media-proxy` `:941`, `assess-body-composition` `:178`,
+  `daily-snapshot`'s `extractCoachingNotes` `:167`) share the SAME `"ai_proxy_gemini_exhausted"`
+  source ai-proxy/tool-loop.ts already use, each with a distinct `endpoint` tag; `rolling-context`'s
+  `summarizeMessages` (`:127`) — the sole cron-dispatched site among the 5, looping over every user
+  with >50 stored messages in one nightly run — deliberately gets its OWN source
+  (`"rolling_context_gemini_exhausted"`) so a bad-run failure burst can't suppress a same-day
+  live-traffic alert. `rolling-context/index.ts`'s `summarizeMessages` also gained a new
+  `supabase: SupabaseClient` parameter (it previously received none), threaded through from the
+  per-user loop's own `supabaseClient` at its call site. Same `DISABLE_GEMINI_FAILURE_ALERT`
+  kill-switch covers all 10 call sites now (5 from OI-226, 5 from this fix). No mechanical gate for
+  server-side wiring — same scope decision OI-226 already made, unchanged by this fix (10 call
+  sites across 6 functions still judged too small a surface).
+- **Verified**: 2026-09-22 — `grep -n "geminiChat\|reportGeminiExhaustion" supabase/functions/{weekly-report,ai-media-proxy,assess-body-composition,daily-snapshot,rolling-context}/index.ts`
+  confirmed all 5 destructure `lastError` and call `reportGeminiExhaustion` exactly once each.
+  `deno check --node-modules-dir=none` clean on all 5 `index.ts` files. `deno test --no-check
+  --allow-all --node-modules-dir=none` across all 5 functions: 44/44 passed. Each of the 5
+  new/extended wiring sites mutation-proven independently (deleted each `reportGeminiExhaustion`
+  call block in turn, confirmed exactly its own test reddened while every other test in that
+  file's suite stayed green, reverted, confirmed green again) — see the diagnose-doc's
+  `mutation_proven` field for exact pass/fail counts per site.
+- **Identified**: 2026-09-22 · filed via mint_oi.sh from branch `claude/strange-merkle-c2d0b9`
+
+Found by the self-triggered Hermes pass on `observation-batch-and-digest-redesign`
+(`docs/diagnoses/2026-09-21-ai-failure-telemetry-gap-oi226-f7a2c9.md`'s own fix wired
+`reportGeminiExhaustion` into `ai-proxy`'s 4 internal `type` handlers plus `tool-loop.ts`'s
+chat/tool-calling path — 5 call sites total, all inside ONE function, `ai-proxy`). This was a
+DIFFERENT, wider gap: per `supabase/functions/CLAUDE.md`'s own AI Architecture section, 6
+functions call Gemini in total, and the other 5 — `weekly-report`, `ai-media-proxy`,
+`assess-body-composition`, `daily-snapshot`, `rolling-context` — each called `geminiChat`
+directly with NO server-side exhaustion alert of any kind. A total Gemini failure in any of these
+5 was invisible to the founder until a user complained (or, for `rolling-context`, silently
+produced zero nightly summaries with no page at all). Explicitly out of scope for OI-226 — that
+OI's own filed text named only ai-proxy's two previously-uncovered call sites, not this wider
+surface; scope-creeping that batch to cover 5 more functions was rejected in favour of tracking
+it here.
+
+**Fix direction (as filed):** wire `reportGeminiExhaustion` (or a function-appropriate variant —
+some of these are user-invoked, not cron, so the `endpoint`/dedup semantics may need adjustment)
+into each of the 5 call sites' failure path, matching the pattern `ai-proxy`/`tool-loop.ts`
+already establish. Shipped exactly this — the dedup-source split (shared for the 4 live sites,
+separate for the one cron site) IS the "adjustment" the filed text anticipated.
+
+**Closes**: diagnose-doc `docs/diagnoses/2026-09-22-gemini-exhaustion-telemetry-oi238-b6e3a8.md`.
+
