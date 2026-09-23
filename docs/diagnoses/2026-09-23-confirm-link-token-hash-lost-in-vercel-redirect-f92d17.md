@@ -91,7 +91,7 @@ proposed_fix: |
   of Vercel's redirect mechanics, so touching the redirect rule was
   judged unnecessary added risk for no additional coverage.
 regression_test_planned:
-  - test/contracts/confirm_link_detector_test.dart (new — 6 cases: the actual live-broken shape (mutation-proven — reverting the fallback reddens exactly this + the "prefers fragment" case), the correct fragment-embedded shape, precedence when both are present, absence, unrelated URL, empty value)
+  - test/contracts/confirm_link_detector_test.dart (new — 6 cases: the actual live-broken shape (mutation-proven — reverting the fallback reddens exactly this case, 1 of 6; CORRECTED 2026-09-23 by round-1 B-pass Finding 2 — the "prefers fragment" case does NOT redden, it resolves entirely via the fragment branch and never touches the removed fromQuery branch, see the mutation_proven block below), the correct fragment-embedded shape, precedence when both are present, absence, unrelated URL, empty value)
 impact_analysis: |
   Additive-only: a new pure-function file, one new `AppRouter` static field
   (same pattern as the two existing recovery-token fields), one new
