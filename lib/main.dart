@@ -16,6 +16,7 @@ import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/router/app_router.dart';
 import 'package:icanbefitter/core/services/usage_counter_service.dart';
 import 'package:icanbefitter/core/utils/password_recovery_detector.dart';
+import 'package:icanbefitter/core/utils/confirm_link_detector.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app.dart';
@@ -115,6 +116,22 @@ Future<void> main() async {
       }
     } catch (_) {
       // Non-web or Uri parsing failure — no recovery detection needed.
+    }
+  }
+
+  // 6. Signup-confirmation token: same timing requirement as password
+  //    recovery above — capture BEFORE GoRouter's initialLocation navigation
+  //    can touch the URL. Live-verified 2026-09-23 (diagnose f92d17):
+  //    Vercel's `/confirm` redirect puts the forwarded `token_hash` in the
+  //    document's own query string, one component before the `#`, which
+  //    HashUrlStrategy/GoRouter never reads — so `state.uri.queryParameters`
+  //    inside the `/confirm` GoRoute is empty on every real request. This
+  //    stash is the fallback `AppRouter.pendingConfirmTokenHash` reads.
+  if (kIsWeb) {
+    try {
+      AppRouter.pendingConfirmTokenHash = ConfirmLinkDetector.detect(Uri.base);
+    } catch (_) {
+      // Non-web or Uri parsing failure — no confirm-link detection needed.
     }
   }
 

@@ -327,6 +327,63 @@ class AuthNotifier extends Notifier<AuthState2> {
     state = state.copyWith(status: AuthStatus.success);
   }
 
+  /// True when [message] is (a substring match on, case-insensitively)
+  /// Supabase's own GoTrue error string for an unconfirmed-email sign-in
+  /// attempt. Extracted so `sign_in_screen.dart` can detect this SPECIFIC
+  /// failure — distinct from every other [AuthStatus.error] — and offer a
+  /// self-service "resend confirmation email" affordance instead of the
+  /// generic transient SnackBar, which is the ONLY recovery path today. A
+  /// live audit (2026-09-23) found the majority of real signups whose
+  /// confirmation email was ever sent never completed confirmation at all —
+  /// some over a week old — with no way for the user to request a fresh
+  /// link once the first one is missed, expired, or lost to spam.
+  ///
+  /// Deliberately NOT `@visibleForTesting` — same reasoning as
+  /// [alreadyAuthenticatedConfirmMessage] below: this exists specifically to
+  /// be read by production code in `sign_in_screen.dart`, not just tests.
+  static bool isEmailNotConfirmedMessage(String? message) =>
+      message != null &&
+      message.toLowerCase().contains('email not confirmed');
+
+  /// Re-issues the signup confirmation email for [email] — the self-service
+  /// recovery path for [isEmailNotConfirmedMessage]. Distinct from
+  /// [signUpWithEmail]: this does NOT create a new account, set a new
+  /// password, or touch any existing session — it only asks Supabase to
+  /// re-send the pending confirmation token for an email that already has an
+  /// unconfirmed `auth.users` row. Supabase's own `resend` enforces its
+  /// usual per-email rate limit server-side (surfaces as an [AuthException]
+  /// here, same as every other auth call), so no separate client-side
+  /// cooldown is added.
+  Future<void> resendConfirmationEmail(String email) async {
+    state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
+    if (!await ensureSupabaseReady()) return;
+    try {
+      await _supabase.client.auth.resend(
+        type: OtpType.signup,
+        email: email.trim(),
+      );
+      unawaited(ErrorTelemetry.logEvent('auth_resend_confirmation_email',
+          message: 'requested'));
+      state = state.copyWith(
+        status: AuthStatus.info,
+        errorMessage:
+            'Confirmation email resent. Check your inbox (and spam folder).',
+      );
+    } on AuthException catch (e) {
+      state = state.copyWith(
+        status: AuthStatus.error,
+        errorMessage: e.message,
+      );
+    } catch (e) {
+      unawaited(ErrorTelemetry.logEvent('auth_resend_confirmation_email_failed',
+          message: '[${e.runtimeType}] ${e.toString().split('\n').first}'));
+      state = state.copyWith(
+        status: AuthStatus.error,
+        errorMessage: 'Could not resend the confirmation email. Please try again.',
+      );
+    }
+  }
+
   /// Create a new account with email + password.
   ///
   /// [termsAcceptedAt] / [termsVersion] (closes-diagnose

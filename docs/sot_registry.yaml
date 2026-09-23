@@ -10286,7 +10286,7 @@ concepts:
         semantic: telemetry-reason-split
     readers:
       - file: lib/core/router/app_router.dart
-        line_range: 789-794
+        line_range: 800-811
         method: postSessionRedirect
         semantic: branch-order-is-the-fix
         notes: signOutInProgress MUST be tested BEFORE the onboarding read.
@@ -10673,6 +10673,67 @@ concepts:
     class_constraints: |
       Re-verify BOTH the implicit-fragment and PKCE query shapes against a
       live link after any supabase_flutter upgrade.
+
+  - concept: confirm_link_token_hash_recovery
+    domain: auth_profile
+    behavioral_test_path: test/contracts/confirm_link_detector_test.dart
+    description: |
+      diagnose f92d17 — Vercel's `/confirm` redirect (`destination:
+      "/#/confirm"`) forwards the confirmation link's `token_hash` query
+      param BEFORE the literal `#/confirm`, not inside it (a standards
+      constraint: a URL can only have one `?query`, and it must precede any
+      `#fragment`). This app's Flutter web build uses HashUrlStrategy
+      exclusively (no `setUrlStrategy` call anywhere), so GoRouter's
+      `state.uri.queryParameters` only ever reads `location.hash` and never
+      sees `token_hash` sitting one component over in `location.search` —
+      every `/confirm` request was affected, regardless of device.
+
+      Deliberately modelled on the `password_recovery_session` concept above
+      (same timing hazard, same fix shape): `ConfirmLinkDetector.detect`
+      reads `Uri.base` in `main()` before `runApp()`, before GoRouter's
+      `initialLocation` navigation can call `history.replaceState` and alter
+      the URL out from under a later read.
+    writers:
+      - file: lib/main.dart
+        line_range: 121-134
+        method: "main() — kIsWeb capture block"
+        semantic: captures-Uri.base-before-GoRouter-boots
+    readers:
+      - file: lib/core/router/app_router.dart
+        line_range: 140-160
+        method: "/confirm GoRoute pageBuilder"
+        semantic: falls-back-to-pendingConfirmTokenHash-when-query-params-empty
+    hive:
+      box: null
+      key: null
+      shape: "Not applicable — transient in-memory static field, cleared implicitly by app restart, never re-read after the /confirm route consumes it."
+    cloud:
+      table: null
+      columns: []
+    forbidden_legacy_patterns:
+      - "reading Uri.base from inside ConfirmEmailScreen's build/initState instead of main() — same timing hazard PasswordRecoveryDetector already documents"
+      - "assuming vercel.json's redirect will always place the query string in the fragment — detect() defends against both possible locations"
+    class_constraints: |
+      CORRECTED 2026-09-23 by round-2 plan-review Finding 3: this
+      previously claimed AppRouter.pendingConfirmTokenHash was "never
+      explicitly cleared after use, consistent with the sibling
+      recoveryAccessToken/recoveryRefreshToken fields" — that was true of
+      the FIRST commit in this batch (f0580c14) but was fixed by round-1
+      plan-review Finding 1 in the very next commit (9ba66bc4): unlike its
+      siblings (which stay set but are gated by isPasswordRecovery being
+      reset false after use), pendingConfirmTokenHash IS now explicitly
+      cleared to null the moment ConfirmEmailScreen actually starts
+      verification for it — because state.uri.queryParameters['token_hash']
+      is structurally ALWAYS empty under this app's HashUrlStrategy, so
+      leaving it set would have made every later re-render of /confirm
+      silently re-supply the same already-consumed/expired token. See
+      lib/core/router/app_router.dart's own doc comment on the field, and
+      round-2 plan-review Finding 2 (fixed same batch) for the follow-on
+      gap that clearing it introduced: ConfirmEmailScreen.build() must not
+      treat a null tokenHash on a rebuild AFTER verification has started as
+      "never had a token" — see confirm_email_screen.dart's build() and its
+      _startedFor-gated early-return guard. Re-verify against a live Vercel
+      deploy if the redirect rule's shape ever changes.
 
   - concept: exercise_plate_read_path
     domain: workout

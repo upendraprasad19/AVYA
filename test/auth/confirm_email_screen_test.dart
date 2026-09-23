@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:icanbefitter/core/router/app_router.dart';
 import 'package:icanbefitter/features/auth/providers/auth_provider.dart';
 import 'package:icanbefitter/features/auth/screens/confirm_email_screen.dart';
 
@@ -25,6 +26,24 @@ class _CallCountingAuthNotifier extends AuthNotifier {
 class _SucceedingAuthNotifier extends AuthNotifier {
   @override
   Future<void> confirmEmail(String tokenHash) async {}
+
+  void succeed() {
+    state = state.copyWith(status: AuthStatus.success);
+  }
+}
+
+/// Round-2 plan-review Finding 2: sets `AuthStatus.loading` on the initial
+/// call (mirroring the real `confirmEmail`'s own first statement) and stays
+/// there until [succeed] is called explicitly — models an in-flight
+/// verification that outlives a rebuild of the widget that started it.
+class _DeferredThenSucceedingAuthNotifier extends AuthNotifier {
+  int confirmEmailCallCount = 0;
+
+  @override
+  Future<void> confirmEmail(String tokenHash) async {
+    confirmEmailCallCount++;
+    state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
+  }
 
   void succeed() {
     state = state.copyWith(status: AuthStatus.success);
@@ -181,6 +200,119 @@ void main() {
             'guard permanently blocked any second token on the same State.',
       );
       expect(notifier.lastTokenHash, 'token-B');
+    },
+  );
+
+  testWidgets(
+    'starting verification clears AppRouter.pendingConfirmTokenHash — '
+    'round-1 plan-review Finding 1: unlike isPasswordRecovery, this field '
+    'had no gate, so a later re-render of /confirm would silently re-supply '
+    'an already-consumed/expired token',
+    (tester) async {
+      final notifier = _CallCountingAuthNotifier();
+      AppRouter.pendingConfirmTokenHash = 'stale-boot-time-fallback-token';
+      addTearDown(() => AppRouter.pendingConfirmTokenHash = null);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [authNotifierProvider.overrideWith(() => notifier)],
+          child: const MaterialApp(
+            home: ConfirmEmailScreen(
+              tokenHash: 'stale-boot-time-fallback-token',
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        notifier.confirmEmailCallCount,
+        1,
+        reason: 'verification must still start normally for this token',
+      );
+      expect(
+        AppRouter.pendingConfirmTokenHash,
+        isNull,
+        reason:
+            'the one-shot boot-time fallback must be cleared the moment '
+            'verification actually starts for it, so a later re-render of '
+            '/confirm (which always falls back to this field, since '
+            'state.uri.queryParameters is structurally always empty under '
+            'HashUrlStrategy) shows the missing-token error instead of '
+            'silently re-attempting an already-consumed/expired token.',
+      );
+    },
+  );
+
+  testWidgets(
+    'a null-tokenHash rebuild AFTER verification has started does not drop '
+    'the success listener — round-2 plan-review Finding 2: Finding 1\'s own '
+    'fix (clearing AppRouter.pendingConfirmTokenHash on use) means a LATER '
+    'rebuild of this SAME State (browser back — go_router reuses the State '
+    'via didUpdateWidget since pageKey is path-only) genuinely arrives with '
+    'tokenHash == null even while a real confirmEmail() call is in flight; '
+    'the pre-fix early-return skipped re-registering ref.listen entirely, '
+    'silently dropping the success -> /restoring routing',
+    (tester) async {
+      final notifier = _DeferredThenSucceedingAuthNotifier();
+      final router = GoRouter(
+        initialLocation: '/confirm?token_hash=real-token-hash',
+        routes: [
+          GoRoute(
+            path: '/confirm',
+            builder: (context, state) => ConfirmEmailScreen(
+              tokenHash: state.uri.queryParameters['token_hash'],
+            ),
+          ),
+          GoRoute(
+            path: '/restoring',
+            builder: (_, _) =>
+                const Scaffold(body: Text('RESTORING-SCREEN-STUB')),
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [authNotifierProvider.overrideWith(() => notifier)],
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pump();
+      expect(notifier.confirmEmailCallCount, 1);
+      expect(find.textContaining('Confirming your account'), findsOneWidget);
+
+      // Browser back (or any re-render of the SAME /confirm path) with the
+      // query string empty — the real, always-true shape under
+      // HashUrlStrategy once the boot-time fallback has been cleared by
+      // Finding 1's fix.
+      router.go('/confirm');
+      await tester.pump();
+
+      expect(
+        find.textContaining('missing its token'),
+        findsNothing,
+        reason:
+            'verification already started for this State — a null '
+            'tokenHash on a LATER rebuild must not be read as "never had a '
+            'token", or the ref.listen registration below it never runs',
+      );
+
+      // The original in-flight call now resolves successfully.
+      notifier.succeed();
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+        if (find.text('RESTORING-SCREEN-STUB').evaluate().isNotEmpty) break;
+      }
+
+      expect(
+        find.text('RESTORING-SCREEN-STUB'),
+        findsOneWidget,
+        reason:
+            'the ref.listen registration must have survived the '
+            'null-tokenHash rebuild, or this in-flight success is silently '
+            'dropped and the user is stuck staring at the wrong screen',
+      );
     },
   );
 
