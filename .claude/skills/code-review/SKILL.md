@@ -306,6 +306,126 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   False-alarm rate 0/3 → no lens removed; lenses 6, 8 extended per above,
   and lens 1 (writer_reader_drift) gains the SoT-registration-parity check.
 
+- **2026-09-23 (merge-integration)** — blast-radius **platform** (self-corrected — see below) —
+  branch `claude/next-aab-decision-d1227b`, a SECOND merge-integration review on the same branch:
+  merge commit `15d43fd9`, bringing 25 further `origin/main` commits (OI-batching A/B/C,
+  Discipline v3, AAB +46) into a branch that had already absorbed an EARLIER `origin/main`
+  snapshot one merge prior (`ad3fed06`, reviewed the same day, entry below). **1 finding (P3,
+  informational, explicitly NOT caused by this merge); 0 false_alarm.** Review:
+  `docs/reviews/15d43fd9-merge-review.md`.
+  **Tuning 1 — a negative result is not "nothing to check": the reviewer's first job on a SECOND
+  merge-integration review of the same branch is confirming the FIRST one's fix actually
+  survived the newer commits, not re-discovering it.** The brief primed the reviewer to hunt for
+  the exact two regressions the earlier same-day merge review had already found and fixed
+  (migration 141 reverting 140's alert_cron_failures bound; BOM/mojibake in the version files).
+  The reviewer correctly identified that `ad3fed06` was itself a nested merge commit predating
+  `15d43fd9`, isolated the actually-new diff range (`e7733cb8..1c791f72`, the 25 commits added
+  AFTER that nested merge), and confirmed neither regression reopened — rather than re-running
+  the same checks against the whole combined history and reporting them clean by coincidence.
+  **Tuning 2 — the review's OWN self-declared `blast_radius: catastrophic` was wrong, caught only
+  by re-running the classifier rather than trusting the frontmatter.** Corrected to `platform`
+  post-dispatch: two independent re-derivations (`git diff <old-HEAD> <merge>` and
+  `git diff <merge>^1 <merge>^2`, both piped through `blast_radius_from_diff.dart -`) returned
+  `account`; a full-repo grep for `SECURITY DEFINER` across every migration in the merge's diff
+  returned zero hits (the one content-rule that forces `catastrophic`); and the value that
+  actually gated the real commit was `platform`, per `pre-commit.sh`'s own live NOTE at commit
+  time. The reviewer likely inherited "catastrophic" from the PRIOR same-day merge-integration
+  entry's tier (which WAS catastrophic, for a genuinely different reason — SECURITY DEFINER
+  migrations that entry's own diff did carry) without recomputing it fresh for this second,
+  narrower diff. **Sibling of this file's own repeated "a review's self-declared tier is a
+  checkable claim, not scene-setting" lesson (lens 3) — here the claim being carried forward
+  was the REVIEWER's own, not the diff's.**
+  **A negative result worth keeping, per this file's own convention:** every one of the 6
+  requested check areas (migration/schema overlap, Edge Function interaction, OI board
+  consistency, SKILL.md citation consistency, version-file corruption, generated-index
+  freshness) was independently verified with a stated command, not accepted from the diff's
+  shape alone — including re-running both index generators against the live merged tree and
+  confirming zero diff, and tracing the one flagged stale citation (a DIFFERENT, unrelated
+  dead reference at line 2532, predating this branch's fork by a month) all the way to
+  confirming its absence at the merge-base itself before ruling it out-of-scope rather than
+  either fixing it inline (scope creep) or silently dropping it (per the brief's explicit ask).
+  Spun off as `task_f7062a7e` rather than either extreme.
+  False-alarm rate 0/1 → no lens removed; no new lens needed, existing set covered it.
+
+- **2026-09-22 (merge-integration)** — blast-radius **catastrophic** (inherited — merging
+  `origin/main`'s SECURITY DEFINER migrations into `claude/next-aab-decision-d1227b`) — a
+  merge-integration review scoped per this file's own 2026-09-22 precedent (line ~295 below) to
+  "did combining these two changesets break something neither branch's own review could see."
+  **3 findings (2 P1, 1 P3); 0 false_alarm.** Finding 1 (P1, `writer_reader_drift` +
+  `asserted_fixture_value`): migration 141 (this branch, disk-IO cleanup) consolidated
+  `alert_cron_failures` into a new `ops_alerts_30min` job using migration 139's ORIGINAL,
+  pre-140-fix logic — silently reverting migration 140's (from `origin/main`) live `[1h, 6h)`
+  stuck-job bound, because 141 was authored from a branch snapshot predating 140's existence.
+  Confirmed live via `execute_sql` against `cron.job` (jobid 42 running the unbounded form
+  byte-for-byte). Neither branch's own prior review could see this: 140's review only ever
+  read 140; 141's own review only ever read 141. Fixed same-day with migration
+  `143_restore_alert_cron_failures_stuck_job_bound.sql` — restores the bound to
+  `ops_alerts_30min`'s `alert_cron_failures` sub-block only, live-apply pending separate
+  founder authorization per §4.3. The existing regression test
+  (`alert_cron_failures_sync_test.dart`) was ALSO widened: it previously read only the ONE
+  migration file named by `alerts/_thresholds.yaml`, which stayed green forever because that
+  file never changed even as the live job diverged from it — a new test now scans every
+  migration for the alert-emitting literal and requires the YAML to name the numerically LAST
+  one, mutation-proven. Finding 2 (P1, `missing_input`): `lib/core/constants/app_constants.dart`
+  and `pubspec.yaml`, both inherited from `origin/main`, carried a UTF-8 BOM plus mojibake
+  corruption (em-dashes/arrows double-encoded) — silently merged through because both branches
+  bumped the version to the identical value, producing zero line-level conflict for git to flag.
+  Fixed by restoring both files from last-known-clean content with the version bump re-applied
+  as the only intended diff. Finding 3 (P3, `blast_radius_mismatch`, informational): both
+  branches independently bumped the same version number for unrelated reasons — no action
+  needed now, flagged for the next `/build-apk`.
+  **Tuning — a merge-integration review's highest-value findings are exactly the ones keyed on
+  TWO files each independently correct in isolation.** Both P1s here span a file this branch
+  touched and a file `origin/main` touched, verified by a query or diff neither single-branch
+  review would have run. No lens changes; the existing `writer_reader_drift`/`asserted_fixture_value`/
+  `missing_input` lenses already covered both once pointed at the overlap set — reinforces
+  keeping the "9-file intersection" scoping note (this file's dispatch protocol) rather than
+  re-auditing all ~115 files either branch touched. Review: `docs/reviews/ecd90fce917e-review.md`.
+
+- **2026-09-22** — blast-radius **platform** — branch `claude/next-aab-decision-d1227b`
+  (disk-io-audit-cleanup: pg_cron bookkeeping WAL diagnosis, ivfflat retune, RLS
+  auth-initplan fix, dead-index cleanup, 9→3 cron consolidation). **8 findings
+  (1 P1, 2 P2, 3 P3, 2 P4); 0 false_alarm — 6 fixed in-batch, 1 mitigated where the
+  migration-immutability rule allows (documented as a lesson, not fixable in place),
+  1 a documented judgment call.** Review: `docs/reviews/571c997e56b5-review.md`
+  (renamed from its original hash `e100478657c7` after the fix round moved the
+  staging hash — see the file's own header for the record→fix→rename-to-final-hash
+  flow this entry confirms working end-to-end).
+  **Tuning 1 — `idx_scan=0` is a query-access signal only; it says nothing about
+  FK-constraint-check coverage, which Postgres uses on the REFERENCED table's side
+  regardless of whether any SELECT ever touched the index.** Finding 1 (P1): the
+  diagnose-doc dropped `idx_nutrition_log_items_food_id` as "verified-dead" on
+  `idx_scan=0` alone; it was the sole index backing `nutrition_log_items_food_id_fkey`.
+  Live `get_advisors` confirmed a new `unindexed_foreign_keys` finding that did not
+  exist before the drop — a regression on the exact axis (DB resource pressure) the
+  batch existed to fix, self-introduced. Added to lens 7 (`missing_input`)'s method:
+  before accepting an `idx_scan=0` drop, check `pg_constraint` for a foreign key on
+  the same column(s) — a plain "this index has never been scanned" claim is checking
+  only one of the two things an index does.
+  **Tuning 2 — a review's own numeric claim can be WRONG in the same way it accuses
+  the diff of being wrong, and only a SECOND independent re-derivation (not
+  re-reading the first) settles which one is right.** Finding 8 flagged OI-235's
+  "~93s/~116s avg" figures as "unverifiable" based on a `cron.job_run_details` query
+  that returned a bimodal ~0.1s/~25-30min pattern instead. A fix-round requery with
+  corrected join/filter conditions reproduced the original figures EXACTLY, and a
+  THIRD, fully independent round-2 requery (different agent, own query text)
+  reproduced them a third time — settling that the reviewer's own query, not the
+  original OI, was the one with the defect. Both the bimodal detail AND the average
+  are real and non-contradictory (15 fast runs + 1 slow outlier averages to ~100s).
+  **A finding that says a number is wrong is itself a claim, not a verdict — it gets
+  re-verified with the same rigor as the thing it's correcting, not accepted because
+  it arrived wearing the reviewer's authority.**
+  **Tuning 3 — round 2 (the post-fix scoped re-review this repo's §4.12.1 requires)
+  earns its cost even when round 1's substance was entirely correct**, by catching
+  staleness the FIX round itself created: a dead cross-reference (the diagnose-doc
+  cited the review file by its pre-rename name after the rename), and a ledger note
+  that still said "9/9 passing" for a migration whose own true apply-time count was
+  8/8 (the 9th test, added during the fix round, covers a DIFFERENT, later,
+  not-yet-applied migration). Neither existed when round 1 ran; both are exactly the
+  class of thing a fresh, context-blind re-reader catches and the fix's own author
+  cannot, because the author is reading their own edit as intentional.
+  False-alarm rate 0/8 → no lens removed; lens 7 extended per Tuning 1 above.
+
 - **2026-09-22 (Batch C)** — blast-radius **platform** — branch
   `oi-batching-strategy-e5e359`, Batch C (OI-238: wiring `reportGeminiExhaustion`
   into 5 Gemini-calling Edge Functions — `weekly-report`, `ai-media-proxy`,
@@ -381,11 +501,19 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   completed-day copy fix — plus a Gate 19 false-positive suppression fix and
   supporting OI-board/SoT-registry updates). **3 findings (0 P0, 1 P1, 1 P2,
   1 P3); 0 false_alarm — all 3 fixed in-batch.** Review:
-  `docs/reviews/5ebf78e29706-review.md` (renamed once from
-  `a4bcd634b7a7-review.md` after the fixes below were staged — the standard
-  hash-fixed-point rename, `docs/reviews/` being hash-excluded made the
-  rename itself free). Run as one agent (16 files, but the real code diff is
-  6 files — the rest is diagnose-doc/OI-board prose).
+  `docs/reviews/d2ce94ab0a72-review.md` (renamed twice: first from
+  `a4bcd634b7a7-review.md` to `5ebf78e29706-review.md` after the fixes below
+  were staged — the standard hash-fixed-point rename, `docs/reviews/` being
+  hash-excluded made the rename itself free — then again to this filename
+  after a mid-batch rebase onto a moved `origin/main`. This entry originally
+  cited the intermediate `5ebf78e29706` name and went stale the moment the
+  second rename landed without a matching update here — caught by
+  `check_skill_tuning_history.dart` failing on the merge that brought this
+  branch and `claude/next-aab-decision-d1227b` together, since that gate
+  requires the review's CURRENT on-disk filename to appear in its own dated
+  block. Corrected as part of that merge, 2026-09-23.). Run as one agent
+  (16 files, but the real code diff is 6 files — the rest is diagnose-doc/
+  OI-board prose).
   **No new lens — all 3 findings are confirmed recurrences of already-documented
   patterns, worth recording as data points rather than tuning.** Finding 1
   (P1, guard_without_its_mirror) reproduced the lens's own standing

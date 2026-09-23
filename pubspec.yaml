@@ -1,4 +1,4 @@
-﻿name: icanbefitter
+name: icanbefitter
 description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -54,31 +54,31 @@ dependencies:
   share_plus: ^12.0.2
   path_provider: ^2.1.0
   # Tech-debt audit 2026-05-20 / D7: single-callsite (shared/widgets/
-  # shareable_card.dart). Keep â€” small bundle cost, no maintenance burden,
+  # shareable_card.dart). Keep — small bundle cost, no maintenance burden,
   # core to the shareable-card feature. Revisit if shareable cards get cut.
   qr_flutter: ^4.1.0
-  # Tech-debt audit 2026-05-20 / D6: bumped from ^7.0.0 â†’ ^7.4.0.
+  # Tech-debt audit 2026-05-20 / D6: bumped from ^7.0.0 → ^7.4.0.
   speech_to_text: ^7.4.0
   # Tech-debt audit 2026-05-20 / D8: removed standalone `http` dependency
   # 2026-05-21. Dio is the lib-wide canonical HTTP client; http remains
   # transitively available for test/edge_functions/* smoke contracts only.
   # SoT entry: `dependency_canonical_http_client` in docs/sot_registry.yaml.
-  # flutter_dotenv removed â€” env vars now injected at build time via
+  # flutter_dotenv removed — env vars now injected at build time via
   # --dart-define-from-file=.env (never bundled in APK).
   mobile_scanner: ^7.2.0
   flutter_image_compress: ^2.0.0
   onesignal_flutter: ^5.5.4
-  # Crashlytics â€” added 2026-04-18 for beta distribution (audit Q3).
+  # Crashlytics — added 2026-04-18 for beta distribution (audit Q3).
   # Firebase project (AVYA) already has google-services.json wired.
-  # Tech-debt audit 2026-05-20 / D5: bumped 4.7.0 â†’ 4.9.0 and 5.2.0 â†’ 5.2.2
+  # Tech-debt audit 2026-05-20 / D5: bumped 4.7.0 → 4.9.0 and 5.2.0 → 5.2.2
   # (NDK symbol-upload race fix in 5.2.2).
   firebase_core: ^4.9.0
   firebase_crashlytics: ^5.2.2
-  # intl_phone_field â€” country-aware phone input for sign-in (India default,
+  # intl_phone_field — country-aware phone input for sign-in (India default,
   # 10-digit validation, auto-strips leading 0, emits full E.164 for Supabase
   # auth.signInWithOtp).
   intl_phone_field: ^3.2.0
-  # flutter_svg â€” added 2026-05-03 (APK Test #9, F11) for captain-cap coach
+  # flutter_svg — added 2026-05-03 (APK Test #9, F11) for captain-cap coach
   # avatar SVG. Wardroom glyphs use CustomPaint, but the coach cap is sourced
   # as a vector asset so it can be swapped without recompiling.
   flutter_svg: ^2.3.0
@@ -110,7 +110,7 @@ dev_dependencies:
   # separately for the widget-finder DSL.
   patrol: ^3.15.2
   patrol_finders: ^2.7.0
-  # Test-only direct dependency (was transitive via supabase_flutter) â€”
+  # Test-only direct dependency (was transitive via supabase_flutter) —
   # test/contracts/password_reset_redirect_flow_test.dart uses
   # package:http/testing.dart's MockClient to fake the GoTrue HTTP
   # transport for a behavioral widget test with no real network.
