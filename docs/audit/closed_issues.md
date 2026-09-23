@@ -3749,3 +3749,36 @@ separate for the one cron site) IS the "adjustment" the filed text anticipated.
 
 **Closes**: diagnose-doc `docs/diagnoses/2026-09-22-gemini-exhaustion-telemetry-oi238-b6e3a8.md`.
 
+## OI-104 — `check_hooks_installed.dart` detects hook PRESENCE, not staleness; installed hooks were 12 days behind their sources (P2)
+
+- **Status**: CLOSED (2026-09-23, discipline-v3-phase3 batch) — commit `aca0237a` cited
+  `closes-oi: OI-104` in its own trailer while this entry stayed marked "ADDRESSED, not CLOSED,"
+  a self-contradiction only caught later by `check_closes_oi_performed.dart` (a gate that landed
+  on `main` from a separate concurrent session while this branch was in flight). Since that
+  commit is already merged and immutable, closing here for real rather than leaving the citation
+  dangling. On the merits: the entry's own title names the defect as "detects PRESENCE, not
+  staleness" — that is fixed (`check_hooks_installed.dart` / Gate 32 now does full-content
+  comparison, not header-line-anchor matching), and the recurrence this entry documents (a hook
+  script edit going silently inert) cannot happen again. The one open question the "ADDRESSED"
+  note raised — escalating the check from WARN to a hard FAIL — was evaluated and INTENTIONALLY
+  REJECTED, not deferred: `setup-hooks.sh` installs into the git dir COMMON to every worktree
+  (§4.13), so hard-failing would block every worktree's next commit the instant any hook script
+  changes anywhere, until someone re-runs the installer once from anywhere — a worse failure mode
+  than the false-negative this OI was filed to fix. WARN is the correct terminal state for this
+  architecture, not a placeholder for future hardening.
+- **Blocked on**: none.
+- **Verified**: 2026-09-23 — re-read `scripts/check_hooks_installed.dart`'s current
+  full-content-comparison logic and `test/scripts/check_hooks_installed_e2e_test.dart`'s
+  BODY-only-edit-detection test (mutation-proven: reverting to the old anchor-only logic reddens
+  it).
+- **Identified**: 2026-08-11 · ×2 plan review of `safe-push-verifier`. Recurred 2026-08-20.
+- **Risk class**: silent-inert-gate — the highest-consequence shape, because everything downstream
+  looks green.
+- **What was wrong**: `scripts/setup-hooks.sh:45` installs by `cp`, not symlink, so `.git/hooks/*`
+  drifts from `scripts/*.sh` the moment either changes, and the old `check_hooks_installed.dart`
+  check only looked for the STRING `flutter analyze` anywhere in the installed file — any file
+  containing that string passed, so an edit to a hook script was inert until someone remembered to
+  re-run the installer, and the gate that existed to catch that said green throughout both the
+  2026-08-11 and 2026-08-20 recurrences.
+- **Closes**: `aca0237a` (fix), this closure entry (board reconciliation).
+
