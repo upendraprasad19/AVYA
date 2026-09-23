@@ -58,6 +58,15 @@
             "command": "dart run --verbosity=error scripts/git_safety_hook.dart"
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "dart run --verbosity=error scripts/memory_write_guard_hook.dart"
+          }
+        ]
       }
     ],
     "Stop": [

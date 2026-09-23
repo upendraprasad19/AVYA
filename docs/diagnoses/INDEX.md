@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### discipline_hook_memory_index_nudge (1 bugs)
+- 2026-09-23 c8d5b2 — scripts/discipline_hook.dart's SessionStart hook is supposed to warn when the harness MEMORY.md index exceeds its soft byte/line cap, nudging /consolidate-memory. Live-tested 2026-09-23 while building…
+
 ### alert_cron_failures_threshold_sync (1 bugs)
 - 2026-09-22 k7d3n5 — `sh scripts/safe_push.sh` FAILED with "Some tests failed." inside the pre-push hook's full CI-equivalent `flutter test test/ --exclude-tags golden` run, blocking the push of this batch's 2…
 
@@ -1347,6 +1350,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-23 | c8d5b2 | scripts/discipline_hook.dart's SessionStart hook is supposed to warn when the harness MEMORY.md index exceeds its soft byte/line cap, nudging /consolidate-memory. Live-tested 2026-09-23 while building… | discipline_hook_memory_index_nudge | test/scripts/discipline_hook_memory_path_test.dart |
 | 2026-09-22 | k7d3n5 | `sh scripts/safe_push.sh` FAILED with "Some tests failed." inside the pre-push hook's full CI-equivalent `flutter test test/ --exclude-tags golden` run, blocking the push of this batch's 2… | alert_cron_failures_threshold_sync | test/contracts/alert_cron_failures_sync_test.dart |
 | 2026-09-22 | m5q8t1 | Full-suite pre-push run failed `test/features/nutrition/counter_increment_on_analyse_test.dart`: "Test #11 M1 — counter at API-call site, not save site CartAuditorNotifier.analyseCart calls… | cart_auditor_counter_increment_test_window | test/features/nutrition/counter_increment_on_analyse_test.dart |
 | 2026-09-22 | r2w6y9 | Full-suite pre-push run failed `test/features/profile/delete_account_screen_test.dart`: "H1-B — Source invariants Support email present in error copy" — Expected contains 'support@icanbefitter.com',… | support_contact_email | test/features/profile/delete_account_screen_test.dart |

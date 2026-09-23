@@ -1590,6 +1590,18 @@ cloud sessions; **this file is the cross-session backlog.**
   the platform permits and hash-check only where it does not. Prefer the hash check: it is
   platform-independent and states the real invariant ("the hook that runs IS the hook in git").
 - **Blast radius estimate**: `platform`.
+- **ADDRESSED, not CLOSED (2026-09-23, discipline-v3-phase3 batch)**: `check_hooks_installed.dart`
+  (Gate 32) now does the recommended full-content comparison, replacing the header-line-anchor
+  check that this entry's own recurrence note shows was insufficient. STILL a WARNING, not the
+  "fail on mismatch" this entry originally suggested — hard-failing would block every worktree's
+  next commit the instant any hook script changes (setup-hooks.sh installs to the COMMON git dir,
+  shared by every worktree per §4.13), until someone re-runs the installer once from anywhere. That
+  is a deliberate, documented divergence from the suggested fix shape, not an oversight — see the
+  gate's own header comment for the full reasoning. Closes the FALSE-NEGATIVE this entry's
+  recurrence documents (green when it should warn); escalating to hard-fail remains a separate,
+  explicit decision and is why this stays OPEN rather than CLOSED. Regression test:
+  `test/scripts/check_hooks_installed_e2e_test.dart` ("a BODY-only edit ... -> WARN"), confirmed by
+  reverting to the old anchor-only logic and observing that exact test redden.
 
 ## OI-106 — local `flutter test` runs ~3.9x slower per file than CI, cause unknown (P3)
 
@@ -5548,3 +5560,10 @@ acknowledging never shortens the window), or add a separate `snoozed_until` conc
 from `acknowledged` so triage and re-page timing are decoupled. Needs a design decision, not a
 one-line fix, since it touches the shared convention all 6 jobs rely on — a design change here
 should update all 6 in the same batch, not just the one that surfaced it.
+
+## OI-243 — Discipline v3 Phase 3: gates, memory-write-guard, hooks-check
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-09-23 · filed via mint_oi.sh from branch `claude/supabase-outage-check-e79200`

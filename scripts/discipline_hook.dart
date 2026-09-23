@@ -30,6 +30,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'batch_close_lib.dart' show primaryRootFrom, mangleProjectPath;
 import 'oi_numbering_lib.dart';
 
 // Bug / fix / observation triggers for UserPromptSubmit. Word-bounded where a
@@ -136,28 +137,54 @@ void main() async {
 
 // Best-effort MEMORY.md size nudge. MEMORY.md (the per-session loaded memory index)
 // lives OUTSIDE the repo, under ~/.claude/projects/<mangled-project-path>/memory/.
-// The harness mangles the project path into that dir name by replacing each of
-// : \ / and space with '-' (so "C:\Upendra\Claude Code\Fitness App" →
+// The harness mangles the PRIMARY repo root's path into that dir name by replacing
+// each of : \ / and space with '-' (so "C:\Upendra\Claude Code\Fitness App" →
 // "C--Upendra-Claude-Code-Fitness-App"). If the index is over the soft cap, suggest
 // /consolidate-memory. Fail-silent: any resolution / IO error returns '' so the
 // session is never affected (honours the top-of-file NEVER-break-the-session contract).
 // A DISCIPLINE_HOOK_MEMORY_PATH env override is honoured for testing.
+//
+// ⚠ FIXED 2026-09-23 (diagnose pending, discipline-v3-phase3 batch): this used to
+// mangle `Directory.current.path` directly, which is the WORKTREE path in every
+// §4.13 session — not the primary repo root the harness actually keyed the memory
+// directory name on. In a linked worktree that mangled to a directory that does
+// not exist (e.g. "...--claude-worktrees-<slug>"), so `memFile.existsSync()` was
+// always false and the nudge silently never fired from ANY worktree session — the
+// exact `--show-toplevel`-vs-`--git-common-dir` bug `batch_close_lib.dart`'s
+// `primaryRootFrom` doc comment already names and was written to fix, just never
+// applied here. Now reuses that same pure function + `mangleProjectPath` instead
+// of re-deriving (and re-breaking) the path a third time.
+/// Pure derivation of the harness MEMORY.md path from its three raw inputs.
+/// EXTRACTED so a test can drive it directly without a real git repo or a real
+/// HOME — the exact "a function no test can reach is a function no test
+/// protects" lesson `batch_close_lib.dart`'s own header names, applied to the
+/// bug this function exists to fix. Returns null when any input cannot yield
+/// an answer (missing home, unresolvable git-common-dir, no PRIMARY root).
+String? resolveMemoryIndexPath({
+  required String? override,
+  required String? home,
+  required String? gitCommonDirOutput,
+}) {
+  if (override != null && override.isNotEmpty) return override;
+  if (home == null || home.isEmpty) return null;
+  final primaryRoot = primaryRootFrom(gitCommonDirOutput);
+  if (primaryRoot == null) return null;
+  final mangled = mangleProjectPath(primaryRoot);
+  return '$home/.claude/projects/$mangled/memory/MEMORY.md';
+}
+
 String _memoryIndexNudge() {
   try {
     const softBytes = 18000; // ~500B of hysteresis above the 17,510 soft target
     const softLines = 150;
-    final override = Platform.environment['DISCIPLINE_HOOK_MEMORY_PATH'];
-    final String path;
-    if (override != null && override.isNotEmpty) {
-      path = override;
-    } else {
-      final home = Platform.environment['USERPROFILE'] ??
-          Platform.environment['HOME'] ??
-          '';
-      if (home.isEmpty) return '';
-      final mangled = Directory.current.path.replaceAll(RegExp(r'[:\\/ ]'), '-');
-      path = '$home/.claude/projects/$mangled/memory/MEMORY.md';
-    }
+    final gitCommonDir = Process.runSync(
+        'git', ['rev-parse', '--path-format=absolute', '--git-common-dir']);
+    final path = resolveMemoryIndexPath(
+      override: Platform.environment['DISCIPLINE_HOOK_MEMORY_PATH'],
+      home: Platform.environment['USERPROFILE'] ?? Platform.environment['HOME'],
+      gitCommonDirOutput: gitCommonDir.exitCode == 0 ? gitCommonDir.stdout as String? : null,
+    );
+    if (path == null) return '';
     final memFile = File(path);
     if (!memFile.existsSync()) return '';
     final bytes = memFile.lengthSync();
