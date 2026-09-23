@@ -6824,6 +6824,18 @@ concepts:
         semantic: read
         fields_read: [current_rank_code]
         notes: Reads cloud user_profile to derive currentOrdinal before guard.
+      - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
+        line_range: 1384-1471
+        method: _getCurrentRankFromLadder / _getNextRankFromLadder
+        semantic: read
+        fields_read: [current_rank_code, current_rank_achieved_at]
+        notes: |
+          OI-230/OI-231 (2026-09-22) — previously duplicated
+          RankService.getCurrentRank's own Hive read directly
+          (profile?['current_rank_code'], plus a dead key,
+          current_rank_earned_at, that no writer ever populated). Now
+          routes through RankService.instance.getCurrentRank() instead
+          of reading userBox['profile'] itself.
     cloud_table: user_profile
     cloud_columns:
       - current_rank_code

@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**138 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**137 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -138,11 +138,10 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-222 | Document versionCode-bump-via-merge CI gap in CLAUDE.md §4.9 | none | never | [:5003](open_issues.md#L5003) |
 | OI-224 | alert_cron_function_dead threshold unreachable, cron_call_log pruned at 7… | none | 2026-09-20 — live on… | [:5071](open_issues.md#L5071) |
 | OI-227 | Telegram coach connect is broken (no linking token, bot says no user… | none — UI removal is self-contained; the… | 2026-09-21 — founder tapped "Connect… | [:5127](open_issues.md#L5127) |
-| OI-228 | AI coach shortenWorkout tool calls get stuck at status:queued with no… | none — Bug A is a small isolated fix;… | 2026-09-21 — both citations below… | [:5191](open_issues.md#L5191) |
-| OI-229 | AI coach chat replies violate captain_manual.ts hard rules: 100-word cap… | none — both are prompt-adherence gaps in… | 2026-09-21 — both cited… | [:5243](open_issues.md#L5243) |
-| OI-230 | AI coach snapshot rank-promotion math is self-contradictory:… | none — mechanism is fully understood and… | 2026-09-21 — read both functions live… | [:5295](open_issues.md#L5295) |
-| OI-231 | AI coach addressed a promoted user by their OLD rank term (Recruit instead… | live verification (need to check the… | 2026-09-21 — the title's own implied… | [:5354](open_issues.md#L5354) |
-| OI-232 | AI coach chat scrolls to top on every switch between in-app chat and… | none — mechanism is understood and… | 2026-09-21 — founder reported live;… | [:5414](open_issues.md#L5414) |
-| OI-233 | user_daily_snapshots' 4 cron/client writers are not atomic against each… | none — scope and fix shape are already… | 2026-09-21 — explicitly scoped out in | [:5465](open_issues.md#L5465) |
-| OI-238 | 5 Gemini-calling Edge Functions have no server-side reportGeminiExhaustion… | none | never | [:5511](open_issues.md#L5511) |
-| OI-239 | Acknowledging an alert re-arms its dedup window instead of waiting out the… | none | never | [:5537](open_issues.md#L5537) |
+| OI-228 | AI coach shortenWorkout tool calls get stuck at status:queued with no… | none — Bug A is CLOSED; Bug B's "stuck… | 2026-09-22 (Batch B) — live-traced the… | [:5191](open_issues.md#L5191) |
+| OI-229 | AI coach chat replies violate captain_manual.ts hard rules: 100-word cap… | none — both are prompt-adherence gaps in… | 2026-09-21 — both cited… | [:5334](open_issues.md#L5334) |
+| OI-231 | AI coach addressed a promoted user by their OLD rank term (Recruit instead… | none — live verification DONE (Batch B,… | 2026-09-22 (Batch B) — settled via the… | [:5446](open_issues.md#L5446) |
+| OI-233 | user_daily_snapshots' 4 cron/client writers are not atomic against each… | none — scope and fix shape are already… | 2026-09-21 — explicitly scoped out in | [:5566](open_issues.md#L5566) |
+| OI-239 | Acknowledging an alert re-arms its dedup window instead of waiting out the… | none | never | [:5612](open_issues.md#L5612) |
+| OI-240 | _getNextRankFromLadder's remaining/binding_constraint is inaccurate for 3… | none — bounded work, but a genuinely… | 2026-09-22 — every claim below re-read… | [:5639](open_issues.md#L5639) |
+| OI-242 | realtime_pro_gate_behavioral_test.dart flakes on full-suite CI run with a… | nothing technical. Needs a… | 2026-09-22 — reproduced the CI failure… | [:5714](open_issues.md#L5714) |

@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
+import { reportGeminiExhaustion } from "../_shared/gemini_failure_alert.ts";
 import { upsertCoachMemory, fetchCoachMemory } from "../_shared/coach_memory.ts";
 // Audit 2026-05-12 P2-D — daily-snapshot must embed merged coaching_notes
 // so semantic retrieval at chat-time can pull the highest-signal facts
@@ -144,7 +145,7 @@ Return ONLY valid JSON (no markdown, no code fences). Include only fields that w
 
 If nothing was found, return: {}`;
 
-  const { content: rawText } = await geminiChat({
+  const { content: rawText, lastError } = await geminiChat({
     model: MODEL_FLASH,
     systemPrompt: "Extract factual profile data from fitness coaching conversations. Return ONLY valid JSON.",
     userPrompt: asAuthoredPrompt(prompt),
@@ -157,6 +158,18 @@ If nothing was found, return: {}`;
 
   if (!rawText) {
     console.error("[daily-snapshot] Gemini extraction returned null");
+    // OI-238 (sibling of A5/OI-226): same shared dedup source as
+    // ai-proxy/tool-loop.ts — this extraction runs on live client-invoked
+    // traffic (pushSnapshot, gated to once per 6h) against the same
+    // GEMINI_API_KEY/quota. endpoint: "daily_snapshot_extraction" keeps it
+    // distinguishable. `supabase` is the caller's own service-role client
+    // (param, not a module global — see call site in serve()).
+    await reportGeminiExhaustion(
+      supabase,
+      "ai_proxy_gemini_exhausted",
+      lastError ?? null,
+      "daily_snapshot_extraction",
+    );
     return null;
   }
 

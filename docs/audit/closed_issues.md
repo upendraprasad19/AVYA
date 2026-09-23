@@ -3557,3 +3557,195 @@ previously-unnamed-by-fix-direction second site.)
   write-guard's own test files).
 - **Identified**: 2026-09-23 · filed via mint_oi.sh from branch `claude/supabase-outage-check-e79200`
 
+## OI-230 — AI coach snapshot rank-promotion math is self-contradictory: _getNextRankFromLadder / _getEtaNextPromotion
+
+- **Status**: CLOSED (2026-09-22, `oi-batching-strategy-e5e359`, Batch A) — diagnose `a8f3e2`
+- **Blocked on**: none
+- **Original filing** (ported verbatim from `claude/food-logging-observations-126ab3`, adopted here per root CLAUDE.md §7's OI allocator row):
+  - **Verified**: 2026-09-21 — read both functions live this session, confirmed
+    the mechanism below by tracing the code (the original founder-observed
+    contradictory screenshot text itself was not preserved in writing from the
+    earlier investigation and is not re-quoted here — the mechanism below is
+    independently derived from the current source, not from that screenshot)
+  - **Identified**: originally from founder APK screenshots (Phase 1, this
+    session, exact date/wording not preserved) · filed 2026-09-21 via
+    mint_oi.sh from branch `claude/food-logging-observations-126ab3`
+
+Founder observed self-contradictory rank/promotion info in an AI coach reply
+(exact wording not preserved in writing). Re-deriving the mechanism directly
+from `lib/features/ai_coach/services/ai_snapshot_builder.dart` finds a
+concrete, precisely-locatable defect that would produce exactly this shape
+of contradiction:
+
+`_getNextRankFromLadder()` (`:1400-1459`) computes a `remaining` map keyed by
+whichever of `workouts` / `streak_days` / `weeks` / `deployments` the next
+rank's gate actually requires (`kRankGates[next.code]`), and picks a
+`binding_constraint` — the requirement with the MAX remaining value (`:1430,
+1442-1445`). So `binding_constraint` can legitimately be `'weeks'`,
+`'streak_days'`, or `'deployments'` — NOT `'workouts'` — whenever the user
+has already satisfied the workout count but not the other gate(s).
+
+`_getEtaNextPromotion()` (`:1585-1619`) calls `_getNextRankFromLadder()` and
+then reads **only** `remaining['workouts']` (`:1590`) to decide the ETA.
+If `remainingWorkouts == 0`, it unconditionally returns `{days: 0, date:
+<today>}` for BOTH `at_current_cadence` and `at_plan_cadence` (`:1592-1597`)
+— i.e. "promotion happens today" — **regardless of whether
+`remaining['streak_days']`, `remaining['weeks']`, or
+`remaining['deployments']` are still nonzero.** Even in the non-zero branch
+(`:1604-1607`), the day/week cadence math is computed purely from
+`remainingWorkouts` and never references the other three keys at all.
+
+**Net effect:** any user whose binding constraint is weeks/streak/deployments
+rather than workouts gets a snapshot where `next_rank.binding_constraint`
+correctly names the real bottleneck (e.g. `"weeks"`, with
+`next_rank.remaining.weeks: 3`), while `eta_next_promotion` simultaneously
+claims `{days: 0, date: today}` — because it only ever looked at
+`remaining.workouts`, which happened to already be 0. The Captain, fed both
+fields in the same snapshot, has no way to reconcile "3 weeks still needed"
+against "promotion today" — because the snapshot itself contains both, and
+they disagree.
+
+**Fix direction (as filed):** `_getEtaNextPromotion()` must compute ETA from
+the ACTUAL `binding_constraint` `_getNextRankFromLadder()` selected, not
+hardcode `workouts`. For a `weeks`-bound or `streak_days`-bound promotion,
+the "0 days" short-circuit is simply wrong — a weeks-gate can only be
+satisfied by calendar time passing, and a streak-gate needs the streak
+itself extended, neither of which `remainingWorkouts == 0` says anything
+about. Needs a per-constraint-type ETA formula, or at minimum an honest
+"cannot estimate" response when the binding constraint isn't workouts,
+rather than a false "today."
+
+**Shipped:** `_getEtaNextPromotion()` rewritten to branch on the real
+`binding_constraint`: `weeks` gets a deterministic calendar-based answer
+(cadence-independent); `streak_days`/`deployments` return an honest "cannot
+estimate" (`{days: null, date: null}`) rather than a fabricated date, since
+neither is reliably forecastable from a cadence figure; a rank whose real
+gate is `completionRateMinimum` (officer/MCPO track — not modeled in
+`remaining` at all) also gets the honest-unknown shape regardless of what
+`binding_constraint` naively resolves to, avoiding a confidently-wrong
+number. Additionally found and fixed in the same function:
+`remaining['streak_days']`/`remaining['deployments']` never computed a real
+`current` value (hardcoded 0), so `remaining['streak_days']` always showed
+the FULL requirement no matter the user's actual streak — fixed for streak
+(`WorkoutRepository.instance.currentStreak()`, a cheap sync local read);
+deployments intentionally left as-is, matching `RankService.getNextRank()`'s
+own documented tradeoff (`rank_service.dart:439-444` — an accurate count
+needs a network call). The completion-rate-gate modeling gap is filed
+separately as OI-240 (not fixed here — a materially different, larger unit
+of work: a new requirement type + an adherence-dependent ETA semantic).
+**Regression tests**: `test/ai_coach/snapshot_keys_test.dart`
+(`eta_next_promotion` + `next_rank` groups, 4 new/rewritten cases),
+mutation-proven (5 tests reddened against the pre-fix code, 0 false
+positives across the other 43 tests in the file).
+**Closes**: diagnose-doc `docs/diagnoses/2026-09-22-rank-eta-binding-constraint-blind-a8f3e2.md`.
+
+## OI-232 — AI coach chat scrolls to top on every switch between in-app chat and Telegram channel
+
+- **Status**: CLOSED (2026-09-22, `oi-batching-strategy-e5e359`, Batch A) — diagnose `c1b9d4`
+- **Blocked on**: none
+- **Original filing** (ported verbatim from `claude/food-logging-observations-126ab3`, adopted here per root CLAUDE.md §7's OI allocator row):
+  - **Verified**: 2026-09-21 — founder reported live; mechanism re-derived from
+    source this session (not yet fixed or regression-tested)
+  - **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/food-logging-observations-126ab3`
+
+Founder: switching to Telegram then back to in-app chat scrolls the chat to
+the top (oldest message), requiring a manual re-scroll down every time.
+
+**Mechanism**, traced in `lib/features/ai_coach/screens/ai_coach/screen.dart`:
+`channel == 'in_app' ? _buildChatArea(messages, isSending) :
+_buildTelegramView(telegramConnected)` (`:447-449`) means the chat's
+scrollable widget tree is entirely REMOVED from the tree when switching to
+Telegram and rebuilt fresh when switching back — Flutter does not preserve a
+`ScrollController`'s offset across that kind of unmount/remount (no
+`PageStorageKey`/keep-alive is used here).
+
+The one thing that WOULD re-scroll it to the bottom on remount,
+`_jumpToBottom()` (`:275-281`, jumps to `maxScrollExtent`, guarded by
+`_scrollController.hasClients`), is only ever invoked from ONE call site
+(`:423-426`):
+```
+if (!_initialScrollDone && messages.isNotEmpty) {
+  _initialScrollDone = true;
+  _jumpToBottom();
+}
+```
+`_initialScrollDone` (`:159`, declared once per `_AiCoachScreenState`) is a
+**one-shot flag for the screen's entire lifetime** — it was added
+specifically to fix first-paint landing position (comment at `:416-422`,
+`closes-diagnose: 2026-05-10-coach-scroll-init`, APK Test #15 / Bug E) and
+was never intended to fire more than once. Because `_AiCoachScreenState`
+itself is NOT recreated when `channel` changes (only the conditional child
+widget swaps), `_initialScrollDone` is already `true` well before the first
+channel switch — so the guard's condition never re-fires, `_jumpToBottom()`
+never runs again, and the freshly-remounted chat ListView is left at
+whatever its own default initial position is (the top).
+
+**Fix direction (as filed):** re-scroll to bottom on every remount of the
+chat area, not just the screen's first paint — e.g. call `_jumpToBottom()`
+whenever `channel` transitions TO `'in_app'`, or give the chat
+`ListView`/`CustomScrollView` a `PageStorageKey`/`AutomaticKeepAliveClientMixin`.
+The existing one-shot `_initialScrollDone` guard should stay for its
+original first-paint purpose.
+
+**Shipped:** implemented exactly the recommended `ref.listen(channelProvider,
+...)` trigger — fires `_jumpToBottom()` only on the transition INTO
+`'in_app'` (`previous != 'in_app' && next == 'in_app'`), added alongside the
+existing `ref.listen` calls in `build()`, without touching the pre-existing
+one-shot `_initialScrollDone` gate.
+**Regression test**: `test/ai_coach/initial_scroll_to_bottom_test.dart` (new
+case, source-grep — matches this file's own established convention for this
+exact screen), mutation-proven (reverting the fix reddens exactly this one
+new test, the pre-existing 4 stay green).
+**Closes**: diagnose-doc `docs/diagnoses/2026-09-22-coach-scroll-channel-switch-c1b9d4.md`.
+
+## OI-238 — 5 Gemini-calling Edge Functions have no server-side reportGeminiExhaustion telemetry (weekly-report, ai-media-proxy, assess-body-composition, daily-snapshot, rolling-context)
+
+- **Status**: CLOSED (2026-09-22, `oi-batching-strategy` Batch C) — diagnose `b6e3a8`
+- **Blocked on**: none
+- **Shipped**: all 5 named call sites. Each function's `geminiChat()` call now destructures
+  `lastError` and its total-exhaustion branch calls `reportGeminiExhaustion`. Dedup source split
+  by traffic shape rather than reused uniformly: the 4 LIVE user-invoked sites
+  (`weekly-report` `:573`, `ai-media-proxy` `:941`, `assess-body-composition` `:178`,
+  `daily-snapshot`'s `extractCoachingNotes` `:167`) share the SAME `"ai_proxy_gemini_exhausted"`
+  source ai-proxy/tool-loop.ts already use, each with a distinct `endpoint` tag; `rolling-context`'s
+  `summarizeMessages` (`:127`) — the sole cron-dispatched site among the 5, looping over every user
+  with >50 stored messages in one nightly run — deliberately gets its OWN source
+  (`"rolling_context_gemini_exhausted"`) so a bad-run failure burst can't suppress a same-day
+  live-traffic alert. `rolling-context/index.ts`'s `summarizeMessages` also gained a new
+  `supabase: SupabaseClient` parameter (it previously received none), threaded through from the
+  per-user loop's own `supabaseClient` at its call site. Same `DISABLE_GEMINI_FAILURE_ALERT`
+  kill-switch covers all 10 call sites now (5 from OI-226, 5 from this fix). No mechanical gate for
+  server-side wiring — same scope decision OI-226 already made, unchanged by this fix (10 call
+  sites across 6 functions still judged too small a surface).
+- **Verified**: 2026-09-22 — `grep -n "geminiChat\|reportGeminiExhaustion" supabase/functions/{weekly-report,ai-media-proxy,assess-body-composition,daily-snapshot,rolling-context}/index.ts`
+  confirmed all 5 destructure `lastError` and call `reportGeminiExhaustion` exactly once each.
+  `deno check --node-modules-dir=none` clean on all 5 `index.ts` files. `deno test --no-check
+  --allow-all --node-modules-dir=none` across all 5 functions: 44/44 passed. Each of the 5
+  new/extended wiring sites mutation-proven independently (deleted each `reportGeminiExhaustion`
+  call block in turn, confirmed exactly its own test reddened while every other test in that
+  file's suite stayed green, reverted, confirmed green again) — see the diagnose-doc's
+  `mutation_proven` field for exact pass/fail counts per site.
+- **Identified**: 2026-09-22 · filed via mint_oi.sh from branch `claude/strange-merkle-c2d0b9`
+
+Found by the self-triggered Hermes pass on `observation-batch-and-digest-redesign`
+(`docs/diagnoses/2026-09-21-ai-failure-telemetry-gap-oi226-f7a2c9.md`'s own fix wired
+`reportGeminiExhaustion` into `ai-proxy`'s 4 internal `type` handlers plus `tool-loop.ts`'s
+chat/tool-calling path — 5 call sites total, all inside ONE function, `ai-proxy`). This was a
+DIFFERENT, wider gap: per `supabase/functions/CLAUDE.md`'s own AI Architecture section, 6
+functions call Gemini in total, and the other 5 — `weekly-report`, `ai-media-proxy`,
+`assess-body-composition`, `daily-snapshot`, `rolling-context` — each called `geminiChat`
+directly with NO server-side exhaustion alert of any kind. A total Gemini failure in any of these
+5 was invisible to the founder until a user complained (or, for `rolling-context`, silently
+produced zero nightly summaries with no page at all). Explicitly out of scope for OI-226 — that
+OI's own filed text named only ai-proxy's two previously-uncovered call sites, not this wider
+surface; scope-creeping that batch to cover 5 more functions was rejected in favour of tracking
+it here.
+
+**Fix direction (as filed):** wire `reportGeminiExhaustion` (or a function-appropriate variant —
+some of these are user-invoked, not cron, so the `endpoint`/dedup semantics may need adjustment)
+into each of the 5 call sites' failure path, matching the pattern `ai-proxy`/`tool-loop.ts`
+already establish. Shipped exactly this — the dedup-source split (shared for the 4 live sites,
+separate for the one cron site) IS the "adjustment" the filed text anticipated.
+
+**Closes**: diagnose-doc `docs/diagnoses/2026-09-22-gemini-exhaustion-telemetry-oi238-b6e3a8.md`.
+

@@ -1,7 +1,8 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { getEmbedding } from "../_shared/embeddings.ts";
 import { geminiChat, MODEL_FLASH } from "../_shared/gemini.ts";
+import { reportGeminiExhaustion } from "../_shared/gemini_failure_alert.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 import { fetchAllPages } from "../_shared/paged_fetch.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
@@ -54,6 +55,7 @@ function getTodayIST(): string {
  */
 async function summarizeMessages(
   messages: { user_message: string; ai_response: string; created_at: string }[],
+  supabase: SupabaseClient,
 ): Promise<string | null> {
   const conversationText = messages
     .map(
@@ -80,7 +82,7 @@ async function summarizeMessages(
   // injected instruction here persists past the one conversation that carried
   // it. Sanitised for the structural lever, fenced for the part sanitising
   // cannot cover.
-  const { content } = await geminiChat({
+  const { content, lastError } = await geminiChat({
     model: MODEL_FLASH,
     systemPrompt,
     // maxLen from the same measurement as daily-snapshot (see its comment):
@@ -109,6 +111,26 @@ async function summarizeMessages(
     // quota pressure during a real outage.
     retries: 1,
   });
+
+  if (!content) {
+    // OI-238 (sibling of A5/OI-226): DELIBERATELY a DIFFERENT dedup source
+    // from ai-proxy/tool-loop.ts's "ai_proxy_gemini_exhausted" — this is the
+    // one cron-dispatched call site among the 5, running nightly inside a
+    // per-user loop over every user with >50 messages. A real Gemini outage
+    // during one run could fail dozens of users back-to-back in minutes; if
+    // it shared the live-traffic dedup source, that burst would suppress a
+    // genuine same-day ai-proxy alert to "warn" for the rest of the 30-min
+    // window while users are actively hitting errors. A separate source
+    // keeps this nightly job's own dedup self-contained (still one alert
+    // per run, not one per user) without masking live-traffic signal or
+    // vice versa.
+    await reportGeminiExhaustion(
+      supabase,
+      "rolling_context_gemini_exhausted",
+      lastError ?? null,
+      "rolling_context_summarize",
+    );
+  }
 
   return content;
 }
@@ -421,7 +443,7 @@ serve(async (req: Request) => {
         );
 
         // Summarize the older messages
-        const summary = await summarizeMessages(toSummarize);
+        const summary = await summarizeMessages(toSummarize, supabaseClient);
 
         if (!summary) {
           console.error(

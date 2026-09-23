@@ -25,6 +25,7 @@ import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/rank_ladder_data.dart';
+import 'package:icanbefitter/core/services/rank_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
@@ -1382,24 +1383,26 @@ class AiSnapshotBuilder {
   }
 
   Map<String, dynamic> _getCurrentRankFromLadder() {
-    final profile = _hive.userBox.get('profile') as Map?;
-    final code = (profile?['current_rank_code'] as String?) ?? 'SD2';
-    final entry = rankByCode(code) ?? kRankLadder.first;
+    // OI-231 (hygiene half): route through the canonical RankService reader
+    // instead of duplicating its Hive read directly (rank_monotonic_current_code
+    // SoT). Also fixes a dead field: this used to read Hive key
+    // `current_rank_earned_at`, which nothing has ever written — the real
+    // writer (rank_service.dart evaluateAndPromote) uses
+    // `current_rank_achieved_at`, which is what getCurrentRank() reads.
+    final current = RankService.instance.getCurrentRank();
     final totalWorkouts = _hive.workoutBox.keys
         .where((k) => k.toString().startsWith('wlog_'))
         .length;
-    final earnedAt = profile?['current_rank_earned_at'] as String?;
     return {
-      'code': entry.code,
-      'display': entry.displayName,
-      'earned_at': earnedAt,
+      'code': current.entry.code,
+      'display': current.entry.displayName,
+      'earned_at': current.achievedAt?.toIso8601String(),
       'total_workouts': totalWorkouts,
     };
   }
 
   Map<String, dynamic>? _getNextRankFromLadder() {
-    final profile = _hive.userBox.get('profile') as Map?;
-    final currentCode = (profile?['current_rank_code'] as String?) ?? 'SD2';
+    final currentCode = RankService.instance.getCurrentRank().entry.code;
     final currentIdx = kRankLadder.indexWhere((r) => r.code == currentCode);
     if (currentIdx == -1 || currentIdx >= kRankLadder.length - 1) return null;
 
@@ -1411,6 +1414,7 @@ class AiSnapshotBuilder {
         .length;
     final grounding = _computeDataWindowGrounding();
     final weeksElapsed = ((grounding['data_window_days'] as int) / 7).floor();
+    final currentStreak = WorkoutRepository.instance.currentStreak();
 
     final reqs = <String, int>{};
     if ((gate?.totalWorkoutsAtLeast ?? 0) > 0) {
@@ -1431,11 +1435,19 @@ class AiSnapshotBuilder {
     int maxRemaining = -1;
 
     reqs.forEach((k, required) {
+      // `current` for 'deployments' stays 0 (never computed here) to match
+      // RankService.getNextRank()'s own documented tradeoff
+      // (rank_service.dart:439-444): an accurate count needs a network
+      // call to count rank_promotions rows, so the client-side fast path
+      // deliberately approximates it as 0 rather than risk a stale/wrong
+      // signal flipping the gate early. Not fixed here — same call.
       int current = 0;
       if (k == 'workouts') {
         current = totalWorkouts;
       } else if (k == 'weeks') {
         current = weeksElapsed;
+      } else if (k == 'streak_days') {
+        current = currentStreak;
       }
       final rem = (required - current).clamp(0, required);
       remaining[k] = rem;
@@ -1582,14 +1594,33 @@ class AiSnapshotBuilder {
         .toList();
   }
 
+  /// Computes ETA to the next rank from the SAME binding constraint
+  /// `_getNextRankFromLadder()` selected — not hardcoded to 'workouts'.
+  /// OI-230: the old code read only `remaining['workouts']`, which
+  /// `kRankGates` never populates (no rank sets `totalWorkoutsAtLeast` —
+  /// see rank_service.dart:18-19), so that branch was unconditionally
+  /// dead and every user with a next rank saw a false "promotion today."
+  ///
+  /// Officer/MCPO ranks are gated primarily by `completionRateMinimum`,
+  /// which `_getNextRankFromLadder` does not model in `remaining` at all
+  /// (filed separately — see docs/audit/open_issues.md). For those, any
+  /// computed `binding_constraint` could be hiding a real, unmodeled
+  /// blocker, so this returns an honest "cannot estimate" instead of a
+  /// confident-looking but possibly-wrong number.
   Map<String, dynamic>? _getEtaNextPromotion() {
     final next = _getNextRankFromLadder();
     if (next == null) return null;
 
-    final remaining = next['remaining'] as Map<String, int>;
-    final remainingWorkouts = remaining['workouts'] ?? 0;
+    final nextGate = kRankGates[next['code']];
+    if (nextGate?.completionRateMinimum != null) {
+      return _unknownEta();
+    }
 
-    if (remainingWorkouts == 0) {
+    final remaining = next['remaining'] as Map<String, int>;
+    final binding = next['binding_constraint'] as String;
+    final remainingForBinding = remaining[binding] ?? 0;
+
+    if (remainingForBinding == 0) {
       final today = istDateStr(DateTime.now());
       return {
         'at_current_cadence': {'days': 0, 'date': today},
@@ -1597,24 +1628,49 @@ class AiSnapshotBuilder {
       };
     }
 
-    final currentCadence = _computeWorkoutsPerWeekLast4Weeks();
-    final profile = _hive.userBox.get('profile') as Map?;
-    final planCadence = (profile?['days_per_week'] as int?) ?? 4;
+    if (binding == 'weeks') {
+      // Calendar-bound, not cadence-dependent — the same answer either way.
+      final days = remainingForBinding * 7;
+      final date = istDateStr(DateTime.now().add(Duration(days: days)));
+      return {
+        'at_current_cadence': {'days': days, 'date': date},
+        'at_plan_cadence': {'days': days, 'date': date},
+      };
+    }
 
-    final daysAtCurrent = currentCadence > 0
-        ? (remainingWorkouts * 7 / currentCadence).ceil()
-        : 999;
-    final daysAtPlan = (remainingWorkouts * 7 / planCadence).ceil();
+    if (binding == 'workouts') {
+      // Currently unreachable (see class doc comment above) — kept correct
+      // in case a future rank ever sets totalWorkoutsAtLeast again.
+      final currentCadence = _computeWorkoutsPerWeekLast4Weeks();
+      final profile = _hive.userBox.get('profile') as Map?;
+      final planCadence = (profile?['days_per_week'] as int?) ?? 4;
 
-    return {
-      'at_current_cadence': {
-        'days': daysAtCurrent,
-        'date': istDateStr(DateTime.now().add(Duration(days: daysAtCurrent))),
-      },
-      'at_plan_cadence': {
-        'days': daysAtPlan,
-        'date': istDateStr(DateTime.now().add(Duration(days: daysAtPlan))),
-      },
-    };
+      final daysAtCurrent = currentCadence > 0
+          ? (remainingForBinding * 7 / currentCadence).ceil()
+          : 999;
+      final daysAtPlan = (remainingForBinding * 7 / planCadence).ceil();
+
+      return {
+        'at_current_cadence': {
+          'days': daysAtCurrent,
+          'date':
+              istDateStr(DateTime.now().add(Duration(days: daysAtCurrent))),
+        },
+        'at_plan_cadence': {
+          'days': daysAtPlan,
+          'date': istDateStr(DateTime.now().add(Duration(days: daysAtPlan))),
+        },
+      };
+    }
+
+    // binding == 'streak_days' or 'deployments' — depends on future
+    // adherence, not just a count remaining; not reliably estimable from
+    // a cadence figure. Honest "cannot estimate" beats a fabricated date.
+    return _unknownEta();
   }
+
+  Map<String, dynamic> _unknownEta() => {
+        'at_current_cadence': {'days': null, 'date': null},
+        'at_plan_cadence': {'days': null, 'date': null},
+      };
 }

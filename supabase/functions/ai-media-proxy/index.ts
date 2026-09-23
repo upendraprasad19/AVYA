@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { encode as base64Encode } from "https://deno.land/std@0.177.0/encoding/base64.ts";
 import { geminiChat, MODEL_FLASH_LITE } from "../_shared/gemini.ts";
+import { reportGeminiExhaustion } from "../_shared/gemini_failure_alert.ts";
 import { COACH_REPLIES } from "../_shared/coach_replies.ts";
 import { istDayStartIso } from "../_shared/ist_date.ts";
 import {
@@ -918,7 +919,7 @@ export async function handleRequest(req: Request): Promise<Response> {
     // `geminiChat` swallows timeouts / 5xx / safety-filter blocks and
     // returns `{content: null}` rather than throwing. We map that to a
     // 502 below (upstream, retry-eligible) — not a 500.
-    const { content: rawReply, tokensUsed } = await geminiChat({
+    const { content: rawReply, tokensUsed, lastError } = await geminiChat({
       model: MODEL_FLASH_LITE,
       systemPrompt,
       userPrompt: asPrincipalMessage(message),
@@ -933,6 +934,16 @@ export async function handleRequest(req: Request): Promise<Response> {
     const modelLabel = MODEL_LABEL;
 
     if (!rawReply) {
+      // OI-238 (sibling of A5/OI-226): same shared dedup source as
+      // ai-proxy/tool-loop.ts — this is a live, user-invoked photo/video
+      // chat request against the same GEMINI_API_KEY/quota as text chat.
+      // endpoint: "ai_media_proxy" keeps it distinguishable.
+      await reportGeminiExhaustion(
+        supabaseClient,
+        "ai_proxy_gemini_exhausted",
+        lastError ?? null,
+        "ai_media_proxy",
+      );
       // Bug 2026-05-16 photo-analysis-500 — was already 502 here, but
       // adding `error_type` so the client can recognise an upstream
       // failure and retry without ambiguity.

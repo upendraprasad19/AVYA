@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { geminiChat, MODEL_FLASH_LITE } from "../_shared/gemini.ts";
+import { reportGeminiExhaustion } from "../_shared/gemini_failure_alert.ts";
 import {
   asAuthoredPrompt, sanitizeIdentifier
 } from "../_shared/sanitize_for_prompt.ts";
@@ -155,7 +156,7 @@ Rules:
 Return ONLY valid JSON — no markdown, no code fences:
 {"bf_low": 18, "bf_high": 22, "confidence": "medium", "suitable": true, "note": "One brief clinical observation"}`;
 
-    const { content: rawText } = await geminiChat({
+    const { content: rawText, lastError } = await geminiChat({
       model: MODEL_FLASH_LITE,
       systemPrompt: "You are a clinical body composition assessment tool. Return ONLY valid JSON.",
       userPrompt: asAuthoredPrompt(prompt),
@@ -170,6 +171,16 @@ Return ONLY valid JSON — no markdown, no code fences:
     });
 
     if (!rawText) {
+      // OI-238 (sibling of A5/OI-226): same shared dedup source as
+      // ai-proxy/tool-loop.ts — this is a live, user-invoked (PRO-gated)
+      // request against the same GEMINI_API_KEY/quota. endpoint:
+      // "assess_body_composition" keeps it distinguishable.
+      await reportGeminiExhaustion(
+        supabase,
+        "ai_proxy_gemini_exhausted",
+        lastError ?? null,
+        "assess_body_composition",
+      );
       return json({ error: "AI assessment failed" }, 502);
     }
 

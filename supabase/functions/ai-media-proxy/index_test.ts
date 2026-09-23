@@ -393,3 +393,81 @@ Deno.test("handleRequest: OPTIONS is the CORS preflight, GET is 405, no auth is 
   );
   assertEquals(noAuth.status, 401);
 });
+
+// ---------------------------------------------------------------------------
+// OI-238 (sibling of A5/OI-226, f7a2c9) — ai-media-proxy's own geminiChat()
+// call had no reportGeminiExhaustion wiring: `lastError` was never
+// destructured, so the !rawReply branch structurally could not alert.
+//
+// `handleRequest` IS exported here, but every test above stops at the auth
+// boundary (`supabaseClient.auth.getUser(token)` is a REAL createClient call
+// against SUPABASE_URL — nothing in this file injects a fake auth response),
+// so driving a real request all the way to the geminiChat branch is not
+// reachable with this file's existing test seam. Same SOURCE-GREP approach
+// used for the other 4 OI-238 sites (weekly-report, assess-body-composition,
+// daily-snapshot, rolling-context) — position-scoped to the `!rawReply`
+// branch and comment-stripped before any `.includes()` check.
+// ---------------------------------------------------------------------------
+
+function stripComments(s: string): string {
+  return s.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
+}
+
+const rawIndexSource = Deno.readTextFileSync(
+  new URL("./index.ts", import.meta.url),
+);
+
+Deno.test("ai-media-proxy imports reportGeminiExhaustion", () => {
+  assert(
+    rawIndexSource.includes(
+      'import { reportGeminiExhaustion } from "../_shared/gemini_failure_alert.ts";',
+    ),
+    "index.ts must import reportGeminiExhaustion",
+  );
+});
+
+Deno.test("ai-media-proxy destructures lastError from its geminiChat call (OI-238)", () => {
+  const callIdx = rawIndexSource.indexOf("await geminiChat({");
+  assert(callIdx >= 0, "geminiChat call not found");
+  const destructureLine = rawIndexSource.slice(Math.max(0, callIdx - 200), callIdx);
+  assert(
+    destructureLine.includes("lastError"),
+    `expected the geminiChat destructure to include lastError, got: ${destructureLine}`,
+  );
+});
+
+Deno.test(
+  "ai-media-proxy reports Gemini exhaustion on the !rawReply branch, BEFORE the 502 return (OI-238)",
+  () => {
+    const branchIdx = rawIndexSource.indexOf("if (!rawReply) {");
+    assert(branchIdx >= 0, "!rawReply branch not found");
+    const branchEnd = rawIndexSource.indexOf("\n    }\n", branchIdx);
+    assert(branchEnd >= 0, "could not bound the !rawReply block");
+    const rawBlock = rawIndexSource.slice(branchIdx, branchEnd);
+    const block = stripComments(rawBlock);
+
+    assert(
+      block.includes("reportGeminiExhaustion("),
+      "the !rawReply branch must call reportGeminiExhaustion",
+    );
+    assert(
+      block.includes('"ai_proxy_gemini_exhausted"'),
+      "must reuse the shared ai-proxy dedup source (live user traffic, same quota)",
+    );
+    assert(
+      block.includes('"ai_media_proxy"'),
+      'must tag this call site with endpoint "ai_media_proxy"',
+    );
+    assert(
+      block.includes("lastError ?? null"),
+      "must forward the real lastError (or null), not a fabricated value",
+    );
+
+    const reportIdx = block.indexOf("reportGeminiExhaustion(");
+    const responseIdx = block.indexOf("new Response(");
+    assert(
+      reportIdx >= 0 && responseIdx >= 0 && reportIdx < responseIdx,
+      "the alert must fire BEFORE the 502 Response is returned",
+    );
+  },
+);
