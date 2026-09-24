@@ -8,6 +8,7 @@ import 'package:icanbefitter/core/utils/hold_week_labels.dart';
 import 'package:icanbefitter/features/train/widgets/workout_receipt_card.dart';
 import 'package:icanbefitter/features/train/widgets/workout_receipt_sheet.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_plate_sheet.dart';
 import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_plate_thumb.dart';
 
@@ -43,7 +44,7 @@ class DayDetailSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final type = schedule?['type'] as String? ?? 'none';
     final status = schedule?['status'] as String? ?? 'none';
-    final isWorkout = type == 'workout' || type == 'custom_template';
+    final isWorkout = !PlanEngineFlags.isRestDayConsideringLogged(type);
     final isCompleted = status == 'completed';
     final isRestDay = type == 'rest' || type == 'none';
 
@@ -101,7 +102,7 @@ class DayDetailSheet extends StatelessWidget {
   Widget _buildHeader() {
     final workoutName = schedule?['workout_name'] as String? ?? '';
     final type = schedule?['type'] as String? ?? 'none';
-    final isWorkout = type == 'workout' || type == 'custom_template';
+    final isWorkout = !PlanEngineFlags.isRestDayConsideringLogged(type);
     // Row-derived (see hold_week_labels.dart): the raw `week` field carries
     // `4 + ordinal` on a hold row. Null means "nothing honest to show",
     // preserving the previous `week > 0` suppression.

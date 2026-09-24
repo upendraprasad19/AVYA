@@ -11,4 +11,16 @@ void main() {
       expect(PlanEngineFlags.isRestDayConsideringLogged('logged'), isTrue);
     });
   });
+
+  group('OI-126 wrapper — the 6 additionally-discovered sites use the same wrapper', () {
+    // These assertions are source-grep (Task 6 adds the mechanical grep test
+    // proving each cited line actually calls the wrapper); this group is a
+    // placeholder reminding the reader that Task 6, not this task, is where
+    // the wiring proof for these 6 sites lives — Task 4 itself only edits
+    // source, per the plan's TDD step shape below.
+    test('wrapper still behaves correctly after this task (no change to it)', () {
+      expect(PlanEngineFlags.isRestDayConsideringLogged('logged'), isTrue);
+      expect(PlanEngineFlags.isRestDayConsideringLogged('workout'), isFalse);
+    });
+  });
 }

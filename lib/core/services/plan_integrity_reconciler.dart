@@ -34,6 +34,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
+
 import 'error_telemetry.dart';
 import 'hive_service.dart';
 import 'migrated_key.dart';
@@ -94,7 +96,7 @@ class PlanIntegrityReconciler {
   static bool needsHeal(Iterable<Map<String, dynamic>> entries) {
     for (final e in entries) {
       final type = e['type'];
-      final isWorkout = type == 'workout' || type == 'custom_template';
+      final isWorkout = !PlanEngineFlags.isRestDayConsideringLogged(type);
       if (!isWorkout) continue;
       if (e['status'] == 'completed') continue;
       final ex = e['exercises'];
