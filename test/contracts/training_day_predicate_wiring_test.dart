@@ -28,7 +28,7 @@ void main() {
 
   group('OI-126 — every claimed call site actually delegates to the wrapper', () {
     // Source-grep, not behavioral — but it closes a real gap: it proves each
-    // of the 11 sites calls PlanEngineFlags.isRestDayConsideringLogged rather
+    // of the 12 sites calls PlanEngineFlags.isRestDayConsideringLogged rather
     // than an inlined duplicate ternary that LOOKS equivalent today and
     // silently drifts tomorrow. Combined with the call-through tests below
     // (which prove the wrapper itself is correct) and the mutation proof
@@ -41,6 +41,7 @@ void main() {
       'lib/core/services/plan_integrity_reconciler.dart',
       'lib/features/home/providers/home_provider.dart',
       'lib/features/home/widgets/day_detail_sheet.dart',
+      'lib/features/home/widgets/weekly_calendar.dart',
     ];
 
     test('every touched file contains at least one call to isRestDayConsideringLogged', () {
