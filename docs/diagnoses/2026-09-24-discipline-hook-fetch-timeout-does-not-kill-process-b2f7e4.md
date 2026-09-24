@@ -128,7 +128,7 @@ spawns via `Process.start()`, times out `process.exitCode` specifically
 (not the whole run), and calls `process.kill(ProcessSignal.sigkill)` on
 timeout so the child is actually terminated. Sets `GIT_TERMINAL_PROMPT=0`
 so a credential prompt fails fast rather than hanging in the first place.
-`_mainSyncWarning()` (line 377) also gained a `DISCIPLINE_HOOK_SYNC_SKIP=1`
+`_mainSyncWarning()` (line 370) also gained a `DISCIPLINE_HOOK_SYNC_SKIP=1`
 kill switch, a separate P2 finding from the same review, fixed in the same
 commit.
 
