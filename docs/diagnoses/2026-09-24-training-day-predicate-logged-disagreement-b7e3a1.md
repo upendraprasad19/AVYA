@@ -114,7 +114,7 @@ impact_analysis: |
 # Training-day predicate disagreement on 'logged' rows (OI-126)
 
 See `docs/audit/open_issues.md` OI-126 for the original board-level framing (which named only 5 of
-the 11 real call sites — corrected here) and `lib/core/utils/phase_completion.dart:29-54`'s doc
+the 11 real call sites — corrected here) and `lib/core/utils/phase_completion.dart:29-56`'s doc
 comment for the in-repo explanation of why two shapes exist at all. This fix closes the one
 *unintended* disagreement (on `'logged'`) without collapsing the two shapes into one — they remain
 deliberately different, now differing only on truly unrecognized future type strings, which is
