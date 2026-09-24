@@ -1409,7 +1409,7 @@ class WorkoutScheduleReadService {
     for (int w = 1; w <= totalWeeks; w++) {
       for (final day in _withoutHoldRows(getWeek(w))) {
         final type = (day['type'] as String?) ?? 'rest';
-        final isRest = type != 'workout' && type != 'custom_template';
+        final isRest = PlanEngineFlags.isRestDayConsideringLogged(type);
         final status = (day['status'] as String?) ?? 'planned';
         days.add((isRest: isRest, isDone: status == 'completed'));
       }
