@@ -11837,7 +11837,7 @@ concepts:
         semantic: flag-check
         fields_read: [type]
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1409-1412
+        line_range: 1388-1412
         method: currentPhaseCompletionRate
         semantic: flag-check
         fields_read: [type]
