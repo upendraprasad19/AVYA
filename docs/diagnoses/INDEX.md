@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### training_day_predicate_logged_agreement (1 bugs)
+- 2026-09-24 b7e3a1 — A `type: 'logged'` schedule row (written by WorkoutWriteService.markCompleted's no-prior-schedule branch for AI-coach-only logging, or by the restore synthesize path in sync/sync_workout.dart) counts…
+
 ### check_hooks_installed_unguarded_reads (1 bugs)
 - 2026-09-23 f2a8c6 — scripts/check_hooks_installed.dart (Gate 32) has always documented its own contract as "never hard-fail unexpectedly" -- a hygiene gate whose freshness/presence checks degrade to a WARN or an…
 
@@ -1376,6 +1379,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-24 | b7e3a1 | A `type: 'logged'` schedule row (written by WorkoutWriteService.markCompleted's no-prior-schedule branch for AI-coach-only logging, or by the restore synthesize path in sync/sync_workout.dart) counts… | training_day_predicate_logged_agreement | test/contracts/training_day_predicate_wiring_test.dart |
 | 2026-09-23 | f2a8c6 | scripts/check_hooks_installed.dart (Gate 32) has always documented its own contract as "never hard-fail unexpectedly" -- a hygiene gate whose freshness/presence checks degrade to a WARN or an… | check_hooks_installed_unguarded_reads | test/scripts/check_hooks_installed_e2e_test.dart |
 | 2026-09-23 | 42a98d | Live-reproduced twice by the founder, on a real device, minutes after diagnose f92d17's token_hash-routing fix went to production: tapping a genuine, freshly-sent confirmation email link showed… | not_applicable — a control-flow/initialization-ordering fix | test/contracts/confirm_email_readiness_behavioral_test.dart |
 | 2026-09-23 | f92d17 | Live reproduction of OI-244: signed up a fresh account (avyaanshfit@gmail.com) and tapped the real confirmation email link on TWO real devices — an iPhone (Safari, Gmail app), and an Android phone… | confirm_link_token_hash_recovery | test/contracts/confirm_link_detector_test.dart |

@@ -11796,3 +11796,69 @@ concepts:
       - "support@avya.app"
       - "support@icanbefitter.com (old variant — canonical is upendra@icanbefitter.com)"
     contract_test_path: test/contracts/support_contact_email_writer_to_reader_test.dart
+
+  - concept: training_day_predicate_logged_agreement
+    domain: workout
+    behavioral_test_path: test/contracts/training_day_predicate_wiring_test.dart
+    description: |
+      Whether a 'logged' schedule-row type counts as a training day. Two
+      shapes: isTrainingDayType (exclusion, streak — unaffected) and
+      isPhaseCompletionTrainingType (whitelist, phase-completion/rest-banner/
+      PRO-gate/calendar/streak-banner/AI-insight/reconciler/day-detail-sheet).
+      All 11 whitelist-shaped call sites now delegate to the single wrapper
+      PlanEngineFlags.isRestDayConsideringLogged, which agrees with the
+      exclusion shape on 'logged' once loggedCountsAsPhaseTrainingDayEnabled
+      is ON (default OFF, ship-dark, OI-126).
+    writers:
+      - file: lib/core/services/workout_write_service.dart
+        line_range: 505-515
+        method: markCompleted (no-prior-schedule branch)
+        notes: stamps type:'logged' for AI-coach-only logging with no prior scheduled day
+      - file: lib/core/services/sync/sync_workout.dart
+        line_range: 980-990
+        method: restore synthesize path
+        notes: stamps type:'logged' when a cloud-restored log has no matching local schedule row
+    reader_manifest_complete: true
+    readers:
+      - file: lib/core/utils/phase_completion.dart
+        line_range: 55-56
+        method: "isTrainingDayType / isPhaseCompletionTrainingType"
+        semantic: flag-check
+        fields_read: [type]
+      - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
+        line_range: new
+        method: isRestDayConsideringLogged
+        semantic: flag-check
+        fields_read: [type]
+        notes: the single wrapper every whitelist-shaped call site below delegates to
+      - file: lib/features/train/providers/train_provider.dart
+        line_range: 632-813
+        method: "workoutDayForDate / week builder"
+        semantic: flag-check
+        fields_read: [type]
+      - file: lib/core/services/workout_schedule_read_service.dart
+        line_range: 1409-1412
+        method: currentPhaseCompletionRate
+        semantic: flag-check
+        fields_read: [type]
+        notes: feeds the PRO phase-advance gate — highest-risk reader
+      - file: lib/features/home/screens/home_screen.dart
+        line_range: 614-792
+        method: "today-card isRestDay (2 sites)"
+        semantic: flag-check
+        fields_read: [type]
+      - file: lib/core/services/plan_integrity_reconciler.dart
+        line_range: 96-100
+        method: needsHeal
+        semantic: flag-check
+        fields_read: [type]
+      - file: lib/features/home/providers/home_provider.dart
+        line_range: 99-679
+        method: "calendar day status / StreakWarningEligibility / AI-insight quick-text (3 sites)"
+        semantic: flag-check
+        fields_read: [type]
+      - file: lib/features/home/widgets/day_detail_sheet.dart
+        line_range: 45-105
+        method: "build / _buildHeader (2 sites)"
+        semantic: flag-check
+        fields_read: [type]

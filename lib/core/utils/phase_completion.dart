@@ -49,9 +49,11 @@ double phaseCompletionRate(Iterable<({bool isRest, bool isDone})> days) {
 /// is excluded defensively because `holdWeekSessionProgress` excludes it, and
 /// these two predicates must not drift.
 ///
-/// The repo-wide split between the two shapes (5 call sites still use the
-/// inclusion form, so they treat a `logged` day as REST) is pre-existing and
-/// tracked on the open-issues board — deliberately NOT changed here.
+/// The repo-wide split between the two shapes is deliberate and permanent
+/// (see [isPhaseCompletionTrainingType] below) — but the disagreement on
+/// `type: 'logged'` across the 11 inline call sites using the inclusion form
+/// was a bug, not a feature, closed by OI-126 behind
+/// [PlanEngineFlags.isRestDayConsideringLogged].
 bool isTrainingDayType(Object? type) => type != 'rest' && type != 'off';
 
 /// Training-day whitelist for phase completion, the home rest-day banner, the
