@@ -248,6 +248,43 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-25** — blast-radius **platform** — branch `oi126-training-day-predicate`
+  (OI-126: unifies the training-day predicate so a `type: 'logged'` schedule row
+  agrees between the weekly streak and phase-completion/PRO-advance-gate/rest-day-banner
+  purposes — a new `PlanEngineFlags.isRestDayConsideringLogged` wrapper, wired onto 12
+  call sites, behind a kill-switch default OFF). Whole-branch review (nothing staged —
+  all 13 commits already landed), reviewed against `main...HEAD` per the merge-review
+  shape this file's history already uses for whole-branch/no-staged-diff cases (branch-
+  named review file, not staging-hash-named). **2 findings (0 P0/P1/P2, 2 P3); 0
+  false_alarm — 1 fixed same session (stale prose count), 1 verified_clean
+  (informational, accurately-disclosed scope boundary).** Review:
+  `docs/reviews/oi126-training-day-predicate-bpass.md`.
+  **No new lens — this entry is worth recording for what a CLEAN pass with real
+  verification work looks like, per this file's own "record the confirmation, not
+  just the catch" convention.** The reviewer independently re-derived, rather than
+  trusted, three separate claims the diagnose-doc made: (1) re-ran a from-scratch
+  `lib/`-wide grep for the predicate's two literal phrasings and confirmed no 13th
+  missed call site exists (the 9 other hits found are semantically distinct, narrower
+  checks) — this is the SAME class of check that found the branch's own 12th site
+  (missed by 7 task-scoped reviews) a few commits earlier, run again independently
+  rather than assumed satisfied because the addendum said so; (2) LIVE-mutated
+  `PlanEngineFlags.isRestDayConsideringLogged` to ignore the flag entirely and
+  re-ran the suite, reproducing the diagnose-doc's "exactly 3 tests redden" claim
+  exactly, then reverted and confirmed `git status` clean — not a re-read of the
+  mutation-proof prose; (3) hand-verified De Morgan equivalence between the pre-fix
+  inline ternary and the wrapper's negation at all 12 sites for the flag-OFF
+  byte-identity claim central to the platform-tier `requires: feature_flag`
+  obligation (lens 3), rather than accepting a doc-comment's assertion of it.
+  **The one real finding (P3) was a stale count surviving inside a diagnose-doc's
+  OWN structured frontmatter fields** (`forbidden_patterns_checked`,
+  `regression_test_planned` said "11"/"8 of 11" after a later commit in the SAME
+  branch wired a 12th site and correctly updated the doc's prose BODY and the SoT
+  registry to "12" — but not these two frontmatter blocks). Same class as this
+  file's own repeated "a citation copied/left behind when the file it's inside gets
+  edited elsewhere" lesson, here recurring inside a single doc's own internal
+  cross-references rather than across two files.
+  False-alarm rate 0/2 → no lens removed; no lens change needed.
+
 - **2026-09-23 (c)** — blast-radius **account** — branch `confirm-email-init-race`
   (diagnose 42a98d: `AuthNotifier.confirmEmail` gains the `ensureSupabaseReady()`
   guard its siblings `signInWithEmail`/`checkEmailRegistered` already had, closing

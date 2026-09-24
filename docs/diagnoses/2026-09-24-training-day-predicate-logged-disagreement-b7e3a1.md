@@ -69,11 +69,13 @@ forbidden_patterns_checked:
      review round tried exactly that and it was reverted in round 3 (phase_completion.dart's own
      doc comment), because phaseCompletionRate's 2 real callers need the narrower whitelist."
   - "Did NOT scope this batch to only the 5 sites the OI-126 board named — an independent live grep
-     found 6 more of the identical pattern; all 11 ship in this batch per CLAUDE.md §4.2."
+     found 6 more of the identical pattern (Tasks 3-4), and the whole-branch review later found a
+     12th site whose predicate was split across two booleans instead of one joined expression
+     (weekly_calendar.dart); all 12 ship in this batch per CLAUDE.md §4.2."
 proposed_fix: |
   Extracted isPhaseCompletionTrainingType(type) — a whitelist widened by exactly one value
   ('logged') from the pre-existing inline predicate. Extracted PlanEngineFlags.isRestDayConsideringLogged
-  as the ONE wrapper all 11 call sites delegate to (rather than 11 independent inline copies of the
+  as the ONE wrapper all 12 call sites delegate to (rather than 12 independent inline copies of the
   ternary, which is how the original disagreement went unnoticed at some sites and would let a
   future edit silently diverge again). Wired behind a new kill-switch
   (PlanEngineFlags.loggedCountsAsPhaseTrainingDayEnabled, default OFF) — nothing changes for any
@@ -81,10 +83,11 @@ proposed_fix: |
   converged a 6th, un-DRY exclusion-shape inline site (workout_schedule_read_service.dart:1709)
   onto the existing isTrainingDayType helper — pure refactor, unflagged, no behavior change.
 regression_test_planned: |
-  test/contracts/training_day_predicate_wiring_test.dart — source-grep proof all 11 sites delegate
+  test/contracts/training_day_predicate_wiring_test.dart — source-grep proof all 12 sites delegate
   to the wrapper (not a re-inlined duplicate) + a negative check against the pre-fix ternary
   reappearing in EITHER phrasing (exclusion, used at the 5 originally-identified sites; inclusion,
-  used at Task 4's 6 additionally-discovered sites). Real call-through coverage at 3 of the 11
+  used at Task 4's 6 additionally-discovered sites, plus the 12th site the whole-branch review
+  found later). Real call-through coverage at 3 of the 12
   sites, chosen for risk + reachability: test/contracts/phase_adherence_rate_test.dart (extended)
   proves currentPhaseCompletionRate's actual output changes — the PRO-advance gate input.
   test/contracts/reconciler_needs_heal_logged_test.dart proves PlanIntegrityReconciler.needsHeal's
@@ -92,7 +95,7 @@ regression_test_planned: |
   test/contracts/streak_warning_eligibility_logged_test.dart proves StreakWarningEligibilityNotifier's
   actual isWorkoutDayToday output changes, driven through a real ProviderContainer (not a
   hand-duplicated reconstruction of the predicate — an earlier draft of this test made exactly that
-  mistake and was rewritten after round-2 review caught it). The other 8 of 11 sites rely on the
+  mistake and was rewritten after round-2 review caught it). The other 9 of 12 sites rely on the
   source-grep plus flutter analyze plus the existing tests re-run in Tasks 3-4 — a stated, not
   hidden, coverage gap; closing it further (e.g. widget-pump tests for the 4 UI-layer sites in
   home_screen.dart and day_detail_sheet.dart) is out of scope for this ship-dark batch. Mutation-

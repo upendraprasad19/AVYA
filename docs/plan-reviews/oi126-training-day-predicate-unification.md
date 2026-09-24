@@ -3,7 +3,8 @@ plan: docs/superpowers/plans/2026-09-24-oi126-training-day-predicate-unification
 review_rounds: 2
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
+bpass_review: docs/reviews/oi126-training-day-predicate-bpass.md
 ---
 
 # Plan review — OI-126 training-day predicate unification
@@ -89,9 +90,15 @@ consistent with convergence rather than an oversized unit. Declaring converged.
 
 ## Outstanding, stated rather than hidden
 
-- 8 of 11 call sites (the 4 UI-layer sites in `home_screen.dart`/`day_detail_sheet.dart` plus 4
-  others) rely on source-grep + `flutter analyze` + existing-test re-runs, not a genuine
-  call-through test. Deliberate scope boundary for this ship-dark batch, not a deferred bug — the
-  flip-on commit (separately reviewed, out of scope here) is the point real user risk begins.
-- `bpass: pending` — the self-triggered `/code-review` B-pass (§4.3) runs before the `--no-ff`
-  merge, after implementation, per the standard sequence; not run yet since no code exists yet.
+- 9 of 12 call sites (the 4 UI-layer sites in `home_screen.dart`/`day_detail_sheet.dart`/
+  `weekly_calendar.dart` plus 5 others) rely on source-grep + `flutter analyze` + existing-test
+  re-runs, not a genuine call-through test. Deliberate scope boundary for this ship-dark batch, not
+  a deferred bug — the flip-on commit (separately reviewed, out of scope here) is the point real
+  user risk begins. (Count updated post-implementation: the whole-branch review found a 12th call
+  site, `weekly_calendar.dart`, missed by the original grep because its predicate was split across
+  two booleans instead of one joined expression.)
+- `bpass: accepted` — the self-triggered `/code-review` B-pass (§4.3) ran after implementation,
+  whole-branch, against `main...HEAD` (13 commits, blast-radius platform). 2 findings, both P3,
+  neither blocking; both triaged same session (one fixed — a stale "11 sites" count in the
+  diagnose-doc, now 12; one confirmed-accurate disclosure, no action needed). Review:
+  `docs/reviews/oi126-training-day-predicate-bpass.md`.
