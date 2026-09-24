@@ -11821,10 +11821,17 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/utils/phase_completion.dart
-        line_range: 55-56
-        method: "isTrainingDayType / isPhaseCompletionTrainingType"
+        line_range: 57-57
+        method: isTrainingDayType
         semantic: flag-check
         fields_read: [type]
+        notes: exclusion shape, unaffected by this batch
+      - file: lib/core/utils/phase_completion.dart
+        line_range: 76-77
+        method: isPhaseCompletionTrainingType
+        semantic: flag-check
+        fields_read: [type]
+        notes: whitelist shape, widened to include 'logged' by this batch
       - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
         line_range: new
         method: isRestDayConsideringLogged

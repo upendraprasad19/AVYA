@@ -25,8 +25,8 @@ writers:
   - { file: lib/core/services/workout_write_service.dart, method: "markCompleted (no-prior-schedule branch)", line: 510 }
   - { file: lib/core/services/sync/sync_workout.dart, method: "restore synthesize path", line: 985 }
 readers:
-  - { file: lib/core/utils/phase_completion.dart, method: "isTrainingDayType (exclusion shape, unaffected)", line: 55 }
-  - { file: lib/core/utils/phase_completion.dart, method: "isPhaseCompletionTrainingType (new whitelist, widened to include logged)", line: 56 }
+  - { file: lib/core/utils/phase_completion.dart, method: "isTrainingDayType (exclusion shape, unaffected)", line: 57 }
+  - { file: lib/core/utils/phase_completion.dart, method: "isPhaseCompletionTrainingType (new whitelist, widened to include logged)", line: 76 }
   - { file: lib/shared/repositories/plan_engine/plan_engine_flags.dart, method: "isRestDayConsideringLogged (the shared wrapper every call site delegates to)", line: "new" }
   - { file: lib/features/train/providers/train_provider.dart, method: "workoutDayForDate", line: 637 }
   - { file: lib/features/train/providers/train_provider.dart, method: "week builder (isRest)", line: 813 }
@@ -87,7 +87,7 @@ regression_test_planned: |
   hidden, coverage gap; closing it further (e.g. widget-pump tests for the 4 UI-layer sites in
   home_screen.dart and day_detail_sheet.dart) is out of scope for this ship-dark batch. Mutation-
   proven: reverting the wrapper to ignore the flag entirely reddens all 3 real call-through tests
-  (see Tasks 5-6 reports for the recorded count and evidence of the mutation run).
+  (verified in Task 6 Step 9's mutation run).
 touched_layers_checked:
   - { tier: 1, name: client_code, status: fixed_in_this_batch, evidence: "11 call sites + 1 DRY convergence; flutter analyze clean; wiring test green, 2 real call-through tests green, mutation-proven." }
   - { tier: 2, name: hive_local_state, status: not_applicable, evidence: "No new Hive key beyond the flag itself; reads the existing schedule_* 'type' field only." }
