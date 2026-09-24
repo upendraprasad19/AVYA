@@ -1,4 +1,5 @@
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/utils/phase_completion.dart';
 
 /// Runtime kill-switches for the plan engine (§4.6 feature-flag protocol).
 ///
@@ -460,5 +461,38 @@ class PlanEngineFlags {
     } catch (_) {
       return false;
     }
+  }
+
+  /// OI-126: a `type: 'logged'` schedule row (AI-coach-only log, or a
+  /// cloud-restore synthesize row) currently counts as a training day for the
+  /// weekly streak (`isTrainingDayType`, exclusion-shaped) but as REST for
+  /// phase completion, the home rest-day banner, the PRO-advance gate, and 8
+  /// other call sites (whitelist-shaped, via `isPhaseCompletionTrainingType`)
+  /// — see `phase_completion.dart`. This flag makes every whitelist-shaped
+  /// call site ALSO count `logged`, via [isRestDayConsideringLogged] below.
+  /// Set `configBox['enable_logged_counts_as_phase_training_day'] = true` to
+  /// enable. Ship-dark default OFF; flip only in its own reviewed commit per
+  /// §4.12.4.
+  static bool get loggedCountsAsPhaseTrainingDayEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('enable_logged_counts_as_phase_training_day') ==
+          true;
+    } catch (_) {
+      return false; // no Hive (pure unit test) → default: OFF
+    }
+  }
+
+  /// The ONE call every OI-126 call site makes instead of re-inlining
+  /// `type != 'workout' && type != 'custom_template'`. Centralizing this is
+  /// deliberate: 11 independent inline copies of the same ternary is exactly
+  /// how a future edit silently diverges at one site and not the others.
+  /// Flag OFF → byte-identical to the pre-fix inline expression for every
+  /// `type` value. Flag ON → widens to also treat `logged` as training.
+  static bool isRestDayConsideringLogged(Object? type) {
+    if (loggedCountsAsPhaseTrainingDayEnabled) {
+      return !isPhaseCompletionTrainingType(type);
+    }
+    return type != 'workout' && type != 'custom_template';
   }
 }
