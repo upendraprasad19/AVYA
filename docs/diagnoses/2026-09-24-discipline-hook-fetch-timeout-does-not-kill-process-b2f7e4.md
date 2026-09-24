@@ -36,7 +36,7 @@ sot_registry_entry: not_applicable — a harness SessionStart hook mechanism,
 writers:
   - { file: scripts/discipline_hook.dart, method_or_widget: "_boundedFetch — spawns via Process.start and kills the process directly on timeout instead of racing a Future", line: 334 }
 readers:
-  - { file: scripts/discipline_hook.dart, method_or_widget: "_mainSyncWarning — calls _boundedFetch(); also gained the DISCIPLINE_HOOK_SYNC_SKIP=1 kill switch this same fix added", line: 377 }
+  - { file: scripts/discipline_hook.dart, method_or_widget: "_mainSyncWarning — calls _boundedFetch(); also gained the DISCIPLINE_HOOK_SYNC_SKIP=1 kill switch this same fix added", line: 370 }
 hive_key_prefix: not_applicable
 hive_key_formula: not_applicable
 sync_methods: []
