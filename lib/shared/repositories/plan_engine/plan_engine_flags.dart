@@ -466,10 +466,13 @@ class PlanEngineFlags {
   /// OI-126: a `type: 'logged'` schedule row (AI-coach-only log, or a
   /// cloud-restore synthesize row) currently counts as a training day for the
   /// weekly streak (`isTrainingDayType`, exclusion-shaped) but as REST for
-  /// phase completion, the home rest-day banner, the PRO-advance gate, and 8
-  /// other call sites (whitelist-shaped, via `isPhaseCompletionTrainingType`)
-  /// — see `phase_completion.dart`. This flag makes every whitelist-shaped
-  /// call site ALSO count `logged`, via [isRestDayConsideringLogged] below.
+  /// phase completion (the direct input to the PRO-advance gate — the two
+  /// are the SAME call site, not two), the home rest-day banner, and 10
+  /// other call sites (whitelist-shaped, via `isPhaseCompletionTrainingType`
+  /// — 12 sites total, incl. the visible calendar strip, found only in the
+  /// whole-branch review) — see `phase_completion.dart`. This flag makes
+  /// every whitelist-shaped call site ALSO count `logged`, via
+  /// [isRestDayConsideringLogged] below.
   /// Set `configBox['enable_logged_counts_as_phase_training_day'] = true` to
   /// enable. Ship-dark default OFF; flip only in its own reviewed commit per
   /// §4.12.4.
@@ -485,8 +488,12 @@ class PlanEngineFlags {
 
   /// The ONE call every OI-126 call site makes instead of re-inlining
   /// `type != 'workout' && type != 'custom_template'`. Centralizing this is
-  /// deliberate: 11 independent inline copies of the same ternary is exactly
-  /// how a future edit silently diverges at one site and not the others.
+  /// deliberate: 12 independent inline copies of the same ternary is exactly
+  /// how a future edit silently diverges at one site and not the others —
+  /// including a 12th call site (weekly_calendar.dart) that split the
+  /// ternary across two separately-named booleans instead of one joined
+  /// expression, which is exactly the shape that let it evade every earlier
+  /// grep until the whole-branch review found it.
   /// Flag OFF → byte-identical to the pre-fix inline expression for every
   /// `type` value. Flag ON → widens to also treat `logged` as training.
   static bool isRestDayConsideringLogged(Object? type) {

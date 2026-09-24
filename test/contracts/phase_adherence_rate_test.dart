@@ -212,9 +212,22 @@ void main() {
       // already-100%-complete days can never move a ratio that's already
       // saturated at 1.0 regardless of the flag. Fixed by seeding an
       // INCOMPLETE logged day, so the denominator changes but the numerator
-      // does not — the rate must move, and it must move DOWN (the flag
-      // widening the denominator without widening completions is the exact
-      // "was hidden, now visible" effect this fix is meant to surface).
+      // does not — the rate moves DOWN here.
+      //
+      // Whole-branch review correction: this is NOT the typical real-world
+      // case. Both real writers of 'logged' rows (workout_write_service.dart
+      // markCompleted's no-prior-schedule branch, and sync/sync_workout.dart's
+      // restore synthesize path) always stamp status: 'completed' — never
+      // 'planned'. The 'logged'+'planned' combination seeded below only
+      // arises from a READ-TIME DEMOTION elsewhere
+      // (workout_schedule_read_service.dart's getScheduleRowForDate), not
+      // from any writer. For a real completed 'logged' row, flipping the
+      // flag would move the rate UP (matching the diagnose-doc's own
+      // "under-report" framing), not down. What THIS test case demonstrates
+      // is narrower and still real: the flag's effect on the DENOMINATOR
+      // when a 'logged' row reaches the rate calc in an uncompleted state via
+      // that read-time demotion — not the typical real-world (completed)
+      // 'logged' day.
       await seedDay(1, 1, type: 'workout', status: 'completed');
       await seedDay(1, 2, type: 'logged', status: 'planned');
 

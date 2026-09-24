@@ -1,6 +1,6 @@
 // test/contracts/reconciler_needs_heal_logged_test.dart
 //
-// Proves the wiring at plan_integrity_reconciler.dart:97 (needsHeal,
+// Proves the wiring at plan_integrity_reconciler.dart:99 (needsHeal,
 // isWorkout) actually changes when the OI-126 flag flips, calling the REAL
 // static method — not a reconstruction of its logic.
 import 'dart:io';

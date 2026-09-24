@@ -51,15 +51,19 @@ double phaseCompletionRate(Iterable<({bool isRest, bool isDone})> days) {
 ///
 /// The repo-wide split between the two shapes is deliberate and permanent
 /// (see [isPhaseCompletionTrainingType] below) — but the disagreement on
-/// `type: 'logged'` across the 11 inline call sites using the inclusion form
-/// was a bug, not a feature, closed by OI-126 behind
+/// `type: 'logged'` across the 12 inline call sites (5 written in the
+/// exclusion phrasing `!= 'workout' && != 'custom_template'`, 7 in the
+/// inclusion phrasing `== 'workout' || == 'custom_template'` — both mean the
+/// same thing) was a bug, not a feature, closed by OI-126 behind
 /// [PlanEngineFlags.isRestDayConsideringLogged].
 bool isTrainingDayType(Object? type) => type != 'rest' && type != 'off';
 
-/// Training-day whitelist for phase completion, the home rest-day banner, the
-/// PRO-advance gate, the calendar day-status dots, the streak-warning banner
-/// eligibility check, the AI-insight quick-text, the reconciler's heal-need
-/// check, and the day-detail bottom sheet.
+/// Training-day whitelist for phase completion / the PRO-advance gate (same
+/// call site), the home rest-day banner, the visible calendar strip's
+/// day-status dots, the streak-warning banner's remaining-workouts count and
+/// its separate eligibility check, the AI-insight quick-text, the
+/// reconciler's heal-need check, and the day-detail bottom sheet — 12 call
+/// sites total (OI-126).
 ///
 /// Deliberately narrower than [isTrainingDayType]: only `workout`,
 /// `custom_template`, and (since OI-126) `logged` count. An unrecognized

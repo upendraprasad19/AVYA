@@ -1,6 +1,6 @@
 // test/contracts/streak_warning_eligibility_logged_test.dart
 //
-// Proves the wiring at home_provider.dart:375 (StreakWarningEligibilityNotifier
+// Proves the wiring at home_provider.dart:376 (StreakWarningEligibilityNotifier
 // .build, isWorkoutDayToday) actually changes when the OI-126 flag flips, by
 // reading the REAL provider through a real ProviderContainer — not a
 // hand-duplicated reconstruction of its logic (round-2 review's finding

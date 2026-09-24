@@ -8,37 +8,47 @@ symptom: |
   A `type: 'logged'` schedule row (written by WorkoutWriteService.markCompleted's
   no-prior-schedule branch for AI-coach-only logging, or by the restore synthesize
   path in sync/sync_workout.dart) counts as a training day for the weekly streak
-  (isTrainingDayType, exclusion-shaped) but as a REST day at 11 other inline call
-  sites (whitelist-shaped: type == 'workout' || type == 'custom_template'),
-  including WorkoutScheduleReadService.currentPhaseCompletionRate — the direct
-  input to the PRO phase-advance gate — plus the home rest-day banner, the
-  calendar day-status dots, the streak-warning banner eligibility check, the
-  AI-insight quick-text, the plan-integrity reconciler's heal-need check, and
-  the day-detail bottom sheet (2 sites). A coach-logged or cloud-restored day
-  therefore advances a user's streak while simultaneously depressing their
-  phase-completion rate and being invisible to 8 other display surfaces.
-  Round-1 review of this batch's own plan found 6 of these 11 sites — the
-  original OI-126 board filing and the first plan draft named only 5.
+  (isTrainingDayType, exclusion-shaped) but as a REST day at 12 other inline call
+  sites (whitelist-shaped: type == 'workout' || type == 'custom_template', or the
+  same split across two separately-named booleans), including
+  WorkoutScheduleReadService.currentPhaseCompletionRate — the direct input to the
+  PRO phase-advance gate — plus the home rest-day banner, the calendar week
+  status classifier feeding the streak-warning banner's remaining-workouts count,
+  the streak-warning banner eligibility check, the AI-insight quick-text, the
+  plan-integrity reconciler's heal-need check, the day-detail bottom sheet
+  (2 sites), and the visible 7-day calendar strip's own day-status dots
+  (weekly_calendar.dart). A coach-logged or cloud-restored day therefore advances
+  a user's streak while simultaneously depressing their phase-completion rate
+  and being invisible to 9 other display surfaces.
+  Round-1 review of this batch's own plan found 6 of these sites — the original
+  OI-126 board filing and the first plan draft named only 5. A 12th site
+  (weekly_calendar.dart, the visible calendar strip) was missed by every
+  per-task review and only surfaced in the FINAL whole-branch review, because
+  it split the predicate across two separately-named booleans
+  (`isWorkout`/`isCustomTemplate`) instead of one joined expression, which is
+  exactly the shape every prior grep (including this batch's own wiring test's
+  negative-regression check) was blind to.
 concept: training_day_predicate_logged_agreement
 sot_registry_entry: training_day_predicate_logged_agreement (new — see docs/sot_registry.yaml)
 writers:
   - { file: lib/core/services/workout_write_service.dart, method: "markCompleted (no-prior-schedule branch)", line: 510 }
   - { file: lib/core/services/sync/sync_workout.dart, method: "restore synthesize path", line: 985 }
 readers:
-  - { file: lib/core/utils/phase_completion.dart, method: "isTrainingDayType (exclusion shape, unaffected)", line: 57 }
-  - { file: lib/core/utils/phase_completion.dart, method: "isPhaseCompletionTrainingType (new whitelist, widened to include logged)", line: 76 }
-  - { file: lib/shared/repositories/plan_engine/plan_engine_flags.dart, method: "isRestDayConsideringLogged (the shared wrapper every call site delegates to)", line: "new" }
+  - { file: lib/core/utils/phase_completion.dart, method: "isTrainingDayType (exclusion shape, unaffected)", line: 59 }
+  - { file: lib/core/utils/phase_completion.dart, method: "isPhaseCompletionTrainingType (new whitelist, widened to include logged)", line: 80 }
+  - { file: lib/shared/repositories/plan_engine/plan_engine_flags.dart, method: "isRestDayConsideringLogged (the shared wrapper every call site delegates to)", line: 499 }
   - { file: lib/features/train/providers/train_provider.dart, method: "workoutDayForDate", line: 637 }
   - { file: lib/features/train/providers/train_provider.dart, method: "week builder (isRest)", line: 813 }
   - { file: lib/core/services/workout_schedule_read_service.dart, method: "currentPhaseCompletionRate", line: 1412 }
   - { file: lib/features/home/screens/home_screen.dart, method: "today-card isRestDay (build)", line: 617 }
   - { file: lib/features/home/screens/home_screen.dart, method: "today-card isRestDay (row builder)", line: 792 }
   - { file: lib/core/services/plan_integrity_reconciler.dart, method: "needsHeal (isWorkout)", line: 99 }
-  - { file: lib/features/home/providers/home_provider.dart, method: "calendar day status", line: 104 }
+  - { file: lib/features/home/providers/home_provider.dart, method: "calendar week status classifier feeding streak-banner remaining-count (CalendarWeekNotifier.build)", line: 104 }
   - { file: lib/features/home/providers/home_provider.dart, method: "StreakWarningEligibility.build (isWorkoutDayToday)", line: 376 }
   - { file: lib/features/home/providers/home_provider.dart, method: "AI-insight quick-text", line: 679 }
   - { file: lib/features/home/widgets/day_detail_sheet.dart, method: "build (isWorkout)", line: 47 }
   - { file: lib/features/home/widgets/day_detail_sheet.dart, method: "_buildHeader (isWorkout)", line: 105 }
+  - { file: lib/features/home/widgets/weekly_calendar.dart, method: "calendar strip day-status (isPlanned, isMissed) — the site that actually renders the visible 7-day calendar dots", line: 67 }
 hive_key_prefix: "schedule_ — the per-date rows every reader reads the 'type' field from."
 hive_key_formula: "schedule_${formatDateKey(date)}"
 sync_methods: not_applicable — no sync method changed, only local read-path predicates.
@@ -89,7 +99,7 @@ regression_test_planned: |
   proven: reverting the wrapper to ignore the flag entirely reddens all 3 real call-through tests
   (verified in Task 6 Step 9's mutation run).
 touched_layers_checked:
-  - { tier: 1, name: client_code, status: fixed_in_this_batch, evidence: "11 call sites + 1 DRY convergence; flutter analyze clean; wiring test green, 2 real call-through tests green, mutation-proven." }
+  - { tier: 1, name: client_code, status: fixed_in_this_batch, evidence: "12 call sites + 1 DRY convergence; flutter analyze clean; wiring test green, 3 real call-through tests green, mutation-proven." }
   - { tier: 2, name: hive_local_state, status: not_applicable, evidence: "No new Hive key beyond the flag itself; reads the existing schedule_* 'type' field only." }
   - { tier: 3, name: postgres_schema, status: not_applicable, evidence: "No DDL." }
   - { tier: 4, name: postgres_data, status: not_applicable, evidence: "No server-side data touched." }
@@ -104,17 +114,18 @@ touched_layers_checked:
 impact_analysis: |
   Severity: P2. Affects any user who has ever had a coach-logged (no prior schedule) or
   cloud-restored-synthesized training day: their phase-completion rate, PRO-advance gate input,
-  streak-warning banner, and 7 other display surfaces under-report relative to their real
-  (streak-counted) training days. Shipped ship-dark (flag default OFF) — zero live behavior change
-  in this batch. The flip-on commit is deliberately out of scope here and needs its own full ×2
-  review per §4.12.4, since it changes the PRO-advance gate and 7 display surfaces for every user
-  with no further code change of its own.
+  streak-warning banner, and 9 other display surfaces under-report relative to their real
+  (streak-counted) training days — including, since the whole-branch review found the 12th site,
+  the visible 7-day calendar strip's own day-status dots. Shipped ship-dark (flag default OFF) —
+  zero live behavior change in this batch. The flip-on commit is deliberately out of scope here
+  and needs its own full ×2 review per §4.12.4, since it changes the PRO-advance gate and 9
+  display surfaces for every user with no further code change of its own.
 ---
 
 # Training-day predicate disagreement on 'logged' rows (OI-126)
 
 See `docs/audit/open_issues.md` OI-126 for the original board-level framing (which named only 5 of
-the 11 real call sites — corrected here) and `lib/core/utils/phase_completion.dart:29-56`'s doc
+the 11 real call sites — corrected here) and `lib/core/utils/phase_completion.dart:29-58`'s doc
 comment for the in-repo explanation of why two shapes exist at all. This fix closes the one
 *unintended* disagreement (on `'logged'`) without collapsing the two shapes into one — they remain
 deliberately different, now differing only on truly unrecognized future type strings, which is
@@ -141,3 +152,18 @@ had their required imports before this batch (per Task 3's own verified Step 1) 
 unshifted. The two writer citations
 (`workout_write_service.dart:510`, `sync/sync_workout.dart:985`) are likewise unshifted — this
 batch only touches readers.
+
+## Whole-branch review addendum — 12th call site (weekly_calendar.dart)
+
+The FINAL whole-branch review (not any per-task review, and not the original round-1 grep) found
+a genuine 12th call site at `lib/features/home/widgets/weekly_calendar.dart:62-68`, carrying the
+identical pre-fix predicate split across two separately-named booleans
+(`isWorkout`/`isCustomTemplate`) rather than one joined expression — exactly the shape this
+batch's own wiring-test negative-regression check (and every earlier grep) was blind to. Fixed
+in the same commit as this addendum: the site now delegates to
+`PlanEngineFlags.isRestDayConsideringLogged` at `weekly_calendar.dart:67`, added to the wiring
+test's `sites` list, and registered below. This is also the site that actually renders the
+**visible** calendar dots on the Home dashboard — the `readers:` entry for
+`home_provider.dart:104` above was previously mislabeled "the calendar day-status dots"; that
+site (`CalendarWeekNotifier.build`) in fact feeds the streak-warning banner's remaining-workouts
+count only, and never reaches the calendar strip's own rendering.
