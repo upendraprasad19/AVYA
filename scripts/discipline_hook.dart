@@ -12,12 +12,15 @@
 //   • SessionStart      → fires on EVERY source (startup/resume/compact; the
 //                         "compact" matcher was REMOVED in settings.json so the
 //                         worktree warning can surface at session start). Emits
-//                         up to three self-guarded pieces: the hot-set
+//                         up to five self-guarded pieces: the hot-set
 //                         re-injection (compact source ONLY, so discipline
 //                         survives summarization); a worktree-per-session warning
-//                         when in the shared main worktree (§4.13); and a
-//                         MEMORY.md size nudge (→ /consolidate-memory) when the
-//                         per-session memory index has grown past its soft cap.
+//                         when in the shared main worktree (§4.13); a
+//                         main-vs-origin/main sync warning (multi-machine drift —
+//                         2026-09-24 VPS 300-commit-behind incident); a MEMORY.md
+//                         size nudge (→ /consolidate-memory) when the per-session
+//                         memory index has grown past its soft cap; and the OI
+//                         board line.
 //
 // Injection is ALWAYS via structured JSON hookSpecificOutput.additionalContext —
 // for PreToolUse, plain stdout goes to the debug log only, so the JSON field is
@@ -116,6 +119,8 @@ void main() async {
         if (source == 'compact') parts.add(_compactReinject);
         final wtWarn = _worktreeWarning();
         if (wtWarn.isNotEmpty) parts.add(wtWarn);
+        final syncWarn = await _mainSyncWarning();
+        if (syncWarn.isNotEmpty) parts.add(syncWarn);
         final memNudge = _memoryIndexNudge();
         if (memNudge.isNotEmpty) parts.add(memNudge);
         final oiLine = _oiBoardLine();
@@ -234,6 +239,134 @@ String _worktreeWarning() {
         'The main worktree is INTEGRATION-ONLY (git merge + push + /build-apk). A '
         'pre-commit gate (scripts/check_commit_from_worktree.dart) will BLOCK a '
         'non-merge commit made here. See CLAUDE.md §4.13.';
+  } catch (_) {
+    return '';
+  }
+}
+
+// Multi-machine main-sync warning (laptop <-> VPS drift, incident 2026-09-24:
+// the VPS's local `main` silently drifted 300 commits behind origin/main with
+// no warning until someone happened to run `git status`). Unlike
+// `_oiBoardLine()` below, this DOES fetch -- deliberately. The OI line's
+// "no fetch" precedent exists because that line only reports background info
+// on every SessionStart source at a fixed recurring cost; this check exists
+// specifically to answer "is my main current" at the one moment that matters
+// (session start), so a short, BOUNDED fetch cost paid once per session is
+// the right trade, not a tax. A slow/offline network degrades to the
+// last-known local comparison (with a staleness caveat) rather than blocking
+// the session -- the top-of-file NEVER-break contract still holds.
+/// Pure, testable core. '' means "nothing to say" (in sync). `wasFetched`
+/// governs whether the message can claim a live answer; `fetchAge` (only
+/// meaningful when `wasFetched` is false) is the age of the last successful
+/// sync recorded in FETCH_HEAD, or null if there is no local record at all.
+String formatMainSyncWarning({
+  required int ahead,
+  required int behind,
+  required bool wasFetched,
+  required Duration? fetchAge,
+}) {
+  if (ahead == 0 && behind == 0) return '';
+
+  String staleness;
+  if (wasFetched) {
+    staleness = '';
+  } else if (fetchAge == null) {
+    staleness = ' (offline/fetch failed, and no prior sync on record — '
+        'this comparison may be badly stale)';
+  } else if (fetchAge > const Duration(hours: 6)) {
+    staleness = ' (offline/fetch failed — last known sync was '
+        '${_formatAge(fetchAge)} ago, this may itself be stale)';
+  } else {
+    staleness = ' (offline/fetch failed — last known sync was '
+        '${_formatAge(fetchAge)} ago)';
+  }
+
+  if (behind > 0 && ahead == 0) {
+    return '⚠️ MAIN BEHIND: local main is $behind commit(s) behind '
+        'origin/main$staleness. Another machine likely pushed since you '
+        'last synced here. Before doing new work:\n'
+        '    git pull origin main';
+  }
+  if (ahead > 0 && behind == 0) {
+    return '⚠️ MAIN AHEAD: local main is $ahead commit(s) ahead of '
+        'origin/main$staleness. Push before switching machines, or this '
+        'work will not exist on the other one:\n'
+        '    git push origin main';
+  }
+  return '⚠️ MAIN DIVERGED: local main is $ahead ahead AND $behind behind '
+      'origin/main$staleness. Do not blind-merge. Reconcile deliberately:\n'
+      '    git fetch origin main && git log --oneline main..origin/main   '
+      '# what they have\n'
+      '    git log --oneline origin/main..main                            '
+      '# what you have';
+}
+
+String _formatAge(Duration d) {
+  if (d.inMinutes < 60) return '${d.inMinutes}m';
+  if (d.inHours < 24) return '${d.inHours}h';
+  return '${d.inDays}d';
+}
+
+/// I/O wrapper. Attempts a short, bounded fetch of origin/main (timeout ~4s);
+/// on timeout/failure, falls back to comparing against whatever
+/// refs/remotes/origin/main already holds locally. Fail-silent: any
+/// unexpected error/inapplicable case returns '' (never breaks the session).
+Future<String> _mainSyncWarning() async {
+  try {
+    final hasLocalMain = await Process.run(
+        'git', ['rev-parse', '--verify', '--quiet', 'refs/heads/main']);
+    if (hasLocalMain.exitCode != 0) return '';
+
+    bool wasFetched;
+    try {
+      final fetchResult = await Process.run('git', [
+        'fetch',
+        '--quiet',
+        'origin',
+        '+refs/heads/main:refs/remotes/origin/main',
+      ]).timeout(const Duration(seconds: 4));
+      wasFetched = fetchResult.exitCode == 0;
+    } catch (_) {
+      // Timeout, missing git, offline, unreachable remote, etc. -- fall back
+      // to whatever refs/remotes/origin/main already holds locally.
+      wasFetched = false;
+    }
+
+    final hasOriginMain = await Process.run(
+        'git', ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main']);
+    if (hasOriginMain.exitCode != 0) return '';
+
+    final counts = await Process.run('git', [
+      'rev-list',
+      '--left-right',
+      '--count',
+      'refs/heads/main...refs/remotes/origin/main',
+    ]);
+    if (counts.exitCode != 0) return '';
+    final parts = (counts.stdout as String).trim().split(RegExp(r'\s+'));
+    if (parts.length != 2) return '';
+    final ahead = int.tryParse(parts[0]);
+    final behind = int.tryParse(parts[1]);
+    if (ahead == null || behind == null) return '';
+
+    Duration? fetchAge;
+    if (!wasFetched) {
+      final cd = await Process.run(
+          'git', ['rev-parse', '--path-format=absolute', '--git-common-dir']);
+      if (cd.exitCode == 0) {
+        final fetchHead = File('${(cd.stdout as String).trim()}/FETCH_HEAD');
+        if (fetchHead.existsSync()) {
+          fetchAge = DateTime.now().difference(fetchHead.lastModifiedSync());
+        }
+      }
+    }
+
+    return formatMainSyncWarning(
+      ahead: ahead,
+      behind: behind,
+      wasFetched: wasFetched,
+      fetchAge: wasFetched ? null : fetchAge,
+    );
   } catch (_) {
     return '';
   }
