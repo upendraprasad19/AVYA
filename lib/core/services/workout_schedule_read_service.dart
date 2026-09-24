@@ -1706,7 +1706,7 @@ class WorkoutScheduleReadService {
         // Same predicate as _scheduledWorkoutDays below, so the count is
         // exactly the set that keeps isPhaseExpiredFrom false.
         final type = v is Map ? (v['type'] ?? '').toString() : '';
-        if (type != 'rest' && type != 'off') workoutRows++;
+        if (isTrainingDayType(type)) workoutRows++;
       } else {
         // OI-189 review B-2: a displaced_* shadow's own `status` was never
         // read here, so a completed row backed up into `displaced_*` would
