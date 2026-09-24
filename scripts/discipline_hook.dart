@@ -30,6 +30,7 @@
 // malformed JSON, unknown event) the script exits 0 and emits nothing. The
 // reminder strings are INLINED (no external file) to keep one moving part.
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -307,30 +308,73 @@ String _formatAge(Duration d) {
   return '${d.inDays}d';
 }
 
-/// I/O wrapper. Attempts a short, bounded fetch of origin/main (timeout ~4s);
-/// on timeout/failure, falls back to comparing against whatever
-/// refs/remotes/origin/main already holds locally. Fail-silent: any
+/// Runs `git fetch origin main` bounded by a real process KILL on timeout,
+/// not just a `Future.timeout()` race.
+///
+/// ⚠ `Process.run(...).timeout(...)` does NOT kill the underlying OS process
+/// on timeout -- `Future.timeout()` is a pure race against a Timer with no
+/// cancellation API, so a stalled `git fetch` (e.g. blocked on an
+/// interactive credential prompt reading from a stdin pipe that will never
+/// receive input) is ORPHANED and keeps running after the caller returns,
+/// potentially holding a lock on the SHARED `.git` dir every §4.13 worktree
+/// session reads/writes. Fixed here by spawning via `Process.start()` and
+/// killing the process directly on timeout, plus `GIT_TERMINAL_PROMPT=0` so
+/// a credential prompt fails fast instead of hanging in the first place
+/// (belt-and-suspenders: the timeout+kill still covers any OTHER cause of a
+/// hang, e.g. a slow/dead network). Found by B-pass review of the initial
+/// version (2026-09-24), which used the unsafe `.timeout()`-on-`Process.run`
+/// pattern this replaces.
+///
+/// Stdout/stderr are drained (not just ignored) because an unread pipe can
+/// fill its OS buffer and deadlock the child before it ever exits --
+/// `--quiet` keeps this small, but draining costs nothing and removes the
+/// assumption.
+///
+/// Returns true only on a clean, on-time, zero-exit-code fetch.
+Future<bool> _boundedFetch() async {
+  try {
+    final env = Map<String, String>.from(Platform.environment)
+      ..['GIT_TERMINAL_PROMPT'] = '0';
+    final process = await Process.start(
+      'git',
+      ['fetch', '--quiet', 'origin', '+refs/heads/main:refs/remotes/origin/main'],
+      environment: env,
+    );
+    unawaited(process.stdout.drain());
+    unawaited(process.stderr.drain());
+    final exitCode = await process.exitCode.timeout(
+      const Duration(seconds: 4),
+      onTimeout: () {
+        process.kill(ProcessSignal.sigkill);
+        return -1;
+      },
+    );
+    return exitCode == 0;
+  } catch (_) {
+    return false;
+  }
+}
+
+/// I/O wrapper. Attempts `_boundedFetch()` (timeout ~4s, real process kill,
+/// see its doc comment); on timeout/failure, falls back to comparing against
+/// whatever refs/remotes/origin/main already holds locally. Fail-silent: any
 /// unexpected error/inapplicable case returns '' (never breaks the session).
+///
+/// Kill switch: DISCIPLINE_HOOK_SYNC_SKIP=1 disables this check entirely --
+/// consistent with every other risky/consequential mechanism in this file
+/// (DISCIPLINE_HOOK_MEMORY_PATH override, .claude/.batch_close.disabled,
+/// CONTRACT_SWEEP_SKIP=1, .claude/.reconcile_ci.disabled). Added after
+/// B-pass review of the initial version (2026-09-24) flagged this as the
+/// file's first network-touching SessionStart mechanism with no way to
+/// disable it surgically if it misbehaves.
 Future<String> _mainSyncWarning() async {
+  if (Platform.environment['DISCIPLINE_HOOK_SYNC_SKIP'] == '1') return '';
   try {
     final hasLocalMain = await Process.run(
         'git', ['rev-parse', '--verify', '--quiet', 'refs/heads/main']);
     if (hasLocalMain.exitCode != 0) return '';
 
-    bool wasFetched;
-    try {
-      final fetchResult = await Process.run('git', [
-        'fetch',
-        '--quiet',
-        'origin',
-        '+refs/heads/main:refs/remotes/origin/main',
-      ]).timeout(const Duration(seconds: 4));
-      wasFetched = fetchResult.exitCode == 0;
-    } catch (_) {
-      // Timeout, missing git, offline, unreachable remote, etc. -- fall back
-      // to whatever refs/remotes/origin/main already holds locally.
-      wasFetched = false;
-    }
+    final wasFetched = await _boundedFetch();
 
     final hasOriginMain = await Process.run(
         'git', ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main']);

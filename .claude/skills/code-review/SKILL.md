@@ -248,6 +248,48 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-24** — blast-radius **platform** — branch `main-sync-warning`
+  (a SessionStart hook warning for multi-machine `main`-vs-`origin/main`
+  drift, motivated by a VPS clone silently falling 300 commits behind with
+  no warning). Reviewed post-commit (`git diff HEAD~1 HEAD`, nothing staged
+  — same pattern as the 2026-09-23 `claude/oi-242-flaky-test-filing` entry
+  below). **5 findings (0 P0, 1 P1, 2 P2, 1 P3, 1 P4); 0 false_alarm — 2
+  fixed in-batch (mutation-proven), 1 resolved as a side effect of the
+  first fix, 2 accepted with no code change (recorded in the diagnose-doc's
+  `residual` field per §4.2).** Review: `docs/reviews/1db54e4f4634-review.md`.
+  **Tuning — lens 6 (`guard_without_its_mirror`)'s existing "mutate it and
+  run it" instruction found a defect WORSE than its own description
+  predicted, and the mutation's FAILURE SHAPE is what proved it.** The
+  finding was `Process.run(...).timeout(...)` not killing the underlying OS
+  process on timeout — read correctly by the reviewer as "an orphaned
+  process may linger". Reproducing it live (a fake `git` whose `fetch`
+  execs into a long sleep) showed the real defect was structural: the Dart
+  runtime keeps a process alive while a stream listener on an open child
+  pipe is pending, so the timeout's `TimeoutException` never actually
+  bounded anything — the WHOLE hook hung for the fake fetch's full
+  duration, not the advertised ~4s. The regression test built to catch this
+  asserts wall-clock time AND that the killed process's pid is confirmed
+  dead afterward; mutating back to the pre-fix pattern reddened it with
+  `Actual: 0:05:00` against an expected `<0:00:20`, not a quick assertion
+  failure — the mutation's OWN timing is additional evidence for the
+  severity, beyond the boolean pass/fail. **Add to lens 6's method: when a
+  `.timeout()` claim is under review, don't just ask "does the process get
+  killed" — ask "does the calling function's own Future actually settle
+  when it expects to", since dart:io keeps unread pipes alive across the
+  isolate's exit path in a way that can silently defeat a timeout's whole
+  purpose.**
+  **Second — a NEW general note, not a lens tuning: a platform-tier gate's
+  self-triggered B-pass (CLAUDE.md §4.3) found a real defect in code from
+  the SAME conversation/session that had already been unit-and-e2e tested
+  (11 tests, all green) before dispatch.** None of those tests could have
+  caught this class — they all assert BEHAVIOR under a working fetch or a
+  fast-failing one; nothing in the original suite simulated a HANG. Worth
+  recording because it's a clean instance of this skill's own stated
+  purpose: a context-blind reviewer asking "what's the mirror case" found
+  a gap a same-author test suite, however thorough on the paths it did
+  cover, structurally could not see.
+  False-alarm rate 0/5 → no lens removed; lens 6 extended per above.
+
 - **2026-09-23 (c)** — blast-radius **account** — branch `confirm-email-init-race`
   (diagnose 42a98d: `AuthNotifier.confirmEmail` gains the `ensureSupabaseReady()`
   guard its siblings `signInWithEmail`/`checkEmailRegistered` already had, closing

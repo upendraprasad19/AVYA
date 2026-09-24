@@ -179,4 +179,87 @@ void main() {
     expect(out, isNot(contains('MAIN AHEAD')));
     expect(out, isNot(contains('MAIN DIVERGED')));
   });
+
+  test('kill switch DISCIPLINE_HOOK_SYNC_SKIP=1 disables the check entirely', () async {
+    _commit(other, 'other.txt', 'from other\n', 'other pushes');
+    expect(_git(['push', '-q', 'origin', 'main'], other).exitCode, 0);
+
+    final env = _cleanEnv()..['DISCIPLINE_HOOK_SYNC_SKIP'] = '1';
+    final p = await Process.start(dart, ['run', '$src/scripts/discipline_hook.dart'],
+        workingDirectory: clone, environment: env, includeParentEnvironment: false);
+    p.stdin.write(startup);
+    await p.stdin.close();
+    final out = await p.stdout.transform(utf8.decoder).join();
+    unawaited(p.stderr.drain<void>());
+    await p.exitCode;
+
+    // Would be MAIN BEHIND without the kill switch -- proven by the sibling
+    // "behind" test above using the identical fixture shape.
+    expect(out, isNot(contains('MAIN BEHIND')));
+    expect(out, isNot(contains('MAIN AHEAD')));
+    expect(out, isNot(contains('MAIN DIVERGED')));
+  });
+
+  test(
+    'a hanging `git fetch` is actually KILLED on timeout, not orphaned '
+    '(B-pass finding 2026-09-24: Process.run().timeout() does not kill the '
+    'child; regression-tests the Process.start()+kill() fix)',
+    () async {
+      // A fake `git` on PATH: `fetch` execs into a long sleep (so killing the
+      // wrapper's own pid kills the sleep directly, no grandchild to leak);
+      // every other subcommand delegates to the real git unchanged.
+      final whichGit = Process.runSync('which', ['git'], stdoutEncoding: utf8);
+      expect(whichGit.exitCode, 0, reason: 'fixture requires a resolvable git on PATH');
+      final realGit = (whichGit.stdout as String)
+          .split('\n')
+          .map((l) => l.trim())
+          .firstWhere((l) => l.isNotEmpty);
+      final fakeBin = Directory('${tmp.path}/fakebin')..createSync();
+      final pidFile = File('${tmp.path}/fake_git_fetch.pid');
+      final wrapper = File('${fakeBin.path}/git');
+      wrapper.writeAsStringSync('#!/bin/sh\n'
+          'if [ "\$1" = "fetch" ]; then\n'
+          '  echo \$\$ > "${_fwd(pidFile.path)}"\n'
+          '  exec sleep 300\n'
+          'fi\n'
+          'exec "${_fwd(realGit)}" "\$@"\n');
+      Process.runSync('chmod', ['+x', wrapper.path]);
+
+      final env = _cleanEnv();
+      env['PATH'] = '${fakeBin.path}:${env['PATH']}';
+
+      final stopwatch = Stopwatch()..start();
+      final p = await Process.start(dart, ['run', '$src/scripts/discipline_hook.dart'],
+          workingDirectory: clone, environment: env, includeParentEnvironment: false);
+      p.stdin.write(startup);
+      await p.stdin.close();
+      unawaited(p.stdout.drain<void>());
+      unawaited(p.stderr.drain<void>());
+      await p.exitCode;
+      stopwatch.stop();
+
+      // Bounded by the ~4s internal timeout, not by the 300s fake fetch --
+      // generous margin for CI/VPS scheduling noise, still far below 300s.
+      expect(stopwatch.elapsed, lessThan(const Duration(seconds: 20)),
+          reason: 'the hook must not block on the hung fetch');
+
+      expect(pidFile.existsSync(), isTrue,
+          reason: 'fixture check: the fake fetch must actually have been invoked');
+      final fetchPid = int.parse(pidFile.readAsStringSync().trim());
+
+      // Give the OS a moment to reap the killed process, then confirm it is
+      // actually gone -- this is the assertion that distinguishes "the
+      // Future gave up waiting" (the pre-fix bug: the process lives on) from
+      // "the process was killed" (the fix).
+      await Future<void>.delayed(const Duration(seconds: 1));
+      final stillAlive = Process.runSync('kill', ['-0', '$fetchPid']).exitCode == 0;
+      expect(stillAlive, isFalse,
+          reason: 'the hung git-fetch process (pid $fetchPid) must be killed on '
+              'timeout, not orphaned');
+    },
+    skip: Platform.isWindows
+        ? 'POSIX-only fixture (exec/kill -0/sh script); the underlying fix is '
+            'platform-independent, only this reproduction is not'
+        : null,
+  );
 }
