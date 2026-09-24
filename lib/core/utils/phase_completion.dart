@@ -53,3 +53,23 @@ double phaseCompletionRate(Iterable<({bool isRest, bool isDone})> days) {
 /// inclusion form, so they treat a `logged` day as REST) is pre-existing and
 /// tracked on the open-issues board — deliberately NOT changed here.
 bool isTrainingDayType(Object? type) => type != 'rest' && type != 'off';
+
+/// Training-day whitelist for phase completion, the home rest-day banner, the
+/// PRO-advance gate, the calendar day-status dots, the streak-warning banner
+/// eligibility check, the AI-insight quick-text, the reconciler's heal-need
+/// check, and the day-detail bottom sheet.
+///
+/// Deliberately narrower than [isTrainingDayType]: only `workout`,
+/// `custom_template`, and (since OI-126) `logged` count. An unrecognized
+/// future `type` string counts as REST here — the exclusion shape above
+/// would wrongly count it as training. This is a WHITELIST on purpose, not
+/// `!isTrainingDayType`'s negated blacklist; do not collapse the two, see the
+/// module doc comment above [isTrainingDayType] for why a prior attempt to
+/// unify them was reverted.
+///
+/// Every call site reaches this through
+/// [PlanEngineFlags.isRestDayConsideringLogged], never directly — that
+/// wrapper is what actually decides whether the widened set applies (gated
+/// on [PlanEngineFlags.loggedCountsAsPhaseTrainingDayEnabled]). See OI-126.
+bool isPhaseCompletionTrainingType(Object? type) =>
+    type == 'workout' || type == 'custom_template' || type == 'logged';
