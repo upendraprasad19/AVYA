@@ -1,4 +1,5 @@
 ---
+branch: oi126-training-day-predicate
 plan: docs/superpowers/plans/2026-09-24-oi126-training-day-predicate-unification.md
 review_rounds: 2
 ground_truth_verified: true
