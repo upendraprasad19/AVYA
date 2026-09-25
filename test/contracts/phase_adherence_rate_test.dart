@@ -206,5 +206,46 @@ void main() {
       // phase<=1 → totalWeeks=4 → 4 workout days, weeks 1-2 done → 2/4 (NOT 2/6).
       expect(rate(), closeTo(2 / 4, 1e-9));
     });
+
+    test('a logged day counts as training once the OI-126 flag is on', () async {
+      // Round-2 review caught the first version of this case: seeding two
+      // already-100%-complete days can never move a ratio that's already
+      // saturated at 1.0 regardless of the flag. Fixed by seeding an
+      // INCOMPLETE logged day, so the denominator changes but the numerator
+      // does not — the rate moves DOWN here.
+      //
+      // Whole-branch review correction: this is NOT the typical real-world
+      // case. Both real writers of 'logged' rows (workout_write_service.dart
+      // markCompleted's no-prior-schedule branch, and sync/sync_workout.dart's
+      // restore synthesize path) always stamp status: 'completed' — never
+      // 'planned'. The 'logged'+'planned' combination seeded below only
+      // arises from a READ-TIME DEMOTION elsewhere
+      // (workout_schedule_read_service.dart's getScheduleRowForDate), not
+      // from any writer. For a real completed 'logged' row, flipping the
+      // flag would move the rate UP (matching the diagnose-doc's own
+      // "under-report" framing), not down. What THIS test case demonstrates
+      // is narrower and still real: the flag's effect on the DENOMINATOR
+      // when a 'logged' row reaches the rate calc in an uncompleted state via
+      // that read-time demotion — not the typical real-world (completed)
+      // 'logged' day.
+      await seedDay(1, 1, type: 'workout', status: 'completed');
+      await seedDay(1, 2, type: 'logged', status: 'planned');
+
+      // Flag OFF (default): 'logged' is invisible to both numerator and
+      // denominator under the pre-fix inline form → 1 workout day, done → 1.0.
+      final rateOff = rate();
+      expect(rateOff, closeTo(1.0, 0.001),
+          reason: 'flag off: only the workout day counts, and it is complete');
+
+      await cb.put('enable_logged_counts_as_phase_training_day', true);
+      final rateOn = rate();
+
+      // Flag ON: 'logged' now counts as a training day too, but it is NOT
+      // completed → denominator grows to 2, numerator stays 1 → 0.5.
+      expect(rateOn, isNot(equals(rateOff)),
+          reason: 'flipping the flag must change the PRO-advance gate input for a logged day');
+      expect(rateOn, closeTo(0.5, 0.001),
+          reason: 'workout done (1) + logged not-done (1) = 1/2 once logged counts as training');
+    });
   });
 }

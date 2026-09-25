@@ -20,6 +20,7 @@ import '../widgets/completeness_nudge.dart';
 import '../providers/home_provider.dart';
 import '../../train/providers/train_provider.dart';
 import 'package:icanbefitter/core/utils/hold_week_labels.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import '../../train/widgets/readiness_sheet.dart';
 import '../widgets/weekly_calendar.dart';
 import '../widgets/day_detail_sheet.dart';
@@ -613,7 +614,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final workoutStatus = schedule?['status'] as String? ?? 'planned';
     final workoutType = schedule?['type'] as String? ?? 'rest';
     final workoutDone = workoutStatus == 'completed';
-    final isRestDay = workoutType != 'workout' && workoutType != 'custom_template';
+    final isRestDay = PlanEngineFlags.isRestDayConsideringLogged(workoutType);
 
     // Meals: both calories AND protein must hit target
     final proteinProgress = nutrition.proteinTarget > 0
@@ -788,7 +789,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     final type = schedule?['type'] as String? ?? 'rest';
     final status = schedule?['status'] as String? ?? 'planned';
-    final isRestDay = type != 'workout' && type != 'custom_template';
+    final isRestDay = PlanEngineFlags.isRestDayConsideringLogged(type);
     final isCompleted = status == 'completed';
     final workoutName = schedule?['workout_name'] as String? ?? 'Rest Day';
     final exercises = schedule?['exercises'] as List? ?? [];

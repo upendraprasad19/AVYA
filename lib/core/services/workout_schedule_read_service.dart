@@ -1409,7 +1409,7 @@ class WorkoutScheduleReadService {
     for (int w = 1; w <= totalWeeks; w++) {
       for (final day in _withoutHoldRows(getWeek(w))) {
         final type = (day['type'] as String?) ?? 'rest';
-        final isRest = type != 'workout' && type != 'custom_template';
+        final isRest = PlanEngineFlags.isRestDayConsideringLogged(type);
         final status = (day['status'] as String?) ?? 'planned';
         days.add((isRest: isRest, isDone: status == 'completed'));
       }
@@ -1706,7 +1706,7 @@ class WorkoutScheduleReadService {
         // Same predicate as _scheduledWorkoutDays below, so the count is
         // exactly the set that keeps isPhaseExpiredFrom false.
         final type = v is Map ? (v['type'] ?? '').toString() : '';
-        if (type != 'rest' && type != 'off') workoutRows++;
+        if (isTrainingDayType(type)) workoutRows++;
       } else {
         // OI-189 review B-2: a displaced_* shadow's own `status` was never
         // read here, so a completed row backed up into `displaced_*` would

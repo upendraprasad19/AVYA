@@ -634,7 +634,7 @@ WorkoutDayData? workoutDayForDate(DateTime date) {
   if (row == null) return null;
 
   final type = row['type'] as String? ?? 'rest';
-  if (type != 'workout' && type != 'custom_template') return null;
+  if (PlanEngineFlags.isRestDayConsideringLogged(type)) return null;
 
   final exercises = _parseExerciseMaps(row['exercises'] as List?);
   if (exercises.isEmpty) return null;
@@ -810,7 +810,7 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
 
       for (final dayMap in weekDays) {
         final type = dayMap['type'] as String? ?? 'rest';
-        final isRest = type != 'workout' && type != 'custom_template';
+        final isRest = PlanEngineFlags.isRestDayConsideringLogged(type);
         final status = dayMap['status'] as String? ?? 'planned';
         final exercises = _parseExerciseMaps(dayMap['exercises'] as List?);
         final warmup = _parseExerciseMaps(dayMap['warmup'] as List?);

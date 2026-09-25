@@ -5,6 +5,7 @@ import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import '../providers/home_provider.dart';
 
 /// Horizontal 7-day calendar strip synced with workout plan from Hive.
@@ -59,13 +60,15 @@ class WeeklyCalendar extends ConsumerWidget {
         final isSwapped = schedule?['is_swapped'] as bool? ?? false;
 
         final isCompleted = status == 'completed';
-        final isWorkout = type == 'workout';
-        final isCustomTemplate = type == 'custom_template';
+        // OI-126: delegate to the shared wrapper instead of re-inlining
+        // `type == 'workout' || type == 'custom_template'` — this call site
+        // was the 12th, missed by every earlier grep because it split the
+        // predicate across two booleans instead of one joined expression.
+        final isTrainingDay = !PlanEngineFlags.isRestDayConsideringLogged(type);
         final isRest = type == 'rest';
         final isTravel = status == 'travel';
-        final isPlanned =
-            (isWorkout || isCustomTemplate) && status == 'planned';
-        final isMissed = isPast && !isCompleted && (isWorkout || isCustomTemplate);
+        final isPlanned = isTrainingDay && status == 'planned';
+        final isMissed = isPast && !isCompleted && isTrainingDay;
         // APK Test #6 obs #7 — pre-onboarding days (joined later in
         // the calendar week) render distinctly: light-grey 'Joined later'
         // glyph, NOT the standard rest em-dash. Distinct from isMissed

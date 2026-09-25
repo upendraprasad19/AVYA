@@ -49,7 +49,33 @@ double phaseCompletionRate(Iterable<({bool isRest, bool isDone})> days) {
 /// is excluded defensively because `holdWeekSessionProgress` excludes it, and
 /// these two predicates must not drift.
 ///
-/// The repo-wide split between the two shapes (5 call sites still use the
-/// inclusion form, so they treat a `logged` day as REST) is pre-existing and
-/// tracked on the open-issues board — deliberately NOT changed here.
+/// The repo-wide split between the two shapes is deliberate and permanent
+/// (see [isPhaseCompletionTrainingType] below) — but the disagreement on
+/// `type: 'logged'` across the 12 inline call sites (5 written in the
+/// exclusion phrasing `!= 'workout' && != 'custom_template'`, 7 in the
+/// inclusion phrasing `== 'workout' || == 'custom_template'` — both mean the
+/// same thing) was a bug, not a feature, closed by OI-126 behind
+/// [PlanEngineFlags.isRestDayConsideringLogged].
 bool isTrainingDayType(Object? type) => type != 'rest' && type != 'off';
+
+/// Training-day whitelist for phase completion / the PRO-advance gate (same
+/// call site), the home rest-day banner, the visible calendar strip's
+/// day-status dots, the streak-warning banner's remaining-workouts count and
+/// its separate eligibility check, the AI-insight quick-text, the
+/// reconciler's heal-need check, and the day-detail bottom sheet — 12 call
+/// sites total (OI-126).
+///
+/// Deliberately narrower than [isTrainingDayType]: only `workout`,
+/// `custom_template`, and (since OI-126) `logged` count. An unrecognized
+/// future `type` string counts as REST here — the exclusion shape above
+/// would wrongly count it as training. This is a WHITELIST on purpose, not
+/// `!isTrainingDayType`'s negated blacklist; do not collapse the two, see the
+/// module doc comment above [isTrainingDayType] for why a prior attempt to
+/// unify them was reverted.
+///
+/// Every call site reaches this through
+/// [PlanEngineFlags.isRestDayConsideringLogged], never directly — that
+/// wrapper is what actually decides whether the widened set applies (gated
+/// on [PlanEngineFlags.loggedCountsAsPhaseTrainingDayEnabled]). See OI-126.
+bool isPhaseCompletionTrainingType(Object? type) =>
+    type == 'workout' || type == 'custom_template' || type == 'logged';

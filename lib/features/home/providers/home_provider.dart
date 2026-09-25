@@ -23,6 +23,7 @@ import 'package:icanbefitter/features/nutrition/repositories/nutrition_repositor
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/features/profile/services/profile_write_service.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 
 // ── Calendar Day Data ───────────────────────────────────────────
 
@@ -100,7 +101,7 @@ class CalendarWeekNotifier extends Notifier<List<CalendarDayData>> {
         status = CalendarDayStatus.completed;
       } else if (statusStr == 'travel') {
         status = CalendarDayStatus.travel;
-      } else if ((type == 'workout' || type == 'custom_template') && statusStr == 'planned') {
+      } else if (!PlanEngineFlags.isRestDayConsideringLogged(type) && statusStr == 'planned') {
         // Past day with planned workout that wasn't done = missed
         status = isPast && !isToday
             ? CalendarDayStatus.missed
@@ -372,7 +373,7 @@ class StreakWarningEligibilityNotifier
     //    `rest` and missing entries are not.
     final type = todaySchedule?['type'] as String? ?? 'none';
     final status = todaySchedule?['status'] as String? ?? 'none';
-    final isWorkoutDayToday = type == 'workout' || type == 'custom_template';
+    final isWorkoutDayToday = !PlanEngineFlags.isRestDayConsideringLogged(type);
 
     // 2. Has today's workout already been completed?
     final isTodayCompleted = status == 'completed';
@@ -675,7 +676,7 @@ class AiInsightNotifier extends Notifier<String?> {
       final exercises = schedule['exercises'] as List? ?? [];
       if (status == 'completed') {
         return '$name completed today — ${exercises.length} exercises. Great work 💪';
-      } else if (type == 'workout' || type == 'custom_template') {
+      } else if (!PlanEngineFlags.isRestDayConsideringLogged(type)) {
         return '$name is scheduled for today — ${exercises.length} exercises. Ready when you are!';
       } else if (type == 'rest') {
         return 'Rest day! You have earned it! 🎉';

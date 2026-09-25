@@ -11796,3 +11796,83 @@ concepts:
       - "support@avya.app"
       - "support@icanbefitter.com (old variant — canonical is upendra@icanbefitter.com)"
     contract_test_path: test/contracts/support_contact_email_writer_to_reader_test.dart
+
+  - concept: training_day_predicate_logged_agreement
+    domain: workout
+    behavioral_test_path: test/contracts/training_day_predicate_wiring_test.dart
+    description: |
+      Whether a 'logged' schedule-row type counts as a training day. Two
+      shapes: isTrainingDayType (exclusion, streak — unaffected) and
+      isPhaseCompletionTrainingType (whitelist, phase-completion/rest-banner/
+      PRO-gate/calendar/streak-banner/AI-insight/reconciler/day-detail-sheet).
+      All 12 whitelist-shaped call sites now delegate to the single wrapper
+      PlanEngineFlags.isRestDayConsideringLogged, which agrees with the
+      exclusion shape on 'logged' once loggedCountsAsPhaseTrainingDayEnabled
+      is ON (default OFF, ship-dark, OI-126).
+    writers:
+      - file: lib/core/services/workout_write_service.dart
+        line_range: 505-515
+        method: markCompleted (no-prior-schedule branch)
+        notes: stamps type:'logged' for AI-coach-only logging with no prior scheduled day
+      - file: lib/core/services/sync/sync_workout.dart
+        line_range: 980-990
+        method: restore synthesize path
+        notes: stamps type:'logged' when a cloud-restored log has no matching local schedule row
+    reader_manifest_complete: true
+    readers:
+      - file: lib/core/utils/phase_completion.dart
+        line_range: 59-59
+        method: isTrainingDayType
+        semantic: flag-check
+        fields_read: [type]
+        notes: exclusion shape, unaffected by this batch
+      - file: lib/core/utils/phase_completion.dart
+        line_range: 80-81
+        method: isPhaseCompletionTrainingType
+        semantic: flag-check
+        fields_read: [type]
+        notes: whitelist shape, widened to include 'logged' by this batch
+      - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
+        line_range: 499-504
+        method: isRestDayConsideringLogged
+        semantic: flag-check
+        fields_read: [type]
+        notes: the single wrapper every whitelist-shaped call site below delegates to
+      - file: lib/features/train/providers/train_provider.dart
+        line_range: 632-813
+        method: "workoutDayForDate / week builder"
+        semantic: flag-check
+        fields_read: [type]
+      - file: lib/core/services/workout_schedule_read_service.dart
+        line_range: 1388-1412
+        method: currentPhaseCompletionRate
+        semantic: flag-check
+        fields_read: [type]
+        notes: feeds the PRO phase-advance gate — highest-risk reader
+      - file: lib/features/home/screens/home_screen.dart
+        line_range: 614-792
+        method: "today-card isRestDay (2 sites)"
+        semantic: flag-check
+        fields_read: [type]
+      - file: lib/core/services/plan_integrity_reconciler.dart
+        line_range: 96-100
+        method: needsHeal
+        semantic: flag-check
+        fields_read: [type]
+      - file: lib/features/home/providers/home_provider.dart
+        line_range: 99-679
+        method: "calendar week status classifier feeding streak-banner remaining-count / StreakWarningEligibility / AI-insight quick-text (3 sites)"
+        semantic: flag-check
+        fields_read: [type]
+        notes: line 104's classifier feeds the streak-warning banner's remaining-workouts count only — it does NOT render the visible calendar strip; that is weekly_calendar.dart below
+      - file: lib/features/home/widgets/day_detail_sheet.dart
+        line_range: 45-105
+        method: "build / _buildHeader (2 sites)"
+        semantic: flag-check
+        fields_read: [type]
+      - file: lib/features/home/widgets/weekly_calendar.dart
+        line_range: 67-71
+        method: "calendar strip day-status (isPlanned, isMissed)"
+        semantic: flag-check
+        fields_read: [type]
+        notes: the 12th call site, missed by every per-task review and found only in the whole-branch review — this is the site that renders the VISIBLE 7-day calendar dots on the Home dashboard
