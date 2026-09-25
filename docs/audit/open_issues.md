@@ -1861,29 +1861,44 @@ cloud sessions; **this file is the cross-session backlog.**
 
 ## OI-126 — The `logged` / `custom_template` training-day predicate split (5 call sites)
 
-- **Status**: OPEN
+- **Status**: OPEN — wrapper shipped ship-dark 2026-09-25 (`fc797551`), kill-switch OFF; the
+  flip-on decision is the remaining open item, tracked here per §4.6 step 4 rather than as an
+  unstated intention.
 - **Verified**: 2026-08-13 — the 5 call sites and the two predicate shapes were read directly while
   fixing a3f8d1; `type: 'logged'`'s two writers were confirmed by grep.
+- **Shipped 2026-09-25** (`fc797551`, branch `oi126-training-day-predicate`, diagnose `b7e3a1`,
+  ×2 plan review + self-triggered B-pass both accepted): a live re-grep at implementation time
+  found the split was actually **12** call sites, not 5 — 6 more found by the original Task 3/4
+  grep, plus a 12th (`weekly_calendar.dart`) found only by the final whole-branch review because
+  its predicate was split across two booleans instead of one joined expression. All 12 now
+  delegate to `PlanEngineFlags.isRestDayConsideringLogged(type)`
+  (`lib/shared/repositories/plan_engine/plan_engine_flags.dart:499-504`), which reads
+  `configBox['enable_logged_counts_as_phase_training_day']` (default OFF — every site is
+  byte-identical to the pre-fix inline ternary until the flag flips) and, when ON, delegates to
+  the new `isPhaseCompletionTrainingType` (`lib/core/utils/phase_completion.dart:80-81`).
+  **Remaining**: flipping the flag to ON is explicitly out of scope for this batch and needs its
+  own full ×2 review per CLAUDE.md §4.12.4 (this was the ship-dark BUILD tier, 1 review round
+  covering the wiring; the FLIP tier requires 2). Only 3 of 12 sites have real call-through test
+  coverage under flag-ON (`currentPhaseCompletionRate`, `PlanIntegrityReconciler.needsHeal`,
+  `StreakWarningEligibilityNotifier.isWorkoutDayToday`) — a disclosed, deliberate gap for this
+  batch; the flip-on batch's own plan should budget closing it (4 UI-layer widget-pump tests for
+  `home_screen.dart`/`day_detail_sheet.dart`/`weekly_calendar.dart`).
 - ⚠ **Renumbered 2026-08-16 (was OI-107).** Filed on branch `claude/open-issues-triage-976962` while `main` independently advanced to OI-124, so OI-107 collided with a different, unrelated issue already on the board. Commit `0e4d97cd`'s message still cites the OLD number — it was pushed before the collision was found and is not rewritten. Mapping: 106→125, 107→126, 108→127.
 - **Identified**: 2026-08-13 · surfaced by round-1 review of the a3f8d1 batch
-- **Blocked on**: none. Pickable, but it is a live behaviour change for all users, so it needs its
-  own review — which is exactly why it was not bundled into a3f8d1.
+- **Blocked on**: none. The flip-on commit needs its own full ×2 review (see above); the wiring
+  itself is shipped.
 - **What's missing**: the repo holds TWO shapes of one rule. The EXCLUSION shape
   (`type != 'rest' && type != 'off'`) now lives in `isTrainingDayType`
-  (`lib/core/utils/phase_completion.dart`) and is used by the weekly-streak reckoning and
+  (`lib/core/utils/phase_completion.dart:59`) and is used by the weekly-streak reckoning and
   `holdWeekSessionProgress`. The INCLUSION shape (`type != 'workout' && type != 'custom_template'`)
-  is inlined at 5 sites: `train_provider.dart:507`, `:683`,
-  `workout_schedule_read_service.dart:1016` (`currentPhaseCompletionRate`),
-  `home_screen.dart:589`, `:764`. The two DISAGREE about `type: 'logged'` — written by
-  `WorkoutWriteService.markCompleted`'s no-prior-schedule branch (AI-coach-only logging) and by the
-  restore synthesize path in `sync/sync_workout.dart`, whose own comment states a logged row
-  "counts as a workout day in the streak walk". So a coach-logged or cloud-restored day currently
-  counts as a training day for the streak but as a REST day for phase completion, the home rest-day
-  banner, and the PRO-advance gate input.
-- **Why it was not fixed in a3f8d1**: `currentPhaseCompletionRate` feeds the PRO phase-advance gate.
-  Widening it changes who can advance, for every user, with no kill-switch — a materially different
-  risk class from the flag-dark streak fix, and it deserves its own blast-radius call rather than
-  riding along.
+  is now unified behind `PlanEngineFlags.isRestDayConsideringLogged` at all 12 sites (see above).
+  The two shapes still DISAGREE about `type: 'logged'` at flag OFF (unchanged pre-fix behavior) —
+  written by `WorkoutWriteService.markCompleted`'s no-prior-schedule branch (AI-coach-only
+  logging, `workout_write_service.dart:510`) and by the restore synthesize path in
+  `sync/sync_workout.dart:985`, whose own comment states a logged row "counts as a workout day in
+  the streak walk". So a coach-logged or cloud-restored day still counts as a training day for
+  the streak but as a REST day for phase completion, the home rest-day banner, and the PRO-advance
+  gate input — until the flip-on commit lands.
 - ⚠ Note `phase_completion.dart`'s existing doc comment describing the inclusion rule is CORRECT for
   its own function — do not "fix" it to match the exclusion helper. A round-2 review claimed it was
   wrong; round 3 showed both of `phaseCompletionRate`'s callers really do compute the inclusion form.
