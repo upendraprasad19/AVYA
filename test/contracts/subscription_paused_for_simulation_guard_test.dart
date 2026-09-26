@@ -38,6 +38,8 @@ import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
+import '../helpers/pro_downgrade_waiter.dart';
+
 class _FakePathProvider extends PathProviderPlatform
     with MockPlatformInterfaceMixin {
   _FakePathProvider(this._tmp);
@@ -97,9 +99,14 @@ void main() {
       SubscriptionService.pausedForSimulation = false;
       await seedExpiredPro();
 
+      final downgrade = ProDowngradeWaiter.arm();
       final result = SubscriptionService.instance.isPro();
-      // _downgradeLocally fires asynchronously inside isPro(); let it settle.
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      // _downgradeLocally runs UN-AWAITED inside isPro(). This waited a fixed
+      // 50 ms, which a loaded runner can outlast; wait for its signal instead
+      // (diagnose b3f8e5). The PAUSED cases below keep their sleep on purpose:
+      // a paused _downgradeLocally returns before its hooks, and they assert
+      // an absence that no late write on that path can falsify.
+      await downgrade.wait();
 
       expect(result, isFalse,
           reason: 'expired PRO must report not-PRO');
@@ -140,10 +147,11 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 50));
       expect(MigratedKey.readWithDefault<bool>('isPro', false), isTrue);
 
-      // Un-paused: downgrade resumes.
+      // Un-paused: downgrade resumes — and is now awaited by signal (b3f8e5).
       SubscriptionService.pausedForSimulation = false;
+      final downgrade = ProDowngradeWaiter.arm();
       SubscriptionService.instance.isPro();
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await downgrade.wait();
       expect(MigratedKey.readWithDefault<bool>('isPro', false), isFalse,
           reason: 'once the sim flag is cleared, the expiry downgrade fires '
               'normally — guard must not leak state across the flag flip');

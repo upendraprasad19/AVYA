@@ -22,9 +22,32 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+/// A global git config holding ONLY `user.useConfigOnly = true`.
+///
+/// HERMETIC by design (diagnose d9e4b1). `main` went red for 4 CI runs because
+/// the `lone` fixture committed with no identity: it passed on every developer
+/// machine (a global `~/.gitconfig` identity was inherited through `HOME`) and
+/// exited 128 on the CI runner, which has none. Pointing `GIT_CONFIG_GLOBAL`
+/// here and setting `GIT_CONFIG_NOSYSTEM=1` makes a local run see exactly what
+/// the runner sees. `useConfigOnly` matters on its own: without it, a host with
+/// a real FQDN auto-detects an identity from the hostname and a missing
+/// `user.email` still commits — so the fixture bug would stay invisible there.
+final String _hermeticGlobalConfig = () {
+  final dir = Directory.systemTemp.createTempSync('hook_sync_gitcfg_');
+  final f = File('${dir.path}/gitconfig')
+    ..writeAsStringSync('[user]\n\tuseConfigOnly = true\n');
+  return f.path;
+}();
+
 Map<String, String> _cleanEnv() {
   final env = Map<String, String>.from(Platform.environment);
   env.removeWhere((k, _) => k.toUpperCase().startsWith('GIT_'));
+  // git falls back to $EMAIL for the author identity; strip it too, or a
+  // machine that sets it passes a commit the CI runner would refuse.
+  env.remove('EMAIL');
+  // Set AFTER the GIT_* strip above, or the strip would remove them.
+  env['GIT_CONFIG_GLOBAL'] = _hermeticGlobalConfig;
+  env['GIT_CONFIG_NOSYSTEM'] = '1';
   return env;
 }
 
@@ -173,6 +196,11 @@ void main() {
     final lone = '${tmp.path}/lone';
     Directory(lone).createSync();
     expect(_git(['init', '-q', '-b', 'main', '.'], lone).exitCode, 0);
+    // Same identity setUp gives `clone`/`other`. This repo is built here, not in
+    // setUp, and until diagnose d9e4b1 it had none — green wherever a global
+    // identity existed, exit 128 on the CI runner.
+    _git(['config', 'user.email', 't@example.invalid'], lone);
+    _git(['config', 'user.name', 'T'], lone);
     _commit(lone, 'seed.txt', 'seed\n', 'seed');
     final out = await _hookOutput(dart, src, lone, startup);
     expect(out, isNot(contains('MAIN BEHIND')));

@@ -33,7 +33,18 @@
 //     android/.gitignore). Without a slash, git matches them at ANY depth, so no
 //     single exact path represents them; the real deep path is classified in the
 //     lib list instead. Anchored nested entries (`/local.properties`) ARE covered.
+//
+// A SECOND PROTECTION, and why the list checks above cannot provide it
+// (diagnose c6f2a8). Every test above proves the two LISTS agree with each
+// other and with the .gitignore text. Delete a secret's .gitignore line AND its
+// list entry together and all of them stay green while the secret is no longer
+// ignored. So the last group asks git itself whether each known token path is
+// ignored, and by which file. It spawns `git`, hence the file-level @Timeout.
 
+@Timeout(Duration(minutes: 2))
+library;
+
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -53,6 +64,7 @@ const deliberatelyPreciousIgnoredPaths = <String>[
   '.env.prod',
   'supabase/.env',
   'supabase/.supabase/',
+  '.supabase/', // the root twin of the line above (c6f2a8) — a live token lived here
   'android/key.properties',
   'android/app/upload-keystore.jks',
 
@@ -227,5 +239,48 @@ void main() {
       // And the secret that the round-1 P0 actually deleted stays precious.
       expect(deliberatelyPreciousIgnoredPaths.contains('supabase/.env'), isTrue);
     });
+  });
+
+  group('token paths are ignored by the REPO .gitignore itself (c6f2a8)', () {
+    // Hermetic: no inherited GIT_* (pre-push runs the suite inside a hook, with
+    // GIT_DIR/GIT_INDEX_FILE set) and no global/system config, so a developer's
+    // own core.excludesFile cannot supply the match. The match SOURCE is then
+    // asserted too: `.git/info/exclude` still applies and cannot be switched
+    // off by env, but git reports the deciding pattern, and a per-directory
+    // .gitignore outranks info/exclude — so a source other than `.gitignore:`
+    // means the repo rule is gone.
+    Map<String, String> hermeticEnv() {
+      final env = Map<String, String>.from(Platform.environment)
+        ..removeWhere((k, _) => k.toUpperCase().startsWith('GIT_'));
+      final empty = File(
+          '${Directory.systemTemp.createTempSync('gi_cfg_').path}/gitconfig')
+        ..writeAsStringSync('');
+      env['GIT_CONFIG_GLOBAL'] = empty.path;
+      env['GIT_CONFIG_NOSYSTEM'] = '1';
+      return env;
+    }
+
+    for (final tokenPath in const [
+      '.supabase/supabase access token.txt', // root copy — unignored until c6f2a8
+      'supabase/.supabase/supabase access token.txt', // the path the tools read
+    ]) {
+      test('`$tokenPath` is ignored, and by .gitignore', () {
+        final r = Process.runSync(
+          'git',
+          ['check-ignore', '-v', '--no-index', tokenPath],
+          environment: hermeticEnv(),
+          includeParentEnvironment: false,
+          stdoutEncoding: utf8,
+          stderrEncoding: utf8,
+        );
+        expect(r.exitCode, 0,
+            reason: '$tokenPath is NOT ignored — a `git add -A` would stage a '
+                'live Supabase Management API token. stderr: ${r.stderr}');
+        expect((r.stdout as String).startsWith('.gitignore:'), isTrue,
+            reason: 'ignored, but not by the repo .gitignore (matched by: '
+                '${r.stdout}) — the protection is machine-local and would '
+                'not exist on another clone');
+      });
+    }
   });
 }

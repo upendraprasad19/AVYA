@@ -6,6 +6,15 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### `isPro()` on an expired row starts `_downgradeLocally()` WITHOUT awaiting it (`subscription_service.dart:480-483`, and :461 for the cross-account wipe) — correct, since isPro() is a synchronous bool. `_downgradeLocally` (:1175) awaits its Hive writes one at a time (:1191-1195), then fires onStateChanged (:1199), then onDowngrade (:1213). The tests waited for that chain with a PROXY (`pumpEventQueue()`, a banner `_settle` quiescence sampler, a fixed sleep). Every write after the first await sits behind real per-box-serialised file I/O, so on a loaded runner the proxy returned first: the assertion read pre-downgrade state, and the file's tearDown then closed Hive under the still running chain, which is where the trailing Box-not-found comes from. The fix waits for the production signal (onDowngrade, which has exactly one caller) instead of any proxy. (1 bugs)
+- 2026-09-26 b3f8e5 — CI "Unit Tests" failed intermittently on `test/contracts/realtime_pro_gate_behavioral_test.dart` — "e4a7c9 — the teardown half … THE SECOND BUG: a downgrade fires onDowngrade" — `Expected: true…
+
+### not_applicable — a test-fixture environment defect, not a Hive/cloud (1 bugs)
+- 2026-09-26 d9e4b1 — `main` was RED for four consecutive CI runs (0c92c105 merge of main-sync-warning, b4a42556, fc797551, fafec56a), job "Unit Tests", one test of 6430:…
+
+### not_applicable — repository secret hygiene, not a Hive/cloud contract. (1 bugs)
+- 2026-09-26 c6f2a8 — A live Supabase Management API token sat at the repo ROOT, `.supabase/supabase access token.txt` (44 B, 2026-09-23), untracked and NOT ignored: `git check-ignore -v` on it exited 1 in the primary…
+
 ### discipline_hook_main_sync_bounded_fetch (1 bugs)
 - 2026-09-24 b2f7e4 — A B-pass adversarial review of commit `1db54e4f` (the SessionStart main-vs-origin/main sync warning added to `scripts/discipline_hook.dart` this same batch) found that `_mainSyncWarning()`'s bounded…
 
@@ -1382,6 +1391,9 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-26 | b3f8e5 | CI "Unit Tests" failed intermittently on `test/contracts/realtime_pro_gate_behavioral_test.dart` — "e4a7c9 — the teardown half … THE SECOND BUG: a downgrade fires onDowngrade" — `Expected: true… | `isPro()` on an expired row starts `_downgradeLocally()` WITHOUT awaiting it (`subscription_service.dart:480-483`, and :461 for the cross-account wipe) — correct, since isPro() is a synchronous bool. `_downgradeLocally` (:1175) awaits its Hive writes one at a time (:1191-1195), then fires onStateChanged (:1199), then onDowngrade (:1213). The tests waited for that chain with a PROXY (`pumpEventQueue()`, a banner `_settle` quiescence sampler, a fixed sleep). Every write after the first await sits behind real per-box-serialised file I/O, so on a loaded runner the proxy returned first: the assertion read pre-downgrade state, and the file's tearDown then closed Hive under the still running chain, which is where the trailing Box-not-found comes from. The fix waits for the production signal (onDowngrade, which has exactly one caller) instead of any proxy. | test/contracts/pro_downgrade_waiter_behavioral_test.dart |
+| 2026-09-26 | d9e4b1 | `main` was RED for four consecutive CI runs (0c92c105 merge of main-sync-warning, b4a42556, fc797551, fafec56a), job "Unit Tests", one test of 6430:… | not_applicable — a test-fixture environment defect, not a Hive/cloud | test/scripts/discipline_hook_main_sync_e2e_test.dart |
+| 2026-09-26 | c6f2a8 | A live Supabase Management API token sat at the repo ROOT, `.supabase/supabase access token.txt` (44 B, 2026-09-23), untracked and NOT ignored: `git check-ignore -v` on it exited 1 in the primary… | not_applicable — repository secret hygiene, not a Hive/cloud contract. | test/scripts/gitignore_classification_test.dart |
 | 2026-09-24 | b2f7e4 | A B-pass adversarial review of commit `1db54e4f` (the SessionStart main-vs-origin/main sync warning added to `scripts/discipline_hook.dart` this same batch) found that `_mainSyncWarning()`'s bounded… | discipline_hook_main_sync_bounded_fetch | test/scripts/discipline_hook_main_sync_e2e_test.dart |
 | 2026-09-24 | b7e3a1 | A `type: 'logged'` schedule row (written by WorkoutWriteService.markCompleted's no-prior-schedule branch for AI-coach-only logging, or by the restore synthesize path in sync/sync_workout.dart) counts… | training_day_predicate_logged_agreement | test/contracts/training_day_predicate_wiring_test.dart |
 | 2026-09-23 | f2a8c6 | scripts/check_hooks_installed.dart (Gate 32) has always documented its own contract as "never hard-fail unexpectedly" -- a hygiene gate whose freshness/presence checks degrade to a WARN or an… | check_hooks_installed_unguarded_reads | test/scripts/check_hooks_installed_e2e_test.dart |
