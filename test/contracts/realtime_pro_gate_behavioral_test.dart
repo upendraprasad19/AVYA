@@ -33,6 +33,9 @@
 //   5. restore the B-pass P0 (latch reset back inside
 //      `unsubscribeRealtime`)                               → 1 red (1 vs 5)
 //   6. delete the swap reset from `_onUserChanged`          → 3 red
+// Mutation 2 RE-MEASURED 2026-09-26 (b3f8e5) after the downgrade wait moved to
+// ProDowngradeWaiter: still exactly 1 red, THE SECOND BUG, and it now fails BY
+// NAME ("onDowngrade never fired within 10000 ms") instead of on a proxy drain.
 // Every guard in this fix has a test that fails without it. Mutation 4 matters
 // most: it is the one a well-meaning future edit is likeliest to make, and it
 // reddens only because of the last group in this file.
@@ -60,6 +63,7 @@ import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 
 import '../helpers/hive_test_setup.dart';
+import '../helpers/pro_downgrade_waiter.dart';
 
 void main() {
   late Directory tempDir;
@@ -229,12 +233,17 @@ void main() {
 
       await makePro(validFor: const Duration(days: -1)); // already expired
 
+      // Arm AFTER the test's own hook: the waiter chains it.
+      final downgrade = ProDowngradeWaiter.arm();
       SubscriptionService.instance.isPro();
       // isPro() calls _downgradeLocally() UN-AWAITED (subscription_service
-      // .dart:461), and the hook fires after five Hive writes inside it. So
-      // the queue must drain before asserting — without this the test reads
-      // `false` and looks like a missing hook rather than a pending one.
-      await pumpEventQueue();
+      // .dart:480-483), and the hook fires only after its awaited Hive writes
+      // (:1191-1195 → :1213). This used to `await pumpEventQueue()` — a fixed
+      // ~20 event-loop turns — which a loaded CI runner outlasted: the test read
+      // `false`, then tearDown closed Hive under the still-running chain and a
+      // `Box not found` stacked on top (OI-242, diagnose b3f8e5). Wait for the
+      // signal instead. If the hook is gone, this fails BY NAME.
+      await downgrade.wait();
 
       expect(tornDown, isTrue,
           reason: 'an expiry downgrade must release PRO-owned resources');

@@ -19,6 +19,8 @@ import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
+import '../helpers/pro_downgrade_waiter.dart';
+
 class _FakePathProvider extends PathProviderPlatform
     with MockPlatformInterfaceMixin {
   _FakePathProvider(this._tmp);
@@ -27,34 +29,6 @@ class _FakePathProvider extends PathProviderPlatform
   Future<String?> getApplicationDocumentsPath() async => _tmp;
   @override
   Future<String?> getTemporaryPath() async => _tmp;
-}
-
-/// Waits for `_downgradeLocally`'s async MigratedKey writes to QUIESCE.
-///
-/// Same defect and same remedy as `subscription_cqrs_behavioral_test.dart`: a
-/// fixed 20 ms sleep is not a synchronization primitive, and on 2026-08-10 that
-/// value made the sibling file green on an idle machine and RED under load —
-/// same commit both times, blocking a push at random.
-///
-/// Waits for the observed key tuple to stop changing rather than for a
-/// caller-supplied predicate. A per-call-site predicate was tried first in the
-/// sibling file and was WORSE: each one was derived from the first assertion
-/// that followed it, so a poll exited before the later writes landed and turned
-/// a flaky test into a deterministically failing one.
-Future<void> _settle() async {
-  const keys = ['isPro', 'expiresAt', 'pro_lapsed_at', 'plan'];
-  String snapshot() =>
-      keys.map((k) => '$k=${MigratedKey.read<dynamic>(k)}').join('|');
-
-  final deadline = DateTime.now().add(const Duration(seconds: 5));
-  var previous = snapshot();
-  var stableRounds = 0;
-  while (stableRounds < 3 && DateTime.now().isBefore(deadline)) {
-    await Future<void>.delayed(const Duration(milliseconds: 10));
-    final current = snapshot();
-    stableRounds = current == previous ? stableRounds + 1 : 0;
-    previous = current;
-  }
 }
 
 String _pastIso() =>
@@ -101,8 +75,12 @@ void main() {
 
       // ignore: deprecated_member_use
       final sub = SubscriptionService.instance;
+      // isPro() starts _downgradeLocally UN-AWAITED; wait for its signal, not a
+      // proxy. This file used a 3×10 ms quiescence sampler here, which could
+      // return before the chain's later writes landed (diagnose b3f8e5).
+      final downgrade = ProDowngradeWaiter.arm();
       expect(sub.isPro(), isFalse, reason: 'expired → not PRO');
-      await _settle();
+      await downgrade.wait();
 
       expect(sub.proLapsedAt, isNotNull, reason: 'A: lapsed marker stamped');
       expect(HiveService.instance.configBox.get('pro_lapsed_at'), isNull,
@@ -129,9 +107,12 @@ void main() {
       await HiveService.instance.configBox.put('isPro', true);
       await HiveService.instance.configBox.put('expiresAt', _pastIso());
 
+      // No session, but _downgradeLocally still runs (and still fires its
+      // hooks) — writing to configBox. Wait for it by signal (b3f8e5).
+      final downgrade = ProDowngradeWaiter.arm();
       // ignore: deprecated_member_use
       expect(SubscriptionService.instance.isPro(), isFalse);
-      await _settle();
+      await downgrade.wait();
 
       expect(HiveService.instance.configBox.get('pro_lapsed_at'), isNull,
           reason:
