@@ -1,0 +1,425 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/services/hive_service.dart';
+import '../../../core/theme/colors.dart';
+import '../models/tool_intent.dart';
+import '../providers/pending_tool_intents_provider.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
+
+/// Inline confirmation card for an AI coach tool intent.
+///
+/// Handles BOTH `trivial` (5s countdown auto-confirm) and `reviewable`
+/// (explicit confirm only) confirmation classes via the intent's
+/// [ConfirmationClass]. Destructive intents use [ToolConfirmSheet] instead.
+///
+/// Borrows visual style from [LogConfirmCard] but operates on
+/// [pendingToolIntentsProvider] + [ToolDispatcher] rather than the legacy
+/// `<ICBF_LOG>` action pipeline.
+class ToolConfirmCard extends ConsumerStatefulWidget {
+  final ToolIntent intent;
+
+  const ToolConfirmCard({super.key, required this.intent});
+
+  @override
+  ConsumerState<ToolConfirmCard> createState() => _ToolConfirmCardState();
+}
+
+class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
+  // B-4 (APK Test #6): auto-confirm timer removed. Spec §5.3 requires
+  // explicit Apply/Dismiss on every confirmation class — no tap-anywhere,
+  // no countdown auto-fire. Both `trivial` and `reviewable` flows now
+  // demand a deliberate APPLY tap.
+  bool _executing = false;
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  Future<void> _confirm() async {
+    if (!mounted || _executing) return;
+    setState(() => _executing = true);
+    final result = await ref
+        .read(pendingToolIntentsProvider.notifier)
+        .confirm(widget.intent.id);
+    if (!mounted) return;
+    setState(() => _executing = false);
+    if (!result.success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.errorMessage ?? 'Failed')),
+      );
+    }
+  }
+
+  void _skip() {
+    // Persist Hive marker so a hot restart (or chat thread filter) sees
+    // the dismissal even if PendingToolIntentsNotifier state is lost.
+    try {
+      HiveService.instance.coachBox.put(
+        'intent_${widget.intent.id}_dismissed_at',
+        DateTime.now().toIso8601String(),
+      );
+    } catch (_) {/* never block on telemetry */}
+    ref.read(pendingToolIntentsProvider.notifier).reject(widget.intent.id);
+  }
+
+  Future<void> _retry() async {
+    if (_executing) return;
+    setState(() => _executing = true);
+    final result = await ref
+        .read(pendingToolIntentsProvider.notifier)
+        .retry(widget.intent.id);
+    if (!mounted) return;
+    setState(() => _executing = false);
+    if (!result.success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.errorMessage ?? 'Failed')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final intent = widget.intent;
+
+    if (intent.status == ToolIntentStatus.executed) {
+      return _buildExecutedState();
+    }
+    if (intent.status == ToolIntentStatus.rejected) {
+      return _buildRejectedState();
+    }
+    if (intent.status == ToolIntentStatus.expired) {
+      return _buildRejectedState(label: 'Expired');
+    }
+    if (intent.status == ToolIntentStatus.failed) {
+      return _buildFailedState();
+    }
+
+    // pending | confirming | executing
+    // B-4: countdown removed; both classes need explicit APPLY.
+    final summary = _buildSummary(intent);
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(16),
+        border:
+            Border.all(color: AppColors.accent.withValues(alpha: 0.4), width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(_iconForType(intent.type), color: AppColors.accent, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                _titleForType(intent.type),
+                style: AppTypography.bodyM.copyWith(fontWeight: FontWeight.w800, color: AppColors.accent, letterSpacing: 0.5),
+              ),
+              const Spacer(),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            summary,
+            style: AppTypography.titleS.copyWith(color: AppColors.textPrimary),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: _executing ? null : _confirm,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.accent,
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: _executing
+                      ? const SizedBox(
+                          height: 16,
+                          width: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.black,
+                          ),
+                        )
+                      : Text(
+                          'APPLY',
+                          style: AppTypography.body.copyWith(fontWeight: FontWeight.w800, letterSpacing: 0.6),
+                        ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _executing ? null : _skip,
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppColors.border),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: Text(
+                    'DISMISS',
+                    style: AppTypography.body.copyWith(fontWeight: FontWeight.w700, color: AppColors.textSecondary, letterSpacing: 0.6),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExecutedState() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.green.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.green.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.check_circle, color: AppColors.green, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _executedMessage(widget.intent),
+              style: AppTypography.bodyM.copyWith(fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRejectedState({String label = 'Skipped'}) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.input,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        '$label: ${_titleForType(widget.intent.type)}',
+        style: AppTypography.body.copyWith(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+      ),
+    );
+  }
+
+  Widget _buildFailedState() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.red.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.red.withValues(alpha: 0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.error_outline, color: AppColors.red, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  widget.intent.errorMessage ?? 'Failed',
+                  style: AppTypography.bodyM.copyWith(fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: _executing ? null : _retry,
+              child: _executing
+                  ? const SizedBox(
+                      height: 14,
+                      width: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.accent,
+                      ),
+                    )
+                  : Text(
+                      'Retry',
+                      style: AppTypography.body.copyWith(fontWeight: FontWeight.w800, color: AppColors.accent),
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _buildSummary(ToolIntent intent) {
+    if (intent.type == 'swap_exercise') {
+      final fromId = intent.payload['exerciseId']?.toString() ?? '';
+      final toId = intent.payload['newExerciseId']?.toString() ?? '';
+      final fromName = _resolveExerciseName(fromId) ?? fromId;
+      final toName = _resolveExerciseName(toId) ?? toId;
+      final reason = intent.payload['reason']?.toString();
+      final base = '$fromName \u2192 $toName';
+      return reason != null && reason.isNotEmpty ? '$base\n$reason' : base;
+    }
+    if (intent.type == 'log_set') {
+      final exerciseId = intent.payload['exerciseId']?.toString() ?? '';
+      final name = _resolveExerciseName(exerciseId) ?? exerciseId;
+      final w = intent.payload['weightKg'];
+      final reps = intent.payload['reps'];
+      final sets = intent.payload['sets'];
+      return '$name \u2014 ${w}kg \u00d7 $reps \u00d7 $sets sets';
+    }
+    if (intent.type == 'shorten_workout') {
+      final minutes = intent.payload['minutes'];
+      final date = intent.payload['date'] as String?;
+      return date != null
+          ? 'Shorten $date workout to $minutes min'
+          : "Shorten today's workout to $minutes min";
+    }
+    if (intent.type == 'create_custom_exercise') {
+      final name = intent.payload['name']?.toString() ?? '';
+      final category = intent.payload['category']?.toString() ?? '';
+      final equipment = intent.payload['equipment']?.toString() ?? '';
+      return '$name\n$category \u00b7 $equipment';
+    }
+    if (intent.type == 'log_meal_by_text') {
+      final foodName = intent.payload['food_name']?.toString() ?? 'Meal';
+      final cal = intent.payload['total_calories'] ?? 0;
+      final protein = intent.payload['total_protein_g'] ?? 0;
+      final confidence = intent.payload['confidence']?.toString();
+      final base = '$foodName \u2014 $cal kcal \u00b7 ${protein}g protein';
+      if (confidence == 'low') {
+        return '$base\n(low confidence \u2014 review carefully)';
+      }
+      return base;
+    }
+    return intent.previewSummary;
+  }
+
+  String? _resolveExerciseName(String id) {
+    if (id.isEmpty) return null;
+    final ex = HiveService.instance.exerciseBox.get(id);
+    if (ex is Map && ex['name'] is String) return ex['name'] as String;
+    final cust = HiveService.instance.customBox.get(id);
+    if (cust is Map && cust['name'] is String) return cust['name'] as String;
+    // Custom items may be keyed differently (e.g. custom_exercise_<ts>) with
+    // an inner 'id' field — scan for a match.
+    for (final k in HiveService.instance.customBox.keys) {
+      final v = HiveService.instance.customBox.get(k);
+      if (v is Map && v['id'] == id && v['name'] is String) {
+        return v['name'] as String;
+      }
+    }
+    return null;
+  }
+
+  String _titleForType(String type) {
+    switch (type) {
+      case 'swap_exercise':
+        return 'SWAP EXERCISE';
+      case 'log_set':
+        return 'LOG SET';
+      case 'shorten_workout':
+        return 'SHORTEN WORKOUT';
+      case 'create_custom_exercise':
+        return 'NEW EXERCISE';
+      case 'modify_workout_for_injury':
+        return 'INJURY MODIFY';
+      case 'reschedule_week':
+        return 'RESCHEDULE WEEK';
+      case 'generate_hotel_workout':
+        return 'HOTEL WORKOUT';
+      case 'regenerate_plan_block':
+        return 'NEW PLAN';
+      case 'pause_plan':
+        return 'PAUSE PLAN';
+      case 'switch_goal':
+        return 'SWITCH GOAL';
+      case 'create_custom_template':
+        return 'NEW TEMPLATE';
+      case 'schedule_template':
+        return 'SCHEDULE TEMPLATE';
+      case 'log_meal_by_text':
+        return 'LOG MEAL';
+      default:
+        return type.toUpperCase().replaceAll('_', ' ');
+    }
+  }
+
+  IconData _iconForType(String type) {
+    switch (type) {
+      case 'swap_exercise':
+        return Icons.swap_horiz;
+      case 'log_set':
+        return Icons.fitness_center;
+      case 'shorten_workout':
+        return Icons.timer;
+      case 'create_custom_exercise':
+        return Icons.add_circle_outline;
+      case 'modify_workout_for_injury':
+        return Icons.healing;
+      case 'reschedule_week':
+        return Icons.calendar_view_week;
+      case 'generate_hotel_workout':
+        return Icons.luggage;
+      case 'regenerate_plan_block':
+        return Icons.refresh;
+      case 'pause_plan':
+        return Icons.pause_circle;
+      case 'switch_goal':
+        return Icons.flag;
+      case 'create_custom_template':
+        return Icons.list_alt;
+      case 'schedule_template':
+        return Icons.event;
+      case 'log_meal_by_text':
+        return Icons.restaurant_menu;
+      default:
+        return Icons.bolt;
+    }
+  }
+
+  String _executedMessage(ToolIntent intent) {
+    switch (intent.type) {
+      case 'swap_exercise':
+        return 'Swapped';
+      case 'log_set':
+        return 'Logged';
+      case 'shorten_workout':
+        return 'Workout shortened';
+      case 'create_custom_exercise':
+        return 'Created';
+      case 'modify_workout_for_injury':
+        return 'Workouts updated';
+      case 'reschedule_week':
+        return 'Week reshuffled';
+      case 'generate_hotel_workout':
+        return 'Hotel plan generated';
+      case 'regenerate_plan_block':
+        return 'Plan regenerated';
+      case 'pause_plan':
+        return 'Plan paused';
+      case 'switch_goal':
+        return 'Goal switched';
+      case 'create_custom_template':
+        return 'Template saved';
+      case 'schedule_template':
+        return 'Template scheduled';
+      case 'log_meal_by_text':
+        return 'Logged';
+      default:
+        return 'Done';
+    }
+  }
+}

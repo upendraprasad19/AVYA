@@ -1,0 +1,231 @@
+part of 'screen.dart';
+
+// ── Exercise Add / Swap / Create Sheets ──────────────────────────
+
+void _showExercisePickerSheet(BuildContext context, WidgetRef ref) {
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (ctx) => _ExercisePickerSheet(
+      onSelect: (exerciseData) {
+        ref.read(activeWorkoutProvider.notifier).addExercise(
+              ExerciseData(
+                name: exerciseData['name'] as String? ?? 'Exercise',
+                sets: '${exerciseData['default_sets'] ?? 3}',
+                reps: '${exerciseData['default_reps'] ?? '10'}',
+                weight: '0kg',
+                rest: '${exerciseData['default_rest_secs'] ?? 60}s',
+                loggingType:
+                    exerciseData['logging_type'] as String? ?? 'weight_reps',
+                exerciseType:
+                    (exerciseData['exercise_type'] is List
+                        ? ((exerciseData['exercise_type'] as List).isNotEmpty
+                            ? (exerciseData['exercise_type'] as List).first.toString()
+                            : null)
+                        : exerciseData['exercise_type'] as String?) ?? 'isolation',
+                category: exerciseData['category'] as String? ?? '',
+                equipmentNeeded: ExerciseData.parseEquipmentNeeded(
+                    exerciseData['equipment_needed']),
+                // W3.3 (Batch 11-A): thread the picked exercise's library id so
+                // a manually-added exercise's logs match history by id.
+                exerciseId: exerciseData['id'] as String?,
+              ),
+            );
+        Navigator.of(ctx).pop();
+      },
+    ),
+  );
+}
+
+void _showSwapSheet(BuildContext context, WidgetRef ref, int exerciseIndex,
+    _ActiveWorkoutScreenState screenState) {
+  final data = ref.read(activeWorkoutProvider);
+  final currentExercise = data.exercises[exerciseIndex];
+  final canDelete = data.exercises.length > 1;
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (ctx) => ExerciseSwapSheet(
+      currentExerciseName: currentExercise.name,
+      category: currentExercise.category,
+      equipment: currentExercise.equipmentNeeded,
+      // ⑦ OI-89 seam 6: the user's capability — NOT `equipment` above, which
+      // is the OUTGOING exercise's requirement and would invert the filter.
+      capability: TrainingHistoryAnalyzer.resolveCapabilityFromProfile(),
+      onSelect: (swapEx) {
+        ref.read(activeWorkoutProvider.notifier).swapExercise(
+              exerciseIndex,
+              ExerciseData(
+                name: swapEx.name,
+                sets: currentExercise.sets,
+                reps: currentExercise.reps,
+                weight: currentExercise.weight,
+                rest: currentExercise.rest,
+                // Obs 6: use the SWAPPED-IN exercise's own logging type, not
+                // the outgoing one's. Pre-fix this always read
+                // currentExercise.loggingType (the OUTGOING exercise), so
+                // swapping a timed exercise for a weight/reps one kept
+                // showing the timed UI until removed and re-added.
+                // '' (never the outgoing exercise's type) when swapEx carries
+                // none — swapExercise() below runs this through
+                // LoggingTypeResolver.resolve(), which only trusts a
+                // non-EMPTY direct value and otherwise looks the NEW
+                // exercise up by name in exerciseBox/customBox. Falling back
+                // to the outgoing type here would short-circuit that
+                // by-name lookup and silently reintroduce this same bug for
+                // any picker row missing logging_type.
+                loggingType: swapEx.loggingType ?? '',
+                category: currentExercise.category,
+                equipmentNeeded: currentExercise.equipmentNeeded,
+                // W3.3 (Batch 11-A): the swapped-IN exercise's library id (from
+                // the picker row), so its logs match history by id going forward.
+                exerciseId: swapEx.id,
+              ),
+            );
+        // F11 · Ensure Home and Calendar immediately reflect the swap —
+        // they read today's schedule/plan, which swapExercise has already
+        // mutated in Hive, but Riverpod caches the last-read snapshot.
+        ref.invalidate(todayWorkoutProvider);
+        ref.invalidate(currentPlanProvider);
+        ref.invalidate(calendarWeekProvider);
+        Navigator.of(ctx).pop();
+      },
+      onDelete: canDelete
+          ? () => ref.read(activeWorkoutProvider.notifier).removeExercise(exerciseIndex)
+          : null,
+      onAdd: (addEx) {
+        // Sentinel '__ADD_MODE__' means user tapped "+ ADD EXERCISE"
+        // inside the Swap sheet.
+        //
+        // Pre-2026-04-24 this opened a picker sheet to browse
+        // existing exercises, forcing the user to then swap again
+        // manually. Per APK test #1 feedback: "if the path was via
+        // swap, it should have swapped as well." The new flow opens
+        // CreateCustomExerciseSheet directly; on save the new
+        // exercise is auto-swapped into the slot, with an UNDO
+        // snackbar for recoverability.
+        if (addEx.name == '__ADD_MODE__') {
+          // Obs 5, internal-testing batch 2026-09-15 (diagnose 6c2f91) — do
+          // NOT pop here. The "+ ADD EXERCISE" button INSIDE
+          // ExerciseSwapSheet (exercise_swap_sheet.dart's onPressed) already
+          // calls `Navigator.of(context).pop()` on itself before invoking
+          // this onAdd callback, so the swap sheet is ALREADY gone by the
+          // time this runs. A second pop here doesn't re-pop the (already
+          // closed) swap sheet — it pops the NEXT route down: the active
+          // workout screen's own page, ejecting the user to the Train tab.
+          // CreateCustomExerciseSheet then opens on top of THAT instead of
+          // the active workout screen. The in-progress ActiveWorkoutData
+          // survives this (it's a plain, non-autoDispose provider), but the
+          // Train tab shows no "resume" affordance, so tapping START again
+          // there calls startWorkout() — an unconditional, no-confirmation
+          // full reset — which is what actually destroyed the founder's
+          // progress. Live-verified 2026-09-15 by navigating straight back
+          // into /train/active-workout (bypassing START): the session was
+          // still there, sets checked and timer still running.
+          //
+          // Bug s1n4c0 (APK Test #16.2), which originally ADDED this now-
+          // removed pop, was solving a REAL but DIFFERENT problem — the
+          // swap sheet staying mounted caused create.onCreated's SnackBar to
+          // host against a shadowed context — but exercise_swap_sheet.dart's
+          // own self-pop (added independently) already solves that; this
+          // extra pop was a double-pop regression, not a needed fix.
+          _openCreateAndAutoSwap(context, ref, exerciseIndex, screenState);
+        }
+      },
+    ),
+  );
+}
+
+/// Opens [CreateCustomExerciseSheet] and, on save, swaps the newly
+/// created exercise into [exerciseIndex], preserving the slot's sets,
+/// reps, weight, and rest. Shows an UNDO snackbar that restores the
+/// original exercise if tapped within 5 s.
+void _openCreateAndAutoSwap(
+  BuildContext context,
+  WidgetRef ref,
+  int exerciseIndex,
+  _ActiveWorkoutScreenState screenState,
+) {
+  final data = ref.read(activeWorkoutProvider);
+  if (exerciseIndex < 0 || exerciseIndex >= data.exercises.length) return;
+  final original = data.exercises[exerciseIndex];
+
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (_) => CreateCustomExerciseSheet(
+      onCreated: (newExercise) {
+        final newName = (newExercise['name'] as String?) ?? 'Exercise';
+        final loggingType =
+            (newExercise['logging_type'] as String?) ?? 'weight_reps';
+        final defaultSets = newExercise['default_sets'];
+        final defaultReps = newExercise['default_reps'];
+        final defaultRest = newExercise['default_rest_secs'];
+        final equipRaw = newExercise['equipment_needed'];
+        final equipment = equipRaw == null
+            ? original.equipmentNeeded
+            : ExerciseData.parseEquipmentNeeded(equipRaw);
+
+        // Compose the swap target. Prefer the form's defaults (user
+        // just typed them) and fall back to the original slot's
+        // values so weight and cadence carry over naturally.
+        final replacement = ExerciseData(
+          name: newName,
+          sets: defaultSets != null ? '$defaultSets' : original.sets,
+          reps: defaultReps != null ? '$defaultReps' : original.reps,
+          weight: original.weight,
+          rest: defaultRest != null ? '${defaultRest}s' : original.rest,
+          loggingType: loggingType,
+          category: (newExercise['category'] as String?) ?? original.category,
+          equipmentNeeded: equipment,
+          // W3.3 (Batch 11-A): a just-created custom exercise usually has no
+          // library id (null → name fallback, correct); carry one if present.
+          exerciseId: newExercise['id'] as String?,
+        );
+
+        ref.read(activeWorkoutProvider.notifier).swapExercise(
+              exerciseIndex,
+              replacement,
+            );
+        ref.invalidate(todayWorkoutProvider);
+        ref.invalidate(currentPlanProvider);
+        ref.invalidate(calendarWeekProvider);
+
+        if (!context.mounted) return;
+        // Obs 1 — captured on the screen state so it can be dismissed
+        // immediately on workout completion, or as a dispose() backstop for
+        // every other exit path (cancel dialog, back-gesture).
+        final messenger = ScaffoldMessenger.of(context);
+        screenState._swapUndoMessenger = messenger;
+        messenger
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: AppColors.card,
+              duration: const Duration(seconds: 5),
+              content: Text(
+                'Swapped "${original.name}" → "$newName"',
+                style: AppTypography.bodySm,
+              ),
+              action: SnackBarAction(
+                label: 'UNDO',
+                textColor: AppColors.accent,
+                onPressed: () {
+                  ref
+                      .read(activeWorkoutProvider.notifier)
+                      .swapExercise(exerciseIndex, original);
+                  ref.invalidate(todayWorkoutProvider);
+                  ref.invalidate(currentPlanProvider);
+                  ref.invalidate(calendarWeekProvider);
+                },
+              ),
+            ),
+          );
+      },
+    ),
+  );
+}

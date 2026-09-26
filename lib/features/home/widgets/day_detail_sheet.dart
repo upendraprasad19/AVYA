@@ -1,0 +1,544 @@
+import 'package:flutter/material.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/core/utils/date_utils.dart';
+import 'package:icanbefitter/core/utils/hold_week_labels.dart';
+import 'package:icanbefitter/features/train/widgets/workout_receipt_card.dart';
+import 'package:icanbefitter/features/train/widgets/workout_receipt_sheet.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
+import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_plate_sheet.dart';
+import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_plate_thumb.dart';
+
+/// Bottom sheet showing workout details for a tapped calendar day.
+///
+/// Shows exercises with sets/reps/rest for workout days,
+/// recovery tips for rest days, and completion status.
+class DayDetailSheet extends StatelessWidget {
+  final DateTime date;
+  final Map<String, dynamic>? schedule;
+
+  const DayDetailSheet({
+    super.key,
+    required this.date,
+    this.schedule,
+  });
+
+  /// Show the day detail bottom sheet.
+  static void show(
+    BuildContext context, {
+    required DateTime date,
+    Map<String, dynamic>? schedule,
+  }) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => DayDetailSheet(date: date, schedule: schedule),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final type = schedule?['type'] as String? ?? 'none';
+    final status = schedule?['status'] as String? ?? 'none';
+    final isWorkout = !PlanEngineFlags.isRestDayConsideringLogged(type);
+    final isCompleted = status == 'completed';
+    final isRestDay = type == 'rest' || type == 'none';
+
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.6,
+      ),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppRadius.card),
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Drag handle
+            Container(
+              margin: const EdgeInsets.only(top: 10),
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.line2,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            // Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.gutter,
+                14,
+                AppSpacing.gutter,
+                0,
+              ),
+              child: _buildHeader(),
+            ),
+            const SizedBox(height: 12),
+            const WardRule(margin: EdgeInsets.zero),
+            // Body
+            if (isRestDay)
+              _buildRestBody()
+            else
+              Flexible(child: _buildWorkoutBody()),
+            // Footer button
+            _buildFooter(context, isWorkout: isWorkout, isCompleted: isCompleted),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Header ──────────────────────────────────────────────────────
+
+  Widget _buildHeader() {
+    final workoutName = schedule?['workout_name'] as String? ?? '';
+    final type = schedule?['type'] as String? ?? 'none';
+    final isWorkout = !PlanEngineFlags.isRestDayConsideringLogged(type);
+    // Row-derived (see hold_week_labels.dart): the raw `week` field carries
+    // `4 + ordinal` on a hold row. Null means "nothing honest to show",
+    // preserving the previous `week > 0` suppression.
+    final weekLabel = dayDetailWeekLabel(schedule);
+
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _formatDate(date).toUpperCase(),
+                style: AppTypography.mono.copyWith(
+                  color: AppColors.textMute,
+                  letterSpacing: 2,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _formatDateDisplay(date),
+                style: AppTypography.h2.copyWith(
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              if (weekLabel != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  weekLabel,
+                  style: AppTypography.monoXs.copyWith(
+                    color: AppColors.textMute,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (isWorkout && workoutName.isNotEmpty)
+          WardChip(
+            label: workoutName,
+            tone: WardChipTone.gold,
+          )
+        else if (!isWorkout)
+          const WardChip(
+            label: 'REST DAY',
+            tone: WardChipTone.neutral,
+          ),
+      ],
+    );
+  }
+
+  // ── Rest Day Body ───────────────────────────────────────────────
+
+  Widget _buildRestBody() {
+    return Padding(
+      padding: const EdgeInsets.all(AppSpacing.gutter),
+      child: Column(
+        children: [
+          const SizedBox(height: 8),
+          Icon(
+            Icons.self_improvement_rounded,
+            size: 40,
+            color: AppColors.textDim.withValues(alpha: 0.4),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Rest & Recovery',
+            style: AppTypography.h2.copyWith(
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Focus on light stretching, foam rolling, and staying hydrated. '
+            'Sleep 7-9 hours to maximise muscle recovery and performance gains.',
+            textAlign: TextAlign.center,
+            style: AppTypography.body.copyWith(
+              color: AppColors.textDim,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  // ── Workout Body ────────────────────────────────────────────────
+
+  Widget _buildWorkoutBody() {
+    final exercises = schedule?['exercises'] as List? ?? [];
+
+    if (exercises.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(AppSpacing.gutter),
+        child: Text(
+          'No exercises scheduled.',
+          style: AppTypography.body.copyWith(
+            color: AppColors.textDim,
+          ),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.gutter,
+        vertical: 12,
+      ),
+      shrinkWrap: true,
+      itemCount: exercises.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      itemBuilder: (ctx, index) {
+        final exercise = exercises[index];
+        final Map<String, dynamic> ex;
+        if (exercise is Map) {
+          ex = Map<String, dynamic>.from(exercise);
+        } else {
+          return const SizedBox.shrink();
+        }
+
+        final name = ex['exercise_name'] as String? ??
+            ex['name'] as String? ??
+            'Unknown Exercise';
+        final sets = ex['sets'] as int? ??
+            ex['prescribed_sets'] as int? ??
+            ex['default_sets'] as int? ??
+            3;
+        final reps = ex['reps'] as String? ??
+            ex['prescribed_reps'] as String? ??
+            ex['default_reps'] as String? ??
+            '10';
+        final restSecs = ex['rest_seconds'] as int? ??
+            ex['default_rest_secs'] as int? ??
+            60;
+        final loggingType = ex['logging_type'] as String? ?? 'weight_reps';
+
+        return WardCard(
+          variant: WardCardVariant.inset,
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              // The plate replaces the index badge — see exercise_card.dart.
+              ExercisePlateThumb(
+                exerciseName: name,
+                size: 44,
+                onTap: () => ExercisePlateSheet.show(ctx, name),
+              ),
+              const SizedBox(width: 10),
+              // Name + details
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: AppTypography.body.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _formatExerciseDetail(
+                        loggingType: loggingType,
+                        sets: sets,
+                        reps: reps,
+                        restSecs: restSecs,
+                      ),
+                      style: AppTypography.monoXs.copyWith(
+                        color: AppColors.textMute,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ── Footer ──────────────────────────────────────────────────────
+
+  Widget _buildFooter(
+    BuildContext context, {
+    required bool isWorkout,
+    required bool isCompleted,
+  }) {
+    if (!isWorkout) {
+      return const SizedBox(height: 16);
+    }
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final targetDay = DateTime(date.year, date.month, date.day);
+    final isToday = targetDay == today;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.gutter,
+        12,
+        AppSpacing.gutter,
+        MediaQuery.of(context).padding.bottom + 16,
+      ),
+      child: isCompleted
+          ? _buildCompletedFooter(context)
+          : SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: _buildStartButton(context, enabled: isToday),
+            ),
+    );
+  }
+
+  Widget _buildCompletedFooter(BuildContext context) {
+    // audit-2026-05-17 OI-05 — differentiate "completed with logged
+    // exercises" from "marked completed without exercise logging". The
+    // user can flip schedule status via `markCompleted` for workouts
+    // they trained outside the app (e.g., outdoor run, gym session
+    // without phone). The schedule says completed; no exlog rows ever
+    // existed for that IST date. Live cloud query 2026-05-17 confirmed
+    // 2/11 of Upendra's completions were of this shape (May 14 + 15
+    // Hybrid A) — both produced misleading "View Card does nothing"
+    // observations on +27 install.
+    final hasLoggedExercises = _hasExerciseLogsForDate();
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Completed badge — label differentiates by data state.
+        SizedBox(
+          width: double.infinity,
+          height: 48,
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.ok.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(AppRadius.sharp),
+              border: Border.all(
+                color: AppColors.ok.withValues(alpha: 0.33),
+              ),
+            ),
+            alignment: Alignment.center,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.check_circle, size: 16, color: AppColors.ok),
+                const SizedBox(width: 8),
+                Text(
+                  hasLoggedExercises ? 'COMPLETED' : 'MARKED DONE',
+                  style: AppTypography.mono.copyWith(
+                    color: AppColors.ok,
+                    letterSpacing: 2,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        // audit-2026-05-17 OI-05 — only render View Card when exlog
+        // rows actually exist for this IST date. For "marked done
+        // without logging" completions, render a small dim hint
+        // instead.
+        if (hasLoggedExercises)
+          SizedBox(
+            width: double.infinity,
+            height: 44,
+            child: Material(
+              color: AppColors.accentSoft,
+              borderRadius: BorderRadius.circular(AppRadius.sharp),
+              child: InkWell(
+                onTap: () {
+                  final receiptData =
+                      WorkoutReceiptData.fromExerciseLogs(date);
+                  if (receiptData != null) {
+                    WorkoutReceiptSheet.show(context, receiptData);
+                  } else {
+                    // Race: hasLoggedExercises said yes but receipt
+                    // builder still returned null (cloud-restore race
+                    // or read-after-write inconsistency). Snackbar
+                    // copy points at the likely cause.
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: const Text(
+                        'Workout data still syncing — try again in a moment.',
+                      ),
+                      behavior: SnackBarBehavior.floating,
+                      duration: const Duration(seconds: 4),
+                    ));
+                  }
+                },
+                borderRadius: BorderRadius.circular(AppRadius.sharp),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(AppRadius.sharp),
+                    border: Border.all(
+                      color: AppColors.accent.withValues(alpha: 0.33),
+                    ),
+                  ),
+                  child: Center(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.receipt_long,
+                            size: 14, color: AppColors.accent),
+                        const SizedBox(width: 8),
+                        Text(
+                          'VIEW WORKOUT CARD',
+                          style: AppTypography.mono.copyWith(
+                            color: AppColors.accent,
+                            letterSpacing: 2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          )
+        else
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            child: Text(
+              'Marked done outside the app — no exercises were logged.',
+              textAlign: TextAlign.center,
+              style: AppTypography.bodySm.copyWith(
+                color: AppColors.textDim,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// audit-2026-05-17 OI-05 — cheap probe for "did the user actually
+  /// log exercises on this IST date". True when the canonical exercise
+  /// log index has entries OR a fallback grep over `exlog_*` rows
+  /// finds a match (covers restored rows that landed without the index).
+  /// False for "marked completed without logging" (Hybrid A May 14/15
+  /// shape in Upendra's data).
+  bool _hasExerciseLogsForDate() {
+    try {
+      final wb = HiveService.instance.workoutBox;
+      final dateKey = formatDateKey(date);
+      final indexRaw = wb.get('exercise_log_index_$dateKey');
+      if (indexRaw is List && indexRaw.isNotEmpty) return true;
+      // Fallback — same heuristic the receipt fromExerciseLogs uses
+      // (Test #16.1 / Agent A defence-in-depth).
+      for (final k in wb.keys) {
+        final ks = k.toString();
+        if (!ks.startsWith('exlog_')) continue;
+        final v = wb.get(k);
+        if (v is Map && v['date'] == dateKey) return true;
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Widget _buildStartButton(BuildContext context, {required bool enabled}) {
+    return Material(
+      color: enabled ? AppColors.accent : AppColors.textDisabled,
+      borderRadius: BorderRadius.circular(AppRadius.sharp),
+      child: InkWell(
+        onTap: enabled ? () => Navigator.of(context).pop() : null,
+        borderRadius: BorderRadius.circular(AppRadius.sharp),
+        child: Center(
+          child: Text(
+            'START WORKOUT',
+            style: AppTypography.mono.copyWith(
+              color: enabled ? Colors.black : AppColors.textMute,
+              letterSpacing: 2,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Helpers ─────────────────────────────────────────────────────
+
+  String _formatDate(DateTime d) {
+    const dayNames = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ];
+    return dayNames[d.weekday - 1];
+  }
+
+  String _formatDateDisplay(DateTime d) {
+    const monthNames = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${monthNames[d.month - 1]} ${d.day}';
+  }
+
+  String _formatExerciseDetail({
+    required String loggingType,
+    required int sets,
+    required String reps,
+    required int restSecs,
+  }) {
+    switch (loggingType) {
+      case 'timed':
+        return '$sets SETS \u00B7 ${reps}S \u00B7 ${restSecs}S REST';
+      case 'cardio':
+        return '$reps MIN \u00B7 ${restSecs}S REST';
+      case 'distance':
+        return '$reps \u00B7 ${restSecs}S REST';
+      default:
+        return '$sets SETS \u00D7 $reps REPS \u00B7 ${restSecs}S REST';
+    }
+  }
+}

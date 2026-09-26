@@ -1,0 +1,426 @@
+// Tech-debt audit 2026-05-20 finding A10 — CoachInteractionRepository
+// extracted from AiCoachRepository.
+//
+// Owns the durable chat-interaction surface in coachBox: persistence of
+// pending user messages, in-place update on AI reply success, in-place
+// update on failure, 60-second client-side dedup window, day-bounded
+// counters, and the "latest insight" projection used by the home insight
+// card.
+//
+// Why split out: this is the canonical write path for coach_<ms> rows
+// (per docs/sot_registry.yaml `coach_interactions`). Mixing it with the
+// AI snapshot read surface in one 2127-line class made every writer
+// change a bigger blast radius than it needed to be.
+//
+// Hive contract: every read/write routes through HiveService.instance
+// (rule #4 — Hive-first). Identity-signal detection is delegated to
+// CoachMemoryService so this file only owns interaction persistence.
+
+import 'package:flutter/foundation.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
+import '../services/coach_memory_service.dart';
+
+/// Canonical persistence layer for AI Coach chat interactions.
+///
+/// Hive keys: `coach_<DateTime.now().millisecondsSinceEpoch>` in coachBox.
+/// Singleton sibling keys (`coaching_notes`, `coach_memory`, `fitness_summary`,
+/// etc.) live in coachBox too but are owned by CoachMemoryService /
+/// AiSnapshotBuilder.
+class CoachInteractionRepository {
+  CoachInteractionRepository._();
+  static final CoachInteractionRepository _instance =
+      CoachInteractionRepository._();
+  static CoachInteractionRepository get instance => _instance;
+
+  final HiveService _hive = HiveService.instance;
+
+  /// Saves an AI interaction to coachBox.
+  Future<String> saveInteraction({
+    required String userMessage,
+    required String aiResponse,
+    required String modelUsed,
+    required String mode,
+  }) async {
+    final id = mintCoachKey();
+    await _hive.coachBox.put(id, {
+      'id': id,
+      'user_message': userMessage,
+      'ai_response': aiResponse,
+      'model_used': modelUsed,
+      'mode': mode,
+      'is_user_message': true,
+      'created_at': DateTime.now().toIso8601String(),
+    });
+    return id;
+  }
+
+  /// 60-second client-side dedup window for [saveUserMessagePending].
+  /// APK Test #16.1 / Agent B (closes-diagnose: a17bc3).
+  /// Exposed for tests so the window can be exercised deterministically.
+  @visibleForTesting
+  static const Duration coachWriterDedupWindow = Duration(seconds: 60);
+
+  // Monotonic coach-key minter. Two interactions saved within the same
+  // millisecond otherwise both mint `coach_<ms>` and the second Hive.put
+  // overwrites the first (silent data loss). Surfaced as a same-ms key
+  // collision in coach_writer_dedup_test (CI flake) and a real rapid-write
+  // loss path. Bumping to last+1 keeps the key numeric, ordered, and unique.
+  // closes-diagnose: c3f9a1.
+  static int _lastMintedKeyMs = 0;
+  @visibleForTesting
+  static String mintCoachKey() {
+    var ms = DateTime.now().millisecondsSinceEpoch;
+    if (ms <= _lastMintedKeyMs) ms = _lastMintedKeyMs + 1;
+    _lastMintedKeyMs = ms;
+    return 'coach_$ms';
+  }
+
+  /// Bug #19 — Persists the user message immediately, BEFORE the AI call.
+  /// Marks the entry as `pending: true` so [ChatHistoryNotifier] can render
+  /// it as a loading bubble even if the app is killed mid-call. Returns the
+  /// Hive key so the caller can update it on success/failure.
+  ///
+  /// APK Test #16.1 / Agent B (closes-diagnose: a17bc3) — added a 60s
+  /// dedup window. If a recent NON-FAILED `coach_*` entry exists with the
+  /// same `user_message` AND `mode` AND `media_url` within the last 60
+  /// seconds, returns the existing key instead of minting a new one.
+  Future<String> saveUserMessagePending({
+    required String userMessage,
+    required String mode,
+    String? mediaUrl,
+    String? mediaType,
+    String? mediaStoragePath,
+  }) async {
+    // Run cheap on-device identity heuristics on every outbound user message.
+    // Patches Hive coach_memory in place; no-op if no signals detected.
+    await CoachMemoryService.instance
+        .detectAndPersistIdentitySignals(userMessage);
+
+    // Layer 1 dedup — scan coachBox for a recent non-failed match.
+    final existing = _findRecentDuplicateMessageKey(
+      userMessage: userMessage,
+      mode: mode,
+      mediaUrl: mediaUrl,
+      window: coachWriterDedupWindow,
+    );
+    if (existing != null) {
+      return existing;
+    }
+
+    final id = mintCoachKey();
+    await _hive.coachBox.put(id, {
+      'id': id,
+      'user_message': userMessage,
+      'ai_response': '',
+      'model_used': '',
+      'mode': mode,
+      'is_user_message': true,
+      'pending': true,
+      'failed': false,
+      'created_at': DateTime.now().toIso8601String(),
+      'media_url': ?mediaUrl,
+      'media_type': ?mediaType,
+      // Unit 8 (coach-media-consent, OI-25) — raw Storage path, stable
+      // beyond media_url's 600s signed-URL TTL. CoachMediaRepository.
+      // saveForLater copies from this path, not from media_url.
+      'media_storage_path': ?mediaStoragePath,
+    });
+    return id;
+  }
+
+  /// Unit 8 (coach-media-consent, OI-25) — records the user's save/decline
+  /// decision for a photo message's coach-media copy, in place on the same
+  /// coach_* row that carries media_url/media_storage_path. Mirrors
+  /// [updateInteractionWithResponse]'s UPDATE-not-INSERT shape. Local-only
+  /// field — `_syncCoachInteractions` (sync_coach.dart) pushes a fixed
+  /// column subset that does not include media_save_state, so this never
+  /// reaches the cloud `ai_coach_interactions` table.
+  Future<void> recordMediaSaveDecision(String key, {required bool saved}) async {
+    // gate16-exempt: in-place mutation + write-back, mirrors
+    // updateInteractionWithResponse/updateInteractionWithError above.
+    final raw = _hive.coachBox.get(key);
+    if (raw is! Map) return;
+    final entry = Map<String, dynamic>.from(raw);
+    entry['media_save_state'] = saved ? 'saved' : 'declined';
+    await _hive.coachBox.put(key, entry);
+  }
+
+  /// Returns the Hive key of an existing `coach_*` entry that is a
+  /// duplicate of the proposed write under the dedup window, or null
+  /// if no recent duplicate exists.
+  @visibleForTesting
+  String? findRecentDuplicateMessageKey({
+    required String userMessage,
+    required String mode,
+    String? mediaUrl,
+    Duration window = coachWriterDedupWindow,
+  }) =>
+      _findRecentDuplicateMessageKey(
+        userMessage: userMessage,
+        mode: mode,
+        mediaUrl: mediaUrl,
+        window: window,
+      );
+
+  String? _findRecentDuplicateMessageKey({
+    required String userMessage,
+    required String mode,
+    String? mediaUrl,
+    required Duration window,
+  }) {
+    final now = DateTime.now();
+    final cutoff = now.subtract(window);
+    String? bestKey;
+    DateTime bestCreated = DateTime.fromMillisecondsSinceEpoch(0);
+    for (final entry in _hive.coachBox.toMap().entries) {
+      final key = entry.key;
+      final raw = entry.value;
+      if (key is! String || !key.startsWith('coach_')) continue;
+      if (raw is! Map) continue;
+      final map = Map<String, dynamic>.from(raw);
+      // Skip failed entries — explicit retry should mint a new row.
+      if (map['failed'] == true) continue;
+      if (map['user_message'] != userMessage) continue;
+      if ((map['mode'] as String?) != mode) continue;
+      if ((map['media_url'] as String?) != mediaUrl) continue;
+      final createdStr = map['created_at'] as String?;
+      if (createdStr == null) continue;
+      final created = DateTime.tryParse(createdStr);
+      if (created == null) continue;
+      if (created.isBefore(cutoff)) continue;
+      if (created.isAfter(bestCreated)) {
+        bestCreated = created;
+        bestKey = key;
+      }
+    }
+    return bestKey;
+  }
+
+  /// Bug #19 — Updates a pending interaction with the AI's reply on success.
+  /// Clears the `pending` flag and writes the model used.
+  Future<void> updateInteractionWithResponse(
+    String key, {
+    required String aiResponse,
+    required String modelUsed,
+    // APK +43 obs 2 — true when [aiResponse] is the server's hardcoded
+    // "trouble reaching the model" apology rather than real model output
+    // (AiChatResponse.hadHardFailure). The turn still delivers normally
+    // (pending: false, no retry UI — that's `updateInteractionWithError`'s
+    // job) and is marked `had_hard_failure` (a field SEPARATE from
+    // `failed` — plan-review round 1 finding, diagnose a1c6b9: `failed` is
+    // also read by `ChatHistoryNotifier.build` to render an error bubble +
+    // Retry button, which a hard-failure apology must NOT trigger; `failed`
+    // therefore stays unconditionally false here, exactly as it was before
+    // this parameter existed) so `recentHistoryExchanges` excludes it from
+    // the next request's replayed history. Without this, a genuine
+    // quota-exhaustion apology gets fed back to the model on the very next
+    // turn, which echoes it back as if it were a normal continuation —
+    // turning one transient outage into a self-perpetuating "stuck" chat.
+    bool hadHardFailure = false,
+  }) async {
+    // gate16-exempt: in-place mutation + write-back. Map is not surfaced
+    // to a List consumer; the key is held by the caller.
+    final raw = _hive.coachBox.get(key);
+    if (raw is! Map) return;
+    final entry = Map<String, dynamic>.from(raw);
+    entry['ai_response'] = aiResponse;
+    entry['model_used'] = modelUsed;
+    entry['pending'] = false;
+    entry['failed'] = false;
+    entry['had_hard_failure'] = hadHardFailure;
+    entry.remove('error_text');
+    await _hive.coachBox.put(key, entry);
+  }
+
+  /// Bug #19 — Marks a pending interaction as failed with the error text.
+  /// The user message stays in coachBox so it survives an app restart, and
+  /// [ChatHistoryNotifier] surfaces it as an error bubble with a Retry button.
+  Future<void> updateInteractionWithError(
+    String key, {
+    required String errorText,
+  }) async {
+    // gate16-exempt: in-place mutation + write-back. Map is not surfaced
+    // to a List consumer; the key is held by the caller.
+    final raw = _hive.coachBox.get(key);
+    if (raw is! Map) return;
+    final entry = Map<String, dynamic>.from(raw);
+    entry['ai_response'] = '';
+    entry['pending'] = false;
+    entry['failed'] = true;
+    entry['error_text'] = errorText;
+    await _hive.coachBox.put(key, entry);
+  }
+
+  /// Counts only user messages sent today (not AI responses).
+  int getTodayUserMessageCount() {
+    final todayStr = istDateStr(DateTime.now());
+
+    int count = 0;
+    for (final raw in _hive.coachBox.values) {
+      if (raw is! Map) continue;
+      final interaction = Map<String, dynamic>.from(raw);
+      final createdAt = interaction['created_at'] as String? ?? '';
+      final hasUserMsg = interaction['user_message'] as String?;
+      if (createdAt.startsWith(todayStr) &&
+          hasUserMsg != null &&
+          hasUserMsg.isNotEmpty) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  /// Unit 2 — coach short-term memory. Returns the last [limit] COMPLETE coach
+  /// exchanges (a user turn + its AI reply), oldest→newest, as a flat alternating
+  /// list of `{role: 'user'|'model', text: ...}` maps for the ai-proxy `history`
+  /// field. [limit] counts EXCHANGES (coachBox rows), so the result holds up to
+  /// `2 * limit` entries — NOT 8 flat entries.
+  ///
+  /// Excludes rows that cannot be safely replayed:
+  ///  - `kind`-tagged action rows (e.g. `completion_prompt` tap-cards),
+  ///  - `pending`/`failed`/`had_hard_failure` rows (incl. the CURRENT turn's
+  ///    just-written pending row — so a message never leaks into its own
+  ///    history). `had_hard_failure` is a SEPARATE field from `failed`
+  ///    (plan-review round 1, diagnose a1c6b9): a hard-failure apology
+  ///    delivers normally (no error bubble/Retry — see
+  ///    `updateInteractionWithResponse`) but must still be excluded from
+  ///    replay, on BOTH the live path (`hadHardFailure` threaded through)
+  ///    and a cold restore of the same row (`_restoreCoachInteractions`
+  ///    recognizes it by exact apology text — the cloud has no column for
+  ///    this flag),
+  ///  - media rows (`mode == 'media'` — their `user_message` is a `[Photo] …`
+  ///    placeholder, not usable text),
+  ///  - any row missing a non-empty `user_message` OR `ai_response`.
+  ///
+  /// Hive iteration is INSERTION order, not chronological, so rows are SORTED
+  /// ascending by `created_at` (ISO8601, lexicographically == chronologically)
+  /// before the last-[limit] slice — mirrors the render path's sort in
+  /// `ChatHistoryNotifier.build`. SoT concept `coach_chat_history_replay`.
+  /// Coach-CHAT channels, for the Gemini-HISTORY reader ONLY
+  /// ([recentHistoryExchanges]). A locally-written coach row has no
+  /// `channel`; a restored row carries its cloud `channel` (see
+  /// `_restoreCoachInteractions`), so a non-chat interaction
+  /// (`food_text_analysis` / `scan_meal` / `cart_auditor` / `weekly_report`)
+  /// is excluded from what gets replayed into the model's own conversation
+  /// history (Hermes P2 — restored non-chat rows must not masquerade as
+  /// prior coach turns). `verify_payment_attempt` was dropped from this
+  /// example list (OI-162 slice 4, f2c8d5) — that channel is retired and no
+  /// row carries it any more; this is illustrative example-list drift only.
+  ///
+  /// Deliberately NARROW, and deliberately NOT shared with the chat-BUBBLE
+  /// renderer (`ChatHistoryNotifier.build`) — see [nonChatAnalysisChannels]
+  /// for that reader's own, differently-shaped filter and why a single
+  /// shared set was wrong (A2c/A2d, 2026-09-21).
+  static const Set<String> coachChatChannels = {'app', 'chat', 'in_app_orphan'};
+
+  /// Channels that are raw AI-ANALYSIS output, never a conversational turn —
+  /// excluded from the chat-BUBBLE render path (`ChatHistoryNotifier.build`).
+  /// A DENYLIST, not an allowlist, and deliberately so (A2d, 2026-09-21,
+  /// review round on A2c): the first version of this fix reused
+  /// [coachChatChannels] as an allowlist for the render path too, which
+  /// silently dropped every LEGITIMATE proactive/paywall channel that isn't
+  /// `'app'`/`'chat'`/`'in_app_orphan'` — confirmed live writers
+  /// `'in_app'` (proactive-coach-promotion), `'promotion_ceremony'`
+  /// (evaluate-rank-promotions), `'proactive_i_see_you'` (i-see-you-callout),
+  /// `'image_paywall'`/`'video_paywall'` (ai-media-proxy) all vanished from a
+  /// user's restored chat history with no error. The analysis-channel set
+  /// below is small, closed, and IS the actual thing the original bug
+  /// (a restored `food_text_analysis` failure rendering as a garbled chat
+  /// bubble) needs excluded; a denylist of it can't miss a future proactive
+  /// channel the way an allowlist of "known good" channels demonstrably did
+  /// twice in one review pass. `'app_event'` (`AppEventsService`) is
+  /// analytics-only and never a chat exchange either way.
+  static const Set<String> nonChatAnalysisChannels = {
+    'food_text_analysis',
+    'scan_meal',
+    'cart_auditor',
+    'weekly_report',
+    'app_event',
+  };
+
+  List<Map<String, dynamic>> recentHistoryExchanges(
+      {int limit = 8, String? excludeKey}) {
+    final rows = <Map<String, dynamic>>[];
+    for (final entry in _hive.coachBox.toMap().entries) {
+      final key = entry.key;
+      final raw = entry.value;
+      // Interaction rows are keyed `coach_<ms>`; singleton siblings like
+      // `coach_memory` also match the prefix but carry no `user_message`, so
+      // the empty-text guard below drops them.
+      if (key is! String || !key.startsWith('coach_')) continue;
+      // Never replay the CURRENT turn's own row into its own history — closes
+      // the self-leak on the fresh-write AND the 60s-dedup-reuse path (a reused
+      // COMPLETE row would otherwise pass every filter below). Hermes P3.
+      if (excludeKey != null && key == excludeKey) continue;
+      if (raw is! Map) continue;
+      final map = Map<String, dynamic>.from(raw);
+      if (map['kind'] != null) continue; // action rows (completion_prompt etc.)
+      if (map['pending'] == true) continue;
+      if (map['failed'] == true) continue;
+      if (map['had_hard_failure'] == true) continue;
+      if (map['mode'] == 'media') continue; // '[Photo] …' placeholder text
+      // Only genuine coach-chat rows (null channel = local coach write).
+      final channel = map['channel'] as String?;
+      if (channel != null && !coachChatChannels.contains(channel)) continue;
+      final user = (map['user_message'] as String?)?.trim() ?? '';
+      final ai = (map['ai_response'] as String?)?.trim() ?? '';
+      if (user.isEmpty || ai.isEmpty) continue;
+      if ((map['created_at'] as String?) == null) continue;
+      rows.add(map);
+    }
+
+    // Stable order: created_at, then the unique monotonic coach_<ms> key as a
+    // tie-breaker (two complete round-trips can't share a millisecond, but
+    // List.sort is not documented stable — B-pass LOW).
+    rows.sort((a, b) {
+      final c =
+          (a['created_at'] as String).compareTo(b['created_at'] as String);
+      return c != 0
+          ? c
+          : ((a['id'] as String?) ?? '').compareTo((b['id'] as String?) ?? '');
+    });
+
+    final recent =
+        rows.length > limit ? rows.sublist(rows.length - limit) : rows;
+
+    final out = <Map<String, dynamic>>[];
+    for (final row in recent) {
+      out.add({'role': 'user', 'text': (row['user_message'] as String).trim()});
+      out.add({'role': 'model', 'text': (row['ai_response'] as String).trim()});
+    }
+    return out;
+  }
+
+  /// Gets the latest coaching insight from coaching_notes or last AI response.
+  String getLatestInsight() {
+    final notes = _hive.coachBox.get('coaching_notes');
+    if (notes is Map) {
+      final notesList = notes['notes'] as List?;
+      if (notesList != null && notesList.isNotEmpty) {
+        return notesList.last.toString();
+      }
+    }
+
+    // Fallback: get the last AI response
+    String? lastResponse;
+    String lastTime = '';
+    for (final raw in _hive.coachBox.values) {
+      if (raw is! Map) continue;
+      final interaction = Map<String, dynamic>.from(raw);
+      final aiResponse = interaction['ai_response'] as String?;
+      final createdAt = interaction['created_at'] as String? ?? '';
+      if (aiResponse != null &&
+          aiResponse.isNotEmpty &&
+          createdAt.compareTo(lastTime) > 0) {
+        lastResponse = aiResponse;
+        lastTime = createdAt;
+      }
+    }
+
+    if (lastResponse != null && lastResponse.length > 120) {
+      return '${lastResponse.substring(0, 120)}...';
+    }
+    return lastResponse ?? '';
+  }
+}

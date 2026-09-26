@@ -1,0 +1,661 @@
+# docs/ship_dark_pending_review.yaml
+#
+# Tracks every kill-switch flag shipped under the CLAUDE.md §4.12.4 ship-dark
+# lighter review tier (1 review round at build time instead of ×2, since the
+# flag is default-OFF and byte-identical when off — zero live risk until it
+# flips). An entry here means: this flag's BUILD commit only got 1 review
+# round. It must get the full ×2 review + `bpass: accepted` before (or at) its
+# flip-on commit, and only then does the entry move to `resolved:`.
+#
+# This is a manually-maintained ledger, not a gate — it exists so a flag can't
+# quietly go live, or sit forgotten mid-overhaul, having only ever had the
+# lighter build-time review. Update it in the SAME commit as any ship-dark-
+# tiered build, and again in the SAME commit as its flip-on.
+#
+# Schema per entry:
+#   flag:            the kill-switch flag name (e.g. enable_readiness)
+#   branch:          worktree branch the build shipped from
+#   build_commit:    sha of the build-tier commit (review_rounds: 1)
+#   build_date:      YYYY-MM-DD (IST)
+#   merge_commit:    sha of the --no-ff merge that landed the build on main
+#                    (optional; recoverable via `git log --merges --ancestry-path`)
+#   flip_reviewed:   false until the flip-on commit's plan-review record shows
+#                    review_rounds >= 2 + bpass: accepted; then true
+#   flip_commit:     sha of the flip-on commit (fill in when flip_reviewed
+#                    flips to true; null until then)
+#   flip_review_record: path to the plan-review record that EVIDENCES
+#                    flip_reviewed: true. Required on every `resolved:` entry.
+#
+# `flip_reviewed: false` is AMBIGUOUS and that is this file's own known defect:
+# it means both "this flip has had no x2 review" and "the review happened and
+# nobody came back to edit this line". The two read identically and the second
+# is indistinguishable from the first without opening docs/plan-reviews/ by
+# hand. On 2026-09-02 all five flipped flags were audited against their records
+# and every one had review_rounds >= 2 + bpass: accepted -- so BOTH remaining
+# `false` values were stale bookkeeping, not review debt, and a reader who
+# trusted the field would have reported two live-unreviewed flags that did not
+# exist. `flip_review_record:` exists so the claim carries its evidence.
+
+pending:
+  - flag: enable_hold_weeks
+    branch: hold-mechanic
+    build_commit: df5e38b0
+    build_date: 2026-07-21
+    flip_reviewed: false
+    flip_commit: null
+    note: >
+      Slice 1 (the holdWeek WRITER). NOT the lighter 1-round tier — the
+      durability fixes (#1 re-anchor, #4 pagination) are LIVE for all users, so
+      the build got the FULL ×2 review (docs/plan-reviews/hold-mechanic.md,
+      review_rounds: 2). Merged to main as 7ca850d9. Tracked here so the
+      default-OFF flag can't be flipped later without its own flip-on ×2
+      (§4.12.4). Placeholder sha resolved by the hold-display batch.
+
+  - flag: enable_hold_weeks
+    branch: hold-display
+    build_commit: 4f4e9518
+    build_date: 2026-07-25
+    flip_reviewed: false
+    flip_commit: null
+    note: >
+      Slice 2-6 (the DISPLAY for the same flag) — this one IS the §4.12.4
+      lighter build tier (review_rounds: 1, tier: ship_dark_build). Every new
+      surface reads one branch point, holdStatusProvider, which returns
+      HoldStatusData.empty whenever the flag is OFF; the flag-OFF group in
+      test/contracts/hold_display_read_path_test.dart is the byte-identical
+      evidence. Blast-radius verified `account` via scripts/blast_radius_from_diff.dart.
+      SAME flag as the row above — flipping it on must clear BOTH entries in
+      the one flip-on commit, which needs the full ×2 + bpass: accepted.
+
+  - flag: enable_hold_weeks
+    branch: hold-display-fixes
+    build_commit: ff13623e
+    merge_commit: 342820b3
+    build_date: 2026-07-25
+    flip_reviewed: false
+    flip_commit: null
+    note: >
+      Two converged fixes found by the 2026-07-25 LIVE walkthrough on test7 +
+      two independent context-blind plan reviews: D1 (the deployment banner
+      printed "WK 4 OF 4" ~40px under the HOLDING·Hn pill) and L1 (a completed
+      hold day credited a ✓ to a padlocked PHASE II/III chip — masked only by
+      the !isLocked guard, which evaporates the instant a holder upgrades).
+      Both key on hold state, so both are inert while the flag is OFF.
+      The SAME reviews returned NOT CONVERGED on four other proposed fixes;
+      per §4.12.1 the unit was split and those became the flip_on_blockers
+      below.
+
+  - flag: enable_hold_weeks
+    branch: claude/oi-pending-hold-weeks-1od97o
+    build_commit: null
+    build_date: 2026-08-21
+    flip_reviewed: false
+    flip_commit: null
+    note: >
+      FOB-1 (week identity, 2026-08-20) and FOB-3 (the coach snapshot's `hold`
+      block + the captain_manual HOLD WEEKS section, 2026-08-21) on the same
+      branch. §4.12.4 lighter build tier for FOB-3: kill-switch
+      enable_hold_weeks, default OFF, and the byte-identical evidence is the
+      `flag OFF — the ship-dark property` group in
+      test/contracts/hold_snapshot_block_behavioral_test.dart, which
+      materializes REAL holds with the flag ON, turns it OFF, and asserts the
+      snapshot gains NO `hold` key. Omission rather than `'hold': null` is the
+      load-bearing detail and is asserted directly.
+      ⚠ HALF OF FOB-3 IS INERT FOR A SECOND REASON, on top of the flag:
+      captain_manual.ts does nothing until ai-proxy is redeployed, which needs
+      a Management API token this container does not hold (closure
+      docs/audit/fob3-coach-hold-block.closure.yaml, finding FOB3-F).
+      FOURTH entry for this ONE flag — flipping it on must clear all four in a
+      single commit, with the full ×2 + bpass: accepted.
+      build_commit is null because this note is written in the same commit it
+      describes; resolve it the way the hold-mechanic row's placeholder was
+      resolved by the next batch.
+
+  # ── The 13 workout-generator-overhaul flags (OI-53) ─────────────────────
+  #
+  # BACKFILLED 2026-07-27, gate-input-family batch. OI-53 asserted these were
+  # "logged in docs/ship_dark_pending_review.yaml"; they were not — this file
+  # held only enable_hold_weeks. Thirteen flags had shipped ship-dark with no
+  # ledger entry at all, which is precisely what §4.12.4's ledger clause exists
+  # to prevent ("the guardrail against a flag quietly going live, or sitting
+  # forgotten"). The claim is now true.
+  #
+  # Recovered from source, not from memory: each `build_commit` is the first
+  # commit introducing that flag's string into plan_engine_flags.dart
+  # (`git log -S"'<flag>'" --reverse`), and each `branch` comes from the subject
+  # of the first merge containing it (`git log --merges --ancestry-path`).
+  #
+  # All 13 remain default OFF. Every flip-on commit needs its own full ×2 +
+  # `bpass: accepted` per §4.12.4 — there is no batch discount, and flipping
+  # thirteen flags in one commit would be one review pretending to be thirteen.
+  #
+  # FLIP ORDER IS CONSTRAINED BY CODE, not preference. Verified in
+  # plan_engine_flags.dart, not assumed:
+  #   - enable_plateau_escalation "Presupposes `enable_readiness` ON (the fatigue
+  #     gate needs data; `plateauedGroups` self-gates on `readinessEnabled`)"
+  #   - enable_triggered_deload's consumer "additionally requires readiness ON
+  #     (`&& readinessEnabled` at the eval site … running the eval without it
+  #     biases toward LIFTING)"
+  # So enable_readiness flips FIRST or those two are inert-to-wrong.
+
+  - flag: enable_volume_titration
+    branch: workout-titration-9
+    build_commit: 05f66c9b
+    build_date: 2026-07-18
+    merge_commit: 38706bae
+    flip_reviewed: false
+    flip_commit: null
+    note: >
+      WARNING added 2026-09-01: this flag's readiness dependency is now LIVE
+      (enable_readiness flipped that day), and unlike triggered_deload's and
+      plateau_escalation's it is NOT enforced in code. _recovered()
+      (volume_titration.dart:116-136) has no readiness gate at all; titration is
+      inert ONLY because THIS flag short-circuits at :60 before it runs. Whoever
+      flips this will immediately consume every readiness row accumulated since.
+      EXCLUDED from OI-53 batch 2 (2026-09-16) for exactly this reason — see
+      docs/audit/open_issues.md's OI-53 entry for the founder's scoping decision.
+
+  - flag: enable_plateau_escalation
+    branch: workout-plateau-12
+    build_commit: 83180fe6
+    build_date: 2026-07-19
+    merge_commit: dc8f4880
+    flip_reviewed: false
+    flip_commit: null
+    note: >
+      Depends on enable_readiness (see above).
+      EXCLUDED from OI-53 batch 2 (2026-09-16) alongside enable_volume_titration —
+      see docs/audit/open_issues.md's OI-53 entry for the founder's scoping
+      decision.
+
+# ── HARD PRECONDITIONS for flipping enable_hold_weeks ─────────────────────
+# Not a wish-list. The flip-on commit already requires the full ×2 + bpass
+# (§4.12.4); this is the checklist that review must show closed. Every item was
+# found by live verification or independent review on 2026-07-25 and every one
+# is currently UNFIXED. A holder today would be told a falsehood by the coach
+# and by the Sunday push.
+
+resolved:
+  - flag: enable_exercise_id_history
+    branch: workout-idkey-variety-11
+    build_commit: d66cd4c1
+    build_date: 2026-07-18
+    merge_commit: 1d93b677
+    flip_reviewed: true
+    flip_commit: fccb77cc
+    flip_review_record: docs/plan-reviews/oi53-batch1-flip.md
+    note: >
+      FLIPPED ON 2026-09-16 (OI-53 batch 1 of 3, flag 1 of 3 this batch). Kill-switch key is now
+      `disable_exercise_id_history` and the catch-block default inverted to ON. Full ×2
+      context-blind plan review plus a B-pass (0 P0/P1, 3 documentation findings all accepted --
+      docs/reviews/1cadbcd1d01f-review.md).
+      Forward-only by design — turning it on starts ID-keying new history and does not retro-key
+      old rows, so a flip is not cleanly reversible in the data even though the code path is
+      (kill-switch reverts the CODE path verbatim; already-stamped exercise_id data persists
+      harmlessly since an OFF resolver never reads it).
+
+  - flag: enable_injury_substitute_pref
+    branch: workout-variety-injurysub-11bc
+    build_commit: c7e26462
+    build_date: 2026-07-18
+    merge_commit: 0fa2b56c
+    flip_reviewed: true
+    flip_commit: fccb77cc
+    flip_review_record: docs/plan-reviews/oi53-batch1-flip.md
+    note: >
+      FLIPPED ON 2026-09-16 (OI-53 batch 1 of 3, flag 2 of 3 this batch). Kill-switch key is now
+      `disable_injury_substitute_pref` and the catch-block default inverted to ON. Full ×2
+      context-blind plan review plus a B-pass (0 P0/P1, 3 documentation findings all accepted --
+      docs/reviews/1cadbcd1d01f-review.md).
+      Re-ranks the already-safe (post-injury-filter) candidate list toward a curated
+      InjurySubstitutes sub; a preference, not a filter, so it can never surface a
+      contraindicated exercise regardless of polarity. The behavioral test's original
+      flag-difference and curated-set-membership assertions were direction-blind (the curated
+      list is an ordered MENU of several valid subs, not one unique answer) -- fixed with a
+      rank-order comparison at the first point of divergence between ON/OFF plans, confirmed by
+      mutation to be the only assertion of the three that discriminates.
+
+  - flag: enable_cross_phase_variety
+    branch: workout-variety-11b
+    build_commit: 6e8b491d
+    build_date: 2026-07-19
+    merge_commit: 544a1bbe
+    flip_reviewed: true
+    flip_commit: fccb77cc
+    flip_review_record: docs/plan-reviews/oi53-batch1-flip.md
+    note: >
+      FLIPPED ON 2026-09-16 (OI-53 batch 1 of 3, flag 3 of 3 this batch). Kill-switch key is now
+      `disable_cross_phase_variety` and the catch-block default inverted to ON. Full ×2
+      context-blind plan review plus a B-pass (0 P0/P1, 3 documentation findings all accepted --
+      docs/reviews/1cadbcd1d01f-review.md).
+      The only pre-existing test seeded no schedule data at all, so it passed regardless of the
+      flag's actual state -- fixed by seeding a real week-1 schedule row via the production read
+      path (MigratedKey + workoutBox) and pairing a "default reads real data" test with a
+      "kill-switch suppresses it despite real data" test, both confirmed by mutation.
+
+  - flag: enable_graded_progression
+    branch: workout-graded-progression
+    build_commit: c4db7214
+    build_date: 2026-07-13
+    merge_commit: 266fa884
+    flip_reviewed: true
+    flip_commit: 035461c7
+    flip_review_record: docs/plan-reviews/oi53-batch2-flip.md
+    note: >
+      FLIPPED ON 2026-09-16 (OI-53 batch 2, flag 1 of 4 this batch). Kill-switch key is now
+      `disable_graded_progression` and the catch-block default inverted to ON. Full ×2
+      context-blind plan review plus a B-pass (0 P0/P1 on this flag specifically; the B-pass's one
+      substantive finding was on the adherenceGateEnabled flag below) --
+      docs/reviews/c22fa39a1cbf-review.md.
+      The fixed 10/5 reps-rule becomes rep-range-aware (progress at the top of the range, hold
+      within, back off on 2 consecutive below-range sessions); beginner auto-linear window (<120d
+      training age) always progresses. Independent of the pre-existing ⑦a reduce-only detraining
+      decay. Kill-switch restores the verbatim fixed-10/5 rule byte-identical, confirmed by
+      mutation (hardcoding the getter to `true` reddened exactly the kill-switch test).
+
+  - flag: enable_session_detraining_cut
+    branch: workout-resume-banner
+    build_commit: 8a2e8654
+    build_date: 2026-07-13
+    merge_commit: b81e4fb6
+    flip_reviewed: true
+    flip_commit: 035461c7
+    flip_review_record: docs/plan-reviews/oi53-batch2-flip.md
+    note: >
+      FLIPPED ON 2026-09-16 (OI-53 batch 2, flag 2 of 4 this batch). Kill-switch key is now
+      `disable_session_detraining_cut` and the catch-block default inverted to ON. Full ×2
+      context-blind plan review plus a B-pass -- docs/reviews/c22fa39a1cbf-review.md.
+      ⚠ CROSS-CUTTING CONSEQUENCE documented on the OI board (not fixed by this batch): flipping
+      this alongside enable_graded_progression invalidates the premises of OI-188's defects 2/3/4
+      (a separate, larger returning-user re-entry analysis, `Blocked on: founder product decision`).
+      `ActiveWorkoutNotifier.startWorkout` (train_provider.dart) applies the session-time prefill
+      cut with NO phase/tier gate anywhere, so free users (phase 1) now get the cut for the first
+      time (generation-time decay ⑦a is still phase-gated off for phase<=1), and phase-1 now
+      DISAGREES with phase>=2 in a new, inverted way. See docs/audit/open_issues.md's OI-188 entry
+      for the full corrected analysis.
+      Kill-switch restores the verbatim prefill (no cut), byte-identical, confirmed by mutation.
+
+  - flag: enable_physique_focus_bringup
+    branch: workout-body-focus
+    build_commit: e0abbc24
+    build_date: 2026-07-13
+    merge_commit: f53d439c
+    flip_reviewed: true
+    flip_commit: 035461c7
+    flip_review_record: docs/plan-reviews/oi53-batch2-flip.md
+    note: >
+      FLIPPED ON 2026-09-16 (OI-53 batch 2, flag 3 of 4 this batch). Kill-switch key is now
+      `disable_physique_focus_bringup` and the catch-block default inverted to ON. Full ×2
+      context-blind plan review plus a B-pass -- docs/reviews/c22fa39a1cbf-review.md.
+      Translates the user's `physique_focus` profile field to muscle-substring tokens at the
+      `effectiveBodyFocus` seam, adding +1 set per matching exercise via the EXISTING bodyFocus
+      periodization mechanism (no periodization change). Explicit focus precedes auto
+      `weakMuscles()` and applies at all phases. Kill-switch restores the verbatim seam,
+      byte-identical, confirmed by mutation.
+
+  - flag: enable_adherence_gate
+    branch: workout-adherence-8a2int
+    build_commit: f47de745
+    build_date: 2026-07-18
+    merge_commit: 4fdcf4af
+    flip_reviewed: true
+    flip_commit: 035461c7
+    flip_review_record: docs/plan-reviews/oi53-batch2-flip.md
+    note: >
+      FLIPPED ON 2026-09-16 (OI-53 batch 2, flag 4 of 4 this batch). Kill-switch key is now
+      `disable_adherence_gate` and the catch-block default inverted to ON. Full ×2 context-blind
+      plan review plus a B-pass (1 P2, 1 P3, both accepted and fixed in-batch) --
+      docs/reviews/c22fa39a1cbf-review.md. The most architecturally involved of the 4: gates a
+      `last_phase_profile` Hive write, a G5 faithfulness re-ranking gate, AND the actual
+      `repeatContent`/`repeat` trigger computation at two call sites (pro_phase_advance.dart's
+      automatic low-adherence repeat; graduation_screen.dart's explicit choice sheet).
+      ⚠ B-PASS FOUND AND FIXED A REAL ASYMMETRY: the automatic path redundantly re-checks the flag
+      a second time immediately before `_buildRepeatPins` (mutation-confirmed); the choice-sheet
+      path took the user's already-made choice straight through with NO re-check, so a kill-switch
+      flip during the human-time gap between the sheet opening and the tap was not honored --
+      contradicting the flag's own byte-identical-when-killed guarantee. Fixed by moving the check
+      into `_buildRepeatPins` itself (the ONE method both callers funnel through), mutation-proven
+      (reverting the new guard reddens exactly the new graduation-path kill-switch test). See
+      docs/plan-reviews/oi53-batch2-flip.md for the full account.
+
+  - flag: enable_deload_reason_line
+    branch: unitb-deload-reason
+    build_commit: null            # built and shipped dark in the phase-arc flip batch
+    build_date: 2026-09-05
+    merge_commit: null
+    flip_reviewed: true
+    flip_commit: c22e12c2
+    flip_review_record: docs/plan-reviews/unitb-deload-reason.md
+    note: >
+      FLIPPED ON 2026-09-06 (OI-53 flag 4 of 12). Kill-switch key is now
+      `disable_deload_reason_line` and the catch-block default inverted to ON. Full ⚠ review
+      (a B-pass plus three context-blind plan-review rounds); 38 findings terminal in
+      docs/audit/unitb-deload-reason.closure.yaml.
+      SPLIT OUT of the phase-arc flip on 2026-09-05 (founder decision) because the week-4 "why"
+      line lives INSIDE PhaseArcStrip, so flipping enable_phase_arc would have lit it too, and it
+      carried an unfixed defect: `deload_reason_phase_<P>` is deleted nowhere in lib/, while TWO
+      blob-rewriting paths (workout_schedule_read_service.dart:388 and :227) re-stamp week 4 as
+      `deload` and deload_evaluator.dart:79's idempotency flag blocks any correction. FIXED at the
+      READER (diagnose c5a8f3): the eval stamps the outcome `week_character` beside the prose and
+      `validatedDeloadReason` returns the text only while it still equals week 4's in the blob the
+      strip renders.
+      ⚠ A SECOND defect was found by review round 2 and fixed here (diagnose d9e1b4): the flip
+      makes five PRE-EXISTING copy branches user-visible for the first time, and one told a
+      first-block user they were "two blocks in". That is the ship-dark lesson in its sharpest
+      form -- the risk was not in the flag's own code, it was in code the flag made reachable.
+      ⚠ There is NO release-build kill-switch (OI-95, accepted risk across all OI-53 flags):
+      every toggle lives in the kDebugMode dev panel and there is no RemoteConfig, so a real
+      rollback is a code revert plus a store round-trip.
+      ⚠ NOT closed by this batch, and terminal as `blocked_on_user` in the closure ledger:
+      OI-166 -- the AI-coach regen writes rows and never `current_plan`, so the phase-arc strip
+      renders a stale wave. Pre-existing since flag 3 shipped 2026-09-05; invisible to this
+      batch's guard by construction.
+
+  - flag: enable_phase_arc
+    branch: phase-arc-flip
+    build_commit: ea7a603e
+    build_date: 2026-07-17
+    merge_commit: b14186fa
+    flip_reviewed: true
+    flip_commit: 55035cd7
+    flip_review_record: docs/plan-reviews/phase-arc-flip.md
+    note: >
+      FLIPPED ON 2026-09-05 (OI-53 flag 3 of 12). Kill-switch key is now `disable_phase_arc`
+      and the catch-block default inverted to ON, matching the sibling default-ON flags.
+      Reviewed x2 context-blind (13 findings, then 20 on the hardened plan) plus a scoped
+      split-verification; the ROUND-2 headline was that round 1's own correction was defective,
+      which is what triggered the SPLIT: the week-4 deload-reason line inside the same widget
+      stayed dark behind the new `enable_deload_reason_line`.
+      Three real defects were fixed in the flip itself, none of them the flag: the fifth wave
+      token `working` was unmapped (rendering correctly only via the unknown-token fallback);
+      the label lookup trimmed while its fallback did not, so a whitespace token rendered a
+      dot with no label; and the provider's `length < 2` guard let a 2-3 week blob render a
+      strip on which the clamped-to-4 highlight could mark no node at all.
+      ⚠ There is NO release-build kill-switch (OI-95, accepted risk across all OI-53 flags):
+      every toggle lives in the kDebugMode dev panel and there is no RemoteConfig, so a real
+      rollback is a code revert plus a store round-trip.
+
+  - flag: enable_equipment_capability_floor
+    branch: oi89-bodyweight-floor
+    build_commit: null            # built and flipped in the SAME batch
+    build_date: 2026-08-28
+    merge_commit: null
+    flip_reviewed: true
+    flip_commit: a7c2d194
+    flip_review_record: docs/plan-reviews/oi89-bodyweight-floor.md
+    note: >
+      Built AND flipped in one batch, so it never sat dark. §4.12.4's lighter
+      ship-dark build review does NOT apply and was not claimed: this batch
+      carries the full ×2 plan review plus a B-pass, which is what §4.12.4 itself
+      requires of the flip-on commit.
+      WHY IT WAS NOT SHIPPED DARK: the same batch corrects the exercise library so
+      that Chin Up truthfully declares a pull-up bar. Leaving the floor dark would
+      have shipped a library that knows what its exercises need alongside a
+      generator that is not reading the field. Measured with the flag OFF against
+      the CORRECTED library, the bodyweight tier still carried 468 equipment
+      violations, because the attempt-5 universal pool bypasses queryV4 and picks
+      by NAME. The tier data and the capability check each close a hole the other
+      cannot reach; shipping one without the other closes neither.
+      Kill switch is now `disable_equipment_capability_floor` (default ON),
+      matching the five sibling default-ON flags in plan_engine_flags.dart.
+      ⚠ The flip's blast radius is NOT limited to bodyweight users, and the
+      measurement is what showed it: re-deriving equipment_tier from
+      equipment_needed removed 38 rows from `home_dumbbells` and 16 from
+      `basic_gym` as well. Those tiers' pools were being propped up by the same
+      over-tags. Result across all 606 personas: equipment-violating plans
+      201 → 0, missing picks 0, unsafe 0; total fallback picks 1184 → 2719, which
+      is the honest price of refusing exercises the user cannot do.
+
+  - flag: enable_equipment_exclusions
+    branch: workout-equipment-filter
+    build_commit: a8583f01
+    build_date: 2026-07-16
+    merge_commit: 95b9bd6e
+    flip_reviewed: true
+    flip_commit: e6a8a8ae
+    flip_review_record: docs/plan-reviews/deps-board-equipment.md
+    note: >
+      FLIPPED ON 2026-08-05 on branch `deps-board-equipment`. The kill-switch key
+      changed from `enable_equipment_exclusions` to `disable_equipment_exclusions`
+      (default ON), matching the four sibling default-ON flags in
+      plan_engine_flags.dart. Flipped ahead of the other twelve OI-53 flags because
+      this one was not dormant: edit_profile_screen.dart:1686 already WROTE
+      `equipment_exclusions` and sync_profile.dart:200 already synced it, so the app
+      was collecting an equipment preference it then ignored — a live broken promise
+      rather than an unshipped feature.
+      ⚠ TWO behaviours ride this one flag, and the flip-on review must cover BOTH:
+      (1) the exclusion filter itself (plan_generator.dart:140-142), which only
+      affects users who set an exclusion; and (2) ⑥ C2's WU-2 gym-cardio gate
+      (plan_generator.dart:298-308), whose `hasGymOverride` stops being null — per
+      diagnose b7a4e2 the predicate it deferred to was ALWAYS FALSE on the generated
+      path, so gym-cardio warmup/finisher pools (Treadmill/Bike) now activate for
+      EVERY gym-tier user, including those with no exclusions. (2) is the wider half
+      of the blast radius.
+      `flip_reviewed` stays FALSE until the flip commit's plan-review record shows
+      review_rounds >= 2 + `bpass: accepted` (§4.12.4). Discriminating regression
+      test: test/contracts/equipment_exclusion_filter_behavioral_test.dart
+      "DEFAULT (no config key at all): exclusions are HONOURED — the flip", proven
+      to FAIL on pre-flip code by mutation (Actual: <true> — cables prescribed to a
+      cables-excluding user) and PASS after, with a kill-switch negative control.
+
+  - flag: enable_readiness
+    branch: workout-6-readiness
+    build_commit: 21d155f1
+    build_date: 2026-07-17
+    merge_commit: 7a9ba3c7
+    flip_reviewed: true
+    flip_commit: 9e4c5681
+    flip_review_record: docs/plan-reviews/readiness-flip.md
+    note: >
+      FLIP THIS ONE FIRST. Both enable_plateau_escalation and the
+      enable_triggered_deload evaluator self-gate on readinessEnabled, so
+      flipping either of those while this is OFF leaves them inert at best and
+      biased at worst. Its build also carried migration 105, so unlike the
+      others this flag has live cloud state behind it.
+
+  - flag: enable_triggered_deload
+    branch: workout-7b-deload
+    build_commit: 2c3ec370
+    build_date: 2026-07-17
+    merge_commit: bf2e352b
+    flip_reviewed: true
+    flip_commit: 9e4c5681
+    flip_review_record: docs/plan-reviews/readiness-flip.md
+    note: >
+      Depends on enable_readiness (see above). The deload cut is
+      non-invertible, which is why the build stashes the pre-cut week.
+
+  - flag: sync_reliability_v1
+    branch: oi150-phase-merge
+    build_commit: null
+    build_date: 2026-04-17
+    flip_reviewed: true
+    flip_commit: c2534257
+    flip_review_record: docs/plan-reviews/oi150-phase-merge.md
+    note: >
+      BUILT-AND-FLIPPED-BY-DIFFERENT-BATCHES, recorded retroactively. Shipped
+      dark 2026-04-17 by docs/superpowers/specs/2026-04-17-sync-reliability.md
+      (Pillar B) and never flipped: it appeared in NEITHER this ledger NOR the
+      OI board for four months, which is exactly the failure this file exists
+      to catch. Its own spec's section 6 checklist shows items 1-9 shipped and
+      10-13 never done. build_commit is null because that build predates this
+      branch and its sha is not this batch's to claim - the same shape
+      enable_equipment_capability_floor uses. Flipped ON here with OI-150.
+      Scope of the flip was MEASURED, not assumed - two gates
+      (_syncUserProfile, _syncUserProgress), both FAILURE-path only; the
+      success path is byte-identical. Two marker ops ride it
+      (sync_user_progress, sync_user_profile_marker). Per 4.12.4 a flag-flip
+      commit takes the FULL x2 review regardless of how lightly the build was
+      reviewed, so this does NOT claim the ship-dark tier.
+
+
+flip_on_blockers:
+  flag: enable_hold_weeks
+  raised: 2026-07-25
+  items:
+    - id: FOB-1
+      closed: "2026-08-20 — docs/audit/fob1-week-identity.closure.yaml; diagnose f4c8e1; behavioral test test/contracts/hold_week_identity_behavioral_test.dart (16 cases, mutation-proven on 2 legs: hold arm -> 3 red, flag gate -> 5 red). New single-gate seam WorkoutScheduleReadService.weekIdentity() + activeHoldWeeks()/activeHoldOrdinalFor(); holdStatusProvider now delegates to it instead of restating the flag check. SIX in-repo surfaces adopted, not the 7 the why: lists: phase_roadmap_screen reaches the clamp via getProgramWeek (the list understated it) and profile_content.dart was named only through its provider. RESIDUALS, neither deferred: ai_snapshot_builder.dart is FOB-3's by the board's own division (same lines, needs the ai-proxy redeploy); telegram-bot/bot.py is upstream_blocked (separate repo, OpenClaw VPS)."
+      title: "Week-identity coherence — adopt 'a hold suppresses the week number; Hn is the identity'"
+      why: >
+        The shipped UI already chose this rule (plan_header.dart drops the week
+        counter while holding, "a hold week has no honest WK n OF m"), and D1
+        extends it to the banner. But 7+ surfaces still print the clamped week 4
+        for a holder: home_screen.dart (eyebrow), profile_provider.dart ->
+        profile_content.dart, journey_timeline.dart, phase_roadmap_screen.dart,
+        reports_screen.dart (the SHARE-AS-VIDEO stamp), ai_snapshot_builder.dart
+        (x2), and telegram-bot/bot.py. Meanwhile day_detail_sheet.dart and
+        preview_workout_screen.dart read the ROW and show week 6 — so the app
+        already contradicts itself across surfaces.
+      do_not: >
+        Do NOT project `4 + ordinal` into user_progress.current_week. That
+        manufactures the exact number the UI ruled dishonest AND reintroduces
+        the three-surface drift diagnose c9f4a2 closed. If any projected value
+        is ever needed it must be programWeekFor(phase, ...) — literal
+        `4 + ordinal` demotes a phase-2 holder from 8 to 5.
+    # ── STATUS ANNOTATIONS (added 2026-08-13) ─────────────────────────────
+    # This section has no per-item status field — each item is a single prose
+    # `why:` blob — so closures are recorded as `closed:` lines added here, and
+    # authoritatively in the per-batch closure YAML named on each line.
+    # Terminal states so far:
+    #   FOB-2     CLOSED  → docs/audit/oi60-streak-identity.closure.yaml (a3f8d1)
+    #   FOB-7(c)  VERIFIED CLEAN — the report was stale; both the 10K cap and the
+    #             FC7 nonce fence are present in ai-media-proxy. Same closure YAML.
+    #   FOB-7(d)  CLOSED  → same closure YAML (both stale citations de-numbered;
+    #             the filing named one, a second was found in the same comment).
+    #   FOB-6     SPLIT OUT to OI-125 (a new feature, not a correctness fix).
+    #   FOB-1     CLOSED 2026-08-20 -> docs/audit/fob1-week-identity.closure.yaml
+    #             (diagnose f4c8e1; test hold_week_identity_behavioral_test.dart).
+    #   FOB-5     CLOSED 2026-08-20 -> docs/audit/fob5-hold-telemetry.closure.yaml
+    #             (diagnose c7a3b9; migration 120 applied live; test
+    #             hold_week_mechanic_behavioral_test.dart). NOTE its prescribed
+    #             `where channel = 'app'` was WRONG and was not applied — see
+    #             finding FOB-5-B.
+    #   FOB-3, FOB-4, FOB-7(a), FOB-7(b) — STILL OPEN.
+    # enable_hold_weeks therefore CANNOT flip yet.
+    - id: FOB-2
+      closed: "2026-08-13 — docs/audit/oi60-streak-identity.closure.yaml; diagnose a3f8d1; behavioral test test/contracts/hold_week_streak_identity_behavioral_test.dart (14 cases, 6 mutations proven)"
+      title: "Weekly streak + streaks row are dead during a hold"
+      why: >
+        getCurrentWeekNumber() clamps to 4, so last_streak_week never advances,
+        current_streak_weeks freezes for the whole hold (stalling streak-week
+        badges), and the streaks row key stays pinned to week 4's Monday — every
+        hold completion REWRITES week 4's row and hold weeks get none.
+      how: >
+        Derive both the week identity and the row key from HoldWeekInfo.weekStart
+        BY DATE. Never `plan_start + 7k`: holdWeek() places the hold in the
+        calendar week containing today, so a late return leaves a gap (pinned by
+        the LATE RETURN case in hold_display_read_path_test.dart — ordinal 1 sits
+        at date-week 8). last_streak_week MUST stay an int (train_provider casts
+        `as int?` and completeWorkout has no try/catch). Cloud streaks is keyed
+        UNIQUE (user_id, week_start) — a DATE — so a new Monday is a new row, no
+        migration.
+    - id: FOB-3
+      title: "The AI coach asserts a falsehood to every holder, every week"
+      why: >
+        The snapshot sends current_week: 4 for EVERY hold day at EVERY ordinal
+        (holds start at plan_start+28 so the clamp always yields 4). Combined
+        with captain_manual.ts ("free locks at Phase I after 4 weeks") and
+        tier: free, the model synthesizes "final week of Phase I / upgrade" —
+        a repeating false milestone aimed at the user who just chose to stay.
+        Nothing in supabase/functions/ reads is_hold or hold_ordinal.
+      how: >
+        Add a `hold` block to the snapshot AND add 'hold' to the keep set in
+        trimSnapshotToBudget — it halves non-kept maps by insertion order and
+        would silently drop the meaning-carrying fields. Teach captain_manual.ts
+        what a hold is. Requires an ai-proxy deploy (own authorization, §4.3).
+    - id: FOB-4
+      title: "Sunday push and weekly report need hold copy, not a number"
+      why: >
+        weekly-recap-ready/index.ts interpolates current_week verbatim
+        ("Week N debrief ready") and weekly-report/index.ts feeds it to Gemini.
+        Whatever value is projected, the copy is wrong for a hold week. Both
+        need a hold branch — which means redeploys, so the earlier
+        "no EF redeploy needed" framing was false.
+    - id: FOB-5
+      closed: "2026-08-20 — docs/audit/fob5-hold-telemetry.closure.yaml; diagnose c7a3b9; migration 120 (applied live, founder-authorized); test test/contracts/hold_week_mechanic_behavioral_test.dart (4 cases, mutation-proven: emit removed -> 3 red, ordinal dropped -> 2 red). ⚠ THE `how:` BELOW IS WRONG AND WAS NOT FOLLOWED: `where channel = 'app'` matches 7 of 116 rows and would have replaced a 5.3x overcount with an ~89% undercount. The correct predicate mirrors the repo's own _coachChatChannels (coach_interaction_repository.dart:282) and also drops 38 stuck/pending rows the filing never mentions. Metric now reads 22 instead of 116. Hold telemetry rides on founder_metrics_engagement()'s new hold_* columns rather than a new RPC, because admin-dashboard-data:255 spreads that row wholesale — so no EF redeploy was needed."
+      title: "Holds are unobservable, and the events corrupt the one live metric"
+      why: >
+        The five phase_1_day_29_* events have ZERO consumers repo-wide — no
+        query, cron, dashboard or alert. Holds taken / hold->convert /
+        hold->churn are all unmeasurable, and the retention thesis rests on this
+        mechanic. Worse, founder_metrics_engagement() counts
+        ai_coach_interactions with no channel filter, so every app_event row
+        inflates ai_messages_today.
+      how: >
+        Add a hold_week_started event with a real consumer, and add
+        `where channel = 'app'` to the metric.
+    - id: FOB-6
+      title: "Selectable hold weeks (D2) — 6 lifecycle traps, do not ship naively"
+      why: >
+        During a hold the THIS WEEK rows show the phase's ORIGINAL week 4 while
+        the user trains the hold week, and both the W4 chip and the current H
+        chip render gold.
+      traps: >
+        (a) extracting the row->WorkoutDayData mapping depends on loop var `w`
+        for dayNumber, so the refactor runs for EVERY user and is NOT hold-gated
+        — it needs a characterization test before extraction; (b) a notifier
+        watching holdStatusProvider is reset by every currentPlanProvider
+        invalidation, clobbering manual selection; (c) needs the
+        authUserIdTokenProvider cross-account guard every sibling Train provider
+        carries; (d) the hero card sources TODAY unconditionally, so selecting a
+        past hold shows today's workout above another hold's rows; (e)
+        expandedDayProvider must collapse on selection or a stale index carries
+        over; (f) terminal states (hold elapses, PRO advance empties holds) are
+        undefined.
+    - id: FOB-7
+      partially_closed: >
+        (c) and (d) are CLOSED — docs/audit/oi60-streak-identity.closure.yaml.
+        (c) was STALE as filed: ai-media-proxy already carries BOTH the
+        10000-char snapshot cap and the fenceAsData nonce fence (documented in
+        that file as a two-stage closure), so it is verified_clean, not fixed.
+        (d) is fixed, and the filing under-counted it — there were TWO stale
+        line citations in that comment region, not one; both are now
+        de-numbered rather than re-numbered, since a line citation inside a
+        1000-line Edge Function re-rots on the next edit.
+        (a) currentPhaseCompletionRate hold-day folding and (b) the
+        PlanIntegrityReconciler scan gap REMAIN OPEN. ⚠ Read the closure YAML
+        before attempting (b): a review found that the 1..4 scan IS the
+        re-anchor trigger, so widening it buys no healing and only makes the
+        re-anchor fire more often — the P0-11 concern d7f3a9 already rejected.
+        The correct shape is to split the trigger from the write.
+      title: "Residuals"
+      why: >
+        currentPhaseCompletionRate's phase>=2 branch scans getWeek(5..12) by
+        DATE, folding hold days into the PRO-advance gate input;
+        PlanIntegrityReconciler scans weeks 1-4 only, so a hold week's lost
+        exercises are never healed — the exact failure it exists to cure, on the
+        only week a free user is training; ai-media-proxy embeds the snapshot
+        with no size check and no FC7 untrusted-data wrapper (unlike ai-proxy);
+        and ai-proxy's size-envelope comment cites the wrong line for its own
+        10K check.
+    - id: FOB-8
+      raised: 2026-09-05
+      title: >
+        PhaseArcStrip is a SEVENTH "you are in week 4" surface, and it went live
+        on 2026-09-05 while enable_hold_weeks was still dark.
+      detail: >
+        FOB-1 closed the week-identity class across six surfaces by routing them
+        through weekIdentityProvider / weekIdentity(). The phase-arc strip was
+        examined during that batch and CLEARED — docs/plan-reviews/round2-oi-pending-hold-weeks.md:35
+        names phaseArcProvider explicitly and reasons that it "doesn't render a
+        week number as user-facing text". That was TRUE ONLY WHILE THE FLAG WAS
+        OFF, and the flag is now on.
+        phaseArcProvider (train_provider.dart) reads
+        WorkoutScheduleService.getCurrentWeekNumber() DIRECTLY, not
+        weekIdentityProvider. That call clamps to 4
+        (workout_schedule_read_service.dart:1214), and a hold extends plan_end
+        locally so isPhaseExpired() is false and PlanExpiredCard does not appear
+        to correct it. So for a holding user the strip would highlight DELOAD as
+        "now", in Campaign Gold, roughly 40px below a plan_header that has
+        deliberately DROPPED its "WK 4 OF 4" because a hold week has no honest
+        week number.
+        Nobody is affected today: enable_hold_weeks is `== true`-gated and
+        DEFAULT OFF (plan_engine_flags.dart:65). This is a flip-on blocker, not
+        a live bug.
+      fix: >
+        Route phaseArcProvider's currentWeek through weekIdentity() /
+        weekIdentityProvider like the other six, and decide what the strip shows
+        during a hold (the honest answer is probably "no node is current", which
+        the widget already renders correctly when currentWeek falls outside
+        1..waves.length).
+      found_by: plan-review round 2 of the phase-arc flip

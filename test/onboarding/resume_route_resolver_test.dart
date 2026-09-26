@@ -1,0 +1,209 @@
+import 'dart:io';
+import 'package:flutter_test/flutter_test.dart';
+import '../helpers/read_screen_source.dart';
+
+/// OB-7 — Onboarding resume from arbitrary step.
+///
+/// Returns the earliest /onboarding/<step> route based on which canonical
+/// field is first null. The order encodes the onboarding flow:
+///
+///   no profile row     → /onboarding/mission-brief (cold sign-up)
+///   full_name == null  → /onboarding/identity
+///   primary_goal == null → /onboarding/goal
+///   current_weight_kg == null → /onboarding/stats
+///   fitness_experience == null → /onboarding/details
+///   otherwise          → /onboarding/plan
+///
+/// **Audit 2026-05-20 / A1 + A9:** logic relocated. Pre-refactor, the
+/// `RestoringScreen._resolveOnboardingResumeRoute` private method
+/// implemented the decision tree directly. Post-refactor:
+///
+///   - `restoring_screen.dart` now switches on `PostSignInDestination`
+///     (sealed class) returned by `AuthSessionBootstrapper.resolveDestination`.
+///   - `lib/core/services/auth_session_bootstrapper.dart` carries the
+///     canonical branch logic in `classifyDestination(Map?)` (also exposed
+///     via `@visibleForTesting`).
+///
+/// The contract pins shifted accordingly:
+///   1. The branch order is preserved (Dart 3 switch-exhaustiveness on
+///      the sealed class compile-checks it).
+///   2. RestoringScreen invokes `AuthSessionBootstrapper.resolveDestination`.
+///   3. Self-heal stamp logic for the orphan state remains accessible.
+///
+/// Per `feedback_source_grep_false_confidence.md`, this is presence-only;
+/// the canonical behavioral test for the decision tree is
+/// `test/contracts/auth_session_bootstrapper_test.dart`.
+void main() {
+  late String restoringSrc;
+  late String bootstrapperSrc;
+
+  setUpAll(() {
+    final restoringFile =
+        File('lib/features/auth/screens/restoring_screen.dart');
+    final bootstrapperFile =
+        File('lib/core/services/auth_session_bootstrapper.dart');
+    expect(restoringFile.existsSync(), isTrue,
+        reason: 'restoring_screen.dart must exist');
+    expect(bootstrapperFile.existsSync(), isTrue,
+        reason:
+            'auth_session_bootstrapper.dart must exist (introduced by audit '
+            '2026-05-20 / A1).');
+    restoringSrc = readRestoringScreenSource();
+    bootstrapperSrc = bootstrapperFile.readAsStringSync();
+  });
+
+  group('OB-7 onboarding resume — post-A1 contract', () {
+    test('AuthSessionBootstrapper exposes destination resolution', () {
+      expect(
+        bootstrapperSrc.contains('resolveDestination') ||
+            bootstrapperSrc.contains('classifyDestination'),
+        isTrue,
+        reason:
+            'AuthSessionBootstrapper must expose resolveDestination (or '
+            'classifyDestination) — the canonical destination decision tree '
+            'lives here post-A1.',
+      );
+      expect(
+        bootstrapperSrc.contains('PostSignInDestination'),
+        isTrue,
+        reason:
+            'PostSignInDestination sealed class must be defined or imported '
+            'in the bootstrapper.',
+      );
+    });
+
+    test('5 field-null branches present in canonical order', () {
+      // Branch presence is checked in EITHER file (depending on whether the
+      // sealed-class enrichment happens in bootstrapper or via the switch
+      // in restoring_screen). Most likely the bootstrapper has the routes
+      // as `ResumeOnboarding('identity')`, `ResumeOnboarding('goal')`, etc.,
+      // OR the legacy literal-route strings.
+      final combined = '$restoringSrc\n$bootstrapperSrc';
+      const orderedTokens = [
+        // First-step token for the "no profile row" case.
+        'mission-brief',
+        // Then resume by missing field, in order:
+        'identity',
+        'goal',
+        'stats',
+        'details',
+        'plan',
+      ];
+
+      var cursor = 0;
+      for (final token in orderedTokens) {
+        final idx = combined.indexOf(token, cursor);
+        expect(idx, greaterThan(0),
+            reason:
+                'Onboarding flow token `$token` must appear after position '
+                '$cursor across (restoring_screen.dart ⨁ '
+                'auth_session_bootstrapper.dart). The order encodes the '
+                'onboarding flow — reordering routes users to the wrong step.');
+        cursor = idx + token.length;
+      }
+    });
+
+    test('mid-onboarding branch invokes the bootstrapper', () {
+      // restoring_screen.dart must call AuthSessionBootstrapper.resolveDestination
+      // (the canonical entry point) — not query Supabase directly.
+      expect(
+        restoringSrc.contains('AuthSessionBootstrapper.instance.resolveDestination') ||
+            restoringSrc.contains('AuthSessionBootstrapper().resolveDestination') ||
+            restoringSrc.contains('.resolveDestination('),
+        isTrue,
+        reason:
+            'RestoringScreen must call AuthSessionBootstrapper.resolveDestination '
+            'to decide the post-sign-in route. Pre-A1 it called the private '
+            '_resolveOnboardingResumeRoute (now superseded).',
+      );
+    });
+
+    test('self-heal path for orphan onboarding_completed_at state', () {
+      // The orphan state: user has current_weight_kg filled locally but
+      // onboarding_completed_at never landed in cloud. The self-heal stamp
+      // logic lives in the bootstrapper now.
+      final hasSelfHeal =
+          restoringSrc.contains('_stampOnboardingCompletedAt') ||
+              bootstrapperSrc.contains('_stampOnboardingCompletedAt') ||
+              bootstrapperSrc.contains('stampOnboardingCompletedAt') ||
+              bootstrapperSrc.contains('onboarding_completed_at');
+      expect(hasSelfHeal, isTrue,
+          reason:
+              'Self-heal helper must exist somewhere in the auth-stack to '
+              'recover the orphan-completed-but-no-timestamp state.');
+
+      // current_weight_kg heuristic — the trigger condition for self-heal.
+      final hasWeightHeuristic =
+          restoringSrc.contains('current_weight_kg') ||
+              bootstrapperSrc.contains('current_weight_kg');
+      expect(hasWeightHeuristic, isTrue,
+          reason:
+              'Self-heal trigger condition must inspect current_weight_kg '
+              '(or another late-flow field) as the heuristic for "user '
+              'reached at least Stats step, so onboarding really happened, '
+              'just the stamp didn\'t land".');
+    });
+
+    test('OI-46 (2026-07-29, B-pass round) — self-heal stamp attempt is '
+        'gated on ALL 9 migration-112 fields, not just the 3-field '
+        'hasCorePlanFields heuristic', () {
+      // Round-1 B-pass finding: migration 112's trigger requires 9 fields
+      // (date_of_birth, gender, height_cm, current_weight_kg,
+      // target_weight_kg, primary_goal, fitness_experience, days_per_week,
+      // equipment_access) non-null before allowing onboarding_completed_at
+      // to transition non-null. Pre-fix, this file's self-heal only
+      // checked 3 of them (primary_goal, fitness_experience,
+      // current_weight_kg) before attempting a stamp — a flagOnboarded=true
+      // legacy user missing any of the other 6 would have the stamp
+      // rejected by the trigger EVERY cold start, forever, with no way to
+      // ever succeed. Pin the renamed variable + all 9 field checks + the
+      // stamp-attempt now being conditional (not unconditional) inside the
+      // self-heal branch.
+      // c2e9f4: the 9-field check moved OUT of this widget and into the pure
+      // module lib/core/services/local_onboarding_evidence.dart, so all three
+      // "not onboarded" branches share one predicate instead of only
+      // ResumeOnboarding having one. The invariant is unchanged — assert it
+      // where the code now lives. (The behavioural counterpart, which is the
+      // stronger guarantee, is local_onboarding_evidence_behavioral_test.dart.)
+      final evidenceSrc =
+          File('lib/core/services/local_onboarding_evidence.dart')
+              .readAsStringSync();
+      expect(restoringSrc.contains('hasAllRequiredProfileFields'), isTrue,
+          reason: 'the widened 9-field check must still be invoked from the '
+              'restoring screen, under its extracted name.');
+      for (final field in [
+        'date_of_birth',
+        'gender',
+        'height_cm',
+        'current_weight_kg',
+        'target_weight_kg',
+        'primary_goal',
+        'fitness_experience',
+        'days_per_week',
+        'equipment_access',
+      ]) {
+        expect(
+          evidenceSrc.contains("'$field'"),
+          isTrue,
+          reason: 'requiredOnboardingProfileFields must list $field, matching '
+              'migration 112 exactly.',
+        );
+      }
+      // The stamp attempt must be wrapped in its OWN conditional on
+      // hasAllRequiredFields — not fired unconditionally for every
+      // flagOnboarded/hasAllRequiredFields entrant to the self-heal branch.
+      final selfHealBlockStart = restoringSrc.indexOf('if (hasLocalOnboardedEvidence(');
+      expect(selfHealBlockStart, greaterThan(-1),
+          reason: 'the self-heal entry condition must go through the shared '
+              'evidence predicate (flag OR all-9-fields).');
+      final stampCallIdx = restoringSrc.indexOf('_stampOnboardingCompletedAt(user.id)', selfHealBlockStart);
+      final innerGuardIdx = restoringSrc.indexOf('if (hasAllRequiredFields)', selfHealBlockStart);
+      expect(innerGuardIdx, greaterThan(-1),
+          reason: 'a second, inner hasAllRequiredFields guard must wrap the '
+              'stamp attempt so a flagOnboarded-only (field-incomplete) '
+              'user still navigates home but stops retrying a doomed write.');
+      expect(innerGuardIdx, lessThan(stampCallIdx),
+          reason: 'the inner guard must wrap the stamp call, not follow it.');
+    });
+  });
+}
