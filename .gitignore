@@ -71,6 +71,11 @@ supabase/.env
 # Supabase Management API access tokens (e.g. supabase/.supabase/supabase access token.txt)
 # Used by .claude/deploy_via_api.js — DO NOT commit any token, ever.
 supabase/.supabase/
+# ...and the SAME directory at the repo ROOT (diagnose c6f2a8). On 2026-09-26 a
+# live Management API token sat at `.supabase/supabase access token.txt` here,
+# untracked and NOT ignored — one `git add -A` from being committed. Anchored so
+# it cannot match anything but the root directory.
+/.supabase/
 
 # Alert-surfacing tooling credential — service-role key for scripts/check_alerts.dart
 # (SessionStart hook). DELIBERATELY separate from .env so it is NEVER compiled into
