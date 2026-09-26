@@ -51,6 +51,11 @@ const seamPatterns = <String>[
 /// map in the same commit, stating what the new site does about capability —
 /// that decision is the whole point of the gate.
 const seamAllowlist = <String, SeamEntry>{
+  'lib/features/train/widgets/create_custom_exercise_sheet.dart': SeamEntry(1,
+      'd5c2e8 read-back only: after createCustomExercise it reads back the ONE '
+      'row the user just authored in this sheet (matched by its id) and hands '
+      'it to onCreated. No capability filter: the user explicitly chose to '
+      'create and add it, and it carries equipment_needed [] by design.'),
   'lib/shared/repositories/plan_engine/exercise_selector.dart': SeamEntry(16,
       'The cascade itself. Attempts 1-5, buildPinnedDays and '
       '_applyHistoryAdjustments all take the capability set as a REQUIRED '

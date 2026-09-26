@@ -37,11 +37,27 @@ void main() {
           reason: '_syncSavedMeals must be called from syncSavedMealsNow');
     });
 
-    test('relogSavedMeal fires syncSavedMealsNow after times_used increment', () {
-      final src = _src(
+    test('relogSavedMeal fires a nutrition sync after the times_used increment',
+        () {
+      // a8e3f1: the bump moved from SavedMealsNotifier (legacy rows only) to
+      // NutritionWriteService.relogSavedMeal (both formats). It fires the
+      // coalesced syncNutritionData — which runs _syncSavedMeals — AFTER the
+      // put, so the trailing pass reads the new count.
+      final src = _src('lib/core/services/nutrition_write_service.dart');
+      final start = src.indexOf('Future<WriteResult> relogSavedMeal(');
+      expect(start, isNot(-1));
+      final body = src.substring(start, src.indexOf('static Map<String, dynamic> '
+          'bumpSavedMealTimesUsed', start));
+      final put = body.indexOf('bumpSavedMealTimesUsed(current)');
+      final sync = body.indexOf(
+          'unawaited(SyncService.instance.syncNutritionData())', put);
+      expect(put, isNot(-1), reason: 'relogSavedMeal must bump times_used');
+      expect(sync, greaterThan(put),
+          reason: 'the sync must fire after the times_used write');
+      final notifier = _src(
           'lib/features/nutrition/providers/nutrition_provider.dart');
-      expect(src, contains('unawaited(SyncService.instance.syncSavedMealsNow())'),
-          reason: 'relogSavedMeal must fire syncSavedMealsNow to push counter to cloud');
+      expect(notifier.contains("updated['times_used']"), isFalse,
+          reason: 'a second bump in the notifier would double-count legacy rows');
     });
 
     test('relogSavedMeal still fires pushSnapshot', () {

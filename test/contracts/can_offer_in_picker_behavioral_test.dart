@@ -5,10 +5,11 @@
 //            seams 6/7/8 reader refinement)
 // Predicate: lib/shared/repositories/plan_engine/equipment_capability.dart
 //            canOfferInPicker
-// Writers it protects: create_custom_exercise_sheet.dart `_save` (stores
-//            `equipment_needed: []` by design — the sheet has no equipment
-//            field), AI writer workout_repository.dart `createCustomExercise`
-//            (normalizes free text; may store real tokens).
+// Writers it protects: workout_repository.dart `createCustomExercise`, the
+//            one create path (d5c2e8). The sheet calls it with no equipment
+//            ⇒ `equipment_needed: []` by design (the sheet has no equipment
+//            field); the AI tool passes free text, which is normalized and
+//            may store real tokens.
 // Readers:   exercise_swap_sheet.dart `_loadExercises`,
 //            exercise_picker_sheet.dart `_loadAllExercises`,
 //            template_builder_screen.dart `_refresh` (doableCustom).

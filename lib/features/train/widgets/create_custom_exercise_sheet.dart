@@ -1,22 +1,23 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
-import 'package:icanbefitter/core/services/hive_service.dart';
-import 'package:icanbefitter/core/services/supabase_service.dart';
-import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
+import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
-import 'package:uuid/uuid.dart';
+
+import '../repositories/workout_repository.dart';
 
 /// Bottom sheet for creating OR editing a custom exercise.
 ///
-/// CREATE mode (default, `existing == null`): writes a new exercise to
-/// `customBox` with `type: 'exercise'` and `is_custom: true`, then invokes
-/// [onCreated] with the exercise map so the caller can add it to the current
-/// workout or template immediately.
+/// CREATE mode (default, `existing == null`): creates through
+/// `WorkoutRepository.createCustomExercise` (the same path the AI coach tool
+/// uses), then invokes [onCreated] with the stored row so the caller can add
+/// it to the current workout or template immediately. A rejected create
+/// (duplicate name, failed write) shows a snackbar and keeps the sheet open.
 ///
 /// EDIT mode (`existing != null`, entry: tapping a chip in YOUR EXERCISES):
 /// prefills every field from the existing row, LOCKS the name (renaming
@@ -214,7 +215,22 @@ class _CreateCustomExerciseSheetState extends State<CreateCustomExerciseSheet> {
   List<String> get _resolvedMuscles => CreateCustomExerciseSheet.resolveMuscles(
       _selectedMuscles, _unmappedMuscleTokens);
 
+  /// In-flight guard: a double-tapped SAVE must not start a second write
+  /// (B-pass F2). The repository also serializes creates, so this is the
+  /// UX half — the duplicate guard is the correctness half.
+  bool _saving = false;
+
   Future<void> _save() async {
+    if (_saving) return;
+    _saving = true;
+    try {
+      await _saveOnce();
+    } finally {
+      _saving = false;
+    }
+  }
+
+  Future<void> _saveOnce() async {
     final isEdit = _isEdit;
     final name = isEdit
         ? (widget.existing!['name'] as String? ?? '')
@@ -272,36 +288,69 @@ class _CreateCustomExerciseSheetState extends State<CreateCustomExerciseSheet> {
       return;
     }
 
-    const customNs = '5a1f0b0c-9dad-11d1-80b4-00c04fd430c8';
-    final userId = SupabaseService.instance.currentUser?.id ?? 'anon';
-    final id = const Uuid().v5(customNs, '$userId|exercise|${name.toLowerCase()}');
-
-    final key = 'custom_exercise_${DateTime.now().millisecondsSinceEpoch}';
-    final exercise = <String, dynamic>{
-      'id': id,
-      'name': name,
-      'category': _category,
-      'logging_type': _loggingType,
-      'default_sets': int.tryParse(_setsCtrl.text) ?? 3,
-      if (_showRepsField)
-        'default_reps':
-            _repsCtrl.text.trim().isEmpty ? '10' : _repsCtrl.text.trim(),
-      if (_showDurationField)
-        'default_duration_seconds':
-            int.tryParse(_durationCtrl.text.trim()) ?? 30,
-      'primary_muscles': _resolvedMuscles,
-      'equipment_needed': <String>[],
-      'is_custom': true,
-      'type': 'exercise',
-      'submitted_to_library': _shareWithCommunity,
-      'approved_for_library': false,
-    };
-
-    unawaited(HiveService.instance.customBox.put(key, exercise));
-    unawaited(SyncService.instance.syncCustomItemsNow());
-    unawaited(SyncService.instance.pushSnapshot());
+    // CREATE goes through the one create path the AI coach tool also uses
+    // (diagnose d5c2e8): duplicate-name guard, 60-char cap, deterministic id,
+    // and the WorkoutWriteService stamps + lock. Equipment stays `[]` — the
+    // sheet has no equipment field.
+    String? error;
+    Map<String, dynamic>? created;
+    try {
+      final id = await WorkoutRepository.instance.createCustomExercise(
+        name: name,
+        category: _category,
+        loggingType: _loggingType,
+        primaryMuscles: _resolvedMuscles,
+        defaultSets: int.tryParse(_setsCtrl.text) ?? 3,
+        defaultReps: _showRepsField
+            ? (_repsCtrl.text.trim().isEmpty ? '10' : _repsCtrl.text.trim())
+            : null,
+        defaultDurationSeconds: _showDurationField
+            ? (int.tryParse(_durationCtrl.text.trim()) ?? 30)
+            : null,
+        submittedToLibrary: _shareWithCommunity,
+      );
+      // Hand the caller the row AS STORED (with source/created_at), read
+      // through the same repository every picker reads.
+      for (final ex in ExerciseRepository.instance.getCustomExercises()) {
+        if (ex['id'] == id) {
+          created = ex;
+          break;
+        }
+      }
+    } on CreateCustomExerciseException catch (e) {
+      error = e.message;
+      unawaited(ErrorTelemetry.logEvent('custom_exercise_sheet_create_failed',
+          message: '${e.code}: ${e.message}'));
+    }
+    if (!mounted) return;
+    if (error != null) {
+      // Rejected (duplicate name / write failed): keep the sheet open.
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error, style: AppTypography.bodySm),
+          backgroundColor: AppColors.card,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
     Navigator.of(context).pop();
-    widget.onCreated?.call(exercise);
+    if (created != null) {
+      widget.onCreated?.call(created);
+    } else {
+      // createCustomExercise already proved the row landed; only the
+      // read-back missed. Never tell the user a SAVED exercise failed
+      // (B-pass F3) — a retry would just hit duplicate_name.
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Saved — find it under YOUR EXERCISES.',
+              style: AppTypography.bodySm),
+          backgroundColor: AppColors.card,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   @override
@@ -358,6 +407,9 @@ class _CreateCustomExerciseSheetState extends State<CreateCustomExerciseSheet> {
               // derived from the lowercased name, so a rename would mint a
               // NEW id and orphan the name-keyed log history.
               readOnly: isEdit,
+              // Matches createCustomExercise's cap, so the field can't hold a
+              // name the writer will reject.
+              maxLength: 60,
             ),
             const SizedBox(height: 12),
 
@@ -542,6 +594,7 @@ class _CreateCustomExerciseSheetState extends State<CreateCustomExerciseSheet> {
     bool autofocus = false,
     TextInputType? keyboardType,
     bool readOnly = false,
+    int? maxLength,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -554,9 +607,11 @@ class _CreateCustomExerciseSheetState extends State<CreateCustomExerciseSheet> {
         autofocus: autofocus,
         keyboardType: keyboardType,
         readOnly: readOnly,
+        maxLength: maxLength,
         style: AppTypography.body.copyWith(fontWeight: FontWeight.w600),
         decoration: InputDecoration(
           border: InputBorder.none,
+          counterText: '',
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           isDense: true,

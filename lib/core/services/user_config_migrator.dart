@@ -98,10 +98,12 @@ class UserConfigMigrator {
   /// These are NOT user-scoped — they cross sessions or pre-date the
   /// authenticated session. Migrating them would break their use case.
   ///
-  ///   - `pending_referral_code`: written BEFORE auth (sign-in screen
-  ///     captures referral code from URL/clipboard), read AFTER auth in
-  ///     `_ensureLocalUser`. The whole point is to survive across the
-  ///     "no user → user" boundary.
+  ///   - `pending_referral_code`: LEGACY, no writer and no reader since
+  ///     diagnose c7b4d2 (the sign-up code now rides in auth user metadata
+  ///     and onboarding redeems it). It never had a reader — this comment
+  ///     used to claim `_ensureLocalUser` read it, which was false. Kept on
+  ///     the shared list because devices from before c7b4d2 may still hold
+  ///     it in configBox; it must never be migrated into a user's box.
   ///   - `logout_in_progress`: set during `signOut` (session being torn
   ///     down), read on next cold launch in `main.dart` BEFORE any auth
   ///     check. Single-device cold-launch flag, not user-scoped.

@@ -34,7 +34,7 @@ for `nlog_*` Hive rows + `nutrition_logs` cloud) + `nutrition_read_service.dart`
 |---|---|---|
 | `nutrition_total_calories` | `nutrition_write_service.dart` `logMeal` | `nutrition_read_service.dart` + home `TodayMacrosCard` + nutrition screen. **Hive key:** `nlog_${istDateStr(date)}_${hashCode}` (`hive_field_name_nlog` SoT). |
 | `food_log_delete_with_undo` | `nutrition_write_service.dart` `deleteLog(allowUndo:)` + `restoreLastDeleted` (soft-delete + restore-on-tap; audit-fixwave F12 — was mis-named `deleteWithUndo`) | the nutrition meal-list dismissible (`TodaysMealsCard`). |
-| `saved_meals` | `nutrition_write_service.dart` `saveMealAsTemplate` (audit-fixwave F12 — was mis-named `saveMeal`) | `saved_meals_section.dart` quick-log. |
+| `saved_meals` | `nutrition_write_service.dart` `saveMealAsTemplate` (audit-fixwave F12 — was mis-named `saveMeal`). **`times_used` is owned by `NutritionWriteService.relogSavedMeal`** for BOTH formats (`meal_*` templates and legacy `saved_meal_*`), and a re-save keeps it — diagnose `a8e3f1`; the bump used to sit in `SavedMealsNotifier`, which only legacy rows reach. | `saved_meals_section.dart` quick-log + most-used sort. |
 | `water_logs` | `health_write_service.dart` `setWaterMl` (audit-fixwave F12 — was mis-named `logWater`, now deleted) | `water_section.dart` `WardGlassGrid`. |
 | `water_target` | `water_target_service.dart` (Hive `configBox['water_target_ml']`) | `waterTargetProvider`. |
 | `diet_plan_saved_loaded` | `diet_plan_screen.dart` `_savePlan` → `configBox['saved_diet_plan']` + `ref.invalidate(dietPlanProvider)` | `TodaysMealsCard` renders "FROM YOUR DIET PLAN" hints on empty slots. |

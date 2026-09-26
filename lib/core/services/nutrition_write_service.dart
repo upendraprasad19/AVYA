@@ -614,6 +614,13 @@ class NutritionWriteService {
   // → water_logs (synced by _syncWaterLogs). See diagnose d8a6f2.
 
   /// Re-log of an existing saved meal template.
+  ///
+  /// Owns the `times_used` bump for BOTH saved-meal formats (legacy
+  /// `saved_meal_*` and `meal_*` templates) — diagnose `a8e3f1`. The bump
+  /// used to live in `SavedMealsNotifier.relogSavedMeal`, which only the
+  /// legacy path calls; `meal_*` templates (the only format the UI creates)
+  /// re-log straight through here and never counted, so the most-used sort
+  /// in `SavedMealsNotifier.build` never moved.
   Future<WriteResult> relogSavedMeal({
     required String savedMealKey,
     required DateTime date,
@@ -629,12 +636,41 @@ class NutritionWriteService {
         .map((e) => FoodItem.fromMap(Map<String, dynamic>.from(e as Map)))
         .toList();
 
-    return logMeal(
+    final result = await logMeal(
       date: date,
       mealType: mealType,
       items: items,
       source: NutritionWriteSource.savedMealRelog,
     );
+    if (!result.success) return result;
+
+    // Count the use only once the log landed. Re-read so a concurrent edit to
+    // the template between the read above and now is not overwritten.
+    try {
+      final current = box.get(savedMealKey);
+      if (current is Map) {
+        await box.put(savedMealKey, bumpSavedMealTimesUsed(current));
+        _invalidateNutritionProviders();
+        // logMeal already fired the coalesced nutrition sync; this call
+        // marks it dirty so its trailing pass reads the new count.
+        unawaited(SyncService.instance.syncNutritionData());
+      }
+    } catch (e, st) {
+      // The meal IS logged — a failed counter bump must not report failure.
+      debugPrint('[NutritionWriteService] times_used bump failed: $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'nutrition_write_service_relog_times_used'));
+    }
+    return result;
+  }
+
+  /// PURE — the saved-meal row after one more use. A missing or non-int
+  /// `times_used` counts as 0.
+  static Map<String, dynamic> bumpSavedMealTimesUsed(Map row) {
+    final updated = Map<String, dynamic>.from(row);
+    final used = updated['times_used'];
+    updated['times_used'] = (used is int ? used : 0) + 1;
+    return updated;
   }
 
   /// Promote a logged meal to a saved template.
@@ -682,6 +718,13 @@ class NutritionWriteService {
       'created_at': DateTime.now().toUtc().toIso8601String(),
       'is_template': true,
     };
+    // Re-saving the same meal lands on the same key: keep its use count, or
+    // the save would silently reset what relogSavedMeal has been counting
+    // (diagnose a8e3f1).
+    final prior = box.get(templateKey);
+    if (prior is Map && prior['times_used'] is int) {
+      payload['times_used'] = prior['times_used'];
+    }
 
     try {
       await box.put(templateKey, payload);

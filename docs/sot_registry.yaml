@@ -1819,7 +1819,7 @@ concepts:
           + foodBox[<v5>], then unawaited(SyncService.instance.syncCustomItemsNow()).
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1345-1346
+        line_range: 1336-1337
         method: customFoodProvider
         semantic: hive-read
         notes: |
@@ -3497,16 +3497,20 @@ concepts:
     writers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
         line_range: 1105-1178
-        method: SavedMealsNotifier.saveMealPreset + relogSavedMeal + deleteSavedMeal (delegators)
+        method: SavedMealsNotifier.saveMealPreset + relogSavedMeal + deleteSavedMeal (delegators — relogSavedMeal no longer bumps times_used, a8e3f1)
       - file: lib/core/services/nutrition_write_service.dart
         line_range: 448-580
         method: saveMealPreset (keys Hive via savedMealKey(name) — diagnose b8d5c2) + deleteSavedMeal + restoreFoodLog (sole writers post-C-12)
+      - file: lib/core/services/nutrition_write_service.dart
+        line_range: 616-740
+        method: relogSavedMeal (owns the times_used bump for BOTH formats — a8e3f1) + saveMealAsTemplate (meal_<hash> templates; a re-save keeps times_used)
       - file: lib/core/services/saved_meal_key_migrator.dart
         line_range: 1-100
         method: SavedMealKeyMigrator.runIfNeeded (one-shot re-key legacy saved_meal_<ms> → canonical, boot-wired; b8d5c2)
       - file: lib/core/services/sync/sync_nutrition.dart
         line_range: 232-330
         method: _syncSavedMeals (cloud projection)
+    behavioral_test_path_times_used: test/contracts/saved_meal_relog_times_used_behavioral_test.dart  # a8e3f1 — meal_* + legacy counts, re-save keeps count
     # audit-2026-05-16 reader-side — every callsite reading
     # saved_meal_* or filtering nutritionBox by is_saved_meal=true.
     reader_manifest_complete: true
@@ -4389,7 +4393,7 @@ concepts:
           screen, a false positive would block every genuine new signup.
           Kill-switch disable_onboarding_overwrite_guard.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
-        line_range: 570-637
+        line_range: 683-750
         method: _syncOnboardingAndPostActions
         notes: |
           Background cloud catch-up (a1f9c4) — syncs the profile (incl.
@@ -6178,13 +6182,16 @@ concepts:
       and the muscle-capture field.
     writers:
       - file: lib/features/train/repositories/workout_repository.dart
-        line_range: 1325-1440
+        line_range: 1357-1506
         method: createCustomExercise
         notes: |
-          AI-coach path. Hive-side: routes through
+          The ONE create path (d5c2e8, 2026-09-26) — the AI-coach tool AND
+          the sheet's CREATE mode both call it. Hive-side: routes through
           WorkoutWriteService.upsertCustomExercise (audit 2026-05-21 / A3).
-          Captures primaryMuscles + normalizes equipment via
-          EquipmentVocab.normalize.
+          Captures primaryMuscles; equipment is optional (null ⇒ [], the
+          sheet) else EquipmentVocab.normalize; defaultReps is a String
+          ("8-12" ranges). Judges the write by the stored row
+          (customExerciseRowLanded), throwing write_failed only when absent.
       - file: lib/core/services/workout_write_service.dart
         line_range: 1184-1224
         method: upsertCustomExercise
@@ -6195,18 +6202,18 @@ concepts:
           custom-picker-fix (2026-09-17): the sheet's EDIT mode now routes
           through here (source `edit_sheet`).
       - file: lib/features/train/widgets/create_custom_exercise_sheet.dart
-        line_range: 200-275
+        line_range: 218-354
         method: _save
         notes: |
-          CREATE mode keeps the DIRECT customBox.put('custom_exercise_<ms>')
-          + syncCustomItemsNow() (pre-existing path, pinned by
-          custom_exercise_writer_to_reader_test). DECISION (custom-picker-fix
-          round-2, recording over the old "prefer routing in a future
-          cleanup" note): the raw put is DELIBERATELY retained for create —
-          it is unawaited and ordered before pop + onCreated, and the
-          awaited service would reorder those steps. EDIT mode routes
-          through upsertCustomExercise (WriteSource.editSheet) and MUST
-          preserve id/created_at/equipment_needed/approved_for_library
+          CREATE mode calls WorkoutRepository.createCustomExercise (d5c2e8,
+          2026-09-26 — reversing the custom-picker-fix round-2 decision to
+          keep a raw customBox.put: that put skipped the duplicate guard,
+          the 60-char cap and the writer stamps, and the reorder concern is
+          handled by awaiting the create, then popping + onCreated with the
+          stored row; a rejected create shows a snackbar and stays open).
+          EDIT mode routes through upsertCustomExercise
+          (WriteSource.editSheet) and MUST preserve
+          id/created_at/equipment_needed/approved_for_library
           (buildEditPayload — round-2 P1-1/P1-2).
       - file: lib/core/services/sync/sync_community.dart
         line_range: 290-360
@@ -6382,6 +6389,22 @@ concepts:
           Edge Function. Catches transport errors + telemeters via
           ErrorTelemetry.recordNonFatal. Wraps response into typed
           RedemptionResult (success / errorMessage / alreadyRedeemed).
+      - file: lib/features/auth/providers/auth_provider.dart
+        line_range: 396-420
+        method: AuthNotifier.signUpWithEmail(referralCode:)
+        notes: |
+          c7b4d2 (2026-09-26): the sign-up field's code is stored in auth
+          user metadata (`referral_code`, via signUp data:) — NOT redeemed
+          at sign-in, which ran before the users row existed and never ran
+          when email confirmation returned no session.
+      - file: lib/features/onboarding/providers/onboarding_provider.dart
+        line_range: 683-750
+        method: _syncOnboardingAndPostActions
+        notes: |
+          The one client redeem point for new users, AFTER the users upsert.
+          Code = resolveReferralCode(welcome stash, userMetadata) — stash
+          wins (c7b4d2).
+    behavioral_test_path_signup: test/contracts/referral_signup_metadata_behavioral_test.dart  # c7b4d2 — resolveReferralCode + sign-up metadata wiring
     reader_manifest_complete: true
     readers:
       - file: lib/features/profile/repositories/referral_repository.dart
@@ -6621,7 +6644,7 @@ concepts:
         fields_read: []
         notes: Fired at :58/:285/:883; invalidates subscriptionInfoProvider + messageLimitProvider.
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 886-886
+        line_range: 929-929
         method: onStateChanged
         semantic: callback-invocation
         fields_read: []
