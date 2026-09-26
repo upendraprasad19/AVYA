@@ -1,0 +1,691 @@
+/**
+ * morning-alert — daily personalised morning push notification for PRO users.
+ *
+ * Trigger: pg_cron job (jobid varies by deploy; see `cron.job` table). Fires
+ *          per timezone bucket — currently single-bucket IST 06:30 with
+ *          subscriber-side dedup keyed on the local IST date.
+ *
+ * Input shape: invoked by cron with no body; reads its working set from DB:
+ *   - subscriptions: status='active' AND end_date > now(), via
+ *     `fetchProUserIds()` from `_shared/subscription.ts`. BOTH terms matter —
+ *     `status` is never reconciled to 'expired', so a status-only check reads
+ *     every lapsed row as PRO. (Until 2026-07-26 this function used
+ *     `users.subscription_status`, which has no expiry term at all and is
+ *     never written back to 'free'; it sent PRO copy to 6 churned users while
+ *     the correct predicate returned zero. This header claimed the
+ *     `subscriptions` gate the whole time. See diagnose doc.)
+ *   - users + user_profile (name, motivation_style, wake_up_time)
+ *   - coach_memory (preferred_name, coaching context)
+ *   - daily_snapshots (yesterday's steps/calories/etc. for "data_driven" tone)
+ *
+ * Output shape: per-user side effects —
+ *   - OneSignal push via `_shared/send_notification.ts`
+ *   - Insert into `ai_coach_interactions` for dedup + telemetry
+ *   - cron_telemetry start/end via `_shared/cron_telemetry.ts` (CLAUDE.md §4.5)
+ *
+ * Env secrets used:
+ *   - SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY (cron-auth, DB reads, dedup writes)
+ *   - ONESIGNAL_APP_ID / ONESIGNAL_REST_API_KEY (push delivery)
+ *
+ * verify_jwt: false (cron invocation). Authenticated via
+ * `isAuthorizedCronCall()` from `_shared/cron_auth.ts` — Vault-stored
+ * service_role_key must match the inbound bearer. See CLAUDE.md
+ * `supabase/functions/CLAUDE.md` for the pr-detection drift history.
+ *
+ * Idempotency: `shouldSendProactive(userId, kind, istDateKey)` blocks repeat
+ * sends within the same IST day. `markProactiveSent` writes the dedup row
+ * before the OneSignal call so retries on transient OneSignal 5xx don't
+ * double-send. Failure surface intentionally per-user — one user's error
+ * does not abort the batch.
+ */
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { sendPushNotification } from "../_shared/send_notification.ts";
+import { fetchCoachMemory } from "../_shared/coach_memory.ts";
+import { markProactiveSent, shouldSendProactive } from "../_shared/proactive_dedup.ts";
+import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
+import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
+import { fetchProUserIds } from "../_shared/subscription.ts";
+import {
+  fetchNotificationPrefs,
+  isNotificationEnabled,
+} from "../_shared/notification_prefs.ts";
+import { sanitizeIdentifier } from "../_shared/sanitize_for_prompt.ts";
+import { generateFreeAlert, generateProLightAlert } from "./message.ts";
+
+type MotivationTone = "tough_love" | "gentle" | "data_driven";
+
+/**
+ * Wrap a base alert with a tone-specific lead-in. `name` is the user's
+ * preferred_name (from coach_memory) when present, falling back to the
+ * full_name first token. `tone` is motivation_style from coach_memory; when
+ * null/unknown we treat it as "gentle" (the existing default voice).
+ */
+function applyTone(
+  baseAlert: string,
+  name: string,
+  tone: MotivationTone | null,
+  snapshotJson: Record<string, unknown> | null,
+): string {
+  // OI-47 round 1: splitting on whitespace drops spaces but NOT CR,
+  // U+2028/2029/0085, control chars or angle brackets.
+  const firstName = sanitizeIdentifier(name?.split(" ")[0], {
+    fallback: "there",
+    maxLen: 32,
+  });
+
+  if (tone === "tough_love") {
+    return `${firstName}, no excuses today. ${baseAlert}`;
+  }
+  if (tone === "data_driven") {
+    const snap = snapshotJson ?? {};
+    // "today_steps" in yesterday's snapshot = steps recorded yesterday
+    const stepsYday = snap.today_steps as number | null;
+    if (stepsYday != null) {
+      return `${firstName} — yesterday: ${stepsYday} steps. ${baseAlert}`;
+    }
+    return `${firstName} — ${baseAlert}`;
+  }
+  // gentle (default) — warm greeting prefix when the base doesn't already lead with the name
+  if (baseAlert.startsWith("Good morning")) return baseAlert;
+  return `Morning ${firstName}! ${baseAlert}`;
+}
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "";
+
+const PAGE_SIZE = 200; // Users fetched per page to cap memory
+const CONCURRENCY = 20; // Parallel alert composition + delivery within each chunk
+
+// ── Counters (module-level so generateAndStoreAlert can increment) ────
+let proLightAlerts = 0;
+let freeAlerts = 0;
+let errorCount = 0;
+let successCount = 0;
+
+/**
+ * Returns today's date string in IST (UTC+5:30) as YYYY-MM-DD.
+ */
+function getTodayIST(): string {
+  const now = new Date();
+  const istOffset = 330 * 60 * 1000;
+  const istDate = new Date(now.getTime() + istOffset);
+  return istDate.toISOString().split("T")[0];
+}
+
+/**
+ * Returns yesterday's date string in IST.
+ */
+function getYesterdayIST(): string {
+  const now = new Date();
+  const istOffset = 330 * 60 * 1000;
+  const istDate = new Date(now.getTime() + istOffset);
+  istDate.setDate(istDate.getDate() - 1);
+  return istDate.toISOString().split("T")[0];
+}
+
+/**
+ * Theme E · Test #8 — Floor the current UTC time to the nearest 15-minute
+ * IST quarter. Returns 'HH:MM:SS' so it lines up with `time without time zone`.
+ */
+function floorToQuarterIst(now: Date = new Date()): string {
+  const utcMs = now.getTime();
+  const istMs = utcMs + (5 * 60 + 30) * 60 * 1000;
+  const ist = new Date(istMs);
+  const hh = ist.getUTCHours().toString().padStart(2, "0");
+  const mm = (Math.floor(ist.getUTCMinutes() / 15) * 15)
+    .toString().padStart(2, "0");
+  return `${hh}:${mm}:00`;
+}
+
+/**
+ * Send push notification via OneSignal.
+ */
+async function sendPushToUser(
+  userId: string,
+  title: string,
+  body: string,
+): Promise<boolean> {
+  return sendPushNotification({
+    userId,
+    title,
+    message: body,
+    screen: "/home",
+  });
+}
+
+/**
+ * Send Telegram message (if bot token is configured and user is connected).
+ */
+async function sendTelegramMessage(
+  chatId: string,
+  message: string,
+): Promise<boolean> {
+  if (!TELEGRAM_BOT_TOKEN || !chatId) return false;
+
+  try {
+    const response = await fetch(
+      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: message,
+          parse_mode: "HTML",
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error(`Telegram send failed for ${chatId}:`, errorBody);
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    console.error(`Telegram error for ${chatId}:`, err);
+    return false;
+  }
+}
+
+// ── Core: generate alert for a single user and upsert to snapshot ─────
+
+interface ActiveUser {
+  id: string;
+  full_name: string | null;
+}
+
+async function generateAndStoreAlert(
+  user: ActiveUser,
+  supabaseClient: SupabaseClient,
+  todayIST: string,
+  yesterdayIST: string,
+  proUserIds: Set<string>,
+): Promise<void> {
+  try {
+    // PRO status comes from the `subscriptions` table via _shared/subscription.ts,
+    // NOT from `users.subscription_status`.
+    //
+    // That column has no expiry term and nothing ever writes it back to 'free'
+    // — three code paths set it to 'pro' and none unset it. Live it claimed 6
+    // PRO users while the correct predicate returned ZERO, so this function was
+    // sending Gemini-generated PRO copy to 6 churned users: paid tokens spent
+    // on people who had stopped paying, and no churn signal. See diagnose doc.
+    const isPro = proUserIds.has(user.id);
+
+    // Read coach_memory ONCE per user.
+    // private_mode users get default copy — explicit guard since fetchCoachMemory
+    // returns the row regardless of private_mode (only renderCoachMemoryBlock
+    // short-circuits on it). Without nullifying here, preferred_name +
+    // motivation_style would leak personalised copy to private_mode users.
+    const memory = await fetchCoachMemory(supabaseClient, user.id);
+    const usableMemory = memory?.private_mode ? null : memory;
+    const userName = usableMemory?.preferred_name ?? user.full_name ?? "Champion";
+    const tone = (usableMemory?.motivation_style ?? null) as MotivationTone | null;
+
+    // Fetch yesterday's snapshot for context
+    const { data: yesterdaySnap } = await supabaseClient
+      .from("user_daily_snapshots")
+      .select("snapshot_json")
+      .eq("user_id", user.id)
+      .eq("snapshot_date", yesterdayIST)
+      .single();
+
+    const snapshotJson = yesterdaySnap?.snapshot_json ?? null;
+
+    let alertMessage: string;
+    let msgType: "pro_light" | "free" = "free";
+
+    if (isPro && !snapshotJson) {
+      // Bug #18 — PRO user with no snapshot (e.g. wasn't active enough yesterday).
+      // Use PRO-light personalised template instead of generic free copy.
+      // Fetch primary_goal from user_profile for goal-aware messaging.
+      const { data: profileRow } = await supabaseClient
+        .from("user_profile")
+        .select("primary_goal")
+        .eq("user_id", user.id)
+        .single();
+
+      const primaryGoal = profileRow?.primary_goal ?? null;
+      const baseProLight = generateProLightAlert(userName, primaryGoal);
+      alertMessage = applyTone(baseProLight, userName, tone, snapshotJson);
+      msgType = "pro_light";
+      proLightAlerts++;
+    } else {
+      // Everyone else — including a PRO user WITH a snapshot, now that there
+      // is no AI path left to prefer for them.
+      const baseFree = generateFreeAlert(userName, snapshotJson);
+      alertMessage = applyTone(baseFree, userName, tone, snapshotJson);
+      msgType = "free";
+      freeAlerts++;
+    }
+
+    // Bug #18 — Structured per-user log line. Greppable for debugging fallback paths.
+    console.log(
+      `[morning-alert] user=${user.id} pro=${isPro} snapshot=${!!snapshotJson} msg_type=${msgType}`,
+    );
+
+    // Store alert in today's snapshot
+    const { data: existingSnapshot } = await supabaseClient
+      .from("user_daily_snapshots")
+      .select("id, snapshot_json")
+      .eq("user_id", user.id)
+      .eq("snapshot_date", todayIST)
+      .single();
+
+    const updatedJson = {
+      ...(existingSnapshot?.snapshot_json ?? {}),
+      morning_alert: alertMessage,
+      morning_alert_type: msgType,
+      morning_alert_generated_at: new Date().toISOString(),
+    };
+
+    const { error: upsertError } = await supabaseClient
+      .from("user_daily_snapshots")
+      .upsert(
+        {
+          user_id: user.id,
+          snapshot_date: todayIST,
+          snapshot_json: updatedJson,
+          created_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id,snapshot_date" },
+      );
+
+    if (upsertError) {
+      console.error(
+        `Failed to store alert for user ${user.id}:`,
+        upsertError,
+      );
+      errorCount++;
+      return;
+    }
+
+    successCount++;
+  } catch (userErr) {
+    console.error(`Error generating alert for user ${user.id}:`, userErr);
+    errorCount++;
+  }
+}
+
+// ── Process a batch of users with bounded concurrency ─────────────────
+
+async function processBatch(
+  users: ActiveUser[],
+  supabaseClient: SupabaseClient,
+  todayIST: string,
+  yesterdayIST: string,
+  proUserIds: Set<string>,
+): Promise<void> {
+  for (let i = 0; i < users.length; i += CONCURRENCY) {
+    const chunk = users.slice(i, i + CONCURRENCY);
+    await Promise.allSettled(
+      chunk.map((user) =>
+        generateAndStoreAlert(
+          user,
+          supabaseClient,
+          todayIST,
+          yesterdayIST,
+          proUserIds,
+        )
+      ),
+    );
+  }
+}
+
+// ── Delivery mode: paginated fetch + bounded concurrency ──────────────
+
+async function deliverAlerts(
+  supabaseClient: SupabaseClient,
+  todayIST: string,
+): Promise<{ totalAlerts: number; pushSent: number; telegramSent: number }> {
+  let pushSent = 0;
+  let telegramSent = 0;
+  let totalAlerts = 0;
+  let offset = 0;
+  let hasMore = true;
+
+  // Theme E · Test #8 — Personalize delivery to each user's wake_up_time.
+  // The cron now fires every 15 min; we ask the RPC for users whose
+  // wake_up_time floors to the current IST quarter. The 07:00 quarter is
+  // the fallback bucket for users with NULL wake_up_time.
+  const currentQuarter = floorToQuarterIst(new Date());
+  const isFallbackQuarter = currentQuarter === "07:00:00";
+  console.log(
+    `[morning-alert.deliver] quarter=${currentQuarter} fallback_window=${isFallbackQuarter}`,
+  );
+
+  while (hasMore) {
+    const { data: snapshots, error: snapError } = await supabaseClient.rpc(
+      "morning_alert_pick_quarter",
+      {
+        p_today: todayIST,
+        p_quarter: currentQuarter,
+        p_fallback: isFallbackQuarter,
+        p_offset: offset,
+        p_limit: PAGE_SIZE,
+      },
+    );
+
+    if (snapError) {
+      console.error(`Delivery fetch error at offset ${offset}:`, snapError);
+      break;
+    }
+
+    if (!snapshots || snapshots.length === 0) break;
+    if (snapshots.length < PAGE_SIZE) hasMore = false;
+    offset += PAGE_SIZE;
+
+    totalAlerts += snapshots.length;
+    console.log(
+      `morning-alert [deliver]: delivering batch at offset ${offset - PAGE_SIZE}, ${snapshots.length} alerts`,
+    );
+
+    // Deliver with bounded concurrency
+    for (let i = 0; i < snapshots.length; i += CONCURRENCY) {
+      const chunk = snapshots.slice(i, i + CONCURRENCY);
+      type MorningSnapRow = {
+        user_id: string;
+        snapshot_json: Record<string, unknown> | null;
+      };
+      // Preferences for THIS chunk, latest-desc. Fetched HERE — in deliver
+      // mode — because this is the branch that actually pushes. An earlier
+      // draft plumbed it through generate mode instead, where nothing consults
+      // it, leaving this call site referencing identifiers that do not exist
+      // in scope (B-pass P0).
+      const deliverPrefs = await fetchNotificationPrefs(
+        supabaseClient,
+        (chunk as MorningSnapRow[]).map((r) => r.user_id),
+      );
+
+      await Promise.allSettled(
+        chunk.map(async (snap: MorningSnapRow) => {
+          const alertMsg = snap.snapshot_json?.morning_alert as
+            | string
+            | undefined;
+          if (!alertMsg) return;
+
+          // Notification preference — from the LATEST snapshot, not this
+          // yesterday-pinned one (F7 / Unit E).
+          //
+          // The date pin is right for CONTENT (the alert summarises
+          // yesterday) and was wrong for PREFERENCES: a user with no row for
+          // yesterday — most users, live — skipped this check entirely, so
+          // the toggle was inert while appearing implemented.
+          if (
+            !isNotificationEnabled(deliverPrefs, snap.user_id, "morning_checkin")
+          ) {
+            return;
+          }
+
+          // Proactive dedup: skip if morning_brief already sent today.
+          const allow = await shouldSendProactive(
+            supabaseClient,
+            snap.user_id,
+            "morning_brief",
+          );
+          if (!allow) {
+            console.log(
+              `[morning-alert] skipping ${snap.user_id}: dedup hit for morning_brief`,
+            );
+            return;
+          }
+
+          // Send push via OneSignal
+          // [TODO] FCM not implemented — alert stored in DB only for user ${snap.user_id}
+          const pushOk = await sendPushToUser(
+            snap.user_id,
+            "ICANBEFITTER",
+            alertMsg,
+          );
+          if (pushOk) {
+            pushSent++;
+            await markProactiveSent(supabaseClient, snap.user_id, "morning_brief");
+          }
+
+          // Try Telegram if connected
+          const { data: tgConn } = await supabaseClient
+            .from("telegram_connections")
+            .select("chat_id")
+            .eq("user_id", snap.user_id)
+            .eq("is_active", true)
+            .single();
+
+          if (tgConn?.chat_id) {
+            const tgOk = await sendTelegramMessage(
+              tgConn.chat_id,
+              `<b>Good Morning!</b>\n\n${alertMsg}`,
+            );
+            if (tgOk) telegramSent++;
+          }
+        }),
+      );
+    }
+  }
+
+  return { totalAlerts, pushSent, telegramSent };
+}
+
+// ── Main handler ──────────────────────────────────────────────────────
+
+serve(async (req: Request) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  // OI-31 (audit-2026-05-17 Hermes F6) — cron-only function. Blast radius
+  // is high: a public POST could trigger AI-generation + push notification
+  // fan-out to every user in the morning quarter window. Helper verifies
+  // JWT signature + role-claim === 'service_role'.
+  if (!await isAuthorizedCronCall(req)) {
+    console.warn(`[cron-auth-gate] morning-alert unauthorized; status=401`);
+    return new Response(
+      JSON.stringify({ error: "Unauthorized" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
+  const logId = await logCronStart("morning-alert");
+
+  try {
+    const startTime = Date.now();
+    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Parse request to determine mode: "generate" (2AM) or "deliver" (7AM)
+    let mode = "generate";
+    try {
+      const body = await req.json();
+      if (body?.mode === "deliver") mode = "deliver";
+    } catch {
+      // No body — default to generate
+    }
+
+    const todayIST = getTodayIST();
+    const yesterdayIST = getYesterdayIST();
+
+    if (mode === "deliver") {
+      // ── DELIVERY MODE (7AM IST) ──────────────────────────────
+      // Read stored alerts page by page and deliver via push + Telegram
+      console.log("morning-alert [deliver]: starting delivery run");
+
+      const { totalAlerts, pushSent, telegramSent } = await deliverAlerts(
+        supabaseClient,
+        todayIST,
+      );
+
+      const elapsed = Date.now() - startTime;
+      console.log(
+        `morning-alert [deliver]: completed in ${elapsed}ms, ` +
+          `${totalAlerts} alerts, ${pushSent} push sent, ${telegramSent} telegram sent`,
+      );
+
+      await logCronEnd(logId, "success", { httpStatus: 200 });
+      return new Response(
+        JSON.stringify({
+          status: "success",
+          mode: "deliver",
+          total_alerts: totalAlerts,
+          push_sent: pushSent,
+          telegram_sent: telegramSent,
+          elapsed_ms: elapsed,
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    // ── GENERATION MODE (2AM IST) ────────────────────────────
+    // Paginated fetch of active users — never loads all into memory at once
+    console.log("morning-alert [generate]: starting generation run");
+
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const sevenDaysAgoISO = sevenDaysAgo.toISOString();
+
+    // PRO set fetched ONCE for the whole run, then O(1) membership per user.
+    // Deliberately not per-user: this function paginates, so an isProUser()
+    // call inside the loop would be one query per user per night.
+    //
+    // On query error this returns an EMPTY set, i.e. nobody is PRO and every
+    // user gets the free template. That is the fail-safe direction — the
+    // alternative is sending the PRO-light template to users we cannot
+    // confirm (both templates are deterministic since cron-ai-removal,
+    // 2026-09-16 — this comment previously described the pre-batch
+    // Gemini-token-spend tradeoff, which no longer applies).
+    const proUserIds = await fetchProUserIds(supabaseClient);
+    console.log(
+      `morning-alert [generate]: ${proUserIds.size} PRO user(s) ` +
+        `(subscriptions.status='active' AND end_date > now())`,
+    );
+
+    // Reset counters
+    proLightAlerts = 0;
+    freeAlerts = 0;
+    errorCount = 0;
+    successCount = 0;
+
+    let offset = 0;
+    let hasMore = true;
+    let batchNum = 0;
+    let totalUsers = 0;
+
+    while (hasMore) {
+      const { data: users, error: usersError } = await supabaseClient
+        .from("users")
+        .select("id, full_name")
+        .gte("last_active_at", sevenDaysAgoISO)
+        // OI-79: a .range() loop needs a stable, unique sort key. Postgres
+        // guarantees no row order without ORDER BY and PostgREST adds none, so
+        // without this two pages can overlap or leave a gap — silently
+        // double-alerting one user and skipping another. `users.id` is the PK.
+        .order("id", { ascending: true })
+        .range(offset, offset + PAGE_SIZE - 1);
+
+      if (usersError) {
+        console.error(`Failed to fetch users at offset ${offset}:`, usersError);
+        // If first page fails, return error; otherwise continue with what we have
+        if (offset === 0) {
+          await logCronEnd(logId, "failed", {
+            httpStatus: 500,
+            errorSummary: `fetch users failed: ${String(usersError)}`,
+          });
+          return new Response(
+            JSON.stringify({ error: "Failed to fetch active users" }),
+            {
+              status: 500,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
+          );
+        }
+        break;
+      }
+
+      if (!users || users.length === 0) break;
+      if (users.length < PAGE_SIZE) hasMore = false;
+
+      batchNum++;
+      totalUsers += users.length;
+      const batchStart = Date.now();
+
+      console.log(
+        `morning-alert [generate]: processing batch ${batchNum}, ` +
+          `${users.length} users (offset ${offset})`,
+      );
+
+      await processBatch(
+        users,
+        supabaseClient,
+        todayIST,
+        yesterdayIST,
+        proUserIds,
+      );
+
+      console.log(
+        `morning-alert [generate]: batch ${batchNum} done in ${Date.now() - batchStart}ms`,
+      );
+
+      offset += PAGE_SIZE;
+    }
+
+    const elapsed = Date.now() - startTime;
+    console.log(
+      `morning-alert [generate]: completed in ${elapsed}ms, ` +
+        `${totalUsers} users across ${batchNum} batches, ` +
+        `${successCount} success, ${proLightAlerts} pro_light, ${freeAlerts} free, ${errorCount} errors`,
+    );
+
+    await logCronEnd(logId, "success", { httpStatus: 200 });
+    return new Response(
+      JSON.stringify({
+        status: "success",
+        mode: "generate",
+        users_processed: successCount,
+        pro_light_alerts: proLightAlerts,
+        free_alerts: freeAlerts,
+        errors: errorCount,
+        total_active: totalUsers,
+        batches: batchNum,
+        elapsed_ms: elapsed,
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
+  } catch (err) {
+    // Sanitised 5xx: never leak raw exception / upstream provider text.
+    const requestId = crypto.randomUUID().split("-")[0];
+    console.error(`[morning-alert] request_id=${requestId}`, err);
+    await logCronEnd(logId, "failed", {
+      httpStatus: 500,
+      requestId,
+      errorSummary: String(err),
+    });
+    return new Response(
+      JSON.stringify({ error: "Internal server error", request_id: requestId }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
+  }
+});

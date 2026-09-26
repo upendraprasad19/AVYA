@@ -1,0 +1,83 @@
+---
+scope: home
+parent: ../../../CLAUDE.md
+created: 2026-05-18
+updated: 2026-05-21
+status: active
+---
+
+# Home Dashboard — Local Rules
+
+> This file is auto-loaded by Claude Code when working under `lib/features/home/`.
+> Root CLAUDE.md (../../../CLAUDE.md) contains process invariants and a pointer index.
+
+## What lives here
+
+`lib/features/home/` owns the 🏠 Home tab — the user's daily dashboard. It is
+**read-only with respect to data** (every card reads from a Riverpod provider
+that wraps a ReadService) but it is the *primary entry point* into other
+features (Start Workout → Train, Log Meal → Nutrition, Edit Goal → Profile).
+
+Pieces:
+
+- `screens/home_screen.dart` — orchestrates the priority-ordered card stack.
+- `widgets/` — `weekly_calendar_strip`, `today_workout_card`, `nutrition_snapshot`, `pr_snapshot`, `recent_logs`, `step_counter`, `day_detail_sheet`, `swap_sheet`, `streak_warning_banner`, `plan_expired_card`. (Weight trend uses the shared `lib/shared/widgets/weight_trend_chart.dart` — the old `weight_sparkline` was removed 2026-06-02, diagnose e1c6a9.)
+- `providers/home_provider.dart` — `todayWorkoutProvider`, `homeNutritionProvider`, `streakWarningEligibilityNotifier`.
+
+## Home Screen Layout (Priority Order)
+
+```
+1. Header (name + greeting + avatar + streak counter)
+2. Weekly calendar strip (7 days, color-coded by completion)
+3. Quick actions: Log Workout | Log Meal | Hydration | Sleep
+4. Today's workout card → Start Workout (or DONE + View Card + stats if completed)
+5. Nutrition snapshot (calories + protein vs target)
+6. AI Coach insight (computed from local schedule data — next workout, consistency tips)
+7. Weight trend chart (`shared/widgets/weight_trend_chart.dart` — range chips All/1Y/6M/3M/1M/1W, dashed goal line, **date-proportional** x-axis + carry-forward anchor so a post-gap weigh-in always draws a connecting line, never a lone dot)
+8. PR snapshot (dynamic — top 4 exercises by volume when key lifts empty)
+9. Recent logged foods
+10. Step counter (Health Connect)
+```
+
+**Today's Workout Card — Completed State:**
+- Shows: DONE badge (green) + "View Card >" (gold) + best lift + total volume
+- "View Card" opens `WorkoutReceiptSheet` with receipt reconstructed from Hive exercise logs
+- Calendar day detail sheet also shows "View Workout Card" button for completed days
+
+## Single-source-of-truth contracts
+
+| Concept | Writer | Reader (this dir) |
+|---|---|---|
+| `workout_receipt_rendering` | `workout_write_service.logExercise` | `home_screen._buildTodayRow` "View Card" handler → `WorkoutReceiptData.fromExerciseLogs(DateTime.now())`; `day_detail_sheet` "View Workout Card" entry. The receipt PHASE label resolves via `WorkoutScheduleReadService.phaseForDate` (Obs 1 6f1a2c). |
+| `nutrition_recent_logs_name` | `nutrition_write_service.logMeal` (name lives in `items[].name`, never top-level) | `home_provider` RecentFoodLogEntry → `NutritionReadService.deriveMealDisplayName` (shared SoT — was reading non-existent top-level `food_name`/`meal_name`/`name` → "Unknown"; Obs 2 8b3d4e). Home recent-logs date key = `istDateStr` (was device-local). |
+| `cold_start_restore_refresh` | `SyncService.restoreFromCloudForUser` bumps `restoreCompletedTick` after the bg-restore heals | **`HiveTabScaffoldMixin` listens (b3c9d4, 2026-09-02) → each tab's own `invalidateOnBackgroundRestore`, which defaults to `invalidateOnRetry`** — so ALL FOUR tab screens refresh, not just Home. It lived in `home_screen` until b3c9d4, which is why Profile/Edit Profile served a pre-restore profile map for a whole session while Home self-healed. Home's set now also includes `userProfileProvider` (the omission that caused it). Nutrition overrides the background hook to EXCLUDE `aiBreakdownProvider`: `ai_mode_body.dart` reads that provider's non-null→null transition as a user commit/cancel and pops the Log Food sheet, which is right for a retry tap and wrong for a restore tick. Background-restore is now opt-OUT — returning users default to it; kill-switch `disable_bg_restore` (slow-boot guard c5a1f2, was opt-in `bg_restore_enabled`). Restore writers are additive/local-wins so a concurrent restore never overwrites a just-logged row. |
+| `streaks` | `streak_progress_service.dart` (on workout complete / food log) | `streak_warning_banner.shouldShow` (clamped to [18,23] — see pitfalls). |
+| `weight_logs` | `health_write_service.dart` | home `WeightTrendChart` (`shared/widgets/weight_trend_chart.dart`; date-proportional x + carry-forward anchor — `weightTrendWindow()` is the testable extraction). |
+| `day_rollover_provider_invalidation` | `day_rollover_service.dart` (cold-start day-change tick) | mount-time invalidation of `todayWorkoutProvider`, `homeNutritionProvider`, `streakProvider`. |
+| Plan expiry (free day 29) | `WorkoutScheduleService.isPhaseExpired()` | `home_screen._buildTodayRow` → `PlanExpiredCard` (3 doors: Upgrade / Build custom / Re-do Week 4). PRO users auto-generate next phase on splash. |
+
+## Common pitfalls
+
+| Pitfall | How to avoid | Source |
+|---|---|---|
+| Steps/sleep showing stale data | Filter health data by BOTH date AND type (`step_log`, `sleep_log`). Legacy `steps_today` guarded by `stepsToday == null && steps_date == todayStr`. Chat-logged sleep read from `sleep_logs` list as fallback. | (relocated 2026-05-18 — see docs/diagnoses/INDEX.md) |
+| Stats grid empty | Fall back to top 4 exercises from allExercisePRs when key lifts (bench/squat/deadlift/OHP) have no data. Unit derived from loggingType (kg/reps/s/km). Adaptive layout: 1→full, 2→row, 3→2+1, 4→2+2. | (relocated 2026-05-18 — see docs/diagnoses/INDEX.md) |
+| Prediction card truncated | Home: maxLines 4 + "Read More →" opens full bottom sheet. Shareable: capped at 500 chars. | (relocated 2026-05-18 — see docs/diagnoses/INDEX.md) |
+| Free user stuck on day 29 with empty schedule | Check `WorkoutScheduleService.isPhaseExpired()` returns true AND `todayWorkoutProvider` is null → `home_screen._buildTodayRow` must render `PlanExpiredCard` (3 doors: Upgrade / Build custom / Re-do Week 4). PRO users auto-generate next Phase on splash via `splash_screen._autoGenerateNextPhaseForPro()` so they never land here. Added 2026-04-18 per audit H9. | (relocated 2026-05-18 — see docs/diagnoses/INDEX.md) |
+| Streak banner fires at 3 PM for a morning lifter | `StreakWarningBanner.shouldShow` (and mirror in `home_provider.StreakWarningEligibilityNotifier._evaluate`) clamps threshold to `[18, 23]`. Handoff is an **evening-only** nudge. Don't re-lower the floor to 15 — an early-riser (6 AM median → raw 9 AM) would surface the banner before dinnertime. Both callsites must stay in sync. | (relocated 2026-05-18 — see docs/diagnoses/INDEX.md) |
+| PRO-expiry banner never shows after expiry | The Home expiry banner's `lapsed` state relies on `SubscriptionService.proLapsedAt` because `_downgradeLocally` **deletes** `expiresAt` on expiry. `isPro()` must keep stamping `pro_lapsed_at` on the genuine-expiry downgrade (NOT cross-account); `writeSubscriptionState` clears it on renewal. Banner = pure `SubscriptionService.expiryBannerSeverity` (amber `<7d` / red lapsed) via `subscriptionExpiryBannerProvider` → `_buildExpiryBanner`; once-per-day dismiss (`expiry_banner_dismissed_date`, IST; re-shown via the day-rollover invalidation set) + kill-switch `configBox['disable_expiry_banner']`. **Cross-account:** both keys are registered in `UserConfigMigrator.userScopedKeys` AND the stamp is session-gated (`HiveUserSession.currentOwnerFullId != null`) — without both they leak the banner to another account on the same device (review P0). Diagnose 2026-06-06. | `subscription_expiry_banner_behavioral_test.dart` |
+
+## Tests pinning the rules here
+
+- `test/contracts/day_rollover_provider_invalidation_writer_to_reader_test.dart`
+- `test/contracts/streaks_writer_to_reader_test.dart`
+- `test/contracts/cold_start_day_rollover_test.dart`
+- `test/contracts/streak_warning_banner_threshold_test.dart`
+- `test/contracts/subscription_expiry_banner_test.dart`
+
+## See also
+
+- `lib/features/train/CLAUDE.md` — Today's workout card targets the active workout flow.
+- `lib/features/nutrition/CLAUDE.md` — nutrition snapshot card.
+- `lib/features/profile/CLAUDE.md` — header avatar + streak chip.
+- `lib/shared/widgets/wardroom/CLAUDE.md` — `WardTabHeader` unified tab header (Test #4 / U7).

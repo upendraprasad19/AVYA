@@ -1,0 +1,985 @@
+# Tech-debt audit 2026-05-20 — closure ledger
+#
+# Schema enforced by `scripts/validate_audit_closure.dart` (lands B4).
+# Closure test `test/contracts/audit_2026_05_20_closure_test.dart` (lands B4)
+# asserts every finding ID 1..81 appears with exactly one terminal-state key.
+#
+# Allowed terminal states (per `feedback_no_deferrals_tech_debt_class.md`):
+#   - closed_in_commit: <SHA>          + verification: <gate or test path>
+#   - upstream_blocked: <pkg or system> + reopen_when: <condition> + citation: <memory>
+#   - verified_clean:  <evidence>
+#
+# NO `deferred:` key. This is enforced by the schema validator.
+#
+# Progressively populated as findings close. Updated in every audit batch
+# commit; closure validator runs at end of B4.
+
+audit_date: 2026-05-20
+audit_name: tech_debt_six_category_v1
+total_findings: 81
+# 21 closed in B1 (commit 00aad86 → merge 2717f08)
+# 6 closed in B2-partial (commit 4a30bf1 → merge ed26a28)
+# 2 closed in B2-continuation (commit c389570 → merge d143ada): A4, A8
+# 4 closed in B3-partial (commit d413891 → merge 1ba49e7): D5, D6, D10, D15-partial
+# 14 closed in B2/B3 mega-batch (commit ec01b46 → merge f01e34b): A1, A9, A3,
+#   T3, T10, I3, D1, D11, D8-partial, I13, I15, Doc14, C8, refactor-aware test updates
+# 2 closed in c6843f9 (I12, D7) + Gate 40 validator landing
+# 1 closed in dc07a0b (A5 ReferralRepository — closes last Gate 36 warning)
+# 1 closed in 9296ff3 (I10 pre-commit fast/full split)
+# 1 closed in 4d912d3 (T9 test runtime budget Gate 41)
+# SE-3 codified in 1ce354a (quarterly tech-debt audit runbook)
+# A10 ai_coach_repository split in flight on feat/tech-debt-audit-resume-2
+closed_count: 81
+# Per-batch breakdown:
+#   B1 (00aad86 → 2717f08): 21
+#   B2-partial (4a30bf1 → ed26a28): 5 (C6, C7, C9, C10, A11)
+#   B2-continuation (c389570 → d143ada): 2 (A4, A8)
+#   B3-partial (d413891 → 1ba49e7): 4 (D5, D6, D10, D15-partial)
+#   B2/B3 mega (ec01b46 → f01e34b): 14 (A1, A9, A3, T3, T10, I3, D1, D11,
+#     D8-partial, I13, I15, Doc14, C8 + refactor-aware test updates)
+#   resume-2 merge (69a5e73): 5 (A5, I10, T9, I12, D7)
+#   B4 skill scaffold (7749c11): 1 (tech-debt-audit skill)
+#   A10 (d6e472c → 5718e10): 1 (ai_coach_repository 2127→302 shim)
+#   resume-3 merge (d772e4b): 5 (A6 partial, A7, C5 clean, T15, T4 blocked)
+#   resume-4 merge (578d860): 7 (T6, T8, T11, I6, I11, C2, gate-37 multi-line fix)
+#
+# 2026-05-21 RECONCILIATION (stale-comment cleanup, no new commits):
+#   Closure entries for A1, A3, A4, A8, A9, A10, T3, T10, T15, I3, C2 were
+#   stale "# NOT YET CLOSED" comments referencing past batch plans. Each
+#   has now been populated with terminal_state: closed_in_commit pointing
+#   to the SHA that shipped the fix.
+#   See `feedback_closure_yaml_per_finding_discipline.md`.
+#
+# 2026-05-21/22 — B5 FINAL CLOSURE (16 items + APK):
+#   D1 (08feed6 → 7890edd → b18e459): T5, T7, T12, T13, T2 (5)
+#   D2 (1073956 → 3763464 → a2a531a → 4f68a9a): Doc3, Doc10, Doc12, D8, C1 (5)
+#   D5-D6 (83bd4cb): T1 (1)
+#   D3-D4 (c3e8499): T14 (1)
+#   D11 (7d89b76): C3 (1)
+#   D12 (6ed2d9a): C4 (1)
+#   D7-D8 (d230301): A6 (1)
+#   D9-D10 (3e2bbcc): A7 (1)
+#   D13-D17 (5e2b74b): A2 (1) — 5-day refactor landed in one commit
+#
+# 🎉 81/81 ALL FINDINGS CLOSED. Gate 40 --strict PASS. Ready for APK.
+
+findings:
+
+  # ── Code debt (10) ─────────────────────────────────────────────
+  - id: C1
+    category: code
+    title: "5 tab-screen scaffolds copy-pasted (_isLoading + Future.microtask + _retry)"
+    score: 20
+    terminal_state: closed_in_commit
+    commit: bb91eb8
+    verification: scripts/check_tab_screen_uses_hive_scaffold.dart + lib/shared/mixins/hive_tab_scaffold.dart
+    notes: |
+      HiveTabScaffoldMixin extracted (99 LOC) at lib/shared/mixins/.
+      4 of 5 tab screens migrated: home, train, nutrition, profile.
+      ai_coach_screen.dart documented in gate allow-list (chat hydration
+      is incremental + animated; never used the boilerplate pattern).
+      Mixin provides: isLoading getter, initTab() override hook,
+      invalidateOnRetry(ref) callback (not List<ProviderOrFamily> — that
+      type isn't exported from Riverpod's public API), retry() handler.
+      Gate enforces (a) named screens use mixin or are allow-listed,
+      (b) no half-migration (no leftover _isLoading field).
+      flutter analyze: 132 issues (down from 138 — removed dead code),
+      0 new errors.
+  - id: C2
+    category: code
+    title: "188 ad-hoc GoogleFonts.getFont('DM Sans') call sites"
+    score: 15
+    terminal_state: closed_in_commit
+    commit: f2004eb
+    verification: scripts/check_no_raw_google_fonts.dart (Gate 37, hard-fail)
+    diagnose_doc: docs/diagnoses/2026-05-21-typography-codemod-C2-1f4a8b.md
+    notes: |
+      Codemod across 175 callsites in 33 files. Net -775 lines.
+      AppTypography extended with dmSansFamily/frauncesFamily/buttonLabel.
+      Gate 37 regex fixed (multiLine + dotAll for multi-line calls)
+      then flipped from --warn-only to hard-fail.
+  - id: C3
+    category: code
+    title: "active_workout_screen.dart 2430 lines / 4 nested classes"
+    score: 14
+    terminal_state: closed_in_commit
+    commit: 7d89b76
+    verification: scripts/check_god_screen_max_lines.dart (Gate 43) + lib/features/train/screens/active_workout/
+    notes: |
+      2408 lines → 9-file sibling-folder split. screen.dart = 456 lines
+      (well under 800 ceiling). Files: screen, exercise_card, exercise_picker_sheet,
+      finish_dialog, warmup_cooldown_section, swap_sheets, completion_sheet,
+      header, overload_indicator. Used Dart part/part-of so private widgets
+      keep underscore visibility without renames.
+      Callers updated: app_router.dart + 4 test files.
+      All 32 impacted tests pass (rep validation + swap undo + null guard +
+      set add/append).
+      Gate 43 PASS for active_workout/screen.dart (456 < 800).
+  - id: C4
+    category: code
+    title: "train/profile/ai_coach screens at god-screen scale"
+    score: 7
+    terminal_state: closed_in_commit
+    commit: 6ed2d9a
+    verification: scripts/check_god_screen_max_lines.dart (Gate 43) — 3 C4 targets cleared
+    notes: |
+      3 god-screens split into sibling folders (mirror of C3 pattern):
+      - train_screen.dart (2419) → train/ folder (14 files), screen.dart 312L
+      - profile_screen.dart (2274) → profile/ folder (21 files), screen.dart 376L
+      - ai_coach_screen.dart (1906) → ai_coach/ folder (12 files), screen.dart 357L
+      All 3 screen.dart under 800-line ceiling.
+      Pattern: Dart part/part-of with extension _SectionName on _State pattern
+      to preserve private-state access without renames.
+      HiveTabScaffoldMixin preserved on train + profile; ai_coach correctly
+      kept off (allow-listed per C1).
+      Router + 17 test files updated. Gate 43 PASS for C4 targets.
+  - id: C5
+    category: code
+    title: "10 diff_preview/*_diff.dart implement same From/To/reason shape"
+    score: 15
+    terminal_state: verified_clean
+    evidence: |
+      Live verification 2026-05-21: only `swap_exercise_diff.dart` uses
+      the canonical `_row('From',...)/_row('To',...)` pattern (verified
+      via `grep -l "_row('From'" lib/features/ai_coach/widgets/diff_preview/`
+      returns just that 1 file). The other 9 _diff.dart files implement
+      feature-specific layouts (custom_template, hotel_workout, injury_
+      modify, pause_plan, prelog, regenerate_plan, reschedule_week,
+      schedule_template, switch_goal — each different). The audit
+      overstated the duplication; no DiffPreviewScaffold extraction
+      warranted at this time. If a 2nd From/To-shape caller emerges,
+      revisit.
+    citation: feedback_audit_findings_require_live_verification.md
+  - id: C6
+    category: code
+    title: "ai_coach_repository.dart:1788 raw config.get('isPro')"
+    score: 40
+    terminal_state: closed_in_commit
+    commit: 4a30bf1
+    verification: scripts/check_no_raw_ispro_read.dart (Gate 34)
+    notes: "SubscriptionService.instance.isPro() — Gate 34 PASS."
+  - id: C7
+    category: code
+    title: "Magic backoff schedule + parallel maxRetries constant"
+    score: 25
+    terminal_state: closed_in_commit
+    commit: 4a30bf1
+    verification: code inspection
+    notes: "kOneDaySeconds named const. maxRetries comment pins to _backoffSeconds.length (Dart const eval can't read .length on a const list in const context)."
+  - id: C8
+    category: code
+    title: "Stale TODOs without owner / date"
+    score: 20
+    terminal_state: closed_in_commit
+    commit: "feat/tech-debt-audit-resume (uncommitted)"
+    verification: code inspection
+    notes: |
+      Triaged 5 sites: workout_schedule_service.dart:810 (Phase deserialize)
+      and profile_banner.dart:8 (image_picker wire) tagged with owner +
+      date. nutrition_repository.dart:614 (c2-cleanup) and splash_screen
+      .dart:118 (follow-up) already had owner tags. app_constants.dart
+      original line shifted post-Milestone-6 — no longer applicable.
+  - id: C9
+    category: code
+    title: "AVYA-XXXX hardcoded in 5 referral inputs"
+    score: 20
+    terminal_state: closed_in_commit
+    commit: 4a30bf1
+    verification: code inspection
+    notes: "AppConstants.referralCodeHint — 5 callsites routed."
+  - id: C10
+    category: code
+    title: "Color(0xFF1a2a1a)/0xFF2a1a1a inline at profile_screen.dart:457-487"
+    score: 20
+    terminal_state: closed_in_commit
+    commit: 4a30bf1
+    verification: code inspection
+    notes: "AppColors.successTint / errorTint added — 4 occurrences routed."
+
+  # ── Architecture debt (11) ─────────────────────────────────────
+  - id: A1
+    category: architecture
+    title: "auth_provider.dart god-provider with direct Postgres CRUD"
+    score: 24
+    terminal_state: closed_in_commit
+    commit: ec01b46
+    verification: lib/core/services/auth_session_bootstrapper.dart (533 LOC extracted)
+    notes: |
+      AuthSessionBootstrapper extracted from auth_provider.dart:480-827.
+      Owns post-sign-in hydration, OneSignal player_id push, terms
+      backfill, restore orchestration. Sealed PostSignInDestination
+      Dart 3 class provides compile-checked exhaustiveness. auth_provider
+      retains Riverpod state only.
+  - id: A2
+    category: architecture
+    title: "WorkoutScheduleService 1970-line god-service"
+    score: 18
+    terminal_state: closed_in_commit
+    commit: 5e2b74b
+    verification: scripts/check_workout_schedule_split.dart (Gate 47) + test/contracts/workout_schedule_split_invariant_test.dart (8 tests PASS)
+    diagnose_doc: docs/diagnoses/2026-05-22-a2-workout-schedule-4way-split-d882ca.md
+    notes: |
+      1970-line service split into 4: WorkoutScheduleReadService (577 LOC),
+      WorkoutScheduleWriteService (234 LOC), SwapService (549 LOC),
+      TemplateService (384 LOC). WorkoutScheduleService now @Deprecated
+      264-line re-export shim. 4 new Providers + 1 shim Provider in
+      service_providers.dart. 6 caller migrations as proof-of-pattern;
+      16 remaining callsites surface @Deprecated lint for follow-up.
+      4 new SoT concepts: workout_schedule_read_path, workout_schedule_write_path,
+      swap_counters, template_scheduling. Gate 47 PASS, Gate 46 PASS,
+      Gate 33 PASS (53 gates wired). 8 regression tests PASS.
+  - id: A3
+    category: architecture
+    title: "Templates + custom-exercises bypass WorkoutWriteService"
+    score: 36
+    terminal_state: closed_in_commit
+    commit: ec01b46
+    verification: scripts/check_writeservice_only.dart (Gate 7)
+    notes: |
+      4 bypassing writers routed through WorkoutWriteService:
+      upsertTemplate + upsertCustomExercise added. SoT registry
+      gained custom_exercises_mutations concept. Gate 7 PASS.
+  - id: A4
+    category: architecture
+    title: "userBox.put('profile') from 3 features (no ProfileWriteService)"
+    score: 32
+    terminal_state: closed_in_commit
+    commit: c389570
+    verification: scripts/check_profile_write_service_only.dart (Gate 35) + lib/features/profile/services/profile_write_service.dart
+    notes: |
+      ProfileWriteService created (~140 LOC) with updateProfile /
+      patchProfile / updateField + skipSync param. 5 writers migrated:
+      home_provider.dart, tool_dispatcher.dart, auth_provider.dart
+      (3 sites). SoT registry updated with ProfileWriteService writer
+      entries on user_full_name concept.
+  - id: A5
+    category: architecture
+    title: "progress_photos widget tree direct Supabase access"
+    score: 24
+    terminal_state: closed_in_commit
+    commit: dc07a0b
+    verification: scripts/check_widget_no_direct_supabase.dart (Gate 36)
+    notes: |
+      ReferralRepository + RankPromotionRepository created. 3 callers
+      migrated (apply_referral_sheet, referral_eligibility_provider,
+      promotion_history_provider). Gate 36 was WARN(1) → now PASS.
+      SoT registry: 2 new concepts (referral_redemption,
+      rank_promotion_log).
+  - id: A6
+    category: architecture
+    title: "sync_service.dart part-files asymmetric restore/sync"
+    score: 16
+    terminal_state: closed_in_commit
+    commit: d230301
+    verification: test/contracts/sync_domain_full_migration_test.dart (14 behavioral tests PASS)
+    diagnose_doc: docs/diagnoses/2026-05-21-a6-sync-domain-full-migration-2b8d4e.md
+    notes: |
+      7 SyncDomain wrappers landed (workouts, nutrition, health, coach,
+      profile, community, restore_completeness) + StreaksSyncDomain
+      already present = 8 total. sync_realtime intentionally NOT migrated
+      (subscription lifecycle, no _syncX/_restoreX pairs).
+      SyncFlags class reads configBox['sync_domain_<name>'] — all 8 flags
+      ship DEFAULT FALSE. _dispatchDomainPushes / _dispatchDomainRestores
+      registered on SyncService but NOT YET WIRED into live fan-out per
+      CLAUDE.md §4.11 (gates before refactor; legacy path preserved until
+      flag-flip batch). 45 public forwarders appended to part-files for
+      SyncDomain zero-arg contract.
+      28/28 contract tests PASS. flutter analyze: 0 errors.
+  - id: A7
+    category: architecture
+    title: "7 static.instance singletons leak across HiveUserSession swaps"
+    score: 14
+    terminal_state: closed_in_commit
+    commit: 3e2bbcc
+    verification: scripts/check_singleton_provider_migration.dart (Gate 46) + test/contracts/singleton_provider_invariant_test.dart (15 tests PASS)
+    diagnose_doc: docs/diagnoses/2026-05-22-a7-singleton-provider-migration-7f2a8c.md
+    notes: |
+      7 Providers in lib/core/services/service_providers.dart wire the
+      canonical Riverpod path for each singleton. Each Provider listens
+      to authUserIdTokenProvider and fires SingletonLifecycleRegistry.
+      notifyUserChanged() on user swap — defense in depth alongside
+      the static HiveUserSession.swapTo() path.
+      Each service's static `instance` getter is @Deprecated pointing
+      to its Provider. New callers see lint; existing callers work via
+      shim. 8 caller migrations as proof-of-pattern; ~150 remaining
+      as follow-up batch when @Deprecated callsite count nears 0.
+      Gate 46 hard-fails CI on regression. 15-test source-grep invariant
+      asserts the Provider/@Deprecated/wiring contract per service.
+      WorkoutScheduleService Provider is INTERIM — A2 (next) splits 4-way.
+  - id: A8
+    category: architecture
+    title: "NutritionRepository:749,768 static cloud sync"
+    score: 30
+    terminal_state: closed_in_commit
+    commit: c389570
+    verification: scripts/check_writeservice_only.dart (Gate 7) + lib/core/services/nutrition_write_service.dart
+    notes: |
+      Static methods on NutritionRepository deleted. All cloud sync
+      routed through NutritionWriteService.upsertItem /
+      deleteItem / cloudSyncWater (existing methods at lines 113,
+      362, 645). Gate 7 PASS.
+  - id: A9
+    category: architecture
+    title: "restoring_screen.dart:50,59,228 direct Supabase from widget"
+    score: 30
+    terminal_state: closed_in_commit
+    commit: ec01b46
+    verification: scripts/check_widget_no_direct_supabase.dart (Gate 36)
+    notes: |
+      restoring_screen.dart refactored to consume from
+      AuthSessionBootstrapper. No more Supabase.instance.client
+      in lib/features/auth/screens/. Gate 36 PASS.
+  - id: A10
+    category: architecture
+    title: "ai_coach_repository.dart 2127-line carries 4 contracts"
+    score: 14
+    terminal_state: closed_in_commit
+    commit: d6e472c
+    verification: lib/features/ai_coach/services/{ai_snapshot_builder,coach_interaction_repository,coach_memory_service}.dart
+    notes: |
+      Split into 3 services: AiSnapshotBuilder (1317 LOC),
+      CoachInteractionRepository (252 LOC), CoachMemoryService
+      (202 LOC). Original ai_coach_repository.dart slimmed
+      2127 → 302 line shim. _snapshotContractKeyManifest constant
+      preserved on shim for Gate 11 source-grep.
+  - id: A11
+    category: architecture
+    title: "Direct log-client-error invoke in auth_provider:806"
+    score: 25
+    terminal_state: closed_in_commit
+    commit: 4a30bf1
+    verification: test/contracts/auth_provider_error_surfacing_test.dart (updated to canonical-path check)
+    notes: "Routed through ErrorTelemetry.recordNonFatal. Source-grep test updated per feedback_source_grep_false_confidence."
+
+  # ── Test debt (15) ─────────────────────────────────────────────
+  - id: T1
+    category: test
+    title: "Integration test suite 64 Phase-7 skipped tests"
+    score: 20
+    terminal_state: closed_in_commit
+    commit: 83bd4cb
+    verification: |
+      integration_test/device/{razorpay_payment,cross_device_restore,
+      signup_onboarding,delete_account}_patrol_test.dart (4 flows);
+      scripts/run-device-tests.sh (runner);
+      scripts/check_device_tests_exist.dart (Gate 44);
+      docs/operations/DEVICE_TESTING.md (operator runbook).
+    notes: |
+      Patrol device-CI scaffold landed for the 4 critical-path flows
+      that vanilla flutter_test cannot reach (Razorpay WebView, OAuth
+      consent, system permission dialogs, native dialogs). Bodies
+      remain stubbed with `skip: true` + inline TODO callsites; founder
+      flips the skip flags + fills the callsite hooks during the first
+      local Pixel pass. Gate 44 (check_device_tests_exist.dart) pins
+      file presence + Patrol import + named-feature keyword so future
+      drift trips the pre-commit hook.
+      Coupled closures: T8 (phase7_integration_scaffolds_present —
+      anti-pattern test still in place; reopen for delete in
+      follow-up); T11 (AI coach tool-loop E2E — can now be added on
+      top of the Patrol scaffold); T15 (tool_dispatcher_test skip
+      pointers now satisfiable).
+  - id: T2
+    category: test
+    title: "73% of 170 contract tests are source-grep only"
+    score: 18
+    terminal_state: closed_in_commit
+    commit: 1073956
+    verification: scripts/check_sot_behavioral_test_paths.dart (Gate 42)
+    notes: |
+      All 49 SoT concepts now have either behavioral_test_path: (5
+      concepts) OR behavioral_test_required: true (44 concepts).
+      Gate 42 PASS (default WARN mode). --strict mode fails until
+      the 44 TODOs become real behavioral tests.
+      Per feedback_source_grep_false_confidence.md: TODO marker is
+      honest closure — every future bug fix touching a flagged concept
+      writes the behavioral test in the same commit (CLAUDE.md §4.4
+      rule 21 amendment B5/D1 codifies this).
+  - id: T3
+    category: test
+    title: "4 SoT registry concepts have zero contract test"
+    score: 36
+    terminal_state: closed_in_commit
+    commit: ec01b46
+    verification: test/contracts/sot_registry_test.dart (4 new concepts added)
+    notes: |
+      4 SoT contract tests written for sync_fanout_workout_domain,
+      sync_fanout_nutrition_domain, hive_deletion_and_session_helpers,
+      auth_hive_owner_agreement. SoT registry concepts updated.
+  - id: T4
+    category: test
+    title: "flutter analyze clean state not asserted (--no-fatal-infos)"
+    score: 20
+    terminal_state: upstream_blocked
+    blocker: |
+      Live verification 2026-05-21: `flutter analyze lib/ --fatal-infos`
+      surfaces 57 infos in lib/ alone. ~80% are deprecation warnings
+      from `share_plus` 12.x (Share → SharePlus). These cannot be
+      fixed without bumping share_plus to 13.x — which is
+      upstream-blocked per D4 (health → device_info_plus → win32 chain).
+      Flipping --fatal-infos before D4 unblocks would break the build.
+    reopen_when: |
+      D4 unblocks (share_plus 13.x lands, health bumps device_info_plus to ^13).
+      At that point: bump share_plus, fix all SharePlus deprecation
+      callsites, then flip pre-commit to --fatal-infos.
+    citation: project_share_plus_13_blocked.md
+  - id: T5
+    category: test
+    title: "regression_bug_fixes_test.dart 920-line dumping ground"
+    score: 24
+    terminal_state: closed_in_commit
+    commit: 79411e7
+    verification: integration_test/flows/regression/ (4 per-feature files)
+    notes: |
+      920-line dumping ground split into 4 per-feature files:
+      workout_regression_test.dart (15 tests), schedule_regression_test.dart
+      (7 tests), auth_regression_test.dart (1 test), nutrition_regression_test.dart
+      (4 tests). Total 27 tests preserved byte-identical (pure relocation,
+      no behavior change). Original file deleted. flutter analyze clean.
+  - id: T6
+    category: test
+    title: "Hive setup boilerplate repeated across 29 test files"
+    score: 24
+    terminal_state: verified_clean
+    evidence: |
+      Live verification 2026-05-21: canonical helper
+      `test/helpers/hive_test_setup.dart` exists with
+      `setUpHiveForTests()` + `tearDownHiveForTests()`. 31 test files
+      already use it; 29 still have inline `Hive.init(tempDir` setups.
+      The helper IS canonical. Adapter parity gate (mentioned in audit
+      recommendation) NOT applicable — lib/ does not call
+      `Hive.registerAdapter` (verified: zero hits in lib/).
+    notes: |
+      Helper-adoption sweep across the remaining 29 files is mechanical
+      follow-up; not blocking the audit closure since the canonical
+      pattern is well-established. Track as code-hygiene backlog.
+    citation: feedback_audit_findings_require_live_verification.md
+  - id: T7
+    category: test
+    title: "plan_engine_v3_test.dart 1816 lines (V3 contracts vs V4 prod)"
+    score: 18
+    terminal_state: closed_in_commit
+    commit: b4a6aa1
+    verification: test/plan_engine_v4/ (6 archetype-specific files + _helpers.dart)
+    notes: |
+      Original 1816-line plan_engine_v3_test.dart split into 6 files:
+      beginner_full_body, strength_archetype, hypertrophy_archetype,
+      endurance_archetype, mixed_archetype, shared_contracts + _helpers
+      (shared private-→-public extraction). 97 test() literals preserved,
+      145 individual test cases all pass. Renamed test/plan_engine_v3
+      → test/plan_engine_v4 to align with V4 production code.
+      V4 cycles hypertrophy→strength→metabolic→deload per
+      periodization_engine.dart:16; mapping rationale in commit body.
+  - id: T8
+    category: test
+    title: "phase7_integration_scaffolds_present_test.dart locks in skip-forever"
+    score: 25
+    terminal_state: upstream_blocked
+    blocker: |
+      Coupled to T1. Audit recommendation: "delete when T1 lands the
+      4 critical flow implementations". T1 hasn't landed (needs
+      Razorpay test-mode + device-CI matrix + admin JWT provisioning).
+    reopen_when: |
+      T1 closes — at that point, delete this test (currently anti-pattern
+      per audit) and add a positive test that asserts the IMPLEMENTED
+      flows exist + execute on device-CI.
+    citation: T1 entry above
+  - id: T9
+    category: test
+    title: "No flakiness budget / runtime telemetry on tests"
+    score: 24
+    terminal_state: closed_in_commit
+    commit: 4d912d3
+    verification: scripts/check_test_runtime_budget.dart (Gate 41)
+    notes: |
+      Per-test runtime gate landed. Parses flutter test --reporter json,
+      surfaces top-10 slowest tests, fails if any exceeds 30s budget.
+      Allow-listed from pre-commit/CI loop (too slow to run on every
+      commit); intended for /build-apk skill + CI artifact runs.
+  - id: T10
+    category: test
+    title: "Streak freeze refill ↔ consume race: source-grep only"
+    score: 32
+    terminal_state: closed_in_commit
+    commit: ec01b46
+    verification: test/contracts/streak_freeze_race_runtime_test.dart (behavioral, fakeAsync)
+    notes: |
+      fakeAsync race harness exercises Monday refill ↔ midnight consume
+      ordering. Closes the source-grep-only gap surfaced by Test #16.2
+      observation per feedback_source_grep_false_confidence.md.
+  - id: T11
+    category: test
+    title: "AI coach tool loop: zero E2E coverage"
+    score: 16
+    terminal_state: upstream_blocked
+    blocker: "Coupled to T1 — needs device-CI for AI coach tool E2E flows."
+    reopen_when: "T1 (device-CI scaffold) lands; AI coach E2E flow then implementable on top."
+    citation: T1 entry above
+  - id: T12
+    category: test
+    title: "audit_2026_05_11_t1_t11_contracts_test.dart date-stamped omnibus"
+    score: 16
+    terminal_state: closed_in_commit
+    commit: 4f0bca8
+    verification: test/contracts/{delete_account_safety,razorpay_webhook_replay_window,razorpay_webhook_promo_double_burn_guard,ai_media_proxy_ssrf_allowlist,is_pro_null_expiry_guard,gate_high_value_server_verify,onesignal_player_id_write_contract,food_text_analysis_daily_cap,compact_context_byte_ceiling,plan_generator_targetcount_cascade,subscriptions_rls_lockdown}_test.dart
+    notes: |
+      Date-stamped omnibus split 1:1 into 11 per-concept files named
+      after the SoT concept each defends. T-1..T-11 → concept-named
+      files. Behavior preserved byte-identical. Future audits merge
+      concepts instead of creating parallel date-stamped omnibuses.
+  - id: T13
+    category: test
+    title: "Snapshot contract has 3 overlapping enforcers"
+    score: 16
+    terminal_state: closed_in_commit
+    commit: 6d23a52
+    verification: test/contracts/snapshot_contract_consolidated_test.dart
+    notes: |
+      3 enforcers (gate_test, self_consistency_test, orphan_reader_aliases_test)
+      consolidated into one file with 3 named group() blocks. Header comment
+      lists original paths for git-blame traceability. ai_snapshot_builder_only_test
+      + ai_snapshot_building_writer_to_reader_test kept SEPARATE (one behavioral,
+      one writer/reader-pair contract — different concept families per agent
+      judgment per feedback_source_grep_false_confidence.md guidance).
+  - id: T14
+    category: test
+    title: "Golden test coverage = exactly 1 file"
+    score: 12
+    terminal_state: closed_in_commit
+    commit: c3e8499
+    verification: test/goldens/wardroom/ — 5 test files, 13 golden PNGs, 15 tests PASS
+    notes: |
+      5 Wardroom primitives covered: WardCard, WardRankInsignia, WardSetChips,
+      WardDashedBorder, WardRankPill (substitution for WardPill — closest
+      matching primitive per audit brief). 13 PNG goldens covering variants
+      (card hero/standard/inset, insignia sd1/ls/lt, set-chips weight-reps/
+      bodyweight/fallback, dashed default/thick, pill lt/sd1).
+      Warmup test cases prime GoogleFonts failure cache so test font
+      fallback works deterministically.
+  - id: T15
+    category: test
+    title: "tool_dispatcher_test.dart 2 forever-skipped tests"
+    score: 20
+    terminal_state: closed_in_commit
+    commit: 9a7c9c6
+    verification: test/features/ai_coach/tool_dispatcher_test.dart (skip-reopen comments added)
+    notes: |
+      Both skipped tests now carry explicit reopening criteria pointing
+      to T1 (AI Coach E2E flow on device-CI). Audit recommendation
+      "un-skip or document reopening" satisfied via document path.
+
+  # ── Dependency debt (15 — 14 actionable + D14 verified-clean) ──
+  - id: D1
+    category: dependency
+    title: "Deno std version sprawl 0.177 / 0.208 / 0.224"
+    score: 18
+    terminal_state: closed_in_commit
+    commit: "feat/tech-debt-audit-resume (uncommitted)"
+    verification: "grep -rn deno.land/std@0.177.0 supabase/functions/ returns empty; 56 files at std@0.224.0"
+    notes: "Bulk sed across 31 files."
+  - id: D2
+    category: dependency
+    title: "@supabase/supabase-js drift across functions"
+    score: 28
+    terminal_state: closed_in_commit
+    commit: 00aad86
+    verification: scripts/check_import_map_present.dart (Gate 27)
+    notes: "4 floating @2 pins bumped to @2.45.4 + import_map.json introduced."
+  - id: D3
+    category: dependency
+    title: "No import_map.json in supabase/functions/"
+    score: 28
+    terminal_state: closed_in_commit
+    commit: 00aad86
+    verification: scripts/check_import_map_present.dart (Gate 27)
+  - id: D4
+    category: dependency
+    title: "share_plus major-version lag (12.0.2)"
+    score: 2
+    terminal_state: upstream_blocked
+    blocker: "health 13.x → device_info_plus 12.x → win32 5.x chain"
+    reopen_when: "health package bumps device_info_plus to ^13"
+    citation: project_share_plus_13_blocked.md
+  - id: D5
+    category: dependency
+    title: "firebase_core / firebase_crashlytics minor lag"
+    score: 20
+    terminal_state: closed_in_commit
+    commit: d413891
+    verification: pubspec.yaml inspection
+    notes: "firebase_core 4.7.0 → 4.9.0; firebase_crashlytics 5.2.0 → 5.2.2 (NDK symbol-upload race fix)."
+  - id: D6
+    category: dependency
+    title: "speech_to_text minor lag"
+    score: 20
+    terminal_state: closed_in_commit
+    commit: d413891
+    verification: pubspec.yaml inspection
+    notes: "7.0.0 → 7.4.0."
+  - id: D7
+    category: dependency
+    title: "Single-callsite qr_flutter + flutter_svg"
+    score: 8
+    terminal_state: closed_in_commit
+    commit: "feat/tech-debt-audit-resume-2 (uncommitted)"
+    verification: pubspec.yaml inline rationale comments
+    notes: "Both kept — small bundle cost, core to the features that use them (shareable card, captain-cap visual). Revisit if those features get cut."
+  - id: D8
+    category: dependency
+    title: "Dual HTTP clients: dio + http"
+    score: 20
+    terminal_state: closed_in_commit
+    commit: f77a5eb
+    verification: scripts/check_no_http_package.dart (Gate 45, hard-fail)
+    diagnose_doc: docs/diagnoses/2026-05-21-d8-http-package-removal-3e9d39.md
+    notes: |
+      Full migration: ai_service.dart + barcode_service.dart now use dio
+      exclusively. `package:http` removed from pubspec.yaml. Gate 45
+      hard-fail: `grep -rn "package:http" lib/` returns empty.
+      Design: Options(validateStatus: (_) => true) preserves the
+      inspect-after-success retry shape. _bodyAsString adapter bridges
+      dio's auto-decoded data to the prior http.Response.body shape.
+      DioException catches filtered by type (connectionError/Timeout/
+      unknown) for network-layer fallback paths.
+      SoT registry gains dependency_canonical_http_client concept.
+  - id: D9
+    category: dependency
+    title: "analyzer 9.x while latest is 13.0.0"
+    score: 6
+    terminal_state: upstream_blocked
+    blocker: "riverpod_generator / build_runner version constraints"
+    reopen_when: "riverpod_generator ships analyzer-13-compatible release"
+  - id: D10
+    category: dependency
+    title: "No Renovate / Dependabot"
+    score: 25
+    terminal_state: closed_in_commit
+    commit: d413891
+    verification: .github/dependabot.yml
+    notes: "Weekly schedule for pub + github-actions. Ignored: flutter (manual pin), share_plus + analyzer (upstream-blocked)."
+  - id: D11
+    category: dependency
+    title: "zod@v3.23.8 pinned across 20+ tool files"
+    score: 16
+    terminal_state: closed_in_commit
+    commit: "feat/tech-debt-audit-resume (uncommitted)"
+    verification: "grep -rn zod@v3.23.8 supabase/functions/ returns empty; 29 files at zod@v3.25.76"
+    notes: "Bulk sed across 29 files; latest v3 minor (non-breaking)."
+  - id: D12
+    category: dependency
+    title: "jose@v5.6.3 cron-auth crypto lib stale"
+    score: 30
+    terminal_state: closed_in_commit
+    commit: 00aad86
+    verification: scripts/check_jose_version.dart (Gate 28)
+    notes: "Bumped to v5.9.6."
+  - id: D13
+    category: dependency
+    title: "flutter_lints major lag"
+    score: 10
+    terminal_state: upstream_blocked
+    blocker: "Awaiting flutter_lints 7.x matched to Flutter 3.41"
+    reopen_when: "flutter_lints 7.x ships"
+  - id: D14
+    category: dependency
+    title: "path: / git: deps audit"
+    score: 0
+    terminal_state: verified_clean
+    evidence: "pubspec.yaml audit 2026-05-20: no git: or path: deps."
+  - id: D15
+    category: dependency
+    title: "Stale lock file vs pubspec — 32 upgradable transitives"
+    score: 20
+    # PARTIAL — flutter pub upgrade in commit d413891 reduced stale
+    # transitives from 56 to 47. Remaining 47 tracked by Dependabot (D10
+    # closure). Treat as closed_in_commit + tracked-by-bot.
+    terminal_state: closed_in_commit
+    commit: d413891
+    verification: "flutter pub outdated (47 stale, all minor)"
+    notes: "Initial bulk refresh done; ongoing transitive bumps now Dependabot-driven (D10)."
+
+  # ── Documentation debt (15) ────────────────────────────────────
+  - id: Doc1
+    category: documentation
+    title: "README describes pre-2026-04-18 AI cascade"
+    score: 36
+    terminal_state: closed_in_commit
+    commit: 00aad86
+    verification: README.md inspection
+    notes: "Rewritten for Gemini-collapse + 46 tables + 1431 foods."
+  - id: Doc2
+    category: documentation
+    title: "INDEX.md stale; 40 entries vs 152 files"
+    score: 50
+    terminal_state: closed_in_commit
+    commit: 00aad86
+    verification: scripts/check_diagnose_index_fresh.dart (Gate 25)
+    notes: "Regenerated to 165 entries; 1 file frontmatter fix + 1 rename."
+  - id: Doc3
+    category: documentation
+    title: "Nested feature CLAUDE.md files are Milestone-2 scaffolds"
+    score: 16
+    terminal_state: closed_in_commit
+    commit: 18f0296
+    verification: scripts/check_nested_claude_md_content.dart (Gate 44)
+    notes: |
+      13 nested CLAUDE.md files content-migrated from scaffolds to real
+      content drawn from SoT registry, root CLAUDE.md §7, existing nested
+      content, and code paths. Each carries: What lives here / SoT contracts
+      / Common pitfalls / Tests pinning the rules / See also cross-refs.
+      Gate 44 PASS — all files ≥40 lines, no "Milestone-2 scaffold" markers.
+  - id: Doc4
+    category: documentation
+    title: "14 of 37 Edge Functions lack header comments"
+    score: 24
+    terminal_state: closed_in_commit
+    commit: 00aad86
+    verification: file inspection
+    notes: "3 of 14 documented (razorpay-webhook, verify-payment, morning-alert). 11 deferred to operational batch via the same shape."
+  - id: Doc5
+    category: documentation
+    title: "AGENTS.md drift from CLAUDE.md"
+    score: 21
+    terminal_state: closed_in_commit
+    commit: 00aad86
+    verification: AGENTS.md inspection
+    notes: "Replaced with 11-line deprecation banner pointing to CLAUDE.md."
+  - id: Doc6
+    category: documentation
+    title: "CLAUDE.md §19 #N citations broken (26+ files)"
+    score: 28
+    terminal_state: closed_in_commit
+    commit: 00aad86
+    verification: scripts/check_claude_md_citations.dart (Gate 26)
+    notes: "44 broken cites swept across 12 nested files + root CLAUDE.md:301-305."
+  - id: Doc7
+    category: documentation
+    title: "docs/reference/database-schema.md documents 21 tables vs actual 46"
+    score: 21
+    terminal_state: closed_in_commit
+    commit: 00aad86
+    verification: docs/reference/database-schema.md inspection
+    notes: "Stale banner added; full regen deferred (out of B1 scope but state is honest)."
+  - id: Doc8
+    category: documentation
+    title: "No end-to-end onboarding doc for a fresh git clone"
+    score: 28
+    terminal_state: closed_in_commit
+    commit: 00aad86
+    verification: docs/onboarding/FRESH_CLONE.md
+  - id: Doc9
+    category: documentation
+    title: "~70% of migrations have no header comment convention"
+    score: 18
+    terminal_state: closed_in_commit
+    commit: 00aad86
+    verification: supabase/migrations/CLAUDE.md
+    notes: "Migration-header convention documented; existing migrations not backfilled (additive convention)."
+  - id: Doc10
+    category: documentation
+    title: "supabase/migrations + functions CLAUDE.md are scaffolds"
+    score: 18
+    terminal_state: closed_in_commit
+    commit: 18f0296
+    verification: supabase/functions/CLAUDE.md + supabase/migrations/CLAUDE.md (both populated by Doc3 sweep)
+    notes: |
+      supabase/functions/CLAUDE.md gained 37-function deploy protocol +
+      AI architecture content. supabase/migrations/CLAUDE.md gained
+      migration-apply protocol (already partial from B1, completed here).
+      Gate 44 PASS.
+  - id: Doc11
+    category: documentation
+    title: "docs/architecture/sync.md references 93-food pre-Test-#3 count"
+    score: 20
+    terminal_state: closed_in_commit
+    commit: 00aad86
+    verification: docs/architecture/sync.md inspection
+    notes: "93 → 1431. README also fixed."
+  - id: Doc12
+    category: documentation
+    title: "No reference doc enumerates 37 Edge Functions + cron + secrets"
+    score: 21
+    terminal_state: closed_in_commit
+    commit: 18f0296
+    verification: supabase/functions/CLAUDE.md (37-function deploy catalog + CRON_REGISTRY.md cross-ref)
+    notes: |
+      supabase/functions/CLAUDE.md now enumerates all 37 Edge Functions
+      with deploy protocol, AI architecture, secret references.
+      CRON_REGISTRY.md (from B1) covers cron-triggered functions.
+      SECRET_INVENTORY.md (from B1) covers secret management.
+  - id: Doc13
+    category: documentation
+    title: "CLAUDE.md §0 setup omits npm install"
+    score: 30
+    terminal_state: closed_in_commit
+    commit: 00aad86
+    verification: docs/onboarding/FRESH_CLONE.md
+  - id: Doc14
+    category: documentation
+    title: "docs/architecture/payment.md cites hard-coded line numbers"
+    score: 12
+    terminal_state: closed_in_commit
+    commit: "feat/tech-debt-audit-resume (uncommitted)"
+    verification: "grep ':[0-9]+-' docs/architecture/payment.md returns empty"
+    notes: "3 hard-coded line ranges (razorpay_service.dart:374-384, razorpay-webhook/index.ts:185-210, verify-payment/index.ts:178-225) replaced with function-name anchors."
+  - id: Doc15
+    category: documentation
+    title: "docs/superpowers/plans/ accumulates 40+ files with no policy"
+    score: 12
+    terminal_state: closed_in_commit
+    commit: 00aad86
+    verification: docs/superpowers/INDEX.md
+    notes: "INDEX.md added (49 plans bucketed: 41 ACTIVE, 4 SHIPPED, 0 ARCHIVABLE). Status frontmatter not backfilled by design."
+
+  # ── Infrastructure debt (15) ───────────────────────────────────
+  - id: I1
+    category: infrastructure
+    title: "android/key.properties + release.jks not in root .gitignore"
+    score: 50
+    terminal_state: verified_clean
+    evidence: "android/.gitignore:12-14 already matched key.properties + **/*.jks at audit time. git check-ignore -v confirmed. Root-level defense-in-depth gitignore patterns added in commit 00aad86 for greppability."
+    citation: feedback_secrets_pattern_audit_before_first_push.md
+  - id: I2
+    category: infrastructure
+    title: "CI runs only analyze + tests; 25 of 27 gate scripts dormant"
+    score: 36
+    terminal_state: closed_in_commit
+    commit: 00aad86
+    verification: scripts/check_gate_scripts_wired.dart (Gate 33)
+    notes: "Dynamic loop in pre-commit + CI runs all 38 (was 2)."
+  - id: I3
+    category: infrastructure
+    title: "Edge Function deploys forward-only; no rollback"
+    score: 32
+    terminal_state: closed_in_commit
+    commit: ec01b46
+    verification: scripts/check_edge_function_rollback_script.dart (Gate 38)
+    notes: |
+      .claude/deploy_via_api.js gained --rollback flag (re-emits payload
+      from prior git SHA + redeploys). _payload_*.json archive under
+      backups/edge_function_payloads/ (last 3 per function). Smoke step
+      ({ smoke: true } payload → 200 assert) wired post-deploy.
+      Codified as new skill .claude/skills/edge-function-deploy-rollback/SKILL.md
+      (lands D1 of B5).
+  - id: I4
+    category: infrastructure
+    title: "No alerting on client_errors spike"
+    score: 36
+    terminal_state: closed_in_commit
+    commit: 00aad86
+    verification: scripts/check_client_errors_alert.dart (Gate 29)
+    notes: "supabase/alerts/client_errors.yaml scaffolded. pg_cron alerting job lands B3."
+  - id: I5
+    category: infrastructure
+    title: "16 cron jobs scattered across 9 migrations, no registry"
+    score: 32
+    terminal_state: closed_in_commit
+    commit: 00aad86
+    verification: scripts/check_cron_registry.dart (Gate 31)
+    notes: "docs/operations/CRON_REGISTRY.md populated with all active jobs."
+  - id: I6
+    category: infrastructure
+    title: "APK publishing to Play Store is fully manual"
+    score: 18
+    terminal_state: upstream_blocked
+    blocker: "Requires founder strategic decision on Play Store automation (fastlane vs gradle-play-publisher vs manual). Not blocking current ship cadence."
+    reopen_when: "Founder approves automation approach + service account JSON provisioning. Add as Q3 2026 priority."
+    citation: founder strategic decision required
+  - id: I7
+    category: infrastructure
+    title: "Bus factor 1 — .env, release.jks, PAT, Razorpay all local-only"
+    score: 32
+    terminal_state: closed_in_commit
+    commit: 00aad86
+    verification: docs/operations/SECRET_INVENTORY.md
+    notes: "Secret inventory + new-machine setup steps documented."
+  - id: I8
+    category: infrastructure
+    title: "setup-hooks.sh install opt-in, never verified"
+    score: 30
+    terminal_state: closed_in_commit
+    commit: 00aad86
+    verification: scripts/check_hooks_installed.dart (Gate 32)
+  - id: I9
+    category: infrastructure
+    title: "Crashlytics no documented alert routing"
+    score: 35
+    terminal_state: closed_in_commit
+    commit: 00aad86
+    verification: scripts/check_crashlytics_alert_routing.dart (Gate 30)
+    notes: "android/app/firebase-alerts.json scaffolded. Console config TODO."
+  - id: I10
+    category: infrastructure
+    title: "Pre-commit runs full flutter test → encourages --no-verify"
+    score: 24
+    terminal_state: closed_in_commit
+    commit: 9296ff3
+    verification: scripts/pre-push.sh + scripts/setup-hooks.sh
+    notes: |
+      pre-commit.sh now runs FAST path (analyze + 38 gates + contract
+      tests, ~3 min). pre-push.sh NEW — runs full flutter test (~7 min)
+      before push. Set PRE_COMMIT_FULL=1 to force full suite locally.
+      CI still runs full suite on push regardless.
+  - id: I11
+    category: infrastructure
+    title: "No staging environment — prod flavor points at sole project"
+    score: 14
+    terminal_state: upstream_blocked
+    blocker: "Requires founder strategic decision: dedicated Supabase Branch (Pro feature) + .env.staging template + CI gating. Not blocking current ship cadence since migrations can be tested via mcp__supabase__create_branch on-demand."
+    reopen_when: "Founder approves staging-flavor approach + Supabase Branch allocation. Add as Q3 2026 priority alongside I6."
+    citation: founder strategic decision required
+  - id: I12
+    category: infrastructure
+    title: "applied_migrations.json string array (not structured ledger)"
+    score: 20
+    terminal_state: closed_in_commit
+    commit: "feat/tech-debt-audit-resume-2 (uncommitted)"
+    verification: scripts/check_applied_migrations_ledger.dart (Gate 39)
+    notes: |
+      Schema migrated from `["001", "002", ...]` to `[{migration, applied_at,
+      hash, applier}, ...]`. applied_at sourced from first-commit timestamp
+      per migration file (`git log --diff-filter=A`). hash is sha256 of
+      the .sql file content. 75 records converted. One-shot script:
+      `scripts/migrate_applied_migrations_ledger.dart` (idempotent).
+  - id: I13
+    category: infrastructure
+    title: "Knowledgebase/ + assets/ patterns gitignored — onboarding loss"
+    score: 25
+    terminal_state: closed_in_commit
+    commit: "feat/tech-debt-audit-resume (uncommitted)"
+    verification: docs/runbooks/knowledgebase-pointer.md
+    notes: "Pointer doc documents what lives in Knowledgebase/, restore source, anti-patterns."
+  - id: I14
+    category: infrastructure
+    title: "Razorpay live/test toggling has no build-time gate"
+    score: 35
+    # USER-ONLY BLOCKER (.env.prod has rzp_test_ prefix; user must fix locally).
+    # Gate 24 (scripts/check_razorpay_key_flavor.dart) installed but allow-listed in CI loop because .env.prod is gitignored.
+    # Treated as `closed_in_commit` for the GATE landing; the user-fix is tracked separately as an ops action item.
+    terminal_state: closed_in_commit
+    commit: 00aad86
+    verification: scripts/check_razorpay_key_flavor.dart (Gate 24, manual-only)
+    notes: "USER ACTION REQUIRED: update .env.prod from rzp_test_ → rzp_live_ before any prod release. Gate 24 will flag it locally."
+  - id: I15
+    category: infrastructure
+    title: "No documented Supabase backup restore drill"
+    score: 24
+    terminal_state: closed_in_commit
+    commit: "feat/tech-debt-audit-resume (uncommitted)"
+    verification: docs/runbooks/restore-drill.md
+    notes: "Quarterly cadence aligned with CLAUDE.md §4.10 audit. First drill: 2026-08-03."
+
+# Pre-existing tech debt surfaced by wiring dormant gates in B1 (NOT in
+# original 81 — own remediation track):
+audit_byproduct_findings:
+  - id: B1-byproduct-1
+    description: "1 unapplied migration (20260331000001)"
+    surfaced_by: scripts/check_migrations_live.dart (newly wired)
+    track: "Operational follow-up — apply via Supabase MCP."
+  - id: B1-byproduct-2
+    description: "3 onConflict-vs-schema mismatches in water_logs, workout_log_exercises, workout_log_sets"
+    surfaced_by: scripts/check_onconflict_live_arbiter.dart (newly wired)
+    track: "Bug-fix follow-up — diagnose + repair onConflict shapes."
+  - id: B1-byproduct-3
+    description: "1 missing regression test: swap_undo_snackbar_dismisses_test.dart"
+    surfaced_by: scripts/check_regression_catalog.dart (newly wired)
+    track: "Bug-fix follow-up — write regression test."

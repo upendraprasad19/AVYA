@@ -1,0 +1,132 @@
+// supabase/functions/_shared/gemini_failure_alert_test.ts
+import { assertEquals } from "https://deno.land/std@0.224.0/testing/asserts.ts";
+import { reportGeminiExhaustion } from "./gemini_failure_alert.ts";
+
+function fakeClient(overrides: {
+  selectResult?: { data: unknown[] | null; error: unknown };
+  insertError?: unknown;
+}) {
+  const inserted: Record<string, unknown>[] = [];
+  return {
+    inserted,
+    from(_table: string) {
+      return {
+        select: (_cols: string) => ({
+          eq: (_a: string, _b: string) => ({
+            eq: (_c: string, _d: string) => ({
+              is: (_e: string, _f: null) => ({
+                gte: (_g: string, _h: string) => ({
+                  limit: (_n: number) =>
+                    Promise.resolve(overrides.selectResult ?? { data: [], error: null }),
+                }),
+              }),
+            }),
+          }),
+        }),
+        insert: (row: Record<string, unknown>) => {
+          inserted.push(row);
+          return Promise.resolve({ error: overrides.insertError ?? null });
+        },
+      };
+    },
+    // deno-lint-ignore no-explicit-any
+  } as any;
+}
+
+Deno.test("reportGeminiExhaustion classifies 429 as quota/billing", async () => {
+  const client = fakeClient({ selectResult: { data: [], error: null } });
+  await reportGeminiExhaustion(client, "ai_proxy_gemini_exhausted", { status: 429, message: "quota exceeded" });
+  assertEquals(client.inserted.length, 1);
+  assertEquals(client.inserted[0].severity, "critical");
+  assertEquals(
+    (client.inserted[0].suggested_action as string).includes("quota"),
+    true,
+  );
+});
+
+Deno.test("reportGeminiExhaustion classifies 401/403 as key/secret issue", async () => {
+  const client = fakeClient({ selectResult: { data: [], error: null } });
+  await reportGeminiExhaustion(client, "ai_proxy_gemini_exhausted", { status: 403, message: "forbidden" });
+  assertEquals(
+    (client.inserted[0].suggested_action as string).includes("GEMINI_API_KEY"),
+    true,
+  );
+});
+
+Deno.test("reportGeminiExhaustion downgrades to warn inside the dedup window", async () => {
+  const client = fakeClient({ selectResult: { data: [{ id: 1 }], error: null } });
+  await reportGeminiExhaustion(client, "ai_proxy_gemini_exhausted", { status: 429, message: "quota exceeded" });
+  assertEquals(client.inserted[0].severity, "warn");
+});
+
+Deno.test("reportGeminiExhaustion never throws when insert fails", async () => {
+  const client = fakeClient({ selectResult: { data: [], error: null }, insertError: new Error("boom") });
+  // Must not throw.
+  await reportGeminiExhaustion(client, "ai_proxy_gemini_exhausted", { status: 500, message: "server error" });
+});
+
+Deno.test("reportGeminiExhaustion never throws when the dedup select errors", async () => {
+  const client = fakeClient({ selectResult: { data: null, error: new Error("boom") } });
+  await reportGeminiExhaustion(client, "ai_proxy_gemini_exhausted", { status: 500, message: "server error" });
+});
+
+Deno.test(
+  "DISABLE_GEMINI_FAILURE_ALERT=true skips the alert entirely (§4.6 feature-flag protocol, 2026-09-20)",
+  async () => {
+    Deno.env.set("DISABLE_GEMINI_FAILURE_ALERT", "true");
+    try {
+      const client = fakeClient({ selectResult: { data: [], error: null } });
+      await reportGeminiExhaustion(client, "ai_proxy_gemini_exhausted", { status: 429, message: "quota exceeded" });
+      assertEquals(client.inserted.length, 0);
+    } finally {
+      Deno.env.delete("DISABLE_GEMINI_FAILURE_ALERT");
+    }
+  },
+);
+
+Deno.test(
+  "DISABLE_GEMINI_FAILURE_ALERT unset still alerts as before (mirror case)",
+  async () => {
+    Deno.env.delete("DISABLE_GEMINI_FAILURE_ALERT");
+    const client = fakeClient({ selectResult: { data: [], error: null } });
+    await reportGeminiExhaustion(client, "ai_proxy_gemini_exhausted", { status: 429, message: "quota exceeded" });
+    assertEquals(client.inserted.length, 1);
+  },
+);
+
+Deno.test(
+  "endpoint distinguishes otherwise-identical alerts in summary + context_json (B-pass finding, 2026-09-20)",
+  async () => {
+    const client = fakeClient({ selectResult: { data: [], error: null } });
+    await reportGeminiExhaustion(
+      client,
+      "ai_proxy_gemini_exhausted",
+      { status: 500, message: "server error" },
+      "scan_meal",
+    );
+    assertEquals(
+      (client.inserted[0].summary as string).startsWith("scan_meal:"),
+      true,
+    );
+    assertEquals(
+      (client.inserted[0].context_json as Record<string, unknown>).endpoint,
+      "scan_meal",
+    );
+  },
+);
+
+Deno.test(
+  "endpoint omitted falls back to source in summary + null in context_json (mirror case)",
+  async () => {
+    const client = fakeClient({ selectResult: { data: [], error: null } });
+    await reportGeminiExhaustion(client, "ai_proxy_gemini_exhausted", { status: 500, message: "server error" });
+    assertEquals(
+      (client.inserted[0].summary as string).startsWith("ai_proxy_gemini_exhausted:"),
+      true,
+    );
+    assertEquals(
+      (client.inserted[0].context_json as Record<string, unknown>).endpoint,
+      null,
+    );
+  },
+);

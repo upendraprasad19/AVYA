@@ -1,0 +1,343 @@
+---
+source: CLAUDE.md §4 + §15
+migrated: 2026-05-18
+status: scaffold
+---
+
+# Sync + Data Architecture — Reference
+
+> Cross-cutting concern. Fetch via Read when working on sync, Hive contracts, or restore-completeness.
+> Root CLAUDE.md contains pointers but not the full content.
+
+## Overview — Offline-first architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│                    FLUTTER APP                       │
+│                                                      │
+│  ALL reads/writes → Hive (LOCAL-FIRST)               │
+│  Zero latency. Works fully offline.                  │
+│                                                      │
+│  SEED DATA (bundled JSON in APK):                    │
+│    assets/data/exercise_library.json (200+ exercises)│
+│    assets/data/food_database.json (1431 foods)        │
+│    → Parsed into Hive on first launch                │
+│                                                      │
+│  SYNC TO SUPABASE:                                   │
+│    Immediately: custom foods/exercises (community)    │
+│    Every app launch: pushSnapshot() (AI context)     │
+│    Daily (app launch if >1d): full sync all logs     │
+│                                                      │
+│  RESTORE (new device):                               │
+│    Login → pull from Supabase → populate Hive        │
+│    ALL users: full history (storage per user ~1-2MB)  │
+│                                                      │
+│  SUPABASE ROLE (NOT primary DB):                     │
+│    • Auth (Supabase Auth)                            │
+│    • Backup + cross-device restore                   │
+│    • AI training corpus (snapshots, conversations)   │
+│    • Community DB growth (custom foods/exercises)     │
+│    • Subscription verification                       │
+└─────────────────────────────────────────────────────┘
+```
+
+### Hive Boxes
+| Box | Contents |
+|-----|----------|
+| `userBox` | user profile, preferences, progress |
+| `workoutBox` | workout_logs, scheduled_workouts, templates, exercise_logs |
+| `nutritionBox` | nutrition_logs, saved_meals |
+| `healthBox` | weight_logs, measurements, streaks, sleep_logs |
+| `exerciseBox` | exercise_library (seeded from bundled JSON) |
+| `foodBox` | food_database (seeded from bundled JSON) |
+| `customBox` | user_custom_exercises, user_custom_foods |
+| `coachBox` | ai_coach_interactions, coaching_notes |
+| `syncBox` | last_sync_timestamps + `pending_sync_<id>` rows (the retry queue — **corrected 2026-09-16**: this row said "planned, not yet implemented" for months after `lib/core/services/sync_queue.dart` shipped; see that file's header for the drain triggers and diagnose docs/diagnoses/ for the auto-drain gap this same date closed) |
+| `configBox` | subscription status, feature flags, app config |
+
+#### SyncBanner display policy (2026-09-17)
+
+The "N changes waiting to sync" count is NOT the raw queue depth: it shows
+**pending ops older than the 6-minute grace window**
+(`syncBannerGraceWindow` in `lib/shared/providers/sync_state_provider.dart`,
+applied by one state funnel `_stateFor` behind the
+`disable_sync_banner_grace` kill-switch — which restores the raw count).
+Rationale: a login-time `user_progress` version conflict enqueues an op
+that the next 5-min auto-drain tick typically self-heals (observed live
+2026-09-17, test2/web: enqueue 23:17:40 IST → cleared 23:22:38 IST); the
+banner flashing for that window reads as an error when nothing needs the
+user. Consequence: the banner can **undercount** transiently (an aged op
+succeeds while a young op is still queued) — the intended tradeoff. The
+manual **Retry** tap issues a FORCED drain (`drain(force: true)`,
+`disable_sync_force_retry` kill-switch): it retries ops even inside their
+backoff window, so the tap can never be a silent no-op; auto drains
+(app-launch, connectivity, 5-min timer) stay unforced.
+
+#### workoutBox Key Patterns
+| Key Pattern | Value |
+|-------------|-------|
+| `schedule_YYYY-MM-DD` | Schedule entry (type, status, workout_name, exercises, week) |
+| `exercise_log_index_YYYY-MM-DD` | List of exercise log IDs for that date |
+| `exlog_<timestamp>_<hash>` | Exercise log: exercise_name, logging_type, weight_kg, reps_completed, sets_completed, volume_kg, is_pr |
+| `wlog_<timestamp>` | Workout log: workout_name, date, duration_seconds, sets_completed |
+| `tmpl_<timestamp>` | Workout template (single-day) — fields: id, name, exercises[], exercise_count, type:'template', assigned_days:[int], created_at. Multi-day AI templates (from `createCustomTemplate` tool) split into N rows tagged with `group_id`/`group_day_index`/`group_total_days` for cross-row identification. |
+
+## Sync schedule + SoT rules
+
+| When | What | Where |
+|------|------|-------|
+| Immediately | Custom foods/exercises added | → Supabase (community contribution) |
+| Immediately (fire-and-forget) | Every nutrition mutation (log meal, water, urine, edit/delete food, scan meal save, barcode save, custom exercise create) fires `SyncService.syncNutritionData()` + `pushSnapshot()` | → Supabase + AI snapshot |
+| Immediately (fire-and-forget) | Every workout mutation (complete, edit log, template save/delete, schedule change) fires `SyncService.syncWorkoutData()` + `pushSnapshot()` | → Supabase + AI snapshot |
+| Every app launch | user_daily_snapshot (AI context) via pushSnapshot() | → Supabase |
+| Daily 11PM IST | coaching_notes extraction from that day's conversations | → Hive + Supabase |
+| Daily (app launch if >1d) | Full sync: all logs, progress, preferences | → Supabase |
+| Periodically | Check for new approved community items | ← Supabase → Hive |
+| On restore | Pull full history (all users) | ← Supabase → Hive |
+
+### Fire-and-Forget Sync Pattern
+All mutation paths use `unawaited()` from `dart:async` to push changes without blocking UI:
+
+```dart
+import 'dart:async';
+import 'package:icanbefitter/core/services/sync_service.dart';
+
+// In any mutation (logFood, addWater, saveMeal, completeWorkout, etc.):
+await hiveBox.put(key, value);            // 1. Hive-first (blocking)
+ref.invalidate(dependentProvider);        // 2. Refresh UI (blocking)
+unawaited(SyncService.instance.syncNutritionData());  // 3. Push to Supabase (background)
+unawaited(SyncService.instance.pushSnapshot());       // 4. Refresh AI context (background)
+```
+
+**Never `await` the sync calls** — they must not block the UI. Failures are logged via `debugPrint` inside the service and silently ignored; the local Hive write is the source of truth. Use `syncWorkoutData()` for workout mutations and `syncNutritionData()` for nutrition mutations (parallels the workout method, syncs `nutrition_logs` + `water_logs` in one batch).
+
+### Sync Deduplication Rules
+- **Streaks:** `onConflict: 'user_id,week_start'` (UNIQUE constraint in DB). Restore dedupes by `week_start` — cloud row replaces local if conflict found. Never dedup by cloud `id` alone (causes same-week duplicates).
+- **Workout logs/exercises:** Upserted by deterministic UUID (`_deterministicId(localKey)`). Safe for re-sync.
+- **Water logs:** `onConflict: 'user_id,date'` (UNIQUE constraint added migration 013). One row per user per day.
+- **Scheduled workouts:** `onConflict: 'user_id,scheduled_date'` (UNIQUE constraint added migration 013). One schedule per user per date.
+
+### Sync fingerprint-skip pattern (H1b Part A / OI-204)
+Cited by name from `sync_service.dart`'s `_exlogHashIndexKey` doc comment (`:358`, added by
+OI-204 Task 2) — this section did not exist until OI-204 Task 3 added it, so that citation
+pointed at nothing until now. `_schedHashIndexKey`'s pre-existing comment (from the original
+H1b Part A work) and `_nlogHashIndexKey`'s own new comment do not cite this section by name.
+
+**Problem:** a coalesced, fire-and-forget sync entry (`syncWorkoutData()` /
+`syncNutritionData()`, fired after every single mutation) re-walked the caller's **entire**
+historical Hive log on **every** call — not just what changed since the last successful
+push — and `await`ed a network upsert per row, sequentially. As a user's history grew, a
+single pass routinely took 14-40s, tripping `SyncService.restoreOpTimeout` (45s, diagnose
+`b7e4c1`) — a ceiling meant to catch a genuinely wedged call, not bound normal-case latency
+(OI-204, diagnose `d3f8a6`).
+
+**Mechanism:** a sync-owned fingerprint index — a single reserved Hive key in the relevant
+user-scoped box, mapping `rowKey/slotId -> UUID-v5 fingerprint of the exact push bundle`.
+The **sole writer and sole reader is the sync method itself**, so writer/reader drift is
+structurally impossible. On each pass: compute the current fingerprint, compare against the
+stored one, and skip the upsert(s) entirely when they match (`shouldSkipUpsert`-family pure
+functions). **Store-on-full-success-only**: the fingerprint is recorded only when every
+network write in the bundle succeeded this pass (a local `*Synced`/`*BundleSynced` flag,
+`true` by default, flipped `false` inside any swallowing catch) — a partial failure leaves
+no entry, so the next pass retries. A fingerprint-computation exception fails OPEN to "push
+normally, never store" (never a silent permanent skip — `feedback_bad_news_vs_no_news`).
+Each domain also prunes its index to currently-live keys/slots after the loop, and each
+carries its own kill-switch (`disable_sched_hash_skip` / `disable_exlog_hash_skip` /
+`disable_nlog_hash_skip`) restoring the verbatim pre-pattern unconditional full sweep.
+`scripts/check_sync_hash_skip_atomicity.dart` statically guards the store-on-success
+invariant for every domain (gate-before-refactor, CLAUDE.md §4.11). **What it can and
+cannot verify, stated plainly so the guarantee isn't overread:** per domain it confirms
+the success flag is declared `true`, that the index-store assignment is guarded by a
+positive (non-negated) `if` on that flag within six lines above it, and — for the
+swallowing-catch half of the invariant — counts the file's total occurrences of
+`<flag> = false;` and compares that count against a hardcoded expected value
+(`sync_hash_skip_atomicity_lib.dart`'s `expectedSwallowCatches`: 1 for exlog's single
+per-set catch, 2 for nlog's item + tail-vacuum catches). **That is a changed-COUNT
+check, not structural "every catch block sets the flag" verification** — a *new*
+swallowing catch that forgets to flip the flag false leaves the total count exactly
+where it was, which the gate cannot distinguish from "nothing changed, still correct."
+**The severity is not merely ambiguity: that shape lets the flag stay `true` after a write
+that actually failed, so the store fires for content that was never pushed — a genuine
+FALSE-SKIP (the exact dangerous direction the whole store-on-full-success-only design
+exists to prevent), confirmed reachable by mutation during the OI-204 B-pass (2026-09-19,
+Finding 2) rather than merely theoretical.** Closing that gap would need real
+catch-block-boundary analysis, which this mechanism
+does not attempt — the count comparison is the cheap, mechanically-checkable
+approximation, not a claim of full coverage (an earlier spec draft overclaimed this;
+corrected at plan-review, spec §6 point 2).
+
+**Domains, in the order the pattern was extended:**
+- `_syncScheduledWorkouts` (H1b Part A, diagnose `b4f7e2`, 2026-06-27) — the original.
+  Status-based carve-out: never skips a `completed` row (d9b2c5's cross-device-completion
+  contract). SoT: `sync_scheduled_payload_hash_index`.
+- `_syncExerciseLogs` (OI-204 Task 2, diagnose `d3f8a6`) — bundles the summary row plus its
+  per-set rows as one fingerprint; no status carve-out (verified no out-of-band cloud
+  mutator for `workout_log_exercises`/`workout_log_sets`). SoT:
+  `sync_exercise_log_payload_hash_index`.
+- `_syncNutritionLogs` (OI-204 Task 3, diagnose `d3f8a6`) — the worst per-key cost of the
+  three (parent upsert + id-resolution SELECT + N item upserts + 1 tail-vacuum DELETE, all
+  sequential), so the biggest win. Keyed by SLOT id (`'$date $mealType'`), matching the
+  existing same-slot merge, not a raw Hive key. Additionally goes inert whenever
+  `disable_nutrition_slot_merge` is set (the legacy per-key push predates the slot concept),
+  and while inert its postamble CLEARS the stored index rather than merely skipping the read
+  of it — a stale index surviving a disable/re-enable cycle would mis-skip re-pushing slots
+  the legacy path may have corrupted. SoT: `sync_nutrition_log_payload_hash_index`.
+
+`_syncExerciseLogs` and `_syncNutritionLogs` share one private helper
+(`SyncService._fingerprintMatchesStored`) for the skip DECISION itself — the two were
+byte-identical and had no domain-specific content worth duplicating; each domain keeps its
+own named wrapper (`exlogShouldSkipUpsert` / `nlogShouldSkipUpsert`) and its own fingerprint
+function (the BUNDLING shape genuinely differs per domain).
+
+**`ownerChangedSince` asymmetry (intentional, not a gap this batch introduced):**
+nutrition's postamble guards its hash-index Hive write with
+`if (ownerChangedSince(userId)) return;` immediately before the write
+(`sync_nutrition.dart:565`, ahead of the `nlogHashIndex` persist/clear at `:570-585`) —
+the same idiom every *other* write inside `_syncNutritionLogs` already follows
+(diagnose `e5c2d1` CLASS 1). Scheduled-workouts' and exercise-logs' postambles
+(`sync_workout.dart`) carry **no** `ownerChangedSince` guard anywhere in that file
+(verified: zero matches) — this is not an inconsistency OI-204 introduced silently; it
+is a pre-existing, nutrition-specific idiom that predates this batch (plan-review round
+1, finding B's-C3). Don't "fix" the asymmetry by bolting the guard onto sched/exlog or
+by removing it from nlog without first re-deriving why `_syncNutritionLogs` alone needed
+it.
+
+Full detail: `docs/sot_registry.yaml` (search `payload_hash_index`),
+`docs/diagnoses/2026-09-19-full-rescan-sync-timeout-d3f8a6.md`.
+
+### Restore conflict policy — local-wins / additive (ADR-0014, diagnose c5a1f2)
+Since the slow-boot guard, returning users reach /home WHILE the cloud restore runs in
+the **background** — so the restore is concurrent with the user logging. Loss-sensitive
+restore writers are therefore **additive / local-wins**: they only fill gaps, never
+overwrite a present local row (`if (box.get(key) != null) continue;`).
+- **Additive (skip-if-local-exists):** `_restoreExerciseLogs`, `_restoreWorkoutLogs`,
+  `_restoreNutritionLogs`, `_restoreSavedMeals`, plus weight / measurements / water
+  (already so — reference pattern `sync_health.dart:300`).
+- **Timestamp-merge (per-writer exception):** `_restoreScheduledWorkouts` reconciles
+  schedule *status* cloud↔local (keep-local-when-cloud-stale, d9b2c5) — it is NOT
+  additive because schedule status genuinely needs merging.
+- **Trade-off:** offline-first local-wins — a row edited on a 2nd device won't overwrite
+  the local copy. Revisit with cloud-newer-wins if true multi-device editing is a goal.
+
+### Restore Pagination
+- All restore queries use paginated fetch (1,000 rows per page, offset-based).
+- Safety ceiling: 50,000 rows per table to prevent runaway fetches.
+- No hardcoded `.limit(5000)` — truly full-history restore for all users.
+
+### Source of Truth Rules (NON-NEGOTIABLE)
+> Multiple-source bugs are the #1 cause of "UI says X but data says Y" issues. Establish ONE reader per derived concept.
+
+- **Workout receipt:** `WorkoutReceiptData.fromExerciseLogs(date)` (in `workout_receipt_card.dart`) is the ONLY way to build receipt data after the fact. Reads from Hive `exlog_*` keys via `WorkoutRepository.getExerciseLogsForDate()`. Deduplicates by exercise name (sum sets, max weight). Never hand-build receipt data from a widget's in-memory state.
+- **Workout log edit:** `EditWorkoutLogSheet` (in `lib/features/train/widgets/edit_workout_log_sheet.dart`) is the ONLY edit surface. Every entry point (receipt sheet Edit button, Home "View Card", calendar day detail, Train expanded view) routes through it. Save:
+  1. Rewrites the Hive log map in place
+  2. Recomputes `volume_kg = weight_kg × reps_completed`
+  3. Chronologically rescans `is_pr` flags for the exercise (sorts by `date + created_at`, walks forward, strict `>` comparison)
+  4. Invalidates: `currentPlanProvider`, `workoutStatsProvider`, `calendarWeekProvider`, `streakProvider`, `todayWorkoutProvider`, `allExercisePRsProvider`
+  5. Fires `SyncService.instance.syncWorkoutData() + pushSnapshot()` (fire-and-forget)
+- **Exercise logs:** `WorkoutRepository.getExerciseLogsForDate()` is the ONLY read path. Uses O(1) index `exercise_log_index_YYYY-MM-DD` with legacy full-scan fallback. Never iterate `workoutBox.keys` manually to find logs for a date.
+- **Home "View Card" state:** `todayWorkoutProvider` is the single source for the "DONE + View Card" state on home. Always derived from Hive schedule + exercise logs — never cached in the widget.
+- **Scheduled workouts:** `WorkoutScheduleService` owns all schedule mutations (generate, clean-sync on template edit, reschedule on days/week change). Never write `schedule_YYYY-MM-DD` keys directly from a widget or repository.
+- **Nutrition total calories:** After a meal is logged, `total_calories` comes from summing `items[]` with per-item Atwater fallback (`raw > 0 ? raw : 4P+4C+9F`). Never read `result['total_calories']` at the top level of an AI response — it's routinely missing.
+- **AI snapshot:** `AiCoachRepository.buildAiContext()` is the ONE builder. `AiService._compactContext()` is the ONE trimmer. Never construct ad-hoc snapshots in provider code.
+- **Subscription status:** `SubscriptionService.isPro()` + `gate()` are the ONLY entry points. Never read `configBox.get('isPro')` directly from a widget. High-value features (`phases_2_to_12`, `ai_coach_unlimited`, `progress_photos`) go through `verifyFromServer()`.
+- **User-scoped Hive keys (MigratedKey discipline):** Anything user-specific that previously lived in shared `configBox` now reads/writes through `MigratedKey` (in `lib/core/services/migrated_key.dart`). The 31-key migrated set is enumerated in `UserConfigMigrator.userScopedKeys` (Test #10.1 + #11.1). Two keys deliberately stay in shared `configBox` and are listed in `_intentionallyShared`: `pending_referral_code` and `logout_in_progress`. When adding a new user-specific key, append it to `userScopedKeys`, bump `_flagKey` (`_v2_done` → `_v3_done` etc.) so existing devices re-run, and add the contract test pin. Never write directly to `configBox` for user-specific data.
+- **Water target:** `WaterTargetService.instance.currentTargetMl()` (in `lib/core/services/water_target_service.dart`) is the ONLY way to read the daily water goal. Never hardcode `3000`. Read precedence: user override (`userBox['water_target_override_ml']`) → computed (`weight × 35 + 500 if 4+ training days + 300 if active lifestyle`, clamped 2500–4000 ml per founder direction 2026-05-04) → 2500 floor. Widgets must `ref.watch(waterTargetProvider)` (in `nutrition_provider.dart`) so manual override changes trigger rebuilds. Onboarding seed routes through `WaterTargetService.computeFromProfile(profile)`.
+- **Provider invalidation after mutation:** Any write that changes workout state (log, edit, delete, complete) MUST invalidate the full batch: `currentPlanProvider`, `workoutStatsProvider`, `calendarWeekProvider`, `streakProvider`, `todayWorkoutProvider`, `allExercisePRsProvider`. One missing invalidation = stale UI.
+- **Muster answers (narrowed 2026-09-19, diagnose d6f1b8 — was a stale description of the PRE-restructure bridge):** `InductionService.recordMusterAnswer` (in `lib/features/ai_coach/services/induction_service.dart`) now accepts only `body_part_priorities` — its `_allowedMusterKeys` guard REJECTS (`ArgumentError`, no write on either side) `why_now`, `definition_of_winning`, `known_injuries`, `typical_wake_time`, and `preferred_workout_time` outright, closing a live clobber bug where muster's injuries answer silently overwrote onboarding Details' answer on every completion (muster always ran after onboarding, so muster's write always won). The one surviving key is ALSO bridged into `userBox['profile']` via `_bridgeToProfile`: `body_part_priorities[0]→physique_focus` (single-element only; legacy multi-select skipped). Injuries stays Details screen's job; wake/workout-time stays Edit Profile's job — neither is collected by muster anymore. `ai_snapshot_builder._getInductionAndMusterKeys()` reads all 4 non-`why_now`/`definition_of_winning` fields (`known_injuries`, `typical_wake_time`, `preferred_workout_time`, `body_part_priorities`) straight off `userBox['profile']` now, not the coachBox mirror, so the AI coach's context can't go stale relative to whichever screen (onboarding, muster, or a later Edit Profile change) last touched the data. Never write `body_part_priorities` to coachBox from anywhere else. `backfillMusterToProfileIfNeeded` (same class) is UNCHANGED — still a one-shot migration of any pre-restructure user's stored answers for the 5 retired keys. Pinned by `test/contracts/muster_profile_bridge_test.dart` + `test/contracts/muster_to_profile_bridge_behavioral_test.dart` + `test/ai_coach/snapshot_keys_test.dart`.
+- **Auth/Hive owner agreement (cross-account guard):** `authUserIdTokenProvider` (in `lib/features/auth/providers/auth_invalidation_provider.dart`) returns `'<anon>'` whenever Supabase `currentUser.id` disagrees with `HiveUserSession.currentOwnerFullId` (the live signOut+signUp race window). The 56 user-scoped Riverpod providers from c4055a all watch this token — they automatically render empty during disagreement and rebuild when the listenable confirms `openForUser` completed. Belt-and-suspenders: `wrapUserScopedBox` (in `lib/core/services/guarded_box.dart`) ALSO checks the same agreement and returns `GuardedBox.empty(authUid)` on disagreement, so reads serve null/empty even if the token-rebuild loop is broken. Never read user-scoped Hive without going through `wrapUserScopedBox`. Pinned by `test/contracts/auth_invalidation_timing_test.dart` + `test/contracts/wrap_user_scoped_box_disagreement_test.dart`.
+- **AI coach memory upward sync (audit-2026-05-16 F3-1.1):** `coach_memory.coach_notes` cloud column is populated by `SyncService.syncCoachMemoryNow` projecting Hive `coachBox['coaching_notes']` (Hive key intentionally singular, cloud column intentionally singular too but DIFFERENT word). Pre-fix the upward projection was missing → AI memory lost on every reinstall (9th writer/reader drift instance). Pinned by `test/contracts/coach_notes_upward_sync_test.dart`. Never rename either side without updating BOTH and the contract test.
+- **AI coach derive-only surface (2026-05-31, ADR-0012):** The `logPR` tool was **removed** — PRs are never AI-asserted, only derived. A coach `logSet` routes through `WorkoutWriteService.logExercise` (single-set `ExerciseSet`, same canonical writer as the UI active-workout flow); PR detection happens inside the WriteService via `_rescanPrFor`, and the home/profile PR snapshot computes best-per-set from `exlog_*` via `WorkoutRepository.loadAllExercisePRs`. Completion is likewise **derived**: the dispatcher's `_maybeCompleteScheduledDay` auto-calls `WorkoutWriteService.markCompleted` after a coach `logSet` on a date that has a `schedule_*` row (idempotent — skips if already `completed`), replacing the removed `markWorkoutComplete` tool. Never call the legacy `WorkoutRepository.logSetWithPrRescan` from the dispatcher; that path was one of Test #16.1 Bug A's rogue exlog_* key formulas and bypasses the WriteService mutex + telemetry — its declaration is now deleted. Pinned by `test/contracts/derive_only_tool_surface_test.dart`, `test/contracts/coach_derived_pr_and_completion_test.dart`, and `test/contracts/no_legacy_log_set_with_pr_rescan_declaration_test.dart`.
+- **AI coach chat photo references do NOT sync (OI-77, 2026-07-30):** `SyncService._syncCoachInteractions` push (`lib/core/services/sync/sync_coach.dart:149-157`) and `_restoreCoachInteractions` restore (`:204-217`) payloads carry no `media_*` field at all — not `media_url`/`media_type` (pre-existing), and not the coach-media-consent batch's `media_storage_path`/`media_save_state`. A historical AI-coach chat message with a photo degrades to caption-only text after a cross-device restore; the photo itself survives in Storage (an already-saved copy still renders in `SavedCoachPhotosScreen`, which lists directly from Storage, not restored Hive state) — only the inline chat-bubble thumbnail and save-consent chip are lost. Tracked, not yet fixed — see `docs/audit/open_issues.md` OI-77.
+- **WorkoutScheduleService (audit-2026-05-16 E.6):** All 9 schedule mutations (markCompleted, markSkipped, activateTravelMode, swapExerciseInDay, shortenDay, copy week × 2, assignTemplateToDate, unscheduleTemplateFromDate) route through `WorkoutWriteService.upsertScheduled` for mutex + fan-out. 3 non-schedule writes (2 `_planKey` plan upserts + 1 template `last_used_at` stamp) stay direct + fire explicit `unawaited(SyncService.instance.syncWorkoutData())` adjacent. 1 internal `displacedKey` backup stays direct (rollback state, no cloud sync needed). Pinned by `test/contracts/workout_schedule_service_uses_write_service_test.dart`.
+- **HealthWriteService (audit-2026-05-16 E.7):** Canonical writer for the health domain (sleep, weight, measurement, water, urine, hydration) mirroring `WorkoutWriteService` + `NutritionWriteService`. Per-(kind, date) mutex via `_acquireLock`. Every key uses `istDateStr(date)` (closes the F2-R2 IST drift in `profile_provider.logSleep`). Sole writer for all UI-layer health mutations — `profile_provider.BiometricNotifier.logSleep`, `nutrition_provider.WaterIntakeNotifier`, `nutrition_provider.UrineColorNotifier`, `nutrition_provider.HydrationSaveNotifier`, `home_provider.WeightLogNotifier`, `onboarding_provider` initial weight, `conversational_log_handler._logMeasurement`. The list key `coachBox['sleep_logs']` write in `conversational_log_handler._logSleep` is intentionally direct (list-append semantics) — documented with audit comment. Pinned by `test/contracts/health_write_service_writer_to_reader_test.dart` (15 tests).
+
+### Hive field-name contract
+
+WriteService output keys are a contract with every consumer. Field renames must:
+
+1. Update the writer.
+2. Update every consumer in the same PR (grep for the old field name).
+3. Update or add a round-trip test in `test/contracts/`.
+
+Current contracts:
+
+- **`exlog_*`** (`WorkoutWriteService`) — fields: `exercise_name`, `date`, `sets[]` (List of Map), `set_number`, `reps_completed`, `weight_kg`, `volume_kg`, `logging_type`, `is_pr`, `source`, `updated_at_ms`, optional `notes`.
+  Consumers: `WorkoutReceiptData.fromExerciseLogs`, `WorkoutRepository.getExerciseLogsForDate`, `AiCoachRepository.buildAiContext` (recent_logs section), calendar week provider, `WorkoutWriteService._rescanAllPrsFor` PR detector, `SyncService.syncWorkoutData` cloud projection.
+
+- **`nlog_*`** (`NutritionWriteService`) — fields: `log_key`, `date`, `meal_type`, `total_calories`, `total_protein`, `total_carbs`, `total_fat`, `total_fiber`, `items[]` (List of Map; per-item keys: `name`, `quantity_g`, `calories`, `protein`, `carbs`, `fat`, `fiber`), `source`, `logged_at`, `created_at`. Consumers: `TodaysMealsCard`, `NutritionRepository`, `home_provider` daily-completion ring, `AiCoachRepository.buildAiContext` (meals_today / nutrition_trend_7d), `SyncService.syncNutritionData`.
+
+If you rename a field in a WriteService, the corresponding contract test in `test/contracts/<x>_write_to_read_contract_test.dart` must be updated in the same commit. The receipt-rendering bug in APK Test #7 (set_number vs sets_completed) is the canonical failure mode this contract prevents.
+
+### Sync fan-out contract
+
+Two domain entry points are the contract for "everything in the
+{workout, nutrition} domain is now in cloud":
+
+- `SyncService.syncWorkoutData()` MUST fan out to every workoutBox
+  prefix and the workout-domain healthBox keys. Currently:
+  `_syncWorkoutLogs`, `_syncExerciseLogs`, `_syncScheduleCompletions`,
+  `_syncWorkoutTemplates`, `_syncScheduledWorkouts`, `_syncStreaks`.
+- `SyncService.syncNutritionData()` MUST fan out to every nutritionBox
+  prefix. Currently: `_syncNutritionLogs`, `_syncWaterLogs`,
+  `_syncSavedMeals`.
+
+Adding a new Hive prefix in either domain requires updating the matching
+`syncX()` AND the contract test
+(`test/contracts/sync_fanout_contract_test.dart`).
+
+The 2026-05-03 sync gap (templates / schedules / streaks invisible to
+cloud for >24h, **with `scheduled_workouts.template_id` and
+`user_saved_meals.id` silently uuid-rejecting since 2026-04-18**) was the
+canonical multi-failure-mode this contract prevents. `weeklyFullSync()`
+remains the safety net but is no longer the only path for workout-domain
+or nutrition-domain rows reaching cloud.
+
+### `plan_json` push is NOT part of the workout fan-out (OI-189, 2026-09-13)
+
+`user_progress.plan_json` (the whole-blob mirror of the workout box's
+`plan_start_date`/`plan_end_date`/`schedule_*`/`displaced_*` keys, restored
+verbatim by `_restoreWorkoutPlan`) is pushed by a SEPARATE, targeted method —
+`SyncService.pushWorkoutPlanForSyncDomain()` (`sync/sync_workout.dart`) — that
+is **not** one of `syncWorkoutData()`'s fan-out targets above. A caller that
+only fires `syncWorkoutData()`/`syncWorkoutDataNow()` after touching the plan
+window does NOT push `plan_json`; `weeklyFullSync()` is the only other caller.
+
+**Invariant established by OI-189 (diagnose `b9e4d1`):** every writer that
+SWEEPS non-completed rows past `plan_end` or MOVES the window
+(`plan_start_date`/`plan_end_date`) must call `pushWorkoutPlanForSyncDomain()`
+immediately after, or the swept/moved state is invisible to the cloud copy
+and `_restoreWorkoutPlan`/`PlanWindowReanchor` can resurrect it on the next
+restore. Two exceptions, both deliberate: (1) `generateAndSchedule` (writer A)
+pushes only when explicitly told to (`pushPlanWindow: true`, passed only at
+the two live phase-advance sites) — its reinstall/repair callers generate a
+plan on a fresh Hive BEFORE the cloud restore runs, and a push there would
+overwrite the only real copy; (2) the push guards on
+`SyncService.pausedForSimulation` first, so the dev year-sim harness's
+in-loop advances no-op it (its own end-of-run flush pushes once instead).
+
+### Restore-completeness sync (Theme A — Test #11, 2026-05-04)
+
+Three additional ad-hoc sync methods exist outside the workout/nutrition
+domain fan-outs. These cover surfaces that were Hive-only before Test #11
+and silently lost on reinstall:
+
+- `SyncService.syncFreezes()` — pushes `streak_freezes_{available, used_dates, last_refill}` into `user_progress`. Called from `WorkoutRepository.consumeMissedDayIfFreezeAvailable` (consume freeze; the query-named `calculateCurrentStreak` shim was deleted in OI-44 Unit 6) + `home_provider.StreakFreezeNotifier._refillIfNewWeek` (weekly refill).
+- `SyncService.syncNotificationsInboxEntry(Map entry)` — upserts a single inbox entry to `notifications_inbox`. Called from `NotificationInboxService.record` after every Hive write.
+- `SyncService.syncSavedDietPlan(Map planJson)` — upserts to `saved_diet_plans` (one row per user). Called from `diet_plan_screen._savePlan` after `UserRepository.saveDietPlan`.
+
+Restore (`SyncService.restoreFromCloudForUser`) pulls these 3 surfaces +
+`rank_promotions` history (last 20) + `coaching_notes` from `coach_memory`
++ folds `SubscriptionService.verifyFromServer(force: true)` as the final
+restore step (was previously a separate post-auth hook in
+`auth_provider.dart` — that callsite is kept as a fast-path fallback).
+
+The `_*` private helpers in `sync_service.dart` are: `_restoreFreezes`,
+`_restoreNotificationsInbox`, `_restoreSavedDietPlan`,
+`_restoreRankPromotions`, `_restoreCoachMemory` (extended in Test #11 to
+also pull `coaching_notes`).
+
+Adding a new Hive-only surface that paying users would lose on reinstall
+requires (1) a cloud column/table, (2) a `syncX()` method on SyncService,
+(3) a `_restoreX()` method called from `restoreFromCloudForUser`, AND
+(4) a contract test in `test/contracts/restore_completeness_writes_test.dart`
+(currently 7 tests).

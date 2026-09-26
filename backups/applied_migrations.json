@@ -1,0 +1,1066 @@
+[
+  {
+    "migration": "001",
+    "applied_at": "2026-03-24T17:51:33+05:30",
+    "hash": "sha256:c86ad9a06ba90d2f6d0231b9474dcf0ed4c1b370d7a67b98a85c9e90a4e70b12",
+    "applier": "founder"
+  },
+  {
+    "migration": "002",
+    "applied_at": "2026-03-24T17:51:33+05:30",
+    "hash": "sha256:ce61d6fc06335a541534f94048d8cba537e6382c5e48083fa558588a2759a123",
+    "applier": "founder"
+  },
+  {
+    "migration": "003",
+    "applied_at": "2026-03-24T17:51:33+05:30",
+    "hash": "sha256:d0f69fd63749a8e0d3f7566cd3710e02c6677ae61a5bc835dc8f6118ca361d23",
+    "applier": "founder"
+  },
+  {
+    "migration": "004",
+    "applied_at": "2026-03-24T17:51:33+05:30",
+    "hash": "sha256:81a6f052acf5a218b5e3d6af9ba0b2152d63274e49a8b896f6eb95de70f6baef",
+    "applier": "founder"
+  },
+  {
+    "migration": "005",
+    "applied_at": "2026-03-24T17:51:33+05:30",
+    "hash": "sha256:c8d2fbe776d59d5cd6d225c24509c1a4bb31a208520437a69ba27ee532ce8730",
+    "applier": "founder"
+  },
+  {
+    "migration": "006",
+    "applied_at": "2026-03-24T17:51:33+05:30",
+    "hash": "sha256:693da88d72fbe532fbbb5ab07de414cdaafad11bef2b045eb1c32ccefa133645",
+    "applier": "founder"
+  },
+  {
+    "migration": "007",
+    "applied_at": "2026-03-24T17:51:33+05:30",
+    "hash": "sha256:ee907c98a5647e43f3da92e8559973a30b368c53a06782a781b475f41a19fa97",
+    "applier": "founder"
+  },
+  {
+    "migration": "008",
+    "applied_at": "2026-03-28T10:11:51+05:30",
+    "hash": "sha256:576a4964129a4af21f7eb4d8fdddedc479766a500face2d72f8c4467aee2bb4a",
+    "applier": "founder"
+  },
+  {
+    "migration": "009",
+    "applied_at": "2026-04-05T22:40:58+05:30",
+    "hash": "sha256:dcc1cf181c4f17f5e21f4ee8d3b3df64841cb0a9a4700bc51e3effd09378f072",
+    "applier": "founder"
+  },
+  {
+    "migration": "010",
+    "applied_at": "2026-04-05T22:40:58+05:30",
+    "hash": "sha256:8ac7eb83c468376df1cf436ca111cbe02ba8a82219552a858f5790acb84c4f16",
+    "applier": "founder"
+  },
+  {
+    "migration": "011",
+    "applied_at": "2026-04-08T00:16:41+05:30",
+    "hash": "sha256:addebc05f4fae0d542ec29a2fc72b596c3a55f95f4d886fb73fe1ba88e8ed783",
+    "applier": "founder"
+  },
+  {
+    "migration": "012",
+    "applied_at": "2026-04-08T19:46:59+05:30",
+    "hash": "sha256:15c0681c32a74273216fc4b39cae24f9475a252d3f9678d4f3ef2d81dd036ff9",
+    "applier": "founder"
+  },
+  {
+    "migration": "013",
+    "applied_at": "2026-04-08T19:46:59+05:30",
+    "hash": "sha256:ce586d9c43f5add6d5ca1006f13a78ff69489d5ac7d5f272bab0f89a2bd6ecda",
+    "applier": "founder"
+  },
+  {
+    "migration": "014",
+    "applied_at": "2026-04-09T23:54:24+05:30",
+    "hash": "sha256:f45660c5ea3b35e6582dfe3fcaddab07cfd114ed522e1c38d6fdfe8d5ab34286",
+    "applier": "founder"
+  },
+  {
+    "migration": "015",
+    "applied_at": "2026-04-11T14:49:53+05:30",
+    "hash": "sha256:d1b2e70a77a1fbbcd88839ec29c82fa2bcb731a8cf108965f2de0d731b15f197",
+    "applier": "founder"
+  },
+  {
+    "migration": "016",
+    "applied_at": "2026-04-12T02:11:20+05:30",
+    "hash": "sha256:b6eb311bbd6281f3eebeb0ace36e3d78a7cda97e6f69c8133ec28204dd56702a",
+    "applier": "founder"
+  },
+  {
+    "migration": "017",
+    "applied_at": "2026-04-17T02:03:04+05:30",
+    "hash": "sha256:fc1d9364cf195435a38d5c4f2bb805ea8000963b35c51d54640813136e5585a0",
+    "applier": "founder"
+  },
+  {
+    "migration": "018",
+    "applied_at": "2026-04-17T02:25:42+05:30",
+    "hash": "sha256:dd8d60f3d175eff7e7bc6e3463b6db5ef116f976151a696198fb94851db37b26",
+    "applier": "founder"
+  },
+  {
+    "migration": "019",
+    "applied_at": "2026-04-17T13:26:32+05:30",
+    "hash": "sha256:8d55c2a6672433ae88f1a83afdf86dac7dbdaff7e05406f6b9b3f62d8dbbb659",
+    "applier": "founder"
+  },
+  {
+    "migration": "020",
+    "applied_at": "2026-04-17T13:26:32+05:30",
+    "hash": "sha256:e495cff45afc8f0575fd34154a59697415a4e66357bb20ce245243e2be079255",
+    "applier": "founder"
+  },
+  {
+    "migration": "021",
+    "applied_at": "2026-04-17T13:26:32+05:30",
+    "hash": "sha256:617ef62785fece5ab3141f7a180d2b0d2f3e4d2ac91fea21c66a864003c376c9",
+    "applier": "founder"
+  },
+  {
+    "migration": "022",
+    "applied_at": "2026-04-17T13:26:32+05:30",
+    "hash": "sha256:7927bd2ccf6b9d5eb39905047cc451ea8e17049d6073893136759b1d1d826421",
+    "applier": "founder"
+  },
+  {
+    "migration": "023",
+    "applied_at": "2026-04-17T13:26:32+05:30",
+    "hash": "sha256:436b0aaa048429c4c7056a24b4a7a8fc56894085642c7f80656e72c8a02bcb53",
+    "applier": "founder"
+  },
+  {
+    "migration": "025",
+    "applied_at": "2026-04-18T18:40:14+05:30",
+    "hash": "sha256:bbb64425d84a16fe6edeb7d185f9460a0ed7c554cea8e35d82c89a196e5b275e",
+    "applier": "founder"
+  },
+  {
+    "migration": "026",
+    "applied_at": "2026-04-18T18:40:14+05:30",
+    "hash": "sha256:ff3ced178c0bdb17cb4f5703c8833910042a8a9f3f3f90b54affbcf5be6f3b90",
+    "applier": "founder"
+  },
+  {
+    "migration": "027",
+    "applied_at": "2026-04-18T23:49:27+05:30",
+    "hash": "sha256:82d806c43bc8d2c84448718b942398ef57e59f55eeda14b0d58b37a130c22a67",
+    "applier": "founder"
+  },
+  {
+    "migration": "028",
+    "applied_at": "2026-04-19T07:14:36+05:30",
+    "hash": "sha256:05528bfd0d8c59ec4946002c59242ceea0df85d13b5e033fae094c2d374e0ec8",
+    "applier": "founder"
+  },
+  {
+    "migration": "029",
+    "applied_at": "2026-04-19T18:31:57+05:30",
+    "hash": "sha256:3fcf81190759e44ef8c3c191b20100cdb65c70874774f248c29c5ea316d78c96",
+    "applier": "founder"
+  },
+  {
+    "migration": "030",
+    "applied_at": "2026-04-20T12:25:30+05:30",
+    "hash": "sha256:056e245147db915e9c1b94ecda57682a5f1d5906614709e9848721b53ed66919",
+    "applier": "founder"
+  },
+  {
+    "migration": "031",
+    "applied_at": "2026-04-20T15:48:43+05:30",
+    "hash": "sha256:a70bea5afc01c782199edfc96f61cfbe44c127c5d76f07451bc470708f08e439",
+    "applier": "founder"
+  },
+  {
+    "migration": "032",
+    "applied_at": "2026-04-24T16:31:14+05:30",
+    "hash": "sha256:ef197b39b598c5366d48962f93ccc7997f3139e3ff277d5c524254df1113c912",
+    "applier": "founder"
+  },
+  {
+    "migration": "033",
+    "applied_at": "2026-04-24T17:00:16+05:30",
+    "hash": "sha256:10f0b947ed0bdccaacff44279332224ebf08b0d09e58e84f31783d302f31580e",
+    "applier": "founder"
+  },
+  {
+    "migration": "034",
+    "applied_at": "2026-04-24T17:00:16+05:30",
+    "hash": "sha256:93891bfe1e8bc373783a354c13f1d909cdc6a8eee43308ed4c6ade2f09acdf1a",
+    "applier": "founder"
+  },
+  {
+    "migration": "035",
+    "applied_at": "2026-04-24T23:33:42+05:30",
+    "hash": "sha256:41e4be72edcdf80754e3ca65eee8ac0fcacf1bed47610e5dab4ff45d3290ff89",
+    "applier": "founder"
+  },
+  {
+    "migration": "036",
+    "applied_at": "2026-04-25T16:23:02+05:30",
+    "hash": "sha256:f635ab61d7be8716ea05873009b373a567646e6dfd76bfd663b447cb424cd5fe",
+    "applier": "founder"
+  },
+  {
+    "migration": "037",
+    "applied_at": "2026-04-25T16:26:18+05:30",
+    "hash": "sha256:6b08810810ecf01b02ec4d11622bc20a6fc54f5653e77a20e2c89e9af01916fa",
+    "applier": "founder"
+  },
+  {
+    "migration": "038",
+    "applied_at": "2026-04-25T18:37:33+05:30",
+    "hash": "sha256:8b7c8705bd919f38ffec0286acabd376209f52cf110a6ce90e833acdb9867f4c",
+    "applier": "founder"
+  },
+  {
+    "migration": "039",
+    "applied_at": "2026-04-26T16:24:25+05:30",
+    "hash": "sha256:012f6896ac69642c2f174f63c53f8102cc400867266e6e6924646a361ea0960c",
+    "applier": "founder"
+  },
+  {
+    "migration": "040",
+    "applied_at": "2026-04-26T16:39:55+05:30",
+    "hash": "sha256:c9d71d3d9a8393e97837dad9bf7f7829e71a7d946f9a36bf7eec967cb89bc77b",
+    "applier": "founder"
+  },
+  {
+    "migration": "041",
+    "applied_at": "2026-04-27T06:58:18+05:30",
+    "hash": "sha256:cb7ca7898a38e1be31591f84403065f926191b42c42b696595bfd931a704c900",
+    "applier": "founder"
+  },
+  {
+    "migration": "042",
+    "applied_at": "2026-04-28T01:35:30+05:30",
+    "hash": "sha256:55090b95ce31f8698b1c5ac6e290ebd4c490b79f646163c924dbc663caf07f8c",
+    "applier": "founder"
+  },
+  {
+    "migration": "043",
+    "applied_at": "2026-04-28T02:13:45+05:30",
+    "hash": "sha256:1af69f9174c0d61fdb72e94305ec371c0072f80931fd78a3fd4c6f4dc03efb87",
+    "applier": "founder"
+  },
+  {
+    "migration": "044",
+    "applied_at": "2026-05-01T04:32:04+05:30",
+    "hash": "sha256:8c394641cb5ecaa48937c07fdbf3fb748a016e4640b442664e31e90b1b788a67",
+    "applier": "founder"
+  },
+  {
+    "migration": "045",
+    "applied_at": "2026-05-01T04:14:31+05:30",
+    "hash": "sha256:ba1183fbf43d999c88d0a07a21fe956906dc268e5203ed41de9c7c7895ecc340",
+    "applier": "founder"
+  },
+  {
+    "migration": "046",
+    "applied_at": "2026-05-03T07:05:45+05:30",
+    "hash": "sha256:1a650c677c4ae1582df9af4ff14ab650eeb96751ac1bcba3417ca6bebc22d78e",
+    "applier": "founder"
+  },
+  {
+    "migration": "047",
+    "applied_at": "2026-05-03T18:12:47+05:30",
+    "hash": "sha256:401c23ceb9a09b28925f678725fe088840fe7af345e00e4bc5ae5e43ecd289cb",
+    "applier": "founder"
+  },
+  {
+    "migration": "048",
+    "applied_at": "2026-05-04T14:33:25+05:30",
+    "hash": "sha256:7b5e516feab7efcdff37102a7d149c89abd2dbc9d18bbc78423ffa0a909db3f9",
+    "applier": "founder"
+  },
+  {
+    "migration": "049",
+    "applied_at": "2026-05-04T14:59:31+05:30",
+    "hash": "sha256:26a50278bab8a5e528e33898206af081dabc238b9e30f61012992179d1a57038",
+    "applier": "founder"
+  },
+  {
+    "migration": "050",
+    "applied_at": "2026-05-10T20:10:33+05:30",
+    "hash": "sha256:7b6f7c28c13b46ce384e8a9355ec16e4ffc34b8bed612c8c638406a72a036100",
+    "applier": "founder"
+  },
+  {
+    "migration": "050b",
+    "applied_at": "2026-05-11T12:29:35+05:30",
+    "hash": "sha256:cd69841a35dc53533946659a8a27c68e92047bb40a494cb3d063d1c826428a25",
+    "applier": "founder"
+  },
+  {
+    "migration": "051",
+    "applied_at": "2026-05-10T23:52:29+05:30",
+    "hash": "sha256:4af3a1f09b1f397fbd911ccd16c42a08f77bd9d9716ec4553d0820e86b80f2a9",
+    "applier": "founder"
+  },
+  {
+    "migration": "052",
+    "applied_at": "2026-05-11T01:34:34+05:30",
+    "hash": "sha256:12f15843aa58cb30c7a8fe945a22105cff8b1ade7c61b457d87a84fa5a13418a",
+    "applier": "founder"
+  },
+  {
+    "migration": "053",
+    "applied_at": "2026-05-11T01:34:34+05:30",
+    "hash": "sha256:2c01e4700f83e1fef4e01aca72e7f21f021b13964317ff80ad6295af8a1f7687",
+    "applier": "founder"
+  },
+  {
+    "migration": "054",
+    "applied_at": "2026-05-11T05:13:46+05:30",
+    "hash": "sha256:a3ae4fbee3dfa24b33a196989183fc9eb9fa10e9320c73560edf59b8952b7100",
+    "applier": "founder"
+  },
+  {
+    "migration": "055",
+    "applied_at": "2026-05-11T05:13:46+05:30",
+    "hash": "sha256:bdefb360ffbe5e2ef3c777d6cb99a9689b5a066d0a4fdc0a4fc40fcafc1b7b4e",
+    "applier": "founder"
+  },
+  {
+    "migration": "056",
+    "applied_at": "2026-05-11T11:19:37+05:30",
+    "hash": "sha256:ed4bfa10b54a680879a86123bb134975d55f0f86650fcab1742ad1aea2016784",
+    "applier": "founder"
+  },
+  {
+    "migration": "057",
+    "applied_at": "2026-05-11T12:29:35+05:30",
+    "hash": "sha256:511a3d4bd81f29adbcba1f256409511e2aae1ffec9009b66430a9c323c35bae6",
+    "applier": "founder"
+  },
+  {
+    "migration": "058",
+    "applied_at": "2026-05-11T12:29:35+05:30",
+    "hash": "sha256:835ede73427cf2723b7e1652c9ce177689bf07896cf4bbe582f0316cf09f4e9f",
+    "applier": "founder"
+  },
+  {
+    "migration": "059",
+    "applied_at": "2026-05-11T14:16:02+05:30",
+    "hash": "sha256:64888daa9b3a99e7d15e2ca726cb1dd7a162a2630e50c0aa7a3280713aec4c0f",
+    "applier": "founder"
+  },
+  {
+    "migration": "060",
+    "applied_at": "2026-05-11T20:03:50+05:30",
+    "hash": "sha256:634856312470bc31c2e6f6c3d762306c2d67c1ac829f257191d6f8873a1b8167",
+    "applier": "founder"
+  },
+  {
+    "migration": "061",
+    "applied_at": "2026-05-12T16:19:46+05:30",
+    "hash": "sha256:1803f39ed76744fc6a5c04f31b4fb43fbc4a930814e1b6474e669f2d00f303f7",
+    "applier": "founder"
+  },
+  {
+    "migration": "062",
+    "applied_at": "2026-05-12T16:19:46+05:30",
+    "hash": "sha256:7745eae9cfcf38399514c8bd512383a3376e155fd6009fb25bd719f1127c1cf5",
+    "applier": "founder"
+  },
+  {
+    "migration": "063",
+    "applied_at": "2026-05-13T07:00:44+05:30",
+    "hash": "sha256:de4cf028b0583da599b43c11b9cdb96cad0f764e69f987e994c2ee0be3db1111",
+    "applier": "founder"
+  },
+  {
+    "migration": "064",
+    "applied_at": "2026-05-15T11:30:52+05:30",
+    "hash": "sha256:9b80da491fd9d0bfc6c024074853e353dd2d14a4c36c00ec5f52a0e72738db81",
+    "applier": "founder"
+  },
+  {
+    "migration": "065",
+    "applied_at": "2026-05-15T11:30:52+05:30",
+    "hash": "sha256:15f14925f511a66aed5441860485960ed0d1097aaaf1d5d3852dceba9ec479fb",
+    "applier": "founder"
+  },
+  {
+    "migration": "066",
+    "applied_at": "2026-05-16T06:35:09+05:30",
+    "hash": "sha256:02db897e2937ea96fca8da474575dd0f05f739d969a25ac6e9b640bf76b75e4c",
+    "applier": "founder"
+  },
+  {
+    "migration": "067",
+    "applied_at": "2026-05-16T17:59:29+05:30",
+    "hash": "sha256:a9f08931a8c9a1d7022f2997a6472ba0630fe4f20018451fd7f9db8da91da012",
+    "applier": "founder"
+  },
+  {
+    "migration": "068",
+    "applied_at": "2026-05-16T17:59:29+05:30",
+    "hash": "sha256:5e262aa3603fe573c7a865ae9288cb4b2f5bcf1787e92d85f31efec3f022b64b",
+    "applier": "founder"
+  },
+  {
+    "migration": "068b",
+    "applied_at": "2026-05-25T01:07:26+05:30",
+    "hash": "sha256:4b8818868d0c8ebf58112f78064cd1b7ee1eb75d91bfe1a7047c47d4ac02ed89",
+    "applier": "claude-via-mcp",
+    "diagnose": "524d12",
+    "slug": "drift_fix_batch"
+  },
+  {
+    "migration": "069",
+    "applied_at": "2026-05-17T11:02:23+05:30",
+    "hash": "sha256:a51dca6b77ad5b0ca34118e784a592b577dcc0ad29b6a803603e624c50f1cf79",
+    "applier": "founder"
+  },
+  {
+    "migration": "070",
+    "applied_at": "2026-05-17T11:28:41+05:30",
+    "hash": "sha256:d966d30775d99b52c669ff4bcf17725736d3906c660594c41953c486f8d52c27",
+    "applier": "founder"
+  },
+  {
+    "migration": "071",
+    "applied_at": "2026-05-17T19:59:35+05:30",
+    "hash": "sha256:5b6657e660900a9184b42b41c17089e8b0eb6d97b6675dfd18a7f1b6ea857e99",
+    "applier": "founder"
+  },
+  {
+    "migration": "072",
+    "applied_at": "2026-05-18T14:18:01+05:30",
+    "hash": "sha256:76ebc945a73eac1c40b9ab96cd535712acb93a9f6d256228b64cfe959e55584b",
+    "applier": "founder"
+  },
+  {
+    "migration": "073",
+    "applied_at": "2026-05-24T09:42:55+05:30",
+    "hash": "sha256:fa80272b9206aa149886aafcf68a0932de6cd9da845c04e0bed112ec35cbe059",
+    "applier": "claude-via-mcp",
+    "diagnose": "8b1f33"
+  },
+  {
+    "migration": "074",
+    "applied_at": "2026-07-19T00:00:00+05:30",
+    "hash": "sha256:4737f384d7216388f6924dbac15b510726a49f3346a9239ad1c076cb0f6a6c87",
+    "applier": "claude-via-management-api",
+    "diagnose": "ada3fb",
+    "reapplied": "Batch 13-A — regenerated from JSON (259 rows: E261 added + 9 stubs normalized to canonical schema, healing the coach's stale NULL primary_muscles). Re-applied to prod (idempotent ON CONFLICT DO UPDATE)."
+  },
+  {
+    "migration": "075",
+    "applied_at": "2026-05-27T19:00:00+05:30",
+    "hash": "sha256:7c7f1016224ecc1ec56551dccbc64b77e3d94e571a6a160c2679b5af4b60f840",
+    "applier": "claude-via-mcp",
+    "diagnose": "3a7b9f",
+    "slug": "heal_current_rank_from_peak"
+  },
+  {
+    "migration": "076",
+    "applied_at": "2026-05-27T22:00:00+05:30",
+    "hash": "sha256:32e42e09cf164c5b8649d6d9dc6ed8d191aafc63321bdfca6116ed396c1ab3cb",
+    "applier": "claude-via-mcp",
+    "diagnose": "n/a",
+    "slug": "alert_detection_crons"
+  },
+  {
+    "migration": "077",
+    "applied_at": "2026-05-28T08:00:00+05:30",
+    "hash": "sha256:0a272255282ebb0741122865affcc05df3531698dd62857705d00b645294aeff",
+    "applier": "claude-via-mcp",
+    "diagnose": "b1f4e2",
+    "slug": "fix_alert_edge_function_health_columns"
+  },
+  {
+    "migration": "078",
+    "applied_at": "2026-05-30T15:30:00+05:30",
+    "hash": "sha256:72621bc1c79bb6e20ae11053bc8f20438be7f74b3f122a2d550336e98d233164",
+    "applier": "claude-via-mcp",
+    "diagnose": "f4b2c9",
+    "slug": "fix_dispatch_proactive_coach_promotion_columns"
+  },
+  {
+    "migration": "079",
+    "applied_at": "2026-05-30T23:05:00+05:30",
+    "hash": "sha256:8937723834f06203d5469525e302dbe7cbae6dd1e67bcad4ae7c7e480dd14c69",
+    "applier": "claude-via-mcp",
+    "diagnose": "e3f1a7",
+    "slug": "enable_weight_logs_realtime"
+  },
+  {
+    "migration": "080",
+    "applied_at": "2026-05-31T09:55:00+05:30",
+    "hash": "sha256:d8f1e6f1c2fa3cc28d8a24407656314da11d9402af570083c435f7df1d42cbf3",
+    "applier": "claude-via-mcp",
+    "diagnose": "7d3f0a",
+    "slug": "relax_wle_reps_realistic_cumulative"
+  },
+  {
+    "migration": "081",
+    "applied_at": "2026-05-31T12:20:00+05:30",
+    "hash": "sha256:7caaab4e9fc33e071c4445c77af889e927fc4ed19b5c3d8f1bac4b2ab3780cd4",
+    "applier": "claude-via-mcp",
+    "diagnose": "b9f4d2",
+    "slug": "user_progress_rank_eval_columns"
+  },
+  {
+    "migration": "20260328000001",
+    "applied_at": "2026-03-28T10:11:51+05:30",
+    "hash": "sha256:7c9c091751241a31dcc75edd97d9ff84b0a342d4051a9b62c1153f00e9b9834d",
+    "applier": "founder"
+  },
+  {
+    "migration": "20260330",
+    "applied_at": "2026-03-30T18:41:45+05:30",
+    "hash": "sha256:f3431cdf4123658df0d0d59cb4e18cb47cde3f3407c0ab4e3c9c1cc3abff995f",
+    "applier": "founder"
+  },
+  {
+    "migration": "20260331000001",
+    "applied_at": "2026-03-30T20:23:29+05:30",
+    "hash": "sha256:d78745bbf0bcafea3cb85bbfa8cffc6301f09ae231b8cf2f7840cb1a1f53bd8c",
+    "applier": "founder"
+  },
+  {
+    "migration": "082",
+    "applied_at": "2026-06-03T13:27:40+05:30",
+    "hash": "sha256:bca094cdb3976ce1f8c27a99caf965e5a9a6e71b5acab1151913c194833dc197",
+    "applier": "claude"
+  },
+  {
+    "migration": "083",
+    "applied_at": "2026-06-03T13:27:40+05:30",
+    "hash": "sha256:8b418bfaa63e064dc727cca8a1bb33abcb758a408c32a4bbd162e73567dc969c",
+    "applier": "claude"
+  },
+  {
+    "migration": "084",
+    "applied_at": "2026-06-05T23:25:18+05:30",
+    "hash": "sha256:1886af1655e77f6bbbac423ea681e2a6cc7aa94b6848fda7ca8ffd82122ffc1a",
+    "applier": "claude"
+  },
+  {
+    "migration": "085",
+    "applied_at": "2026-06-06T06:15:00+05:30",
+    "hash": "sha256:7319d1f624ab73ed0957c0b6da670e3a9e50b04a8efc43ae496a9be7874a807d",
+    "applier": "claude",
+    "diagnose": "d9a4f2"
+  },
+  {
+    "migration": "086",
+    "applied_at": "2026-06-06T20:54:31+05:30",
+    "hash": "sha256:f4f5e88b351114d4141d65daea30242eeeaa8b60c61f953317df5fcd94ef98df",
+    "applier": "claude",
+    "diagnose": "f0b9d3"
+  },
+  {
+    "migration": "087",
+    "applied_at": "2026-06-06T23:07:53+05:30",
+    "hash": "sha256:62270ad2b7b98381a77707a665057a935e90ef9da6e9895b05b17872a6d55800",
+    "applier": "claude",
+    "diagnose": "f0b9d3"
+  },
+  {
+    "migration": "088",
+    "applied_at": "2026-06-08T16:39:40+05:30",
+    "hash": "sha256:b1bfc37d2985fa06bcab270878da1e3643322bf9946eef93f82a595c146727c7",
+    "applier": "claude",
+    "diagnose": "b4e2a9"
+  },
+  {
+    "migration": "089",
+    "applied_at": "2026-06-08T17:26:39+05:30",
+    "hash": "sha256:6b10555313996aa27c60fc5f1c87ed0b1993cc8fd7883b19d8435ba919094990",
+    "applier": "claude",
+    "diagnose": "a3e8f1"
+  },
+  {
+    "migration": "090",
+    "applied_at": "2026-06-11T18:00:00+05:30",
+    "hash": "sha256:7fa57f01686deff1016885285295db9406de079a2a87730aaa40e119d51147dd",
+    "applier": "claude",
+    "diagnose": "c9b3e2"
+  },
+  {
+    "migration": "091",
+    "applied_at": "2026-06-11T18:07:00+05:30",
+    "hash": "sha256:721fdbea85554acd682a49bb968e22f23ebf74edaab9888dfd4d0d0aefabcf83",
+    "applier": "claude",
+    "diagnose": "c9b3e2"
+  },
+  {
+    "migration": "092",
+    "applied_at": "2026-06-13T12:56:46+05:30",
+    "hash": "sha256:08183afb852f1199e75c26ebe95aaf8e9af917b8febcb73704de0444dbc478a9",
+    "applier": "claude",
+    "diagnose": "c7d4f1"
+  },
+  {
+    "migration": "093",
+    "applied_at": "2026-06-14T13:25:37+05:30",
+    "hash": "sha256:11b0be39338d44060a144a749bb4cb79f85ba852a32f3592bd6ebcdf5f0a9308",
+    "applier": "claude"
+  },
+  {
+    "migration": "094",
+    "applied_at": "2026-06-16T20:18:36+05:30",
+    "hash": "sha256:382c6fe6e88186223067c492e98a56f8946abbb1782dd598bb9da6c7f3091333",
+    "applier": "claude",
+    "diagnose": "a1c9f4"
+  },
+  {
+    "migration": "095",
+    "applied_at": "2026-06-18T15:35:12+05:30",
+    "hash": "sha256:7028626eecb6b1d47ef81adf580b881c6c902bb46aebd611fcbb38b43f6ca153",
+    "applier": "claude",
+    "diagnose": "f9d2e7"
+  },
+  {
+    "migration": "096",
+    "applied_at": "2026-06-18T15:35:12+05:30",
+    "hash": "sha256:745616dc89a0738a94e51b08bff2dbb0def6e44649e7f4c3cb7ca76df3ac29f3",
+    "applier": "claude",
+    "diagnose": "f9d2e7"
+  },
+  {
+    "migration": "097",
+    "applied_at": "2026-06-28T14:56:19+05:30",
+    "hash": "sha256:e2b7879e6ba0ed30ab5a351cc6040788de187d5235c83a9094decf89579ad144",
+    "applier": "claude"
+  },
+  {
+    "migration": "098",
+    "applied_at": "2026-06-28T17:10:23+05:30",
+    "hash": "sha256:19288d5332939d5efd3236968f763b0a5548b2ac4431aecd9ff847e10b6ab0b6",
+    "applier": "claude",
+    "diagnose": "c4d8a2"
+  },
+  {
+    "migration": "099",
+    "applied_at": "2026-07-01T12:10:31+05:30",
+    "hash": "sha256:87096601f5835d27f12bc72ff1097927b83886844146c54126edc02633716fc3",
+    "applier": "claude",
+    "slug": "drop_dup_water_logs_user_date_index"
+  },
+  {
+    "migration": "100",
+    "applied_at": "2026-07-07T04:17:07+05:30",
+    "hash": "sha256:febba64cb6095e01d400a7cb652f03d530e1339d078a7df5ab18d4a1b8a07eb7",
+    "applier": "claude",
+    "slug": "rls_initplan_select_wrap",
+    "diagnose": "e6b1a4"
+  },
+  {
+    "migration": "101",
+    "applied_at": "2026-07-13T09:52:07+05:30",
+    "hash": "sha256:c68c5e770ef66d7d7ba104c996ee079f057877e611507bdac21ad858b7abefa0",
+    "applier": "claude",
+    "slug": "admin_dashboard_metrics_functions"
+  },
+  {
+    "migration": "102",
+    "applied_at": "2026-07-13T09:52:07+05:30",
+    "hash": "sha256:e38cb3bf2afe8a9396e4d85c7fd38295fba868abfb29180aed4d4053b99e5c3a",
+    "applier": "claude",
+    "slug": "admin_metrics_daily_snapshot"
+  },
+  {
+    "migration": "103",
+    "applied_at": "2026-07-13T09:52:07+05:30",
+    "hash": "sha256:b8f1a23583068cae73a834d021ebd0e3897bcc20431d930597de27b217f57cf5",
+    "applier": "claude",
+    "slug": "admin_metrics_revoke_from_roles",
+    "diagnose": "a9d3f1"
+  },
+  {
+    "migration": "104",
+    "applied_at": "2026-07-17T06:32:16+05:30",
+    "hash": "sha256:4c6ebb529f1f893fed7ab53275f54360af9bca8465f08f7e74b44c946455bff3",
+    "applier": "claude",
+    "slug": "add_equipment_exclusions_to_user_profile"
+  },
+  {
+    "migration": "105",
+    "applied_at": "2026-07-17T10:53:26+05:30",
+    "hash": "sha256:8a2a181ec9e83ad1a5a0900269008750ba681782f23f6bd63c3e6a21fb6e1739",
+    "applier": "claude",
+    "slug": "add_readiness_daily"
+  },
+  {
+    "migration": "106",
+    "applied_at": "2026-07-18T09:31:53+05:30",
+    "hash": "sha256:839546b01c82de28d6994ca275fbfab4b05c21b93e8a99f0e05fc9572afb35ef",
+    "applier": "claude",
+    "slug": "email_is_registered_check"
+  },
+  {
+    "migration": "107",
+    "applied_at": "2026-07-26T10:05:00+05:30",
+    "hash": "sha256:8f0946425e60de066618384f28e62b077b65a408cd12dc92ed11875bdfbe38a3",
+    "applier": "claude-via-mcp",
+    "diagnose": "c3f8a1",
+    "slug": "cron_secret_auth"
+  },
+  {
+    "migration": "108",
+    "applied_at": "2026-07-26T12:14:00+05:30",
+    "hash": "sha256:3e641e2df53a0318920ccfd5e75555dd8727cbb1a9b5909923a8f82863a7d725",
+    "applier": "claude-via-mcp",
+    "diagnose": "c3f8a1",
+    "slug": "cron_secret_auth_verify_jwt_jobs"
+  },
+  {
+    "migration": "109",
+    "applied_at": "2026-07-26T10:07:00+05:30",
+    "hash": "sha256:1980b56f0a6c5bdf48a752476dc155282713830747839e0df1671f3dc62a826c",
+    "applier": "claude-via-mcp",
+    "diagnose": "c3f8a1",
+    "slug": "cron_silence_alert_and_log_cleanup"
+  },
+  {
+    "migration": "110",
+    "applied_at": "2026-07-26T13:00:00+05:30",
+    "hash": "sha256:4de9a96e14165cfa9eaf20ecae6c87471025cb61b23b0b835baa69efbf268c75",
+    "applier": "claude-via-mcp",
+    "diagnose": "c3f8a1",
+    "slug": "cron_silence_per_function_and_cleanup_null_guard"
+  },
+  {
+    "migration": "111",
+    "applied_at": "2026-07-29T16:03:47+05:30",
+    "hash": "sha256:e76c8f54cd46dc733dc331e4ed940a290104704905e31329cd05b6fe8e7d77ca",
+    "applier": "claude-via-mcp",
+    "diagnose": "f4a19c",
+    "slug": "chat_vision_daily_cap_triggers"
+  },
+  {
+    "migration": "112",
+    "applied_at": "2026-07-29T16:03:47+05:30",
+    "hash": "sha256:8a3094c71d0df10989ad9d666d51766eb9e0154649a2a666408099c63ff7d942",
+    "applier": "claude-via-mcp",
+    "diagnose": "f4a19c",
+    "slug": "onboarding_required_fields_transition_gate"
+  },
+  {
+    "migration": "113",
+    "applied_at": "2026-07-29T16:03:47+05:30",
+    "hash": "sha256:9675b12b44030a7df08e87e1d2a1c1d480a74c139493b0b69f0ccaaadb2f10dd",
+    "applier": "claude-via-mcp",
+    "diagnose": "f4a19c",
+    "slug": "fix_food_text_trigger_ist_boundary"
+  },
+  {
+    "migration": "114",
+    "applied_at": "2026-07-30T06:06:57+05:30",
+    "hash": "sha256:acf7b17ad47d4a2cd2fcca6948976f4aebef0bbe79d4e87d5da696593111a383",
+    "applier": "claude-via-mcp",
+    "diagnose": "c9e3b1",
+    "slug": "raise_vision_analysis_cap_to_20"
+  },
+  {
+    "migration": "115",
+    "applied_at": "2026-07-30T17:35:29+05:30",
+    "hash": "sha256:ff51d373ab730b86fcdb2b94a9c7e9848f84e1a7e487a0674580552a5c844608",
+    "applier": "claude-via-mcp",
+    "diagnose": "e6b9c4",
+    "slug": "user_progress_snapshot_optimistic_lock"
+  },
+  {
+    "migration": "116",
+    "applied_at": "2026-07-30T23:30:08+05:30",
+    "hash": "sha256:88a477111bfa8921acb845e59dce690e6436023151d9928d5de0a660e9fd41e7",
+    "applier": "claude-via-mcp",
+    "diagnose": "f4a7c2",
+    "slug": "chat_media_delete_own_policy"
+  },
+  {
+    "migration": "117",
+    "applied_at": "2026-08-01T07:05:00+05:30",
+    "hash": "sha256:821bbdb99cd01b2abb3dfb88de0d65f5f56fdc2a2b33c174f0e16414991e631f",
+    "applier": "claude-via-mcp",
+    "diagnose": "a4e1c9",
+    "slug": "reengagement_silent_candidates_rpc"
+  },
+  {
+    "migration": "118",
+    "applied_at": "2026-08-03T10:04:53+05:30",
+    "hash": "sha256:16c8afcb323a1d2b3f58c775996da0f7a81c09e0321223239913a57c90f28332",
+    "applier": "claude-via-mcp",
+    "diagnose": "b3f9e7",
+    "slug": "backfill_terms_accepted_historical_rows"
+  },
+  {
+    "migration": "119",
+    "applied_at": "2026-08-06T23:30:00+05:30",
+    "hash": "sha256:1b0764fc1cf75b73a3cfbf1b2ea2a1085cb83f45feafcb1dc831d8750f2e2c4a",
+    "applier": "founder-manual-sql-editor",
+    "diagnose": "b6e4f2",
+    "slug": "client_errors_nullable_user_id_for_preauth",
+    "note": "Applied by the founder by hand in the Supabase SQL editor after the auto-mode classifier refused apply_migration twice. Live state VERIFIED (pg_attribute.attnotnull=false; FK client_errors_user_id_fkey unchanged; RLS INSERT with_check still auth.uid()=user_id). Because it did NOT go through the migration system, supabase_migrations.schema_migrations has NO row for it — a list_migrations vs this manifest comparison will show 119 absent on the server side. That gap is expected, not drift to re-apply."
+  },
+  {
+    "migration": "120",
+    "applied_at": "2026-08-20T21:48:40+05:30",
+    "hash": "sha256:2c0955204e4ad3a4e2f00a44166375b5b48311cb4fcd6cb3be22499fb9567a12",
+    "applier": "claude-via-mcp",
+    "diagnose": "c7a3b9",
+    "slug": "engagement_metric_channel_filter_and_hold_telemetry",
+    "note": "Applied in TWO steps, deliberately recorded as two. Step 1 (the DROP + CREATE) shipped the function with acl {postgres=X,anon=X,authenticated=X,service_role=X}: CREATE OR REPLACE preserves an ACL but DROP+CREATE does not, and Supabase's default privileges on schema public re-grant EXECUTE to anon+authenticated, which `revoke all ... from public` (inherited verbatim from migration 101) does NOT remove. Step 2 revoked them. Final acl verified {postgres=X,service_role=X}, matching both sibling metric functions; security advisor clean. The .sql file now carries the extra revoke, so a replay is correct in ONE step. HASH UPDATED 2026-08-20 (was sha256:e9190aef2008...): the Hermes pass found the header claimed these columns 'reach the dashboard' when they reached only the Edge Function response, and that two writer citations were stale on arrival. Those corrections are COMMENT-ONLY -- every executable statement is byte-identical to what was applied, and the live pg_get_functiondef body still matches. The hash tracks the FILE, so it moves when comments move; that is the convention, not drift. RE-UPDATED 2026-08-20 (round-2 review): the header was corrected a SECOND time in the following commit (the false 'all three reads' claim), which invalidated the hash recorded here one commit earlier — the exact defect this entry had just fixed for 120b, recurring within the same batch. Recording the recurrence rather than only the value, because a hand-maintained hash is invalidated by every later edit and 60 of the 125 entries in this ledger are already drifted for the same reason (OI-135)."
+  },
+  {
+    "migration": "120b",
+    "applied_at": "2026-08-20T21:52:00+05:30",
+    "hash": "unverifiable:no-artifact",
+    "applier": "claude-via-mcp",
+    "diagnose": "c7a3b9",
+    "slug": "revoke_anon_authenticated_from_founder_metrics_engagement",
+    "note": "Grant-only follow-up to 120, applied minutes later. NOT a separate .sql file: its statement is folded into 120's file so a replay needs one apply, but it is recorded here because it WAS a distinct live apply and the manifest is a record of what happened, not of what the file now says. HASH CORRECTED 2026-08-20 (Hermes L9-F4): the value previously recorded here (sha256:4f9f4c2529...) matched NO artifact -- not this repo (120b has no file by design) and not the live statement text. Every sibling entry's hash is the sha256 of its .sql file, so a hash on a fileless entry is meaningless by construction and a future drift audit would have chased it. Replaced with an explicit sentinel: the key is required by check_applied_migrations_ledger.dart, so it cannot simply be dropped. Replay fidelity for 120b is covered by 120's file, whose hash IS verifiable."
+  },
+  {
+    "migration": "121",
+    "applied_at": "2026-08-15T21:28:23+05:30",
+    "hash": "sha256:e7fbbc280063fe1f1589cc21779b496f3b310d6b5a7fabf339905f46cdd01f72",
+    "applier": "unknown-pre-reconstruction",
+    "diagnose": "c8e5b3",
+    "slug": "log_table_retention",
+    "note": "RECONSTRUCTED 2026-08-20, five days after the fact (OI-132). This migration ran on prod on 2026-08-15 as supabase_migrations.schema_migrations version 20260815155823 and left NO artifact in the repo: no .sql file, no entry here, no diagnose-doc (its own header cited c8e5b3, which did not exist), and no CRON_REGISTRY rows for the FOUR cron jobs it created -- two of which delete rows daily. applied_at is derived from that version stamp; applier is genuinely unknown, and is recorded as such rather than guessed. WHAT THE HASH MEANS HERE, because it does not mean what it means elsewhere: every other entry hashes the .sql file that WAS applied. There was no file, so this hashes the RECONSTRUCTION -- recovered verbatim from schema_migrations.statements, then wrapped in a DO-NOT-APPLY header and an inline rollback block that did not exist at apply time. It therefore attests that the repo file matches itself, NOT that it matches what ran. THE FIDELITY CLAIM IS SEPARATELY MEASURED, not asserted: stripping every -- comment line from the repo file and normalising whitespace yields a 1539-character string IDENTICAL to the same normalisation of supabase_migrations.schema_migrations.statements[1] for version 20260815155823 (verified 2026-08-20 during this commit's B-pass). So the executable text IS what ran; only the comments are new. Stated because 60 of the 125 entries in this ledger already have hashes that match nothing (OI-135), and an unexplained hash on a reconstruction would have been the 61st. CORRECTED during this commit's own B-pass: the value first written here was the literal string \"sha256:%s\" -- an unsubstituted format placeholder. It survived check_applied_migrations_ledger.dart because that gate requires the KEY to be present and never inspects the VALUE, so this entry would have become the 61st mismatching hash in the same commit whose note explains why that must not happen. Filed as OI-137. DO NOT APPLY: cron.schedule on an existing name updates in place so a replay would survive, but the DELETEs would run immediately rather than on schedule."
+  },
+  {
+    "migration": "122",
+    "applied_at": "2026-08-26T19:10:46+05:30",
+    "hash": "sha256:ef4a5800c9f99a98314c60d380480c6cd3aa4f07631cf036a3bd5a9e0ba2d8b8",
+    "applier": "claude-via-mcp",
+    "diagnose": "e4a1b7",
+    "slug": "notification_preferences_column",
+    "note": "OI-98. Adds user_preferences.notification_preferences (jsonb, NULLABLE, NO DEFAULT) so the concept stops riding inside the wholesale-replaced user_daily_snapshots.snapshot_json blob, where it was push-only and destroyed on every reinstall. NULLABLE-with-no-default is load-bearing: NULL means 'no record' and must stay distinguishable from '{}' — collapsing those two is the root of the bug, so a DEFAULT '{}'::jsonb would re-create it in the new home. NO BACKFILL, and that is a finding not an omission: at apply time 14 of 126 snapshot rows carried the key across 5 users and ZERO rows had any key set to false, so no user's real 'off' survived anywhere to recover — back-filling would only make the bug's own all-enabled output authoritative. Applied via MCP apply_migration as the file's two DDL statements (ALTER TABLE + COMMENT ON COLUMN) with the file's explanatory comment block trimmed; the hash above is of the .sql FILE, so a replay from the file is equivalent in effect, not byte-identical to what was sent. Verified post-apply via information_schema: notification_preferences | jsonb | is_nullable=YES | column_default=null. backups/live_schema_columns.json regenerated in the same commit (50->51 tables, 570->580 columns; the diff showed ZERO dropped columns, so the regeneration is purely additive — the 9 non-mine additions are the coach_tool_invocations_v view, pre-existing drift since the 2026-06-08 capture)."
+  },
+  {
+    "migration": "123",
+    "applied_at": "2026-08-26T19:58:27+05:30",
+    "hash": "sha256:6a94f32b94dbe8445d21d218e19aa5877999f48c2ad84d25e96545321a5f84cc",
+    "applier": "claude-via-mcp",
+    "diagnose": "e4a1b7",
+    "slug": "merge_notification_preferences_rpc",
+    "note": "OI-98 B-pass Finding 1. Migration 122 moved notification_preferences out of the wholesale-replaced snapshot blob and left the WRITE side with the identical defect: a jsonb COLUMN is also replaced wholesale by an upsert (PostgREST emits SET col = EXCLUDED.col, assignment not merge), and the stored map is legitimately sparse, so a device holding one key deleted every preference it had never seen. This RPC makes the write per-key additive via jsonb ||. SECURITY INVOKER (verified live: prosecdef=false) and keyed on auth.uid(), so the caller's own RLS applies and no user can write another's row. Merge semantics verified live by evaluating the operator directly: keeps both keys, right wins per key, works from a NULL column. The hash is of the .sql FILE as amended to include 123b's revoke; what was SENT was the file's statements with the comment block trimmed, so a replay is equivalent in effect, not byte-identical."
+  },
+  {
+    "migration": "123b",
+    "applied_at": "2026-08-26T19:58:27+05:30",
+    "hash": "unverifiable:folded-into-123",
+    "applier": "claude-via-mcp",
+    "diagnose": "e4a1b7",
+    "slug": "merge_notification_preferences_revoke_anon",
+    "note": "Grant-only follow-up to 123, applied minutes later, recorded separately because it WAS a distinct live apply — the manifest records what happened, not what the file now says (same convention as 120b). NOT a separate .sql file: the statement is folded into 123 so a replay needs one pass. CAUSE: Supabase ships ALTER DEFAULT PRIVILEGES granting EXECUTE on every new public function to anon/authenticated/service_role EXPLICITLY, so 123's REVOKE ... FROM PUBLIC left anon=X/postgres standing. Caught by reading proacl after the apply rather than trusting the grant block. Post-fix ACL verified live: postgres=X | authenticated=X | service_role=X. Not exploitable as written (invoker + auth.uid() NULL + user_id NOT NULL + RLS), but an anon-executable function writing a user table is the wrong shape to leave."
+  },
+  {
+    "migration": "124",
+    "applied_at": "2026-08-28T16:52:00+05:30",
+    "hash": "sha256:c09195f899bd93c4a087fd3744302a1adea2a2d3fe5f385003c13e88b03ffc17",
+    "applier": "claude-via-mcp",
+    "diagnose": "f7b2c4",
+    "slug": "user_profile_equipment_owned",
+    "note": "OI-89. Adds user_profile.equipment_owned (text[], NULLABLE, NO DEFAULT) - the ADD half of the capability model whose SUBTRACT half (equipment_exclusions) shipped in migration 104. effective = tierItems[tier] + equipment_owned - equipment_exclusions. NULL and {} are equivalent to every reader (EquipmentVocab.fromProfile is crash-safe), so a DEFAULT would rewrite every row and buy nothing. Applied BEFORE the Profile UI that writes it, deliberately: user_repository.dart:721 upserts a SPREAD and _sanitize does not whitelist columns, so a client carrying the key against a DB without it gets a PostgREST 400 that rejects the WHOLE row. Verified post-apply: information_schema reports ARRAY / nullable / no default."
+  },
+  {
+    "migration": "125",
+    "applied_at": "2026-08-28T16:55:00+05:30",
+    "hash": "sha256:6fa1f09aadbdd4cc73fffcc3bc5badcd3bf4c4ecda51242fb62598bdc5006185",
+    "applier": "claude-via-node-api",
+    "diagnose": "f7b2c4",
+    "slug": "reseed_exercise_library",
+    "note": "OI-89. RE-SEEDS cloud exercise_library from the corrected bundled asset: 259 -> 292 rows, carrying the 31 restored + 9 audit-corrected equipment_needed values and the 33 new rows E262-E294. 074 seeded the original 259 and is APPLIED therefore IMMUTABLE, so this mints the next number rather than rewriting it; scripts/seed_exercise_library.js no longer hard-codes 074 and the contract test resolves the NEWEST seed by numeric prefix. NOTE equipment_tier is NOT a cloud column - only equipment_needed is - so the cloud never carried the tier over-tag; what this fixes cloud-side is the DESTROYED equipment_needed values that beat-my-coach/index.ts:193 filters on via equipment_needed.cs.{bodyweight}. Verified post-apply: 292 rows; Ab Wheel Rollout {ab wheel}, Jump Rope {jump rope}, Negative Pull Up {pull-up bar}; rows claiming bodyweight 119 -> 104."
+  },
+  {
+    "migration": "126",
+    "applied_at": "2026-08-28T18:05:00+05:30",
+    "hash": "sha256:a6fc1cd929d433869727fe54adb14994ef3fcfa482595c7a913f1b521db0e303",
+    "applier": "claude-via-mcp",
+    "diagnose": "f7b2c4",
+    "slug": "fix_incline_dumbbell_press_equipment",
+    "note": "OI-89 B-pass finding 2. E260 Incline Dumbbell Press claimed equipment_needed=['dumbbells'] while its FIRST coaching cue says 'Set bench to 30-45 degree incline' unconditionally - so it was tagged home_dumbbells, a tier that grants no bench. A new number rather than an edit to 125 (applied minutes earlier and therefore immutable - the OI-135 ledger-hash drift class). Found by running check_equipment_audit.dart --all-tiers: its default was BODYWEIGHT-TIER ONLY, and that scope was the blind spot, because a row over-tagged in equipment_needed rather than equipment_tier is not bodyweight-tier to begin with. E260 was the one real defect among 18 gym-tier findings; the other 17 are comparison prose, now recorded with reasons in acceptedMentions. The gate default is all-tiers as of the same commit. Verified post-apply: {dumbbells,bench}."
+  },
+  {
+    "migration": "127",
+    "applied_at": "2026-09-04T17:18:20+05:30",
+    "hash": "sha256:305622fba7cd22019e3c73810aae952f7446159e1731fca1db94fbc02f7ad0ca",
+    "applier": "claude-via-mcp-apply-migration",
+    "diagnose": "b8f4c2",
+    "slug": "food_text_free_cap_parity_10",
+    "note": "Lowers the FREE food_text_analysis daily cap 50 -> 10 so the server agrees with AppConstants.freeAiTextLogsPerDay and docs/architecture/business-rules.md; only this trigger said 50, a 5x bypass for callers reaching ai-proxy directly. PRO unchanged at 200 (founder decision 2026-09-04). CREATE OR REPLACE on migration 113 s function; IST day boundary (7ad0d3 fix) carried verbatim. Cloud version 20260904114820. Live-verified via pg_proc: cap expr now ELSE 10, Asia/Kolkata boundary present, trg_food_text_rate_limit still attached."
+  },
+  {
+    "migration": "128",
+    "applied_at": "2026-09-05T07:19:52+05:30",
+    "hash": "sha256:36bb9ae7c38bfb3c9c8b29ab883a4bae1ef8454bf0eabaf3fdd16c01bb226546",
+    "applier": "claude-via-mcp-apply-migration",
+    "diagnose": "d3a7f1",
+    "slug": "usage_counters",
+    "note": "OI-162 slice 1. Creates the usage_counters quota ledger + consume_quota() + cleanup_usage_counters() + the usage_counters_retention_daily cron (03:45 UTC). NOTHING CALLS IT — deliberately inert infrastructure so the nine ai_coach_interactions-derived quotas migrate one slice at a time. No SECURITY-DEFINER function anywhere: RLS-with-no-policy is the guard, which keeps the tier at platform and removes the escalation surface. Cloud version 20260905014952. Live-verified: CASCADE FK (confdeltype=c), relrowsecurity true with 0 policies, both functions prosecdef=false, cron owned by postgres; behaviour 1/2/3 then -1, p_limit=0 returns -1 on the first call, retention deletes a stale windowed row and KEEPS the epoch row; authenticated and anon both refused 42501 while holding EXECUTE, service_role writes."
+  },
+  {
+    "migration": "129",
+    "applied_at": "2026-09-05T12:47:59+05:30",
+    "hash": "sha256:1b0ffc945c8bdce14cdbee269ee475465bbf8ad14e1b243f5234c99c85abf1e5",
+    "applier": "claude-via-mcp-apply-migration",
+    "diagnose": "e7c4b2",
+    "slug": "cap_triggers_use_usage_counters",
+    "cloud_version": "20260905071759",
+    "note": "OI-162 slice 2. Moves the three Postgres cap triggers (enforce_chat_app_daily_limit / enforce_vision_analysis_daily_limit / enforce_food_text_daily_limit) off count(*) over ai_coach_interactions and onto consume_quota() against usage_counters. Backfill runs FIRST, before the three CREATE OR REPLACEs; a migration applies in one transaction so no session sees the new logic before the seed lands. Verified live post-apply: all three prosecdef=false (INVOKER), all three call consume_quota, none still references ai_coach_interactions, all three carry the Asia/Kolkata boundary. Backfill landed chat_app used=3 at window 2026-09-04T18:30Z (= midnight IST); vision_analysis and food_text had zero rows today so correctly produced none. The three P0001 base identifiers ai-proxy greps at index.ts:338/:524/:765 are preserved verbatim. No Edge Function or client change; no deploy. Six of nine legacy quota readers REMAIN on the old table (slices 3-4). Closes-diagnose e7c4b2."
+  },
+  {
+    "migration": "130",
+    "applied_at": "2026-09-11T17:32:05+05:30",
+    "hash": "sha256:c47a303d70f96d3c4560b2ba47afa63b4363a16b4b04f875591f09651d2daa55",
+    "applier": "founder-via-management-api",
+    "diagnose": "f2c8d5",
+    "slug": "consume_quota_revoke_public_execute",
+    "note": "OI-162 slice 4. Revokes PUBLIC/anon/authenticated EXECUTE on consume_quota() and confirms service_role retains it. Founder-applied via the Supabase Management API (the raw-curl DDL path was correctly blocked by the auto-mode classifier when the agent tried it; the founder ran the exact reviewed SQL directly). Live-verified before and after: pre-apply proacl was {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres} (four independent grant entries — anon/authenticated were NOT PUBLIC-inherited, so a PUBLIC-only revoke as migration 091 used would have been a no-op for them); post-apply proacl is {postgres=X/postgres,service_role=X/postgres} and has_function_privilege confirms anon=false, authenticated=false, service_role=true. No client or Edge Function change; both consumers (delete-account, verify-payment) already used a service_role client, unaffected. Closes-diagnose f2c8d5."
+  },
+  {
+    "migration": "131",
+    "applied_at": "2026-09-13T07:28:25+05:30",
+    "hash": "sha256:e579f8c16f2b2a8a7dbf26ec1ab9286f07d3988b338e44871b4f8a403cf6b350",
+    "applier": "claude-via-mcp-apply-migration",
+    "diagnose": "a9d4e7",
+    "slug": "founder_digest_cron",
+    "cloud_version": "20260913015825",
+    "note": "OI-153 Unit D (the migration header says Unit E — a mislabel frozen by immutability; the plan, board, registry and closure ledger all say D). Schedules pg_cron job founder_digest_daily (jobid 38, '30 2 * * *' = 08:00 IST) POSTing to the founder-digest Edge Function (deployed v1 the same hour, verify_jwt=false, gated by isAuthorizedCronCall) with 'Bearer ' || private.cron_get_secret(). Literal function URL on purpose: a private.<fn>_function_url() helper is SECURITY DEFINER and the blast-radius content rule would lift the file to catastrophic. Verified live post-apply: cron.job row present, active, command targets /functions/v1/founder-digest, uses cron_get_secret, no service-key helper; 30 jobs total (snapshot regenerated in the same commit). T9: one manual net.http_post of the exact job command -> cron_call_log founder-digest status=success http_status=200 at 02:00:25Z, function_edge_logs POST 200 in 7570 ms; pg_net's own 5000 ms client timeout recorded a timeout on its side while the function completed (the same fire-and-forget shape every other cron job has; cron_call_log is the record). No schema change. Founder go given 2026-09-12 for merge + deploys + migrations together."
+  },
+  {
+    "migration": "132",
+    "applied_at": "2026-09-13T07:28:48+05:30",
+    "hash": "sha256:e857fb2d0662580c9656dd541ffe2eff43f72abc7819c41c3d146edebee3eaf3",
+    "applier": "claude-via-mcp-apply-migration",
+    "diagnose": "a9d4e7",
+    "slug": "vision_trigger_null_channel_guard",
+    "cloud_version": "20260913015848",
+    "note": "OI-153 Unit F = OI-183. CREATE OR REPLACE of enforce_vision_analysis_daily_limit with migration 129's body verbatim except the guard: IF NEW.channel IS NULL OR NEW.channel NOT IN ('scan_meal','cart_auditor') THEN RETURN NEW. Dormant defect (0 NULL-channel rows, every writer passes a guarded literal, authenticated NULL inserts fail 42501 first) closed for sibling parity. Verified live post-apply inside a rolled-back transaction (test/sql/oi153_pro_media_caps_live_verify.sql Part B): pg_get_functiondef carries the guard; a NULL-channel insert as postgres consumed NO vision unit; a scan_meal insert still consumed exactly one. DISCRIMINATION proven the same way: with 129's pre-132 body restored inside a rolled-back transaction, the identical NULL-channel insert DID create a vision_analysis row (used=1) - the probe is red before 132 and green after. Trigger binding untouched."
+  },
+  {
+    "migration": "133",
+    "applied_at": "2026-09-14T06:29:30+05:30",
+    "hash": "sha256:721c57a9969a05981f2047a78be1c1065796006883c9ca893e93f1a97ef36f86",
+    "applier": "claude-via-mcp-apply-migration",
+    "diagnose": "n/a",
+    "slug": "alert_critical_notify_trigger",
+    "cloud_version": "20260914005825",
+    "note": "Telegram admin bot batch, Task 6 (docs/superpowers/plans/2026-09-13-telegram-admin-bot.md). CREATE OR REPLACE private.dispatch_critical_alert_notify() (SECURITY DEFINER, private schema per the public-SECURITY-DEFINER-is-anon-executable pitfall) + AFTER INSERT trigger on public.alerts WHEN (NEW.severity='critical'), same shape as 073_proactive_coach_promotion_trigger.sql: exception-swallowing, fire-and-forget pg_net.http_post to /functions/v1/alert-critical-notify with 'Bearer '||private.cron_get_secret(). Pre-apply live verification: private.cron_get_secret() exists, pg_net enabled, public.alerts columns (id/source/severity/summary/suggested_action) match both the trigger body and the verify SQL. Post-apply live verification (test/sql/alert_critical_notify_trigger_live_verify.sql, rolled-back transaction): a critical-severity insert and a non-critical insert both succeeded and returned normally, proving the trigger neither blocks nor errors the parent INSERT. The trigger's pg_net dispatch fired async against alert-critical-notify, which is NOT YET DEPLOYED (Task 13 of the same plan) -- expected to 404 harmlessly in pg_net's background worker; no Telegram message is sent until that function is deployed. Founder go given 2026-09-14 for this specific live apply via AskUserQuestion, per CLAUDE.md 4.3 (plan approval != deploy approval)."
+  },
+  {
+    "migration": "134",
+    "applied_at": "2026-09-14T06:45:42+05:30",
+    "hash": "sha256:a8bc7554e86e5e31fdf6da23ab2c06c36221310a0e9f4d578a428c60c395e095",
+    "applier": "claude-via-mcp-apply-migration",
+    "diagnose": "n/a",
+    "slug": "alert_critical_notify_telemetry",
+    "cloud_version": "20260914010918",
+    "note": "B-pass follow-up to migration 133 (docs/reviews/28213f7956e2-review.md Findings 3 and 4). CREATE OR REPLACE private.dispatch_critical_alert_notify() adds client_errors telemetry (success + failure paths, real columns error_code/error_message/client_version/platform) and a COMMENT ON TRIGGER documenting the AFTER-INSERT-only scope. The review's own suggested-fix cited the wrong client_errors columns (message/severity) -- the exact columns that caused a real prod P0 in migration 073's original body, fixed by 078_fix_dispatch_proactive_coach_promotion_columns.sql. This migration was written from 078's corrected pattern instead, independently re-verified against live information_schema.columns before writing any SQL, and the failure-path telemetry insert is nested in its own BEGIN/EXCEPTION WHEN OTHERS THEN NULL block (078's fix) so a telemetry-insert failure can never itself abort the parent alerts INSERT. Live-verified post-apply inside a rolled-back transaction: a critical insert produced a correct critical_alert_dispatched / error_code='info' telemetry row; the COMMENT ON TRIGGER text confirmed live via obj_description(). Founder go for the live-apply covers this migration under the same 2026-09-14 approval as 133 (same task, same batch, B-pass-mandated follow-up)."
+  },
+  {
+    "migration": "135",
+    "applied_at": "2026-09-14T19:43:41+05:30",
+    "hash": "sha256:577f1a2ab6f16bbcf467fcb757ff993cfcc61ab197a9ccde8dbdd8ec55abee51",
+    "applier": "claude-via-mcp-apply-migration",
+    "diagnose": "82b018",
+    "slug": "founder_metrics_ops_exclude_info_client_errors",
+    "cloud_version": "20260914141301",
+    "note": "Review Round 2 finding R2-10 (telegram-admin-bot whole-branch review, diagnose 82b018): migration 134's success-path critical-alert telemetry writes a client_errors row with error_code='info' on every successful dispatch, inflating founder_metrics_ops()'s client_errors_today count even though nothing had gone wrong. CREATE OR REPLACE founder_metrics_ops() with 101_admin_dashboard_metrics_functions.sql's body verbatim (confirmed via live pg_get_functiondef before writing this migration -- byte-identical to 101's definition, no intervening redefinition) plus one added predicate: error_code is distinct from 'info' on the client_errors_today subquery only. Mirrors the exclusion pattern migrations 086/087 already established on the alert-spike side. Post-apply live verification: has_function_privilege confirms anon=false, authenticated=false, service_role=true (unchanged from pre-apply); founder_metrics_ops() still returns a full row (client_errors_today=4, matching the pre-apply smoke-tested value, since no info-coded rows exist in today's window yet). Founder go given 2026-09-14 via AskUserQuestion, per CLAUDE.md 4.3 (plan approval != deploy approval) -- this migration was deliberately held out of two prior commits specifically pending this authorization."
+  },
+  {
+    "migration": "136",
+    "applied_at": "2026-09-14T20:41:30+05:30",
+    "hash": "sha256:0b1a3cb6a27ba1e99e44b168ee048948f22b6da5776ce1676743ce39459768f7",
+    "applier": "claude-via-mcp-apply-migration",
+    "diagnose": "82b018",
+    "slug": "founder_metrics_ops_exclude_info_client_errors_7d",
+    "cloud_version": "20260914154130",
+    "note": "Hermes pass finding F1 (telegram-admin-bot whole-branch Hermes pass, diagnose 82b018), corroborated independently by 3 lenses (L1, L22, L35): migration 135 fixed client_errors_today's error_code='info' inflation but left the sibling client_errors_7d subquery in the same function, same table, with the identical bug -- migration 134's success-path telemetry inflates both. CREATE OR REPLACE founder_metrics_ops() with 135's body verbatim (confirmed via live pg_get_functiondef before writing this migration -- byte-identical to 135's definition, no intervening redefinition) plus the same predicate now also on client_errors_7d: error_code is distinct from 'info'. Post-apply live verification: has_function_privilege confirms anon=false, authenticated=false, service_role=true (unchanged); a rolled-back transaction confirmed the exact discrimination -- an info-coded row leaves client_errors_7d unchanged (140->140), a real error-coded row still increments it by one (140->141), and client_errors_today (135's earlier fix) is unregressed (4->5, only the real-error row counted). Founder go given 2026-09-14 via AskUserQuestion, per CLAUDE.md 4.3 (plan approval != deploy approval) -- this migration was deliberately held out of the Hermes-fix commit specifically pending this authorization."
+  },
+  {
+    "migration": "137",
+    "applied_at": "2026-09-14T23:37:04+05:30",
+    "hash": "sha256:28ca39654267585e5ee9f92032aa4568a33be570873a1dbc4987ead9435bc220",
+    "applier": "claude-via-mcp-apply-migration",
+    "diagnose": "f7c3a1",
+    "slug": "founder_metrics_ops_reassert_role_revoke",
+    "cloud_version": "20260914180704",
+    "note": "First full `flutter test` run of the telegram-admin-bot branch (pre-push, Task 13 Step 8) failed test/contracts/admin_metrics_functions_role_revoke_test.dart's a9d3f1 replay-guard test: migrations 135 and 136 each CREATE OR REPLACE founder_metrics_ops() without their own explicit `revoke execute ... from anon, authenticated;`, drift from the established a9d3f1/e4a1b7 defense-in-depth pattern that neither review round nor the Hermes pass caught (none ran flutter test locally, only live SQL + Deno tests). Live has_function_privilege verified BEFORE this migration: anon=false, authenticated=false, service_role=true -- migration 103's original revoke survived both 135's and 136's signature-unchanged CREATE OR REPLACE per ordinary Postgres ACL-preservation semantics, so there was never a live exposure; this migration is defense-in-depth against a full migration-set replay relying on that implicit preservation. Idempotent revoke, applied after founder authorization via AskUserQuestion 2026-09-14 per CLAUDE.md 4.3. Post-apply has_function_privilege unchanged (anon=false, authenticated=false, service_role=true), confirming no behavioural change. Paired with a narrow, named, documented exemption for 135/136 in admin_metrics_functions_role_revoke_test.dart plus a new test pinning this migration's own revoke line (both mutation-proven -- see diagnose f7c3a1)."
+  },
+  {
+    "migration": "138",
+    "applied_at": "2026-09-21T22:52:30+05:30",
+    "hash": "sha256:0135ca83ca7117b56c3cba475db0fa39a5922cab07a127e99a4d864e9092f89e",
+    "applier": "claude-via-mcp-apply-migration",
+    "diagnose": "n/a",
+    "slug": "subscriptions_cancelled_at_trigger",
+    "cloud_version": "20260921172242",
+    "note": "Part B3 of the observation-batch-and-digest-redesign spec (docs/superpowers/specs/2026-09-21-observation-batch-and-digest-redesign-design.md), branch claude/strange-merkle-c2d0b9. Adds subscriptions.cancelled_at (nullable timestamptz) + a private.set_subscription_cancelled_at() BEFORE UPDATE trigger that self-maintains the column on any status transition INTO 'cancelled', so founder-digest B3's New-MRR/Cancelled reporting has a genuinely-windowed figure instead of an un-windowed status count. Grepped both supabase/functions/ and lib/ for any writer of status='cancelled' -- none exists; all 3 live 'cancelled' rows were set by a manual dashboard/SQL edit, so a trigger is the only self-maintaining option (no call site to patch). No backfill for those 3 rows (founder-accepted: not tracked retroactively). Self-triggered B-pass code review ran on the full staged diff (docs/reviews/7aff4322b5ac-review.md) -- this migration's SECURITY DEFINER trigger forced the batch's blast-radius to catastrophic regardless of path-glob; 0 findings against this specific migration (the review's 3 findings were elsewhere in the batch). Founder authorized both the review verdict and the live apply together on 2026-09-21 ('Accept the review and apply migrations 138 and 139'); the apply itself was delayed by an unrelated live Supabase disk-IO-budget-exhaustion incident on this same project (dashboard-reported, confirmed via get_advisors also timing out identically to apply_migration/execute_sql), which the founder resolved on a separate thread before this retry succeeded. Post-apply live verification: information_schema.columns confirms cancelled_at is nullable timestamptz; a BEGIN/ROLLBACK transaction against a real active subscription confirmed the trigger stamps cancelled_at on transition to 'cancelled', and a follow-up SELECT confirmed the rollback left that row's status='active'/cancelled_at=null unchanged (no live side effect from the verification itself)."
+  },
+  {
+    "migration": "139",
+    "applied_at": "2026-09-21T22:53:45+05:30",
+    "hash": "sha256:04626deb7914ff36f04a60026436403ece1b71e4d5f9e003896661adbd9b56ce",
+    "applier": "claude-via-mcp-apply-migration",
+    "diagnose": "n/a",
+    "slug": "alert_cron_failures",
+    "cloud_version": "20260921172347",
+    "note": "Part B4 of the observation-batch-and-digest-redesign spec, same branch/batch as migration 138. 6th SQL-only alert cron job (*/15 * * * *): pages when cron_call_log shows a recently-failed or currently-stuck 'started' job, matching the 5 pre-existing alert_* jobs' plain-INSERT idiom (no Edge Function). Corrected same day by the self-triggered B-pass review (Finding 3, docs/reviews/7aff4322b5ac-review.md): the first draft borrowed founder_metrics_ops()'s 24-hour lookback verbatim, which paired with this job's own 1-hour dedup window would have re-paged the founder roughly hourly for up to 24h after an already-resolved single failure. Rejected the review's own suggested fix (shrink the lookback or widen the dedup, same shared-bound shape) after hand-tracing the timing showed ANY shared outer bound makes a genuinely-still-stuck job permanently invisible once its age exceeds that bound -- worse than the reported bug. Shipped structurally instead: two independently-time-bounded OR-branches (failed = discrete event, self-resolving 1h lookback == 1h dedup, matching alert_client_errors_spike's working precedent; started-stuck = ongoing condition, no upper time bound by design). Mutation-proven regression test test/contracts/alert_cron_failures_sync_test.dart (7 tests, reverting to the shared-24h-bound shape reddens 3). Founder authorized the review verdict and live apply together 2026-09-21; delayed by the same disk-IO-budget outage noted in migration 138's entry, resolved by the founder on a separate thread before this retry succeeded. Post-apply live verification: SELECT jobid, jobname, schedule, active FROM cron.job WHERE jobname='alert_cron_failures' returned exactly one row (jobid 39, schedule '*/15 * * * *', active=true)."
+  },
+  {
+    "migration": "140",
+    "applied_at": "2026-09-21T23:44:34+05:30",
+    "hash": "sha256:02dad577ae4d36ed91f85bf9de522b36e61c0b9954d922335774f3975af54408",
+    "applier": "claude-via-mcp-apply-migration",
+    "diagnose": "h1a2b3",
+    "slug": "hermes_pass_fixes_138_139",
+    "cloud_version": "20260921181434",
+    "note": "Corrects two live defects in the immutable migrations 138 and 139, both found by an 8-lens self-triggered Hermes pass run on this same branch/batch before merge (mandatory because the batch's blast-radius classifies catastrophic -- 138/139/140 each define a SECURITY DEFINER function). Fix 1: alert_cron_failures's (139) status='started' stuck-job branch had no upper time bound, so a crashed-and-never-updated cron_call_log row (logCronEnd never runs on a timeout/OOM/crash) paged the founder indefinitely -- confirmed ALREADY MISFIRING LIVE (public.alerts id=40 fired 2026-09-21 17:30 UTC on two rows stuck since a crashed 2026-09-19 04:15 UTC tick, both functions healthy since). Bounded to a 6-hour lookback via cron.unschedule+cron.schedule (new jobid, same job name/schedule) -- long enough to not mask a real incident, short enough to stay inside sibling alert_cron_function_dead's 8-day horizon. Fix 2: private.set_subscription_cancelled_at() (138) only cleared cancelled_at FORWARD; a manual dashboard reactivation (confirmed live as the only writer of status='cancelled' today) left a stale permanent stamp, which founder-digest's B3 'Cancelled (manual)' reader (filtering on cancelled_at alone) would have misreported as a cancellation forever. CREATE OR REPLACE adds the reactivation-clear branch + widens BEFORE UPDATE to BEFORE INSERT OR UPDATE (an INSERT carrying status='cancelled' directly previously fired no trigger). Both migrations are immutable (already applied) per supabase/migrations/CLAUDE.md -- corrections land here via CREATE OR REPLACE FUNCTION (preserves ACL, no signature change) + cron.unschedule/cron.schedule (086's established pattern). Founder gave separate, explicit per-action authorization for this live apply (AskUserQuestion, 'Yes, apply now') distinct from the broader batch-level 'commit push merge' instruction. Post-apply live verification: new test/sql/migration_140_stuck_alert_and_cancelled_at_live_verify.sql run via execute_sql inside BEGIN...ROLLBACK against synthetic rows -- 3/3 status='ok' (stuck-window bound correctly includes a 2h-old row and excludes a 7h-old one; cancelled_at stamps on cancel and clears back to NULL on reactivation), plus a live query confirming the two real pre-existing stale cron_call_log rows no longer match the bounded predicate, plus cron.job showing the job re-registered active on the same schedule. Zero residual rows confirmed by a separate post-run leak check."
+  },
+  {
+    "migration": "141",
+    "applied_at": "2026-09-22T05:38:35+05:30",
+    "hash": "sha256:999a9b7eca0266fb2f026acc64ca026f55dfe205946989a2ae1b6f0061a92991",
+    "applier": "claude-via-mcp-apply-migration",
+    "diagnose": "e8b4a1",
+    "slug": "disk_io_audit_cleanup_batch",
+    "cloud_version": "20260922000835",
+    "note": "2026-09-21/22 disk-IO-budget-exhaustion investigation (dashboard warning + Unhealthy status + select-1 timeouts). Bundles 4 independent fixes: (1) memory_embeddings ivfflat index retuned lists=100->10 (839 live rows vs the ~1M the original tuning anticipated, verified via live count and pg_indexes; post-apply indexdef confirms lists='10'). (2) readiness_daily RLS policy rewritten to (select auth.uid()) per Supabase's own auth_rls_initplan advisor finding; post-apply pg_policy confirms the wrapped subquery form. (3) Dropped idx_ai_coach_interactions_tool_calls_failed and idx_nutrition_log_items_food_id -- both verified idx_scan=0 live against pg_stat_user_indexes (not just the advisor's claim) before dropping; post-apply pg_indexes confirms both gone. (4) Consolidated 9 pg_cron jobs into 3: db_maintenance_nightly (folds 6 nightly housekeeping jobs -- cron_call_log_cleanup_daily, usage_counters_retention_daily, jrd_retention_daily, client_errors_retention_daily, jrd_vacuum_daily, client_errors_vacuum_daily -- same underlying cleanup/vacuum functions, sequenced retention-before-vacuum explicitly rather than relying on a time gap between separate jobs), ops_alerts_30min (folds alert_edge_function_health, alert_client_errors_spike, alert_cron_failures; cadence 15min->30min, explicit founder decision balancing incident-detection latency against CPU cost on Nano-tier compute already reading 91% utilization), and proactive_pr_detection moved 15min->hourly via cron.alter_job (preserves jobid/history; registry flags it as the de-facto heartbeat alert_cron_silence implicitly relies on -- hourly still clears the 2h silence threshold with a full hour of margin, recommend watching for false positives for one week). docs/operations/CRON_REGISTRY.md updated in the same commit for Gate 31 parity. Post-apply live verification: cron.job confirms db_maintenance_nightly, ops_alerts_30min present with correct schedules, proactive_pr_detection at '0 * * * *', and all 8 folded job names absent. Fix A (cron.log_run=off, migration 140) was separately drafted but discovered NOT APPLICABLE via ALTER DATABASE -- pg_settings shows context=postmaster, meaning it requires a full server restart, not a reload; this is a materially different (and possibly Supabase-plan-gated) action than what was described when founder authorized it, so it was NOT applied and is being taken back to the founder as a revised decision rather than forced through. Founder authorized migration 141 specifically (separately from 140) via AskUserQuestion 2026-09-22, per CLAUDE.md 4.3. Regression test: test/contracts/disk_io_audit_cleanup_batch_test.dart (8/8 passing at this migration's own apply time, mutation-proven on the ivfflat lists value -- see diagnose e8b4a1 for the two-bug history of getting that mutation check actually correct; a 9th test covering a SEPARATE, later migration 142 (applied same-day, see its own ledger entry below) was added to the same file afterward -- corrected here after a round-2 review caught this note's original '9/9' as a carry-over of a since-fixed miscount, not this migration's own true apply-time count). Migration numbers 140/141 chosen to avoid colliding with 138/139, which were uncommitted-but-already-live on a separate in-flight branch (claude/strange-merkle-c2d0b9) at authoring time."
+  },
+  {
+    "migration": "142",
+    "applied_at": "2026-09-22T10:00:10+05:30",
+    "hash": "sha256:53592ae280cc9f26de68c6c65c9d5aee37161a26005734dfea354a213708b6ee",
+    "applier": "claude-via-mcp-apply-migration",
+    "diagnose": "e8b4a1",
+    "slug": "restore_nutrition_log_items_food_id_index",
+    "cloud_version": "20260922043010",
+    "note": "Same-day follow-up to migration 141, closing a P1 regression found by a self-triggered B-pass review before this batch's first commit: 141 dropped idx_nutrition_log_items_food_id on the basis of idx_scan=0 without checking it was the SOLE index backing nutrition_log_items_food_id_fkey. idx_scan=0 measures query-access paths only -- it says nothing about FK-constraint-check coverage, which Postgres also uses on the referenced table's side (food_database.id) regardless of whether any SELECT ever used the index. Verified live before this fix: pg_constraint confirmed the FK, pg_indexes confirmed zero coverage on food_id post-141, and get_advisors had newly flagged an unindexed_foreign_keys finding that did not exist before 141. Checked the sibling drop (idx_ai_coach_interactions_tool_calls_failed) for the same blind spot -- confirmed clean, isolated to this one index (ai_coach_interactions's two FKs, snapshot_id and user_id, both retain their own separate indexes). This migration is a single CREATE INDEX IF NOT EXISTS, byte-identical to 141's own rollback-block definition plus the IF NOT EXISTS guard (added in direct response to a separate finding in the same review: none of 141's cron.unschedule() calls are guarded, and cron.unschedule() on a missing job name raises a hard Postgres error rather than a no-op, verified live). Post-apply live verification: pg_indexes confirms idx_nutrition_log_items_food_id exists on nutrition_log_items(food_id); get_advisors(type=performance) re-run and the unindexed_foreign_keys finding is gone (only the pre-existing, expected unused_index findings remain, now correctly including this freshly-recreated index again, exactly as expected -- idx_scan=0 was never the axis that mattered for it). Founder authorized this migration explicitly and separately from 141, in chat, after the regression and fix were presented. Regression test: test/contracts/disk_io_audit_cleanup_batch_test.dart, 1 new test added for this migration (file now 9/9 passing, mutation-proven on the ivfflat value from 141; this migration's own test asserts the index/table/column names and the IF NOT EXISTS guard by source-grep, not a live-Postgres behavioral assertion, per the same test-suite-cannot-carry-Supabase-credentials rationale as 141's own tests)."
+  },
+  {
+    "migration": "143",
+    "applied_at": "2026-09-22T23:18:16+05:30",
+    "hash": "sha256:7eb38c1f2d8e8c1b1c52eb22c7fa4a59e863f213841a90cc352d8dc7d50ff6b2",
+    "applier": "claude-via-mcp-apply-migration",
+    "diagnose": "a2f6c9",
+    "slug": "restore_alert_cron_failures_stuck_job_bound",
+    "cloud_version": "20260922231744",
+    "note": "Fixes a P1 found by a self-triggered merge-integration /code-review (B-pass) on merging origin/main into claude/next-aab-decision-d1227b -- the merge raised blast-radius to catastrophic (SECURITY DEFINER migrations inherited from main), review docs/reviews/c3e7decc73e7-review.md (staging-hash renamed twice as fix commits shifted it; content unchanged from the original agent a4ebe34013f443b0a's findings). Migration 141 (this branch) had consolidated alert_cron_failures into the combined ops_alerts_30min job using migration 139's ORIGINAL pre-140 logic, silently reverting migration 140's (from origin/main) live [1h, 6h) stuck-job bound back to unbounded -- 141 was authored from a branch snapshot predating 140's existence, so it could not have known. Verified live before drafting: SELECT command FROM cron.job WHERE jobname='ops_alerts_30min' (jobid 42) matched migration 141's file byte-for-byte, not 140's. This migration re-schedules ops_alerts_30min, reproducing the alert_edge_function_health and alert_client_errors_spike sub-blocks VERBATIM from 141 (out of scope for this fix) and restoring only the alert_cron_failures sub-block's [1h, 6h) bound and matching summary/context text. Also widened test/contracts/alert_cron_failures_sync_test.dart with a structural test scanning all migrations for the alert-emitting literal and requiring alerts/_thresholds.yaml's defined_in_migration to name the numerically last one, closing the blind spot that let this exact class of drift go undetected (140's own file never changed, so the old test stayed green while the live job diverged from it) -- mutation-proven: reverting the YAML pointer to 140 reddens the new test naming 143 as the fix. Founder authorized this live apply explicitly via AskUserQuestion 2026-09-22/23 ('Apply now'), separate from the batch's own commit/push authorization. Post-apply live verification: SELECT jobid, jobname, schedule, active, command FROM cron.job WHERE jobname='ops_alerts_30min' returned jobid 43, active=true, schedule='*/30 * * * *', command containing the restored 'AND started_at >= now() - interval ''6 hours''' clause that 141 had dropped."
+  },
+  {
+    "migration": "144",
+    "applied_at": "2026-09-26T12:27:33+05:30",
+    "hash": "sha256:b087e9cf6947bb17c8b9761f401cb55b3d0154f18c348655854702632df1724f",
+    "applier": "claude-via-mcp-apply-migration",
+    "diagnose": "d6b2f9",
+    "slug": "split_vacuum_out_of_db_maintenance_nightly",
+    "cloud_version": "20260926065733",
+    "note": "Restores nightly retention (OI-247). Migration 141 folded 4 cleanup SELECTs + 2 VACUUMs into db_maintenance_nightly (jobid 41); pg_cron (1.6.4, cron.use_background_workers=off) sends it as one libpq simple query = one implicit transaction, so VACUUM failed every run 09-22..09-26 and rolled back the 4 cleanups with it. 144: cron.alter_job(41) -> cleanups only; jrd_vacuum_daily (new jobid 44, 03:40 UTC) and client_errors_vacuum_daily (new jobid 45, 03:43 UTC) as single-statement jobs (the pre-141 shape, 15/15 succeeded 09-06..09-20); cron.alter_job(32 alert_cron_function_dead) adds AND function_name <> 'alert-critical-notify' inside its cron_call_log subquery (trigger-dispatched; OI-179 R2-11), defusing a false CRITICAL due 2026-10-01 06:47 UTC. Plan-review x2 converged + B-pass accepted (docs/plan-reviews/ops-alerting-batch-b.md). Founder authorized this live apply explicitly via AskUserQuestion 2026-09-26, separate from plan approval. Post-apply live verification: cron.job shows 41 with 4 statements and no VACUUM, 44/45 single VACUUM statements, 32 containing the exclusion; schema_migrations records 144 at 20260926065733. OI-247 closes only on the next 03:30/03:40/03:43 UTC runs reading 'succeeded'. Regression test: test/contracts/cron_vacuum_single_statement_test.dart (6, mutation-proven)."
+  }
+]

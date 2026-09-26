@@ -1,0 +1,83 @@
+# generic_op_type_baseline.txt
+#
+# Audit 2026-05-16 / E.14.D — pre-existing generic numbered op_types
+# grandfathered through Gate 15. Each entry is `<path>::<op_type>`.
+# Line number stripped so edits don't churn the baseline.
+#
+# These are LEGACY labels written by the 2026-05-11 H-42 telemetry-pair
+# retrofit. The audit P2-G class flagged numbered catch labels
+# (`sync_service_catch_5`, `sync_service_for_25`, ...) as useless for
+# triage. New code must use semantic op_types like
+# `upsert_user_profile_failed` / `restore_weight_logs_failed`.
+#
+# To reduce technical debt: rename one entry at a time, update the
+# corresponding callsite (no callsites outside `lib/core/services/sync/`
+# — these op_types are write-only labels), and drop the line here.
+#
+# Lines starting with `#` are comments. Blank lines ignored.
+#
+# Pinned by: scripts/check_generic_error_telemetry.dart (Gate 15 / E.14.D).
+
+lib/core/services/sync/sync_coach.dart::sync_service_for_27
+lib/core/services/sync/sync_coach.dart::sync_service_for_28
+lib/core/services/sync/sync_coach.dart::sync_service_if_22
+lib/core/services/sync/sync_community.dart::sync_service_catch_8
+lib/core/services/sync/sync_community.dart::sync_service_for_15
+lib/core/services/sync/sync_community.dart::sync_service_for_16
+lib/core/services/sync/sync_community.dart::sync_service_for_22
+lib/core/services/sync/sync_community.dart::sync_service_if
+lib/core/services/sync/sync_community.dart::sync_service_if_10
+lib/core/services/sync/sync_community.dart::sync_service_if_11
+lib/core/services/sync/sync_community.dart::sync_service_if_8
+lib/core/services/sync/sync_community.dart::sync_service_if_9
+lib/core/services/sync/sync_health.dart::sync_service_catch_7
+lib/core/services/sync/sync_health.dart::sync_service_for_17
+lib/core/services/sync/sync_health.dart::sync_service_for_18
+lib/core/services/sync/sync_health.dart::sync_service_for_19
+lib/core/services/sync/sync_health.dart::sync_service_for_20
+lib/core/services/sync/sync_health.dart::sync_service_for_4
+lib/core/services/sync/sync_health.dart::sync_service_for_5
+lib/core/services/sync/sync_health.dart::sync_service_for_6
+lib/core/services/sync/sync_health.dart::sync_service_for_7
+lib/core/services/sync/sync_health.dart::sync_service_for_8
+lib/core/services/sync/sync_health.dart::sync_service_for_9
+lib/core/services/sync/sync_nutrition.dart::sync_service_catch_6
+lib/core/services/sync/sync_nutrition.dart::sync_service_for_10
+lib/core/services/sync/sync_nutrition.dart::sync_service_for_25
+lib/core/services/sync/sync_nutrition.dart::sync_service_for_26
+lib/core/services/sync/sync_nutrition.dart::sync_service_for_3
+lib/core/services/sync/sync_nutrition.dart::sync_service_if_13
+lib/core/services/sync/sync_nutrition.dart::sync_service_if_15
+lib/core/services/sync/sync_profile.dart::sync_service_catch_9
+lib/core/services/sync/sync_profile.dart::sync_service_if_14
+lib/core/services/sync/sync_realtime.dart::sync_service_catch_4
+lib/core/services/sync/sync_restore_completeness.dart::sync_service_for_29
+lib/core/services/sync/sync_restore_completeness.dart::sync_service_if_23
+lib/core/services/sync/sync_workout.dart::sync_service_catch_10
+lib/core/services/sync/sync_workout.dart::sync_service_catch_11
+lib/core/services/sync/sync_workout.dart::sync_service_catch_12
+lib/core/services/sync/sync_workout.dart::sync_service_catch_5
+lib/core/services/sync/sync_workout.dart::sync_service_for
+lib/core/services/sync/sync_workout.dart::sync_service_for_11
+lib/core/services/sync/sync_workout.dart::sync_service_for_12
+lib/core/services/sync/sync_workout.dart::sync_service_for_13
+lib/core/services/sync/sync_workout.dart::sync_service_for_14
+lib/core/services/sync/sync_workout.dart::sync_service_for_2
+lib/core/services/sync/sync_workout.dart::sync_service_for_21
+lib/core/services/sync/sync_workout.dart::sync_service_for_23
+lib/core/services/sync/sync_workout.dart::sync_service_for_24
+lib/core/services/sync/sync_workout.dart::sync_service_if_12
+lib/core/services/sync/sync_workout.dart::sync_service_if_16
+lib/core/services/sync/sync_workout.dart::sync_service_if_17
+lib/core/services/sync/sync_workout.dart::sync_service_if_18
+lib/core/services/sync/sync_workout.dart::sync_service_if_19
+lib/core/services/sync/sync_workout.dart::sync_service_if_20
+lib/core/services/sync/sync_workout.dart::sync_service_if_21
+lib/core/services/sync/sync_workout.dart::sync_service_if_7
+lib/core/services/sync_service.dart::sync_service_catch_2
+lib/core/services/sync_service.dart::sync_service_catch_3
+lib/core/services/sync_service.dart::sync_service_if_2
+lib/core/services/sync_service.dart::sync_service_if_3
+lib/core/services/sync_service.dart::sync_service_if_4
+lib/core/services/sync_service.dart::sync_service_if_5
+lib/core/services/sync_service.dart::sync_service_if_6
