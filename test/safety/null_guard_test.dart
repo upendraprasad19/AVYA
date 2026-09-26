@@ -15,7 +15,12 @@ void main() {
       final src = _src('lib/features/auth/screens/sign_in_screen.dart');
       expect(src, isNot(contains("Hive.box(")),
           reason: 'sign_in_screen should use HiveService.instance, not Hive.box()');
-      expect(src, contains('HiveService.instance.configBox'));
+      // c7b4d2: the screen's only Hive use was the pending_referral_code
+      // stash, now removed — the referral code rides in auth metadata. So the
+      // screen holds no Hive access at all (rule 4: widgets never touch Hive),
+      // a stricter form of the no-raw-Hive.box invariant above.
+      expect(src, isNot(contains('configBox')),
+          reason: 'sign_in_screen must not read or write configBox directly');
     });
 
     test('ai_coach_repository.dart has no raw Hive.box() calls', () {

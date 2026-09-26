@@ -563,7 +563,7 @@ class ToolDispatcher {
         loggingType: loggingType,
         primaryMuscles: (p['primaryMuscles'] as List?)?.cast<String>(),
         defaultSets: (p['defaultSets'] as num?)?.toInt() ?? 3,
-        defaultReps: (p['defaultReps'] as num?)?.toInt(),
+        defaultReps: (p['defaultReps'] as num?)?.toInt().toString(),
         defaultDurationSeconds: (p['defaultDurationSeconds'] as num?)?.toInt(),
       );
       return ToolExecutionResult.success(data: {

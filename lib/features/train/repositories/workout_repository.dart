@@ -1353,15 +1353,24 @@ class WorkoutRepository {
   ///     exercise invisible to AI coach" bug).
   ///
   /// Returns the deterministic exercise ID. Throws
-  /// [CreateCustomExerciseException] for invalid input or duplicate name.
+  /// [CreateCustomExerciseException] for invalid input, duplicate name, or a
+  /// failed Hive write (`write_failed`).
+  ///
+  /// This is the ONE create path for custom exercises — the AI coach tool AND
+  /// `CreateCustomExerciseSheet` both call it (diagnose `d5c2e8`; the sheet
+  /// used to put the row straight into customBox, skipping the duplicate
+  /// guard, the 60-char cap and the writer's stamps). [defaultReps] is a
+  /// String because the sheet accepts ranges like "8-12". A null [equipment]
+  /// stores `equipment_needed: []` (no requirement) — the sheet has no
+  /// equipment field.
   Future<String> createCustomExercise({
     required String name,
     required String category,
-    required String equipment,
+    String? equipment,
     required String loggingType,
     List<String>? primaryMuscles,
     int defaultSets = 3,
-    int? defaultReps,
+    String? defaultReps,
     int? defaultDurationSeconds,
     bool submittedToLibrary = false,
   }) async {
@@ -1379,14 +1388,55 @@ class WorkoutRepository {
       );
     }
 
-    // Deterministic v5 UUID per docs/architecture/database.md. Same algorithm as
-    // CreateCustomExerciseSheet._save() — keeps cross-device upserts
-    // idempotent so AI- and UI-created customs collapse correctly.
+    // Deterministic v5 UUID per docs/architecture/database.md. The sheet and
+    // the AI tool both create through here, so the id is computed in one
+    // place — keeps cross-device upserts idempotent.
     const customNs = '5a1f0b0c-9dad-11d1-80b4-00c04fd430c8';
     final userId = SupabaseService.instance.currentUser?.id ?? 'anon';
     final id = const Uuid()
         .v5(customNs, '$userId|exercise|${trimmed.toLowerCase()}');
 
+    // Serialize the check-then-write below across ALL creates (B-pass F2,
+    // d5c2e8). The duplicate guard is a read before an awaited write, and the
+    // writer's lock keys on the ms-based Hive key, not the id — so without
+    // this a double-tapped SAVE (or a UI + AI-coach create of the same name)
+    // both pass the guard and write two rows sharing one id.
+    final previous = _customCreateTail;
+    final done = Completer<void>();
+    _customCreateTail = done.future;
+    await previous;
+    try {
+      return await _createCustomExerciseLocked(
+        id: id,
+        trimmed: trimmed,
+        category: category,
+        equipment: equipment,
+        loggingType: loggingType,
+        primaryMuscles: primaryMuscles,
+        defaultSets: defaultSets,
+        defaultReps: defaultReps,
+        defaultDurationSeconds: defaultDurationSeconds,
+        submittedToLibrary: submittedToLibrary,
+      );
+    } finally {
+      done.complete();
+    }
+  }
+
+  static Future<void> _customCreateTail = Future<void>.value();
+
+  Future<String> _createCustomExerciseLocked({
+    required String id,
+    required String trimmed,
+    required String category,
+    required String? equipment,
+    required String loggingType,
+    required List<String>? primaryMuscles,
+    required int defaultSets,
+    required String? defaultReps,
+    required int? defaultDurationSeconds,
+    required bool submittedToLibrary,
+  }) async {
     // Duplicate-name guard — scan customBox for an existing entry with the
     // same deterministic ID (different keys, same logical exercise).
     final customBox = _hive.customBox;
@@ -1400,7 +1450,13 @@ class WorkoutRepository {
       }
     }
 
-    final key = 'custom_exercise_${DateTime.now().millisecondsSinceEpoch}';
+    // Two creates can land in the same millisecond; never reuse a key, or the
+    // second put would overwrite a different exercise.
+    var ms = DateTime.now().millisecondsSinceEpoch;
+    while (customBox.get('custom_exercise_$ms') != null) {
+      ms++;
+    }
+    final key = 'custom_exercise_$ms';
     final exercise = <String, dynamic>{
       'id': id,
       'name': trimmed,
@@ -1409,14 +1465,16 @@ class WorkoutRepository {
       'default_sets': defaultSets,
       // Match the sheet's conditional shape: only store reps when
       // logging_type is rep-based; only store duration when timed.
-      'default_reps': ?defaultReps?.toString(),
+      'default_reps': ?defaultReps,
       'default_duration_seconds': ?defaultDurationSeconds,
       'primary_muscles': primaryMuscles ?? <String>[],
       // ⑥ slice A: normalize the caller-supplied (AI/free-text) equipment to the
       // canonical vocab so a custom exercise's equipment_needed matches the
       // library's (and slice B's item-filter can read it). May be [] if the
       // token is unmappable — [] = no equipment requirement (never over-excludes).
-      'equipment_needed': EquipmentVocab.normalize(<String>[equipment]),
+      'equipment_needed': equipment == null
+          ? <String>[]
+          : EquipmentVocab.normalize(<String>[equipment]),
       'is_custom': true,
       'type': 'exercise',
       'submitted_to_library': submittedToLibrary,
@@ -1432,6 +1490,17 @@ class WorkoutRepository {
       exercise: exercise,
       source: WriteSource.manual,
     );
+
+    // Judge the write by the ROW, not by the WriteResult: the service can
+    // return `fail` after a successful put (its sync kick sits inside the same
+    // try), and a row that IS in Hive must not be reported as lost — the user
+    // would retry and hit the duplicate guard. Only an absent row is a failure.
+    if (!customExerciseRowLanded(customBox.get(key), id)) {
+      throw CreateCustomExerciseException(
+        'write_failed',
+        'Could not save "$trimmed". Try again.',
+      );
+    }
 
     return id;
   }
@@ -1651,11 +1720,19 @@ class WorkoutRepository {
   }
 }
 
+/// PURE — did a custom-exercise create actually land? True only when the row
+/// read back from the write key is a map carrying the expected [id].
+/// [WorkoutRepository.createCustomExercise] judges success by this rather
+/// than by the `WriteResult` (which can report `fail` after a successful put).
+bool customExerciseRowLanded(Object? row, String id) =>
+    row is Map && row['id'] == id;
+
 /// Thrown by [WorkoutRepository.createCustomExercise] for input validation
 /// failures or duplicate names. [code] is one of:
 ///   - `invalid_input` — name empty / too long / other validation
 ///   - `duplicate_name` — an exercise with the same deterministic ID
 ///     already exists in the user's library
+///   - `write_failed` — the row is not in customBox after the write
 ///   - `other` — unexpected
 class CreateCustomExerciseException implements Exception {
   final String code;

@@ -180,6 +180,20 @@ class OnboardingState {
   }
 }
 
+/// PURE — which referral code onboarding should redeem (diagnose c7b4d2).
+///
+/// The Welcome-screen [stash] wins when set. Otherwise the code the user typed
+/// at email sign-up, which `AuthNotifier.signUpWithEmail` stores in the auth
+/// user's metadata as `referral_code` — it survives the confirm-email link and
+/// a device change, which the old sign-in-screen redeem did not. Anything
+/// blank or non-string resolves to `''` (no redeem).
+String resolveReferralCode(String stash, Map<String, dynamic>? userMetadata) {
+  final fromStash = stash.trim();
+  if (fromStash.isNotEmpty) return fromStash;
+  final fromMeta = userMetadata?['referral_code'];
+  return fromMeta is String ? fromMeta.trim() : '';
+}
+
 // ── Onboarding Notifier ──────────────────────────────────────────
 
 class OnboardingNotifier extends Notifier<OnboardingState> {
@@ -609,8 +623,15 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
       // flag + bootstrap replay backstop a missed sync. Kill-switch:
       // `disable_onboarding_async_sync` restores the old blocking path.
       await MigratedKey.write('pending_onboarding_sync', true);
-      final referralCode = ref.read(referralCodeStashProvider).trim();
-      if (referralCode.isNotEmpty) {
+      final stash = ref.read(referralCodeStashProvider);
+      Map<String, dynamic>? userMetadata;
+      try {
+        userMetadata = SupabaseService.instance.currentUser?.userMetadata;
+      } catch (_) {
+        // No client yet — the stash alone decides, as before c7b4d2.
+      }
+      final referralCode = resolveReferralCode(stash, userMetadata);
+      if (stash.trim().isNotEmpty) {
         // Clear NOW so it can't be replayed; the code is captured above.
         ref.read(referralCodeStashProvider.notifier).clear();
       }
