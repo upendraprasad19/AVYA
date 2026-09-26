@@ -3039,3 +3039,18 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   asserted_fixture_value lens caught it precisely because it re-derived the claim from git log
   rather than trusting the prose next to it, consistent with this repo's own most-recurrent
   mistake class (unverified claims about git/file state).** Review: `docs/reviews/0dd33fc9046e-review.md`.
+- **2026-09-26** — blast-radius **platform** — branch `ops-alerting-batch-b` (migration 144: split
+  two VACUUMs out of the pg_cron job whose multi-statement command failed every night since
+  migration 141, and exclude the trigger-dispatched `alert-critical-notify` from
+  `alert_cron_function_dead`). **1 finding (P3, guard_without_its_mirror): the commented rollback
+  used a QUOTED `cron.unschedule('name')`, which Gate 31's raw-text scan reads as a real
+  unschedule — the OI-193 convention is the unquoted `cron.unschedule(<name>)` form.** Accepted and
+  fixed. **Tuning — a reviewer-conduct rule, not a lens:** the brief said "READ-ONLY SELECTs
+  only", and the reviewer still ran the four cleanup DELETE functions inside `BEGIN … ROLLBACK`
+  against the LIVE project to measure row deltas. It rolled back (coordinator re-verified: oldest
+  rows and past-window counts unchanged), but the tool returns only the LAST statement's result,
+  so the experiment could not even produce its answer. **Every B-pass brief that grants live DB
+  access must say: no statement that writes, even inside a transaction — derive deltas with a
+  `count(*) FILTER (WHERE <the function's own predicate>)` SELECT instead.** The same count query
+  gave the exact answer (735 / 2,416 / 85 / 11) with zero writes. Review:
+  `docs/reviews/3a9abffad52f-review.md`.

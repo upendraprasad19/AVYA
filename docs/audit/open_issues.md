@@ -3629,7 +3629,8 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
 
 - **Status**: OPEN
 - **Blocked on**: none — one-line predicate fix; the value is in the test that would have caught it
-- **Verified**: 2026-09-10 — `min(started_at)` across `cron_call_log` is **2026-09-03**, so the maximum achievable `days_silent` is **7.46**. The alert's predicate is `days_silent >= 8`. Hermes measured **7.21** on 2026-08-16; three weeks later the ceiling is unchanged because it is set by the pruner, not by traffic.
+- **Verified**: 2026-09-26 — the R2-11 PRECONDITION is now met: migration 144 (diagnose `d6b2f9`) excludes `alert-critical-notify` inside the alert's `cron_call_log` subquery (live jobid 32 verified), pinned by `test/contracts/cron_vacuum_single_statement_test.dart`, which also requires every function on `cron_auth_adoption_test.dart`'s `_triggerDispatchedFunctions` roster that calls `logCronStart` to be excluded. The `>= 8` vs 7-day-prune defect itself is UNCHANGED (batch B2). Latent, recorded: `weekly-recalc` calls `logCronStart` (`weekly-recalc/index.ts:208`) but has no cron job and is not on the roster — a manual run would put it in the same silence-is-healthy class once the threshold is fixed. Also: with retention broken (09-22 → 09-26) this alert became reachable BY ACCIDENT, and a weekly function with one lost success row (`weekly-recap-ready`, OI-194 class) could have false-fired from 2026-09-29; 144's restored prune closes that.
+  PRIOR (kept verbatim): 2026-09-10 — `min(started_at)` across `cron_call_log` is **2026-09-03**, so the maximum achievable `days_silent` is **7.46**. The alert's predicate is `days_silent >= 8`. Hermes measured **7.21** on 2026-08-16; three weeks later the ceiling is unchanged because it is set by the pruner, not by traffic.
 - **Identified**: 2026-08-16 · Hermes L1-F3. **Pre-existing — not introduced by the log-retention batch.**
 - **The mechanism**: `cleanup_cron_call_log` prunes `cron_call_log` at 7 days, sparing only the single *globally* newest success. The alert asks whether any function has been silent for **8** days. The table cannot hold evidence that old, so the predicate is unsatisfiable by construction. It has fired **0 times, ever**.
 - ⚠ **The prior diagnose-doc records this as "cannot fire past day 7", which reads like a partial blind spot.** It is not partial: the alert is inert across its entire range. A threshold above its own data-retention ceiling is not a tuning problem, it is a dead alert that reads as coverage — which is worse than having no alert, because it occupies the slot.
@@ -6009,8 +6010,9 @@ Needs a tombstone or cloud-side delete; restore-completeness class (docs/archite
 ## OI-247 — db_maintenance_nightly (jobid 41) fails every run: VACUUM cannot run inside a transaction block
 
 - **Status**: OPEN
-- **Blocked on**: none — scheduled: batch B (next, before 2026-10-01).
-- **Verified**: 2026-09-26 — LIVE `cron.job_run_details`: jobid 41 `db_maintenance_nightly` failed every run 2026-09-22 → 09-26 with `VACUUM cannot run inside a transaction block` (pg_cron wraps a multi-statement command in one transaction).
+- **Blocked on**: the first nightly run after the fix (2026-09-27 03:30/03:40/03:43 UTC) — closes only on observed `succeeded`, never on the apply.
+- **Verified**: 2026-09-26 — FIX APPLIED: migration 144 (`ops-alerting-batch-b`, diagnose `d6b2f9`) live at 20260926065733; `cron.job` 41 now holds the 4 cleanups and no VACUUM, new single-statement jobs 44 `jrd_vacuum_daily` (03:40) / 45 `client_errors_vacuum_daily` (03:43). Pending: the next runs' `cron.job_run_details` status.
+  PRIOR (kept verbatim): 2026-09-26 — LIVE `cron.job_run_details`: jobid 41 `db_maintenance_nightly` failed every run 2026-09-22 → 09-26 with `VACUUM cannot run inside a transaction block` (pg_cron wraps a multi-statement command in one transaction).
 - **Identified**: 2026-09-26 · filed via mint_oi.sh from branch `ci-green-batch-a` (backlog triage)
 
 Fix shape: split the VACUUM into its own single-statement job. Also motivates OI-178 (SQL-job failures raise no alert).
