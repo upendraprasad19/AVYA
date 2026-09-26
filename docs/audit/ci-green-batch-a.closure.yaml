@@ -1,0 +1,154 @@
+# Closure ledger — ci-green-batch-a (main CI red + flake + token hygiene + board)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no
+# `deferred:` key. `<branch>@branch` is the in-branch commit form.
+#
+# Plan: docs/superpowers/plans/2026-09-26-ci-green-batch-a.md — three review
+# rounds; U2 was SPLIT after round 3 (§4.12.1) because each round found new
+# material issues in the machinery proposed for the cqrs / grace-window files.
+
+batch: ci-green-batch-a
+diagnose_docs:
+  - docs/diagnoses/2026-09-26-main-sync-e2e-fixture-ambient-git-identity-d9e4b1.md
+  - docs/diagnoses/2026-09-26-downgrade-wait-proxy-loses-race-on-ci-b3f8e5.md
+  - docs/diagnoses/2026-09-26-root-supabase-token-dir-not-gitignored-c6f2a8.md
+
+findings:
+  # ── Units ────────────────────────────────────────────────────────
+  - id: U1
+    title: "main CI red 4 runs — main-sync e2e `lone` fixture had no git identity"
+    terminal_state: closed_in_commit
+    commit: ci-green-batch-a@branch
+    verification: >
+      Hermetic git env (GIT_CONFIG_GLOBAL → useConfigOnly file, NOSYSTEM, EMAIL
+      removed) + lone identity. 8/8 green; removing the lone identity reddens exactly
+      1 with CI's own `Expected: <0> Actual: <128>`. Diagnose d9e4b1.
+
+  - id: U2a
+    title: "OI-242 flake — downgrade waited for with a proxy; lost the race on CI"
+    terminal_state: closed_in_commit
+    commit: ci-green-batch-a@branch
+    verification: >
+      ProDowngradeWaiter waits on onDowngrade (:1213). Realtime, expiry-banner and
+      paused-guard files migrated. Deterministic repro (2000-write backlog): old
+      wait RED 5/5, waiter green 3/3. Mutations: wait→pumpEventQueue 5 red; drain
+      skips await 1 red; realtime header mutation 2 still 1 red, now by name.
+      Diagnose b3f8e5.
+
+  - id: U2b
+    title: "cqrs (12 _settle sites) + grace-window file — same wait class, split out"
+    terminal_state: blocked_on_user
+    reason: >
+      Split per §4.12.1 after round 3 found new P2s (tripwire soundness R3 F1,
+      setUp-started downgrade R3 F4, grace-window sites must wait R3 F2). Needs
+      its own plan + ×2 review; scheduling is the founder's call. Tracked on
+      OI-86, narrowed to exactly these two files. Both keep today's a3e9b7 behaviour.
+
+  - id: U3
+    title: "live Management-API token at repo-root .supabase/ not gitignored"
+    terminal_state: closed_in_commit
+    commit: ci-green-batch-a@branch
+    verification: >
+      Anchored `/.supabase/` rule + precious-list entry + a hermetic
+      `git check-ignore` assertion that the deciding rule is the repo's .gitignore.
+      7/7 green; deleting rule+entry reddens exactly the new case. Diagnose c6f2a8.
+
+  - id: U3-residual
+    title: "two DIFFERENT tokens on disk — decide which is live, revoke the other"
+    terminal_state: blocked_on_user
+    reason: >
+      Founder action in the Supabase dashboard (revoke). Both paths are ignored by
+      U3, so neither can be committed meanwhile.
+
+  # ── U4 board hygiene ─────────────────────────────────────────────
+  - id: OI-242
+    title: "realtime_pro_gate flake"
+    terminal_state: closed_in_commit
+    commit: ci-green-batch-a@branch
+    verification: "Closed by U2a; cross-file state-leak hypothesis refuted by in-process deterministic repro."
+
+  - id: OI-63
+    title: "137-policy RLS initplan"
+    terminal_state: verified_clean
+    evidence: "LIVE: 0 unwrapped auth.uid() of 137 policies; no initplan advisor lints (migrations 100 + 141)."
+
+  - id: OI-66
+    title: "CI gradle cache: proven win, keep"
+    terminal_state: verified_clean
+    evidence: "CI run on fafec56a: gradle cache hit; APK build 3m25s (3m37s–3m52s on the 3 prior runs) vs 7m41s uncached."
+
+  - id: OI-168
+    title: "grep-the-test-tree rule — mechanised"
+    terminal_state: verified_clean
+    evidence: "scripts/contract_sweep.dart:99 runs git grep -l -F <basename> over test/ for every changed non-doc file at pre-push, every tier; hard-fail flip owned by OI-220."
+
+  - id: OI-198
+    title: "pr-detection cron failures"
+    terminal_state: verified_clean
+    evidence: "LIVE cron_call_log: 812 success / 0 non-success pr-detection rows since 2026-09-14 (failures were 2026-09-13)."
+
+  - id: OI-206
+    title: "deno.lock worktree-retire classification"
+    terminal_state: verified_clean
+    evidence: "deno.lock at retire_worktree_lib.dart:255; 8bf79dde is an ancestor of main; gitignore_classification_test pins it."
+
+  - id: OI-235
+    title: "slow cron job averages"
+    terminal_state: verified_clean
+    evidence: "LIVE cron.job_run_details: both jobs 0.1–1.3 s daily except the two 2026-09-21 startup timeouts (e8b4a1 DB-starvation incident)."
+
+  - id: OI-224
+    title: "duplicate of OI-179"
+    terminal_state: closed_in_commit
+    commit: ci-green-batch-a@branch
+    notes: "Closed as duplicate; UPDATE note added to OI-179."
+
+  - id: OI-234
+    title: "duplicate of OI-197"
+    terminal_state: closed_in_commit
+    commit: ci-green-batch-a@branch
+    notes: "Closed as duplicate; UPDATE note added to OI-197."
+
+  - id: OI-209
+    title: "duplicate of OI-180"
+    terminal_state: closed_in_commit
+    commit: ci-green-batch-a@branch
+    notes: "Closed as duplicate; UPDATE note added to OI-180."
+
+  - id: OI-86
+    title: "concurrent-run Hive corruption — narrowed"
+    terminal_state: closed_in_commit
+    commit: ci-green-batch-a@branch
+    notes: "Entry narrowed to the two U2b files with R2/R3 findings; the OI itself stays OPEN (see U2b)."
+
+  - id: BOARD-CORRECTIONS
+    title: "Verified/UPDATE corrections — OI-60, 61, 62, 97, 87, 135, 140, 165, 80, 207"
+    terminal_state: closed_in_commit
+    commit: ci-green-batch-a@branch
+    notes: "Each re-verified 2026-09-26; prior Verified text preserved as PRIOR continuation lines."
+
+  # ── New findings surfaced by the triage — filed, each with a scheduling status ──
+  - id: OI-245
+    title: "restored PRO photo turns replayed to Gemini as text"
+    terminal_state: closed_in_commit
+    commit: ci-green-batch-a@branch
+    notes: "Filed as OI-245 (P1, unscheduled — candidate batch D). Writer sync_coach.dart:261, reader coach_interaction_repository.dart:362."
+  - id: OI-246
+    title: "deleted exercise logs reappear after restore"
+    terminal_state: closed_in_commit
+    commit: ci-green-batch-a@branch
+    notes: "Filed as OI-246 (P1, unscheduled — candidate batch F). Restore re-put at sync_workout.dart:916."
+  - id: OI-247
+    title: "db_maintenance_nightly VACUUM-in-transaction failure"
+    terminal_state: closed_in_commit
+    commit: ci-green-batch-a@branch
+    notes: "Filed as OI-247; scheduled into batch B (next)."
+  - id: OI-248
+    title: "client_errors_spike counts rows not users"
+    terminal_state: closed_in_commit
+    commit: ci-green-batch-a@branch
+    notes: "Filed as OI-248; scheduled into batch B (next)."
+  - id: OI-249
+    title: "45 s restore-op timeouts on tiny tables"
+    terminal_state: closed_in_commit
+    commit: ci-green-batch-a@branch
+    notes: "Filed as OI-249 (P2, unscheduled)."

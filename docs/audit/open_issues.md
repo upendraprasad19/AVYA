@@ -147,7 +147,8 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
 
 - **Status**: OPEN
 - **Blocked on**: none
-- **Verified**: 2026-08-01 (Unit 9, `oi79-paged-cron-reads`) — measured, not inferred.
+- **Verified**: 2026-09-26 — ROOT CAUSE FOUND: the reader regex at `scripts/check_snapshot_contract.dart:252` captures `fn:\s*([\w-]+),`, which rejects the `/` in `fn: _shared/notification_prefs` (`docs/snapshot_contract.yaml:578`), so that reader line never matches and is never checked. The skip-list half of this OI is already done (OI-155).
+  PRIOR (kept verbatim): 2026-08-01 (Unit 9, `oi79-paged-cron-reads`) — measured, not inferred.
 - **Identified**: 2026-08-01, while correcting reader citations that OI-79's paging refactor moved.
 - **What's wrong**: `scripts/check_snapshot_contract.dart` reports `8 reader citations checked` and
   exits 0, but the `_shared/notification_prefs` entry under `extra_server_written_keys` →
@@ -172,6 +173,8 @@ External Hermes cross-check on 2026-05-17 evening surfaced 13 REAL findings (3 P
 - **Fix**: find why that entry is skipped (start by instrumenting `_Key.readers` parsing for the
   `extra_server_written_keys` block), add a negative-control test that a deliberately-wrong
   citation FAILS for every reader entry, and remove the gate from both skip allowlists.
+
+**UPDATE 2026-09-26 (backlog triage + `ci-green-batch-a`):** Fix is one capture, `[\w-]+` → `[^,]+`; the one affected citation (`notification_prefs.ts:231`) is currently correct, so it surfaces 0 new violations and can hard-fail on day one. Add a negative-control test that mutates every reader entry's line. Pairs with OI-216 (per-entry slack, same script).
 
 ## OI-81 — 10 per-user reads still destructure `data` without `error` in 4 cron functions (P2)
 
@@ -538,7 +541,8 @@ cloud sessions; **this file is the cross-session backlog.**
 ## OI-60 — Flip `enable_hold_weeks`
 
 - **Status**: OPEN
-- **Verified**: 2026-08-20 — the blocker list re-derived from the AUTHORITATIVE ledger
+- **Verified**: 2026-09-26 — blocker list re-derived: FOB-7(a)/(b) are CLOSED (`d8b90e86`, merged `280fd810`, `docs/audit/oi60-client-blockers.closure.yaml`); FOB-8 is open and was missing from this list (`train_provider.dart:959` `phaseArcProvider` still reads `getCurrentWeekNumber()` directly).
+  PRIOR (kept verbatim): 2026-08-20 — the blocker list re-derived from the AUTHORITATIVE ledger
   (`docs/ship_dark_pending_review.yaml:251-382` + `docs/audit/oi60-streak-identity.closure.yaml`),
   not carried from this entry's own text, which was wrong. The three `enable_hold_weeks` rows were
   read directly and all still carry `flip_reviewed: false`. FOB-1's six surfaces were each read in
@@ -618,27 +622,36 @@ cloud sessions; **this file is the cross-session backlog.**
   `claude/oi-pending-hold-weeks-1od97o`) in one commit — corrected from "three" on 2026-08-21 when
   FOB-1+FOB-3 added the fourth.
 
+**UPDATE 2026-09-26 (backlog triage + `ci-green-batch-a`):** The `Blocked on` line below predates this and still lists FOB-7(a)/(b) — they are CLOSED (`d8b90e86`, merged `280fd810`, diagnoses `b9d4c2` / `e7c4a2`). What really remains: **FOB-4** (how the Sunday push + weekly report learn a user is on hold — founder design choice: (a) a `user_progress` hold column/RPC + 2 EF redeploys, or (b) drop the week number from those two EFs' copy for everyone, no migration) and **FOB-8** (`train_provider.dart:959`, `phaseArcProvider` reads `getCurrentWeekNumber()` directly — NOT previously on this list). FOB-3's code is on main; archived ai-proxy payload `backups/edge_function_payloads/ai-proxy/v3_57b0b07.json` (2026-09-24) contains 'HOLD WEEKS', so it is probably deployed — confirm with `get_edge_function` before relying on it.
+
 ## OI-61 — Coach-UX: live-verify test7, v74 hardening, temp-PRO cleanup
 
 - **Status**: OPEN
-- **Verified**: 2026-08-05 — BLOCKER ONLY (OI-52 confirmed CLOSED at `closed_issues.md:1048`,
+- **Verified**: 2026-09-26 — narrowed. v74: H2 is in source (`ai-proxy/index.ts:1075-1092`), H1/H3 already founder-decided (`docs/plan-reviews/v74-coach-telemetry.md:19-21`); the Units 2+3+FC8 live-verify was superseded by later live-tested batches. LIVE: test7 still has 2 `referral_trial` subscription rows `status=active` past end_date (latest 2026-07-13).
+  PRIOR (kept verbatim): 2026-08-05 — BLOCKER ONLY (OI-52 confirmed CLOSED at `closed_issues.md:1048`,
   2026-07-27). This issue's own substance has NOT been re-checked since filing.
 - **Identified**: 2026-07-26 · Units 2+3+FC8 shipped `237c347`, ai-proxy v73
 - **Blocked on**: none — its only blocker was OI-52, which closed 2026-07-27. Pickable now.
 
+**UPDATE 2026-09-26 (backlog triage + `ci-green-batch-a`):** Narrowed to the ONE remaining item: test7's 2 expired `referral_trial` rows still read `status=active` (live 2026-09-26). Needs a founder yes for a prod data UPDATE marking them expired; then close.
+
 ## OI-62 — Coach-reliability: FC6 + Unit A
 
 - **Status**: OPEN
-- **Verified**: 2026-08-05 — BLOCKER ONLY (OI-52 confirmed CLOSED at `closed_issues.md:1048`,
+- **Verified**: 2026-09-26 — FC6 SHIPPED (`_clampMealPayload` on all write paths, `nutrition_write_service.dart:117,270`, plus restore; APK now +47). Unit A (F1 restore EF cold-start, F3) has NO content anywhere in the repo — its only record was a harness-local memory file not present on this machine.
+  PRIOR (kept verbatim): 2026-08-05 — BLOCKER ONLY (OI-52 confirmed CLOSED at `closed_issues.md:1048`,
   2026-07-27). This issue's own substance has NOT been re-checked since filing.
 - **Blocked on**: FC6 is unblocked — its OI-52 dependency closed 2026-07-27. Unit A: F3 anytime,
   F1 founder-gated.
 - **Identified**: 2026-07-26 · Unit B merged `b2ea2e3`, ai-proxy v72
 
+**UPDATE 2026-09-26 (backlog triage + `ci-green-batch-a`):** FC6 is done. Unit A exists only as a name here. Founder question: close OI-62, or re-file Unit A with its substance?
+
 ## OI-63 — Restore C2: 137-policy RLS initplan
 
-- **Status**: OPEN
-- **Verified**: 2026-08-05 — BLOCKER ONLY (OI-52 confirmed CLOSED at `closed_issues.md:1048`,
+- **Status**: CLOSED · 2026-09-26 · verified_clean, no code change · branch `ci-green-batch-a`
+- **Verified**: 2026-09-26 — LIVE: 144 public policies, 137 mention `auth.uid()`, **0** still unwrapped (case-insensitive strip of `( SELECT auth.uid() AS uid)`); 0 `auth.jwt()`/`auth.role()`/`current_setting` hits; performance advisor has no `auth_rls_initplan`/`multiple_permissive` lints. Done by migration 100 (2026-07-07, before this OI was filed) + 141 (readiness_daily).
+  PRIOR (kept verbatim): 2026-08-05 — BLOCKER ONLY (OI-52 confirmed CLOSED at `closed_issues.md:1048`,
   2026-07-27). This issue's own substance has NOT been re-checked since filing.
 - **Identified**: 2026-07-26 · restore-perf C3 shipped
 - **Blocked on**: none — it was sequenced after OI-52, which closed 2026-07-27. Pickable now.
@@ -674,9 +687,10 @@ cloud sessions; **this file is the cross-session backlog.**
 
 ## OI-66 — Prove or remove the CI gradle cache
 
-- **Status**: OPEN
+- **Status**: CLOSED · 2026-09-26 · proven win, keep the cache · branch `ci-green-batch-a`
 - **Blocked on**: none
-- **Verified**: never
+- **Verified**: 2026-09-26 — CI run on `fafec56a`: 'Cache hit … Cache restored successfully' (setup-java gradle key), Build Check (APK) 02:59:14→03:02:39Z = 3m25s; 3m52s/3m37s/3m50s on the 3 prior runs, vs the 7m41s uncached baseline.
+  PRIOR (kept verbatim): never
 - **Identified**: 2026-07-26 · ci-speed batch `904e6961`
 - **Risk class**: unverified optimisation
 - **What's missing**: The cache is **3.4 GB**; restore-and-extract cost may exceed the Gradle work it
@@ -837,8 +851,22 @@ cloud sessions; **this file is the cross-session backlog.**
 ## OI-86 — two concurrent `flutter test` runs on this machine corrupt each other's Hive state (P2)
 
 - **Status**: OPEN
-- **Blocked on**: none — the mechanism is understood and was reproduced twice; scheduled work.
-- **Verified**: 2026-08-03 (twice in one day, both times the same tests passed standalone
+- **Blocked on**: founder scheduling of U2b (its own plan + ×2 review) — not technical.
+- **Verified**: 2026-09-26 — NARROWED. The "Box not found" in the expiry-banner and
+  realtime files was at least partly a SINGLE-process race, not only cross-process
+  contention: tests waited for an unawaited `_downgradeLocally()` with a proxy, and
+  tearDown closed Hive under the running chain (OI-242, diagnose `b3f8e5`). Those
+  files plus the paused-guard file now use `ProDowngradeWaiter`. REMAINING scope is
+  exactly two files, split out of `ci-green-batch-a` per §4.12.1 after review round 3
+  kept surfacing new issues in the machinery proposed for them:
+  (1) `test/contracts/subscription_cqrs_behavioral_test.dart` — 12 `_settle` sites
+  still on the a3e9b7 onStateChanged-chained sampler; R3 found the proposed tripwire
+  unsound (F1) and a downgrade started in setUp that no per-test wait drains (F4);
+  (2) `test/contracts/subscription_payment_grace_window_behavioral_test.dart` (its
+  `:79-81` 12×5 ms tearDown drain) — R3 F2: every site there must `wait()`, a teardown
+  drain alone is not loud. The per-process Hive directory fix below still stands for
+  the cross-process half.
+  PRIOR (kept verbatim): 2026-08-03 (twice in one day, both times the same tests passed standalone
   immediately afterwards on the identical tree)
 - **Identified**: 2026-08-03 · Unit B (`b4e9c7`) — once during overlapping `safe_commit` runs,
   once during a `safe_push` whose pre-push suite raced another session's suite.
@@ -886,7 +914,8 @@ cloud sessions; **this file is the cross-session backlog.**
   `ground_truth_verified: true`, `verdict: converged`, `bpass: accepted`), so the keystone gate is
   satisfied by a real review rather than by anyone attesting to work they did not do. The
   STRUCTURAL problem below is unfixed and is what this entry now tracks.
-- **Verified**: 2026-08-05 — record confirmed present by direct read of its frontmatter, and CI is
+- **Verified**: 2026-09-26 — mostly fixed by OI-181 (`safe_merge.sh:235-290` warns at merge time when a ≥account branch has NO record). Residual: a record that EXISTS but is not converged gets no warning, and a raw `git merge` bypasses `safe_merge.sh` (`git_safety_hook.dart` has no merge clause).
+  PRIOR (kept verbatim): 2026-08-05 — record confirmed present by direct read of its frontmatter, and CI is
   green on the pushed range containing that merge (`9e7d4769`), which is the gate's own verdict.
   The 2026-08-03 reproduction of the blocked push (both worktrees + the then-missing file) stands.
 - **Identified**: 2026-08-03 · Unit B (`b4e9c7`) push attempt
@@ -933,6 +962,8 @@ cloud sessions; **this file is the cross-session backlog.**
   prospective push range before pushing — never `HEAD^1..HEAD`. That is what caught this. Failing
   to do so on 2026-08-03 morning is what put `ca4ef2c3` on `origin` red.
 - **Blast radius estimate**: `feature` (a hook + docs); no runtime code, no migration, no schema.
+
+**UPDATE 2026-09-26 (backlog triage + `ci-green-batch-a`):** Narrowed to the residual in the Verified line.
 
 ## OI-88 — `restoring_screen.dart` split owed (allow-list entry now removed) (P3)
 
@@ -1230,7 +1261,8 @@ cloud sessions; **this file is the cross-session backlog.**
 - **Status**: OPEN
 - **Blocked on**: nothing — mechanical, but it is copy work, so it wants the Wardroom brand soul
   loaded (§0.3) rather than a mechanical string drop.
-- **Verified**: 2026-08-07 — `_featureSubtitle`'s switch read directly against every
+- **Verified**: 2026-09-26 — 2 live mismatches, not 5: `'AI Weekly Report'` (`reports_screen.dart:1011`) vs `case 'Weekly AI Report'` (`paywall_sheet.dart:151`); `'AI Body Composition Assessment'` (`edit_profile_screen.dart:1657,1700`). `'PRO'`/`'PRO Upgrade'` are deliberate generic sentinels; `'Readiness Trends'` has no call site (readiness went free).
+  PRIOR (kept verbatim): 2026-08-07 — `_featureSubtitle`'s switch read directly against every
   `showPaywallSheet` call site in `lib/`.
 - **Identified**: 2026-08-07, while fixing OI-76's paywall half (diagnose `a7e3d1`). OI-76's own
   call site was the worst instance (it passed a snake_case id and rendered
@@ -1250,6 +1282,8 @@ cloud sessions; **this file is the cross-session backlog.**
   call sites so a rename cannot silently fall through again (the deeper fix, and the only one that
   stays fixed).
 - **Blast radius estimate**: `feature` — one widget, copy only.
+
+**UPDATE 2026-09-26 (backlog triage + `ci-green-batch-a`):** Scope is now the two labels above plus shared label constants (the entry's deeper fix). Copy must follow the Wardroom brand soul (`lib/shared/widgets/wardroom/CLAUDE.md`).
 
 ## OI-141 — retire the notification-preferences snapshot fallback once APK +39 is adopted (P3)
 
@@ -2096,7 +2130,8 @@ forced to invent mid-flight, and it should not be an improvisation.
 
 - **Status**: OPEN
 - **Blocked on**: nothing technical. The fix shape is settled (below); what it needs is a decision on whether to backfill the 60 or grandfather them by name.
-- **Verified**: 2026-08-20 — measured, not estimated. Recomputed sha256 for every entry in `backups/applied_migrations.json` against its `supabase/migrations/*.sql` file: **125 entries → 64 match, 60 mismatch, 1 non-hash sentinel (120b, deliberate)**.
+- **Verified**: 2026-09-26 — RECOMPUTED by the coordinator: 147 hashable ledger entries, **61** mismatches, of which **56** equal sha256 of the file with LF→CRLF (hashed on a Windows CRLF working copy — content-identical) and only **5** are genuine content drift: 057, 069, 070, 108, 123.
+  PRIOR (kept verbatim): 2026-08-20 — measured, not estimated. Recomputed sha256 for every entry in `backups/applied_migrations.json` against its `supabase/migrations/*.sql` file: **125 entries → 64 match, 60 mismatch, 1 non-hash sentinel (120b, deliberate)**.
 
 `backups/applied_migrations.json` records a `hash` per applied migration. Its documented purpose
 is drift auditing — "recompute hashes on drift", per `applied_migrations_parity_test.dart:36`.
@@ -2129,6 +2164,8 @@ same error class as the 2026-07-25/26 required-status-checks incident. The one i
 caused is fixed in it; the class is filed here.
 
 ---
+
+**UPDATE 2026-09-26 (backlog triage + `ci-green-batch-a`):** The decision shrinks from 'grandfather ~60' to: hash LF-normalised content, re-stamp the 56 (provably content-identical), and a FOUNDER call on the 5 genuine drifts (grandfather by name or re-stamp after review). A raw-byte gate would disagree between the Windows laptop and Linux CI — normalise first. Pairs with OI-137 (hash shape) and OI-163 (header gate).
 
 ## OI-136 — Gate 40 validates "closure YAML" without ever parsing it as YAML; 2 files in the repo are invalid and it passes all 32 (P2)
 
@@ -2288,7 +2325,8 @@ OI-136, OI-132.
 ## OI-140 — nothing detects a duplicate diagnose `bug_id`, though the identical OI-number bug shipped six times and got its own gate
 
 - **Status**: OPEN
-- **Verified**: 2026-08-25 — `ls docs/diagnoses/*.md | sed -E 's/.*-([0-9a-f]{6})\.md$/\1/' | sort |
+- **Verified**: 2026-09-26 — LIVE, worse than filed: 3 current `bug_id` collisions in `docs/diagnoses/` — `d3f7b2`, `e8a3b1`, `f7a2c9` (`grep -h '^bug_id:' docs/diagnoses/*.md | sort | uniq -d`).
+  PRIOR (kept verbatim): 2026-08-25 — `ls docs/diagnoses/*.md | sed -E 's/.*-([0-9a-f]{6})\.md$/\1/' | sort |
   uniq -c | awk '$1>1'` returned `2 d3b8f1`, a live collision between
   `2026-08-15-cleanup-delete-boundary-keyed-on-uuid-d3b8f1.md` (landed `acffbd43`) and a doc minted
   in the `oi60-client-blockers` batch. Read `scripts/validate_diagnose_doc.dart` directly: it takes
@@ -2319,6 +2357,8 @@ OI-136, OI-132.
   Per rule 24 it ships mutation-proven with a `docs/audit/gate_test_ledger.yaml` entry.
 - **Related**: OI-112 (the OI-number version, whose mint-time half is closed), rule 22, the
   `id_collision_note:` in `docs/diagnoses/2026-08-25-hold-days-dilute-phase-completion-b9d4c2.md`.
+
+**UPDATE 2026-09-26 (backlog triage + `ci-green-batch-a`):** Three live collisions now exist (listed above); any `closes-diagnose:` trailer citing one of them is ambiguous. Pairs with OI-167 (skill bug-class number collisions) as one 'hand-minted id collision' batch.
 
 ## OI-143 — nothing checks whether a multi-task BATCH is finished; the Stop hook only asks the §5 rows (P2)
 
@@ -3300,7 +3340,8 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
 
 - **Status**: OPEN
 - **Blocked on**: identifying which token the runner needs (Management API vs service-role)
-- **Verified**: 2026-09-05 — ran it; and the harness header records the same failure 2026-07-30
+- **Verified**: 2026-09-26 — new root-cause HYPOTHESIS (not yet run): the default token file is CWD-relative (`check_onconflict_live_arbiter.dart:132`, `supabase/.supabase/…`), which exists only in the PRIMARY worktree; §4.13 puts every session in a linked worktree, where it is absent, so the resolver falls to the `SUPABASE_ACCESS_TOKEN` env fallback (`:136`) — a different account's token ⇒ 403.
+  PRIOR (kept verbatim): 2026-09-05 — ran it; and the harness header records the same failure 2026-07-30
 - **Symptom**: `dart run scripts/check_onconflict_live_arbiter.dart --sql <file>` →
   `FATAL — Management API HTTP 403 — "Your account does not have the necessary privileges to
   access this endpoint."` It resolves a token (44 bytes) and warns it is using the
@@ -3317,6 +3358,8 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
   harness un-runnable by anyone without this MCP, including CI.
 - **Related**: `test/sql/onconflict_live_arbiter.sql`, `oi46_daily_cap_triggers_live_verify.sql`,
   rule 21, `docs/operations/SECRET_INVENTORY.md`.
+
+**UPDATE 2026-09-26 (backlog triage + `ci-green-batch-a`):** Candidate fix: resolve the default file from `--git-common-dir/..` (the `batch_close_lib.dart` `primaryRootFrom` pattern) and fail CLOSED instead of using the env fallback. Also note (2026-09-26): this VPS holds TWO different Management-API tokens — see diagnose `c6f2a8`.
 
 ## OI-166 — regeneration RESTARTS the periodization wave instead of continuing it, so the wave index and the week counter disagree (P2)
 
@@ -3490,9 +3533,10 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
 
 ## OI-168 — nothing fires §4.9's "grep the test tree before you land" rule, so it is re-learned by breaking main (P2)
 
-- **Status**: OPEN
+- **Status**: CLOSED · 2026-09-26 · superseded by OI-220's sweep arm · branch `ci-green-batch-a`
 - **Blocked on**: nothing technical — needs the gate written, mutation-proven, ledger entry
-- **Verified**: 2026-09-07 — the pre-push full suite on `493d230b` failed 3 assertions in **files the batch never opened**: `test/contracts/usage_quota_ledger_writer_to_reader_test.dart` (×2) and `test/scripts/usage_counter_source_lib_test.dart` (×1). None was a code defect; all three were contracts the change deliberately falsified. Cost: one full push cycle (~20 min) plus a red local `main`
+- **Verified**: 2026-09-26 — `scripts/contract_sweep.dart:99` runs `git grep -l -F <basename> -- test/` for every changed non-doc file and runs the hits at pre-push, for EVERY tier. That is this rule, mechanised. The remaining hard-fail flip is owned by OI-220.
+  PRIOR (kept verbatim): 2026-09-07 — the pre-push full suite on `493d230b` failed 3 assertions in **files the batch never opened**: `test/contracts/usage_quota_ledger_writer_to_reader_test.dart` (×2) and `test/scripts/usage_counter_source_lib_test.dart` (×1). None was a code defect; all three were contracts the change deliberately falsified. Cost: one full push cycle (~20 min) plus a red local `main`
 - **Identified**: 2026-09-07 · during OI-162 slice 3a
 - **Symptom**: you change a production file, run the tests you wrote, they pass, and the full suite then fails in test files you never opened — because source-grep contracts pin code by LOCATION and CONTENT, so relocating or repairing something breaks assertions in files the diff does not touch. A targeted run structurally cannot see them.
 
@@ -3611,6 +3655,8 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
   OI-199, whose fix shape (widening retention to per-function) would
   independently arm the same loop from the other side.
 
+**UPDATE 2026-09-26 (backlog triage + `ci-green-batch-a`):** OI-224 closed as a duplicate of this entry (same `alert_cron_function_dead` `days_silent >= 8` predicate vs the 7-day `cron_call_log` prune). ⚠ LIVE 2026-09-26: the prune is currently NOT running (`db_maintenance_nightly` has failed every night since 2026-09-22, filed separately), so retained rows reach back to 09-14 and the predicate has become reachable BY ACCIDENT — a false critical for `alert-critical-notify` is armed for ~2026-10-01 06:47Z if retention is not restored first.
+
 ## OI-180 — `check_sot_registry_parity` silently skips every single-number `line_range:`, so 30 citations are validated by nothing (P2)
 
 - **Status**: OPEN
@@ -3622,6 +3668,8 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
 - **Proposed repair**: validate the single-number form too (at minimum file-exists plus method-appears-near-N), and for the dash form prefer matching a DECLARATION (`method_name(` preceded by a type or `Future<`) over a bare substring. Both are offline checks needing no credentials.
 - **Blast radius**: `scripts/**` is individually pinned `platform`; needs its own gate test + `mutation_proven:` ledger entry per rule 24.
 - **Class**: `feedback_green_check_input_set_width` — the gate's input set silently excluded 4.5% of the citations it exists to police. Also `feedback_bad_news_vs_no_news`: an unchecked citation and a valid one both report nothing.
+
+**UPDATE 2026-09-26 (backlog triage + `ci-green-batch-a`):** OI-209 closed as a duplicate of this entry. Its census, re-measured 2026-09-26 by simulating the gate regex: **39** bare single-number `line_range` entries (was 30); of the 28 that name a symbol, **21** would go stale if bare-N were parsed (OI-209 said 15); 11 are prose. Related blind spot found the same day — see OI-207's UPDATE: `method: a / b / c` fails `_bareSymbolRe` and is prose-skipped entirely (417 of 663 dash-form entries).
 ## OI-181 — nothing catches a MISSING plan-review record at merge time; both prechecks miss the plain absent case (P1)
 
 - **Status**: CLOSED (2026-09-19, `gate-integrity`) — diagnose `b7e2d4`
@@ -4194,11 +4242,14 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
   reports on top of what these checks already produce; it does not close any of these 4 gaps
   itself.
 
+**UPDATE 2026-09-26 (backlog triage + `ci-green-batch-a`):** OI-234 closed as a duplicate of item 2 here (401s write no `cron_call_log` row, so `alert_edge_function_health`'s `total >= 5` guard never sees them; 0 alerts ever). Live 2026-09-26: `alert_edge_function_health`, `alert_payment_flow_health`, `alert_cron_silence` and `alert_cron_function_dead` have fired 0 alerts between them.
+
 ## OI-198 — pr-detection cron: repeated Gateway Timeout on paged_fetch (4x in 24h, 2026-09-13/14)
 
-- **Status**: OPEN
+- **Status**: CLOSED · 2026-09-26 · no recurrence · branch `ci-green-batch-a`
 - **Blocked on**: none
-- **Verified**: 2026-09-14, live query against `public.cron_call_log`
+- **Verified**: 2026-09-26 — LIVE: 812 success / 0 non-success pr-detection rows in retained `cron_call_log` (earliest retained row 2026-09-14; the failures were 09-13). Closed on that evidence. The CAUSE (disk-IO starvation era, or migration 141's hourly-cadence change) is a HYPOTHESIS, not a finding. Note the 12-day-deep retention is itself a symptom of the failing `db_maintenance_nightly` job (filed separately 2026-09-26).
+  PRIOR (kept verbatim): 2026-09-14, live query against `public.cron_call_log`
 - **Identified**: 2026-09-14 · filed via mint_oi.sh from branch `telegram-admin-bot`
 - **How found**: telegram-admin-bot's `/status` smoke test (Task 13, Step 5) reported
   "Cron failures (24h): 4" — unexpected against the naive assumption of a quiet cron
@@ -4540,9 +4591,10 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
 
 ## OI-206 — retire_worktree.dart's regenerable-ignored-paths allowlist is missing deno.lock
 
-- **Status**: OPEN
+- **Status**: CLOSED · 2026-09-26 · already fixed in `8bf79dde` (2026-09-18) · branch `ci-green-batch-a`
 - **Blocked on**: none
-- **Verified**: 2026-09-16, live read of `scripts/retire_worktree_lib.dart:236-303`
+- **Verified**: 2026-09-26 — `'deno.lock'` is at `scripts/retire_worktree_lib.dart:255`; `8bf79dde` is an ancestor of `main`; `test/scripts/gitignore_classification_test.dart` pins every literal `.gitignore` entry into exactly one list. The board was never updated.
+  PRIOR (kept verbatim): 2026-09-16, live read of `scripts/retire_worktree_lib.dart:236-303`
   (`regenerableIgnoredPaths`) — no `deno.lock` entry anywhere in the list —
   plus `.gitignore:140` (`deno.lock` is gitignored, 0 tracked files by that
   name per `git ls-files`) and a live check of the primary worktree, where
@@ -4584,7 +4636,8 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
 
 - **Status**: OPEN
 - **Blocked on**: none
-- **Verified**: 2026-09-16, live `Read` of `lib/core/services/workout_schedule_read_service.dart`
+- **Verified**: 2026-09-26 — real cause is NOT an incidental mention in a wide window: `method: a / b / c` fails `_bareSymbolRe` (`check_sot_registry_parity.dart:70`), `_extractSymbol` returns null, and the entry is treated as PROSE and never symbol-checked. 417 of 663 dash-form entries are prose-skipped this way. The two hold-weeks methods are now at `workout_schedule_read_service.dart:986-1104`.
+  PRIOR (kept verbatim): 2026-09-16, live `Read` of `lib/core/services/workout_schedule_read_service.dart`
   vs `git show HEAD:<path>` at the same lines, cross-checked against `docs/sot_registry.yaml`
 - **Identified**: 2026-09-16 · filed via mint_oi.sh from branch `oi53-batch2-flip`
 - **How found**: opportunistically, by the OI-53 batch 2 plan-review round-1 subagent, while
@@ -4624,6 +4677,8 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
   have to spend attention on. Fix as part of whatever batch next touches hold-weeks, or as a
   standalone doc-only fix.
 
+**UPDATE 2026-09-26 (backlog triage + `ci-green-batch-a`):** This is a third parity-gate blind spot beside OI-180 (bare single-number ranges). Fix shape: a slash/comma-list extractor checking each identifier, landed `--warn-only` first (§4.11) because the gate hard-fails every commit.
+
 ## OI-208 — AuthNotifier._teardown() swallows internal failures with no signal to callers -- a timeout leaves all 3 signOut() call sites unable to react (OI-51 residual)
 
 - **Status**: OPEN
@@ -4659,9 +4714,10 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
 
 ## OI-209 — check_sot_registry_parity.dart's line_range parser is blind to bare (non-dash) entries -- 15 stale citations invisible, 14 predating cron-ai-removal in unrelated subsystems
 
-- **Status**: OPEN
+- **Status**: CLOSED · 2026-09-26 · DUPLICATE of OI-180 (same line_range regex); its violation census moved onto OI-180 · branch `ci-green-batch-a`
 - **Blocked on**: none
-- **Verified**: 2026-09-16, B-pass on the cron-ai-removal batch
+- **Verified**: 2026-09-26 — read side by side with OI-180; the survivor carries this entry's content (see its 2026-09-26 UPDATE).
+  PRIOR (kept verbatim): 2026-09-16, B-pass on the cron-ai-removal batch
   (`docs/reviews/247d945d1ba0-review.md` Finding 4) plus independent
   re-verification. `scripts/check_sot_registry_parity.dart`'s block-form
   parser (`blockRegex`) requires a dash-separated `line_range: N-M` —
@@ -5032,9 +5088,10 @@ Gate 14 already is, which is the argument for retiring.
 
 ## OI-224 — alert_cron_function_dead threshold unreachable, cron_call_log pruned at 7 days
 
-- **Status**: OPEN
+- **Status**: CLOSED · 2026-09-26 · DUPLICATE of OI-179 (same predicate, same prune interaction) · branch `ci-green-batch-a`
 - **Blocked on**: none
-- **Verified**: 2026-09-20 — live on dedsavbjuwgarrhphgnl: `cron_call_log` `min(started_at)` 7.04 days back, alert has fired 0 times ever, `cleanup_cron_call_log()` body unchanged (still 7-day / global-newest-success)
+- **Verified**: 2026-09-26 — read side by side with OI-179; the survivor carries this entry's content (see its 2026-09-26 UPDATE).
+  PRIOR (kept verbatim): 2026-09-20 — live on dedsavbjuwgarrhphgnl: `cron_call_log` `min(started_at)` 7.04 days back, alert has fired 0 times ever, `cleanup_cron_call_log()` body unchanged (still 7-day / global-newest-success)
 - **Identified**: 2026-08-16 (Hermes pass, `debugging-stuck-issue-89b2e9`) — re-verified + filed 2026-09-20 via mint_oi.sh from branch `oi224-alert-cron-threshold`
 
 `alert_cron_function_dead` (migration 110, `supabase/migrations/110_cron_silence_per_function_and_cleanup_null_guard.sql:112`)
@@ -5573,16 +5630,18 @@ this repo's migration protocol, not a quick follow-on to d8a2f6.
 
 ## OI-234 — alert_edge_function_health never fires — 401s write no cron_call_log row, so its err_rate guard structurally never matches an auth outage
 
-- **Status**: OPEN
+- **Status**: CLOSED · 2026-09-26 · DUPLICATE of OI-197 item 2 (EF auth-outage alert never fires) · branch `ci-green-batch-a`
 - **Blocked on**: none
-- **Verified**: never
+- **Verified**: 2026-09-26 — read side by side with OI-197; the survivor carries this entry's content (see its 2026-09-26 UPDATE).
+  PRIOR (kept verbatim): never
 - **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/next-aab-decision-d1227b`
 
 ## OI-235 — proactive_plateau_alert (~116s avg) and i-see-you-daily (~93s avg) run unusually long once daily — likely per-user loop instead of set-based query, needs Edge Function code review
 
-- **Status**: OPEN
+- **Status**: CLOSED · 2026-09-26 · misattributed · branch `ci-green-batch-a`
 - **Blocked on**: none
-- **Verified**: 2026-09-22, re-confirmed live by a B-pass review of the disk-io-audit-cleanup work (diagnose e8b4a1) (`select avg/min/max(extract(epoch from (end_time-start_time))) from cron.job_run_details join cron.job ... where jobname in (...)`) — both averages reproduced exactly (93.1s, 116.0s over 16 runs each). Distribution is genuinely bimodal, not uniformly slow: min=0.1s, max=1488.1s (~24.8min) for i-see-you-daily and max=1853.8s (~30.9min) for proactive_plateau_alert — most runs are fast and one outlier per job pulls the average up. Sharpens the likely cause: a conditional expensive path (e.g. a per-user loop that only fires under some condition) rather than a uniformly slow query.
+- **Verified**: 2026-09-26 — LIVE `cron.job_run_details`: both jobs run 0.1–1.3 s every day EXCEPT the two 2026-09-21 'job startup timeout' failures (1488 s / 1853 s, the e8b4a1 DB-starvation incident); 0 runs > 5 s otherwise. The ~116 s / ~93 s averages were one outlier each. Also: this metric times the pg_net DISPATCH, not the Edge Function runtime, so it never measured a per-user loop either way.
+  PRIOR (kept verbatim): 2026-09-22, re-confirmed live by a B-pass review of the disk-io-audit-cleanup work (diagnose e8b4a1) (`select avg/min/max(extract(epoch from (end_time-start_time))) from cron.job_run_details join cron.job ... where jobname in (...)`) — both averages reproduced exactly (93.1s, 116.0s over 16 runs each). Distribution is genuinely bimodal, not uniformly slow: min=0.1s, max=1488.1s (~24.8min) for i-see-you-daily and max=1853.8s (~30.9min) for proactive_plateau_alert — most runs are fast and one outlier per job pulls the average up. Sharpens the likely cause: a conditional expensive path (e.g. a per-user loop that only fires under some condition) rather than a uniformly slow query.
 - **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/next-aab-decision-d1227b`
 
 ## OI-236 — 12 of 14 Supabase advisor-flagged unused indexes (idx_scan=0) left unreviewed — idx_users_email_lower and idx_subscriptions_razorpay_payment_id are auth/payment-adjacent, may be low-frequency not dead
@@ -5730,11 +5789,19 @@ session working in this repo simultaneously.
 
 ## OI-242 — realtime_pro_gate_behavioral_test.dart flakes on full-suite CI run with a Box-not-found HiveError, passes clean in isolation
 
-- **Status**: OPEN
-- **Blocked on**: nothing technical. Needs a test-isolation investigation
-  (what earlier file in the full `test/` run leaves state this test depends
-  on) before a fix can be proposed.
-- **Verified**: 2026-09-22 — reproduced the CI failure signature exactly via
+- **Status**: CLOSED · 2026-09-26 · fixed, diagnose `b3f8e5` · branch `ci-green-batch-a`
+- **Blocked on**: nothing — closed.
+- **Verified**: 2026-09-26 — ROOT CAUSE is NOT a cross-file state leak (the
+  hypothesis below is refuted). `isPro()` starts `_downgradeLocally()` unawaited
+  (`subscription_service.dart:480-483`); the test waited with `pumpEventQueue()`,
+  a turn-bounded proxy racing an I/O-bounded chain. On a loaded runner the proxy
+  won, the assertion read pre-downgrade state, and tearDown closed Hive under the
+  still-running chain (the trailing Box-not-found). Reproduced DETERMINISTICALLY
+  in-process: 2000 unawaited puts queued before `isPro()` ⇒ old wait RED 5/5,
+  new `ProDowngradeWaiter` (`test/helpers/pro_downgrade_waiter.dart`, waits on
+  `onDowngrade` :1213) green 3/3. Same fix applied to the expiry-banner and
+  paused-guard files. Test: `test/contracts/pro_downgrade_waiter_behavioral_test.dart`.
+  PRIOR (kept verbatim): 2026-09-22 — reproduced the CI failure signature exactly via
   GitHub Actions logs; ruled out as unrelated to the PR that surfaced it by
   running the file alone locally (9/9 green) and by confirming the same
   failure independently hit an unrelated merge's CI run too.
@@ -5920,3 +5987,48 @@ work end-to-end for every real user, not just the founder's test accounts.
 OI-244 stays OPEN because the Android App Links sub-issue is independent
 of both fixes and still requires the founder's own Play Console check —
 not something resolvable from this session.
+
+## OI-245 — Restored PRO photo-coach turns are replayed to Gemini as text (sync_coach hardcodes mode quick)
+
+- **Status**: OPEN
+- **Blocked on**: none — P1, unscheduled (candidate: batch D).
+- **Verified**: 2026-09-26 — code read: `lib/core/services/sync/sync_coach.dart:261` restores every row with `mode: 'quick'`; the history filter at `coach_interaction_repository.dart:362` excludes only `mode == 'media'`; PRO photo rows are channel `app`. So a restored photo turn loses its media marker and is replayed into Gemini context as a plain-text turn.
+- **Identified**: 2026-09-26 · filed via mint_oi.sh from branch `ci-green-batch-a` (backlog triage)
+
+Writer: `sync_coach.dart:261` (restore). Reader: `coach_interaction_repository.dart:362` (context builder). Classic writer/reader field drift — fix is to restore the row's real mode, with a writer→reader test.
+
+## OI-246 — Deleted exercise logs reappear after a cloud restore (deleteLog removes the Hive key only)
+
+- **Status**: OPEN
+- **Blocked on**: none — P1, unscheduled (candidate: batch F).
+- **Verified**: 2026-09-26 — code read: `deleteLog` removes the Hive `exlog_` key only (no tombstone, no cloud delete), and restore re-puts every cloud row whose key is absent locally (`lib/core/services/sync/sync_workout.dart:916`). A user-deleted log therefore comes back on the next restore.
+- **Identified**: 2026-09-26 · filed via mint_oi.sh from branch `ci-green-batch-a` (backlog triage)
+
+Needs a tombstone or cloud-side delete; restore-completeness class (docs/architecture/sync.md).
+
+## OI-247 — db_maintenance_nightly (jobid 41) fails every run: VACUUM cannot run inside a transaction block
+
+- **Status**: OPEN
+- **Blocked on**: none — scheduled: batch B (next, before 2026-10-01).
+- **Verified**: 2026-09-26 — LIVE `cron.job_run_details`: jobid 41 `db_maintenance_nightly` failed every run 2026-09-22 → 09-26 with `VACUUM cannot run inside a transaction block` (pg_cron wraps a multi-statement command in one transaction).
+- **Identified**: 2026-09-26 · filed via mint_oi.sh from branch `ci-green-batch-a` (backlog triage)
+
+Fix shape: split the VACUUM into its own single-statement job. Also motivates OI-178 (SQL-job failures raise no alert).
+
+## OI-248 — client_errors_spike trips on one device's offline telemetry-queue replay (alert counts rows, not users)
+
+- **Status**: OPEN
+- **Blocked on**: none — scheduled: batch B.
+- **Verified**: 2026-09-26 — LIVE: the spike rows came from ONE device replaying its offline telemetry queue on reconnect; the alert threshold counts rows, not distinct users, so one device's backlog reads as an incident.
+- **Identified**: 2026-09-26 · filed via mint_oi.sh from branch `ci-green-batch-a` (backlog triage)
+
+Fix shape: count distinct users and/or exclude network-class errors; client side, classify offline errors before they are queued.
+
+## OI-249 — 45 s restore-op timeouts on tiny tables on builds +45 to +47
+
+- **Status**: OPEN
+- **Blocked on**: none — P2, unscheduled.
+- **Verified**: 2026-09-26 — LIVE client telemetry: restore ops on tiny tables hit the 45 s timeout on builds +45 to +47. Cause not yet investigated.
+- **Identified**: 2026-09-26 · filed via mint_oi.sh from branch `ci-green-batch-a` (backlog triage)
+
+Tables are small, so the timeout is not payload size; suspect connection/auth warm-up or serialised awaits.
