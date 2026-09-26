@@ -11,8 +11,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
-import 'package:icanbefitter/core/services/supabase_service.dart';
-import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
@@ -228,31 +226,10 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         authNotifier.resetState();
       }
       if (next.status == AuthStatus.success) {
-        // Save referral code to Hive so it can be retried if redemption fails
-        final code = _referralController.text.trim();
-        if (code.isNotEmpty) {
-          // Store pending referral in configBox for retry on next launch
-          try {
-            final configBox = HiveService.instance.configBox;
-            configBox.put('pending_referral_code', code);
-          } catch (_) {}
-          SupabaseService.instance
-              .callFunction('redeem-referral', body: {'code': code})
-              .then((_) {
-                debugPrint('[SignIn] Referral code redeemed: $code');
-                // Clear pending code on success
-                try {
-                  HiveService.instance.configBox.delete(
-                    'pending_referral_code',
-                  );
-                } catch (_) {}
-              })
-              .catchError((e) {
-                debugPrint(
-                  '[SignIn] Referral redemption failed (will retry on next launch): $e',
-                );
-              });
-        }
+        // c7b4d2: no referral redeem here. It ran BEFORE the users row
+        // existed and only when sign-up returned a session, so with email
+        // confirmation on the code was dropped. The code now rides in auth
+        // user metadata and OnboardingNotifier redeems it.
         // Q1: Route through RestoringScreen instead of /splash.
         // RestoringScreen runs the post-auth decision tree:
         //   onboarded → restore + /home
@@ -1025,9 +1002,11 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
               ),
               const SizedBox(height: 24),
 
-              // U8 fix: Referral code field. The existing redemption flow
-              // in the success listener (_referralController.text.trim())
-              // is already wired up and reused here — no new handler needed.
+              // U8 fix: Referral code field. CREATE ACCOUNT passes it to
+              // signUpWithEmail, which stores it in auth user metadata;
+              // onboarding redeems it after the users row exists (c7b4d2 —
+              // the old success-listener redeem lost it whenever email
+              // confirmation was on).
               const SizedBox(height: 16),
               Text(
                 'REFERRAL CODE (OPTIONAL)',
@@ -1132,6 +1111,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                     password,
                     termsAcceptedAt: DateTime.now().toUtc().toIso8601String(),
                     termsVersion: AppConstants.termsVersion,
+                    // c7b4d2: carried in auth metadata, redeemed at onboarding.
+                    referralCode: _referralController.text,
                   );
                 },
               ),

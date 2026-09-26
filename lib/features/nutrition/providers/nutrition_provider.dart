@@ -1239,19 +1239,9 @@ class SavedMealsNotifier extends Notifier<List<Map<String, dynamic>>> {
       return;
     }
 
-    // Increment times_used counter on the saved meal and sync to cloud.
-    final box = HiveService.instance.nutritionBox;
-    final existing = box.get(savedId);
-    if (existing is Map) {
-      final updated = Map<String, dynamic>.from(existing);
-      updated['times_used'] = ((updated['times_used'] as int?) ?? 0) + 1;
-      await box.put(savedId, updated);
-      unawaited(SyncService.instance.syncSavedMealsNow());
-    }
-
-    // WriteService invalidates the daily/weekly/summary/recent
-    // providers via its hook; this notifier still rebuilds for the
-    // times_used update.
+    // The times_used bump + its sync are owned by
+    // NutritionWriteService.relogSavedMeal (diagnose a8e3f1) so both
+    // saved-meal formats count. This notifier only rebuilds to show it.
     ref.invalidateSelf();
   }
 

@@ -393,18 +393,27 @@ class AuthNotifier extends Notifier<AuthState2> {
   /// `HiveUserSession.openForUser` has opened the user-scoped box. Writing
   /// them here directly (the pre-fix approach) is impossible: no session
   /// exists yet at tap time, so the box can't be opened.
+  ///
+  /// [referralCode] (diagnose c7b4d2) is stored in the auth user's metadata
+  /// (`referral_code`), NOT redeemed here: with email confirmation on, sign-up
+  /// ends before any session exists, and the later sign-in is a fresh screen
+  /// with an empty field. Onboarding redeems it after the `users` upsert, from
+  /// `userMetadata` — which survives the confirm link and a device change.
   Future<void> signUpWithEmail(
     String email,
     String password, {
     String? termsAcceptedAt,
     String? termsVersion,
+    String? referralCode,
   }) async {
     state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
     if (!await ensureSupabaseReady()) return;
     try {
+      final code = referralCode?.trim() ?? '';
       final response = await _supabase.client.auth.signUp(
         email: email,
         password: password,
+        data: code.isEmpty ? null : {'referral_code': code},
       );
 
       if (response.user == null) {

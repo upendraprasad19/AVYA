@@ -29,7 +29,10 @@ import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart'
-    show CreateCustomExerciseException, WorkoutRepository;
+    show
+        CreateCustomExerciseException,
+        WorkoutRepository,
+        customExerciseRowLanded;
 import 'package:icanbefitter/features/train/widgets/create_custom_exercise_sheet.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
@@ -97,7 +100,7 @@ void main() {
         equipment: 'none',
         loggingType: 'bodyweight_reps',
         defaultSets: 3,
-        defaultReps: 8,
+        defaultReps: '8',
       );
 
       final customs = ExerciseRepository.instance.getCustomExercises();
@@ -339,6 +342,114 @@ void main() {
       expect(after['default_duration_seconds'], 45);
     },
   );
+
+  // ── d5c2e8: the sheet's create now goes through createCustomExercise ─────
+  group('sheet-create through the one writer (d5c2e8)', () {
+    Map<String, dynamic> rowNamed(String name) {
+      final box = HiveService.instance.customBox;
+      for (final k in box.keys) {
+        final v = box.get(k);
+        if (v is Map && v['name'] == name) return Map<String, dynamic>.from(v);
+      }
+      fail('no row named $name');
+    }
+
+    test('a rep RANGE round-trips as the string the sheet accepts', () async {
+      await WorkoutRepository.instance.createCustomExercise(
+        name: 'Range Reps Test',
+        category: 'Push',
+        loggingType: 'weight_reps',
+        defaultReps: '8-12',
+      );
+      expect(rowNamed('Range Reps Test')['default_reps'], '8-12');
+    });
+
+    test('no equipment (the sheet) stores an empty requirement', () async {
+      await WorkoutRepository.instance.createCustomExercise(
+        name: 'No Equipment Test',
+        category: 'Core',
+        loggingType: 'bodyweight_reps',
+      );
+      expect(rowNamed('No Equipment Test')['equipment_needed'], isEmpty);
+    });
+
+    test('the row carries the writer stamps the raw put skipped', () async {
+      await WorkoutRepository.instance.createCustomExercise(
+        name: 'Stamped Row Test',
+        category: 'Pull',
+        loggingType: 'weight_reps',
+      );
+      final row = rowNamed('Stamped Row Test');
+      expect(row['source'], 'manual',
+          reason: 'WorkoutWriteService stamps source — the old sheet put '
+              'stored none');
+      expect(row['created_at'], isA<String>());
+      expect(row['updated_at'], isA<String>());
+    });
+
+    test('concurrent creates of one name write ONE row (B-pass F2: '
+        'double-tapped SAVE)', () async {
+      final results = await Future.wait([
+        for (var i = 0; i < 2; i++)
+          WorkoutRepository.instance
+              .createCustomExercise(
+                name: 'Double Tap Test',
+                category: 'Push',
+                loggingType: 'weight_reps',
+              )
+              .then<Object>((id) => id, onError: (Object e) => e),
+      ]);
+      expect(results.whereType<String>().length, 1,
+          reason: 'exactly one create succeeds');
+      expect(results.whereType<CreateCustomExerciseException>().single.code,
+          'duplicate_name');
+      final box = HiveService.instance.customBox;
+      final rows = box.keys
+          .map(box.get)
+          .whereType<Map>()
+          .where((v) => v['name'] == 'Double Tap Test');
+      expect(rows.length, 1, reason: 'two rows sharing one id is the bug');
+    });
+
+    test('concurrent creates of DIFFERENT names never share a Hive key',
+        () async {
+      await Future.wait([
+        for (final n in ['Key A Test', 'Key B Test', 'Key C Test'])
+          WorkoutRepository.instance.createCustomExercise(
+            name: n,
+            category: 'Push',
+            loggingType: 'weight_reps',
+          ),
+      ]);
+      final box = HiveService.instance.customBox;
+      final names = box.keys
+          .map(box.get)
+          .whereType<Map>()
+          .map((v) => v['name'])
+          .toSet();
+      expect(names, containsAll(['Key A Test', 'Key B Test', 'Key C Test']),
+          reason: 'a same-millisecond key would overwrite another exercise');
+    });
+
+    test('customExerciseRowLanded: only a map with the expected id counts',
+        () {
+      expect(customExerciseRowLanded({'id': 'a'}, 'a'), isTrue);
+      expect(customExerciseRowLanded(null, 'a'), isFalse,
+          reason: 'absent row = the write did not land');
+      expect(customExerciseRowLanded({'id': 'b'}, 'a'), isFalse,
+          reason: 'a different row at the key is not our write');
+      expect(customExerciseRowLanded('a', 'a'), isFalse);
+    });
+
+    test('createCustomExercise judges the write by the row, and throws '
+        'write_failed when it is absent', () {
+      final src = File('lib/features/train/repositories/workout_repository.dart')
+          .readAsStringSync();
+      expect(src.contains('if (!customExerciseRowLanded(customBox.get(key), id))'),
+          isTrue);
+      expect(src.contains("'write_failed'"), isTrue);
+    });
+  });
 
   test(
     'edit-mode resolveMuscles: selected and unmapped union, no duplicates',

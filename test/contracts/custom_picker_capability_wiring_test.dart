@@ -82,8 +82,11 @@ void main() {
   });
 
   group('creation sheet: muscles + edit mode wiring', () {
-    test('create map stores the resolved muscle selection', () {
-      expect(sheetSrc.contains("'primary_muscles': _resolvedMuscles"), isTrue,
+    test('create passes the resolved muscle selection', () {
+      // Since d5c2e8 the create branch calls
+      // WorkoutRepository.createCustomExercise, which stores the list it is
+      // given — so the selection is pinned at the call argument.
+      expect(sheetSrc.contains('primaryMuscles: _resolvedMuscles'), isTrue,
           reason: 'the hardcoded empty list was the writer half of the bug — '
               'the plan-generator supplement path ('
               '_eligibleCustomExercises) never saw a custom');
@@ -103,11 +106,18 @@ void main() {
       expect(sheetSrc.contains('widget.onCreated?.call'), isTrue);
     });
 
-    test('approved_for_library re-stamped in exactly ONE place (create only)',
-        () {
-      expect("'approved_for_library'".allMatches(sheetSrc).length, 1,
-          reason: 'the edit payload must NOT re-stamp approved_for_library '
-              '(round-2 P1-1): one occurrence = create branch only');
+    test('approved_for_library stamped in exactly ONE place (the create '
+        'writer), never by the sheet', () {
+      // Since d5c2e8 the create stamp lives in the repository's
+      // createCustomExercise; the sheet stamps it nowhere, so the edit
+      // payload cannot re-stamp it either (round-2 P1-1).
+      expect("'approved_for_library'".allMatches(sheetSrc).length, 0,
+          reason: 'the sheet must not stamp approved_for_library — create '
+              'belongs to the repository, edit must preserve the stored value');
+      final repoSrc = _read(
+          '$repoRoot/lib/features/train/repositories/workout_repository.dart');
+      expect("'approved_for_library': false".allMatches(repoSrc).length, 1,
+          reason: 'exactly one create stamp, in createCustomExercise');
     });
   });
 

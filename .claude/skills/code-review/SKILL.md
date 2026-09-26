@@ -248,6 +248,18 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-26** — blast-radius **account** — branch `reuse-audit-fixes` (B1 saved-meal
+  times_used owner, C sign-up referral via auth metadata, D custom-exercise sheet through the
+  one create path). Staged-diff review, branch-named file. **3 findings: 1 false_alarm (33%),
+  2 fixed.** F1 (P1) claimed the onboarding referral redeem could hit an FK violation because
+  the users upsert might not have landed — reasoned from the client code alone; a live
+  `pg_trigger` query showed `on_auth_user_created` creates `public.users` at sign-up (0/36
+  missing). **Lesson for lens 6:** when a finding's mechanism is "row X may not exist yet",
+  check for a DB trigger that creates it before crediting the client-side ordering. F2 (P2) was
+  a real guard-without-its-mirror: a duplicate check read BEFORE an awaited write whose lock
+  keys on a different value than the check — mirror case "two concurrent callers". Fixed by
+  serializing the check-then-write; proven with a `Future.wait` test.
+  Review: `docs/reviews/reuse-audit-fixes-bpass.md`.
 - **2026-09-25** — blast-radius **platform** — branch `oi126-training-day-predicate`
   (OI-126: unifies the training-day predicate so a `type: 'logged'` schedule row
   agrees between the weekly streak and phase-completion/PRO-advance-gate/rest-day-banner
