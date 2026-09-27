@@ -1375,10 +1375,23 @@ class SyncService {
           // fresh insert (schema default), which is correct for a new user.
           'total_workouts_done': pr['total_workouts_done'] ?? 0,
           'current_streak_weeks': pr['current_streak_weeks'] ?? 0,
-          'phase_started_at':
-              pr['phase_started_at'] ?? DateTime.now().toIso8601String(),
-          'plan_generated_at':
-              pr['plan_generated_at'] ?? DateTime.now().toIso8601String(),
+          // Spec §5.12 / plan D2: this replay retries EVERY boot until it
+          // succeeds (line ~1421 clears the flag only on success), so a
+          // `DateTime.now()` fallback here re-stamped a moving "now" on
+          // every failed retry — the recurrence-of-5a36ad class.
+          // onboarding_provider.dart:577-578 and :890-891 always write both
+          // fields at onboarding-completion time, so the only time either is
+          // absent from `pr` is a malformed/partial local write; omit rather
+          // than fabricate. `pushOnboardingProgressSnapshot`'s RPC COALESCEs
+          // an omitted key to the existing column on UPDATE
+          // (sync_profile.dart:78-83, migration 115:162-163) and both
+          // columns are plain nullable timestamptz on INSERT with no
+          // default (001_create_users.sql:122-123), so an all-null fresh
+          // insert is a valid, harmless outcome.
+          if (pr['phase_started_at'] != null)
+            'phase_started_at': pr['phase_started_at'],
+          if (pr['plan_generated_at'] != null)
+            'plan_generated_at': pr['plan_generated_at'],
           'detected_experience_level': p['fitness_experience'],
         },
       );
@@ -1397,6 +1410,14 @@ class SyncService {
       ));
     }
   }
+
+  /// Test-only entry point for [_replayPendingOnboardingSync]. It has no
+  /// existing `SyncDomain` wrapper to reuse (it is a one-shot migration
+  /// replay, not a per-domain push) — same shape as the existing
+  /// `restoreScheduledWorkoutsForTest` precedent.
+  @visibleForTesting
+  Future<void> replayPendingOnboardingSyncForTest(String userId) =>
+      _replayPendingOnboardingSync(userId);
 
   /// Checks if local Hive is empty and restores from Supabase if so.
   /// Called automatically by checkAndSync() on app launch.

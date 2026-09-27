@@ -276,6 +276,15 @@ extension SyncServiceRestoreCompleteness on SyncService {
       // rows with no cloud counterpart to reconcile against, and the writer
       // now mints real uuids so only pre-fix installs take this branch.
       if (!isUuidShaped(id)) return;
+      // Spec §5.12 / plan D2: `entry` is always AppNotification.toJson()
+      // (app_notification.dart:62-70), which always sets `created_at` — this
+      // fallback only ever fired for a malformed/legacy caller. A re-push of
+      // the SAME entry (e.g. marking it read) upserts onConflict:'id', so a
+      // `DateTime.now()` fallback here re-stamped created_at to "now" on
+      // every re-push once the field was ever missing once. Omit instead:
+      // the column is NOT NULL DEFAULT now() on INSERT (migration
+      // 048:38) and an UPDATE keeps whatever it already has.
+      final createdAt = entry['created_at'] as String?;
       final row = <String, dynamic>{
         'id': id,
         'user_id': userId,
@@ -286,11 +295,8 @@ extension SyncServiceRestoreCompleteness on SyncService {
           'priority': entry['priority'],
           'read': entry['read'],
         },
-        'created_at': entry['created_at'] as String? ??
-            DateTime.now().toUtc().toIso8601String(),
-        if (entry['read'] == true)
-          'read_at': entry['created_at'] as String? ??
-              DateTime.now().toUtc().toIso8601String(),
+        if (createdAt != null) 'created_at': createdAt,
+        if (entry['read'] == true && createdAt != null) 'read_at': createdAt,
       };
       await _supabase.client
           .from('notifications_inbox')
@@ -483,13 +489,20 @@ extension SyncServiceRestoreCompleteness on SyncService {
             ? Map<String, dynamic>.from(payload)
             : <String, dynamic>{};
 
+        // Spec §5.12 / plan D2: `notifications_inbox.created_at` is NOT NULL
+        // on the cloud table (migration 048:38), so `r['created_at']` is
+        // only ever absent here on a malformed row. Omit rather than default
+        // to "now" — AppNotification.fromJson's own DateTime.now() fallback
+        // (app_notification.dart:80-81) remains the one place that ever
+        // stands in for a missing created_at, instead of baking a wrong
+        // value into Hive on every restore of that row.
+        final createdAt = r['created_at'] as String?;
         final hiveEntry = <String, dynamic>{
           'id': id,
           'category': r['notif_type'] as String? ?? 'system',
           'title': r['title'] as String? ?? '',
           'body': r['body'] as String? ?? '',
-          'created_at': r['created_at'] as String? ??
-              DateTime.now().toUtc().toIso8601String(),
+          if (createdAt != null) 'created_at': createdAt,
           'priority': payloadMap['priority'] as String? ?? 'normal',
           'read': r['read_at'] != null || payloadMap['read'] == true,
         };

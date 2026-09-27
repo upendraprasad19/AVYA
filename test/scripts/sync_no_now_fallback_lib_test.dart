@@ -85,14 +85,7 @@ void main() {
     // own commit message) but never updated this baseline, so this test was
     // red at HEAD (ea93f97d) before Task 17 touched anything — measured live
     // via `flutter test test/scripts/sync_no_now_fallback_lib_test.dart`.
-    const expected = <String>[
-      'sync_coach.dart|created_at',
-      'sync_restore_completeness.dart|created_at',
-      'sync_restore_completeness.dart|created_at',
-      'sync_restore_completeness.dart|read_at',
-      'sync_service.dart|phase_started_at',
-      'sync_service.dart|plan_generated_at',
-    ];
+    const expected = <String>[];
     final actual = <String>[];
     final files = <File>[
       File('lib/core/services/sync_service.dart'),

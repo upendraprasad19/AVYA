@@ -129,6 +129,10 @@ void main() {
         'restoreWorkoutLogsForSyncDomain',
         'restoreWorkoutPlanForSyncDomain',
         'restoreWorkoutTemplatesForSyncDomain',
+        // Day-swapper + sync-load Task 19 — test-only wrapper for the
+        // onboarding-replay now()-fallback fix (no existing SyncDomain entry
+        // point for this one-shot migration replay).
+        'replayPendingOnboardingSyncForTest',
       };
 
       final files = <File>[
