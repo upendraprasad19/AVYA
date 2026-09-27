@@ -245,6 +245,13 @@ void main() {
         'supabase/functions/ai-media-proxy/index.ts',
         'supabase/functions/delete-account/index.ts',
         'supabase/functions/verify-payment/index.ts',
+        // Single-owner audit 2026-09-26 (P0 #5): an ai-proxy `prediction` is
+        // an HTTP attempt with no row inserted — the weekly-report shape
+        // exactly, so no trigger has anything to hang off. The handler calls
+        // the RPC itself (IST-day window, cap 3). Its test file never spells
+        // the RPC name (it compares against CONSUME_QUOTA_RPC), so only the
+        // module itself is allowlisted.
+        'supabase/functions/_shared/prediction_handler.ts',
       };
       final offenders = <String>[];
       for (final e in _appSources()) {

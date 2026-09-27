@@ -295,6 +295,74 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   reads as *more* thorough than a single sprawling assertion — it is not; a
   single assertion spanning both blocks including their connective (145's own
   sibling dedup does exactly this, and WAS caught) is strictly stronger here.
+- **2026-09-26** — blast-radius **catastrophic** — branch `single-owner-a` (single-owner
+  audit unit a1: ai-proxy `prediction` metered 3/day on the ledger with a server-owned
+  prompt, request-size limits in one validator, delete-account purging every user-owned
+  bucket through one list). Two context-blind reviewers: A read-only (lenses 1-5, 7, 9,
+  10 + rebase/decision/tool-side-effect), B mutation lenses 6 + 8 in an isolated
+  worktree with the staged patch applied, so no tree was ever mutated under A.
+  **7 findings (4 P1, 1 P2, 2 P3); 0 false_alarm — all fixed in-batch, each re-proven
+  by mutation.** Review: `docs/reviews/d65b986f910b-review.md` (dispatched at
+  c5d659f52986; renamed after the fixes moved the hash).
+  **Tuning 1 — lens 2 gains the SERVER-ADDS-A-STATUS question.** When a diff gives an
+  existing client caller a NEW status (here a 429 daily cap), follow it into the client:
+  `functions.invoke` THROWS on every non-2xx, so an `if (response.status != 200)` inside
+  the `try` is dead code and the status survives only if an `on FunctionException`
+  clause keeps `e.status`. Without one, the cap reached the user as "try again later".
+  The server half was correct and fully tested; the defect lived entirely in a file the
+  server change never needed to touch.
+  **Tuning 2 — lens 6: a test NAMED for an attack must ATTEMPT it.** "The system prompt
+  is the server's" called the handler with no `context` at all, so it proved only the
+  default path; the reviewer restored the exact pre-fix shape (fall back to
+  `context.system_prompt` when present) and 15 of 15 tests stayed green. The author's own
+  mutation had used a more detectable shape (`systemPrompt: String(message)`) and
+  reddened 1 — a mutation chosen for convenience certified a test against the one
+  regression it could not see. Mutate to the defect's real historical shape.
+  **Tuning 3 — lens 6 on discovery greps: resolve by VALUE and fail closed.** A contract
+  test finding client Storage buckets matched constants by NAME (`…Bucket =`); a const
+  named `_exportsLocation` was invisible, and the "every bucket is purged" check passed
+  vacuously. The fix resolves every bucket argument through same-file constants, treats
+  anything unreadable (a call, a qualified name, an aliased `.storage` handle) as a
+  failure, and keeps the one legitimate pass-through as an enumerated allowlist that must
+  stay in use — the OI-162 slice-2 precedent (resolve, then fail closed) applied to a new
+  surface.
+  **Process note:** `git apply --index` of the staged patch into the reviewer's isolated
+  worktree failed on one hunk of an auto-generated index that main had regenerated since
+  the base; `--exclude` on that file was the right call and the reviewer disclosed it.
+  Both reviewers were told "no writing statement, not even inside BEGIN…ROLLBACK"; both
+  used SELECT only.
+  False-alarm rate 0/7 → no lens removed; lenses 2 and 6 extended per above.
+
+- **2026-09-26 (b)** — blast-radius **catastrophic** — branch `single-owner-a`
+  (single-owner audit unit a1, ROUND 2: a fresh two-reviewer B-pass dispatched
+  against the delta on top of the round-1-reviewed state — the Hermes-pass
+  remediation itself, specifically the new `PredictionAttemptGate` and the
+  L37-F2 sanitized-length snapshot fix). **2 findings (1 P1, 1 P2); 0
+  false_alarm — both fixed in-batch, each re-proven by mutation.** Review:
+  `docs/reviews/a7fae1c65d95-review.md` (dispatched at the round-1-reviewed
+  hash; renamed twice after the fixes, then two purely mechanical
+  documentation trailers, each moved the hash — see the file's own header
+  for the full chain back to `d65b986f910b`).
+  **Tuning 4 — lens 6's mirror question extends to a whole SINGLETON
+  FAMILY, not just the one guard being added.** `PredictionService` was the
+  one of eight `SingletonLifecycleRegistry`-eligible services never
+  registered — the mirror of "does this NEW guard have a gap" is "does
+  every sibling of this class of state ALREADY have the guard this class
+  needs", and the registry's own SoT concept (`docs/sot_registry.yaml`)
+  made the omission a one-`grep` finding once asked. The fix registers it,
+  clears its in-flight gate on account switch, and separately guards the
+  write itself against the account changing while the network call was in
+  flight — two independent defects the same singleton-omission created.
+  **Tuning 5 — lens 8 (asserted_fixture_value) applies to a CLIENT/SERVER
+  measurement pair, not just one side's literal.** The client measured a
+  snapshot's plain `json.encode(...).length`; the server (this same batch's
+  own L37-F2 fix) measures it AFTER `sanitizeJsonForPrompt` re-escapes rare
+  separator characters. Neither side's number was wrong in isolation — the
+  finding is that the two measurements of the SAME bytes can disagree, and
+  the only way to see it is to compute both from a real fixture (a
+  throwaway probe script, not an estimate) and check they diverge across
+  the ceiling, which the fixture the fix landed with does.
+  False-alarm rate 0/2 → no lens removed; lenses 6 and 8 extended per above.
 
 - **2026-09-25** — blast-radius **platform** — branch `oi126-training-day-predicate`
   (OI-126: unifies the training-day predicate so a `type: 'logged'` schedule row

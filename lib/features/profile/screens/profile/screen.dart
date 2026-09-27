@@ -144,8 +144,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     });
   }
 
-  /// PRO monthly prediction refresh — calls AI via the prediction route
-  /// (bypasses daily limits + interaction logging). Moved from home_screen.dart.
+  /// PRO monthly prediction refresh — calls AI via the prediction route,
+  /// which has its own 3/day cap (shared with onboarding and the coach tab's
+  /// auto-refresh) and no interaction logging. Moved from home_screen.dart.
   /// Now delegates to PredictionService for shared logic.
   Future<void> _refreshPrediction() async {
     if (!mounted) return;
@@ -160,12 +161,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       duration: const Duration(seconds: 10),
     ));
 
-    final success =
+    final outcome =
         await PredictionService.instance.regeneratePrediction();
 
     if (mounted) {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      if (success) {
+      if (outcome == PredictionRefreshOutcome.success) {
         ref.invalidate(predictionProvider);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
@@ -175,6 +176,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           backgroundColor: AppColors.green,
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 3),
+        ));
+      } else if (outcome == PredictionRefreshOutcome.dailyLimitReached) {
+        // The server's 3/day cap — "try again later" would be wrong advice.
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+            'Daily prediction limit reached. Try again tomorrow.',
+            style: AppTypography.bodyM,
+          ),
+          backgroundColor: AppColors.card,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
         ));
       } else {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(

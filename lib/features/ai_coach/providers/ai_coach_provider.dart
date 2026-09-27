@@ -1301,8 +1301,8 @@ String? detectAndStripJsonShapedReply(
 class PredictionData {
   final String? predictionText;
   final DateTime? generatedAt;
-  final bool canRefresh; // PRO can refresh monthly
-  final bool isStale; // Goal changed since last generation (free users)
+  final bool canRefresh; // PRO: monthly, or whenever isStale
+  final bool isStale; // Goal changed and the text was not regenerated
 
   const PredictionData({
     this.predictionText,
@@ -1376,11 +1376,12 @@ class PredictionNotifier extends Notifier<PredictionData> {
     // OI-44 Unit 6 — PURE read: this is a Notifier build().
     final isPro = ref.read(subscriptionServiceProvider).proStateSnapshot();
 
-    bool canRefresh = false;
-    if (isPro && predDate != null) {
-      final daysSince = DateTime.now().difference(predDate).inDays;
-      canRefresh = daysSince >= 30;
-    }
+    final canRefresh = PredictionService.refreshEnabled(
+      isPro: isPro,
+      generatedAt: predDate,
+      isStale: isStale,
+      now: DateTime.now(),
+    );
 
     // Monthly auto-refresh for PRO: if prediction is >30 days old, trigger
     // regeneration in a post-frame callback so the UI renders first.
@@ -1404,8 +1405,11 @@ class PredictionNotifier extends Notifier<PredictionData> {
   }
 
   Future<void> _autoRefresh() async {
-    final success = await PredictionService.instance.regeneratePrediction();
-    if (success) {
+    // automatic: one attempt per IST day, shared with the goal-change
+    // regenerate; a rebuild while it runs joins it (PredictionAttemptGate).
+    final outcome = await PredictionService.instance
+        .regeneratePrediction(automatic: true);
+    if (outcome == PredictionRefreshOutcome.success) {
       ref.invalidateSelf();
     }
   }

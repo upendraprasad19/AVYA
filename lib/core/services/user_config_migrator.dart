@@ -70,6 +70,10 @@ class UserConfigMigrator {
     // AI prediction card (per-user AI-generated text)
     'prediction_text', 'prediction_date', 'prediction_stale',
     'prediction_generated_at',
+    // IST day of the last AUTOMATIC prediction attempt (PredictionAttemptGate,
+    // Hermes 2026-09-26). Per-user: leaked, it would skip another account's
+    // refresh for a day. New key, never in configBox — no _flagKey bump.
+    'prediction_auto_attempt_day',
     // AI behavior + chat (per-user trial window, telegram link, channel)
     'pattern_insights', 'last_ai_greeting_date', 'ai_trial_start',
     'telegram_connected', 'coach_channel',

@@ -1,5 +1,5 @@
 // Tech-debt audit 2026-05-20 finding A7 — behavioral contract for
-// SingletonLifecycleRegistry + the 7 wired singletons.
+// SingletonLifecycleRegistry + the 8 wired singletons.
 //
 // A7 (score 14): seven `static .instance` services hold mutable state
 // that leaks across HiveUserSession swaps. Full Riverpod conversion is
@@ -15,7 +15,7 @@
 //   2. Multiple registers all fire on a single notify (insertion order).
 //   3. A throwing callback doesn't stop the others (H-42 contract).
 //   4. Idempotent re-register replaces the previous callback.
-//   5. Source-grep: every one of the 7 named singletons registers itself.
+//   5. Source-grep: every one of the 8 named singletons registers itself.
 //   6. Source-grep: HiveUserSession.dart calls notifyUserChanged after
 //      every user-flip (open / close / delete).
 //
@@ -126,8 +126,11 @@ void main() {
   });
 
   // ────────────────────────────────────────────────────────────────
-  // Source-grep contracts — every one of the 7 wired singletons calls
+  // Source-grep contracts — every one of the 8 wired singletons calls
   // SingletonLifecycleRegistry.register from its private constructor.
+  // PredictionService added 2026-09-26 (B-pass round 2, single-owner-a):
+  // it was the one singleton in this family never registered, so an
+  // account switch never cleared its automatic-refresh in-flight gate.
   // ────────────────────────────────────────────────────────────────
   group('A7 — every wired singleton registers itself', () {
     /// (file, expected_registry_name) pairs.
@@ -142,6 +145,7 @@ void main() {
       ['lib/core/services/ai_service.dart', 'AiService'],
       ['lib/core/services/razorpay_service.dart', 'RazorpayService'],
       ['lib/core/services/seed_service.dart', 'SeedService'],
+      ['lib/core/services/prediction_service.dart', 'PredictionService'],
     ];
 
     for (final entry in wired) {
