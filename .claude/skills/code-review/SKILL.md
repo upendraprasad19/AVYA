@@ -3225,3 +3225,40 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   (the real fix is a client-side op_type rename, in scope for the batch's next unit B2a-2b, not
   this pure-SQL migration); mutation-proven pinning test added asserting `cnt` carries no `FILTER`
   clause, so a future silent change to either side of the asymmetry is caught.
+- **2026-09-27 (c)** — blast-radius **platform** — post-commit range review
+  `a60c7eac..HEAD` (`merge-reconciliation-82844bfd`): the `reuse-audit-fixes`/`template-stable-
+  identity` merge into `main`, scoped to the 2 commits nobody had reviewed yet (a founder-approved
+  `--no-verify` nutrition fix `fef26cbb`, and the merge-reconciliation commit `82844bfd` itself)
+  while explicitly told to spot-check rather than re-review the 5 already-B-passed
+  `template-stable-identity` commits underneath. **3 findings (1 P1, 1 P2, 1 P3); 0 false_alarm —
+  1 fixed with a mutation-proven test, 1 fixed by correcting a doc's shape, 1 not code-fixable
+  post-hoc (captured as a session memory lesson instead).** Review:
+  `docs/reviews/merge-reconciliation-82844bfd-review.md`.
+  **Tuning — a NEW P1 shape for process-discipline findings, not covered by any existing lens:
+  `--no-verify` is an ATOMIC bypass of the whole pre-commit hook chain, and a commit's own
+  justification can name only the ONE gate the author was thinking about while silently skipping
+  OTHERS the author never considered.** `fef26cbb` legitimately bypassed
+  `check_closes_oi_performed.dart` (a genuine false-positive, independently re-verified) — but it
+  was ALSO a non-merge commit in the primary/shared worktree, which `check_commit_from_worktree.dart`
+  (a gate CLAUDE.md itself says to "Never `--no-verify` around") would independently have blocked.
+  The reviewer proved this live by staging a throwaway file in that exact worktree and running the
+  gate directly (`[worktree-guard] FAIL`), rather than reasoning from the gate's source alone. No
+  actual harm occurred (the reviewer separately confirmed the staged content was correct
+  throughout), but the commit message's bypass justification was incomplete. **Add to the review
+  method: whenever a commit's message discloses a `--no-verify`/gate-bypass justification for ONE
+  named gate, independently re-derive every OTHER gate that would apply to that commit's actual
+  shape (worktree location, blast-radius tier, touched-concept registry membership) and check
+  whether the message discloses all of them — a single-gate justification is a claim about that
+  gate only, never about the whole bypass.**
+  **Second — lens 6 (`guard_without_its_mirror`) found the sharpest instance yet of "the fix
+  covers only the call site a failing TEST happened to exercise, not the bug class it belongs
+  to."** The P2: `fef26cbb`'s `ref.mounted` guard fixed exactly 1 of 7 structurally identical
+  unguarded `ref.invalidate`/`ref.invalidateSelf()`-after-`await` call sites in the SAME file —
+  found by a straightforward but exhaustive cross-reference of every `await` against the nearest
+  following `ref.invalidate*` call, not by anything exotic. One sibling
+  (`FoodLogNotifier.deleteFoodLog`) sits 30 lines below the fixed method, in the SAME class, same
+  invalidated provider, reachable from a swipe-to-delete gesture — as close to "the exact mirror
+  case" as this lens has recorded.
+  False-alarm rate 0/3 → no lens removed; the review-method note above is new (not a lens-prompt
+  change, since no single lens 1-8 is shaped to catch a commit-message's OWN disclosure
+  completeness — logged as a standing review-dispatch instruction instead).

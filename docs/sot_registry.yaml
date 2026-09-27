@@ -1843,7 +1843,7 @@ concepts:
           + foodBox[<v5>], then unawaited(SyncService.instance.syncCustomItemsNow()).
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1342-1343
+        line_range: 1355-1356
         method: customFoodProvider
         semantic: hive-read
         notes: |

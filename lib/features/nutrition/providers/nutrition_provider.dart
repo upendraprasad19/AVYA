@@ -1109,7 +1109,11 @@ class FoodLogNotifier extends Notifier<void> {
     // WriteService invalidates the canonical batch internally. Invalidate
     // the weekly provider that the service doesn't own (mirrors the
     // restoreFoodLog pattern + the editFoodLog wrapper below).
-    ref.invalidate(weeklyNutritionProvider);
+    // ref.mounted guard: same shape as logFood above (b7f3e2) -- the
+    // caller's widget tree can be disposed while deleteLog is in flight.
+    if (ref.mounted) {
+      ref.invalidate(weeklyNutritionProvider);
+    }
   }
 
   /// Bug #20 — Restores a previously-deleted food log from an undo snackbar.
@@ -1217,7 +1221,10 @@ class SavedMealsNotifier extends Notifier<List<Map<String, dynamic>>> {
     // _invalidateNutritionProviders helper; this notifier still needs
     // an explicit invalidateSelf so SavedMealsSection rebuilds with
     // the new row.
-    ref.invalidateSelf();
+    // ref.mounted guard: same shape as FoodLogNotifier.logFood (b7f3e2).
+    if (ref.mounted) {
+      ref.invalidateSelf();
+    }
   }
 
   /// Re-log a saved meal.
@@ -1248,14 +1255,20 @@ class SavedMealsNotifier extends Notifier<List<Map<String, dynamic>>> {
     // The times_used bump + its sync are owned by
     // NutritionWriteService.relogSavedMeal (diagnose a8e3f1) so both
     // saved-meal formats count. This notifier only rebuilds to show it.
-    ref.invalidateSelf();
+    // ref.mounted guard: same shape as FoodLogNotifier.logFood (b7f3e2).
+    if (ref.mounted) {
+      ref.invalidateSelf();
+    }
   }
 
   /// Delete a saved meal preset.
   Future<void> deleteSavedMeal(String id) async {
     // C-12 (audit-2026-05-11) — route through NutritionWriteService.
     await NutritionWriteService.instance.deleteSavedMeal(id);
-    ref.invalidateSelf();
+    // ref.mounted guard: same shape as FoodLogNotifier.logFood (b7f3e2).
+    if (ref.mounted) {
+      ref.invalidateSelf();
+    }
   }
 }
 
@@ -1414,7 +1427,10 @@ class ScanMealNotifier extends Notifier<ScanMealState> {
         // Refresh the "remaining today" chip immediately — the remaining
         // provider is otherwise invalidated only at midnight, so the chip
         // would stay stale until tomorrow.
-        ref.invalidate(scanMealRemainingProvider);
+        // ref.mounted guard: same shape as FoodLogNotifier.logFood (b7f3e2).
+        if (ref.mounted) {
+          ref.invalidate(scanMealRemainingProvider);
+        }
         return;
       }
 
@@ -1518,7 +1534,10 @@ class CartAuditorNotifier extends Notifier<CartAuditorState> {
         // Refresh the "remaining today" chip immediately — the remaining
         // provider is otherwise invalidated only at midnight, so the chip
         // would stay stale until tomorrow.
-        ref.invalidate(cartAuditorRemainingProvider);
+        // ref.mounted guard: same shape as FoodLogNotifier.logFood (b7f3e2).
+        if (ref.mounted) {
+          ref.invalidate(cartAuditorRemainingProvider);
+        }
         return;
       }
 
