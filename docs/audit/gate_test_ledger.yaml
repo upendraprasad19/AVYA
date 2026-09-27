@@ -1014,3 +1014,15 @@ check_gemini_retry_and_telemetry_coverage.dart:
     comment-blind `.contains()` — reddened EXACTLY the 2 new tests (nothing
     else), confirming they and only they detect this specific class.
     Reverted; 19/19 green.
+
+check_sync_no_now_fallback.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/sync_no_now_fallback_lib_test.dart
+    - test/scripts/sync_no_now_fallback_e2e_test.dart
+  evidence: >
+    Gate G2, day-swapper + sync-load Task 2. Mutation 1: findNowFallbacks never
+    adds a finding -- reddens 8 tests (6 lib + 2 e2e expected). Mutation 2:
+    stripDartCommentsPreservingLines returns its input -- reddens 2 tests
+    (2 expected). Mutation 3: block comments stop preserving newlines --
+    reddens 1 (1 expected). All confirmed applied with grep -c before the run.
