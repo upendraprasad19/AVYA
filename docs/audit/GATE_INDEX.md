@@ -15,7 +15,7 @@ Total gates: **110** (48 numbered, 62 by filename only).
 | Gate | Script | Purpose | Test ledger |
 |---|---|---|---|
 | — | `check_adr_index_fresh.dart` | confirms docs/adr/INDEX.md is up-to-date relative to docs/adr/NNNN-*.md. | grandfathered |
-| — | `check_ai_tool_dispatcher_coverage.dart` | Every WRITE-kind AI tool registered server-side must have a matching | grandfathered |
+| — | `check_ai_tool_dispatcher_coverage.dart` | (E.13 — Audit 2026-05-16 framework deliverable; extended Task 27, | mutation_proven |
 | — | `check_alerts.dart` | SessionStart hook script: queries unacknowledged alerts and emits a JSON | grandfathered |
 | — | `check_analyze_narrower_than_lib_in_tooling.dart` | Blocks a committed script/skill from instructing `flutter analyze` scoped | mutation_proven |
 | 48 | `check_apk_release_signed.dart` | the built APK is signed with the RELEASE certificate, not the | grandfathered |

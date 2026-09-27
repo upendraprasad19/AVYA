@@ -18,7 +18,29 @@ check_adr_index_fresh.dart:
   grandfathered: 2026-08-10
 
 check_ai_tool_dispatcher_coverage.dart:
-  grandfathered: 2026-08-10
+  mutation_proven: true
+  test_path:
+    - test/scripts/ai_tool_dispatcher_coverage_lib_test.dart
+  evidence: >
+    Extended 2026-09-27 (day-swapper-sync-load batch, Task 27, spec §5.8):
+    the pure matching logic moved into ai_tool_dispatcher_coverage_lib.dart
+    (parseTools / checkCoverage) and gained a SECOND check — a tool
+    declaring `requiresCapability` must have that string present in the
+    client's kCoachClientCapabilities const, not just a dispatcher case.
+    Moved off `grandfathered:` because this batch materially changes the
+    gate's protection surface (rule 24). Mutation: deleted the
+    `t.requiresCapability != null && !clientCapabilities.contains(...)`
+    block from checkCoverage. Confirmed applied
+    (`grep -c "requiresCapability != null &&" scripts/ai_tool_dispatcher_coverage_lib.dart`
+    → 0, was 1). Reddened exactly 1 of 9 tests — "a capability-gated tool
+    NOT declared by the client is a violation" (its first assertion,
+    `uncoveredCapabilities, isNotEmpty`, throws and aborts the test body
+    before the second assertion runs, so only 1 test failure is reported).
+    Restored via a pre-mutation file backup; `grep -c` on the restored file
+    returned to 1, confirming the diff is gone. Verified live via
+    `flutter test test/scripts/ai_tool_dispatcher_coverage_lib_test.dart`
+    in this worktree: 9/9 before, 8/9 under the mutation, 9/9 after
+    restore.
 
 check_alerts.dart:
   grandfathered: 2026-08-10

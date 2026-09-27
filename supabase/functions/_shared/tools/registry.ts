@@ -7,6 +7,7 @@ import {
   rescheduleWeekTool,
   shortenWorkoutTool,
   swapExerciseTool,
+  swapWorkoutDaysTool,
 } from "./workout/index.ts";
 import {
   getExerciseHistoryTool,
@@ -41,6 +42,8 @@ const ALL_TOOLS: ToolDefinition<any, any>[] = [
   modifyWorkoutForInjuryTool, // workout / write / destructive / PRO
   // Phase B.4
   rescheduleWeekTool, // workout / write / destructive / PRO
+  // day-swapper-sync-load batch (2026-09-27) — spec §5.8
+  swapWorkoutDaysTool, // workout / write / reviewable / PRO / requiresCapability
   // Phase B.5
   generateHotelWorkoutTool, // workout / write / destructive / PRO
   // ── Phase C: nutrition family ─────────────────────────────────────
