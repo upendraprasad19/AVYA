@@ -51,6 +51,12 @@ const expectedVerifyJwt = <String, bool>{
   'clean-orphan-media': false,
   'compute-admin-metrics-daily': false,
   'compute-coach-signals': false,
+  // day-swapper + sync-load (OI-237): NOT YET DEPLOYED. The plan's Task 34
+  // deploy command (docs/superpowers/plans/2026-09-26-day-swapper-sync-load.md)
+  // uses verify_jwt=true — a user-authenticated EF (CLAUDE.md §4.4 rule 9).
+  // Task 34 re-reads the live value after the founder-approved deploy and
+  // corrects this line if it differs.
+  'consume-day-swap': true,
   'create-razorpay-order': false,
   'daily-snapshot': true,
   'delete-account': true,
