@@ -2078,8 +2078,20 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         if (isPro) {
           // PRO: auto-regenerate prediction with new goal in background.
           // Don't await — let user proceed while prediction generates.
-          unawaited(PredictionService.instance.regeneratePrediction().then((success) {
-            if (success && mounted) {
+          // automatic: one attempt per IST day, shared with the 30-day
+          // refresh, so repeated goal saves cannot spend the user's 3/day.
+          unawaited(PredictionService.instance
+              .regeneratePrediction(automatic: true)
+              .then((outcome) {
+            // A regenerate that did not land (the 3/day cap, a failure, or
+            // today's automatic attempt already spent) leaves the OLD goal's
+            // prediction on screen: mark it stale, as the FREE branch below
+            // does (B-pass c5d659f52986 Finding 1). Stale enables the PRO
+            // UPDATE button (PredictionService.refreshEnabled).
+            if (outcome != PredictionRefreshOutcome.success) {
+              PredictionService.instance.markStale();
+            }
+            if (mounted) {
               ref.invalidate(predictionProvider);
             }
           }));

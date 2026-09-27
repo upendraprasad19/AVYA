@@ -6,6 +6,17 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### usage_quota_ledger (new key prediction_daily) + ai_proxy_input_limits (1 bugs)
+- 2026-09-26 125b81 — ai-proxy's `type: "prediction"` branch (`ai-proxy/index.ts:700-757` before this fix) had three defects, each verified by reading the code on 2026-09-26: 1. Unmetered. No quota, no tier check. Every…
+
+### coach_chat_history_replay (3 bugs)
+- 2026-09-26 e5c9d2 — ai-proxy's chat dedup (`ai-proxy/index.ts`, "Deduplication: return cached response for same user+message in last 30s") served ANY recent row with a non-empty `ai_response` back as a 200 reply. When…
+- 2026-09-20 d3e8a1 — CI went red on `main` twice in a row (merge-triggered run 35485792369, then its rerun) on the "Supabase Integration Tests" job: `test/edge_functions/ai_proxy_test.dart`'s "AI Proxy — Free Tier T19: AI…
+- 2026-09-16 a1c6b9 — Founder reported (APK 1.0.0+43, two screenshots) that the AI Coach chat showed "I had trouble reaching the model. Try again in a moment." on every turn since the previous day, including a plain "hi"…
+
+### user_owned_storage_buckets (1 bugs)
+- 2026-09-26 40054f — delete-account's Storage purge (`delete-account/index.ts:398` before this fix) looped over a hard-coded list of three buckets — progress-photos, chat-media, coach-media — while the client also uploads…
+
 ### `isPro()` on an expired row starts `_downgradeLocally()` WITHOUT awaiting it (`subscription_service.dart:480-483`, and :461 for the cross-account wipe) — correct, since isPro() is a synchronous bool. `_downgradeLocally` (:1175) awaits its Hive writes one at a time (:1191-1195), then fires onStateChanged (:1199), then onDowngrade (:1213). The tests waited for that chain with a PROXY (`pumpEventQueue()`, a banner `_settle` quiescence sampler, a fixed sleep). Every write after the first await sits behind real per-box-serialised file I/O, so on a loaded runner the proxy returned first: the assertion read pre-downgrade state, and the file's tearDown then closed Hive under the still running chain, which is where the trailing Box-not-found comes from. The fix waits for the production signal (onDowngrade, which has exactly one caller) instead of any proxy. (1 bugs)
 - 2026-09-26 b3f8e5 — CI "Unit Tests" failed intermittently on `test/contracts/realtime_pro_gate_behavioral_test.dart` — "e4a7c9 — the teardown half … THE SECOND BUG: a downgrade fires onDowngrade" — `Expected: true…
 
@@ -105,10 +116,6 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ### (new — no prior SoT concept; UI-lifecycle fix, not a data contract) (1 bugs)
 - 2026-09-21 b4e7f1 — Founder observation #1 (screenshot): the swap "UNDO" snackbar banner stayed visible even after the workout reached 100% completion. Investigation found the gap was wider than the report: the snackbar…
-
-### coach_chat_history_replay (2 bugs)
-- 2026-09-20 d3e8a1 — CI went red on `main` twice in a row (merge-triggered run 35485792369, then its rerun) on the "Supabase Integration Tests" job: `test/edge_functions/ai_proxy_test.dart`'s "AI Proxy — Free Tier T19: AI…
-- 2026-09-16 a1c6b9 — Founder reported (APK 1.0.0+43, two screenshots) that the AI Coach chat showed "I had trouble reaching the model. Try again in a moment." on every turn since the previous day, including a plain "hi"…
 
 ### diet_plan_immediate_load_no_modal (1 bugs)
 - 2026-09-20 6642b5 — Opening the Diet Plan screen shows a blank spinner behind a "Saved Diet Plan Found — load it or generate fresh?" modal, even though the saved plan is already available synchronously from local Hive…
@@ -1391,6 +1398,9 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-26 | 125b81 | ai-proxy's `type: "prediction"` branch (`ai-proxy/index.ts:700-757` before this fix) had three defects, each verified by reading the code on 2026-09-26: 1. Unmetered. No quota, no tier check. Every… | usage_quota_ledger (new key prediction_daily) + ai_proxy_input_limits | supabase/functions/_shared/prediction_handler_test.ts |
+| 2026-09-26 | e5c9d2 | ai-proxy's chat dedup (`ai-proxy/index.ts`, "Deduplication: return cached response for same user+message in last 30s") served ANY recent row with a non-empty `ai_response` back as a 200 reply. When… | coach_chat_history_replay | supabase/functions/_shared/chat_dedup_test.ts |
+| 2026-09-26 | 40054f | delete-account's Storage purge (`delete-account/index.ts:398` before this fix) looped over a hard-coded list of three buckets — progress-photos, chat-media, coach-media — while the client also uploads… | user_owned_storage_buckets | test/contracts/delete_account_purges_all_user_buckets_test.dart |
 | 2026-09-26 | b3f8e5 | CI "Unit Tests" failed intermittently on `test/contracts/realtime_pro_gate_behavioral_test.dart` — "e4a7c9 — the teardown half … THE SECOND BUG: a downgrade fires onDowngrade" — `Expected: true… | `isPro()` on an expired row starts `_downgradeLocally()` WITHOUT awaiting it (`subscription_service.dart:480-483`, and :461 for the cross-account wipe) — correct, since isPro() is a synchronous bool. `_downgradeLocally` (:1175) awaits its Hive writes one at a time (:1191-1195), then fires onStateChanged (:1199), then onDowngrade (:1213). The tests waited for that chain with a PROXY (`pumpEventQueue()`, a banner `_settle` quiescence sampler, a fixed sleep). Every write after the first await sits behind real per-box-serialised file I/O, so on a loaded runner the proxy returned first: the assertion read pre-downgrade state, and the file's tearDown then closed Hive under the still running chain, which is where the trailing Box-not-found comes from. The fix waits for the production signal (onDowngrade, which has exactly one caller) instead of any proxy. | test/contracts/pro_downgrade_waiter_behavioral_test.dart |
 | 2026-09-26 | d9e4b1 | `main` was RED for four consecutive CI runs (0c92c105 merge of main-sync-warning, b4a42556, fc797551, fafec56a), job "Unit Tests", one test of 6430:… | not_applicable — a test-fixture environment defect, not a Hive/cloud | test/scripts/discipline_hook_main_sync_e2e_test.dart |
 | 2026-09-26 | c6f2a8 | A live Supabase Management API token sat at the repo ROOT, `.supabase/supabase access token.txt` (44 B, 2026-09-23), untracked and NOT ignored: `git check-ignore -v` on it exited 1 in the primary… | not_applicable — repository secret hygiene, not a Hive/cloud contract. | test/scripts/gitignore_classification_test.dart |

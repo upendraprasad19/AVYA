@@ -778,7 +778,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/ai_service.dart
-        line_range: 170-195
+        line_range: 195-260
         method: _compactContext
         semantic: pass-through
         fields_read: [step_history_7d, water_7d, weight_trend, nutrition_trend_7d, nutrition_trend, exercise_history, personal_records, coach_notices, coaching_notes, fitness_summary]
@@ -788,6 +788,15 @@ concepts:
           coaching_notes Map/String to 1000 chars. Last resort drops
           fitness_summary. Never-drop keys are intentionally absent
           from trimSteps.
+
+          Wide window (±~30-40 lines around the method body, conversion-
+          on-touch per CLAUDE.md common-pitfalls) since this batch (B-pass
+          round 2, 2026-09-26) added a `size()` helper + `_sanitizedLength`
+          just above the method, pushing it from 170-195 to 211-256 and
+          reddening this exact gate ([stale-line-range]) at commit time.
+          size() now measures the sanitised length (matching the server's
+          `sanitizeJsonForPrompt`), not the plain `json.encode` length —
+          see diagnose 125b81 Mb16.
       - file: lib/core/services/ai_service.dart
         line_range: 265-548
         method: chat / chatWithMedia / predict / direct HTTP fallbacks
@@ -4746,6 +4755,22 @@ concepts:
           empty / collapse consecutive same-role) runs AFTER the cap, then seeds
           messages[] with history BEFORE the current user turn. Deno behavioral
           test: supabase/functions/_shared/tool-loop.test.ts.
+      - file: supabase/functions/_shared/chat_dedup.ts
+        line_range: 27-37
+        method: dedupDecision (ai-proxy's 30-second same-message dedup)
+        semantic: flag-check
+        fields_read: [ai_response, model_used]
+        notes: |
+          Hermes 2026-09-26 L29-F3 (diagnose e5c9d2) — the THIRD reader of a
+          failed turn's cloud row, after history replay and restore. The dedup
+          served any non-empty ai_response back as a 200 reply, so the
+          client's automatic retry of a runToolLoop-threw 502 (2 s later,
+          inside the window) received "[failed] runToolLoop threw" as the
+          coach's reply. A row whose model_used is
+          MODEL_USED_LOOP_THREW_SENTINEL now replays the FAILURE (the same
+          502) — never its marker, and never a re-run, which would spend
+          another chat-cap unit. Deno behavioral test:
+          supabase/functions/_shared/chat_dedup_test.ts.
     regression_test: test/contracts/coach_chat_history_replay_writer_to_reader_test.dart
 
   - concept: coach_interactions
@@ -6884,9 +6909,11 @@ concepts:
       three locked mutator paths (open / close / delete). Every hook
       fires; per-singleton `_onUserChanged` resets the mutable state.
 
-      Full Riverpod migration of the seven singletons is a follow-up
+      Full Riverpod migration of the eight singletons is a follow-up
       batch — converting them in place would touch hundreds of caller
-      sites. This registry is the stepping stone.
+      sites. This registry is the stepping stone. (Seven at the original
+      2026-05-20 A7 audit; PredictionService added 2026-09-26, B-pass
+      round 2, single-owner-a — see its writers: entry above.)
     writers:
       - { file: lib/core/services/sync_service.dart, line: 82, method: "SyncService._() constructor → _registerLifecycle()", notes: "Resets _realtimeSubscription / _healthSyncCompleter / restoreProgressLabel / _restoreCancelled." }
       - { file: lib/core/services/subscription_service.dart, line: 17, method: "SubscriptionService._() constructor → _registerLifecycle()", notes: "Re-fires onStateChanged so Riverpod consumers re-read the new user's PRO state." }
@@ -6895,6 +6922,7 @@ concepts:
       - { file: lib/core/services/ai_service.dart, line: 54, method: "AiService._() constructor → _registerLifecycle()", notes: "Reset closes + drops the cached http.Client via dispose()." }
       - { file: lib/core/services/razorpay_service.dart, line: 26, method: "RazorpayService._() constructor → _registerLifecycle()", notes: "Reset nulls _onSuccess / _onFailure / _pendingPlan." }
       - { file: lib/core/services/seed_service.dart, line: 36, method: "SeedService._() constructor → _registerLifecycle()", notes: "Seeds are shared-box; reset is a no-op placeholder." }
+      - { file: lib/core/services/prediction_service.dart, line: 1, method: "PredictionService._() constructor → SingletonLifecycleRegistry.register", notes: "Added 2026-09-26 (B-pass round 2, single-owner-a): PredictionService was the one singleton in this family never registered, so a device-level account switch never cleared PredictionAttemptGate's in-flight Future — the new account's own tap could join the old account's stale request via PredictionAttemptGate.run's `if (running != null) return running;`. Reset hook (`_onUserChanged`) calls `_gate.clearInFlightForAccountChange()`, which nulls `_inFlight` so the next call starts fresh rather than joining." }
     reader_manifest_complete: true
     readers:
       - { file: lib/core/services/hive_user_session.dart, line: 286, method: "_openForUserLocked → SingletonLifecycleRegistry.notifyUserChanged()", semantic: pass-through, fields_read: [registered callback table], notes: "Fires after static owner fields + listenable flip to the new user." }
@@ -6906,7 +6934,7 @@ concepts:
       key_formula: |
         Not Hive-backed. Pure in-memory Map<String, void Function()>.
         Registry state is intentionally not persisted — every cold start
-        the seven singletons re-register from their private constructors.
+        the eight singletons re-register from their private constructors.
     cloud:
       table: null
       columns: []
@@ -11240,7 +11268,7 @@ concepts:
           unresolvable and skips the symbol check.
     readers:
       - file: supabase/functions/ai-proxy/index.ts
-        line_range: 96-130
+        line_range: 133-167
         method: checkPro
         semantic: cloud-read
         notes: |
@@ -11467,6 +11495,27 @@ concepts:
           pins that set equal to the union of every `p_quota_key` constant and
           every trigger literal — both directions, caps and kinds included —
           so a tenth caller cannot appear without a digest section.
+      - file: supabase/functions/_shared/prediction_handler.ts
+        method: consumePredictionQuota
+        semantic: cloud-read
+        notes: |
+          quota_key `prediction_daily`, 3 per user per IST day (single-owner
+          audit 2026-09-26, P0 #5 — ai-proxy `type: "prediction"` was
+          unmetered and took its system prompt from the request). A direct
+          RPC caller: a prediction inserts no row, so no trigger has anything
+          to hang off (the weekly-report shape); allowlisted in
+          usage_quota_ledger_writer_to_reader_test.dart. Consumed BEFORE
+          Gemini and never refunded, so the cap counts attempts — safe only
+          because a Gemini failure returns a 500, which the client does not
+          auto-retry (retryColdStart retries 502/503/504).
+          Kill switch: the Edge Function secret DISABLE_PREDICTION_QUOTA=true
+          skips this consume (read per call; the prompt stays server-owned).
+          Its name and rule live in _shared/prediction_quota_switch.ts, which
+          founder_digest_content.ts also reads so the digest prints
+          UNMETERED for prediction_daily instead of "none" (Hermes L1-F2).
+          Client side, automatic refreshes get one attempt per IST day
+          (PredictionAttemptGate, Hive prediction_auto_attempt_day), so they
+          cannot spend the units the user's own taps need (Hermes L1-F3).
     reader_manifest_complete: true
     hive:
       box: "n/a — cloud-only ledger, no Hive surface"
@@ -11474,6 +11523,91 @@ concepts:
     cloud:
       table: usage_counters
       columns: [user_id, quota_key, window_start, used, updated_at]
+    sync_methods: []
+
+  # Single-owner audit 2026-09-26 (P0 #5) — ai-proxy request-size limits.
+  - concept: ai_proxy_input_limits
+    domain: ai_coach
+    behavioral_test_path: supabase/functions/_shared/ai_proxy_input_limits_test.ts
+    description: |
+      ai-proxy's request-size limits (CLAUDE.md §4.4 rule 18): message and
+      text <= 5000 chars, snapshot_json <= 10000 chars as the prompt receives
+      it — measured after sanitizeJsonForPrompt, which turns each raw
+      U+2028/U+2029/U+0085 into six characters (Hermes L37-F2). ONE owner,
+      `validateAiProxyInput`, called once before the first `type` branch.
+      Before it, each branch checked its own fields, and the `prediction`
+      branch — which ran before the chat branch's checks — checked none, so
+      an unbounded message went straight to Gemini. The error strings are the
+      pre-existing ones, verbatim; type checks stay in each branch.
+    writers:
+      - file: supabase/functions/_shared/ai_proxy_input_limits.ts
+        method: validateAiProxyInput
+        semantic: flag-check
+        notes: |
+          Pure. Returns the first violated limit or null.
+    readers:
+      - file: supabase/functions/ai-proxy/index.ts
+        method: serve handler — validateAiProxyInput(body) before the first `if (type ===`
+        semantic: flag-check
+        notes: |
+          Position pinned by ai_proxy_input_limits_test.ts (the call must
+          precede every branch, or the branch above it is unbounded).
+    hive:
+      box: "n/a — server-side request validation"
+      key_prefix: ""
+    cloud:
+      table: "n/a"
+      columns: []
+    sync_methods: []
+
+  # Single-owner audit 2026-09-26 (P0 #6) — the buckets delete-account purges.
+  - concept: user_owned_storage_buckets
+    domain: auth_profile
+    behavioral_test_path: supabase/functions/_shared/purge_user_storage_test.ts
+    description: |
+      Every Supabase Storage bucket the app writes user-owned objects into,
+      under a `<userId>/` prefix: progress-photos, chat-media, coach-media,
+      avatars, banners. ONE list, `USER_OWNED_BUCKETS`; delete-account purges
+      exactly that list through `purgeUserStorage` (recursive, OI-32).
+      Before it, delete-account hard-coded three buckets while the client
+      also wrote avatars and banners — both PUBLIC — so a deleted user's
+      photos stayed reachable by URL (DPDP §17). The client side is tied to
+      the list by test/contracts/delete_account_purges_all_user_buckets_test.dart:
+      any bucket the client names in code must be on it.
+    writers:
+      - file: lib/features/profile/providers/profile_provider.dart
+        method: avatar + banner upload (UserRepository.uploadImage, buckets avatars / banners)
+        semantic: cloud-write
+      - file: lib/features/profile/repositories/progress_photo_repository.dart
+        method: ProgressPhotoRepository upload (bucket progress-photos)
+        semantic: cloud-write
+      - file: lib/features/ai_coach/screens/ai_coach/media_picker.dart
+        method: chat media upload (bucket chat-media)
+        semantic: cloud-write
+      - file: lib/features/ai_coach/repositories/coach_media_repository.dart
+        method: CoachMediaRepository copy chat-media -> coach-media
+        semantic: cloud-write
+    readers:
+      - file: supabase/functions/_shared/purge_user_storage.ts
+        method: purgeUserStorage
+        semantic: cloud-read
+        notes: |
+          Lists every object under `<userId>/` recursively in each bucket and
+          removes it in chunks of 1000; per-bucket errors are recorded, never
+          thrown, so one bucket cannot block the account deletion. A failed
+          list of one page or folder is recorded as `<bucket>_list:` and the
+          paths that WERE listed are still removed (Hermes L37-F1 — it used
+          to throw and discard them). Objects missed or re-uploaded after the
+          purge have no sweep yet (plan unit a4).
+      - file: supabase/functions/delete-account/index.ts
+        method: serve handler — purgeUserStorage(admin.storage, userId, USER_OWNED_BUCKETS, requestId)
+        semantic: cloud-read
+    hive:
+      box: "n/a — Storage objects, no Hive surface"
+      key_prefix: ""
+    cloud:
+      table: "storage.objects (buckets: progress-photos, chat-media, coach-media, avatars, banners)"
+      columns: []
     sync_methods: []
 
   - concept: safe_push_terminal_result_record

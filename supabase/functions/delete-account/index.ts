@@ -11,7 +11,7 @@
 //      account_deletion_log.razorpay_cancel_status and the erasure PROCEEDS so a
 //      Razorpay outage can't block a legally-required DPDP §17 deletion
 //   5. OneSignal player unsub — best-effort, non-fatal
-//   6. Storage purge (3 buckets) — best-effort, per-bucket errors logged
+//   6. Storage purge (every USER_OWNED_BUCKETS bucket) — best-effort, per-bucket errors logged
 //   7. auth.users delete (service-role) — CASCADE through public.users + all FKs
 //      (5 community surfaces get user_id = NULL per migration 049, not deleted)
 //   8. Audit insert to account_deletion_log (no FK, survives auth delete)
@@ -26,6 +26,8 @@
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { purgeUserStorage } from "../_shared/purge_user_storage.ts";
+import { USER_OWNED_BUCKETS } from "../_shared/user_owned_buckets.ts";
 
 // ── CORS headers (inline — no cors.ts in _shared for this project) ────────────
 const corsHeaders = {
@@ -348,98 +350,16 @@ serve(async (req: Request) => {
     }
 
     // ── 5. STORAGE PURGE — best-effort, non-fatal ────────────────────────────
-    // Purge all user-owned objects in the 3 buckets. Errors are accumulated and
-    // logged but never block the delete. A separate orphan-cleanup cron handles
-    // objects that might be missed here (not yet implemented — post-Test-#11).
-    const purgeStats: { [key: string]: number | string[] } = { errors: [] };
-
-    // OI-32 (audit-2026-05-17 Hermes F7) — recursive Storage purge.
-    // Pre-fix this loop only called `.list(userId)` which returns the
-    // top-level entries under `userId/` (objects + subdirectory names,
-    // not contents of subdirectories). Any nested path like
-    // `userId/2026/photo.jpg` survived account deletion. DPDP §17
-    // requires erasure of all user-tagged objects — nested or otherwise.
-    //
-    // Supabase Storage SDK has no `recursive: true` option on .list();
-    // we implement DFS ourselves. Folder entries have `id === null`,
-    // file entries have a non-null id. Paginated 1000-per-call for
-    // users with large photo histories.
-    async function listAllObjectsRecursive(
-      bucket: string,
-      prefix: string,
-    ): Promise<string[]> {
-      const objectPaths: string[] = [];
-      const stack: string[] = [prefix];
-      while (stack.length > 0) {
-        const current = stack.pop()!;
-        let offset = 0;
-        while (true) {
-          const { data: entries, error } = await admin.storage
-            .from(bucket)
-            .list(current, { limit: 1000, offset });
-          if (error) throw new Error(`list ${current}: ${error.message}`);
-          if (!entries || entries.length === 0) break;
-          for (const e of entries) {
-            const fullPath = current ? `${current}/${e.name}` : e.name;
-            if (e.id === null) {
-              // Folder entry — recurse into it.
-              stack.push(fullPath);
-            } else {
-              objectPaths.push(fullPath);
-            }
-          }
-          if (entries.length < 1000) break;
-          offset += 1000;
-        }
-      }
-      return objectPaths;
-    }
-
-    for (const bucket of ["progress-photos", "chat-media", "coach-media"]) {
-      try {
-        const paths = await listAllObjectsRecursive(bucket, userId);
-
-        if (paths.length > 0) {
-          // Storage .remove() takes a flat array; chunk by 1000 (the
-          // Supabase REST batch limit) so large purges don't reject.
-          let removed = 0;
-          for (let i = 0; i < paths.length; i += 1000) {
-            const chunk = paths.slice(i, i + 1000);
-            const { error: rmErr } = await admin.storage
-              .from(bucket)
-              .remove(chunk);
-            if (rmErr) {
-              (purgeStats.errors as string[]).push(
-                `${bucket}_rm:${rmErr.message}`,
-              );
-              console.warn(
-                `[delete-account] request_id=${requestId} storage remove error bucket=${bucket} (chunk@${i}):`,
-                rmErr.message,
-              );
-              // Don't break — try remaining chunks.
-            } else {
-              removed += chunk.length;
-            }
-          }
-          purgeStats[bucket] = removed;
-          console.log(
-            `[delete-account] request_id=${requestId} purged ${removed}/${paths.length} objects from bucket=${bucket} (recursive)`,
-          );
-        } else {
-          purgeStats[bucket] = 0;
-          console.log(
-            `[delete-account] request_id=${requestId} bucket=${bucket} empty for user`,
-          );
-        }
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        (purgeStats.errors as string[]).push(`${bucket}_exception:${msg}`);
-        console.warn(
-          `[delete-account] request_id=${requestId} storage exception bucket=${bucket} (non-fatal):`,
-          e,
-        );
-      }
-    }
+    // Purge all user-owned objects in every bucket the app writes to
+    // (USER_OWNED_BUCKETS — single-owner audit 2026-09-26, P0 #6: avatars and
+    // banners were missed). Recursive (OI-32); errors are accumulated in
+    // purgeStats and logged but never block the delete.
+    const purgeStats = await purgeUserStorage(
+      admin.storage,
+      userId,
+      USER_OWNED_BUCKETS,
+      requestId,
+    );
 
     // ── 6. AUTH.USERS DELETE ─────────────────────────────────────────────────
     // Service-role admin call. This cascades through:

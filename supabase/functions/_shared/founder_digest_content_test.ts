@@ -27,6 +27,7 @@ import {
   istClock,
   readDigestSections,
   type SubscriptionRow,
+  unmeteredQuotaKeys,
 } from "./founder_digest_content.ts";
 
 /**
@@ -280,4 +281,32 @@ Deno.test("buildDigestText renders an unreadable marker for a failed subscriptio
   };
   const text = buildDigestText(input);
   assertStringIncludes(text, "unreadable");
+});
+
+// Hermes 2026-09-26, L1-F2: with DISABLE_PREDICTION_QUOTA on, the ledger is
+// never written, and "Prediction (3/day): none" read as "nobody used it".
+Deno.test("a key whose kill switch is on renders UNMETERED, never 'none'", () => {
+  const base: DigestInput = {
+    dayLabel: "2026-09-12",
+    windowed: { rows: [] },
+    lifetime: { rows: [] },
+    alerts: { rows: [] },
+    subscriptions: { rows: [] },
+    expiringSoon: { count7d: 0, count30d: 0 },
+    ...EMPTY_B_EXTRAS,
+  };
+  const metered = buildDigestText(base);
+  assertStringIncludes(metered, "Prediction (3/day): none", "control: switch off reads as before");
+
+  const unmetered = buildDigestText({ ...base, unmeteredKeys: ["prediction_daily"] });
+  assertStringIncludes(unmetered, "Prediction (3/day): ⚠ UNMETERED — DISABLE_PREDICTION_QUOTA is on");
+  assert(!unmetered.includes("Prediction (3/day): none"), "an unmetered key must not read as no usage");
+});
+
+Deno.test("unmeteredQuotaKeys reports exactly the keys whose switch is on", () => {
+  assertEquals(unmeteredQuotaKeys(() => false), []);
+  assertEquals(
+    unmeteredQuotaKeys((env) => env === "DISABLE_PREDICTION_QUOTA"),
+    ["prediction_daily"],
+  );
 });

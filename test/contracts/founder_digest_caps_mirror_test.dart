@@ -119,9 +119,19 @@ class _Site {
 /// Throws (fails the test) on any site it cannot resolve.
 List<_Site> _efSites() {
   final sites = <_Site>[];
-  final dirs = Directory(_functionsDir).listSync().whereType<Directory>();
-  for (final d in dirs) {
-    final f = File('${d.path}/index.ts');
+  // Every non-test module in the functions tree, RECURSIVELY: a
+  // consume_quota call extracted into a shared handler (prediction,
+  // single-owner audit 2026-09-26) or into any sibling module — including
+  // `_shared/tools/` and a function's own non-index files — is still a caller
+  // the digest must mirror (B-pass c5d659f52986 Finding 5: the first
+  // widening listed `_shared/` non-recursively).
+  final files = <File>[
+    for (final f in Directory(_functionsDir)
+        .listSync(recursive: true)
+        .whereType<File>())
+      if (f.path.endsWith('.ts') && !f.path.endsWith('_test.ts')) f,
+  ];
+  for (final f in files) {
     if (!f.existsSync()) continue;
     final rel = f.path.replaceAll('\\', '/');
     final src = _stripTs(f.readAsStringSync());
@@ -307,6 +317,7 @@ void main() {
       expect(byKey['chat_app']!.cap, 10);
       expect(byKey['vision_analysis']!.cap, 20);
       expect(byKey['food_text']!.cap, isNull);
+      expect(byKey['prediction_daily']!.cap, 3);
       expect(byKey['delete_account']!.cap, isNull);
       expect(byKey['verify_payment']!.cap, isNull);
     });
