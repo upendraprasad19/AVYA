@@ -84,36 +84,30 @@ extension SyncServiceWorkout on SyncService {
   }
 
   /// Pushes workout session logs (wlog_* keys) to Supabase workout_logs.
+  /// day-swapper+sync-load Task 16: routed through SyncSkipIndex (domain
+  /// wlog) — no pre-existing index, so this closes one leg of the OI-237
+  /// write-amplification class (every historical wlog row previously
+  /// re-uploaded on every pass).
   Future<void> _syncWorkoutLogs(String userId) async {
     final workoutBox = _hive.workoutBox;
+    final index = SyncSkipIndex(
+      box: workoutBox,
+      domain: SyncSkipDomain.wlog,
+      disabled: _hashSkipKillSwitchOn(SyncSkipDomain.wlog),
+      ownerChangedNow: () => ownerChangedSince(userId),
+      reportFailure: (op, e, st) =>
+          unawaited(_reportSyncFailure(opType: op, error: e)),
+    );
+
+    final liveKeys = <String>{};
     for (final key in workoutBox.keys) {
+      if (index.aborted) break;
       if (key is! String || !key.startsWith('wlog_')) continue;
       final raw = workoutBox.get(key);
       if (raw is! Map) continue;
       final log = Map<String, dynamic>.from(raw);
 
       try {
-        // APK Test #12.7 — preserve original timestamp. Read from any of
-        // {created_at, completed_at, *_ms} or fall back to the IST date
-        // parsed from the Hive key. Empty-string `completed_at` (which
-        // older restores wrote into Hive) is filtered by the helper —
-        // this stops the cloud rejecting with `invalid input syntax for
-        // type timestamp with time zone: ""`.
-        final resolved = _resolveCompletedAt(
-          log,
-          dateKeyPrefix: log['date'] as String? ?? _dateFromKey(key),
-          hiveKey: key,
-        );
-        // `logged_at` and `created_at` are timestamptz columns. Send
-        // null when the source was an empty string AND we have no
-        // alternate authoring time (helper's last-resort path); the
-        // null branch is friendlier to PostgREST than a fabricated
-        // wall-clock that misrepresents history.
-        // Audit 2026-05-12 P2-F — include `rpe` in the projection so
-        // weekly-report stops rendering "N/A" for sessions where the user
-        // (or AI coach via tool calls) supplied a rating-of-perceived-
-        // exertion. Cloud column was always there; client just never
-        // shipped the field. Safe to send null when Hive doesn't have it.
         // Audit 2026-05-12 P2-E — onConflict was 'id'; same class as P0-A.
         // Live data had 27 rows for 8 sessions (founder's account had 4-6
         // dupes for each completed workout). Migration 062 added natural
@@ -147,24 +141,54 @@ extension SyncServiceWorkout on SyncService {
           ));
           continue;
         }
-        await _supabase.client.from('workout_logs').upsert({
-          // Fix 2026-06-02 (cross-user PK collision): OMIT the client id. Was
-          // `_deterministicId('wlog_<date>')` (date-only, no user) → two users
-          // completing a workout on the SAME date generated the SAME uuid →
-          // cross-user collision on workout_logs_pkey (23505); whoever synced
-          // second silently lost their session-summary row. Omitting id (the
-          // proven cure: nutrition_logs c9f2a7 / workout_templates a8b2c7 /
-          // scheduled_workouts c8e4a1) → gen_random_uuid() on insert, existing
-          // id kept on conflict; the user-inclusive natural key
-          // (user_id,date,workout_name) below merges re-syncs. Existing rows
-          // self-heal on next sync — no re-key.
+        liveKeys.add(key);
+
+        // day-swapper+sync-load Task 16 (round-1 review D1 F1): OrNull —
+        // never now() inside a fingerprinted payload, or the row would
+        // never skip. `logged_at` and `created_at` are timestamptz columns
+        // DEFAULT now(): omitting them on insert applies the server
+        // default once, and ON CONFLICT DO UPDATE leaves an omitted
+        // column untouched, so the fingerprint stays stable.
+        final resolved = _resolveCompletedAtOrNull(
+          log,
+          dateKeyPrefix: wlogDate.isNotEmpty ? wlogDate : _dateFromKey(key),
+        );
+
+        // Fix 2026-06-02 (cross-user PK collision): OMIT the client id. Was
+        // `_deterministicId('wlog_<date>')` (date-only, no user) → two users
+        // completing a workout on the SAME date generated the SAME uuid →
+        // cross-user collision on workout_logs_pkey (23505); whoever synced
+        // second silently lost their session-summary row. Omitting id (the
+        // proven cure: nutrition_logs c9f2a7 / workout_templates a8b2c7 /
+        // scheduled_workouts c8e4a1) → gen_random_uuid() on insert, existing
+        // id kept on conflict; the user-inclusive natural key
+        // (user_id,date,workout_name) below merges re-syncs. Existing rows
+        // self-heal on next sync — no re-key.
+        final payload = <String, dynamic>{
           'user_id': userId,
           'workout_name': wlogName,
           'date': wlogDate,
-          'logged_at': resolved,
+          if (resolved != null) 'logged_at': resolved,
           'duration_seconds': log['duration_seconds'],
-          'created_at': resolved,
-        }, onConflict: 'user_id,date,workout_name');
+          if (resolved != null) 'created_at': resolved,
+        };
+
+        await index.pushIfChanged(
+          key,
+          () => SyncFingerprint.of(payload),
+          () async {
+            if (resolved == null) {
+              unawaited(ErrorTelemetry.logEvent(
+                'sync_completed_at_fallback',
+                message:
+                    'hiveKey=$key table=workout_logs timestamps_omitted',
+              ));
+            }
+            await _supabase.client.from('workout_logs').upsert(payload,
+                onConflict: 'user_id,date,workout_name');
+            return true;
+          },
+        );
       } catch (e, st) {
         debugPrint('[SyncService._syncWorkoutLogs] Failed key=$key: $e');
         // audit-2026-05-11 H-42 — telemetry pair.
@@ -175,6 +199,8 @@ extension SyncServiceWorkout on SyncService {
         } catch (_) {}
       }
     }
+
+    await index.commit(liveKeys: liveKeys);
   }
 
   /// Pushes individual exercise logs (exlog_* keys) to
@@ -491,6 +517,30 @@ extension SyncServiceWorkout on SyncService {
     String? dateKeyPrefix,
     String? hiveKey,
   }) {
+    final resolved =
+        _resolveCompletedAtOrNull(row, dateKeyPrefix: dateKeyPrefix);
+    if (resolved != null) return resolved;
+    // 7 — true last-resort. Telemetry + debug log so we can spot the
+    // dead branch in production.
+    debugPrint(
+      '[SyncService._resolveCompletedAt] fallback to NOW for key=$hiveKey '
+      '(no created_at / completed_at / *_ms / dateKeyPrefix found)',
+    );
+    ErrorTelemetry.logEvent(
+      'sync_completed_at_fallback',
+      message: 'hiveKey=${hiveKey ?? '<unknown>'}',
+    );
+    return DateTime.now().toUtc().toIso8601String();
+  }
+
+  /// Steps 1–6 of [_resolveCompletedAt] with NO wall-clock fallback: returns
+  /// null when nothing in the row or its date prefix resolves. Use this for
+  /// any value that feeds a SyncSkipIndex fingerprint (day-swapper+sync-load
+  /// Task 16, round-1 review D1 F1) — a now() there never skips.
+  String? _resolveCompletedAtOrNull(
+    Map<String, dynamic> row, {
+    String? dateKeyPrefix,
+  }) {
     // 1 / 2 / 5 — string ISO timestamps. Reject empty strings (a stale
     // restore loop wrote `''` into Hive at one point).
     for (final field in const ['created_at', 'completed_at', 'logged_at']) {
@@ -518,17 +568,7 @@ extension SyncServiceWorkout on SyncService {
         }
       } catch (_) {/* fall through */}
     }
-    // 7 — true last-resort. Telemetry + debug log so we can spot the
-    // dead branch in production.
-    debugPrint(
-      '[SyncService._resolveCompletedAt] fallback to NOW for key=$hiveKey '
-      '(no created_at / completed_at / *_ms / dateKeyPrefix found)',
-    );
-    ErrorTelemetry.logEvent(
-      'sync_completed_at_fallback',
-      message: 'hiveKey=${hiveKey ?? '<unknown>'}',
-    );
-    return DateTime.now().toUtc().toIso8601String();
+    return null;
   }
 
   /// Extract the `YYYY-MM-DD` prefix from a Hive key shaped like
@@ -638,16 +678,32 @@ extension SyncServiceWorkout on SyncService {
     await completionIndex.commit(liveKeys: liveDates);
   }
 
+  /// Pushes weekly streak snapshots (healthBox['streaks']) to Supabase.
+  /// day-swapper+sync-load Task 16: routed through SyncSkipIndex (domain
+  /// streak; index stored in healthBox per plan D12 — streak rows already
+  /// live there).
   Future<void> _syncStreaks(String userId) async {
     final healthBox = _hive.healthBox;
     final logs = healthBox.get('streaks');
     if (logs == null) return;
 
+    final index = SyncSkipIndex(
+      box: healthBox,
+      domain: SyncSkipDomain.streak,
+      disabled: _hashSkipKillSwitchOn(SyncSkipDomain.streak),
+      ownerChangedNow: () => ownerChangedSince(userId),
+      reportFailure: (op, e, st) =>
+          unawaited(_reportSyncFailure(opType: op, error: e)),
+    );
+
     final items = (logs as List).whereType<Map>();
+    final liveKeys = <String>{};
     for (final log in items) {
+      if (index.aborted) break;
       final data = Map<String, dynamic>.from(log);
       final weekStart = data['week_start']?.toString() ?? '';
       if (weekStart.isEmpty) continue;
+      liveKeys.add(weekStart);
       // APK Test #12.7 — explicit projection instead of `...data` spread.
       // Cloud `streaks` schema has: id, user_id, week_start,
       // workouts_planned, workouts_completed, is_streak_maintained,
@@ -669,9 +725,17 @@ extension SyncServiceWorkout on SyncService {
             'is_streak_maintained': data['is_streak_maintained'],
           if (data['created_at'] != null) 'created_at': data['created_at'],
         };
-        await _supabase.client
-            .from('streaks')
-            .upsert(payload, onConflict: 'user_id,week_start');
+
+        await index.pushIfChanged(
+          weekStart,
+          () => SyncFingerprint.of(payload),
+          () async {
+            await _supabase.client
+                .from('streaks')
+                .upsert(payload, onConflict: 'user_id,week_start');
+            return true;
+          },
+        );
       } catch (e, st) {
         debugPrint('[SyncService._syncStreaks] $e');
         // audit-2026-05-11 H-42 — telemetry pair.
@@ -682,6 +746,8 @@ extension SyncServiceWorkout on SyncService {
         } catch (_) {}
       }
     }
+
+    await index.commit(liveKeys: liveKeys);
   }
 
   /// Pulls workout session logs from cloud workout_logs into local Hive.
@@ -1247,14 +1313,36 @@ extension SyncServiceWorkout on SyncService {
   }
 
   /// Pushes workout templates and their exercises to Supabase.
+  /// Pushes workout templates (header + exercises + tail vacuum) to
+  /// Supabase workout_templates / template_exercises.
+  ///
+  /// day-swapper+sync-load Task 16: routed through SyncSkipIndex (domain
+  /// template). The header upsert, the id SELECT, the per-exercise upsert
+  /// loop and the tail-vacuum DELETE are now ONE bundle per template: any
+  /// failure inside the bundle returns false (unconfirmed), so the WHOLE
+  /// bundle retries next pass — every write inside is already idempotent, so
+  /// a retry is cheap and safe. This is a deliberate tightening vs. the
+  /// pre-Task-16 code, which continued past a single failed exercise upsert.
   Future<void> _syncWorkoutTemplates(String userId) async {
     final workoutBox = _hive.workoutBox;
+    final index = SyncSkipIndex(
+      box: workoutBox,
+      domain: SyncSkipDomain.template,
+      disabled: _hashSkipKillSwitchOn(SyncSkipDomain.template),
+      ownerChangedNow: () => ownerChangedSince(userId),
+      reportFailure: (op, e, st) =>
+          unawaited(_reportSyncFailure(opType: op, error: e)),
+    );
+
+    final liveKeys = <String>{};
     for (final key in workoutBox.keys) {
+      if (index.aborted) break;
       if (key is! String || !key.startsWith('tmpl_')) continue;
       final raw = workoutBox.get(key);
       if (raw is! Map) continue;
       final tmpl = Map<String, dynamic>.from(raw);
       if (tmpl['type'] != 'template') continue;
+      liveKeys.add(key);
 
       try {
         // Diagnosed 2026-04-18: the Hive template id (`tmpl_<ms>`) is a
@@ -1288,149 +1376,182 @@ extension SyncServiceWorkout on SyncService {
         final tmplName = (tmpl['name'] as String?)?.trim() ?? 'Untitled';
         final exercises = tmpl['exercises'] as List? ?? [];
 
-        // Upsert template header — `id` deliberately omitted.
+        // day-swapper+sync-load Task 16: created_at now OMITS the field
+        // rather than falling back to DateTime.now() (D2 site
+        // sync_workout.dart|created_at). On insert, the column default
+        // applies; on update, the column is left untouched.
         // audit-2026-05-16 E.12 — migration 067 dropped
         // workout_templates.description + estimated_duration_mins (template
         // builder UI never exposes these inputs; 100% NULL across all
         // live rows). Hive `description` field is retained for the restore
         // round-trip (cloud read returns null → empty in Hive).
-        await _supabase.client.from('workout_templates').upsert({
-          'user_id': userId,
-          'name': tmplName,
-          'workout_type': tmpl['workout_focus'] ?? tmpl['workout_type'] ?? 'custom',
-          'source': 'user',
-          'is_active': true,
-          'created_at':
-              tmpl['created_at'] ?? DateTime.now().toIso8601String(),
-          if (tmpl['last_used_at'] != null)
-            'last_used_at': tmpl['last_used_at'],
-        }, onConflict: 'user_id,name');
+        Map<String, dynamic> headerPayload() => <String, dynamic>{
+              'user_id': userId,
+              'name': tmplName,
+              'workout_type':
+                  tmpl['workout_focus'] ?? tmpl['workout_type'] ?? 'custom',
+              'source': 'user',
+              'is_active': true,
+              if (tmpl['created_at'] != null)
+                'created_at': tmpl['created_at'],
+              if (tmpl['last_used_at'] != null)
+                'last_used_at': tmpl['last_used_at'],
+            };
 
-        // SELECT the real cloud id post-upsert so child rows FK
-        // correctly. Pre-fix used `SyncService._deterministicId('tmpl|user|name')`
-        // which only matched on greenfield first-insert; pre-existing
-        // rows kept their migration-050 keeper id and the FK lookup
-        // mismatched → 23503.
-        String? cloudTmplId;
-        try {
-          final parentRow = await _supabase.client
-              .from('workout_templates')
-              .select('id')
-              .eq('user_id', userId)
-              .eq('name', tmplName)
-              .maybeSingle();
-          cloudTmplId = parentRow?['id'] as String?;
-        } catch (idErr, st) {
-          debugPrint(
-              '[SyncService._syncWorkoutTemplates] parent id lookup: $idErr');
-          // audit-2026-05-11 H-42 — telemetry pair.
-          unawaited(ErrorTelemetry.recordNonFatal(idErr, st,
-              reason: 'sync_service_for_23'));
-        }
-        if (cloudTmplId == null || cloudTmplId.isEmpty) {
-          // Without a valid parent id we can't push children safely.
-          // Skip silently — next sync will retry.
-          continue;
-        }
+        await index.pushIfChanged(
+          key,
+          () => SyncFingerprint.of(<String, dynamic>{
+            'header': headerPayload(),
+            'exercises': exercises,
+          }),
+          () async {
+            // Upsert template header — `id` deliberately omitted. Kept as a
+            // single-line chain (`dead_columns_dropped_test.dart` source-greps
+            // the literal `from('workout_templates').upsert(` with no
+            // whitespace between).
+            await _supabase.client.from('workout_templates').upsert(headerPayload(), onConflict: 'user_id,name');
 
-        // Backlog #2 (post-Test-#15) — switched from DELETE-then-INSERT
-        // to UPSERT now that migration 051 added UNIQUE (template_id,
-        // order_index). Each row is independently upserted; a network
-        // blip on row N leaves rows 0..N-1 + N+1..end intact (latter are
-        // upserts, not inserts, so they update unchanged rows). Next
-        // sync retries row N alone. No "torn" template state.
-        //
-        // closes-diagnose: 2026-05-10-template-exercises-upsert-a8b2c7
-        // (migration 051 header has the full rationale).
-        for (int i = 0; i < exercises.length; i++) {
-          final ex = exercises[i] is Map
-              ? Map<String, dynamic>.from(exercises[i] as Map)
-              : <String, dynamic>{};
-          // audit-2026-05-16 E.12 — migration 067 dropped exercise_id from
-          // template_exercises. The pre-fix `isUuid` UUID-shape check
-          // gated the projection of that column; with the column gone,
-          // the variable is dead. Removed to satisfy analyzer.
-          try {
-            await _supabase.client.from('template_exercises').upsert({
-              // APK Test #12.8 / Bug #4 — `id` omitted; child UUID
-              // generated by cloud default on first insert. On conflict
-              // (template_id, order_index), the existing row's id is
-              // preserved and other fields are updated.
-              'template_id': cloudTmplId,
-              // audit-2026-05-16 E.12 — migration 067 dropped 5 columns
-              // from template_exercises (exercise_id, rest_seconds,
-              // prescribed_weight, prescribed_time_secs, notes — all 100%
-              // NULL in prod, no UI writers). Projection trimmed to the
-              // surviving columns. Hive-side fields are retained for the
-              // restore round-trip (cloud → Hive reads of dropped columns
-              // return null, which is the expected default).
-              'exercise_name': ex['exercise_name'] ?? ex['name'] ?? '',
-              'order_index': i,
-              'logging_type': ex['logging_type'] ?? 'weight_reps',
-              // audit-fixwave 2026-07-02 / F17 — fall back to the exercise's
-              // default_sets/default_reps when the builder's saved map omits
-              // sets/reps, so the cloud template_exercises row is self-describing
-              // (prescribed_* was persisting NULL — benign at read time because
-              // the schedule/active-workout readers already fall back to
-              // default_sets, but a later custom-exercise edit/delete would then
-              // strand the template with no prescription).
-              if ((ex['sets'] ?? ex['default_sets']) != null)
-                'prescribed_sets': (ex['sets'] ?? ex['default_sets']) is int
-                    ? (ex['sets'] ?? ex['default_sets'])
-                    : int.tryParse((ex['sets'] ?? ex['default_sets']).toString()),
-              if ((ex['reps'] ?? ex['default_reps']) != null)
-                'prescribed_reps': (ex['reps'] ?? ex['default_reps']).toString(),
-            }, onConflict: 'template_id,order_index');
-          } catch (exErr, st) {
-            debugPrint('[SyncService._syncWorkoutTemplates] exercise $i: $exErr');
-            // audit-2026-05-11 H-42 — telemetry pair.
-            unawaited(ErrorTelemetry.recordNonFatal(exErr, st,
-                reason: 'sync_service_for_24'));
+            // SELECT the real cloud id post-upsert so child rows FK
+            // correctly. Pre-fix used
+            // `SyncService._deterministicId('tmpl|user|name')` which only
+            // matched on greenfield first-insert; pre-existing rows kept
+            // their migration-050 keeper id and the FK lookup mismatched
+            // → 23503.
+            String? cloudTmplId;
             try {
-              await _reportSyncFailure(opType: 'upsert_template_exercise', error: exErr);
-            } catch (_) {}
-          }
-        }
+              final parentRow = await _supabase.client
+                  .from('workout_templates')
+                  .select('id')
+                  .eq('user_id', userId)
+                  .eq('name', tmplName)
+                  .maybeSingle();
+              cloudTmplId = parentRow?['id'] as String?;
+            } catch (idErr, st) {
+              debugPrint(
+                  '[SyncService._syncWorkoutTemplates] parent id lookup: $idErr');
+              // audit-2026-05-11 H-42 — telemetry pair.
+              unawaited(ErrorTelemetry.recordNonFatal(idErr, st,
+                  reason: 'sync_service_for_23'));
+              // G1 (spec §7): a catch inside pushIfChanged( must rethrow or
+              // return false; -- the bundle is not confirmed until the id
+              // lookup, the exercises and the vacuum all succeed.
+              return false;
+            }
+            if (cloudTmplId == null || cloudTmplId.isEmpty) {
+              // Without a valid parent id the bundle cannot proceed safely.
+              // Unconfirmed -> the whole bundle (idempotent header
+              // included) retries next pass.
+              return false;
+            }
 
-        // APK Test #15.1 / Bug B — vacuum the tail. Migration 051
-        // (Test #15 / Backlog #2) added UNIQUE(template_id, order_index)
-        // and switched DELETE-then-INSERT → upsert with onConflict.
-        // That fix preserved no-torn-state on partial failure but
-        // introduced a NEW failure mode: when a template shrinks
-        // (15 exercises → 5), only slots 0..4 are upserted; slots
-        // 5..14 from the prior version remain orphaned in cloud.
-        // Restore pulls all 15, founder sees 15-exercise "triplicates"
-        // on his Back Day A / Leg Day A / Push Day templates.
-        //
-        // Tail vacuum bounds the cloud row count to exactly the local
-        // exercises.length. One round-trip per template. Idempotent.
-        // Network failure on the DELETE leaves stale tail rows (same
-        // as today's status quo before this commit) — no regression.
-        //
-        // closes-diagnose: 2026-05-12-template-exercises-tail-vacuum-b3c8d2
-        try {
-          await _supabase.client
-              .from('template_exercises')
-              .delete()
-              .eq('template_id', cloudTmplId)
-              .gte('order_index', exercises.length);
-        } catch (vacErr, st) {
-          debugPrint(
-              '[SyncService._syncWorkoutTemplates] tail vacuum failed: $vacErr');
-          unawaited(ErrorTelemetry.recordNonFatal(vacErr, st,
-              reason: 'sync_template_exercises_tail_vacuum'));
-          // Non-fatal — same stale-tail state as pre-fix.
-        }
+            // Backlog #2 (post-Test-#15) — switched from DELETE-then-INSERT
+            // to UPSERT now that migration 051 added UNIQUE (template_id,
+            // order_index). Each row is independently upserted; a network
+            // blip on row N leaves rows 0..N-1 + N+1..end intact (latter are
+            // upserts, not inserts, so they update unchanged rows).
+            //
+            // closes-diagnose: 2026-05-10-template-exercises-upsert-a8b2c7
+            // (migration 051 header has the full rationale).
+            for (int i = 0; i < exercises.length; i++) {
+              final ex = exercises[i] is Map
+                  ? Map<String, dynamic>.from(exercises[i] as Map)
+                  : <String, dynamic>{};
+              // audit-2026-05-16 E.12 — migration 067 dropped exercise_id
+              // from template_exercises. The pre-fix `isUuid` UUID-shape
+              // check gated the projection of that column; with the column
+              // gone, the variable is dead. Removed to satisfy analyzer.
+              try {
+                await _supabase.client.from('template_exercises').upsert({
+                  // APK Test #12.8 / Bug #4 — `id` omitted; child UUID
+                  // generated by cloud default on first insert. On
+                  // conflict (template_id, order_index), the existing
+                  // row's id is preserved and other fields are updated.
+                  'template_id': cloudTmplId,
+                  // audit-2026-05-16 E.12 — migration 067 dropped 5
+                  // columns from template_exercises (exercise_id,
+                  // rest_seconds, prescribed_weight, prescribed_time_secs,
+                  // notes — all 100% NULL in prod, no UI writers).
+                  // Projection trimmed to the surviving columns. Hive-side
+                  // fields are retained for the restore round-trip (cloud
+                  // → Hive reads of dropped columns return null, which is
+                  // the expected default).
+                  'exercise_name': ex['exercise_name'] ?? ex['name'] ?? '',
+                  'order_index': i,
+                  'logging_type': ex['logging_type'] ?? 'weight_reps',
+                  // audit-fixwave 2026-07-02 / F17 — fall back to the
+                  // exercise's default_sets/default_reps when the
+                  // builder's saved map omits sets/reps, so the cloud
+                  // template_exercises row is self-describing
+                  // (prescribed_* was persisting NULL — benign at read
+                  // time because the schedule/active-workout readers
+                  // already fall back to default_sets, but a later
+                  // custom-exercise edit/delete would then strand the
+                  // template with no prescription).
+                  if ((ex['sets'] ?? ex['default_sets']) != null)
+                    'prescribed_sets': (ex['sets'] ?? ex['default_sets'])
+                            is int
+                        ? (ex['sets'] ?? ex['default_sets'])
+                        : int.tryParse(
+                            (ex['sets'] ?? ex['default_sets']).toString()),
+                  if ((ex['reps'] ?? ex['default_reps']) != null)
+                    'prescribed_reps':
+                        (ex['reps'] ?? ex['default_reps']).toString(),
+                }, onConflict: 'template_id,order_index');
+              } catch (exErr, st) {
+                debugPrint(
+                    '[SyncService._syncWorkoutTemplates] exercise $i: $exErr');
+                // audit-2026-05-11 H-42 — telemetry pair.
+                unawaited(ErrorTelemetry.recordNonFatal(exErr, st,
+                    reason: 'sync_service_for_24'));
+                // Bundle atomicity (Task 16): one failed exercise fails the
+                // WHOLE bundle -- every write here is idempotent, so
+                // retrying the header + all exercises + the vacuum next
+                // pass is cheap.
+                return false;
+              }
+            }
+
+            // APK Test #15.1 / Bug B — vacuum the tail. Migration 051
+            // (Test #15 / Backlog #2) added UNIQUE(template_id,
+            // order_index) and switched DELETE-then-INSERT → upsert with
+            // onConflict. That fix preserved no-torn-state on partial
+            // failure but introduced a NEW failure mode: when a template
+            // shrinks (15 exercises → 5), only slots 0..4 are upserted;
+            // slots 5..14 from the prior version remain orphaned in cloud.
+            //
+            // Tail vacuum bounds the cloud row count to exactly the local
+            // exercises.length. One round-trip per template. Idempotent.
+            //
+            // closes-diagnose: 2026-05-12-template-exercises-tail-vacuum-b3c8d2
+            try {
+              await _supabase.client
+                  .from('template_exercises')
+                  .delete()
+                  .eq('template_id', cloudTmplId)
+                  .gte('order_index', exercises.length);
+            } catch (vacErr, st) {
+              debugPrint(
+                  '[SyncService._syncWorkoutTemplates] tail vacuum failed: $vacErr');
+              unawaited(ErrorTelemetry.recordNonFatal(vacErr, st,
+                  reason: 'sync_template_exercises_tail_vacuum'));
+              return false;
+            }
+            return true;
+          },
+        );
       } catch (e, st) {
         debugPrint('[SyncService._syncWorkoutTemplates] $e');
         // audit-2026-05-11 H-42 — telemetry pair.
         unawaited(ErrorTelemetry.recordNonFatal(e, st,
             reason: 'sync_service_catch_10'));
         try {
-          await _reportSyncFailure(opType: 'upsert_workout_template', error: e);
+          await _reportSyncFailure(
+              opType: 'upsert_workout_template', error: e);
         } catch (_) {}
       }
     }
+
+    await index.commit(liveKeys: liveKeys);
   }
 
   /// Restores workout templates (with exercises) from Supabase.

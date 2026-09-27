@@ -1682,7 +1682,7 @@ concepts:
         semantic: aggregated
         fields_read: [type, workout_name, date]
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 68-148
+        line_range: 86-204
         method: _syncWorkoutLogs (cloud projection)
         semantic: pass-through
         fields_read: [date, workout_name, duration_seconds (selects by wlog_ key-prefix; ignores type)]
@@ -3310,7 +3310,7 @@ concepts:
           (templates are identified by type field per the writer
           contract — saveTemplate / createMultiDayTemplate stamp it).
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 938-1110
+        line_range: 1316-1555
         method: _syncWorkoutTemplates (cloud projection)
         semantic: pass-through
         fields_read: [all tmpl_* fields]
@@ -3815,7 +3815,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 460-810
+        line_range: 681-1143
         method: _syncStreaks (push) + restore merge
         semantic: pass-through
         fields_read: [local_id, week_start, workouts_planned, workouts_completed, is_streak_maintained]
