@@ -758,6 +758,7 @@ check_sync_hash_skip_atomicity.dart:
   test_path:
     - test/scripts/sync_hash_skip_atomicity_lib_test.dart
     - test/scripts/sync_hash_skip_atomicity_e2e_test.dart
+    - test/scripts/sync_write_structure_lib_test.dart
   evidence: >
     Neutered checkDomainAtomicity's guard-detection (forced `guarded = true`
     unconditionally) -- reddens "FAILS when the guard is inverted" and "FAILS when the
@@ -778,6 +779,23 @@ check_sync_hash_skip_atomicity.dart:
     mutation, confirming the fix doesn't newly false-positive on a legitimate wrap. Restored,
     re-confirmed all 15 lib tests + 3 e2e tests green, re-ran the real gate against
     lib/core/services/sync/sync_workout.dart + sync_nutrition.dart -- still OK.
+    G1 structural rule (day-swapper + sync-load Task 3): wrap-check forced true
+    (`if (inside(pushSpans, ...) || inside(allowed, ...))` -> `if (true)`, confirmed via
+    `grep -c "if (true) {"` = 1) reddens 4 (2 lib: "an unwrapped history write is a
+    violation", "the same write in a method NOT on the allowlist is a violation"; 2 e2e:
+    "G1: an unwrapped history write WARNS by default", "G1: --hard FAILS on the same
+    fixture") -- 4 expected, 4 observed. rethrow-or-false regex made permissive
+    (`_rethrowOrFalse` -> `RegExp(r'.')`, confirmed via `grep -c "RegExp(r'.')"` = 1)
+    reddens 1 ("a swallowing catch inside pushIfChanged is a violation") -- 1 expected, 1
+    observed. Index-literal check disabled (`if (path != _skipIndexPath)` -> `if (false)`,
+    confirmed via `grep -c "if (false) {"` = 1) reddens 1 ("an index-key literal outside
+    sync_skip_index.dart is a violation") -- 1 expected, 1 observed. All three mutations
+    confirmed applied with grep -c before running tests; every red was an assertion
+    failure (`Expected: [...] Actual: []`), never a compile error. All three mutations
+    restored and reverified: grep -c for each mutated token returns 0 post-restore, and
+    the full 36-test run (16 sync_write_structure_lib_test.dart + 15
+    sync_hash_skip_atomicity_lib_test.dart + 5 sync_hash_skip_atomicity_e2e_test.dart) is
+    green.
 # ---------------------------------------------------------------------------
 # self-learning discipline batch, 2026-09-19 (discipline-gates-tier12) — 8
 # gates mechanizing sub-patterns from feedback_green_check_input_set_width.md

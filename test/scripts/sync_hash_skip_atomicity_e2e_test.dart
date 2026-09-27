@@ -16,9 +16,10 @@ import '../../scripts/regression_catalog_lib.dart' show scrubbedChildEnvironment
 late final String _repoRoot;
 late final String _gate;
 
-ProcessResult _runGate(String cwd) => Process.runSync(
+ProcessResult _runGate(String cwd, [List<String> extra = const []]) =>
+    Process.runSync(
       'dart',
-      ['run', _gate],
+      ['run', _gate, ...extra],
       workingDirectory: cwd,
       environment: scrubbedChildEnvironment(Platform.environment),
       includeParentEnvironment: false,
@@ -97,5 +98,24 @@ void main() {
     writeFixtures(_placeholder, _placeholder);
     final r = _runGate(tmp.path);
     expect(r.exitCode, 0);
+  });
+
+  const unwrapped = "Future<void> _syncWaterLogs(String u) async {\n"
+      "  await _supabase.client.from('water_logs').upsert(e);\n"
+      "}\n";
+
+  test('G1: an unwrapped history write WARNS by default (exit 0)', () {
+    writeFixtures(_placeholder, unwrapped);
+    final r = _runGate(tmp.path);
+    expect(r.exitCode, 0, reason: '${r.stdout}${r.stderr}');
+    expect(r.stderr, contains('WARN sync write structure'));
+    expect(r.stderr, contains('sync_nutrition.dart:2'));
+  });
+
+  test('G1: --hard FAILS (exit 1) on the same fixture', () {
+    writeFixtures(_placeholder, unwrapped);
+    final r = _runGate(tmp.path, ['--hard']);
+    expect(r.exitCode, 1, reason: '${r.stdout}${r.stderr}');
+    expect(r.stderr, contains('unwrapped_write'));
   });
 }

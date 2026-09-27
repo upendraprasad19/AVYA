@@ -5,6 +5,9 @@
 /// docs/superpowers/specs/2026-09-19-oi204-delta-sync-design.md §5.1/§5.2/§6.
 library;
 
+import 'sync_no_now_fallback_lib.dart'
+    show isSyncLayerPath, stripDartCommentsPreservingLines;
+
 class HashSkipDomainSpec {
   final String flagName;
   final String indexAssignPrefix;
@@ -148,4 +151,241 @@ AtomicityViolation? checkDomainAtomicity(String source, HashSkipDomainSpec spec)
   }
 
   return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// G1 structural rule (day-swapper + sync-load batch, spec §7). Replaces the
+// count-based check above once every domain pushes through SyncSkipIndex:
+// "sent" can only be recorded by SyncSkipIndex.pushIfChanged, which owns the
+// try/catch, so a swallowing catch that forgets to flip a flag — the gap the
+// count-based check cannot see (docs/architecture/sync.md, OI-204 B-pass) —
+// cannot exist by construction.
+// ─────────────────────────────────────────────────────────────────────────
+
+/// Methods whose Supabase writes need not sit inside `pushIfChanged(`:
+/// single-row pushes, and the coach loop, which skips by the cloud id it
+/// stamps into each Hive row (spec §5.9).
+const Set<String> kSyncWriteAllowlist = {
+  '_executeUserProfileUpsert',
+  '_syncUserProfile',
+  '_syncUserPreferences',
+  'syncCoachMemoryNow',
+  '_syncCoachInteractions',
+  'syncFreezes',
+  'syncNotificationsInboxEntry',
+  'syncSavedDietPlan',
+};
+
+/// One Supabase write call in the sync layer.
+class SyncWriteCall {
+  const SyncWriteCall({
+    required this.path,
+    required this.line,
+    required this.offset,
+    required this.verb,
+    required this.table,
+  });
+
+  final String path;
+  final int line;
+
+  /// Offset into the comment-stripped source.
+  final int offset;
+
+  /// `upsert`, `insert`, `update` or `delete`.
+  final String verb;
+
+  /// The `.from('<table>')` literal, or null for a non-literal table.
+  final String? table;
+}
+
+class StructuralViolation {
+  const StructuralViolation(this.path, this.line, this.kind, this.detail);
+
+  final String path;
+  final int line;
+
+  /// `unwrapped_write`, `swallowing_catch`, `catch_error_in_push` or
+  /// `index_literal_outside_helper`.
+  final String kind;
+  final String detail;
+
+  @override
+  String toString() => '$path:$line [$kind] $detail';
+}
+
+final RegExp _writeVerb = RegExp(r'\.(upsert|insert|update|delete)\s*\(');
+final RegExp _supabaseFrom =
+    RegExp(r'''(?:\.from\(\s*['"]|client\s*\.\s*from\s*\()''');
+final RegExp _fromLiteral =
+    RegExp(r'''\.from\(\s*['"]([A-Za-z_][A-Za-z0-9_]*)['"]\s*\)''');
+final RegExp _pushIfChangedCall = RegExp(r'\bpushIfChanged\s*\(');
+final RegExp _catchClause = RegExp(r'\bcatch\s*\(');
+final RegExp _onClause = RegExp(r'\bon\s+[A-Z]\w*(?:<[^>{]*>)?\s*\{');
+final RegExp _catchError = RegExp(r'\.catchError\s*\(');
+final RegExp _rethrowOrFalse = RegExp(r'\brethrow\b|\breturn\s+false\s*;');
+final RegExp _indexLiteral =
+    RegExp(r'''['"][^'"\n]*payload_hash_index[^'"\n]*['"]''');
+
+const String _skipIndexPath = 'lib/core/services/sync/sync_skip_index.dart';
+
+int _lineOf(String s, int offset) =>
+    '\n'.allMatches(s.substring(0, offset)).length + 1;
+
+/// Offset of the bracket that closes the one at [openIndex] (same bracket
+/// type), skipping string literals. Returns the last offset when unbalanced.
+int _matchingClose(String s, int openIndex) {
+  final open = s[openIndex];
+  final close = open == '(' ? ')' : (open == '{' ? '}' : ']');
+  var depth = 0;
+  String? quote;
+  for (var i = openIndex; i < s.length; i++) {
+    final c = s[i];
+    if (quote != null) {
+      if (c == r'\') {
+        i++;
+        continue;
+      }
+      if (c == quote) quote = null;
+      continue;
+    }
+    if (c == "'" || c == '"') {
+      quote = c;
+      continue;
+    }
+    if (c == open) {
+      depth++;
+    } else if (c == close) {
+      depth--;
+      if (depth == 0) return i;
+    }
+  }
+  return s.length - 1;
+}
+
+/// Every Supabase write in [stripped] (already comment-stripped). A write's
+/// statement runs from the previous `;`, `{` or `}` to the verb; it counts
+/// only when that statement contains a Supabase `.from(` (a quoted literal or
+/// `client.from(`), which excludes Hive `box.delete(k)` and `List.insert`.
+List<SyncWriteCall> findSyncWriteCalls(String path, String stripped) {
+  final calls = <SyncWriteCall>[];
+  for (final m in _writeVerb.allMatches(stripped)) {
+    var start = m.start;
+    while (start > 0 && !';{}'.contains(stripped[start - 1])) {
+      start--;
+    }
+    final statement = stripped.substring(start, m.start);
+    if (!_supabaseFrom.hasMatch(statement)) continue;
+    final literals = _fromLiteral.allMatches(statement).toList();
+    calls.add(SyncWriteCall(
+      path: path,
+      line: _lineOf(stripped, m.start),
+      offset: m.start,
+      verb: m.group(1)!,
+      table: literals.isEmpty ? null : literals.last.group(1),
+    ));
+  }
+  return calls;
+}
+
+/// The argument-list spans `(open, close)` of every `pushIfChanged(` call.
+List<(int, int)> _pushSpans(String s) => [
+      for (final m in _pushIfChangedCall.allMatches(s))
+        (m.end - 1, _matchingClose(s, m.end - 1)),
+    ];
+
+/// The declaration-to-body-end spans of every method named in [names].
+List<(int, int)> _methodSpans(String s, Set<String> names) {
+  final spans = <(int, int)>[];
+  for (final name in names) {
+    final decl = RegExp(
+        r'(?:Future(?:<[^;{()]*>)?|void)\s+' + RegExp.escape(name) + r'\s*\(');
+    for (final m in decl.allMatches(s)) {
+      final paramsEnd = _matchingClose(s, m.end - 1);
+      final brace = s.indexOf('{', paramsEnd);
+      final arrow = s.indexOf('=>', paramsEnd);
+      if (arrow >= 0 && (brace < 0 || arrow < brace)) {
+        final end = s.indexOf(';', arrow);
+        spans.add((m.start, end < 0 ? s.length - 1 : end));
+      } else if (brace >= 0) {
+        spans.add((m.start, _matchingClose(s, brace)));
+      }
+    }
+  }
+  return spans;
+}
+
+/// Tables written by the sync layer. [sourcesByPath] holds RAW sources keyed
+/// by repo-relative path; comments are stripped here.
+Set<String> enumerateSyncWriteTables(Map<String, String> sourcesByPath) => {
+      for (final e in sourcesByPath.entries)
+        if (isSyncLayerPath(e.key))
+          for (final c in findSyncWriteCalls(
+              e.key, stripDartCommentsPreservingLines(e.value)))
+            if (c.table != null) c.table!,
+    };
+
+/// The G1 structural check over RAW sources keyed by repo-relative path.
+List<StructuralViolation> checkSyncStructure(
+  Map<String, String> sourcesByPath, {
+  Set<String> allowlist = kSyncWriteAllowlist,
+}) {
+  final out = <StructuralViolation>[];
+  for (final entry in sourcesByPath.entries) {
+    final path = entry.key.replaceAll(r'\', '/');
+    if (!isSyncLayerPath(path)) continue;
+    final s = stripDartCommentsPreservingLines(entry.value);
+    final pushSpans = _pushSpans(s);
+    final allowed = _methodSpans(s, allowlist);
+    bool inside(List<(int, int)> spans, int o) =>
+        spans.any((sp) => o > sp.$1 && o < sp.$2);
+
+    for (final call in findSyncWriteCalls(path, s)) {
+      if (inside(pushSpans, call.offset) || inside(allowed, call.offset)) {
+        continue;
+      }
+      out.add(StructuralViolation(path, call.line, 'unwrapped_write',
+          '.${call.verb}( on ${call.table ?? '<non-literal table>'} is outside '
+          'pushIfChanged( and outside the allowlist (spec §7 G1)'));
+    }
+
+    for (final sp in pushSpans) {
+      final body = s.substring(sp.$1, sp.$2 + 1);
+      for (final m in _catchClause.allMatches(body)) {
+        final parenEnd = _matchingClose(s, sp.$1 + m.end - 1);
+        final brace = s.indexOf('{', parenEnd);
+        if (brace < 0 || brace > sp.$2) continue;
+        final block = s.substring(brace, _matchingClose(s, brace) + 1);
+        if (!_rethrowOrFalse.hasMatch(block)) {
+          out.add(StructuralViolation(path, _lineOf(s, sp.$1 + m.start),
+              'swallowing_catch',
+              'a catch inside pushIfChanged( must `rethrow` or `return false;`'));
+        }
+      }
+      for (final m in _onClause.allMatches(body)) {
+        final brace = sp.$1 + m.end - 1;
+        final block = s.substring(brace, _matchingClose(s, brace) + 1);
+        if (!_rethrowOrFalse.hasMatch(block)) {
+          out.add(StructuralViolation(path, _lineOf(s, sp.$1 + m.start),
+              'swallowing_catch',
+              'an `on T {` block inside pushIfChanged( must `rethrow` or `return false;`'));
+        }
+      }
+      for (final m in _catchError.allMatches(body)) {
+        out.add(StructuralViolation(path, _lineOf(s, sp.$1 + m.start),
+            'catch_error_in_push',
+            '.catchError( inside pushIfChanged( hides a failed push'));
+      }
+    }
+
+    if (path != _skipIndexPath) {
+      for (final m in _indexLiteral.allMatches(s)) {
+        out.add(StructuralViolation(path, _lineOf(s, m.start),
+            'index_literal_outside_helper',
+            '${m.group(0)} — index keys live only in SyncSkipDomain '
+            '($_skipIndexPath)'));
+      }
+    }
+  }
+  return out;
 }
