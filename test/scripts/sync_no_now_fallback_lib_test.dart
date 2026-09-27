@@ -93,7 +93,6 @@ void main() {
       'sync_restore_completeness.dart|read_at',
       'sync_service.dart|phase_started_at',
       'sync_service.dart|plan_generated_at',
-      'sync_workout.dart|completed_at',
       'sync_workout.dart|created_at',
     ];
     final actual = <String>[];

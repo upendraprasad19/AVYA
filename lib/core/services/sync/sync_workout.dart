@@ -548,8 +548,25 @@ extension SyncServiceWorkout on SyncService {
   }
 
   /// Pushes completed schedule entries to workout_schedule_completions.
+  ///
+  /// Day-swapper + sync-load Task 14 — moved onto SyncSkipIndex (domain
+  /// `completion`, spec §5.9) and the completion time now comes from
+  /// ScheduleCompletionTime, never `DateTime.now()` (recurrence of 5a36ad,
+  /// spec §1.6). This is a brand-new index (no pre-existing stored
+  /// fingerprints), so the fingerprint function is the generic
+  /// `SyncFingerprint.of` rather than a bespoke one — nothing to preserve.
   Future<void> _syncScheduleCompletions(String userId) async {
     final workoutBox = _hive.workoutBox;
+    final completionIndex = SyncSkipIndex(
+      box: workoutBox,
+      domain: SyncSkipDomain.completion,
+      disabled: _hashSkipKillSwitchOn(SyncSkipDomain.completion),
+      ownerChangedNow: () => ownerChangedSince(userId),
+      reportFailure: (op, e, st) =>
+          unawaited(_reportSyncFailure(opType: op, error: e)),
+    );
+    final liveDates = <String>{};
+
     for (final key in workoutBox.keys) {
       if (key is! String || !key.startsWith('schedule_')) continue;
       final raw = workoutBox.get(key);
@@ -560,44 +577,65 @@ extension SyncServiceWorkout on SyncService {
 
       final date = entry['date'] as String?;
       if (date == null) continue;
-
-      // audit-2026-05-16 F3-1.3 — `duration_seconds` lives on the
-      // `wlog_<dateStr>` workout-log row (written by
-      // `WorkoutWriteService.markCompleted`), NOT on the schedule entry.
-      // Pre-fix this projection pulled the field directly off the schedule
-      // entry map, which never has it → cloud column was 100% NULL (11/11
-      // rows). Look up the matching wlog by IST date and pull the field
-      // from there. Absent → omit from payload (column is nullable;
-      // absence beats null on the wire).
-      // (Anti-regression test in test/contracts/schedule_completion_duration_*
-      // bans the pre-fix shape `<entry>[<key>]` so don't restore it.)
-      final wlog = workoutBox.get('wlog_$date');
-      final durationSeconds =
-          wlog is Map ? (wlog['duration_seconds'] as num?)?.toInt() : null;
+      liveDates.add(date);
 
       try {
+        // audit-2026-05-16 F3-1.3 — `duration_seconds` lives on the
+        // `wlog_<dateStr>` workout-log row (written by
+        // `WorkoutWriteService.markCompleted`), NOT on the schedule entry.
+        final wlog = workoutBox.get('wlog_$date');
+        final durationSeconds =
+            wlog is Map ? (wlog['duration_seconds'] as num?)?.toInt() : null;
+
+        // Task 14 / spec §5.12 — resolver order: the schedule row's own
+        // legacy ISO field, then its completed_at_ms; if the schedule row
+        // has neither, fall back to the matching wlog's ISO completed_at
+        // (spec's 3rd step; markCompleted always writes a real ISO string
+        // there, workout_write_service.dart:540, so no further derivation is
+        // needed). Absent -> OMIT the field entirely (never "now").
+        final resolvedCompletedAt =
+            ScheduleCompletionTime.scheduledCompletedAtIso(entry) ??
+                (wlog is Map ? (wlog['completed_at'] as String?) : null);
+
         final payload = <String, dynamic>{
           'user_id': userId,
           'scheduled_date': date,
           'day_of_week': entry['day_of_week']?.toString(),
           'workout_name': entry['workout_name'],
           if (durationSeconds != null) 'duration_seconds': durationSeconds,
-          'completed_at':
-              entry['completed_at'] ?? DateTime.now().toUtc().toIso8601String(),
+          if (resolvedCompletedAt != null) 'completed_at': resolvedCompletedAt,
         };
-        await _supabase.client
-            .from('workout_schedule_completions')
-            .upsert(payload, onConflict: 'user_id,scheduled_date');
+
+        await completionIndex.pushIfChanged(
+          date,
+          () => SyncFingerprint.of(payload),
+          () async {
+            await _supabase.client
+                .from('workout_schedule_completions')
+                .upsert(payload, onConflict: 'user_id,scheduled_date');
+            return true;
+          },
+        );
       } catch (e, st) {
         debugPrint('[SyncService._syncScheduleCompletions] Failed key=$key: $e');
         // audit-2026-05-11 H-42 — telemetry pair.
         unawaited(ErrorTelemetry.recordNonFatal(e, st,
             reason: 'sync_service_for_2'));
+        // Task 13/14 review fix round 1 (2026-09-27) — this outer catch only
+        // guards the payload-build code above (pushIfChanged never rethrows;
+        // a push() failure is already reported via the domain's own opType
+        // through the `reportFailure` closure passed above), but it MUST
+        // still keep its own `_reportSyncFailure` call so a payload-build
+        // exception (before pushIfChanged is even reached) still reaches the
+        // server-side client_errors table -- exactly the shape Task 13's own
+        // outer catches (`_syncExerciseLogs`, `_syncNutritionLogs`) kept.
         try {
           await _reportSyncFailure(opType: 'upsert_schedule_completion', error: e);
         } catch (_) {}
       }
     }
+
+    await completionIndex.commit(liveKeys: liveDates);
   }
 
   Future<void> _syncStreaks(String userId) async {
@@ -1930,7 +1968,17 @@ extension SyncServiceWorkout on SyncService {
         //
         // Diagnose: docs/diagnoses/2026-05-10-restore-overwrite-d9b2c5.md
         final localStatus = existingMap['status'] as String?;
-        final localCompletedAt = existingMap['completed_at'] as String?;
+        // Day-swapper + sync-load Task 14 (plan D3) — existingMap['completed_at']
+        // is NEVER set by markCompleted on a schedule row (only completed_at_ms
+        // is), so this branch's "local completed + cloud planned -> keep local"
+        // rule (immediately below) could never actually fire before this fix: a
+        // stale cloud `planned` row would silently demote a locally completed
+        // day on every scheduled-workouts restore. ScheduleCompletionTime
+        // resolves the real value (legacy ISO field, else derived from
+        // completed_at_ms); still null only when existingMap truly has no
+        // completion time recorded at all.
+        final localCompletedAt =
+            ScheduleCompletionTime.scheduledCompletedAtIso(existingMap);
 
         String? mergedStatus = cloudStatus;
         String? mergedCompletedAt = cloudCompletedAt;

@@ -18,6 +18,7 @@
 // and the production singleton can't be DI'd from a unit test.
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:icanbefitter/core/services/sync/schedule_completion_time.dart';
 
 import '../contracts/_sync_service_source.dart';
 
@@ -142,5 +143,31 @@ void main() {
         );
       },
     );
+  });
+
+  group('Task 14 — schedule-completion time preservation (recurrence of 5a36ad, spec §1.6)', () {
+    test('ScheduleCompletionTime never falls back to now() for a completed row', () {
+      expect(
+        ScheduleCompletionTime.scheduledCompletedAtIso({'status': 'completed'}),
+        isNull,
+        reason: 'the resolver must OMIT (spec §5.12), never fabricate DateTime.now()',
+      );
+    });
+
+    test('_syncScheduleCompletions source no longer contains the pre-fix now() fallback', () {
+      // Source-grep companion to the behavioral test in
+      // test/contracts/sync_schedule_completion_payload_hash_index_writer_to_reader_test.dart
+      // (which proves the BEHAVIOR); this pins the removed literal shape so a
+      // future edit cannot silently reintroduce it (same style as this file's
+      // existing _resolveCompletedAt group, which is source-grep for the same
+      // reason -- SyncService is a singleton, no DI seam).
+      final src = loadSyncServiceSource().readAsStringSync();
+      expect(
+        src.contains("entry['completed_at'] ?? DateTime.now()"),
+        isFalse,
+        reason: '_syncScheduleCompletions must not reintroduce the pre-Task-14 '
+            'now() fallback for completed_at',
+      );
+    });
   });
 }

@@ -28,6 +28,7 @@ import 'package:icanbefitter/core/services/sync_domains/profile_sync_domain.dart
 import 'package:icanbefitter/core/services/sync_domains/restore_completeness_sync_domain.dart';
 import 'package:icanbefitter/core/services/sync_domains/streaks_sync_domain.dart';
 import 'package:icanbefitter/core/services/sync_domains/workouts_sync_domain.dart';
+import 'package:icanbefitter/core/services/sync/schedule_completion_time.dart';
 import 'package:icanbefitter/core/services/sync/sync_skip_index.dart';
 import 'package:icanbefitter/core/services/sync_error.dart';
 import 'package:icanbefitter/core/services/sync_flags.dart';
