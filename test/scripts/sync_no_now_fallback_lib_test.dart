@@ -80,6 +80,11 @@ void main() {
     // Task 18 the five health sites, Task 19 coach + notifications +
     // onboarding replay. Empty after Task 19; Task 32 flips the gate to
     // hard-fail.
+    // ⚠ Task 17 also removed the stale `sync_workout.dart|created_at` entry:
+    // Task 16 (875c8f3e) already fixed that site ("G2 count 13 -> 12" per its
+    // own commit message) but never updated this baseline, so this test was
+    // red at HEAD (ea93f97d) before Task 17 touched anything — measured live
+    // via `flutter test test/scripts/sync_no_now_fallback_lib_test.dart`.
     const expected = <String>[
       'sync_coach.dart|created_at',
       'sync_health.dart|created_at',
@@ -87,13 +92,11 @@ void main() {
       'sync_health.dart|created_at',
       'sync_health.dart|created_at',
       'sync_health.dart|created_at',
-      'sync_nutrition.dart|created_at',
       'sync_restore_completeness.dart|created_at',
       'sync_restore_completeness.dart|created_at',
       'sync_restore_completeness.dart|read_at',
       'sync_service.dart|phase_started_at',
       'sync_service.dart|plan_generated_at',
-      'sync_workout.dart|created_at',
     ];
     final actual = <String>[];
     final files = <File>[

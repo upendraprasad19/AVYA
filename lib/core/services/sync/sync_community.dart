@@ -108,110 +108,97 @@ extension SyncServiceCommunity on SyncService {
       if (userId == null) return;
 
       final customBox = _hive.customBox;
+      // Day-swapper + sync-load Task 17 — custom exercises/foods push through
+      // the shared SyncSkipIndex helper (OI-237 write amplification). One
+      // shared index across both tables (row keys `exercise:<id>` /
+      // `food:<id>` cannot collide with each other or a real uuid `id`).
+      final index = SyncSkipIndex(
+        box: customBox,
+        domain: SyncSkipDomain.customItem,
+        disabled: _hashSkipKillSwitchOn(SyncSkipDomain.customItem),
+        ownerChangedNow: () => ownerChangedSince(userId),
+        reportFailure: (op, e, st) =>
+            unawaited(_reportSyncFailure(opType: op, error: e)),
+      );
+      final liveKeys = <String>{};
 
-      // ── Primary path: per-key entries ──
+      // ── Primary path: per-key entries (the only path any current writer
+      // uses) ──
       for (final key in customBox.keys) {
+        if (index.aborted) break;
         if (key is! String) continue;
         final raw = customBox.get(key);
         if (raw is! Map) continue;
 
         if (key.startsWith('custom_exercise_')) {
           final payload = _projectCustomExercise(raw, userId);
+          final id = payload['id'] as String?;
+          if (id == null || id.isEmpty) continue;
+          final rowKey = 'exercise:$id';
+          liveKeys.add(rowKey);
           if (kDebugMode) {
             debugPrint(
               '[SyncService] upsert user_custom_exercises '
-              'name=${payload['name']} user=$userId id=${payload['id']}',
+              'name=${payload['name']} user=$userId id=$id',
             );
           }
-          try {
-            await _supabase.client
-                .from('user_custom_exercises')
-                .upsert(payload, onConflict: 'id');
-            exerciseSuccessCount++;
-          } catch (e, st) {
-            debugPrint(
-              '[SyncService._syncCustomItems] exercise '
-              '"${payload['name']}" key=$key: $e',
-            );
-            // audit-2026-05-11 H-42 — telemetry pair.
-            unawaited(ErrorTelemetry.recordNonFatal(e, st,
-                reason: 'sync_service_if_8'));
-            try {
-              await _reportSyncFailure(opType: 'upsert_custom_exercise', error: e);
-            } catch (_) {}
-          }
+          final ok = await index.pushIfChanged(
+            rowKey,
+            () => SyncFingerprint.of(payload),
+            () async {
+              await _supabase.client
+                  .from('user_custom_exercises')
+                  .upsert(payload, onConflict: 'id');
+              return true;
+            },
+          );
+          if (ok) exerciseSuccessCount++;
         } else if (key.startsWith('custom_food_')) {
           final payload = _projectCustomFood(raw, userId);
+          final id = payload['id'] as String?;
+          if (id == null || id.isEmpty) continue;
+          final rowKey = 'food:$id';
+          liveKeys.add(rowKey);
           if (kDebugMode) {
             debugPrint(
               '[SyncService] upsert user_custom_foods '
-              'name=${payload['name']} user=$userId id=${payload['id']}',
+              'name=${payload['name']} user=$userId id=$id',
             );
           }
-          try {
-            await _supabase.client
-                .from('user_custom_foods')
-                .upsert(payload, onConflict: 'id');
-            foodSuccessCount++;
-          } catch (e, st) {
-            debugPrint(
-              '[SyncService._syncCustomItems] food '
-              '"${payload['name']}" key=$key: $e',
-            );
-            // audit-2026-05-11 H-42 — telemetry pair.
-            unawaited(ErrorTelemetry.recordNonFatal(e, st,
-                reason: 'sync_service_if_9'));
-            try {
-              await _reportSyncFailure(opType: 'upsert_custom_food', error: e);
-            } catch (_) {}
-          }
+          final ok = await index.pushIfChanged(
+            rowKey,
+            () => SyncFingerprint.of(payload),
+            () async {
+              await _supabase.client
+                  .from('user_custom_foods')
+                  .upsert(payload, onConflict: 'id');
+              return true;
+            },
+          );
+          if (ok) foodSuccessCount++;
         }
       }
+      await index.commit(liveKeys: liveKeys);
 
-      // ── Legacy path: aggregate list keys ──
-      // Kept for back-compat with devices that still have the old shape
-      // (never-shipped but safe guard).
-      final legacyExercises = customBox.get('custom_exercises');
-      if (legacyExercises is List) {
-        for (final item in legacyExercises.cast<Map>()) {
-          try {
-            await _supabase.client
-                .from('user_custom_exercises')
-                .upsert(_projectCustomExercise(item, userId), onConflict: 'id');
-          } catch (e, st) {
-            debugPrint('[SyncService._syncCustomItems] legacy exercise: $e');
-            // audit-2026-05-11 H-42 — telemetry pair.
-            unawaited(ErrorTelemetry.recordNonFatal(e, st,
-                reason: 'sync_service_if_10'));
-            try {
-              await _reportSyncFailure(opType: 'upsert_custom_exercise_legacy', error: e);
-            } catch (_) {}
-          }
-        }
-      }
-      final legacyFoods = customBox.get('custom_foods');
-      if (legacyFoods is List) {
-        for (final item in legacyFoods.cast<Map>()) {
-          try {
-            await _supabase.client
-                .from('user_custom_foods')
-                .upsert(_projectCustomFood(item, userId), onConflict: 'id');
-          } catch (e, st) {
-            debugPrint('[SyncService._syncCustomItems] legacy food: $e');
-            // audit-2026-05-11 H-42 — telemetry pair.
-            unawaited(ErrorTelemetry.recordNonFatal(e, st,
-                reason: 'sync_service_if_11'));
-            try {
-              await _reportSyncFailure(opType: 'upsert_custom_food_legacy', error: e);
-            } catch (_) {}
-          }
-        }
-      }
+      // ── Legacy path DELETED (day-swapper + sync-load Task 17 Decision 3 /
+      // D18): the aggregate list keys `custom_exercises` / `custom_foods`
+      // have never been populated by any writer in lib/ ("never-shipped" per
+      // the pre-existing comment this replaces) and G1 hard-fails an
+      // unwrapped write from Task 32 onward, so retiring this dead code —
+      // rather than wrapping it in a synthetic-fingerprint pushIfChanged that
+      // would buy nothing — is the only non-deferring option. If a stray
+      // `custom_exercises`/`custom_foods` list key still exists in Hive on
+      // some device (it never should), it is now simply never read here
+      // again; see `test/sync/custom_item_skip_test.dart`'s regression test.
 
       await _setTimestamp(SyncService._lastCustomSyncKey);
       // E.14.A · audit-2026-05-16 — success-path emission. One event
       // per batch with per-table counts so the audit can distinguish
       // "user has zero custom items" from "this loop silently throws".
+      // Task 17: a count now means "confirmed in cloud this pass" (skip OR
+      // fresh push), not just "freshly pushed" — pushIfChanged returns true
+      // in both cases, which is a strictly more accurate signal for this
+      // event's original purpose and unaffected by whether a row was skipped.
       if (exerciseSuccessCount > 0 || foodSuccessCount > 0) {
         unawaited(ErrorTelemetry.logEvent('upsert_custom_items_success',
             message:

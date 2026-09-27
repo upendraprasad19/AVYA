@@ -87,7 +87,23 @@ class SyncStubServer {
       requests.where((r) => r.isWrite && r.table == table).toList();
 
   Future<void> _handle(HttpRequest req) async {
-    final raw = await utf8.decoder.bind(req).join();
+    String raw;
+    try {
+      raw = await utf8.decoder.bind(req).join();
+    } on HttpException {
+      // Day-swapper + sync-load Task 17 (diagnose a9d3f6) -- an unawaited
+      // caller (e.g. SyncService._reportSyncFailure's fire-and-forget
+      // log-client-error POST) can still be in flight when the OWNING
+      // test's tearDown calls stop() with force:true, which destroys this
+      // connection mid-read. That is a legitimate outcome of a
+      // fire-and-forget call outliving its test, not a bug in the request
+      // itself -- silently drop it rather than let an unhandled exception
+      // surface (attributed to whichever test happens to be running next)
+      // and crash the suite. Never recorded in `requests`.
+      return;
+    } on SocketException {
+      return;
+    }
     Object? body;
     if (raw.isNotEmpty) {
       try {
