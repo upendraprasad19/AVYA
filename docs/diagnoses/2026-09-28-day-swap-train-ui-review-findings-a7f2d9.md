@@ -178,3 +178,55 @@ tree is exactly the pre-feature tree (by widget type and child count).
 
 None — this is a review-fix round on an unmerged, mid-batch feature
 (`day-swapper-sync-load`), not a production regression.
+
+## Fix round 2 correction (task-25-fix2, 2026-09-28)
+
+Fix round 1's F2 fix (above) was applied one notch too literally: it made
+`daySwapRowTrailingSlot` return `const []` whenever `date == null ||
+!daySwapTrainUiEnabled()`, which — with the switch off — omitted
+`DaySwapRowTrailing` from the row entirely, including its "⇄ MOVED" tag.
+That contradicts the spec (`docs/superpowers/specs/2026-09-26-day-swapper-design.md`
+lines ~217, ~699, ~736: "The '⇄ MOVED' tag stays until the day is
+completed" / "After a swap, both rows show '⇄ MOVED' until completed. DONE
+always wins over MOVED.") and `task-25-brief.md` design decision 3 ("The
+MOVED tag stays visible either way … hiding it would make an already-
+swapped day look unswapped"). Fix 1's own report flagged this exact tension
+under "Concerns" without resolving it.
+
+**Coordinator ruling:** the kill switch stops NEW swaps (the ⇅ affordance
+and the drag interaction) — it must not hide swaps that already happened
+(the MOVED-tag display of past state).
+
+**Fix:** `daySwapRowTrailingSlot(String? date)` now checks, only when the
+switch is off, whether the day is already moved
+(`SwapService.instance.weekStates(date)` → `DaySwapDayState.isMoved`, the
+same canonical predicate `DaySwapRowTrailing` itself watches via
+`daySwapWeekProvider`) and keeps the slot (so the MOVED tag still renders)
+when it is. A non-moved day, or a moved-but-completed day (DONE wins over
+MOVED — already baked into `DaySwapRules.isMoved`'s `status != 'completed'`
+clause), still gets `const []`, preserving the pre-feature byte-identical
+layout fix 1 established. `DaySwapRowTrailing` itself is unchanged — it
+already correctly hides only the ⇅ affordance (`enabled && state.movable`)
+while always rendering the MOVED tag when `state.isMoved`; the bug was
+entirely in the caller's slot-insertion decision, not in the widget.
+
+Two new tests added to `test/widgets/week_rows_kill_switch_test.dart`:
+"OFF plus a swapped, uncompleted day — MOVED shows, no ⇅ affordance" and
+"OFF plus a swapped AND completed day — no MOVED tag (DONE wins, spec)".
+The original OFF/no-swaps byte-identity test is unchanged and still green.
+
+Mutation-proof: (1) reverting the guard to fix 1's original
+`date == null || !daySwapTrainUiEnabled()` reddened exactly 1 test (the new
+MOVED-visible-when-OFF test); the other 8 stayed green. (2) Removing the
+guard entirely (always inserting the slot) reddened exactly 2 tests (the
+OFF/no-swaps byte-identity test and the OFF+completed test) — the two cases
+that must produce an empty slot; the other 7 stayed green. Both mutations
+confirmed applied via `grep -c`, confirmed to compile, and restored with a
+clean `diff` against a pre-mutation backup afterward.
+
+Also repointed `test/contracts/day_of_week_canon_writer_to_reader_test.dart`'s
+stale `week_rows.dart:54` prose citation (CLAUDE.md §4.9 conversion-on-touch)
+to a symbol reference (`_buildCompactRow`'s `dayLabel = 'D${day.dayNumber}'`
+fallback) instead of a line number, since that file only ever reads
+`date_utils.dart`-family sources and never source-greps `week_rows.dart`
+itself — assertions unchanged.

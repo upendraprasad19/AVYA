@@ -2,16 +2,36 @@ part of 'screen.dart';
 
 /// The Train week-list row's day-swap trailing slot: the [DaySwapRowTrailing]
 /// widget plus the 8px gap it needs before the EX count — or an empty list
-/// when [date] is null (no real calendar date) or when
-/// `daySwapTrainUiEnabled()` is false. Extracted as a top-level function
-/// (rather than left inline in `_buildCompactRow`) so it is directly
-/// testable: `_buildCompactRow`/`_buildCompactWeekRows` are private
+/// when [date] is null (no real calendar date). Extracted as a top-level
+/// function (rather than left inline in `_buildCompactRow`) so it is
+/// directly testable: `_buildCompactRow`/`_buildCompactWeekRows` are private
 /// extension methods on `_TrainScreenState` and cannot be pumped from a
 /// test in another library, but a top-level function declared in a `part
 /// of` file is visible to anyone importing `screen.dart` (task-25-fix1, F2 —
 /// the caller must not add layout residue when the kill switch is off).
+///
+/// task-25-fix2 (coordinator correction, spec lines ~217/699/736,
+/// task-25-brief.md design decision 3): the kill switch
+/// (`disable_day_swap_train_ui`) stops NEW swaps — it hides the ⇅
+/// affordance and the drag interaction — but it must not hide the "⇄
+/// MOVED" tag of a swap that already happened, because that tag is a
+/// DISPLAY of past state, not an affordance. So with the switch off this
+/// slot is empty ONLY when the day is not already moved; a moved,
+/// not-yet-completed day still gets [DaySwapRowTrailing] (which itself
+/// hides the ⇅ when the switch is off, via `enabled && state.movable`) so
+/// its MOVED tag keeps showing. `SwapService.instance.weekStates` is read
+/// directly (not through `daySwapWeekProvider`) because this is a plain
+/// function, not a widget — it uses the exact same `DaySwapDayState.isMoved`
+/// (`DaySwapRules.isMoved`, DONE-wins-over-MOVED already baked in there) that
+/// [DaySwapRowTrailing] itself watches via the provider, so both sides agree
+/// on one canonical predicate.
 List<Widget> daySwapRowTrailingSlot(String? date) {
-  if (date == null || !daySwapTrainUiEnabled()) return const [];
+  if (date == null) return const [];
+  if (!daySwapTrainUiEnabled()) {
+    final week = SwapService.instance.weekStates(date);
+    final isMoved = week.any((d) => d.date == date && d.isMoved);
+    if (!isMoved) return const [];
+  }
   return [
     DaySwapRowTrailing(date: date),
     const SizedBox(width: 8),
@@ -188,8 +208,10 @@ extension _WeekRows on _TrainScreenState {
               // Day-swap trailing controls: "⇄ MOVED" tag + ⇅ affordance
               // (Task 24/25). Self-contained; skipped for a day with no
               // real calendar date (a not-yet-generated future phase), and
-              // for every dated day when the kill switch is off (F2) — see
-              // daySwapRowTrailingSlot's doc comment.
+              // for a non-moved dated day when the kill switch is off — a
+              // moved-but-not-completed day still gets it so the MOVED tag
+              // keeps showing (task-25-fix2) — see daySwapRowTrailingSlot's
+              // doc comment.
               ...daySwapRowTrailingSlot(
                   day.date != null ? istDateStr(day.date!) : null),
 

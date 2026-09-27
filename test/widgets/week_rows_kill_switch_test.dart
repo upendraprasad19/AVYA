@@ -32,6 +32,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:icanbefitter/core/services/day_swap/day_swap_copy.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/features/train/screens/train/screen.dart';
@@ -133,6 +134,75 @@ void main() {
         expect(row.children.length, 4);
         expect(find.byType(DaySwapRowTrailing), findsOneWidget);
         expect(find.byType(SizedBox), findsOneWidget);
+      });
+
+      // task-25-fix2 (coordinator correction): the switch stops NEW swaps,
+      // not the display of a swap that already happened. Spec lines ~217,
+      // ~699, ~736 + task-25-brief.md design decision 3: the "⇄ MOVED" tag
+      // stays until the day is completed, kill switch or not.
+      testWidgets(
+          'OFF plus a swapped, uncompleted day — MOVED shows, no ⇅ affordance',
+          (tester) async {
+        await tester.runAsync(() async {
+          await HiveService.instance.configBox
+              .put('disable_day_swap_train_ui', true);
+          await HiveService.instance.workoutBox.put('schedule_2026-09-25', {
+            'date': '2026-09-25',
+            'type': 'workout',
+            'workout_name': 'Pull + Core',
+            'status': 'planned',
+            'is_swapped': true,
+            'exercises': <Map<String, dynamic>>[],
+          });
+        });
+        await tester.pumpWidget(ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: Row(children: [
+                const Text('A'),
+                ...daySwapRowTrailingSlot('2026-09-25'),
+                const Text('B'),
+              ]),
+            ),
+          ),
+        ));
+        await tester.pump();
+        expect(find.byType(DaySwapRowTrailing), findsOneWidget);
+        expect(find.text(DaySwapCopy.movedTag), findsOneWidget);
+        expect(find.byIcon(Icons.swap_vert), findsNothing);
+      });
+
+      testWidgets(
+          'OFF plus a swapped AND completed day — no MOVED tag (DONE wins, spec)',
+          (tester) async {
+        await tester.runAsync(() async {
+          await HiveService.instance.configBox
+              .put('disable_day_swap_train_ui', true);
+          await HiveService.instance.workoutBox.put('schedule_2026-09-25', {
+            'date': '2026-09-25',
+            'type': 'workout',
+            'workout_name': 'Pull + Core',
+            'status': 'completed',
+            'is_swapped': true,
+            'exercises': <Map<String, dynamic>>[],
+          });
+        });
+        await tester.pumpWidget(MaterialApp(
+          home: Scaffold(
+            body: Row(children: [
+              const Text('A'),
+              ...daySwapRowTrailingSlot('2026-09-25'),
+              const Text('B'),
+            ]),
+          ),
+        ));
+        await tester.pump();
+        final row = tester.widget<Row>(find.byType(Row));
+        // Pre-feature shape again: a completed, swapped day is exactly like
+        // "no swapped rows" from this slot's point of view (DONE wins).
+        expect(row.children.length, 2);
+        expect(find.byType(DaySwapRowTrailing), findsNothing);
+        expect(find.text(DaySwapCopy.movedTag), findsNothing);
       });
     });
 
