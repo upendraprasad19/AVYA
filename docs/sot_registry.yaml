@@ -10377,13 +10377,19 @@ concepts:
         method: restoreOpTimeout
         semantic: per-op-ceiling
       - file: lib/core/services/sync_service.dart
-        line_range: 2300-2312
+        line_range: 2448-2460
         method: applyRestoreCeiling
         semantic: apply-ceiling
+        notes: day-swapper + sync-load Task 20 shifted this range (+148 lines,
+          restoreLightweightAlways's new single-fetch branch + sync_epoch
+          resync lever were inserted earlier in the file) — repointed per
+          this task's brief exception (fix the minimum when the parity gate
+          blocks on a citation you shifted).
       - file: lib/core/services/sync_service.dart
-        line_range: 2314-2322
+        line_range: 2462-2470
         method: restoreFailureReason
         semantic: telemetry-reason-split
+        notes: same shift as applyRestoreCeiling directly above.
     readers:
       - file: lib/core/router/app_router.dart
         line_range: 800-811

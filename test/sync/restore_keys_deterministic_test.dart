@@ -218,26 +218,48 @@ void main() {
 
   group('Bug #4 — _syncWorkoutTemplates does NOT include id in upsert', () {
     test('parent upsert payload omits id', () {
-      // Narrow to _syncWorkoutTemplates only (NOT _restore).
+      // day-swapper + sync-load Task 20 (coordinator addition, 2026-09-28) —
+      // REPOINTED. Task 16 moved the header payload's map literal out of the
+      // upsert call site into a local `headerPayload()` closure (so the same
+      // map can also feed the domain's SyncSkipIndex fingerprint) and the
+      // call site is now `.upsert(headerPayload(), onConflict: ...)` — the
+      // old `.upsert({` literal search finds nothing (indexOf == -1) even
+      // though the underlying property (the payload sent to
+      // workout_templates omits 'id') still holds, since headerPayload()
+      // itself never includes it. Repoint the search to the closure's own
+      // body instead of the call site's now-indirect literal.
       final start = src.indexOf('Future<void> _syncWorkoutTemplates(');
       expect(start, greaterThan(0));
       final next = src.indexOf('\n  Future<void> ', start + 1);
       final body = src.substring(start, next);
 
-      // Find the workout_templates upsert block. Pre-fix had `'id': cloudTmplId,`.
-      final upsertStart =
-          body.indexOf(".from('workout_templates').upsert({");
-      expect(upsertStart, greaterThan(0),
-          reason: 'workout_templates upsert must exist');
-      final upsertEnd = body.indexOf('}', upsertStart);
-      final upsertBlock = body.substring(upsertStart, upsertEnd);
+      final headerStart =
+          body.indexOf('Map<String, dynamic> headerPayload() =>');
+      expect(headerStart, greaterThan(0),
+          reason: 'headerPayload() closure must exist — it is what is '
+              'actually sent to workout_templates AND fingerprinted');
+      final headerEnd = body.indexOf('};', headerStart);
+      expect(headerEnd, greaterThan(headerStart));
+      final headerBlock = body.substring(headerStart, headerEnd);
 
       expect(
-        upsertBlock.contains("'id':"),
+        headerBlock.contains("'id':"),
         isFalse,
         reason:
-            "Bug #4 — parent upsert must NOT pass 'id'; cloud column "
-            'has gen_random_uuid() default and FK loop fires on UPDATE',
+            "Bug #4 — the workout_templates payload must NOT pass 'id'; "
+            'cloud column has gen_random_uuid() default and FK loop fires '
+            'on UPDATE',
+      );
+
+      // Belt-and-suspenders: the call site itself must actually use this
+      // closure (not some other inline map that could reintroduce 'id').
+      expect(
+        body.contains(
+            ".from('workout_templates').upsert(headerPayload(),"),
+        isTrue,
+        reason: 'the upsert call must feed FROM headerPayload(), not a '
+            'separate literal that could drift from the id-omission '
+            'invariant asserted above',
       );
     });
 

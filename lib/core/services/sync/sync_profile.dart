@@ -940,6 +940,24 @@ extension SyncServiceProfile on SyncService {
       if (rows.isEmpty) return;
       final cloud = Map<String, dynamic>.from(rows.first as Map);
       cloud.remove('user_id');
+      // Day-swapper + sync-load Task 20 (spec §5.11): these two columns are
+      // control-plane values with no place in the progress SEMANTIC key set.
+      // Before this fix, mergeCloudProgress's cloud-non-null-wins loop over
+      // EVERY remaining `cloud` key spread the WHOLE plan_json blob into
+      // userBox['progress']['plan_json'] on every restore (verified: no
+      // reader in lib/ depends on that duplicate — `git grep` for
+      // `progress'\]\['plan_json'\]`-shaped reads is empty). sync_epoch is
+      // read separately by restoreLightweightAlways (below) from the SAME
+      // row and has its own dedicated Hive key (`sync_epoch_seen`); it does
+      // not belong in the progress map either. Leaving it in `cloud` would
+      // create a SECOND, unmaintained copy of the epoch inside
+      // userBox['progress']['sync_epoch'] — nothing would ever advance that
+      // copy after this one write, while the canonical value in
+      // configBox['sync_epoch_seen'] keeps moving via
+      // _applySyncEpochFromRestoreRow below, so the two would silently
+      // diverge on every restore after the first.
+      cloud.remove('plan_json');
+      cloud.remove('sync_epoch');
 
       // F6 · Merge semantics (same as _restoreUserProfile), plus the OI-83
       // monotonic guard on the 3 lifetime/phase fields.

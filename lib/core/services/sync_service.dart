@@ -1444,31 +1444,87 @@ class SyncService {
     }
   }
 
+  /// day-swapper + sync-load Task 20 kill switch: `true` reverts
+  /// [restoreLightweightAlways] to today's verbatim two-fetch path (each of
+  /// _restoreUserProgress / _restoreWorkoutPlan does its own network
+  /// `user_progress` read) — CLAUDE.md §4.6, old path reachable.
+  @visibleForTesting
+  static const String kDisableRestoreSinglePlanFetchKey =
+      'disable_restore_single_plan_fetch';
+
+  /// day-swapper + sync-load Task 20 (spec §5.10 rule 3): the last cloud
+  /// `user_progress.sync_epoch` value this device has acted on. Lives in
+  /// configBox — a device-scoped control value, not per-user progress state.
+  @visibleForTesting
+  static const String kSyncEpochSeenKey = 'sync_epoch_seen';
+
+  bool get _restoreSinglePlanFetchDisabled {
+    try {
+      return _hive.configBox.get(kDisableRestoreSinglePlanFetchKey) == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// F6 · Lightweight restore that fires on every sign-in regardless of
   /// whether Hive has workout history. Pulls the small, frequently-drifting
   /// datasets: profile, progress, subscription-adjacent state, customs,
   /// templates. Bulk history (workout/nutrition logs) stays gated on
   /// empty-Hive so we don't re-download GBs every launch.
+  ///
+  /// Day-swapper + sync-load Task 20 (spec §5.11 / OI-237): runs ONE
+  /// `user_progress` select and hands the same row to BOTH
+  /// _restoreUserProgress and _restoreWorkoutPlan via their existing
+  /// `preFetched` injection params (the same pattern the C3 single-call
+  /// restore already uses at `_attemptSingleCallRestore`) — this used to be
+  /// two separate network reads of the same row on every returning-user
+  /// launch.
   Future<void> restoreLightweightAlways(String userId) async {
     try {
+      if (_restoreSinglePlanFetchDisabled) {
+        await Future.wait(
+          [
+            _safeRestoreOp('user_profile', _restoreUserProfile(userId)),
+            _safeRestoreOp('user_progress', _restoreUserProgress(userId)),
+            _safeRestoreOp('custom_exercises', _restoreCustomExercises(userId)),
+            _safeRestoreOp('custom_foods', _restoreCustomFoods(userId)),
+            _safeRestoreOp('workout_templates', _restoreWorkoutTemplates(userId)),
+            _safeRestoreOp('user_preferences', _restoreUserPreferences(userId)),
+            // F38 (2026-06-07): re-anchor the workout plan on every
+            // returning-user launch. A plan_start_date that advanced on
+            // another device was never re-applied on a normal (non-empty-
+            // Hive) launch, leaving this device's week number / day labels
+            // stale. _restoreWorkoutPlan is idempotent — it applies the
+            // cloud plan_json via the completed-day-preserving
+            // PlanIntegrityReconciler merge (diagnose a7d3f1).
+            _safeRestoreOp('workout_plan', _restoreWorkoutPlan(userId)),
+          ],
+          eagerError: false,
+        );
+        // The sync_epoch lever is independent of this switch (plan-review
+        // round 1, slice D2 F1): one narrow select, on this path only.
+        await _applySyncEpochFromRestoreRow(
+            await _fetchSyncEpochRowForRestore(userId));
+        return;
+      }
+
+      final progressRows = await _fetchUserProgressRowForRestore(userId);
       await Future.wait(
         [
           _safeRestoreOp('user_profile', _restoreUserProfile(userId)),
-          _safeRestoreOp('user_progress', _restoreUserProgress(userId)),
+          _safeRestoreOp('user_progress',
+              _restoreUserProgress(userId, preFetched: progressRows)),
           _safeRestoreOp('custom_exercises', _restoreCustomExercises(userId)),
           _safeRestoreOp('custom_foods', _restoreCustomFoods(userId)),
           _safeRestoreOp('workout_templates', _restoreWorkoutTemplates(userId)),
           _safeRestoreOp('user_preferences', _restoreUserPreferences(userId)),
-          // F38 (2026-06-07): re-anchor the workout plan on every returning-user
-          // launch. A plan_start_date that advanced on another device was never
-          // re-applied on a normal (non-empty-Hive) launch, leaving this device's
-          // week number / day labels stale. _restoreWorkoutPlan is idempotent —
-          // it applies the cloud plan_json via the completed-day-preserving
-          // PlanIntegrityReconciler merge (diagnose a7d3f1).
-          _safeRestoreOp('workout_plan', _restoreWorkoutPlan(userId)),
+          // F38 (2026-06-07) — see rationale above; unchanged.
+          _safeRestoreOp('workout_plan',
+              _restoreWorkoutPlan(userId, preFetched: progressRows)),
         ],
         eagerError: false,
       );
+      await _applySyncEpochFromRestoreRow(progressRows);
     } catch (e, st) {
       debugPrint('[SyncService.restoreLightweightAlways] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
@@ -1478,6 +1534,98 @@ class SyncService {
         await _reportSyncFailure(opType: 'restore_lightweight_always', error: e);
       } catch (_) {}
     }
+  }
+
+  /// The ONE `user_progress` select [restoreLightweightAlways] shares
+  /// between _restoreUserProgress and _restoreWorkoutPlan. A fetch failure
+  /// degrades to an empty list — exactly the shape both consumers already
+  /// treat as "no row yet" via their own `if (rows.isEmpty) return;` guard —
+  /// so a transient failure simply no-ops this pass and retries on the next
+  /// launch, same outcome as today's per-writer network reads on failure.
+  Future<List> _fetchUserProgressRowForRestore(String userId) async {
+    try {
+      return await _supabase.client
+          .from('user_progress')
+          .select()
+          .eq('user_id', userId)
+          .limit(1);
+    } catch (e, st) {
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_restore_lightweight_progress_fetch'));
+      try {
+        await _reportSyncFailure(
+            opType: 'restore_user_progress_fetch', error: e);
+      } catch (_) {}
+      return const [];
+    }
+  }
+
+  /// Kill-switch path only: the old two-fetch restore reads user_progress
+  /// inside each step, so the epoch needs its own extra read. That is one
+  /// extra request per launch, paid only while the switch is on (the
+  /// default single-fetch path adds nothing). A failure degrades to `[]`
+  /// (no epoch action this launch), like the shared fetch.
+  ///
+  /// Deliberately a BARE `.select()`, not `.select('sync_epoch')`: the
+  /// `sync_epoch` column ships in migration 145 (Task 7/U1), which had not
+  /// landed at the time this task executed (`check_schema_column_refs.dart`
+  /// FAILs a literal reference to a column absent from
+  /// `backups/live_schema_columns.json`, and this repo's own convention is
+  /// to regenerate that snapshot in the SAME commit as the migration —
+  /// something this task cannot do without applying a live migration,
+  /// forbidden by its own brief). A bare select is exempt from that gate by
+  /// design (any column set is valid) and is forward-compatible: before
+  /// migration 145, `row['sync_epoch']` below reads null exactly like today;
+  /// after it, the same row simply carries a real value. Once the migration
+  /// is live, the coordinator may narrow this back to `.select('sync_epoch')`
+  /// as a follow-up (a network-cost micro-optimisation, not a correctness
+  /// fix) after regenerating the snapshot.
+  Future<List> _fetchSyncEpochRowForRestore(String userId) async {
+    try {
+      return await _supabase.client
+          .from('user_progress')
+          .select()
+          .eq('user_id', userId)
+          .limit(1);
+    } catch (e, st) {
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_restore_sync_epoch_fetch'));
+      return const [];
+    }
+  }
+
+  /// Day-swapper + sync-load Task 20 (spec §5.10 rule 3): the sync_epoch
+  /// resync lever. `null`/absent (column not yet live, or an older DB state)
+  /// reads as 0. On FIRST sight (no `sync_epoch_seen` key at all) just
+  /// stores the baseline — a fresh device has no skip indexes yet, so
+  /// clearing on every cold boot would be pure waste. Once a baseline is
+  /// known, a STRICTLY GREATER cloud epoch clears every domain's skip index
+  /// (forcing a full one-time re-push) then stores the new epoch; an equal
+  /// or lower epoch is a no-op.
+  Future<void> _applySyncEpochFromRestoreRow(List rows) async {
+    if (rows.isEmpty) return;
+    final row = rows.first;
+    if (row is! Map) return;
+    final cloudEpoch = (row['sync_epoch'] as num?)?.toInt() ?? 0;
+    final rawSeen = _hive.configBox.get(kSyncEpochSeenKey);
+    if (rawSeen == null) {
+      await _hive.configBox.put(kSyncEpochSeenKey, cloudEpoch);
+      return;
+    }
+    final seen = (rawSeen as num?)?.toInt() ?? 0;
+    if (cloudEpoch <= seen) return;
+    try {
+      await SyncSkipIndex.clearAll((box) => switch (box) {
+            SyncSkipBox.workout => _hive.workoutBox,
+            SyncSkipBox.nutrition => _hive.nutritionBox,
+            SyncSkipBox.health => _hive.healthBox,
+            SyncSkipBox.custom => _hive.customBox,
+          });
+    } catch (e, st) {
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_sync_epoch_clear_all'));
+    }
+    await _hive.configBox.put(kSyncEpochSeenKey, cloudEpoch);
   }
 
   /// Pulls all user data from Supabase into Hive.

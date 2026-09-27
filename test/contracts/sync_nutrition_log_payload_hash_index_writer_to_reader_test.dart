@@ -219,16 +219,29 @@ void main() {
   });
 
   group('resetJourney clears the index (source contract)', () {
-    test('SyncSkipDomain.nlog.indexKey is referenced by resetJourney (repointed, see '
-        'the exlog sibling test for the full rationale)', () {
+    test(
+        'nlog is cleared by resetJourney via SyncSkipIndex.clearAll '
+        '(day-swapper + sync-load Task 20 -- see the exlog sibling test for '
+        'the full rationale, including why the check now traces through '
+        'clearJourneyLocalState)', () {
       final src = File('lib/features/dev/simulation_service.dart').readAsStringSync();
-      final start = src.indexOf('Future<void> resetJourney(');
-      expect(start, isNot(-1), reason: 'resetJourney must exist at this name');
-      final end = src.indexOf('\n  }\n', start);
-      final body = src.substring(start, end == -1 ? src.length : end);
-      expect(body, contains('SyncSkipDomain.nlog.indexKey'),
+      final rjStart = src.indexOf('Future<void> resetJourney(');
+      expect(rjStart, isNot(-1), reason: 'resetJourney must exist at this name');
+      final rjEnd = src.indexOf('\n  }\n', rjStart);
+      final rjBody = src.substring(rjStart, rjEnd == -1 ? src.length : rjEnd);
+      expect(rjBody, contains('clearJourneyLocalState()'),
           reason: 'a stale fingerprint entry survives a sim reset and mis-skips the '
-              're-drive push');
+              're-drive push unless resetJourney routes through the Hive-only '
+              'reset helper');
+
+      final clStart = src.indexOf('Future<void> clearJourneyLocalState(');
+      expect(clStart, isNot(-1),
+          reason: 'clearJourneyLocalState must exist at this name');
+      final clEnd = src.indexOf('\n  }\n', clStart);
+      final clBody = src.substring(clStart, clEnd == -1 ? src.length : clEnd);
+      expect(clBody, contains('SyncSkipIndex.clearAll('),
+          reason: 'clearJourneyLocalState must clear every domain via the '
+              'shared helper, not just exlog/sched/nlog individually');
     });
   });
 }

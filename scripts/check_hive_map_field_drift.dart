@@ -440,4 +440,14 @@ const _alwaysOk = <String>{
   // ai_snapshot_builder.dart also reads those log prefixes elsewhere for the
   // PR/meals/logs snapshot.
   'code', 'binding_constraint',
+  // Day-swapper + sync-load Task 20 (a9d3f6, 2026-09-28) — `sync_epoch` is a
+  // cloud `user_progress.sync_epoch` COLUMN, read off the REST response row
+  // in `SyncService._applySyncEpochFromRestoreRow` (the resync lever, spec
+  // §5.10 rule 3) and stripped from the `cloud` map in
+  // `sync/sync_profile.dart`'s `_restoreUserProgress` before the progress
+  // merge. NOT an exlog_*/wlog_* Hive-map field (neither emit set carries
+  // it); the prefix heuristic mis-attributes it because sync_service.dart
+  // also walks those prefixes elsewhere for restore/sync — same mechanism as
+  // `streak_progress_version` above.
+  'sync_epoch',
 };

@@ -115,35 +115,7 @@ class SimulationService {
     final read = ref.read(workoutScheduleReadServiceProvider);
     final profile = UserRepository.instance.getProfile() ?? {};
 
-    // Wipe all previously-logged journey data so re-runs start clean (the
-    // WriteServices key by date; without this a re-drive double-logs).
-    await _clearKeysWithPrefixes(HiveService.instance.workoutBox, [
-      'exlog_', 'wlog_', 'schedule_', 'displaced_', 'exercise_log_index_',
-      // H1b Part A (A-fix-3) — the schedule fingerprint index is a single
-      // reserved key (`sync_sched_payload_hash_index`), NOT a `schedule_`
-      // prefix, so the entries above miss it. A survivor would mis-skip the
-      // sim re-drive's scheduled_workouts push. The full key equals this
-      // prefix, so startsWith deletes exactly it. sched moved onto
-      // SyncSkipIndex in Task 15, so it is referenced symbolically like
-      // exlog/nlog below (same key value as before).
-      SyncSkipDomain.sched.indexKey,
-      // Day-swapper + sync-load Task 13 — exlog's index now lives under
-      // SyncSkipDomain, so resetJourney references it symbolically instead
-      // of repeating the literal (G1's index_literal_outside_helper rule,
-      // spec §7). Same key value as before: 'sync_exlog_payload_hash_index'.
-      SyncSkipDomain.exlog.indexKey,
-    ]);
-    await _clearKeysWithPrefixes(HiveService.instance.healthBox,
-        const ['weight_', 'sleep_log_', 'water_ml_', 'hydration_', 'step_']);
-    await HiveService.instance.healthBox.delete('streaks');
-    await HiveService.instance.healthBox.delete('steps_today');
-    await HiveService.instance.healthBox.delete('steps_date');
-    await _clearKeysWithPrefixes(HiveService.instance.nutritionBox, [
-      'nlog_',
-      // Day-swapper + sync-load Task 13 — see the exlog comment above for
-      // the full rationale (G1's index_literal_outside_helper rule).
-      SyncSkipDomain.nlog.indexKey,
-    ]);
+    await clearJourneyLocalState();
 
     // Free tier.
     await ref.read(subscriptionServiceProvider).writeSubscriptionState(
@@ -181,6 +153,40 @@ class SimulationService {
     );
 
     resetCursor(ref);
+  }
+
+  /// Day-swapper + sync-load Task 20 (coordinator addendum): the Hive-only
+  /// half of [resetJourney] — it never reads `ref`, so it is extracted here
+  /// to be testable without a WidgetRef/ProviderContainer harness.
+  /// [resetJourney] is the only production caller; it already gates on
+  /// kDebugMode before reaching this point, so this method carries no guard
+  /// of its own.
+  Future<void> clearJourneyLocalState() async {
+    // Wipe all previously-logged journey data so re-runs start clean (the
+    // WriteServices key by date; without this a re-drive double-logs).
+    await _clearKeysWithPrefixes(HiveService.instance.workoutBox, const [
+      'exlog_', 'wlog_', 'schedule_', 'displaced_', 'exercise_log_index_',
+    ]);
+    await _clearKeysWithPrefixes(HiveService.instance.healthBox,
+        const ['weight_', 'sleep_log_', 'water_ml_', 'hydration_', 'step_']);
+    await HiveService.instance.healthBox.delete('streaks');
+    await HiveService.instance.healthBox.delete('steps_today');
+    await HiveService.instance.healthBox.delete('steps_date');
+    await _clearKeysWithPrefixes(
+        HiveService.instance.nutritionBox, const ['nlog_']);
+    // Day-swapper + sync-load Task 20 (coordinator addendum): sched, exlog
+    // and nlog's index deletes above (previously a raw literal for sched and
+    // symbolic SyncSkipDomain.<x>.indexKey references for exlog/nlog, Tasks
+    // 13/15) are replaced by this ONE call, which walks every one of the
+    // (now 17) SyncSkipDomain values and deletes its index wherever it
+    // lives — a survivor here mis-skips its domain's re-drive push once
+    // resetJourney wipes cloud data out-of-band.
+    await SyncSkipIndex.clearAll((box) => switch (box) {
+          SyncSkipBox.workout => HiveService.instance.workoutBox,
+          SyncSkipBox.nutrition => HiveService.instance.nutritionBox,
+          SyncSkipBox.health => HiveService.instance.healthBox,
+          SyncSkipBox.custom => HiveService.instance.customBox,
+        });
   }
 
   /// Reset the cursor to the plan start (day-0 of the journey) and reseed

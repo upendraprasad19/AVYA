@@ -1175,6 +1175,18 @@ extension SyncServiceWorkout on SyncService {
 
   /// Pushes the current workout plan (plan JSON + schedule entries + dates)
   /// to Supabase user_progress.plan_json so it can be restored on new device.
+  ///
+  /// Day-swapper + sync-load Task 20 (spec §5.9 plan row): wrapped in
+  /// SyncSkipIndex so an unchanged bundle stops re-uploading every pass. The
+  /// stored fingerprint under kPlanBundleRowKey ('bundle') in the SAME
+  /// user-scoped workoutBox IS `plan_bundle_cloud_fingerprint` (spec §5.7 L2,
+  /// read by Task 22's restore-merge skip via
+  /// `SyncSkipIndex.readIndex(HiveService.instance.workoutBox,
+  /// SyncSkipDomain.plan.indexKey)[kPlanBundleRowKey]`). `synced_at` is a
+  /// sent-at stamp (spec §5.9's fingerprint table) and is EXCLUDED from the
+  /// fingerprint input so a re-push driven only by the clock never happens;
+  /// it is still sent on the wire (not a past timestamp — §5.12 does not
+  /// apply to it).
   Future<void> _syncWorkoutPlan(String userId) async {
     try {
       final workoutBox = _hive.workoutBox;
@@ -1196,18 +1208,40 @@ extension SyncServiceWorkout on SyncService {
         }
       }
 
+      final planCopy = plan is Map ? Map<String, dynamic>.from(plan) : plan;
       final planBundle = {
-        'plan': plan is Map ? Map<String, dynamic>.from(plan) : plan,
+        'plan': planCopy,
         'plan_start_date': planStart,
         'plan_end_date': planEnd,
         'schedules': schedules,
         'synced_at': DateTime.now().toIso8601String(),
       };
 
-      await _supabase.client.from('user_progress').upsert({
-        'user_id': userId,
-        'plan_json': planBundle,
-      }, onConflict: 'user_id');
+      final index = SyncSkipIndex(
+        box: workoutBox,
+        domain: SyncSkipDomain.plan,
+        disabled: _hashSkipKillSwitchOn(SyncSkipDomain.plan),
+        ownerChangedNow: () => ownerChangedSince(userId),
+        reportFailure: (op, e, st) =>
+            unawaited(_reportSyncFailure(opType: op, error: e)),
+      );
+      await index.pushIfChanged(
+        kPlanBundleRowKey,
+        () => SyncFingerprint.of({
+          'plan': planCopy,
+          'plan_start_date': planStart,
+          'plan_end_date': planEnd,
+          'schedules': schedules,
+        }),
+        () async {
+          await _supabase.client.from('user_progress').upsert({
+            'user_id': userId,
+            'plan_json': planBundle,
+          }, onConflict: 'user_id');
+          return true;
+        },
+      );
+      await index.commit(liveKeys: {kPlanBundleRowKey});
     } catch (e, st) {
       debugPrint('[SyncService._syncWorkoutPlan] $e');
       // audit-2026-05-11 H-42 — telemetry pair.

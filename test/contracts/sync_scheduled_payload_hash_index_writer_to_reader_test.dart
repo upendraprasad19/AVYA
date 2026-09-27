@@ -15,6 +15,8 @@
 //
 // See docs/diagnoses/2026-09-26-sync-write-amplification-a9d3f6.md.
 
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/sync/sync_skip_index.dart';
@@ -294,6 +296,38 @@ void main() {
       await SyncService.instance.pushScheduledWorkoutsForSyncDomain();
       expect(SyncSkipIndex.readIndex(box, SyncSkipDomain.sched.indexKey).containsKey('2026-09-27'),
           isFalse);
+    });
+  });
+
+  // Day-swapper + sync-load Task 20 (coordinator addendum) — Task 15 left
+  // resetJourney's sched literal untouched (its own "Notes for the
+  // coordinator" section names Task 20 as where the conversion lands), and
+  // this file carried no "resetJourney clears the index" test to repoint —
+  // this is therefore the FIRST such test for sched, added for parity with
+  // the exlog/nlog sibling tests in the two sibling contract files.
+  group('resetJourney clears the index (source contract)', () {
+    test(
+        'sched is cleared by resetJourney via SyncSkipIndex.clearAll '
+        '(see the exlog sibling test for the full rationale, including why '
+        'the check traces through clearJourneyLocalState)', () {
+      final src = File('lib/features/dev/simulation_service.dart').readAsStringSync();
+      final rjStart = src.indexOf('Future<void> resetJourney(');
+      expect(rjStart, isNot(-1), reason: 'resetJourney must exist at this name');
+      final rjEnd = src.indexOf('\n  }\n', rjStart);
+      final rjBody = src.substring(rjStart, rjEnd == -1 ? src.length : rjEnd);
+      expect(rjBody, contains('clearJourneyLocalState()'),
+          reason: 'a stale fingerprint entry survives a sim reset and mis-skips the '
+              're-drive push unless resetJourney routes through the Hive-only '
+              'reset helper');
+
+      final clStart = src.indexOf('Future<void> clearJourneyLocalState(');
+      expect(clStart, isNot(-1),
+          reason: 'clearJourneyLocalState must exist at this name');
+      final clEnd = src.indexOf('\n  }\n', clStart);
+      final clBody = src.substring(clStart, clEnd == -1 ? src.length : clEnd);
+      expect(clBody, contains('SyncSkipIndex.clearAll('),
+          reason: 'clearJourneyLocalState must clear every domain via the '
+              'shared helper, not just exlog/sched/nlog individually');
     });
   });
 }
