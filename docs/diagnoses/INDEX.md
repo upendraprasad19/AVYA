@@ -6,6 +6,10 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### alert_threshold_tuning (2 bugs)
+- 2026-09-27 d2c9f4 — The live alert_client_errors_spike sub-block of ops_alerts_30min (jobid 43) counted RAW client_errors rows over a 1-hour window, with no offline-noise exclusion, no per-user breadth signal, and no…
+- 2026-06-06 f0b9d3 — The alert_client_errors_spike cron paged critical for benign volume. Alert #24 fired "client_errors spike: 354 rows in last hour" (critical) for what was the founder's own reinstall/restore burst on…
+
 ### alert-contract-test-infra (1 bugs)
 - 2026-09-27 d4a7c1 — Merging `template-stable-identity` into `main` triggered the pre-merge-commit hook's `check_regression_catalog.dart` gate (a merge-only gate that runs the Dart regression tests cited by diagnose-docs…
 
@@ -922,9 +926,6 @@ rather than a Hive box. (1 bugs)
 ### client_ux_flow_and_restore_correctness (1 bugs)
 - 2026-06-07 a8e3c5 — Twelve client UX/flow/restore defects from the 2026-06-07 audit. F3: the streak explainer claimed "+1 each week you complete at least 80% of scheduled workouts", but the real algorithm is +1 per…
 
-### alert_threshold_tuning (1 bugs)
-- 2026-06-06 f0b9d3 — The alert_client_errors_spike cron paged critical for benign volume. Alert #24 fired "client_errors spike: 354 rows in last hour" (critical) for what was the founder's own reinstall/restore burst on…
-
 ### coach_interactions (4 bugs)
 - 2026-06-06 c3f9a1 — Two AI-coach interactions saved within the same millisecond both minted the Hive key coach_<ms>; the second coachBox.put overwrote the first (silent data loss). Surfaced as a non-deterministic CI…
 - 2026-05-29 9e1d4c — Every rank promotion silently fails to deliver its celebration — no AI congrats message is stored and no OneSignal "Promotion Day" push is sent.
@@ -1417,6 +1418,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-27 | d2c9f4 | The live alert_client_errors_spike sub-block of ops_alerts_30min (jobid 43) counted RAW client_errors rows over a 1-hour window, with no offline-noise exclusion, no per-user breadth signal, and no… | alert_threshold_tuning | test/contracts/ops_alerts_spike_breadth_test.dart |
 | 2026-09-27 | d4a7c1 | Merging `template-stable-identity` into `main` triggered the pre-merge-commit hook's `check_regression_catalog.dart` gate (a merge-only gate that runs the Dart regression tests cited by diagnose-docs… | alert-contract-test-infra | "test/contracts/alert_cron_job_silent_test.dart and test/contracts/alert_sql_job_failures_test.dart (both pre-existing, this fix repairs their own assertion rather than adding a new test)" |
 | 2026-09-27 | f4a8c2 | Found by the reuse audit. Deleting a workout template on one device, then restoring on another (or after a reinstall), could bring the deleted template — and any workout day scheduled against it —… | workout_templates | test/sync/oi252_deleted_template_restore_behavioral_test.dart |
 | 2026-09-27 | b7f3e2 | The `main` push (after merging `template-stable-identity`) ran the full `flutter test` suite under `scripts/pre-push.sh` and hit one failure:… | food_log_provider_invalidation | "test/widgets/log_food_sheet_search_respects_locked_slot_test.dart (pre-existing; this fix repairs the production code the test's own teardown was exposing, not the test itself)" |

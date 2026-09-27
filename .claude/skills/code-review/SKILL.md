@@ -3196,3 +3196,32 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   counter proving the gate is REACHED, without exercising the untestable network branch) is a
   reusable pattern for this "live-network-gated logic, zero mock infra" shape. Review:
   `docs/reviews/template-stable-identity-bpass.md`.
+- **2026-09-27** — blast-radius **platform** — branch `ops-alerting-b2a2a` (migration 147:
+  `alert_client_errors_spike` rewrite — distinct-event counting, offline-noise exclusion,
+  per-user + server-error-class breadth arms, rank-based dedup; recurrence of 2026-06-06's
+  f0b9d3 spike-filter-drift class). **1 finding (P1, guard_without_its_mirror): the migration
+  adds an `error_code NOT IN ('event', 'info')` guard to the NEW `users`/`server_events` arms
+  specifically to exclude the routine `subscription_refresh_query_returned_null` breadcrumb, but
+  the PRIMARY `cnt` metric — the one this whole migration exists to fix — has no equivalent
+  guard, so the same breadcrumb (and any other event/info-coded op_type matching the `_null`
+  reinclusion regex) still inflates `cnt` unconditionally.** Live data confirmed the exposure is
+  real (28 occurrences of this exact breadcrumb over 36 days, matched by the outer WHERE) but not
+  currently material (max observed `cnt`=24 vs. floor 40). **Tuning: a fix that hardens two new
+  arms against a NAMED noise source while leaving the pre-existing primary metric exposed to the
+  IDENTICAL noise source is easy to miss because the diagnose doc's own narrative frames the
+  breadcrumb problem as "solved" once the arm it explicitly discusses is protected — the reviewer
+  had to independently ask "which OTHER column reads from the same filtered rowset" rather than
+  trusting the doc's scoped framing.** Also mutation-tested two of the diff's own claimed
+  mutation-proofs directly (removed the `server_events` arm's exception-shaped guard alone;
+  removed the fire-condition's parens) rather than accepting the diagnose doc's mutation record on
+  faith — both reproduced the doc's claimed "exactly 1 of 10 tests reddens" exactly, restored via
+  `cp` + `sha256sum` verification each time. All of the diagnose doc's live-data numeric claims
+  (8 firing ticks, max_users=2, 770/6199 offline rows, 0 overridden, 8/66 status/type matches)
+  were independently re-derived from fresh read-only SQL rather than re-run from the doc's own
+  queries, and all matched exactly. Review: `docs/reviews/46c9b9ff3bde-review.md`. **Resolution:**
+  triaged `accepted`, fixed by documentation + a pinning test rather than a SQL change — narrowing
+  `cnt` would have undone migration 087's own P0 fix, and a name-based exclusion for this one
+  op_type is the exact "transient denylist" f0b9d3's diagnose doc already rejected. Filed OI-254
+  (the real fix is a client-side op_type rename, in scope for the batch's next unit B2a-2b, not
+  this pure-SQL migration); mutation-proven pinning test added asserting `cnt` carries no `FILTER`
+  clause, so a future silent change to either side of the asymmetry is caught.
