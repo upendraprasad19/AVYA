@@ -205,8 +205,8 @@ class StructuralViolation {
   final String path;
   final int line;
 
-  /// `unwrapped_write`, `swallowing_catch`, `catch_error_in_push` or
-  /// `index_literal_outside_helper`.
+  /// `unwrapped_write`, `swallowing_catch`, `catch_error_in_push`,
+  /// `index_literal_outside_helper` or `aliased_query_builder`.
   final String kind;
   final String detail;
 
@@ -226,6 +226,22 @@ final RegExp _catchError = RegExp(r'\.catchError\s*\(');
 final RegExp _rethrowOrFalse = RegExp(r'\brethrow\b|\breturn\s+false\s*;');
 final RegExp _indexLiteral =
     RegExp(r'''['"][^'"\n]*payload_hash_index[^'"\n]*['"]''');
+
+// Fix round 1 (day-swapper + sync-load, spec §7 G1): a `.from(` builder
+// stored in a variable evades findSyncWriteCalls entirely, because the
+// eventual `.upsert(`/etc. call site is a DIFFERENT statement with no
+// `.from(` of its own — the write is real and unwrapped, but structurally
+// invisible to the statement-scoped scan above it. Ruling: forbid aliasing
+// outright rather than trying to trace it — lexical form is the contract.
+final RegExp _assignOp = RegExp(r'(?<![=!<>])=(?!=)(?!>)');
+// `.stream(` is terminal too: `_realtimeSubscription = client.from('t')
+// .stream(...).listen(...)` (sync_realtime.dart) opens a realtime channel and
+// is never later called with a write verb — it is a subscription handle, not
+// a query builder stashed for a future `.upsert(`/etc. Confirmed live: this
+// is the ONLY assignment of a `.from(` chain anywhere in the current sync
+// layer (2026-09-27), and excluding it is what keeps this gate at zero
+// false positives on the real tree.
+final RegExp _terminalRead = RegExp(r'\.(select|rpc|stream)\s*\(');
 
 const String _skipIndexPath = 'lib/core/services/sync/sync_skip_index.dart';
 
@@ -325,6 +341,37 @@ Set<String> enumerateSyncWriteTables(Map<String, String> sourcesByPath) => {
             if (c.table != null) c.table!,
     };
 
+/// Every statement in the sync layer that DECLARES OR ASSIGNS a Supabase
+/// query builder to a variable instead of executing it inline —
+/// `final row = _supabase.client.from('t');` — rather than writing the chain
+/// inline where `findSyncWriteCalls` can see the write. A statement counts
+/// only when it has an assignment `=` before the `.from(`, contains no write
+/// verb of its own (that shape is an executed write already governed by the
+/// `unwrapped_write` rule above) and no terminal read (`.select(`/`.rpc(`,
+/// which executes the builder rather than storing it).
+List<StructuralViolation> _findAliasedQueryBuilders(String path, String s) {
+  final out = <StructuralViolation>[];
+  final seenStarts = <int>{};
+  for (final m in _supabaseFrom.allMatches(s)) {
+    var start = m.start;
+    while (start > 0 && !';{}'.contains(s[start - 1])) {
+      start--;
+    }
+    if (!seenStarts.add(start)) continue;
+    final semi = s.indexOf(';', m.start);
+    final end = semi < 0 ? s.length : semi;
+    final statement = s.substring(start, end);
+    final beforeFrom = s.substring(start, m.start);
+    if (!_assignOp.hasMatch(beforeFrom)) continue;
+    if (_writeVerb.hasMatch(statement)) continue;
+    if (_terminalRead.hasMatch(statement)) continue;
+    out.add(StructuralViolation(path, _lineOf(s, m.start), 'aliased_query_builder',
+        'store no Supabase query builder in a variable — write the chain '
+        'inline so G1 can see the write (spec §7)'));
+  }
+  return out;
+}
+
 /// The G1 structural check over RAW sources keyed by repo-relative path.
 List<StructuralViolation> checkSyncStructure(
   Map<String, String> sourcesByPath, {
@@ -348,6 +395,8 @@ List<StructuralViolation> checkSyncStructure(
           '.${call.verb}( on ${call.table ?? '<non-literal table>'} is outside '
           'pushIfChanged( and outside the allowlist (spec §7 G1)'));
     }
+
+    out.addAll(_findAliasedQueryBuilders(path, s));
 
     for (final sp in pushSpans) {
       final body = s.substring(sp.$1, sp.$2 + 1);

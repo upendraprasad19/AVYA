@@ -796,6 +796,31 @@ check_sync_hash_skip_atomicity.dart:
     the full 36-test run (16 sync_write_structure_lib_test.dart + 15
     sync_hash_skip_atomicity_lib_test.dart + 5 sync_hash_skip_atomicity_e2e_test.dart) is
     green.
+    Fix round 1 (coordinator finding, day-swapper + sync-load): findSyncWriteCalls only
+    sees a write whose OWN statement contains `.from(` -- storing the builder in a
+    variable (`final row = client.from('t'); ...; row.upsert(e);`) evades G1 entirely.
+    Added `_findAliasedQueryBuilders` / kind `aliased_query_builder`: a statement in a
+    sync-layer file that assigns a `.from(`-bearing expression to a variable, contains no
+    write verb of its own, and no terminal op (`.select(`/`.rpc(`/`.stream(`) is flagged.
+    Mutation: `if (!seenStarts.add(start)) continue;` followed by an unconditional
+    `if (true) continue;` (confirmed applied via `grep -c "if (true) continue;"` = 1)
+    reddens 1 test ("an aliased query builder stored in a variable is a violation";
+    `Expected: an object with length of <1> Actual: []`) -- 1 expected, 1 observed,
+    assertion failure not a compile error. Restored; `grep -c "if (true) continue;"`
+    returns 0 post-restore and `git diff scripts/sync_hash_skip_atomicity_lib.dart` shows
+    no trace of the mutated line, confirmed against the tracked Task-3 commit. Full
+    41-test run (21 sync_write_structure_lib_test.dart + 15
+    sync_hash_skip_atomicity_lib_test.dart + 5 sync_hash_skip_atomicity_e2e_test.dart)
+    green after restore. Live false positive found and fixed during this round:
+    `_terminalRead` originally excluded only `.select(`/`.rpc(`, which flagged
+    `sync_realtime.dart:78`'s `_realtimeSubscription = client.from('weight_logs')
+    .stream(...).listen(...)` -- a realtime-channel handle, never later called with a
+    write verb, not an aliased builder. Widened the exclusion to include `.stream(` and
+    added a dedicated regression test pinning the exact real-tree shape. Re-ran the real
+    gate (`dart run scripts/check_sync_hash_skip_atomicity.dart`): 28 unwrapped_write + 3
+    index_literal_outside_helper = 31 violations, zero aliased_query_builder, exit 0 --
+    byte-identical to the pre-fix-round-1 count, confirming zero real aliasing exists in
+    the current tree and the new check adds no false positives.
 # ---------------------------------------------------------------------------
 # self-learning discipline batch, 2026-09-19 (discipline-gates-tier12) — 8
 # gates mechanizing sub-patterns from feedback_green_check_input_set_width.md

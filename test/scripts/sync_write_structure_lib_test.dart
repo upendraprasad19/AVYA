@@ -146,6 +146,58 @@ void main() {
               {'lib/core/services/workout_write_service.dart': src}),
           isEmpty);
     });
+
+    test('an aliased query builder stored in a variable is a violation '
+        '(fix round 1: it evades findSyncWriteCalls entirely, since the '
+        'eventual .upsert( call carries no .from( of its own)', () {
+      const src = "Future<void> f() async {\n"
+          "  final row = _supabase.client.from('water_logs');\n"
+          "  await idx.pushIfChanged(k, () => fp, () async {\n"
+          "    await row.upsert(e);\n"
+          "    return true;\n"
+          "  });\n"
+          "}";
+      final violations = checkSyncStructure(_one(src));
+      expect(violations, hasLength(1));
+      expect(violations.single.kind, 'aliased_query_builder');
+      expect(violations.single.line, 2);
+    });
+
+    test('an executed read assigned to a variable is not flagged as aliased '
+        '(.select( is a terminal read, not a stored builder)', () {
+      const src =
+          "final res = await _supabase.client.from('t').select();";
+      expect(checkSyncStructure(_one(src)), isEmpty);
+    });
+
+    test('an executed write assigned to a variable is not flagged as '
+        'aliased (it has a write verb; existing unwrapped_write rules '
+        'apply instead)', () {
+      const src = "final r = await client.from('t').upsert(x);";
+      final violations = checkSyncStructure(_one(src));
+      expect(violations.map((v) => v.kind), ['unwrapped_write']);
+    });
+
+    test('an aliased builder inside a comment is not flagged', () {
+      const src =
+          "void f() {\n  // final row = _supabase.client.from('t');\n}";
+      expect(checkSyncStructure(_one(src)), isEmpty);
+    });
+
+    test('a realtime stream subscription assigned to a variable is not '
+        'flagged as aliased (fix round 1 false positive found live in '
+        'sync_realtime.dart:78 — .stream(...).listen(...) is a terminal '
+        'op that opens a channel, never later called with a write verb)',
+        () {
+      const src = "void f() {\n"
+          "  _realtimeSubscription = _supabase.client\n"
+          "      .from('weight_logs')\n"
+          "      .stream(primaryKey: ['id'])\n"
+          "      .eq('user_id', userId)\n"
+          "      .listen((rows) {});\n"
+          "}";
+      expect(checkSyncStructure(_one(src)), isEmpty);
+    });
   });
 
   group('the real sync layer', () {
