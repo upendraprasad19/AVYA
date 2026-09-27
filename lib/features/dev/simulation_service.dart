@@ -123,9 +123,10 @@ class SimulationService {
       // reserved key (`sync_sched_payload_hash_index`), NOT a `schedule_`
       // prefix, so the entries above miss it. A survivor would mis-skip the
       // sim re-drive's scheduled_workouts push. The full key equals this
-      // prefix, so startsWith deletes exactly it. Still a raw literal here —
-      // sched moves onto SyncSkipIndex in Task 15, not this task.
-      'sync_sched_payload_hash_index',
+      // prefix, so startsWith deletes exactly it. sched moved onto
+      // SyncSkipIndex in Task 15, so it is referenced symbolically like
+      // exlog/nlog below (same key value as before).
+      SyncSkipDomain.sched.indexKey,
       // Day-swapper + sync-load Task 13 — exlog's index now lives under
       // SyncSkipDomain, so resetJourney references it symbolically instead
       // of repeating the literal (G1's index_literal_outside_helper rule,

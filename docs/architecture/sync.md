@@ -168,8 +168,13 @@ corrected at plan-review, spec §6 point 2).
 
 **Domains, in the order the pattern was extended:**
 - `_syncScheduledWorkouts` (H1b Part A, diagnose `b4f7e2`, 2026-06-27) — the original.
-  Status-based carve-out: never skips a `completed` row (d9b2c5's cross-device-completion
-  contract). SoT: `sync_scheduled_payload_hash_index`.
+  Originally carried a status-based carve-out (never skip a `completed` row — d9b2c5's
+  cross-device-completion contract, A-fix-1). ⚠ **Superseded by day-swapper + sync-load
+  Task 15:** the domain now runs on the shared `SyncSkipIndex` (`sched`) with NO status
+  special-case — a completed row skips on a fingerprint match like any other, because the
+  server-side completed-day guard (migration 147) refuses a stale overwrite of a completed
+  row. Migration 147 must therefore be applied live BEFORE any build carrying Task 15
+  ships. SoT: `sync_scheduled_payload_hash_index`.
 - `_syncExerciseLogs` (OI-204 Task 2, diagnose `d3f8a6`) — bundles the summary row plus its
   per-set rows as one fingerprint; no status carve-out (verified no out-of-band cloud
   mutator for `workout_log_exercises`/`workout_log_sets`). SoT:

@@ -94,8 +94,13 @@ e7c1a9). Two rules this imposes on callers:
   pass under a new owner would cross accounts (esp. `pushSnapshot`'s `coach_memory`
   mirror into `coachBox`). Each path is kill-switched (`disable_sync_debounce` /
   `disable_sched_hash_skip` / `disable_snapshot_debounce`) to verbatim pre-Unit-H
-  behavior. `_syncScheduledWorkouts` additionally skips an unchanged *planned*
-  row via a sync-owned fingerprint index — but NEVER a `completed` row (d9b2c5).
+  behavior. `_syncScheduledWorkouts` additionally skips an unchanged row via the
+  shared `SyncSkipIndex` (domain `sched`, day-swapper + sync-load Task 15). ⚠ Since
+  Task 15 that includes `completed` rows — the d9b2c5 "never skip a completed row"
+  carve-out (A-fix-1) is deliberately SUPERSEDED, because the server-side
+  completed-day guard (migration 147) now refuses a stale overwrite of a completed
+  row. That makes migration 147 a HARD prerequisite: it must be applied live
+  before any build carrying Task 15 ships.
 
 **Re-audited clean 2026-09-21 (A3-follow, observation-batch-and-digest-redesign).**
 Grepped every `unawaited(SyncService.instance.<sync|push>...)`-shaped call site
