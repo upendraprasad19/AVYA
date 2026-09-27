@@ -58,11 +58,11 @@ export interface DigestKey {
  * EVERY quota_key the ledger carries, enumerated — and pinned both ways by
  * test/contracts/founder_digest_caps_mirror_test.dart against the callers'
  * `p_quota_key` constants and the cap triggers (migration 129). A map of
- * "the keys I thought of" over a template of ten sections is membership
+ * "the keys I thought of" over a template of eleven sections is membership
  * without completeness: a misspelt key returns 0 rows and renders "none",
  * which the three-state rendering cannot see.
  *
- * Explicit type, NOT `as const`: with `cap` present on 7 of 10 literals,
+ * Explicit type, NOT `as const`: with `cap` present on 7 of 11 literals,
  * `as const` makes a union whose members disagree on `cap`, and `k.cap` is
  * TS2339 under CI's `deno check`.
  */
@@ -85,6 +85,13 @@ export const DIGEST_KEYS: readonly DigestKey[] = [
   // 10-minute buckets, totals only. Unaffected by the slop above: 18:30Z is
   // an exact 10-minute boundary, so its buckets never straddle IST midnight.
   { key: "verify_payment", label: "verify-payment", kind: "subday" },
+  // 6h buckets, totals only — daily-snapshot's coaching-notes extraction
+  // meter (a2b, single-owner batch, 2026-09-27; OI-162-class recurrence).
+  // Same "totals only, no cap shown" precedent as delete_account/
+  // verify_payment above: this aggregates ACROSS ALL USERS per bucket, so
+  // a per-user cap (1) wouldn't mean "at cap" the way a daily per-user
+  // metric does.
+  { key: "coach_extraction", label: "Coach extraction", kind: "subday" },
   { key: "free_image_analysis", label: "Free image reads", kind: "lifetime", cap: 5 },
   { key: "weekly_report_free", label: "Weekly report (free)", kind: "lifetime", cap: 1 },
 ];

@@ -5164,7 +5164,7 @@ concepts:
       server's value, destroying both coach memory and the BF% rate limit
       in one write.
     writers:
-      - { file: supabase/functions/daily-snapshot/index.ts, line_range: 196-269, method: mergeCoachingNotes, notes: "Read-merge-write: selects existing coaching_notes, JSON.parse, merges extracted facts (non-empty values only) + last_extracted_at, re-upserts onConflict user_id. Gated behind the a2a private_mode check (2026-09-27, diagnose c3f8e6) — never reached when the user's coach_memory.private_mode is true." }
+      - { file: supabase/functions/daily-snapshot/index.ts, line_range: 354-428, method: mergeCoachingNotes, notes: "Read-merge-write: selects existing coaching_notes, JSON.parse, merges extracted facts (non-empty values only) + last_extracted_at, re-upserts onConflict user_id. Gated behind the a2a private_mode check (2026-09-27, diagnose c3f8e6) — never reached when the user's coach_memory.private_mode is true. Called from INSIDE extractCoachingNotes now, not the handler (B-pass finding 1, 2026-09-27, diagnose a2b1c7 — gates the watermark advance on merge success). Line range shifted twice by the a2b-1 batch's own insertions earlier in the same file (once by the watermark/metering rewrite, again by the B-pass remediation) — re-verify by grep, not by citation, per this repo's own common-pitfalls row on line-count drift." }
       - { file: supabase/functions/assess-body-composition/index.ts, line_range: 86-224, method: "serve handler — 30-day rate-limit block", notes: "Also read-merge-write: selects existing coaching_notes, JSON.parse, sets last_bf_assessed_at, re-upserts onConflict user_id — never a blind overwrite of daily-snapshot's keys." }
     reader_manifest_complete: false
     readers:

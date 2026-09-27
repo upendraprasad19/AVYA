@@ -53,27 +53,124 @@ interface ExtractedFacts {
   motivation_style?: string;
 }
 
+// a2b (single-owner batch, 2026-09-27): watermark-bounded read replacing the
+// whole-IST-day window (OI-162-class recurrence — see the diagnose-doc).
+// `p_limit`/`p_quota_key` must stay bare const identifiers, in this field
+// order, for founder_digest_caps_mirror_test.dart's _efSites() resolver.
+const COACH_EXTRACTION_QUOTA_KEY = "coach_extraction";
+const COACH_EXTRACTION_CAP = 1;
+const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+
+// The tri-state result extractCoachingNotes returns. `ok: true` covers a
+// genuine Gemini response, INCLUDING an empty `{}` extraction — the
+// watermark-advance decision reads this discriminant, never a bare
+// nullable, because "Gemini call/parse failed" and "Gemini succeeded with
+// nothing new" require OPPOSITE watermark behavior (retry vs. advance).
+type ExtractionResult =
+  | { ok: true; facts: ExtractedFacts }
+  | { ok: false };
+
 // a2a (single-owner batch, 2026-09-27): exported + geminiChatFn injectable so
 // tests can drive this without a live Gemini call. Default is the real
-// import — no production call site passes a second argument. What this
-// function reads/meters is UNCHANGED here; that's a2b's scope.
+// import — no production call site passes a second argument.
+// a2b B-pass finding 1 (2026-09-27): mergeCoachingNotesFn/mergeCoachMemoryFieldsFn
+// added for the same reason — extractCoachingNotes now owns the merge step
+// itself (gating the watermark advance on merge success), so tests need to
+// drive that without a live Supabase upsert too. Both default to the real
+// functions declared below (hoisted; resolved at call time, not definition
+// time, so the forward reference is safe).
 export async function extractCoachingNotes(
   supabase: SupabaseClient,
   userId: string,
-  todayIST: string,
-  { geminiChatFn = geminiChat }: { geminiChatFn?: typeof geminiChat } = {},
-): Promise<ExtractedFacts | null> {
-  // Fetch today's conversations
-  const { data: convos } = await supabase
-    .from("ai_coach_interactions")
-    .select("user_message, ai_response")
-    .eq("user_id", userId)
-    .gte("created_at", `${todayIST}T00:00:00+05:30`)
-    .lte("created_at", `${todayIST}T23:59:59+05:30`)
-    .order("created_at", { ascending: true })
-    .limit(30); // cap to avoid huge prompts
+  lastExtractionAt: string | null,
+  {
+    geminiChatFn = geminiChat,
+    mergeCoachingNotesFn = mergeCoachingNotes,
+    mergeCoachMemoryFieldsFn = mergeCoachMemoryFields,
+  }: {
+    geminiChatFn?: typeof geminiChat;
+    mergeCoachingNotesFn?: typeof mergeCoachingNotes;
+    mergeCoachMemoryFieldsFn?: typeof mergeCoachMemoryFields;
+  } = {},
+): Promise<ExtractionResult> {
+  // readStartIso is captured ONCE, before the query, so a row inserted
+  // WHILE this function runs is excluded rather than racing into the next
+  // bucket's read too. floorIso is the 48h recovery bound (an offline user
+  // never scans further back than this on first read).
+  const readStartIso = new Date().toISOString();
+  const floorIso = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+  // The fallback comparison (stored watermark vs. the 48h floor) is a
+  // genuine cross-format comparison — lastExtractionAt is Postgres-native
+  // text (offset + microseconds), floorIso is JS toISOString() output (Z
+  // suffix, milliseconds) — so it MUST go through Date.parse() on both
+  // sides, never a raw string `>`.
+  const readFromIso = lastExtractionAt &&
+      Date.parse(lastExtractionAt) > Date.parse(floorIso)
+    ? lastExtractionAt
+    : floorIso;
 
-  if (!convos || convos.length === 0) return null;
+  const { data: convos, error: convosError } = await supabase
+    .from("ai_coach_interactions")
+    .select("user_message, ai_response, channel, created_at")
+    .eq("user_id", userId)
+    // "chat" is a dead literal — it is never a persisted `channel` value
+    // (only the client's request `type` param uses it). food_text_analysis
+    // is included deliberately: its user_message is real free-typed
+    // meal-log text that can carry diet/preference facts (e.g. "grilled
+    // paneer, I'm vegetarian"), unlike scan_meal/cart_auditor (fixed system
+    // labels) or in_app/promotion_ceremony (empty user_message, already
+    // excluded below regardless of channel).
+    .in("channel", ["app", "food_text_analysis", "in_app_orphan", "free_image_analysis"])
+    .gt("created_at", readFromIso)
+    .lte("created_at", readStartIso) // excludes future-dated in_app_orphan rows
+    .not("user_message", "is", null)
+    .neq("user_message", "")
+    .not("user_message", "like", "{event:%") // drops app_event-shaped rows
+    .order("created_at", { ascending: true })
+    .limit(30);
+
+  if (!convos || convos.length === 0) {
+    // B-pass finding 5 (2026-09-27): distinguish a genuine read failure
+    // from the (much more common) "nothing new since the watermark" case
+    // — every other failure branch below logs, this one silently didn't.
+    if (convosError) {
+      console.error("[daily-snapshot] conversation read error:", convosError);
+    }
+    return { ok: false };
+  }
+
+  // Metering — consume IMMEDIATELY after the non-empty-read check, BEFORE
+  // calling Gemini (the reservation pattern every other quota-gated Gemini
+  // caller in this codebase uses). Consuming AFTER a successful parse would
+  // let two overlapping daily-snapshot invocations inside the same 6h
+  // bucket both pass this point and both spend a real Gemini call — the
+  // exact unmetered-call class OI-162 exists to close.
+  const bucketStartMs = Math.floor(Date.now() / SIX_HOURS_MS) * SIX_HOURS_MS;
+  const bucketStart = new Date(bucketStartMs).toISOString();
+  const { data: consumed, error: consumeError } = await supabase.rpc(
+    "consume_quota",
+    {
+      p_user_id: userId,
+      p_quota_key: COACH_EXTRACTION_QUOTA_KEY,
+      p_window_start: bucketStart,
+      p_limit: COACH_EXTRACTION_CAP,
+    },
+  );
+  if (consumeError || typeof consumed !== "number") {
+    // Fail CLOSED: skip Gemini this cycle, do NOT advance the watermark —
+    // the rows were read but not processed, so a later successful bucket
+    // must still pick them up.
+    console.error(
+      "[daily-snapshot.coach_extraction] consume_quota failed:",
+      consumeError,
+    );
+    return { ok: false };
+  }
+  if (consumed === -1) {
+    // Already extracted this 6h bucket — the normal "quota exhausted"
+    // case, replacing the old isStale skip. No Gemini call, no advance.
+    return { ok: false };
+  }
 
   // Build conversation text
   const convoText = convos
@@ -175,22 +272,83 @@ If nothing was found, return: {}`;
       lastError ?? null,
       "daily_snapshot_extraction",
     );
-    return null;
+    return { ok: false };
   }
 
+  let extracted: ExtractedFacts;
   try {
     const cleaned = rawText
       .replace(/```json\n?/g, "")
       .replace(/```\n?/g, "")
       .trim();
-    const extracted = JSON.parse(cleaned) as ExtractedFacts;
-    // Return null if empty object
-    if (Object.keys(extracted).length === 0) return null;
-    return extracted;
+    const parsed = JSON.parse(cleaned);
+    // B-pass finding 2 (2026-09-27): jsonMode:true does not guarantee an
+    // OBJECT shape — Gemini can return syntactically valid JSON that is
+    // `null`, an array, or a bare string/number despite the prompt asking
+    // for `{}`. JSON.parse("null") does not throw, so without this check
+    // `extracted` becomes `null`/a string/etc., which either crashes the
+    // caller's Object.keys() check AFTER the watermark has already
+    // advanced (a string's Object.keys() doesn't even throw — it iterates
+    // character indices and would write garbage key:char pairs into
+    // coaching_notes). Treat this exactly like malformed JSON: same
+    // failure branch, no watermark advance.
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      throw new Error("extraction response was valid JSON but not a plain object");
+    }
+    extracted = parsed as ExtractedFacts;
   } catch {
+    // A non-empty but MALFORMED (or wrong-shaped) rawText — a third failure
+    // branch, same discriminant as !rawText above (an implementer who
+    // folded this into ok:true would advance the watermark despite the
+    // extraction genuinely failing, silently losing this window's facts
+    // forever).
     console.error("Failed to parse extraction response:", rawText);
-    return null;
+    return { ok: false };
   }
+
+  // B-pass finding 1 (2026-09-27): merge BEFORE advancing the watermark.
+  // The first draft advanced the watermark here unconditionally on ANY
+  // parseable response, then let the HANDLER call mergeCoachingNotes/
+  // mergeCoachMemoryFields afterward — so a downstream merge-write failure
+  // (an unguarded .upsert() throwing) lost the extracted facts PERMANENTLY:
+  // the watermark had already moved past the rows that produced them, and
+  // nothing ever re-reads a window once its watermark clears it. Injectable
+  // (mergeCoachingNotesFn/mergeCoachMemoryFieldsFn) for the same reason
+  // geminiChatFn is: tests drive this without a live Supabase upsert.
+  const lastRowCreatedAt = convos[convos.length - 1].created_at as string;
+  if (Object.keys(extracted).length > 0) {
+    try {
+      await mergeCoachingNotesFn(supabase, userId, extracted);
+      await mergeCoachMemoryFieldsFn(supabase, userId, extracted);
+    } catch (mergeErr) {
+      console.error(
+        "[daily-snapshot] merge error (non-fatal, watermark NOT advanced — retried next bucket):",
+        mergeErr,
+      );
+      return { ok: true, facts: extracted };
+    }
+  }
+
+  // Advance the watermark to the RAW string of the last row returned,
+  // unmodified — the query's own .order("created_at", {ascending: true})
+  // already sorts by the real timestamptz value at full precision, so
+  // re-comparing client-side would only reintroduce the
+  // Postgres-microsecond-vs-JS-millisecond format mismatch this fix
+  // exists to avoid. Reached on ANY genuine Gemini response, including an
+  // empty {} extraction (nothing to merge) or a successful merge — never
+  // reached on a merge failure (see above). Non-fatal on its own write
+  // failure too: a write failure here just means a later bucket re-reads
+  // (and re-meters, and re-merges — merges are idempotent upserts) the
+  // same rows, which the 1/6h cap already bounds the cost of.
+  try {
+    await upsertCoachMemory(supabase, userId, {
+      last_extraction_at: lastRowCreatedAt,
+    });
+  } catch (e) {
+    console.error("[daily-snapshot] watermark advance error (non-fatal):", e);
+  }
+
+  return { ok: true, facts: extracted };
 }
 
 async function mergeCoachingNotes(
@@ -269,7 +427,10 @@ async function mergeCoachingNotes(
   }
 }
 
-async function mergeCoachMemoryFields(
+// a2b (single-owner batch, 2026-09-27): exported so item 11's `:293` guard
+// (now `> 0`) can be tested directly against a real supabase-shaped fake,
+// mirroring the a2a export precedent on extractCoachingNotes above.
+export async function mergeCoachMemoryFields(
   supabase: SupabaseClient,
   userId: string,
   extracted: ExtractedFacts,
@@ -288,9 +449,13 @@ async function mergeCoachMemoryFields(
   if (extracted.motivation_style) patch.motivation_style = extracted.motivation_style;
   if (extracted.injuries) patch.injuries = extracted.injuries;
   if (extracted.food_preferences) patch.food_preferences = { raw: extracted.food_preferences };
-  patch.last_extraction_at = new Date().toISOString();
+  // a2b (single-owner batch, 2026-09-27): last_extraction_at is no longer
+  // written here — extractCoachingNotes() is now the ONLY writer, advancing
+  // to the raw created_at of the last row it actually read (item 11/15).
+  // Writing wall-clock `new Date()` here too would jump the watermark past
+  // unread backlog rows and anything inserted during the ~15s Gemini call.
 
-  if (Object.keys(patch).length > 1) {
+  if (Object.keys(patch).length > 0) {
     await upsertCoachMemory(supabase, userId, patch);
   }
 }
@@ -434,13 +599,16 @@ async function handler(req: Request): Promise<Response> {
       );
     }
 
-    // Coaching notes extraction (gated): skip if we already extracted within
-    // the last 6h. pushSnapshot fires per-mutation, so without this guard
-    // Gemini Flash burns once per logFood/addWater/completeWorkout call.
+    // Coaching notes extraction (gated). pushSnapshot fires per-mutation, so
+    // without a gate Gemini Flash would burn once per logFood/addWater/
+    // completeWorkout call — extractCoachingNotes() now owns that gate
+    // itself via a watermark-bounded read + a 1-per-6h consume_quota meter
+    // (a2b, single-owner batch, 2026-09-27; OI-162-class recurrence — see
+    // the diagnose-doc), replacing the old isStale wall-clock check.
     //
     // a2a (single-owner batch, 2026-09-27): DISABLE_COACH_EXTRACTION kill
     // switch (read per call, no redeploy needed) + private_mode checked
-    // BEFORE the staleness check / any Gemini call — previously only
+    // BEFORE any read/consume/extract call — previously only
     // mergeCoachMemoryFields checked it, AFTER extractCoachingNotes had
     // already spent a Gemini call and mergeCoachingNotes had already
     // written diet_preference/injuries/etc. into user_preferences +
@@ -457,26 +625,23 @@ async function handler(req: Request): Promise<Response> {
       try {
         const existing = await fetchCoachMemory(supabaseClient, userId);
         if (!existing?.private_mode) {
-          const lastExtraction = existing?.last_extraction_at
-            ? new Date(existing.last_extraction_at).getTime()
-            : 0;
-          const sixHoursMs = 6 * 60 * 60 * 1000;
-          const isStale = (Date.now() - lastExtraction) > sixHoursMs;
-
-          if (isStale) {
-            extractedFacts = await extractCoachingNotes(
-              supabaseClient,
-              userId,
-              snapshotDate,
-            );
-            if (extractedFacts) {
-              await mergeCoachingNotes(supabaseClient, userId, extractedFacts);
-              try {
-                await mergeCoachMemoryFields(supabaseClient, userId, extractedFacts);
-              } catch (memErr) {
-                console.error("Coach memory merge error (non-fatal):", memErr);
-              }
-            }
+          const result = await extractCoachingNotes(
+            supabaseClient,
+            userId,
+            existing?.last_extraction_at ?? null,
+          );
+          // B-pass finding 1 (2026-09-27): extractCoachingNotes now owns
+          // the merge step itself (gating its own watermark advance on
+          // merge success — see its header comment) — the handler no
+          // longer calls mergeCoachingNotes/mergeCoachMemoryFields
+          // directly, it only reads the result to set the response's
+          // coaching_extracted flag. `extractedFacts` reflects "Gemini
+          // returned non-empty facts this cycle", regardless of whether
+          // the merge succeeded — matching the pre-fix response shape,
+          // which set this flag before the (then-unguarded) merge call
+          // could even throw.
+          if (result.ok && Object.keys(result.facts).length > 0) {
+            extractedFacts = result.facts;
           }
         }
       } catch (extractErr) {

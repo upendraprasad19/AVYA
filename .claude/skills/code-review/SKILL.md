@@ -3186,3 +3186,19 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   `count(*) FILTER (WHERE <the function's own predicate>)` SELECT instead.** The same count query
   gave the exact answer (735 / 2,416 / 85 / 11) with zero writes. Review:
   `docs/reviews/3a9abffad52f-review.md`.
+- **2026-09-27** — blast-radius **platform** — branch `single-owner-a2b` (unit a2b-1: daily-snapshot
+  coaching-notes extraction rewritten to a watermark-bounded, metered read, closing an OI-162-class
+  unmetered-Gemini-call gap). **6 findings, 0 false alarms** — the highest-signal pass this skill has
+  logged yet: **Finding 1 (P1, guard_without_its_mirror)** caught a genuine data-loss bug the
+  author's own mutation-proof table never exercised — the watermark advanced BEFORE the downstream
+  merge write, so a merge failure lost the extracted facts permanently with no retry path, exactly
+  the "guard optimizes for one failure mode and creates a worse one for the mirror case" shape this
+  lens exists for. **Finding 6 (asserted_fixture_value)** is the more interesting tuning signal: the
+  reviewer correctly found a real fixture/production divergence (`gt`/`lte` string comparison vs the
+  production code's `Date.parse()` rationale) and then proposed a fix that was ITSELF WRONG — adopting
+  it would have silently defeated the exact microsecond-precision property the whole batch existed to
+  get right, because `Date.parse()` truncates to millisecond resolution. **Tuning: a review finding's
+  suggested-fix is not automatically correct just because the finding is — verify a suggested fix
+  against the code's own stated rationale before applying it, the same "verify every claim against
+  code, never subagent prose" discipline this repo already applies to the finding itself.** Review:
+  `docs/reviews/aee7dfb3bf10-review.md`.

@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### coaching_notes / coach_memory extraction (same concept as c3f8e6; (1 bugs)
+- 2026-09-27 a2b1c7 — `daily-snapshot/index.ts`'s `extractCoachingNotes` (before this fix) had three defects, all present after a2a's own fix to the same function landed (diagnose c3f8e6, which fixed a DIFFERENT set of…
+
 ### coaching_notes / coach_memory extraction (1 bugs)
 - 2026-09-27 c3f8e6 — `daily-snapshot/index.ts` (before this fix) had three defects, each verified by reading the code on 2026-09-27: 1. Untestable. `serve(async (req) => {...})` ran at MODULE SCOPE with no…
 
@@ -1413,6 +1416,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-27 | a2b1c7 | `daily-snapshot/index.ts`'s `extractCoachingNotes` (before this fix) had three defects, all present after a2a's own fix to the same function landed (diagnose c3f8e6, which fixed a DIFFERENT set of… | coaching_notes / coach_memory extraction (same concept as c3f8e6; | supabase/functions/daily-snapshot/index_test.ts |
 | 2026-09-27 | c3f8e6 | `daily-snapshot/index.ts` (before this fix) had three defects, each verified by reading the code on 2026-09-27: 1. Untestable. `serve(async (req) => {...})` ran at MODULE SCOPE with no… | coaching_notes / coach_memory extraction | supabase/functions/daily-snapshot/index_test.ts |
 | 2026-09-26 | 125b81 | ai-proxy's `type: "prediction"` branch (`ai-proxy/index.ts:700-757` before this fix) had three defects, each verified by reading the code on 2026-09-26: 1. Unmetered. No quota, no tier check. Every… | usage_quota_ledger (new key prediction_daily) + ai_proxy_input_limits | supabase/functions/_shared/prediction_handler_test.ts |
 | 2026-09-26 | e5c9d2 | ai-proxy's chat dedup (`ai-proxy/index.ts`, "Deduplication: return cached response for same user+message in last 30s") served ANY recent row with a non-empty `ai_response` back as a 200 reply. When… | coach_chat_history_replay | supabase/functions/_shared/chat_dedup_test.ts |

@@ -6078,3 +6078,34 @@ Tables are small, so the timeout is not payload size; suspect connection/auth wa
   older than the retention window exist, plus a table-size growth alert.
 - **Source**: OI-178's third aggravation; diagnose `f7a3d2` residual (4) and
   `b4c8e2`.
+
+## OI-256 — Profile field-level conflict resolution: per-field merge instead of whole-object overwrite (user_profile sync)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-09-27 · filed via mint_oi.sh from branch `single-owner-a2b`
+- **Problem**: `_syncUserProfile` (`sync_profile.dart:226-229`) pushes the user's
+  WHOLE Hive `user_profile` record to the cloud on every save, from FOUR call
+  sites (`profile_write_service.dart:125`, `auth_session_bootstrapper.dart:685,807`,
+  `restoring_screen.dart:584`, `induction_service.dart:121,221`). This is a blind
+  whole-object overwrite with no per-field timestamp or version, so two writers
+  touching the SAME record — two devices editing offline, a background job, a
+  restore racing a live edit — can silently clobber each other with no conflict
+  detection at all. Found while designing a2b-2 (coach chat extraction writing
+  `diet_preference`/`lifestyle_activity`/`injuries`), but the bug is NOT specific
+  to that feature — it already existed for plain two-device editing before any AI
+  wrote to this table, and will recur for every future writer to `user_profile`
+  (a2b-2 is being shipped on a narrower field-specific lock instead of waiting on
+  this, per founder decision 2026-09-27).
+- **Fix shape**: per-field (or per-row) timestamp/version metadata on
+  `user_profile`, and a merge RPC (mirroring migration 123's
+  `merge_notification_preferences` — `INSERT ... ON CONFLICT DO UPDATE` keyed on
+  `auth.uid()`) that only touches fields that actually changed, instead of the
+  current blind whole-object push. This is a genuine architecture change to core
+  profile sync (bigger blast radius than any single feature), not a small patch —
+  scope it as its own dedicated unit with its own ×2 plan review, not bundled into
+  a feature batch.
+- **Source**: found during a2b-2 design (single-owner batch, 2026-09-27); the
+  underlying whole-object-overwrite pattern is `sync_profile.dart`'s existing,
+  pre-AI design, not something a2b-2 introduced.
