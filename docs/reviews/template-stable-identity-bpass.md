@@ -5,7 +5,7 @@ blast_radius: platform
 reviewer: claude-sonnet-via-skill
 lens_set: [writer_reader_drift, function_exception_swallow, blast_radius_mismatch, secrets_in_tree, unawaited_no_error_sink, guard_without_its_mirror, missing_input, asserted_fixture_value]
 findings_count: 7
-verdict: pending
+verdict: accepted
 ---
 
 # Code Review — template-stable-identity (OI-252)
@@ -72,15 +72,18 @@ diagnose-doc or plan-review record's own prose without a direct check.
   that inserts a tombstone via a bare `INSERT ... ON CONFLICT (id) DO UPDATE` (the same shape
   PostgREST's `upsert(..., onConflict:'id')` emits) against a row that does not yet exist, and
   asserts the resulting name is suffixed.
-- **status:** drafted, blocked — migration 146 written (option (a): extends the trigger to
-  `before insert or update`, both apply-order tags and an inline rollback block included;
-  option (b)'s client-side duplication was considered and rejected as unnecessary once (a)
-  covers every writer unconditionally) but NOT applied. Two live-apply attempts via
-  `apply_migration` were denied by the Claude Code auto-mode classifier (attempt 1: "Production
-  Deploy"; attempt 2: "Protected-Scope IaC Apply"). Per CLAUDE.md §4.3 this was not retried a
-  third time or worked around. Founder action needed — see the diagnose-doc's "B-pass
-  remediation" section for the drafted SQL's current location and what a future session must do
-  once it is applied (backups/applied_migrations.json + touched_layers_checked tier 3 update).
+- **status:** accepted, fixed and applied — migration 146 (option (a): extends the trigger to
+  `before insert or update`; option (b)'s client-side duplication was considered and rejected as
+  unnecessary once (a) covers every writer unconditionally) applied live 2026-09-27T10:22:49+05:30
+  after founder granted explicit permission (two earlier attempts were denied by the Claude Code
+  auto-mode classifier: "Production Deploy", then "Protected-Scope IaC Apply" — not retried a
+  third time or worked around, per CLAUDE.md §4.3). Post-apply live verification:
+  `pg_trigger.tgtype=23` confirms BEFORE INSERT OR UPDATE; a functional repro run live inside
+  BEGIN/ROLLBACK reproduced the exact pre-fix failure shape and confirmed it now succeeds (a
+  tombstone-shaped INSERT came back suffixed + is_active=false; a second INSERT under the
+  original name then succeeded with no 23505), rolled back with 0 leftover rows confirmed. Full
+  detail: diagnose-doc's "B-pass remediation" section, `backups/applied_migrations.json` entry
+  for migration 146.
 
 ## Finding 2 — P1 — guard_without_its_mirror / plan-vs-implementation drift (legacy-key migrator never reached by the most common restore path)
 

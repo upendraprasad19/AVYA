@@ -99,7 +99,7 @@ impact_analysis: |
 touched_layers_checked:
   - { tier: 1, name: "Client code", status: fixed_in_this_batch, evidence: "flutter analyze lib/ clean (45 pre-existing infos, 0 errors/warnings) across every file this unit touched." }
   - { tier: 2, name: "Hive (local state)", status: fixed_in_this_batch, evidence: "test/sync/oi252_deleted_template_restore_behavioral_test.dart — real workoutBox write -> restore -> read, mutation-proven on 3 independent legs." }
-  - { tier: 3, name: "Postgres schema", status: fixed_in_this_batch, evidence: "Migration 145 applied live to dedsavbjuwgarrhphgnl 2026-09-27T06:44:46+05:30 (cloud_version 20260927011446), founder-authorized in chat separately from plan approval. Post-apply live verification: pg_trigger shows workout_templates_delete_final_rename (count 1) on public.workout_templates; information_schema.columns confirms deleted_at exists (ordinal position 11). backups/applied_migrations.json + backups/live_schema_columns.json updated same batch; check_migrations_applied + check_schema_column_refs gates both PASS." }
+  - { tier: 3, name: "Postgres schema", status: fixed_in_this_batch, evidence: "Migration 145 applied live to dedsavbjuwgarrhphgnl 2026-09-27T06:44:46+05:30 (cloud_version 20260927011446), founder-authorized in chat separately from plan approval. Post-apply live verification: pg_trigger shows workout_templates_delete_final_rename (count 1) on public.workout_templates; information_schema.columns confirms deleted_at exists (ordinal position 11). Follow-up migration 146 (OI-252 B-pass finding 1) applied live 2026-09-27T10:22:49+05:30, extending the trigger to BEFORE INSERT OR UPDATE -- two earlier live-apply attempts were denied by the Claude Code auto-mode classifier (Production Deploy, then Protected-Scope IaC Apply); founder granted explicit permission in chat and the apply succeeded on the next attempt. Post-apply live verification: pg_trigger.tgtype=23 (ROW+BEFORE+INSERT+UPDATE bits) confirms the new firing event; a functional repro run live inside BEGIN/ROLLBACK showed a tombstone-shaped INSERT (deleted_at set) coming back suffixed and is_active=false, and a SECOND insert under the original un-suffixed name then succeeding with no 23505 (the exact pre-146 failure) -- rolled back with 0 leftover rows confirmed by a follow-up count query. backups/applied_migrations.json updated same batch for both migrations; check_migrations_applied gate PASSES. live_schema_columns.json unchanged by 146 (no column added/dropped/renamed -- trigger-only change, confirmed via grep for column DDL in the file, 0 hits)." }
   - { tier: 6, name: "Edge Function code vs deploy", status: fixed_in_this_batch, evidence: "restore-user-snapshot deployed to dedsavbjuwgarrhphgnl as v7 (HTTP 201) and workout-window-closing as v15 (HTTP 201), both founder-authorized. Both Deno type-checked (deno check --node-modules-dir=none) clean pre-deploy; workout-window-closing's 8-test Deno suite (index_test.ts) green pre-deploy. Both functions' post-deploy smoke probes returned 401/Unauthorized as expected (restore-user-snapshot is verify_jwt:true rejecting an unauthenticated probe; workout-window-closing's isAuthorizedCronCall guard rejecting a probe with no cron secret) -- neither is a regression." }
 ---
 
@@ -140,38 +140,36 @@ see the review file's per-finding `status:` fields. The two P1s:
   green, as expected — restored from a pre-mutation backup, both green
   re-confirmed after.
 
-- **Finding 1 (drafted, NOT yet applied — blocked)** — migration 145's
-  `workout_templates_delete_final_rename` trigger is `before update` ONLY;
-  it never fires when `_drainPendingTemplateDeletes`'s tombstone UPSERT is
-  the very first cloud write for a template's id (created and deleted in
-  the same offline session, so no prior "creating push" ran) — that lands
-  as a plain INSERT, the row is created with `deleted_at` set but the name
-  is never suffixed, and `UNIQUE(user_id, name)` still occupies that name,
-  so a later ordinary re-create under the identical name hits a live
-  `23505` — reopening the "42P10 forever" class 145 itself exists to avoid,
-  through the one path its header comment didn't cover. Does NOT reopen the
-  resurrection bug this diagnose-doc's own fix closes (restore still
-  filters purely on `deleted_at`, untouched by this gap) — a distinct,
-  narrower regression in the rename/name-freeing guarantee only, and it
-  requires a specific offline create-then-delete-before-first-sync sequence
-  to trigger, which is uncommon but real.
+- **Finding 1 (fixed — migration 146, applied live 2026-09-27T10:22:49+05:30)**
+  — migration 145's `workout_templates_delete_final_rename` trigger was
+  `before update` ONLY; it never fired when `_drainPendingTemplateDeletes`'s
+  tombstone UPSERT was the very first cloud write for a template's id
+  (created and deleted in the same offline session, so no prior "creating
+  push" ran) — that landed as a plain INSERT, the row was created with
+  `deleted_at` set but the name never suffixed, and `UNIQUE(user_id, name)`
+  still occupied that name, so a later ordinary re-create under the
+  identical name hit a live `23505` — reopening the "42P10 forever" class
+  145 itself exists to avoid, through the one path its header comment
+  didn't cover. Did NOT reopen the resurrection bug this diagnose-doc's own
+  fix closes (restore still filters purely on `deleted_at`, untouched by
+  this gap) — a distinct, narrower regression in the rename/name-freeing
+  guarantee only, requiring a specific offline
+  create-then-delete-before-first-sync sequence, uncommon but real.
 
-  Fix drafted as follow-up migration 146 (extends the trigger to
+  Fixed via follow-up migration 146 (extends the trigger to
   `before insert or update`, suffixing on `new.name` when fired by INSERT
-  since `OLD` doesn't exist there) — SQL content is final and was NOT saved
-  under `supabase/migrations/` in this commit specifically to avoid failing
-  Gate 14 (`check_migrations_applied.dart`) for the rest of this batch,
-  since it is drafted but unapplied. **Two live-apply attempts via
-  `apply_migration` were both denied by the Claude Code auto-mode
-  classifier** (attempt 1: "Production Deploy"; attempt 2: "Protected-Scope
-  IaC Apply") — per CLAUDE.md §4.3 ("A classifier block on a live apply is
-  CORRECT; get the explicit ok, never work around it"), this was not
-  retried a third time or worked around. **Founder action needed**: either
-  grant the permission so a future attempt can land, or apply the drafted
-  SQL manually via the Supabase dashboard SQL editor and have a future
-  session update `backups/applied_migrations.json` + this doc's
-  `touched_layers_checked` tier 3 to match. The full drafted migration file
-  (header, function body, trigger, live BEGIN/ROLLBACK verification
-  snippet, inline rollback block) is preserved and ready to commit as-is
-  once applied — see the branch's follow-up commit / OI board for its
-  current location if this doc is read after that lands.
+  since `OLD` doesn't exist there; `old.name` unchanged on UPDATE). Two
+  live-apply attempts via `apply_migration` were denied by the Claude Code
+  auto-mode classifier (attempt 1: "Production Deploy"; attempt 2:
+  "Protected-Scope IaC Apply") — per CLAUDE.md §4.3, this was not retried a
+  third time or worked around; the founder granted explicit permission in
+  chat and the apply succeeded on the next attempt. Post-apply live
+  verification: `pg_trigger.tgtype = 23` (ROW+BEFORE+INSERT+UPDATE bits)
+  confirms the new firing event; a functional repro run live inside
+  `BEGIN`/`ROLLBACK` showed a tombstone-shaped INSERT (`deleted_at` set)
+  coming back suffixed `'OI252 F1 Repro ‹del:77895682›'` with
+  `is_active=false`, and a second INSERT under the original un-suffixed
+  name then succeeding with no `23505` — the exact pre-146 failure —
+  rolled back with 0 leftover rows confirmed by a follow-up count query.
+  `backups/applied_migrations.json` updated for both 145 and 146 in this
+  batch's commits; `check_migrations_applied` gate PASSES.

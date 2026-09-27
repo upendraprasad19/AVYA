@@ -4,6 +4,8 @@ plan: docs/superpowers/plans/2026-09-26-template-stable-identity.md
 review_rounds: 3
 ground_truth_verified: true
 verdict: converged
+bpass: accepted
+bpass_review: docs/reviews/template-stable-identity-bpass.md
 ---
 
 # Plan review — workout templates get one stable identity (unit 2a)
