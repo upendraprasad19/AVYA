@@ -10302,7 +10302,7 @@ concepts:
           (→913) despite the gate not flagging it, found by grepping the
           symbol directly rather than trusting the gate's silence on it.
       - file: lib/core/services/sync_service.dart
-        line_range: 1996
+        line_range: 2390
         method: restoreOpTimeout
         semantic: per-op-ceiling
       - file: lib/core/services/sync_service.dart
@@ -10324,7 +10324,7 @@ concepts:
         method: _authRedirect
         semantic: delegates-to-pure-fn
       - file: lib/core/services/sync_service.dart
-        line_range: 2037
+        line_range: 2438
         method: _safeRestoreOp
         semantic: bounded-await
     hive:
@@ -10520,24 +10520,24 @@ concepts:
       Precedent it mirrors: AuthNotifier._inFlightSignOut and SyncCoalescer.
     writers:
       - file: lib/core/services/supabase_service.dart
-        line_range: 195
+        line_range: 204
         method: _inFlightRefresh
         semantic: the-shared-in-flight-future
       - file: lib/core/services/supabase_service.dart
-        line_range: 209
+        line_range: 243
         method: coalescedRefresh
         semantic: join-never-race-injectable-test-seam
       - file: lib/core/services/supabase_service.dart
-        line_range: 235
+        line_range: 324
         method: ensureFreshToken
         semantic: expiry-branch-delegates-to-the-join
       - file: lib/core/services/supabase_service.dart
-        line_range: 260
+        line_range: 352
         method: _refreshToken
         semantic: the-refresh-itself-single-call-site
     readers:
       - file: lib/core/services/supabase_service.dart
-        line_range: 230
+        line_range: 248
         method: disableRefreshJoin
         semantic: kill-switch-read
     hive:

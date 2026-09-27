@@ -136,8 +136,19 @@ void main() {
         ...Directory('lib/core/services/sync')
             .let((dir) => dir.existsSync() ? dir.listSync() : <FileSystemEntity>[])
             .whereType<File>()
-            .where((f) => f.path.endsWith('.dart')),
+            .where((f) => f.path.endsWith('.dart'))
+            // Only the `part of` files ARE the SyncService library. A standalone
+            // library in the same directory (sync_skip_index.dart — the
+            // SyncSkipIndex helper, day-swapper + sync-load Task 4) has its own
+            // public API, and counting it here would read pushIfChanged/commit
+            // as SyncService methods.
+            .where((f) => RegExp(r'^part of ', multiLine: true)
+                .hasMatch(f.readAsStringSync())),
       ];
+      // The filter must never drop the SyncService library itself: every file
+      // in sync/ except the standalone helper is a part file.
+      expect(files.length, greaterThanOrEqualTo(8),
+          reason: 'sync_service.dart + its 7 part files must all be scanned');
 
       // Match instance method signatures at exactly 2-space indent
       // (class instance methods + extension methods). The pattern requires the
