@@ -458,8 +458,12 @@ extension SyncServiceNutrition on SyncService {
     final healthBox = _hive.healthBox;
     // Day-swapper + sync-load Task 17 — water pushes through the shared
     // SyncSkipIndex helper (OI-237 write amplification). The index's own
-    // ownerChangedNow/abort check replaces the former inline
-    // `if (ownerChangedSince(userId)) return;` sink guard (e5c2d1 CLASS 1).
+    // ownerChangedNow/abort check covers entry + immediately after the push,
+    // but `test/contracts/session_owner_inflight_guard_behavioral_test.dart`
+    // (e5c2d1) requires the LITERAL guard adjacent to each network sink in
+    // THIS file, not merely an equivalent check elsewhere -- so the push
+    // closure below still carries its own explicit re-check too, same
+    // pattern as `_syncNutritionLogs` above.
     final index = SyncSkipIndex(
       box: healthBox,
       domain: SyncSkipDomain.water,
@@ -497,6 +501,7 @@ extension SyncServiceNutrition on SyncService {
             if (e.key != 'updated_at') e.key: e.value,
         }),
         () async {
+          if (ownerChangedSince(userId)) return false;
           await _supabase.client
               .from('water_logs')
               .upsert(payload, onConflict: 'user_id,date');
@@ -579,6 +584,7 @@ extension SyncServiceNutrition on SyncService {
         savedName,
         () => SyncFingerprint.of(payload),
         () async {
+          if (ownerChangedSince(userId)) return false;
           await _supabase.client
               .from('user_saved_meals')
               .upsert(payload, onConflict: 'user_id,name');

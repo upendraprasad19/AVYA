@@ -53,6 +53,13 @@ class SyncStubServer {
   HttpServer? _server;
   final List<StubRequest> requests = [];
 
+  /// Day-swapper + sync-load Task 17 (diagnose a9d3f6). Set the instant
+  /// [stop] is called, BEFORE the actual close -- narrows the dropped-
+  /// connection catch in [_handle] to genuinely in-progress shutdowns only,
+  /// so it can never mask a real client/network fault during ordinary test
+  /// execution (only during the deliberate window this class itself opens).
+  bool _stopping = false;
+
   /// Writes to these tables answer 500, so a push throws PostgrestException.
   final Set<String> failWritesTo = {};
 
@@ -71,6 +78,7 @@ class SyncStubServer {
   SupabaseClient client() => SupabaseClient(url, 'stub-anon-key');
 
   Future<void> stop() async {
+    _stopping = true;
     try {
       await _server?.close(force: true);
     } catch (_) {
@@ -100,9 +108,18 @@ class SyncStubServer {
       // itself -- silently drop it rather than let an unhandled exception
       // surface (attributed to whichever test happens to be running next)
       // and crash the suite. Never recorded in `requests`.
-      return;
+      // Gated on `_stopping` so this can NEVER swallow a genuine connection
+      // fault during ordinary (non-shutdown) test execution -- narrowed
+      // after a full-suite run showed a DIFFERENT test's dual-post count
+      // assertion (`sync_nutrition_log_payload_hash_index_writer_to_reader_
+      // test.dart`) drop from 2 to 1 under contention; that turned out to be
+      // a pre-existing timing flake unrelated to this catch (confirmed
+      // green 3/3 in isolation), but the narrowing removes any doubt.
+      if (_stopping) return;
+      rethrow;
     } on SocketException {
-      return;
+      if (_stopping) return;
+      rethrow;
     }
     Object? body;
     if (raw.isNotEmpty) {
