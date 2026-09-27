@@ -98,7 +98,7 @@ void main() {
 
     test('alerts/_thresholds.yaml entry agrees with the SQL it documents', () {
       String field(String k) => thresholdsField('sql_job_failures', k);
-      expect(field('defined_in_migration'), job.file.split('/').last);
+      expect(field('defined_in_migration'), job.file.split(RegExp(r'[/\\]')).last);
       expect(field('cron_cadence'), job.cadence);
       expect(body,
           contains("interval '${field('window_minutes')} minutes'"));

@@ -1647,8 +1647,8 @@ class WorkoutRepository {
       }
 
       final perDayName = days.length == 1 ? trimmed : '$trimmed - $dayName';
-      final perDayId =
-          'tmpl_${DateTime.now().millisecondsSinceEpoch + i}';
+      // OI-252: a real UUID identity per day, not a legacy tmpl_<ms+i> key.
+      final perDayId = WorkoutWriteService.instance.newTemplateKey();
 
       final templateMap = <String, dynamic>{
         'id': perDayId,

@@ -148,7 +148,7 @@ void main() {
 
     test('alerts/_thresholds.yaml entry agrees with the SQL it documents', () {
       String field(String k) => thresholdsField('cron_job_silent', k);
-      expect(field('defined_in_migration'), job.file.split('/').last);
+      expect(field('defined_in_migration'), job.file.split(RegExp(r'[/\\]')).last);
       expect(field('cron_cadence'), job.cadence);
       expect(field('overdue_factor'), '1.25');
       expect(body, contains('e.expected * ${field('overdue_factor')} + '

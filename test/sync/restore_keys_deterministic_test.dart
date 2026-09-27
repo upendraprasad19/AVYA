@@ -138,18 +138,30 @@ void main() {
       );
     });
 
-    test('_restoreWorkoutTemplates derives key from name, not cloud UUID',
+    test('_restoreWorkoutTemplates derives key from the cloud UUID via '
+        'templateKeyFor, NOT from name (OI-252 f4a8c2 supersedes Bug #1)',
         () {
+      // OI-252 (2026-09-27, diagnose f4a8c2) — deriving the local key from
+      // NAME (this test's ORIGINAL assertion) turned out to be the root
+      // cause of a WORSE bug: a deleted template and a fresh one created
+      // under the same name deterministically collided on the identical
+      // Hive key, so a delete-then-recreate could resurrect the deleted
+      // one. The fix derives the key from the template's own permanent,
+      // stable cloud identity (a client-minted UUID, immutable across
+      // rename/delete/recreate) instead of from mutable content.
       final body = _restoreBody(src, 'WorkoutTemplates');
-      // Must derive from name (cloud always returns a UUID id, never
-      // a `tmpl_*` prefix, so the old startsWith-check ALWAYS hit the
-      // else branch and produced the dup).
       expect(
-        body.contains('tmplName.hashCode') ||
-            (body.contains("map['name']") &&
-                body.contains('toLowerCase')),
+        body.contains('templateKeyFor(id)'),
         isTrue,
-        reason: 'must derive Hive key from name field',
+        reason: 'must derive the Hive key from the cloud id via '
+            'templateKeyFor, not from the template name',
+      );
+      expect(
+        body.contains('tmplName.hashCode'),
+        isFalse,
+        reason: 'the superseded name-hash key formula must not reappear — '
+            'it is the exact mechanism that let a delete and its '
+            'same-named replacement collide on one key',
       );
       expect(
         body.contains("startsWith('tmpl_') ? id : 'tmpl_"),
@@ -216,28 +228,47 @@ void main() {
     });
   });
 
-  group('Bug #4 — _syncWorkoutTemplates does NOT include id in upsert', () {
-    test('parent upsert payload omits id', () {
-      // Narrow to _syncWorkoutTemplates only (NOT _restore).
+  group('Bug #4 → OI-252 f4a8c2 supersedes: _syncWorkoutTemplates upserts '
+      'the client-minted id DIRECTLY', () {
+    test('parent upsert payload DOES pass id — client-minted, stable, '
+        'targets onConflict: id', () {
+      // OI-252 (2026-09-27) inverted this invariant on purpose. Bug #4's
+      // original fix (omit 'id', let the server generate one via
+      // gen_random_uuid(), then SELECT it back by name) was itself the
+      // mechanism that made template identity name-derived — the root
+      // cause of the WORSE delete-then-recreate resurrection bug. The
+      // template's permanent identity is now minted CLIENT-SIDE at create
+      // time (WorkoutWriteService.newTemplateKey()) and is stable across
+      // rename/delete/recreate, so the upsert targets it directly.
       final start = src.indexOf('Future<void> _syncWorkoutTemplates(');
       expect(start, greaterThan(0));
       final next = src.indexOf('\n  Future<void> ', start + 1);
       final body = src.substring(start, next);
 
-      // Find the workout_templates upsert block. Pre-fix had `'id': cloudTmplId,`.
       final upsertStart =
           body.indexOf(".from('workout_templates').upsert({");
       expect(upsertStart, greaterThan(0),
           reason: 'workout_templates upsert must exist');
-      final upsertEnd = body.indexOf('}', upsertStart);
-      final upsertBlock = body.substring(upsertStart, upsertEnd);
+      // Widened past the map literal's closing `}` — `onConflict:` is a
+      // separate named argument AFTER it (`.upsert({...}, onConflict:
+      // 'id')`), not inside the map body a bare `indexOf('}')` would stop
+      // at.
+      final upsertBlock =
+          body.substring(upsertStart, (upsertStart + 700).clamp(0, body.length));
 
       expect(
-        upsertBlock.contains("'id':"),
-        isFalse,
-        reason:
-            "Bug #4 — parent upsert must NOT pass 'id'; cloud column "
-            'has gen_random_uuid() default and FK loop fires on UPDATE',
+        upsertBlock.contains("'id': cloudTmplId,"),
+        isTrue,
+        reason: "OI-252 — parent upsert must pass 'id': cloudTmplId "
+            '(the id resolved from the client-minted Hive key via '
+            'cloudIdFromKey), not omit it',
+      );
+      expect(
+        upsertBlock.contains("onConflict: 'id'"),
+        isTrue,
+        reason: "the upsert must target onConflict: 'id', not "
+            "'user_id,name' — the old name-based conflict target is what "
+            'let a delete and its same-named replacement collide',
       );
     });
 
@@ -275,23 +306,30 @@ void main() {
       );
     });
 
-    test('SELECTs real cloud parent id by (user_id, name) before children',
-        () {
+    test('id is already known from the key — no SELECT-by-name lookup '
+        'before children (OI-252 supersedes Bug #4)', () {
+      // OI-252 (2026-09-27) removes this lookup entirely: the id is the
+      // client-minted uuid baked into the Hive key (cloudIdFromKey(key)),
+      // known BEFORE the upsert runs, so there is nothing left to resolve
+      // by name afterward. A surviving name-based lookup here would be a
+      // regression toward the old ambiguous-identity design.
       final start = src.indexOf('Future<void> _syncWorkoutTemplates(');
       final next = src.indexOf('\n  Future<void> ', start + 1);
       final body = src.substring(start, next);
 
-      // Lookup must use SELECT id WHERE user_id=? AND name=?.
       expect(
-        body.contains(
-            ".from('workout_templates')") &&
-            body.contains(".select('id')") &&
-            body.contains(".eq('name', tmplName)"),
+        body.contains(".eq('name', tmplName)"),
+        isFalse,
+        reason: 'must not look up the cloud parent id by (user_id, name) '
+            "any more — that lookup is what made a template's identity "
+            'ambiguous between a deleted row and its same-named '
+            'replacement',
+      );
+      expect(
+        body.contains('cloudIdFromKey(key)'),
         isTrue,
-        reason:
-            'Bug #4 — must look up cloud parent id via (user_id, name) '
-            'before child insert so FK targets the migration-050 keeper '
-            'row, not a freshly-derived deterministic UUID',
+        reason: 'the id must come from the Hive key itself via '
+            'cloudIdFromKey, resolved before the upsert runs',
       );
     });
   });

@@ -3170,3 +3170,29 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   `count(*) FILTER (WHERE <the function's own predicate>)` SELECT instead.** The same count query
   gave the exact answer (735 / 2,416 / 85 / 11) with zero writes. Review:
   `docs/reviews/3a9abffad52f-review.md`.
+- **2026-09-27** — blast-radius **platform** — branch `template-stable-identity` (OI-252, unit
+  2a: workout-template stable-identity rework — migration 145 already live, both Edge Functions
+  already deployed). **7 findings, 0 false alarms** (independently re-verified against live
+  code/cloud state by the dispatching session, not trusted from the subagent's prose) — 2 P1
+  (`guard_without_its_mirror` — migration 145's trigger is UPDATE-only and never fires on the
+  INSERT-lands-first race its own header describes; a class doc + a converged plan-review
+  record both claimed a design the code never implemented), 3 P2 (`asserted_fixture_value` — a
+  stray find/replace collateral swept 2 unrelated OI-board citations; a diagnose-doc
+  self-contradicting on a migration's live status; a "tracked separately on the OI board" claim
+  with zero matching board entries, fixed by filing OI-253), 2 P3 (`writer_reader_drift` — a
+  combined SoT registry entry's `line_range` was accurate for one of its two named methods and
+  ~800 lines off for the other; a diagnose-doc citation pointing at a shared helper's top-level
+  declaration instead of its actual call site inside the method it was cited for). **Tuning — a
+  suggested-fix's OWN regression-test proposal can assume test infrastructure that does not
+  exist.** Finding 2's suggested fix asked for "a behavioral test that seeds a legacy key and
+  drives restore" — reasonable on its face, but this repo has ZERO Supabase-mocking seam
+  anywhere (`SupabaseService.client` hardcodes `Supabase.instance.client`, never initialized in
+  unit tests) and the migrator's legacy-key path always makes a live query once a legacy key
+  exists, so the proposed test literally could not be written as specified without first
+  building mock infrastructure from scratch — disproportionate to a single-fix remediation. **No
+  lens currently checks whether its own `suggested-fix`'s proposed test is achievable against
+  the repo's real test infrastructure before proposing it** — worth watching for a second
+  instance before adding a dedicated check; the workaround here (a narrow test-only invocation
+  counter proving the gate is REACHED, without exercising the untestable network branch) is a
+  reusable pattern for this "live-network-gated logic, zero mock infra" shape. Review:
+  `docs/reviews/template-stable-identity-bpass.md`.

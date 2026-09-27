@@ -6078,3 +6078,82 @@ Tables are small, so the timeout is not payload size; suspect connection/auth wa
   older than the retention window exist, plus a table-size growth alert.
 - **Source**: OI-178's third aggravation; diagnose `f7a3d2` residual (4) and
   `b4c8e2`.
+
+## OI-252 — Workout templates: one stable identity (delete/rename propagation, unit 2a)
+
+- **Status**: OPEN
+- **Blocked on**: B-pass self-review (platform blast radius, mandatory before `--no-ff` merge) + the merge to `main` itself.
+- **Verified**: 2026-09-27 — implementation complete and gate-green: client restore rework across all three template_id-carrying restore paths, migration 145 applied live to dedsavbjuwgarrhphgnl (pg_trigger + information_schema.columns confirmed), `restore-user-snapshot` (v7) and `workout-window-closing` (v15) deployed and Deno-tested pre-deploy, `backups/applied_migrations.json` + `backups/live_schema_columns.json` updated, full `sh scripts/pre-commit.sh` reports OK. 10 new behavioral tests, mutation-proven on 3 legs. Diagnose-doc `docs/diagnoses/2026-09-27-deleted-workout-template-resurrects-via-restore-f4a8c2.md`.
+- **Identified**: 2026-09-26 · filed via mint_oi.sh from branch `template-stable-identity`
+
+Fix shape: migration 145 (add `deleted_at`, keep `UNIQUE(user_id,name)`, BEFORE UPDATE trigger renames on delete-transition + no-ops any write to an already-deleted row) + `restore-user-snapshot`/`workout-window-closing` EF updates + client rework of template create/push/restore/delete across `sync_workout.dart`, `template_service.dart`, `train_provider.dart`, `workout_write_service.dart`, plus a one-time legacy-key migrator. Saved meals (unit 2b, `reuse-audit-fixes` batch) reuse whatever this proves. Full design + 3 converged review rounds: `docs/superpowers/plans/2026-09-26-template-stable-identity.md`.
+
+## OI-253 — PendingTemplateDeletes queued delete lost on logout/offline sign-out before it drains
+
+- **Status**: OPEN
+- **Blocked on**: a durable, cross-session delete queue design (own-scope unit, not part of OI-252)
+- **Verified**: never
+- **Identified**: 2026-09-27 · filed via mint_oi.sh from branch `template-stable-identity`
+
+Symptom: `PendingTemplateDeletes` (`lib/core/services/pending_template_deletes.dart`) lives in
+`userBox`, which is cleared on logout. A template deleted locally but not yet drained to a cloud
+tombstone (offline, or the app closed/signed out before the next sync tick) loses its queued
+delete entry — the local Hive row is already gone (deleted eagerly in
+`WorkoutWriteService.deleteTemplate`), but the cloud row survives untouched and can resurrect on
+a later restore, same class of bug OI-252 fixes for the identity-collision case. Fix shape
+(not designed): either persist the queue somewhere that survives logout (a small dedicated table
+keyed by user id, drained on next login for that user) or drain synchronously/best-effort on
+sign-out before `userBox` clears. Surfaced during OI-252's B-pass (finding 7,
+`docs/reviews/template-stable-identity-bpass.md`); documented as a known limit in
+`pending_template_deletes.dart`'s class doc and the OI-252 diagnose-doc's `cross_account_guard`
+field rather than fixed in that batch (narrow, pre-existing gap; not a regression from OI-252's
+change, and no evidence it's hit in production yet).
+
+## OI-255 — Migration numbering has no collision-proof allocator -- two branches both minted 145 AND 146
+
+- **Status**: OPEN
+- **Blocked on**: none (documentation-only; all four instances are already applied live and immutable)
+- **Verified**: never
+- **Identified**: 2026-09-27 · filed via mint_oi.sh from branch `template-stable-identity`
+
+Symptom: `supabase/migrations/` now holds FOUR files across two colliding number prefixes, not one
+as first filed (corrected during the merge to `main` — the merge conflict in
+`backups/applied_migrations.json` exposed a second collision at 145 that a single-number
+investigation had missed): `145_alert_sql_job_failures.sql` / `146_alert_cron_job_silent.sql`
+(main, OI-178/ops-alerting-b2a batch, applied live 2026-09-26/27) and
+`145_workout_templates_stable_delete.sql` / `146_workout_templates_delete_trigger_insert_path.sql`
+(this branch, OI-252, applied live 2026-09-27T06:44:46+05:30 and 2026-09-27T10:22:49+05:30). All
+four have their own `"migration"` entry in `backups/applied_migrations.json` (main's two, then this
+branch's two, in that chronological order after the merge). Found when pulling `origin/main` into
+the primary worktree immediately before merging `template-stable-identity` — the two branches
+diverged from `main` before either side's migrations existed on the other, and each independently
+picked "145" then "146" as the next free number at draft time, in the same order, coincidentally.
+
+Root cause: migration numbers are chosen by hand from whatever `ls supabase/migrations/` shows the
+drafting branch at draft time — there is no reservation mechanism analogous to `mint_oi.sh`'s
+`refs/heads/oi/N` compare-and-swap for OI numbers (§7 pointer table, OI allocator row). Two
+branches developing in parallel off diverging `main` states have no way to see each other's
+in-flight migration numbers.
+
+Impact, checked rather than assumed: **no functional collision** — all four migrations touch
+entirely disjoint database objects (a `workout_templates` trigger function + soft-delete column vs.
+two new pg_cron alert jobs + their functions), all four applied successfully and independently.
+**Gate 14 (`scripts/check_migrations_applied.dart`) does not detect the ambiguity**: its
+"unapplied" check matches by bare numeric prefix via `appliedMigrations.any((a) =>
+a.startsWith(prefix) || ...)` (`check_migrations_applied.dart:97-101`), so both files under each
+colliding number independently satisfy the same ledger entry and the gate reports PASS for all
+four. The break is the implicit "one number names exactly one migration" invariant relied on for
+human navigability, `docs/naming_conventions.md`-style citation, and any future tooling that
+assumes strict 1:1 sequential numbering.
+
+Not fixed in this batch: **all four files are immutable once applied** (same principle
+`docs/diagnoses/2026-09-21-hermes-pass-migration-138-139-fixes-h1a2b3.md` and this file's own
+common-pitfalls table state for migration 138/139) — renaming any of them post-apply would
+misrepresent what actually ran and would invalidate cross-references already pushed on both
+branches (diagnose-docs, commit messages, `backups/applied_migrations.json` `"migration"` values,
+OI-board prose). Fix shape (not designed): (a) a migration-number allocator mirroring
+`mint_oi.sh` — reserve a ref before drafting a new migration file so a second branch drafting in
+parallel sees the reservation on its next fetch — and/or (b) widen Gate 14 to hard-fail on two
+`.sql` files sharing an EXACT bare numeric prefix (distinct from today's loose "is this number
+present in the ledger at all" check), so a future collision is caught at commit/push time instead
+of only by a human noticing during a `git pull` before a merge.

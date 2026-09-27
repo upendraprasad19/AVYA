@@ -119,6 +119,12 @@ const _expectedEmitFields = <String, Set<String>>{
     // Read back by the terminal-row contract test; 'moved'/'dropped' statuses
     // are skipped by WorkoutRepository.isInvisibleToStreak (c1a9d4).
     'moved_to', 'moved_via', 'moved_at', 'dropped_via', 'dropped_at',
+    // OI-252 (f4a8c2): the cloud `template_id` FK, carried into the Hive
+    // schedule map so a restore/reconcile pass can resolve the referenced
+    // template's identity (incl. detecting a deleted one) without a second
+    // live query. Emitted by WorkoutWriteService.upsertScheduled and by the
+    // restore paths' merged-map write (sync_workout.dart).
+    'template_id',
   },
   // wlog_* writer: WorkoutWriteService.markCompleted (workout summary row).
   // f1c8e4: markCompleted stamps type:'workout_log' + completed_at (ISO) +
@@ -284,6 +290,14 @@ const _alwaysOk = <String>{
   // Provider state + UI render:
   'value', 'label', 'icon', 'title', 'subtitle', 'message', 'error',
   'isLoading', 'error_class', 'status', 'data', 'items', 'result',
+  // OI-252 (f4a8c2): `deleted_at` is a `workout_templates` CLOUD ROW / embed
+  // field (read off `tmpl['deleted_at']` inside the template-embed map, or
+  // off the cloud row map while iterating `_restoreWorkoutTemplates`), never
+  // an exlog_/schedule_/wlog_ Hive map field. The heuristic flags it under
+  // all three prefixes anyway because it scans `['field']` accesses
+  // FILE-WIDE (sync_workout.dart contains readers for every prefix) rather
+  // than scoped to the specific map instance being read.
+  'deleted_at',
   // JSON request/response bodies for Edge Functions:
   // restore-user-snapshot (C3) bundle ENVELOPE — read off the EF JSON response
   // (data['schema_version'] / data['tables']), NOT off any exlog_/wlog_ Hive map.

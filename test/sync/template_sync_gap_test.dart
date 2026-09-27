@@ -89,27 +89,44 @@ void main() {
               'route through WorkoutWriteService.upsertTemplate.');
     });
 
-    test('deleteTemplate fires syncWorkoutData + pushSnapshot', () {
+    test('deleteTemplate fires syncWorkoutData + pushSnapshot via '
+        'WriteService or directly', () {
+      // OI-252 (2026-09-27) routed TemplatesNotifier.deleteTemplate through
+      // WorkoutWriteService.instance.deleteTemplate — which fires the fan-out
+      // INTERNALLY (same pattern saveTemplate/updateTemplate already used for
+      // upsertTemplate) — instead of calling syncWorkoutData/pushSnapshot
+      // directly in the notifier. Same "WriteService OR direct" acceptance
+      // as the two tests above.
       final body =
           _methodBody(_src(path), 'Future<void> deleteTemplate(');
       expect(body, isNotEmpty,
           reason: 'deleteTemplate must exist on TemplatesNotifier');
+      final routedThroughWriteService =
+          body.contains('WorkoutWriteService.instance.deleteTemplate');
+      final firesSyncWorkoutData = body
+              .contains('unawaited(SyncService.instance.syncWorkoutData())') ||
+          routedThroughWriteService;
       expect(
-        body,
-        contains('unawaited(SyncService.instance.syncWorkoutData())'),
+        firesSyncWorkoutData,
+        isTrue,
         reason:
-            'deleteTemplate must call syncWorkoutData so the cloud '
-            'workout_templates row is deleted in the same fan-out. '
-            'Pre-fix only pushSnapshot ran, leaving the cloud row '
-            'orphaned — next restore re-imported the "deleted" '
-            'template.',
+            'deleteTemplate must EITHER directly call syncWorkoutData OR '
+            'route through WorkoutWriteService.deleteTemplate (which fires '
+            'it internally) — so the cloud workout_templates row is '
+            'tombstoned in the same fan-out. Pre-fix only pushSnapshot ran, '
+            'leaving the cloud row orphaned — next restore re-imported the '
+            '"deleted" template.',
       );
+      final firesPushSnapshot = body
+              .contains('unawaited(SyncService.instance.pushSnapshot())') ||
+          routedThroughWriteService;
       expect(
-        body,
-        contains('unawaited(SyncService.instance.pushSnapshot())'),
+        firesPushSnapshot,
+        isTrue,
         reason:
-            'deleteTemplate must call pushSnapshot so AI coach stops '
-            'referencing the deleted template immediately.',
+            'deleteTemplate must EITHER call pushSnapshot directly OR '
+            'route through WorkoutWriteService.deleteTemplate, so AI coach '
+            'stops referencing the deleted template immediately.',
       );
     });
   });

@@ -373,7 +373,7 @@ concepts:
       key_formula: "'exercise_log_index_${istDateStr(date)}'"
     ist_sites:
       - { file: lib/core/utils/date_utils.dart, line: 27, fn: formatDateKey }
-      - { file: lib/core/services/workout_write_service.dart, line: 1303, fn: wlogKey }
+      - { file: lib/core/services/workout_write_service.dart, line: 1355, fn: wlogKey }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\\.keys.*manually.*date", reason: "O(n) scan — use the index key instead" }
       - { pattern: "DateTime\\.now\\(\\)\\.toIso8601String\\(\\)\\.substring\\(0,\\s*10\\)", reason: "UTC date, disagrees with IST-keyed reader; use istDateStr(DateTime.now())" }
@@ -388,6 +388,20 @@ concepts:
     description: |
       All schedule mutations (generate, clean-sync on template edit,
       reschedule on days/week change). Owns schedule_YYYY-MM-DD keys.
+      OI-252 — `template_id` on this row is ALWAYS the LOCAL `tmpl_<uuid>`
+      Hive-key form (`WorkoutWriteService.newTemplateKey()`'s shape), never
+      the raw cloud uuid; `_syncScheduledWorkouts`'s `payload()` always sends
+      `template_id` (including explicit null) as the raw cloud id, and
+      `_restoreScheduledWorkouts` / `_restoreWorkoutPlan` convert both
+      directions via `templateKeyFor`/`cloudIdFromKey`
+      (`lib/core/services/template_identity.dart`). A row whose template is a
+      tombstone (`workout_templates.deleted_at != null` — via the
+      `scheduled_workouts` embed's `deleted_at`, or cross-referenced against
+      `_deletedTemplateCloudIds()`) is a GHOST day: skipped on restore and
+      any existing local reference is cleaned via
+      `_cleanScheduleReferencesToTemplate`, never hydrated with the
+      tombstone's mangled name. See `workout_templates`'s description for
+      the full delete-tombstone design.
     writers:
       - file: lib/core/services/workout_schedule_service.dart
         line_range: 1-9999
@@ -438,6 +452,7 @@ concepts:
       - { file: lib/features/train/widgets/week_selector.dart, reason: "Theme K — past-phase scroll-back iterates schedule_* keys for completed-phase chips" }
       - { file: lib/core/services/scheduled_workouts_resync_migrator.dart, reason: "one-shot resync sweep over schedule_* keys" }
       - { file: lib/core/services/sync/sync_workout.dart, reason: "cloud sync writer scans schedule_* prefix" }
+      - { file: lib/core/services/template_identity_migrator.dart, reason: "OI-252 one-shot migrator excludes schedule_*/displaced_* keys while rekeying legacy tmpl_* Hive keys to the new stable-uuid form" }
     regression_test: test/workout_write_service/upsert_scheduled_test.dart
     hive:
       box: workoutBox
@@ -451,7 +466,7 @@ concepts:
     restore_methods: [_restoreScheduledWorkouts, _restoreScheduleCompletions]
     provider_invalidation_set: [currentPlanProvider, calendarWeekProvider, todayWorkoutProvider]
     ist_sites:
-      - { file: lib/core/services/workout_write_service.dart, line: 1306, fn: scheduleKey }
+      - { file: lib/core/services/workout_write_service.dart, line: 1358, fn: scheduleKey }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\.put\('schedule_", reason: "Never write schedule keys directly from a widget — use WorkoutScheduleService" }
     class_constraints: |
@@ -3163,6 +3178,7 @@ concepts:
       - { file: lib/features/train/widgets/week_selector.dart, reason: "Theme K — past-phase scroll-back reads schedule_*.status for completed-day check glyphs" }
       - { file: lib/core/services/scheduled_workouts_resync_migrator.dart, reason: "one-shot resync sweep over schedule_* keys" }
       - { file: lib/core/services/sync/sync_workout.dart, reason: "cloud sync writer scans schedule_* prefix" }
+      - { file: lib/core/services/template_identity_migrator.dart, reason: "OI-252 one-shot migrator excludes schedule_*/displaced_* keys while rekeying legacy tmpl_* Hive keys to the new stable-uuid form" }
     regression_test: test/sync/restore_ordering_and_sweep_test.dart
     hive:
       box: workoutBox
@@ -3188,15 +3204,33 @@ concepts:
     domain: workout
     behavioral_test_path: test/contracts/workout_templates_writer_to_reader_test.dart
     description: |
-      Workout templates stored as tmpl_<ms> or tmpl_<nameHash> Hive keys.
-      Multi-day AI templates split into N rows with group_id/group_day_index.
-      Cloud: workout_templates parent + template_exercises children.
-      UNIQUE(user_id, name) on workout_templates prevents duplicate names
-      (migration 050). UNIQUE(template_id, order_index) on
+      OI-252 (stable ID rework, 2026-09-27) — every template now carries ONE
+      permanent client-minted UUID identity (`WorkoutWriteService.newTemplateKey()`
+      → `tmpl_<uuid-v4>` Hive key / `uuid` cloud id, minted at CREATE time and
+      never re-derived), used everywhere: sync, restore, schedule
+      `template_id` refs, and `plan_json` snapshot entries. Replaces the old
+      dual-identity scheme (`tmpl_<ms>` Hive key + a name-derived cloud
+      lookup), which is why deleting-then-recreating a same-named template
+      used to resurrect the deleted one (bug A) — the old restore matched by
+      NAME, so a locally-deleted row and its live replacement collided under
+      one cloud identity.
+      DELETE is a rename-on-delete tombstone (migration 145's
+      `workout_templates_delete_final_rename` trigger), not a row drop —
+      `deleted_at` set, `is_active=false`, `name` mangled — so `UNIQUE
+      (user_id, name)` stays satisfiable for a fresh template under the
+      freed name while every downstream FK (`scheduled_workouts.template_id`,
+      `plan_json.schedules[*].template_id`) stays valid instead of nulling.
+      A local delete queues in `PendingTemplateDeletes` (survives offline;
+      NOT across logout) and is drained to the cloud tombstone by
+      `_drainPendingTemplateDeletes`. Every restore path that can carry a
+      reference to a deleted template treats it as gone rather than as an
+      ordinary missing row — see `scheduled_workouts_mutations`'s ghost-day
+      handling below, which is the OTHER half of this concept's contract.
+      Multi-day AI templates still split into N rows with
+      group_id/group_day_index. Cloud: workout_templates parent +
+      template_exercises children. UNIQUE(template_id, order_index) on
       template_exercises (migration 051) enables upsert with onConflict
-      so partial-failure recovery is row-level instead of template-level
-      (replaced fragile DELETE-then-INSERT pattern in
-      _syncWorkoutTemplates).
+      so partial-failure recovery is row-level instead of template-level.
     writers:
       - file: lib/features/train/providers/train_provider.dart
         line_range: 1619-1635
@@ -3209,13 +3243,42 @@ concepts:
         line_range: 920-960
         method: createCustomTemplate tool
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1136-1180
-        method: upsertTemplate
+        line_range: 1182-1230
+        method: newTemplateKey / upsertTemplate
         notes: |
           Canonical writer scaffolded 2026-05-21 / audit A3. Routes
           previously-direct workoutBox.put(tmpl_*) from train_provider
           (saveTemplate + updateTemplate) through a locked + sync-fanned-
-          out + telemetry-paired service method.
+          out + telemetry-paired service method. `newTemplateKey()` (OI-252,
+          :1182) is the ONE place a template identity is minted
+          (`templateKeyFor(const Uuid().v4())`) — every create call site
+          (train_provider.saveTemplate, template_builder_screen,
+          workout_repository's AI multi-day loop) routes through it.
+      - file: lib/core/services/workout_write_service.dart
+        line_range: 1232-1271
+        method: deleteTemplate
+        notes: |
+          OI-252 — the canonical delete writer. Hive-only (layering:
+          WriteServices never call Supabase directly) — deletes the local
+          row and queues `PendingTemplateDeletes.add(id: cloudIdFromKey(key),
+          name:)`, with a null `id` when the row is still on a legacy
+          pre-migration key (resolved by name at drain time). Deliberately
+          does NOT call `TemplateService.cleanSyncTemplateSchedule` —
+          circular-dependency avoidance; that stays the caller's
+          responsibility (`TemplatesNotifier.deleteTemplate`).
+      - file: lib/core/services/sync/sync_workout.dart
+        line_range: 1287-1306
+        method: _drainPendingTemplateDeletes
+        notes: |
+          OI-252 — drains the queue by UPSERTing a tombstone per id
+          (`deleted_at`, `is_active: false`) via `onConflict: 'id'`, not
+          UPDATE — so the tombstone can be created even if the template's
+          own creating push hasn't reached the cloud yet; migration 145's
+          trigger then makes that later creating push a no-op against the
+          now-deleted row, so the delete always wins regardless of which
+          side's write lands first. A null queued id is resolved by
+          `(user_id, name)` here, the one place in this flow with both DB
+          access and the name.
     reader_manifest_complete: true
     readers:
       - file: lib/features/train/providers/train_provider.dart
@@ -3247,20 +3310,74 @@ concepts:
           (templates are identified by type field per the writer
           contract — saveTemplate / createMultiDayTemplate stamp it).
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 938-1110
+        line_range: 1330-1485
         method: _syncWorkoutTemplates (cloud projection)
         semantic: pass-through
         fields_read: [all tmpl_* fields]
+        notes: |
+          OI-252 — begins with `TemplateIdentityMigrator.runIfNeeded(userId)`
+          (legacy-key rekey gate, scoped to this function only — never
+          `_restoreIfNeeded` as a whole) then `_drainPendingTemplateDeletes`.
+      - file: lib/core/services/sync/sync_workout.dart
+        line_range: 1561-1669
+        method: _restoreWorkoutTemplates
+        semantic: pass-through
+        fields_read: [id, name, workout_type, deleted_at, template_exercises]
+        notes: |
+          OI-252 — REWRITTEN. Query drops `.eq('is_active', true)` and adds
+          `.order('deleted_at', nullsFirst: true)`; a `deleted_at != null`
+          row deletes the local `tmpl_<uuid>` key + calls
+          `_cleanScheduleReferencesToTemplate` (:1670) instead of hydrating.
+          A `PendingTemplateDeletes`-queued id is skipped outright (an
+          offline local delete must not be undone by a racing restore). The
+          old canonicalKeys/deleteAll stale-key SWEEP is gone entirely —
+          positive-evidence-only removal replaces it (a legacy sweep would
+          delete every not-yet-pushed local template on a first restore).
+      - file: lib/core/services/sync/sync_workout.dart
+        line_range: 1177-1274
+        method: _restoreWorkoutPlan
+        semantic: cross-concept ghost-day filter
+        fields_read: [template_id, template.deleted_at (embed)]
+        notes: |
+          OI-252 — a `plan_json.schedules` entry referencing a deleted
+          template is treated as gone, not as an ordinary missing/orphaned
+          reference: the schedule day is skipped rather than hydrated with
+          the tombstone's mangled name. See `scheduled_workouts_mutations`
+          below for the full writer/reader pair; cited here because it is
+          this concept's delete semantics leaking into a sibling concept's
+          restore path.
+      - file: lib/core/services/sync/sync_workout.dart
+        line_range: 2000-2296
+        method: _restoreScheduledWorkouts
+        semantic: cross-concept ghost-day filter
+        fields_read: [template_id, template.deleted_at (embed)]
+        notes: |
+          OI-252 — same ghost-day treatment as `_restoreWorkoutPlan` above,
+          applied to the live `scheduled_workouts` embed instead of the
+          frozen `plan_json` snapshot.
+    reader_allow_files:
+      - { file: lib/core/services/template_identity_migrator.dart, reason: "OI-252 one-shot migrator scans tmpl_* keys to find legacy (non-uuid) identities and rekey them to the stable-uuid form" }
     regression_test: test/contracts/templates_unique_constraint_test.dart
     hive:
       box: workoutBox
       key_prefix: "tmpl_"
-      key_formula: "'tmpl_${DateTime.now().millisecondsSinceEpoch}' or 'tmpl_${name.hashCode.toUnsigned(32).toRadixString(16)}'"
+      key_formula: "templateKeyFor(const Uuid().v4()) == 'tmpl_<uuid-v4>' — OI-252, the ONE
+        place an identity is minted (WorkoutWriteService.newTemplateKey()).
+        Superseded: 'tmpl_${DateTime.now().millisecondsSinceEpoch}' /
+        'tmpl_${name.hashCode...}' (legacy; TemplateIdentityMigrator rekeys
+        any surviving legacy row on next sync)."
     cloud:
       table: workout_templates
-      columns: [id, user_id, name, exercises, type, assigned_days, group_id, group_day_index, group_total_days, created_at]
-      unique_constraint: "(user_id, name) on workout_templates; (template_id, order_index) on template_exercises (migration 051)"
-    sync_methods: [_syncWorkoutTemplates]
+      columns: [id, user_id, name, workout_type, exercises, type, assigned_days, group_id, group_day_index, group_total_days, created_at, is_active, deleted_at]
+      unique_constraint: "(user_id, name) on workout_templates; (template_id, order_index) on template_exercises (migration 051).
+        OI-252 — migration 145's workout_templates_delete_final_rename BEFORE UPDATE
+        trigger keeps this satisfiable across a delete+recreate under the same
+        name: on `deleted_at` transitioning non-null it mangles `name` (appends
+        ' ‹del:<8-char-id-prefix>›') and clears `is_active`, freeing the original
+        name for a fresh row rather than colliding on it. A further write to an
+        already-tombstoned row (old.deleted_at already set) is a total no-op
+        (RETURN NULL)."
+    sync_methods: [_syncWorkoutTemplates, _drainPendingTemplateDeletes]
     restore_methods: [_restoreWorkoutTemplates]
     provider_invalidation_set: [currentPlanProvider, calendarWeekProvider, todayWorkoutProvider]
     telemetry:
@@ -3268,7 +3385,14 @@ concepts:
     class_constraints: |
       Single-day templates: one tmpl_* row. Multi-day: N rows with
       group_id + group_day_index + group_total_days fields.
-      Cloud id must be deterministic v5 UUID keyed on (user_id, lower(name)).
+      OI-252 — the cloud id is a client-minted UUID v4 (`const Uuid().v4()`
+      inside `WorkoutWriteService.newTemplateKey()`), minted ONCE at create
+      time and never re-derived from name/content. Supersedes the prior
+      "deterministic v5 UUID keyed on (user_id, lower(name))" scheme, which
+      was the actual root cause of bug A (delete-then-recreate resurrection):
+      a name-derived identity meant a locally-deleted row and its live
+      replacement collided under the SAME cloud id the moment both existed,
+      so a stale-name-match restore could not tell them apart.
 
   - concept: exercise_personal_records
     domain: workout
@@ -6218,7 +6342,7 @@ concepts:
           ("8-12" ranges). Judges the write by the stored row
           (customExerciseRowLanded), throwing write_failed only when absent.
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1184-1224
+        line_range: 1275-1315
         method: upsertCustomExercise
         notes: |
           Canonical writer (audit 2026-05-21 / A3). Locks per-key,
@@ -10338,7 +10462,7 @@ concepts:
         method: applyRestoreCeiling
         semantic: apply-ceiling
       - file: lib/core/services/sync_service.dart
-        line_range: 2403-2405
+        line_range: 2407-2409
         method: restoreFailureReason
         semantic: telemetry-reason-split
     readers:
@@ -12012,7 +12136,7 @@ concepts:
         semantic: flag-check
         fields_read: [type]
       - file: lib/core/services/plan_integrity_reconciler.dart
-        line_range: 96-100
+        line_range: 124-135
         method: needsHeal
         semantic: flag-check
         fields_read: [type]

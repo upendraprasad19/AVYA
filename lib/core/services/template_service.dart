@@ -279,7 +279,14 @@ class TemplateService {
       final map = Map<String, dynamic>.from(entry);
       if (map['type'] != 'custom_template') continue;
       if (map['template_id'] != templateId) continue;
-      if (map['status'] == 'completed') continue;
+      // OI-252 (round-1 plan review): a terminal row must never be
+      // touched here, not only a `completed` one. `moved` is the OTHER
+      // terminal status (tool_dispatcher.dart's AI-coach day-move writes
+      // a terminal source row via `status: 'moved'` instead of a raw
+      // delete, specifically so cloud fan-out + the streak walk-back see
+      // it) — unscheduling a `moved` row would delete the streak-safe
+      // terminal record this rework's own delete path must not disturb.
+      if (map['status'] == 'completed' || map['status'] == 'moved') continue;
 
       await unscheduleTemplateFromDate(d);
     }

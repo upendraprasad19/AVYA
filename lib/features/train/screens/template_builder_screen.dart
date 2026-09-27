@@ -11,6 +11,7 @@ import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
+import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import '../../home/providers/home_provider.dart';
@@ -367,7 +368,8 @@ class _TemplateBuilderScreenState
             .updateTemplate(_editingTemplateId!, templateData);
         templateId = _editingTemplateId!;
       } else {
-        templateId = 'tmpl_${DateTime.now().millisecondsSinceEpoch}';
+        // OI-252: a real UUID identity, not the legacy tmpl_<ms> shape.
+        templateId = WorkoutWriteService.instance.newTemplateKey();
         templateData['id'] = templateId;
         await ref.read(templatesProvider.notifier).saveTemplate(templateData);
       }
