@@ -32,7 +32,9 @@ void main() {
           'status': 'completed',
           'completed_at_ms': ms,
         }),
-        DateTime.fromMillisecondsSinceEpoch(ms, isUtc: false).toUtc().toIso8601String(),
+        // Hardcoded, not re-derived with the production expression, so a bug
+        // in that exact transform cannot pass itself (Task 14 review Minor).
+        '2026-05-05T10:00:00.000Z',
       );
     });
 
