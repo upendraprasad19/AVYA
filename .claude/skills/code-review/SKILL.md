@@ -248,6 +248,41 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-26** — blast-radius **platform** — branch `ops-alerting-b2a`
+  (OI-178: two new pg_cron alerts — migration 145 for a SQL job that ran and
+  failed, migration 146 for one that stopped being launched or was switched
+  off — plus their contract tests, a shared test-body-reading helper, yaml/
+  registry/doc updates, and two new OI board entries). Staged-diff review
+  (`docs/reviews/1c2e14c715da-review.md`), dispatched after 3 independent
+  plan-review rounds had already converged on the same diff (145 after 4
+  rounds, 146 after 3). **4 findings (1 P1, 2 P2, 1 P3); 0 false_alarm — all 4
+  fixed same batch.** The P1 is the interesting one: `guard_without_its_mirror`
+  caught a dedup `NOT EXISTS` whose two severity-branches were each pinned as
+  their OWN `contains()` substring, so an `OR`→`AND` mutation on the connective
+  BETWEEN them left both substrings intact and both target assertions green —
+  disabling dedup for both severities (a page-storm) with the mutation run
+  showing 7/7 pass. Three prior independent review rounds (context-blind, live
+  DB access, one of them explicitly mutation-testing 3 *other* survivors in
+  this same dedup block) all missed this exact one, because each one that
+  looked at the dedup mutated a BRANCH's content, never the token connecting
+  two already-individually-verified branches. The two P2s were a citation
+  drift (a diagnose doc's `line:` fields onto the migration's OWN header,
+  which had grown across those same 3 rounds — CLAUDE.md §4.9's own
+  documented recurring class) and a factual error in a migration's about-to-
+  be-immutable header comment ("14 jobs failed within 7 hours" — live query
+  independently re-run by both the reviewer and the coordinator: actual span
+  14h44m). **Tuning: widen `guard_without_its_mirror`'s method note.** The
+  existing method already says "mutate it and run it" and "follow the return
+  value to its call site" — add: *when a compound boolean condition has
+  multiple sub-clauses individually pinned by separate `contains()`
+  assertions, the CONNECTIVE ITSELF (the token joining two already-verified
+  operands) is a distinct mutation target that is invisible to per-clause
+  literal-substring assertions, because both operands survive verbatim in the
+  body regardless of what joins them.* The one-`contains()`-per-block pattern
+  reads as *more* thorough than a single sprawling assertion — it is not; a
+  single assertion spanning both blocks including their connective (145's own
+  sibling dedup does exactly this, and WAS caught) is strictly stronger here.
+
 - **2026-09-25** — blast-radius **platform** — branch `oi126-training-day-predicate`
   (OI-126: unifies the training-day predicate so a `type: 'logged'` schedule row
   agrees between the weekly streak and phase-completion/PRO-advance-gate/rest-day-banner
