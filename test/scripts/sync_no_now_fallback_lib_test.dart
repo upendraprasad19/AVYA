@@ -87,11 +87,6 @@ void main() {
     // via `flutter test test/scripts/sync_no_now_fallback_lib_test.dart`.
     const expected = <String>[
       'sync_coach.dart|created_at',
-      'sync_health.dart|created_at',
-      'sync_health.dart|created_at',
-      'sync_health.dart|created_at',
-      'sync_health.dart|created_at',
-      'sync_health.dart|created_at',
       'sync_restore_completeness.dart|created_at',
       'sync_restore_completeness.dart|created_at',
       'sync_restore_completeness.dart|read_at',

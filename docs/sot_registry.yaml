@@ -1880,12 +1880,12 @@ concepts:
       manual UI writer.
     writers:
       - file: lib/core/services/sync/sync_health.dart
-        line_range: 222-260
+        line_range: 357-404
         method: _syncStepsLogs (push) — source is the native health import
         semantic: cloud-upsert
     readers:
       - file: lib/core/services/sync/sync_health.dart
-        line_range: 471-511
+        line_range: 572-614
         method: _restoreStepsLogs
         semantic: cloud-restore
     hive:
@@ -4123,17 +4123,21 @@ concepts:
           Per-day path only — list key NOT consulted. Feeds the
           snapshot's data_window/coverage signal.
       - file: lib/core/services/sync/sync_health.dart
-        line_range: 30-205
+        line_range: 305-355
         method: _syncSleepLogs (push)
         semantic: pass-through
-        fields_read: [<both per-day + list paths>]
+        fields_read: [date, duration_hrs, quality, bed_time, wake_time, notes, created_at]
         notes: |
-          Sole writer-side fan-out that READS the legacy 'sleep_logs'
-          list AND the per-day keys. Scans per-day FIRST then falls
-          back to list for chat-logged path. Both upsert into the same
-          cloud sleep_logs row with deterministic id from date.
+          Sole writer-side fan-out for sleep_logs. Reads ONLY the per-day
+          sleep_log_<date> keys (day-swapper + sync-load D18, 2026-09-27 —
+          the legacy 'sleep_logs' LIST push was deleted; its writer moved
+          off the list key in 2026-05-16 and build 1.0.0+46 is well past
+          the "+28" retirement trigger that writer's own comment named).
+          Upserts onConflict (user_id,date), skipping an unchanged row via
+          SyncSkipIndex (sync_water_log_payload_hash_index's sibling,
+          sync_sleep_payload_hash_index).
       - file: lib/core/services/sync/sync_health.dart
-        line_range: 335-365
+        line_range: 527-566
         method: _restoreSleepLogs (pull)
         semantic: pass-through
         fields_read: [user_id, date, duration_hrs, quality, bed_time, wake_time, notes]
@@ -4168,22 +4172,17 @@ concepts:
     ist_sites:
       - { file: lib/features/profile/providers/profile_provider.dart, line: 540, fn: logSleep }
     telemetry:
-      failure_op_types: [upsert_sleep_log, upsert_sleep_log_chat]
+      failure_op_types: [upsert_sleep_log]
     class_constraints: |
-      DUAL-KEY HAZARD — two parallel storage shapes:
-        (a) per-day singleton: healthBox['sleep_log_<istDate>'] = Map
-        (b) legacy list:       healthBox['sleep_logs']           = List<Map>
-      As of 2026-05-12 the conversational log handler was migrated to
-      write per-day keys (closes-diagnose: 2026-05-12 F2-R2), so the
-      list path is HISTORICAL-only — no live writer produces it. BUT:
-      legacy entries from pre-#15.3 installs survive in the list, and
-      _syncSleepLogs intentionally still reads both. profile_provider
-      ALSO reads both (priority: typed entry → per-day key → list).
-      _getSleep7d + _countSleepLogsLast7Days read PER-DAY ONLY.
-      Result: a stale list entry can disagree with the per-day reader
-      for the same date. Sweep candidates: source-grep
-      `healthBox.get('sleep_logs')` (3 expected callsites only) before
-      retiring the list path entirely. Do NOT introduce a 3rd shape.
+      RETIRED 2026-09-27 (day-swapper + sync-load D18) — the legacy
+      list-key PUSH path (_syncSleepLogs no longer reads
+      healthBox['sleep_logs'] at all) is deleted; see the writers[]
+      note above. profile_provider.dart:488 still READS
+      healthBox['sleep_logs'] as a UI fallback for any list entries
+      that predate the 2026-05-12 writer migration (closes-diagnose
+      2026-05-12 F2-R2) — this is read-only and intentionally
+      untouched. Do NOT reintroduce a second write path for this
+      concept.
 
   - concept: user_full_name
     domain: auth_profile
