@@ -1587,69 +1587,44 @@ extension SyncServiceWorkout on SyncService {
   /// Diagnose: docs/diagnoses/2026-05-10-fk-violation-saturday-c8e4a1.md
   Future<void> _syncScheduledWorkouts(String userId) async {
     final workoutBox = _hive.workoutBox;
-
-    // H1b Part A — load the sync-owned fingerprint index so an unchanged
-    // planned row can skip its idempotent re-upsert (the returning-login
-    // ~96-upsert tax). The index is loaded once per call, mutated in-memory on
-    // CONFIRMED 200s, and persisted (pruned to live rows) after the loop. When
-    // the kill-switch is set we skip the index entirely → the verbatim pre-H1b
-    // unconditional sweep.
-    final bool schedHashSkipDisabled = _schedHashSkipDisabled;
-    final Map<String, String> schedHashIndex = <String, String>{};
-    if (!schedHashSkipDisabled) {
-      final rawIndex = workoutBox.get(SyncService._schedHashIndexKey);
-      if (rawIndex is Map) {
-        rawIndex.forEach((k, v) {
-          if (k is String && v is String) schedHashIndex[k] = v;
-        });
-      }
-    }
-
-    // H1b Part A — fingerprint delegate. Logic + rationale (UUID v5 / sha1 ⇒
-    // cross-VM-stable, A-fix-4) live in SyncService.schedPayloadFingerprint,
-    // extracted there for behavioral-test coverage of the skip decision.
-    String schedFp(Map<String, dynamic> p) =>
-        SyncService.schedPayloadFingerprint(p);
+    final index = SyncSkipIndex(
+      box: workoutBox,
+      domain: SyncSkipDomain.sched,
+      disabled: _schedHashSkipDisabled,
+      ownerChangedNow: () => ownerChangedSince(userId),
+      reportFailure: (op, e, st) =>
+          unawaited(_reportSyncFailure(opType: op, error: e)),
+    );
 
     // APK Test #14 / Bug B.1 — per-call cache of template_name → cloud
-    // UUID. A week's worth of schedule rows that share the same template
-    // would otherwise N×SELECT. `null` cached values mark known-misses
-    // so we don't re-query for an orphan template repeatedly.
+    // UUID, and a one-shot _syncWorkoutTemplates recovery attempt bounded to
+    // once per call. Both preserved verbatim from the pre-Task-15 code;
+    // pinned by test/contracts/scheduled_workouts_fk_resilience_test.dart.
     final templateNameToCloudId = <String, String?>{};
-
-    // Tracks whether we've already attempted a one-shot
-    // `_syncWorkoutTemplates(userId)` recovery this call. Bounds work
-    // to one re-push regardless of how many schedule rows hit 23503.
     bool templatesResynced = false;
 
-    /// Resolve the cloud `workout_templates.id` for a Hive `tmpl_<ms>`
-    /// raw key by reading the local template's name and SELECTing the
-    /// cloud row that matches `(user_id, lower-trim name)`.
-    ///
-    /// Returns null when the local template is missing (template was
-    /// deleted upstream), the local template has no name, or the cloud
-    /// SELECT errors. Cache hits (including null) short-circuit.
-    Future<String?> resolveCloudTemplateId(String? rawHiveTemplateId) async {
+    // Local-only (no network): the template row's name on THIS phone, or
+    // null when the ref is empty or the template row is not here.
+    String? localTemplateName(String? rawHiveTemplateId) {
       if (rawHiveTemplateId == null || rawHiveTemplateId.isEmpty) return null;
-
-      // Look up the local template Map in workoutBox to extract its
-      // name. Falls back to entry-level workout_name if the local row
-      // is gone (deleted upstream); cloud lookup uses the same
-      // (user_id, name) onConflict as `_syncWorkoutTemplates`.
-      String? tmplName;
       final localTmpl = workoutBox.get(rawHiveTemplateId);
-      if (localTmpl is Map) {
-        final n = (localTmpl['name'] as String?)?.trim();
-        if (n != null && n.isNotEmpty) tmplName = n;
-      }
-      if (tmplName == null) return null;
+      if (localTmpl is! Map) return null;
+      final n = (localTmpl['name'] as String?)?.trim();
+      return (n == null || n.isEmpty) ? null : n;
+    }
 
-      // Cache key on the trimmed name — cloud `onConflict` is
-      // `user_id,name` so identical names dedupe correctly.
+    /// Resolve the cloud `workout_templates.id` for a Hive `tmpl_<ms>` raw
+    /// key by reading the local template's name and SELECTing the cloud row
+    /// that matches `(user_id, name)`. Returns null when the local template
+    /// is missing/nameless or the cloud SELECT errors. Cache hits (including
+    /// null) short-circuit; never called when [localTemplateName] is null
+    /// (spec §14 — a skipped or genuinely-orphan row costs no SELECT).
+    Future<String?> resolveCloudTemplateId(String? rawHiveTemplateId) async {
+      final tmplName = localTemplateName(rawHiveTemplateId);
+      if (tmplName == null) return null;
       if (templateNameToCloudId.containsKey(tmplName)) {
         return templateNameToCloudId[tmplName];
       }
-
       try {
         final parentRow = await _supabase.client
             .from('workout_templates')
@@ -1671,13 +1646,16 @@ extension SyncServiceWorkout on SyncService {
       }
     }
 
+    final liveDates = <String>{};
     for (final key in workoutBox.keys) {
+      if (index.aborted) break;
       if (key is! String || !key.startsWith('schedule_')) continue;
       final raw = workoutBox.get(key);
       if (raw is! Map) continue;
       final entry = Map<String, dynamic>.from(raw);
       final date = entry['date'] as String?;
       if (date == null) continue;
+      liveDates.add(date);
 
       try {
         // OI-170: `parsedDate` lived here solely to feed
@@ -1686,191 +1664,177 @@ extension SyncServiceWorkout on SyncService {
         // is deleted rather than left as an unused local (which is a WARNING,
         // and `flutter analyze --no-fatal-infos` at pre-push fails on warnings).
         final rawTemplateId = entry['template_id']?.toString();
+        final bool hasLocalRef =
+            rawTemplateId != null && rawTemplateId.isNotEmpty;
+        // Local only — the cloud id is resolved inside the push closure, so a
+        // skipped row costs no workout_templates SELECT (spec §14).
+        final String? tmplName = localTemplateName(rawTemplateId);
 
-        // APK Test #14 / Bug B.1 — resolve cloud template_id by NAME
-        // lookup. Pre-fix used `SyncService._deterministicId(rawTemplateId)` which
-        // hashed the local Hive key — never matched cloud's
-        // gen_random_uuid() id, so every push 23503'd. See
-        // docs/diagnoses/2026-05-10-fk-violation-saturday-c8e4a1.md.
-        String? cloudTemplateId = await resolveCloudTemplateId(rawTemplateId);
+        // day-swapper+sync-load Task 14 — never "now" for a past completion;
+        // resolver order: completed_at (ISO) -> completed_at_ms -> the
+        // matching wlog's completed_at -> omit.
+        final String? completedAt =
+            ScheduleCompletionTime.scheduledCompletedAtIso(entry);
 
-        // APK Test #12.7 — sanitize completed_at. An empty string in
-        // Hive (legacy code path) reaches PostgREST as `""` and Postgres
-        // 22007s with `invalid input syntax for type timestamp with time
-        // zone: ""`. Send null when empty/missing; pass through real
-        // ISO strings unchanged.
-        final rawCompletedAt = entry['completed_at'];
-        final completedAt = (rawCompletedAt is String && rawCompletedAt.isNotEmpty)
-            ? rawCompletedAt
-            : null;
-
-        Map<String, dynamic> payload(String? tmplId) => <String, dynamic>{
+        // day-swapper+sync-load Task 15 — payload-shape heal: send an
+        // EXPLICIT `template_id: null` when the local row has no template at
+        // all; omit the key only for a genuine orphan (a local ref that
+        // never resolves to a cloud id). PostgREST treats an explicit null
+        // and an absent key differently on upsert (NULLs the column vs.
+        // leaves it untouched), so every row's first push under this scheme
+        // changes payload shape and re-pushes once (the expected heal).
+        Map<String, dynamic> buildPayload(String? tmplId,
+                {required bool includeTemplateKey}) =>
+            <String, dynamic>{
               'user_id': userId,
-              if (tmplId != null) 'template_id': tmplId,
+              if (includeTemplateKey) 'template_id': tmplId,
               'scheduled_date': date,
               'week_number': entry['week'] ?? entry['week_number'],
               // OI-170 — send the app's canon (0=Mon..6=Sun), not Dart's
-              // `weekday` (1..7). This line preferred a RE-DERIVATION over the
-              // stored value AND got the derivation wrong, so the correct local
-              // 0..6 was never sent; the restore then wrote the wrong value
-              // back over it. `parsedDate` comes from this row's own date key
-              // (`:1595`) and is effectively never null, so the `??` fallback
-              // never fired and the stored value was simply discarded.
-              // The restore now derives its own value, which is what actually
-              // heals existing rows; this keeps the cloud honest going forward.
+              // `weekday` (1..7). See the original diagnose for why a
+              // re-derivation (rather than the stored value) is preferred.
               'day_of_week': entry['day_of_week'] ?? dayOfWeekFromDate(date),
               'status': entry['status'] ?? 'planned',
-              'completed_at': completedAt,
+              if (completedAt != null) 'completed_at': completedAt,
             };
 
-        // H1b Part A — skip the idempotent re-upsert when this date's resolved
-        // payload is byte-identical to the last CONFIRMED push. A-fix-1
-        // (LOAD-BEARING): a `completed` row is NEVER skipped — cloud can be
-        // silently stale (d9b2c5 / Bug B.1) and the resync migrator's one-shot
-        // flag would make a mis-skip PERMANENT, so completed rows always
-        // re-push. Only planned-week regeneration (the bulk of the ~96) skips.
-        final firstPayload = payload(cloudTemplateId);
-        final entryStatus = (entry['status'] ?? 'planned').toString();
-        if (SyncService.schedShouldSkipUpsert(
-          killSwitchDisabled: schedHashSkipDisabled,
-          status: entryStatus,
-          storedFingerprint: schedHashIndex[date],
-          currentFingerprint: schedFp(firstPayload),
-        )) {
-          continue; // cloud already holds this exact row
-        }
-
-        try {
-          await _supabase.client
-              .from('scheduled_workouts')
-              .upsert(firstPayload, onConflict: 'user_id,scheduled_date');
-          // H1b Part A — record the CONFIRMED fingerprint (store-on-200-only:
-          // any throw below leaves no entry → the next pass re-pushes).
-          if (!schedHashSkipDisabled) {
-            schedHashIndex[date] = schedFp(firstPayload);
-          }
-        } on Object catch (firstErr) {
-          // APK Test #14 / Bug B.1 — distinguish 23503 (FK violation on
-          // template_id) from other failures. PostgrestException's code
-          // is exposed via toString(); auth_provider.dart:483 uses the
-          // same `eStr.contains('23503')` convention.
-          final errStr = firstErr.toString();
-          final isFkViolation = errStr.contains('23503');
-          if (!isFkViolation) {
-            rethrow;
-          }
-
-          // First-time-this-call: re-run `_syncWorkoutTemplates` to
-          // ensure the parent row exists, then re-resolve and retry.
-          if (!templatesResynced) {
-            templatesResynced = true;
-            try {
-              await _syncWorkoutTemplates(userId);
-            } catch (resyncErr, st) {
-              debugPrint(
-                  '[SyncService._syncScheduledWorkouts] templates resync: $resyncErr');
-              // audit-2026-05-11 H-42 — telemetry pair.
-              unawaited(ErrorTelemetry.recordNonFatal(resyncErr, st,
-                  reason: 'sync_service_if_20'));
-            }
-            // Clear cache so the post-resync lookup hits cloud fresh
-            // instead of returning the stale null/miss.
-            templateNameToCloudId.clear();
-            cloudTemplateId = await resolveCloudTemplateId(rawTemplateId);
-
-            final recoveryPayload = payload(cloudTemplateId);
-            try {
-              await _supabase.client
-                  .from('scheduled_workouts')
-                  .upsert(recoveryPayload,
-                      onConflict: 'user_id,scheduled_date');
-              // H1b Part A — recovery confirmed; record the (re-resolved)
-              // fingerprint so the next pass skips this now-healed row.
-              if (!schedHashSkipDisabled) {
-                schedHashIndex[date] = schedFp(recoveryPayload);
-              }
-              // Recovery succeeded — log telemetry event.
+        await index.pushIfChanged(
+          date,
+          // The LOCAL template ref, not the cloud id (spec §5.9): a rename,
+          // a template arriving on this phone, or a changed local ref all
+          // re-push. day-swapper+sync-load Task 15 supersedes A-fix-1 (a
+          // `completed` row never skipped) — migration 147's server-side
+          // completed-day guard (Task 7) makes a fingerprint-matched
+          // completed row exactly as safe to skip as a planned one; see
+          // docs/diagnoses/2026-06-27-sched-dirty-filter-b4f7e2.md.
+          () => SyncService.schedPayloadFingerprint(<String, dynamic>{
+                ...buildPayload(null, includeTemplateKey: false),
+                'template_ref': hasLocalRef ? rawTemplateId : null,
+                'template_name': tmplName,
+              }),
+          () async {
+            Future<bool> upsertOnce(String? tmplId, bool includeKey) async {
               try {
-                await _reportSyncFailure(
+                await _supabase.client.from('scheduled_workouts').upsert(
+                    buildPayload(tmplId, includeTemplateKey: includeKey),
+                    onConflict: 'user_id,scheduled_date');
+                return true;
+              } on Object catch (e) {
+                // APK Test #14 / Bug B.1 — distinguish 23503 (FK violation on
+                // template_id) from other failures; anything else propagates
+                // to pushIfChanged's own catch, which reports it via the
+                // domain's opType (SyncSkipDomain.sched.opType ==
+                // 'upsert_scheduled_workout').
+                if (!e.toString().contains('23503')) rethrow;
+                return false;
+              }
+            }
+
+            // Case 1 — no local ref: explicit null, confirmed.
+            if (!hasLocalRef) return upsertOnce(null, true);
+            // Case 2 — the template row is not on this phone: nothing can
+            // resolve, so omit the key and CONFIRM. template_name (null) is
+            // in the fingerprint, so the template's arrival re-pushes.
+            // Unconfirmed here would re-push every pass while the template
+            // stays missing.
+            if (tmplName == null) return upsertOnce(null, false);
+
+            // Case 3 — resolve now (only rows being pushed pay this SELECT).
+            final cloudTemplateId =
+                await resolveCloudTemplateId(rawTemplateId);
+            if (cloudTemplateId != null &&
+                await upsertOnce(cloudTemplateId, true)) {
+              return true;
+            }
+
+            // Unresolved, or 23503 on a stale id. First-time-this-CALL (not
+            // per-row): re-run _syncWorkoutTemplates so the parent row
+            // exists, then re-resolve and retry.
+            if (!templatesResynced) {
+              templatesResynced = true;
+              try {
+                await _syncWorkoutTemplates(userId);
+              } catch (resyncErr, st) {
+                debugPrint(
+                    '[SyncService._syncScheduledWorkouts] templates resync: $resyncErr');
+                // audit-2026-05-11 H-42 — telemetry pair.
+                unawaited(ErrorTelemetry.recordNonFatal(resyncErr, st,
+                    reason: 'sync_service_if_20'));
+                return false;
+              }
+              // Clear cache so the post-resync lookup hits cloud fresh
+              // instead of returning the stale null/miss.
+              templateNameToCloudId.clear();
+              final recovered = await resolveCloudTemplateId(rawTemplateId);
+              if (recovered != null && await upsertOnce(recovered, true)) {
+                unawaited(_reportSyncFailure(
                   opType: 'scheduled_workout_fk_recovered',
                   error: 'tmpl=$rawTemplateId date=$date',
-                );
-              } catch (_) {}
-              continue;
-            } on Object catch (secondErr) {
-              final secondStr = secondErr.toString();
-              if (!secondStr.contains('23503')) {
-                rethrow;
+                ));
+                return true;
               }
-              // Fall through to null-template fallback below.
             }
-          }
 
-          // Second 23503 (or repeat-FK after a prior row already used
-          // the recovery slot): null-template fallback. Status +
-          // completed_at still reach cloud so the calendar tick survives;
-          // template attribution is the only loss.
-          final fallbackPayload = payload(null);
-          try {
-            await _supabase.client
-                .from('scheduled_workouts')
-                .upsert(fallbackPayload,
-                    onConflict: 'user_id,scheduled_date');
-            // H1b Part A — orphan-fallback confirmed; record the null-template
-            // fingerprint. It differs from a resolved-template fingerprint, so a
-            // later pass that resolves the FK re-pushes WITH the template.
-            if (!schedHashSkipDisabled) {
-              schedHashIndex[date] = schedFp(fallbackPayload);
+            // Second FK violation (or the one-shot recovery slot was
+            // already used by an earlier row this pass): fall back to
+            // omitting template_id so status/completed_at still reach
+            // cloud. This final attempt catches ANY failure (not just
+            // 23503) — matching the pre-Task-15 catch-all fallback shape —
+            // and reports 'upsert_scheduled_workout' (the pre-change op
+            // string) itself: a rethrow-based report via pushIfChanged
+            // would only fire for a non-23503 throw, and this path is
+            // reached specifically because the retryable attempts are
+            // exhausted, not because this attempt is expected to fail.
+            try {
+              await _supabase.client.from('scheduled_workouts').upsert(
+                  buildPayload(null, includeTemplateKey: false),
+                  onConflict: 'user_id,scheduled_date');
+            } on Object catch (e, st) {
+              debugPrint(
+                  '[SyncService._syncScheduledWorkouts] fallback upsert: $e');
+              // audit-2026-05-11 H-42 — telemetry pair.
+              unawaited(ErrorTelemetry.recordNonFatal(e, st,
+                  reason: 'sync_service_catch_11'));
+              unawaited(_reportSyncFailure(
+                  opType: 'upsert_scheduled_workout', error: e));
+              return false;
             }
-            try {
-              await _reportSyncFailure(
-                opType: 'scheduled_workout_template_orphaned',
-                error: 'tmpl=$rawTemplateId date=$date',
-              );
-            } catch (_) {}
-          } catch (fallbackErr, st) {
-            // Fallback itself failed — surface as the original op_type
-            // so retry-queue accounting stays consistent.
-            debugPrint(
-                '[SyncService._syncScheduledWorkouts] fallback upsert: $fallbackErr');
-            // audit-2026-05-11 H-42 — telemetry pair.
-            unawaited(ErrorTelemetry.recordNonFatal(fallbackErr, st,
-                reason: 'sync_service_catch_11'));
-            try {
-              await _reportSyncFailure(
-                  opType: 'upsert_scheduled_workout', error: fallbackErr);
-            } catch (_) {}
-          }
-        }
+            // Fallback confirmed but the template link is lost. Spec D4: an
+            // id-lookup failure means "written but not confirmed complete",
+            // so report + stay UNCONFIRMED — a later successful resolve
+            // re-pushes WITH the template instead of being stuck on the
+            // omitted-template fingerprint forever.
+            unawaited(_reportSyncFailure(
+              opType: 'scheduled_workout_template_orphaned',
+              error: 'tmpl=$rawTemplateId date=$date',
+            ));
+            return false;
+          },
+        );
       } catch (e, st) {
         debugPrint('[SyncService._syncScheduledWorkouts] $e');
         // audit-2026-05-11 H-42 — telemetry pair.
         unawaited(ErrorTelemetry.recordNonFatal(e, st,
             reason: 'sync_service_catch_12'));
+        // Task 13/14 review fix round 1 (2026-09-27) — this outer catch only
+        // guards the payload-build code above (pushIfChanged never
+        // rethrows; a push() failure is already reported via the domain's
+        // own opType through the `reportFailure` closure passed above), but
+        // it MUST still keep its own `_reportSyncFailure` call so a
+        // payload-build exception (before pushIfChanged is even reached)
+        // still reaches the server-side client_errors table — the same
+        // shape `_syncExerciseLogs` / `_syncNutritionLogs` /
+        // `_syncScheduleCompletions` kept (an outer catch around
+        // payload-building is a disjoint path from pushIfChanged's own
+        // reporting).
         try {
-          await _reportSyncFailure(opType: 'upsert_scheduled_workout', error: e);
+          await _reportSyncFailure(
+              opType: 'upsert_scheduled_workout', error: e);
         } catch (_) {}
       }
     }
 
-    // H1b Part A (A-fix-2) — persist the fingerprint index, pruned to the
-    // schedule rows still present. A deleted date drops its entry, so a later
-    // re-create re-pushes (covers the delete sites without per-call-site
-    // wiring). Store-back only on the live skip path so the kill-switch leaves
-    // the box verbatim.
-    if (!schedHashSkipDisabled) {
-      final liveDates = <String>{};
-      for (final key in workoutBox.keys) {
-        if (key is String && key.startsWith('schedule_')) {
-          final r = workoutBox.get(key);
-          if (r is Map && r['date'] is String) {
-            liveDates.add(r['date'] as String);
-          }
-        }
-      }
-      await workoutBox.put(SyncService._schedHashIndexKey,
-          SyncService.schedPrunedHashIndex(schedHashIndex, liveDates));
-    }
+    await index.commit(liveKeys: liveDates);
   }
 
   /// Restores scheduled workouts from Supabase (supplement to plan restore).

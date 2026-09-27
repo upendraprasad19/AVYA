@@ -155,8 +155,8 @@ void main() {
       // RETURN TYPE immediately after the 2-space indent, so it excludes two
       // classes by construction (NOT by indent):
       //   (a) `static `-prefixed members — the `^  static …` text never matches
-      //       `^  (Future|Stream|void)` (e.g. the H1b @visibleForTesting statics
-      //       schedPayloadFingerprint / schedShouldSkipUpsert / schedPrunedHashIndex);
+      //       `^  (Future|Stream|void)` (e.g. the H1b @visibleForTesting static
+      //       schedPayloadFingerprint);
       //   (b) non-Future/Stream/void return types (String/bool/Map/int).
       // (Known blind spot, acceptable for now: a future PUBLIC `static Future<…>`
       // would also be excluded — add an explicit static branch here if one is

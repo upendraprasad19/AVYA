@@ -1,37 +1,39 @@
-// H1b Part A — behavioral contract for the scheduled_workouts dirty-filter.
+// H1b Part A / day-swapper+sync-load Task 15 — behavioral contract for the
+// scheduled_workouts skip decision, now routed through SyncSkipIndex (domain
+// `sched`) instead of the bespoke schedShouldSkipUpsert/schedPrunedHashIndex
+// pair (both deleted by this task).
 //
-// The returning-login cost tax was ~96 `upsert_scheduled_workout` calls re-
-// pushing a plan the cloud already held. `_syncScheduledWorkouts` now skips an
-// unchanged PLANNED row whose payload fingerprint matches the last CONFIRMED
-// push (index `sync_sched_payload_hash_index` in user-scoped workoutBox).
+// A-fix-1 (a `completed` row never skips) is SUPERSEDED here: migration 147
+// (Task 7) adds a server-side guard that rejects a stale client overwrite of
+// a completed row's identity columns, so a fingerprint-matched completed row
+// is exactly as safe to skip as a fingerprint-matched planned row. See
+// docs/diagnoses/2026-06-27-sched-dirty-filter-b4f7e2.md (A-fix-1's origin)
+// and this batch's own diagnose-doc as the record of the supersession.
 //
-// The skip decision, fingerprint, and prune are pure statics on SyncService so
-// the load-bearing semantics are behaviorally testable without a live backend
-// (the method itself is private + Supabase-coupled). This FAILS if:
-//   - A `completed` row is ever skipped (A-fix-1 P0 — cloud can be silently
-//     stale per d9b2c5 and the resync migrator's one-shot flag makes a mis-skip
-//     PERMANENT).
-//   - An unchanged planned row stops skipping (the cost win) OR a changed row
-//     skips (correctness).
-//   - A null stored fingerprint skips (store-on-200-only — a failed push must
-//     re-push next pass).
-//   - The fingerprint stops being sensitive to a pushed field.
-//   - Prune stops dropping a deleted date (A-fix-2).
+// schedPayloadFingerprint itself is UNCHANGED (still pinned by
+// test/sync/sync_skip_index_test.dart's cross-check against SyncFingerprint).
 //
-// See docs/diagnoses/2026-06-27-sched-dirty-filter-b4f7e2.md.
-
-import 'dart:io';
+// See docs/diagnoses/2026-09-26-sync-write-amplification-a9d3f6.md.
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive/hive.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/sync/sync_skip_index.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 
+import '../sync/sync_domain_skip_harness.dart';
+
 void main() {
-  // Mirrors `_syncScheduledWorkouts`' `payload(tmplId)` builder: template_id is
-  // OMITTED when null (not null-valued), matching the `if (tmplId != null)` map
-  // spread in the production code.
+  final h = SyncHarness();
+  setUp(h.setUp);
+  tearDown(h.tearDown);
+
+  // Mirrors _syncScheduledWorkouts' payload(tmplId) builder for the
+  // fingerprint-only unit tests below (the domain enum key stays
+  // 'sync_sched_payload_hash_index' — Task 4 pins the three shipped domains'
+  // names byte-identical to today's).
   Map<String, dynamic> basePayload({
     String userId = 'user-1',
+    bool includeTemplateKey = true,
     String? templateId = 'tmpl-cloud-1',
     String date = '2026-06-20',
     Object? week = 2,
@@ -41,226 +43,257 @@ void main() {
   }) =>
       <String, dynamic>{
         'user_id': userId,
-        if (templateId != null) 'template_id': templateId,
+        if (includeTemplateKey) 'template_id': templateId,
         'scheduled_date': date,
         'week_number': week,
         'day_of_week': day,
         'status': status,
-        'completed_at': completedAt,
+        if (completedAt != null) 'completed_at': completedAt,
       };
 
-  group('schedPayloadFingerprint — stable + field-sensitive', () {
-    test('same payload → same fingerprint (deterministic / cross-VM stable)',
-        () {
+  group('schedPayloadFingerprint — stable + field-sensitive (unchanged)', () {
+    test('same payload -> same fingerprint (deterministic / cross-VM stable)', () {
       final a = SyncService.schedPayloadFingerprint(basePayload());
       final b = SyncService.schedPayloadFingerprint(basePayload());
       expect(a, b);
-      // 36-char UUID-v5 shape proves the deterministic (sha1) path — NOT a
-      // VM-unstable String.hashCode (H-15).
       expect(a.length, 36);
     });
 
     test('every pushed field flips the fingerprint', () {
       final base = SyncService.schedPayloadFingerprint(basePayload());
       final variants = <String, String>{
-        'user_id':
-            SyncService.schedPayloadFingerprint(basePayload(userId: 'user-2')),
-        'template_id': SyncService.schedPayloadFingerprint(
-            basePayload(templateId: 'tmpl-cloud-2')),
-        'template_absent':
-            SyncService.schedPayloadFingerprint(basePayload(templateId: null)),
-        'scheduled_date':
-            SyncService.schedPayloadFingerprint(basePayload(date: '2026-06-21')),
+        'user_id': SyncService.schedPayloadFingerprint(basePayload(userId: 'user-2')),
+        'template_id': SyncService.schedPayloadFingerprint(basePayload(templateId: 'tmpl-cloud-2')),
+        'template_key_absent': SyncService.schedPayloadFingerprint(
+            basePayload(includeTemplateKey: false)),
+        'template_value_null': SyncService.schedPayloadFingerprint(basePayload(templateId: null)),
+        'scheduled_date': SyncService.schedPayloadFingerprint(basePayload(date: '2026-06-21')),
         'week': SyncService.schedPayloadFingerprint(basePayload(week: 3)),
         'day': SyncService.schedPayloadFingerprint(basePayload(day: 7)),
-        'status': SyncService.schedPayloadFingerprint(
-            basePayload(status: 'completed')),
-        'completed_at': SyncService.schedPayloadFingerprint(
-            basePayload(completedAt: '2026-06-20T08:00:00.000')),
+        'status': SyncService.schedPayloadFingerprint(basePayload(status: 'completed')),
+        'completed_at':
+            SyncService.schedPayloadFingerprint(basePayload(completedAt: '2026-06-20T08:00:00.000')),
       };
       variants.forEach((field, fp) {
-        expect(fp, isNot(base),
-            reason: 'changing $field must flip the fingerprint → re-push');
+        expect(fp, isNot(base), reason: 'changing $field must flip the fingerprint -> re-push');
       });
     });
 
-    test('null template_id (orphan-fallback) differs from a resolved template',
-        () {
-      final orphan =
-          SyncService.schedPayloadFingerprint(basePayload(templateId: null));
-      final resolved = SyncService.schedPayloadFingerprint(
-          basePayload(templateId: 'tmpl-cloud-1'));
-      expect(orphan, isNot(resolved),
-          reason: 'a later FK-resolve must re-push WITH the template');
+    test('an explicit null template_id (local row has no template) differs from an OMITTED key '
+        '(orphan) — the T15 payload-shape distinction', () {
+      final explicitNull = SyncService.schedPayloadFingerprint(basePayload(templateId: null));
+      final omitted = SyncService.schedPayloadFingerprint(basePayload(includeTemplateKey: false));
+      expect(explicitNull, isNot(omitted),
+          reason: 'PostgREST treats an explicit null and an absent key differently on upsert; '
+              'the fingerprint must too, or an orphan-then-resolved row could mis-skip');
     });
   });
 
-  group('schedShouldSkipUpsert — A-fix-1 + skip/re-push semantics', () {
-    final fp = SyncService.schedPayloadFingerprint(basePayload());
+  group('scheduled_workouts skip contract (SyncSkipIndex domain: sched)', () {
+    Future<void> seed() async {
+      final box = HiveService.instance.workoutBox;
+      await box.put('schedule_2026-09-21', {
+        'date': '2026-09-21',
+        'type': 'workout',
+        'workout_name': 'Push A',
+        'status': 'planned',
+        'day_of_week': 0,
+        'week': 3,
+      });
+    }
 
-    test('A-fix-1 (P0): a completed row is NEVER skipped, even on a match', () {
-      expect(
-        SyncService.schedShouldSkipUpsert(
-          killSwitchDisabled: false,
-          status: 'completed',
-          storedFingerprint: fp,
-          currentFingerprint: fp,
-        ),
-        isFalse,
-        reason:
-            'completed rows must always re-push — cloud can be silently stale '
-            '(d9b2c5) and a mis-skip is made PERMANENT by the resync migrator',
-      );
-    });
+    Future<void> editOne(int generation) async {
+      final box = HiveService.instance.workoutBox;
+      final raw = Map<String, dynamic>.from(box.get('schedule_2026-09-21') as Map);
+      // `workout_name` is NOT part of the scheduled_workouts payload (see
+      // buildPayload in _syncScheduledWorkouts) so editing it would never
+      // flip the fingerprint; `week` IS (-> `week_number`), so use that.
+      raw['week'] = 3 + generation;
+      await box.put('schedule_2026-09-21', raw);
+    }
 
-    test('planned + matching fingerprint → skip (the cost win)', () {
-      expect(
-        SyncService.schedShouldSkipUpsert(
-          killSwitchDisabled: false,
-          status: 'planned',
-          storedFingerprint: fp,
-          currentFingerprint: fp,
-        ),
-        isTrue,
-      );
-    });
-
-    test('planned + changed fingerprint → re-push', () {
-      expect(
-        SyncService.schedShouldSkipUpsert(
-          killSwitchDisabled: false,
-          status: 'planned',
-          storedFingerprint: 'stale-fp',
-          currentFingerprint: fp,
-        ),
-        isFalse,
-      );
-    });
-
-    test(
-        'store-on-200-only: null stored fingerprint (never pushed / push threw) '
-        '→ re-push', () {
-      expect(
-        SyncService.schedShouldSkipUpsert(
-          killSwitchDisabled: false,
-          status: 'planned',
-          storedFingerprint: null,
-          currentFingerprint: fp,
-        ),
-        isFalse,
-        reason: 'a failed push leaves no entry → must re-push next pass',
-      );
-    });
-
-    test('kill-switch disabled → never skip (verbatim pre-H1b sweep)', () {
-      expect(
-        SyncService.schedShouldSkipUpsert(
-          killSwitchDisabled: true,
-          status: 'planned',
-          storedFingerprint: fp,
-          currentFingerprint: fp,
-        ),
-        isFalse,
-      );
-    });
-  });
-
-  group('schedPrunedHashIndex — A-fix-2 delete handling', () {
-    test('drops dates whose schedule row is gone, keeps live dates', () {
-      final index = {
-        '2026-06-20': 'fp-a',
-        '2026-06-21': 'fp-b',
-        '2026-06-22': 'fp-c',
-      };
-      final live = {'2026-06-20', '2026-06-22'};
-      final pruned = SyncService.schedPrunedHashIndex(index, live);
-      expect(pruned.keys.toSet(), {'2026-06-20', '2026-06-22'});
-      expect(pruned['2026-06-21'], isNull,
-          reason: 'deleted date dropped → a re-create re-pushes');
-      expect(pruned['2026-06-20'], 'fp-a',
-          reason: 'live entries survive with their fingerprint intact');
-    });
-
-    test('empty liveDates → empty index (all rows deleted)', () {
-      final pruned = SyncService.schedPrunedHashIndex({'d': 'fp'}, <String>{});
-      expect(pruned, isEmpty);
-    });
-  });
-
-  group('source guards — store-on-200 placement + resetJourney clear', () {
-    test('A-fix-3: resetJourney clears the fingerprint index key', () {
-      final src =
-          File('lib/features/dev/simulation_service.dart').readAsStringSync();
-      expect(src.contains('sync_sched_payload_hash_index'), isTrue,
-          reason:
-              'sim reset must wipe the index or a survivor mis-skips the re-drive');
-    });
-
-    test('store-on-200-only: exactly 3 fingerprint writes (the 3 success points)',
-        () {
-      final src = File('lib/core/services/sync/sync_workout.dart')
-          .readAsStringSync()
-          .replaceAll(RegExp(r'//.*'), '')
-          .replaceAll(RegExp(r'/\*[\s\S]*?\*/', multiLine: true), '');
-      final writes =
-          RegExp(r'schedHashIndex\[date\]\s*=\s*schedFp').allMatches(src).length;
-      expect(writes, 3,
-          reason:
-              'the fingerprint must be stored ONLY after a confirmed 200 at the '
-              '3 success points (plain / 23503-recovery / null-fallback)');
-    });
-  });
-
-  // B-pass P1 — a real Hive put→get round-trip of the index map, not just the
-  // pure statics. Catches a break in the runtime read-path (the dynamic-typed
-  // Map reconstruction the loop head does) that the static tests would miss.
-  group('Hive round-trip — fingerprint index survives put/get + drives the skip',
-      () {
-    late Directory tempDir;
-    late Box box;
-
-    setUp(() async {
-      tempDir = await Directory.systemTemp.createTemp('sched_fp_idx');
-      Hive.init(tempDir.path);
-      box = await Hive.openBox('rt_workout');
-    });
-
-    tearDown(() async {
-      await box.close();
-      await Hive.close();
-      await tempDir.delete(recursive: true);
-    });
-
-    test('index map {date: fingerprint} round-trips and feeds schedShouldSkipUpsert',
+    test('the full contract: first push, unchanged skip, edit re-sends, retry after failure, kill switch',
         () async {
-      const key = 'sync_sched_payload_hash_index';
-      final fp = SyncService.schedPayloadFingerprint(basePayload());
-
-      // Writer: store the index map exactly as _syncScheduledWorkouts does.
-      await box.put(key, <String, String>{'2026-06-20': fp});
-
-      // Reader: read back + reconstruct Map<String,String> (Hive returns a
-      // dynamic-typed Map; this mirrors the method's load at the loop head).
-      final raw = box.get(key);
-      expect(raw, isA<Map>(),
-          reason: 'index persists as a Map under the reserved key');
-      final index = <String, String>{};
-      (raw as Map).forEach((k, v) {
-        if (k is String && v is String) index[k] = v;
-      });
-
-      expect(index['2026-06-20'], fp,
-          reason: 'the fingerprint survives the Hive round-trip intact');
-      expect(
-        SyncService.schedShouldSkipUpsert(
-          killSwitchDisabled: false,
-          status: 'planned',
-          storedFingerprint: index['2026-06-20'],
-          currentFingerprint: fp,
-        ),
-        isTrue,
-        reason: 'a planned row matching the PERSISTED index skips its re-upsert',
+      await expectSkipContract(
+        h: h,
+        domain: SyncSkipDomain.sched,
+        table: 'scheduled_workouts',
+        seed: seed,
+        editOne: editOne,
+        runPass: () => SyncService.instance.pushScheduledWorkoutsForSyncDomain(),
       );
+    });
+
+    test('a completed row that matches its stored fingerprint now skips too (A-fix-1 superseded)',
+        () async {
+      h.server.clear();
+      h.server.getResponders.clear();
+      final box = HiveService.instance.workoutBox;
+      await box.put('schedule_2026-09-22', {
+        'date': '2026-09-22',
+        'type': 'workout',
+        'workout_name': 'Pull A',
+        'status': 'completed',
+        'completed_at_ms': DateTime.utc(2026, 9, 22, 7).millisecondsSinceEpoch,
+        'day_of_week': 1,
+        'week': 3,
+      });
+      await SyncService.instance.pushScheduledWorkoutsForSyncDomain();
+      expect(h.server.writesTo('scheduled_workouts'), hasLength(1));
+      h.server.clear();
+      await SyncService.instance.pushScheduledWorkoutsForSyncDomain();
+      expect(h.server.writesTo('scheduled_workouts'), isEmpty,
+          reason: 'a completed row is no longer special-cased; migration 147 (Task 7) protects it '
+              'server-side, so a fingerprint match skips exactly like a planned row');
+    });
+
+    test('a local row with no template_id sends an EXPLICIT null, confirmed', () async {
+      h.server.clear();
+      h.server.getResponders.clear();
+      final box = HiveService.instance.workoutBox;
+      await box.put('schedule_2026-09-23', {
+        'date': '2026-09-23',
+        'type': 'rest',
+        'status': 'planned',
+        'day_of_week': 2,
+        'week': 3,
+      });
+      await SyncService.instance.pushScheduledWorkoutsForSyncDomain();
+      final writes = h.server.writesTo('scheduled_workouts');
+      expect(writes, hasLength(1));
+      expect(writes.single.rows.single.containsKey('template_id'), isTrue);
+      expect(writes.single.rows.single['template_id'], isNull);
+      expect(
+          SyncSkipIndex.readIndex(HiveService.instance.workoutBox, SyncSkipDomain.sched.indexKey)
+              .containsKey('2026-09-23'),
+          isTrue,
+          reason: 'a resolved (here: genuinely template-less) row is recorded as confirmed');
+    });
+
+    test('case 2 — the template row is not on this phone: key omitted, CONFIRMED, and the '
+        "template's later arrival re-pushes WITH the cloud id", () async {
+      h.server.clear();
+      h.server.getResponders.clear();
+      final box = HiveService.instance.workoutBox;
+      await box.put('schedule_2026-09-24', {
+        'date': '2026-09-24',
+        'type': 'custom_template',
+        'template_id': 'tmpl_missing',
+        'status': 'planned',
+        'day_of_week': 3,
+        'week': 3,
+      });
+      await SyncService.instance.pushScheduledWorkoutsForSyncDomain();
+      final writes = h.server.writesTo('scheduled_workouts');
+      expect(writes, hasLength(1), reason: 'status still reaches cloud');
+      expect(writes.single.rows.single.containsKey('template_id'), isFalse,
+          reason: 'an unresolvable template_id is OMITTED, never guessed');
+      expect(
+          SyncSkipIndex.readIndex(box, SyncSkipDomain.sched.indexKey).containsKey('2026-09-24'),
+          isTrue,
+          reason: 'confirmed: an unconfirmed row would re-push every pass while the template is missing');
+      expect(
+          h.server.requests.where((r) => r.method == 'GET' && r.table == 'workout_templates'),
+          isEmpty,
+          reason: 'no cloud lookup when the local template row is absent');
+
+      h.server.clear();
+      await SyncService.instance.pushScheduledWorkoutsForSyncDomain();
+      expect(h.server.writesTo('scheduled_workouts'), isEmpty, reason: 'unchanged: skipped');
+
+      // The template arrives on this phone -> template_name enters the fingerprint.
+      await box.put('tmpl_missing', {'id': 'tmpl_missing', 'name': 'Arms'});
+      h.server.getResponders['workout_templates'] = (_) => [
+            {'id': 'cloud-tmpl-arms'}
+          ];
+      h.server.clear();
+      await SyncService.instance.pushScheduledWorkoutsForSyncDomain();
+      final healed = h.server.writesTo('scheduled_workouts');
+      expect(healed, hasLength(1));
+      expect(healed.single.rows.single['template_id'], 'cloud-tmpl-arms');
+    });
+
+    test('case 3 — local template present but its cloud id is unresolvable: written without '
+        'template_id, UNCONFIRMED, retried next pass; resolves once the cloud id exists', () async {
+      h.server.clear();
+      h.server.getResponders.clear();
+      final box = HiveService.instance.workoutBox;
+      await box.put('tmpl_legs', {'id': 'tmpl_legs', 'name': 'Legs'});
+      await box.put('schedule_2026-09-25', {
+        'date': '2026-09-25',
+        'type': 'custom_template',
+        'template_id': 'tmpl_legs',
+        'status': 'planned',
+        'day_of_week': 4,
+        'week': 3,
+      });
+      // No workout_templates responder: the stub answers [] -> maybeSingle null.
+      await SyncService.instance.pushScheduledWorkoutsForSyncDomain();
+      final writes = h.server.writesTo('scheduled_workouts');
+      expect(writes, hasLength(1));
+      expect(writes.single.rows.single.containsKey('template_id'), isFalse);
+      expect(
+          SyncSkipIndex.readIndex(box, SyncSkipDomain.sched.indexKey).containsKey('2026-09-25'),
+          isFalse,
+          reason: 'unconfirmed: the next pass retries the resolve');
+
+      h.server.getResponders['workout_templates'] = (_) => [
+            {'id': 'cloud-tmpl-legs'}
+          ];
+      h.server.clear();
+      await SyncService.instance.pushScheduledWorkoutsForSyncDomain();
+      final retried = h.server.writesTo('scheduled_workouts');
+      expect(retried, hasLength(1));
+      expect(retried.single.rows.single['template_id'], 'cloud-tmpl-legs');
+      expect(
+          SyncSkipIndex.readIndex(box, SyncSkipDomain.sched.indexKey).containsKey('2026-09-25'),
+          isTrue);
+    });
+
+    test('a skipped row makes NO workout_templates lookup (spec §14)', () async {
+      h.server.clear();
+      h.server.getResponders.clear();
+      final box = HiveService.instance.workoutBox;
+      await box.put('tmpl_push', {'id': 'tmpl_push', 'name': 'Push'});
+      await box.put('schedule_2026-09-26', {
+        'date': '2026-09-26',
+        'type': 'custom_template',
+        'template_id': 'tmpl_push',
+        'status': 'planned',
+        'day_of_week': 5,
+        'week': 3,
+      });
+      h.server.getResponders['workout_templates'] = (_) => [
+            {'id': 'cloud-tmpl-push'}
+          ];
+      await SyncService.instance.pushScheduledWorkoutsForSyncDomain();
+      h.server.clear();
+      await SyncService.instance.pushScheduledWorkoutsForSyncDomain();
+      expect(h.server.writesTo('scheduled_workouts'), isEmpty);
+      expect(
+          h.server.requests.where((r) => r.method == 'GET' && r.table == 'workout_templates'),
+          isEmpty,
+          reason: 'resolveCloudTemplateId runs only inside the push closure');
+    });
+
+    test('a deleted schedule row leaves the index on the next pass (liveKeys prune)', () async {
+      h.server.clear();
+      h.server.getResponders.clear();
+      final box = HiveService.instance.workoutBox;
+      await box.put('schedule_2026-09-27', {
+        'date': '2026-09-27',
+        'type': 'rest',
+        'status': 'rest',
+        'day_of_week': 6,
+        'week': 3,
+      });
+      await SyncService.instance.pushScheduledWorkoutsForSyncDomain();
+      expect(SyncSkipIndex.readIndex(box, SyncSkipDomain.sched.indexKey).containsKey('2026-09-27'),
+          isTrue);
+      await box.delete('schedule_2026-09-27');
+      await SyncService.instance.pushScheduledWorkoutsForSyncDomain();
+      expect(SyncSkipIndex.readIndex(box, SyncSkipDomain.sched.indexKey).containsKey('2026-09-27'),
+          isFalse);
     });
   });
 }

@@ -285,18 +285,9 @@ class SyncService {
     }
   }
 
-  /// H1b Part A — reserved user-scoped `workoutBox` key holding the
-  /// `{scheduled_date: fingerprint}` index that lets an unchanged planned
-  /// `scheduled_workouts` row skip its idempotent re-upsert (a returning login
-  /// re-pushed ~96 rows the cloud already held). Sole writer+reader is
-  /// [_syncScheduledWorkouts] so writer/reader drift is structurally
-  /// impossible; the per-user box file IS the namespace, so it auto-clears on
-  /// user-swap / sign-out / DPDP — no extra wiring.
-  static const String _schedHashIndexKey = 'sync_sched_payload_hash_index';
-
-  /// H1b Part A — kill-switch reverting [_syncScheduledWorkouts] to the verbatim
-  /// pre-H1b unconditional full-sweep upsert (no fingerprint skip). Defensive
-  /// read (see [_syncDebounceDisabled]).
+  /// Kill-switch reverting [_syncScheduledWorkouts] to the verbatim
+  /// pre-SyncSkipIndex unconditional full-sweep upsert (no fingerprint skip).
+  /// Defensive read (see [_syncDebounceDisabled]).
   bool get _schedHashSkipDisabled {
     try {
       return _hive.configBox.get('disable_sched_hash_skip') == true;
@@ -309,51 +300,24 @@ class SyncService {
   /// pushed to cloud. Serializes EVERY entry under a deterministic key sort
   /// (null → '') so any value change — and a present-vs-absent `template_id`
   /// (the key set differs) — flips the fingerprint and forces a re-push.
-  /// Key-generic (not a fixed field list) so a future payload column is covered
-  /// automatically — no forget-to-fingerprint drift. [_deterministicId] is UUID
-  /// v5 (sha1-based) → STABLE across VMs/sessions (NOT `String.hashCode`, H-15).
-  /// Pure; extracted for behavioral coverage.
+  /// Key-generic (not a fixed field list) so a future payload column is
+  /// covered automatically. UUID v5 (sha1-based) → STABLE across
+  /// VMs/sessions (NOT `String.hashCode`, H-15). Pure; kept public
+  /// (`@visibleForTesting`) — pinned cross-checked against
+  /// `SyncFingerprint.ofCanonical` by `test/sync/sync_skip_index_test.dart`.
+  ///
+  /// day-swapper+sync-load Task 15: the row is now recorded/skipped by
+  /// `SyncSkipIndex` (domain `sched`), not a bespoke index + `status`-based
+  /// carve-out — `schedShouldSkipUpsert` and `schedPrunedHashIndex` are
+  /// deleted. A-fix-1 (a `completed` row never skipped) is SUPERSEDED by
+  /// migration 147's server-side completed-day guard (Task 7); see
+  /// docs/diagnoses/2026-06-27-sched-dirty-filter-b4f7e2.md.
   @visibleForTesting
   static String schedPayloadFingerprint(Map<String, dynamic> payload) {
-    // Delimiter-SAFE canonical form: sorted keys → jsonEncode. JSON quotes +
-    // escapes every value, so a literal `|`/`=`/`"` inside a value cannot alias
-    // two distinct payloads (the prior `'$k=$v'.join('|')` form was
-    // delimiter-ambiguous — review e7c1a9 P2 hardening).
     final sorted = <String, dynamic>{
       for (final k in payload.keys.toList()..sort()) k: payload[k],
     };
     return _deterministicId(jsonEncode(sorted));
-  }
-
-  /// H1b Part A — the skip decision for one `scheduled_workouts` row. True iff
-  /// the idempotent re-upsert can be skipped because cloud already holds this
-  /// exact payload. A `completed` row NEVER skips (A-fix-1: cloud can be
-  /// silently stale per d9b2c5/B.1 and the resync migrator's one-shot flag makes
-  /// a mis-skip PERMANENT). A null [storedFingerprint] (never pushed, or a prior
-  /// push failed → store-on-200-only) never skips. Pure.
-  @visibleForTesting
-  static bool schedShouldSkipUpsert({
-    required bool killSwitchDisabled,
-    required String status,
-    required String? storedFingerprint,
-    required String currentFingerprint,
-  }) {
-    if (killSwitchDisabled) return false;
-    if (status == 'completed') return false;
-    return storedFingerprint != null &&
-        storedFingerprint == currentFingerprint;
-  }
-
-  /// H1b Part A (A-fix-2) — the fingerprint index pruned to the schedule rows
-  /// still present. A deleted date drops its entry so a later re-create
-  /// re-pushes. Pure (returns a new map).
-  @visibleForTesting
-  static Map<String, String> schedPrunedHashIndex(
-      Map<String, String> index, Set<String> liveDates) {
-    return <String, String>{
-      for (final e in index.entries)
-        if (liveDates.contains(e.key)) e.key: e.value,
-    };
   }
 
   /// Whether [domain]'s Hive-index skip mechanism is turned off via its own

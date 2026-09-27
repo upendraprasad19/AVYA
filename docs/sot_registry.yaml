@@ -2103,25 +2103,56 @@ concepts:
       H1b Part A (2026-06-27, b4f7e2): the sync-owned fingerprint index that
       gates the idempotent scheduled_workouts re-upsert. Maps scheduled_date ->
       UUID-v5 fingerprint of the exact payload last CONFIRMED to cloud, so an
-      unchanged PLANNED row skips its re-upsert (the returning-login ~96-upsert
-      tax). The SOLE writer AND reader is _syncScheduledWorkouts ⇒ writer/reader
+      unchanged row skips its re-upsert (the returning-login ~96-upsert tax).
+      The SOLE writer AND reader is _syncScheduledWorkouts ⇒ writer/reader
       drift is structurally impossible. The per-user workoutBox file IS the
       namespace -> auto-clears on swap/sign-out/DPDP.
+      Day-swapper + sync-load Task 15 (2026-09-27, diagnose a9d3f6): moved
+      onto the shared `SyncSkipIndex` helper (lib/core/services/sync/sync_skip_index.dart,
+      SyncSkipDomain.sched) -- `_syncScheduledWorkouts` now constructs one
+      SyncSkipIndex and drives the upsert through its
+      `pushIfChanged(scheduled_date, fingerprint, push)`, which owns the skip
+      decision, the store-on-confirmed-only write and the pruning; the
+      per-domain `_schedHashIndexKey` const, `schedShouldSkipUpsert` and
+      `schedPrunedHashIndex` are DELETED, replaced by the generic
+      `_hashSkipKillSwitchOn(SyncSkipDomain)` pattern Task 13 introduced (sched
+      still reads its OWN `_schedHashSkipDisabled` getter rather than that
+      shared helper, since the getter predates it and nothing required the
+      churn of switching). `schedPayloadFingerprint` itself is BYTE-IDENTICAL
+      (unchanged statics body) so every fingerprint stored before this change
+      still matches for a row whose payload SHAPE is unchanged.
+      A-fix-1 (a `completed` row never skipped) is SUPERSEDED, not carried
+      forward: migration 147 (Task 7, NOT yet applied live as of this
+      commit) adds a server-side trigger rejecting a stale client overwrite of
+      a completed row's identity columns, making a fingerprint-matched
+      completed row exactly as safe to skip as a planned one. See
+      docs/diagnoses/2026-06-27-sched-dirty-filter-b4f7e2.md (A-fix-1's
+      origin) and this batch's own diagnose-doc for the supersession record.
+      Payload-shape heal (same commit): `template_id` is now sent as an
+      EXPLICIT `null` when the local row has no template at all, and the key
+      is OMITTED only for a genuine orphan (a local ref that never resolves to
+      a cloud id) -- PostgREST treats those two shapes differently on upsert,
+      so the fingerprint now distinguishes them too. Every row's first push
+      under this scheme therefore changes fingerprint and re-pushes once (the
+      expected heal, not a regression). `completed_at` now resolves via
+      `ScheduleCompletionTime.scheduledCompletedAtIso` (Task 14) instead of a
+      raw `entry['completed_at']` read, and is OMITTED (never sent as an
+      explicit null) when unresolved.
     writers:
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 1-9999
-        method: _syncScheduledWorkouts (stores index[date]=fingerprint ON CONFIRMED 200 ONLY at the 3 upsert success points; prunes to live rows + persists after the loop)
+        line_range: 1568-1838
+        method: _syncScheduledWorkouts (constructs a SyncSkipIndex(domain: SyncSkipDomain.sched) and drives the FK-resilient upsert through its pushIfChanged closure -- the helper stores index[scheduled_date]=fp ON CONFIRMED ONLY; commit(liveKeys:) prunes to live schedule_ dates + persists after the loop)
       - file: lib/core/services/sync_service.dart
-        line_range: 1-9999
-        method: schedPayloadFingerprint / schedShouldSkipUpsert / schedPrunedHashIndex (pure statics) + _schedHashIndexKey const + disable_sched_hash_skip kill-switch
+        line_range: 288-321
+        method: schedPayloadFingerprint (pure static, byte-identical) + _schedHashSkipDisabled kill-switch getter
       - file: lib/features/dev/simulation_service.dart
-        line_range: 1-9999
-        method: resetJourney (A-fix-3 — clears the index key in the workoutBox prefix-clear list)
+        line_range: 103-183
+        method: "resetJourney (A-fix-3 — clears the RAW 'sync_sched_payload_hash_index' literal in the workoutBox prefix-clear list; NOT repointed to SyncSkipDomain.sched.indexKey by this task -- out of Task 15's stated file scope, functionally identical since the enum's indexKey string is byte-identical to the literal)"
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 1-9999
-        method: _syncScheduledWorkouts (the skip decision reads index[date] for the current row)
+        line_range: 1568-1838
+        method: _syncScheduledWorkouts (the skip decision is now internal to SyncSkipIndex.pushIfChanged, which reads its own `_stored[rowKey]` -- hydrated from readIndex(box, domain.indexKey) in the SyncSkipIndex constructor)
         semantic: latest
         fields_read: [sync_sched_payload_hash_index.<scheduled_date>]
     regression_test: test/contracts/sync_scheduled_payload_hash_index_writer_to_reader_test.dart
@@ -2129,7 +2160,7 @@ concepts:
     hive:
       box: workoutBox
       key_prefix: "sync_sched_payload_hash_index"
-      key_formula: "reserved single key -> Map{scheduled_date: SyncService._deterministicId(canonical fixed-order payload string)}"
+      key_formula: "reserved single key -> Map{scheduled_date: SyncService.schedPayloadFingerprint(canonical fixed-order payload + template_ref + template_name)}"
     cloud:
       table: scheduled_workouts
       columns: [user_id, template_id, scheduled_date, week_number, day_of_week, status, completed_at]
@@ -2137,11 +2168,19 @@ concepts:
     sync_methods: [_syncScheduledWorkouts]
     restore_methods: []
     class_constraints: |
-      A-fix-1: a row with status=='completed' is NEVER skipped (cloud can be
-      silently stale per d9b2c5; a mis-skip is made PERMANENT by the resync
-      migrator's one-shot flag). store-on-200-only: a failed push records no
-      fingerprint -> re-pushes next pass. Kill-switch disable_sched_hash_skip
-      restores the verbatim pre-H1b unconditional sweep.
+      No status-based carve-out (day-swapper+sync-load Task 15 supersedes
+      A-fix-1 — see description). store-on-confirmed-only: SyncSkipIndex.pushIfChanged
+      only records index[scheduled_date]=fp when its `push` closure returns
+      true; a genuinely orphaned template (id-lookup exhausted) returns false
+      (UNCONFIRMED) even though the row DID write successfully, so a later
+      successful resolve re-pushes WITH the template instead of being stuck on
+      the omitted-template fingerprint forever (spec D4). Kill-switch
+      disable_sched_hash_skip restores the verbatim pre-H1b unconditional
+      sweep. FK self-healing (23503 retry via a one-shot
+      _syncWorkoutTemplates resync, both telemetry events
+      scheduled_workout_fk_recovered / scheduled_workout_template_orphaned) is
+      UNCHANGED from the pre-Task-15 shape; pinned by
+      test/contracts/scheduled_workouts_fk_resilience_test.dart.
 
   - concept: sync_exercise_log_payload_hash_index
     domain: workout
@@ -10036,7 +10075,7 @@ concepts:
           Never throws: an escape here would kill the user's ENTIRE daily
           snapshot via compileDailySnapshot -> pushSnapshotNow, not just prefs.
       - file: lib/core/services/sync_service.dart
-        line_range: 1157-1196
+        line_range: 1052-1110
         method: compileDailySnapshot
         semantic: pass-through
         notes: >
@@ -10343,7 +10382,7 @@ concepts:
         method: applyRestoreCeiling
         semantic: apply-ceiling
       - file: lib/core/services/sync_service.dart
-        line_range: 2328-2336
+        line_range: 2293-2301
         method: restoreFailureReason
         semantic: telemetry-reason-split
     readers:
