@@ -228,11 +228,28 @@ class ErrorTelemetry {
   /// Crashlytics ALWAYS runs (even when the server is rate-limited) —
   /// it's a separate sink with its own budget. Only the server POST is
   /// gated by the cooldown.
+  ///
+  /// [skipServerPost] (diagnose — see docs/diagnoses/, B2a-2b dual-write fix):
+  /// when true, this call does ONLY the Crashlytics leg. For a caller that
+  /// already POSTs to `log-client-error` itself via a more mature,
+  /// retry-queue-integrated path (`SyncService._reportSyncFailure`, wired to
+  /// `_enqueueTelemetryFailure` on failure), calling this with the default
+  /// `false` would insert a SECOND `client_errors` row for the same failure
+  /// — the exact bug this parameter closes. `_reportSyncFailure` sets it on
+  /// its own internal call, AND (round-1 plan-review widening, same batch)
+  /// 87 caller-level sites across `sync_service.dart` and its `part of`
+  /// domain files under `lib/core/services/sync/` set it too — each of
+  /// those callers follows the "audit-2026-05-11 H-42 — telemetry pair"
+  /// idiom (its own `recordNonFatal` call immediately before calling
+  /// `_reportSyncFailure`) and would double-write exactly like
+  /// `_reportSyncFailure` itself did if left at the default. Every OTHER
+  /// caller (not shaped like that pair) must leave this at its default.
   static Future<void> recordNonFatal(
     Object error,
     StackTrace? stack, {
     required String reason,
     Map<String, String>? extra,
+    bool skipServerPost = false,
   }) async {
     if (debugOnRecordNonFatalForTests != null) {
       debugOnRecordNonFatalForTests!(error, stack, reason: reason, extra: extra);
@@ -261,6 +278,8 @@ class ErrorTelemetry {
         // Crashlytics swallow — telemetry must never throw.
       }
     }
+
+    if (skipServerPost) return;
 
     // log-client-error leg.
     //

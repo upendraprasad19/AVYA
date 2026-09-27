@@ -107,7 +107,7 @@ extension SyncServiceRestoreCompleteness on SyncService {
       debugPrint('[SyncService.syncFreezes] error: $e\n$st');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_sync_freezes'));
+          reason: 'sync_service_sync_freezes', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'sync_freezes', error: e);
       } catch (_) {}
@@ -299,7 +299,7 @@ extension SyncServiceRestoreCompleteness on SyncService {
       debugPrint('[SyncService.syncNotificationsInboxEntry] error: $e\n$st');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_sync_notifications_inbox_entry'));
+          reason: 'sync_service_sync_notifications_inbox_entry', skipServerPost: true));
       try {
         await _reportSyncFailure(
             opType: 'sync_notifications_inbox_entry', error: e);
@@ -328,7 +328,7 @@ extension SyncServiceRestoreCompleteness on SyncService {
       debugPrint('[SyncService.syncSavedDietPlan] error: $e\n$st');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_sync_saved_diet_plan'));
+          reason: 'sync_service_sync_saved_diet_plan', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'sync_saved_diet_plan', error: e);
       } catch (_) {}
@@ -435,7 +435,7 @@ extension SyncServiceRestoreCompleteness on SyncService {
       debugPrint('[SyncService._restoreFreezes] error: $e\n$st');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_if_23'));
+          reason: 'sync_service_if_23', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'restore_freezes', error: e);
       } catch (_) {}
@@ -500,7 +500,7 @@ extension SyncServiceRestoreCompleteness on SyncService {
       debugPrint('[SyncService._restoreNotificationsInbox] error: $e\n$st');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_for_29'));
+          reason: 'sync_service_for_29', skipServerPost: true));
       try {
         await _reportSyncFailure(
             opType: 'restore_notifications_inbox', error: e);
@@ -535,7 +535,7 @@ extension SyncServiceRestoreCompleteness on SyncService {
       debugPrint('[SyncService._restoreSavedDietPlan] error: $e\n$st');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_restore_saved_diet_plan'));
+          reason: 'sync_service_restore_saved_diet_plan', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'restore_saved_diet_plan', error: e);
       } catch (_) {}
@@ -566,7 +566,7 @@ extension SyncServiceRestoreCompleteness on SyncService {
       debugPrint('[SyncService._restoreRankPromotions] error: $e\n$st');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_restore_rank_promotions'));
+          reason: 'sync_service_restore_rank_promotions', skipServerPost: true));
       try {
         await _reportSyncFailure(
             opType: 'restore_rank_promotions', error: e);
@@ -624,7 +624,7 @@ extension SyncServiceRestoreCompleteness on SyncService {
       debugPrint('[SyncService._restoreReferralCodes] error: $e\n$st');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_restore_referral_codes'));
+          reason: 'sync_service_restore_referral_codes', skipServerPost: true));
       try {
         await _reportSyncFailure(
             opType: 'restore_referral_codes', error: e);
@@ -668,7 +668,7 @@ extension SyncServiceRestoreCompleteness on SyncService {
       debugPrint('[SyncService._restoreReferralRedemptions] error: $e\n$st');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_restore_referral_redemptions'));
+          reason: 'sync_service_restore_referral_redemptions', skipServerPost: true));
       try {
         await _reportSyncFailure(
             opType: 'restore_referral_redemptions', error: e);

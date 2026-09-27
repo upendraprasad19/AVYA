@@ -100,7 +100,7 @@ extension SyncServiceCoach on SyncService {
       debugPrint('[SyncService.syncCoachMemoryNow] coach_memory upsert failed: $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_put_if_present'));
+          reason: 'sync_service_put_if_present', skipServerPost: true));
       unawaited(_reportSyncFailure(
         opType: 'upsert_coach_memory_induction',
         error: e,
@@ -211,7 +211,7 @@ extension SyncServiceCoach on SyncService {
         debugPrint('[SyncService._syncCoachInteractions] $e');
         // audit-2026-05-11 H-42 — telemetry pair.
         unawaited(ErrorTelemetry.recordNonFatal(e, st,
-            reason: 'sync_service_for_27'));
+            reason: 'sync_service_for_27', skipServerPost: true));
         try {
           await _reportSyncFailure(opType: 'upsert_coach_interaction', error: e);
         } catch (_) {}
@@ -286,7 +286,7 @@ extension SyncServiceCoach on SyncService {
       debugPrint('[SyncService._restoreCoachInteractions] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_for_28'));
+          reason: 'sync_service_for_28', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'restore_coach_interactions', error: e);
       } catch (_) {}
@@ -353,7 +353,7 @@ extension SyncServiceCoach on SyncService {
       debugPrint('[SyncService._restoreCoachMemory] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_if_22'));
+          reason: 'sync_service_if_22', skipServerPost: true));
       unawaited(_reportSyncFailure(
         opType: 'restore_coach_memory',
         error: e,

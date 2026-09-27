@@ -908,8 +908,17 @@ class SubscriptionService {
             'subscription row — downgrading locally');
         // APK Test #12.8 — distinct event so we can tell apart
         // "downgraded because no row" from "downgraded because expired".
+        // Renamed from subscription_refresh_query_returned_null (OI-254,
+        // B2a-2b, diagnose — see docs/diagnoses/): this is the routine,
+        // expected outcome for every free/expired user's subscription
+        // check, not an anomaly — but the old name's "_null" suffix
+        // matched migration 147's failure-shaped op_type regex
+        // ((fail|error|crash|fallback|unknown|exception|timeout|denied|
+        // _null)), so it was swept into the alert_client_errors_spike cnt
+        // metric alongside genuine failures. The new name avoids every
+        // token in that regex.
         unawaited(ErrorTelemetry.logEvent(
-            'subscription_refresh_query_returned_null'));
+            'subscription_refresh_no_active_row'));
         unawaited(_downgradeLocally());
         return;
       }

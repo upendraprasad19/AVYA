@@ -3199,3 +3199,52 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   (the real fix is a client-side op_type rename, in scope for the batch's next unit B2a-2b, not
   this pure-SQL migration); mutation-proven pinning test added asserting `cnt` carries no `FILTER`
   clause, so a future silent change to either side of the asymmetry is caught.
+- **2026-09-27 (second entry today)** — blast-radius **platform** — branch `ops-alerting-b2a2b`
+  (unit B2a-2b: the sync-telemetry H-42 dual-write fix widened from 1 to 87 caller-level sites by
+  the batch's own round-1 plan-review, the OI-254 client-side op_type rename from the entry above,
+  and a new client-side `isOfflineNoiseSignature`/`isOfflineNoise` mirror of migration 147's
+  offline-noise exclusion regex). **5 findings (1 P1, 1 P2, 2 P4, 1 P3); 0 false_alarm — all 5
+  accepted and fixed/documented in-batch.** Review: `docs/reviews/af6a1b2fe201-review.md`
+  (renamed once from `d763fd5fd6cc-review.md` after the fixes below moved the staging hash).
+  **Every finding was a documentation/process-completeness gap, zero code defects** — the
+  underlying fixes (the 87-site dual-write correction, the op_type rename, the regex mirror) were
+  each independently re-derived from scratch and mutation-tested live by the reviewer and matched
+  the diagnose-doc's own claims exactly.
+  **Tuning 1 — self_attesting_artifact (lens 10) gains: a diagnose-doc's "OI-NNN is closed" claim
+  is checkable against the OI BOARD ITSELF, not just against the diagnose-doc's own internal
+  consistency.** The diagnose-doc and a staged test comment both asserted OI-254 was closed, but
+  `docs/audit/open_issues.md` — untouched by the diff — still carried `Status: OPEN` with no
+  `closes-oi:` transition anywhere in the commit. This is a NEW instance of the family, distinct
+  from every prior self_attesting_artifact finding in this history (which all checked a claimed
+  ARTIFACT's existence — a test file, a review file, a plan-review record): here the artifact
+  (the diagnose-doc) exists and is internally coherent, but the CLAIM IT MAKES ABOUT A DIFFERENT,
+  UNTOUCHED FILE is what's false. Add to lens 10's method: when a diff's own prose asserts an OI
+  is closed, diff `docs/audit/open_issues.md` against the staged set — if the board file isn't
+  even IN the diff, the claim is unverified by construction.
+  **Second, sharper half: fixing this finding required an INDEPENDENT AUDIT, not just a board
+  edit.** The OI-254 entry's own "Fix shape" field had instructed auditing "~24 other call-sites"
+  for the same `_null`-suffix classification defect before the OI could be honestly marked closed
+  — a step the diagnose-doc's frontmatter implied was already done (naming "6 deliberately-
+  instrumented op_types...investigated") but never showed the verification command for. Re-ran
+  the audit from scratch (`grep -rnoE` for every string literal matching migration 087's full
+  failure-shaped regex across `lib/`, spot-checked 2 of the 6 hits against their code comments)
+  before trusting the board closure — confirming the claim was actually true, not just repeating
+  it. **When an OI's own "Fix shape" names a follow-up verification step, closing that OI is not
+  complete until that step is independently reproduced, not merely cited as already done.**
+  **Tuning 2 — a recurrence, not new, of the "gate PASS is not evidence of full accuracy" class
+  (2026-08-30/2026-09-13(second) entries): `check_sot_registry_parity.dart` passed on a
+  `line_range` that covered a method's DECLARATION but not its BODY** — the method opened inside
+  the cited range and closed 35 lines past the end of it, with the exact `recordNonFatal(...)`
+  call this diff modifies sitting outside the range entirely. The gate only checks the symbol's
+  declaration line, never the range's actual span. No lens change (already documented); logged as
+  a fourth data point for this specific gate's known blind spot.
+  **Tuning 3 — blast_radius_mismatch (lens 3) on an unenforced `requires:` list benefits from a
+  PER-FIX rationale, not a blanket "telemetry is low-risk" wave-through.** The diff had no
+  kill-switch for any of 3 fixes; rather than accept the platform-tier `requires: feature_flag`
+  gap as uniformly mitigated (this skill's own precedent from 2026-08-11/2026-09-16(d)), the
+  resolution wrote a distinct one-sentence justification per fix (write-count-only vs. a durable
+  retained writer; a pure rename with a confirmed zero-reader cross-tree sweep; a pure function
+  with zero production callers) — because the three fixes have genuinely different risk shapes,
+  and a single blanket sentence would have hidden that Fix 1 (removing a write) and Fix 3 (adding
+  an inert function) sit at opposite ends of "how bad if this is wrong".
+  False-alarm rate 0/5 → no lens removed; lens 10 extended per Tuning 1 above.
