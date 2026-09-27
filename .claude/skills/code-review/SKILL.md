@@ -3311,3 +3311,27 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   and a single blanket sentence would have hidden that Fix 1 (removing a write) and Fix 3 (adding
   an inert function) sit at opposite ends of "how bad if this is wrong".
   False-alarm rate 0/5 → no lens removed; lens 10 extended per Tuning 1 above.
+- **2026-09-27 (d)** — blast-radius **platform** — merge-reconciliation-only review of
+  `43b89035` (`Merge origin/main (ops-alerting-b2a2b) into local main`, a SECOND reconciliation
+  merge on the same push cycle as the `(c)` entry above — `origin/main` moved again between the
+  first merge and the first push attempt). Scoped explicitly to "did the conflict resolution
+  itself lose/corrupt/misplace anything", not a re-review of either parent's own feature work
+  (both already independently B-passed). **0 findings.** Review:
+  `docs/reviews/merge-reconciliation-43b89035-review.md`.
+  **No new lens — logged per this file's own "record a clean pass with real verification work
+  behind it" convention, since the alternative (a reviewer that reads the merge commit message,
+  finds it plausible, and reports 0 findings) is indistinguishable in the output file alone.**
+  Every claim was checked against git OBJECTS, not prose: `git merge-file` (the plumbing 3-way
+  merge primitive) was run independently on EVERY touched file — both the 5 hand-resolved
+  conflicts and the 2 auto-merged files — to reconstruct what an unassisted merge would have
+  produced and diff it against the actual committed content. For the 5 hand-resolved files, the
+  reconstruction differed from the committed result *only* in the literal conflict-marker lines
+  (a textbook clean resolution); for the 2 auto-merged files, the reconstruction was
+  byte-identical to the commit, proving git's own algorithm handled them correctly rather than
+  assuming it from their absence in the conflict list. Both generated index files were actually
+  re-run against the live tree and diffed (zero diff both times), not trusted from the "mechanical
+  regeneration" framing. One conflict (an OI being deleted on one side while additively edited on
+  the other, in `open_issues.md`) required tracing true 3-way arithmetic (base/HEAD/origin) rather
+  than reading the diff, to confirm the resolution correctly chose "accept the deletion" — worth
+  noting as a reusable pattern for a future add-vs-delete board conflict: verify the DELETED
+  entry exists intact in its new location (`closed_issues.md`) before accepting the removal.
