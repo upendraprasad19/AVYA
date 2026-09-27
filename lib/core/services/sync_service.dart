@@ -1615,15 +1615,29 @@ class SyncService {
     final seen = (rawSeen as num?)?.toInt() ?? 0;
     if (cloudEpoch <= seen) return;
     try {
-      await SyncSkipIndex.clearAll((box) => switch (box) {
+      final result = await SyncSkipIndex.clearAll((box) => switch (box) {
             SyncSkipBox.workout => _hive.workoutBox,
             SyncSkipBox.nutrition => _hive.nutritionBox,
             SyncSkipBox.health => _hive.healthBox,
             SyncSkipBox.custom => _hive.customBox,
           });
+      // Fix (diagnose a9d3f6): clearAll catches per-domain failures
+      // internally and never rethrows, so a failed clear used to fall
+      // straight through to the unconditional store below and the operator's
+      // resync lever was marked handled even though a domain was left dirty.
+      // Only mark the epoch seen when every domain actually cleared — a
+      // partial failure leaves sync_epoch_seen untouched so the very next
+      // launch's cloudEpoch > seen check fires again and clearAll is retried
+      // (never within this same launch — this method runs at most once per
+      // restoreLightweightAlways call, which itself runs once per launch).
+      if (!result.allSucceeded) return;
     } catch (e, st) {
+      // Defensive: clearAll itself does not throw today (every per-domain
+      // failure is caught inside it), but if that ever changes, still leave
+      // sync_epoch_seen unchanged so the retry isn't lost.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
           reason: 'sync_service_sync_epoch_clear_all'));
+      return;
     }
     await _hive.configBox.put(kSyncEpochSeenKey, cloudEpoch);
   }

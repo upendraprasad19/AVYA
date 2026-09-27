@@ -202,15 +202,46 @@ void main() {
     await SyncSkipIndex.recordConfirmed(wb, SyncSkipDomain.plan, kPlanBundleRowKey, 'fpP');
     expect(SyncSkipIndex.readIndex(wb, SyncSkipDomain.plan.indexKey), {'bundle': 'fpP'});
     await box.put(SyncSkipDomain.water.indexKey, {'d': 'x'});
-    final cleared = await SyncSkipIndex.clearAll((b) => switch (b) {
+    final result = await SyncSkipIndex.clearAll((b) => switch (b) {
           SyncSkipBox.workout => HiveService.instance.workoutBox,
           SyncSkipBox.nutrition => HiveService.instance.nutritionBox,
           SyncSkipBox.health => HiveService.instance.healthBox,
           SyncSkipBox.custom => HiveService.instance.customBox,
         });
-    expect(cleared, 2);
+    // Repointed (day-swapper + sync-load Task 20 fix, diagnose a9d3f6):
+    // clearAll now returns a ClearAllResult, not a bare cleared-count int,
+    // so a caller can tell "nothing to clear" apart from "clearing failed".
+    expect(result.cleared, 2);
+    expect(result.failed, 0);
+    expect(result.allSucceeded, isTrue);
     expect(wb.containsKey(SyncSkipDomain.plan.indexKey), isFalse);
     expect(box.containsKey(SyncSkipDomain.water.indexKey), isFalse);
+  });
+
+  test('clearAll counts a per-domain failure separately from "nothing to '
+      'clear" (diagnose a9d3f6)', () async {
+    final wb = HiveService.instance.workoutBox;
+    await SyncSkipIndex.recordConfirmed(
+        wb, SyncSkipDomain.plan, kPlanBundleRowKey, 'fpP');
+    await box.put(SyncSkipDomain.water.indexKey, {'d': 'x'});
+    SyncSkipIndex.debugForceClearFailureForTests =
+        (d) => d == SyncSkipDomain.water;
+    addTearDown(() => SyncSkipIndex.debugForceClearFailureForTests = null);
+
+    final result = await SyncSkipIndex.clearAll((b) => switch (b) {
+          SyncSkipBox.workout => HiveService.instance.workoutBox,
+          SyncSkipBox.nutrition => HiveService.instance.nutritionBox,
+          SyncSkipBox.health => HiveService.instance.healthBox,
+          SyncSkipBox.custom => HiveService.instance.customBox,
+        });
+
+    expect(result.cleared, 1, reason: 'plan cleared; water was forced to fail');
+    expect(result.failed, 1);
+    expect(result.allSucceeded, isFalse);
+    expect(wb.containsKey(SyncSkipDomain.plan.indexKey), isFalse,
+        reason: 'a failure in one domain must not abort the rest of the sweep');
+    expect(box.containsKey(SyncSkipDomain.water.indexKey), isTrue,
+        reason: 'the forced-failure domain is left untouched, not deleted');
   });
 
   group('SyncFingerprint', () {

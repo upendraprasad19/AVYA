@@ -10368,23 +10368,31 @@ concepts:
           (→913) despite the gate not flagging it, found by grepping the
           symbol directly rather than trusting the gate's silence on it.
       - file: lib/core/services/sync_service.dart
-        line_range: 2289
+        line_range: 2451
         method: restoreOpTimeout
         semantic: per-op-ceiling
+        notes: day-swapper + sync-load Task 20 fix1 (diagnose a9d3f6) shifted
+          this line (+14 lines, the sync_epoch clearAll failure-signal fix
+          inserted earlier in the file, in _applySyncEpochFromRestoreRow) —
+          repointed alongside the two ranges directly below (not gate-checked
+          itself — check_sot_registry_parity.dart's block regex only matches
+          an N-M line_range — but left stale it would misdirect a future
+          reader by the same +14).
       - file: lib/core/services/sync_service.dart
-        line_range: 2448-2460
+        line_range: 2462-2474
         method: applyRestoreCeiling
         semantic: apply-ceiling
         notes: day-swapper + sync-load Task 20 shifted this range (+148 lines,
           restoreLightweightAlways's new single-fetch branch + sync_epoch
           resync lever were inserted earlier in the file) — repointed per
           this task's brief exception (fix the minimum when the parity gate
-          blocks on a citation you shifted).
+          blocks on a citation you shifted). Shifted again by task-20-fix1
+          (diagnose a9d3f6, +14 lines, same method) for the same reason.
       - file: lib/core/services/sync_service.dart
-        line_range: 2462-2470
+        line_range: 2476-2484
         method: restoreFailureReason
         semantic: telemetry-reason-split
-        notes: same shift as applyRestoreCeiling directly above.
+        notes: same shift as applyRestoreCeiling directly above, both times.
     readers:
       - file: lib/core/router/app_router.dart
         line_range: 800-811

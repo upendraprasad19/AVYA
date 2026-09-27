@@ -172,6 +172,74 @@ void main() {
           isFalse);
     });
 
+    test('a clearAll failure in one domain does NOT advance sync_epoch_seen, '
+        'and the SAME row retries the clear on the next call (diagnose '
+        'a9d3f6)', () async {
+      await HiveService.instance.configBox.put('sync_epoch_seen', 1);
+      await HiveService.instance.workoutBox
+          .put(SyncSkipDomain.sched.indexKey, {'2026-08-01': 'fp-stale'});
+      await HiveService.instance.healthBox
+          .put(SyncSkipDomain.water.indexKey, {'2026-08-01': 'fp-stale'});
+      h.server.getResponders['user_progress'] = (_) => [progressRow(syncEpoch: 2)];
+      h.server.getResponders['user_profile'] = (_) => [];
+      h.server.getResponders['user_custom_exercises'] = (_) => [];
+      h.server.getResponders['user_custom_foods'] = (_) => [];
+      h.server.getResponders['workout_templates'] = (_) => [];
+      h.server.getResponders['user_preferences'] = (_) => [];
+
+      // Force the `water` domain's clear to throw, simulating one bad Hive
+      // box among the four SyncSkipIndex.clearAll walks -- exactly the
+      // per-domain failure clearAll already catches internally and never
+      // rethrows.
+      SyncSkipIndex.debugForceClearFailureForTests =
+          (d) => d == SyncSkipDomain.water;
+      addTearDown(() => SyncSkipIndex.debugForceClearFailureForTests = null);
+
+      await SyncService.instance.restoreLightweightAlways('test-user');
+
+      // Pre-fix bug: sync_epoch_seen was stored unconditionally right after
+      // the clearAll attempt, so a partial failure was silently marked
+      // "handled" and never retried. It must stay at 1.
+      expect(HiveService.instance.configBox.get('sync_epoch_seen'), 1,
+          reason: 'a failed domain clear must not mark the resync as done');
+      // sched (a different box) DID clear -- one domain's forced failure
+      // must not abort the rest of the sweep.
+      expect(
+          HiveService.instance.workoutBox
+              .containsKey(SyncSkipDomain.sched.indexKey),
+          isFalse);
+      // water is the forced-failure domain -- left dirty, exactly as a real
+      // failed delete would leave it.
+      expect(
+          HiveService.instance.healthBox
+              .containsKey(SyncSkipDomain.water.indexKey),
+          isTrue,
+          reason: 'the forced-failure domain is left untouched, not deleted');
+
+      // Re-seed sched (clearAll above already deleted it) so the SECOND
+      // call's before-state is unambiguous, remove the forced failure, and
+      // run with the SAME cloud row again: since sync_epoch_seen is still 1
+      // and cloudEpoch is still 2, the clear must be attempted again.
+      SyncSkipIndex.debugForceClearFailureForTests = null;
+      await HiveService.instance.workoutBox.put(
+          SyncSkipDomain.sched.indexKey, {'2026-08-01': 'fp-stale-again'});
+
+      await SyncService.instance.restoreLightweightAlways('test-user');
+
+      expect(HiveService.instance.configBox.get('sync_epoch_seen'), 2,
+          reason: 'the retry succeeds once nothing is forced to fail');
+      expect(
+          HiveService.instance.workoutBox
+              .containsKey(SyncSkipDomain.sched.indexKey),
+          isFalse,
+          reason: 'the retried clear ran again and cleared it this time');
+      expect(
+          HiveService.instance.healthBox
+              .containsKey(SyncSkipDomain.water.indexKey),
+          isFalse,
+          reason: 'water also cleared once the forced failure was removed');
+    });
+
     test('cloud sync_epoch <= seen is a no-op', () async {
       await HiveService.instance.configBox.put('sync_epoch_seen', 2);
       await HiveService.instance.workoutBox

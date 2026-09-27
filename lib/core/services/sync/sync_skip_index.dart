@@ -300,23 +300,55 @@ class SyncSkipIndex {
     await box.put(domain.indexKey, m);
   }
 
+  /// Test-only seam: when non-null, forces the named domain's clear to throw
+  /// during [clearAll] without needing a real Hive box failure. Mirrors the
+  /// established `debugCurrentUidResolverForTests` seam (hive_user_session.dart).
+  /// Production leaves this null; reset it in tearDown.
+  @visibleForTesting
+  static bool Function(SyncSkipDomain)? debugForceClearFailureForTests;
+
   /// Deletes every domain's index (the `sync_epoch` repair lever, spec
-  /// §5.10 rule 3). Returns how many indexes existed.
-  static Future<int> clearAll(Box<dynamic> Function(SyncSkipBox) boxFor) async {
+  /// §5.10 rule 3). A per-domain failure is caught here and reported (never
+  /// rethrown, so one bad domain cannot abort the rest of the sweep) but is
+  /// still counted in [ClearAllResult.failed] so a caller — the sync_epoch
+  /// lever, specifically — can tell "every domain cleared" apart from
+  /// "something was left dirty" and avoid marking the repair as done when it
+  /// was not (diagnose a9d3f6).
+  static Future<ClearAllResult> clearAll(
+      Box<dynamic> Function(SyncSkipBox) boxFor) async {
     var cleared = 0;
+    var failed = 0;
     for (final d in SyncSkipDomain.values) {
       try {
+        if (debugForceClearFailureForTests?.call(d) ?? false) {
+          throw StateError('debugForceClearFailureForTests: ${d.name}');
+        }
         final b = boxFor(d.box);
         if (b.containsKey(d.indexKey)) {
           await b.delete(d.indexKey);
           cleared++;
         }
       } catch (e, st) {
+        failed++;
         debugPrint('[SyncSkipIndex] clearAll ${d.name}: $e');
         unawaited(ErrorTelemetry.recordNonFatal(e, st,
             reason: 'sync_skip_clear_all', extra: {'domain': d.name}));
       }
     }
-    return cleared;
+    return ClearAllResult(cleared: cleared, failed: failed);
   }
+}
+
+/// Outcome of [SyncSkipIndex.clearAll]: how many domain indexes were
+/// actually deleted, and how many domains threw while being cleared. A
+/// caller that needs a strict "did the whole sweep succeed" answer reads
+/// [failed] — [cleared] alone cannot distinguish "nothing to clear" from
+/// "clearing failed", since both leave a domain uncounted in [cleared].
+class ClearAllResult {
+  const ClearAllResult({required this.cleared, required this.failed});
+
+  final int cleared;
+  final int failed;
+
+  bool get allSucceeded => failed == 0;
 }
