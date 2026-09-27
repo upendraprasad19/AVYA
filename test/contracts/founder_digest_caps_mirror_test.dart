@@ -102,6 +102,13 @@ String? _resolveKind(String src, String ident) {
   final expr = init.group(1)!;
   if (expr.contains('istDayStartIso(')) return 'daily';
   if (expr.contains('bucketStartMs')) return 'subday';
+  // fix1 batch (coordinator ruling, day-swapper-sync-load): the IST
+  // Mon-Sun-week window consume-day-swap/logic.ts's own `windowStartIso`
+  // helper produces (`${weekStart}T00:00:00+05:30`). A `p_window_start`
+  // local var initialised by CALLING that function -- not a bare literal --
+  // is how the census's own bare-identifier-const convention meets a value
+  // that is itself computed from a caller-supplied argument.
+  if (expr.contains('windowStartIso(')) return 'weekly';
   return null;
 }
 
@@ -140,12 +147,24 @@ List<_Site> _efSites() {
             'a one-level `c ? A : B` ternary. Add the shape here rather than '
             'letting a caller go unmirrored.');
       }
-      if (keys.length != caps.length) {
+      if (keys.length == caps.length) {
+        for (var i = 0; i < keys.length; i++) {
+          sites.add(_Site(rel, keys[i], caps[i], kind));
+        }
+      } else if (keys.length == 1 && caps.length > 1) {
+        // fix1 batch (coordinator ruling): a SINGLE (non-ternary) key whose
+        // LIMIT varies by tier -- e.g. consume-day-swap's day_swap: the same
+        // key regardless of tier, but p_limit is a 2-branch ternary
+        // (free vs PRO). This is NOT an arity error: it is the EF-caller
+        // shape of the exact "food_text: no single ceiling" treatment the
+        // trigger side already has via readSingleCeiling returning null for
+        // a genuinely tier-dependent limit. One site, cap=null (no single
+        // ceiling) -- the "caps" test below still enforces that
+        // DIGEST_KEYS carries no `cap` for it.
+        sites.add(_Site(rel, keys.single, null, kind));
+      } else {
         fail('$rel: key and cap ternaries have different arity — the '
             'branch-pairing below would mis-associate a cap with a key.');
-      }
-      for (var i = 0; i < keys.length; i++) {
-        sites.add(_Site(rel, keys[i], caps[i], kind));
       }
     }
     // Any `p_quota_key:` the full-object regex did NOT consume is a shape
@@ -309,6 +328,58 @@ void main() {
       expect(byKey['food_text']!.cap, isNull);
       expect(byKey['delete_account']!.cap, isNull);
       expect(byKey['verify_payment']!.cap, isNull);
+      expect(byKey['day_swap']!.cap, isNull,
+          reason: 'day_swap is tier-dependent (free 1 / PRO 3), same '
+              'treatment as food_text — no single ceiling');
+      expect(byKey['day_swap']!.kind, 'weekly');
+    });
+
+    // fix1 batch (coordinator ruling): consume-day-swap/index.ts duplicates
+    // its quota-key and tier-limit literals LOCALLY (see index.ts's own
+    // comment) so this census's bare-identifier-const convention can read
+    // them without following an import. A local duplicate that is never
+    // checked against its canonical source is exactly the drift this repo's
+    // own §4.4 rule 21 warns about — so this reads BOTH files' source
+    // directly (never imports either as a module: index.ts calls
+    // Deno.serve() at load time, which this Dart test process cannot run)
+    // and compares the literals textually.
+    test('day_swap: index.ts local literals stay in sync with logic.ts exports', () {
+      final indexSrc = _stripTs(
+        File('supabase/functions/consume-day-swap/index.ts').readAsStringSync(),
+      );
+      final logicSrc = _stripTs(
+        File('supabase/functions/consume-day-swap/logic.ts').readAsStringSync(),
+      );
+
+      final indexKey = _resolveStrings(indexSrc, 'QUOTA_KEY');
+      final logicKey = _resolveStrings(logicSrc, 'DAY_SWAP_QUOTA_KEY');
+      expect(indexKey, isNotNull,
+          reason: 'index.ts QUOTA_KEY unresolvable — did its declaration shape change?');
+      expect(logicKey, isNotNull,
+          reason: 'logic.ts DAY_SWAP_QUOTA_KEY unresolvable — did its export shape change?');
+      expect(indexKey, logicKey,
+          reason: 'index.ts QUOTA_KEY ($indexKey) has drifted from logic.ts '
+              'DAY_SWAP_QUOTA_KEY ($logicKey) — these must name the SAME quota key');
+
+      final indexFree = _resolveInts(indexSrc, 'FREE_LIMIT');
+      final indexPro = _resolveInts(indexSrc, 'PRO_LIMIT');
+      final logicFree = _resolveInts(logicSrc, 'FREE_DAY_SWAP_LIMIT');
+      final logicPro = _resolveInts(logicSrc, 'PRO_DAY_SWAP_LIMIT');
+      expect(indexFree, isNotNull, reason: 'index.ts FREE_LIMIT unresolvable');
+      expect(indexPro, isNotNull, reason: 'index.ts PRO_LIMIT unresolvable');
+      expect(logicFree, isNotNull, reason: 'logic.ts FREE_DAY_SWAP_LIMIT unresolvable');
+      expect(logicPro, isNotNull, reason: 'logic.ts PRO_DAY_SWAP_LIMIT unresolvable');
+      // This is the actual equality the fix1 brief asks for, stated in terms
+      // of limitForTier's OWN definition (limitForTier(false) returns
+      // FREE_DAY_SWAP_LIMIT; limitForTier(true) returns PRO_DAY_SWAP_LIMIT —
+      // see logic.ts) rather than re-invoking a TS function from Dart, which
+      // is not possible here.
+      expect(indexFree, logicFree,
+          reason: 'index.ts FREE_LIMIT ($indexFree) != logic.ts '
+              'FREE_DAY_SWAP_LIMIT ($logicFree) == limitForTier(false)');
+      expect(indexPro, logicPro,
+          reason: 'index.ts PRO_LIMIT ($indexPro) != logic.ts '
+              'PRO_DAY_SWAP_LIMIT ($logicPro) == limitForTier(true)');
     });
   });
 }

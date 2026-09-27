@@ -51,3 +51,19 @@ export function istYesterdayWindow(
     label: istDateStr(new Date(yStartMs)),
   };
 }
+
+/// Returns the IST midnight instant of the MONDAY that starts the IST week
+/// containing `d`, as a timestamptz-comparable ISO string carrying the
+/// +05:30 offset (same shape as istDayStartIso, one level up).
+///
+/// day-swapper-sync-load spec §5.3 — the day-swap allowance window is a
+/// Monday-Sunday IST week, and this file had no Monday helper before this.
+/// Sun=0 in istDayOfWeek's convention, so the offset back to the most recent
+/// Monday is (dow + 6) % 7: Mon(1)->0, Tue(2)->1, ..., Sat(6)->5, Sun(0)->6.
+export function istWeekStartIso(d: Date = new Date()): string {
+  const dow = istDayOfWeek(d);
+  const daysSinceMonday = (dow + 6) % 7;
+  const mondayIst = new Date(istNow(d).getTime() - daysSinceMonday * ONE_DAY_MS);
+  const mondayDateStr = mondayIst.toISOString().substring(0, 10);
+  return `${mondayDateStr}T00:00:00+05:30`;
+}

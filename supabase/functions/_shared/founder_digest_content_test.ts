@@ -39,6 +39,11 @@ import {
  * the two new windowed counts, and an empty Map for userNames (falls back to
  * the pre-existing id-prefix format for every user, unaffected by B2).
  */
+// fix1 batch (day-swapper-sync-load, coordinator ruling) grew DigestInput by
+// 1 more field ("weekly", the day_swap section) after this file's own B1/B2/B3
+// extras were written — same "spread a neutral, readable-empty default"
+// pattern, so every fixture below keeps compiling without needing its own
+// edit.
 const EMPTY_B_EXTRAS: Pick<
   DigestInput,
   | "signupsYesterday"
@@ -48,6 +53,7 @@ const EMPTY_B_EXTRAS: Pick<
   | "userNames"
   | "cancelledYesterday"
   | "lapsedYesterday"
+  | "weekly"
 > = {
   signupsYesterday: { count: 0 },
   adminMetrics: { rows: [] },
@@ -56,6 +62,7 @@ const EMPTY_B_EXTRAS: Pick<
   userNames: new Map(),
   cancelledYesterday: { count: 0 },
   lapsedYesterday: { count: 0 },
+  weekly: { rows: [] },
 };
 
 Deno.test("idPrefix returns the first 8 chars of a user id, never the whole uuid", () => {

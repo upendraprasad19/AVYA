@@ -30,7 +30,7 @@
  */
 
 import { escapeHtml, TELEGRAM_MAX_CHARS } from "./telegram.ts";
-import { IST_OFFSET_MS, istYesterdayWindow } from "./ist_date.ts";
+import { IST_OFFSET_MS, istWeekStartIso, istYesterdayWindow } from "./ist_date.ts";
 import { fetchAllByIds, fetchAllPages } from "./paged_fetch.ts";
 import { sanitizeIdentifier } from "./sanitize_for_prompt.ts";
 
@@ -45,7 +45,14 @@ export const MAX_PAGES = 200;
 export interface DigestKey {
   key: string;
   label: string;
-  kind: "daily" | "subday" | "lifetime";
+  /**
+   * `weekly` added by the day-swapper-sync-load fix1 batch (coordinator
+   * ruling): a quota whose `window_start` is a fixed IST Monday for the
+   * whole week rather than a UTC-hour/10-min bucket (subday), a per-IST-day
+   * boundary (daily), or the epoch sentinel (lifetime). See
+   * `gatherDigestInput`'s weekly read below for the window computation.
+   */
+  kind: "daily" | "subday" | "lifetime" | "weekly";
   /** Absent for keys whose ceiling varies by tier or is not a ceiling at all. */
   cap?: number;
 }
@@ -80,6 +87,12 @@ export const DIGEST_KEYS: readonly DigestKey[] = [
   { key: "verify_payment", label: "verify-payment", kind: "subday" },
   { key: "free_image_analysis", label: "Free image reads", kind: "lifetime", cap: 5 },
   { key: "weekly_report_free", label: "Weekly report (free)", kind: "lifetime", cap: 1 },
+  // day-swapper-sync-load fix1 (coordinator ruling): free 1 / PRO 3 swaps per
+  // IST Mon-Sun week -- tier-dependent, so no single "at cap" ceiling, same
+  // treatment as food_text above. Must equal consume-day-swap's own quota
+  // key literal exactly (pinned by
+  // test/contracts/founder_digest_caps_mirror_test.dart's drift-guard test).
+  { key: "day_swap", label: "Day swaps (weekly)", kind: "weekly" },
 ];
 
 export interface UsageRow {
@@ -235,6 +248,19 @@ export interface DigestInput {
   windowed: SectionRead<UsageRow>;
   /** Lifetime rows whose updated_at falls inside yesterday's IST day. */
   lifetime: SectionRead<UsageRow>;
+  /**
+   * Rows for every `kind: "weekly"` DIGEST_KEYS entry whose `window_start`
+   * equals the IST Monday of the week CONTAINING yesterday's IST day (fix1
+   * batch, coordinator ruling). A weekly row's `window_start` can also fall
+   * inside the WINDOWED read's [yStart, tStart) range on the one day of the
+   * week that IS that Monday -- `buildDigestText` deliberately skips weekly
+   * keys in the windowed per-key loop, its unlisted-keys warning, AND the
+   * per-user Top Users ranking (fix2 batch, coordinator ruling: a weekly
+   * total is not a bounded day's activity, and must never mix into a daily
+   * figure) so such a row is never double-rendered or double-counted there;
+   * it is rendered ONLY via this field's own section.
+   */
+  weekly: SectionRead<UsageRow>;
   /** Alerts detected inside yesterday's IST day. */
   alerts: SectionRead<AlertRow>;
   /** `subscriptions` rows created inside yesterday's IST day (status='active'). */
@@ -310,6 +336,19 @@ export function istClock(iso: string): string {
   return `${hh}:${mm} `;
 }
 
+/**
+ * "Day swaps (weekly)" -> "Day swaps (weekly, this week)" for the non-empty
+ * render of a weekly DigestKey (fix1 brief decision #4) -- inserts ", this
+ * week" before the label's own trailing paren rather than appending a new
+ * one, so it reads as "Day swaps (weekly, this week)", one qualified phrase,
+ * not two back-to-back parenthesised phrases. Falls back to a trailing
+ * " (this week)" for a label that doesn't end in ")", so a future weekly key
+ * with a differently-shaped label still renders sensibly.
+ */
+function weeklyWithDataLabel(label: string): string {
+  return label.endsWith(")") ? `${label.slice(0, -1)}, this week)` : `${label} (this week)`;
+}
+
 function unreadableLine(section: string, reason: string): string {
   // The marker deliberately names the SECTION, not the table, so the Deno
   // test file never needs the table-name literal that the ledger census in
@@ -366,7 +405,10 @@ export function buildDigestText(input: DigestInput): string {
     const rows = input.windowed.rows;
     const alsoParts: string[] = [];
     for (const k of DIGEST_KEYS) {
-      if (k.kind === "lifetime") continue;
+      // A weekly key's window_start can fall inside THIS window on the one
+      // day of the week that IS its Monday -- it gets its own section below,
+      // never the daily per-key summary (fix1 batch, coordinator ruling).
+      if (k.kind === "lifetime" || k.kind === "weekly") continue;
       const mine = rows.filter((r) => r.quota_key === k.key);
       const total = mine.reduce((s, r) => s + (r.used ?? 0), 0);
       const users = new Set(mine.map((r) => r.user_id)).size;
@@ -383,8 +425,19 @@ export function buildDigestText(input: DigestInput): string {
     }
     lines.push(`Also: ${alsoParts.join(" · ")}`);
     // Every windowed row counts toward the per-user ranking — unlisted keys
-    // included, since they are real usage the key table simply lacks.
+    // included, since they are real usage the key table simply lacks —
+    // EXCEPT a weekly key's row, which can leak into this window on the one
+    // day of the week that IS its Monday (same reason the per-key loop above
+    // skips it). A weekly total is not a bounded day's activity; mixing it
+    // into this DAILY ranking would silently inflate one user's "yesterday"
+    // figure with a whole week's count (fix2 batch, coordinator ruling).
+    // Derived from DIGEST_KEYS kinds, not hard-coded to any one key, so a
+    // future second weekly key is excluded automatically.
+    const weeklyKeys = new Set(
+      DIGEST_KEYS.filter((k) => k.kind === "weekly").map((k) => k.key),
+    );
     for (const r of rows) {
+      if (weeklyKeys.has(r.quota_key)) continue;
       perUser.set(r.user_id, (perUser.get(r.user_id) ?? 0) + (r.used ?? 0));
     }
     const unlisted = unlistedTotals(rows, "windowed");
@@ -417,6 +470,27 @@ export function buildDigestText(input: DigestInput): string {
     const unlisted = unlistedTotals(rows, "lifetime");
     if (unlisted.length > 0) {
       lines.push(`⚠ unlisted lifetime keys: ${unlisted.join(" · ")} — add to DIGEST_KEYS`);
+    }
+  }
+
+  // fix1 batch (coordinator ruling): weekly keys (day_swap) get their own
+  // section, never the daily windowed summary or its unlisted-keys warning
+  // (day_swap is already a KNOWN key once listed here, so unlistedTotals
+  // naturally excludes it with no code change of its own).
+  if ("unreadable" in input.weekly) {
+    lines.push(unreadableLine("weekly meters", input.weekly.unreadable));
+  } else {
+    const rows = input.weekly.rows;
+    for (const k of DIGEST_KEYS) {
+      if (k.kind !== "weekly") continue;
+      const mine = rows.filter((r) => r.quota_key === k.key);
+      const total = mine.reduce((s, r) => s + (r.used ?? 0), 0);
+      const users = new Set(mine.map((r) => r.user_id)).size;
+      lines.push(
+        mine.length === 0
+          ? `${k.label}: none`
+          : `${weeklyWithDataLabel(k.label)}: ${users} user${users === 1 ? "" : "s"} · ${total} swaps`,
+      );
     }
   }
 
@@ -733,6 +807,34 @@ export async function gatherDigestInput(
   const { yStart, tStart } = window;
   const { windowed, lifetime, alerts } = await readDigestSections(supabase, window, callerLabel);
 
+  // fix1 batch (coordinator ruling): the IST Monday of the week CONTAINING
+  // yesterday's IST day -- exactly the p_window_start consume-day-swap's
+  // `windowStartIso` writes for that week (`new Date(yStart)` is yesterday's
+  // IST-midnight instant, so istWeekStartIso resolves its own week's Monday
+  // rather than "today"'s, which would be wrong on Sundays: reporting
+  // yesterday=Sunday must still resolve to THAT week's Monday, not next
+  // week's). Independent read, same three-state contract as every other
+  // section -- bounded via fetchAllPages (OI-79,
+  // check_unbounded_cron_reads.dart) like windowed/lifetime/subscriptions
+  // above, per founder directive to never add an unbounded fan-out read.
+  const weekStart = istWeekStartIso(new Date(yStart));
+  const weeklyKeys = DIGEST_KEYS.filter((k) => k.kind === "weekly").map((k) => k.key);
+  const weeklyRead = readSection<UsageRow>(async () => ({
+    rows: weeklyKeys.length === 0 ? [] : await fetchAllPages<UsageRow>(
+      () =>
+        supabase
+          .from("usage_counters")
+          .select("user_id, quota_key, window_start, used, updated_at")
+          .in("quota_key", weeklyKeys)
+          .eq("window_start", weekStart),
+      {
+        orderBy: [{ column: "user_id" }, { column: "quota_key" }],
+        label: "founder-digest weekly",
+        maxPages: MAX_PAGES,
+      },
+    ),
+  }), callerLabel);
+
   // New paid subscriptions created inside yesterday's IST day, for the
   // per-plan breakdown. Independent read, same three-state contract as the
   // other sections above. Routed through fetchAllPages (OI-79,
@@ -970,6 +1072,7 @@ export async function gatherDigestInput(
   })();
 
   const [
+    weekly,
     subscriptions,
     expiringSoon,
     adminMetrics,
@@ -980,6 +1083,7 @@ export async function gatherDigestInput(
     lapsedYesterday,
     userNames,
   ] = await Promise.all([
+    weeklyRead,
     subscriptionsRead,
     expiringSoonRead,
     adminMetricsRead,
@@ -994,6 +1098,7 @@ export async function gatherDigestInput(
     dayLabel: window.label,
     windowed,
     lifetime,
+    weekly,
     alerts,
     subscriptions,
     expiringSoon,
