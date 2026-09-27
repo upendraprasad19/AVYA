@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**138 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**139 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -146,3 +146,4 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-249 | 45 s restore-op timeouts on tiny tables on builds +45 to +47 | none — P2, unscheduled. | 2026-09-26 — LIVE client telemetry:… | [:6030](open_issues.md#L6030) |
 | OI-250 | pg_cron self/correlated silence has no out-of-band watcher (146 cannot see… | none | never | [:6039](open_issues.md#L6039) |
 | OI-251 | Retention/vacuum effect is unobserved: return_message '1 row' hides DELETE… | none | never | [:6061](open_issues.md#L6061) |
+| OI-254 | alert_client_errors_spike cnt metric still counts benign event-coded _null… | none | never | [:6082](open_issues.md#L6082) |
