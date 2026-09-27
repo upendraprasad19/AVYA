@@ -69,6 +69,32 @@ void main() {
     expect(h.server.writesTo('user_custom_foods'), hasLength(1));
   });
 
+  test('a same-valued id shared by an exercise and a food does not collide in '
+      'the shared index (the exercise:/food: prefix disambiguates)', () async {
+    h.server.clear(); // see the earlier test's comment -- shared server.
+    // Both entities deliberately share the SAME raw id: without the
+    // exercise:/food: type prefix on the row key, `_stored['shared-1']`
+    // would be one index slot shared by both, so whichever push landed
+    // SECOND would overwrite the other's fingerprint and the first would
+    // never be able to skip on an unchanged pass.
+    await HiveService.instance.customBox.put('custom_exercise_2',
+        {'id': 'shared-1', 'name': 'Pull Up', 'logging_type': 'weight_reps'});
+    await HiveService.instance.customBox
+        .put('custom_food_2', {'id': 'shared-1', 'name': 'Rajma'});
+    await SyncService.instance.pushCustomItemsForSyncDomain();
+    expect(h.server.writesTo('user_custom_exercises'), hasLength(1));
+    expect(h.server.writesTo('user_custom_foods'), hasLength(1));
+
+    // Both unchanged -> both must still skip, even though their raw ids
+    // collide -- proves the row key carries the type prefix, not just id.
+    h.server.clear();
+    await SyncService.instance.pushCustomItemsForSyncDomain();
+    expect(h.server.writesTo('user_custom_exercises'), isEmpty,
+        reason: 'the exercise must skip on its own recorded fingerprint, '
+            'not be shadowed by the food sharing its raw id');
+    expect(h.server.writesTo('user_custom_foods'), isEmpty);
+  });
+
   test('a leftover legacy custom_exercises/custom_foods list key is ignored — '
       'no writer ever populates it, and the retired read path (D18) must not '
       'crash or push it', () async {
