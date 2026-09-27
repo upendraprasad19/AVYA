@@ -33,6 +33,16 @@ class TemplateIdentityMigrator {
   /// completed at least one full pass.
   static const _flagKey = 'tmpl_identity_v1_done';
 
+  /// Test-only invocation counter, incremented as the FIRST statement of
+  /// [runIfNeeded] — before the Hive scan or any network call. No Supabase
+  /// mocking seam exists anywhere in this repo (`SupabaseService.client`
+  /// hardcodes `Supabase.instance.client`, uninitialized in unit tests), so
+  /// this is how a caller-wiring test proves the gate was REACHED without
+  /// needing to exercise its live-network legacy-key-resolve branch.
+  /// OI-252 B-pass finding 2 (2026-09-27).
+  @visibleForTesting
+  static int invocationCountForTest = 0;
+
   /// Runs the migration pass if any non-uuid `tmpl_*` template row
   /// remains. Returns `true` when it is safe to push/restore templates
   /// this launch — either nothing needed migrating, or every legacy row
@@ -41,6 +51,7 @@ class TemplateIdentityMigrator {
   /// Callers MUST skip template push/restore for this pass when this
   /// returns `false`; every OTHER restore domain proceeds regardless.
   static Future<bool> runIfNeeded(String userId) async {
+    invocationCountForTest++;
     final box = HiveService.instance.workoutBox;
     final legacyKeys = box.keys
         .whereType<String>()

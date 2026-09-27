@@ -41,7 +41,7 @@ writers:
 readers:
   - { file: lib/core/services/sync/sync_workout.dart, method_or_widget: "_restoreScheduledWorkouts — a row whose embedded template carries deleted_at is never hydrated/written; an existing local reference is cleaned via _cleanScheduleReferencesToTemplate", line: 2140 }
   - { file: lib/core/services/sync/sync_workout.dart, method_or_widget: "_restoreWorkoutPlan — a plan_json.schedules entry whose template_id resolves into _deletedTemplateCloudIds() is dropped (ghost-day filter, shared isGhostScheduleEntry predicate)", line: 1248 }
-  - { file: lib/core/services/plan_integrity_reconciler.dart, method_or_widget: "PlanIntegrityReconciler.reconcile — same ghost-day filter applied to the boot-time heal of the identical plan_json snapshot", line: 64 }
+  - { file: lib/core/services/plan_integrity_reconciler.dart, method_or_widget: "PlanIntegrityReconciler.reconcile — same ghost-day filter applied to the boot-time heal of the identical plan_json snapshot", line: 345 }
   - { file: lib/core/services/sync/sync_workout.dart, method_or_widget: "_restoreWorkoutTemplates — rewritten to positive-evidence-only removal (a deleted_at row deletes locally + cleans schedule refs); the old canonicalKeys stale-key SWEEP is gone (it would have deleted every not-yet-pushed local template on a first restore)", line: 1561 }
 hive_key_prefix: "tmpl_"
 hive_key_formula: "templateKeyFor(const Uuid().v4()) == 'tmpl_<uuid-v4>' — client-minted once at create time (WorkoutWriteService.newTemplateKey()), never re-derived from name/content. Supersedes 'tmpl_<ms>' / 'tmpl_<nameHash>'; TemplateIdentityMigrator rekeys any surviving legacy row."
@@ -55,7 +55,7 @@ provider_invalidations: [currentPlanProvider, calendarWeekProvider, todayWorkout
 telemetry_op_types:
   success: []
   failure: [sync_deleted_template_cloud_ids, sync_drain_pending_template_deletes, sync_service_if_16, sync_service_if_21]
-cross_account_guard: Unchanged — workoutBox / userBox via wrapUserScopedBox; PendingTemplateDeletes lives in userBox (cleared on logout, documented as its own known limit, tracked separately on the OI board).
+cross_account_guard: Unchanged — workoutBox / userBox via wrapUserScopedBox; PendingTemplateDeletes lives in userBox (cleared on logout, documented as its own known limit, tracked as OI-253).
 forbidden_patterns_checked:
   - "nulling scheduled_workouts.template_id on delete (FK SET NULL) — rejected: migration 145 renames+deactivates instead of dropping the row, so the FK stays valid and downstream readers can still SEE which template a day pointed at (for cleanup) instead of losing that information the instant the delete lands."
   - "gating the WHOLE restore on the template-identity migrator — rejected (round-2 plan review): would starve every OTHER sync domain for an offline user who happens to have legacy template keys. Scoped to _syncWorkoutTemplates only."
@@ -110,5 +110,68 @@ identity was name-derived, so a delete-then-recreate under the same name
 collided on one row, and (b) no restore path treated a deleted template's
 downstream references (schedule days, plan_json entries) as gone. Fixed with
 a stable client-minted identity, a rename-on-delete tombstone (migration 145,
-not yet live), and an independent ghost-day filter on every restore path
-that can carry a stale reference.
+applied live 2026-09-27), and an independent ghost-day filter on every
+restore path that can carry a stale reference.
+
+## B-pass remediation (2026-09-27, `docs/reviews/template-stable-identity-bpass.md`)
+
+A self-triggered B-pass on this unit found 7 real defects (0 false alarms,
+independently re-verified against live code/cloud state before any fix
+landed). Findings 3-7 (documentation/citation drift) are fixed and verified —
+see the review file's per-finding `status:` fields. The two P1s:
+
+- **Finding 2 (fixed)** — `TemplateIdentityMigrator.runIfNeeded` was wired
+  into `_syncWorkoutTemplates` only, never into `_restoreWorkoutTemplates` —
+  the path `restoreLightweightAlways` calls on every normal sign-in once
+  Hive already has local data (the common returning-user case). A device
+  holding a pre-rework legacy-keyed template never got it rekeyed on this
+  path, rendering as a duplicate until `weeklyFullSync` happened to fire.
+  Fixed by adding the identical gate to `_restoreWorkoutTemplates` itself
+  (`sync/sync_workout.dart`), covering every caller of that method in one
+  place. Regression test: `test/sync/oi252_template_restore_migrator_wiring_test.dart`
+  (2 tests) — a test-only invocation counter on the migrator
+  (`TemplateIdentityMigrator.invocationCountForTest`) proves the gate is
+  reached, since this repo has no Supabase-mocking seam to exercise the
+  migrator's own live-network legacy-key-resolve branch (verified: zero
+  existing tests reference `TemplateIdentityMigrator`, zero mock-http/mock-
+  Supabase packages in `pubspec.yaml` — building one is disproportionate to
+  this fix). Mutation-proven: deleting the gate call reddened exactly the
+  invocation-count test (1 of 2) and left the functional pass-through test
+  green, as expected — restored from a pre-mutation backup, both green
+  re-confirmed after.
+
+- **Finding 1 (drafted, NOT yet applied — blocked)** — migration 145's
+  `workout_templates_delete_final_rename` trigger is `before update` ONLY;
+  it never fires when `_drainPendingTemplateDeletes`'s tombstone UPSERT is
+  the very first cloud write for a template's id (created and deleted in
+  the same offline session, so no prior "creating push" ran) — that lands
+  as a plain INSERT, the row is created with `deleted_at` set but the name
+  is never suffixed, and `UNIQUE(user_id, name)` still occupies that name,
+  so a later ordinary re-create under the identical name hits a live
+  `23505` — reopening the "42P10 forever" class 145 itself exists to avoid,
+  through the one path its header comment didn't cover. Does NOT reopen the
+  resurrection bug this diagnose-doc's own fix closes (restore still
+  filters purely on `deleted_at`, untouched by this gap) — a distinct,
+  narrower regression in the rename/name-freeing guarantee only, and it
+  requires a specific offline create-then-delete-before-first-sync sequence
+  to trigger, which is uncommon but real.
+
+  Fix drafted as follow-up migration 146 (extends the trigger to
+  `before insert or update`, suffixing on `new.name` when fired by INSERT
+  since `OLD` doesn't exist there) — SQL content is final and was NOT saved
+  under `supabase/migrations/` in this commit specifically to avoid failing
+  Gate 14 (`check_migrations_applied.dart`) for the rest of this batch,
+  since it is drafted but unapplied. **Two live-apply attempts via
+  `apply_migration` were both denied by the Claude Code auto-mode
+  classifier** (attempt 1: "Production Deploy"; attempt 2: "Protected-Scope
+  IaC Apply") — per CLAUDE.md §4.3 ("A classifier block on a live apply is
+  CORRECT; get the explicit ok, never work around it"), this was not
+  retried a third time or worked around. **Founder action needed**: either
+  grant the permission so a future attempt can land, or apply the drafted
+  SQL manually via the Supabase dashboard SQL editor and have a future
+  session update `backups/applied_migrations.json` + this doc's
+  `touched_layers_checked` tier 3 to match. The full drafted migration file
+  (header, function body, trigger, live BEGIN/ROLLBACK verification
+  snippet, inline rollback block) is preserved and ready to commit as-is
+  once applied — see the branch's follow-up commit / OI board for its
+  current location if this doc is read after that lands.

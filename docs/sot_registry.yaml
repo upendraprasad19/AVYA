@@ -3325,18 +3325,27 @@ concepts:
           positive-evidence-only removal replaces it (a legacy sweep would
           delete every not-yet-pushed local template on a first restore).
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 1990-2320
-        method: _restoreScheduledWorkouts / _restoreWorkoutPlan
+        line_range: 1177-1274
+        method: _restoreWorkoutPlan
         semantic: cross-concept ghost-day filter
         fields_read: [template_id, template.deleted_at (embed)]
         notes: |
-          OI-252 — a `scheduled_workouts` row (or a `plan_json.schedules`
-          entry) referencing a deleted template is treated as gone, not as
-          an ordinary missing/orphaned reference: the schedule day is
-          skipped/cleaned rather than hydrated with the tombstone's mangled
-          name. See `scheduled_workouts_mutations` below for the full
-          writer/reader pair; cited here because it is this concept's
-          delete semantics leaking into a sibling concept's restore path.
+          OI-252 — a `plan_json.schedules` entry referencing a deleted
+          template is treated as gone, not as an ordinary missing/orphaned
+          reference: the schedule day is skipped rather than hydrated with
+          the tombstone's mangled name. See `scheduled_workouts_mutations`
+          below for the full writer/reader pair; cited here because it is
+          this concept's delete semantics leaking into a sibling concept's
+          restore path.
+      - file: lib/core/services/sync/sync_workout.dart
+        line_range: 2000-2296
+        method: _restoreScheduledWorkouts
+        semantic: cross-concept ghost-day filter
+        fields_read: [template_id, template.deleted_at (embed)]
+        notes: |
+          OI-252 — same ghost-day treatment as `_restoreWorkoutPlan` above,
+          applied to the live `scheduled_workouts` embed instead of the
+          frozen `plan_json` snapshot.
     reader_allow_files:
       - { file: lib/core/services/template_identity_migrator.dart, reason: "OI-252 one-shot migrator scans tmpl_* keys to find legacy (non-uuid) identities and rekey them to the stable-uuid form" }
     regression_test: test/contracts/templates_unique_constraint_test.dart

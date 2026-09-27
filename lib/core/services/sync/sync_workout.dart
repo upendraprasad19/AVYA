@@ -1558,8 +1558,26 @@ extension SyncServiceWorkout on SyncService {
   /// cloud fetch reports as `deleted_at`-set. A local row this fetch
   /// simply doesn't mention (an unpushed creation, or a fetch that
   /// legitimately returned fewer than the full set) is left alone.
+  ///
+  /// OI-252 B-pass finding 2 (2026-09-27) — the legacy-key migrator MUST
+  /// run here too, not just in `_syncWorkoutTemplates`. This is the
+  /// restore path `restoreLightweightAlways` calls on every normal
+  /// sign-in once Hive already has local data (the common case for a
+  /// returning user); before this fix a device holding a pre-rework
+  /// legacy-keyed template (`tmpl_<ms>` / `tmpl_<namehash>`) never got it
+  /// rekeyed on this path, so the cloud-authoritative copy landed under a
+  /// NEW `tmpl_<uuid>` key while the old legacy row sat untouched —
+  /// `TemplatesNotifier.build` filters by `type=='template'`, not key
+  /// prefix, so both rendered as separate templates until
+  /// `weeklyFullSync` happened to run. Scoped to this function only —
+  /// never gates `_restoreIfNeeded`/`restoreLightweightAlways` as a whole
+  /// (round-2 plan review: that would starve unrelated domains for an
+  /// offline user). Mirrors `_syncWorkoutTemplates`'s identical gate.
   Future<void> _restoreWorkoutTemplates(String userId,
       {Object? preFetched = _kNoInject}) async {
+    final migrated = await TemplateIdentityMigrator.runIfNeeded(userId);
+    if (!migrated) return;
+
     try {
       final rows = identical(preFetched, _kNoInject)
           ? await _supabase.client
@@ -2421,4 +2439,16 @@ extension SyncServiceWorkout on SyncService {
         preFetched: preFetched,
         preFetchedDeletedTemplateIds: preFetchedDeletedTemplateIds,
       );
+
+  /// OI-252 B-pass finding 2 — test seam: runs `_restoreWorkoutTemplates`
+  /// with INJECTED cloud rows (no Supabase query for the row read itself),
+  /// so the legacy-key-migrator gate this fix added is behaviorally
+  /// testable. [preFetched] must be passed (even as an empty list) or this
+  /// falls through to a live network call, which unit tests cannot make.
+  @visibleForTesting
+  Future<void> restoreWorkoutTemplatesForTest(
+    String userId, {
+    required Object? preFetched,
+  }) =>
+      _restoreWorkoutTemplates(userId, preFetched: preFetched);
 }

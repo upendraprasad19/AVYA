@@ -11,7 +11,7 @@ import 'hive_service.dart';
 ///
 /// A queued entry survives app restarts and offline periods. It does NOT
 /// survive logout — `userBox` is cleared on sign-out, so an undrained delete
-/// is lost on that device (stated in the plan; filed as its own OI, since a
+/// is lost on that device (stated in the plan; tracked as OI-253, since a
 /// durable cross-session delete queue is separate scope from this unit).
 class PendingTemplateDeletes {
   PendingTemplateDeletes._();

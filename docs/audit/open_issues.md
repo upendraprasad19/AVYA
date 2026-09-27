@@ -3629,7 +3629,7 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
 
 - **Status**: OPEN
 - **Blocked on**: none — one-line predicate fix; the value is in the test that would have caught it
-- **Verified**: 2026-09-26 — the R2-11 PRECONDITION is now met: migration 145 (diagnose `d6b2f9`) excludes `alert-critical-notify` inside the alert's `cron_call_log` subquery (live jobid 32 verified), pinned by `test/contracts/cron_vacuum_single_statement_test.dart`, which also requires every function on `cron_auth_adoption_test.dart`'s `_triggerDispatchedFunctions` roster that calls `logCronStart` to be excluded. The `>= 8` vs 7-day-prune defect itself is UNCHANGED (batch B2). Latent, recorded: `weekly-recalc` calls `logCronStart` (`weekly-recalc/index.ts:208`) but has no cron job and is not on the roster — a manual run would put it in the same silence-is-healthy class once the threshold is fixed. Also: with retention broken (09-22 → 09-26) this alert became reachable BY ACCIDENT, and a weekly function with one lost success row (`weekly-recap-ready`, OI-194 class) could have false-fired from 2026-09-29; 144's restored prune closes that.
+- **Verified**: 2026-09-26 — the R2-11 PRECONDITION is now met: migration 144 (diagnose `d6b2f9`) excludes `alert-critical-notify` inside the alert's `cron_call_log` subquery (live jobid 32 verified), pinned by `test/contracts/cron_vacuum_single_statement_test.dart`, which also requires every function on `cron_auth_adoption_test.dart`'s `_triggerDispatchedFunctions` roster that calls `logCronStart` to be excluded. The `>= 8` vs 7-day-prune defect itself is UNCHANGED (batch B2). Latent, recorded: `weekly-recalc` calls `logCronStart` (`weekly-recalc/index.ts:208`) but has no cron job and is not on the roster — a manual run would put it in the same silence-is-healthy class once the threshold is fixed. Also: with retention broken (09-22 → 09-26) this alert became reachable BY ACCIDENT, and a weekly function with one lost success row (`weekly-recap-ready`, OI-194 class) could have false-fired from 2026-09-29; 144's restored prune closes that.
   PRIOR (kept verbatim): 2026-09-10 — `min(started_at)` across `cron_call_log` is **2026-09-03**, so the maximum achievable `days_silent` is **7.46**. The alert's predicate is `days_silent >= 8`. Hermes measured **7.21** on 2026-08-16; three weeks later the ceiling is unchanged because it is set by the pruner, not by traffic.
 - **Identified**: 2026-08-16 · Hermes L1-F3. **Pre-existing — not introduced by the log-retention batch.**
 - **The mechanism**: `cleanup_cron_call_log` prunes `cron_call_log` at 7 days, sparing only the single *globally* newest success. The alert asks whether any function has been silent for **8** days. The table cannot hold evidence that old, so the predicate is unsatisfiable by construction. It has fired **0 times, ever**.
@@ -6011,7 +6011,7 @@ Needs a tombstone or cloud-side delete; restore-completeness class (docs/archite
 
 - **Status**: OPEN
 - **Blocked on**: the first nightly run after the fix (2026-09-27 03:30/03:40/03:43 UTC) — closes only on observed `succeeded`, never on the apply.
-- **Verified**: 2026-09-26 — FIX APPLIED: migration 145 (`ops-alerting-batch-b`, diagnose `d6b2f9`) live at 20260926065733; `cron.job` 41 now holds the 4 cleanups and no VACUUM, new single-statement jobs 44 `jrd_vacuum_daily` (03:40) / 45 `client_errors_vacuum_daily` (03:43). Pending: the next runs' `cron.job_run_details` status.
+- **Verified**: 2026-09-26 — FIX APPLIED: migration 144 (`ops-alerting-batch-b`, diagnose `d6b2f9`) live at 20260926065733; `cron.job` 41 now holds the 4 cleanups and no VACUUM, new single-statement jobs 44 `jrd_vacuum_daily` (03:40) / 45 `client_errors_vacuum_daily` (03:43). Pending: the next runs' `cron.job_run_details` status.
   PRIOR (kept verbatim): 2026-09-26 — LIVE `cron.job_run_details`: jobid 41 `db_maintenance_nightly` failed every run 2026-09-22 → 09-26 with `VACUUM cannot run inside a transaction block` (pg_cron wraps a multi-statement command in one transaction).
 - **Identified**: 2026-09-26 · filed via mint_oi.sh from branch `ci-green-batch-a` (backlog triage)
 
@@ -6043,3 +6043,24 @@ Tables are small, so the timeout is not payload size; suspect connection/auth wa
 - **Identified**: 2026-09-26 · filed via mint_oi.sh from branch `template-stable-identity`
 
 Fix shape: migration 145 (add `deleted_at`, keep `UNIQUE(user_id,name)`, BEFORE UPDATE trigger renames on delete-transition + no-ops any write to an already-deleted row) + `restore-user-snapshot`/`workout-window-closing` EF updates + client rework of template create/push/restore/delete across `sync_workout.dart`, `template_service.dart`, `train_provider.dart`, `workout_write_service.dart`, plus a one-time legacy-key migrator. Saved meals (unit 2b, `reuse-audit-fixes` batch) reuse whatever this proves. Full design + 3 converged review rounds: `docs/superpowers/plans/2026-09-26-template-stable-identity.md`.
+
+## OI-253 — PendingTemplateDeletes queued delete lost on logout/offline sign-out before it drains
+
+- **Status**: OPEN
+- **Blocked on**: a durable, cross-session delete queue design (own-scope unit, not part of OI-252)
+- **Verified**: never
+- **Identified**: 2026-09-27 · filed via mint_oi.sh from branch `template-stable-identity`
+
+Symptom: `PendingTemplateDeletes` (`lib/core/services/pending_template_deletes.dart`) lives in
+`userBox`, which is cleared on logout. A template deleted locally but not yet drained to a cloud
+tombstone (offline, or the app closed/signed out before the next sync tick) loses its queued
+delete entry — the local Hive row is already gone (deleted eagerly in
+`WorkoutWriteService.deleteTemplate`), but the cloud row survives untouched and can resurrect on
+a later restore, same class of bug OI-252 fixes for the identity-collision case. Fix shape
+(not designed): either persist the queue somewhere that survives logout (a small dedicated table
+keyed by user id, drained on next login for that user) or drain synchronously/best-effort on
+sign-out before `userBox` clears. Surfaced during OI-252's B-pass (finding 7,
+`docs/reviews/template-stable-identity-bpass.md`); documented as a known limit in
+`pending_template_deletes.dart`'s class doc and the OI-252 diagnose-doc's `cross_account_guard`
+field rather than fixed in that batch (narrow, pre-existing gap; not a regression from OI-252's
+change, and no evidence it's hit in production yet).
