@@ -119,6 +119,13 @@ const _expectedEmitFields = <String, Set<String>>{
     // Read back by the terminal-row contract test; 'moved'/'dropped' statuses
     // are skipped by WorkoutRepository.isInvisibleToStreak (c1a9d4).
     'moved_to', 'moved_via', 'moved_at', 'dropped_via', 'dropped_at',
+    // day-swapper-sync-load: WorkoutWriteService.upsertScheduled (:643) stamps
+    // arranged_at_ms on any rewrite of a date that already carries it (unless
+    // the source is daySwap, which sets it itself, or restore, which copies
+    // it); DaySwapRules also sets it directly on a swap (day_swap_rules.dart:151).
+    // First READ by PlanIntegrityReconciler.snapshotArrangementWinsKeys (T21,
+    // spec sec 5.7 L3) — which is why the gate only fires now.
+    'arranged_at_ms',
   },
   // wlog_* writer: WorkoutWriteService.markCompleted (workout summary row).
   // f1c8e4: markCompleted stamps type:'workout_log' + completed_at (ISO) +

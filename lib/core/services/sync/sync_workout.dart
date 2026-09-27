@@ -1317,22 +1317,11 @@ extension SyncServiceWorkout on SyncService {
         await MigratedKey.write('plan_end_date', reEnd);
       }
       if (schedules is Map) {
-        for (final entry in schedules.entries) {
-          final key = entry.key.toString();
-          if (!key.startsWith('schedule_')) continue;
-          final incoming = entry.value;
-          if (incoming is! Map) continue;
-          // Completed-day-preserving merge — extracted to
-          // PlanIntegrityReconciler.mergeScheduleEntry and SHARED with the boot
-          // heal so the restore + reconciler can't drift (APK Test #12.9 kept:
-          // a local `status:'completed'` is authoritative and survives the
-          // frozen plan_json snapshot).
-          final existing = _hive.workoutBox.get(key);
-          final merged = PlanIntegrityReconciler.mergeScheduleEntry(
-            existing is Map ? Map<String, dynamic>.from(existing) : null,
-            Map<String, dynamic>.from(incoming),
-          );
-          await _hive.workoutBox.put(key, merged);
+        final result = await PlanIntegrityReconciler.mergeScheduleBundleIntoHive(
+            Map<String, dynamic>.from(schedules));
+        if (result.discardedLocalArrangement) {
+          unawaited(ErrorTelemetry.logEvent('swap_merge_conflict',
+              message: 'source=restoreWorkoutPlan'));
         }
       }
     } catch (e, st) {
@@ -2225,10 +2214,20 @@ extension SyncServiceWorkout on SyncService {
           // When the template resolved, force the type to
           // 'custom_template' (overrides any stale local type written
           // by plan-gen). Otherwise preserve existing behavior.
+          // Spec 2026-09-26-day-swapper-design.md sec 1.4/sec 5.7 fix
+          // (diagnose b6e1c8): when no template resolves and the CLOUD says
+          // this day is rest, force type:'rest' regardless of any stale
+          // local/template-derived type — a rest day restored onto a fresh
+          // install (no local row; plan_json silent on this date) must
+          // never render as a no-exercise workout. Otherwise unchanged.
           'type': templateResolved
               ? 'custom_template'
-              : (existingMap['type'] ??
-                  (map['template_id'] != null ? 'custom_template' : 'workout')),
+              : (cloudStatus == 'rest'
+                  ? 'rest'
+                  : (existingMap['type'] ??
+                      (map['template_id'] != null
+                          ? 'custom_template'
+                          : 'workout'))),
           if (map['template_id'] != null) 'template_id': map['template_id'],
           if (mergedStatus != null && mergedStatus.isNotEmpty)
             'status': mergedStatus,
@@ -2385,4 +2384,13 @@ extension SyncServiceWorkout on SyncService {
       _restoreScheduledWorkouts(
           userId, since ?? _kSyncDomainRestoreSince,
           preFetched: preFetched);
+
+  /// Mirrors [restoreScheduledWorkoutsForTest]: runs `_restoreWorkoutPlan`
+  /// with INJECTED cloud rows (no Supabase query, no live session), so the
+  /// L1/L3 restore-merge behaviour (spec sec 5.7) is testable against a
+  /// real Hive box.
+  @visibleForTesting
+  Future<void> restoreWorkoutPlanForTest(String userId,
+          {Object? preFetched}) =>
+      _restoreWorkoutPlan(userId, preFetched: preFetched);
 }

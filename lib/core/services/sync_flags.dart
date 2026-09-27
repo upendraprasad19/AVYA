@@ -122,6 +122,40 @@ class SyncFlags {
     }
   }
 
+  /// Kill-switch for spec sec 5.7 L1 (day-swapper-sync-load): "never refill a
+  /// rest row with workout content" in `PlanIntegrityReconciler
+  /// .mergeScheduleEntry`. Opt-OUT polarity, same reasoning as
+  /// [deriveDayOfWeekOnRestore] — the fix is LIVE by default; setting
+  /// `configBox['disable_rest_row_refill_guard'] = true` restores the
+  /// pre-fix refill verbatim (a rest row CAN be refilled with stale workout
+  /// content again — the a7d3f1/d5a1e7 hybrid, reproduced on purpose as an
+  /// escape hatch, not a safety net).
+  static bool get restRowRefillGuardEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('disable_rest_row_refill_guard') !=
+          true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// Kill-switch for spec sec 5.7 L3: "the newer arrangement wins, per
+  /// Mon-Sun week". Opt-OUT polarity. Setting
+  /// `configBox['disable_swap_arrangement_merge'] = true` makes every
+  /// restore/reconcile merge go through the per-entry rules only (L1 +
+  /// existing) — a genuinely newer arrangement from another device will NOT
+  /// override the local one until the switch is cleared.
+  static bool get swapArrangementMergeEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('disable_swap_arrangement_merge') !=
+          true;
+    } catch (_) {
+      return true;
+    }
+  }
+
   /// Test-only setter. Production callers MUST NOT toggle flags in
   /// code — they flip via `configBox.put` from a one-shot migration
   /// or remote-config write only.

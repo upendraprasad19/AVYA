@@ -128,6 +128,11 @@ void main() {
         'restoreWeightLogsForSyncDomain',
         'restoreWorkoutLogsForSyncDomain',
         'restoreWorkoutPlanForSyncDomain',
+        // T21 (day-swapper-sync-load) — @visibleForTesting seam mirroring
+        // restoreScheduledWorkoutsForTest: injects a fake `user_progress`
+        // row so the L1/L3 restore-merge behaviour (spec sec 5.7) is testable
+        // against a real Hive box without a live Supabase session.
+        'restoreWorkoutPlanForTest',
         'restoreWorkoutTemplatesForSyncDomain',
         // Day-swapper + sync-load Task 19 — test-only wrapper for the
         // onboarding-replay now()-fallback fix (no existing SyncDomain entry

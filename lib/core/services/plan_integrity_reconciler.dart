@@ -40,6 +40,7 @@ import 'error_telemetry.dart';
 import 'hive_service.dart';
 import 'migrated_key.dart';
 import 'plan_window_reanchor.dart';
+import 'sync_flags.dart';
 import 'supabase_service.dart';
 import 'workout_schedule_read_service.dart';
 
@@ -67,18 +68,40 @@ class PlanIntegrityReconciler {
   ///  - otherwise (planned/rest)→ take the snapshot's content but keep the
   ///                              local live `status` / `completed_at`.
   static Map<String, dynamic> mergeScheduleEntry(
-      Map<String, dynamic>? existing, Map<String, dynamic> planJson) {
-    if (existing == null) return Map<String, dynamic>.from(planJson);
-    if (existing['status'] == 'completed') {
-      return Map<String, dynamic>.from(existing);
+    Map<String, dynamic>? existing,
+    Map<String, dynamic> planJson, {
+    bool forceSnapshotArrangement = false,
+  }) {
+    if (existing != null && existing['status'] == 'completed') {
+      return _normalizeHybrid(Map<String, dynamic>.from(existing));
     }
+    // Spec 2026-09-26-day-swapper-design.md sec 5.7 L3: a genuinely NEWER
+    // downloaded arrangement for this week takes the snapshot's row
+    // WHOLESALE (content, status, markers) — the completed guard above
+    // already returned, so this can never demote a completed day (I6).
+    if (forceSnapshotArrangement) {
+      return _normalizeHybrid(Map<String, dynamic>.from(planJson));
+    }
+    if (existing == null) return _normalizeHybrid(Map<String, dynamic>.from(planJson));
     // If the local day ALREADY has its exercises, treat it as authoritative —
     // it may carry a local swap not yet synced into plan_json. Only FILL from
     // the snapshot when the local content was dropped (the restore-skip bug).
     // Keeps restore + the boot heal idempotent + swap-safe (review P1 2026-06-06).
     final localEx = existing['exercises'];
     if (localEx is List && localEx.isNotEmpty) {
-      return Map<String, dynamic>.from(existing);
+      return _normalizeHybrid(Map<String, dynamic>.from(existing));
+    }
+    // Spec sec 5.7 L1: NEVER refill a rest row with workout content — every
+    // hybrid in secs 1.3/1.4 of the spec comes from exactly this refill. A
+    // local row of type 'rest', or with status 'rest', is kept as-is.
+    // Kill switch `disable_rest_row_refill_guard` restores the pre-fix
+    // unconditional-refill behaviour verbatim (CLAUDE.md sec 4.6).
+    if (SyncFlags.restRowRefillGuardEnabled) {
+      final isWorkoutType =
+          !PlanEngineFlags.isRestDayConsideringLogged(existing['type']);
+      if (!isWorkoutType || existing['status'] == 'rest') {
+        return _normalizeHybrid(Map<String, dynamic>.from(existing));
+      }
     }
     final merged = Map<String, dynamic>.from(planJson);
     final localStatus = existing['status'];
@@ -86,7 +109,171 @@ class PlanIntegrityReconciler {
     if (existing['completed_at'] != null) {
       merged['completed_at'] = existing['completed_at'];
     }
-    return merged;
+    return _normalizeHybrid(merged);
+  }
+
+  /// Spec sec 5.7 merge-output normalizer (deviation D5): a row that would
+  /// render as `type: workout` + `status: rest` + no exercises is corrected
+  /// to `type: rest`. Applied to EVERY [mergeScheduleEntry] return path
+  /// (including the wholesale-take branches), so a hybrid can never re-enter
+  /// Hive through any of them. Deliberately UNSWITCHED — CLAUDE.md sec 4.6 /
+  /// spec sec 11 list "restore type derivation" among the pure bug fixes
+  /// that get no kill switch; preserving the old output shape here would
+  /// just preserve the bug the fix exists to close, even with L1 disabled.
+  static Map<String, dynamic> _normalizeHybrid(Map<String, dynamic> row) {
+    if (isRestHybrid(row)) return {...row, 'type': 'rest'};
+    return row;
+  }
+
+  /// The ONE hybrid predicate (spec §1.3/§1.4, plan D5): `status: rest`, a
+  /// workout type, and no exercises. Shared by [_normalizeHybrid] and the
+  /// one-time `ScheduleHybridRepairMigrator` (Task 23) so the two can never
+  /// disagree about what a hybrid is. A hybrid WITH exercises is not one of
+  /// these (ambiguous; left alone by both).
+  static bool isRestHybrid(Map<String, dynamic> row) {
+    final isWorkoutType =
+        !PlanEngineFlags.isRestDayConsideringLogged(row['type']);
+    final ex = row['exercises'];
+    final hasExercises = ex is List && ex.isNotEmpty;
+    return row['status'] == 'rest' && isWorkoutType && !hasExercises;
+  }
+
+  /// Spec sec 5.7 L3: the IST Monday (`YYYY-MM-DD`) of the week containing
+  /// [isoDate]. Pure string/UTC-date math. Deliberately NOT `mondayOfIst`
+  /// (`lib/core/utils/ist_date.dart:113`, which takes a `DateTime` and, per
+  /// the day-swap module's own note, double-shifts east of IST) and
+  /// deliberately NOT `day_swap/day_swap_rules.dart`'s `DaySwapRules
+  /// .mondayOf` (same algorithm, but that file is a different unit's — this
+  /// reconciler must not depend on its landing order).
+  static String _mondayOfIsoWeek(String isoDate) {
+    final p = isoDate.split('-');
+    if (p.length != 3) return isoDate;
+    final y = int.tryParse(p[0]);
+    final m = int.tryParse(p[1]);
+    final d = int.tryParse(p[2]);
+    if (y == null || m == null || d == null) return isoDate;
+    final dt = DateTime.utc(y, m, d);
+    final monday = dt.subtract(Duration(days: dt.weekday - 1));
+    return '${monday.year.toString().padLeft(4, '0')}-'
+        '${monday.month.toString().padLeft(2, '0')}-'
+        '${monday.day.toString().padLeft(2, '0')}';
+  }
+
+  /// Spec sec 5.7 L3 (PURE, visible for testing): the `schedule_<date>` keys
+  /// where the DOWNLOADED bundle's arrangement is the newer one, per Mon-Sun
+  /// IST week. A missing `arranged_at_ms` counts as 0. Only dates STAMPED on
+  /// either side are eligible, and only when they exist on the snapshot
+  /// side (nothing to take otherwise). A TIE keeps local (strictly newer
+  /// required).
+  @visibleForTesting
+  static Set<String> snapshotArrangementWinsKeys({
+    required Map<String, dynamic> localRows,
+    required Map<String, dynamic> snapshotRows,
+  }) {
+    int? stampOf(Object? row) {
+      if (row is! Map) return null;
+      final v = row['arranged_at_ms'];
+      if (v is int) return v;
+      if (v is num) return v.toInt();
+      return null;
+    }
+
+    final localMaxByWeek = <String, int>{};
+    final snapshotMaxByWeek = <String, int>{};
+    final stampedKeysByWeek = <String, Set<String>>{};
+
+    void scan(Map<String, dynamic> rows, Map<String, int> maxByWeek) {
+      for (final entry in rows.entries) {
+        final key = entry.key;
+        if (!key.startsWith(_schedulePrefix)) continue;
+        final date = key.substring(_schedulePrefix.length);
+        final week = _mondayOfIsoWeek(date);
+        final stamp = stampOf(entry.value);
+        final ms = stamp ?? 0;
+        if (ms > (maxByWeek[week] ?? 0)) maxByWeek[week] = ms;
+        if (stamp != null) {
+          (stampedKeysByWeek[week] ??= <String>{}).add(key);
+        }
+      }
+    }
+
+    scan(localRows, localMaxByWeek);
+    scan(snapshotRows, snapshotMaxByWeek);
+
+    final winning = <String>{};
+    for (final week in stampedKeysByWeek.keys) {
+      final localMax = localMaxByWeek[week] ?? 0;
+      final snapshotMax = snapshotMaxByWeek[week] ?? 0;
+      if (snapshotMax > localMax) {
+        for (final key in stampedKeysByWeek[week]!) {
+          if (snapshotRows.containsKey(key)) winning.add(key);
+        }
+      }
+    }
+    return winning;
+  }
+
+  /// Spec sec 5.7 (L1 + L3 combined write path). Applies EVERY entry of
+  /// [schedules] (a `plan_json.schedules`-shaped map, key `schedule_<date>`)
+  /// against the CURRENT `workoutBox` rows and writes the merged result
+  /// directly to Hive. SHARED by `_restoreWorkoutPlan` (sync_workout.dart)
+  /// and [reconcile] (this file) so the two consumers of the SAME cloud
+  /// snapshot can never apply different merge semantics — two copies of
+  /// this loop is exactly how the a7d3f1 / d9b2c5 recurrence class starts
+  /// (CLAUDE.md sec 4.1.5). Returns the processed-entry count (for
+  /// `reconcile`'s `healed` telemetry) and whether L3 discarded at least
+  /// one LOCAL arrangement — the caller logs ONE `swap_merge_conflict`
+  /// event per call, never per row (spec sec 5.7).
+  static Future<({int processedCount, bool discardedLocalArrangement})>
+      mergeScheduleBundleIntoHive(Map<String, dynamic> schedules) async {
+    final workoutBox = HiveService.instance.workoutBox;
+    final localRows = <String, dynamic>{
+      for (final k in workoutBox.keys)
+        if (k is String && k.startsWith(_schedulePrefix)) k: workoutBox.get(k),
+    };
+    final snapshotRows = <String, dynamic>{
+      for (final e in schedules.entries)
+        if (e.key.toString().startsWith(_schedulePrefix))
+          e.key.toString(): e.value,
+    };
+    final winningKeys = SyncFlags.swapArrangementMergeEnabled
+        ? snapshotArrangementWinsKeys(
+            localRows: localRows, snapshotRows: snapshotRows)
+        : const <String>{};
+
+    var processed = 0;
+    var discardedLocalArrangement = false;
+    for (final entry in snapshotRows.entries) {
+      final key = entry.key;
+      final incoming = entry.value;
+      if (incoming is! Map) continue;
+      final existingRaw = workoutBox.get(key);
+      final existingMap =
+          existingRaw is Map ? Map<String, dynamic>.from(existingRaw) : null;
+      final forceSnapshot = winningKeys.contains(key);
+      // A completed row is protected by mergeScheduleEntry's first guard, so
+      // nothing of it is discarded: no conflict to report (round-1 review E F1).
+      // An UNSTAMPED local row (no arranged_at_ms) in a winning week is also
+      // not counted: it holds no local arrangement to lose — the snapshot's
+      // arrangement came from another device (round-2 review E F1, by design).
+      if (forceSnapshot &&
+          existingMap != null &&
+          existingMap['status'] != 'completed' &&
+          existingMap['arranged_at_ms'] != null) {
+        discardedLocalArrangement = true;
+      }
+      final merged = mergeScheduleEntry(
+        existingMap,
+        Map<String, dynamic>.from(incoming),
+        forceSnapshotArrangement: forceSnapshot,
+      );
+      await workoutBox.put(key, merged);
+      processed++;
+    }
+    return (
+      processedCount: processed,
+      discardedLocalArrangement: discardedLocalArrangement,
+    );
   }
 
   /// PURE (visible for testing): does any entry describe a PLANNED workout day
@@ -292,18 +479,12 @@ class PlanIntegrityReconciler {
       final schedules = bundle['schedules'];
       var healed = 0;
       if (schedules is Map) {
-        for (final entry in schedules.entries) {
-          final key = entry.key.toString();
-          if (!key.startsWith(_schedulePrefix)) continue;
-          final incoming = entry.value;
-          if (incoming is! Map) continue;
-          final existing = hive.workoutBox.get(key);
-          final merged = mergeScheduleEntry(
-            existing is Map ? Map<String, dynamic>.from(existing) : null,
-            Map<String, dynamic>.from(incoming),
-          );
-          await hive.workoutBox.put(key, merged);
-          healed++;
+        final result = await mergeScheduleBundleIntoHive(
+            Map<String, dynamic>.from(schedules));
+        healed = result.processedCount;
+        if (result.discardedLocalArrangement) {
+          unawaited(ErrorTelemetry.logEvent('swap_merge_conflict',
+              message: 'source=reconcile'));
         }
       }
 
