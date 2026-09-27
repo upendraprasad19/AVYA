@@ -1073,7 +1073,13 @@ class FoodLogNotifier extends Notifier<void> {
     // sync internally. Invalidate the weekly provider + run badge checks
     // that the service doesn't own.
     if (result.success) {
-      ref.invalidate(weeklyNutritionProvider);
+      // ref.mounted guard: logMeal awaits NutritionWriteService, which can
+      // still be settling after the caller (e.g. a bottom sheet) has been
+      // popped and this notifier's ProviderContainer disposed — invalidating
+      // an unmounted ref throws UnmountedRefException.
+      if (ref.mounted) {
+        ref.invalidate(weeklyNutritionProvider);
+      }
       BadgeService.instance.checkAll();
     }
 
