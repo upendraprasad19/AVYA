@@ -65,11 +65,29 @@ const ALL_TOOLS: ToolDefinition<any, any>[] = [
 ];
 
 /**
- * Returns the subset of tools available to a user given their tier.
- * Free users get only `tier='free'` tools; PRO users get everything.
+ * Returns the subset of tools available to a user given their tier AND the
+ * client's declared capabilities. A tool with no `requiresCapability` is
+ * unaffected by `capabilities` and included exactly as before (tier-only).
+ * A tool WITH `requiresCapability` is included only when `capabilities`
+ * contains that exact string — an absent/empty `capabilities` set (the
+ * default, and what every caller passed before this parameter existed)
+ * therefore excludes every capability-gated tool, which is why today's real
+ * registry (no tool sets `requiresCapability` yet) is completely unaffected:
+ * `allTools(isPro)` and `allTools(isPro, new Set())` return identical
+ * results. Free users get only `tier='free'` tools; PRO users get everything
+ * whose capability (if any) they've declared.
  */
-export function allTools(isPro: boolean): ToolDefinition<any, any>[] {
-  return ALL_TOOLS.filter((t) => isPro || t.tier === "free");
+export function allTools(
+  isPro: boolean,
+  capabilities: Set<string> = new Set(),
+): ToolDefinition<any, any>[] {
+  return ALL_TOOLS.filter((t) => {
+    if (!isPro && t.tier !== "free") return false;
+    if (t.requiresCapability && !capabilities.has(t.requiresCapability)) {
+      return false;
+    }
+    return true;
+  });
 }
 
 /**

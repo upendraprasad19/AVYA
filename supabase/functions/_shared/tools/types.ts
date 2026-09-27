@@ -58,6 +58,17 @@ export interface ToolDefinition<TArgs = unknown, TResult = unknown> {
   /** Required for write tools; ignored for read tools. */
   confirmationClass?: ConfirmationClass;
   tier: ToolTier;
+  /**
+   * Optional capability gate for the CLIENT app build, independent of `tier`.
+   * When set, the tool is included in `allTools()`'s output only when the
+   * caller's declared capability set (from the request's `client_capabilities`
+   * field, parsed by `_shared/client_capabilities.ts`) contains this exact
+   * string. Absent (the default for every tool as of this batch) means the
+   * tool is always included, subject only to `tier`. Added for the day-swap
+   * capability handshake (spec 2026-09-26-day-swapper-design.md §5.8) so an
+   * old client build is never offered a tool it cannot execute.
+   */
+  requiresCapability?: string;
   /** Plain-text description sent to Gemini in the function declaration. Tell the model when to call this. */
   description: string;
   /**

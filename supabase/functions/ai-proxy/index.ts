@@ -54,6 +54,8 @@ import {
 } from "../_shared/sanitize_for_prompt.ts";
 import type { ToolContext } from "../_shared/tools/index.ts";
 import { CAPTAIN_MANUAL } from "../_shared/captain_manual.ts";
+import { parseClientCapabilities } from "../_shared/client_capabilities.ts";
+import { daySwapRoutingBlock } from "../_shared/day_swap_routing.ts";
 import { istDateStr } from "../_shared/ist_date.ts";
 import { reportGeminiExhaustion } from "../_shared/gemini_failure_alert.ts";
 
@@ -279,8 +281,21 @@ serve(async (req: Request) => {
 
     // ── Body ──
     const body = await req.json();
-    const { message, snapshot_json, type, text, context, image_base64, history } =
-      body;
+    const {
+      message,
+      snapshot_json,
+      type,
+      text,
+      context,
+      image_base64,
+      history,
+      client_capabilities,
+    } = body;
+    // Unit 3 (day-swapper-sync-load) — CLIENT-CONTROLLED, so validated
+    // defensively before it ever reaches a tool filter or a prompt block.
+    // Absent (every client before Task 27 ships) parses to an empty set,
+    // which is exactly today's behaviour: no tool has requiresCapability yet.
+    const capabilities = parseClientCapabilities(client_capabilities);
 
     // ── Food text analysis ────────────────────────────────────────
     // Free: 10/day  ·  PRO: 200/day. Enforced atomically by Postgres
@@ -941,6 +956,13 @@ Parse "5x8 at 80kg" as 5 sets of 8 reps at 80kg. logging_type: weight_reps (weig
     //   retrievalBlock            ≤ ~1.2 KB (5 × 200 chars + header)
     // Total ceiling ≈ 19.5 KB, well under Gemini 2.5 Flash context limit.
     const promptParts: string[] = [CAPTAIN_MANUAL, ICBF_LOG_INSTRUCTIONS];
+    if (isChatChannel) {
+      // Unit 3 (day-swapper-sync-load) — deterministic per-request routing
+      // block, chosen server-side from isProUser + the parsed client
+      // capability set. See _shared/day_swap_routing.ts for why this is not
+      // left for the model to infer.
+      promptParts.push(daySwapRoutingBlock(isProUser, capabilities));
+    }
     if (coachMemoryBlock) {
       // FC7 / Hermes P2-FC7-1: coach_memory is user-derived text (extracted from
       // prior chats) concatenated raw into the SYSTEM prompt — a second-order
@@ -1085,6 +1107,7 @@ yet" — never make up a number.
         userMessage: message,
         history: cappedHistory,
         ctx: toolCtx,
+        capabilities,
         model: MODEL_FLASH,
       });
     } catch (loopErr) {

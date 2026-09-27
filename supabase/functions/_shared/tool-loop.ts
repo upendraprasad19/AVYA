@@ -104,6 +104,14 @@ export interface ToolLoopOptions {
   history?: Array<{ role: string; text: string }>;
   /** Authentication + Supabase client + tier flag. */
   ctx: ToolContext;
+  /**
+   * Client-declared capability set, from the request's `client_capabilities`
+   * field (parsed by `_shared/client_capabilities.ts`). Passed through to
+   * `allTools()` so a tool with `requiresCapability` is offered only to a
+   * client that declared it. Defaults to an empty set — every tool without
+   * `requiresCapability` is unaffected either way.
+   */
+  capabilities?: Set<string>;
   /** Model — typically MODEL_FLASH from gemini.ts. */
   model: string;
   /** Optional override for max rounds (default MAX_ROUNDS=3). Used by tests. */
@@ -262,7 +270,8 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
   // Tier-filtered tool list passed to the model. Pre-converted once
   // (registry is small; conversion is cheap; doing it once avoids
   // re-walking the Zod schemas every round).
-  const visibleTools = allTools(opts.ctx.isPro).map(toolToFunctionDeclaration);
+  const visibleTools = allTools(opts.ctx.isPro, opts.capabilities)
+    .map(toolToFunctionDeclaration);
 
   for (let round = 0; round < maxRounds; round++) {
     roundsExecuted = round + 1;

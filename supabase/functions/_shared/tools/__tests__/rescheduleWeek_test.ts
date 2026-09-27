@@ -77,3 +77,22 @@ Deno.test("rescheduleWeek — metadata", () => {
   assertEquals(rescheduleWeekTool.family, "workout");
   assertEquals(rescheduleWeekTool.confirmationClass, "destructive");
 });
+
+Deno.test("rescheduleWeek — selectionHints no longer point a two-day swap here", () => {
+  const hints = rescheduleWeekTool.selectionHints ?? "";
+  if (hints.includes("move Friday's pull")) {
+    throw new Error(
+      "rescheduleWeek selectionHints still say \"move Friday's pull\" — the day-swap misrouting hint was not fixed.",
+    );
+  }
+  if (!hints.includes("I'm only free on these days")) {
+    throw new Error(
+      "rescheduleWeek selectionHints missing the new whole-week availability phrasing.",
+    );
+  }
+  if (!hints.includes("swapWorkoutDays")) {
+    throw new Error(
+      "rescheduleWeek selectionHints no longer disambiguates itself from swapWorkoutDays.",
+    );
+  }
+});

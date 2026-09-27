@@ -11740,7 +11740,7 @@ concepts:
       key — NOT reused directly for chat to avoid corrupting that key).
     writers:
       - file: supabase/functions/_shared/tool-loop.ts
-        line_range: 306
+        line_range: 248
         method: runToolLoop
         notes: the raw Gemini text this concept cleans on the client side.
     readers:
