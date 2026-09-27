@@ -126,10 +126,12 @@ class SyncFlags {
   /// rest row with workout content" in `PlanIntegrityReconciler
   /// .mergeScheduleEntry`. Opt-OUT polarity, same reasoning as
   /// [deriveDayOfWeekOnRestore] — the fix is LIVE by default; setting
-  /// `configBox['disable_rest_row_refill_guard'] = true` restores the
-  /// pre-fix refill verbatim (a rest row CAN be refilled with stale workout
-  /// content again — the a7d3f1/d5a1e7 hybrid, reproduced on purpose as an
-  /// escape hatch, not a safety net).
+  /// `configBox['disable_rest_row_refill_guard'] = true` skips the L1 guard,
+  /// so a rest row CAN be refilled with stale workout content again (an
+  /// escape hatch, not a safety net). It is NOT a verbatim revert: the
+  /// merge-output normalizer is unswitched (spec sec 11), so a refill that
+  /// brings NO exercises still comes out `type: 'rest'`. Only a refill whose
+  /// snapshot row carries exercises reproduces the old workout-on-rest shape.
   static bool get restRowRefillGuardEnabled {
     try {
       return HiveService.instance.configBox

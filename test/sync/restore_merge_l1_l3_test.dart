@@ -188,6 +188,51 @@ void main() {
           reason: 'ONE event per merge call, not per row');
     });
 
+    test('two weeks in ONE bundle are decided independently: the snapshot '
+        'wins the week where it is newer and loses the week where local is '
+        'newer (no max leaks across the Monday boundary)', () async {
+      const fri1 = '2026-09-25'; // week of Mon 2026-09-21
+      const fri2 = '2026-10-02'; // week of Mon 2026-09-28
+      await put(fri1, {
+        'type': 'rest',
+        'status': 'rest',
+        'arranged_at_ms': 1000,
+        'exercises': <dynamic>[],
+      });
+      await put(fri2, {
+        'type': 'rest',
+        'status': 'rest',
+        'arranged_at_ms': 3000,
+        'exercises': <dynamic>[],
+      });
+      await restorePlan({
+        'schedule_$fri1': {
+          'type': 'workout',
+          'status': 'planned',
+          'workout_name': 'Legs + Core',
+          'arranged_at_ms': 2000,
+          'exercises': [
+            {'name': 'Squat'}
+          ],
+        },
+        'schedule_$fri2': {
+          'type': 'workout',
+          'status': 'planned',
+          'workout_name': 'Pull + Core',
+          'arranged_at_ms': 2500,
+          'exercises': [
+            {'name': 'Pull Up'}
+          ],
+        },
+      });
+      expect(row(fri1)!['workout_name'], 'Legs + Core',
+          reason: 'week 1: snapshot 2000 > local 1000, so the snapshot wins — '
+              'a week key that pooled both weeks would compare 2500 vs 3000 '
+              'and wrongly keep the rest row');
+      expect(row(fri2)!['type'], 'rest',
+          reason: 'week 2: local 3000 > snapshot 2500, so local wins');
+    });
+
     test('I6: a completed local row is never overridden even when its week '
         "'s snapshot arrangement is newer", () async {
       const fri = '2026-09-25';
@@ -289,9 +334,10 @@ void main() {
       expect(events, isEmpty);
     });
 
-    test('kill switch disable_rest_row_refill_guard=true restores the '
-        'pre-fix refill VERBATIM (reproduces the a7d3f1/d5a1e7 hybrid on '
-        'purpose)', () async {
+    test('kill switch disable_rest_row_refill_guard=true skips the L1 guard: '
+        'a snapshot row WITH exercises refills the rest row again (the '
+        'normalizer stays on, so only this with-exercises shape reproduces)',
+        () async {
       await HiveService.instance.configBox
           .put('disable_rest_row_refill_guard', true);
       const fri = '2026-09-25';

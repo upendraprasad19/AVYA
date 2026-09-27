@@ -41,14 +41,6 @@ const dartAllowlist = <String>{
   // YYYY-MM-DD string (or +N days of pure date arithmetic on it) — no DateTime.now(),
   // no device-local clock. Pure string round-trip (day-swap Task 10).
   'lib/core/services/day_swap/day_swap_rules.dart',
-  // _mondayOfIsoWeek (day-swapper-sync-load T21, spec sec 5.7 L3) builds a
-  // DateTime.utc() from an already-IST-keyed 'YYYY-MM-DD' schedule_<date> key
-  // and subtracts days — pure string/date arithmetic, no DateTime.now(), no
-  // device-local clock. Same exemption class as day_swap_rules.dart above;
-  // deliberately NOT istDateStr/mondayOfIst (double-shifts east of IST per
-  // the day-swap module's own note) and NOT day_swap_rules.dart's mondayOf
-  // (this reconciler must not depend on that unit's landing order).
-  'lib/core/services/plan_integrity_reconciler.dart',
 };
 
 // TS files where a .toISOString().slice/substring(0,10) is KNOWN-CORRECT (IST-derived).

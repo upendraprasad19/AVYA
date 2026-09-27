@@ -11958,11 +11958,11 @@ concepts:
         semantic: flag-check
         fields_read: [type]
       - file: lib/core/services/plan_integrity_reconciler.dart
-        line_range: 304-308
+        line_range: 296-300
         method: needsHeal
         semantic: flag-check
         fields_read: [type]
-        notes: "line_range shifted by T21 then T22 (day-swapper-sync-load) — T22 added an import + the L2 write-only-if-differs block inside mergeScheduleBundleIntoHive, above needsHeal in the same file; method body unchanged"
+        notes: "line_range shifted by T21, T22 and T21-fix1 (day-swapper-sync-load) — T22 added an import + the L2 write-only-if-differs block inside mergeScheduleBundleIntoHive; T21-fix1 shortened _mondayOfIsoWeek to delegate to DaySwapRules.mondayOf. All above needsHeal in the same file; method body unchanged"
       - file: lib/features/home/providers/home_provider.dart
         line_range: 99-679
         method: "calendar week status classifier feeding streak-banner remaining-count / StreakWarningEligibility / AI-insight quick-text (3 sites)"

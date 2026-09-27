@@ -36,6 +36,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 
+import 'day_swap/day_swap_rules.dart';
 import 'error_telemetry.dart';
 import 'hive_service.dart';
 import 'migrated_key.dart';
@@ -139,26 +140,17 @@ class PlanIntegrityReconciler {
     return row['status'] == 'rest' && isWorkoutType && !hasExercises;
   }
 
+  static final RegExp _isoDateShape = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+
   /// Spec sec 5.7 L3: the IST Monday (`YYYY-MM-DD`) of the week containing
-  /// [isoDate]. Pure string/UTC-date math. Deliberately NOT `mondayOfIst`
-  /// (`lib/core/utils/ist_date.dart:113`, which takes a `DateTime` and, per
-  /// the day-swap module's own note, double-shifts east of IST) and
-  /// deliberately NOT `day_swap/day_swap_rules.dart`'s `DaySwapRules
-  /// .mondayOf` (same algorithm, but that file is a different unit's — this
-  /// reconciler must not depend on its landing order).
-  static String _mondayOfIsoWeek(String isoDate) {
-    final p = isoDate.split('-');
-    if (p.length != 3) return isoDate;
-    final y = int.tryParse(p[0]);
-    final m = int.tryParse(p[1]);
-    final d = int.tryParse(p[2]);
-    if (y == null || m == null || d == null) return isoDate;
-    final dt = DateTime.utc(y, m, d);
-    final monday = dt.subtract(Duration(days: dt.weekday - 1));
-    return '${monday.year.toString().padLeft(4, '0')}-'
-        '${monday.month.toString().padLeft(2, '0')}-'
-        '${monday.day.toString().padLeft(2, '0')}';
-  }
+  /// [isoDate], via the day-swap engine's own [DaySwapRules.mondayOf] so the
+  /// restore merge and the swap engine can never disagree on week bounds.
+  /// Deliberately NOT `mondayOfIst` (takes a `DateTime`; double-shifts east
+  /// of IST). Keys here come from cloud data, so a malformed legacy key is
+  /// its own one-key "week" instead of throwing mid-restore
+  /// (`DaySwapRules.mondayOf` parses with `int.parse`).
+  static String _mondayOfIsoWeek(String isoDate) =>
+      _isoDateShape.hasMatch(isoDate) ? DaySwapRules.mondayOf(isoDate) : isoDate;
 
   /// Spec sec 5.7 L3 (PURE, visible for testing): the `schedule_<date>` keys
   /// where the DOWNLOADED bundle's arrangement is the newer one, per Mon-Sun
