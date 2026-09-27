@@ -6064,3 +6064,48 @@ sign-out before `userBox` clears. Surfaced during OI-252's B-pass (finding 7,
 `pending_template_deletes.dart`'s class doc and the OI-252 diagnose-doc's `cross_account_guard`
 field rather than fixed in that batch (narrow, pre-existing gap; not a regression from OI-252's
 change, and no evidence it's hit in production yet).
+
+## OI-255 — Migration numbering has no collision-proof allocator -- two branches both minted migration 146
+
+- **Status**: OPEN
+- **Blocked on**: none (documentation-only; both instances are already applied live and immutable)
+- **Verified**: never
+- **Identified**: 2026-09-27 · filed via mint_oi.sh from branch `template-stable-identity`
+
+Symptom: `supabase/migrations/` now holds two DIFFERENT migrations both prefixed `146_`:
+`146_alert_cron_job_silent.sql` (main, OI-178/ops-alerting-b2a batch, applied live 2026-09-26/27,
+`"migration": "146"` in `backups/applied_migrations.json:1077`) and
+`146_workout_templates_delete_trigger_insert_path.sql` (this branch, OI-252 B-pass finding 1,
+applied live 2026-09-27T10:22:49+05:30, its own `"migration": "146"` entry on this branch's copy
+of the same ledger). Found when pulling `origin/main` into the primary worktree immediately before
+merging `template-stable-identity` — the two branches diverged from `main` before either migration
+existed on the other, and each independently picked "146" as the next free number at draft time.
+
+Root cause: migration numbers are chosen by hand from whatever `ls supabase/migrations/` shows the
+drafting branch at draft time — there is no reservation mechanism analogous to `mint_oi.sh`'s
+`refs/heads/oi/N` compare-and-swap for OI numbers (§7 pointer table, OI allocator row). Two
+branches developing in parallel off diverging `main` states have no way to see each other's
+in-flight migration number.
+
+Impact, checked rather than assumed: **no functional collision** — the two migrations touch
+entirely disjoint database objects (a `workout_templates` trigger function vs. a new
+`alert_cron_job_silent` pg_cron job + its own function), both applied successfully and
+independently. **Gate 14 (`scripts/check_migrations_applied.dart`) does not detect the ambiguity**:
+its "unapplied" check matches by bare numeric prefix via `appliedMigrations.any((a) =>
+a.startsWith(prefix) || ...)` (`check_migrations_applied.dart:97-101`), so both `146_...` files
+independently satisfy the same `"146"` ledger entry and the gate reports PASS for both. The break
+is the implicit "one number names exactly one migration" invariant relied on for human
+navigability, `docs/naming_conventions.md`-style citation, and any future tooling that assumes
+strict 1:1 sequential numbering.
+
+Not fixed in this batch: **both files are immutable once applied** (same principle
+`docs/diagnoses/2026-09-21-hermes-pass-migration-138-139-fixes-h1a2b3.md` and this file's own
+common-pitfalls table state for migration 138/139) — renaming either file post-apply would
+misrepresent what actually ran and would invalidate cross-references already pushed on both
+branches (diagnose-docs, commit messages, `backups/applied_migrations.json` `"migration"` values,
+OI-board prose). Fix shape (not designed): (a) a migration-number allocator mirroring
+`mint_oi.sh` — reserve a ref before drafting a new migration file so a second branch drafting in
+parallel sees the reservation on its next fetch — and/or (b) widen Gate 14 to hard-fail on two
+`.sql` files sharing an EXACT bare numeric prefix (distinct from today's loose "is this number
+present in the ledger at all" check), so a future collision is caught at commit/push time instead
+of only by a human noticing during a `git pull` before a merge.
