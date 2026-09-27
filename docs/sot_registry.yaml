@@ -315,7 +315,7 @@ concepts:
         method: logExercise
         notes: appends to exercise_log_index_YYYY-MM-DD on every write
       - file: lib/core/services/workout_write_service.dart
-        line_range: 728-856
+        line_range: 867-995
         method: moveExerciseLogs
         notes: |
           C2 (e8f4a3) — re-keys partial exlog_<fromDate>_* rows onto the
@@ -373,7 +373,7 @@ concepts:
       key_formula: "'exercise_log_index_${istDateStr(date)}'"
     ist_sites:
       - { file: lib/core/utils/date_utils.dart, line: 27, fn: formatDateKey }
-      - { file: lib/core/services/workout_write_service.dart, line: 1303, fn: wlogKey }
+      - { file: lib/core/services/workout_write_service.dart, line: 1405, fn: wlogKey }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\\.keys.*manually.*date", reason: "O(n) scan — use the index key instead" }
       - { pattern: "DateTime\\.now\\(\\)\\.toIso8601String\\(\\)\\.substring\\(0,\\s*10\\)", reason: "UTC date, disagrees with IST-keyed reader; use istDateStr(DateTime.now())" }
@@ -451,7 +451,7 @@ concepts:
     restore_methods: [_restoreScheduledWorkouts, _restoreScheduleCompletions]
     provider_invalidation_set: [currentPlanProvider, calendarWeekProvider, todayWorkoutProvider]
     ist_sites:
-      - { file: lib/core/services/workout_write_service.dart, line: 1306, fn: scheduleKey }
+      - { file: lib/core/services/workout_write_service.dart, line: 1408, fn: scheduleKey }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\.put\('schedule_", reason: "Never write schedule keys directly from a widget — use WorkoutScheduleService" }
     class_constraints: |
@@ -1510,7 +1510,7 @@ concepts:
         semantic: pass-through
         fields_read: [logging_type, exercise_name]
       - file: lib/core/services/write_result.dart
-        line_range: 80-142
+        line_range: 88-150
         method: ExerciseSet.fromMap
         semantic: per-set
         fields_read: [weight_kg, reps, duration_sec, duration_seconds, distance_km]
@@ -3200,7 +3200,7 @@ concepts:
         line_range: 1-9999
         method: createCustomTemplate tool
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1136-1180
+        line_range: 1277-1321
         method: upsertTemplate
         notes: |
           Canonical writer scaffolded 2026-05-21 / audit A3. Routes
@@ -5332,11 +5332,11 @@ concepts:
         method: deleteAllFilesForCurrentUser
         notes: hard-wipes all Hive boxes for current user on account deletion
       - file: lib/core/services/workout_write_service.dart
-        line_range: 537-582
+        line_range: 592-671
         method: upsertScheduled
         notes: upserts a scheduled workout entry to workoutBox under schedule_ key
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1091-1161
+        line_range: 1193-1263
         method: deleteLog
         notes: removes an exlog_* entry + updates exercise_log_index; fires cloud delete
       - file: lib/core/services/nutrition_write_service.dart
@@ -6193,7 +6193,7 @@ concepts:
           ("8-12" ranges). Judges the write by the stored row
           (customExerciseRowLanded), throwing write_failed only when absent.
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1184-1224
+        line_range: 1325-1365
         method: upsertCustomExercise
         notes: |
           Canonical writer (audit 2026-05-21 / A3). Locks per-key,

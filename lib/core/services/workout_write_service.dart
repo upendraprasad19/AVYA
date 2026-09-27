@@ -32,6 +32,24 @@ import 'write_result.dart';
 ///                               ExerciseSet)
 ///
 /// Cloud sync fires fire-and-forget after the Hive write succeeds.
+
+/// What swapScheduledDays reads under its two-date lock (deep copies).
+typedef ScheduledDaySwapLive = ({
+  Map<String, dynamic>? rowA,
+  Map<String, dynamic>? rowB,
+  Map<String, dynamic>? displacedA,
+  Map<String, dynamic>? displacedB,
+});
+
+/// What the build function asks swapScheduledDays to write. A null
+/// displaced map deletes that date's `displaced_<date>` backup.
+typedef ScheduledDaySwapWrite = ({
+  Map<String, dynamic> rowA,
+  Map<String, dynamic> rowB,
+  Map<String, dynamic>? displacedA,
+  Map<String, dynamic>? displacedB,
+});
+
 class WorkoutWriteService {
   WorkoutWriteService._();
   static final WorkoutWriteService instance = WorkoutWriteService._();
@@ -595,7 +613,7 @@ class WorkoutWriteService {
       //   - activeWorkout / editSheet — user is editing or re-logging.
       //   - aiCoach / manual — user explicitly invoked.
       //   - schedSwap — reschedule keeps the completed status intact via
-      //     a separate path (rescheduleDay).
+      //     a separate path (swapScheduledDays, which refuses completed days).
       //   - restore — cloud restore must be able to replay history.
       final existingRaw = box.get(key);
       final existingMap = existingRaw is Map
@@ -611,12 +629,19 @@ class WorkoutWriteService {
             'refusing to overwrite completed day from planGenerator');
       }
 
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
       final stamped = <String, dynamic>{
         ...entry,
         'date': dateStr,
         'source': source.code,
-        'updated_at_ms': DateTime.now().millisecondsSinceEpoch,
+        'updated_at_ms': nowMs,
       };
+      // Spec §5.7 carry-forward: rewriting an arranged (day-swapped) date is
+      // itself a newer arrangement, so an older swap arriving from another
+      // device (restore merge L3) cannot overwrite this write.
+      if (carriesArrangement(existing: existingMap, entry: entry, source: source)) {
+        stamped['arranged_at_ms'] = nowMs;
+      }
       await box.put(key, stamped);
 
       unawaited(SyncService.instance.syncWorkoutData());
@@ -645,53 +670,123 @@ class WorkoutWriteService {
     }
   }
 
-  Future<WriteResult> rescheduleDay({
-    required DateTime fromDate,
-    required DateTime toDate,
+  /// Spec §5.7 carry-forward. `daySwap` sets the stamp itself; `restore`
+  /// copies the source row's. Pure; extracted for behavioural coverage.
+  @visibleForTesting
+  static bool carriesArrangement({
+    required Map<String, dynamic>? existing,
+    required Map<String, dynamic> entry,
     required WriteSource source,
+  }) {
+    if (source == WriteSource.daySwap || source == WriteSource.restore) {
+      return false;
+    }
+    if (entry.containsKey('arranged_at_ms')) return false;
+    return existing != null && existing['arranged_at_ms'] != null;
+  }
+
+  /// Written as [WriteResult.errorMessage] when [swapScheduledDays]'s build
+  /// function refuses (the caller's rules said no), so a refusal is never
+  /// mistaken for a write failure.
+  static const String daySwapRefusedMessage = 'day_swap_refused';
+
+  static const String _displacedPrefix = 'displaced_';
+
+  /// Exchanges the schedule rows of two dates — the day-swap engine's one
+  /// write (spec §5.4). Takes the two-date lock in sorted order, reads both
+  /// rows and both `displaced_<date>` backups as deep copies, and hands them
+  /// to [build], which returns the new rows and backups, or null to refuse.
+  /// Writes all four keys or none: if a write throws, every key already
+  /// written is restored to its previous value and the failure is returned.
+  /// A completed day is never moved, whatever [build] returns. Fans out ONE
+  /// sync pass and ONE snapshot push.
+  Future<WriteResult> swapScheduledDays({
+    required DateTime dateA,
+    required DateTime dateB,
+    required ScheduledDaySwapWrite? Function(ScheduledDaySwapLive live) build,
     WidgetRef? ref,
   }) async {
-    final fromStr = istDateStr(fromDate);
-    final toStr = istDateStr(toDate);
-    if (fromStr == toStr) {
-      return WriteResult.fail('fromDate and toDate are the same');
+    final aStr = istDateStr(dateA);
+    final bStr = istDateStr(dateB);
+    if (aStr == bStr) {
+      return WriteResult.fail('dateA and dateB are the same');
     }
-
-    // Lock both dates (deterministic order to avoid deadlock)
-    final keys = [fromStr, toStr]..sort();
+    final keys = [aStr, bStr]..sort();
     final c1 = await _acquireLock(keys[0]);
     final c2 = await _acquireLock(keys[1]);
     try {
       final box = HiveService.instance.workoutBox;
-      final fromKey = scheduleKey(fromDate);
-      final toKey = scheduleKey(toDate);
+      final keyA = scheduleKey(dateA);
+      final keyB = scheduleKey(dateB);
+      final dispA = '$_displacedPrefix$aStr';
+      final dispB = '$_displacedPrefix$bStr';
+      Map<String, dynamic>? read(String k) {
+        final raw = box.get(k);
+        return raw is Map ? _swapDeepCopyMap(raw) : null;
+      }
 
-      final fromRaw = box.get(fromKey);
-      final toRaw = box.get(toKey);
-      final fromEntry = fromRaw is Map
-          ? Map<String, dynamic>.from(fromRaw)
-          : <String, dynamic>{};
-      final toEntry = toRaw is Map
-          ? Map<String, dynamic>.from(toRaw)
-          : <String, dynamic>{};
+      final live = (
+        rowA: read(keyA),
+        rowB: read(keyB),
+        displacedA: read(dispA),
+        displacedB: read(dispB),
+      );
+      final plan = build(live);
+      if (plan == null) {
+        return WriteResult.fail(daySwapRefusedMessage);
+      }
+      if (live.rowA?['status'] == 'completed' ||
+          live.rowB?['status'] == 'completed') {
+        unawaited(ErrorTelemetry.logEvent('day_swap_completed_guard',
+            message: 'a=$aStr b=$bStr'));
+        return WriteResult.fail(daySwapRefusedMessage);
+      }
 
-      // Swap (entries keep their original date stamps but the
-      // workout content moves).
-      final newFrom = <String, dynamic>{
-        ...toEntry,
-        'date': fromStr,
-        'source': source.code,
-        'updated_at_ms': DateTime.now().millisecondsSinceEpoch,
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+      Map<String, dynamic> stamp(Map<String, dynamic> row, String date) => {
+            ...row,
+            'date': date,
+            'source': WriteSource.daySwap.code,
+            'updated_at_ms': nowMs,
+          };
+      final writes = <String, Map<String, dynamic>?>{
+        keyA: stamp(plan.rowA, aStr),
+        keyB: stamp(plan.rowB, bStr),
+        dispA: plan.displacedA,
+        dispB: plan.displacedB,
       };
-      final newTo = <String, dynamic>{
-        ...fromEntry,
-        'date': toStr,
-        'source': source.code,
-        'updated_at_ms': DateTime.now().millisecondsSinceEpoch,
+      final previous = <String, Object?>{
+        for (final k in writes.keys) k: box.get(k),
       };
-
-      await box.put(fromKey, newFrom);
-      await box.put(toKey, newTo);
+      final written = <String>[];
+      try {
+        for (final e in writes.entries) {
+          if (e.value == null) {
+            if (box.containsKey(e.key)) {
+              await box.delete(e.key);
+              written.add(e.key);
+            }
+          } else {
+            await box.put(e.key, e.value);
+            written.add(e.key);
+          }
+        }
+      } catch (_) {
+        for (final k in written.reversed) {
+          try {
+            final prev = previous[k];
+            if (prev == null) {
+              await box.delete(k);
+            } else {
+              await box.put(k, prev);
+            }
+          } catch (e, st) {
+            unawaited(ErrorTelemetry.recordNonFatal(e, st,
+                reason: 'workout_write_service_swap_rollback'));
+          }
+        }
+        rethrow;
+      }
 
       unawaited(SyncService.instance.syncWorkoutData());
       unawaited(SyncService.instance.pushSnapshot());
@@ -700,24 +795,31 @@ class WorkoutWriteService {
         try {
           onInvalidate!(ref);
         } catch (e, st) {
-          // audit-2026-05-11 H-42 — telemetry pair.
-          debugPrint('[WorkoutWriteService.rescheduleDay] inv: $e\n$st');
+          debugPrint('[WorkoutWriteService.swapScheduledDays] inv: $e\n$st');
           unawaited(ErrorTelemetry.recordNonFatal(e, st,
-              reason: 'workout_write_service_reschedule_day_invalidation'));
+              reason: 'workout_write_service_swap_scheduled_days_invalidation'));
         }
       }
-
-      return WriteResult.ok(toKey);
+      return WriteResult.ok(keyA);
     } catch (e, st) {
-      // audit-2026-05-11 H-42 — telemetry pair.
-      debugPrint('[WorkoutWriteService.rescheduleDay] $e\n$st');
+      debugPrint('[WorkoutWriteService.swapScheduledDays] $e\n$st');
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'workout_write_service_reschedule_day'));
+          reason: 'workout_write_service_swap_scheduled_days'));
       return WriteResult.fail(e.toString());
     } finally {
       _releaseLock(keys[1], c2);
       _releaseLock(keys[0], c1);
     }
+  }
+
+  static Map<String, dynamic> _swapDeepCopyMap(Map raw) => <String, dynamic>{
+        for (final e in raw.entries) e.key.toString(): _swapDeepCopy(e.value),
+      };
+
+  static Object? _swapDeepCopy(Object? v) {
+    if (v is Map) return _swapDeepCopyMap(v);
+    if (v is List) return v.map(_swapDeepCopy).toList();
+    return v;
   }
 
   /// C2 (e8f4a3) — re-keys partial `exlog_<fromDate>_*` rows onto `<toDate>`
