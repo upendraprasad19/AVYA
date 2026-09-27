@@ -71,8 +71,14 @@ class SyncStubServer {
   SupabaseClient client() => SupabaseClient(url, 'stub-anon-key');
 
   Future<void> stop() async {
-    await _server?.close(force: true);
-    _server = null;
+    try {
+      await _server?.close(force: true);
+    } catch (_) {
+      // Teardown must never throw (CLAUDE.md §4.9) — a failing close here
+      // must not stop the harness's other cleanup steps from running.
+    } finally {
+      _server = null;
+    }
   }
 
   void clear() => requests.clear();

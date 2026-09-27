@@ -24,11 +24,22 @@ class SyncHarness {
     HiveUserSession.debugCurrentUidResolverForTests = () => kTestUserId;
   }
 
+  /// Each cleanup step is isolated so one failing step cannot throw out of
+  /// `tearDown()` and skip the rest (CLAUDE.md §4.9 — teardown must never
+  /// throw).
   Future<void> tearDown() async {
-    SupabaseService.clientOverrideForTest = null;
-    HiveUserSession.debugCurrentUidResolverForTests = null;
-    await server.stop();
-    await tearDownHiveForTests(_hiveDir);
+    try {
+      SupabaseService.clientOverrideForTest = null;
+    } catch (_) {}
+    try {
+      HiveUserSession.debugCurrentUidResolverForTests = null;
+    } catch (_) {}
+    try {
+      await server.stop();
+    } catch (_) {}
+    try {
+      await tearDownHiveForTests(_hiveDir);
+    } catch (_) {}
   }
 }
 
