@@ -6,12 +6,27 @@
 // Supabase auth session is needed — see that file's header for why a full
 // `ToolDispatcher.execute()` test otherwise requires one).
 //
-// THE BUG THIS GUARDS: tool_dispatcher.dart's general 6-provider
-// invalidation (`_invalidateWorkoutProviders`) does NOT cover
-// `daySwapWeekProvider` (Task 12/U4's own new provider) — without the
-// `swap_workout_days`-specific invalidation block this task adds, a
-// coach-driven swap would leave the Train week list and the picker/confirm
-// sheets showing STALE pre-swap titles until some UNRELATED rebuild.
+// WHAT THIS ACTUALLY PINS (corrected post-review, Task 27 fix round —
+// Mutation 3 proved the claim below false): tool_dispatcher.dart's dedicated
+// `swap_workout_days` invalidation block (`ref.invalidate(daySwapWeekProvider)`
+// / `ref.invalidate(daySwapAllowanceProvider)`) is REDUNDANT-BY-DESIGN — both
+// providers already refresh through paths that do not depend on it:
+//   - `daySwapWeekProvider` (lib/features/train/providers/day_swap_provider.dart:102)
+//     watches `currentPlanProvider`, which the dispatcher's general,
+//     unconditional `_invalidateWorkoutProviders(ref)` already invalidates for
+//     `swap_workout_days` (it is not a nutrition intent).
+//   - `daySwapAllowanceProvider` (lib/features/train/providers/day_swap_provider.dart:114)
+//     listens to `DaySwapAllowance.instance.revision`, which
+//     `SwapService.swapDays` bumps via `DaySwapAllowance.instance.recordSwap`
+//     -> `lib/core/services/day_swap/day_swap_allowance.dart:159`, on every
+//     successful swap — independent of the dispatcher entirely.
+// Deleting the dedicated block reddens NOTHING in this file (Mutation 3). It
+// is kept anyway as a cheap, harmless defensive guard — the same
+// belt-and-braces shape `DaySwapController._refresh` already uses for its own
+// origin. This test therefore pins that the dedicated block's PRESENCE is
+// safe and that invalidation genuinely happens end-to-end after a
+// coach-driven swap — it does NOT prove the dedicated block is what prevents
+// staleness; the two paths named above already guarantee that on their own.
 
 // ignore_for_file: invalid_use_of_visible_for_testing_member
 
@@ -159,21 +174,26 @@ void main() {
       expect(res.success, isTrue,
           reason: 'The swap_workout_days dispatch must succeed.');
 
-      // Read the SAME container's provider again. If the invalidation
-      // block under test is missing, Riverpod returns the CACHED `before`
-      // list unchanged (nothing ever asked it to rebuild) — titles would
-      // still read pre-swap even though the underlying Hive rows changed.
+      // Read the SAME container's provider again. This proves invalidation
+      // genuinely happens end-to-end (via the general
+      // `_invalidateWorkoutProviders(ref) -> currentPlanProvider` path, see
+      // this file's header) — NOT that the dedicated `swap_workout_days`
+      // block is what causes it; Mutation 3 showed that block is redundant.
       final after = c.read(daySwapWeekProvider(weekStart));
       final afterFri = after.firstWhere((s) => s.date == fri).title;
       final afterSat = after.firstWhere((s) => s.date == sat).title;
       expect(afterFri, 'Legs + Core',
           reason: 'daySwapWeekProvider must be invalidated + recomputed '
-              'after a coach-driven swap, not read from stale cache — this '
-              'is exactly what the swap_workout_days invalidation block '
-              '(Anchor 3) exists to guarantee.');
+              'after a coach-driven swap, not read from stale cache — via '
+              '`currentPlanProvider` (watched at day_swap_provider.dart:102), '
+              'which the general _invalidateWorkoutProviders(ref) already '
+              'invalidates; the dedicated swap_workout_days block is a '
+              'redundant defensive guard, not the cause (see file header).');
       expect(afterSat, 'Pull + Core');
-      // The allowance family is invalidated by the same block: without it the
-      // cached pre-swap value (used 0) would still be served.
+      // The allowance family refreshes via DaySwapAllowance.instance.revision
+      // (day_swap_provider.dart:114), which SwapService.swapDays bumps
+      // through DaySwapAllowance.recordSwap -> day_swap_allowance.dart:159 —
+      // independent of the dedicated dispatcher block (see file header).
       expect(c.read(daySwapAllowanceProvider(weekStart)).used, 1,
           reason: 'daySwapAllowanceProvider must be invalidated after a '
               'coach-driven swap (Provider.family keyed by IST Monday, Task 12)');

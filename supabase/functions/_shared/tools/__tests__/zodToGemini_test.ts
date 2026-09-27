@@ -58,6 +58,31 @@ Deno.test("zodToGeminiSchema — throws on unsupported type", () => {
   );
 });
 
+// Task 27 fix round (F3): swapWorkoutDays.ts's real-calendar-date validation
+// uses `.refine()`, which wraps a ZodString in ZodEffects. zodToGemini must
+// unwrap it to the PRE-effect shape (Gemini describes the wire shape, not
+// the refinement) rather than throwing "unsupported Zod type: ZodEffects".
+Deno.test("zodToGeminiSchema — unwraps ZodEffects (.refine()) to its pre-effect shape", () => {
+  const result = zodToGeminiSchema(z.string().regex(/^\d+$/).refine(() => true));
+  assertEquals(result, { type: "STRING" });
+});
+
+Deno.test("zodToGeminiSchema — ZodEffects preserves an outer .describe()", () => {
+  const result = zodToGeminiSchema(
+    z.string().refine(() => true).describe("a refined string"),
+  );
+  assertEquals(result, { type: "STRING", description: "a refined string" });
+});
+
+Deno.test("zodToGeminiSchema — an object field using .refine() still produces a valid OBJECT schema", () => {
+  const result = zodToGeminiSchema(z.object({
+    dateA: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(() => true),
+  }));
+  assertEquals(result.type, "OBJECT");
+  assertEquals(result.properties?.dateA, { type: "STRING" });
+  assertEquals(result.required, ["dateA"]);
+});
+
 Deno.test("toolToFunctionDeclaration — happy path", () => {
   const result = toolToFunctionDeclaration({
     name: "logSet",

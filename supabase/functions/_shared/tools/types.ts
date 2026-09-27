@@ -43,7 +43,15 @@ export interface ToolIntent {
 /** A single tool invocation record for telemetry. Stored as one element of ai_coach_interactions.tool_calls JSONB. */
 export interface ToolCallRecord {
   name: string;
-  status: "ok" | "queued" | "invalid_args" | "pro_blocked" | "unknown" | "failed" | "timeout";
+  status:
+    | "ok"
+    | "queued"
+    | "invalid_args"
+    | "pro_blocked"
+    | "capability_blocked"
+    | "unknown"
+    | "failed"
+    | "timeout";
   // deno-lint-ignore no-explicit-any
   args?: Record<string, any>;
   latency_ms?: number;

@@ -43,6 +43,43 @@ Deno.test("swapWorkoutDays — schema rejects extra unknown fields loosely typed
   assertEquals(result.success, false);
 });
 
+// F3 — real-calendar-date validation (review "Minor" finding): ISO_DATE's
+// regex matches shape only, so "2026-02-30" (no such day) and "2026-13-01"
+// (no such month) both passed the OLD schema. `dateField`'s `.refine()` now
+// requires the UTC round-trip to equal the input, catching the overflow
+// `Date.UTC` would otherwise silently roll forward (e.g. Feb 30 -> Mar 2).
+Deno.test("swapWorkoutDays — schema rejects an impossible calendar date (2026-02-30)", () => {
+  const result = swapWorkoutDaysTool.schema.safeParse({
+    dateA: "2026-02-30",
+    dateB: "2026-09-26",
+  });
+  assertEquals(result.success, false);
+});
+
+Deno.test("swapWorkoutDays — schema rejects an impossible calendar month (2026-13-01)", () => {
+  const result = swapWorkoutDaysTool.schema.safeParse({
+    dateA: "2026-09-25",
+    dateB: "2026-13-01",
+  });
+  assertEquals(result.success, false);
+});
+
+Deno.test("swapWorkoutDays — schema accepts a valid leap day (2028-02-29, 2028 is a leap year)", () => {
+  const result = swapWorkoutDaysTool.schema.safeParse({
+    dateA: "2028-02-29",
+    dateB: "2028-03-01",
+  });
+  assertEquals(result.success, true);
+});
+
+Deno.test("swapWorkoutDays — schema rejects a non-leap-year Feb 29 (2027-02-29, 2027 is not a leap year)", () => {
+  const result = swapWorkoutDaysTool.schema.safeParse({
+    dateA: "2027-02-29",
+    dateB: "2027-03-01",
+  });
+  assertEquals(result.success, false);
+});
+
 Deno.test("swapWorkoutDays — intentBuilder shapes the intent from validated args", async () => {
   const intent = await swapWorkoutDaysTool.intentBuilder!(
     { dateA: "2026-09-25", dateB: "2026-09-26" },

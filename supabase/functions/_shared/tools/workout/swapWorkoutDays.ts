@@ -19,11 +19,38 @@ import { CAPABILITY_SWAP_WORKOUT_DAYS } from "../../day_swap_routing.ts";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+// F3 (Task 27 fix round, review "Minor" finding): ISO_DATE above validates
+// SHAPE only — "2026-02-30" and "2026-13-01" both match the regex despite
+// not being real calendar dates. This is real-CALENDAR-date validation:
+// parse as UTC and require the round-trip (year/month/day read back off the
+// constructed Date) to equal the input. `new Date(Date.UTC(2026, 1, 30))`
+// silently rolls forward to March 2 rather than throwing, which is exactly
+// why a naive `!isNaN(Date.parse(...))` check would NOT catch this — the
+// round-trip comparison is what catches the overflow. Applied via
+// `.refine()` so a failure still produces the same `safeParse({success:
+// false})` shape the existing regex check already produces (Zod issue on
+// the field) — no new error shape, no change to how tool-loop.ts /
+// zodToGemini.ts consume this schema.
+function isRealCalendarDate(value: string): boolean {
+  if (!ISO_DATE.test(value)) return false;
+  const [y, m, d] = value.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return (
+    dt.getUTCFullYear() === y &&
+    dt.getUTCMonth() === m - 1 &&
+    dt.getUTCDate() === d
+  );
+}
+
+const dateField = z.string().regex(ISO_DATE).refine(isRealCalendarDate, {
+  message: "must be a real calendar date (YYYY-MM-DD), not just the right shape",
+});
+
 const schema = z.object({
-  dateA: z.string().regex(ISO_DATE).describe(
+  dateA: dateField.describe(
     "First IST date of the pair to swap, YYYY-MM-DD.",
   ),
-  dateB: z.string().regex(ISO_DATE).describe(
+  dateB: dateField.describe(
     "Second IST date of the pair to swap, YYYY-MM-DD.",
   ),
 });
