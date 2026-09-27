@@ -84,6 +84,30 @@ thresholds:
     # goes green forever while checking a file the live database no longer runs.
     defined_in_migration: "143_restore_alert_cron_failures_stuck_job_bound.sql"
 
+  sql_job_failures:
+    description: "pg_cron runs with status='failed' in cron.job_run_details whose END time falls in the last 65 min (OI-178; end, not start, because a row reads failed only once the run ends). pure-SQL jobs write no cron_call_log row, so before this NOTHING saw them fail (db_maintenance_nightly 5/5 nights, diagnose d6b2f9). ONE aggregated alert per run. critical (pages via trigger 133) only if any failure is NOT a pg_cron capacity failure; capacity alone = warn (DB saturation, e8b4a1). Dedup: an open alert of the same severity within 23 h suppresses — for critical only if it already names every job now failing with a REAL error (context key sql_jobs), so a NEW real failure always pages and a nightly failure re-pages once a night. 30-day hourly replay: 5 criticals (all jobid 41, real, from night one) + 4 warns."
+    critical_when: "any failed run whose return_message does not match the capacity class"
+    warn_when:     "only capacity failures: job startup timeout | connection failed | remaining connection slots | server restarted | could not connect"
+    window_minutes: 65
+    cron_cadence:  "23 * * * *"
+    dedup_window_hours: 23   # per severity (+ job-set containment for critical); 23 not 24 — a nightly failure is checked ~24 h apart
+    acknowledge_sql: "UPDATE public.alerts SET acknowledged = true, acknowledged_at = now() WHERE id = <id>  -- re-arms the alert"
+    phase: 1
+    defined_in_migration: "145_alert_sql_job_failures.sql"
+
+  cron_job_silent:
+    description: "pg_cron jobs that STOPPED RUNNING or are switched off (OI-178 second half; 145 covers jobs that ran and failed). A deactivated job (cron.job.active = false, the kill switch) or one pg_cron stops launching writes no run row, so nothing else can see it. Expected gap comes from the job's SCHEDULE, checked in this order so it is never shorter than reality (month set 366 d, dow set 7 d, dom set 62 d, hour set 1 d, */N minutes N min, else 1 h, @macros mapped, other shapes not judged), because job_run_details retention keeps only each job's newest run past 14 d. SILENT (critical, pages): active, launched at least once, now - last launch > expected x 1.25 + 1 h. INACTIVE (warn): active = false. Replayed over all retained history (09-06 to 09-26): 2 flags, both real (alert_payment_flow_health + alert_cron_silence not launched for 5 h on 2026-09-21, DB saturation e8b4a1)."
+    critical_when: "any active job overdue by expected x overdue_factor + overdue_grace_hours"
+    warn_when:     "only deactivated jobs"
+    overdue_factor: 1.25
+    overdue_grace_hours: 1
+    cron_cadence:  "33 * * * *"
+    critical_dedup_window_hours: 23   # unacknowledged, and only if the open alert names every silent job
+    warn_dedup_window_days: 7         # acknowledged or not — a deliberately disabled job re-surfaces weekly
+    acknowledge_sql: "UPDATE public.alerts SET acknowledged = true, acknowledged_at = now() WHERE id = <id>  -- re-arms: a job still silent re-pages at the next :33"
+    phase: 1
+    defined_in_migration: "146_alert_cron_job_silent.sql"
+
 # Notes on suppression / acknowledgement
 # --------------------------------------
 # Every cron job dedup-checks for an unacknowledged alert from the same

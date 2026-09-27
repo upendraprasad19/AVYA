@@ -3613,8 +3613,9 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
 
 ## OI-178 — pg_cron SQL jobs are structurally invisible to the alerting stack: `cron_call_log` is written only by Edge Functions (P1)
 
-- **Status**: OPEN
-- **Blocked on**: a design decision — telemetry bridge vs. a second alert reading `cron.job_run_details`
+- **Status**: CLOSED (2026-09-27, `ops-alerting-b2a`) — diagnose `b4c8e2` + `f7a3d2`
+- **Blocked on**: none
+- **Resolution**: two new pg_cron alerts, applied live — `alert_sql_job_failures` (migration 145, jobid 46, hourly) reads `cron.job_run_details` for `status='failed'` rows; `alert_cron_job_silent` (migration 146, jobid 47, hourly) reads `cron.job` + `cron.job_run_details` for jobs stopped being launched or switched off. Together they cover both aggravations this entry named: `return_message = "1 row"` hiding retention volume is now filed separately as [[OI-251]] (not this entry's scope — that is disk-observability, not run-visibility), and the kill-switch-with-no-run-row gap is closed by 146's INACTIVE (warn) arm. Residual gaps this fix does NOT close, filed separately: self/correlated silence and the `cron.log_run` dependency ([[OI-250]]). Design converged after 4 rounds (145) / 3 rounds (146) of independent plan review plus an accepted B-pass (`docs/plan-reviews/ops-alerting-b2a.md`).
 - **Verified**: 2026-09-10 — `cron_call_log` holds **1,080 rows across 16 distinct `function_name`s**, and **0 rows** for any of `jrd_retention_daily`, `client_errors_retention_daily`, `jrd_vacuum_daily`, `client_errors_vacuum_daily`. All four are live and `active=true` in `cron.job` (jobids 33–36).
 - **Identified**: 2026-08-16 · Hermes L31-F2, same pass as [[OI-177]].
 - **The mechanism**: pg_cron records every run in `cron.job_run_details`. This project's alerting reads `public.cron_call_log`, which is written **only** by `_shared/cron_telemetry.ts` — i.e. only by Edge Functions. A cron job whose command is pure SQL therefore emits nothing any alert reads, no matter how it fails. `alerts/_thresholds.yaml` has no retention/vacuum/disk entry at all.
@@ -6034,3 +6035,46 @@ Fix shape: count distinct users and/or exclude network-class errors; client side
 - **Identified**: 2026-09-26 · filed via mint_oi.sh from branch `ci-green-batch-a` (backlog triage)
 
 Tables are small, so the timeout is not payload size; suspect connection/auth warm-up or serialised awaits.
+
+## OI-250 — pg_cron self/correlated silence has no out-of-band watcher (146 cannot see itself or a whole-scheduler stop; cron.log_run dependency)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-09-26 · filed via mint_oi.sh from branch `ops-alerting-b2a`
+- **Problem**: OI-178's two alerts (145 `alert_sql_job_failures`, 146
+  `alert_cron_job_silent`) both run INSIDE pg_cron. They cover each other only
+  partly: 146 sees 145's job go silent, and 145 sees 146's job fail. Nothing
+  sees 146 itself go silent, and nothing sees the case where pg_cron stops
+  launching jobs at all (scheduler down, DB saturated as on 2026-09-21 e8b4a1,
+  or all jobs stop together). Both alerts also read `cron.job_run_details`,
+  which is written only while `cron.log_run = on`, a postmaster-context GUC.
+  If it is ever switched off, 145 goes blind, and 146 pages every job, then
+  re-pages every 23 h and again at the next :33 after each acknowledgement.
+- **Fix shape**: a heartbeat checked from OUTSIDE pg_cron. For example, the
+  SessionStart alert hook or an external uptime check reads
+  `max(cron.job_run_details.start_time)` plus `cron.log_run` and complains if
+  either is stale or wrong.
+- **Class**: absence of a row reads as health (same family as OI-178, OI-179).
+- **Source**: diagnose `f7a3d2` residual (2); 146 header residuals.
+
+## OI-251 — Retention/vacuum effect is unobserved: return_message '1 row' hides DELETE counts; no retention/disk threshold in alerts/_thresholds.yaml
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-09-26 · filed via mint_oi.sh from branch `ops-alerting-b2a`
+- **Problem**: the retention jobs (`db_maintenance_nightly` after 144 B1,
+  `cleanup_cron_job_run_details`, and the others) report
+  `return_message = '1 row'` whatever they deleted, because the command is one
+  SELECT that wraps the DELETEs. So a job that deletes nothing, or everything,
+  looks identical. 145 catches a retention job that FAILS, and 146 one that
+  stops being LAUNCHED. Nothing catches one that runs "successfully" and deletes
+  nothing (the 141→144 shape, where retention was dead for weeks). There is also
+  no table-size or disk threshold in `alerts/_thresholds.yaml`.
+- **Fix shape**: have each retention job return or log its per-table deleted
+  counts (for example into `cron_call_log` or a `retention_runs` table), and
+  add a threshold entry that alerts on zero deletions over N days where rows
+  older than the retention window exist, plus a table-size growth alert.
+- **Source**: OI-178's third aggravation; diagnose `f7a3d2` residual (4) and
+  `b4c8e2`.

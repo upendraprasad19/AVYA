@@ -1,11 +1,13 @@
 {
   "_comment": "Snapshot of live cron.job on project dedsavbjuwgarrhphgnl. Gate 31 (scripts/check_cron_registry.dart) checks every jobname here against docs/operations/CRON_REGISTRY.md. This exists because Gate 31's original input was the migration FILES, so a migration applied without a file was invisible to it by construction -- log_table_retention ran for five days with four unregistered jobs while the gate reported green (OI-132). CI has no Supabase credentials (OI-105), so a live query would silently skip there; a committed snapshot is the CI-safe shape, following the precedent of backups/live_schema_columns.json. REGENERATE in the same commit as any migration that schedules or unschedules a job -- SQL in the gate's header.",
-  "_generated_at": "2026-09-26T12:30:00+05:30",
+  "_generated_at": "2026-09-27T00:01:34+05:30",
   "_source": "select jobid, jobname, schedule, active from cron.job order by jobname",
   "jobs": [
     { "jobid": 32, "jobname": "alert_cron_function_dead", "schedule": "47 6 * * *", "active": true },
+    { "jobid": 47, "jobname": "alert_cron_job_silent", "schedule": "33 * * * *", "active": true },
     { "jobid": 31, "jobname": "alert_cron_silence", "schedule": "17 * * * *", "active": true },
     { "jobid": 26, "jobname": "alert_payment_flow_health", "schedule": "7 * * * *", "active": true },
+    { "jobid": 46, "jobname": "alert_sql_job_failures", "schedule": "23 * * * *", "active": true },
     { "jobid": 18, "jobname": "clean_orphan_media_daily", "schedule": "0 3 * * *", "active": true },
     { "jobid": 45, "jobname": "client_errors_vacuum_daily", "schedule": "43 3 * * *", "active": true },
     { "jobid": 30, "jobname": "compute_admin_metrics_daily", "schedule": "15 18 * * *", "active": true },
