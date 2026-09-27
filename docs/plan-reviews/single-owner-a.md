@@ -5,7 +5,7 @@ mechanical_only: true
 ground_truth_verified: true
 verdict: converged
 bpass: accepted
-bpass_review: docs/reviews/a5e03de2a231-review.md
+bpass_review: docs/reviews/a7fae1c65d95-review.md
 hermes: accepted
 hermes_report: docs/audit/2026-09-26-hermes-single-owner-a1.md
 tier: catastrophic
@@ -94,9 +94,15 @@ Accepted by the founder 2026-09-26.
 ## B-pass round 2 (fresh adversarial reviewer, over the Hermes remediation
 delta)
 Full findings + verification + fix detail:
-`docs/reviews/a5e03de2a231-review.md` (renamed twice after remediation, once
-more after founder acceptance moved the diff again — see the file's own
-header for the full hash chain back to `d65b986f910b`).
+`docs/reviews/a7fae1c65d95-review.md` (renamed twice after remediation, once
+more after founder acceptance moved the diff again, and once more at the
+`--no-ff` merge into `main` after resolving two real conflicts against
+`ops-alerting-b2a` — see the file's own header for the full hash chain back
+to `d65b986f910b`). This record's own `bpass_review:` citation above was
+updated to match in a small follow-up commit after the merge landed, since
+`docs/plan-reviews/` is not itself excluded from the review-hash
+computation and fixing the citation inside the merge commit would have
+moved the hash a fifth time.
 
 **2 findings (1 P1, 1 P2); 0 false_alarm — both fixed, each re-proven by
 mutation** (Mb13–Mb16, diagnose 125b81):
@@ -170,4 +176,4 @@ the totals above.
   SoT-registry/wired-test-list documentation completion for that fix landed,
   and (c) the founder's acceptance flipped three `verdict:` fields — none
   changed any finding, fix, or test. Full chain documented in
-  `docs/reviews/a5e03de2a231-review.md`'s own header.
+  `docs/reviews/a7fae1c65d95-review.md`'s own header.
