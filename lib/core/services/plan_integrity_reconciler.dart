@@ -41,6 +41,7 @@ import 'hive_service.dart';
 import 'migrated_key.dart';
 import 'plan_window_reanchor.dart';
 import 'sync_flags.dart';
+import 'sync/sync_skip_index.dart';
 import 'supabase_service.dart';
 import 'workout_schedule_read_service.dart';
 
@@ -267,7 +268,27 @@ class PlanIntegrityReconciler {
         Map<String, dynamic>.from(incoming),
         forceSnapshotArrangement: forceSnapshot,
       );
-      await workoutBox.put(key, merged);
+      // Day-swapper + sync-load Task 22 (spec sec 5.7 L2): "when the merge
+      // runs, write a row only if the merged result differs from the local
+      // row". Skips a redundant Hive.put on every date the bundle re-sends
+      // unchanged every restore/reconcile pass -- this is where most of the
+      // "up to 112 writes/launch" figure comes from, since a whole plan
+      // bundle's worth of dates is looped every pass regardless of whether
+      // any single date actually changed. Compared via
+      // SyncFingerprint.canonicalJson (sorted map keys at every depth, same
+      // primitive Task 4's push-side skip index uses) rather than `==`, so a
+      // jsonb round-trip's key reordering never forces a write. Kill switch
+      // disable_plan_merge_skip_when_known reverts to an unconditional put
+      // every pass (CLAUDE.md sec 4.6) -- the SAME flag also gates the
+      // whole-bundle skip in _restoreWorkoutPlan (one flag, both L2
+      // optimizations).
+      final unchanged = existingMap != null &&
+          SyncFlags.planMergeSkipWhenKnownEnabled &&
+          SyncFingerprint.canonicalJson(merged) ==
+              SyncFingerprint.canonicalJson(existingMap);
+      if (!unchanged) {
+        await workoutBox.put(key, merged);
+      }
       processed++;
     }
     return (

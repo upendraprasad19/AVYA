@@ -156,6 +156,24 @@ class SyncFlags {
     }
   }
 
+  /// Kill switch for spec sec 5.7 L2 (day-swapper-sync-load): "merge only
+  /// what is new". Opt-OUT polarity, same shape as [restRowRefillGuardEnabled]
+  /// / [swapArrangementMergeEnabled]. `true` disables BOTH L2 optimizations
+  /// TOGETHER (one flag): the whole-bundle-unchanged skip in
+  /// `SyncService._restoreWorkoutPlan`, and the per-row write-only-if-differs
+  /// check inside `PlanIntegrityReconciler.mergeScheduleBundleIntoHive`.
+  /// Reverts both to Task 21's own verbatim behaviour: the merge always
+  /// runs, and every processed row is unconditionally put.
+  static bool get planMergeSkipWhenKnownEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('disable_plan_merge_skip_when_known') !=
+          true;
+    } catch (_) {
+      return true;
+    }
+  }
+
   /// Test-only setter. Production callers MUST NOT toggle flags in
   /// code — they flip via `configBox.put` from a one-shot migration
   /// or remote-config write only.

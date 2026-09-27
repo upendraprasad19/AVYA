@@ -1316,13 +1316,43 @@ extension SyncServiceWorkout on SyncService {
       if (reEnd != null) {
         await MigratedKey.write('plan_end_date', reEnd);
       }
-      if (schedules is Map) {
+      // Day-swapper + sync-load Task 22 (spec sec 5.7 L2): skip the WHOLE
+      // merge when this device already knows the cloud holds exactly this
+      // bundle -- either because THIS device just confirmed a push of it
+      // (Task 20's _syncWorkoutPlan), or because a prior restore/reconcile
+      // already merged it. The stored value lives at the SAME Hive slot
+      // Task 20's confirmed push writes: SyncSkipIndex.readIndex(workoutBox,
+      // SyncSkipDomain.plan.indexKey)[kPlanBundleRowKey]. Fingerprinted over
+      // the SAME 4-key shape the push side uses ({plan, plan_start_date,
+      // plan_end_date, schedules} -- synced_at excluded, spec sec 5.9's
+      // fingerprint table) so a round-tripped, unchanged bundle always
+      // matches regardless of which device produced it last. Scoped to ONLY
+      // the schedule-merge call -- the plan-seed ('current_plan') and
+      // plan-window-reanchor writes just above are cheap (at most 3 keys)
+      // and independent of whether the SCHEDULE bundle changed, so they are
+      // deliberately left to run every pass.
+      final planFingerprintInput = Map<String, dynamic>.from(bundle)
+        ..remove('synced_at');
+      final downloadedPlanFingerprint = SyncFingerprint.of(planFingerprintInput);
+      final storedPlanFingerprint = SyncSkipIndex.readIndex(
+          _hive.workoutBox, SyncSkipDomain.plan.indexKey)[kPlanBundleRowKey];
+      final skipPlanMerge = SyncFlags.planMergeSkipWhenKnownEnabled &&
+          storedPlanFingerprint != null &&
+          storedPlanFingerprint == downloadedPlanFingerprint;
+      if (schedules is Map && !skipPlanMerge) {
         final result = await PlanIntegrityReconciler.mergeScheduleBundleIntoHive(
             Map<String, dynamic>.from(schedules));
         if (result.discardedLocalArrangement) {
           unawaited(ErrorTelemetry.logEvent('swap_merge_conflict',
               message: 'source=restoreWorkoutPlan'));
         }
+        // "It is set ... after a successful merge of a downloaded bundle"
+        // (spec sec 5.7 L2) -- only reached when mergeScheduleBundleIntoHive
+        // returns without throwing; a throw propagates to this method's own
+        // try/catch below, so this line is unreached on failure and no
+        // fingerprint is recorded for a merge that did not actually finish.
+        await SyncSkipIndex.recordConfirmed(_hive.workoutBox,
+            SyncSkipDomain.plan, kPlanBundleRowKey, downloadedPlanFingerprint);
       }
     } catch (e, st) {
       debugPrint('[SyncService._restoreWorkoutPlan] $e');
