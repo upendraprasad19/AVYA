@@ -13,10 +13,12 @@
 // in THIS file.
 library;
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:uuid/uuid.dart';
 
 /// Where a domain's index lives: always the user-scoped box that holds the
@@ -139,6 +141,11 @@ class SyncSkipIndex {
   bool _dirty = false;
   bool _aborted = false;
 
+  /// D13 no-flood: the fingerprint catch runs per ROW, so only the FIRST
+  /// fingerprint failure of this instance's pass is reported to
+  /// ErrorTelemetry.
+  int _fingerprintFailures = 0;
+
   int pushed = 0;
   int skipped = 0;
   int failed = 0;
@@ -164,9 +171,14 @@ class SyncSkipIndex {
     if (!disabled) {
       try {
         fp = fingerprint();
-      } catch (e) {
+      } catch (e, st) {
         fp = null; // fail open: push, never record
         debugPrint('[SyncSkipIndex] ${domain.name} fingerprint $rowKey: $e');
+        _fingerprintFailures++;
+        if (_fingerprintFailures == 1) {
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'sync_skip_fingerprint_${domain.name}'));
+        }
       }
       if (fp != null && _stored[rowKey] == fp) {
         skipped++;
@@ -219,9 +231,11 @@ class SyncSkipIndex {
       if (!_dirty) return;
       await _box.put(domain.indexKey, Map<String, String>.from(_stored));
       _dirty = false;
-    } catch (e) {
+    } catch (e, st) {
       // Losing the index costs one extra push next pass — never a false skip.
       debugPrint('[SyncSkipIndex] ${domain.name} commit: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_skip_commit_${domain.name}'));
     } finally {
       if (kDebugMode) {
         debugPrint('[sync-skip] ${domain.name}: pushed $pushed, skipped '
@@ -241,8 +255,10 @@ class SyncSkipIndex {
               e.key as String: e.value as String,
         };
       }
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[SyncSkipIndex] readIndex $indexKey: $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_skip_read_index', extra: {'index_key': indexKey}));
     }
     return <String, String>{};
   }
@@ -268,8 +284,10 @@ class SyncSkipIndex {
           await b.delete(d.indexKey);
           cleared++;
         }
-      } catch (e) {
+      } catch (e, st) {
         debugPrint('[SyncSkipIndex] clearAll ${d.name}: $e');
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'sync_skip_clear_all', extra: {'domain': d.name}));
       }
     }
     return cleared;

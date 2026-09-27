@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/sync/sync_skip_index.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
@@ -13,6 +14,7 @@ void main() {
   late Directory dir;
   late Box<dynamic> box;
   late List<String> reports;
+  late List<MapEntry<String, Map<String, String>?>> telemetryCalls;
   var ownerChanged = false;
 
   SyncSkipIndex index({bool disabled = false}) => SyncSkipIndex(
@@ -28,8 +30,16 @@ void main() {
     box = HiveService.instance.healthBox;
     reports = <String>[];
     ownerChanged = false;
+    telemetryCalls = <MapEntry<String, Map<String, String>?>>[];
+    ErrorTelemetry.debugOnRecordNonFatalForTests =
+        (error, stack, {required reason, extra}) {
+      telemetryCalls.add(MapEntry(reason, extra));
+    };
   });
-  tearDown(() => tearDownHiveForTests(dir));
+  tearDown(() async {
+    ErrorTelemetry.debugOnRecordNonFatalForTests = null;
+    await tearDownHiveForTests(dir);
+  });
 
   Future<bool> ok() async => true;
 
@@ -96,6 +106,21 @@ void main() {
     expect(SyncSkipIndex.readIndex(box, SyncSkipDomain.water.indexKey), isEmpty);
   });
 
+  test('two fingerprint failures in one pass report ErrorTelemetry exactly once (H-42/D13)',
+      () async {
+    final a = index();
+    expect(
+        await a.pushIfChanged('d', () => throw const FormatException('x'), () async => true),
+        isTrue);
+    expect(
+        await a.pushIfChanged('e', () => throw const FormatException('y'), () async => true),
+        isTrue);
+    final fpReports =
+        telemetryCalls.where((c) => c.key == 'sync_skip_fingerprint_water').toList();
+    expect(fpReports, hasLength(1),
+        reason: 'first fingerprint failure of the pass only (D13)');
+  });
+
   test('kill switch: every row pushes, nothing recorded, commit deletes the index', () async {
     await box.put(SyncSkipDomain.water.indexKey, {'d': 'fp1'});
     var calls = 0;
@@ -159,6 +184,17 @@ void main() {
     expect(SyncSkipIndex.readIndex(box, SyncSkipDomain.water.indexKey), isEmpty);
     await box.put(SyncSkipDomain.water.indexKey, {'a': 1, 2: 'b', 'c': 'fp'});
     expect(SyncSkipIndex.readIndex(box, SyncSkipDomain.water.indexKey), {'c': 'fp'});
+  });
+
+  test('readIndex reports to ErrorTelemetry when the box throws (H-42)', () async {
+    final scratch = await Hive.openBox<dynamic>('scratchIndexBox');
+    await scratch.close();
+    final result = SyncSkipIndex.readIndex(scratch, 'some_key');
+    expect(result, isEmpty);
+    final idxReports =
+        telemetryCalls.where((c) => c.key == 'sync_skip_read_index').toList();
+    expect(idxReports, hasLength(1));
+    expect(idxReports.single.value, {'index_key': 'some_key'});
   });
 
   test('recordConfirmed writes one row; clearAll deletes every domain index', () async {
