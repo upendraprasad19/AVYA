@@ -169,7 +169,7 @@ extension SyncServiceNutrition on SyncService {
       debugPrint('[SyncService.syncNutritionDataNow] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_sync_nutrition_data'));
+          reason: 'sync_service_sync_nutrition_data', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'sync_nutrition_data', error: e);
       } catch (_) {}
@@ -189,7 +189,7 @@ extension SyncServiceNutrition on SyncService {
       debugPrint('[SyncService.syncSavedMealsNow] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_sync_saved_meals_now'));
+          reason: 'sync_service_sync_saved_meals_now', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'sync_saved_meals_now', error: e);
       } catch (_) {}
@@ -495,7 +495,7 @@ extension SyncServiceNutrition on SyncService {
               debugPrint('[SyncService._syncNutritionLogs] item $i: $itemErr');
               // audit-2026-05-11 H-42 — telemetry pair.
               unawaited(ErrorTelemetry.recordNonFatal(itemErr, st,
-                  reason: 'sync_service_for_3'));
+                  reason: 'sync_service_for_3', skipServerPost: true));
               try {
                 await _reportSyncFailure(opType: 'upsert_nutrition_log_item', error: itemErr);
               } catch (_) {}
@@ -540,7 +540,7 @@ extension SyncServiceNutrition on SyncService {
         debugPrint('[SyncService._syncNutritionLogs] $e');
         // audit-2026-05-11 H-42 — telemetry pair.
         unawaited(ErrorTelemetry.recordNonFatal(e, st,
-            reason: 'sync_service_catch_6'));
+            reason: 'sync_service_catch_6', skipServerPost: true));
         try {
           await _reportSyncFailure(opType: 'upsert_nutrition_log', error: e);
         } catch (_) {}
@@ -638,7 +638,7 @@ extension SyncServiceNutrition on SyncService {
         debugPrint('[SyncService._syncWaterLogs] $e');
         // audit-2026-05-11 H-42 — telemetry pair.
         unawaited(ErrorTelemetry.recordNonFatal(e, st,
-            reason: 'sync_service_for_10'));
+            reason: 'sync_service_for_10', skipServerPost: true));
         try {
           await _reportSyncFailure(opType: 'upsert_water_log', error: e);
         } catch (_) {}
@@ -704,7 +704,7 @@ extension SyncServiceNutrition on SyncService {
         debugPrint('[SyncService._syncSavedMeals] $e');
         // audit-2026-05-11 H-42 — telemetry pair.
         unawaited(ErrorTelemetry.recordNonFatal(e, st,
-            reason: 'sync_service_for_25'));
+            reason: 'sync_service_for_25', skipServerPost: true));
         try {
           await _reportSyncFailure(opType: 'upsert_saved_meal', error: e);
         } catch (_) {}
@@ -888,7 +888,7 @@ extension SyncServiceNutrition on SyncService {
       debugPrint('[SyncService._restoreNutritionLogs] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_if_13'));
+          reason: 'sync_service_if_13', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'restore_nutrition_logs', error: e);
       } catch (_) {}
@@ -939,7 +939,7 @@ extension SyncServiceNutrition on SyncService {
       debugPrint('[SyncService._restoreWaterLogs] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_if_15'));
+          reason: 'sync_service_if_15', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'restore_water_logs', error: e);
       } catch (_) {}
@@ -1002,7 +1002,7 @@ extension SyncServiceNutrition on SyncService {
       debugPrint('[SyncService._restoreSavedMeals] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_for_26'));
+          reason: 'sync_service_for_26', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'restore_saved_meals', error: e);
       } catch (_) {}

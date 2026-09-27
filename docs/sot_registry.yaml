@@ -1099,7 +1099,7 @@ concepts:
       columns: [user_id, plan, status, end_date, razorpay_payment_id, razorpay_subscription_id]
     telemetry:
       success_op_types: [subscription_refresh_success, subscription_verify_non_200]
-      failure_op_types: [subscription_refresh_grace_skip, subscription_refresh_expired_state, subscription_refresh_query_returned_null]
+      failure_op_types: [subscription_refresh_grace_skip, subscription_refresh_expired_state, subscription_refresh_no_active_row]
     forbidden_legacy_patterns:
       - { pattern: "configBox\\.get\\('isPro'\\)", reason: "Never read isPro directly from configBox; use SubscriptionService.isPro()" }
       - { pattern: "SubscriptionService\\.instance\\.isPro\\(\\)\\s*\\?\\s|isPro\\s*==\\s*true\\b", reason: "Inline isPro check in widget build method is forbidden; use ref.watch(subscriptionInfoProvider).isPro or subscription.gate()" }
@@ -5324,12 +5324,12 @@ concepts:
       UI errors. All calls are fire-and-forget (unawaited or void).
     writers:
       - file: lib/core/services/error_telemetry.dart
-        line_range: 19-280
+        line_range: 19-423
         method: ErrorTelemetry (whole class)
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync_service.dart
-        line_range: 350-510
+        line_range: 2540-2605
         method: _reportSyncFailure (funnel — all sync failures route through here)
         semantic: pass-through
         fields_read: []
@@ -5346,7 +5346,7 @@ concepts:
           Fires hive_session_opened / hive_session_closed /
           hive_session_reopen_noop events for every owner transition.
       - file: lib/core/services/subscription_service.dart
-        line_range: 197-605
+        line_range: 197-1237
         method: subscription refresh + verify events
         semantic: pass-through
         fields_read: []
@@ -10458,11 +10458,11 @@ concepts:
         method: restoreOpTimeout
         semantic: per-op-ceiling
       - file: lib/core/services/sync_service.dart
-        line_range: 2391-2395
+        line_range: 2424-2428
         method: applyRestoreCeiling
         semantic: apply-ceiling
       - file: lib/core/services/sync_service.dart
-        line_range: 2407-2409
+        line_range: 2440-2442
         method: restoreFailureReason
         semantic: telemetry-reason-split
     readers:

@@ -75,13 +75,17 @@ void main() {
     // reopens the exact blind spot 087 closed). A B-pass review (finding 1,
     // docs/reviews/46c9b9ff3bde-review.md) found this asymmetry and it was
     // evaluated, not overlooked: the real fix is a CLIENT-side rename of
-    // the offending op_type (subscription_refresh_query_returned_null,
-    // lib/core/services/subscription_service.dart:911-912, which matches
-    // the regex's `_null` alternative despite being a benign expected state
-    // transition, not a bug) — tracked as OI-254, naturally in scope for
-    // B2a-2b (client telemetry), not this pure-SQL migration. This test
-    // pins the DECISION so a future "fix" doesn't silently narrow cnt (or
-    // silently widen users/server_events back open) without discussion.
+    // the offending op_type — tracked as OI-254, closed in B2a-2b:
+    // lib/core/services/subscription_service.dart now emits
+    // 'subscription_refresh_no_active_row' instead of the old
+    // 'subscription_refresh_query_returned_null', which matched the
+    // regex's `_null` alternative despite being a benign expected state
+    // transition, not a bug. See
+    // test/contracts/oi254_subscription_refresh_op_type_rename_test.dart.
+    // This test still pins the STRUCTURAL DECISION (cnt stays unscoped by
+    // design) so a future "fix" doesn't silently narrow cnt (or silently
+    // widen users/server_events back open) without discussion — that
+    // decision is independent of any one op_type's name.
     final cntDef =
         "COUNT(DISTINCT (coalesce(user_id::text, 'anon'), left(coalesce(error_message, ''), 200), date_trunc('second', created_at))) AS cnt,";
     expect(body.contains(cntDef), isTrue,

@@ -42,7 +42,7 @@ thresholds:
     info_at:     40    # /hour, distinct events
     warn_at:     100
     critical_at: 200
-    breadth_warn_users: 3      # distinct users among EXCEPTION-SHAPED rows only (excludes the event-coded subscription_refresh_query_returned_null breadcrumb) — trips at least warn
+    breadth_warn_users: 3      # distinct users among EXCEPTION-SHAPED rows only (excludes the event-coded subscription_refresh_no_active_row breadcrumb, renamed from subscription_refresh_query_returned_null in B2a-2b/OI-254) — trips at least warn
     breadth_critical_users: 5
     server_warn_events: 3      # distinct server-shaped events (PGRST00x, 57014 statement-timeout, WORKER_RESOURCE_LIMIT, bare 5xx) — trips at least warn regardless of user breadth
     server_critical_events: 10

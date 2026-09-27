@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**142 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**141 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -148,5 +148,4 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-251 | Retention/vacuum effect is unobserved: return_message '1 row' hides DELETE… | none | never | [:6061](open_issues.md#L6061) |
 | OI-252 | Workout templates: one stable identity (delete/rename propagation, unit… | B-pass self-review (platform blast… | 2026-09-27 — implementation complete and… | [:6082](open_issues.md#L6082) |
 | OI-253 | PendingTemplateDeletes queued delete lost on logout/offline sign-out… | a durable, cross-session delete queue… | never | [:6091](open_issues.md#L6091) |
-| OI-254 | alert_client_errors_spike cnt metric still counts benign event-coded _null… | none | never | [:6112](open_issues.md#L6112) |
-| OI-255 | Migration numbering has no collision-proof allocator -- two branches both… | none (documentation-only; all four… | never | [:6167](open_issues.md#L6167) |
+| OI-255 | Migration numbering has no collision-proof allocator -- two branches both… | none (documentation-only; all four… | never | [:6112](open_issues.md#L6112) |

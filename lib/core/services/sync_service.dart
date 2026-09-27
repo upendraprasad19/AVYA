@@ -1114,9 +1114,15 @@ class SyncService {
         await pushSnapshotNow();
       } catch (e, st) {
         debugPrint('[SyncService.checkAndSync] Snapshot push failed: $e');
-        // audit-2026-05-11 H-42 — telemetry pair.
+        // audit-2026-05-11 H-42 — telemetry pair. skipServerPost:true
+        // (B2a-2b dual-write fix, diagnose — see docs/diagnoses/):
+        // _reportSyncFailure below already posts the canonical,
+        // retry-queue-integrated client_errors row for this failure; this
+        // call now covers Crashlytics only (with the real stack trace `st`,
+        // which _reportSyncFailure's own internal Crashlytics leg cannot
+        // provide since it only receives the error object).
         unawaited(ErrorTelemetry.recordNonFatal(e, st,
-            reason: 'sync_service_catch'));
+            reason: 'sync_service_catch', skipServerPost: true));
         try {
           await _reportSyncFailure(opType: 'check_and_sync_snapshot', error: e);
         } catch (_) {}
@@ -1148,9 +1154,11 @@ class SyncService {
         hscErr.complete();
       }
       debugPrint('[SyncService.checkAndSync] $e');
-      // audit-2026-05-11 H-42 — telemetry pair.
+      // audit-2026-05-11 H-42 — telemetry pair. skipServerPost:true
+      // (B2a-2b dual-write fix, diagnose — see docs/diagnoses/):
+      // _reportSyncFailure below is the canonical client_errors writer.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_if_2'));
+          reason: 'sync_service_if_2', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'check_and_sync', error: e);
       } catch (_) {}
@@ -1317,9 +1325,11 @@ class SyncService {
             debugPrint(
               '[SyncService.pushSnapshot] coach_memory mirror failed: $memErr',
             );
-            // audit-2026-05-11 H-42 — telemetry pair.
+            // audit-2026-05-11 H-42 — telemetry pair. skipServerPost:true
+            // (B2a-2b dual-write fix, diagnose — see docs/diagnoses/):
+            // _reportSyncFailure below is the canonical client_errors writer.
             unawaited(ErrorTelemetry.recordNonFatal(memErr, st,
-                reason: 'sync_service_if_3'));
+                reason: 'sync_service_if_3', skipServerPost: true));
             try {
               await _reportSyncFailure(opType: 'mirror_coach_memory_from_snapshot', error: memErr);
             } catch (_) {}
@@ -1331,9 +1341,11 @@ class SyncService {
     } catch (e, st) {
       // Offline — will retry next scheduled run.
       debugPrint('[SyncService.pushSnapshot] $e');
-      // audit-2026-05-11 H-42 — telemetry pair.
+      // audit-2026-05-11 H-42 — telemetry pair. skipServerPost:true
+      // (B2a-2b dual-write fix, diagnose — see docs/diagnoses/):
+      // _reportSyncFailure below is the canonical client_errors writer.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_catch_2'));
+          reason: 'sync_service_catch_2', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'push_snapshot', error: e);
       } catch (_) {}
@@ -1388,9 +1400,11 @@ class SyncService {
     } catch (e, st) {
       // Partial sync failure — next launch will retry.
       debugPrint('[SyncService.weeklyFullSync] $e');
-      // audit-2026-05-11 H-42 — telemetry pair.
+      // audit-2026-05-11 H-42 — telemetry pair. skipServerPost:true
+      // (B2a-2b dual-write fix, diagnose — see docs/diagnoses/):
+      // _reportSyncFailure below is the canonical client_errors writer.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_weekly_full_sync'));
+          reason: 'sync_service_weekly_full_sync', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'weekly_full_sync', error: e);
       } catch (_) {}
@@ -1496,9 +1510,11 @@ class SyncService {
     } catch (e, st) {
       debugPrint('[SyncService._replayPendingOnboardingSync] failed: $e '
           '— flag left set; will retry next launch');
-      // audit-2026-05-11 H-42 — telemetry pair.
+      // audit-2026-05-11 H-42 — telemetry pair. skipServerPost:true
+      // (B2a-2b dual-write fix, diagnose — see docs/diagnoses/):
+      // _reportSyncFailure below is the canonical client_errors writer.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_if_4'));
+          reason: 'sync_service_if_4', skipServerPost: true));
       unawaited(_reportSyncFailure(
         opType: 'onboarding_sync_replay',
         error: e,
@@ -1558,9 +1574,12 @@ class SyncService {
       );
     } catch (e, st) {
       debugPrint('[SyncService.restoreLightweightAlways] $e');
-      // audit-2026-05-11 H-42 — telemetry pair.
+      // audit-2026-05-11 H-42 — telemetry pair. skipServerPost:true
+      // (B2a-2b dual-write fix, diagnose — see docs/diagnoses/):
+      // _reportSyncFailure below is the canonical client_errors writer.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_restore_lightweight_always'));
+          reason: 'sync_service_restore_lightweight_always',
+          skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'restore_lightweight_always', error: e);
       } catch (_) {}
@@ -1619,9 +1638,11 @@ class SyncService {
     } catch (e, st) {
       // Partial restore is fine — app works offline with whatever we got.
       debugPrint('[SyncService.restoreFromCloud] $e');
-      // audit-2026-05-11 H-42 — telemetry pair.
+      // audit-2026-05-11 H-42 — telemetry pair. skipServerPost:true
+      // (B2a-2b dual-write fix, diagnose — see docs/diagnoses/):
+      // _reportSyncFailure below is the canonical client_errors writer.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_restore_from_cloud'));
+          reason: 'sync_service_restore_from_cloud', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'restore_from_cloud', error: e);
       } catch (_) {}
@@ -1820,9 +1841,11 @@ class SyncService {
       } catch (e, st) {
         // Non-fatal — keep cached subscription state.
         debugPrint('[SyncService.restoreFromCloudForUser] subscription refresh error: $e');
-        // audit-2026-05-11 H-42 — telemetry pair.
+        // audit-2026-05-11 H-42 — telemetry pair. skipServerPost:true
+        // (B2a-2b dual-write fix, diagnose — see docs/diagnoses/):
+        // _reportSyncFailure below is the canonical client_errors writer.
         unawaited(ErrorTelemetry.recordNonFatal(e, st,
-            reason: 'sync_service_catch_3'));
+            reason: 'sync_service_catch_3', skipServerPost: true));
         unawaited(_reportSyncFailure(
             opType: 'subscription_refresh_on_restore', error: e));
       }
@@ -2036,8 +2059,13 @@ class SyncService {
         // Non-fatal — keep cached subscription state (legacy posture).
         debugPrint('[SyncService._attemptSingleCallRestore] '
             'subscription refresh error: $e');
+        // audit-2026-05-11 H-42 — telemetry pair (untagged sibling of the
+        // legacy-path variant above). skipServerPost:true (B2a-2b dual-write
+        // fix, diagnose — see docs/diagnoses/): _reportSyncFailure below is
+        // the canonical client_errors writer.
         unawaited(ErrorTelemetry.recordNonFatal(e, st,
-            reason: 'sync_service_single_call_sub_refresh'));
+            reason: 'sync_service_single_call_sub_refresh',
+            skipServerPost: true));
         unawaited(_reportSyncFailure(
             opType: 'subscription_refresh_on_restore', error: e));
       }
@@ -2155,9 +2183,11 @@ class SyncService {
       }
     } catch (e, st) {
       debugPrint('[SyncService._syncFitnessSummary] $e');
-      // audit-2026-05-11 H-42 — telemetry pair.
+      // audit-2026-05-11 H-42 — telemetry pair. skipServerPost:true
+      // (B2a-2b dual-write fix, diagnose — see docs/diagnoses/):
+      // _reportSyncFailure below is the canonical client_errors writer.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_if_6'));
+          reason: 'sync_service_if_6', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'sync_fitness_summary', error: e);
       } catch (_) {}
@@ -2188,9 +2218,12 @@ class SyncService {
     } catch (e, st) {
       // Offline or error — silently skip.
       debugPrint('[SyncService.pullRecentCrossChannelLogs] $e');
-      // audit-2026-05-11 H-42 — telemetry pair.
+      // audit-2026-05-11 H-42 — telemetry pair. skipServerPost:true
+      // (B2a-2b dual-write fix, diagnose — see docs/diagnoses/):
+      // _reportSyncFailure below is the canonical client_errors writer.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_pull_recent_cross_channel_logs'));
+          reason: 'sync_service_pull_recent_cross_channel_logs',
+          skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'pull_cross_channel_logs', error: e);
       } catch (_) {}
@@ -2418,9 +2451,13 @@ class SyncService {
   /// invariant is what lets the ~30-op fan-out survive a single failing op, so
   /// do not make this method rethrow.
   ///
-  /// The catch reports twice by design (audit-2026-05-11 H-42 — telemetry
-  /// pair): once via [ErrorTelemetry.recordNonFatal] and again inside
-  /// [_reportSyncFailure].
+  /// The catch reports via BOTH [ErrorTelemetry.recordNonFatal] (Crashlytics
+  /// only, via `skipServerPost: true`, real stack trace) AND
+  /// [_reportSyncFailure] (the canonical `client_errors` writer) — audit
+  /// 2026-05-11 H-42's "telemetry pair" shape, corrected 2026-09-27 (B2a-2b
+  /// dual-write fix, diagnose — see docs/diagnoses/): it used to ALSO
+  /// double-post to `client_errors`, since `recordNonFatal` posted there by
+  /// default too. Now exactly one `client_errors` row lands per failure.
   Future<void> _safeRestoreOp(String label, Future<void> task) async {
     // Bug 2026-05-19 (A1 telemetry) — wrap with Stopwatch so client_errors
     // can answer "which restore op is the long pole." LOW-priority op_type
@@ -2444,7 +2481,7 @@ class SyncService {
       debugPrint('[sync/restore] $label '
           '${timedOut ? "TIMED OUT" : "failed"}: $e (${sw.elapsedMilliseconds}ms)');
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: restoreFailureReason(e)));
+          reason: restoreFailureReason(e), skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'restore_$label', error: e);
       } catch (_) {}
@@ -2522,12 +2559,19 @@ class SyncService {
     required Object error,
     int retryCount = 0,
   }) async {
-    // Crashlytics + secondary log-client-error path (idempotent dual
-    // posting; the legacy path below stays as the canonical
-    // client_errors writer for retry-queue continuity).
+    // Crashlytics ONLY here (diagnose — see docs/diagnoses/, B2a-2b).
+    // Pre-fix this ALSO posted its own separate log-client-error row via
+    // recordNonFatal's server leg, so every sync failure inserted TWO
+    // client_errors rows for the one event (comment here used to call
+    // that "idempotent dual posting" — two distinct INSERTs are not
+    // idempotent, they are two rows, with different retry_count values
+    // since recordNonFatal always sends 0). skipServerPost:true leaves
+    // Crashlytics coverage intact and defers to the retry-queue-integrated
+    // POST below, which is the canonical client_errors writer.
     // Stack is unavailable here (this function takes Object only); pass
     // null and let Crashlytics auto-capture.
-    unawaited(ErrorTelemetry.recordNonFatal(error, null, reason: opType));
+    unawaited(ErrorTelemetry.recordNonFatal(error, null,
+        reason: opType, skipServerPost: true));
 
     try {
       final code = error.runtimeType.toString();

@@ -25,7 +25,7 @@ extension SyncServiceHealth on SyncService {
       debugPrint('[SyncService.syncWeightNow] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_sync_weight_now'));
+          reason: 'sync_service_sync_weight_now', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'sync_weight_now', error: e);
       } catch (_) {}
@@ -51,7 +51,7 @@ extension SyncServiceHealth on SyncService {
     } catch (e, st) {
       debugPrint('[SyncService.syncReadinessNow] $e');
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_sync_readiness_now'));
+          reason: 'sync_service_sync_readiness_now', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'sync_readiness_now', error: e);
       } catch (_) {}
@@ -81,7 +81,7 @@ extension SyncServiceHealth on SyncService {
       } catch (e, st) {
         debugPrint('[SyncService._syncReadiness] $dateStr: $e');
         unawaited(ErrorTelemetry.recordNonFatal(e, st,
-            reason: 'sync_service_sync_readiness'));
+            reason: 'sync_service_sync_readiness', skipServerPost: true));
         try {
           await _reportSyncFailure(
               opType: 'upsert_readiness_daily', error: e);
@@ -116,7 +116,7 @@ extension SyncServiceHealth on SyncService {
     } catch (e, st) {
       debugPrint('[SyncService._restoreReadiness] $e');
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_restore_readiness'));
+          reason: 'sync_service_restore_readiness', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'restore_readiness', error: e);
       } catch (_) {}
@@ -163,7 +163,7 @@ extension SyncServiceHealth on SyncService {
           debugPrint('[SyncService.syncSleepNow] list-item $dateStr: $e');
           // audit-2026-05-11 H-42 — telemetry pair.
           unawaited(ErrorTelemetry.recordNonFatal(e, st,
-              reason: 'sync_service_for_4'));
+              reason: 'sync_service_for_4', skipServerPost: true));
           try {
             await _reportSyncFailure(opType: 'upsert_sleep_log_chat', error: e);
           } catch (_) {}
@@ -173,7 +173,7 @@ extension SyncServiceHealth on SyncService {
       debugPrint('[SyncService.syncSleepNow] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_catch_7'));
+          reason: 'sync_service_catch_7', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'sync_sleep_now', error: e);
       } catch (_) {}
@@ -194,7 +194,7 @@ extension SyncServiceHealth on SyncService {
       debugPrint('[SyncService.syncMeasurementsNow] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_sync_measurements_now'));
+          reason: 'sync_service_sync_measurements_now', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'sync_measurements_now', error: e);
       } catch (_) {}
@@ -228,7 +228,7 @@ extension SyncServiceHealth on SyncService {
         debugPrint('[SyncService._syncWeightLogs] $key: $e');
         // audit-2026-05-11 H-42 — telemetry pair.
         unawaited(ErrorTelemetry.recordNonFatal(e, st,
-            reason: 'sync_service_for_5'));
+            reason: 'sync_service_for_5', skipServerPost: true));
         try {
           await _reportSyncFailure(opType: 'upsert_weight_log', error: e);
         } catch (_) {}
@@ -265,7 +265,7 @@ extension SyncServiceHealth on SyncService {
         debugPrint('[SyncService._syncMeasurements] $key: $e');
         // audit-2026-05-11 H-42 — telemetry pair.
         unawaited(ErrorTelemetry.recordNonFatal(e, st,
-            reason: 'sync_service_for_6'));
+            reason: 'sync_service_for_6', skipServerPost: true));
         try {
           await _reportSyncFailure(opType: 'upsert_body_measurement', error: e);
         } catch (_) {}
@@ -302,7 +302,7 @@ extension SyncServiceHealth on SyncService {
         debugPrint('[SyncService._syncSleepLogs] $key: $e');
         // audit-2026-05-11 H-42 — telemetry pair.
         unawaited(ErrorTelemetry.recordNonFatal(e, st,
-            reason: 'sync_service_for_7'));
+            reason: 'sync_service_for_7', skipServerPost: true));
         try {
           await _reportSyncFailure(opType: 'upsert_sleep_log', error: e);
         } catch (_) {}
@@ -336,7 +336,7 @@ extension SyncServiceHealth on SyncService {
         debugPrint('[SyncService._syncStepsLogs] $key: $e');
         // audit-2026-05-11 H-42 — telemetry pair.
         unawaited(ErrorTelemetry.recordNonFatal(e, st,
-            reason: 'sync_service_for_8'));
+            reason: 'sync_service_for_8', skipServerPost: true));
         try {
           await _reportSyncFailure(opType: 'upsert_daily_steps', error: e);
         } catch (_) {}
@@ -367,7 +367,7 @@ extension SyncServiceHealth on SyncService {
         debugPrint('[SyncService._syncUrineColorLogs] $e');
         // audit-2026-05-11 H-42 — telemetry pair.
         unawaited(ErrorTelemetry.recordNonFatal(e, st,
-            reason: 'sync_service_for_9'));
+            reason: 'sync_service_for_9', skipServerPost: true));
         try {
           await _reportSyncFailure(opType: 'upsert_urine_color_log', error: e);
         } catch (_) {}
@@ -406,7 +406,7 @@ extension SyncServiceHealth on SyncService {
       debugPrint('[SyncService._restoreWeightLogs] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_for_17'));
+          reason: 'sync_service_for_17', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'restore_weight_logs', error: e);
       } catch (_) {}
@@ -439,7 +439,7 @@ extension SyncServiceHealth on SyncService {
       debugPrint('[SyncService._restoreMeasurements] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_for_18'));
+          reason: 'sync_service_for_18', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'restore_measurements', error: e);
       } catch (_) {}
@@ -482,7 +482,7 @@ extension SyncServiceHealth on SyncService {
       debugPrint('[SyncService._restoreSleepLogs] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_for_19'));
+          reason: 'sync_service_for_19', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'restore_sleep_logs', error: e);
       } catch (_) {}
@@ -530,7 +530,7 @@ extension SyncServiceHealth on SyncService {
       debugPrint('[SyncService._restoreStepsLogs] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_for_20'));
+          reason: 'sync_service_for_20', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'restore_steps_logs', error: e);
       } catch (_) {}
