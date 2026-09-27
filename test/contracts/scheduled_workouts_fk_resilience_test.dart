@@ -3,7 +3,12 @@
 //
 // Source-grep contract test (matches the established pattern in
 // test/contracts/ist_sweep_no_utc_substring_test.dart). Pins:
-//   • per-call cache `templateNameToCloudId` exists
+//   • `resolveCloudTemplateId` resolves via the pure `cloudIdFromKey` key
+//     conversion (OI-252 stable-ID rework superseded the original
+//     name-lookup-plus-cache design this test pinned pre-OI-252 — the
+//     cloud id is now embedded directly in the Hive key, so there is no
+//     network SELECT left to cache against; see the corrected finding
+//     below)
 //   • `'23503'` literal present (FK-violation discriminator)
 //   • `scheduled_workout_fk_recovered` op_type emitted on retry success
 //   • `scheduled_workout_template_orphaned` op_type emitted on null fallback
@@ -11,6 +16,21 @@
 //     never matched cloud's gen_random_uuid()) is gone
 //
 // See docs/diagnoses/2026-05-10-fk-violation-saturday-c8e4a1.md.
+//
+// Corrected 2026-09-27 (OI-252 batch full-suite verification): the original
+// `templateNameToCloudId` per-call-cache assertion pinned the PRE-OI-252
+// architecture (a name-based Supabase SELECT + an in-memory cache to avoid
+// N×SELECT on a week of schedule rows sharing one template). OI-252's
+// stable client-minted UUID identity replaced that lookup entirely with a
+// pure, synchronous `cloudIdFromKey()` parse of the Hive key itself — see
+// `sync_workout.dart`'s `resolveCloudTemplateId`, whose own comment states
+// "no network call and no cache needed". The cache assertion had gone
+// stale (the architecture it guarded no longer exists) without anyone
+// updating this test, because the full test suite had not run on this
+// branch since the OI-252 rework landed. Confirmed via
+// `git diff 034d8100..HEAD -- lib/core/services/sync/sync_workout.dart`
+// that this specific function predates the current B-pass remediation
+// session entirely — not a regression introduced by it.
 
 import 'package:flutter_test/flutter_test.dart';
 
@@ -24,11 +44,24 @@ void main() {
       src = loadSyncServiceSource().readAsStringSync();
     });
 
-    test('per-call cache `templateNameToCloudId` is present', () {
+    test('resolveCloudTemplateId resolves via the pure cloudIdFromKey '
+        'conversion (OI-252 — no network lookup, no cache)', () {
       expect(
-        src.contains('templateNameToCloudId'),
+        src.contains('resolveCloudTemplateId'),
         isTrue,
-        reason: 'Per-call cache eliminates N×SELECT on shared template names',
+        reason:
+            'The self-healing 23503 recovery path must still resolve a '
+            'cloud template id from the schedule row\'s Hive-key '
+            'template_id before pushing.',
+      );
+      expect(
+        src.contains('cloudIdFromKey(rawHiveTemplateId)'),
+        isTrue,
+        reason:
+            'OI-252: the cloud id is embedded in the tmpl_<uuid> Hive key '
+            'itself, so resolution must be a pure key parse — a name-based '
+            'Supabase SELECT here would reintroduce the N×SELECT problem '
+            'the old templateNameToCloudId cache existed to avoid.',
       );
     });
 

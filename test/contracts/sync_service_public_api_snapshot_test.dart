@@ -128,7 +128,18 @@ void main() {
         'restoreWeightLogsForSyncDomain',
         'restoreWorkoutLogsForSyncDomain',
         'restoreWorkoutPlanForSyncDomain',
+        // OI-252 — test seam: injects preFetched user_progress rows (+ an
+        // optional pre-resolved deleted-template-id set) so the ghost-day
+        // filter is behaviorally testable without a live Supabase query;
+        // delegates to _restoreWorkoutPlan, production path unchanged.
+        'restoreWorkoutPlanForTest',
         'restoreWorkoutTemplatesForSyncDomain',
+        // OI-252 B-pass finding 2 (2026-09-27) — test seam: injects
+        // preFetched workout_templates rows so the legacy-key-migrator gate
+        // added to _restoreWorkoutTemplates is behaviorally testable without
+        // a live Supabase query for the row read itself; delegates to
+        // _restoreWorkoutTemplates, production path unchanged.
+        'restoreWorkoutTemplatesForTest',
       };
 
       final files = <File>[
