@@ -1503,6 +1503,13 @@ extension SyncServiceWorkout on SyncService {
                 // audit-2026-05-11 H-42 — telemetry pair.
                 unawaited(ErrorTelemetry.recordNonFatal(exErr, st,
                     reason: 'sync_service_for_24'));
+                // `_reportSyncFailure` is the only path to the server-side
+                // client_errors table (recordNonFatal above is
+                // Crashlytics-only) — kept, same op string as pre-Task-16.
+                // `unawaited` so the closure returns promptly (Task 13
+                // precedent, the exlog per-set catch).
+                unawaited(_reportSyncFailure(
+                    opType: 'upsert_template_exercise', error: exErr));
                 // Bundle atomicity (Task 16): one failed exercise fails the
                 // WHOLE bundle -- every write here is idempotent, so
                 // retrying the header + all exercises + the vacuum next
