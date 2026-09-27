@@ -435,11 +435,14 @@ extension SyncServiceWorkout on SyncService {
                 // G1 (spec §7): a catch inside pushIfChanged( must rethrow or
                 // return false; -- the bundle is NOT fully synced, so nothing
                 // is recorded and the whole bundle (summary + sets) re-pushes
-                // next pass. A domain-specific `_reportSyncFailure` call is
-                // deliberately not duplicated here: an "unconfirmed" push
-                // reports nothing (plan D4) -- the Crashlytics non-fatal
-                // above plus SyncSkipIndex's own `unconfirmed` counter is the
-                // record.
+                // next pass. Fix round 1 (2026-09-27): `_reportSyncFailure` is
+                // the only path to the server-side `client_errors` row
+                // (via the log-client-error Edge Function) that server
+                // alerting reads -- `ErrorTelemetry.recordNonFatal` above is
+                // Crashlytics-only. `unawaited` (not `await`) so the closure
+                // returns promptly.
+                unawaited(_reportSyncFailure(
+                    opType: 'upsert_workout_log_sets', error: e));
                 return false;
               }
             }

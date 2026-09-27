@@ -7,6 +7,33 @@ import 'package:icanbefitter/core/services/sync_service.dart';
 
 import '../sync/sync_domain_skip_harness.dart';
 
+/// Fix round 1 (2026-09-27) helper. `_reportSyncFailure` fires `unawaited`
+/// (the fix brief requires the closure return promptly), so its
+/// `log-client-error` POST can land a tick or two after the push call
+/// returns; `ErrorTelemetry.recordNonFatal` ALSO posts to `log-client-error`
+/// on the SAME failure, but with `op_type` set to its own internal `reason`
+/// string (e.g. `sync_service_for_3`), not the domain op string -- so the
+/// filter must match on `op_type`, not merely count every log-client-error
+/// call. Polls briefly rather than a bare delay -- fast on the happy path,
+/// robust under full-suite load contention (CLAUDE.md's own documented class
+/// of full-suite-only timing flakiness).
+Future<List<dynamic>> _logClientErrorReports(SyncHarness h, String opType,
+    {int maxWaitMs = 500}) async {
+  List<dynamic> matches() => h.server.requests
+      .where((r) =>
+          r.path == '/functions/v1/log-client-error' &&
+          r.body is Map &&
+          (r.body as Map)['op_type'] == opType)
+      .toList();
+  final deadline = DateTime.now().add(Duration(milliseconds: maxWaitMs));
+  var found = matches();
+  while (found.isEmpty && DateTime.now().isBefore(deadline)) {
+    await Future.delayed(const Duration(milliseconds: 20));
+    found = matches();
+  }
+  return found;
+}
+
 void main() {
   group('nlogPayloadFingerprint (kept byte-identical -- plan D4, no re-push burst)', () {
     test('same payload -> same fingerprint, 36-char UUID shape', () {
@@ -147,6 +174,37 @@ void main() {
           SyncSkipIndex.readIndex(
               skipBoxOf(SyncSkipDomain.nlog), SyncSkipDomain.nlog.indexKey),
           isEmpty);
+      // Fix round 1 (2026-09-27): _reportSyncFailure is the only path to the
+      // server-side client_errors row (via the log-client-error Edge
+      // Function) that server alerting reads. Exactly ONE CALL to
+      // _reportSyncFailure for the whole failed slot (not one per item) --
+      // the no-flood property: abandon-on-first-failure means only item 0's
+      // catch ever runs, and its `unawaited(_reportSyncFailure(...))` fires
+      // once. ErrorTelemetry.recordNonFatal (called just above in the same
+      // catch, tagged with its own internal reason 'sync_service_for_3', not
+      // the domain op_type) is a SEPARATE call filtered out by op_type (see
+      // _logClientErrorReports' doc comment above).
+      //
+      // The expected COUNT for that one call is 2, not 1:
+      // `_reportSyncFailure` (sync_service.dart:2447) dual-posts to
+      // log-client-error by design -- once via its own explicit
+      // `functions.invoke`, once via its internal
+      // `ErrorTelemetry.recordNonFatal(reason: opType)` call, whose
+      // log-client-error leg uses `reason` AS the op_type
+      // (error_telemetry.dart:267, "idempotent dual posting", pinned by
+      // test/sync/sync_telemetry_test.dart) -- both requests therefore carry
+      // op_type upsert_nutrition_log_item. The no-flood property this test
+      // pins is that the count stays fixed at 2 (one _reportSyncFailure
+      // call's worth) regardless of item count, NOT that it scales to 4 with
+      // this fixture's two items -- "try every item" would produce exactly
+      // that 4, since each item's own failure would trigger its own
+      // dual-posted pair.
+      final reports =
+          await _logClientErrorReports(h, 'upsert_nutrition_log_item');
+      expect(reports, hasLength(2),
+          reason: 'one _reportSyncFailure call worth of log-client-error '
+              'reports (dual-posted by design) for the whole slot -- not '
+              'one pair per item, with op_type upsert_nutrition_log_item');
       h.server
         ..clear()
         ..failWritesTo.remove('nutrition_log_items');

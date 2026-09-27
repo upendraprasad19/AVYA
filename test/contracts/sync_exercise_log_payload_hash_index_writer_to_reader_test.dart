@@ -9,6 +9,33 @@ import 'package:icanbefitter/core/services/sync_service.dart';
 import '../helpers/hive_test_setup.dart' show kTestUserId;
 import '../sync/sync_domain_skip_harness.dart';
 
+/// Fix round 1 (2026-09-27) helper. `_reportSyncFailure` fires `unawaited`
+/// (the fix brief requires the closure return promptly), so its
+/// `log-client-error` POST can land a tick or two after the push call
+/// returns; `ErrorTelemetry.recordNonFatal` ALSO posts to `log-client-error`
+/// on the SAME failure, but with `op_type` set to its own internal `reason`
+/// string (e.g. `sync_service_if_7`), not the domain op string -- so the
+/// filter must match on `op_type`, not merely count every log-client-error
+/// call. Polls briefly rather than a bare delay -- fast on the happy path,
+/// robust under full-suite load contention (CLAUDE.md's own documented class
+/// of full-suite-only timing flakiness).
+Future<List<dynamic>> _logClientErrorReports(SyncHarness h, String opType,
+    {int maxWaitMs = 500}) async {
+  List<dynamic> matches() => h.server.requests
+      .where((r) =>
+          r.path == '/functions/v1/log-client-error' &&
+          r.body is Map &&
+          (r.body as Map)['op_type'] == opType)
+      .toList();
+  final deadline = DateTime.now().add(Duration(milliseconds: maxWaitMs));
+  var found = matches();
+  while (found.isEmpty && DateTime.now().isBefore(deadline)) {
+    await Future.delayed(const Duration(milliseconds: 20));
+    found = matches();
+  }
+  return found;
+}
+
 void main() {
   group('exlogPayloadFingerprint (kept byte-identical -- plan D4, no re-push burst)', () {
     test('same payload -> same fingerprint, 36-char UUID shape', () {
@@ -108,6 +135,30 @@ void main() {
               skipBoxOf(SyncSkipDomain.exlog), SyncSkipDomain.exlog.indexKey),
           isEmpty,
           reason: 'a failed per-set write must not confirm the bundle');
+      // Fix round 1 (2026-09-27): _reportSyncFailure is the only path to the
+      // server-side client_errors row (via the log-client-error Edge
+      // Function) that server alerting reads -- the debugPrint + the
+      // preceding ErrorTelemetry.recordNonFatal(reason: 'sync_service_if_7')
+      // above are Crashlytics-tagged with an INTERNAL reason string, not the
+      // domain op_type (see _logClientErrorReports' doc comment above). The
+      // call is `unawaited` (the fix brief requires the closure return
+      // promptly), so poll for it rather than assuming it has landed the
+      // instant the push returns. Do NOT assert an exact count here:
+      // `_reportSyncFailure` (sync_service.dart:2447) itself dual-posts to
+      // log-client-error -- once via its own explicit `functions.invoke`,
+      // once via its internal `ErrorTelemetry.recordNonFatal(reason:
+      // opType)` call, whose log-client-error leg uses `reason` AS the
+      // op_type (error_telemetry.dart:267, "idempotent dual posting", pinned
+      // by test/sync/sync_telemetry_test.dart) -- so ONE call to
+      // _reportSyncFailure yields TWO requests with this op_type. That
+      // multiplier is pre-existing, unrelated to this fix, and not a
+      // no-flood property this test needs to pin (the nlog sibling test
+      // pins the no-flood property instead, where the item count varies).
+      final reports =
+          await _logClientErrorReports(h, 'upsert_workout_log_sets');
+      expect(reports, isNotEmpty,
+          reason: 'the per-set failure must report to log-client-error '
+              'with op_type upsert_workout_log_sets');
       h.server
         ..clear()
         ..failWritesTo.remove('workout_log_sets');

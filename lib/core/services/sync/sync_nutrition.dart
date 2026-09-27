@@ -385,6 +385,16 @@ extension SyncServiceNutrition on SyncService {
                   debugPrint('[SyncService._syncNutritionLogs] item $i: $itemErr');
                   unawaited(ErrorTelemetry.recordNonFatal(itemErr, st,
                       reason: 'sync_service_for_3'));
+                  // Fix round 1 (2026-09-27): restores the server-side
+                  // client_errors report (log-client-error EF) this catch
+                  // had before this task -- ErrorTelemetry.recordNonFatal
+                  // above is Crashlytics-only. Since nlog now abandons on
+                  // the FIRST failing item (G1's rethrow-or-return-false
+                  // rule), this emits at most ONE report per slot per pass
+                  // -- strictly fewer EF calls than before, which reported
+                  // per item.
+                  unawaited(_reportSyncFailure(
+                      opType: 'upsert_nutrition_log_item', error: itemErr));
                   return false;
                 }
               }

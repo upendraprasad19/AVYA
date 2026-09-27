@@ -2179,7 +2179,7 @@ concepts:
       setting the old `exlogBundleSynced` flag checked after the try.
     writers:
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 180-465
+        line_range: 180-468
         method: _syncExerciseLogs (constructs a SyncSkipIndex(domain: SyncSkipDomain.exlog) and drives the summary + per-set upserts through its pushIfChanged closure -- the helper stores index[key]=fp ON CONFIRMED FULL-BUNDLE SUCCESS ONLY; commit(liveKeys:) prunes to live exlog_ keys and persists after the loop)
       - file: lib/core/services/sync_service.dart
         line_range: 358-386
@@ -2190,7 +2190,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 180-465
+        line_range: 180-468
         method: _syncExerciseLogs (the skip decision is now internal to SyncSkipIndex.pushIfChanged, which reads its own `_stored[rowKey]` -- hydrated from readIndex(box, domain.indexKey) in the SyncSkipIndex constructor)
         semantic: latest
         fields_read: [sync_exlog_payload_hash_index.<exlog_key>]
@@ -2313,7 +2313,7 @@ concepts:
       is not a regression.
     writers:
       - file: lib/core/services/sync/sync_nutrition.dart
-        line_range: 201-422
+        line_range: 201-432
         method: _syncNutritionLogs (constructs a SyncSkipIndex(domain: SyncSkipDomain.nlog) and drives the parent + item + vacuum writes through its pushIfChanged closure -- stores index[slotId]=nlogFp ON CONFIRMED FULL-BUNDLE SUCCESS ONLY; commit(liveKeys:) prunes to live slots + persists after the loop, or CLEARS the index entirely when disabled)
       - file: lib/core/services/sync_service.dart
         line_range: 358-418
@@ -2324,7 +2324,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_nutrition.dart
-        line_range: 201-422
+        line_range: 201-432
         method: _syncNutritionLogs (the skip decision is now internal to SyncSkipIndex.pushIfChanged, which reads its own `_stored[rowKey]` -- hydrated from readIndex(box, domain.indexKey) in the SyncSkipIndex constructor)
         semantic: latest
         fields_read: [sync_nlog_payload_hash_index.<slot_id>]
