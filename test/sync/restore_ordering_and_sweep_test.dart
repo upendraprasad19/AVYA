@@ -76,30 +76,51 @@ void main() {
     });
   });
 
-  group('templates stale-key sweep', () {
-    test('_restoreWorkoutTemplates collects canonicalKeys + sweeps stragglers', () {
+  group('templates deleted-row removal (OI-252 — replaces the old stale-key sweep)', () {
+    // OI-252 (2026-09-27): the old canonicalKeys/deleteAll SWEEP (delete
+    // every local tmpl_* not in the cloud's live set) is GONE entirely —
+    // deliberately, per round-review: a blanket sweep would delete every
+    // not-yet-pushed local template on a device's first restore. It is
+    // replaced by POSITIVE-EVIDENCE-ONLY removal, keyed on each row's own
+    // `deleted_at` tombstone (migration 145's rename-on-delete trigger),
+    // never on absence from a snapshot. These 3 tests previously pinned the
+    // sweep mechanism; repointed (not deleted — CLAUDE.md's
+    // extraction-breaks-source-grep-contracts pitfall) to the mechanism
+    // that replaced it. Behavioral coverage for the removal itself lives in
+    // test/sync/oi252_deleted_template_restore_behavioral_test.dart.
+    test('_restoreWorkoutTemplates removes a local copy on positive '
+        'deleted_at evidence, never on mere absence', () {
       final method = _extractMethod(source, '_restoreWorkoutTemplates');
-      expect(method, contains('canonicalKeys'),
-          reason: 'must track canonical keys during write');
-      expect(method, contains("startsWith('tmpl_')"),
-          reason: 'sweep must scan tmpl_* keys');
-      expect(method, contains('deleteAll'),
-          reason: 'sweep must call deleteAll for stale keys');
-      expect(method, contains('canonicalKeys.contains'),
-          reason: 'sweep must filter by canonicalKeys.contains');
+      expect(method, contains("map['deleted_at'] != null"),
+          reason: 'removal must be keyed on the row\'s OWN tombstone field, '
+              'not on it being missing from any collected set');
+      expect(method, contains('_hive.workoutBox.delete(hiveKey)'),
+          reason: 'a locally-cached copy of a tombstoned template must be '
+              'removed');
     });
 
-    test('sweep is gated on canonicalKeys.isNotEmpty (defensive against query failure)', () {
+    test('an offline local delete is never undone by a racing restore', () {
       final method = _extractMethod(source, '_restoreWorkoutTemplates');
-      expect(method, contains('canonicalKeys.isNotEmpty'),
-          reason: 'must skip sweep when cloud returned zero rows');
+      expect(method, contains('pendingDeleteIds'),
+          reason: 'a row this device itself queued for deletion via '
+              'PendingTemplateDeletes must be skipped even while the cloud '
+              'still (briefly) reports it live — the new mechanism\'s '
+              'analogue of the old sweep\'s query-failure defensiveness: '
+              'never act on stale/partial state as though it were '
+              'authoritative');
     });
 
-    test('sweep emits telemetry event for observability', () {
+    test('removal cleans schedule references + emits telemetry for '
+        'observability', () {
       final method = _extractMethod(source, '_restoreWorkoutTemplates');
-      expect(method, contains('templates_stale_keys_swept'),
-          reason: 'op_type lets us correlate "templates dup" reports to '
-              'sweep frequency in client_errors');
+      expect(method, contains('_cleanScheduleReferencesToTemplate'),
+          reason: 'a removed template must not leave dangling schedule_* '
+              'references behind');
+      expect(method, contains('deleted_template_removed_during_restore'),
+          reason: 'op_type lets us correlate "template resurrected" '
+              'reports to removal frequency in client_errors — the '
+              'observability parity the old sweep\'s '
+              '"templates_stale_keys_swept" event provided');
     });
   });
 }

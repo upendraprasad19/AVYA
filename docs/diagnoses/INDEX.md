@@ -6,6 +6,10 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### workout_templates (2 bugs)
+- 2026-09-27 f4a8c2 — Found by the reuse audit. Deleting a workout template on one device, then restoring on another (or after a reinstall), could bring the deleted template — and any workout day scheduled against it —…
+- 2026-05-08 5a36ad — Sync stack had systemic failures — workout templates were not deduped (UNIQUE constraint added), streak pill showed cached value instead of live calculateCurrentStreak(), completed_at was overwritten…
+
 ### custom_exercises_mutations (3 bugs)
 - 2026-09-26 d5c2e8 — Found by the reuse audit, not by a user report. `CreateCustomExerciseSheet` created a custom exercise with a raw `HiveService.instance.customBox.put` plus a hand-rolled `syncCustomItemsNow()` /…
 - 2026-09-17 e7b2d4 — Founder, logged in as Upendra, doing his morning workout in the active-workout screen: searching the SWAP EXERCISE picker for his own custom exercise `Single Leg Front Lever` returned nothing. The…
@@ -1356,9 +1360,6 @@ rather than a Hive box. (1 bugs)
 ### workout_template_sync (1 bugs)
 - 2026-05-10 a8b2c7 — _syncWorkoutTemplates used a DELETE-then-INSERT pattern for child template_exercises rows. If the DELETE succeeded but a subsequent INSERT errored mid-loop (network blip, FK constraint, payload…
 
-### workout_templates (1 bugs)
-- 2026-05-08 5a36ad — Sync stack had systemic failures — workout templates were not deduped (UNIQUE constraint added), streak pill showed cached value instead of live calculateCurrentStreak(), completed_at was overwritten…
-
 ### subscription_payment_grace_window (2 bugs)
 - 2026-05-06 5456c4 — Multiple issues in one batch — PRO upgrade did not unlock after payment, receipt showed wrong set counts, today card had duplicate text, weight chart decimals were static, swap kept stale…
 - 2026-05-06 d9b546 — PRO unlock still failed systemically across multiple code paths; logging_type repair migrator was not library-aware, repairing to wrong types for exercises present in the library.
@@ -1397,6 +1398,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-27 | f4a8c2 | Found by the reuse audit. Deleting a workout template on one device, then restoring on another (or after a reinstall), could bring the deleted template — and any workout day scheduled against it —… | workout_templates | test/sync/oi252_deleted_template_restore_behavioral_test.dart |
 | 2026-09-26 | d5c2e8 | Found by the reuse audit, not by a user report. `CreateCustomExerciseSheet` created a custom exercise with a raw `HiveService.instance.customBox.put` plus a hand-rolled `syncCustomItemsNow()` /… | custom_exercises_mutations | test/contracts/custom_exercises_mutations_behavioral_test.dart |
 | 2026-09-26 | d6b2f9 | pg_cron job 41 `db_maintenance_nightly` FAILED every run 2026-09-22 → 09-26 (5/5, `ERROR: VACUUM cannot run inside a transaction block`, avg 0.93 s). Because pg_cron executes a multi-statement command… | Migration 141 (disk-IO audit, 2026-09-22) consolidated six single-statement maintenance jobs into one command: four `SELECT cleanup_*()` + two `VACUUM (ANALYZE)`. With `cron.use_background_workers=off` (live) pg_cron sends the command over libpq as one simple query, which Postgres runs as a single implicit transaction; VACUUM refuses to run in a transaction block. As separate single-statement jobs (pre-141 jobids 35/36) the same VACUUMs succeeded every night 09-06 → 09-20 — the consolidation, not the statements, is the defect. 141's registry row even described the new shape as an improvement ("sequenced explicitly AFTER retention in the same job"). | test/contracts/cron_vacuum_single_statement_test.dart |
 | 2026-09-26 | b3f8e5 | CI "Unit Tests" failed intermittently on `test/contracts/realtime_pro_gate_behavioral_test.dart` — "e4a7c9 — the teardown half … THE SECOND BUG: a downgrade fires onDowngrade" — `Expected: true… | `isPro()` on an expired row starts `_downgradeLocally()` WITHOUT awaiting it (`subscription_service.dart:480-483`, and :461 for the cross-account wipe) — correct, since isPro() is a synchronous bool. `_downgradeLocally` (:1175) awaits its Hive writes one at a time (:1191-1195), then fires onStateChanged (:1199), then onDowngrade (:1213). The tests waited for that chain with a PROXY (`pumpEventQueue()`, a banner `_settle` quiescence sampler, a fixed sleep). Every write after the first await sits behind real per-box-serialised file I/O, so on a loaded runner the proxy returned first: the assertion read pre-downgrade state, and the file's tearDown then closed Hive under the still running chain, which is where the trailing Box-not-found comes from. The fix waits for the production signal (onDowngrade, which has exactly one caller) instead of any proxy. | test/contracts/pro_downgrade_waiter_behavioral_test.dart |

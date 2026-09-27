@@ -4,8 +4,8 @@
     "project_id": "dedsavbjuwgarrhphgnl",
     "captured_at": "2026-08-26",
     "captured_via": "SELECT table_name, array_agg(column_name) FROM information_schema.columns WHERE table_schema='public' GROUP BY table_name",
-    "regenerated_at": "2026-09-21",
-    "regenerated_for": "migration 138 (subscriptions.cancelled_at trigger, observation-batch-and-digest-redesign B3). Verified against live information_schema on project dedsavbjuwgarrhphgnl AFTER the apply (cloud version 20260921172242, ordinal_position 12). subscriptions gained one column; no other table changed. Migration 139 (alert_cron_failures) is a cron.schedule() job only, adds no column, moves nothing here."
+    "regenerated_at": "2026-09-27",
+    "regenerated_for": "migration 145 (OI-252, workout_templates soft-delete/rename-on-delete tombstone). Verified against live information_schema on project dedsavbjuwgarrhphgnl AFTER the apply (cloud version 20260927011446, ordinal_position 11 -- confirmed via ORDER BY ordinal_position live query). workout_templates gained one nullable column (deleted_at); no other table changed. Two live cloud migrations (20260926183009 alert_sql_job_failures, 20260926183056 alert_cron_job_silent) are visible in list_migrations but absent from this worktree's local supabase/migrations/ -- local main is behind origin/main; neither touches a table column (cron.schedule() jobs), so this snapshot is unaffected, but check_migrations_applied may still flag them as unrecorded until this worktree syncs with main."
   },
   "storage_buckets": [
     "chat-media",
@@ -702,7 +702,8 @@
       "source",
       "is_active",
       "created_at",
-      "last_used_at"
+      "last_used_at",
+      "deleted_at"
     ]
   }
 }

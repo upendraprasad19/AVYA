@@ -19,6 +19,7 @@ import 'package:icanbefitter/core/services/singleton_lifecycle_registry.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/sync_coalescer.dart';
+import 'package:icanbefitter/core/services/template_service.dart';
 import 'package:icanbefitter/core/services/sync_domain.dart';
 import 'package:icanbefitter/core/services/sync_domains/coach_sync_domain.dart';
 import 'package:icanbefitter/core/services/sync_domains/community_sync_domain.dart';
@@ -31,7 +32,10 @@ import 'package:icanbefitter/core/services/sync_domains/workouts_sync_domain.dar
 import 'package:icanbefitter/core/services/sync_error.dart';
 import 'package:icanbefitter/core/services/sync_flags.dart';
 import 'package:icanbefitter/core/services/nutrition_write_service.dart';
+import 'package:icanbefitter/core/services/pending_template_deletes.dart';
 import 'package:icanbefitter/core/services/sync_queue.dart';
+import 'package:icanbefitter/core/services/template_identity.dart';
+import 'package:icanbefitter/core/services/template_identity_migrator.dart';
 import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/utils/equipment_vocab.dart';

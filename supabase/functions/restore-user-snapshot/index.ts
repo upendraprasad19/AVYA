@@ -157,12 +157,19 @@ serve(async (req: Request) => {
       "user_preferences",
       db.from("user_preferences").select("*").eq("user_id", vUid).limit(1),
     );
+    // OI-252 (stable ID rework): NO `is_active` filter -- the client now
+    // needs BOTH live rows (to restore) AND deleted rows (to remove any
+    // local copy + clean their schedules). `deleted_at` is on `*` already
+    // (migration 145). Order live-first (nullsFirst) so a `.limit(500)`
+    // clip loses stale delete evidence before it loses a live template --
+    // a user is far likelier to approach 500 live templates than 500
+    // deletes.
     tables["workout_templates"] = await q(
       "workout_templates",
       db.from("workout_templates")
         .select("*, template_exercises(*)")
         .eq("user_id", vUid)
-        .eq("is_active", true)
+        .order("deleted_at", { ascending: true, nullsFirst: true })
         .limit(500),
     );
     // workout_plan = the plan_json snapshot on user_progress (parser reads rows.first['plan_json']).
@@ -236,10 +243,13 @@ serve(async (req: Request) => {
       db.from("streaks").select("*").eq("user_id", vUid)
         .order("week_start", { ascending: false }).limit(52),
     );
+    // OI-252: `deleted_at` added to the embed so the client can tell a
+    // deleted template's schedule day apart from a merely-missing embed
+    // (a genuinely orphaned FK) -- the two need different handling.
     tables["scheduled_workouts"] = await q(
       "scheduled_workouts",
       db.from("scheduled_workouts")
-        .select("*, template:template_id(id, name, workout_type, template_exercises(*))")
+        .select("*, template:template_id(id, name, workout_type, deleted_at, template_exercises(*))")
         .eq("user_id", vUid)
         .gte("scheduled_date", SINCE_DATE)
         .order("scheduled_date")
