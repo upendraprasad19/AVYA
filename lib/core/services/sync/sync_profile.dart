@@ -24,7 +24,7 @@ extension SyncServiceProfile on SyncService {
           '$e\n$st');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_sync_profile_now'));
+          reason: 'sync_service_sync_profile_now', skipServerPost: true));
       unawaited(_reportSyncFailure(
         opType: 'upsert_user_profile',
         error: e,
@@ -43,7 +43,7 @@ extension SyncServiceProfile on SyncService {
       debugPrint('[SyncService.syncProgressNow] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_sync_progress_now'));
+          reason: 'sync_service_sync_progress_now', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'sync_progress_now', error: e);
       } catch (_) {}
@@ -273,7 +273,7 @@ extension SyncServiceProfile on SyncService {
         // later by the backoff schedule.
         unawaited(ErrorTelemetry.recordNonFatal(
             StateError('${err.code}: ${err.message}'), StackTrace.current,
-            reason: 'sync_service_sync_user_profile_enqueued'));
+            reason: 'sync_service_sync_user_profile_enqueued', skipServerPost: true));
         try {
           await _reportSyncFailure(opType: 'upsert_user_profile', error: err);
         } catch (_) {}
@@ -433,7 +433,7 @@ extension SyncServiceProfile on SyncService {
       debugPrint('[SyncService._syncUserProgress] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_sync_user_progress'));
+          reason: 'sync_service_sync_user_progress', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'sync_user_progress', error: e);
       } catch (_) {}
@@ -687,7 +687,7 @@ extension SyncServiceProfile on SyncService {
       debugPrint('[SyncService._syncUserPreferences] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_sync_user_preferences'));
+          reason: 'sync_service_sync_user_preferences', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'upsert_user_preferences', error: e);
       } catch (_) {}
@@ -832,7 +832,7 @@ extension SyncServiceProfile on SyncService {
       debugPrint('[SyncService._restoreUserProfile] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_catch_9'));
+          reason: 'sync_service_catch_9', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'restore_user_profile', error: e);
       } catch (_) {}
@@ -957,7 +957,7 @@ extension SyncServiceProfile on SyncService {
       debugPrint('[SyncService._restoreUserProgress] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_restore_user_progress'));
+          reason: 'sync_service_restore_user_progress', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'restore_user_progress', error: e);
       } catch (_) {}
@@ -1033,7 +1033,7 @@ extension SyncServiceProfile on SyncService {
       debugPrint('[SyncService._restoreUserPreferences] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_restore_user_preferences'));
+          reason: 'sync_service_restore_user_preferences', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'restore_user_preferences', error: e);
       } catch (_) {}

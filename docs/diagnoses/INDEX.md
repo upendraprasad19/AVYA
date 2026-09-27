@@ -10,6 +10,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 - 2026-09-27 d2c9f4 — The live alert_client_errors_spike sub-block of ops_alerts_30min (jobid 43) counted RAW client_errors rows over a 1-hour window, with no offline-noise exclusion, no per-user breadth signal, and no…
 - 2026-06-06 f0b9d3 — The alert_client_errors_spike cron paged critical for benign volume. Alert #24 fired "client_errors spike: 354 rows in last hour" (critical) for what was the founder's own reinstall/restore burst on…
 
+### sync_error_telemetry (1 bugs)
+- 2026-09-27 f7b2c9 — Three independent client-side telemetry defects, scoped together as unit B2a-2b of the ops-alerting batch (the "client classification, queue drift, dual write" scope named by the original —…
+
 ### usage_quota_ledger (new key prediction_daily) + ai_proxy_input_limits (1 bugs)
 - 2026-09-26 125b81 — ai-proxy's `type: "prediction"` branch (`ai-proxy/index.ts:700-757` before this fix) had three defects, each verified by reading the code on 2026-09-26: 1. Unmetered. No quota, no tier check. Every…
 
@@ -1412,6 +1415,7 @@ rather than a Hive box. (1 bugs)
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
 | 2026-09-27 | d2c9f4 | The live alert_client_errors_spike sub-block of ops_alerts_30min (jobid 43) counted RAW client_errors rows over a 1-hour window, with no offline-noise exclusion, no per-user breadth signal, and no… | alert_threshold_tuning | test/contracts/ops_alerts_spike_breadth_test.dart |
+| 2026-09-27 | f7b2c9 | Three independent client-side telemetry defects, scoped together as unit B2a-2b of the ops-alerting batch (the "client classification, queue drift, dual write" scope named by the original —… | sync_error_telemetry | test/sync/sync_telemetry_test.dart (Fix 1); test/contracts/oi254_subscription_refresh_op_type_rename_test.dart (Fix 2); test/contracts/offline_signature_migration_147_parity_test.dart (Fix 3) |
 | 2026-09-26 | 125b81 | ai-proxy's `type: "prediction"` branch (`ai-proxy/index.ts:700-757` before this fix) had three defects, each verified by reading the code on 2026-09-26: 1. Unmetered. No quota, no tier check. Every… | usage_quota_ledger (new key prediction_daily) + ai_proxy_input_limits | supabase/functions/_shared/prediction_handler_test.ts |
 | 2026-09-26 | e5c9d2 | ai-proxy's chat dedup (`ai-proxy/index.ts`, "Deduplication: return cached response for same user+message in last 30s") served ANY recent row with a non-empty `ai_response` back as a 200 reply. When… | coach_chat_history_replay | supabase/functions/_shared/chat_dedup_test.ts |
 | 2026-09-26 | f7a3d2 | A pg_cron job that stops being launched, or is switched off with the documented kill switch (`cron.job.active = false`), writes no run row at all, and nothing raises an alert. On 2026-09-21 two hourly… | Migration 145 (b4c8e2) reads cron.job_run_details for runs that FAILED. A job that is never launched produces no row there, so 145 cannot see it. OI-178's class line names exactly this: "a failing job and a job that never ran are the same observation here: nothing". Nothing read cron.job's schedule or active flag against run history. | test/contracts/alert_cron_job_silent_test.dart |
