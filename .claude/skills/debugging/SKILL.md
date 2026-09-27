@@ -785,6 +785,8 @@ added, false of the flip being performed.
 
 ## Changelog
 
+- **2026-09-27 (day-swapper-sync-load)** — Self-evolution. §2.73 NEW — a widget test hanging straight through `--timeout` is unwrapped real I/O in the `testWidgets` body, not a synchronous product loop (3 hangs in one batch; one misdirected product-loop hunt before bisection found the bare `await box.put`).
+
 - **2026-08-28 (OI-144, same branch)** — Self-evolution. §2.55 NEW — a deliberately SCOPED
   capability wired to an UNSCOPED surface (collect-but-ignore). The Profile picker offered
   13 chips at a tier the capability model never reached; ticking one raised the reschedule
@@ -1405,3 +1407,12 @@ added, false of the flip being performed.
 - **Class rule:** a fixture must not depend on the machine it runs on. "It passes on my machine and in the full suite" is not evidence for a subprocess test that reads user-level config; the mutation proof must be run with the hermetic env in place, on a machine that HAS a global identity, and must reproduce CI's exact failure.
 - **Prior incidents:** `d9e4b1` (2026-09-26) — `discipline_hook_main_sync_e2e_test.dart`'s `lone` repo, `main` red for 4 CI runs. First instance.
 - **Regression test:** `test/scripts/discipline_hook_main_sync_e2e_test.dart` (hermetic `_cleanEnv`; mutation-proven — deleting the `lone` identity lines reddens exactly 1 of 8 with CI's `Expected: <0> Actual: <128>`, on a VPS that has a global identity).
+
+### 2.73 A widget test hangs for 20+ minutes straight through `--timeout 90s` and `@Timeout` — and it is NOT a synchronous product loop (NEW 2026-09-27)
+- **Telltale:** one `flutter_tester.exe` sits for 18–26 min on a widget-test file; the runner prints nothing; `--timeout 90s` and a file-level `@Timeout(Duration(minutes: 3))` never fire. It recurs even after `tester.runAsync` was added to the obvious Hive calls. Hit 3× in one batch (day-swapper, Tasks 24/27).
+- **Root-cause shape:** ONE remaining bare `await box.put(...)` (real disk I/O) directly in the `testWidgets` body — outside `setUp` and outside `tester.runAsync` — the CLAUDE.md §4.9 class. The fake-async zone never completes it, and the test timeout does not rescue it either.
+- **The misdiagnosis this entry exists to prevent:** "a timeout that cannot fire ⇒ the isolate is blocked synchronously ⇒ an infinite loop in product code". The coordinator reasoned exactly that and sent an agent hunting for a date-stepping `while` loop in the swap engine; instrumenting the call chain proved execution never even reached the widget under test. There was no product loop.
+- **Fix pattern:** bisect with `flutter test <file> --plain-name "<one test>" --timeout 90s`, one test per run, with a 5-minute wall-clock cutoff; then grep THAT test's body for unwrapped `await` on Hive/File/path_provider and move it into `tester.runAsync(() async {...})` or `setUp`. Never run the hanging file in the background — an API/rate-limit stop kills the agent and leaves the tester orphaned.
+- **Class rule:** a dead test timeout is evidence of unwrapped real I/O in a widget test before it is evidence of a product loop. Check the test body first; instrument before blaming `lib/`.
+- **Prior incidents:** day-swapper batch 2026-09-27 (U6 `tool_confirm_card_day_swap_test.dart`, U5b/U5c `swap_confirm_sheet_test.dart` "a stale day…"). Sibling of §4.9's "`await`-ing real disk I/O inside a `testWidgets` body" row.
+- **Regression test:** `test/widgets/swap_confirm_sheet_test.dart` (Task 24 — the stale-day test with its I/O inside `tester.runAsync`).
