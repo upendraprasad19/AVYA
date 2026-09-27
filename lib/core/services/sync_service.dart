@@ -28,6 +28,7 @@ import 'package:icanbefitter/core/services/sync_domains/profile_sync_domain.dart
 import 'package:icanbefitter/core/services/sync_domains/restore_completeness_sync_domain.dart';
 import 'package:icanbefitter/core/services/sync_domains/streaks_sync_domain.dart';
 import 'package:icanbefitter/core/services/sync_domains/workouts_sync_domain.dart';
+import 'package:icanbefitter/core/services/sync/sync_skip_index.dart';
 import 'package:icanbefitter/core/services/sync_error.dart';
 import 'package:icanbefitter/core/services/sync_flags.dart';
 import 'package:icanbefitter/core/services/nutrition_write_service.dart';
@@ -354,16 +355,15 @@ class SyncService {
     };
   }
 
-  /// OI-204 — Hive key for the exercise-log fingerprint index (workoutBox). See
-  /// docs/architecture/sync.md "Sync fingerprint-skip pattern" +
-  /// docs/sot_registry.yaml `sync_exercise_log_payload_hash_index`.
-  static const String _exlogHashIndexKey = 'sync_exlog_payload_hash_index';
-
-  /// Kill-switch reverting `_syncExerciseLogs` to the verbatim unconditional
-  /// full-sweep upsert (no fingerprint skip).
-  bool get _exlogHashSkipDisabled {
+  /// Whether [domain]'s Hive-index skip mechanism is turned off via its own
+  /// kill switch (day-swapper + sync-load Task 13). Replaces the per-domain
+  /// getters this batch removes (`_exlogHashSkipDisabled`, `_nlogHashSkipDisabled`,
+  /// ...) with one generic reader keyed on the enum's own `killSwitchKey`, so a
+  /// future domain never needs a bespoke getter. Defensive read, same shape as
+  /// the getters it replaces.
+  bool _hashSkipKillSwitchOn(SyncSkipDomain domain) {
     try {
-      return _hive.configBox.get('disable_exlog_hash_skip') == true;
+      return _hive.configBox.get(domain.killSwitchKey) == true;
     } catch (_) {
       return false;
     }
@@ -383,68 +383,6 @@ class SyncService {
       'sets': sets.map(sortKeys).toList(),
     };
     return _deterministicId(jsonEncode(combined));
-  }
-
-  /// Shared by exlogShouldSkipUpsert/nlogShouldSkipUpsert (plan-review round
-  /// 1, finding M11) — the two were byte-identical; unlike the per-domain
-  /// fingerprint functions (which genuinely differ in bundling shape), the
-  /// skip DECISION has no domain-specific content, so duplicating it was
-  /// pure divergence risk with no offsetting benefit (a future fix reaching
-  /// one and missing the other). Kept private + wrapped by named per-domain
-  /// functions so Task 1's gate, both test files, and any future domain
-  /// needing a carve-out shape like sched's `status` parameter all keep
-  /// stable, domain-specific call sites.
-  static bool _fingerprintMatchesStored({
-    required bool killSwitchDisabled,
-    required String? storedFingerprint,
-    required String currentFingerprint,
-  }) {
-    if (killSwitchDisabled) return false;
-    return storedFingerprint != null && storedFingerprint == currentFingerprint;
-  }
-
-  /// No status-based carve-out (unlike `schedShouldSkipUpsert`) — deliberate.
-  /// Exercise-log rows have no server-side out-of-band mutator (verified:
-  /// no Edge Function or migration writes to workout_log_exercises/
-  /// workout_log_sets outside a one-shot historical backfill, plus migration
-  /// 057's one-shot dedup DELETEs — see the diagnose-doc's spec §5.3
-  /// correction) and every edit rewrites the SAME Hive key in place, so any
-  /// edit changes the fingerprint on its own. Pure, static.
-  static bool exlogShouldSkipUpsert({
-    required bool killSwitchDisabled,
-    required String? storedFingerprint,
-    required String currentFingerprint,
-  }) =>
-      _fingerprintMatchesStored(
-        killSwitchDisabled: killSwitchDisabled,
-        storedFingerprint: storedFingerprint,
-        currentFingerprint: currentFingerprint,
-      );
-
-  @visibleForTesting
-  static Map<String, String> exlogPrunedHashIndex(
-      Map<String, String> index, Set<String> liveKeys) {
-    return <String, String>{
-      for (final e in index.entries)
-        if (liveKeys.contains(e.key)) e.key: e.value,
-    };
-  }
-
-  /// OI-204 — Hive key for the nutrition-log fingerprint index (nutritionBox),
-  /// keyed by SLOT id (`'$date $mealType'`), not raw Hive key — matches what
-  /// _syncNutritionLogs already merges same-slot logs into before pushing
-  /// (spec §5.2). Inert whenever `disable_nutrition_slot_merge` is set — the
-  /// legacy per-key path predates the slot concept this is keyed on.
-  static const String _nlogHashIndexKey = 'sync_nlog_payload_hash_index';
-
-  /// Kill-switch reverting `_syncNutritionLogs` to the verbatim unconditional
-  /// full-sweep upsert (no fingerprint skip).
-  bool get _nlogHashSkipDisabled {
-    try {
-      return _hive.configBox.get('disable_nlog_hash_skip') == true;
-    } catch (_) {
-      return false;
-    }
   }
 
   /// Pure — extracted so the boolean composition itself is directly testable
@@ -477,31 +415,6 @@ class SyncService {
       'items': sortedItems,
     };
     return _deterministicId(jsonEncode(combined));
-  }
-
-  /// No status-based carve-out — same reasoning as exlogShouldSkipUpsert
-  /// (spec §5.3): no out-of-band cloud mutator for nutrition_logs/
-  /// nutrition_log_items, every edit rewrites the same Hive key. Delegates
-  /// to the SHARED `_fingerprintMatchesStored` Task 2 adds (plan-review
-  /// round 1, finding M11) — do not redefine the body here.
-  static bool nlogShouldSkipUpsert({
-    required bool killSwitchDisabled,
-    required String? storedFingerprint,
-    required String currentFingerprint,
-  }) =>
-      SyncService._fingerprintMatchesStored(
-        killSwitchDisabled: killSwitchDisabled,
-        storedFingerprint: storedFingerprint,
-        currentFingerprint: currentFingerprint,
-      );
-
-  @visibleForTesting
-  static Map<String, String> nlogPrunedHashIndex(
-      Map<String, String> index, Set<String> liveSlots) {
-    return <String, String>{
-      for (final e in index.entries)
-        if (liveSlots.contains(e.key)) e.key: e.value,
-    };
   }
 
   /// H1a — best-effort flush fired on `AppLifecycleState.paused` (wired to

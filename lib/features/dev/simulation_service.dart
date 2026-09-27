@@ -35,6 +35,7 @@ import 'package:icanbefitter/core/services/rank_service.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/services/streak_progress_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/core/services/sync/sync_skip_index.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
@@ -116,32 +117,31 @@ class SimulationService {
 
     // Wipe all previously-logged journey data so re-runs start clean (the
     // WriteServices key by date; without this a re-drive double-logs).
-    await _clearKeysWithPrefixes(HiveService.instance.workoutBox, const [
+    await _clearKeysWithPrefixes(HiveService.instance.workoutBox, [
       'exlog_', 'wlog_', 'schedule_', 'displaced_', 'exercise_log_index_',
       // H1b Part A (A-fix-3) — the schedule fingerprint index is a single
       // reserved key (`sync_sched_payload_hash_index`), NOT a `schedule_`
       // prefix, so the entries above miss it. A survivor would mis-skip the
       // sim re-drive's scheduled_workouts push. The full key equals this
-      // prefix, so startsWith deletes exactly it.
+      // prefix, so startsWith deletes exactly it. Still a raw literal here —
+      // sched moves onto SyncSkipIndex in Task 15, not this task.
       'sync_sched_payload_hash_index',
-      // OI-204 — same reasoning as sync_sched_payload_hash_index immediately
-      // above: a single reserved key, not an `exlog_`-prefixed one, so the
-      // entries above miss it. A survivor would mis-skip the sim re-drive's
-      // exercise-log push after resetJourney wipes cloud out-of-band.
-      'sync_exlog_payload_hash_index',
+      // Day-swapper + sync-load Task 13 — exlog's index now lives under
+      // SyncSkipDomain, so resetJourney references it symbolically instead
+      // of repeating the literal (G1's index_literal_outside_helper rule,
+      // spec §7). Same key value as before: 'sync_exlog_payload_hash_index'.
+      SyncSkipDomain.exlog.indexKey,
     ]);
     await _clearKeysWithPrefixes(HiveService.instance.healthBox,
         const ['weight_', 'sleep_log_', 'water_ml_', 'hydration_', 'step_']);
     await HiveService.instance.healthBox.delete('streaks');
     await HiveService.instance.healthBox.delete('steps_today');
     await HiveService.instance.healthBox.delete('steps_date');
-    await _clearKeysWithPrefixes(HiveService.instance.nutritionBox, const [
+    await _clearKeysWithPrefixes(HiveService.instance.nutritionBox, [
       'nlog_',
-      // OI-204 — same reasoning as sync_sched_payload_hash_index /
-      // sync_exlog_payload_hash_index above: a single reserved key, not an
-      // `nlog_`-prefixed one. A survivor mis-skips the sim re-drive's
-      // nutrition-log push.
-      'sync_nlog_payload_hash_index',
+      // Day-swapper + sync-load Task 13 — see the exlog comment above for
+      // the full rationale (G1's index_literal_outside_helper rule).
+      SyncSkipDomain.nlog.indexKey,
     ]);
 
     // Free tier.

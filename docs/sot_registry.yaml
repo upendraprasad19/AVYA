@@ -2161,21 +2161,37 @@ concepts:
       Extends the proven H1b Part A pattern (sync_scheduled_payload_hash_index
       above) to a second domain; shares the private _fingerprintMatchesStored
       helper with Task 3's sync_nutrition_log_payload_hash_index sibling.
+      Day-swapper + sync-load Task 13 (2026-09-27): moved onto the shared
+      `SyncSkipIndex` helper (lib/core/services/sync/sync_skip_index.dart,
+      SyncSkipDomain.exlog) -- `_syncExerciseLogs` now constructs one
+      SyncSkipIndex and drives every write for a key through its
+      `pushIfChanged(rowKey, fingerprint, push)`, which owns the skip
+      decision, the store-on-confirmed-only write and the pruning; the
+      per-domain `_exlogHashIndexKey` const, `_exlogHashSkipDisabled` getter,
+      `exlogShouldSkipUpsert`, `exlogPrunedHashIndex` and the shared
+      `_fingerprintMatchesStored` helper are DELETED (dead once the helper
+      owns the decision), replaced by one generic `_hashSkipKillSwitchOn
+      (SyncSkipDomain)` reader. `exlogPayloadFingerprint` itself is
+      byte-identical (plan D4) so every fingerprint stored before this
+      change still matches -- zero re-push burst. G1
+      (scripts/check_sync_hash_skip_atomicity.dart's rethrow-or-return-false
+      rule) forced the per-set catch to `return false;` directly instead of
+      setting the old `exlogBundleSynced` flag checked after the try.
     writers:
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 1-9999
-        method: _syncExerciseLogs (stores index[key]=fp ON CONFIRMED FULL-BUNDLE SUCCESS ONLY -- gated by the local exlogBundleSynced flag, false'd in the per-set catch; prunes to live exlog_ keys + persists after the loop)
+        line_range: 180-465
+        method: _syncExerciseLogs (constructs a SyncSkipIndex(domain: SyncSkipDomain.exlog) and drives the summary + per-set upserts through its pushIfChanged closure -- the helper stores index[key]=fp ON CONFIRMED FULL-BUNDLE SUCCESS ONLY; commit(liveKeys:) prunes to live exlog_ keys and persists after the loop)
       - file: lib/core/services/sync_service.dart
-        line_range: 1-9999
-        method: exlogPayloadFingerprint / exlogShouldSkipUpsert / exlogPrunedHashIndex (pure statics; exlogShouldSkipUpsert wraps the shared private _fingerprintMatchesStored, also used by Task 3's nlogShouldSkipUpsert) + _exlogHashIndexKey const + disable_exlog_hash_skip kill-switch
+        line_range: 358-386
+        method: exlogPayloadFingerprint (pure static, byte-identical -- plan D4) + _hashSkipKillSwitchOn(SyncSkipDomain) (generic kill-switch reader shared with nlog/every future domain, replaces the deleted _exlogHashSkipDisabled getter)
       - file: lib/features/dev/simulation_service.dart
-        line_range: 1-9999
-        method: resetJourney (clears the index key in the workoutBox prefix-clear list -- the identical special case sync_sched_payload_hash_index already needed, for the identical reason)
+        line_range: 103-183
+        method: resetJourney (clears SyncSkipDomain.exlog.indexKey in the workoutBox prefix-clear list -- repointed from the raw 'sync_exlog_payload_hash_index' literal to the symbol, G1's index_literal_outside_helper rule)
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 1-9999
-        method: _syncExerciseLogs (the skip decision reads index[key] for the current row)
+        line_range: 180-465
+        method: _syncExerciseLogs (the skip decision is now internal to SyncSkipIndex.pushIfChanged, which reads its own `_stored[rowKey]` -- hydrated from readIndex(box, domain.indexKey) in the SyncSkipIndex constructor)
         semantic: latest
         fields_read: [sync_exlog_payload_hash_index.<exlog_key>]
     regression_test: test/contracts/sync_exercise_log_payload_hash_index_writer_to_reader_test.dart
@@ -2197,35 +2213,27 @@ concepts:
     sync_methods: [_syncExerciseLogs]
     restore_methods: []
     atomicity:
-      presence_only: true
+      presence_only: false
       presence_only_reason: |
-        Spec §8's atomicity behavioral-test requirement (simulate a per-set
-        network failure, assert no fingerprint is stored) needs a test-time
-        fault-injection seam. Checked before falling back to this (OI-204
-        Step 7b, not skipped): `_supabase` is `final SupabaseService
-        _supabase = SupabaseService.instance;` (sync_service.dart:219) -- a
-        singleton with no constructor injection -- and
-        `grep -rln "MockSupabase|FakeSupabase|_supabase = Mock|SupabaseService("
-        test/` returns nothing anywhere in this repo. _syncScheduledWorkouts
-        itself, the pattern this batch extends, has no such test either --
-        its own store-on-200-only group in
-        sync_scheduled_payload_hash_index_writer_to_reader_test.dart is the
-        SAME call-site-count source-grep this concept uses, not a live
-        failure simulation. Adding a DI seam is a separate, reviewed refactor
-        decision, out of scope for this delta-sync fix. The atomicity
-        property is instead covered structurally by three things: (1)
-        scripts/check_sync_hash_skip_atomicity.dart -- the static gate,
-        mutation-proven per rule 24, docs/audit/gate_test_ledger.yaml; (2)
-        exlogShouldSkipUpsert's pure-function tests, proving the skip
-        DECISION is correct for every stored/current fingerprint pair
-        (including the edited-row-never-skipped case); (3) the exact-store-
-        call-site-count test (spec §8 item 4,
-        test/contracts/sync_exercise_log_payload_hash_index_writer_to_reader_test.dart),
-        proving the fingerprint can only be recorded from the one guarded
-        site the static gate depends on. This entry's GENERAL writer->reader
-        contract is NOT presence-only -- the Hive round-trip group in the
-        same test file is a real behavioral test satisfying rule 21. Only
-        this narrower atomicity-under-failure sub-property is presence-only.
+        SUPERSEDED by day-swapper + sync-load Task 13 (2026-09-27): Task 5's
+        SyncHarness + SyncStubServer (test/sync/sync_domain_skip_harness.dart,
+        test/helpers/sync_stub_server.dart) are exactly the test-time
+        fault-injection seam this note previously said did not exist --
+        `_supabase.client` now resolves to a real SupabaseClient pointed at a
+        local stub HttpServer inside `flutter test`, so a live per-set
+        network failure can be simulated directly instead of via source-grep
+        proxies. `sync_exercise_log_payload_hash_index_writer_to_reader_test.dart`'s
+        "a per-set upsert failure abandons the bundle" test seeds a row,
+        fails `workout_log_sets`, asserts `SyncSkipIndex.readIndex(...)` is
+        EMPTY after the failed pass, then clears the failure and asserts the
+        WHOLE bundle (not just the sets) re-pushes next pass -- a genuine
+        behavioral proof of the atomicity property, not a call-site count.
+        The static gate (scripts/check_sync_hash_skip_atomicity.dart,
+        mutation-proven per rule 24) and SyncSkipIndex.pushIfChanged's own
+        unit coverage (lib/core/services/sync/sync_skip_index.dart, exercised
+        indirectly through every domain that constructs one) remain as
+        structural backstops, but this concept's atomicity sub-property is no
+        longer presence-only.
     class_constraints: |
       No status-based carve-out (unlike schedShouldSkipUpsert's
       status=='completed' exemption) -- deliberate, verified not assumed
@@ -2239,16 +2247,21 @@ concepts:
       recurring process, so no forced-repush carve-out is warranted today.
       Every edit path (WorkoutWriteService.editLog) rewrites the SAME Hive
       key in place, so any content change flips the fingerprint on its own.
-      store-on-full-success-only: a per-set push failure leaves NO
-      fingerprint stored (exlogBundleSynced=false) -> re-pushes next pass.
-      Fingerprint-computation failure fails OPEN to "push normally, never
-      store" (spec §5.4), never a silent skip. Kill-switch
-      disable_exlog_hash_skip restores the verbatim pre-OI-204 unconditional
-      full-rescan sweep. Known limitation (spec M1/M2, non-blocking): weeklyFullSync()
-      calls _syncExerciseLogs outside the per-domain coalescer, so two
-      overlapping passes can each read-then-replace the persisted index map
-      (lost update) -- the only possible outcome is a dropped entry -> one
-      extra redundant re-push next pass, never a false skip.
+      store-on-full-success-only: SyncSkipIndex.pushIfChanged only records
+      index[key]=fp when its `push` closure returns true (Task 13,
+      2026-09-27 -- replaces the old local exlogBundleSynced flag); a per-set
+      push failure returns false directly (G1's rethrow-or-return-false
+      rule) -> re-pushes next pass. Fingerprint-computation failure fails
+      OPEN to "push normally, never store" (spec §5.4; SyncSkipIndex's own
+      try/catch around the fingerprint thunk), never a silent skip.
+      Kill-switch disable_exlog_hash_skip (read via the generic
+      _hashSkipKillSwitchOn(SyncSkipDomain.exlog)) restores the verbatim
+      pre-OI-204 unconditional full-rescan sweep. Known limitation (spec
+      M1/M2, non-blocking): weeklyFullSync() calls _syncExerciseLogs outside
+      the per-domain coalescer, so two overlapping passes can each
+      read-then-replace the persisted index map (lost update) -- the only
+      possible outcome is a dropped entry -> one extra redundant re-push
+      next pass, never a false skip.
 
   - concept: sync_nutrition_log_payload_hash_index
     domain: nutrition
@@ -2276,21 +2289,43 @@ concepts:
       Extends the proven H1b Part A pattern (sync_scheduled_payload_hash_index)
       to a third domain; shares the private _fingerprintMatchesStored helper
       with Task 2's sync_exercise_log_payload_hash_index sibling.
+      Day-swapper + sync-load Task 13 (2026-09-27): moved onto the shared
+      `SyncSkipIndex` helper (lib/core/services/sync/sync_skip_index.dart,
+      SyncSkipDomain.nlog) -- `_syncNutritionLogs` now constructs one
+      SyncSkipIndex and drives every write for a slot (parent upsert +
+      id-resolution SELECT + item upserts + tail-vacuum) through its
+      `pushIfChanged(slotId, fingerprint, push)`; the per-domain
+      `_nlogHashIndexKey` const, `_nlogHashSkipDisabled` getter,
+      `nlogShouldSkipUpsert`, `nlogPrunedHashIndex` and the shared
+      `_fingerprintMatchesStored` helper are DELETED, replaced by the same
+      generic `_hashSkipKillSwitchOn(SyncSkipDomain)` reader exlog uses.
+      `nlogPayloadFingerprint` / `nlogHashSkipDisabledFor` are unchanged
+      (plan D4) -- zero re-push burst. G1's rethrow-or-return-false rule
+      changed the per-item loop from "try every item, flag unconfirmed at
+      the end" to "the first failing item (or the id-lookup, or the vacuum)
+      `return false;`s immediately, abandoning the rest of the slot for this
+      pass" -- correctness-neutral (spec §7 / Task 13 brief): nothing is
+      recorded unless the whole slot lands, so an abandoned slot re-pushes
+      everything (including any items skipped by the early return) next
+      pass. `SyncSkipIndex.commit()` already CLEARS the index when
+      `disabled: true` (the same behavior the deleted else-branch in the
+      old postamble implemented for finding I9), so that branch's removal
+      is not a regression.
     writers:
       - file: lib/core/services/sync/sync_nutrition.dart
-        line_range: 1-9999
-        method: _syncNutritionLogs (stores index[slotId]=nlogFp ON CONFIRMED FULL-BUNDLE SUCCESS ONLY -- gated by the local nlogSlotSynced flag, false'd in the per-item AND tail-vacuum catches; prunes to live slots + persists after the loop, or CLEARS the index entirely when disabled per finding I9)
+        line_range: 201-422
+        method: _syncNutritionLogs (constructs a SyncSkipIndex(domain: SyncSkipDomain.nlog) and drives the parent + item + vacuum writes through its pushIfChanged closure -- stores index[slotId]=nlogFp ON CONFIRMED FULL-BUNDLE SUCCESS ONLY; commit(liveKeys:) prunes to live slots + persists after the loop, or CLEARS the index entirely when disabled)
       - file: lib/core/services/sync_service.dart
-        line_range: 1-9999
-        method: nlogPayloadFingerprint / nlogShouldSkipUpsert / nlogPrunedHashIndex / nlogHashSkipDisabledFor (pure statics; nlogShouldSkipUpsert wraps the shared private _fingerprintMatchesStored, also used by Task 2's exlogShouldSkipUpsert) + _nlogHashIndexKey const + disable_nlog_hash_skip kill-switch
+        line_range: 358-418
+        method: nlogPayloadFingerprint / nlogHashSkipDisabledFor (pure statics, byte-identical -- plan D4) + _hashSkipKillSwitchOn(SyncSkipDomain) (generic kill-switch reader shared with exlog, replaces the deleted _nlogHashSkipDisabled getter)
       - file: lib/features/dev/simulation_service.dart
-        line_range: 1-9999
-        method: resetJourney (clears the index key in the nutritionBox prefix-clear list -- the identical special case sync_sched_payload_hash_index / sync_exlog_payload_hash_index already needed, for the identical reason)
+        line_range: 103-183
+        method: resetJourney (clears SyncSkipDomain.nlog.indexKey in the nutritionBox prefix-clear list -- repointed from the raw 'sync_nlog_payload_hash_index' literal to the symbol, G1's index_literal_outside_helper rule)
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_nutrition.dart
-        line_range: 1-9999
-        method: _syncNutritionLogs (the skip decision reads index[slotId] for the current slot)
+        line_range: 201-422
+        method: _syncNutritionLogs (the skip decision is now internal to SyncSkipIndex.pushIfChanged, which reads its own `_stored[rowKey]` -- hydrated from readIndex(box, domain.indexKey) in the SyncSkipIndex constructor)
         semantic: latest
         fields_read: [sync_nlog_payload_hash_index.<slot_id>]
     regression_test: test/contracts/sync_nutrition_log_payload_hash_index_writer_to_reader_test.dart
@@ -2313,35 +2348,24 @@ concepts:
     sync_methods: [_syncNutritionLogs]
     restore_methods: []
     atomicity:
-      presence_only: true
+      presence_only: false
       presence_only_reason: |
-        Spec §8's atomicity behavioral-test requirement (simulate a per-item
-        or vacuum network failure, assert no fingerprint is stored) needs a
-        test-time fault-injection seam. Same finding as Task 2's exlog
-        sibling (OI-204 Step 7b, not skipped): `_supabase` is `final
-        SupabaseService _supabase = SupabaseService.instance;`
-        (sync_service.dart:219) -- a singleton with no constructor
-        injection -- and `grep -rln "MockSupabase|FakeSupabase|_supabase =
-        Mock|SupabaseService(" test/` returns nothing anywhere in this
-        repo. _syncScheduledWorkouts itself, the pattern this batch extends,
-        has no such test either. Adding a DI seam is a separate, reviewed
-        refactor decision, out of scope for this delta-sync fix. The
-        atomicity property is instead covered structurally by three things:
-        (1) scripts/check_sync_hash_skip_atomicity.dart -- the static gate
-        (Task 1), mutation-proven per rule 24, docs/audit/gate_test_ledger.yaml,
-        checked against BOTH domains (exlogSpec/nlogSpec) with
-        expectedSwallowCatches: 2 for this domain (one per swallowing catch --
-        the per-item upsert catch and the tail-vacuum catch); (2)
-        nlogShouldSkipUpsert's pure-function tests, proving the skip DECISION
-        is correct for every stored/current fingerprint pair (including the
-        edited-item-never-skipped case); (3) the exact-store-call-site-count
-        test (spec §8 item 4,
-        test/contracts/sync_nutrition_log_payload_hash_index_writer_to_reader_test.dart),
-        proving the fingerprint can only be recorded from the one guarded
-        site the static gate depends on. This entry's GENERAL writer->reader
-        contract is NOT presence-only -- the Hive round-trip group in the
-        same test file is a real behavioral test satisfying rule 21. Only
-        this narrower atomicity-under-failure sub-property is presence-only.
+        SUPERSEDED by day-swapper + sync-load Task 13 (2026-09-27), same as
+        Task 2's exlog sibling: Task 5's SyncHarness + SyncStubServer
+        (test/sync/sync_domain_skip_harness.dart,
+        test/helpers/sync_stub_server.dart) provide the test-time
+        fault-injection seam this note previously said did not exist.
+        `sync_nutrition_log_payload_hash_index_writer_to_reader_test.dart`'s
+        "an item-upsert failure abandons the slot immediately" test seeds a
+        two-item slot, fails `nutrition_log_items`, asserts the abandon
+        happens after exactly the FIRST item (only one write attempt --
+        proving abandon-on-first-failure, not try-every-item), asserts
+        `SyncSkipIndex.readIndex(...)` is EMPTY, then clears the failure and
+        asserts the whole slot (parent + both items + the tail-vacuum) lands
+        on retry -- a genuine behavioral proof, not a call-site count. The
+        static gate (scripts/check_sync_hash_skip_atomicity.dart,
+        mutation-proven per rule 24) remains as a structural backstop, but
+        this concept's atomicity sub-property is no longer presence-only.
     class_constraints: |
       No status-based carve-out (unlike schedShouldSkipUpsert's
       status=='completed' exemption) -- deliberate, verified not assumed
@@ -2349,17 +2373,26 @@ concepts:
       nutrition_log_items (same grep evidence as Task 2's exlog sibling), and
       every edit path (NutritionWriteService) rewrites the SAME Hive key in
       place, so any content change flips the fingerprint on its own.
-      store-on-full-success-only: a per-item OR tail-vacuum failure leaves NO
-      fingerprint stored (nlogSlotSynced=false) -> re-pushes next pass.
-      Fingerprint-computation failure fails OPEN to "push normally, never
-      store" (spec §5.4), never a silent skip. Kill-switch
-      disable_nlog_hash_skip restores the verbatim pre-OI-204 unconditional
-      full-rescan sweep; nlogHashSkipDisabledFor ALSO goes inert whenever
-      disable_nutrition_slot_merge is set (the legacy per-key path predates
-      the slot concept the fingerprint is keyed on), in which case the
-      postamble CLEARS the stored index (finding I9) rather than leaving it
-      unread, so a disable/re-enable cycle cannot mis-skip re-pushing slots
-      the legacy path corrupted. Known limitation (plan-review round 1,
+      store-on-full-success-only: SyncSkipIndex.pushIfChanged only records
+      index[slotId]=nlogFp when its `push` closure returns true (Task 13,
+      2026-09-27 -- replaces the old local nlogSlotSynced flag); a per-item
+      OR tail-vacuum failure returns false directly (G1's
+      rethrow-or-return-false rule), abandoning the REST of the slot
+      immediately rather than trying every item first (correctness-neutral --
+      nothing is ever recorded as sent unless the whole slot lands) ->
+      re-pushes next pass. Fingerprint-computation failure fails OPEN to
+      "push normally, never store" (spec §5.4; SyncSkipIndex's own try/catch
+      around the fingerprint thunk), never a silent skip. Kill-switch
+      disable_nlog_hash_skip (read via the generic
+      _hashSkipKillSwitchOn(SyncSkipDomain.nlog)) restores the verbatim
+      pre-OI-204 unconditional full-rescan sweep; nlogHashSkipDisabledFor
+      ALSO goes inert whenever disable_nutrition_slot_merge is set (the
+      legacy per-key path predates the slot concept the fingerprint is keyed
+      on), in which case SyncSkipIndex.commit() CLEARS the stored index
+      (finding I9's behavior, now owned by the shared helper) rather than
+      leaving it unread, so a disable/re-enable cycle cannot mis-skip
+      re-pushing slots the legacy path corrupted. Known limitation
+      (plan-review round 1,
       finding M2, non-blocking): an edit-then-exact-revert to a slot's
       content during an account-switch race (abandon via ownerChangedSince
       mid-item-loop, self-heals to nothing persisted, but a revert to the
@@ -10302,15 +10335,15 @@ concepts:
           (→913) despite the gate not flagging it, found by grepping the
           symbol directly rather than trusting the gate's silence on it.
       - file: lib/core/services/sync_service.dart
-        line_range: 2390
+        line_range: 2303
         method: restoreOpTimeout
         semantic: per-op-ceiling
       - file: lib/core/services/sync_service.dart
-        line_range: 2409-2413
+        line_range: 2314-2326
         method: applyRestoreCeiling
         semantic: apply-ceiling
       - file: lib/core/services/sync_service.dart
-        line_range: 2421-2423
+        line_range: 2328-2336
         method: restoreFailureReason
         semantic: telemetry-reason-split
     readers:
