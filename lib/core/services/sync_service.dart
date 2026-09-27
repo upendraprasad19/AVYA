@@ -658,7 +658,7 @@ class SyncService {
   /// truth and the pass re-runs); an under-abort writes one user's rows under
   /// another's session.
   bool restoreAbortedFor(String ownerId) =>
-      restoreAborted(_restoreCancelled, ownerId, _supabase.currentUser?.id);
+      restoreAborted(_restoreCancelled, ownerId, _liveUserId);
 
   /// Pure form of [restoreAbortedFor], extracted so the predicate is
   /// behaviorally testable without a live Supabase session — the same
@@ -686,12 +686,30 @@ class SyncService {
   /// skipped push is retried on the next pass; a wrongly-allowed push writes
   /// one user's rows under another's session.
   bool ownerChangedSince(String ownerId) =>
-      ownerChangedFrom(ownerId, _supabase.currentUser?.id);
+      ownerChangedFrom(ownerId, _liveUserId);
 
   /// Pure form of [ownerChangedSince] — see [restoreAborted].
   @visibleForTesting
   static bool ownerChangedFrom(String ownerId, String? liveOwnerId) =>
       ownerId != liveOwnerId;
+
+  /// The live account id the sync layer compares against. Reads the SAME test
+  /// seam `HiveUserSession.ensureOpenedForCurrentSession` already honours
+  /// ([HiveUserSession.debugCurrentUidResolverForTests]), so one seam drives
+  /// both the session open and the owner checks. The resolver is null in
+  /// production, so this is exactly `_supabase.currentUser?.id` there.
+  ///
+  /// The field is `@visibleForTesting` in its declaring file because its
+  /// ORIGINAL sole caller was `ensureOpenedForCurrentSession` there; this
+  /// getter is now a second, production, cross-library caller, which the
+  /// analyzer cannot distinguish from a misuse — same shape
+  /// `UserRepository.mergeCloudProgress`'s doc comment already documents for
+  /// `phaseAdvanceTarget`. Ignored rather than de-annotated at the source so
+  /// the field's test-only contract for every OTHER reader stays intact.
+  String? get _liveUserId =>
+      // ignore: invalid_use_of_visible_for_testing_member
+      HiveUserSession.debugCurrentUidResolverForTests?.call() ??
+      _supabase.currentUser?.id;
 
   // ── Hive syncBox Keys ───────────────────────────────────────
 

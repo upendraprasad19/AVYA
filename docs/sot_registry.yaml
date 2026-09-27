@@ -10306,11 +10306,11 @@ concepts:
         method: restoreOpTimeout
         semantic: per-op-ceiling
       - file: lib/core/services/sync_service.dart
-        line_range: 2391-2395
+        line_range: 2409-2413
         method: applyRestoreCeiling
         semantic: apply-ceiling
       - file: lib/core/services/sync_service.dart
-        line_range: 2403-2405
+        line_range: 2421-2423
         method: restoreFailureReason
         semantic: telemetry-reason-split
     readers:

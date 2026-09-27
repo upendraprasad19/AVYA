@@ -265,7 +265,7 @@ extension SyncServiceRestoreCompleteness on SyncService {
   /// `notif_type` (matches AppNotification.category.name).
   Future<void> syncNotificationsInboxEntry(Map<String, dynamic> entry) async {
     try {
-      final userId = _supabase.currentUser?.id;
+      final userId = _liveUserId;
       if (userId == null) return;
       final id = entry['id'] as String?;
       if (id == null || id.isEmpty) return;

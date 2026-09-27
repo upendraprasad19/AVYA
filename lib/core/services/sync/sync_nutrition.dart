@@ -182,7 +182,7 @@ extension SyncServiceNutrition on SyncService {
   /// and delegates.
   Future<void> syncSavedMealsNow() async {
     try {
-      final userId = _supabase.currentUser?.id;
+      final userId = _liveUserId;
       if (userId == null) return;
       await _syncSavedMeals(userId);
     } catch (e, st) {

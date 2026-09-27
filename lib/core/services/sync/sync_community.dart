@@ -104,7 +104,7 @@ extension SyncServiceCommunity on SyncService {
     var exerciseSuccessCount = 0;
     var foodSuccessCount = 0;
     try {
-      final userId = _supabase.currentUser?.id;
+      final userId = _liveUserId;
       if (userId == null) return;
 
       final customBox = _hive.customBox;

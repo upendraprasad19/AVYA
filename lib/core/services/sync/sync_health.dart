@@ -18,7 +18,7 @@ extension SyncServiceHealth on SyncService {
   Future<void> syncWeightNow() async {
     if (SyncService.pausedForSimulation) return; // sim bulk-backfill
     try {
-      final userId = _supabase.currentUser?.id;
+      final userId = _liveUserId;
       if (userId == null) return;
       await _syncWeightLogs(userId);
     } catch (e, st) {
@@ -45,7 +45,7 @@ extension SyncServiceHealth on SyncService {
   Future<void> syncReadinessNow() async {
     if (SyncService.pausedForSimulation) return;
     try {
-      final userId = _supabase.currentUser?.id;
+      final userId = _liveUserId;
       if (userId == null) return;
       await _syncReadiness(userId);
     } catch (e, st) {
@@ -130,7 +130,7 @@ extension SyncServiceHealth on SyncService {
   Future<void> syncSleepNow() async {
     if (SyncService.pausedForSimulation) return; // sim bulk-backfill
     try {
-      final userId = _supabase.currentUser?.id;
+      final userId = _liveUserId;
       if (userId == null) return;
       // Handle per-day keys (standard path) via existing helper
       await _syncSleepLogs(userId);
@@ -187,7 +187,7 @@ extension SyncServiceHealth on SyncService {
   Future<void> syncMeasurementsNow() async {
     if (SyncService.pausedForSimulation) return; // sim bulk-backfill
     try {
-      final userId = _supabase.currentUser?.id;
+      final userId = _liveUserId;
       if (userId == null) return;
       await _syncMeasurements(userId);
     } catch (e, st) {
