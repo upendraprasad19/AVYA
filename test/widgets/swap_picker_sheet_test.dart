@@ -302,6 +302,12 @@ void main() {
       await tester.pumpAndSettle();
       // PaywallSheet's letterhead: "<feature> is a PRO feature".
       expect(find.text('Day Swaps is a PRO feature'), findsOneWidget);
+      // Task 26 addendum: the 'Day Swaps' subtitle line added to
+      // paywall_sheet.dart's _featureSubtitle switch.
+      expect(
+          find.text('Life happens. Move a workout to another day this week '
+              'without losing your plan.'),
+          findsOneWidget);
     });
   });
 }

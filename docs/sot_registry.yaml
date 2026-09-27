@@ -423,11 +423,11 @@ concepts:
         method: WeeklyCalendar 7-day fetch
         semantic: pass-through
         fields_read: [via service.getScheduleForDate(day)]
-      - file: lib/features/home/widgets/swap_sheet.dart
-        line_range: 1-9999
-        method: SwapSheet week + source
+      - file: lib/core/services/swap_service.dart
+        line_range: 143-146
+        method: SwapService._row(date) (weekStates / preview / swapDays)
         semantic: pass-through
-        fields_read: [via _scheduleService.getScheduleForDate(d/widget.sourceDate)]
+        fields_read: [raw workoutBox schedule_<date> row]
       - file: lib/features/train/repositories/workout_repository.dart
         line_range: 1-9999
         method: WorkoutRepository (5 call-throughs)
@@ -1038,9 +1038,9 @@ concepts:
         method: FoodLoggerSection build (gate + reactive watch)
         semantic: display-only
         fields_read: [isPro]
-      - file: lib/features/home/widgets/swap_sheet.dart
-        line_range: 1-9999
-        method: SwapSheet build (PRO check via ref.read)
+      - file: lib/features/train/providers/day_swap_provider.dart
+        line_range: 35-35
+        method: DaySwapController._isPro (ref.read subscriptionInfoProvider)
         semantic: flag-check
         fields_read: [isPro]
       - file: lib/features/profile/repositories/progress_photo_repository.dart
@@ -2027,11 +2027,6 @@ concepts:
       - file: lib/features/train/screens/template_builder_screen.dart
         line_range: 1-9999
         method: template save / delete
-        semantic: pass-through
-        fields_read: [unawaited(SyncService.instance.syncWorkoutData())]
-      - file: lib/features/home/widgets/swap_sheet.dart
-        line_range: 1-9999
-        method: SwapSheet confirm
         semantic: pass-through
         fields_read: [unawaited(SyncService.instance.syncWorkoutData())]
       - file: lib/features/ai_coach/services/tool_dispatcher.dart
@@ -7900,11 +7895,11 @@ concepts:
         method: SwapService
     reader_manifest_complete: false
     readers:
-      - file: lib/features/home/widgets/swap_sheet.dart
-        line_range: 1-9999
-        method: _onConfirm → swapDays
+      - file: lib/features/train/providers/day_swap_provider.dart
+        line_range: 111-119
+        method: daySwapAllowanceProvider → DaySwapAllowance.current
         semantic: latest
-        fields_read: [schedule_<date>.exercises, swap_week_start, swaps_this_week]
+        fields_read: [swap_counters (via DaySwapAllowance)]
     forbidden_legacy_patterns:
       - { pattern: "WorkoutScheduleService\\.instance\\.(swapDays|swapExerciseInDay|shortenDay|activateTravelMode|isTravelDay)", reason: "Use swapServiceProvider after A2 split." }
     hive_storage:

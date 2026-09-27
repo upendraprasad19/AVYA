@@ -21,7 +21,7 @@ features (Start Workout → Train, Log Meal → Nutrition, Edit Goal → Profile
 Pieces:
 
 - `screens/home_screen.dart` — orchestrates the priority-ordered card stack.
-- `widgets/` — `weekly_calendar_strip`, `today_workout_card`, `nutrition_snapshot`, `pr_snapshot`, `recent_logs`, `step_counter`, `day_detail_sheet`, `swap_sheet`, `streak_warning_banner`, `plan_expired_card`. (Weight trend uses the shared `lib/shared/widgets/weight_trend_chart.dart` — the old `weight_sparkline` was removed 2026-06-02, diagnose e1c6a9.)
+- `widgets/` — `weekly_calendar_strip`, `today_workout_card`, `nutrition_snapshot`, `pr_snapshot`, `recent_logs`, `step_counter`, `day_detail_sheet`, `streak_warning_banner`, `plan_expired_card`. (Weight trend uses the shared `lib/shared/widgets/weight_trend_chart.dart` — the old `weight_sparkline` was removed 2026-06-02, diagnose e1c6a9. `widgets/swap_sheet.dart` was removed in the day-swapper batch — the calendar day long-press now opens the shared `lib/features/train/widgets/swap_picker_sheet.dart` via `DaySwapController`, same engine as Train's drag/⇅ and the coach.)
 - `providers/home_provider.dart` — `todayWorkoutProvider`, `homeNutritionProvider`, `streakWarningEligibilityNotifier`.
 
 ## Home Screen Layout (Priority Order)
