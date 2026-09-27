@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/services/day_swap/day_swap_result.dart';
 import 'package:icanbefitter/core/services/day_swap/day_swap_rules.dart';
@@ -402,6 +404,36 @@ void main() {
       // If Monday's missing row counted as rest, swapping Wed(W)<->Thu(R)
       // would create Mon-Tue-Wed and warn. It must not.
       expect(warn(['-', 'R', 'W', 'R', 'W', 'W', 'W'], wed, thu), isNull);
+    });
+  });
+
+  group('no local wall-clock reads (closes the check_local_date_key_drift '
+      'file-level exemption for this file)', () {
+    test('the source contains none of the forbidden clock patterns', () {
+      final src = File('lib/core/services/day_swap/day_swap_rules.dart')
+          .readAsStringSync();
+      final stripped = src
+          .split('\n')
+          .map((line) {
+            final idx = line.indexOf('//');
+            return idx == -1 ? line : line.substring(0, idx);
+          })
+          .join('\n');
+      const forbidden = [
+        'DateTime.now',
+        '.toLocal(',
+        'DateTime.timestamp',
+        'nowWall(',
+        'istNow(',
+        'istTodayStr(',
+      ];
+      for (final pattern in forbidden) {
+        expect(stripped.contains(pattern), isFalse,
+            reason: 'day_swap_rules.dart is exempted from '
+                'check_local_date_key_drift.dart at the FILE level (Task 10); '
+                'this test is the only guard against it silently regaining a '
+                'wall-clock read. Found: $pattern');
+      }
     });
   });
 }

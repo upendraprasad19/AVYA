@@ -714,19 +714,6 @@ class WorkoutRepository {
     return total;
   }
 
-  // ── Swap ──────────────────────────────────────────────────────
-
-  /// Swap two workout days within the same week.
-  ///
-  /// Returns null on success, or an error message string.
-  Future<String?> swapDays(
-    DateTime dateA,
-    DateTime dateB, {
-    required bool isPro,
-  }) {
-    return _schedule.swapDays(dateA, dateB, isPro: isPro);
-  }
-
   // ── Travel Mode ───────────────────────────────────────────────
 
   /// Activate travel mode for a date range (PRO only, max 7 days).

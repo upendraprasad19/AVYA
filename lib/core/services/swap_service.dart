@@ -2,8 +2,10 @@
 //
 // Tech-debt audit 2026-05-20 / A2 (final closure batch B5 D13-D17).
 //
-// Owns swap-related schedule mutations + counters + travel mode:
-//   - swapDays (whole-day swap within a week, with counter)
+// Owns swap-related schedule mutations + travel mode:
+//   - swapDays: the ONE day-swap engine for Train drag / ⇅, Home and the
+//     coach (spec 2026-09-26-day-swapper-design §5; rules in day_swap/)
+//   - weekStates / preview: what the picker and the confirm sheet show
 //   - swapExerciseInDay (single-exercise swap with library lookup)
 //   - shortenDay (trim accessory work to a target duration)
 //   - activateTravelMode / isTravelDay
@@ -12,14 +14,26 @@
 
 // ignore_for_file: deprecated_member_use_from_same_package
 
+import 'dart:async';
+
+import 'package:flutter/foundation.dart' show visibleForTesting;
+
+import 'day_swap/day_swap_allowance.dart';
+import 'day_swap/day_swap_copy.dart';
+import 'day_swap/day_swap_result.dart';
+import 'day_swap/day_swap_rules.dart';
+import 'error_telemetry.dart';
 import 'hive_service.dart';
 import 'migrated_key.dart';
 import 'singleton_lifecycle_registry.dart';
+import 'sync_service.dart';
 import 'template_service.dart' show LoggingTypeResolver;
+import 'workout_read_service.dart';
 import 'workout_schedule_read_service.dart';
 import 'workout_write_service.dart';
 import 'write_result.dart';
 import '../utils/date_utils.dart';
+import '../utils/ist_date.dart';
 import '../../shared/repositories/plan_engine/equipment_capability.dart';
 import '../../shared/repositories/plan_engine/training_history_analyzer.dart';
 
@@ -102,70 +116,241 @@ class SwapService {
   }
 
   static const String _schedulePrefix = 'schedule_';
-  static const String _swapsThisWeekKey = 'swaps_this_week';
-  static const String _swapWeekStartKey = 'swap_week_start';
   static const String _travelStartKey = 'travel_start';
   static const String _travelEndKey = 'travel_end';
 
-  // ── Day swap ────────────────────────────────────────────────────
+  // ── Day swap (spec §5) ──────────────────────────────────────────
 
-  /// Swap two days within the same week.
-  Future<String?> swapDays(DateTime dateA, DateTime dateB,
-      {required bool isPro}) async {
-    final mondayA = _normalizeToMonday(dateA);
-    final mondayB = _normalizeToMonday(dateB);
-    if (mondayA != mondayB) {
-      return 'Can only swap days within the same week';
+  /// Test seam: replaces the plan push that follows a successful swap.
+  @visibleForTesting
+  static void Function()? debugOnPlanPushForTests;
+
+  /// Test seam: replaces the atomic write (the rules still run inside
+  /// `build`). Lets a test force a write failure or throw.
+  @visibleForTesting
+  static Future<WriteResult> Function({
+    required DateTime dateA,
+    required DateTime dateB,
+    required ScheduledDaySwapWrite? Function(ScheduledDaySwapLive live) build,
+  })? debugSwapWriteForTests;
+
+  /// Test seam: replaces [DaySwapAllowance.recordSwap]. Lets a test force
+  /// the post-write allowance count to throw without a real Hive failure.
+  @visibleForTesting
+  static Future<DayAllowance> Function(String weekStart,
+      {required bool isPro})? debugRecordSwapForTests;
+
+  Map<String, dynamic>? _row(String date) {
+    final raw = _hive.workoutBox.get('$_schedulePrefix$date');
+    return raw is Map ? Map<String, dynamic>.from(raw) : null;
+  }
+
+  /// Sets are stamped with the IST date they are logged on, and a past date
+  /// is locked as PAST before `started` is asked, so only TODAY can be
+  /// "started" by a logged set. Skipping the other six dates avoids six
+  /// exercise-log scans per call.
+  bool _hasLoggedSets(String date, String today) {
+    if (date != today) return false;
+    final wlog = _hive.workoutBox
+        .get(WorkoutWriteService.wlogKey(DaySwapRules.utcDate(date)));
+    if (wlog != null) return true;
+    return WorkoutReadService.instance.exerciseLogsForIstDate(date).isNotEmpty;
+  }
+
+  DaySwapRefused? _firstLock(
+    String dateA,
+    Map<String, dynamic>? rowA,
+    String dateB,
+    Map<String, dynamic>? rowB, {
+    required String today,
+    String? inProgressDate,
+  }) {
+    for (final (date, row) in [(dateA, rowA), (dateB, rowB)]) {
+      final lock = DaySwapRules.lockOf(
+        date: date,
+        row: row,
+        today: today,
+        hasLoggedSets: _hasLoggedSets(date, today),
+        inProgressDate: inProgressDate,
+      );
+      if (lock != null) return DaySwapRefused(reason: lock, date: date);
     }
-
-    final swapsUsed = _getSwapsUsedThisWeek(mondayA);
-    final maxSwaps = isPro ? 3 : 1;
-    if (swapsUsed >= maxSwaps) {
-      return isPro
-          ? 'Maximum 3 swaps per week reached'
-          : 'Free users can swap once per week. Upgrade to PRO for 3 swaps.';
-    }
-
-    final keyA = '$_schedulePrefix${formatDateKey(dateA)}';
-    final keyB = '$_schedulePrefix${formatDateKey(dateB)}';
-    final dataA = _hive.workoutBox.get(keyA);
-    final dataB = _hive.workoutBox.get(keyB);
-    if (dataA == null || dataB == null) return 'Schedule not found';
-
-    final mapA = Map<String, dynamic>.from(dataA as Map);
-    final mapB = Map<String, dynamic>.from(dataB as Map);
-
-    final simWeek = _simulateSwap(mondayA, dateA, dateB);
-    if (_hasThreeConsecutiveRest(simWeek)) {
-      return 'Swap would create 3+ consecutive rest days — not allowed';
-    }
-
-    final swappedA = Map<String, dynamic>.from(mapB);
-    swappedA['date'] = mapA['date'];
-    swappedA['day_of_week'] = mapA['day_of_week'];
-    swappedA['is_swapped'] = true;
-    swappedA['original_date'] = mapB['date'];
-
-    final swappedB = Map<String, dynamic>.from(mapA);
-    swappedB['date'] = mapB['date'];
-    swappedB['day_of_week'] = mapB['day_of_week'];
-    swappedB['is_swapped'] = true;
-    swappedB['original_date'] = mapA['date'];
-
-    await WorkoutWriteService.instance.upsertScheduled(
-      date: dateA,
-      entry: swappedA,
-      source: WriteSource.schedSwap,
-    );
-    await WorkoutWriteService.instance.upsertScheduled(
-      date: dateB,
-      entry: swappedB,
-      source: WriteSource.schedSwap,
-    );
-
-    await _incrementSwapCount(mondayA);
-
     return null;
+  }
+
+  /// Mon–Sun states of the week containing [anyDateInWeek] (spec §6.1,
+  /// §6.3). Reads only; logs nothing.
+  List<DaySwapDayState> weekStates(String anyDateInWeek,
+      {String? inProgressDate}) {
+    final today = istTodayStr();
+    return [
+      for (final date in DaySwapRules.weekDates(anyDateInWeek))
+        _stateOf(date, _row(date),
+            today: today, inProgressDate: inProgressDate),
+    ];
+  }
+
+  DaySwapDayState _stateOf(String date, Map<String, dynamic>? row,
+          {required String today, String? inProgressDate}) =>
+      DaySwapDayState(
+        date: date,
+        row: row,
+        lock: DaySwapRules.lockOf(
+          date: date,
+          row: row,
+          today: today,
+          hasLoggedSets: _hasLoggedSets(date, today),
+          inProgressDate: inProgressDate,
+        ),
+        isMoved: DaySwapRules.isMoved(row),
+        title: DaySwapCopy.titleOf(row),
+      );
+
+  /// What swapping [dateA] and [dateB] would do right now. DISPLAY ONLY:
+  /// [swapDays] re-checks everything against live rows at confirm time.
+  DaySwapPreview preview({
+    required String dateA,
+    required String dateB,
+    required bool isPro,
+    String? inProgressDate,
+  }) {
+    final allowance = DaySwapAllowance.instance
+        .current(DaySwapRules.mondayOf(dateA), isPro: isPro);
+    final pair = DaySwapRules.pairRefusal(dateA, dateB);
+    if (pair != null) return DaySwapPreview(allowance: allowance, refusal: pair);
+    final rows = <String, Map<String, dynamic>?>{
+      for (final d in DaySwapRules.weekDates(dateA)) d: _row(d),
+    };
+    final lock = _firstLock(dateA, rows[dateA], dateB, rows[dateB],
+        today: istTodayStr(), inProgressDate: inProgressDate);
+    return DaySwapPreview(
+      allowance: allowance,
+      refusal: lock?.reason ??
+          (allowance.spent ? DaySwapRefusal.allowanceSpent : null),
+      warning: DaySwapRules.restRunWarning(
+          weekDates: rows.keys.toList(),
+          rows: rows,
+          dateA: dateA,
+          dateB: dateB),
+    );
+  }
+
+  /// The ONE day-swap entry point (spec §5.1): Train drag, Train ⇅, Home
+  /// long-press and the coach all land here. Every check runs NOW, against
+  /// rows re-read inside the two-date write lock; a swap is counted only
+  /// after its write succeeded; the plan backup is pushed right after
+  /// (spec decision 8).
+  Future<DaySwapResult> swapDays({
+    required String dateA,
+    required String dateB,
+    required DaySwapOrigin origin,
+    required bool isPro,
+    String? inProgressDate,
+  }) async {
+    final pair = DaySwapRules.pairRefusal(dateA, dateB);
+    if (pair != null) {
+      return _refused(DaySwapRefused(reason: pair, date: dateA), origin);
+    }
+    final weekStart = DaySwapRules.mondayOf(dateA);
+    final today = istTodayStr();
+    final nowMs = nowWall().millisecondsSinceEpoch;
+    DaySwapRefused? refusal;
+    RestRunWarning? warning;
+
+    ScheduledDaySwapWrite? build(ScheduledDaySwapLive live) {
+      if (DaySwapAllowance.instance.current(weekStart, isPro: isPro).spent) {
+        refusal = DaySwapRefused(
+            reason: DaySwapRefusal.allowanceSpent, date: dateA);
+        return null;
+      }
+      final lock = _firstLock(dateA, live.rowA, dateB, live.rowB,
+          today: today, inProgressDate: inProgressDate);
+      if (lock != null) {
+        refusal = lock;
+        return null;
+      }
+      final rows = <String, Map<String, dynamic>?>{
+        for (final d in DaySwapRules.weekDates(dateA))
+          d: d == dateA ? live.rowA : (d == dateB ? live.rowB : _row(d)),
+      };
+      warning = DaySwapRules.restRunWarning(
+          weekDates: rows.keys.toList(),
+          rows: rows,
+          dateA: dateA,
+          dateB: dateB);
+      return DaySwapRules.buildSwap(
+        dateA: dateA,
+        dateB: dateB,
+        rowA: live.rowA!,
+        rowB: live.rowB!,
+        displacedA: live.displacedA,
+        displacedB: live.displacedB,
+        nowMs: nowMs,
+      );
+    }
+
+    final write =
+        debugSwapWriteForTests ?? WorkoutWriteService.instance.swapScheduledDays;
+    final WriteResult result;
+    try {
+      result = await write(
+        dateA: DaySwapRules.utcDate(dateA),
+        dateB: DaySwapRules.utcDate(dateB),
+        build: build,
+      );
+    } catch (e, st) {
+      // Nothing was written (the write function owns its own atomicity),
+      // so nothing was counted and nothing to push. Never let a swap
+      // request surface an uncaught exception to the UI.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'day_swap_write_threw'));
+      return const DaySwapFailed();
+    }
+
+    final refused = refusal;
+    if (refused != null) return _refused(refused, origin);
+    if (!result.success) {
+      unawaited(ErrorTelemetry.logEvent('day_swap_failed',
+          message: 'origin=${origin.name} error=${result.errorMessage}'));
+      return const DaySwapFailed();
+    }
+
+    // The write already succeeded — the swap DID happen. If recording the
+    // allowance throws, the swap is still reported as done (never claim a
+    // done swap failed); the allowance simply reads back whatever is
+    // currently stored, which may under-count this swap by one. That is
+    // the safe direction: never double-charge, never lose the write.
+    DayAllowance after;
+    try {
+      final recordSwap =
+          debugRecordSwapForTests ?? DaySwapAllowance.instance.recordSwap;
+      after = await recordSwap(weekStart, isPro: isPro);
+    } catch (e, st) {
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'day_swap_record_threw'));
+      after = DaySwapAllowance.instance.current(weekStart, isPro: isPro);
+    }
+    _pushPlan();
+    unawaited(ErrorTelemetry.logEvent('day_swap_done',
+        message:
+            'origin=${origin.name} week=$weekStart used=${after.used}/${after.limit}'));
+    return DaySwapDone(
+        dateA: dateA, dateB: dateB, allowanceAfter: after, warning: warning);
+  }
+
+  DaySwapRefused _refused(DaySwapRefused r, DaySwapOrigin origin) {
+    unawaited(ErrorTelemetry.logEvent('day_swap_refused',
+        message: 'origin=${origin.name} reason=${r.reason.code}'));
+    return r;
+  }
+
+  void _pushPlan() {
+    final hook = debugOnPlanPushForTests;
+    if (hook != null) {
+      hook();
+      return;
+    }
+    unawaited(SyncService.instance.pushWorkoutPlanForSyncDomain());
   }
 
   /// Swap a single exercise within a day's scheduled workout.
@@ -476,59 +661,6 @@ class SwapService {
 
   // ── Helpers ─────────────────────────────────────────────────────
 
-  int _getSwapsUsedThisWeek(DateTime monday) {
-    final weekStart = MigratedKey.read<String>(_swapWeekStartKey);
-    if (weekStart == null || weekStart != formatDateKey(monday)) {
-      return 0;
-    }
-    return MigratedKey.readWithDefault<int>(_swapsThisWeekKey, 0);
-  }
-
-  Future<void> _incrementSwapCount(DateTime monday) async {
-    final currentWeekStart = MigratedKey.read<String>(_swapWeekStartKey);
-    final mondayKey = formatDateKey(monday);
-
-    if (currentWeekStart != mondayKey) {
-      await MigratedKey.write(_swapWeekStartKey, mondayKey);
-      await MigratedKey.write(_swapsThisWeekKey, 1);
-    } else {
-      final current = MigratedKey.readWithDefault<int>(_swapsThisWeekKey, 0);
-      await MigratedKey.write(_swapsThisWeekKey, current + 1);
-    }
-  }
-
-  List<String> _simulateSwap(DateTime monday, DateTime dateA, DateTime dateB) {
-    final readSvc = WorkoutScheduleReadService.instance;
-    final types = <String>[];
-    for (int i = 0; i < 7; i++) {
-      final date = monday.add(Duration(days: i));
-      final schedule = readSvc.getScheduleForDate(date);
-      types.add(schedule?['type'] as String? ?? 'rest');
-    }
-
-    final indexA = dateA.difference(monday).inDays;
-    final indexB = dateB.difference(monday).inDays;
-    if (indexA >= 0 && indexA < 7 && indexB >= 0 && indexB < 7) {
-      final temp = types[indexA];
-      types[indexA] = types[indexB];
-      types[indexB] = temp;
-    }
-    return types;
-  }
-
-  bool _hasThreeConsecutiveRest(List<String> types) {
-    int consecutive = 0;
-    for (final t in types) {
-      if (t == 'rest') {
-        consecutive++;
-        if (consecutive >= 3) return true;
-      } else {
-        consecutive = 0;
-      }
-    }
-    return false;
-  }
-
   int _estimateExerciseListSeconds(List<Map<String, dynamic>> exercises) {
     int total = 0;
     for (final ex in exercises) {
@@ -562,11 +694,6 @@ class SwapService {
       if (name.contains(kw)) return 1;
     }
     return 3;
-  }
-
-  DateTime _normalizeToMonday(DateTime date) {
-    final daysFromMonday = date.weekday - 1;
-    return DateTime(date.year, date.month, date.day - daysFromMonday);
   }
 }
 

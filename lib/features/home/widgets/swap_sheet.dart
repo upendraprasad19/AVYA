@@ -1,11 +1,13 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
-import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/core/services/day_swap/day_swap_allowance.dart';
+import 'package:icanbefitter/core/services/day_swap/day_swap_copy.dart';
+import 'package:icanbefitter/core/services/day_swap/day_swap_result.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 
 /// Bottom sheet that allows swapping a workout day with another day
@@ -125,23 +127,23 @@ class _SwapSheetState extends ConsumerState<SwapSheet> {
     // upgrades.
     final isPro = ref.read(subscriptionInfoProvider).isPro;
     final result = await ref.read(swapServiceProvider).swapDays(
-          widget.sourceDate,
-          _selectedTarget!,
+          dateA: istDateStr(widget.sourceDate),
+          dateB: istDateStr(_selectedTarget!),
+          origin: DaySwapOrigin.homePicker,
           isPro: isPro,
         );
 
-    if (result != null) {
+    final error = DaySwapCopy.errorFor(result,
+        isPro: isPro,
+        limit: isPro ? DaySwapAllowance.proLimit : DaySwapAllowance.freeLimit);
+    if (error != null) {
       if (!mounted) return;
       setState(() {
-        _errorText = result;
+        _errorText = error;
         _isSwapping = false;
       });
       return;
     }
-
-    // Fire-and-forget sync so AI coach and cloud tables reflect the swap.
-    unawaited(SyncService.instance.syncWorkoutData());
-    unawaited(SyncService.instance.pushSnapshot());
 
     if (!mounted) return;
     Navigator.of(context).pop();

@@ -544,15 +544,29 @@ void main() {
       expect(day2['week_character'], 'working');
     });
 
-    test('is_swapped + shortened rows are NOT rewritten', () async {
+    test('a day-swapped row IS lifted (the is_swapped skip is gone)',
+        () async {
       await seedWk4(phase: 2);
       await wb.put('last_actual_deload_phase', 1);
       await seedGoodReadiness();
       await seedNonDecliningCompound();
       final wk4Start = planStart.add(const Duration(days: 21));
-      // day 0 → is_swapped; day 2 → shortened.
       await wb.put('schedule_${dk(wk4Start)}',
           workoutRow(wk4Start, 2, 0, isSwapped: true));
+      await enableFlags();
+
+      await DeloadEvaluator.instance.maybeEvaluate();
+
+      expect(ex0(liftedWorkoutRow()!, 'sets'), 4);
+      expect(liftedWorkoutRow()!['week_character'], 'working');
+    });
+
+    test('a time-shortened row is NOT rewritten', () async {
+      await seedWk4(phase: 2);
+      await wb.put('last_actual_deload_phase', 1);
+      await seedGoodReadiness();
+      await seedNonDecliningCompound();
+      final wk4Start = planStart.add(const Duration(days: 21));
       await wb.put('schedule_${dk(wk4Start.add(const Duration(days: 2)))}',
           workoutRow(wk4Start.add(const Duration(days: 2)), 2, 2,
               shortenedVia: 'ai_coach'));
@@ -560,10 +574,10 @@ void main() {
 
       await DeloadEvaluator.instance.maybeEvaluate();
 
-      expect(ex0(liftedWorkoutRow()!, 'sets'), 2);
       final day2 = wb.get('schedule_${dk(wk4Start.add(const Duration(days: 2)))}')
           as Map;
       expect(ex0(day2, 'sets'), 2);
+      expect(day2['week_character'], 'deload');
     });
 
     test('per-exercise: a swapped-in exercise (no stash) is left untouched',
