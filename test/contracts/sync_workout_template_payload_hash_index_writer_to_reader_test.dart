@@ -26,8 +26,15 @@ import '../sync/sync_domain_skip_harness.dart';
 /// a surplus (a flood) is also visible before the caller counts. Same filter
 /// as the exlog/nlog siblings: `recordNonFatal` posts with its own internal
 /// `reason` as op_type, so only the domain op string is matched.
+///
+/// Fix round 2 (F3, 2026-09-27): already counts to [atLeast] rather than
+/// stopping on the first match (the nlog sibling's bug this fix round
+/// addresses), so this file was never exposed to that failure mode -- but
+/// its 1000ms deadline is not "generous" under full-suite contention.
+/// Raised to 10s for parity; the happy path (plus the 150ms flood-settle
+/// below) is unaffected.
 Future<List<dynamic>> _logClientErrorReports(SyncHarness h, String opType,
-    {int atLeast = 1, int maxWaitMs = 1000}) async {
+    {int atLeast = 1, int maxWaitMs = 10000}) async {
   List<dynamic> matches() => h.server.requests
       .where((r) =>
           r.path == '/functions/v1/log-client-error' &&

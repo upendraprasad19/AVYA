@@ -151,6 +151,13 @@ extension SyncServiceCommunity on SyncService {
                   .upsert(payload, onConflict: 'id');
               return true;
             },
+            // F1 (Task 17 fix round 1) -- the shared customItem index's own
+            // domain.opType ('sync_custom_items') is also the outer
+            // catch-all's string; without this override an exercise-upsert
+            // failure, a food-upsert failure and a whole-function crash are
+            // telemetry-indistinguishable. Restores the pre-Task-17 string
+            // (see git show ea93f97d:lib/core/services/sync/sync_community.dart:140).
+            opType: 'upsert_custom_exercise',
           );
           if (ok) exerciseSuccessCount++;
         } else if (key.startsWith('custom_food_')) {
@@ -174,6 +181,10 @@ extension SyncServiceCommunity on SyncService {
                   .upsert(payload, onConflict: 'id');
               return true;
             },
+            // F1 (Task 17 fix round 1) -- see the exercise branch's comment
+            // above; restores the pre-Task-17 string (see git show
+            // ea93f97d:lib/core/services/sync/sync_community.dart:165).
+            opType: 'upsert_custom_food',
           );
           if (ok) foodSuccessCount++;
         }

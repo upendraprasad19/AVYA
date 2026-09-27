@@ -17,8 +17,18 @@ import '../sync/sync_domain_skip_harness.dart';
 /// call. Polls briefly rather than a bare delay -- fast on the happy path,
 /// robust under full-suite load contention (CLAUDE.md's own documented class
 /// of full-suite-only timing flakiness).
+///
+/// Fix round 2 (F3, 2026-09-27): the loop used to stop as soon as
+/// `matches()` was NON-EMPTY, not once it reached the count the caller
+/// actually needs. `_reportSyncFailure` dual-posts (two separate requests
+/// for one logical failure), so under full-suite contention the FIRST of
+/// the two could land inside the old 500ms budget while the second was
+/// still in flight -- the loop exited early on the first, and the caller's
+/// `hasLength(2)` failed on real, not-yet-arrived data, not a real defect.
+/// Now polls until [atLeast] have arrived (or a generous 10s deadline
+/// expires) so a slow-but-real second post is actually waited for.
 Future<List<dynamic>> _logClientErrorReports(SyncHarness h, String opType,
-    {int maxWaitMs = 500}) async {
+    {int atLeast = 1, int maxWaitMs = 10000}) async {
   List<dynamic> matches() => h.server.requests
       .where((r) =>
           r.path == '/functions/v1/log-client-error' &&
@@ -27,7 +37,7 @@ Future<List<dynamic>> _logClientErrorReports(SyncHarness h, String opType,
       .toList();
   final deadline = DateTime.now().add(Duration(milliseconds: maxWaitMs));
   var found = matches();
-  while (found.isEmpty && DateTime.now().isBefore(deadline)) {
+  while (found.length < atLeast && DateTime.now().isBefore(deadline)) {
     await Future.delayed(const Duration(milliseconds: 20));
     found = matches();
   }
@@ -199,12 +209,14 @@ void main() {
       // this fixture's two items -- "try every item" would produce exactly
       // that 4, since each item's own failure would trigger its own
       // dual-posted pair.
-      final reports =
-          await _logClientErrorReports(h, 'upsert_nutrition_log_item');
+      final reports = await _logClientErrorReports(
+          h, 'upsert_nutrition_log_item',
+          atLeast: 2);
       expect(reports, hasLength(2),
           reason: 'one _reportSyncFailure call worth of log-client-error '
               'reports (dual-posted by design) for the whole slot -- not '
-              'one pair per item, with op_type upsert_nutrition_log_item');
+              'one pair per item, with op_type upsert_nutrition_log_item '
+              '(${reports.length} arrived within the wait budget)');
       h.server
         ..clear()
         ..failWritesTo.remove('nutrition_log_items');

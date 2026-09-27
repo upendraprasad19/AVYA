@@ -151,17 +151,38 @@ class SyncSkipIndex {
   int failed = 0;
   int unconfirmed = 0;
 
+  /// Distinct opTypes already reported to [_reportFailure] THIS pass (mirror
+  /// gap fix, F1 round 2). `failed == 1` alone is wrong for a shared index
+  /// like `customItem`, which passes a different [opType] override per call:
+  /// an exercise-upsert failure followed by a food-upsert failure in the
+  /// SAME pass are two DISTINCT opTypes, and both must be reported once
+  /// each -- but a domain with only one opType (the common case) must keep
+  /// reporting exactly once per pass, exactly as before. Reset happens
+  /// naturally: this field lives on the instance, and a new SyncSkipIndex is
+  /// constructed per pass (same lifetime as [failed] itself).
+  final Set<String> _reportedOpTypes = <String>{};
+
   /// True once the live account differs from the pass's owner. The domain
   /// loop should stop; nothing more is pushed or recorded.
   bool get aborted => _aborted;
 
   /// Pushes [rowKey] unless its fingerprint equals the last confirmed one.
   /// Returns true when the row is confirmed in the cloud after this call.
+  ///
+  /// [opType] overrides [SyncSkipDomain.opType] for THIS call's failure
+  /// report only (Task 17 fix round 1, F1) -- a domain that shares one
+  /// index across several underlying tables (e.g. `customItem` for both
+  /// `user_custom_exercises` and `user_custom_foods`) would otherwise report
+  /// every push failure under the same generic string, indistinguishable
+  /// from each other AND from the domain's own whole-function catch-all.
+  /// Every other domain omits it and keeps reporting under `domain.opType`
+  /// exactly as before.
   Future<bool> pushIfChanged(
     String rowKey,
     String Function() fingerprint,
-    Future<bool> Function() push,
-  ) async {
+    Future<bool> Function() push, {
+    String? opType,
+  }) async {
     if (_aborted) return false;
     if (_ownerChangedNow()) {
       _aborted = true;
@@ -191,7 +212,13 @@ class SyncSkipIndex {
     } catch (e, st) {
       failed++;
       _forget(rowKey);
-      if (failed == 1) _reportFailure(domain.opType, e, st);
+      // Report once per DISTINCT opType per pass, not just the first
+      // failure overall (mirror gap fix, F1 round 2) -- a shared index
+      // (customItem) can see two different opType overrides fail in one
+      // pass, and both must surface; a single-opType domain still reports
+      // exactly once, since `add` returns false on the second occurrence.
+      final op = opType ?? domain.opType;
+      if (_reportedOpTypes.add(op)) _reportFailure(op, e, st);
       return false;
     }
     if (_ownerChangedNow()) {

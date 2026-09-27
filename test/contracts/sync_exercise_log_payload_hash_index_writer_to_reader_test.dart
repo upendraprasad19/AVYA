@@ -19,8 +19,16 @@ import '../sync/sync_domain_skip_harness.dart';
 /// call. Polls briefly rather than a bare delay -- fast on the happy path,
 /// robust under full-suite load contention (CLAUDE.md's own documented class
 /// of full-suite-only timing flakiness).
+///
+/// Fix round 2 (F3, 2026-09-27): this call site only ever needs `isNotEmpty`
+/// (at least one report), so the "stop once non-empty" loop shape was never
+/// wrong the way the nlog sibling's `hasLength(2)` one was -- but its 500ms
+/// deadline is not "generous" under full-suite contention, so a genuinely
+/// slow (not dropped) post could still time out and read as a false
+/// failure. Raised to 10s for parity with the nlog fix; the happy path is
+/// unaffected since the loop still exits the instant the first match lands.
 Future<List<dynamic>> _logClientErrorReports(SyncHarness h, String opType,
-    {int maxWaitMs = 500}) async {
+    {int maxWaitMs = 10000}) async {
   List<dynamic> matches() => h.server.requests
       .where((r) =>
           r.path == '/functions/v1/log-client-error' &&
