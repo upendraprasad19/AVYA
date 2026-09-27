@@ -159,6 +159,17 @@ class DaySwapCopy {
     return '${subject.title} is now ${relativeDay(subject.date, today)}. $left';
   }
 
+  // ── Train week list (drag) ──────────────────────────────────────
+  // Both strings below are from the approved mockup (spec §6.1, Approach A)
+  // — not NEW — implemented exactly as chrome on DaySwapDragWrapper.
+  static const dropToSwap = 'DROP TO SWAP';
+  static const movingLabel = 'moving…';
+
+  /// NEW: accessibility label for the ⇅ affordance (not part of the visual
+  /// mockup — the mockup has no a11y-label concept).
+  static String swapSemanticsLabel(String date) =>
+      'Swap ${weekdayLong(date)} with another day';
+
   // ── Allowance line (Train week list) ────────────────────────────
   static const allowanceHint = 'Hold a day and drag it onto another, or tap ⇅';
 

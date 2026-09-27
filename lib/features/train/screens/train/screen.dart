@@ -46,6 +46,9 @@ import 'package:icanbefitter/shared/repositories/user_repository.dart';
 // and only the FULL analyze at pre-push could see it — a per-file analyze of
 // screen.dart reports clean because the parts are analysed with the library.
 import '../../widgets/readiness_sheet.dart';
+import '../../widgets/day_swap_row_trailing.dart';
+import '../../widgets/day_swap_drag_wrapper.dart';
+import '../../widgets/day_swap_allowance_line.dart';
 
 part 'plan_header.dart';
 part 'hero_cards.dart';

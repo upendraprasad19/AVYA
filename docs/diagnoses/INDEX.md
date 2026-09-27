@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### day_swap_train_ui_kill_switch (1 bugs)
+- 2026-09-28 a7f2d9 — task-25-review.md (reviewing commit c9fbcd64, the unmerged day-swap Train UI feature) found 5 gaps, the two most consequential being real bugs rather than style nits: (1)…
+
 ### day_swap_engine (2 bugs)
 - 2026-09-26 c3e8b2 — Asking the AI coach to "shift today's workout to tomorrow and tomorrow's workout to today" (the APK observation that triggered this whole batch, spec §1.1: Fri 25 Pull+Core <-> Sat 26 Legs+Core) makes…
 - 2026-09-26 e2b9d4 — The only shipped day-swap path, `SwapService.swapDays` (lib/core/services/swap_service.dart:113-169), reached solely via a long-press on the Home calendar strip, has nine independent defects, each…
@@ -1413,6 +1416,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-28 | a7f2d9 | task-25-review.md (reviewing commit c9fbcd64, the unmerged day-swap Train UI feature) found 5 gaps, the two most consequential being real bugs rather than style nits: (1)… | day_swap_train_ui_kill_switch | "test/widgets/week_rows_kill_switch_test.dart (new — asserts by widget type/key and child count, not pixels), plus updated test/widgets/day_swap_drag_wrapper_test.dart (new switch-OFF test, F3) and its new F5 standing-reset group" |
 | 2026-09-26 | c3e8b2 | Asking the AI coach to "shift today's workout to tomorrow and tomorrow's workout to today" (the APK observation that triggered this whole batch, spec §1.1: Fri 25 Pull+Core <-> Sat 26 Legs+Core) makes… | day_swap_engine | "must add: supabase/functions/_shared/tools/workout/__tests__/swapWorkoutDays_test.ts |
 | 2026-09-26 | d5c2e8 | Found by the reuse audit, not by a user report. `CreateCustomExerciseSheet` created a custom exercise with a raw `HiveService.instance.customBox.put` plus a hand-rolled `syncCustomItemsNow()` /… | custom_exercises_mutations | test/contracts/custom_exercises_mutations_behavioral_test.dart |
 | 2026-09-26 | d5a1e7 | A day swap made with the existing `SwapService.swapDays` (lib/core/services/swap_service.dart:113) can silently revert on the next app launch, and a workout-to-workout swap never propagates to a… | schedule_arrangement_stamp | "must add: test/sync/restore_merge_invariants_test.dart (invariants |
