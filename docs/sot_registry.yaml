@@ -5137,6 +5137,52 @@ concepts:
       Singleton key (not a coach_* row). AiCoachHistoryProvider must
       skip it. _compactContext caps at 1000 chars as step 8 of trim order.
       Never truncate in the writer — truncation is the trimmer's job.
+      Guard note (single-owner-a2a, 2026-09-27): DO NOT confuse this Hive
+      singleton / coach_memory.coach_notes concept with the SEPARATE
+      concept user_preferences_coaching_notes below — same English name,
+      different table+column, different writers (daily-snapshot's nightly
+      extraction + assess-body-composition's rate-limit stamp, not
+      CoachMemoryService), no code path connects the two.
+
+  - concept: user_preferences_coaching_notes
+    domain: ai_coach
+    behavioral_test_path: test/contracts/user_preferences_coaching_notes_writer_to_reader_test.dart
+    presence_only: true  # single-owner-a2a — source-grep drift detector; no live-Postgres round-trip test exists for this Edge-Function-only concept (rule 21 honesty)
+    description: |
+      A JSON blob in Postgres user_preferences.coaching_notes, DISTINCT
+      from the coaching_notes concept above (that one is the client Hive
+      singleton fed from coach_memory.coach_notes — unrelated table,
+      unrelated column, same English name only). This column has TWO
+      server-side writers, each a read-merge-write over the same JSON so
+      neither clobbers the other's keys: daily-snapshot (extracted AI
+      facts — diet_preference, injuries, lifestyle_activity, etc. plus
+      last_extracted_at) and assess-body-composition (the
+      last_bf_assessed_at 30-day PRO rate-limit stamp, piggybacked here to
+      avoid a migration for one timestamp). The client is a PURE CONSUMER
+      — OI-98 round-3 review removed it from the client's own
+      user_preferences push payload after a null-carrying key nulled the
+      server's value, destroying both coach memory and the BF% rate limit
+      in one write.
+    writers:
+      - { file: supabase/functions/daily-snapshot/index.ts, line_range: 196-269, method: mergeCoachingNotes, notes: "Read-merge-write: selects existing coaching_notes, JSON.parse, merges extracted facts (non-empty values only) + last_extracted_at, re-upserts onConflict user_id. Gated behind the a2a private_mode check (2026-09-27, diagnose c3f8e6) — never reached when the user's coach_memory.private_mode is true." }
+      - { file: supabase/functions/assess-body-composition/index.ts, line_range: 86-224, method: "serve handler — 30-day rate-limit block", notes: "Also read-merge-write: selects existing coaching_notes, JSON.parse, sets last_bf_assessed_at, re-upserts onConflict user_id — never a blind overwrite of daily-snapshot's keys." }
+    reader_manifest_complete: false
+    readers:
+      - { file: lib/core/services/sync/sync_profile.dart, line_range: 971-1033, method: _restoreUserPreferences, semantic: pass-through, notes: "Generic .select() on user_preferences pulls the whole row, incl. coaching_notes, into Hive on restore. The client never writes this key back (see class_constraints below) — reader_manifest_complete is false because nothing in lib/ currently parses this JSON's individual keys client-side; it round-trips opaquely." }
+      - { file: supabase/functions/restore-user-snapshot/index.ts, line: 158, method: "serve handler", semantic: pass-through, notes: "Server-side restore endpoint selects user_preferences.* (incl. coaching_notes) back to a fresh install / reinstall." }
+    cloud:
+      table: user_preferences
+      columns: [user_id, coaching_notes]
+    class_constraints: |
+      The client MUST NEVER include coaching_notes in its own
+      user_preferences upsert payload (OI-98 round-3 review, comment at
+      sync_profile.dart:654-662) — a key present with
+      a null value still lands in the generated SET list, so a client with
+      no local copy nulls the server's, destroying both daily-snapshot's
+      extracted facts AND assess-body-composition's rate-limit stamp in
+      one write. Both server-side writers MUST read-merge-write (select →
+      JSON.parse → merge → upsert), never a blind overwrite, for the same
+      reason.
 
   - concept: log_client_error_payload
     domain: telemetry

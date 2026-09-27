@@ -1,12 +1,19 @@
 // supabase/functions/daily-snapshot/index_test.ts
 //
-// index.ts calls `serve(...)` at module scope with no `import.meta.main`
-// guard, so importing it directly would boot a real HTTP server (the exact
-// trap supabase/functions/CLAUDE.md warns about). This is a SOURCE-GREP
-// wiring test — it proves the handler actually calls the merge-safe path
-// fixed for diagnose d8a2f6, not just that the path exists somewhere.
-// Behavioral coverage of the merge logic itself lives in
+// index.ts's handler() reads Deno.env.get(...)! at module scope (SUPABASE_URL
+// etc.), so a dynamic import in a test without those env vars set would still
+// throw at import time — this file stays SOURCE-GREP rather than switching to
+// a dynamic-import behavioral test. It proves the handler actually calls the
+// merge-safe path fixed for diagnose d8a2f6, not just that the path exists
+// somewhere. Behavioral coverage of the merge logic itself lives in
 // ../_shared/snapshot_merge_test.ts (mutation-proven).
+//
+// a2a (single-owner batch, 2026-09-27): serve(...) now boots ONLY under
+// `if (import.meta.main)` (see the "boots under..." test below) — this file
+// itself never imports index.ts directly, so this was never the thing at
+// risk here, but every OTHER consumer (a future behavioral test, or the a2b
+// work that follows this piece) can now safely import extractCoachingNotes
+// without a live server starting.
 
 import { assert } from "https://deno.land/std@0.224.0/assert/mod.ts";
 
@@ -91,12 +98,15 @@ Deno.test("daily-snapshot imports reportGeminiExhaustion", () => {
 });
 
 Deno.test("extractCoachingNotes destructures lastError from its geminiChat call (OI-238)", () => {
-  const callIdx = source.indexOf("await geminiChat({");
-  assert(callIdx >= 0, "geminiChat call not found");
+  // a2a repointed this call from a bare `geminiChat(` to the injectable
+  // `geminiChatFn(` — see the geminiChatFn tests below for why. Repointed,
+  // not loosened: the call site still exists, just under its new name.
+  const callIdx = source.indexOf("await geminiChatFn({");
+  assert(callIdx >= 0, "geminiChatFn call not found");
   const destructureLine = source.slice(Math.max(0, callIdx - 200), callIdx);
   assert(
     destructureLine.includes("lastError"),
-    `expected the geminiChat destructure to include lastError, got: ${destructureLine}`,
+    `expected the geminiChatFn destructure to include lastError, got: ${destructureLine}`,
   );
 });
 
@@ -132,3 +142,85 @@ Deno.test(
     );
   },
 );
+
+// ── a2a (single-owner batch, 2026-09-27) ─────────────────────────────────
+//
+// Test seam + kill switch + private-mode-before-any-read. What this
+// function reads/meters is UNCHANGED here — that's a2b's scope, reviewed
+// separately.
+
+Deno.test("daily-snapshot boots the server ONLY under import.meta.main", () => {
+  assert(
+    source.includes("if (import.meta.main) {") &&
+      source.includes("serve(handler)"),
+    "importing this module for a test must not start a real HTTP server",
+  );
+  assert(
+    !/serve\(async \(req: Request\)/.test(source),
+    "the old unguarded `serve(async (req) => {...})` form must be gone, " +
+      "not merely joined by a guarded second call",
+  );
+});
+
+Deno.test("extractCoachingNotes is exported with an injectable geminiChatFn, defaulting to the real geminiChat", () => {
+  assert(
+    source.includes("export async function extractCoachingNotes("),
+    "must be exported for a2b's own tests to call it directly",
+  );
+  assert(
+    source.includes("{ geminiChatFn = geminiChat }: { geminiChatFn?: typeof geminiChat } = {}"),
+    "the injectable param must default to the REAL geminiChat import — " +
+      "no production call site passes a second argument",
+  );
+});
+
+Deno.test("daily-snapshot has a DISABLE_COACH_EXTRACTION kill switch (read per call, no redeploy needed)", () => {
+  assert(
+    source.includes('Deno.env.get("DISABLE_COACH_EXTRACTION") === "true"'),
+    "platform-tier §4.6 requires a feature_flag for this kind of change",
+  );
+  const disableIdx = source.indexOf("DISABLE_COACH_EXTRACTION");
+  const fetchIdx = source.indexOf("fetchCoachMemory(supabaseClient, userId)");
+  assert(disableIdx >= 0 && fetchIdx >= 0, "both anchors must exist");
+  assert(
+    disableIdx < fetchIdx,
+    "the kill switch must be checked BEFORE the coach_memory read it gates — " +
+      "checking it after would still spend the read on every call",
+  );
+});
+
+Deno.test("private_mode is checked BEFORE the staleness check and BEFORE any extraction call, not after (round-3 #9)", () => {
+  // Pre-a2a, only mergeCoachMemoryFields checked private_mode — AFTER
+  // extractCoachingNotes had already spent a Gemini call and
+  // mergeCoachingNotes had already written diet_preference/injuries/etc.
+  // into user_preferences + memory_embeddings + user_profile.
+  const privateModeIdx = source.indexOf("if (!existing?.private_mode) {");
+  const isStaleIdx = source.indexOf("const isStale =");
+  const extractCallIdx = source.indexOf(
+    "extractedFacts = await extractCoachingNotes(",
+  );
+  assert(
+    privateModeIdx >= 0 && isStaleIdx >= 0 && extractCallIdx >= 0,
+    "all three anchors must exist",
+  );
+  assert(
+    privateModeIdx < isStaleIdx && isStaleIdx < extractCallIdx,
+    "private_mode must gate BEFORE isStale is even computed, which must " +
+      "precede the actual extraction call — this is the exact ordering " +
+      "round 3 finding #9 required",
+  );
+});
+
+Deno.test("private_mode gate fails OPEN on a missing row or a read error, not closed (matches this function's existing non-fatal posture)", () => {
+  // fetchCoachMemory (see _shared/coach_memory.ts) returns null on BOTH "no
+  // row yet" and a genuine read error — `!existing?.private_mode` must
+  // therefore evaluate true (proceed with extraction) in both cases, never
+  // block a legitimate first-time user because coach_memory doesn't exist
+  // yet. Asserting the exact `!existing?.private_mode` form (rather than
+  // some other private_mode check elsewhere in the file) pins this.
+  assert(
+    source.includes("if (!existing?.private_mode) {"),
+    "must use the optional-chaining form so an absent row (undefined) " +
+      "reads as \"not private\", not as a block",
+  );
+});

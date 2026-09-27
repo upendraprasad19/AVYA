@@ -53,10 +53,15 @@ interface ExtractedFacts {
   motivation_style?: string;
 }
 
-async function extractCoachingNotes(
+// a2a (single-owner batch, 2026-09-27): exported + geminiChatFn injectable so
+// tests can drive this without a live Gemini call. Default is the real
+// import — no production call site passes a second argument. What this
+// function reads/meters is UNCHANGED here; that's a2b's scope.
+export async function extractCoachingNotes(
   supabase: SupabaseClient,
   userId: string,
   todayIST: string,
+  { geminiChatFn = geminiChat }: { geminiChatFn?: typeof geminiChat } = {},
 ): Promise<ExtractedFacts | null> {
   // Fetch today's conversations
   const { data: convos } = await supabase
@@ -145,7 +150,7 @@ Return ONLY valid JSON (no markdown, no code fences). Include only fields that w
 
 If nothing was found, return: {}`;
 
-  const { content: rawText, lastError } = await geminiChat({
+  const { content: rawText, lastError } = await geminiChatFn({
     model: MODEL_FLASH,
     systemPrompt: "Extract factual profile data from fitness coaching conversations. Return ONLY valid JSON.",
     userPrompt: asAuthoredPrompt(prompt),
@@ -163,7 +168,7 @@ If nothing was found, return: {}`;
     // traffic (pushSnapshot, gated to once per 6h) against the same
     // GEMINI_API_KEY/quota. endpoint: "daily_snapshot_extraction" keeps it
     // distinguishable. `supabase` is the caller's own service-role client
-    // (param, not a module global — see call site in serve()).
+    // (param, not a module global — see call site in handler()).
     await reportGeminiExhaustion(
       supabase,
       "ai_proxy_gemini_exhausted",
@@ -301,7 +306,10 @@ function getTodayIST(): string {
   return istDate.toISOString().split("T")[0];
 }
 
-serve(async (req: Request) => {
+// a2a (single-owner batch, 2026-09-27): import.meta.main guard, matching
+// ai-media-proxy/founder-digest — importing this module for tests must not
+// boot a real HTTP server.
+async function handler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -429,32 +437,51 @@ serve(async (req: Request) => {
     // Coaching notes extraction (gated): skip if we already extracted within
     // the last 6h. pushSnapshot fires per-mutation, so without this guard
     // Gemini Flash burns once per logFood/addWater/completeWorkout call.
+    //
+    // a2a (single-owner batch, 2026-09-27): DISABLE_COACH_EXTRACTION kill
+    // switch (read per call, no redeploy needed) + private_mode checked
+    // BEFORE the staleness check / any Gemini call — previously only
+    // mergeCoachMemoryFields checked it, AFTER extractCoachingNotes had
+    // already spent a Gemini call and mergeCoachingNotes had already
+    // written diet_preference/injuries/etc. into user_preferences +
+    // memory_embeddings + user_profile unconditionally. Currently latent
+    // (no client writer ever sets private_mode=true), but structurally a
+    // privacy leak once one exists. fetchCoachMemory returns null on BOTH
+    // "no row yet" and a genuine read error, so `!existing?.private_mode`
+    // fails OPEN in both cases — extraction proceeds, matching this
+    // function's existing non-fatal-on-error posture everywhere else.
     let extractedFacts: ExtractedFacts | null = null;
-    try {
-      const existing = await fetchCoachMemory(supabaseClient, userId);
-      const lastExtraction = existing?.last_extraction_at
-        ? new Date(existing.last_extraction_at).getTime()
-        : 0;
-      const sixHoursMs = 6 * 60 * 60 * 1000;
-      const isStale = (Date.now() - lastExtraction) > sixHoursMs;
+    const extractionDisabled =
+      Deno.env.get("DISABLE_COACH_EXTRACTION") === "true";
+    if (!extractionDisabled) {
+      try {
+        const existing = await fetchCoachMemory(supabaseClient, userId);
+        if (!existing?.private_mode) {
+          const lastExtraction = existing?.last_extraction_at
+            ? new Date(existing.last_extraction_at).getTime()
+            : 0;
+          const sixHoursMs = 6 * 60 * 60 * 1000;
+          const isStale = (Date.now() - lastExtraction) > sixHoursMs;
 
-      if (isStale) {
-        extractedFacts = await extractCoachingNotes(
-          supabaseClient,
-          userId,
-          snapshotDate,
-        );
-        if (extractedFacts) {
-          await mergeCoachingNotes(supabaseClient, userId, extractedFacts);
-          try {
-            await mergeCoachMemoryFields(supabaseClient, userId, extractedFacts);
-          } catch (memErr) {
-            console.error("Coach memory merge error (non-fatal):", memErr);
+          if (isStale) {
+            extractedFacts = await extractCoachingNotes(
+              supabaseClient,
+              userId,
+              snapshotDate,
+            );
+            if (extractedFacts) {
+              await mergeCoachingNotes(supabaseClient, userId, extractedFacts);
+              try {
+                await mergeCoachMemoryFields(supabaseClient, userId, extractedFacts);
+              } catch (memErr) {
+                console.error("Coach memory merge error (non-fatal):", memErr);
+              }
+            }
           }
         }
+      } catch (extractErr) {
+        console.error("Coaching extraction error (non-fatal):", extractErr);
       }
-    } catch (extractErr) {
-      console.error("Coaching extraction error (non-fatal):", extractErr);
     }
 
     let memory = null;
@@ -488,4 +515,8 @@ serve(async (req: Request) => {
       },
     );
   }
-});
+}
+
+if (import.meta.main) {
+  serve(handler);
+}

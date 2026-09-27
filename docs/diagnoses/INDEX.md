@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### coaching_notes / coach_memory extraction (1 bugs)
+- 2026-09-27 c3f8e6 — `daily-snapshot/index.ts` (before this fix) had three defects, each verified by reading the code on 2026-09-27: 1. Untestable. `serve(async (req) => {...})` ran at MODULE SCOPE with no…
+
 ### usage_quota_ledger (new key prediction_daily) + ai_proxy_input_limits (1 bugs)
 - 2026-09-26 125b81 — ai-proxy's `type: "prediction"` branch (`ai-proxy/index.ts:700-757` before this fix) had three defects, each verified by reading the code on 2026-09-26: 1. Unmetered. No quota, no tier check. Every…
 
@@ -1410,6 +1413,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-27 | c3f8e6 | `daily-snapshot/index.ts` (before this fix) had three defects, each verified by reading the code on 2026-09-27: 1. Untestable. `serve(async (req) => {...})` ran at MODULE SCOPE with no… | coaching_notes / coach_memory extraction | supabase/functions/daily-snapshot/index_test.ts |
 | 2026-09-26 | 125b81 | ai-proxy's `type: "prediction"` branch (`ai-proxy/index.ts:700-757` before this fix) had three defects, each verified by reading the code on 2026-09-26: 1. Unmetered. No quota, no tier check. Every… | usage_quota_ledger (new key prediction_daily) + ai_proxy_input_limits | supabase/functions/_shared/prediction_handler_test.ts |
 | 2026-09-26 | e5c9d2 | ai-proxy's chat dedup (`ai-proxy/index.ts`, "Deduplication: return cached response for same user+message in last 30s") served ANY recent row with a non-empty `ai_response` back as a 200 reply. When… | coach_chat_history_replay | supabase/functions/_shared/chat_dedup_test.ts |
 | 2026-09-26 | f7a3d2 | A pg_cron job that stops being launched, or is switched off with the documented kill switch (`cron.job.active = false`), writes no run row at all, and nothing raises an alert. On 2026-09-21 two hourly… | Migration 145 (b4c8e2) reads cron.job_run_details for runs that FAILED. A job that is never launched produces no row there, so 145 cannot see it. OI-178's class line names exactly this: "a failing job and a job that never ran are the same observation here: nothing". Nothing read cron.job's schedule or active flag against run history. | test/contracts/alert_cron_job_silent_test.dart |

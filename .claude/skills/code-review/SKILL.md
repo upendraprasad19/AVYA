@@ -248,6 +248,22 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-27** — blast-radius **platform** — branch `single-owner-a2` (a2a: daily-snapshot's
+  coaching-notes extraction gains a test seam, kill switch, and a private-mode-before-any-read
+  gate; diagnose `c3f8e6`). Staged-diff review, `docs/reviews/aa943309c727-review.md`.
+  **2 findings, 0 false alarms, both fixed/accepted in the same commit.** F1 (P2,
+  blast_radius_mismatch) caught that the already-converged plan's own dependent list
+  (`docs/plans/2026-09-26-single-owner-batch-a.md:262`) named 3 test-header repoints + a new SoT
+  concept + a guard note that the first diff had simply skipped — a real gap between what the
+  plan committed to and what shipped, not a plan error. F2 (P3, asserted_fixture_value /
+  guard_without_its_mirror) flagged that the 4 new source-grep tests never behaviorally invoke
+  the seam they pin — accepted as a disclosed, codebase-wide limitation (module-scope
+  `Deno.env.get(...)!` reads block dynamic import) rather than fixed, since the mutation-proof
+  table is this repo's documented substitute for exactly this case. **Lesson:** a plan's own
+  "dependents" list for a converged sub-piece is load-bearing scope, not decoration — a B-pass
+  against the diff alone, without re-reading the plan's dependents line, would have missed F1
+  entirely (it is invisible from the code; only visible by re-reading the plan).
+
 - **2026-09-26** — blast-radius **account** — branch `reuse-audit-fixes` (B1 saved-meal
   times_used owner, C sign-up referral via auth metadata, D custom-exercise sheet through the
   one create path). Staged-diff review, branch-named file. **3 findings: 1 false_alarm (33%),
