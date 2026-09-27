@@ -304,11 +304,25 @@ keys:
 
   - key: week_lookahead
     type: list
-    writer_line: 119
+    writer_line: 1253
     readers: []
     prompt_passthrough: true
     notes: |
-      7-day forecast — REST entries for days without schedule.
+      7-day forecast — REST entries for days without schedule. Since
+      day-swapper-sync-load (2026-09-27): each entry also carries `name`,
+      `can_swap`, `swap_block` (only when not swappable) and `week_start`.
+
+  - key: swaps_left
+    type: map
+    writer_line: 1324
+    readers: []
+    prompt_passthrough: true
+    notes: |
+      NEW (day-swapper-sync-load, 2026-09-27, spec §5.8). {<IST Monday>: <int
+      swaps left>} for every week week_lookahead touches (at most 2). Joins
+      trimSnapshotToBudget's keep set alongside week_lookahead (plan D7) — see
+      ai_snapshot_builder.dart's own note on why: it is tiny but useless
+      without the lookahead it annotates.
 
   - key: current_plan_summary
     type: map
