@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### retries_2_sole_call_site_pin (existing SoT-adjacent test contract, no registry entry — presence-only Deno source-grep, per docs/sot_registry.yaml's own convention for this test file) (1 bugs)
+- 2026-09-28 e35936 — `supabase/functions/_shared/gemini_backoff_retry_test.ts`'s `assertSoleCallSiteHasRetries` helper — which exists specifically to pin `retries: 2` at each of 5 single-call-site Gemini functions…
+
 ### coach_extraction_locked_fields (new SoT concept — docs/sot_registry.yaml) (1 bugs)
 - 2026-09-27 a2b2f1 — Two independent, unsynchronized writers to the same three `user_profile` columns (`diet_preference`, `lifestyle_activity`, `injuries`): 1. The user, directly — via Profile → Edit Profile…
 
@@ -1419,6 +1422,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-28 | e35936 | `supabase/functions/_shared/gemini_backoff_retry_test.ts`'s `assertSoleCallSiteHasRetries` helper — which exists specifically to pin `retries: 2` at each of 5 single-call-site Gemini functions… | retries_2_sole_call_site_pin (existing SoT-adjacent test contract, no registry entry — presence-only Deno source-grep, per docs/sot_registry.yaml's own convention for this test file) | supabase/functions/_shared/gemini_backoff_retry_test.ts |
 | 2026-09-27 | a2b2f1 | Two independent, unsynchronized writers to the same three `user_profile` columns (`diet_preference`, `lifestyle_activity`, `injuries`): 1. The user, directly — via Profile → Edit Profile… | coach_extraction_locked_fields (new SoT concept — docs/sot_registry.yaml) | test/contracts/coach_extraction_locked_fields_writer_to_reader_test.dart |
 | 2026-09-27 | a2b1c7 | `daily-snapshot/index.ts`'s `extractCoachingNotes` (before this fix) had three defects, all present after a2a's own fix to the same function landed (diagnose c3f8e6, which fixed a DIFFERENT set of… | coaching_notes / coach_memory extraction (same concept as c3f8e6; | supabase/functions/daily-snapshot/index_test.ts |
 | 2026-09-27 | c3f8e6 | `daily-snapshot/index.ts` (before this fix) had three defects, each verified by reading the code on 2026-09-27: 1. Untestable. `serve(async (req) => {...})` ran at MODULE SCOPE with no… | coaching_notes / coach_memory extraction | supabase/functions/daily-snapshot/index_test.ts |

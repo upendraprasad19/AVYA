@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**141 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**142 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -149,3 +149,4 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-256 | Profile field-level conflict resolution: per-field merge instead of… | none | never | [:6082](open_issues.md#L6082) |
 | OI-257 | Onboarding diet_preference default 'veg' doesn't match Edit Profile's chip… | a product decision — change onboarding's… | `lib/features/onboarding/screens/plan_sc… | [:6113](open_issues.md#L6113) |
 | OI-258 | backups/applied_migrations.json missing entries for live-applied… | a small standalone hygiene commit… | never | [:6123](open_issues.md#L6123) |
+| OI-260 | 4 sibling reportGeminiExhaustion-wiring tests… | none — fixable any time by whoever's own… | never | [:6202](open_issues.md#L6202) |

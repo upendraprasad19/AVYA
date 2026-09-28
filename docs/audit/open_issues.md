@@ -6198,3 +6198,23 @@ since it's a pure-additive, zero-risk JSON edit directly unblocking this batch's
 the ledger/migration-file findings above, which need their own standalone commit. The
 `backups/applied_migrations.json` gap (147) and the migration-NUMBER collision (145/146) remain
 open per the two findings above; only the schema-snapshot staleness is resolved.
+
+## OI-260 — 4 sibling reportGeminiExhaustion-wiring tests (weekly-report/assess-body-composition/ai-media-proxy/rolling-context) share e35936's exact literal-string blind spot if any adopts an injectable geminiChatFn seam
+
+- **Status**: OPEN
+- **Blocked on**: none — fixable any time by whoever's own batch next touches one of these 4 files, or as a small standalone follow-up
+- **Verified**: never
+- **Identified**: 2026-09-28 · filed via mint_oi.sh from branch `single-owner-a2b`, surfaced by the B-pass on diagnose `e35936`'s fix (`docs/reviews` — subagent finding, not yet written to a file; see that diagnose-doc's "B-pass findings" section for the exact verification)
+
+**Not a live bug today** — all 4 functions currently call `geminiChat({...})` directly, confirmed via `grep -rn "geminiChat({\|geminiChatFn(" supabase/functions/{weekly-report,assess-body-composition,ai-media-proxy,rolling-context}/index.ts`. This is a latent-recurrence risk, the exact same shape diagnose `e35936` just fixed for `daily-snapshot`'s retry-pinning test, but on the OI-238 `reportGeminiExhaustion`-wiring tests instead:
+
+- `supabase/functions/weekly-report/index_test.ts:44` — `source.indexOf("await geminiChat({")`
+- `supabase/functions/assess-body-composition/index_test.ts:39` — `source.indexOf("await geminiChat({")`
+- `supabase/functions/ai-media-proxy/index_test.ts:430` — `rawIndexSource.indexOf("await geminiChat({")`
+- `supabase/functions/rolling-context/index_test.ts:69` — `source.indexOf("await geminiChat({")`
+
+If ANY of these 4 functions is ever refactored to call Gemini through an injectable `geminiChatFn` parameter (the exact testability seam `daily-snapshot` adopted in unit a2a, `docs/plan-reviews/single-owner-a2.md`), that function's own test above goes blind with `callIdx not found` — but **fails LOUD**, not silently: `assertEquals(callIdx >= 0, ...)` throws, so CI/the full suite catches it immediately. This is why it's `OPEN`/not urgent rather than a P0/P1 — no silent coverage loss is possible, only a noisy, easily-diagnosed failure at the moment the hazard actually fires (which may be never).
+
+**Fix, when picked up:** apply the exact same widening `e35936` did to `_shared/gemini_backoff_retry_test.ts`'s `assertSoleCallSiteHasRetries` — recognize either `geminiChat({` or `geminiChatFn({`, sum occurrences of both — to each of these 4 files' own call-site-finding logic. Four small, independent, mechanical edits; no shared helper currently links them (each function's `index_test.ts` has its own copy of this check, unlike the retries-pinning tests which share `assertSoleCallSiteHasRetries`).
+
+**Reopen when:** one of the 4 functions actually adopts a `geminiChatFn`-style seam (its own test will fail loud at that point regardless of whether this OI was ever picked up first) — or on general principle at the next quarterly tech-debt audit (§4.10).

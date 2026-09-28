@@ -3224,3 +3224,21 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   confirm each one individually has its own regression test, since a fix's own diagnose-doc prose reads as
   equally confident about both copies even when only one is actually machine-verified going forward.
   Review: `docs/reviews/b56bd6f49571-review.md`.
+- **2026-09-28** — blast-radius **platform** — branch `single-owner-a2b` (diagnose `e35936`: widening
+  `_shared/gemini_backoff_retry_test.ts`'s `assertSoleCallSiteHasRetries` to recognize the
+  injectable-`geminiChatFn` seam spelling alongside the bare `geminiChat` call). **1 finding, 0 false
+  alarms, filed as OI-260 rather than fixed.** The finding (P2, guard_without_its_mirror) is the
+  interesting tuning signal here: the reviewer correctly identified that 4 SIBLING test files
+  (weekly-report/assess-body-composition/ai-media-proxy/rolling-context's own OI-238
+  `reportGeminiExhaustion`-wiring tests) carry the IDENTICAL literal-string blind-spot shape this fix
+  just closed for one file — but none of the 4 functions currently uses the seam, so nothing is
+  broken today, and each test fails LOUD (not silently) if the hazard ever fires. **Tuning: not every
+  "same shape found elsewhere" finding should be fixed inline** — the established distinguishing
+  question, already implicit in this repo's OI-226/OI-238 precedent but not previously stated as a
+  lens-6 rule, is whether the sibling gap is CURRENTLY LIVE (broken now, silently) or merely
+  SAME-SHAPED-AND-LATENT (would fail loudly, only if and when triggered). The former must be fixed in
+  the same batch (§4.2 no-deferrals); the latter is correctly filed as an OI, since fixing 4 unrelated
+  files defensively for a non-live risk is disproportionate to the actual current exposure. Also
+  notable: the subagent independently re-ran the mutation proof and the target test rather than
+  trusting the diagnose-doc's own numbers — caught nothing new, but is exactly the discipline this
+  skill's own anti-patterns section (§6) asks for. Review: `docs/reviews/307b548789a7-review.md`.
