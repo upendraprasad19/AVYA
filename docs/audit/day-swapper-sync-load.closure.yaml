@@ -27,6 +27,8 @@
 batch: day-swapper-sync-load
 plan_review_record: docs/plan-reviews/day-swapper-sync-load.md
 bpass_review: docs/reviews/day-swapper-sync-load-bpass.md
+hermes_review: docs/audit/2026-09-28-hermes-day-swapper-sync-load.md
+merge_review: docs/reviews/33fb1d332932-review.md
 diagnose_docs:
   - docs/diagnoses/2026-09-26-day-swap-reverts-after-restart-d5a1e7.md
   - docs/diagnoses/2026-09-26-coach-routes-day-swap-to-reschedule-week-c3e8b2.md
@@ -34,6 +36,10 @@ diagnose_docs:
   - docs/diagnoses/2026-09-26-sync-past-timestamps-overwritten-with-now-f4c7a9.md
   - docs/diagnoses/2026-09-26-sync-write-amplification-a9d3f6.md
   - docs/diagnoses/2026-09-26-restore-types-rest-days-as-workouts-b6e1c8.md
+  - docs/diagnoses/2026-09-28-telemetry-ships-postgres-row-values-e8c3a1.md
+  - docs/diagnoses/2026-09-28-restore-rewrites-unchanged-rows-every-launch-f1c6b4.md
+  - docs/diagnoses/2026-09-28-swap-rest-run-warning-misses-hybrid-rest-c2d8e5.md
+  - docs/diagnoses/2026-09-28-merge-oi252-interaction-defects-a3e7d9.md
 
 findings:
   # ── The six bugs (Task 1's diagnose-docs) ──────────────────────────
@@ -289,5 +295,155 @@ findings:
       migrator (Task 23, 9ffb48a1). test/contracts/deload_eval_behavioral_test.dart split per D9 into
       "a swapped row IS lifted" and "a shortened row is NOT rewritten".
 
-total_findings: 32
-closed_count: 32
+
+  # ---- Hermes E-pass (Task 33 Step 4), docs/audit/2026-09-28-hermes-day-swapper-sync-load.md ----
+  # 20 findings, 18 unique (h2F1 = h5F2, h2F2 = h4F2), plus one coordinator-found defect.
+
+  - id: H-h5F1
+    title: "daySwapAllowanceProvider was not re-evaluated on account switch"
+    terminal_state: closed_in_commit
+    commit: "9f5fedf5"
+    verification: "Provider watches authUserIdTokenProvider; test/features/train/day_swap_provider_test.dart account-switch case red before (Expected <0> Actual <1>)."
+
+  - id: H-h2F1-h5F2
+    title: "sync_epoch_seen lived in the shared configBox, so one account's epoch suppressed another's resync"
+    terminal_state: closed_in_commit
+    commit: "9f5fedf5"
+    verification: "Moved to per-user workoutBox; per-user epoch test in test/sync/restore_lightweight_single_plan_fetch_test.dart red before."
+
+  - id: H-h2F2-h4F2
+    title: "displaced_<date> swap backups are local-only and lost on a new device"
+    terminal_state: upstream_blocked
+    blocker: "OI-261 — pre-existing since 708d2910 (TemplateService, 2026-04-10); needs its own design (carry inside the plan_json bundle or fold into the row)."
+    reopen_when: "OI-261 is scheduled."
+
+  - id: H-h2F3
+    title: "Two devices converging on the same plan bundle was unproven"
+    terminal_state: closed_in_commit
+    commit: "9f5fedf5"
+    verification: "test/sync/sync_workout_plan_skip_test.dart 'two devices converge'; mutation (drop restore-side recordConfirmed) red."
+
+  - id: H-h1F1
+    title: "consume-day-swap is not a pre-write gate"
+    terminal_state: verified_clean
+    evidence: "By design, spec decision 6 (phone records first, server corrects); stated in the EF header in 9f5fedf5."
+
+  - id: H-h1F2
+    title: "consume-day-swap header did not state its fail-open semantics"
+    terminal_state: closed_in_commit
+    commit: "9f5fedf5"
+    verification: "Header paragraph added; deno check exit 0."
+
+  - id: H-h3F1
+    title: "Migration file, contract test and live-verify runbook disagreed on the migration number"
+    terminal_state: blocked_on_user
+    reason: "Fixed in the untracked u1-handover files (all say 148); they enter the tree with the live apply in Task 34, which needs the founder's explicit go."
+
+  - id: H-h3F2
+    title: "Migration 148 header cited a stale line range and the wrong time unit"
+    terminal_state: blocked_on_user
+    reason: "Corrected in the u1-handover 148 file; lands with the Task 34 live apply (founder go)."
+
+  - id: H-h4F1
+    title: "Carry-forward re-stamps arranged_at_ms = now, so a later edit on another device can win the week"
+    terminal_state: verified_clean
+    evidence: "By design (spec 5.7 carry-forward + accepted residual). Documented in docs/architecture/sync.md L3 in 7ee0795c; only an already-arranged date is re-stamped, so the finding's 'unrelated date' case does not occur."
+
+  - id: H-h4F3
+    title: "The swap engine's isRest ignored the legacy rest hybrid"
+    terminal_state: closed_in_commit
+    commit: "7ee0795c"
+    verification: "diagnose c2d8e5; test/services/day_swap/day_swap_rules_test.dart; mutations 1 red / 3 red."
+
+  - id: H-h5F3
+    title: "SwapService._weekLocks is not cleared on user change"
+    terminal_state: verified_clean
+    evidence: "Deliberate: a held lock belongs to an in-flight swap; comment added in 9f5fedf5 (swap_service.dart _onUserChanged)."
+
+  - id: H-h6F1
+    title: "origin/main moved 31 commits past the branch base with conflicting fixes"
+    terminal_state: closed_in_commit
+    commit: "735becbf"
+    verification: "origin/main 7cb4eb78 merged into the branch before remediation; resolution reviewed (scratchpad merge-review, triaged in the merge commit)."
+
+  - id: H-h6F2
+    title: "A failed coach upsert put raw chat text into client_errors"
+    terminal_state: closed_in_commit
+    commit: "7ee0795c"
+    verification: "diagnose e8c3a1; 6 unit + 1 behavioural test; mutations 1 red / 6 red."
+
+  - id: H-h6F3
+    title: "The dispatcher's day-swap invalidate catch had no telemetry"
+    terminal_state: closed_in_commit
+    commit: "9f5fedf5"
+    verification: "recordNonFatal(reason: tool_dispatcher_day_swap_invalidate) added."
+
+  - id: H-h7F1
+    title: "Template restore rewrote every template every launch"
+    terminal_state: closed_in_commit
+    commit: "7ee0795c"
+    verification: "diagnose f1c6b4; test/sync/restore_write_if_changed_test.dart; mutation 3 red."
+
+  - id: H-h7F2
+    title: "Progress and profile restore rewrote every launch"
+    terminal_state: closed_in_commit
+    commit: "7ee0795c"
+    verification: "diagnose f1c6b4; same test file; updated_at-exclusion mutation 1 red."
+
+  - id: H-h7F3
+    title: "The app must not ship before migration 148's completed-day guard is live"
+    terminal_state: blocked_on_user
+    reason: "Rollout precondition, not code: Task 34 applies 148 and confirms the completed-day trigger live BEFORE the merge to main (web deploys on push). Each step needs the founder's explicit go."
+
+  - id: H-h7F4
+    title: "Pre-148 schema compatibility of the sync_epoch read"
+    terminal_state: verified_clean
+    evidence: "Bare select degrades to 0 when the column is absent; the app never writes sync_epoch (seat h7's own grep)."
+
+  - id: H-coord-flagkey
+    title: "Coordinator-found: the hybrid-repair done-flag key started with schedule_, which eight readers enumerate as day rows"
+    terminal_state: closed_in_commit
+    commit: "9f5fedf5"
+    verification: "Renamed hybrid_schedule_repair_v1_done; test in test/services/schedule_hybrid_repair_migrator_test.dart."
+
+  # ---- Merge-resolution review (origin/main 7cb4eb78 into the branch), docs/reviews/33fb1d332932-review.md ----
+  # 4 findings from one context-blind reviewer, plus 2 defects the merge commit's own gates exposed.
+
+  - id: MR-F1
+    title: "The nlog item catch dual-posted telemetry, hidden from the H-42 sweep by a 300-char pairing window"
+    terminal_state: closed_in_commit
+    commit: "735becbf"
+    verification: "skipServerPost added; test/sync/sync_telemetry_test.dart now pairs within the enclosing block (count 75, measured on the staged blobs); mutation (flag removed) 1 red."
+
+  - id: MR-F2
+    title: "_syncScheduledWorkouts Case 2 omitted a template id the OI-252 key already carries"
+    terminal_state: closed_in_commit
+    commit: "7ee0795c"
+    verification: "diagnose a3e7d9; contract cases 2a/2b; mutation 2 red."
+
+  - id: MR-F3
+    title: "OI-252 ghost days defeated the L2 whole-bundle skip on every launch"
+    terminal_state: closed_in_commit
+    commit: "7ee0795c"
+    verification: "diagnose a3e7d9; ghost + mirror tests in test/sync/restore_plan_merge_skip_test.dart; mutation 1 red per leg."
+
+  - id: MR-F4
+    title: "A restored rest day kept the replaced workout's template_id and content; a cloud rest row demoted an unpushed completion"
+    terminal_state: closed_in_commit
+    commit: "7ee0795c"
+    verification: "diagnose a3e7d9; test/sync/restore_rest_row_content_test.dart (4); mutations 2 red + 1 red."
+
+  - id: MR-G1-drain
+    title: "Gate G1 flagged main's _drainPendingTemplateDeletes upsert"
+    terminal_state: closed_in_commit
+    commit: "735becbf"
+    verification: "A queue drain (each entry removed once its tombstone lands) cannot resend unchanged rows; allowlisted with that reason in scripts/sync_hash_skip_atomicity_lib.dart; the allowlist-existence test covers it."
+
+  - id: MR-catalog-helper
+    title: "The merge-commit regression-catalog walk ran a harness file (no main) that diagnose a9d3f6 cited as its test"
+    terminal_state: closed_in_commit
+    commit: "735becbf"
+    verification: "a9d3f6 now cites sync_skip_index_test.dart; regression_catalog_lib runs only *_test.dart and existence-checks other cited .dart; mutation (split back to any .dart) 1 red."
+
+total_findings: 57
+closed_count: 57

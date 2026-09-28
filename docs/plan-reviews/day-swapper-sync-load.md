@@ -6,6 +6,10 @@ review_rounds: 3
 ground_truth_verified: true
 verdict: converged
 blast_radius: catastrophic
+bpass: accepted
+bpass_review: docs/reviews/day-swapper-sync-load-bpass.md
+hermes: accepted
+hermes_report: docs/audit/2026-09-28-hermes-day-swapper-sync-load.md
 ---
 
 # Plan review — day swapper + sync-load (OI-237)
@@ -26,7 +30,8 @@ Two runs, batch tier is the higher:
   needs `hermes: accepted` before the merge (`check_plan_review_record_exists.dart` requires it at
   the `catastrophic` tier).
 
-`bpass:` / `bpass_review:` (and `hermes:`) are added by Task 33, after the implementation exists.
+`bpass:` / `bpass_review:` and `hermes:` / `hermes_report:` were added by Task 33 once the
+implementation existed (see "Post-implementation reviews" at the end).
 
 **Method.** Every round was context-blind. Reviewers ran on Sonnet, at most four at once. The plan
 is 1.37 MB, so each round was split into eight slices: Wave 0; U1–U3; U4; Tasks 13–16; Tasks 17–20;
@@ -105,3 +110,18 @@ The round-3 findings were mechanical or test coverage only, with no new design i
 and 3 each surfaced fewer and smaller findings than the round before (16 → 21 mostly-P2 → 3), so
 the plan did not need to be split (§4.12.1). Review files: `review/r1_*.md`, `r2_*.md`, `r3_*.md` in
 the planning session's scratchpad, and the correction lists `r1_changes.md` / `r2_changes.md`.
+
+## Post-implementation reviews
+
+- **B-pass (Task 33):** four context-blind Sonnet reviewers, 12 findings (0 P0, 4 P1, 5 P2,
+  3 P3), 0 false alarms; 10 fixed in `2675345b`, 2 verified clean. Verdict accepted:
+  `docs/reviews/day-swapper-sync-load-bpass.md`.
+- **Hermes E-pass (Task 33, catastrophic tier):** seven Sonnet seats. The skill names Opus, but the
+  founder's standing rule is Sonnet only, so Sonnet was used and the deviation is recorded in the
+  report. 20 findings, 18 unique, all terminal in the closure ledger. Verdict accepted:
+  `docs/audit/2026-09-28-hermes-day-swapper-sync-load.md`.
+- **Merge resolution (origin/main 7cb4eb78, merge commit `735becbf`):** main moved 31 commits past
+  the branch base while the batch ran. It was merged before remediation closed, so the fixes
+  target the code that ships. One context-blind reviewer read the resolution against both parents:
+  4 findings, all fixed (F1 in the merge commit, F2–F4 under diagnose `a3e7d9`). Verdict accepted:
+  `docs/reviews/33fb1d332932-review.md`.
