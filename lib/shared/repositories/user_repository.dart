@@ -877,10 +877,37 @@ class UserRepository {
     // PostgREST responds 400 "invalid input syntax for type date" and the
     // entire row is rejected. `_sanitize` drops those entries so the upsert
     // succeeds with whatever the user did provide.
+    // a2b-2 (single-owner batch, 2026-09-27): coach_extraction_locked_fields
+    // (migration 148) MUST be written ONLY via lockCoachExtractionFields'
+    // additive-union RPC — never via this blind spread, which would
+    // overwrite it wholesale. `_sanitize` is a denylist (empty
+    // strings/non-finite numbers), not a column allowlist, so it would pass
+    // this key through unchanged if a future caller ever added it to
+    // profileData. Stripped explicitly here as defense-in-depth; today's
+    // real onboarding_provider.dart profileData map never includes this key
+    // (confirmed by reading it), so this line is currently a no-op guard,
+    // not a live fix.
+    final sanitizedProfileData = _sanitize(profileData)
+      ..remove('coach_extraction_locked_fields');
     await supabase.from('user_profile').upsert({
       'user_id': userId,
-      ..._sanitize(profileData),
+      ...sanitizedProfileData,
     }, onConflict: 'user_id');
+
+    // Lock `injuries` when onboarding actually collected a real injury
+    // selection — matches the Details-screen convention
+    // (`_injuries.isEmpty` seeds `['none']`, the "no injuries" default) so a
+    // genuinely-injured user's onboarding entry can't be overwritten by the
+    // AI-coach extraction pass later (migration 148). The default `['none']`
+    // is NOT locked: it is a filled-in default, not a deliberate user
+    // statement, so the AI should still be free to populate real injuries
+    // from chat for a user who skipped this at onboarding.
+    //
+    final onboardingInjuries = profileData['injuries'];
+    if (onboardingInjuries is List &&
+        shouldLockOnboardingInjuries(List<String>.from(onboardingInjuries))) {
+      unawaited(lockCoachExtractionFields(['injuries']));
+    }
 
     // Unit 3b round-1-review P1 fix (2026-07-30): user_progress routes
     // through the SAME optimistic-lock RPC every other progress writer uses
@@ -893,6 +920,56 @@ class UserRepository {
       userId: userId,
       progressData: _sanitize(progressData),
     );
+  }
+
+  /// Pure decision, extracted for testability (a2b-2, single-owner batch,
+  /// 2026-09-27): should onboarding's `injuries` answer be locked against
+  /// AI-coach extraction? Only when it is genuinely non-default —
+  /// `details_screen.dart` seeds `_injuries = ['none']` whenever the user
+  /// never answers, so the onboarding answer is NEVER actually empty; a
+  /// plain non-empty check would therefore lock injuries for 100% of new
+  /// signups regardless of whether a real answer was given.
+  ///
+  /// Uses `listEquals`, never a bare `!=` — `List` does not override `==`
+  /// in Dart, so `injuries != const ['none']` would be REFERENCE
+  /// inequality, always true, which would reproduce the exact "locks 100%
+  /// of new signups" bug this function exists to avoid, just via a
+  /// different mechanism (matches this file's own
+  /// `listEquals(_injuries, _originalInjuries)` convention in
+  /// edit_profile_screen.dart).
+  @visibleForTesting
+  static bool shouldLockOnboardingInjuries(List<String> injuries) {
+    return !listEquals(injuries, const ['none']);
+  }
+
+  /// Additive-only lock: marks [fields] (subset of `diet_preference` /
+  /// `lifestyle_activity` / `injuries`) as user-owned in
+  /// `user_profile.coach_extraction_locked_fields`, so daily-snapshot's
+  /// coach-extraction merge (migration 148) skips them instead of silently
+  /// overwriting a manual edit. Best-effort: swallows failure after one
+  /// retry — a lock RPC that never lands means the NEXT extraction pass
+  /// might still overwrite the field once, which is a much smaller harm than
+  /// blocking the profile save the caller is running this alongside.
+  static Future<void> lockCoachExtractionFields(List<String> fields) async {
+    if (fields.isEmpty) return;
+    final supabase = SupabaseService.instance.client;
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        await supabase.rpc('lock_coach_extraction_fields', params: {
+          'p_fields': fields,
+        });
+        return;
+      } catch (e, st) {
+        if (attempt == 1) {
+          // H-42 telemetry pair.
+          debugPrint(
+            '[UserRepository] lockCoachExtractionFields($fields) failed after retry (non-fatal): $e',
+          );
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'user_repository_lock_coach_extraction_fields'));
+        }
+      }
+    }
   }
 
   // ── Account Management ───────────────────────────────────────────────────

@@ -195,9 +195,35 @@ Each row is a **per-exercise summary** (NOT per-set), matching the Hive exlog_* 
 - RPE: NOT stored per exercise. Workout-level RPE column exists in `workout_logs` but is currently never written by the Flutter app (no UI for it).
 
 ## coaching_notes
-- Batch extraction daily (11PM IST with snapshot)
-- Process that day's conversations → extract facts → append to Hive
+- Batch extraction, dispatched by the `daily-snapshot` cron (11PM IST with the snapshot)
+- **Watermark-bounded, not whole-day** (single-owner a2b-1, 2026-09-27): reads
+  conversations strictly after the stored `last_extraction_at` watermark (via
+  `coach_memory`), not "today's" rows — a whole-day window silently re-read and
+  re-billed the same early-morning conversations on every run once the old
+  `isStale` wall-clock guard (`>6h since last extraction`) had passed. Extract
+  facts → append to Hive/`coach_memory`.
+- **Metered**, not merely wall-clock-gated: `consume_quota('coach_extraction',
+  <6h bucket>, cap=1)` runs BEFORE the Gemini call (reservation pattern, closing
+  the OI-162 unmetered-Gemini-call recurrence class). A tri-state extraction
+  result (`{ok:true, facts}` incl. empty vs `{ok:false}`) decides whether the
+  watermark advances: a Gemini failure or malformed response never advances it
+  (so the same window is retried next run); a successful call — even with zero
+  new facts — does.
 - NOT per-message extraction (too expensive)
+- **Locked-field guard (a2b-2, single-owner batch, 2026-09-27):** three of the
+  extracted facts (`diet_preference`, `lifestyle_activity`, `injuries`) are
+  ALSO writable directly by the user (Edit Profile save; injuries additionally
+  at onboarding). Before writing any of them into `user_profile`, extraction
+  checks `user_profile.coach_extraction_locked_fields` (migration 148,
+  additive-only, written ONLY via `lock_coach_extraction_fields`) and skips a
+  locked field entirely — instead recording an attempted-value conflict
+  marker on `coach_memory.locked_field_conflicts`, which reaches this same
+  prompt context via `coach_memory`'s existing wholesale pass-through (see
+  `lib/features/ai_coach/CLAUDE.md`). See `docs/sot_registry.yaml`'s
+  `coach_extraction_locked_fields` concept for the full writer/reader map,
+  including the ground-truth correction (the design originally targeted
+  `user_preferences.coaching_notes`, which has zero readers) discovered
+  during implementation rather than by any of the plan's 5 review rounds.
 
 ## Context Injection
 - System prompt receives `user_daily_snapshot` JSON (~300 tokens)

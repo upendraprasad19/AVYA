@@ -50,7 +50,7 @@ class CoachInteractionRepository {
       'model_used': modelUsed,
       'mode': mode,
       'is_user_message': true,
-      'created_at': DateTime.now().toIso8601String(),
+      'created_at': DateTime.now().toUtc().toIso8601String(),
     });
     return id;
   }
@@ -118,7 +118,7 @@ class CoachInteractionRepository {
       'is_user_message': true,
       'pending': true,
       'failed': false,
-      'created_at': DateTime.now().toIso8601String(),
+      'created_at': DateTime.now().toUtc().toIso8601String(),
       'media_url': ?mediaUrl,
       'media_type': ?mediaType,
       // Unit 8 (coach-media-consent, OI-25) — raw Storage path, stable

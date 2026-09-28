@@ -258,18 +258,48 @@ function assertRetriesNearAnchor(
   );
 }
 
+/** Counts non-overlapping occurrences of `needle` in `source`. */
+function _countOccurrences(source: string, needle: string): number {
+  let count = 0;
+  let from = 0;
+  while (true) {
+    const at = source.indexOf(needle, from);
+    if (at < 0) break;
+    count++;
+    from = at + needle.length;
+  }
+  return count;
+}
+
 function assertSoleCallSiteHasRetries(
   source: string,
   label: string,
   expectedRetries = 2,
 ) {
-  const idx = source.indexOf("geminiChat({");
-  assertEquals(idx >= 0, true, `${label}: no geminiChat( call found`);
-  const second = source.indexOf("geminiChat({", idx + 1);
+  // daily-snapshot's a2a test-seam refactor (2026-09-27) calls Gemini
+  // through an injectable `geminiChatFn` parameter (defaulting to the real
+  // `geminiChat`) rather than the bare function name at the call site — the
+  // SAME runtime call, different literal text. Recognize both spellings so
+  // this test doesn't go permanently blind to `retries: 2` the moment a
+  // function adopts this testability pattern (found live, 2026-09-28: this
+  // exact gap reddened only in the FULL `deno test supabase/functions/`
+  // run, never in any targeted per-file run, because the two literal
+  // substrings are mutually exclusive — "geminiChat({" is not a substring
+  // of "geminiChatFn({" — so neither spelling can double-count the other).
+  const directIdx = source.indexOf("geminiChat({");
+  const seamIdx = source.indexOf("geminiChatFn({");
+  const idx = directIdx >= 0 ? directIdx : seamIdx;
   assertEquals(
-    second,
-    -1,
-    `${label}: expected exactly one geminiChat( call site in this file`,
+    idx >= 0,
+    true,
+    `${label}: no geminiChat(/geminiChatFn( call found`,
+  );
+  const totalCallSites = _countOccurrences(source, "geminiChat({") +
+    _countOccurrences(source, "geminiChatFn({");
+  assertEquals(
+    totalCallSites,
+    1,
+    `${label}: expected exactly one geminiChat(/geminiChatFn( call site in this file`,
   );
   // Max observed call→retries distance across these 5 files: 1489 chars
   // (rolling-context — widened 2026-09-21, Hermes L21 F3 fix, when its own

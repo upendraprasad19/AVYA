@@ -6109,6 +6109,126 @@ sign-out before `userBox` clears. Surfaced during OI-252's B-pass (finding 7,
 field rather than fixed in that batch (narrow, pre-existing gap; not a regression from OI-252's
 change, and no evidence it's hit in production yet).
 
+## OI-256 — Profile field-level conflict resolution: per-field merge instead of whole-object overwrite (user_profile sync)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-09-27 · filed via mint_oi.sh from branch `single-owner-a2b`
+- **Problem**: `_syncUserProfile` (`sync_profile.dart:226-229`) pushes the user's
+  WHOLE Hive `user_profile` record to the cloud on every save, from FOUR call
+  sites (`profile_write_service.dart:125`, `auth_session_bootstrapper.dart:685,807`,
+  `restoring_screen.dart:584`, `induction_service.dart:121,221`). This is a blind
+  whole-object overwrite with no per-field timestamp or version, so two writers
+  touching the SAME record — two devices editing offline, a background job, a
+  restore racing a live edit — can silently clobber each other with no conflict
+  detection at all. Found while designing a2b-2 (coach chat extraction writing
+  `diet_preference`/`lifestyle_activity`/`injuries`), but the bug is NOT specific
+  to that feature — it already existed for plain two-device editing before any AI
+  wrote to this table, and will recur for every future writer to `user_profile`
+  (a2b-2 is being shipped on a narrower field-specific lock instead of waiting on
+  this, per founder decision 2026-09-27).
+- **Fix shape**: per-field (or per-row) timestamp/version metadata on
+  `user_profile`, and a merge RPC (mirroring migration 123's
+  `merge_notification_preferences` — `INSERT ... ON CONFLICT DO UPDATE` keyed on
+  `auth.uid()`) that only touches fields that actually changed, instead of the
+  current blind whole-object push. This is a genuine architecture change to core
+  profile sync (bigger blast radius than any single feature), not a small patch —
+  scope it as its own dedicated unit with its own ×2 plan review, not bundled into
+  a feature batch.
+- **Source**: found during a2b-2 design (single-owner batch, 2026-09-27); the
+  underlying whole-object-overwrite pattern is `sync_profile.dart`'s existing,
+  pre-AI design, not something a2b-2 introduced.
+
+## OI-257 — Onboarding diet_preference default 'veg' doesn't match Edit Profile's chip vocabulary (non_veg/vegetarian/vegan/pescatarian/keto)
+
+- **Status**: OPEN
+- **Blocked on**: a product decision — change onboarding's default, or leave it and keep isVeg accepting both 'veg' and 'vegetarian' forever
+- **Verified**: `lib/features/onboarding/screens/plan_screen.dart:520` writes the literal `'veg'` (documented product decision, `lib/features/onboarding/CLAUDE.md`: "diet_preference defaults to 'veg' (Indian-first default)"); `lib/features/profile/screens/edit_profile_screen.dart:1253-1259`'s `_buildDietPreferenceChips` options map is `{non_veg, vegetarian, vegan, pescatarian, keto}` — 'veg' matches NONE of them. A user who never visits Edit Profile carries `diet_preference: 'veg'` forever; the first time they DO open Edit Profile, `_dietPreference` loads as `'veg'` (line 225) and every chip renders unselected (`isSelected` false for all 5), which reads as a UI bug even though the underlying value is fine.
+- **Discovered**: 2026-09-27, single-owner a2b-2 batch, while fixing the protein-gap-alert `isVeg` vocabulary bug (which checked only `"veg"`/`"vegan"`, never the REAL `"vegetarian"` value Edit Profile writes). Out of scope for that fix (isVeg now correctly accepts BOTH `'veg'` and `'vegetarian'`, so this is no longer a live correctness bug for that alert) — filed because the underlying vocabulary mismatch is real and independent of it.
+- **Impact**: cosmetic (no chip highlighted) for any user who hasn't yet visited Edit Profile since onboarding, plus latent risk that a FUTURE reader of `diet_preference` assumes the 5-value Edit Profile vocabulary and mishandles `'veg'` the way `isVeg` used to. Not a data-loss or crash bug.
+- **Reopen when**: a founder product decision is made — either change `plan_screen.dart:520`'s default to `'vegetarian'` (closing the vocabulary gap at the source) or explicitly accept `'veg'` as a permanent third vegetarian-family value everywhere `diet_preference` is read.
+- **Identified**: 2026-09-27 · filed via mint_oi.sh from branch `single-owner-a2b`
+
+## OI-258 — backups/applied_migrations.json missing entries for live-applied migrations 147 and two colliding 145/146 numbers across diverged main branches
+
+- **Status**: OPEN
+- **Blocked on**: a small standalone hygiene commit (JSON-only, additive) from someone in a fresh worktree based on `main`
+- **Verified**: never
+- **Identified**: 2026-09-27 · filed via mint_oi.sh from branch `single-owner-a2b`, discovered while investigating `test/contracts/applied_migrations_parity_test.dart`'s failure ahead of migration 148's own ledger entry.
+
+**Two independent findings, both real, both live on `dedsavbjuwgarrhphgnl`:**
+
+1. **Migration 147 (`147_alert_client_errors_spike_breadth.sql`, commit `984d9c51`, diagnose `d2c9f4`,
+   batch `ops-alerting-b2a2a`) was applied live (cloud `list_migrations` shows version
+   `20260927094123`, name `alert_client_errors_spike_breadth`) but `backups/applied_migrations.json`
+   has NO `"migration": "147"` entry** — violates CLAUDE.md §4.5 ("Migration apply paired with
+   `backups/applied_migrations.json` update in same commit"). Confirmed via
+   `python3 -c "... '147' in versions"` → `False` against the file on `main` (HEAD `00ae3e46` /
+   `d8832af8` on `origin/main`). This branch (`single-owner-a2b`) does not even have the 147 file
+   in its own tree yet (branched before it landed), so it cannot be fixed from here without pulling
+   unrelated work into an unrelated feature branch — needs its own small commit directly against
+   `main`'s current tip, in a fresh worktree, never in the shared primary worktree per §4.13.
+
+2. **`main` and `origin/main` used migration numbers `145` and `146` for TWO DIFFERENT PAIRS of
+   migrations, and BOTH pairs are already live-applied to the SAME prod database:**
+   - This branch's lineage: `145_alert_sql_job_failures.sql` / `146_alert_cron_job_silent.sql`
+     (ledger entries present, `cloud_version` `20260926183009` / `20260926183056`).
+   - `origin/main`'s lineage (12 commits ahead of local `main` at discovery time, presumably a
+     different concurrent session's branch, since `avya-c4` showed `busy` in `ListAgents` at the
+     time): `145_workout_templates_stable_delete.sql` /
+     `146_workout_templates_delete_trigger_insert_path.sql`, confirmed live via `list_migrations`
+     (`cloud_version` `20260927011446` / `20260927045029` — LATER than this branch's 145/146, so
+     they landed on cloud AFTER this branch's own 145/146 were already applied).
+   Both pairs are immutable (already applied — supabase/migrations/CLAUDE.md forbids editing an
+   applied migration file, and a rename is the same class of risk even though it wouldn't change
+   the file's hash). **This is the exact "migration numbering coordination risk" already flagged as
+   a residual/hypothetical risk in `docs/diagnoses/2026-09-27-coach-extraction-locked-fields-writer-drift-a2b2f1.md`'s
+   own numbering-risk section for migration 148 — it just materialized for real at 145/146 instead,
+   from a totally different pair of branches, before 148 was even drafted.** The earlier mitigation
+   (`ls`-checking each branch's HIGHEST migration number before picking one) is insufficient: both
+   branches' highest number matched (147) at check time, which hid that two MIDDLE numbers (145,
+   146) had already silently diverged and both gone live. A number-uniqueness check needs to diff
+   the actual FILE SET per number across branches, not just compare the max.
+   No schema-object collision is expected (the two migrations touch entirely disjoint tables/
+   functions — `workout_templates` vs `alerts`/`cron.job`), so this is a bookkeeping/numbering
+   problem, not a data-corruption one. Nothing needs reverting.
+
+**Fix, when picked up:**
+- Add the missing 147 entry to `backups/applied_migrations.json` on `main` (hash of the real
+  147 file as it exists on `main`, `applied_at` derived from the cloud `cloud_version`
+  `20260927094123` → `2026-09-27T15:11:23+05:30`, `applier: claude-via-mcp-apply-migration`,
+  cite diagnose `d2c9f4`).
+- Decide the numbering-collision resolution: since supabase/migrations/CLAUDE.md's own
+  "Filename scheme history" section documents a precedent (letter-suffix a colliding number,
+  e.g. `050b`, `068b`) for collisions caught BEFORE apply — but both colliding pairs here are
+  ALREADY applied and immutable, so renaming either file is not safe by the same
+  immutable-migration principle (even a content-preserving rename changes the historical
+  artifact and any doc/SoT citation of its exact filename). Most likely resolution: leave both
+  pairs as-is (document the collision inline in each of the four files' headers, cross-referencing
+  this OI), and treat this as a closed-book numbering anomaly rather than something to retroactively
+  rename.
+- Consider whether `scripts/mint_oi.sh`'s allocator pattern (server-side compare-and-swap on a
+  git ref) should be extended to migration numbers too, given this is the first CONFIRMED (not
+  hypothetical) collision of that class.
+- **Reopen when**: this exact class (two branches independently claiming the same migration
+  number, both reaching live apply) recurs a second time — at that point the ad-hoc `ls`-based
+  check is confirmed insufficient and an allocator is worth building.
+
+**Third finding, ALREADY FIXED (single-owner-a2b-2's own commit, same investigation):**
+`backups/live_schema_columns.json` (Gate: `scripts/check_schema_column_refs.dart`) was ALSO
+stale — `workout_templates` gained a `deleted_at` column via the 145/146 collision pair above,
+but the snapshot file was never regenerated for it (same "regen in the same commit" rule the
+147-ledger gap violated, different file). Found by diffing a full live
+`information_schema.columns` dump against the snapshot file table-by-table (not just the two
+columns THIS batch's migration 148 added) — a `check_schema_column_refs.dart` run would have
+failed on the very next commit touching `workout_templates` regardless of who made it. Fixed
+inline in this batch's commit (adding `deleted_at` to the snapshot's `workout_templates` array)
+since it's a pure-additive, zero-risk JSON edit directly unblocking this batch's own gate — unlike
+the ledger/migration-file findings above, which need their own standalone commit. The
+`backups/applied_migrations.json` gap (147) and the migration-NUMBER collision (145/146) remain
+open per the two findings above; only the schema-snapshot staleness is resolved.
+
 ## OI-259 — check_plan_review_record_exists.dart cannot parse hand-authored reconciliation-merge subjects
 
 - **Status**: OPEN
@@ -6236,3 +6356,23 @@ Symptom, measured 2026-09-28 against `scripts/check_sot_registry_parity.dart`:
   a mutation-proven test (the gate already has a rule-24 ledger entry).
 - **Source**: founder-queued during the day-swapper-sync-load batch after repeated hand
   re-derivation of shifted citations.
+
+## OI-260 — 4 sibling reportGeminiExhaustion-wiring tests (weekly-report/assess-body-composition/ai-media-proxy/rolling-context) share e35936's exact literal-string blind spot if any adopts an injectable geminiChatFn seam
+
+- **Status**: OPEN
+- **Blocked on**: none — fixable any time by whoever's own batch next touches one of these 4 files, or as a small standalone follow-up
+- **Verified**: never
+- **Identified**: 2026-09-28 · filed via mint_oi.sh from branch `single-owner-a2b`, surfaced by the B-pass on diagnose `e35936`'s fix (`docs/reviews` — subagent finding, not yet written to a file; see that diagnose-doc's "B-pass findings" section for the exact verification)
+
+**Not a live bug today** — all 4 functions currently call `geminiChat({...})` directly, confirmed via `grep -rn "geminiChat({\|geminiChatFn(" supabase/functions/{weekly-report,assess-body-composition,ai-media-proxy,rolling-context}/index.ts`. This is a latent-recurrence risk, the exact same shape diagnose `e35936` just fixed for `daily-snapshot`'s retry-pinning test, but on the OI-238 `reportGeminiExhaustion`-wiring tests instead:
+
+- `supabase/functions/weekly-report/index_test.ts:44` — `source.indexOf("await geminiChat({")`
+- `supabase/functions/assess-body-composition/index_test.ts:39` — `source.indexOf("await geminiChat({")`
+- `supabase/functions/ai-media-proxy/index_test.ts:430` — `rawIndexSource.indexOf("await geminiChat({")`
+- `supabase/functions/rolling-context/index_test.ts:69` — `source.indexOf("await geminiChat({")`
+
+If ANY of these 4 functions is ever refactored to call Gemini through an injectable `geminiChatFn` parameter (the exact testability seam `daily-snapshot` adopted in unit a2a, `docs/plan-reviews/single-owner-a2.md`), that function's own test above goes blind with `callIdx not found` — but **fails LOUD**, not silently: `assertEquals(callIdx >= 0, ...)` throws, so CI/the full suite catches it immediately. This is why it's `OPEN`/not urgent rather than a P0/P1 — no silent coverage loss is possible, only a noisy, easily-diagnosed failure at the moment the hazard actually fires (which may be never).
+
+**Fix, when picked up:** apply the exact same widening `e35936` did to `_shared/gemini_backoff_retry_test.ts`'s `assertSoleCallSiteHasRetries` — recognize either `geminiChat({` or `geminiChatFn({`, sum occurrences of both — to each of these 4 files' own call-site-finding logic. Four small, independent, mechanical edits; no shared helper currently links them (each function's `index_test.ts` has its own copy of this check, unlike the retries-pinning tests which share `assertSoleCallSiteHasRetries`).
+
+**Reopen when:** one of the 4 functions actually adopts a `geminiChatFn`-style seam (its own test will fail loud at that point regardless of whether this OI was ever picked up first) — or on general principle at the next quarterly tech-debt audit (§4.10).

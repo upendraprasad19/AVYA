@@ -5,7 +5,7 @@
     "captured_at": "2026-08-26",
     "captured_via": "SELECT table_name, array_agg(column_name) FROM information_schema.columns WHERE table_schema='public' GROUP BY table_name",
     "regenerated_at": "2026-09-28",
-    "regenerated_for": "migration 149 (OI-237 day-swapper-sync-load: user_progress.sync_epoch). Verified against live information_schema on project dedsavbjuwgarrhphgnl AFTER the apply (cloud version 20260928083027; sync_epoch is ordinal 24, last, in the ORDER BY ordinal_position query). Only this column was added here. Live ALSO carries user_profile.coach_extraction_locked_fields and coach_memory.locked_field_conflicts from 148_coach_extraction_locked_fields, which was applied from a branch not yet on main; they are left for that branch's own migration+snapshot commit rather than recorded here without the migration that created them (OI-258 class). Every other table matched the previous snapshot (52 tables both sides)."
+    "regenerated_for": "migrations 148 and 149, merged 2026-09-28. 148 (coach_extraction_locked_fields, single-owner-a2b-2) added user_profile.coach_extraction_locked_fields and coach_memory.locked_field_conflicts; 149 (OI-237 day-swapper-sync-load) added user_progress.sync_epoch (cloud version 20260928083027, ordinal 24). A full live information_schema.columns read on dedsavbjuwgarrhphgnl after the 149 apply matched this file: 52 tables, those three columns the only additions since the 145 regeneration."
   },
   "storage_buckets": [
     "chat-media",
@@ -125,7 +125,8 @@
       "known_injuries",
       "typical_wake_time",
       "preferred_workout_time",
-      "body_part_priorities"
+      "body_part_priorities",
+      "locked_field_conflicts"
     ],
     "coach_tool_invocations_v": [
       "interaction_id",
@@ -523,7 +524,8 @@
       "current_rank_achieved_at",
       "preferred_workout_time",
       "equipment_exclusions",
-      "equipment_owned"
+      "equipment_owned",
+      "coach_extraction_locked_fields"
     ],
     "user_progress": [
       "id",

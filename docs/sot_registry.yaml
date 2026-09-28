@@ -5347,6 +5347,52 @@ concepts:
       Singleton key (not a coach_* row). AiCoachHistoryProvider must
       skip it. _compactContext caps at 1000 chars as step 8 of trim order.
       Never truncate in the writer — truncation is the trimmer's job.
+      Guard note (single-owner-a2a, 2026-09-27): DO NOT confuse this Hive
+      singleton / coach_memory.coach_notes concept with the SEPARATE
+      concept user_preferences_coaching_notes below — same English name,
+      different table+column, different writers (daily-snapshot's nightly
+      extraction + assess-body-composition's rate-limit stamp, not
+      CoachMemoryService), no code path connects the two.
+
+  - concept: user_preferences_coaching_notes
+    domain: ai_coach
+    behavioral_test_path: test/contracts/user_preferences_coaching_notes_writer_to_reader_test.dart
+    presence_only: true  # single-owner-a2a — source-grep drift detector; no live-Postgres round-trip test exists for this Edge-Function-only concept (rule 21 honesty)
+    description: |
+      A JSON blob in Postgres user_preferences.coaching_notes, DISTINCT
+      from the coaching_notes concept above (that one is the client Hive
+      singleton fed from coach_memory.coach_notes — unrelated table,
+      unrelated column, same English name only). This column has TWO
+      server-side writers, each a read-merge-write over the same JSON so
+      neither clobbers the other's keys: daily-snapshot (extracted AI
+      facts — diet_preference, injuries, lifestyle_activity, etc. plus
+      last_extracted_at) and assess-body-composition (the
+      last_bf_assessed_at 30-day PRO rate-limit stamp, piggybacked here to
+      avoid a migration for one timestamp). The client is a PURE CONSUMER
+      — OI-98 round-3 review removed it from the client's own
+      user_preferences push payload after a null-carrying key nulled the
+      server's value, destroying both coach memory and the BF% rate limit
+      in one write.
+    writers:
+      - { file: supabase/functions/daily-snapshot/index.ts, line_range: 354-428, method: mergeCoachingNotes, notes: "Read-merge-write: selects existing coaching_notes, JSON.parse, merges extracted facts (non-empty values only) + last_extracted_at, re-upserts onConflict user_id. Gated behind the a2a private_mode check (2026-09-27, diagnose c3f8e6) — never reached when the user's coach_memory.private_mode is true. Called from INSIDE extractCoachingNotes now, not the handler (B-pass finding 1, 2026-09-27, diagnose a2b1c7 — gates the watermark advance on merge success). Line range shifted twice by the a2b-1 batch's own insertions earlier in the same file (once by the watermark/metering rewrite, again by the B-pass remediation) — re-verify by grep, not by citation, per this repo's own common-pitfalls row on line-count drift." }
+      - { file: supabase/functions/assess-body-composition/index.ts, line_range: 86-224, method: "serve handler — 30-day rate-limit block", notes: "Also read-merge-write: selects existing coaching_notes, JSON.parse, sets last_bf_assessed_at, re-upserts onConflict user_id — never a blind overwrite of daily-snapshot's keys." }
+    reader_manifest_complete: false
+    readers:
+      - { file: lib/core/services/sync/sync_profile.dart, line_range: 971-1033, method: _restoreUserPreferences, semantic: pass-through, notes: "Generic .select() on user_preferences pulls the whole row, incl. coaching_notes, into Hive on restore. The client never writes this key back (see class_constraints below) — reader_manifest_complete is false because nothing in lib/ currently parses this JSON's individual keys client-side; it round-trips opaquely." }
+      - { file: supabase/functions/restore-user-snapshot/index.ts, line: 158, method: "serve handler", semantic: pass-through, notes: "Server-side restore endpoint selects user_preferences.* (incl. coaching_notes) back to a fresh install / reinstall." }
+    cloud:
+      table: user_preferences
+      columns: [user_id, coaching_notes]
+    class_constraints: |
+      The client MUST NEVER include coaching_notes in its own
+      user_preferences upsert payload (OI-98 round-3 review, comment at
+      sync_profile.dart:654-662) — a key present with
+      a null value still lands in the generated SET list, so a client with
+      no local copy nulls the server's, destroying both daily-snapshot's
+      extracted facts AND assess-body-composition's rate-limit stamp in
+      one write. Both server-side writers MUST read-merge-write (select →
+      JSON.parse → merge → upsert), never a blind overwrite, for the same
+      reason.
 
   - concept: log_client_error_payload
     domain: telemetry
@@ -13363,3 +13409,110 @@ concepts:
       closes the re-entry path so a fresh restore-merge cannot recreate the
       hybrid even before the one-time repair runs -- this is the SEPARATE
       writer path, not the same code as this concept's own fix.
+
+  - concept: coach_extraction_locked_fields
+    domain: ai_coach
+    behavioral_test_path: supabase/functions/daily-snapshot/index_test.ts
+    description: |
+      a2b-2 (single-owner batch, 2026-09-27). daily-snapshot's Gemini
+      extraction (mergeCoachingNotes) can propose diet_preference /
+      lifestyle_activity / injuries into user_profile from conversational
+      signal. Those same three fields are ALSO writable directly by the user
+      (Edit Profile save; injuries additionally at onboarding) — the classic
+      two-writers-one-column shape this repo's §4.1 flags as the default
+      suspect class. migration 148 adds an ADDITIVE lock list
+      (user_profile.coach_extraction_locked_fields, written ONLY via the
+      lock_coach_extraction_fields RPC — never a plain UPDATE, which would
+      un-lock a field a different call site had already locked) plus a
+      conflict-marker column (coach_memory.locked_field_conflicts) that
+      mergeCoachingNotes writes to instead of silently overwriting a locked
+      field.
+
+      GROUND-TRUTH CORRECTION during implementation (not caught by the
+      plan's own 5 converged review rounds): the plan's original Design §5
+      specified writing the conflict marker into
+      user_preferences.coaching_notes. Grepped ZERO readers of that column
+      anywhere in ai-proxy / _shared / rolling-context / weekly-report —
+      writing there would have shipped a suggest-mechanism that could never
+      reach the AI or the user. coach_memory IS reachable:
+      ai_snapshot_builder.dart's _getCoachMemoryForContext() returns
+      CoachMemory.readFromBox(...).toJson() WHOLESALE into the AI's prompt
+      context (subject to private_mode), so any field added to the
+      CoachMemory schema is live in the prompt with no further plumbing.
+
+      Array-value comparison (injuries) uses a sorted-copy compare, never
+      `!==`/`==` — the cross-language reference-equality class this repo's
+      harness memory already tracks (a list never overrides `==` in Dart,
+      and two distinct array instances are never `===` in TS regardless of
+      content).
+    writers:
+      - file: supabase/migrations/148_coach_extraction_locked_fields.sql
+        line_range: 1-203
+        method: lock_coach_extraction_fields RPC
+        notes: |
+          Additive-only (UNION, never removes). Allowlist-filters p_fields
+          to {diet_preference, lifestyle_activity, injuries} inside the
+          function. SECURITY INVOKER + auth.uid() — the caller's own
+          user_profile_update_own RLS applies, row is keyed on the session
+          user. No unlock RPC exists by design. RAISES on a missing
+          user_profile row rather than silently no-op-ing. Includes a P0
+          BACKFILL: every row existing at migration-apply time is locked on
+          all three fields (only post-migration signups start unlocked) —
+          without this, the very next extraction pass would silently
+          overwrite every pre-existing user's genuine profile values.
+      - file: lib/shared/repositories/user_repository.dart
+        line_range: 953-972
+        method: lockCoachExtractionFields
+        notes: |
+          Client call site: `.rpc('lock_coach_extraction_fields', params: {'p_fields': fields})`.
+          Best-effort, non-throwing, one inline retry — a lock that never
+          lands means the NEXT extraction pass might overwrite the field
+          once, a much smaller harm than blocking the profile save this
+          runs alongside.
+      - file: lib/features/profile/screens/edit_profile_screen.dart
+        line_range: 1893-1908
+        method: "_save (via the pure computeCoachExtractionFieldsToLock helper)"
+        notes: |
+          Locks only fields that ACTUALLY changed this save (diet_preference /
+          lifestyle_activity / injuries), never a field re-saved unchanged.
+      - file: lib/shared/repositories/user_repository.dart
+        line_range: 880-919
+        method: "syncOnboardingToSupabase (onboarding injuries trigger) + shouldLockOnboardingInjuries (pure decision, line 941)"
+        notes: |
+          Locks 'injuries' when onboarding collected a REAL selection (not
+          the ['none'] default, via value-equality listEquals — never a bare
+          `!=`, which is reference inequality on a List in Dart) — matches
+          details_screen.dart's own "no injuries" convention. Also strips
+          coach_extraction_locked_fields from the blind-spread profileData
+          payload before the user_profile upsert (defense-in-depth; the
+          real onboarding_provider.dart payload never includes this key
+          today).
+      - file: supabase/functions/daily-snapshot/index.ts
+        line_range: 354-495
+        method: mergeCoachingNotes
+        notes: |
+          Reads coach_extraction_locked_fields + the three current field
+          values in ONE select; skips any locked field from the
+          user_profile upsert; for a field whose attempted value genuinely
+          differs from the current (locked) value, writes a conflict
+          marker onto coach_memory.locked_field_conflicts — MERGED over any
+          existing conflicts for other fields (upsertCoachMemory's
+          ON CONFLICT DO UPDATE SET replaces a jsonb column wholesale, the
+          same shape migration 123 fixed for notification_preferences one
+          column over).
+    reader_manifest_complete: true
+    readers:
+      - file: supabase/functions/daily-snapshot/index.ts
+        line_range: 354-495
+        method: mergeCoachingNotes
+        semantic: flag-check
+        fields_read: [coach_extraction_locked_fields]
+        notes: the only reader of the lock list itself
+      - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
+        line_range: 1011-1020
+        method: _getCoachMemoryForContext
+        semantic: pass-through
+        fields_read: [locked_field_conflicts]
+        notes: |
+          Wholesale toJson() pass-through, subject to private_mode —
+          reaches the AI's prompt context with no field-specific plumbing.

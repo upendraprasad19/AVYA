@@ -392,5 +392,26 @@ void main() {
           reason: 'index.ts PRO_LIMIT ($indexPro) != logic.ts '
               'PRO_DAY_SWAP_LIMIT ($logicPro) == limitForTier(true)');
     });
+
+    // a2b (single-owner batch, 2026-09-27), item 9: the "caps" test above
+    // SKIPS cap validation for every sub-day key (by design — a sub-day
+    // bucket aggregates ACROSS ALL USERS, so a per-user cap is not a "at
+    // cap" ceiling for the digest line). That means it would NOT catch
+    // daily-snapshot's coach_extraction meter being wired to the wrong
+    // limit (e.g. 4, which — spread over 4 buckets/day — allows 16/day
+    // instead of the intended 4/day). Pin the SOURCE-SIDE limit directly.
+    test('coach_extraction — dedicated p_limit=1 pin (item 8/9)', () {
+      final sites = ef.where((s) => s.key == 'coach_extraction').toList();
+      expect(sites, isNotEmpty,
+          reason: 'no consume_quota(..., p_quota_key: coach_extraction, ...) '
+              'site found in daily-snapshot/index.ts');
+      for (final s in sites) {
+        expect(s.cap, 1,
+            reason: '${s.file}: coach_extraction must be limit=1 per 6h '
+                'bucket (4 buckets/day × 1 = 4/day) — a limit of 4 here '
+                'would allow 16/day, 4x the intended cap');
+        expect(s.kind, 'subday');
+      }
+    });
   });
 }

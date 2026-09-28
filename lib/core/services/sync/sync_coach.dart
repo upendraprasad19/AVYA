@@ -223,6 +223,10 @@ extension SyncServiceCoach on SyncService {
           'user_message': entry['user_message'] ?? '',
           'ai_response': entry['ai_response'] ?? '',
           'model_used': entry['model_used'] ?? 'unknown',
+          // Merge note (origin/main a2b, 2026-09-28): main changed the old
+          // `now()` fallback here to UTC; this branch removed the `now()`
+          // fallback entirely (G2 gate) and derives the time from the Hive key
+          // as UTC (`_coachCreatedAtFromKey`), which already covers it.
           if (createdAt != null) 'created_at': createdAt,
         };
         await _supabase.client

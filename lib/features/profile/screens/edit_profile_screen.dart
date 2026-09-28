@@ -94,6 +94,14 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   late String _originalPhysiqueFocus;
   late List<String> _originalInjuries;
 
+  /// a2b-2 (single-owner batch, 2026-09-27): captured so a SAVE that
+  /// actually changes diet_preference / lifestyle_activity locks that field
+  /// against later AI-coach-extraction overwrite (migration 148). A field
+  /// re-saved with its UNCHANGED value is deliberately NOT locked — locking
+  /// is meant to fire on a real edit, not on every save of the screen.
+  late String _originalDietPreference;
+  late String _originalLifestyleActivity;
+
   /// b3c9d4 — what we last wrote into [_nameController] ourselves. Used to
   /// tell an untouched field from one the user has edited.
   String _seededName = '';
@@ -292,6 +300,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _originalSessionDuration = _sessionDuration;
     _originalPhysiqueFocus = _physiqueFocus;
     _originalInjuries = List<String>.of(_injuries);
+    _originalDietPreference = _dietPreference;
+    _originalLifestyleActivity = _lifestyleActivity;
     _originalTargetWeight = targetKgRaw ?? 0.0;
   }
 
@@ -1880,6 +1890,23 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         unawaited(SyncService.instance.pushSnapshot());
       }
 
+      // a2b-2 (single-owner batch, 2026-09-27): lock any of the three
+      // coach-extraction-shared fields the user ACTUALLY changed this save,
+      // so the next daily-snapshot extraction pass can't overwrite this
+      // manual edit (migration 148). A field re-saved with its unchanged
+      // value is deliberately not locked — see the trackers' doc comment.
+      final fieldsToLock = computeCoachExtractionFieldsToLock(
+        dietPreference: _dietPreference,
+        originalDietPreference: _originalDietPreference,
+        lifestyleActivity: _lifestyleActivity,
+        originalLifestyleActivity: _originalLifestyleActivity,
+        injuries: _injuries,
+        originalInjuries: _originalInjuries,
+      );
+      if (fieldsToLock.isNotEmpty) {
+        unawaited(UserRepository.lockCoachExtractionFields(fieldsToLock));
+      }
+
       // Refresh downstream views that cache profile-derived targets/state.
       ref.invalidate(userStatsProvider);
       ref.invalidate(nutritionSummaryProvider);
@@ -2136,6 +2163,29 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       if (mounted) setState(() => _isSaving = false);
     }
   }
+}
+
+/// Pure helper extracted from `_EditProfileScreenState._save` (a2b-2,
+/// single-owner batch, 2026-09-27) — mirrors `computePlanChanged` below.
+/// Returns the subset of `diet_preference` / `lifestyle_activity` /
+/// `injuries` that actually changed this save, which the caller passes to
+/// `UserRepository.lockCoachExtractionFields` (migration 148). A field
+/// re-saved with its unchanged value is deliberately excluded — locking is
+/// meant to fire on a real edit, not on every save of the screen.
+@visibleForTesting
+List<String> computeCoachExtractionFieldsToLock({
+  required String dietPreference,
+  required String originalDietPreference,
+  required String lifestyleActivity,
+  required String originalLifestyleActivity,
+  required List<String> injuries,
+  required List<String> originalInjuries,
+}) {
+  return <String>[
+    if (dietPreference != originalDietPreference) 'diet_preference',
+    if (lifestyleActivity != originalLifestyleActivity) 'lifestyle_activity',
+    if (!listEquals(injuries, originalInjuries)) 'injuries',
+  ];
 }
 
 /// Pure helper extracted from `_EditProfileScreenState._save` so the

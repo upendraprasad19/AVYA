@@ -249,6 +249,17 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-28 (e)** — blast-radius **platform** — branch `day-swapper-sync-load`, second merge
+  of origin/main (b7239acf, single-owner-a2b) before the Task 34 EF deploys. 1 finding (P2), 0
+  false alarms, fixed pre-commit (`6e4819de87d7-review.md`). **Lesson for merge reviews: the
+  dangerous hunk is the one git did NOT flag.** Both sides appended one entry to the same array
+  in different places, so the auto-merge was textually clean while the doc comment counting that
+  array ("7 of 11") went stale — each side had correctly updated the count for its own addition.
+  **Reviewer prompt addition:** for every file BOTH parents changed (not just conflicted files),
+  re-derive any count, list or "N of M" prose against the merged content. Also: the reviewer
+  flagged, and the coordinator confirmed, that `sot_registry.yaml` has never been valid YAML
+  (35 errors) — worth knowing before anyone reaches for a YAML parser on it.
+
 - **2026-09-28 (d)** — blast-radius **catastrophic** — branch `day-swapper-sync-load`, Task 34:
   the already-applied migration 149 lands with its ledger entry and a 148→149 renumber. 2
   findings (1 P1, 1 P2), 0 false alarms, both fixed before commit (`992f2cf23c2a-review.md`).
@@ -359,6 +370,22 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
     (deletion, corruption, manual edit) without side A's fingerprint changing — if so, the skip is
     unsafe without an explicit side-B presence/consistency check.
   Review: pending (Task 33).
+
+- **2026-09-27** — blast-radius **platform** — branch `single-owner-a2` (a2a: daily-snapshot's
+  coaching-notes extraction gains a test seam, kill switch, and a private-mode-before-any-read
+  gate; diagnose `c3f8e6`). Staged-diff review, `docs/reviews/aa943309c727-review.md`.
+  **2 findings, 0 false alarms, both fixed/accepted in the same commit.** F1 (P2,
+  blast_radius_mismatch) caught that the already-converged plan's own dependent list
+  (`docs/plans/2026-09-26-single-owner-batch-a.md:262`) named 3 test-header repoints + a new SoT
+  concept + a guard note that the first diff had simply skipped — a real gap between what the
+  plan committed to and what shipped, not a plan error. F2 (P3, asserted_fixture_value /
+  guard_without_its_mirror) flagged that the 4 new source-grep tests never behaviorally invoke
+  the seam they pin — accepted as a disclosed, codebase-wide limitation (module-scope
+  `Deno.env.get(...)!` reads block dynamic import) rather than fixed, since the mutation-proof
+  table is this repo's documented substitute for exactly this case. **Lesson:** a plan's own
+  "dependents" list for a converged sub-piece is load-bearing scope, not decoration — a B-pass
+  against the diff alone, without re-reading the plan's dependents line, would have missed F1
+  entirely (it is invisible from the code; only visible by re-reading the plan).
 
 - **2026-09-26** — blast-radius **account** — branch `reuse-audit-fixes` (B1 saved-meal
   times_used owner, C sign-up referral via auth metadata, D custom-exercise sheet through the
@@ -3447,3 +3474,85 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   than reading the diff, to confirm the resolution correctly chose "accept the deletion" — worth
   noting as a reusable pattern for a future add-vs-delete board conflict: verify the DELETED
   entry exists intact in its new location (`closed_issues.md`) before accepting the removal.
+- **2026-09-27** — blast-radius **platform** — branch `single-owner-a2b` (unit a2b-1: daily-snapshot
+  coaching-notes extraction rewritten to a watermark-bounded, metered read, closing an OI-162-class
+  unmetered-Gemini-call gap). **6 findings, 0 false alarms** — the highest-signal pass this skill has
+  logged yet: **Finding 1 (P1, guard_without_its_mirror)** caught a genuine data-loss bug the
+  author's own mutation-proof table never exercised — the watermark advanced BEFORE the downstream
+  merge write, so a merge failure lost the extracted facts permanently with no retry path, exactly
+  the "guard optimizes for one failure mode and creates a worse one for the mirror case" shape this
+  lens exists for. **Finding 6 (asserted_fixture_value)** is the more interesting tuning signal: the
+  reviewer correctly found a real fixture/production divergence (`gt`/`lte` string comparison vs the
+  production code's `Date.parse()` rationale) and then proposed a fix that was ITSELF WRONG — adopting
+  it would have silently defeated the exact microsecond-precision property the whole batch existed to
+  get right, because `Date.parse()` truncates to millisecond resolution. **Tuning: a review finding's
+  suggested-fix is not automatically correct just because the finding is — verify a suggested fix
+  against the code's own stated rationale before applying it, the same "verify every claim against
+  code, never subagent prose" discipline this repo already applies to the finding itself.** Review:
+  `docs/reviews/aee7dfb3bf10-review.md`.
+- **2026-09-28** — blast-radius **platform** — branch `single-owner-a2b` (unit a2b-2: coach-extraction
+  locked-fields; staged-against `b56bd6f49571`). **2 findings, 0 false alarms, both fixed same commit.**
+  F1 (P2, blast_radius_mismatch) caught the platform-tier `feature_flag` requirement (§4.6/
+  `docs/blast_radius.yaml`) missing entirely for the batch's new locked-field guard, which had already
+  gone LIVE (migration applied, both Edge Functions deployed) with no kill-switch — the ONLY recovery
+  path for a misfire would have been a redeploy. Fixed with a narrower `DISABLE_COACH_EXTRACTION_LOCK_GUARD`
+  switch (deliberately separate from the pre-existing, coarser `DISABLE_COACH_EXTRACTION`), mutation-proven.
+  F2 (P3, guard_without_its_mirror/rule-21) caught that of TWO places sharing one deliberately-duplicated
+  naming-scheme bug fix (`emit_payload.js` and `deploy_via_api.js`'s `--rollback` path), only the first got
+  a persisted automated regression test — the second's "mutate it and run it" proof was hand-run and
+  recorded only in prose, with no test file to catch a FUTURE regression in that copy. **Tuning, two
+  lessons:** (1) a live platform-tier deploy is exactly the scenario §4.6 exists for, and a review pass
+  should check for a kill-switch on ANY new server-side behavioral branch that has already shipped live,
+  not just ones still in review — "designed, reviewed, and pushed to prod without incident" does not mean
+  "safe without one," it means "not yet tested under the failure the switch exists for." (2) when a fix is
+  DELIBERATELY duplicated across two files "so both surfaces stay byte-identical" (a real, documented
+  pattern in this repo — see `docs/diagnoses/2026-05-21-edge-function-rollback-I3-b3ecf2.md`), rule 21's
+  "a test for every fix" applies to EACH copy independently, not once for the pattern as a whole; a
+  reviewer should explicitly grep for every OTHER call site sharing a "same bug, second copy" fix and
+  confirm each one individually has its own regression test, since a fix's own diagnose-doc prose reads as
+  equally confident about both copies even when only one is actually machine-verified going forward.
+  Review: `docs/reviews/b56bd6f49571-review.md`.
+- **2026-09-28** — blast-radius **platform** — branch `single-owner-a2b` (diagnose `e35936`: widening
+  `_shared/gemini_backoff_retry_test.ts`'s `assertSoleCallSiteHasRetries` to recognize the
+  injectable-`geminiChatFn` seam spelling alongside the bare `geminiChat` call). **1 finding, 0 false
+  alarms, filed as OI-260 rather than fixed.** The finding (P2, guard_without_its_mirror) is the
+  interesting tuning signal here: the reviewer correctly identified that 4 SIBLING test files
+  (weekly-report/assess-body-composition/ai-media-proxy/rolling-context's own OI-238
+  `reportGeminiExhaustion`-wiring tests) carry the IDENTICAL literal-string blind-spot shape this fix
+  just closed for one file — but none of the 4 functions currently uses the seam, so nothing is
+  broken today, and each test fails LOUD (not silently) if the hazard ever fires. **Tuning: not every
+  "same shape found elsewhere" finding should be fixed inline** — the established distinguishing
+  question, already implicit in this repo's OI-226/OI-238 precedent but not previously stated as a
+  lens-6 rule, is whether the sibling gap is CURRENTLY LIVE (broken now, silently) or merely
+  SAME-SHAPED-AND-LATENT (would fail loudly, only if and when triggered). The former must be fixed in
+  the same batch (§4.2 no-deferrals); the latter is correctly filed as an OI, since fixing 4 unrelated
+  files defensively for a non-live risk is disproportionate to the actual current exposure. Also
+  notable: the subagent independently re-ran the mutation proof and the target test rather than
+  trusting the diagnose-doc's own numbers — caught nothing new, but is exactly the discipline this
+  skill's own anti-patterns section (§6) asks for. Review: `docs/reviews/307b548789a7-review.md`.
+- **2026-09-28 (second entry today)** — blast-radius **platform** — merge-reconciliation-only review
+  of `8ff6c1f1` (`Merge branch 'single-owner-a2b'` into `main`, `7cb4eb78`→`8ff6c1f1`), same scope as
+  the two prior merge-reconciliation entries above: did the conflict RESOLUTION lose/corrupt/misplace
+  anything, not a re-review of either parent's own already-reviewed feature work. **0 findings.**
+  Review: `docs/reviews/merge-reconciliation-8ff6c1f1-review.md`. This merge hit 6 real conflicts
+  (both branches independently extended the same append-only files while `single-owner-a2b` was in
+  flight): `SKILL.md` itself, both `backups/*.json` files, `docs/audit/open_issues.md`, and the 2
+  generated indexes. Same verification discipline as the precedent entries: `git merge-file -p`
+  plumbing reconstruction diffed against the actual committed content for the 4 hand-resolved files
+  (3 of 4 differ from a naive reconstruction only in the conflict-marker lines; the 4th,
+  `open_issues.md`, was deliberately REORDERED by ascending OI number rather than left as a straight
+  append, so its check was instead a programmatic union-completeness proof — every `## OI-NNN`
+  section from both parents' tips present exactly once in the final file, byte-identical body text,
+  none missing, none invented); the 2 generated files were regenerated from scratch via their own
+  canonical scripts against the merged tree rather than hand-merged, and cross-checked against the
+  pre-commit hook's own independent regen during the same commit. Also confirmed the primary
+  worktree's pre-existing, unrelated uncommitted files (2 deleted backup JSONs, 1 modified nested
+  `CLAUDE.md`) were not swept into the merge commit. **No new lens — logged per this file's own
+  "record a clean pass with real verification work behind it" convention** (same rationale as the
+  `(d)` merge-reconciliation entry above): the alternative, a reviewer that reads the merge commit
+  and reports 0 findings from a plausible-looking diff alone, is indistinguishable in the output file
+  from this. One reusable addition to the precedent: when a conflicted append-only board gets
+  REORDERED during resolution (not just concatenated), the fidelity check can't be a marker-only
+  diff — it needs a structural union-completeness proof instead (extract every section by its own
+  identifier from both parents, confirm the final set is exactly their union with byte-identical
+  bodies).
