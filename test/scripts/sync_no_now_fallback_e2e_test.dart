@@ -60,11 +60,11 @@ void main() {
     File('${dir.path}/sync_workout.dart').writeAsStringSync(body);
   }
 
-  test('default run WARNS (exit 0) and names the file:line', () {
+  test('default run FAILS (exit 1) and names the file:line', () {
     writeFixture(_bad);
     final r = _runGate(tmp.path);
-    expect(r.exitCode, 0, reason: '${r.stdout}${r.stderr}');
-    expect(r.stderr, contains('WARN'));
+    expect(r.exitCode, 1, reason: '${r.stdout}${r.stderr}');
+    expect(r.stderr, contains('FAIL'));
     expect(r.stderr, contains('sync_workout.dart:2'));
   });
 

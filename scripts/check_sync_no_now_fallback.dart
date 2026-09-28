@@ -4,18 +4,16 @@
 // never sends "now" as the fallback for a past timestamp. Logic and rationale:
 // scripts/sync_no_now_fallback_lib.dart.
 //
-// ⚠ WARN IS THE BUILT-IN DEFAULT until Task 32 flips `_hardFailByDefault`
-// (CLAUDE.md §4.11: a 24 h warn-only baseline first). scripts/pre-commit.sh
-// and .github/workflows/test.yml run every scripts/check_*.dart by glob with
-// NO arguments, so the default is what runs there. `--hard` forces the
-// failing exit (the e2e test uses it to prove the red path).
+// HARD-FAIL by default since Task 32 of the day-swapper + sync-load plan,
+// after a 24 h warn-only baseline (CLAUDE.md §4.11). `--hard` is still
+// accepted and changes nothing.
 //
 // Usage: dart run scripts/check_sync_no_now_fallback.dart [--hard]
 import 'dart:io';
 
 import 'sync_no_now_fallback_lib.dart';
 
-const bool _hardFailByDefault = false;
+const bool _hardFailByDefault = true;
 
 void main(List<String> args) {
   final hard = _hardFailByDefault || args.contains('--hard');

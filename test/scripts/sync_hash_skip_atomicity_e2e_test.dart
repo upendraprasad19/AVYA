@@ -2,8 +2,8 @@
 library;
 
 // End-to-end coverage for scripts/check_sync_hash_skip_atomicity.dart against
-// the REAL script process. sync_hash_skip_atomicity_lib_test.dart proves
-// checkDomainAtomicity's logic; this proves main() is actually wired to it
+// the REAL script process. sync_write_structure_lib_test.dart proves
+// checkSyncStructure's logic; this proves main() is actually wired to it
 // (the Gate-44 class: a gate whose own test never invokes main()).
 
 import 'dart:convert';
@@ -27,26 +27,6 @@ ProcessResult _runGate(String cwd, [List<String> extra = const []]) =>
       stderrEncoding: utf8,
       runInShell: true,
     );
-
-const _goodExlogFixture = '''
-Future<void> _syncExerciseLogs(String userId) async {
-  bool exlogBundleSynced = true;
-  try {
-    await upsertSets();
-  } catch (e) {
-    exlogBundleSynced = false;
-  }
-  if (exlogBundleSynced) {
-    exlogHashIndex[key] = fp;
-  }
-}
-''';
-
-const _badExlogFixture = '''
-Future<void> _syncExerciseLogs(String userId) async {
-  exlogHashIndex[key] = fp;
-}
-''';
 
 const _placeholder = 'class Placeholder {}';
 
@@ -80,35 +60,22 @@ void main() {
     File('${dir.path}/sync_nutrition.dart').writeAsStringSync(nlogBody);
   }
 
-  test('OK (exit 0) when the exlog fixture is correctly guarded', () {
-    writeFixtures(_goodExlogFixture, _placeholder);
-    final r = _runGate(tmp.path);
-    expect(r.exitCode, 0, reason: '${r.stdout}${r.stderr}');
-    expect(r.stdout, contains('OK'));
-  });
-
-  test('FAILS (exit 1) and names the file when exlog is unguarded', () {
-    writeFixtures(_badExlogFixture, _placeholder);
-    final r = _runGate(tmp.path);
-    expect(r.exitCode, 1);
-    expect(r.stderr, contains('sync_workout.dart'));
-  });
-
-  test('OK (vacuous) when neither file has the mechanism yet', () {
+  test('OK (exit 0) when the sync layer has no history write', () {
     writeFixtures(_placeholder, _placeholder);
     final r = _runGate(tmp.path);
-    expect(r.exitCode, 0);
+    expect(r.exitCode, 0, reason: '${r.stdout}${r.stderr}');
+    expect(r.stdout, contains('check_sync_hash_skip_atomicity: OK'));
   });
 
   const unwrapped = "Future<void> _syncWaterLogs(String u) async {\n"
       "  await _supabase.client.from('water_logs').upsert(e);\n"
       "}\n";
 
-  test('G1: an unwrapped history write WARNS by default (exit 0)', () {
+  test('G1: an unwrapped history write FAILS by default (exit 1)', () {
     writeFixtures(_placeholder, unwrapped);
     final r = _runGate(tmp.path);
-    expect(r.exitCode, 0, reason: '${r.stdout}${r.stderr}');
-    expect(r.stderr, contains('WARN sync write structure'));
+    expect(r.exitCode, 1, reason: '${r.stdout}${r.stderr}');
+    expect(r.stderr, contains('FAIL sync write structure'));
     expect(r.stderr, contains('sync_nutrition.dart:2'));
   });
 

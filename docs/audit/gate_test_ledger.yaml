@@ -778,71 +778,15 @@ check_single_schedule_row_builder.dart:
 check_sync_hash_skip_atomicity.dart:
   mutation_proven: true
   test_path:
-    - test/scripts/sync_hash_skip_atomicity_lib_test.dart
     - test/scripts/sync_hash_skip_atomicity_e2e_test.dart
     - test/scripts/sync_write_structure_lib_test.dart
   evidence: >
-    Neutered checkDomainAtomicity's guard-detection (forced `guarded = true`
-    unconditionally) -- reddens "FAILS when the guard is inverted" and "FAILS when the
-    store is not guarded by the flag" (2 tests). Neutered the swallow-count comparison
-    (deleted the setFalseCount mismatch check) -- reddens "FAILS when a swallowing catch
-    forgets to set the flag false (exlog, expects 1)" and "FAILS on nlog fixture with only
-    1 of 2 expected flag-false sites" (2 tests). 4 reds total on 2 independent mutations
-    to the checker itself (not a test fixture -- see Step 9). e2e test
-    (sync_hash_skip_atomicity_e2e_test.dart) proves main() is wired to the lib by running
-    the real compiled script as a subprocess against a controlled fixture tree.
-    OI-204 B-pass Finding 1 (2026-09-19): reverted the multi-line-safe `storeLineIdxs`
-    computation (the per-match-offset scan) back to the pre-fix per-line `storeRe.hasMatch`
-    re-scan -- reddens exactly "FAILS when the store is unconditional AND split across two
-    lines" (1 test; `Expected: not null, Actual: <null>`), proving the pre-fix checker
-    silently PASSED an unguarded store wrapped across two lines (a plausible dart-format
-    output, not a contrived shape). The paired positive-control test ("passes when a
-    CORRECTLY-guarded store is split across two lines") stayed green on both sides of the
-    mutation, confirming the fix doesn't newly false-positive on a legitimate wrap. Restored,
-    re-confirmed all 15 lib tests + 3 e2e tests green, re-ran the real gate against
-    lib/core/services/sync/sync_workout.dart + sync_nutrition.dart -- still OK.
-    G1 structural rule (day-swapper + sync-load Task 3): wrap-check forced true
-    (`if (inside(pushSpans, ...) || inside(allowed, ...))` -> `if (true)`, confirmed via
-    `grep -c "if (true) {"` = 1) reddens 4 (2 lib: "an unwrapped history write is a
-    violation", "the same write in a method NOT on the allowlist is a violation"; 2 e2e:
-    "G1: an unwrapped history write WARNS by default", "G1: --hard FAILS on the same
-    fixture") -- 4 expected, 4 observed. rethrow-or-false regex made permissive
-    (`_rethrowOrFalse` -> `RegExp(r'.')`, confirmed via `grep -c "RegExp(r'.')"` = 1)
-    reddens 1 ("a swallowing catch inside pushIfChanged is a violation") -- 1 expected, 1
-    observed. Index-literal check disabled (`if (path != _skipIndexPath)` -> `if (false)`,
-    confirmed via `grep -c "if (false) {"` = 1) reddens 1 ("an index-key literal outside
-    sync_skip_index.dart is a violation") -- 1 expected, 1 observed. All three mutations
-    confirmed applied with grep -c before running tests; every red was an assertion
-    failure (`Expected: [...] Actual: []`), never a compile error. All three mutations
-    restored and reverified: grep -c for each mutated token returns 0 post-restore, and
-    the full 36-test run (16 sync_write_structure_lib_test.dart + 15
-    sync_hash_skip_atomicity_lib_test.dart + 5 sync_hash_skip_atomicity_e2e_test.dart) is
-    green.
-    Fix round 1 (coordinator finding, day-swapper + sync-load): findSyncWriteCalls only
-    sees a write whose OWN statement contains `.from(` -- storing the builder in a
-    variable (`final row = client.from('t'); ...; row.upsert(e);`) evades G1 entirely.
-    Added `_findAliasedQueryBuilders` / kind `aliased_query_builder`: a statement in a
-    sync-layer file that assigns a `.from(`-bearing expression to a variable, contains no
-    write verb of its own, and no terminal op (`.select(`/`.rpc(`/`.stream(`) is flagged.
-    Mutation: `if (!seenStarts.add(start)) continue;` followed by an unconditional
-    `if (true) continue;` (confirmed applied via `grep -c "if (true) continue;"` = 1)
-    reddens 1 test ("an aliased query builder stored in a variable is a violation";
-    `Expected: an object with length of <1> Actual: []`) -- 1 expected, 1 observed,
-    assertion failure not a compile error. Restored; `grep -c "if (true) continue;"`
-    returns 0 post-restore and `git diff scripts/sync_hash_skip_atomicity_lib.dart` shows
-    no trace of the mutated line, confirmed against the tracked Task-3 commit. Full
-    41-test run (21 sync_write_structure_lib_test.dart + 15
-    sync_hash_skip_atomicity_lib_test.dart + 5 sync_hash_skip_atomicity_e2e_test.dart)
-    green after restore. Live false positive found and fixed during this round:
-    `_terminalRead` originally excluded only `.select(`/`.rpc(`, which flagged
-    `sync_realtime.dart:78`'s `_realtimeSubscription = client.from('weight_logs')
-    .stream(...).listen(...)` -- a realtime-channel handle, never later called with a
-    write verb, not an aliased builder. Widened the exclusion to include `.stream(` and
-    added a dedicated regression test pinning the exact real-tree shape. Re-ran the real
-    gate (`dart run scripts/check_sync_hash_skip_atomicity.dart`): 28 unwrapped_write + 3
-    index_literal_outside_helper = 31 violations, zero aliased_query_builder, exit 0 --
-    byte-identical to the pre-fix-round-1 count, confirming zero real aliasing exists in
-    the current tree and the new check adds no false positives.
+    Task 32 (day-swapper + sync-load) retired the OI-204 count-based exlog/nlog
+    check; the gate is now the G1 structural rule only, hard-fail. Deleting the
+    runner's exit(1) reddens "G1: an unwrapped history write FAILS by default"
+    and "G1: --hard FAILS (exit 1) on the same fixture" (2 tests); Task 3's lib
+    mutation (checkSyncStructure short-circuited to accept every call) reddens
+    4 lib/e2e tests.
 # ---------------------------------------------------------------------------
 # self-learning discipline batch, 2026-09-19 (discipline-gates-tier12) — 8
 # gates mechanizing sub-patterns from feedback_green_check_input_set_width.md
@@ -1091,3 +1035,6 @@ check_sync_no_now_fallback.dart:
     stripDartCommentsPreservingLines returns its input -- reddens 2 tests
     (2 expected). Mutation 3: block comments stop preserving newlines --
     reddens 1 (1 expected). All confirmed applied with grep -c before the run.
+    Task 32 (day-swapper + sync-load): default flipped to hard-fail after the
+    24 h baseline; setting _hardFailByDefault back to false reddens exactly
+    "default run FAILS (exit 1)" (1 test).

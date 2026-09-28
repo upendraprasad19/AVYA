@@ -1,58 +1,30 @@
-// OI-204 gate-before-refactor (CLAUDE.md §4.11). Verifies the sync-fingerprint
-// atomicity invariant for the exlog/nlog hash-skip mechanism:
-// docs/superpowers/specs/2026-09-19-oi204-delta-sync-design.md §6.
+// Gate G1 (day-swapper + sync-load batch, spec §7): every Supabase history
+// write in the sync layer sits inside SyncSkipIndex.pushIfChanged or an
+// allowlisted single-row method; a catch inside a push rethrows or returns
+// false; index-key literals live only in sync_skip_index.dart. Logic and
+// rationale: scripts/sync_hash_skip_atomicity_lib.dart.
 //
-// Hard-fail from its first commit (not warn-only-for-24h): this is a brand-new
-// mechanism with nothing pre-existing to baseline against.
-//
-// + the G1 structural rule (day-swapper + sync-load batch, spec §7) — see
-// sync_hash_skip_atomicity_lib.dart.
+// It replaced the OI-204 count-based exlog/nlog check (retired in Task 32,
+// when both domains moved onto SyncSkipIndex and the flags it counted no
+// longer existed). Hard-fail by default since Task 32, after a 24 h warn-only
+// baseline (CLAUDE.md §4.11). `--hard` is still accepted and changes nothing.
 import 'dart:io';
 
 import 'sync_hash_skip_atomicity_lib.dart';
 import 'sync_no_now_fallback_lib.dart' show isSyncLayerPath;
 
 void main(List<String> args) {
-  final workoutFile = File('lib/core/services/sync/sync_workout.dart');
-  final nutritionFile = File('lib/core/services/sync/sync_nutrition.dart');
-
-  var failed = false;
-
-  if (workoutFile.existsSync()) {
-    final v = checkDomainAtomicity(workoutFile.readAsStringSync(), exlogSpec);
-    if (v != null) {
-      stderr.writeln('FAIL sync_workout.dart: ${v.message}');
-      failed = true;
-    }
-  }
-  if (nutritionFile.existsSync()) {
-    final v = checkDomainAtomicity(nutritionFile.readAsStringSync(), nlogSpec);
-    if (v != null) {
-      stderr.writeln('FAIL sync_nutrition.dart: ${v.message}');
-      failed = true;
-    }
-  }
-
-  // G1 structural rule (day-swapper + sync-load, spec §7). ⚠ WARN IS THE
-  // BUILT-IN DEFAULT until Task 32 flips `_structuralHardFailByDefault`
-  // (CLAUDE.md §4.11): the pre-commit loop and CI run this script with no
-  // arguments. `--hard` forces the failing exit (e2e-tested).
   final structural = checkSyncStructure(_syncLayerSources());
-  final hardStructural = _structuralHardFailByDefault || args.contains('--hard');
   if (structural.isNotEmpty) {
-    stderr.writeln('${hardStructural ? 'FAIL' : 'WARN'} sync write structure '
-        '(G1) — ${structural.length} violation(s):');
+    stderr.writeln('FAIL sync write structure (G1) — '
+        '${structural.length} violation(s):');
     for (final v in structural) {
       stderr.writeln('  $v');
     }
-    if (hardStructural) failed = true;
+    exit(1);
   }
-
-  if (failed) exit(1);
   print('check_sync_hash_skip_atomicity: OK');
 }
-
-const bool _structuralHardFailByDefault = false;
 
 Map<String, String> _syncLayerSources() {
   final out = <String, String>{};
