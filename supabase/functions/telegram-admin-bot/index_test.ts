@@ -1118,6 +1118,11 @@ function makeEmptyDigestFake() {
     const builder = {
       select: (_cols: string, _opts?: Record<string, unknown>) => builder,
       eq: (_col: string, _val?: unknown) => builder,
+      // day-swapper-sync-load: gatherDigestInput's weekly read
+      // (founder_digest_content.ts, `weeklyRead`) filters with
+      // `.in("quota_key", weeklyKeys)`. Without it here that section threw and
+      // rendered "unreadable", failing this fixture's premise (CI, PR #47).
+      in: (_col: string, _vals?: unknown[]) => builder,
       gte: (_col: string, _val?: unknown) => builder,
       lt: (_col: string, _val?: unknown) => builder,
       not: (_col: string, _op?: string, _val?: unknown) => builder,
@@ -1181,6 +1186,9 @@ Deno.test("cmdDigest builds text via the shared founder_digest_content module, n
   assertStringIncludes(text, "<b>Alerts yesterday</b>: none");
   assertStringIncludes(text, "<b>Subscriptions (new, yesterday)</b>\nnone");
   assertStringIncludes(text, "7d: 0 · 30d: 0");
+  // The weekly section (day swaps) is read through its own `.in()` chain; pin
+  // that it renders, not just that nothing anywhere says "unreadable".
+  assertStringIncludes(text, "Day swaps (weekly): none");
   // Ensure "unreadable" marker never appears — which would indicate a chain failure
   assertEquals(text.includes("unreadable"), false);
 });
