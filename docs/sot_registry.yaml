@@ -10415,7 +10415,7 @@ concepts:
           (→913) despite the gate not flagging it, found by grepping the
           symbol directly rather than trusting the gate's silence on it.
       - file: lib/core/services/sync_service.dart
-        line_range: 2451
+        line_range: 2451-2451
         method: restoreOpTimeout
         semantic: per-op-ceiling
         notes: day-swapper + sync-load Task 20 fix1 (diagnose a9d3f6) shifted
@@ -10451,7 +10451,7 @@ concepts:
         method: _authRedirect
         semantic: delegates-to-pure-fn
       - file: lib/core/services/sync_service.dart
-        line_range: 2438
+        line_range: 2499-2527
         method: _safeRestoreOp
         semantic: bounded-await
     hive:
@@ -11761,7 +11761,7 @@ concepts:
       funnel through, so the teardown belongs there.
     writers:
       - file: lib/core/services/sync/sync_realtime.dart
-        line_range: 33
+        line_range: 33-73
         method: subscribeToRealtimeSync
         semantic: entitlement-gate-at-sink
         canonical: true
@@ -11794,7 +11794,7 @@ concepts:
           159-166, so a single teardown site carries any future bookkeeping.
     readers:
       - file: lib/core/services/sync/sync_realtime.dart
-        line_range: 77
+        line_range: 77-152
         method: _attachRealtimeStream
         semantic: opens-the-wal-stream
       - file: lib/core/services/day_rollover_service.dart
@@ -11905,7 +11905,7 @@ concepts:
       proactive channel can't repeat the same silent drop.
     writers:
       - file: lib/core/services/sync/sync_coach.dart
-        line_range: 225
+        line_range: 255-324
         method: _restoreCoachInteractions
         notes: pulls ALL ai_coach_interactions rows for the user, no channel filter of its own — the filter lives entirely on the render side.
     readers:
