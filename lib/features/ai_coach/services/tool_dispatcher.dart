@@ -189,6 +189,9 @@ class ToolDispatcher {
           ref.invalidate(daySwapAllowanceProvider);
         } catch (e, st) {
           debugPrint('[tool_dispatcher] invalidate daySwap providers failed: $e\n$st');
+          // Hermes L34 2026-09-28: a debugPrint alone is invisible in release.
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'tool_dispatcher_day_swap_invalidate'));
         }
       }
 

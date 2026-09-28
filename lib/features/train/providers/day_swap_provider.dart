@@ -15,6 +15,7 @@ import 'package:icanbefitter/core/services/day_swap/day_swap_result.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
+import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 
@@ -110,6 +111,10 @@ final daySwapWeekProvider =
 /// Follows the background server reply through `DaySwapAllowance.revision`.
 final daySwapAllowanceProvider =
     Provider.family<DayAllowance, String>((ref, weekStart) {
+  // c4055a — rebuild on auth change. The count lives in the per-user userBox,
+  // but nothing else here changes on an account switch between two users of
+  // the same tier, so without this B was shown A's spent week (Hermes L16).
+  ref.watch(authUserIdTokenProvider);
   final isPro = ref.watch(subscriptionInfoProvider.select((s) => s.isPro));
   final revision = DaySwapAllowance.instance.revision;
   void onChange() => ref.invalidateSelf();

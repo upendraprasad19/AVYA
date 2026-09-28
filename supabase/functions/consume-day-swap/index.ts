@@ -10,6 +10,18 @@
  * (spec 2026-09-26-day-swapper-design.md §5.3 — "one key, one call site, one
  * limit"). All validation + RPC-result mapping lives in logic.ts so it is
  * unit-testable without booting a server.
+ *
+ * NOT a pre-write gate (Hermes L21 F2, 2026-09-28). A day swap is a local Hive
+ * write: the phone checks its own copy of the allowance, performs the swap,
+ * counts it, and only THEN calls this function in the background
+ * (`DaySwapAllowance.recordSwap`). This call keeps the shared server count and
+ * corrects the phone's copy when it answers (server wins when online); no
+ * answer keeps the phone's copy (fail open, nothing retries). So `allowed:
+ * false` never undoes a swap — it tells the phone the week is spent, which
+ * blocks the NEXT swap. Founder-locked design (brainstorm decision 6): the
+ * allowance is a convenience quota, not a paid entitlement (§4.4 rule 19's
+ * server-verified list does not include it), and blocking offline swaps on a
+ * server round-trip was rejected.
  */
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";

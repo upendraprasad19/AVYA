@@ -65,7 +65,7 @@ its own numbered `.sql` file in `supabase/migrations/`.
 
 On that user's (or every user's) next app launch, `SyncService.restoreLightweightAlways`
 reads the new `sync_epoch` value (as part of its single `user_progress`
-select), compares it against the device-local `configBox['sync_epoch_seen']`
+select), compares it against the per-user `workoutBox['sync_epoch_seen']`
 (`SyncService.kSyncEpochSeenKey`), and — because the cloud epoch is now
 strictly greater — calls `SyncSkipIndex.clearAll`, which deletes every
 domain's stored fingerprint index. The device only advances its own
@@ -92,7 +92,7 @@ bumping for everyone, not just for the affected subset.
 
 - `select sync_epoch from user_progress where user_id = '<uuid>';` — confirm
   the bump landed.
-- After the affected user's next app launch, `configBox['sync_epoch_seen']`
+- After the affected user's next app launch, `workoutBox['sync_epoch_seen']`
   on that device (not directly queryable from the server) should equal the
   new epoch — check via the app's own debug tooling, or infer it from a
   subsequent full resync of that domain's rows actually reaching the cloud.

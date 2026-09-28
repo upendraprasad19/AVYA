@@ -7,6 +7,8 @@ import 'package:icanbefitter/core/services/day_swap/day_swap_allowance.dart';
 import 'package:icanbefitter/core/services/day_swap/day_swap_result.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
+import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/core/services/swap_service.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
@@ -149,6 +151,31 @@ void main() {
     gate.complete({'allowed': true, 'used': 3, 'limit': 3});
     await DaySwapAllowance.instance.lastConsumeForTests;
     expect(c.read(daySwapAllowanceProvider(mon)).used, 3);
+  });
+
+  test(
+      'Hermes L16 2026-09-28: the allowance provider rebuilds on an account '
+      "switch — user B never sees user A's spent count", () async {
+    var uid = 'A';
+    final c = ProviderContainer(overrides: [
+      subscriptionInfoProvider.overrideWith(() => _Sub(false)),
+      activeWorkoutProvider.overrideWith(() => _Active(const ActiveWorkoutData())),
+      currentPlanProvider.overrideWith(_Plan.new),
+      authUserIdTokenProvider.overrideWith((ref) => uid),
+    ]);
+    addTearDown(c.dispose);
+    await swap(c, fri, sat);
+    expect(c.read(daySwapAllowanceProvider(mon)).used, 1,
+        reason: "A's free swap is spent");
+
+    // Same tier (both free), so only the account change can refresh it.
+    await HiveUserSession.openForUser('bbbbbbbb-cccc-dddd-eeee-ffffffffffff');
+    // What a real sign-in does: the token provider re-emits (authStateProvider
+    // / hiveSessionOwnerProvider changed).
+    uid = 'B';
+    c.invalidate(authUserIdTokenProvider);
+    expect(c.read(daySwapAllowanceProvider(mon)).used, 0,
+        reason: "B's own userBox has no swap this week");
   });
 
   test(

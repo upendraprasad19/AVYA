@@ -112,7 +112,13 @@ class SwapService {
   }
 
   void _onUserChanged() {
-    // No in-memory caches.
+    // No cached user data. `_weekLocks` is in-memory but holds no data, only
+    // in-flight mutual exclusion keyed by IST week; it is deliberately NOT
+    // cleared here: dropping a held lock would let a second swap overlap one
+    // still running. Across an account switch the worst case is that B's
+    // first swap waits for A's in-flight one (a few Hive writes; the
+    // allowance server call is background, outside the lock). Hermes L15
+    // 2026-09-28.
   }
 
   static const String _schedulePrefix = 'schedule_';

@@ -10415,7 +10415,7 @@ concepts:
           (→913) despite the gate not flagging it, found by grepping the
           symbol directly rather than trusting the gate's silence on it.
       - file: lib/core/services/sync_service.dart
-        line_range: 2451-2451
+        line_range: 2454-2454
         method: restoreOpTimeout
         semantic: per-op-ceiling
         notes: day-swapper + sync-load Task 20 fix1 (diagnose a9d3f6) shifted
@@ -10426,7 +10426,7 @@ concepts:
           an N-M line_range — but left stale it would misdirect a future
           reader by the same +14).
       - file: lib/core/services/sync_service.dart
-        line_range: 2462-2474
+        line_range: 2465-2477
         method: applyRestoreCeiling
         semantic: apply-ceiling
         notes: day-swapper + sync-load Task 20 shifted this range (+148 lines,
@@ -10436,10 +10436,10 @@ concepts:
           blocks on a citation you shifted). Shifted again by task-20-fix1
           (diagnose a9d3f6, +14 lines, same method) for the same reason.
       - file: lib/core/services/sync_service.dart
-        line_range: 2476-2484
+        line_range: 2479-2487
         method: restoreFailureReason
         semantic: telemetry-reason-split
-        notes: same shift as applyRestoreCeiling directly above, both times.
+        notes: same shift as applyRestoreCeiling directly above, both times; all three re-derived +3 by the Hermes sync_epoch_seen doc comment (2026-09-28).
     readers:
       - file: lib/core/router/app_router.dart
         line_range: 800-811
@@ -12920,31 +12920,31 @@ concepts:
       server-side hard enough that every domain skip-index should be
       invalidated" (e.g. an admin-side repair, the Task 23 hybrid repair
       migrator) without walking every domain individually. Local high-water
-      mark is `configBox['sync_epoch_seen']` (`SyncService.kSyncEpochSeenKey`,
-      confirmed :1459). On first sight (no `sync_epoch_seen` key at all) the
+      mark is `workoutBox['sync_epoch_seen']` (`SyncService.kSyncEpochSeenKey`,
+      confirmed :1462). On first sight (no `sync_epoch_seen` key at all) the
       baseline is stored WITHOUT clearing anything. When the cloud epoch is
       strictly greater than the stored `sync_epoch_seen`,
       `SyncSkipIndex.clearAll(...)` runs for every domain and the new epoch
       is stored ONLY when `result.allSucceeded` (diagnose a9d3f6/a53f3305 fix
       -- a partial clear failure must not mark the resync lever handled,
-      confirmed :1617-1626). A missing `sync_epoch` column/value
+      confirmed :1621-1638). A missing `sync_epoch` column/value
       (pre-migration or older DB state) reads as 0 and is treated as a no-op
       the same way.
     writers:
       - file: lib/core/services/sync_service.dart
         line_range: 1-9999
-        method: "_applySyncEpochFromRestoreRow (confirmed :1604 -- the actual private method; called from restoreLightweightAlways at :1443. Reads the shared user_progress select, writes configBox['sync_epoch_seen'] only after SyncSkipIndex.clearAll reports allSucceeded)"
+        method: "_applySyncEpochFromRestoreRow (confirmed :1608 -- the actual private method; called from restoreLightweightAlways at :1509 and :1530, re-derived 2026-09-28. Reads the shared user_progress select, writes workoutBox['sync_epoch_seen'] only after SyncSkipIndex.clearAll reports allSucceeded)"
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync_service.dart
         line_range: 1-9999
         method: _applySyncEpochFromRestoreRow
         semantic: latest
-        fields_read: [configBox.sync_epoch_seen, cloud user_progress.sync_epoch]
+        fields_read: [workoutBox.sync_epoch_seen, cloud user_progress.sync_epoch]
     regression_test: test/sync/restore_lightweight_single_plan_fetch_test.dart
     behavioral_test_path: test/sync/restore_lightweight_single_plan_fetch_test.dart
     hive:
-      box: configBox
+      box: workoutBox
       key_prefix: ""
       key_formula: "'sync_epoch_seen' (single reserved key, int)"
     cloud:

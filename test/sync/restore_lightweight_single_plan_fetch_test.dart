@@ -16,10 +16,12 @@ library;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/sync/sync_skip_index.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 
+import '../helpers/hive_test_setup.dart' show kTestUserId;
 import 'sync_domain_skip_harness.dart';
 
 void main() {
@@ -95,7 +97,7 @@ void main() {
       '(round-1 review D2 F1)', () async {
     await HiveService.instance.configBox
         .put(SyncService.kDisableRestoreSinglePlanFetchKey, true);
-    await HiveService.instance.configBox.put('sync_epoch_seen', 1);
+    await HiveService.instance.workoutBox.put('sync_epoch_seen', 1);
     await HiveService.instance.workoutBox
         .put(SyncSkipDomain.sched.indexKey, {'2026-08-01': 'fp-stale'});
     h.server.getResponders['user_progress'] = (_) => [progressRow(syncEpoch: 2)];
@@ -107,11 +109,49 @@ void main() {
 
     await SyncService.instance.restoreLightweightAlways('test-user');
 
-    expect(HiveService.instance.configBox.get('sync_epoch_seen'), 2);
+    expect(HiveService.instance.workoutBox.get('sync_epoch_seen'), 2);
     expect(
         SyncSkipIndex.readIndex(
             HiveService.instance.workoutBox, SyncSkipDomain.sched.indexKey),
         isEmpty);
+  });
+
+  test(
+      'Hermes L15 2026-09-28: sync_epoch_seen is PER USER — account A\'s '
+      'high-water mark on a shared device never masks account B\'s resync',
+      () async {
+    void stubEpoch(int epoch) {
+      h.server.getResponders['user_progress'] =
+          (_) => [progressRow(syncEpoch: epoch)];
+      h.server.getResponders['user_profile'] = (_) => [];
+      h.server.getResponders['user_custom_exercises'] = (_) => [];
+      h.server.getResponders['user_custom_foods'] = (_) => [];
+      h.server.getResponders['workout_templates'] = (_) => [];
+      h.server.getResponders['user_preferences'] = (_) => [];
+    }
+
+    // Account A has seen epoch 3.
+    stubEpoch(3);
+    await SyncService.instance.restoreLightweightAlways(kTestUserId);
+
+    // Account B signs in on the same device: epoch 1 is B's first sight.
+    const userB = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
+    HiveUserSession.debugCurrentUidResolverForTests = () => userB;
+    await HiveUserSession.openForUser(userB);
+    stubEpoch(1);
+    await SyncService.instance.restoreLightweightAlways(userB);
+    await HiveService.instance.workoutBox
+        .put(SyncSkipDomain.sched.indexKey, {'2026-08-01': 'fp-stale'});
+
+    // The operator bumps B to 2: B's indexes must clear (2 > B's own 1),
+    // even though 2 <= A's 3.
+    stubEpoch(2);
+    await SyncService.instance.restoreLightweightAlways(userB);
+    expect(
+        HiveService.instance.workoutBox
+            .containsKey(SyncSkipDomain.sched.indexKey),
+        isFalse,
+        reason: "B's resync was masked by A's sync_epoch_seen");
   });
 
   group('sync_epoch resync lever', () {
@@ -137,7 +177,7 @@ void main() {
 
       await SyncService.instance.restoreLightweightAlways('test-user');
 
-      expect(HiveService.instance.configBox.get('sync_epoch_seen'), 1);
+      expect(HiveService.instance.workoutBox.get('sync_epoch_seen'), 1);
       expect(
           SyncSkipIndex.readIndex(
               HiveService.instance.workoutBox, SyncSkipDomain.sched.indexKey),
@@ -147,7 +187,7 @@ void main() {
 
     test('a higher cloud sync_epoch clears every domain index then stores '
         'the new epoch', () async {
-      await HiveService.instance.configBox.put('sync_epoch_seen', 1);
+      await HiveService.instance.workoutBox.put('sync_epoch_seen', 1);
       await HiveService.instance.workoutBox
           .put(SyncSkipDomain.sched.indexKey, {'2026-08-01': 'fp-stale'});
       await HiveService.instance.healthBox
@@ -161,7 +201,7 @@ void main() {
 
       await SyncService.instance.restoreLightweightAlways('test-user');
 
-      expect(HiveService.instance.configBox.get('sync_epoch_seen'), 2);
+      expect(HiveService.instance.workoutBox.get('sync_epoch_seen'), 2);
       expect(
           HiveService.instance.workoutBox
               .containsKey(SyncSkipDomain.sched.indexKey),
@@ -175,7 +215,7 @@ void main() {
     test('a clearAll failure in one domain does NOT advance sync_epoch_seen, '
         'and the SAME row retries the clear on the next call (diagnose '
         'a9d3f6)', () async {
-      await HiveService.instance.configBox.put('sync_epoch_seen', 1);
+      await HiveService.instance.workoutBox.put('sync_epoch_seen', 1);
       await HiveService.instance.workoutBox
           .put(SyncSkipDomain.sched.indexKey, {'2026-08-01': 'fp-stale'});
       await HiveService.instance.healthBox
@@ -200,7 +240,7 @@ void main() {
       // Pre-fix bug: sync_epoch_seen was stored unconditionally right after
       // the clearAll attempt, so a partial failure was silently marked
       // "handled" and never retried. It must stay at 1.
-      expect(HiveService.instance.configBox.get('sync_epoch_seen'), 1,
+      expect(HiveService.instance.workoutBox.get('sync_epoch_seen'), 1,
           reason: 'a failed domain clear must not mark the resync as done');
       // sched (a different box) DID clear -- one domain's forced failure
       // must not abort the rest of the sweep.
@@ -226,7 +266,7 @@ void main() {
 
       await SyncService.instance.restoreLightweightAlways('test-user');
 
-      expect(HiveService.instance.configBox.get('sync_epoch_seen'), 2,
+      expect(HiveService.instance.workoutBox.get('sync_epoch_seen'), 2,
           reason: 'the retry succeeds once nothing is forced to fail');
       expect(
           HiveService.instance.workoutBox
@@ -241,7 +281,7 @@ void main() {
     });
 
     test('cloud sync_epoch <= seen is a no-op', () async {
-      await HiveService.instance.configBox.put('sync_epoch_seen', 2);
+      await HiveService.instance.workoutBox.put('sync_epoch_seen', 2);
       await HiveService.instance.workoutBox
           .put(SyncSkipDomain.sched.indexKey, {'2026-08-01': 'fp-live'});
       h.server.getResponders['user_progress'] = (_) => [progressRow(syncEpoch: 2)];
@@ -261,7 +301,7 @@ void main() {
 
     test('a missing sync_epoch column (pre-migration-145 / older DB state) '
         'is treated as 0', () async {
-      await HiveService.instance.configBox.put('sync_epoch_seen', 0);
+      await HiveService.instance.workoutBox.put('sync_epoch_seen', 0);
       h.server.getResponders['user_progress'] =
           (_) => [progressRow()]; // no sync_epoch key at all
       h.server.getResponders['user_profile'] = (_) => [];
@@ -272,7 +312,7 @@ void main() {
 
       await SyncService.instance.restoreLightweightAlways('test-user');
 
-      expect(HiveService.instance.configBox.get('sync_epoch_seen'), 0,
+      expect(HiveService.instance.workoutBox.get('sync_epoch_seen'), 0,
           reason: 'a missing column must never read as "newer than anything"');
     });
   });

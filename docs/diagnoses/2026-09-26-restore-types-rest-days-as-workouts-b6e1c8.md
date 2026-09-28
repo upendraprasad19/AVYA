@@ -155,3 +155,15 @@ Task 23 (`9ffb48a1`, `ScheduleHybridRepairMigrator`), 6 legs, restored via backu
 
 All 6 compiled and ran (no compile-error-as-proof); mutation 2's actual red count (5) exceeding the
 brief's estimate (3) was investigated and explained, not accepted at face value (rule 21).
+
+## Hermes remediation (2026-09-28)
+
+- **The migrator's done-flag was itself a `schedule_*` key.** `ScheduleHybridRepairMigrator` wrote
+  `workoutBox['schedule_hybrid_repair_v1_done'] = true`; eight readers treat every workoutBox key
+  with the `schedule_` prefix as a day row. Two were affected: `sync_workout.dart` `_syncWorkoutPlan`
+  uploaded `{"schedule_hybrid_repair_v1_done": true}` inside `plan_json.schedules`, and
+  `workout_repository.dart` `_hasAnyScheduleRow` read "has a schedule" for an account with none.
+  The other six skip non-Map values. Fix: renamed to `hybrid_schedule_repair_v1_done` (unshipped,
+  so no legacy key to migrate). Test: `test/services/schedule_hybrid_repair_migrator_test.dart`
+  "the done-flag is NOT a schedule_* key" — red before (`Actual: ['schedule_hybrid_repair_v1_done']`),
+  green after. Found by the coordinator while verifying Hermes L11 F1.

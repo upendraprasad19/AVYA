@@ -143,6 +143,13 @@ the sync layer now goes through `SyncSkipIndex.pushIfChanged(rowKey, fingerprint
 - **Kill switch:** each `SyncSkipDomain` carries its own `configBox` flag (below); when set,
   `pushIfChanged` never reads or writes the fingerprint (push every row, verbatim pre-pattern
   behaviour), and `commit()` deletes that domain's stored index outright.
+- **`forcePushKeys`** (constructor, default empty; B-pass R1-F1, diagnose `a9d3f6`): row keys
+  that push even when their fingerprint matches the stored one — for a caller that KNOWS the
+  cloud lost a row the index still records as sent. Its one caller is the scheduled-workouts
+  FK self-heal (`sync_workout.dart` `_syncScheduledWorkouts` → `_syncWorkoutTemplates(forceKeys:
+  {rawTemplateId})`), which forces exactly the missing template. Deliberately not the kill
+  switch: a disabled index deletes itself at `commit`, which would re-push EVERY row of that
+  domain on the next pass. A forced push still records its fingerprint on success.
 - **`commit({required liveKeys})`** persists the index ONCE per pass: prunes rows not in
   `liveKeys`, writes Hive only when something changed (`_dirty`), and no-ops entirely once the
   pass is `aborted`.
@@ -231,7 +238,7 @@ AND `sync_epoch` from the cloud row before `UserRepository.mergeCloudProgress`, 
 control-plane value lands inside `userBox['progress']` — the whole-blob `plan_json` copy that
 used to be spread there on every restore is gone (the migrator below deletes the copy already
 on disk for existing installs). `sync_epoch` is read separately and compared against
-`configBox['sync_epoch_seen']` (`SyncService.kSyncEpochSeenKey`) by
+`workoutBox['sync_epoch_seen']` (`SyncService.kSyncEpochSeenKey`) by
 `_applySyncEpochFromRestoreRow`: on first sight (no `sync_epoch_seen` key at all) it just
 stores the baseline; once a baseline exists, a STRICTLY GREATER cloud epoch calls
 `SyncSkipIndex.clearAll` (below) and only advances `sync_epoch_seen` when
@@ -273,7 +280,7 @@ consumers of the same cloud snapshot can never disagree:
   `mergeScheduleBundleIntoHive` writes a row only when the merged result's canonical fingerprint
   differs from the existing row's, even when the whole-bundle skip above did not fire.
 - **The one-time `ScheduleHybridRepairMigrator`** (`lib/core/services/schedule_hybrid_repair_migrator.dart`,
-  diagnose `b6e1c8`) — gated by `workoutBox['schedule_hybrid_repair_v1_done']` (per-user, NOT
+  diagnose `b6e1c8`) — gated by `workoutBox['hybrid_schedule_repair_v1_done']` (per-user, NOT
   `migrationBox`, so a second account signing into the same device is repaired too). Walks every
   `schedule_<date>` row once: a `status: rest` + workout `type` + no-exercises row (the hybrid
   `isRestHybrid` predicate, shared with the normalizer above) is corrected to `type: 'rest'` (28

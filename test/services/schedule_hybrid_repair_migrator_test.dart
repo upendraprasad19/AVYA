@@ -264,5 +264,20 @@ void main() {
       await HiveUserSession.openForUser('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
       expect(ScheduleHybridRepairMigrator.hasRun(), isTrue);
     });
+
+    test('Hermes 2026-09-28: the done-flag is NOT a schedule_* key — eight '
+        'readers treat every workoutBox key with that prefix as a day row '
+        '(plan_json bundle push, _hasAnyScheduleRow, ...)', () async {
+      final wb = HiveService.instance.workoutBox;
+      // An account with NO schedule rows at all (e.g. pre-onboarding): after
+      // the migrator runs, nothing with the day-row prefix may exist, or
+      // WorkoutRepository._hasAnyScheduleRow reads "has a schedule" and the
+      // plan push uploads the flag inside plan_json.schedules.
+      await ScheduleHybridRepairMigrator.runIfNeeded();
+      expect(ScheduleHybridRepairMigrator.hasRun(), isTrue);
+      expect(
+          wb.keys.where((k) => k.toString().startsWith('schedule_')).toList(),
+          isEmpty);
+    });
   });
 }

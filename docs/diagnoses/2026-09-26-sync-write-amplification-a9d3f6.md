@@ -240,3 +240,26 @@ Fix `a53f3305`: see "Skipped-then-found fixes" above.
   `return false;`. Live tree still 0 violations. Tests in `test/scripts/sync_write_structure_lib_test.dart`
   (3 new). Mutation — restore the anywhere-token match → 2 red. Residue stated in the lib: still a
   text scan; the behavioural guard is the per-domain skip contract (failed push retried next pass).
+
+## Hermes remediation (2026-09-28, report `docs/audit/2026-09-28-hermes-day-swapper-sync-load.md`)
+
+- **L11/L15 — `sync_epoch_seen` was per-DEVICE, the lever is per-ACCOUNT.** Writer + reader
+  `sync_service.dart` `_applySyncEpochFromRestoreRow` read and wrote `configBox['sync_epoch_seen']`
+  (the shared, never user-scoped box) while the 17 skip indexes it clears live in the per-user
+  workoutBox/nutritionBox/healthBox/customBox. On a shared device, account A's high-water mark (3)
+  made account B's operator bump (1 → 2) a silent no-op. Fix: the key moves to the per-user
+  `workoutBox` beside the indexes. Test: `test/sync/restore_lightweight_single_plan_fetch_test.dart`
+  "sync_epoch_seen is PER USER" — red before the fix (`Expected: false Actual: <true>`, B's index
+  not cleared), green after; the 5 existing epoch tests repointed to workoutBox.
+- **L39 — cross-device convergence was unproven.** `_syncWorkoutPlan` upserts the whole bundle
+  with no read-before-write, so a stale device can overwrite a newer arrangement. It converges
+  because `_restoreWorkoutPlan` records the DOWNLOADED bundle's fingerprint after a merge, so the
+  device holding the newer week no longer matches it and re-pushes on its next plan pass. New
+  test `test/sync/sync_workout_plan_skip_test.dart` "two devices converge"; mutation: the restore
+  side `recordConfirmed` commented out → `Expected: an object with length of <1> Actual: []` (no
+  re-push), restored → green. Residue, stated: if the device with the newer week never runs again,
+  the stale arrangement stays — last-writer-wins at week granularity (spec §5.7 L3).
+- **L22 — migration 148 handover:** the paired `sync_noop_trigger_tables_test.dart` still read the
+  pre-renumber `147_…` path (would throw at apply) and the stale `147_…` copy sat beside `148_…`;
+  repointed, stale copy deleted, run against the real `148_…` file: 4/4 green. Header's
+  "same microsecond" corrected to millisecond (JS `toISOString`) and its `ai-proxy` cite re-derived.

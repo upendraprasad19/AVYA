@@ -248,3 +248,17 @@ itself — assertions unchanged.
   already refreshes on every outcome). Test: "a REFUSED coach swap still refreshes
   daySwapWeekProvider" (`tool_dispatcher_day_swap_invalidation_test.dart`). Mutation — gate the
   block on `result.success` → 1 red (expected completed lock, got null).
+
+## Hermes remediation (2026-09-28)
+
+- **L16 — `daySwapAllowanceProvider` did not rebuild on an account switch.** Reader
+  `day_swap_provider.dart` watched only `subscriptionInfoProvider.isPro`; the count it reads lives
+  in the per-user userBox (writer `DaySwapAllowance.recordSwap` / `_consume`). Between two accounts of
+  the same tier, B was shown A's spent week — and the drag confirm sheet's spent-upsell reads this
+  provider. Fix: `ref.watch(authUserIdTokenProvider)` (the c4055a convention). Test:
+  `test/features/train/day_swap_provider_test.dart` "rebuilds on an account switch" — red before
+  (`Expected: <0> Actual: <1>`), green after.
+- **L34 — the coach swap's invalidate failure only reached `debugPrint`.** `tool_dispatcher.dart`
+  now also records it (`tool_dispatcher_day_swap_invalidate`).
+- **L15 — `SwapService._weekLocks` survives an account switch by design** (dropping a held lock
+  would let two swaps overlap); `_onUserChanged`'s "No in-memory caches" comment corrected.

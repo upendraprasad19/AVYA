@@ -1453,8 +1453,11 @@ class SyncService {
       'disable_restore_single_plan_fetch';
 
   /// day-swapper + sync-load Task 20 (spec §5.10 rule 3): the last cloud
-  /// `user_progress.sync_epoch` value this device has acted on. Lives in
-  /// configBox — a device-scoped control value, not per-user progress state.
+  /// `user_progress.sync_epoch` value this device has acted on. Lives in the
+  /// per-user workoutBox, beside the skip indexes it clears: the epoch is a
+  /// per-ACCOUNT lever, and in the shared configBox account A's high-water
+  /// mark masked account B's resync on the same device (Hermes L15
+  /// 2026-09-28). No `schedule_` prefix — eight readers treat those as rows.
   @visibleForTesting
   static const String kSyncEpochSeenKey = 'sync_epoch_seen';
 
@@ -1607,9 +1610,9 @@ class SyncService {
     final row = rows.first;
     if (row is! Map) return;
     final cloudEpoch = (row['sync_epoch'] as num?)?.toInt() ?? 0;
-    final rawSeen = _hive.configBox.get(kSyncEpochSeenKey);
+    final rawSeen = _hive.workoutBox.get(kSyncEpochSeenKey);
     if (rawSeen == null) {
-      await _hive.configBox.put(kSyncEpochSeenKey, cloudEpoch);
+      await _hive.workoutBox.put(kSyncEpochSeenKey, cloudEpoch);
       return;
     }
     final seen = (rawSeen as num?)?.toInt() ?? 0;
@@ -1639,7 +1642,7 @@ class SyncService {
           reason: 'sync_service_sync_epoch_clear_all'));
       return;
     }
-    await _hive.configBox.put(kSyncEpochSeenKey, cloudEpoch);
+    await _hive.workoutBox.put(kSyncEpochSeenKey, cloudEpoch);
   }
 
   /// Pulls all user data from Supabase into Hive.

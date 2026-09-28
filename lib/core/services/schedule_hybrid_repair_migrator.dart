@@ -46,7 +46,7 @@
 //
 // ## Idempotency
 //
-// Gated by `workoutBox['schedule_hybrid_repair_v1_done']`. Non-fatal on
+// Gated by `workoutBox['hybrid_schedule_repair_v1_done']`. Non-fatal on
 // failure (next launch retries) — the flag is set only after every step
 // (repair loop, key deletes, plan_json strip) has run without throwing.
 
@@ -79,7 +79,11 @@ enum HybridRowVerdict {
 class ScheduleHybridRepairMigrator {
   ScheduleHybridRepairMigrator._();
 
-  static const String _flagKey = 'schedule_hybrid_repair_v1_done';
+  // Must NOT start with `schedule_`: eight readers treat every workoutBox key
+  // with that prefix as a day row (the plan_json bundle push uploads it,
+  // WorkoutRepository._hasAnyScheduleRow reads "has a schedule"). Hermes
+  // 2026-09-28; pinned by schedule_hybrid_repair_migrator_test.dart.
+  static const String _flagKey = 'hybrid_schedule_repair_v1_done';
   static const String _schedulePrefix = 'schedule_';
 
   /// True once the migration has run for the CURRENTLY OPEN user's

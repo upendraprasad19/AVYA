@@ -953,7 +953,7 @@ extension SyncServiceProfile on SyncService {
       // create a SECOND, unmaintained copy of the epoch inside
       // userBox['progress']['sync_epoch'] — nothing would ever advance that
       // copy after this one write, while the canonical value in
-      // configBox['sync_epoch_seen'] keeps moving via
+      // workoutBox['sync_epoch_seen'] keeps moving via
       // _applySyncEpochFromRestoreRow below, so the two would silently
       // diverge on every restore after the first.
       cloud.remove('plan_json');
