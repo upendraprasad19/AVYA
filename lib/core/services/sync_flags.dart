@@ -176,6 +176,24 @@ class SyncFlags {
     }
   }
 
+  /// Kill switch for the per-launch restore write skip (Hermes h7F1/h7F2,
+  /// diagnose f1c6b4). `_restoreWorkoutTemplates`, `_restoreUserProgress` and
+  /// `_restoreUserProfile` run on EVERY launch; each now writes Hive only when
+  /// the restored value differs from what is stored (compared with
+  /// `SyncFingerprint.canonicalJson`, so a jsonb key reorder is not a
+  /// change). `configBox['disable_restore_write_if_changed'] = true` reverts
+  /// all three to an unconditional write every pass. Opt-OUT polarity, same
+  /// shape as [planMergeSkipWhenKnownEnabled].
+  static bool get restoreWriteIfChangedEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('disable_restore_write_if_changed') !=
+          true;
+    } catch (_) {
+      return true;
+    }
+  }
+
   /// Test-only setter. Production callers MUST NOT toggle flags in
   /// code — they flip via `configBox.put` from a one-shot migration
   /// or remote-config write only.

@@ -142,6 +142,12 @@ void main() {
         // a live Supabase query for the row read itself; delegates to
         // _restoreWorkoutTemplates, production path unchanged.
         'restoreWorkoutTemplatesForTest',
+        // Hermes h7F2 (diagnose f1c6b4) — test seams injecting
+        // user_progress / user_profile+users rows so the per-launch
+        // write-if-changed skip is behaviorally testable; delegate to the
+        // private restores, production path unchanged.
+        'restoreUserProgressForTest',
+        'restoreUserProfileForTest',
         // Day-swapper + sync-load Task 19 — test-only wrapper for the
         // onboarding-replay now()-fallback fix (no existing SyncDomain entry
         // point for this one-shot migration replay).

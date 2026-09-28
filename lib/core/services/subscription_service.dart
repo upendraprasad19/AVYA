@@ -994,7 +994,8 @@ class SubscriptionService {
         'log-client-error',
         body: {
           'type': 'subscription_refresh_failure',
-          'message': err.toString(),
+          // h6F2 (diagnose e8c3a1): same row-value redaction as every sink.
+          'message': ErrorTelemetry.redactRowValues(err.toString()),
         },
       );
     } catch (_) {

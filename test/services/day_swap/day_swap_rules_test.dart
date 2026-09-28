@@ -405,6 +405,41 @@ void main() {
       // would create Mon-Tue-Wed and warn. It must not.
       expect(warn(['-', 'R', 'W', 'R', 'W', 'W', 'W'], wed, thu), isNull);
     });
+
+    // Hermes h4F3 (diagnose c2d8e5): a legacy rest hybrid (status 'rest', a
+    // workout type, no exercises) IS a rest day. With `type == 'rest'` alone
+    // it was counted as a workout and this swap's new Tue-Wed-Thu run went
+    // unwarned.
+    test('a legacy rest hybrid counts as a rest day', () {
+      final rows = week(['W', 'W', 'R', 'W', 'R', 'W', 'W']);
+      rows[tue] = {
+        'date': tue,
+        'type': 'workout',
+        'status': 'rest',
+        'exercises': <Map<String, dynamic>>[],
+      };
+      final w = DaySwapRules.restRunWarning(
+          weekDates: DaySwapRules.weekDates(mon),
+          rows: rows,
+          dateA: thu,
+          dateB: fri);
+      expect(w, isNotNull);
+      expect(w!.runDates, [tue, wed, thu]);
+    });
+
+    test('mirror: status rest WITH exercises is not a rest hybrid', () {
+      final row = {
+        'date': tue,
+        'type': 'workout',
+        'status': 'rest',
+        'exercises': [
+          {'name': 'Bench'}
+        ],
+      };
+      expect(DaySwapRules.isRest(row), isFalse);
+      expect(DaySwapRules.isRest(null), isFalse);
+      expect(DaySwapRules.isRest({'type': 'rest'}), isTrue);
+    });
   });
 
   group('no local wall-clock reads (closes the check_local_date_key_drift '

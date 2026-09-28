@@ -6175,3 +6175,64 @@ threat model it already defends against).
   calls or OI reservations.
 - **Source**: GitHub Actions run 36339457678 (job 108676553930), discovered while confirming CI
   green for the unrelated `gate14-migration-collision` push (diagnose `d5f1b8`).
+
+## OI-261 — displaced_<date> swap backups are local-only: never in plan_json or any cloud table, so swap-back on a new device silently loses the displaced template link
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-09-28 — `git grep displaced -- lib/core/services/sync/` returns nothing
+- **Identified**: 2026-09-28 · filed via mint_oi.sh from branch `day-swapper-sync-load`
+
+Symptom: `displaced_<date>` is the backup `TemplateService.assignTemplateToDate` writes when a
+template is assigned over a date that already held a workout, so removing the template later
+brings that workout back. It has existed since 2026-04-10 (`708d2910`) and has only ever lived in
+local Hive. `git grep -n displaced -- lib/core/services/sync/` finds nothing, no cloud table or
+column holds it, and `_syncWorkoutPlan`'s bundle loop collects `schedule_` keys only. On a new
+device or a reinstall, the template day restores through `plan_json`, but its backup does not, so
+removing the template there brings back nothing. No error is shown. The day-swapper batch
+(spec §5.1 row 4, §5.5) made the backup TRAVEL with the template when a day is swapped, which
+makes the backup matter more, but did not create the local-only gap.
+- **Class**: restore-completeness. A Hive key that carries user-meaningful state but belongs to
+  no sync domain, the same class as the historical `_restoreXxx` gaps in
+  `test/sync/restore_completeness_test.dart`.
+- **Fix shape (not designed)**: carry `displaced_<date>` inside the `plan_json` bundle next to its
+  `schedule_<date>` row (the only schedule vehicle that round-trips content), with the same L1/L3
+  merge rules as the row it belongs to; or fold it into the row itself as a nested field so it can
+  never be separated from it. Either way it needs a restore test in
+  `restore_completeness_test.dart`.
+- **Source**: Hermes E-pass, day-swapper-sync-load, findings h2F2 and h4F2
+  (`docs/audit/2026-09-28-hermes-day-swapper-sync-load.md`).
+
+## OI-262 — check_sot_registry_parity only checks N-M line_ranges: bare :NNNN citations and (push)/(pull)-suffixed ranges are never validated, and a wide range passes while pointing at the wrong span
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-09-28 — measured against the gate's own regexes (below)
+- **Identified**: 2026-09-28 · filed via mint_oi.sh from branch `day-swapper-sync-load`
+
+Symptom, measured 2026-09-28 against `scripts/check_sot_registry_parity.dart`:
+1. **Single-number ranges are never parsed.** The block regex at `:141` requires
+   `line_range:\s*(\d+)-(\d+)`, so a `line_range: 137` entry matches nothing and gets neither the
+   bounds check nor the method-location check. `grep -c "line_range: [0-9]\+ *$"
+   docs/sot_registry.yaml` → **34** such entries.
+2. **A method value with trailing text gets no symbol check.** `_extractSymbol` (`:79-97`)
+   accepts only a backticked name or a bare/dotted identifier. `_syncStreaks (push) + restore
+   merge`, `_syncSleepLogs (push)` and every `"X (confirmed :NNN; ...)"` prose value fall to
+   case 3 ("prose — skip"), so a stale range on those entries is invisible.
+3. **Bare `:NNNN` citations inside prose are never checked.** For example, the `sync_epoch`
+   entry's "confirmed :1485" and "at :1532 and :1553". The day-swapper-sync-load batch re-derived
+   these by hand three times in one day as edits above them shifted the file.
+4. **A wide range passes while pointing at the wrong span.** The check only asks whether the
+   method's signature falls inside `[start, end]`. On 2026-09-28, `mergeScheduleEntry` was cited
+   `72-115` while it sat at `100-143`, and `_restoreScheduledWorkouts` was cited `2000-2296` while
+   it sat at `2185-2524`. Both passed.
+- **Class**: a green check is only as wide as its input set
+  (`feedback_green_check_input_set_width`). The gate reports PASS over the subset it can parse,
+  and that looks identical to a PASS over the whole registry.
+- **Fix shape (not designed)**: accept `N` as `N-N`; extract the leading identifier from a method
+  value before any `(` or space instead of skipping it as prose; add a `:NNNN`-in-prose resolver
+  that at least checks bounds and names the nearest symbol; tighten (4) by requiring the cited
+  start to be within a small window of the method's doc-comment or signature line. Each leg needs
+  a mutation-proven test (the gate already has a rule-24 ledger entry).
+- **Source**: founder-queued during the day-swapper-sync-load batch after repeated hand
+  re-derivation of shifted citations.

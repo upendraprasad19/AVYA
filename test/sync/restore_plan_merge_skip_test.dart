@@ -139,6 +139,86 @@ void main() {
       expect(row(sat)!['type'], 'rest');
     });
 
+    // Merge review F3 (OI-252 ghost days). A ghost day (its template was
+    // deleted) is filtered out of every merge and never written, so without
+    // accounting for it the skip above could never fire again for an account
+    // holding one. Both tests use the STAMPED-row probe from the test below:
+    // only a real whole-bundle skip keeps `fri` at 'Old'.
+    const deletedTemplateUuid = 'dddddddd-1111-4222-8333-444444444444';
+    Map<String, dynamic> stampedOld() => {
+          'type': 'workout',
+          'status': 'planned',
+          'workout_name': 'Old',
+          'arranged_at_ms': 1000,
+          'exercises': [
+            {'name': 'Old'}
+          ],
+        };
+    Map<String, dynamic> bundleWithGhost() => bundleOf({
+          'schedule_2026-09-25': {
+            'type': 'workout',
+            'status': 'planned',
+            'workout_name': 'New',
+            'arranged_at_ms': 5000,
+            'exercises': [
+              {'name': 'New'}
+            ],
+          },
+          'schedule_2026-09-26': {
+            'type': 'custom_template',
+            'status': 'planned',
+            'template_id': 'tmpl_$deletedTemplateUuid',
+            'exercises': [
+              {'name': 'Curl'}
+            ],
+          },
+        });
+
+    test(
+        'a GHOST day (template deleted, so neither the row nor the template '
+        'key is on this phone) does NOT defeat the skip', () async {
+      await put('2026-09-25', stampedOld());
+      final bundle = bundleWithGhost();
+      await recordStoredFingerprint(fingerprintOf(bundle));
+
+      await SyncService.instance.restoreWorkoutPlanForTest(kTestUserId,
+          preFetched: [
+            {'plan_json': bundle}
+          ],
+          preFetchedDeletedTemplateIds: {deletedTemplateUuid});
+
+      expect(row('2026-09-25')!['workout_name'], 'Old',
+          reason: 'the ghost day is never written, so counting it as missing '
+              'would re-run the whole merge (and the deleted-template query) '
+              'on every launch');
+      expect(row('2026-09-26'), isNull, reason: 'the ghost stays filtered');
+    });
+
+    test(
+        'MIRROR: an absent row whose template key IS on this phone is a real '
+        'local delete, so it still defeats the skip and is put back', () async {
+      await put('2026-09-25', stampedOld());
+      await HiveService.instance.workoutBox.put('tmpl_$deletedTemplateUuid', {
+        'id': 'tmpl_$deletedTemplateUuid',
+        'type': 'template',
+        'name': 'Arms',
+      });
+      final bundle = bundleWithGhost();
+      await recordStoredFingerprint(fingerprintOf(bundle));
+
+      await SyncService.instance.restoreWorkoutPlanForTest(kTestUserId,
+          preFetched: [
+            {'plan_json': bundle}
+          ],
+          preFetchedDeletedTemplateIds: <String>{});
+
+      expect(row('2026-09-26'), isNotNull,
+          reason: 'template present locally, so the row was deleted locally '
+              'and the merge must put it back');
+      expect(row('2026-09-25')!['workout_name'], 'New',
+          reason: 'the merge ran');
+    });
+
     test(
         'a bundle whose fingerprint equals the stored one leaves a STAMPED, '
         'week-winning local row untouched -- unlike the sibling test above, '

@@ -1343,8 +1343,27 @@ extension SyncServiceWorkout on SyncService {
       // reconcile()'s needsHeal cannot, because getWeek() omits absent keys.
       // So the skip also requires every bundled key to still exist locally
       // (in-memory containsKey, no I/O); one absent key runs the full merge.
+      // Merge review F3 (OI-252 ghost days): a ghost day is filtered out of
+      // every merge below and so is never written, which would leave it
+      // "absent" forever and defeat this skip on every launch for any
+      // account that has one. A ghost day's template key is gone from this
+      // phone's Hive (the delete removed it, and a deleted template is never
+      // restored), so an absent row whose `tmpl_<uuid>` key is also absent
+      // locally counts as accounted for. Local-only, no deleted-template
+      // query. Residual: a real row deleted locally whose template is ALSO
+      // missing locally is not put back until the bundle changes.
+      bool bundledRowAccountedFor(Object? key, Object? value) {
+        if (_hive.workoutBox.containsKey(key)) return true;
+        if (value is! Map) return false;
+        final tmplKey = value['template_id'];
+        return tmplKey is String &&
+            cloudIdFromKey(tmplKey) != null &&
+            !_hive.workoutBox.containsKey(tmplKey);
+      }
+
       final allBundledRowsPresent = schedules is Map &&
-          schedules.keys.every((k) => _hive.workoutBox.containsKey(k));
+          schedules.entries
+              .every((e) => bundledRowAccountedFor(e.key, e.value));
       final skipPlanMerge = SyncFlags.planMergeSkipWhenKnownEnabled &&
           storedPlanFingerprint != null &&
           storedPlanFingerprint == downloadedPlanFingerprint &&
@@ -1858,7 +1877,7 @@ extension SyncServiceWorkout on SyncService {
 
         // F6 · Always refresh template content from cloud — covers the
         // case where the user edited a template on another device.
-        await _hive.workoutBox.put(hiveKey, {
+        final restored = <String, dynamic>{
           'id': hiveKey,
           'type': 'template',
           'name': map['name'],
@@ -1869,7 +1888,20 @@ extension SyncServiceWorkout on SyncService {
           'created_at': map['created_at'],
           'last_used_at': map['last_used_at'],
           'source': 'cloud_restore',
-        });
+        };
+        // Hermes h7F1 (diagnose f1c6b4): this runs on EVERY launch, so an
+        // unchanged template was re-written every time. "Refresh from cloud"
+        // still holds — a template that differs in any field is written —
+        // but an identical one is left alone. Kill switch
+        // disable_restore_write_if_changed.
+        final existing = _hive.workoutBox.get(hiveKey);
+        if (existing is Map &&
+            SyncFlags.restoreWriteIfChangedEnabled &&
+            SyncFingerprint.canonicalJson(existing) ==
+                SyncFingerprint.canonicalJson(restored)) {
+          continue;
+        }
+        await _hive.workoutBox.put(hiveKey, restored);
       }
     } catch (e, st) {
       debugPrint('[SyncService._restoreWorkoutTemplates] $e');
@@ -2054,11 +2086,22 @@ extension SyncServiceWorkout on SyncService {
 
             // Case 1 — no local ref: explicit null, confirmed.
             if (!hasLocalRef) return upsertOnce(null, true);
-            // Case 2 — the template row is not on this phone: omit the key
-            // and CONFIRM. template_name (null) is in the fingerprint, so the
-            // template's arrival re-pushes. Unconfirmed here would re-push
-            // (and fail its FK) every pass while the template stays missing.
-            if (tmplName == null) return upsertOnce(null, false);
+            // Case 2 — the template row is not on this phone. OI-252 (merge
+            // review F2): the cloud id is inside the key, so the row's own
+            // template is sent whenever the key carries one — the cloud may
+            // well hold the template (restore order, another device), and a
+            // swap on this phone moved this date's template_id, which an
+            // omitted key would leave pointing at the PRE-swap template.
+            // Only when the cloud rejects it (23503: it lacks the template
+            // too) or the key is legacy is the key omitted. Either way the
+            // row is CONFIRMED: template_name (null) is in the fingerprint,
+            // so the template's arrival re-pushes, and an unconfirmed row
+            // would re-push (and fail its FK) every pass while it is missing.
+            if (tmplName == null) {
+              final keyId = resolveCloudTemplateId(rawTemplateId);
+              if (keyId != null && await upsertOnce(keyId, true)) return true;
+              return upsertOnce(null, false);
+            }
 
             // Case 3 — the id comes from the key (OI-252), no SELECT.
             final cloudTemplateId = resolveCloudTemplateId(rawTemplateId);
@@ -2297,8 +2340,13 @@ extension SyncServiceWorkout on SyncService {
         String? mergedStatus = cloudStatus;
         String? mergedCompletedAt = cloudCompletedAt;
 
+        // Merge review F4: `rest` joins `planned` here. A cross-device day
+        // swap can put a rest row on a date this phone completed but has not
+        // pushed yet; taking the cloud's rest would demote a completed day
+        // (spec I6), and the rest-content strip below would then erase its
+        // exercises.
         if (localStatus == 'completed' &&
-            cloudStatus == 'planned' &&
+            (cloudStatus == 'planned' || cloudStatus == 'rest') &&
             localCompletedAt != null &&
             localCompletedAt.isNotEmpty) {
           // Cloud is stale (push failed). Keep local; Bug B.3 migrator
@@ -2497,6 +2545,26 @@ extension SyncServiceWorkout on SyncService {
           if (hydratedExercises != null) 'exercises': hydratedExercises,
           'source': 'cloud_restore',
         };
+        // Merge review F4: a day typed rest above (the cloud says rest and no
+        // template resolved) must not keep the workout it replaced. The
+        // `...existingMap` spread carries the old template_id, name and
+        // exercises; the next push would send that template_id with a rest
+        // status, and another device's restore would resolve it and rebuild
+        // a `custom_template` row with status rest (the b6e1c8 hybrid). Same
+        // unswitched restore type derivation as the rest type itself (spec
+        // sec 11).
+        if (merged['type'] == 'rest' && mergedStatus == 'rest') {
+          merged.remove('template_id');
+          final hadWorkout = !PlanEngineFlags.isRestDayConsideringLogged(
+                  existingMap['type']) ||
+              (existingMap['exercises'] is List &&
+                  (existingMap['exercises'] as List).isNotEmpty);
+          if (hadWorkout) {
+            merged['workout_name'] = 'Rest Day';
+            merged['workout_focus'] = 'Recovery & mobility';
+            merged['exercises'] = <Map<String, dynamic>>[];
+          }
+        }
         await _hive.workoutBox.put(key, merged);
       }
     } catch (e, st) {

@@ -3406,7 +3406,7 @@ concepts:
           (legacy-key rekey gate, scoped to this function only — never
           `_restoreIfNeeded` as a whole) then `_drainPendingTemplateDeletes`.
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 1739-1883
+        line_range: 1758-1915
         method: _restoreWorkoutTemplates
         semantic: pass-through
         fields_read: [id, name, workout_type, deleted_at, template_exercises]
@@ -3421,7 +3421,7 @@ concepts:
           positive-evidence-only removal replaces it (a legacy sweep would
           delete every not-yet-pushed local template on a first restore).
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 1177-1274
+        line_range: 1256-1420
         method: _restoreWorkoutPlan
         semantic: cross-concept ghost-day filter
         fields_read: [template_id, template.deleted_at (embed)]
@@ -3434,7 +3434,7 @@ concepts:
           this concept's delete semantics leaking into a sibling concept's
           restore path.
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 2000-2296
+        line_range: 2215-2579
         method: _restoreScheduledWorkouts
         semantic: cross-concept ghost-day filter
         fields_read: [template_id, template.deleted_at (embed)]
@@ -4390,7 +4390,7 @@ concepts:
           COVERAGE BOUNDARY (B-pass finding 1, same batch): this retry is
           only reachable on the legacy fallback restore path. The C3
           single-call restore (tried first for every restore,
-          sync_service.dart:1417) injects the 'users' row directly via
+          sync_service.dart:1826, `_attemptSingleCallRestore`) injects the 'users' row directly via
           preFetchedUsers, bypassing _fetchUsersRowForRestore — a real null
           there now logs restore_users_row_null_via_singlecall (the branch
           opens at line 603, the logEvent call is at line 615)
@@ -4746,7 +4746,7 @@ concepts:
           disk, SILENTLY (the loud StateError at :335 fires only when
           UNAUTHENTICATED). The pre-fix code relied on the parallel
           restoreFromCloudForUser having opened the session, but that call
-          (sync_service.dart:454) is fire-and-forget, making it a race.
+          (restoring_screen.dart:113-114, started in parallel with resolveDestination and not awaited before it; this read sync_service.dart:454, a doc comment, until 2026-09-28) is a race.
           Kill-switch disable_local_onboarded_evidence.
       - file: lib/core/router/app_router.dart
         line_range: 549-560
@@ -10567,7 +10567,7 @@ concepts:
           (→913) despite the gate not flagging it, found by grepping the
           symbol directly rather than trusting the gate's silence on it.
       - file: lib/core/services/sync_service.dart
-        line_range: 2491-2491
+        line_range: 2496-2496
         method: restoreOpTimeout
         semantic: per-op-ceiling
         notes: day-swapper + sync-load Task 20 fix1 (diagnose a9d3f6) shifted
@@ -10578,7 +10578,7 @@ concepts:
           an N-M line_range — but left stale it would misdirect a future
           reader by the same +14).
       - file: lib/core/services/sync_service.dart
-        line_range: 2502-2514
+        line_range: 2507-2519
         method: applyRestoreCeiling
         semantic: apply-ceiling
         notes: day-swapper + sync-load Task 20 shifted this range (+148 lines,
@@ -10588,10 +10588,10 @@ concepts:
           blocks on a citation you shifted). Shifted again by task-20-fix1
           (diagnose a9d3f6, +14 lines, same method) for the same reason.
       - file: lib/core/services/sync_service.dart
-        line_range: 2516-2524
+        line_range: 2521-2529
         method: restoreFailureReason
         semantic: telemetry-reason-split
-        notes: same shift as applyRestoreCeiling directly above, both times; all three re-derived +3 by the Hermes sync_epoch_seen doc comment (2026-09-28).
+        notes: same shift as applyRestoreCeiling directly above, both times; all three re-derived +3 by the Hermes sync_epoch_seen doc comment (2026-09-28), then +1 (with _safeRestoreOp) by the plan_engine_flags import the merge-review F4 fix added (a3e7d9).
     readers:
       - file: lib/core/router/app_router.dart
         line_range: 800-811
@@ -10603,7 +10603,7 @@ concepts:
         method: _authRedirect
         semantic: delegates-to-pure-fn
       - file: lib/core/services/sync_service.dart
-        line_range: 2526-2571
+        line_range: 2531-2576
         method: _safeRestoreOp
         semantic: bounded-await
     hive:
@@ -12277,7 +12277,7 @@ concepts:
         semantic: flag-check
         fields_read: [type]
       - file: lib/core/services/plan_integrity_reconciler.dart
-        line_range: 324-335
+        line_range: 318-329
         method: needsHeal
         semantic: flag-check
         fields_read: [type]
@@ -12378,7 +12378,7 @@ concepts:
         method: "_syncScheduleCompletions (confirmed at :598; SyncSkipIndex for SyncSkipDomain.completion; fingerprint = SyncFingerprint.of(payload) with the resolved completion time, never now())"
       - file: lib/core/services/sync_service.dart
         line_range: 1-9999
-        method: "_hashSkipKillSwitchOn(SyncSkipDomain.completion) — the GENERIC kill-switch reader (confirmed sync_service.dart:329, called from sync_workout.dart:603); disable_completion_hash_skip via domain.killSwitchKey, NOT a bespoke _completionHashSkipDisabled getter (that name does not exist in the code)"
+        method: "_hashSkipKillSwitchOn(SyncSkipDomain.completion) — the GENERIC kill-switch reader (confirmed sync_service.dart:334, called from sync_workout.dart:603); disable_completion_hash_skip via domain.killSwitchKey, NOT a bespoke _completionHashSkipDisabled getter (that name does not exist in the code)"
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_workout.dart
@@ -12418,7 +12418,7 @@ concepts:
         method: "_syncWorkoutLogs (confirmed at :91; SyncSkipIndex for SyncSkipDomain.wlog; fingerprint = SyncFingerprint.of(payload))"
       - file: lib/core/services/sync_service.dart
         line_range: 1-9999
-        method: "_hashSkipKillSwitchOn(SyncSkipDomain.wlog) — the GENERIC kill-switch reader (sync_service.dart:329, called from sync_workout.dart:96); disable_wlog_hash_skip via domain.killSwitchKey, NOT a bespoke _wlogHashSkipDisabled getter"
+        method: "_hashSkipKillSwitchOn(SyncSkipDomain.wlog) — the GENERIC kill-switch reader (sync_service.dart:334, called from sync_workout.dart:96); disable_wlog_hash_skip via domain.killSwitchKey, NOT a bespoke _wlogHashSkipDisabled getter"
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_workout.dart
@@ -12458,7 +12458,7 @@ concepts:
         method: "_syncWorkoutTemplates (confirmed at :1388; SyncSkipIndex for SyncSkipDomain.template; bundles header+exercises+tail-DELETE behind one pushIfChanged)"
       - file: lib/core/services/sync_service.dart
         line_range: 1-9999
-        method: "_hashSkipKillSwitchOn(SyncSkipDomain.template) — the GENERIC kill-switch reader (sync_service.dart:329, called from sync_workout.dart:1393); disable_template_hash_skip via domain.killSwitchKey, NOT a bespoke _templateHashSkipDisabled getter"
+        method: "_hashSkipKillSwitchOn(SyncSkipDomain.template) — the GENERIC kill-switch reader (sync_service.dart:334, called from sync_workout.dart:1393); disable_template_hash_skip via domain.killSwitchKey, NOT a bespoke _templateHashSkipDisabled getter"
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_workout.dart
@@ -12516,7 +12516,7 @@ concepts:
         method: "_syncWorkoutPlan (confirmed at :1190; SyncSkipIndex for SyncSkipDomain.plan, row key kPlanBundleRowKey)"
       - file: lib/core/services/sync_service.dart
         line_range: 1-9999
-        method: "_hashSkipKillSwitchOn(SyncSkipDomain.plan) — the GENERIC kill-switch reader (sync_service.dart:329, called from sync_workout.dart:1223); disable_plan_hash_skip via domain.killSwitchKey, NOT a bespoke _planHashSkipDisabled getter"
+        method: "_hashSkipKillSwitchOn(SyncSkipDomain.plan) — the GENERIC kill-switch reader (sync_service.dart:334, called from sync_workout.dart:1223); disable_plan_hash_skip via domain.killSwitchKey, NOT a bespoke _planHashSkipDisabled getter"
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_workout.dart
@@ -12525,7 +12525,7 @@ concepts:
         semantic: latest
         fields_read: [sync_plan_payload_hash_index.bundle]
       - file: lib/core/services/plan_integrity_reconciler.dart
-        line_range: 220-290
+        line_range: 242-312
         method: "mergeScheduleBundleIntoHive (Task 22) -- reads the SAME stored fingerprint (aka plan_bundle_cloud_fingerprint), passed in by its caller in sync_workout.dart, to decide the per-row write-only-if-differs L2 optimization (SyncFingerprint.canonicalJson comparison, not a raw index read inside this method itself)"
         semantic: flag-check
         fields_read: [sync_plan_payload_hash_index.bundle]
@@ -12567,7 +12567,7 @@ concepts:
         method: "_syncStreaks (confirmed at :685; SyncSkipIndex for SyncSkipDomain.streak; box = healthBox per plan D12)"
       - file: lib/core/services/sync_service.dart
         line_range: 1-9999
-        method: "_hashSkipKillSwitchOn(SyncSkipDomain.streak) — the GENERIC kill-switch reader (sync_service.dart:329, called from sync_workout.dart:693); disable_streak_hash_skip via domain.killSwitchKey, NOT a bespoke _streakHashSkipDisabled getter"
+        method: "_hashSkipKillSwitchOn(SyncSkipDomain.streak) — the GENERIC kill-switch reader (sync_service.dart:334, called from sync_workout.dart:693); disable_streak_hash_skip via domain.killSwitchKey, NOT a bespoke _streakHashSkipDisabled getter"
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_workout.dart
@@ -12605,7 +12605,7 @@ concepts:
         method: "_syncWaterLogs (confirmed at :457; SyncSkipIndex for SyncSkipDomain.water; box = healthBox per plan D12; fingerprint excludes updated_at)"
       - file: lib/core/services/sync_service.dart
         line_range: 1-9999
-        method: "_hashSkipKillSwitchOn(SyncSkipDomain.water) — the GENERIC kill-switch reader (sync_service.dart:329, called from sync_nutrition.dart:470); disable_water_hash_skip via domain.killSwitchKey, NOT a bespoke _waterHashSkipDisabled getter"
+        method: "_hashSkipKillSwitchOn(SyncSkipDomain.water) — the GENERIC kill-switch reader (sync_service.dart:334, called from sync_nutrition.dart:470); disable_water_hash_skip via domain.killSwitchKey, NOT a bespoke _waterHashSkipDisabled getter"
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_nutrition.dart
@@ -12648,7 +12648,7 @@ concepts:
         method: "_syncSavedMeals (confirmed at :516; SyncSkipIndex for SyncSkipDomain.savedMeal)"
       - file: lib/core/services/sync_service.dart
         line_range: 1-9999
-        method: "_hashSkipKillSwitchOn(SyncSkipDomain.savedMeal) — the GENERIC kill-switch reader (sync_service.dart:329, called from sync_nutrition.dart:523); disable_saved_meal_hash_skip via domain.killSwitchKey, NOT a bespoke _savedMealHashSkipDisabled getter"
+        method: "_hashSkipKillSwitchOn(SyncSkipDomain.savedMeal) — the GENERIC kill-switch reader (sync_service.dart:334, called from sync_nutrition.dart:523); disable_saved_meal_hash_skip via domain.killSwitchKey, NOT a bespoke _savedMealHashSkipDisabled getter"
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_nutrition.dart
@@ -12688,7 +12688,7 @@ concepts:
         method: "_syncCustomItems (confirmed at :103; primary per-key loop onto SyncSkipIndex for SyncSkipDomain.customItem)"
       - file: lib/core/services/sync_service.dart
         line_range: 1-9999
-        method: "_hashSkipKillSwitchOn(SyncSkipDomain.customItem) — the GENERIC kill-switch reader (sync_service.dart:329, called from sync_community.dart:118); disable_custom_item_hash_skip via domain.killSwitchKey, NOT a bespoke _customItemHashSkipDisabled getter"
+        method: "_hashSkipKillSwitchOn(SyncSkipDomain.customItem) — the GENERIC kill-switch reader (sync_service.dart:334, called from sync_community.dart:118); disable_custom_item_hash_skip via domain.killSwitchKey, NOT a bespoke _customItemHashSkipDisabled getter"
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_community.dart
@@ -12735,7 +12735,7 @@ concepts:
         method: "_syncStepsLogs (confirmed at :358; SyncSkipIndex for SyncSkipDomain.steps; fingerprint excludes synced_at)"
       - file: lib/core/services/sync_service.dart
         line_range: 1-9999
-        method: "_hashSkipKillSwitchOn(SyncSkipDomain.steps) — the GENERIC kill-switch reader (sync_service.dart:329, called from sync_health.dart:363); disable_steps_hash_skip via domain.killSwitchKey, NOT a bespoke _stepsHashSkipDisabled getter"
+        method: "_hashSkipKillSwitchOn(SyncSkipDomain.steps) — the GENERIC kill-switch reader (sync_service.dart:334, called from sync_health.dart:363); disable_steps_hash_skip via domain.killSwitchKey, NOT a bespoke _stepsHashSkipDisabled getter"
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_health.dart
@@ -12776,7 +12776,7 @@ concepts:
         method: "_syncUrineColorLogs (confirmed at :407; SyncSkipIndex for SyncSkipDomain.urine; upserts into water_logs.urine_color/urine_status)"
       - file: lib/core/services/sync_service.dart
         line_range: 1-9999
-        method: "_hashSkipKillSwitchOn(SyncSkipDomain.urine) — the GENERIC kill-switch reader (sync_service.dart:329, called from sync_health.dart:414); disable_urine_hash_skip via domain.killSwitchKey, NOT a bespoke _urineHashSkipDisabled getter"
+        method: "_hashSkipKillSwitchOn(SyncSkipDomain.urine) — the GENERIC kill-switch reader (sync_service.dart:334, called from sync_health.dart:414); disable_urine_hash_skip via domain.killSwitchKey, NOT a bespoke _urineHashSkipDisabled getter"
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_health.dart
@@ -12816,7 +12816,7 @@ concepts:
         method: "_syncSleepLogs (confirmed at :305; SyncSkipIndex for SyncSkipDomain.sleep; sole writer of sleep_logs post-D18)"
       - file: lib/core/services/sync_service.dart
         line_range: 1-9999
-        method: "_hashSkipKillSwitchOn(SyncSkipDomain.sleep) — the GENERIC kill-switch reader (sync_service.dart:329, called from sync_health.dart:310); disable_sleep_hash_skip via domain.killSwitchKey, NOT a bespoke _sleepHashSkipDisabled getter"
+        method: "_hashSkipKillSwitchOn(SyncSkipDomain.sleep) — the GENERIC kill-switch reader (sync_service.dart:334, called from sync_health.dart:310); disable_sleep_hash_skip via domain.killSwitchKey, NOT a bespoke _sleepHashSkipDisabled getter"
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_health.dart
@@ -12856,7 +12856,7 @@ concepts:
         method: "_syncWeightLogs (confirmed at :205; SyncSkipIndex for SyncSkipDomain.weight)"
       - file: lib/core/services/sync_service.dart
         line_range: 1-9999
-        method: "_hashSkipKillSwitchOn(SyncSkipDomain.weight) — the GENERIC kill-switch reader (sync_service.dart:329, called from sync_health.dart:210); disable_weight_hash_skip via domain.killSwitchKey, NOT a bespoke _weightHashSkipDisabled getter"
+        method: "_hashSkipKillSwitchOn(SyncSkipDomain.weight) — the GENERIC kill-switch reader (sync_service.dart:334, called from sync_health.dart:210); disable_weight_hash_skip via domain.killSwitchKey, NOT a bespoke _weightHashSkipDisabled getter"
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_health.dart
@@ -12893,7 +12893,7 @@ concepts:
         method: "_syncMeasurements (confirmed at :253; SyncSkipIndex for SyncSkipDomain.measurement)"
       - file: lib/core/services/sync_service.dart
         line_range: 1-9999
-        method: "_hashSkipKillSwitchOn(SyncSkipDomain.measurement) — the GENERIC kill-switch reader (sync_service.dart:329, called from sync_health.dart:258); disable_measurement_hash_skip via domain.killSwitchKey, NOT a bespoke _measurementHashSkipDisabled getter"
+        method: "_hashSkipKillSwitchOn(SyncSkipDomain.measurement) — the GENERIC kill-switch reader (sync_service.dart:334, called from sync_health.dart:258); disable_measurement_hash_skip via domain.killSwitchKey, NOT a bespoke _measurementHashSkipDisabled getter"
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_health.dart
@@ -12928,7 +12928,7 @@ concepts:
         method: "_syncReadiness (confirmed at :74; SyncSkipIndex for SyncSkipDomain.readiness)"
       - file: lib/core/services/sync_service.dart
         line_range: 1-9999
-        method: "_hashSkipKillSwitchOn(SyncSkipDomain.readiness) — the GENERIC kill-switch reader (sync_service.dart:329, called from sync_health.dart:79); disable_readiness_hash_skip via domain.killSwitchKey, NOT a bespoke _readinessHashSkipDisabled getter"
+        method: "_hashSkipKillSwitchOn(SyncSkipDomain.readiness) — the GENERIC kill-switch reader (sync_service.dart:334, called from sync_health.dart:79); disable_readiness_hash_skip via domain.killSwitchKey, NOT a bespoke _readinessHashSkipDisabled getter"
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_health.dart
@@ -13132,13 +13132,13 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/plan_integrity_reconciler.dart
-        line_range: 72-115
+        line_range: 100-143
         method: mergeScheduleEntry
         semantic: max
         fields_read: [schedule_<date>.arranged_at_ms]
         notes: "missing arranged_at_ms counts as 0 (an unstamped local week loses the L3 comparison); see snapshotArrangementWinsKeys for the actual per-week comparison this feeds"
       - file: lib/core/services/plan_integrity_reconciler.dart
-        line_range: 220-290
+        line_range: 242-312
         method: mergeScheduleBundleIntoHive
         semantic: max
         fields_read: [schedule_<date>.arranged_at_ms]
@@ -13179,19 +13179,19 @@ concepts:
       invalidated" (e.g. an admin-side repair, the Task 23 hybrid repair
       migrator) without walking every domain individually. Local high-water
       mark is `workoutBox['sync_epoch_seen']` (`SyncService.kSyncEpochSeenKey`,
-      confirmed :1482). On first sight (no `sync_epoch_seen` key at all) the
+      confirmed :1486). On first sight (no `sync_epoch_seen` key at all) the
       baseline is stored WITHOUT clearing anything. When the cloud epoch is
       strictly greater than the stored `sync_epoch_seen`,
       `SyncSkipIndex.clearAll(...)` runs for every domain and the new epoch
       is stored ONLY when `result.allSucceeded` (diagnose a9d3f6/a53f3305 fix
       -- a partial clear failure must not mark the resync lever handled,
-      confirmed :1644-1661). A missing `sync_epoch` column/value
+      confirmed :1648-1673). A missing `sync_epoch` column/value
       (pre-migration or older DB state) reads as 0 and is treated as a no-op
       the same way.
     writers:
       - file: lib/core/services/sync_service.dart
         line_range: 1-9999
-        method: "_applySyncEpochFromRestoreRow (confirmed :1631 -- the actual private method; called from restoreLightweightAlways at :1529 and :1550, re-derived 2026-09-28. Reads the shared user_progress select, writes workoutBox['sync_epoch_seen'] only after SyncSkipIndex.clearAll reports allSucceeded)"
+        method: "_applySyncEpochFromRestoreRow (confirmed :1636 -- the actual private method; called from restoreLightweightAlways at :1533 and :1554, re-derived 2026-09-28 after the merge-review F4 import. Reads the shared user_progress select, writes workoutBox['sync_epoch_seen'] only after SyncSkipIndex.clearAll reports allSucceeded)"
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync_service.dart
@@ -13330,7 +13330,7 @@ concepts:
     reader_manifest_complete: false
     readers:
       - file: lib/core/services/plan_integrity_reconciler.dart
-        line_range: 324-335
+        line_range: 318-329
         method: needsHeal
         semantic: flag-check
         fields_read: [schedule_<date>.type, schedule_<date>.status, schedule_<date>.exercises]

@@ -827,6 +827,21 @@ extension SyncServiceProfile on SyncService {
       // canonical service with skipSync: true. The data we just merged
       // came FROM cloud; re-pushing it would create a redundant
       // upsert loop on every restore.
+      //
+      // Hermes h7F2 (diagnose f1c6b4): this runs on EVERY launch — skip the
+      // write when the merge changed nothing. `updated_at` is left out of the
+      // comparison because updateProfile re-stamps it with istNow() on every
+      // call, so it can never match and would defeat the skip; nothing else
+      // about the profile changed in that case. Kill switch
+      // disable_restore_write_if_changed.
+      if (SyncFlags.restoreWriteIfChangedEnabled &&
+          existing is Map &&
+          SyncFingerprint.canonicalJson(
+                  Map<String, dynamic>.from(existingMap)..remove('updated_at')) ==
+              SyncFingerprint.canonicalJson(
+                  Map<String, dynamic>.from(merged)..remove('updated_at'))) {
+        return;
+      }
       await ProfileWriteService.instance.updateProfile(merged, skipSync: true);
     } catch (e, st) {
       debugPrint('[SyncService._restoreUserProfile] $e');
@@ -969,7 +984,17 @@ extension SyncServiceProfile on SyncService {
         local: existingMap,
         cloud: cloud,
       );
-      await _hive.userBox.put('progress', result.merged);
+      // Hermes h7F2 (diagnose f1c6b4): EVERY launch — write only when the
+      // merge changed something. The declined-demotion report still runs:
+      // a refused demotion is news whether or not a write happened. Kill
+      // switch disable_restore_write_if_changed.
+      final unchanged = SyncFlags.restoreWriteIfChangedEnabled &&
+          existing is Map &&
+          SyncFingerprint.canonicalJson(existingMap) ==
+              SyncFingerprint.canonicalJson(result.merged);
+      if (!unchanged) {
+        await _hive.userBox.put('progress', result.merged);
+      }
       reportProgressDemotionsDeclined(result, source: 'restore_user_progress');
     } catch (e, st) {
       debugPrint('[SyncService._restoreUserProgress] $e');
@@ -1095,6 +1120,27 @@ extension SyncServiceProfile on SyncService {
     if (userId == null) return;
     await _restoreUserPreferences(userId);
   }
+
+  /// Hermes h7F2 (diagnose f1c6b4) test seam — drives [_restoreUserProgress]
+  /// with INJECTED `user_progress` rows. [preFetched] must be passed (even as
+  /// an empty list) or this falls through to a live network call.
+  @visibleForTesting
+  Future<void> restoreUserProgressForTest(
+    String userId, {
+    required Object? preFetched,
+  }) =>
+      _restoreUserProgress(userId, preFetched: preFetched);
+
+  /// Hermes h7F2 test seam — drives [_restoreUserProfile] with INJECTED
+  /// `user_profile` AND `users` rows; both must be passed.
+  @visibleForTesting
+  Future<void> restoreUserProfileForTest(
+    String userId, {
+    required Object? preFetched,
+    required Object? preFetchedUsers,
+  }) =>
+      _restoreUserProfile(userId,
+          preFetched: preFetched, preFetchedUsers: preFetchedUsers);
 }
 
 /// Builds the `user_preferences` upsert payload. PURE — no Hive, no network.

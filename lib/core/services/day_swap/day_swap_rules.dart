@@ -5,6 +5,8 @@
 // engine (SwapService.swapDays) reads live state inside the write lock and
 // passes it in, so every rule is testable without a device.
 
+import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
+
 import '../workout_write_service.dart' show ScheduledDaySwapWrite;
 import 'day_swap_result.dart';
 
@@ -104,8 +106,28 @@ class DaySwapRules {
   static bool isMoved(Map<String, dynamic>? row) =>
       row != null && row['is_swapped'] == true && row['status'] != 'completed';
 
-  /// Rest = a row of type `rest` (spec §5.6). A missing row is not rest.
-  static bool isRest(Map<String, dynamic>? row) => row?['type'] == 'rest';
+  /// Rest = a row of type `rest` (spec §5.6), OR a legacy rest hybrid
+  /// ([isRestHybrid]). A missing row is not rest. Hermes h4F3 (diagnose
+  /// c2d8e5): the hybrid shape is what the one-time repair migrator fixes,
+  /// but a hybrid restored AFTER that migrator ran is only normalized on the
+  /// next restore/reconcile — until then `type == 'rest'` alone counted it
+  /// as a workout day and understated the 3+-rest-day-run warning.
+  static bool isRest(Map<String, dynamic>? row) =>
+      row != null && (row['type'] == 'rest' || isRestHybrid(row));
+
+  /// The ONE hybrid predicate (spec §1.3/§1.4, plan D5): `status: rest`, a
+  /// workout type, and no exercises. Shared by [isRest], the restore merge
+  /// normalizer and the one-time `ScheduleHybridRepairMigrator` (through
+  /// `PlanIntegrityReconciler.isRestHybrid`, which delegates here) so none
+  /// of them can disagree about what a hybrid is. A hybrid WITH exercises is
+  /// not one of these (ambiguous; left alone by all).
+  static bool isRestHybrid(Map<String, dynamic> row) {
+    final isWorkoutType =
+        !PlanEngineFlags.isRestDayConsideringLogged(row['type']);
+    final ex = row['exercises'];
+    final hasExercises = ex is List && ex.isNotEmpty;
+    return row['status'] == 'rest' && isWorkoutType && !hasExercises;
+  }
 
   static Map<String, dynamic> contentOf(Map<String, dynamic> row) => {
         for (final e in row.entries)

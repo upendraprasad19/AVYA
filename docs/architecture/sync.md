@@ -263,7 +263,10 @@ consumers of the same cloud snapshot can never disagree:
   — applied to every `mergeScheduleEntry` return path: a row that would render `type: workout` +
   `status: rest` + no exercises is corrected to `type: rest`. `isRestHybrid` is the ONE hybrid
   predicate, shared with `ScheduleHybridRepairMigrator` (below) so the merge and the one-time
-  repair can never disagree about what a hybrid is.
+  repair can never disagree about what a hybrid is. Its body lives in
+  `DaySwapRules.isRestHybrid` (`PlanIntegrityReconciler.isRestHybrid` delegates), so the swap
+  engine's `DaySwapRules.isRest` counts a not-yet-normalized hybrid as rest too (Hermes h4F3,
+  diagnose `c2d8e5`).
 - **L3 — the newer arrangement wins, per Mon–Sun IST week**
   (`SyncFlags.swapArrangementMergeEnabled`, kill switch `disable_swap_arrangement_merge`):
   `snapshotArrangementWinsKeys` compares the MAX `arranged_at_ms` per week between local and
@@ -272,13 +275,39 @@ consumers of the same cloud snapshot can never disagree:
   WHOLESALE (content, status, markers) for every winning key. A `swap_merge_conflict` telemetry
   event fires ONCE per merge call (never per row) when at least one non-completed, previously
   `arranged_at_ms`-stamped local row was discarded this way.
+  **Carry-forward makes this last-writer-wins per week, by design (spec §5.7; Hermes h4F1,
+  2026-09-28).** `upsertScheduled`'s `carriesArrangement` re-stamps `arranged_at_ms = now` when a
+  non-swap, non-restore writer (plan regeneration, coach edit, template change, manual edit)
+  rewrites a date that ALREADY carries a stamp. A date that was never arranged is NOT re-stamped,
+  so an edit to an unrelated, unstamped date cannot move the week's MAX. The consequence: if device
+  B edits one of its own arranged dates AFTER device A's swap in the same week, B's week is newer,
+  and when the two meet in a merge, B's rows win the whole week and A's swap is discarded
+  (`swap_merge_conflict` fires). That is the spec's accepted residual ("the later swap wins that
+  whole week"), extended to a later edit of an arranged date, which the spec counts as a newer
+  arrangement. A stale device that never saw any arrangement in that week has no stamps, reads as
+  0, and cannot win. Same-device coverage: `restore_merge_invariants_test.dart` I5.
 - **L2 — merge only what is new**, one flag (`disable_plan_merge_skip_when_known`) gating BOTH
   halves: (a) `_restoreWorkoutPlan` skips the WHOLE bundle merge when the downloaded bundle's
   fingerprint equals the recorded one AND every bundled `schedule_<date>` key still exists
   locally — a locally-deleted row defeats the whole-bundle skip (commit `18183762`; a
-  fingerprint match alone says the CLOUD is unchanged, not that local still holds it); (b)
+  fingerprint match alone says the CLOUD is unchanged, not that local still holds it). An
+  OI-252 ghost day (its template was deleted) is filtered out of every merge and so never
+  written; an absent row whose `tmpl_<uuid>` template key is also absent locally therefore
+  counts as present, or one ghost day would defeat the skip forever (merge review F3, diagnose
+  `a3e7d9`). Residual: a real row deleted locally whose template is also missing locally is not
+  put back until the bundle changes; (b)
   `mergeScheduleBundleIntoHive` writes a row only when the merged result's canonical fingerprint
   differs from the existing row's, even when the whole-bundle skip above did not fire.
+- **Per-launch restore write-if-changed** (Hermes h7F1/h7F2, diagnose `f1c6b4`; kill switch
+  `disable_restore_write_if_changed`, `SyncFlags.restoreWriteIfChangedEnabled`) — the same idea
+  applied to the three other restore writers that run on EVERY launch via
+  `restoreLightweightAlways`: `_restoreWorkoutTemplates` (per template), `_restoreUserProgress`
+  (`userBox['progress']`) and `_restoreUserProfile` (`userBox['profile']`). Each compares the value
+  it would write with the stored one via `SyncFingerprint.canonicalJson` and skips an identical
+  write. The profile comparison drops `updated_at` from both sides, because
+  `ProfileWriteService.updateProfile` re-stamps it on every call and it would otherwise never
+  match (the field is server-set and never pushed). A declined progress demotion is still
+  reported when the write is skipped.
 - **The one-time `ScheduleHybridRepairMigrator`** (`lib/core/services/schedule_hybrid_repair_migrator.dart`,
   diagnose `b6e1c8`) — gated by `workoutBox['hybrid_schedule_repair_v1_done']` (per-user, NOT
   `migrationBox`, so a second account signing into the same device is repaired too). Walks every
@@ -321,7 +350,8 @@ date already carried a template link; travels WITH the template so a swap-back c
 `disable_weight_hash_skip` / `disable_measurement_hash_skip` / `disable_readiness_hash_skip` /
 `disable_saved_meal_hash_skip` / `disable_custom_item_hash_skip` (per-domain, point 2 table);
 `disable_rest_row_refill_guard` (L1); `disable_swap_arrangement_merge` (L3);
-`disable_plan_merge_skip_when_known` (L2, both halves); `disable_restore_single_plan_fetch`;
+`disable_plan_merge_skip_when_known` (L2, both halves); `disable_restore_write_if_changed`
+(template / progress / profile restore writes); `disable_restore_single_plan_fetch`;
 `disable_day_swap_train_ui` (Train UI only — see `lib/features/train/CLAUDE.md`).
 
 **M1 (unchanged limitation):** two overlapping sync passes for the same domain can still both

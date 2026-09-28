@@ -48,6 +48,7 @@ import 'package:icanbefitter/features/profile/services/profile_target_recompute.
 import 'package:icanbefitter/features/ai_coach/models/coach_memory.dart';
 import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
 import 'package:icanbefitter/features/profile/services/profile_write_service.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
 part 'sync/sync_coach.dart';
@@ -833,7 +834,10 @@ class SyncService {
         'log-client-error',
         body: {
           'error_code': op.lastErrorCode ?? 'UnknownError',
-          'error_message': op.lastErrorMessage,
+          // h6F2: the op's last error text is a PostgrestException string too.
+          'error_message': op.lastErrorMessage == null
+              ? null
+              : ErrorTelemetry.redactRowValues(op.lastErrorMessage!),
           'op_type': op.opType,
           'retry_count': op.retryCount,
           'client_version': _currentClientVersion(),
@@ -2586,7 +2590,9 @@ class SyncService {
       final queue =
           (_hive.syncBox.get(_telemetryQueueKey) as List?)?.cast<Map>().toList() ??
               [];
-      final msg = error.toString();
+      // h6F2: redact before the 500-char cut, so the queued copy at rest is
+      // clean too (the drain re-sends it through _reportSyncFailure).
+      final msg = ErrorTelemetry.redactRowValues(error.toString());
       queue.insert(0, {
         'op_type': opType,
         'error': msg.substring(0, msg.length.clamp(0, 500)),
@@ -2661,7 +2667,11 @@ class SyncService {
       // Truncate to keep the Edge Function request body reasonable — some
       // PostgrestException messages include the full echoed row which can
       // be several KB on user_profile.
-      var message = error.toString();
+      // Hermes h6F2 (diagnose e8c3a1): that echoed row is USER DATA — a
+      // failed ai_coach_interactions upsert carried the raw chat text into
+      // client_errors. Redact before truncating (the cap can cut the suffix
+      // the redactor anchors on).
+      var message = ErrorTelemetry.redactRowValues(error.toString());
       if (message.length > 2000) {
         message = '${message.substring(0, 2000)}…(truncated)';
       }

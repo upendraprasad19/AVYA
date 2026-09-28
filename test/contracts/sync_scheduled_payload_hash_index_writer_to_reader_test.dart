@@ -182,10 +182,11 @@ void main() {
           reason: 'a resolved (here: genuinely template-less) row is recorded as confirmed');
     });
 
-    test('case 2 — the template row is not on this phone: key omitted, CONFIRMED, and the '
-        "template's later arrival re-pushes WITH the cloud id", () async {
+    test('case 2a — the template row is not on this phone but the CLOUD has it: the row is '
+        'pushed WITH the id from the key (merge review F2)', () async {
       h.server.clear();
       h.server.getResponders.clear();
+      h.server.writeFailers.clear();
       final box = HiveService.instance.workoutBox;
       final armsKey = templateKeyFor(_armsId);
       await box.put('schedule_2026-09-24', {
@@ -198,31 +199,77 @@ void main() {
       });
       await SyncService.instance.pushScheduledWorkoutsForSyncDomain();
       final writes = h.server.writesTo('scheduled_workouts');
-      expect(writes, hasLength(1), reason: 'status still reaches cloud');
-      expect(writes.single.rows.single.containsKey('template_id'), isFalse,
-          reason: 'a template not on this phone is OMITTED: its cloud row may '
-              'not exist yet, and the FK would reject it');
+      expect(writes, hasLength(1));
+      expect(writes.single.rows.single['template_id'], _armsId,
+          reason: 'OI-252: the cloud id is inside the key, so a missing LOCAL '
+              'template row is no reason to drop it. Omitting it would leave '
+              'the cloud row on whatever template it had before, e.g. the '
+              'pre-swap one after a day swap on this phone.');
       expect(
           SyncSkipIndex.readIndex(box, SyncSkipDomain.sched.indexKey).containsKey('2026-09-24'),
-          isTrue,
-          reason: 'confirmed: an unconfirmed row would re-push every pass while the template is missing');
-
-      h.server.clear();
-      await SyncService.instance.pushScheduledWorkoutsForSyncDomain();
-      expect(h.server.writesTo('scheduled_workouts'), isEmpty, reason: 'unchanged: skipped');
-
-      // The template arrives on this phone -> template_name enters the fingerprint.
-      await box.put(armsKey, {'id': armsKey, 'type': 'template', 'name': 'Arms'});
-      h.server.clear();
-      await SyncService.instance.pushScheduledWorkoutsForSyncDomain();
-      final healed = h.server.writesTo('scheduled_workouts');
-      expect(healed, hasLength(1));
-      expect(healed.single.rows.single['template_id'], _armsId,
-          reason: 'the cloud id is the uuid inside the Hive key');
+          isTrue);
       expect(
           h.server.requests.where((r) => r.method == 'GET' && r.table == 'workout_templates'),
           isEmpty,
           reason: 'OI-252: the id comes from the key, never from a lookup');
+    });
+
+    test('case 2b — the template row is not on this phone and the cloud LACKS it (23503): key '
+        "omitted, CONFIRMED, and the template's later arrival re-pushes WITH the cloud id",
+        () async {
+      h.server.clear();
+      h.server.getResponders.clear();
+      final box = HiveService.instance.workoutBox;
+      final armsKey = templateKeyFor(_armsId);
+      var cloudHasTemplate = false;
+      h.server.writeFailers['scheduled_workouts'] = (req) =>
+          !cloudHasTemplate && req.rows.any((r) => r['template_id'] == _armsId)
+              ? {
+                  'code': '23503',
+                  'message': 'violates foreign key constraint '
+                      '"scheduled_workouts_template_id_fkey"',
+                }
+              : null;
+      try {
+        await box.put('schedule_2026-09-24', {
+          'date': '2026-09-24',
+          'type': 'custom_template',
+          'template_id': armsKey,
+          'status': 'planned',
+          'day_of_week': 3,
+          'week': 3,
+        });
+        await SyncService.instance.pushScheduledWorkoutsForSyncDomain();
+        final writes = h.server.writesTo('scheduled_workouts');
+        expect(writes, hasLength(2),
+            reason: 'one attempt with the id (rejected), then the fallback');
+        expect(writes.last.rows.single.containsKey('template_id'), isFalse,
+            reason: 'the cloud lacks the template, so the key is OMITTED and '
+                'status still reaches cloud');
+        expect(
+            SyncSkipIndex.readIndex(box, SyncSkipDomain.sched.indexKey)
+                .containsKey('2026-09-24'),
+            isTrue,
+            reason: 'confirmed: an unconfirmed row would re-push (and fail its '
+                'FK) every pass while the template is missing');
+
+        h.server.clear();
+        await SyncService.instance.pushScheduledWorkoutsForSyncDomain();
+        expect(h.server.writesTo('scheduled_workouts'), isEmpty, reason: 'unchanged: skipped');
+
+        // The template arrives on this phone (and so in the cloud) ->
+        // template_name enters the fingerprint.
+        cloudHasTemplate = true;
+        await box.put(armsKey, {'id': armsKey, 'type': 'template', 'name': 'Arms'});
+        h.server.clear();
+        await SyncService.instance.pushScheduledWorkoutsForSyncDomain();
+        final healed = h.server.writesTo('scheduled_workouts');
+        expect(healed, hasLength(1));
+        expect(healed.single.rows.single['template_id'], _armsId,
+            reason: 'the cloud id is the uuid inside the Hive key');
+      } finally {
+        h.server.writeFailers.clear();
+      }
     });
 
     test('case 3 — a LEGACY (pre-OI-252) template key is resolved in the same pass: the forced '

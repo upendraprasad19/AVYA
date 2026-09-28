@@ -155,18 +155,12 @@ class PlanIntegrityReconciler {
     return row;
   }
 
-  /// The ONE hybrid predicate (spec §1.3/§1.4, plan D5): `status: rest`, a
-  /// workout type, and no exercises. Shared by [_normalizeHybrid] and the
-  /// one-time `ScheduleHybridRepairMigrator` (Task 23) so the two can never
-  /// disagree about what a hybrid is. A hybrid WITH exercises is not one of
-  /// these (ambiguous; left alone by both).
-  static bool isRestHybrid(Map<String, dynamic> row) {
-    final isWorkoutType =
-        !PlanEngineFlags.isRestDayConsideringLogged(row['type']);
-    final ex = row['exercises'];
-    final hasExercises = ex is List && ex.isNotEmpty;
-    return row['status'] == 'rest' && isWorkoutType && !hasExercises;
-  }
+  /// The ONE hybrid predicate — lives in [DaySwapRules.isRestHybrid] (Hermes
+  /// h4F3, diagnose c2d8e5) so the swap engine's `isRest` shares it too.
+  /// Kept under this name for [_normalizeHybrid] and the one-time
+  /// `ScheduleHybridRepairMigrator` (Task 23).
+  static bool isRestHybrid(Map<String, dynamic> row) =>
+      DaySwapRules.isRestHybrid(row);
 
   static final RegExp _isoDateShape = RegExp(r'^\d{4}-\d{2}-\d{2}$');
 
