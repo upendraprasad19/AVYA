@@ -3407,3 +3407,29 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   notable: the subagent independently re-ran the mutation proof and the target test rather than
   trusting the diagnose-doc's own numbers — caught nothing new, but is exactly the discipline this
   skill's own anti-patterns section (§6) asks for. Review: `docs/reviews/307b548789a7-review.md`.
+- **2026-09-28 (second entry today)** — blast-radius **platform** — merge-reconciliation-only review
+  of `8ff6c1f1` (`Merge branch 'single-owner-a2b'` into `main`, `7cb4eb78`→`8ff6c1f1`), same scope as
+  the two prior merge-reconciliation entries above: did the conflict RESOLUTION lose/corrupt/misplace
+  anything, not a re-review of either parent's own already-reviewed feature work. **0 findings.**
+  Review: `docs/reviews/merge-reconciliation-8ff6c1f1-review.md`. This merge hit 6 real conflicts
+  (both branches independently extended the same append-only files while `single-owner-a2b` was in
+  flight): `SKILL.md` itself, both `backups/*.json` files, `docs/audit/open_issues.md`, and the 2
+  generated indexes. Same verification discipline as the precedent entries: `git merge-file -p`
+  plumbing reconstruction diffed against the actual committed content for the 4 hand-resolved files
+  (3 of 4 differ from a naive reconstruction only in the conflict-marker lines; the 4th,
+  `open_issues.md`, was deliberately REORDERED by ascending OI number rather than left as a straight
+  append, so its check was instead a programmatic union-completeness proof — every `## OI-NNN`
+  section from both parents' tips present exactly once in the final file, byte-identical body text,
+  none missing, none invented); the 2 generated files were regenerated from scratch via their own
+  canonical scripts against the merged tree rather than hand-merged, and cross-checked against the
+  pre-commit hook's own independent regen during the same commit. Also confirmed the primary
+  worktree's pre-existing, unrelated uncommitted files (2 deleted backup JSONs, 1 modified nested
+  `CLAUDE.md`) were not swept into the merge commit. **No new lens — logged per this file's own
+  "record a clean pass with real verification work behind it" convention** (same rationale as the
+  `(d)` merge-reconciliation entry above): the alternative, a reviewer that reads the merge commit
+  and reports 0 findings from a plausible-looking diff alone, is indistinguishable in the output file
+  from this. One reusable addition to the precedent: when a conflicted append-only board gets
+  REORDERED during resolution (not just concatenated), the fidelity check can't be a marker-only
+  diff — it needs a structural union-completeness proof instead (extract every section by its own
+  identifier from both parents, confirm the final set is exactly their union with byte-identical
+  bodies).
