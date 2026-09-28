@@ -69,12 +69,7 @@ class _SwapPickerSheetState extends ConsumerState<SwapPickerSheet> {
             isMoved: false,
             title: ''));
 
-    if (!isPro && allowance.spent) {
-      return _SpentSheet(onSeePro: () {
-        Navigator.of(context).pop();
-        showPaywallSheet(context, feature: 'Day Swaps');
-      });
-    }
+    if (!isPro && allowance.spent) return DaySwapSpentSheet.forContext(context);
 
     return _Sheet(
       child: Column(
@@ -224,8 +219,19 @@ class _SwapPickerSheetState extends ConsumerState<SwapPickerSheet> {
 }
 
 /// The "no swaps left" full-screen state for a free user (spec §6.3/§6.4).
-class _SpentSheet extends StatelessWidget {
-  const _SpentSheet({required this.onSeePro});
+/// Shared by EVERY entry point: this picker (Train ⇅ + Home long-press) and
+/// [SwapConfirmSheet] (Train drag) — the drag path showed a plain confirm
+/// sheet to a spent free user until B-pass R2-F1.
+class DaySwapSpentSheet extends StatelessWidget {
+  const DaySwapSpentSheet({super.key, required this.onSeePro});
+
+  /// "See PRO" closes the sheet and opens the one paywall (rule 7).
+  factory DaySwapSpentSheet.forContext(BuildContext context) =>
+      DaySwapSpentSheet(onSeePro: () {
+        Navigator.of(context).pop();
+        showPaywallSheet(context, feature: 'Day Swaps');
+      });
+
   final VoidCallback onSeePro;
 
   @override

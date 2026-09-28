@@ -79,7 +79,6 @@ final RegExp _pushIfChangedCall = RegExp(r'\bpushIfChanged\s*\(');
 final RegExp _catchClause = RegExp(r'\bcatch\s*\(');
 final RegExp _onClause = RegExp(r'\bon\s+[A-Z]\w*(?:<[^>{]*>)?\s*\{');
 final RegExp _catchError = RegExp(r'\.catchError\s*\(');
-final RegExp _rethrowOrFalse = RegExp(r'\brethrow\b|\breturn\s+false\s*;');
 final RegExp _indexLiteral =
     RegExp(r'''['"][^'"\n]*payload_hash_index[^'"\n]*['"]''');
 
@@ -103,6 +102,60 @@ const String _skipIndexPath = 'lib/core/services/sync/sync_skip_index.dart';
 
 int _lineOf(String s, int offset) =>
     '\n'.allMatches(s.substring(0, offset)).length + 1;
+
+final RegExp _exitStatement = RegExp(r'^(?:rethrow|return\s+false)\s*;$');
+
+/// Whether a `{ ... }` catch block ENDS in an unconditional `rethrow;` or
+/// `return false;` — its LAST top-level statement, not a token anywhere in
+/// its text. B-pass R4-F2: the first version accepted `rethrow` anywhere, so
+/// `catch (e) { if (false) { rethrow; } }` — a catch that always swallows —
+/// passed. A conditional exit may still precede the final one
+/// (`if (!x) rethrow; return false;` is the live 23503 shape).
+///
+/// Residue, stated plainly: this is still a text scan. A final `rethrow;`
+/// inside an unreachable region after an earlier `return` is not modelled,
+/// and a block whose branches ALL exit (`if (a) { rethrow; } else { return
+/// false; }`) is rejected — write it with a trailing exit instead.
+bool endsInUnconditionalExit(String block) {
+  final inner = block.substring(1, block.length - 1);
+  var depth = 0;
+  String? quote;
+  var segStart = 0;
+  String? lastStatement;
+  for (var i = 0; i < inner.length; i++) {
+    final c = inner[i];
+    if (quote != null) {
+      if (c == r'\') {
+        i++;
+        continue;
+      }
+      if (c == quote) quote = null;
+      continue;
+    }
+    if (c == "'" || c == '"') {
+      quote = c;
+      continue;
+    }
+    if (c == '(' || c == '{' || c == '[') {
+      depth++;
+      continue;
+    }
+    if (c == ')' || c == '}' || c == ']') {
+      depth--;
+      if (depth == 0 && c == '}') {
+        lastStatement = inner.substring(segStart, i + 1);
+        segStart = i + 1;
+      }
+      continue;
+    }
+    if (c == ';' && depth == 0) {
+      lastStatement = inner.substring(segStart, i + 1);
+      segStart = i + 1;
+    }
+  }
+  if (inner.substring(segStart).trim().isNotEmpty) return false;
+  return _exitStatement.hasMatch((lastStatement ?? '').trim());
+}
 
 /// Offset of the bracket that closes the one at [openIndex] (same bracket
 /// type), skipping string literals. Returns the last offset when unbalanced.
@@ -261,19 +314,19 @@ List<StructuralViolation> checkSyncStructure(
         final brace = s.indexOf('{', parenEnd);
         if (brace < 0 || brace > sp.$2) continue;
         final block = s.substring(brace, _matchingClose(s, brace) + 1);
-        if (!_rethrowOrFalse.hasMatch(block)) {
+        if (!endsInUnconditionalExit(block)) {
           out.add(StructuralViolation(path, _lineOf(s, sp.$1 + m.start),
               'swallowing_catch',
-              'a catch inside pushIfChanged( must `rethrow` or `return false;`'));
+              'a catch inside pushIfChanged( must END in `rethrow;` or `return false;`'));
         }
       }
       for (final m in _onClause.allMatches(body)) {
         final brace = sp.$1 + m.end - 1;
         final block = s.substring(brace, _matchingClose(s, brace) + 1);
-        if (!_rethrowOrFalse.hasMatch(block)) {
+        if (!endsInUnconditionalExit(block)) {
           out.add(StructuralViolation(path, _lineOf(s, sp.$1 + m.start),
               'swallowing_catch',
-              'an `on T {` block inside pushIfChanged( must `rethrow` or `return false;`'));
+              'an `on T {` block inside pushIfChanged( must END in `rethrow;` or `return false;`'));
         }
       }
       for (final m in _catchError.allMatches(body)) {

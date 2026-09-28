@@ -1385,7 +1385,15 @@ extension SyncServiceWorkout on SyncService {
   /// bundle retries next pass — every write inside is already idempotent, so
   /// a retry is cheap and safe. This is a deliberate tightening vs. the
   /// pre-Task-16 code, which continued past a single failed exercise upsert.
-  Future<void> _syncWorkoutTemplates(String userId) async {
+  ///
+  /// [forceKeys]: `tmpl_*` keys to re-push even when their fingerprint is
+  /// unchanged — the `_syncScheduledWorkouts` FK recovery passes the ONE
+  /// template its row could not resolve in the cloud. Without it that
+  /// recovery was a no-op (the skip index still called the template
+  /// confirmed) and the row fell to the orphan fallback on every pass
+  /// (B-pass R1-F1).
+  Future<void> _syncWorkoutTemplates(String userId,
+      {Set<String> forceKeys = const <String>{}}) async {
     final workoutBox = _hive.workoutBox;
     final index = SyncSkipIndex(
       box: workoutBox,
@@ -1394,6 +1402,7 @@ extension SyncServiceWorkout on SyncService {
       ownerChangedNow: () => ownerChangedSince(userId),
       reportFailure: (op, e, st) =>
           unawaited(_reportSyncFailure(opType: op, error: e)),
+      forcePushKeys: forceKeys,
     );
 
     final liveKeys = <String>{};
@@ -1939,11 +1948,14 @@ extension SyncServiceWorkout on SyncService {
 
             // Unresolved, or 23503 on a stale id. First-time-this-CALL (not
             // per-row): re-run _syncWorkoutTemplates so the parent row
-            // exists, then re-resolve and retry.
+            // exists, then re-resolve and retry. The row's own template is
+            // FORCED past the skip index: it is only here because the cloud
+            // lacks it, which the index (confirmed once, earlier) cannot know.
             if (!templatesResynced) {
               templatesResynced = true;
               try {
-                await _syncWorkoutTemplates(userId);
+                await _syncWorkoutTemplates(userId,
+                    forceKeys: <String>{rawTemplateId});
               } catch (resyncErr, st) {
                 debugPrint(
                     '[SyncService._syncScheduledWorkouts] templates resync: $resyncErr');

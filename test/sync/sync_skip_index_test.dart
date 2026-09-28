@@ -92,6 +92,58 @@ void main() {
     expect(a.unconfirmed, 1);
   });
 
+  // B-pass R1-F2: the test above never seeds an earlier fingerprint, so it
+  // cannot see the `_forget` on the unconfirmed branch. Without it the OLD
+  // fingerprint survives; when the row later returns to that old content the
+  // pass would skip a row the cloud never received in its new shape.
+  test('unconfirmed push DROPS the previously confirmed fingerprint (no false skip later)',
+      () async {
+    final a = index();
+    await a.pushIfChanged('d', () => 'fp1', ok);
+    await a.commit(liveKeys: {'d'});
+    final b = index();
+    expect(await b.pushIfChanged('d', () => 'fp2', () async => false), isFalse);
+    await b.commit(liveKeys: {'d'});
+    expect(SyncSkipIndex.readIndex(box, SyncSkipDomain.water.indexKey), isEmpty,
+        reason: 'fp1 no longer describes what the cloud holds');
+    var calls = 0;
+    final c = index();
+    await c.pushIfChanged('d', () => 'fp1', () async {
+      calls++;
+      return true;
+    });
+    expect(calls, 1, reason: 'reverting to the old content must push again');
+  });
+
+  test('forcePushKeys pushes a fingerprint-matched row and records it; others still skip',
+      () async {
+    final a = index();
+    await a.pushIfChanged('d1', () => 'fp1', ok);
+    await a.pushIfChanged('d2', () => 'fp2', ok);
+    await a.commit(liveKeys: {'d1', 'd2'});
+    final pushedRows = <String>[];
+    final b = SyncSkipIndex(
+      box: box,
+      domain: SyncSkipDomain.water,
+      disabled: false,
+      ownerChangedNow: () => ownerChanged,
+      reportFailure: (op, e, st) => reports.add(op),
+      forcePushKeys: const {'d1'},
+    );
+    for (final (k, fp) in [('d1', 'fp1'), ('d2', 'fp2')]) {
+      await b.pushIfChanged(k, () => fp, () async {
+        pushedRows.add(k);
+        return true;
+      });
+    }
+    await b.commit(liveKeys: {'d1', 'd2'});
+    expect(pushedRows, ['d1']);
+    expect(b.skipped, 1);
+    expect(SyncSkipIndex.readIndex(box, SyncSkipDomain.water.indexKey),
+        {'d1': 'fp1', 'd2': 'fp2'},
+        reason: 'a forced push keeps the index (unlike the kill switch)');
+  });
+
   test('a throwing fingerprint fails OPEN: push runs, nothing recorded', () async {
     var calls = 0;
     final a = index();

@@ -41,10 +41,12 @@ sync_methods: [_syncWorkoutLogs, _syncScheduleCompletions, _syncStreaks, _syncWo
 restore_methods: [_restoreUserProgress, _restoreWorkoutPlan]
 cloud_table: scheduled_workouts
 cloud_columns: [updated_at]
-contract_test_path: "must add: test/sync/sync_domain_skip_harness.dart (shared per-domain skip
-  contract, coordinator Task 5) plus 14 x test/contracts/<concept>_writer_to_reader_test.dart (one
-  per new hash-index concept, Tasks 14-20) plus test/sql/day_swap_sync_load_live_verify.sql
-  (BEGIN...ROLLBACK discrimination test, Task 7)"
+contract_test_path: "test/sync/sync_domain_skip_harness.dart (shared per-domain skip contract,
+  coordinator Task 5) plus 14 x test/contracts/<concept>_writer_to_reader_test.dart (one per new
+  hash-index concept, Tasks 14-20) plus test/sql/day_swap_sync_load_live_verify.sql (BEGIN...ROLLBACK
+  discrimination test, Task 7) — that SQL file and migration 148 are held out of the tree until the
+  Task 34 live apply and land in that commit; until then neither exists at these paths (B-pass
+  2026-09-28)."
 ist_handling: []
 provider_invalidations: []
 telemetry_op_types:
@@ -212,3 +214,29 @@ Task 20 (`083b82a9`): 9 mutations; launch path verified 8→7 Supabase calls (th
 of which the shared select now subsumes; independently confirmed by the reviewer, correcting this
 doc's own drafting-time claim in `regression_test_planned` about which projection was doubled).
 Fix `a53f3305`: see "Skipped-then-found fixes" above.
+
+## B-pass remediation (2026-09-28, review `docs/reviews/day-swapper-sync-load-bpass.md`)
+
+- **R1-F1 (P1) — the skip index defeated the scheduled_workouts FK self-heal.** Writer: the
+  recovery call in `_syncScheduledWorkouts` (`sync_workout.dart`, the `templatesResynced` block)
+  re-runs `_syncWorkoutTemplates`; reader: that function's `SyncSkipIndex` (domain `template`),
+  which still held the template's confirmed fingerprint, so the re-run SKIPPED the one template the
+  cloud had lost. The row fell to the orphan fallback and, being unconfirmed by design (spec D4),
+  repeated the dead-end recovery (2 SELECTs + 2 upserts + a telemetry post) on every pass — a flood
+  for as long as the template stays missing. Fix: `SyncSkipIndex.forcePushKeys` (push + record a
+  fingerprint-matched row; deliberately NOT `disabled`, which deletes the whole index at commit and
+  would re-push every template next pass), threaded as `_syncWorkoutTemplates(forceKeys:)`; the
+  recovery forces exactly `{rawTemplateId}`. Test: `test/sync/sched_template_fk_recovery_test.dart`
+  (real SyncService against the stub; the cloud loses the template after pass 1). Mutation —
+  restore the old `await _syncWorkoutTemplates(userId);` → 1 red ("the recovery re-pushes the lost
+  template": expected ['Push A'], got []).
+- **R1-F2 (P2) — the unconfirmed branch's `_forget` had no test.** Removing it left 18/18 green.
+  Added "unconfirmed push DROPS the previously confirmed fingerprint (no false skip later)" and a
+  `forcePushKeys` unit test to `test/sync/sync_skip_index_test.dart`. Mutation — delete
+  `_forget(rowKey)` on `!confirmed` → 1 red (expected empty index, got {'d': 'fp1'}).
+- **R4-F2 (P1) — gate G1 accepted an unreachable `rethrow`.** `_rethrowOrFalse` matched the token
+  anywhere in a catch block, so `catch (e) { if (false) { rethrow; } }` passed. Now
+  `endsInUnconditionalExit`: the block's LAST top-level statement must be `rethrow;` or
+  `return false;`. Live tree still 0 violations. Tests in `test/scripts/sync_write_structure_lib_test.dart`
+  (3 new). Mutation — restore the anywhere-token match → 2 red. Residue stated in the lib: still a
+  text scan; the behavioural guard is the per-domain skip contract (failed push retried next pass).

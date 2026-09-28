@@ -19,7 +19,7 @@ import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 import '../providers/day_swap_provider.dart';
-import 'swap_picker_sheet.dart' show buildDaySwapToast;
+import 'swap_picker_sheet.dart' show DaySwapSpentSheet, buildDaySwapToast;
 
 class SwapConfirmSheet extends ConsumerStatefulWidget {
   const SwapConfirmSheet(
@@ -56,7 +56,11 @@ class _SwapConfirmSheetState extends ConsumerState<SwapConfirmSheet> {
     final weekStart = DaySwapRules.mondayOf(widget.dayA.date);
     // Force a rebuild if a background server reply lands while this sheet
     // is open (spec §5.3 "the server count wins").
-    ref.watch(daySwapAllowanceProvider(weekStart));
+    final allowance = ref.watch(daySwapAllowanceProvider(weekStart));
+    final isPro = ref.watch(subscriptionInfoProvider).isPro;
+    // Same gate as SwapPickerSheet: a spent free user gets the upsell, not a
+    // SWAP button that can only answer "spent" (B-pass R2-F1).
+    if (!isPro && allowance.spent) return DaySwapSpentSheet.forContext(context);
     final preview = ref
         .read(daySwapControllerProvider)
         .preview(widget.dayA.date, widget.dayB.date);

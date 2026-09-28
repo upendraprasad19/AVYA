@@ -225,8 +225,11 @@ class SwapService {
         today: istTodayStr(), inProgressDate: inProgressDate);
     return DaySwapPreview(
       allowance: allowance,
-      refusal: lock?.reason ??
-          (allowance.spent ? DaySwapRefusal.allowanceSpent : null),
+      // Same precedence as swapDays' `build` (allowance, then locks), so the
+      // preview never names a different reason than the confirm will
+      // (B-pass R2-F4).
+      refusal: (allowance.spent ? DaySwapRefusal.allowanceSpent : null) ??
+          lock?.reason,
       warning: DaySwapRules.restRunWarning(
           weekDates: rows.keys.toList(),
           rows: rows,
@@ -252,6 +255,51 @@ class SwapService {
       return _refused(DaySwapRefused(reason: pair, date: dateA), origin);
     }
     final weekStart = DaySwapRules.mondayOf(dateA);
+    // One swap per WEEK at a time. The allowance check (inside `build`, under
+    // the two-DATE write lock) and `recordSwap` (after the write) are
+    // separated by awaits, so two swaps on different date pairs of the same
+    // week — a coach swap and a manual one in flight together — could both
+    // pass "not spent" and a free user would get two. B-pass R2-F2.
+    return _withWeekLock(
+        weekStart,
+        () => _swapDaysInWeek(
+              dateA: dateA,
+              dateB: dateB,
+              origin: origin,
+              isPro: isPro,
+              inProgressDate: inProgressDate,
+              weekStart: weekStart,
+            ));
+  }
+
+  final Map<String, Completer<void>> _weekLocks = {};
+
+  /// Same shape as `UsageCounterService._withLock` (the repo's convention for
+  /// serializing a check-then-write on shared Hive-backed state).
+  Future<T> _withWeekLock<T>(String weekStart, Future<T> Function() op) async {
+    while (_weekLocks[weekStart] != null) {
+      try {
+        await _weekLocks[weekStart]!.future;
+      } catch (_) {/* swallowed; holder will release */}
+    }
+    final c = Completer<void>();
+    _weekLocks[weekStart] = c;
+    try {
+      return await op();
+    } finally {
+      _weekLocks.remove(weekStart);
+      if (!c.isCompleted) c.complete();
+    }
+  }
+
+  Future<DaySwapResult> _swapDaysInWeek({
+    required String dateA,
+    required String dateB,
+    required DaySwapOrigin origin,
+    required bool isPro,
+    required String? inProgressDate,
+    required String weekStart,
+  }) async {
     final today = istTodayStr();
     final nowMs = nowWall().millisecondsSinceEpoch;
     DaySwapRefused? refusal;

@@ -49,9 +49,12 @@ sync_methods: [_syncScheduledWorkouts]
 restore_methods: [_restoreScheduledWorkouts]
 cloud_table: scheduled_workouts
 cloud_columns: [template_id, is_swapped, original_date]
-contract_test_path: "must add: test/services/day_swap/day_swap_engine_atomic_write_test.dart (atomic
-  write both-or-neither, no count on failure, displaced_ backup travel, swap-back clears MOVED) plus
-  test/services/day_swap/day_swap_rules_test.dart (eligibility, field partition, 3-rest warning)"
+contract_test_path: "test/workout_write_service/swap_scheduled_days_test.dart (atomic write
+  both-or-neither, completed never moved, displaced_ backup travel, backup-failure rolls back both) plus
+  test/services/day_swap/day_swap_engine_test.dart (no count on failure, swap-back clears MOVED,
+  one-swap-per-week under concurrency) plus test/services/day_swap/day_swap_rules_test.dart
+  (eligibility, field partition, 3-rest warning). The plan-time name
+  day_swap_engine_atomic_write_test.dart was never created; B-pass (2026-09-28) repointed this field."
 ist_handling:
   - { file: lib/core/utils/ist_date.dart, line: 113, fn: mondayOfIst }
 provider_invalidations: [currentPlanProvider, workoutStatsProvider, calendarWeekProvider, streakProvider, todayWorkoutProvider, allExercisePRsProvider]
@@ -169,3 +172,19 @@ Task 8 (consume-day-swap EF + digest fixes, `1001b41d`): mutation evidence recor
 allowance sequencing tests — `logic_test.ts` mutation (`Date.now()` inserted into the IST-week
 computation) → 1 red on the real assertion, restored diff 0 (coordinator-added mirror guard per the
 review's accepted Minor).
+
+## B-pass remediation (2026-09-28, review `docs/reviews/day-swapper-sync-load-bpass.md`)
+
+- **R2-F2 (P2) — a free user could get two swaps in one week.** The allowance check (inside
+  `SwapService.swapDays`'s `build`, under `swapScheduledDays`'s two-DATE lock) and
+  `DaySwapAllowance.recordSwap` (after the write) are separated by awaits, so two swaps on different
+  pairs of the same week (a coach swap and a manual one together) both passed "not spent". The
+  reviewer's stated mechanism (a lost Hive increment) was wrong — Hive's in-memory put is synchronous
+  and `recordSwap` has no await before it — the real one is check-then-act. Fix: `swapDays` runs per
+  IST week under `_withWeekLock` (the `UsageCounterService._withLock` shape). Test: "free: two
+  CONCURRENT swaps in one week — exactly one is done" (`day_swap_engine_test.dart`). Mutation —
+  bypass the week lock → 1 red (both swaps Done).
+- **R2-F4 (P3) — preview and confirm disagreed on which refusal to name.** `preview` checked locks
+  before the allowance; the engine checks the allowance first. Aligned. Test: "preview names the same
+  refusal as swapDays when spent AND locked". Mutation — restore the old order → 1 red (expected
+  allowanceSpent, got completed).

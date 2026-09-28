@@ -6,6 +6,7 @@ import 'package:icanbefitter/core/services/day_swap/day_swap_result.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/swap_service.dart';
+import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 
@@ -188,6 +189,44 @@ void main() {
     expect((r as DaySwapRefused).reason, DaySwapRefusal.allowanceSpent);
     expect(get('schedule_$sun'), sunBefore);
     expect(DaySwapAllowance.instance.current(mon, isPro: false).used, 1);
+  });
+
+  // B-pass R2-F2: the allowance check (inside the two-DATE write lock) and
+  // recordSwap (after the write) are separated by awaits, so two swaps on
+  // DIFFERENT pairs of one week could both pass "not spent". The seam holds
+  // each swap between its check and its count, which is where they interleaved.
+  test('free: two CONCURRENT swaps in one week — exactly one is done', () async {
+    SwapService.debugSwapWriteForTests =
+        ({required dateA, required dateB, required build}) async {
+      final r = await WorkoutWriteService.instance
+          .swapScheduledDays(dateA: dateA, dateB: dateB, build: build);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      return r;
+    };
+    final results = await Future.wait([
+      swap(fri, sat, isPro: false),
+      swap(thu, sun, isPro: false),
+    ]);
+    expect(results.whereType<DaySwapDone>(), hasLength(1));
+    expect(
+        results
+            .whereType<DaySwapRefused>()
+            .map((r) => r.reason)
+            .toList(),
+        [DaySwapRefusal.allowanceSpent]);
+    expect(DaySwapAllowance.instance.current(mon, isPro: false).used, 1);
+  });
+
+  // B-pass R2-F4: preview and confirm must name the SAME reason when a pair is
+  // both spent-out and locked (the engine checks the allowance first).
+  test('preview names the same refusal as swapDays when spent AND locked',
+      () async {
+    expect(await swap(fri, sat, isPro: false), isA<DaySwapDone>());
+    await put(sat, workout(sat, 'Legs + Core', status: 'completed'));
+    final p = engine.preview(dateA: thu, dateB: sat, isPro: false);
+    final r = await swap(thu, sat, isPro: false);
+    expect((r as DaySwapRefused).reason, DaySwapRefusal.allowanceSpent);
+    expect(p.refusal, r.reason);
   });
 
   test('a failed write is not counted and pushes no plan', () async {

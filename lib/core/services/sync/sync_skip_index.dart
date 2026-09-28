@@ -124,6 +124,7 @@ class SyncSkipIndex {
     required this.disabled,
     required bool Function() ownerChangedNow,
     required SyncSkipFailureReporter reportFailure,
+    this.forcePushKeys = const <String>{},
   })  : _box = box,
         _ownerChangedNow = ownerChangedNow,
         _reportFailure = reportFailure,
@@ -133,6 +134,14 @@ class SyncSkipIndex {
 
   /// The kill switch (or a domain-specific extra condition) is on.
   final bool disabled;
+
+  /// Rows pushed even when their fingerprint matches the stored one, and
+  /// recorded normally afterwards. For a self-heal that knows the cloud
+  /// copy of THESE rows is gone although this phone confirmed it once (the
+  /// scheduled_workouts FK recovery re-pushing one template). Deliberately
+  /// NOT [disabled]: a disabled index deletes itself at [commit], which would
+  /// re-push every row of the domain on the next pass. B-pass R1-F1.
+  final Set<String> forcePushKeys;
 
   final Box<dynamic> _box;
   final bool Function() _ownerChangedNow;
@@ -201,7 +210,9 @@ class SyncSkipIndex {
               reason: 'sync_skip_fingerprint_${domain.name}'));
         }
       }
-      if (fp != null && _stored[rowKey] == fp) {
+      if (fp != null &&
+          !forcePushKeys.contains(rowKey) &&
+          _stored[rowKey] == fp) {
         skipped++;
         return true;
       }

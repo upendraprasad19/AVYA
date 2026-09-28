@@ -176,6 +176,22 @@ class ToolDispatcher {
           );
       }
 
+      // Day-swap's own two providers refresh on EVERY outcome, before the
+      // failure early-return below — the same rule DaySwapController._refresh
+      // follows for the other three origins. A refusal usually means the rows
+      // changed under the cached week (a day completed or moved since it was
+      // built), so it is exactly the case where the cache is stale.
+      // B-pass R2-F3. (daySwapWeekProvider / daySwapAllowanceProvider are not
+      // in the general workout batch below.)
+      if (intent.type == 'swap_workout_days') {
+        try {
+          ref.invalidate(daySwapWeekProvider);
+          ref.invalidate(daySwapAllowanceProvider);
+        } catch (e, st) {
+          debugPrint('[tool_dispatcher] invalidate daySwap providers failed: $e\n$st');
+        }
+      }
+
       if (!result.success) return result;
 
       // 4. Fire family-appropriate invalidation + sync.
@@ -219,21 +235,6 @@ class ToolDispatcher {
           ref.invalidate(templatesProvider);
         } catch (e, st) {
           debugPrint('[tool_dispatcher] invalidate templatesProvider failed: $e\n$st');
-        }
-      }
-      // swap_workout_days already runs through the general
-      // _invalidateWorkoutProviders(ref) branch above (its intent.type is not
-      // a nutrition one), but Task 12's own two day-swap providers
-      // (daySwapWeekProvider / daySwapAllowanceProvider) are NOT in that
-      // sync.md batch — invalidate them here so the Train week list and the
-      // picker/confirm sheets refresh immediately after a coach-driven swap,
-      // matching what DaySwapController._refresh does for every other origin.
-      if (intent.type == 'swap_workout_days') {
-        try {
-          ref.invalidate(daySwapWeekProvider);
-          ref.invalidate(daySwapAllowanceProvider);
-        } catch (e, st) {
-          debugPrint('[tool_dispatcher] invalidate daySwap providers failed: $e\n$st');
         }
       }
       unawaited(SyncService.instance.pushSnapshot());

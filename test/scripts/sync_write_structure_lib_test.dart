@@ -109,6 +109,52 @@ void main() {
       expect(checkSyncStructure(_one(src)), isEmpty);
     });
 
+    // B-pass R4-F2: a `rethrow` that is never reached must not satisfy the
+    // gate. The first version matched the token anywhere in the block.
+    test('a catch whose only exit is conditional (dead rethrow) is a violation',
+        () {
+      const src = "Future<void> f() async {\n"
+          "  await idx.pushIfChanged(k, () => fp, () async {\n"
+          "    try {\n"
+          "      await _supabase.client.from('water_logs').upsert(e);\n"
+          "    } catch (e) {\n"
+          "      if (false) { rethrow; }\n"
+          "    }\n"
+          "    try { await _supabase.client.from('water_logs').upsert(e); }\n"
+          "    on StateError { if (kDebugMode) return false; }\n"
+          "    return true;\n"
+          "  });\n"
+          "}";
+      final violations = checkSyncStructure(_one(src));
+      expect(violations.map((v) => v.kind),
+          ['swallowing_catch', 'swallowing_catch']);
+    });
+
+    test('a conditional exit followed by an unconditional one passes '
+        '(the live 23503 shape)', () {
+      const src = "Future<void> f() async {\n"
+          "  await idx.pushIfChanged(k, () => fp, () async {\n"
+          "    try { await _supabase.client.from('water_logs').upsert(e); }\n"
+          "    on Object catch (e) {\n"
+          "      if (!e.toString().contains('23503')) rethrow;\n"
+          "      return false;\n"
+          "    }\n"
+          "    return true;\n"
+          "  });\n"
+          "}";
+      expect(checkSyncStructure(_one(src)), isEmpty);
+    });
+
+    test('endsInUnconditionalExit reads the LAST top-level statement', () {
+      expect(endsInUnconditionalExit('{ log(e); return false; }'), isTrue);
+      expect(endsInUnconditionalExit('{ rethrow; }'), isTrue);
+      expect(endsInUnconditionalExit('{ return false; log(e); }'), isFalse);
+      expect(endsInUnconditionalExit('{ if (x) { return false; } }'), isFalse);
+      expect(endsInUnconditionalExit("{ log('rethrow;'); }"), isFalse,
+          reason: 'a token inside a string is not a statement');
+      expect(endsInUnconditionalExit('{ }'), isFalse);
+    });
+
     test('.catchError inside pushIfChanged is a violation', () {
       const src = "Future<void> f() async {\n"
           "  await idx.pushIfChanged(k, () => fp, () async {\n"

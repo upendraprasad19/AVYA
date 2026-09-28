@@ -199,4 +199,47 @@ void main() {
               'coach-driven swap (Provider.family keyed by IST Monday, Task 12)');
     },
   );
+
+  // B-pass R2-F3. Unlike the success case above, the dedicated block is the
+  // ONLY path on a refusal: execute() returns before the general workout
+  // invalidation, and a refused swap never bumps the allowance revision. A
+  // refusal is the typical sign the cached week is stale, so it must refresh.
+  test('a REFUSED coach swap still refreshes daySwapWeekProvider', () async {
+    final c = ProviderContainer();
+    addTearDown(c.dispose);
+    final ref = c.read(_refProvider);
+    c.listen(daySwapWeekProvider(weekStart), (prev, next) {},
+        fireImmediately: true);
+    final cachedSat =
+        c.read(daySwapWeekProvider(weekStart)).firstWhere((s) => s.date == sat);
+    expect(cachedSat.lock, isNull, reason: 'premise: Sat is swappable when cached');
+
+    // Sat is completed elsewhere; nothing invalidates the cached week.
+    final wb = HiveService.instance.workoutBox;
+    final satRow = Map<String, dynamic>.from(wb.get('schedule_$sat') as Map)
+      ..['status'] = 'completed';
+    await wb.put('schedule_$sat', satRow);
+    expect(
+        c.read(daySwapWeekProvider(weekStart)).firstWhere((s) => s.date == sat).lock,
+        isNull,
+        reason: 'premise: without an invalidation the provider still serves '
+            'the stale cached week');
+
+    final res = await ToolDispatcher.instance.execute(
+        ref,
+        ToolIntent(
+          id: 'swap_refused',
+          type: 'swap_workout_days',
+          payload: {'dateA': fri, 'dateB': sat},
+          confirmationClass: ConfirmationClass.reviewable,
+          previewSummary: 'Swap $fri and $sat',
+          createdAt: DateTime.now(),
+        ));
+    expect(res.success, isFalse, reason: 'a completed day cannot be swapped');
+
+    final satAfter =
+        c.read(daySwapWeekProvider(weekStart)).firstWhere((s) => s.date == sat);
+    expect(satAfter.lock, DaySwapRefusal.completed,
+        reason: 'the refusal must refresh the week so the list shows Sat locked');
+  });
 }

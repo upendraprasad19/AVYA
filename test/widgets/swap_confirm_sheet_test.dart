@@ -302,6 +302,35 @@ void main() {
       expect(captured, isA<DaySwapDone>());
     });
 
+    // B-pass R2-F1: the drag path opened a plain confirm sheet for a free
+    // user whose weekly swap was already spent; SWAP could only answer
+    // "spent", with no way to PRO. It must show the same upsell the picker
+    // (Train ⇅ + Home long-press) shows.
+    testWidgets('spent free user gets the upsell sheet, not a SWAP button',
+        (tester) async {
+      await tester.runAsync(() => HiveService.instance.userBox.put(
+          DaySwapAllowance.hiveKey, {
+        '2026-09-21': {'used': DaySwapAllowance.freeLimit}
+      }));
+      await openConfirm(tester,
+          isPro: false,
+          dayA: day(fri, workout(fri, 'Pull + Core')),
+          dayB: day(sat, workout(sat, 'Legs + Core')));
+      expect(find.text(DaySwapCopy.spentTitleFree), findsOneWidget);
+      expect(find.text(DaySwapCopy.seePro.toUpperCase()), findsOneWidget);
+      expect(find.text(DaySwapCopy.confirmSwap.toUpperCase()), findsNothing);
+    });
+
+    testWidgets('free user with a swap left still gets the SWAP button (mirror)',
+        (tester) async {
+      await openConfirm(tester,
+          isPro: false,
+          dayA: day(fri, workout(fri, 'Pull + Core')),
+          dayB: day(sat, workout(sat, 'Legs + Core')));
+      expect(find.text(DaySwapCopy.confirmSwap.toUpperCase()), findsOneWidget);
+      expect(find.text(DaySwapCopy.spentTitleFree), findsNothing);
+    });
+
     testWidgets('CANCEL pops with null and writes nothing', (tester) async {
       await openConfirm(tester,
           dayA: day(fri, workout(fri, 'Pull + Core')),

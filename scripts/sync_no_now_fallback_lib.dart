@@ -93,9 +93,18 @@ class NowFallbackFinding {
 }
 
 /// `?? DateTime.now()`, `?? DateTime.timestamp()`, `?? nowWall()` and
-/// `?? istNow()`. `\s` spans newlines, so a `??` at a line end still matches.
+/// `?? istNow()` — and the compound-assignment spelling of the same fallback,
+/// `x ??= DateTime.now()` (B-pass R4-F1: the `=` defeated the first version).
+/// `\s` spans newlines, so a `??` at a line end still matches.
+///
+/// Residue, stated so nobody mistakes this grep for proof: a fallback routed
+/// through a local (`final now = DateTime.now(); a ?? now`) or a helper is
+/// invisible to it. The behavioural guards for the class assert VALUES, not
+/// source text: test/sync/schedule_completion_time_test.dart (the resolver's
+/// output) and the per-domain push tests under test/sync/ that read the row
+/// the stub received (e.g. weight_skip_test.dart's derived `created_at`).
 final RegExp nowFallbackPattern = RegExp(
-    r'\?\?\s*(?:DateTime\s*\.\s*(?:now|timestamp)|nowWall|istNow)\s*\(');
+    r'\?\?=?\s*(?:DateTime\s*\.\s*(?:now|timestamp)|nowWall|istNow)\s*\(');
 
 final RegExp _fieldKey = RegExp(r'''['"]([A-Za-z_][A-Za-z0-9_]*)['"]\s*:''');
 

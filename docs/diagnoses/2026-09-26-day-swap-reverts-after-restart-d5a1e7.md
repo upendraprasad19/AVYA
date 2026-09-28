@@ -42,8 +42,9 @@ sync_methods: [weeklyFullSync, pushWorkoutPlanForSyncDomain]
 restore_methods: [restoreLightweightAlways, _restoreWorkoutPlan]
 cloud_table: user_progress
 cloud_columns: [plan_json]
-contract_test_path: "must add: test/sync/restore_merge_invariants_test.dart (invariants
-  I1-I8, spec §5.7) plus test/services/day_swap/day_swap_engine_atomic_write_test.dart"
+contract_test_path: "test/sync/restore_merge_invariants_test.dart (invariants I1-I8, spec §5.7)
+  plus test/workout_write_service/swap_scheduled_days_test.dart (the atomic swap write; the plan-time
+  name day_swap_engine_atomic_write_test.dart was never created — repointed by the B-pass 2026-09-28)"
 ist_handling:
   - { file: lib/core/utils/ist_date.dart, line: 113, fn: mondayOfIst }
   - { file: lib/core/utils/ist_date.dart, line: 76, fn: istTodayStr }

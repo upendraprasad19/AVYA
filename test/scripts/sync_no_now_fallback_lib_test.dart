@@ -35,6 +35,16 @@ void main() {
       expect(findings.map((f) => f.field), ['x', 'y', 'z']);
     });
 
+    // B-pass R4-F1: the compound assignment is the same fallback.
+    test('`x ??= DateTime.now()` (compound assignment) is the same class', () {
+      const src = "var completedAt = row['completed_at'];\n"
+          "completedAt ??= DateTime.now();\n"
+          "var readAt = row['read_at'];\n"
+          "readAt ??=\n    nowWall();";
+      final findings = findNowFallbacks(_p, src);
+      expect(findings.map((f) => f.line), [2, 4]);
+    });
+
     test('line numbers stay exact after a multi-line block comment', () {
       const src = "/* one\n two\n three */\nfinal p = {'created_at': a ?? DateTime.now()};";
       final findings = findNowFallbacks(_p, src);

@@ -230,3 +230,21 @@ to a symbol reference (`_buildCompactRow`'s `dayLabel = 'D${day.dayNumber}'`
 fallback) instead of a line number, since that file only ever reads
 `date_utils.dart`-family sources and never source-greps `week_rows.dart`
 itself — assertions unchanged.
+
+## B-pass remediation (2026-09-28, review `docs/reviews/day-swapper-sync-load-bpass.md`)
+
+- **R2-F1 (P1) — Train drag showed a spent free user a normal confirm sheet.** Writer of the gate:
+  `SwapPickerSheet.build` (`!isPro && allowance.spent` → the upsell); reader that lacked it:
+  `SwapConfirmSheet.build`, reached from `DaySwapDragWrapper`'s drop. SWAP could only answer "This
+  week's swap is spent." with no way to PRO. Fix: the spent sheet is public (`DaySwapSpentSheet`,
+  one `forContext` factory opening the one paywall) and both sheets return it under the same
+  condition. Tests (`test/widgets/swap_confirm_sheet_test.dart`): spent free user → upsell, and the
+  mirror — a free user with a swap left still gets SWAP. Mutation — disable the confirm-sheet gate →
+  1 red (the spent test), mirror green.
+- **R2-F3 (P2) — a REFUSED coach swap left the Train week stale.** `ToolDispatcher.execute` returned
+  on `!result.success` before its `swap_workout_days` invalidation block, and a refusal bumps no
+  allowance revision, so the block was the only refresh path — and a refusal is exactly the case
+  where the cached week is out of date. Moved above the early return (`DaySwapController._refresh`
+  already refreshes on every outcome). Test: "a REFUSED coach swap still refreshes
+  daySwapWeekProvider" (`tool_dispatcher_day_swap_invalidation_test.dart`). Mutation — gate the
+  block on `result.success` → 1 red (expected completed lock, got null).

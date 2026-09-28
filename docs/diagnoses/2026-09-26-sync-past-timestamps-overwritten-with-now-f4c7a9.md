@@ -51,10 +51,12 @@ sync_methods: [_syncScheduleCompletions, _syncScheduledWorkouts, _syncWorkoutTem
 restore_methods: [_resolveCompletedAt]
 cloud_table: workout_schedule_completions
 cloud_columns: [completed_at]
-contract_test_path: "must add: test/sync/completion_time_resolver_extended_test.dart (extends the
-  existing test/sync/completed_at_preservation_test.dart pattern from 5a36ad to the two schedule-
-  completion paths) plus a G2 gate test (see scripts/check_sync_no_now_fallback.dart, must add:
-  test/scripts/check_sync_no_now_fallback_test.dart)"
+contract_test_path: "test/sync/schedule_completion_time_test.dart (the completion-time order,
+  incl. never updated_at_ms; extends the test/sync/completed_at_preservation_test.dart pattern from
+  5a36ad) plus the G2 gate tests test/scripts/sync_no_now_fallback_lib_test.dart and
+  test/scripts/sync_no_now_fallback_e2e_test.dart. The plan-time names
+  completion_time_resolver_extended_test.dart and check_sync_no_now_fallback_test.dart were never
+  created — repointed by the B-pass 2026-09-28."
 ist_handling: []
 provider_invalidations: []
 telemetry_op_types:
@@ -80,7 +82,8 @@ proposed_fix: |
   (G2, spec §7) fails on any `?? DateTime.now()` inside sync payload code, comment-stripped; it must
   fail on today's tree (14 hits after D2) and pass once this fix lands.
 regression_test_planned: |
-  test/sync/completion_time_resolver_extended_test.dart proves the new completion-time order picks
+  test/sync/schedule_completion_time_test.dart (planned as completion_time_resolver_extended_test.dart)
+  proves the new completion-time order picks
   the ISO `completed_at`, then `completed_at_ms`, then the matching `wlog_<date>`'s `completed_at`,
   then omits — never `updated_at_ms` even when it is the freshest field present, reproducing the exact
   trap spec §1.6 names. A live-evidence-shaped fixture reproduces the "17 of 37 stamped >1 day late"
@@ -178,3 +181,18 @@ on UPDATE / no default, or DEFAULT now() only on a genuine first INSERT). Mutati
 ISO string, got null). Mutation 5 (revert `_restoreNotificationsInbox`'s hiveEntry fallback) → 1 red
 ("omits the Hive field": expected false, got true). Every mutation reddened exactly 1 test, no
 compile errors, no zero-red surprises.
+
+## B-pass remediation (2026-09-28, review `docs/reviews/day-swapper-sync-load-bpass.md`)
+
+- **R4-F1 (P1) — gate G2 missed the compound-assignment spelling.** `nowFallbackPattern` required
+  `??` then whitespace then `DateTime`, so `completedAt ??= DateTime.now();` — the identical fallback
+  — passed. Pattern is now `\?\?=?`. No live `??=` now-fallback existed (checked before widening, so
+  the hard-fail gate stayed green). Test: "`x ??= DateTime.now()` (compound assignment) is the same
+  class" (`test/scripts/sync_no_now_fallback_lib_test.dart`). Mutation — restore `\?\?` → 1 red.
+  Residue documented in the lib: a fallback routed through a local or helper is still invisible to a
+  grep; the payload-level tests below are the behavioural guard.
+- **Coordinator-found (P2) — stale test citations in this doc's frontmatter.** `contract_test_path`
+  and `regression_test_planned` named plan-time files that were never created
+  (`completion_time_resolver_extended_test.dart`, `check_sync_no_now_fallback_test.dart`); repointed
+  to `test/sync/schedule_completion_time_test.dart` and the two `sync_no_now_fallback_*_test.dart`
+  files. The same drift was fixed in d5a1e7, e2b9d4 and a9d3f6.
