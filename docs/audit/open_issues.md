@@ -6082,8 +6082,27 @@ Tables are small, so the timeout is not payload size; suspect connection/auth wa
 ## OI-252 — Workout templates: one stable identity (delete/rename propagation, unit 2a)
 
 - **Status**: OPEN
-- **Blocked on**: B-pass self-review (platform blast radius, mandatory before `--no-ff` merge) + the merge to `main` itself.
-- **Verified**: 2026-09-27 — implementation complete and gate-green: client restore rework across all three template_id-carrying restore paths, migration 145 applied live to dedsavbjuwgarrhphgnl (pg_trigger + information_schema.columns confirmed), `restore-user-snapshot` (v7) and `workout-window-closing` (v15) deployed and Deno-tested pre-deploy, `backups/applied_migrations.json` + `backups/live_schema_columns.json` updated, full `sh scripts/pre-commit.sh` reports OK. 10 new behavioral tests, mutation-proven on 3 legs. Diagnose-doc `docs/diagnoses/2026-09-27-deleted-workout-template-resurrects-via-restore-f4a8c2.md`.
+- **Blocked on**: founder on-device verification only. Everything else this entry previously
+  listed as blocking (B-pass self-review, the merge to `main`) is done — see Verified below. This
+  field went stale the same way OI-258's did (board not re-read after the work that closed it);
+  corrected 2026-09-29 rather than left for a future session to re-discover.
+- **Verified**: 2026-09-28 (superseding the 2026-09-27 note below) — merged to `main` in two
+  waves (`82844bfd`, `43b89035`, final `d8832af8`), both self-triggered B-pass reviews on the
+  reconciliation merges accepted (`docs/reviews/merge-reconciliation-82844bfd-review.md`: 3
+  findings, 2 fixed + 1 false_alarm; `merge-reconciliation-43b89035-review.md`: 0 findings).
+  Migration 145 confirmed live via `list_migrations` + `backups/applied_migrations.json`
+  (`20260927011446`); migration 146 (same-unit B-pass Finding 1 fix, BEFORE INSERT OR UPDATE)
+  also live (`20260927045029`). `restore-user-snapshot` (v7) and `workout-window-closing` (v15)
+  confirmed deployed via `list_edge_functions` (`updated_at` matching the local payload-backup
+  timestamps) AND a live `get_edge_function` source fetch matching the committed code
+  byte-for-byte at the OI-252 markers. Full local suite green (6589 tests) at push time.
+  PRIOR (2026-09-27, kept for record): implementation complete and gate-green: client restore
+  rework across all three template_id-carrying restore paths, migration 145 applied live to
+  dedsavbjuwgarrhphgnl (pg_trigger + information_schema.columns confirmed),
+  `restore-user-snapshot` (v7) and `workout-window-closing` (v15) deployed and Deno-tested
+  pre-deploy, `backups/applied_migrations.json` + `backups/live_schema_columns.json` updated,
+  full `sh scripts/pre-commit.sh` reports OK. 10 new behavioral tests, mutation-proven on 3 legs.
+  Diagnose-doc `docs/diagnoses/2026-09-27-deleted-workout-template-resurrects-via-restore-f4a8c2.md`.
 - **Identified**: 2026-09-26 · filed via mint_oi.sh from branch `template-stable-identity`
 
 Fix shape: migration 145 (add `deleted_at`, keep `UNIQUE(user_id,name)`, BEFORE UPDATE trigger renames on delete-transition + no-ops any write to an already-deleted row) + `restore-user-snapshot`/`workout-window-closing` EF updates + client rework of template create/push/restore/delete across `sync_workout.dart`, `template_service.dart`, `train_provider.dart`, `workout_write_service.dart`, plus a one-time legacy-key migrator. Saved meals (unit 2b, `reuse-audit-fixes` batch) reuse whatever this proves. Full design + 3 converged review rounds: `docs/superpowers/plans/2026-09-26-template-stable-identity.md`.
@@ -6149,85 +6168,6 @@ change, and no evidence it's hit in production yet).
 - **Impact**: cosmetic (no chip highlighted) for any user who hasn't yet visited Edit Profile since onboarding, plus latent risk that a FUTURE reader of `diet_preference` assumes the 5-value Edit Profile vocabulary and mishandles `'veg'` the way `isVeg` used to. Not a data-loss or crash bug.
 - **Reopen when**: a founder product decision is made — either change `plan_screen.dart:520`'s default to `'vegetarian'` (closing the vocabulary gap at the source) or explicitly accept `'veg'` as a permanent third vegetarian-family value everywhere `diet_preference` is read.
 - **Identified**: 2026-09-27 · filed via mint_oi.sh from branch `single-owner-a2b`
-
-## OI-258 — backups/applied_migrations.json missing entries for live-applied migrations 147 and two colliding 145/146 numbers across diverged main branches
-
-- **Status**: OPEN
-- **Blocked on**: a small standalone hygiene commit (JSON-only, additive) from someone in a fresh worktree based on `main`
-- **Verified**: never
-- **Identified**: 2026-09-27 · filed via mint_oi.sh from branch `single-owner-a2b`, discovered while investigating `test/contracts/applied_migrations_parity_test.dart`'s failure ahead of migration 148's own ledger entry.
-
-**Two independent findings, both real, both live on `dedsavbjuwgarrhphgnl`:**
-
-1. **Migration 147 (`147_alert_client_errors_spike_breadth.sql`, commit `984d9c51`, diagnose `d2c9f4`,
-   batch `ops-alerting-b2a2a`) was applied live (cloud `list_migrations` shows version
-   `20260927094123`, name `alert_client_errors_spike_breadth`) but `backups/applied_migrations.json`
-   has NO `"migration": "147"` entry** — violates CLAUDE.md §4.5 ("Migration apply paired with
-   `backups/applied_migrations.json` update in same commit"). Confirmed via
-   `python3 -c "... '147' in versions"` → `False` against the file on `main` (HEAD `00ae3e46` /
-   `d8832af8` on `origin/main`). This branch (`single-owner-a2b`) does not even have the 147 file
-   in its own tree yet (branched before it landed), so it cannot be fixed from here without pulling
-   unrelated work into an unrelated feature branch — needs its own small commit directly against
-   `main`'s current tip, in a fresh worktree, never in the shared primary worktree per §4.13.
-
-2. **`main` and `origin/main` used migration numbers `145` and `146` for TWO DIFFERENT PAIRS of
-   migrations, and BOTH pairs are already live-applied to the SAME prod database:**
-   - This branch's lineage: `145_alert_sql_job_failures.sql` / `146_alert_cron_job_silent.sql`
-     (ledger entries present, `cloud_version` `20260926183009` / `20260926183056`).
-   - `origin/main`'s lineage (12 commits ahead of local `main` at discovery time, presumably a
-     different concurrent session's branch, since `avya-c4` showed `busy` in `ListAgents` at the
-     time): `145_workout_templates_stable_delete.sql` /
-     `146_workout_templates_delete_trigger_insert_path.sql`, confirmed live via `list_migrations`
-     (`cloud_version` `20260927011446` / `20260927045029` — LATER than this branch's 145/146, so
-     they landed on cloud AFTER this branch's own 145/146 were already applied).
-   Both pairs are immutable (already applied — supabase/migrations/CLAUDE.md forbids editing an
-   applied migration file, and a rename is the same class of risk even though it wouldn't change
-   the file's hash). **This is the exact "migration numbering coordination risk" already flagged as
-   a residual/hypothetical risk in `docs/diagnoses/2026-09-27-coach-extraction-locked-fields-writer-drift-a2b2f1.md`'s
-   own numbering-risk section for migration 148 — it just materialized for real at 145/146 instead,
-   from a totally different pair of branches, before 148 was even drafted.** The earlier mitigation
-   (`ls`-checking each branch's HIGHEST migration number before picking one) is insufficient: both
-   branches' highest number matched (147) at check time, which hid that two MIDDLE numbers (145,
-   146) had already silently diverged and both gone live. A number-uniqueness check needs to diff
-   the actual FILE SET per number across branches, not just compare the max.
-   No schema-object collision is expected (the two migrations touch entirely disjoint tables/
-   functions — `workout_templates` vs `alerts`/`cron.job`), so this is a bookkeeping/numbering
-   problem, not a data-corruption one. Nothing needs reverting.
-
-**Fix, when picked up:**
-- Add the missing 147 entry to `backups/applied_migrations.json` on `main` (hash of the real
-  147 file as it exists on `main`, `applied_at` derived from the cloud `cloud_version`
-  `20260927094123` → `2026-09-27T15:11:23+05:30`, `applier: claude-via-mcp-apply-migration`,
-  cite diagnose `d2c9f4`).
-- Decide the numbering-collision resolution: since supabase/migrations/CLAUDE.md's own
-  "Filename scheme history" section documents a precedent (letter-suffix a colliding number,
-  e.g. `050b`, `068b`) for collisions caught BEFORE apply — but both colliding pairs here are
-  ALREADY applied and immutable, so renaming either file is not safe by the same
-  immutable-migration principle (even a content-preserving rename changes the historical
-  artifact and any doc/SoT citation of its exact filename). Most likely resolution: leave both
-  pairs as-is (document the collision inline in each of the four files' headers, cross-referencing
-  this OI), and treat this as a closed-book numbering anomaly rather than something to retroactively
-  rename.
-- Consider whether `scripts/mint_oi.sh`'s allocator pattern (server-side compare-and-swap on a
-  git ref) should be extended to migration numbers too, given this is the first CONFIRMED (not
-  hypothetical) collision of that class.
-- **Reopen when**: this exact class (two branches independently claiming the same migration
-  number, both reaching live apply) recurs a second time — at that point the ad-hoc `ls`-based
-  check is confirmed insufficient and an allocator is worth building.
-
-**Third finding, ALREADY FIXED (single-owner-a2b-2's own commit, same investigation):**
-`backups/live_schema_columns.json` (Gate: `scripts/check_schema_column_refs.dart`) was ALSO
-stale — `workout_templates` gained a `deleted_at` column via the 145/146 collision pair above,
-but the snapshot file was never regenerated for it (same "regen in the same commit" rule the
-147-ledger gap violated, different file). Found by diffing a full live
-`information_schema.columns` dump against the snapshot file table-by-table (not just the two
-columns THIS batch's migration 148 added) — a `check_schema_column_refs.dart` run would have
-failed on the very next commit touching `workout_templates` regardless of who made it. Fixed
-inline in this batch's commit (adding `deleted_at` to the snapshot's `workout_templates` array)
-since it's a pure-additive, zero-risk JSON edit directly unblocking this batch's own gate — unlike
-the ledger/migration-file findings above, which need their own standalone commit. The
-`backups/applied_migrations.json` gap (147) and the migration-NUMBER collision (145/146) remain
-open per the two findings above; only the schema-snapshot staleness is resolved.
 
 ## OI-259 — check_plan_review_record_exists.dart cannot parse hand-authored reconciliation-merge subjects
 

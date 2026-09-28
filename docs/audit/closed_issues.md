@@ -3943,3 +3943,106 @@ instead of only by a human noticing during a `git pull` before a merge. **Fix im
 - **Closes**: `docs/diagnoses/2026-09-28-gate14-migration-number-collision-detection-d5f1b8.md`
   (fix), this closure entry (board reconciliation).
 
+## OI-258 — backups/applied_migrations.json missing entries for live-applied migrations 147 and two colliding 145/146 numbers across diverged main branches
+
+- **Status**: CLOSED (2026-09-28, board reconciliation — no new code) — both findings this entry
+  documents are already resolved on `main`, as a side effect of subsequent, unrelated work landing
+  after this entry was filed; nothing was left to fix.
+  1. **The "missing 147 entry" finding was never true on `main`.** It was true only on the
+     divergent branch (`single-owner-a2b`) this entry was filed from, which had branched before
+     commit `984d9c51` (`fix(alerts): rewrite alert_client_errors_spike...`) landed — and that
+     commit added the migration-147 ledger entry in the SAME commit that applied it, per §4.5, as
+     it should. When `single-owner-a2b` was later merged into `main` (`8ff6c1f1`), the two
+     histories reconciled and the ledger came out complete. No standalone hygiene commit was ever
+     required.
+  2. **The 145/146 collision bookkeeping is also already complete**, but via the sibling entry
+     **OI-255** (filed the same day, closed 2026-09-28) rather than via this entry's own suggested
+     fix. OI-255 hard-codes the two colliding, already-applied migration numbers into Gate 14's
+     permanent grandfather list (`scripts/migration_collision_lib.dart:26`,
+     `grandfatheredMigrationCollisionPrefixes = {'145', '146'}`), which both documents the
+     collision durably and makes a FUTURE recurrence of this class fail the commit by naming both
+     files. **This entry's own suggested resolution — "document the collision inline in each of
+     the four files' headers" — was correctly NOT done.** `supabase/migrations/CLAUDE.md:72-96`
+     is explicit that an applied migration is immutable including its comments (a comment edit
+     changes the file's hash while the ledger still records the old one, silently falsifying the
+     audit trail — this happened once already, migration 127). The immutability rule's own
+     prescribed alternative — "the correction goes in the diagnose-doc, and — if it is a durable
+     trap — a row in root CLAUDE.md §4.9" — is exactly the shape OI-255's grandfather list takes.
+- **Blocked on**: none.
+- **Verified**: 2026-09-28 — `backups/applied_migrations.json` on `main` (HEAD `e75d630d` at
+  verification time) holds complete entries for migration 145 (both slugs
+  `alert_sql_job_failures` / `workout_templates_stable_delete`), 146 (both slugs
+  `alert_cron_job_silent` / `workout_templates_delete_trigger_insert_path`), 147
+  (`alert_client_errors_spike_breadth`), and 148. `sha256sum` recomputed against the actual files
+  on disk for all five 145/146/147 files and compared byte-for-byte against the ledger's `hash`
+  field — all five match exactly, confirming no file was edited to "fix" this (which would have
+  been the wrong fix per the immutability rule above). `dart run scripts/check_migrations_applied.dart`
+  (Gate 14) passes clean: `[Gate 14] PASS — all local migrations appear in the applied snapshot
+  (156 applied)`, with the collision check (`findMigrationPrefixCollisions`) reporting no
+  new, non-grandfathered collisions.
+- **Identified**: 2026-09-27 · filed via mint_oi.sh from branch `single-owner-a2b`, discovered
+  while investigating `test/contracts/applied_migrations_parity_test.dart`'s failure ahead of
+  migration 148's own ledger entry. Original Problem/Root cause/Impact preserved verbatim below —
+  none of it changed by this closure; only the "Fix, when picked up" section is superseded by
+  "Status" above.
+- **Note**: this entry's own "Consider whether `mint_oi.sh`'s allocator pattern... should be
+  extended to migration numbers too" bullet is picked up independently by **OI-263**
+  ("Migration-number allocator: reserve migration numbers server-side (mint_oi.sh pattern)"),
+  filed 2026-09-28 from a separate concurrent branch (`day-swapper-sync-load`, not yet merged to
+  `main` at the time of this closure) — not opened or actioned by this closure, noted only for
+  cross-reference.
+
+**Two independent findings, both real, both live on `dedsavbjuwgarrhphgnl`:**
+
+1. **Migration 147 (`147_alert_client_errors_spike_breadth.sql`, commit `984d9c51`, diagnose `d2c9f4`,
+   batch `ops-alerting-b2a2a`) was applied live (cloud `list_migrations` shows version
+   `20260927094123`, name `alert_client_errors_spike_breadth`) but `backups/applied_migrations.json`
+   has NO `"migration": "147"` entry** — violates CLAUDE.md §4.5 ("Migration apply paired with
+   `backups/applied_migrations.json` update in same commit"). Confirmed via
+   `python3 -c "... '147' in versions"` → `False` against the file on `main` (HEAD `00ae3e46` /
+   `d8832af8` on `origin/main`). This branch (`single-owner-a2b`) does not even have the 147 file
+   in its own tree yet (branched before it landed), so it cannot be fixed from here without pulling
+   unrelated work into an unrelated feature branch — needs its own small commit directly against
+   `main`'s current tip, in a fresh worktree, never in the shared primary worktree per §4.13.
+
+2. **`main` and `origin/main` used migration numbers `145` and `146` for TWO DIFFERENT PAIRS of
+   migrations, and BOTH pairs are already live-applied to the SAME prod database:**
+   - This branch's lineage: `145_alert_sql_job_failures.sql` / `146_alert_cron_job_silent.sql`
+     (ledger entries present, `cloud_version` `20260926183009` / `20260926183056`).
+   - `origin/main`'s lineage (12 commits ahead of local `main` at discovery time, presumably a
+     different concurrent session's branch, since `avya-c4` showed `busy` in `ListAgents` at the
+     time): `145_workout_templates_stable_delete.sql` /
+     `146_workout_templates_delete_trigger_insert_path.sql`, confirmed live via `list_migrations`
+     (`cloud_version` `20260927011446` / `20260927045029` — LATER than this branch's 145/146, so
+     they landed on cloud AFTER this branch's own 145/146 were already applied).
+   Both pairs are immutable (already applied — supabase/migrations/CLAUDE.md forbids editing an
+   applied migration file, and a rename is the same class of risk even though it wouldn't change
+   the file's hash). This is the exact "migration numbering coordination risk" already flagged as
+   a residual/hypothetical risk in `docs/diagnoses/2026-09-27-coach-extraction-locked-fields-writer-drift-a2b2f1.md`'s
+   own numbering-risk section for migration 148 — it just materialized for real at 145/146 instead,
+   from a totally different pair of branches, before 148 was even drafted. The earlier mitigation
+   (`ls`-checking each branch's HIGHEST migration number before picking one) is insufficient: both
+   branches' highest number matched (147) at check time, which hid that two MIDDLE numbers (145,
+   146) had already silently diverged and both gone live. A number-uniqueness check needs to diff
+   the actual FILE SET per number across branches, not just compare the max.
+   No schema-object collision is expected (the two migrations touch entirely disjoint tables/
+   functions — `workout_templates` vs `alerts`/`cron.job`), so this is a bookkeeping/numbering
+   problem, not a data-corruption one. Nothing needs reverting.
+
+**Third finding, ALREADY FIXED (single-owner-a2b-2's own commit, same investigation):**
+`backups/live_schema_columns.json` (Gate: `scripts/check_schema_column_refs.dart`) was ALSO
+stale — `workout_templates` gained a `deleted_at` column via the 145/146 collision pair above,
+but the snapshot file was never regenerated for it (same "regen in the same commit" rule the
+147-ledger gap violated, different file). Found by diffing a full live
+`information_schema.columns` dump against the snapshot file table-by-table (not just the two
+columns THIS batch's migration 148 added) — a `check_schema_column_refs.dart` run would have
+failed on the very next commit touching `workout_templates` regardless of who made it. Fixed
+inline in this batch's commit (adding `deleted_at` to the snapshot's `workout_templates` array)
+since it's a pure-additive, zero-risk JSON edit directly unblocking this batch's own gate — unlike
+the ledger/migration-file findings above, which need their own standalone commit.
+
+- **Class**: board staleness — the underlying problems resolved as a byproduct of unrelated merges
+  before anyone re-read the board entry against current state.
+- **Source**: filed via `mint_oi.sh` from `single-owner-a2b`, 2026-09-27.
+- **Closes**: this closure entry (board reconciliation; no diagnose-doc — no code changed).
+
