@@ -1336,9 +1336,18 @@ extension SyncServiceWorkout on SyncService {
       final downloadedPlanFingerprint = SyncFingerprint.of(planFingerprintInput);
       final storedPlanFingerprint = SyncSkipIndex.readIndex(
           _hive.workoutBox, SyncSkipDomain.plan.indexKey)[kPlanBundleRowKey];
+      // A matching fingerprint says the CLOUD bundle is unchanged, not that
+      // the LOCAL rows still hold it. Before Task 22 every launch re-merged,
+      // which incidentally put back a schedule_<date> row deleted locally;
+      // reconcile()'s needsHeal cannot, because getWeek() omits absent keys.
+      // So the skip also requires every bundled key to still exist locally
+      // (in-memory containsKey, no I/O); one absent key runs the full merge.
+      final allBundledRowsPresent = schedules is Map &&
+          schedules.keys.every((k) => _hive.workoutBox.containsKey(k));
       final skipPlanMerge = SyncFlags.planMergeSkipWhenKnownEnabled &&
           storedPlanFingerprint != null &&
-          storedPlanFingerprint == downloadedPlanFingerprint;
+          storedPlanFingerprint == downloadedPlanFingerprint &&
+          allBundledRowsPresent;
       if (schedules is Map && !skipPlanMerge) {
         final result = await PlanIntegrityReconciler.mergeScheduleBundleIntoHive(
             Map<String, dynamic>.from(schedules));

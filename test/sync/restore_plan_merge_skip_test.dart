@@ -5,7 +5,9 @@
 // suite that L2 must not break is in restore_merge_invariants_test.dart):
 //   - a downloaded bundle whose fingerprint (excluding synced_at) equals the
 //     stored plan_bundle_cloud_fingerprint skips the merge ENTIRELY, even
-//     when the bundle's content differs from what is in Hive right now;
+//     when the bundle's content differs from what is in Hive right now --
+//     but ONLY while every bundled schedule_<date> key still exists locally
+//     (Task 22 review finding: a locally-deleted row must still be put back);
 //   - a mismatched fingerprint runs the merge normally;
 //   - after a successful merge, the downloaded bundle's fingerprint is
 //     recorded via SyncSkipIndex.recordConfirmed under kPlanBundleRowKey, in
@@ -106,6 +108,35 @@ void main() {
               'would still have kept fri as rest, so this alone would not '
               'prove the SKIP happened; the point is proven by the recorded '
               '"a changed bundle is not skipped" sibling test below');
+    });
+
+    test(
+        'a matching fingerprint does NOT skip when a bundled row is missing '
+        'locally: the merge runs and puts the deleted row back (the '
+        'pre-Task-22 self-heal, which reconcile() cannot do)', () async {
+      const fri = '2026-09-25';
+      const sat = '2026-09-26';
+      await put(sat, {'type': 'rest', 'status': 'rest', 'exercises': <dynamic>[]});
+      // fri deliberately absent: deleted locally after the bundle was known.
+      final bundle = bundleOf({
+        'schedule_$fri': {
+          'type': 'workout',
+          'status': 'planned',
+          'workout_name': 'Legs',
+          'exercises': [
+            {'name': 'Squat'}
+          ],
+        },
+        'schedule_$sat': {'type': 'rest', 'status': 'rest', 'exercises': <dynamic>[]},
+      });
+      await recordStoredFingerprint(fingerprintOf(bundle));
+
+      await restorePlan(bundle);
+
+      expect(row(fri), isNotNull,
+          reason: 'an absent local row must defeat the whole-bundle skip');
+      expect(row(fri)!['workout_name'], 'Legs');
+      expect(row(sat)!['type'], 'rest');
     });
 
     test(
