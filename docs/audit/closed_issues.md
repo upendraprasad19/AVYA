@@ -3859,3 +3859,87 @@ separate for the one cron site) IS the "adjustment" the filed text anticipated.
 - **Closes**: `docs/diagnoses/2026-09-27-sync-telemetry-dual-write-oi254-offline-signature-f7b2c9.md`
   (fix), this closure entry (board reconciliation).
 
+## OI-255 — Migration numbering has no collision-proof allocator -- two branches both minted 145 AND 146
+
+- **Status**: CLOSED (2026-09-28, `gate14-migration-collision` batch) — implemented this entry's
+  own fix-shape option (b): Gate 14 (`scripts/check_migrations_applied.dart`) now hard-fails on
+  two `.sql` files sharing an exact bare numeric prefix, naming both, via a new
+  `scripts/migration_collision_lib.dart`. The two ALREADY-APPLIED collisions this entry documents
+  (145 and 146) are grandfathered by name in the check — permanently, since both pairs are
+  immutable once applied — with an explicit comment forbidding future additions to that list.
+  Option (a), a `mint_oi.sh`-style migration-number allocator (reserving a ref before drafting a
+  new migration file), was considered and explicitly NOT implemented — founder chose option (b)
+  alone for now as sufficient practical prevention at a fraction of the engineering cost; it
+  remains a legitimate future enhancement, not a deferral of this entry's own ask (the ask was "a
+  fix shape (a) and/or (b)", and (b) alone satisfies it). The underlying historical fact this
+  entry documents — that migrations 145 and 146 were each independently claimed twice — is
+  permanently true and cannot be undone; this closure is about the PREVENTION mechanism, not about
+  retroactively resolving four already-live, immutable files.
+- **Blocked on**: none.
+- **Verified**: 2026-09-28 — `test/scripts/migration_collision_lib_test.dart` (7 tests) +
+  `test/scripts/check_migrations_applied_collision_e2e_test.dart` (3 tests spawning the real gate
+  binary against a throwaway repo), all green. Mutation-proven: neutering the detection reddened
+  4/10 tests, neutering the grandfather exclusion reddened 2/10 — both mutations confirmed applied
+  and compiling, both reddened for the correct assertion-failure reason (not a compile error or a
+  swallowed exception). The real 145/146 quadruple was reproduced in the e2e suite and confirmed
+  to still pass Gate 14 (must not start failing every future commit); a NEW, non-grandfathered
+  collision (two files both prefixed "148") was reproduced and confirmed to fail it, naming both
+  files, closing the exact blind spot this entry's own "Impact" section named
+  (`appliedMigrations.any((a) => a.startsWith(prefix) || ...)` satisfying both colliding files'
+  ledger check independently).
+- **Identified**: 2026-09-27 · filed via mint_oi.sh from branch `template-stable-identity`
+- **Problem, Root cause, Impact**: see this entry's own body, preserved verbatim below — none of it
+  changed by this closure; only the fix-shape section is superseded by "Fix implemented" below.
+
+Symptom: `supabase/migrations/` now holds FOUR files across two colliding number prefixes, not one
+as first filed (corrected during the merge to `main` — the merge conflict in
+`backups/applied_migrations.json` exposed a second collision at 145 that a single-number
+investigation had missed): `145_alert_sql_job_failures.sql` / `146_alert_cron_job_silent.sql`
+(main, OI-178/ops-alerting-b2a batch, applied live 2026-09-26/27) and
+`145_workout_templates_stable_delete.sql` / `146_workout_templates_delete_trigger_insert_path.sql`
+(this branch, OI-252, applied live 2026-09-27T06:44:46+05:30 and 2026-09-27T10:22:49+05:30). All
+four have their own `"migration"` entry in `backups/applied_migrations.json` (main's two, then this
+branch's two, in that chronological order after the merge). Found when pulling `origin/main` into
+the primary worktree immediately before merging `template-stable-identity` — the two branches
+diverged from `main` before either side's migrations existed on the other, and each independently
+picked "145" then "146" as the next free number at draft time, in the same order, coincidentally.
+
+Root cause: migration numbers are chosen by hand from whatever `ls supabase/migrations/` shows the
+drafting branch at draft time — there is no reservation mechanism analogous to `mint_oi.sh`'s
+`refs/heads/oi/N` compare-and-swap for OI numbers (§7 pointer table, OI allocator row). Two
+branches developing in parallel off diverging `main` states have no way to see each other's
+in-flight migration numbers.
+
+Impact, checked rather than assumed: **no functional collision** — all four migrations touch
+entirely disjoint database objects (a `workout_templates` trigger function + soft-delete column vs.
+two new pg_cron alert jobs + their functions), all four applied successfully and independently.
+**Gate 14 (`scripts/check_migrations_applied.dart`) does not detect the ambiguity**: its
+"unapplied" check matches by bare numeric prefix via `appliedMigrations.any((a) =>
+a.startsWith(prefix) || ...)` (`check_migrations_applied.dart:97-101`), so both files under each
+colliding number independently satisfy the same ledger entry and the gate reports PASS for all
+four. The break is the implicit "one number names exactly one migration" invariant relied on for
+human navigability, `docs/naming_conventions.md`-style citation, and any future tooling that
+assumes strict 1:1 sequential numbering.
+
+Historical note (fix implemented 2026-09-28, superseding the paragraph below): **all four files
+remain immutable once applied** (same principle
+`docs/diagnoses/2026-09-21-hermes-pass-migration-138-139-fixes-h1a2b3.md` and this file's own
+common-pitfalls table state for migration 138/139) — renaming any of them post-apply would
+misrepresent what actually ran and would invalidate cross-references already pushed on both
+branches (diagnose-docs, commit messages, `backups/applied_migrations.json` `"migration"` values,
+OI-board prose). Fix shape (as originally filed, not designed): (a) a migration-number allocator
+mirroring `mint_oi.sh` — reserve a ref before drafting a new migration file so a second branch
+drafting in parallel sees the reservation on its next fetch — and/or (b) widen Gate 14 to hard-fail
+on two `.sql` files sharing an EXACT bare numeric prefix (distinct from today's loose "is this
+number present in the ledger at all" check), so a future collision is caught at commit/push time
+instead of only by a human noticing during a `git pull` before a merge. **Fix implemented:** option
+(b), via `scripts/migration_collision_lib.dart` — see Status above.
+- **Class**: a manual, unreserved numbering scheme with no cross-branch visibility, structurally
+  identical to the class `mint_oi.sh` was built to close for OI numbers — but for migration
+  numbers, which (unlike OI numbers) become permanently immutable the moment they are applied
+  live, so a collision here can never be un-collided, only prevented from a third recurrence.
+- **Source**: filed via `mint_oi.sh` from `template-stable-identity`, 2026-09-27; closed via
+  `docs/diagnoses/2026-09-28-gate14-migration-number-collision-detection-d5f1b8.md`.
+- **Closes**: `docs/diagnoses/2026-09-28-gate14-migration-number-collision-detection-d5f1b8.md`
+  (fix), this closure entry (board reconciliation).
+

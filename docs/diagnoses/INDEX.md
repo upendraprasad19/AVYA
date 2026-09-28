@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### migration-number-collision-detection (1 bugs)
+- 2026-09-28 d5f1b8 — OI-255 (filed 2026-09-27 from `template-stable-identity`) documented that `template-stable-identity` and `ops-alerting` independently minted BOTH migration 145 and migration 146 before either branch…
+
 ### alert_threshold_tuning (2 bugs)
 - 2026-09-27 d2c9f4 — The live alert_client_errors_spike sub-block of ops_alerts_30min (jobid 43) counted RAW client_errors rows over a 1-hour window, with no offline-noise exclusion, no per-user breadth signal, and no…
 - 2026-06-06 f0b9d3 — The alert_client_errors_spike cron paged critical for benign volume. Alert #24 fired "client_errors spike: 354 rows in last hour" (critical) for what was the founder's own reinstall/restore burst on…
@@ -1421,6 +1424,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-28 | d5f1b8 | OI-255 (filed 2026-09-27 from `template-stable-identity`) documented that `template-stable-identity` and `ops-alerting` independently minted BOTH migration 145 and migration 146 before either branch… | migration-number-collision-detection | "test/scripts/migration_collision_lib_test.dart (7 pure unit tests) + test/scripts/check_migrations_applied_collision_e2e_test.dart (3 e2e tests spawning the real gate binary)" |
 | 2026-09-27 | d2c9f4 | The live alert_client_errors_spike sub-block of ops_alerts_30min (jobid 43) counted RAW client_errors rows over a 1-hour window, with no offline-noise exclusion, no per-user breadth signal, and no… | alert_threshold_tuning | test/contracts/ops_alerts_spike_breadth_test.dart |
 | 2026-09-27 | d4a7c1 | Merging `template-stable-identity` into `main` triggered the pre-merge-commit hook's `check_regression_catalog.dart` gate (a merge-only gate that runs the Dart regression tests cited by diagnose-docs… | alert-contract-test-infra | "test/contracts/alert_cron_job_silent_test.dart and test/contracts/alert_sql_job_failures_test.dart (both pre-existing, this fix repairs their own assertion rather than adding a new test)" |
 | 2026-09-27 | f4a8c2 | Found by the reuse audit. Deleting a workout template on one device, then restoring on another (or after a reinstall), could bring the deleted template — and any workout day scheduled against it —… | workout_templates | test/sync/oi252_deleted_template_restore_behavioral_test.dart |
