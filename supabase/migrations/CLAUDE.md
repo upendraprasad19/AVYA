@@ -141,7 +141,8 @@ SoT concept's columns must stay in sync"):
 | `user_profile` | `onboarding_completed_at` + most profile fields | `ProfileWriteService` + onboarding |
 | `subscriptions` | `subscription_state`, `subscription_payment_grace_window` | `verify-payment` Edge Function + `razorpay-webhook` |
 | `ai_coach_interactions` | `coach_interactions`, `food_text_analysis_daily_cap` | `ai-proxy` Edge Function + `ai_coach_repository` |
-| `coach_memory` | `coach_memory_coach_notes_upward_sync` | `ai_coach_repository` upward sync |
+| `coach_memory` | `coach_memory_coach_notes_upward_sync`, `coach_extraction_locked_fields` (conflict-marker half) | `ai_coach_repository` upward sync; `daily-snapshot`'s `mergeCoachingNotes` (conflict markers) |
+| `user_profile` (`coach_extraction_locked_fields` column) | `coach_extraction_locked_fields` | `lock_coach_extraction_fields` RPC (migration 148), ONLY writer — never a plain UPDATE |
 | `rank_promotion_log` | `rank_promotion_log` | server-side `evaluate-rank-promotions` cron |
 | `client_errors` | `log_client_error_payload` | client `ErrorTelemetry.recordNonFatal` → `log-client-error` Edge Function |
 

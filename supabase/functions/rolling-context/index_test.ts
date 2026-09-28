@@ -15,9 +15,12 @@
 // 30-minute dedup window).
 //
 // index.ts calls `serve(...)` at module scope with no `import.meta.main`
-// guard (same shape as daily-snapshot/index.ts — see that file's own
-// index_test.ts header), so importing it directly would boot a real HTTP
-// server. This is a SOURCE-GREP wiring test, position-scoped to the
+// guard (same shape as weekly-report/index.ts and assess-body-composition/
+// index.ts — see either file's own index_test.ts header; daily-snapshot/
+// index.ts GAINED this guard in the single-owner-a2a batch, 2026-09-27, so
+// it is no longer a same-shaped sibling here), so importing this file
+// directly would boot a real HTTP server. This is a SOURCE-GREP wiring
+// test, position-scoped to the
 // `if (!content)` branch inside summarizeMessages() and comment-stripped
 // before any `.includes()` check.
 //

@@ -411,9 +411,22 @@ function findRelativeImports(source) {
  * { name, content } objects in payload shape. BYTE-IDENTICAL to what
  * emit_payload.js would have produced at that SHA.
  *
- * Path-naming scheme (must match emit_payload.js):
+ * Path-naming scheme (must match emit_payload.js's payloadName(), fixed
+ * 2026-09-27/28, diagnose a2b2f1 — this rollback path duplicates that
+ * scheme inline per docs/diagnoses/2026-05-21-edge-function-rollback-I3-b3ecf2.md,
+ * so it inherited the exact same bug: unconditionally prefixing every
+ * non-entry file with `../<path-relative-to-functions-dir>` broke any
+ * function with a same-directory sibling of index.ts, e.g. `./message.ts`
+ * in protein-gap-alert/morning-alert/plateau-alert/pr-detection/
+ * re-engagement/streak-guardian/workout-window-closing, `./trend.ts` in
+ * future-prediction, `./congrats.ts` in proactive-coach-promotion — a
+ * rollback for any of those would have deployed a payload Deno's bundler
+ * rejects with "Module not found .../source/message.ts", identical to the
+ * forward-deploy failure this fix's sibling diagnose documents):
  *   - The entry is always 'index.ts'.
- *   - Every other file is `../<path-relative-to-functions-dir>`.
+ *   - Every other file is named relative to the ENTRY's OWN DIRECTORY (not
+ *     functions-dir): a file outside that directory still climbs out with
+ *     `../` as usual; a same-directory sibling of index.ts stays bare.
  */
 function emitPayloadAtSha(sha, fnName) {
   const functionsDirRel = 'supabase/functions';
@@ -453,14 +466,17 @@ function emitPayloadAtSha(sha, fnName) {
 
   walk(entryAbs, entrySource);
 
-  // Convert to payload shape: entry → 'index.ts'; others → '../<rel-from-functions-dir>'.
+  // Convert to payload shape: entry → 'index.ts'; others → relative to the
+  // ENTRY's own directory (climbs out with '../' when actually outside it,
+  // stays bare when it's a same-directory sibling — see comment above).
+  const entryDirAbs = path.posix.dirname(entryAbs);
   const files = order.map((rel) => {
     const content = visited.get(rel);
     if (rel === entryAbs) {
       return { name: 'index.ts', content };
     }
-    const relFromFunctionsDir = path.posix.relative(functionsDirRel, rel);
-    return { name: `../${relFromFunctionsDir}`, content };
+    const relFromEntryDir = path.posix.relative(entryDirAbs, rel);
+    return { name: relFromEntryDir, content };
   });
   return files;
 }

@@ -32,12 +32,14 @@ class CoachMemory {
     this.consentVersion = 'v1',
     this.privateMode = false,
     this.coachNotes,
+    Map<String, dynamic>? lockedFieldConflicts,
     this.updatedAt,
   })  : injuries = injuries ?? const [],
         foodPreferences = foodPreferences ?? const {},
         excusePatterns = excusePatterns ?? const [],
         lifestyle = lifestyle ?? const {},
-        supplementStack = supplementStack ?? const [];
+        supplementStack = supplementStack ?? const [],
+        lockedFieldConflicts = lockedFieldConflicts ?? const {};
 
   final String userId;
   final String? preferredName;
@@ -63,6 +65,12 @@ class CoachMemory {
   final String consentVersion;
   final bool privateMode;
   final String? coachNotes;
+
+  /// Conflict markers written by daily-snapshot's `mergeCoachingNotes` when
+  /// Gemini extraction wanted to change a field the user has locked via
+  /// `lock_coach_extraction_fields`. Shape:
+  /// `{"<field>": {"attempted_value": ..., "at": "<iso8601>"}}`.
+  final Map<String, dynamic> lockedFieldConflicts;
   final DateTime? updatedAt;
 
   Map<String, dynamic> toJson() => {
@@ -90,6 +98,8 @@ class CoachMemory {
         'consent_version': consentVersion,
         'private_mode': privateMode,
         if (coachNotes != null) 'coach_notes': coachNotes,
+        if (lockedFieldConflicts.isNotEmpty)
+          'locked_field_conflicts': lockedFieldConflicts,
         if (updatedAt != null) 'updated_at': updatedAt!.toIso8601String(),
       };
 
@@ -126,6 +136,8 @@ class CoachMemory {
       consentVersion: (json['consent_version'] as String?) ?? 'v1',
       privateMode: (json['private_mode'] as bool?) ?? false,
       coachNotes: json['coach_notes'] as String?,
+      lockedFieldConflicts: Map<String, dynamic>.from(
+          (json['locked_field_conflicts'] as Map?) ?? const {}),
       updatedAt: parseTs(json['updated_at']),
     );
   }
@@ -174,6 +186,9 @@ class CoachMemory {
         consentVersion: consentVersion,
         privateMode: privateMode,
         coachNotes: patch.coachNotes ?? coachNotes,
+        lockedFieldConflicts: patch.lockedFieldConflicts.isNotEmpty
+            ? patch.lockedFieldConflicts
+            : lockedFieldConflicts,
         updatedAt: patch.updatedAt ?? updatedAt,
       );
 

@@ -9,12 +9,24 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### migration-number-collision-detection (1 bugs)
 - 2026-09-28 d5f1b8 — OI-255 (filed 2026-09-27 from `template-stable-identity`) documented that `template-stable-identity` and `ops-alerting` independently minted BOTH migration 145 and migration 146 before either branch…
 
+### retries_2_sole_call_site_pin (existing SoT-adjacent test contract, no registry entry — presence-only Deno source-grep, per docs/sot_registry.yaml's own convention for this test file) (1 bugs)
+- 2026-09-28 e35936 — `supabase/functions/_shared/gemini_backoff_retry_test.ts`'s `assertSoleCallSiteHasRetries` helper — which exists specifically to pin `retries: 2` at each of 5 single-call-site Gemini functions…
+
 ### alert_threshold_tuning (2 bugs)
 - 2026-09-27 d2c9f4 — The live alert_client_errors_spike sub-block of ops_alerts_30min (jobid 43) counted RAW client_errors rows over a 1-hour window, with no offline-noise exclusion, no per-user breadth signal, and no…
 - 2026-06-06 f0b9d3 — The alert_client_errors_spike cron paged critical for benign volume. Alert #24 fired "client_errors spike: 354 rows in last hour" (critical) for what was the founder's own reinstall/restore burst on…
 
 ### alert-contract-test-infra (1 bugs)
 - 2026-09-27 d4a7c1 — Merging `template-stable-identity` into `main` triggered the pre-merge-commit hook's `check_regression_catalog.dart` gate (a merge-only gate that runs the Dart regression tests cited by diagnose-docs…
+
+### coach_extraction_locked_fields (new SoT concept — docs/sot_registry.yaml) (1 bugs)
+- 2026-09-27 a2b2f1 — Two independent, unsynchronized writers to the same three `user_profile` columns (`diet_preference`, `lifestyle_activity`, `injuries`): 1. The user, directly — via Profile → Edit Profile…
+
+### coaching_notes / coach_memory extraction (same concept as c3f8e6; (1 bugs)
+- 2026-09-27 a2b1c7 — `daily-snapshot/index.ts`'s `extractCoachingNotes` (before this fix) had three defects, all present after a2a's own fix to the same function landed (diagnose c3f8e6, which fixed a DIFFERENT set of…
+
+### coaching_notes / coach_memory extraction (1 bugs)
+- 2026-09-27 c3f8e6 — `daily-snapshot/index.ts` (before this fix) had three defects, each verified by reading the code on 2026-09-27: 1. Untestable. `serve(async (req) => {...})` ran at MODULE SCOPE with no…
 
 ### workout_templates (2 bugs)
 - 2026-09-27 f4a8c2 — Found by the reuse audit. Deleting a workout template on one device, then restoring on another (or after a reinstall), could bring the deleted template — and any workout day scheduled against it —…
@@ -1425,8 +1437,12 @@ rather than a Hive box. (1 bugs)
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
 | 2026-09-28 | d5f1b8 | OI-255 (filed 2026-09-27 from `template-stable-identity`) documented that `template-stable-identity` and `ops-alerting` independently minted BOTH migration 145 and migration 146 before either branch… | migration-number-collision-detection | "test/scripts/migration_collision_lib_test.dart (7 pure unit tests) + test/scripts/check_migrations_applied_collision_e2e_test.dart (3 e2e tests spawning the real gate binary)" |
+| 2026-09-28 | e35936 | `supabase/functions/_shared/gemini_backoff_retry_test.ts`'s `assertSoleCallSiteHasRetries` helper — which exists specifically to pin `retries: 2` at each of 5 single-call-site Gemini functions… | retries_2_sole_call_site_pin (existing SoT-adjacent test contract, no registry entry — presence-only Deno source-grep, per docs/sot_registry.yaml's own convention for this test file) | supabase/functions/_shared/gemini_backoff_retry_test.ts |
 | 2026-09-27 | d2c9f4 | The live alert_client_errors_spike sub-block of ops_alerts_30min (jobid 43) counted RAW client_errors rows over a 1-hour window, with no offline-noise exclusion, no per-user breadth signal, and no… | alert_threshold_tuning | test/contracts/ops_alerts_spike_breadth_test.dart |
 | 2026-09-27 | d4a7c1 | Merging `template-stable-identity` into `main` triggered the pre-merge-commit hook's `check_regression_catalog.dart` gate (a merge-only gate that runs the Dart regression tests cited by diagnose-docs… | alert-contract-test-infra | "test/contracts/alert_cron_job_silent_test.dart and test/contracts/alert_sql_job_failures_test.dart (both pre-existing, this fix repairs their own assertion rather than adding a new test)" |
+| 2026-09-27 | a2b2f1 | Two independent, unsynchronized writers to the same three `user_profile` columns (`diet_preference`, `lifestyle_activity`, `injuries`): 1. The user, directly — via Profile → Edit Profile… | coach_extraction_locked_fields (new SoT concept — docs/sot_registry.yaml) | test/contracts/coach_extraction_locked_fields_writer_to_reader_test.dart |
+| 2026-09-27 | a2b1c7 | `daily-snapshot/index.ts`'s `extractCoachingNotes` (before this fix) had three defects, all present after a2a's own fix to the same function landed (diagnose c3f8e6, which fixed a DIFFERENT set of… | coaching_notes / coach_memory extraction (same concept as c3f8e6; | supabase/functions/daily-snapshot/index_test.ts |
+| 2026-09-27 | c3f8e6 | `daily-snapshot/index.ts` (before this fix) had three defects, each verified by reading the code on 2026-09-27: 1. Untestable. `serve(async (req) => {...})` ran at MODULE SCOPE with no… | coaching_notes / coach_memory extraction | supabase/functions/daily-snapshot/index_test.ts |
 | 2026-09-27 | f4a8c2 | Found by the reuse audit. Deleting a workout template on one device, then restoring on another (or after a reinstall), could bring the deleted template — and any workout day scheduled against it —… | workout_templates | test/sync/oi252_deleted_template_restore_behavioral_test.dart |
 | 2026-09-27 | b7f3e2 | The `main` push (after merging `template-stable-identity`) ran the full `flutter test` suite under `scripts/pre-push.sh` and hit one failure:… | food_log_provider_invalidation | "test/widgets/log_food_sheet_search_respects_locked_slot_test.dart (pre-existing; repairs the production code the test's own teardown was exposing) + test/contracts/nutrition_provider_ref_mounted_guard_test.dart (NEW — source-grep pinning ALL ref.invalidate/ref.invalidateSelf call sites in this file are ref.mounted-guarded; mutation-proven, see below)" |
 | 2026-09-27 | f7b2c9 | Three independent client-side telemetry defects, scoped together as unit B2a-2b of the ops-alerting batch (the "client classification, queue drift, dual write" scope named by the original —… | sync_error_telemetry | test/sync/sync_telemetry_test.dart (Fix 1); test/contracts/oi254_subscription_refresh_op_type_rename_test.dart (Fix 2); test/contracts/offline_signature_migration_147_parity_test.dart (Fix 3) |

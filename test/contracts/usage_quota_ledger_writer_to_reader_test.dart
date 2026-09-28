@@ -252,6 +252,15 @@ void main() {
         // the RPC name (it compares against CONSUME_QUOTA_RPC), so only the
         // module itself is allowlisted.
         'supabase/functions/_shared/prediction_handler.ts',
+        // a2b (single-owner batch, 2026-09-27), item 10: daily-snapshot's
+        // coaching-notes extraction is a cron-shaped read/consume/extract
+        // cycle with no row INSERTed at the moment the limit is decided —
+        // same "nothing for a trigger to hang off" shape as weekly-report/
+        // delete-account/verify-payment above. extractCoachingNotes() calls
+        // the RPC directly (6h bucket, cap 1). No advisory usage_counters
+        // SELECT here, so this file belongs ONLY on this allowlist, not the
+        // usage_counters one above.
+        'supabase/functions/daily-snapshot/index.ts',
       };
       final offenders = <String>[];
       for (final e in _appSources()) {

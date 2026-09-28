@@ -33,6 +33,12 @@ export interface CoachMemory {
   consent_version: string;
   private_mode: boolean;
   coach_notes: string | null;
+  // a2b-2 (single-owner batch, 2026-09-27): conflict markers written by
+  // daily-snapshot's mergeCoachingNotes when extraction wanted to change a
+  // field the user has locked via lock_coach_extraction_fields (migration
+  // 148). Reaches the AI prompt via ai_snapshot_builder's whole-object
+  // toJson() pass-through of this row.
+  locked_field_conflicts: Record<string, unknown>;
   updated_at: string;
 }
 

@@ -90,7 +90,7 @@ backoff window, so the tap can never be a silent no-op; auto drains
 | Immediately (fire-and-forget) | Every nutrition mutation (log meal, water, urine, edit/delete food, scan meal save, barcode save, custom exercise create) fires `SyncService.syncNutritionData()` + `pushSnapshot()` | → Supabase + AI snapshot |
 | Immediately (fire-and-forget) | Every workout mutation (complete, edit log, template save/delete, schedule change) fires `SyncService.syncWorkoutData()` + `pushSnapshot()` | → Supabase + AI snapshot |
 | Every app launch | user_daily_snapshot (AI context) via pushSnapshot() | → Supabase |
-| Daily 11PM IST | coaching_notes extraction from that day's conversations | → Hive + Supabase |
+| Daily 11PM IST | coaching_notes extraction — watermark-bounded (conversations since the last successful extraction, NOT "that day's"; single-owner a2b-1, 2026-09-27) + metered 1/6h via `consume_quota` | → Hive + Supabase |
 | Daily (app launch if >1d) | Full sync: all logs, progress, preferences | → Supabase |
 | Periodically | Check for new approved community items | ← Supabase → Hive |
 | On restore | Pull full history (all users) | ← Supabase → Hive |

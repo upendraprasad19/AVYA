@@ -6,9 +6,12 @@
 // could not alert on total Gemini exhaustion.
 //
 // index.ts calls `serve(...)` at module scope with no `import.meta.main`
-// guard (same shape as daily-snapshot/index.ts — see that file's own
-// index_test.ts header), so importing it directly would boot a real HTTP
-// server. This is a SOURCE-GREP wiring test, position-scoped to the
+// guard (same shape as assess-body-composition/index.ts and
+// rolling-context/index.ts — see either file's own index_test.ts header;
+// daily-snapshot/index.ts GAINED this guard in the single-owner-a2a batch,
+// 2026-09-27, so it is no longer a same-shaped sibling here), so importing
+// this file directly would boot a real HTTP server. This is a SOURCE-GREP
+// wiring test, position-scoped to the
 // `!aiContent` branch and comment-stripped before any `.includes()` check —
 // the exact discipline `gemini_retry_coverage_lib.dart`'s `stripComments()`
 // and this same batch's sibling diagnose-doc (f7a2c9) both document, after a

@@ -205,7 +205,8 @@ extension SyncServiceCoach on SyncService {
           'user_message': entry['user_message'] ?? '',
           'ai_response': entry['ai_response'] ?? '',
           'model_used': entry['model_used'] ?? 'unknown',
-          'created_at': entry['created_at'] ?? DateTime.now().toIso8601String(),
+          'created_at':
+              entry['created_at'] ?? DateTime.now().toUtc().toIso8601String(),
         }, onConflict: 'id');
       } catch (e, st) {
         debugPrint('[SyncService._syncCoachInteractions] $e');
