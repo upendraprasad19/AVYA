@@ -351,7 +351,11 @@ If nothing was found, return: {}`;
   return { ok: true, facts: extracted };
 }
 
-async function mergeCoachingNotes(
+// a2b-2 (single-owner batch, 2026-09-27): exported so the new locked-field
+// guard + conflict-marker logic can be tested directly against a real
+// supabase-shaped fake, mirroring the mergeCoachMemoryFields export
+// precedent below.
+export async function mergeCoachingNotes(
   supabase: SupabaseClient,
   userId: string,
   extracted: ExtractedFacts,
@@ -415,16 +419,110 @@ async function mergeCoachingNotes(
 
   // Also update lifestyle_activity and diet_preference directly on user_profile
   // if extracted, so recalculateTargets() picks them up immediately.
+  //
+  // a2b-2 (single-owner batch, 2026-09-27): these three fields are ALSO
+  // writable directly by the user (Edit Profile save; injuries additionally
+  // at onboarding). A field the user has explicitly locked via
+  // lock_coach_extraction_fields() (migration 148) is skipped here — the
+  // extraction's attempted value is recorded as a conflict marker on
+  // coach_memory.locked_field_conflicts instead of silently overwriting a
+  // deliberate human edit. See migration 148's header for the full
+  // writer/reader-drift rationale.
+  const candidateUpdates: Record<string, unknown> = {};
+  if (extracted.diet_preference) candidateUpdates["diet_preference"] = extracted.diet_preference;
+  if (extracted.lifestyle_activity) candidateUpdates["lifestyle_activity"] = extracted.lifestyle_activity;
+  if (extracted.injuries) candidateUpdates["injuries"] = extracted.injuries;
+
+  if (Object.keys(candidateUpdates).length === 0) return;
+
+  // Kill-switch (B-pass finding 1, 2026-09-28 — platform tier's §4.6/
+  // blast_radius.yaml `feature_flag` requirement): set
+  // DISABLE_COACH_EXTRACTION_LOCK_GUARD=true in the Edge Function secrets to
+  // revert JUST this locked-field-skip guard to its pre-a2b-2 behavior
+  // (unconditional write of every candidate field, no lock check, no
+  // conflict marker) without a redeploy — mirrors the
+  // DISABLE_SNAPSHOT_MERGE_SAFE_UPSERT precedent above. Deliberately
+  // narrower than the pre-existing DISABLE_COACH_EXTRACTION switch, which
+  // disables ALL of extractCoachingNotes() (including the Gemini call and
+  // the coaching_notes/embedding merge above) — this one only reverts the
+  // NEW lock-check-and-skip behavior, leaving extraction itself running.
+  const lockGuardDisabled =
+    Deno.env.get("DISABLE_COACH_EXTRACTION_LOCK_GUARD") === "true";
+  if (lockGuardDisabled) {
+    await supabase
+      .from("user_profile")
+      .upsert({ user_id: userId, ...candidateUpdates }, { onConflict: "user_id" });
+    return;
+  }
+
+  const { data: lockRow } = await supabase
+    .from("user_profile")
+    .select("coach_extraction_locked_fields, diet_preference, lifestyle_activity, injuries")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const lockedFields = new Set<string>(
+    (lockRow?.coach_extraction_locked_fields as string[] | null) ?? [],
+  );
+
   const profileUpdates: Record<string, unknown> = {};
-  if (extracted.diet_preference) profileUpdates["diet_preference"] = extracted.diet_preference;
-  if (extracted.lifestyle_activity) profileUpdates["lifestyle_activity"] = extracted.lifestyle_activity;
-  if (extracted.injuries) profileUpdates["injuries"] = extracted.injuries;
+  const conflicts: Record<string, { attempted_value: unknown; at: string }> = {};
+  const nowIso = new Date().toISOString();
+
+  for (const [field, attemptedValue] of Object.entries(candidateUpdates)) {
+    if (!lockedFields.has(field)) {
+      profileUpdates[field] = attemptedValue;
+      continue;
+    }
+    const currentValue = (lockRow as Record<string, unknown> | null)?.[field];
+    if (valuesEqualForLockCheck(attemptedValue, currentValue)) {
+      // Extraction re-confirmed the same value the user already locked in —
+      // not a conflict, and there is nothing to write.
+      continue;
+    }
+    conflicts[field] = { attempted_value: attemptedValue, at: nowIso };
+  }
 
   if (Object.keys(profileUpdates).length > 0) {
     await supabase
       .from("user_profile")
       .upsert({ user_id: userId, ...profileUpdates }, { onConflict: "user_id" });
   }
+
+  if (Object.keys(conflicts).length > 0) {
+    try {
+      // upsertCoachMemory's ON CONFLICT DO UPDATE SET replaces this jsonb
+      // column WHOLESALE (same shape as the pre-migration-123 notification_
+      // preferences bug) — merge over the EXISTING stored conflicts here,
+      // in application code, so a conflict recorded for a DIFFERENT locked
+      // field in a prior run is not silently wiped by this run.
+      const existingMemory = await fetchCoachMemory(supabase, userId);
+      const existingConflicts =
+        (existingMemory?.locked_field_conflicts as Record<string, unknown> | null) ?? {};
+      await upsertCoachMemory(supabase, userId, {
+        locked_field_conflicts: { ...existingConflicts, ...conflicts },
+      });
+    } catch (e) {
+      console.error("[daily-snapshot] locked_field_conflicts write error (non-fatal):", e);
+    }
+  }
+}
+
+// `injuries` is a string[] — comparing arrays with `!==` in JS/TS is ALWAYS
+// true regardless of content (reference equality on two distinct array
+// instances), which would mark every re-extraction of an unchanged injuries
+// list as a "conflict" forever. Sort copies (never mutate the inputs) before
+// comparing so element ORDER doesn't manufacture a false conflict either.
+// Same cross-language reference-equality class as the Dart `listEquals`
+// lesson this repo already tracks.
+function valuesEqualForLockCheck(a: unknown, b: unknown): boolean {
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    const sortedA = [...a].sort();
+    const sortedB = [...b].sort();
+    return sortedA.every((v, i) => v === sortedB[i]);
+  }
+  if (Array.isArray(a) || Array.isArray(b)) return false;
+  return a === b;
 }
 
 // a2b (single-owner batch, 2026-09-27): exported so item 11's `:293` guard

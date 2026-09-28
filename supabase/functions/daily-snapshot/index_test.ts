@@ -35,9 +35,10 @@ const source = Deno.readTextFileSync(
   new URL("./index.ts", import.meta.url),
 );
 
-const { extractCoachingNotes, mergeCoachMemoryFields } = await import(
-  "./index.ts"
-);
+const { extractCoachingNotes, mergeCoachMemoryFields, mergeCoachingNotes } =
+  await import(
+    "./index.ts"
+  );
 
 Deno.test("daily-snapshot imports the shared merge helper", () => {
   assert(
@@ -470,6 +471,13 @@ function fakeSupabase(opts: {
   rpcResult?: { data: unknown; error: unknown };
   onRpc?: (name: string, args: Record<string, unknown>) => void;
   onUpsert?: (table: string, payload: Record<string, unknown>) => void;
+  // a2b-2 (single-owner batch, 2026-09-27): lets a test drive
+  // mergeCoachingNotes's locked-field guard against a specific
+  // user_profile / coach_memory row shape without disturbing any existing
+  // test, which never sets these and so falls through to the pre-existing
+  // generic (table !== "ai_coach_interactions") branch below.
+  userProfileRow?: Record<string, unknown> | null;
+  coachMemoryRow?: Record<string, unknown> | null;
 }) {
   const rows = opts.convoRows ?? [];
   return {
@@ -479,6 +487,12 @@ function fakeSupabase(opts: {
         if (upsertCall) {
           opts.onUpsert?.(table, upsertCall.args[0] as Record<string, unknown>);
           return { data: null, error: null };
+        }
+        if (table === "user_profile" && opts.userProfileRow !== undefined) {
+          return { data: opts.userProfileRow, error: null };
+        }
+        if (table === "coach_memory" && opts.coachMemoryRow !== undefined) {
+          return { data: opts.coachMemoryRow, error: null };
         }
         if (table !== "ai_coach_interactions") {
           const isSingle = calls.some((c) => c.method === "maybeSingle");
@@ -873,5 +887,237 @@ Deno.test("mergeCoachMemoryFields no longer writes last_extraction_at (source pr
   assert(
     !body.includes("patch.last_extraction_at ="),
     "mergeCoachMemoryFields must not assign patch.last_extraction_at anymore",
+  );
+});
+
+// ── a2b-2 (single-owner batch, 2026-09-27): mergeCoachingNotes's
+// locked-field guard + conflict-marker logic (migration 148). ──────────────
+
+Deno.test("mergeCoachingNotes: an unlocked field is applied to user_profile normally", async () => {
+  const upserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
+  const supabase = fakeSupabase({
+    userProfileRow: { coach_extraction_locked_fields: [], diet_preference: "non_veg" },
+    onUpsert: (table, payload) => upserts.push({ table, payload }),
+  });
+
+  await mergeCoachingNotes(supabase, "u1", { diet_preference: "vegetarian" });
+
+  const profileUpsert = upserts.find((u) => u.table === "user_profile");
+  assert(profileUpsert, "user_profile must be upserted when nothing is locked");
+  assertEquals(profileUpsert!.payload.diet_preference, "vegetarian");
+  assert(
+    !upserts.some((u) => u.table === "coach_memory"),
+    "no conflict marker should be written when the field isn't locked",
+  );
+});
+
+Deno.test("mergeCoachingNotes: a locked field with a DIFFERENT attempted value is skipped and recorded as a conflict, not applied", async () => {
+  const upserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
+  const supabase = fakeSupabase({
+    userProfileRow: {
+      coach_extraction_locked_fields: ["diet_preference"],
+      diet_preference: "vegetarian",
+    },
+    coachMemoryRow: null,
+    onUpsert: (table, payload) => upserts.push({ table, payload }),
+  });
+
+  await mergeCoachingNotes(supabase, "u1", { diet_preference: "non_veg" });
+
+  const profileUpsert = upserts.find((u) => u.table === "user_profile");
+  assert(
+    !profileUpsert || !("diet_preference" in profileUpsert.payload),
+    "a locked field must NEVER be overwritten by extraction, even when the " +
+      "attempted value differs from what the user set",
+  );
+  const memoryUpsert = upserts.find((u) => u.table === "coach_memory");
+  assert(memoryUpsert, "a real conflict (differing value) must write a marker");
+  const conflicts = memoryUpsert!.payload.locked_field_conflicts as Record<string, unknown>;
+  assertEquals(
+    (conflicts.diet_preference as { attempted_value: unknown }).attempted_value,
+    "non_veg",
+  );
+  assert(
+    typeof (conflicts.diet_preference as { at: unknown }).at === "string",
+    "the conflict marker must carry a timestamp",
+  );
+});
+
+Deno.test("mergeCoachingNotes: a locked field re-confirmed with the SAME value is neither applied nor recorded as a conflict", async () => {
+  const upserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
+  const supabase = fakeSupabase({
+    userProfileRow: {
+      coach_extraction_locked_fields: ["diet_preference"],
+      diet_preference: "vegetarian",
+    },
+    onUpsert: (table, payload) => upserts.push({ table, payload }),
+  });
+
+  await mergeCoachingNotes(supabase, "u1", { diet_preference: "vegetarian" });
+
+  assertEquals(
+    upserts.filter((u) => u.table === "user_profile" || u.table === "coach_memory").length,
+    0,
+    "re-confirming the exact same value the user already locked in is not a " +
+      "conflict and must produce no write at all",
+  );
+});
+
+Deno.test("mergeCoachingNotes: locked injuries — array VALUE equality, not reference/order (the cross-language reference-equality class)", async () => {
+  const upserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
+  const supabase = fakeSupabase({
+    userProfileRow: {
+      coach_extraction_locked_fields: ["injuries"],
+      injuries: ["knee", "shoulder"],
+    },
+    onUpsert: (table, payload) => upserts.push({ table, payload }),
+  });
+
+  // Same elements, different order, and a DISTINCT array instance — a naive
+  // `!==` comparison (always true for two different array instances) would
+  // wrongly report this as a conflict.
+  await mergeCoachingNotes(supabase, "u1", { injuries: ["shoulder", "knee"] });
+
+  assertEquals(
+    upserts.filter((u) => u.table === "user_profile" || u.table === "coach_memory").length,
+    0,
+    "an order-different but value-equal injuries list must not be treated as a conflict",
+  );
+});
+
+Deno.test("mergeCoachingNotes: locked injuries — a GENUINELY different list IS recorded as a conflict", async () => {
+  const upserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
+  const supabase = fakeSupabase({
+    userProfileRow: {
+      coach_extraction_locked_fields: ["injuries"],
+      injuries: ["knee"],
+    },
+    onUpsert: (table, payload) => upserts.push({ table, payload }),
+  });
+
+  await mergeCoachingNotes(supabase, "u1", { injuries: ["knee", "shoulder"] });
+
+  const memoryUpsert = upserts.find((u) => u.table === "coach_memory");
+  assert(memoryUpsert, "a genuinely different injuries list must record a conflict");
+  const conflicts = memoryUpsert!.payload.locked_field_conflicts as Record<string, unknown>;
+  assertEquals(
+    (conflicts.injuries as { attempted_value: unknown }).attempted_value,
+    ["knee", "shoulder"],
+  );
+});
+
+Deno.test("mergeCoachingNotes: a NEW conflict merges over an EXISTING one for a different field, never replacing it", async () => {
+  const upserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
+  const supabase = fakeSupabase({
+    userProfileRow: {
+      coach_extraction_locked_fields: ["diet_preference", "lifestyle_activity"],
+      diet_preference: "vegetarian",
+      lifestyle_activity: "desk_job",
+    },
+    coachMemoryRow: {
+      locked_field_conflicts: {
+        lifestyle_activity: { attempted_value: "very_active_job", at: "2026-09-01T00:00:00.000Z" },
+      },
+    },
+    onUpsert: (table, payload) => upserts.push({ table, payload }),
+  });
+
+  await mergeCoachingNotes(supabase, "u1", { diet_preference: "non_veg" });
+
+  const memoryUpsert = upserts.find((u) => u.table === "coach_memory");
+  assert(memoryUpsert, "expected a coach_memory upsert recording the new conflict");
+  const conflicts = memoryUpsert!.payload.locked_field_conflicts as Record<string, unknown>;
+  assert(
+    "lifestyle_activity" in conflicts,
+    "upsertCoachMemory's ON CONFLICT DO UPDATE SET replaces this jsonb column " +
+      "wholesale — mergeCoachingNotes must merge over the EXISTING stored " +
+      "conflicts itself, or this run's write silently erases a prior run's " +
+      "conflict for a DIFFERENT field (the pre-migration-123 notification_ " +
+      "preferences bug, one column over)",
+  );
+  assertEquals(
+    (conflicts.diet_preference as { attempted_value: unknown }).attempted_value,
+    "non_veg",
+  );
+});
+
+// ── B-pass finding 1 (2026-09-28): the locked-field guard above shipped
+// live with no kill-switch, violating platform tier's §4.6/blast_radius.yaml
+// `feature_flag` requirement. DISABLE_COACH_EXTRACTION_LOCK_GUARD reverts
+// JUST this guard to its pre-a2b-2 unconditional-write behavior, without
+// disabling extraction entirely (that's the pre-existing, broader
+// DISABLE_COACH_EXTRACTION switch tested above). ──────────────────────────
+
+Deno.test("daily-snapshot's locked-field guard has its own narrower kill-switch (platform-tier §4.6)", () => {
+  assert(
+    source.includes('Deno.env.get("DISABLE_COACH_EXTRACTION_LOCK_GUARD")'),
+    "platform tier requires a feature_flag per docs/blast_radius.yaml — the " +
+      "locked-field guard must be gated so it can revert to unconditional " +
+      "writes without a redeploy",
+  );
+  const guardIdx = source.indexOf('Deno.env.get("DISABLE_COACH_EXTRACTION_LOCK_GUARD")');
+  const lockRowIdx = source.indexOf(".select(\"coach_extraction_locked_fields");
+  assert(
+    guardIdx >= 0 && lockRowIdx >= 0 && guardIdx < lockRowIdx,
+    "the kill-switch check must run BEFORE the lock-status read, or the " +
+      "revert path still pays for (and could still be gated by) the read " +
+      "it's supposed to skip",
+  );
+});
+
+Deno.test("mergeCoachingNotes: DISABLE_COACH_EXTRACTION_LOCK_GUARD=true writes a locked field unconditionally, no lock check, no conflict marker", async () => {
+  Deno.env.set("DISABLE_COACH_EXTRACTION_LOCK_GUARD", "true");
+  try {
+    const upserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
+    const supabase = fakeSupabase({
+      userProfileRow: {
+        coach_extraction_locked_fields: ["diet_preference"],
+        diet_preference: "vegetarian",
+      },
+      onUpsert: (table, payload) => upserts.push({ table, payload }),
+    });
+
+    await mergeCoachingNotes(supabase, "u1", { diet_preference: "non_veg" });
+
+    const profileUpsert = upserts.find((u) => u.table === "user_profile");
+    assert(
+      profileUpsert,
+      "with the kill-switch on, a locked field must be written exactly like " +
+        "the pre-a2b-2 behavior, ignoring the lock",
+    );
+    assertEquals(profileUpsert!.payload.diet_preference, "non_veg");
+    assert(
+      !upserts.some((u) => u.table === "coach_memory"),
+      "the kill-switch path must never write a conflict marker — there is " +
+        "no lock check to have produced one",
+    );
+  } finally {
+    Deno.env.delete("DISABLE_COACH_EXTRACTION_LOCK_GUARD");
+  }
+});
+
+Deno.test("mergeCoachingNotes: with the kill-switch OFF (default), the lock is still enforced (mutation check for the guard above)", async () => {
+  // Deno.env is unset here (no set() call) — proves the switch defaults to
+  // off/false rather than "unset reads as true", which would silently
+  // disable the guard for everyone until someone explicitly set it false.
+  assertEquals(Deno.env.get("DISABLE_COACH_EXTRACTION_LOCK_GUARD"), undefined);
+
+  const upserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
+  const supabase = fakeSupabase({
+    userProfileRow: {
+      coach_extraction_locked_fields: ["diet_preference"],
+      diet_preference: "vegetarian",
+    },
+    onUpsert: (table, payload) => upserts.push({ table, payload }),
+  });
+
+  await mergeCoachingNotes(supabase, "u1", { diet_preference: "non_veg" });
+
+  const profileUpsert = upserts.find((u) => u.table === "user_profile");
+  assert(
+    !profileUpsert || !("diet_preference" in profileUpsert.payload),
+    "with the switch unset (default), the lock must still be enforced — " +
+      "this is the mutation check: flipping the guard's comparison to " +
+      "`!== \"true\"`, or defaulting it truthy, would redden this test",
   );
 });

@@ -20,7 +20,24 @@ Deno.test("pickQuickFix: <20g gap, veg", () => {
   assertEquals(pickQuickFix(10, "veg"), "Quick fix: a glass of milk + 30g almonds.");
 });
 Deno.test("pickQuickFix: <20g gap, non-veg", () => {
-  assertEquals(pickQuickFix(5, "eggetarian"), "Quick fix: 2 boiled eggs.");
+  // Corrected 2026-09-27 (a2b-2): the prior version of this test asserted
+  // "eggetarian", a value that has never existed anywhere in this app's
+  // diet_preference vocabulary (confirmed by grep across lib/ + supabase/)
+  // — an asserted_fixture_value defect (code-review lens 8), not a real
+  // coverage case. "pescatarian" is a REAL value the client's Edit Profile
+  // chips write and correctly falls to the non-veg branch.
+  assertEquals(pickQuickFix(5, "pescatarian"), "Quick fix: 2 boiled eggs.");
+});
+Deno.test("pickQuickFix: >=40g gap, vegetarian counts as veg (a2b-2 regression — the P1 vocabulary bug)", () => {
+  // Real bug, not hypothetical: onboarding writes diet_preference='veg' by
+  // default, but the client's own Edit Profile chips write 'vegetarian' —
+  // the value most users who explicitly picked a diet preference actually
+  // carry. Pre-fix, isVeg checked only "veg"/"vegan", so every vegetarian
+  // user who had edited their profile got the non-veg suggestion.
+  assertEquals(pickQuickFix(45, "vegetarian"), "Quick fix: 200g paneer + a glass of milk.");
+});
+Deno.test("pickQuickFix: keto falls to non-veg branch", () => {
+  assertEquals(pickQuickFix(5, "keto"), "Quick fix: 2 boiled eggs.");
 });
 
 Deno.test("buildProteinGapMessage assembles greeting + gap + quick-fix + CTA", () => {

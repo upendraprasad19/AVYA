@@ -4,8 +4,8 @@
     "project_id": "dedsavbjuwgarrhphgnl",
     "captured_at": "2026-08-26",
     "captured_via": "SELECT table_name, array_agg(column_name) FROM information_schema.columns WHERE table_schema='public' GROUP BY table_name",
-    "regenerated_at": "2026-09-21",
-    "regenerated_for": "migration 138 (subscriptions.cancelled_at trigger, observation-batch-and-digest-redesign B3). Verified against live information_schema on project dedsavbjuwgarrhphgnl AFTER the apply (cloud version 20260921172242, ordinal_position 12). subscriptions gained one column; no other table changed. Migration 139 (alert_cron_failures) is a cron.schedule() job only, adds no column, moves nothing here."
+    "regenerated_at": "2026-09-28",
+    "regenerated_for": "migration 148 (coach_extraction_locked_fields, single-owner-a2b-2 batch). Verified with a FULL live information_schema.columns dump on project dedsavbjuwgarrhphgnl (not just the two columns this migration added) and diffed programmatically against every table already in this file, table-by-table and column-by-column — deliberately wide, since migrations 140-147 landed on other branches/sessions since this file's 2026-09-21 regen and were not individually re-verified one by one. Found and fixed THREE column gaps, only one of which is this batch's own: user_profile gained coach_extraction_locked_fields (migration 148, this batch); coach_memory gained locked_field_conflicts (migration 148, this batch); workout_templates gained deleted_at (migrations 145/146 on a DIFFERENT, already-merged-to-origin/main branch — see OI-258, the same investigation that found the 145/146 migration-number collision). No other table differed between the full live dump and the pre-this-commit file — every other table's column SET matched exactly."
   },
   "storage_buckets": [
     "chat-media",
@@ -125,7 +125,8 @@
       "known_injuries",
       "typical_wake_time",
       "preferred_workout_time",
-      "body_part_priorities"
+      "body_part_priorities",
+      "locked_field_conflicts"
     ],
     "coach_tool_invocations_v": [
       "interaction_id",
@@ -523,7 +524,8 @@
       "current_rank_achieved_at",
       "preferred_workout_time",
       "equipment_exclusions",
-      "equipment_owned"
+      "equipment_owned",
+      "coach_extraction_locked_fields"
     ],
     "user_progress": [
       "id",
@@ -702,7 +704,8 @@
       "source",
       "is_active",
       "created_at",
-      "last_used_at"
+      "last_used_at",
+      "deleted_at"
     ]
   }
 }

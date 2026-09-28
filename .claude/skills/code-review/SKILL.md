@@ -3202,3 +3202,25 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   against the code's own stated rationale before applying it, the same "verify every claim against
   code, never subagent prose" discipline this repo already applies to the finding itself.** Review:
   `docs/reviews/aee7dfb3bf10-review.md`.
+- **2026-09-28** — blast-radius **platform** — branch `single-owner-a2b` (unit a2b-2: coach-extraction
+  locked-fields; staged-against `b56bd6f49571`). **2 findings, 0 false alarms, both fixed same commit.**
+  F1 (P2, blast_radius_mismatch) caught the platform-tier `feature_flag` requirement (§4.6/
+  `docs/blast_radius.yaml`) missing entirely for the batch's new locked-field guard, which had already
+  gone LIVE (migration applied, both Edge Functions deployed) with no kill-switch — the ONLY recovery
+  path for a misfire would have been a redeploy. Fixed with a narrower `DISABLE_COACH_EXTRACTION_LOCK_GUARD`
+  switch (deliberately separate from the pre-existing, coarser `DISABLE_COACH_EXTRACTION`), mutation-proven.
+  F2 (P3, guard_without_its_mirror/rule-21) caught that of TWO places sharing one deliberately-duplicated
+  naming-scheme bug fix (`emit_payload.js` and `deploy_via_api.js`'s `--rollback` path), only the first got
+  a persisted automated regression test — the second's "mutate it and run it" proof was hand-run and
+  recorded only in prose, with no test file to catch a FUTURE regression in that copy. **Tuning, two
+  lessons:** (1) a live platform-tier deploy is exactly the scenario §4.6 exists for, and a review pass
+  should check for a kill-switch on ANY new server-side behavioral branch that has already shipped live,
+  not just ones still in review — "designed, reviewed, and pushed to prod without incident" does not mean
+  "safe without one," it means "not yet tested under the failure the switch exists for." (2) when a fix is
+  DELIBERATELY duplicated across two files "so both surfaces stay byte-identical" (a real, documented
+  pattern in this repo — see `docs/diagnoses/2026-05-21-edge-function-rollback-I3-b3ecf2.md`), rule 21's
+  "a test for every fix" applies to EACH copy independently, not once for the pattern as a whole; a
+  reviewer should explicitly grep for every OTHER call site sharing a "same bug, second copy" fix and
+  confirm each one individually has its own regression test, since a fix's own diagnose-doc prose reads as
+  equally confident about both copies even when only one is actually machine-verified going forward.
+  Review: `docs/reviews/b56bd6f49571-review.md`.

@@ -22,11 +22,24 @@
 // stripping, no whitespace compression. The whole point is to make the
 // MCP deploy reproducible from git.
 //
-// Path-naming scheme (matches what ai-proxy v42 was deployed with):
+// Path-naming scheme (fixed 2026-09-27/28, diagnose a2b2f1 — the old scheme
+// named every non-entry file `../<path-relative-to-functions-dir>`
+// unconditionally, which happened to match what ai-proxy v42 was deployed
+// with ONLY because ai-proxy has zero same-directory sibling files. It
+// silently broke every function with a same-dir sibling of index.ts — e.g.
+// `./message.ts` in protein-gap-alert/morning-alert/plateau-alert/
+// pr-detection/re-engagement/streak-guardian/workout-window-closing, or
+// `./trend.ts` in future-prediction, `./congrats.ts` in
+// proactive-coach-promotion — deploying it as `../<fn-name>/message.ts` (a
+// sibling of `source/`) instead of `message.ts` (inside `source/`, where
+// index.ts's own `./message.ts` import actually looks). See payloadName()
+// below for the corrected rule):
 //   - The entry file is always named `index.ts`.
-//   - Every other file is named `../<path-relative-to-functions-dir>`.
-//     E.g. `_shared/tools/workout/swapExercise.ts` →
-//          `../_shared/tools/workout/swapExercise.ts`.
+//   - Every other file is named relative to the ENTRY's OWN DIRECTORY
+//     (not functions-dir). A file outside the entry's directory climbs out
+//     with `../` as usual (e.g. `_shared/tools/workout/swapExercise.ts` →
+//     `../_shared/tools/workout/swapExercise.ts`); a same-directory
+//     sibling of index.ts stays bare (e.g. `message.ts` → `message.ts`).
 
 const fs = require('fs');
 const path = require('path');
@@ -87,12 +100,27 @@ if (!fs.existsSync(entryPath)) {
 // ---- Helpers ---------------------------------------------------------------
 
 // Compute the payload "name" for a file — `index.ts` for the entry, and
-// `../<path-from-functions-dir>` for everything else. We always emit
-// forward slashes regardless of host OS (Deno/MCP expects POSIX-style).
+// everything else named RELATIVE TO THE ENTRY'S OWN DIRECTORY (not
+// functionsDir). This matters for a same-directory sibling of index.ts
+// (e.g. `./message.ts` in protein-gap-alert, morning-alert, etc.): its
+// path relative to functionsDir is `<fn-name>/message.ts`, which used to
+// get unconditionally prefixed with `../` — deployed as
+// `../<fn-name>/message.ts`, a sibling of `source/` rather than a file
+// INSIDE `source/`. Deno then reports "Module not found .../source/message.ts"
+// because index.ts's own `./message.ts` import expects it right next to
+// itself. Relative-to-entry-dir gives the correct name in both cases:
+// `_shared/gemini.ts` → `../_shared/gemini.ts` (still climbs out, since
+// `_shared/` is NOT inside the entry's directory) but `message.ts` stays
+// `message.ts` (no `../`, since it already lives in the entry's own dir).
+// We always emit forward slashes regardless of host OS (Deno/MCP expects
+// POSIX-style).
 function payloadName(absPath) {
   if (absPath === entryPath) return 'index.ts';
-  const rel = path.relative(functionsDir, absPath).split(path.sep).join('/');
-  return `../${rel}`;
+  const rel = path
+    .relative(path.dirname(entryPath), absPath)
+    .split(path.sep)
+    .join('/');
+  return rel;
 }
 
 // Parse all relative imports out of a TS source string. Captures the

@@ -195,6 +195,20 @@ Each row is a **per-exercise summary** (NOT per-set), matching the Hive exlog_* 
   (so the same window is retried next run); a successful call — even with zero
   new facts — does.
 - NOT per-message extraction (too expensive)
+- **Locked-field guard (a2b-2, single-owner batch, 2026-09-27):** three of the
+  extracted facts (`diet_preference`, `lifestyle_activity`, `injuries`) are
+  ALSO writable directly by the user (Edit Profile save; injuries additionally
+  at onboarding). Before writing any of them into `user_profile`, extraction
+  checks `user_profile.coach_extraction_locked_fields` (migration 148,
+  additive-only, written ONLY via `lock_coach_extraction_fields`) and skips a
+  locked field entirely — instead recording an attempted-value conflict
+  marker on `coach_memory.locked_field_conflicts`, which reaches this same
+  prompt context via `coach_memory`'s existing wholesale pass-through (see
+  `lib/features/ai_coach/CLAUDE.md`). See `docs/sot_registry.yaml`'s
+  `coach_extraction_locked_fields` concept for the full writer/reader map,
+  including the ground-truth correction (the design originally targeted
+  `user_preferences.coaching_notes`, which has zero readers) discovered
+  during implementation rather than by any of the plan's 5 review rounds.
 
 ## Context Injection
 - System prompt receives `user_daily_snapshot` JSON (~300 tokens)
