@@ -2,7 +2,7 @@
 bug_id: c3e8b2
 date: 2026-09-26
 batch: day-swapper-sync-load
-status: fixed_pending_live_apply
+status: fixed
 blast_radius: platform
 symptom: |
   Asking the AI coach to "shift today's workout to tomorrow and tomorrow's workout to today" (the
@@ -80,7 +80,7 @@ touched_layers_checked:
   - { tier: 3, name: postgres_schema, status: not_applicable, evidence: "No DDL is involved in tool routing." }
   - { tier: 4, name: postgres_data, status: not_applicable, evidence: "No cloud data read or write is involved in tool selection." }
   - { tier: 5, name: migrations_applied, status: not_applicable, evidence: "No migration is needed for this bug." }
-  - { tier: 6, name: edge_function_code_vs_deploy, status: fixed_pending_live_apply, evidence: "captain_manual.ts, rescheduleWeek.ts, registry.ts and the new swapWorkoutDays.ts all committed (Task 9 commit 8d56ccd3/2cb978c1; Task 27 commit 9925bf71/cf99ff1c + fix ae700095/5a764182), deno check ai-proxy/index.ts exit 0, but NOT yet deployed to the live ai-proxy Edge Function — Task 34 deploys with its own founder go and this status moves to fixed_in_this_batch then." }
+  - { tier: 6, name: edge_function_code_vs_deploy, status: verified, evidence: "captain_manual.ts, rescheduleWeek.ts, registry.ts and the new swapWorkoutDays.ts committed (Task 9 8d56ccd3/2cb978c1; Task 27 9925bf71/cf99ff1c + fix ae700095/5a764182), deno check ai-proxy/index.ts exit 0. ai-proxy deployed live 2026-09-28 as v89 (verify_jwt false, unchanged) from the merged tree 19b42747/60b0802c on the founder's explicit go, via the host-shell byte-identical flow; payload snapshot backups/edge_function_payloads/ai-proxy/v4_60b0802.json. Smoke: HTTP 401 unauthenticated (the function's own auth). The coach-conversation check with a real signed-in user is part of Task 34's web E2E / device test." }
   - { tier: 7, name: cron_jobs, status: not_applicable, evidence: "No cron job is involved in coach tool routing." }
   - { tier: 8, name: rls_policies, status: not_applicable, evidence: "No RLS-governed table is touched by this fix." }
   - { tier: 9, name: storage, status: not_applicable, evidence: "No Storage bucket or object is involved." }

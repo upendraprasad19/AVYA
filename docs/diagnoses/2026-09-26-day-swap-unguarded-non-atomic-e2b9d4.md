@@ -104,7 +104,7 @@ touched_layers_checked:
   - { tier: 3, name: postgres_schema, status: not_applicable, evidence: "The allowance ledger schema (usage_counters) already exists from migration 128; this bug's fixes need no new DDL of their own." }
   - { tier: 4, name: postgres_data, status: not_applicable, evidence: "Each of the nine defects was confirmed by reading the client code directly (spec §1.2, 'each read in code'), not by querying live Postgres data." }
   - { tier: 5, name: migrations_applied, status: not_applicable, evidence: "No new migration is needed for the engine rebuild itself." }
-  - { tier: 6, name: edge_function_code_vs_deploy, status: fixed_pending_live_apply, evidence: "The counter-miscounting defect (point 5) is replaced by the new consume-day-swap Edge Function backed by the existing consume_quota RPC (spec §5.3), committed in Task 8 (U2, commit 1001b41d) but NOT yet deployed — Task 34 deploys it with its own founder go. Not blocking this doc's overall `fixed` status: the client allowance is fail-open by design (global constraints — 'Server count wins when online; fail open; offline overage is tolerated'), so the phone-copy DayAllowance already fixes the client-side miscount independent of the EF's deploy state." }
+  - { tier: 6, name: edge_function_code_vs_deploy, status: verified, evidence: "The counter-miscounting defect (point 5) is replaced by the new consume-day-swap Edge Function backed by the existing consume_quota RPC (spec §5.3), committed in Task 8 (U2, commit 1001b41d) and deployed live 2026-09-28 as v1 (verify_jwt true) from the merged tree on the founder's explicit go; smoke without a token HTTP 401 at the gateway, and with the public anon key (no user) HTTP 401 'Authentication required' from the function's own auth branch, proving the body boots; the real signed-in-user check is part of Task 34's web E2E / device test. Not blocking this doc's overall `fixed` status: the client allowance is fail-open by design (global constraints — 'Server count wins when online; fail open; offline overage is tolerated'), so the phone-copy DayAllowance already fixes the client-side miscount independent of the EF's deploy state." }
   - { tier: 7, name: cron_jobs, status: not_applicable, evidence: "No cron job reads or writes any of the nine defect sites." }
   - { tier: 8, name: rls_policies, status: not_applicable, evidence: "No RLS policy change is needed; usage_counters' existing policy is unchanged." }
   - { tier: 9, name: storage, status: not_applicable, evidence: "No Storage bucket or object is involved." }
@@ -141,7 +141,7 @@ is filed as new.
 - `WorkoutWriteService.swapScheduledDays` + `WriteSource.daySwap`: Task 6 (coordinator, Wave 0) — lands
   first because U4 depends on it. Landed `3b2fd2c0`.
 - `consume-day-swap` Edge Function: Task 8 (U2, Wave 1). Landed `1ccce8be` + fix rounds `ed2655e0` +
-  `6ef55e2d` (integrated as one squashed coordinator commit `1001b41d`). Not yet deployed live.
+  `6ef55e2d` (integrated as one squashed coordinator commit `1001b41d`). Deployed live 2026-09-28 (v1).
 - The template-null-link fix and the deload skip removal: the template-null fix landed with Task 15
   (`3c376f77`, coordinator inline); `deload_evaluator.dart` is U4-owned and its `is_swapped` skip
   removal landed with Task 11's integration (`a9366949`).

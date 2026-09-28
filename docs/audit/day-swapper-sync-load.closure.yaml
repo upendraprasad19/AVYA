@@ -54,13 +54,11 @@ findings:
 
   - id: BUG-c3e8b2
     title: "The coach routes a two-day workout exchange to rescheduleWeek instead of swapping"
-    terminal_state: blocked_on_user
-    reason: >
-      Code and tests are complete and committed (8d56ccd3/2cb978c1, 9925bf71/cf99ff1c, ae700095/
-      5a764182 — Deno 54/54, deno check ai-proxy/index.ts exit 0), but the fix lives in ai-proxy,
-      which is not yet deployed live. Deploying an Edge Function needs the founder's explicit go per
-      commit (CLAUDE.md §4.3) — Task 34 requests it and flips this to closed_in_commit with the
-      live deploy's evidence.
+    terminal_state: closed_in_commit
+    commit: "day-swapper-sync-load (Task 34 deploy-record commit)"
+    verification: >
+      Code and tests committed (8d56ccd3/2cb978c1, 9925bf71/cf99ff1c, ae700095/5a764182 — Deno
+      54/54). ai-proxy deployed live 2026-09-28 as v89 (verify_jwt false, unchanged) from the merged tree 19b42747/60b0802c on the founder's explicit go, via the host-shell byte-identical flow; payload snapshot backups/edge_function_payloads/ai-proxy/v4_60b0802.json. Smoke: HTTP 401 unauthenticated (the function's own auth). The coach-conversation check with a real signed-in user is part of Task 34's web E2E / device test.
 
   - id: BUG-e2b9d4
     title: "The existing day swap has no guards and is not atomic (9 defects)"
@@ -68,8 +66,8 @@ findings:
     commit: "3b2fd2c0, aa697efd, eb07e849, ef021699, 372f478b, a9366949, 64edfc6b, 595c68b4, ea93f97d, 1ccce8be, ed2655e0, 6ef55e2d, 1001b41d, 3c376f77"
     verification: >
       All 9 defects fixed: the atomic write, field partition and markers (U4, Tasks 10-12), the
-      server-backed allowance (Task 8, EF committed but not yet deployed — tolerated by design since
-      the client allowance is fail-open), the template_id: null fix (Task 15) and the deload
+      server-backed allowance (Task 8; consume-day-swap deployed live 2026-09-28 as v1 — before that
+      the client allowance ran fail-open by design), the template_id: null fix (Task 15) and the deload
       is_swapped skip removal (Task 11). test/services/day_swap/ 61/61, 7/7+84/84 (Task 12) green.
 
   - id: BUG-f4c7a9
