@@ -436,12 +436,25 @@ by this specific mutation — stayed green. Restored the fix via `cp` from a
 manual backup (never `git checkout`) and confirmed 40/40 green again.
 `deno check --node-modules-dir=none` clean on the fixed file.
 
-**Not yet redeployed as of this section** — `daily-snapshot` was already
-deployed live (v28) as part of this unit's earlier work, BEFORE this
-kill-switch fix landed in source. A redeploy is required to make the live
-function actually carry this switch, and per §4.3 that redeploy needs its
-own fresh explicit founder authorization, separate from both the v28 deploy
-authorization and the migration-148 apply authorization already obtained.
+**UPDATE (2026-09-28, post-commit) — redeployed.** Founder authorized this
+redeploy explicitly (via `AskUserQuestion`, separate from both the earlier
+v28 deploy authorization and the migration-148 apply authorization).
+`node .claude/emit_payload.js daily-snapshot --auto --functions-dir ...`
+confirmed byte-for-byte (via a direct JSON parse of the emitted payload)
+that the reconstructed `index.ts` content contains
+`DISABLE_COACH_EXTRACTION_LOCK_GUARD` before deploying. Deployed via
+`node .claude/deploy_via_api.js dedsavbjuwgarrhphgnl daily-snapshot
+.claude/_payload_daily-snapshot.json true --token-file
+"/home/ubuntu/projects/avya/.supabase/supabase access token.txt" --yes`
+(the ROOT token file — see `docs/diagnoses/2026-09-26-root-supabase-token-dir-not-gitignored-c6f2a8.md`;
+the nested `supabase/.supabase/` copy is the stale one) →
+**HTTP 201, `daily-snapshot` → v29**, smoke OK (401, tolerated for
+`verify_jwt=true`). Boot-verified per the deploy skill's own caveat (an
+unauthenticated smoke only proves the GATEWAY responded, not that the
+module booted): a direct anon-key-Bearer POST returned **401
+`{"error":"Invalid or expired token"}`** — the function's OWN auth-rejection
+logic running, not a gateway-level 503 — confirming v29 loaded cleanly with
+no parse/import error. The switch is now live and operator-flippable.
 
 **Finding 2 (P3, guard_without_its_mirror / rule 21) — `deploy_via_api.js`'s
 `--rollback` fix (documented above, "Same bug, second copy") had no
