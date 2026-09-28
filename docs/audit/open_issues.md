@@ -6082,8 +6082,27 @@ Tables are small, so the timeout is not payload size; suspect connection/auth wa
 ## OI-252 — Workout templates: one stable identity (delete/rename propagation, unit 2a)
 
 - **Status**: OPEN
-- **Blocked on**: B-pass self-review (platform blast radius, mandatory before `--no-ff` merge) + the merge to `main` itself.
-- **Verified**: 2026-09-27 — implementation complete and gate-green: client restore rework across all three template_id-carrying restore paths, migration 145 applied live to dedsavbjuwgarrhphgnl (pg_trigger + information_schema.columns confirmed), `restore-user-snapshot` (v7) and `workout-window-closing` (v15) deployed and Deno-tested pre-deploy, `backups/applied_migrations.json` + `backups/live_schema_columns.json` updated, full `sh scripts/pre-commit.sh` reports OK. 10 new behavioral tests, mutation-proven on 3 legs. Diagnose-doc `docs/diagnoses/2026-09-27-deleted-workout-template-resurrects-via-restore-f4a8c2.md`.
+- **Blocked on**: founder on-device verification only. Everything else this entry previously
+  listed as blocking (B-pass self-review, the merge to `main`) is done — see Verified below. This
+  field went stale the same way OI-258's did (board not re-read after the work that closed it);
+  corrected 2026-09-29 rather than left for a future session to re-discover.
+- **Verified**: 2026-09-28 (superseding the 2026-09-27 note below) — merged to `main` in two
+  waves (`82844bfd`, `43b89035`, final `d8832af8`), both self-triggered B-pass reviews on the
+  reconciliation merges accepted (`docs/reviews/merge-reconciliation-82844bfd-review.md`: 3
+  findings, 2 fixed + 1 false_alarm; `merge-reconciliation-43b89035-review.md`: 0 findings).
+  Migration 145 confirmed live via `list_migrations` + `backups/applied_migrations.json`
+  (`20260927011446`); migration 146 (same-unit B-pass Finding 1 fix, BEFORE INSERT OR UPDATE)
+  also live (`20260927045029`). `restore-user-snapshot` (v7) and `workout-window-closing` (v15)
+  confirmed deployed via `list_edge_functions` (`updated_at` matching the local payload-backup
+  timestamps) AND a live `get_edge_function` source fetch matching the committed code
+  byte-for-byte at the OI-252 markers. Full local suite green (6589 tests) at push time.
+  PRIOR (2026-09-27, kept for record): implementation complete and gate-green: client restore
+  rework across all three template_id-carrying restore paths, migration 145 applied live to
+  dedsavbjuwgarrhphgnl (pg_trigger + information_schema.columns confirmed),
+  `restore-user-snapshot` (v7) and `workout-window-closing` (v15) deployed and Deno-tested
+  pre-deploy, `backups/applied_migrations.json` + `backups/live_schema_columns.json` updated,
+  full `sh scripts/pre-commit.sh` reports OK. 10 new behavioral tests, mutation-proven on 3 legs.
+  Diagnose-doc `docs/diagnoses/2026-09-27-deleted-workout-template-resurrects-via-restore-f4a8c2.md`.
 - **Identified**: 2026-09-26 · filed via mint_oi.sh from branch `template-stable-identity`
 
 Fix shape: migration 145 (add `deleted_at`, keep `UNIQUE(user_id,name)`, BEFORE UPDATE trigger renames on delete-transition + no-ops any write to an already-deleted row) + `restore-user-snapshot`/`workout-window-closing` EF updates + client rework of template create/push/restore/delete across `sync_workout.dart`, `template_service.dart`, `train_provider.dart`, `workout_write_service.dart`, plus a one-time legacy-key migrator. Saved meals (unit 2b, `reuse-audit-fixes` batch) reuse whatever this proves. Full design + 3 converged review rounds: `docs/superpowers/plans/2026-09-26-template-stable-identity.md`.
