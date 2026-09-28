@@ -6108,3 +6108,70 @@ sign-out before `userBox` clears. Surfaced during OI-252's B-pass (finding 7,
 `pending_template_deletes.dart`'s class doc and the OI-252 diagnose-doc's `cross_account_guard`
 field rather than fixed in that batch (narrow, pre-existing gap; not a regression from OI-252's
 change, and no evidence it's hit in production yet).
+
+## OI-259 — check_plan_review_record_exists.dart cannot parse hand-authored reconciliation-merge subjects
+
+- **Status**: OPEN
+- **Blocked on**: none (false-positive class, not a missing-review class — see Impact)
+- **Verified**: 2026-09-28 — confirmed live on GitHub Actions, both failing commits, both
+  underlying plan-review records
+- **Identified**: 2026-09-28 · filed via mint_oi.sh from branch `oi-reconciliation-merge-gap`,
+  found while verifying CI for an unrelated push (`gate14-migration-collision`)
+
+Symptom: CI run 36339457678 (push of commit `d8832af8` to `main`, 2026-09-27T18:07) FAILED its
+"Plan-review record (>=account merge-to-main)" job with:
+```
+[plan-review-record] FAIL: 43b89035: could not recover merged branch from subject: 'Merge origin/main (ops-alerting-b2a2b) into local main -- second reconciliation, OI-254 client-side fix landed concurrently' (expected "Merge branch 'X'" or "Merge pull request #N from owner/X").
+[plan-review-record] FAIL: 82844bfd: could not recover merged branch from subject: 'Merge origin/main (ops-alerting-b2a2a) into local main -- reconciles after template-stable-identity merge' (expected "Merge branch 'X'" or "Merge pull request #N from owner/X").
+```
+Both commits are hand-authored **reconciliation merges** — `git merge origin/main` run from local
+`main` with a custom `-m` message, to fold in commits another concurrent session had pushed to
+`origin/main` while this session's `main` had diverged (the exact §4.13/multi-session shape this
+repo runs under routinely). `classifyMergeSubject()`'s three recognized shapes
+(`scripts/plan_review_record_lib.dart:61,87,92`) all expect a GIT-GENERATED subject —
+`Merge branch 'X'`, `Merge branch 'X' of <url>`, or `Merge pull request #N from owner/X` — none of
+which match a hand-written "Merge origin/main (X) into local main -- ..." subject, so both fall
+through to `MergeSubjectKind.unrecognized` and hard-fail, even though the diff range for each
+merge IS correctly classified >= account tier (the gate reaches the parse step at all only after
+that check passes).
+
+Impact, checked rather than assumed: **this is a false positive, not a missing review** — both
+merged branches, `ops-alerting-b2a2a` and `ops-alerting-b2a2b`, have real, converged plan-review
+records (`docs/plan-reviews/ops-alerting-b2a2a.md`: `review_rounds: 3`, `verdict: converged`,
+`bpass: accepted`; `docs/plan-reviews/ops-alerting-b2a2b.md`: `review_rounds: 2`,
+`verdict: converged`, `bpass: accepted`) — the gate simply cannot recover either branch NAME from
+the reconciliation commit's custom subject to go look for them. The existing
+`MergeSubjectKind.remoteSyncMerge` case (`check_plan_review_record_exists.dart:606`) already
+special-cases exactly this shape for the OTHER direction — "a `git pull` on main with divergent
+local history" — but only when `ms.branch == 'main'` (i.e., the STANDARD git-generated
+"Merge branch 'main' of <url>" subject from pulling main-into-main); a reconciliation merge that
+NAMES the *other* branch it was folding in (as both of these do, in parentheses) does not match
+that regex either, so it falls through past the exemption into `unrecognized`.
+
+Practical consequence, checked: because CI evaluates only the PUSHED RANGE (`PUSH_BEFORE..HEAD`)
+on each push, a subsequent clean push (this OI's own filing branch, and the preceding
+`gate14-migration-collision` push, `70895e15`) does NOT re-encounter these two already-landed
+commits and passes independently — so `main`'s LATEST push is not blocked by this. The residue is
+narrower but real: (1) that specific historical CI run (`36339457678`) sits permanently red in
+Actions history for a review that in fact happened; (2) the NEXT reconciliation merge with a
+similarly-shaped hand-written subject will hard-fail its own push's CI the same way, and — unlike
+this instance — a future reconciliation might not have every merged branch's plan-review record
+already sitting on disk to fall back on if someone tries to work around it by hand.
+
+Fix shape (not designed): widen `classifyMergeSubject()` with a new pattern recognizing
+"Merge origin/main ([branch]) into local main" (and close variants of the reconciliation-merge
+phrasing this repo's own sessions have now used at least twice) as a `remoteSyncMerge`-like kind
+that extracts `[branch]` as the branch to look up, rather than requiring `ms.branch == 'main'`.
+Needs care: the extracted name must still go through the same `recordSlug()` normalisation and
+Dependabot/foreign-PR checks as `branchMerge`, since a hand-written subject is exactly the kind of
+free-text a malicious or careless commit could use to smuggle an arbitrary string past the "branch
+merge" trust model this gate is built on (see the gate's own `foreignPullRequest` handling for the
+threat model it already defends against).
+- **Class**: a keystone gate's merge-subject classifier enumerates GIT-GENERATED subject shapes
+  only, and a legitimate, repo-sanctioned hand-authored merge shape (reconciling a diverged `main`
+  across concurrent sessions, §4.13) falls outside all of them — the same "enumerated allowlist
+  meets a real but unanticipated shape" class as `check_hive_first_pattern.dart`'s alias-set gap
+  and `mint_oi.sh`'s original three-shape-only design, just for merge subjects instead of function
+  calls or OI reservations.
+- **Source**: GitHub Actions run 36339457678 (job 108676553930), discovered while confirming CI
+  green for the unrelated `gate14-migration-collision` push (diagnose `d5f1b8`).
