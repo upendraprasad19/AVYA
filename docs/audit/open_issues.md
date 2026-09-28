@@ -6376,3 +6376,67 @@ If ANY of these 4 functions is ever refactored to call Gemini through an injecta
 **Fix, when picked up:** apply the exact same widening `e35936` did to `_shared/gemini_backoff_retry_test.ts`'s `assertSoleCallSiteHasRetries` — recognize either `geminiChat({` or `geminiChatFn({`, sum occurrences of both — to each of these 4 files' own call-site-finding logic. Four small, independent, mechanical edits; no shared helper currently links them (each function's `index_test.ts` has its own copy of this check, unlike the retries-pinning tests which share `assertSoleCallSiteHasRetries`).
 
 **Reopen when:** one of the 4 functions actually adopts a `geminiChatFn`-style seam (its own test will fail loud at that point regardless of whether this OI was ever picked up first) — or on general principle at the next quarterly tech-debt audit (§4.10).
+
+## OI-263 — Migration-number allocator: reserve migration numbers server-side (mint_oi.sh pattern) and refuse a number already applied live
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-09-28 — live list_migrations held 148 while the tree did not
+- **Identified**: 2026-09-28 · filed via mint_oi.sh from branch `day-swapper-sync-load`; founder asked for it
+
+Symptom, measured 2026-09-28: the day-swapper-sync-load migration was renumbered 145 → 147 → 148
+as other batches landed on `main`, then had to become **149 at apply time**, because live
+`list_migrations` already held `20260927224028 / 148_coach_extraction_locked_fields`. That branch
+(`single-owner-a2b`) had applied 148 to prod before merging to `main`, so no file in this
+worktree's tree and nothing on `origin/main` showed 148 as taken. Nothing allocates a migration
+number today: the next number is read off `ls supabase/migrations/` by whoever writes the file.
+OI-258 is the ledger-side symptom of the same gap (145/146 collided across diverged `main`s).
+
+- **Class**: a green check is only as wide as its input set
+  (`feedback_green_check_input_set_width` #60). "Is N free?" has THREE sources — the local tree,
+  `origin/main`, and the live database — and both collisions so far came from the one nobody
+  checked.
+- **Industry norm, for the record**: timestamp-prefixed filenames (Rails, Supabase's own
+  `supabase migration new`) make a git collision near-impossible with no coordination; sequential
+  numbering (Django, Alembic, Flyway) relies on a merge-time "two heads" detector. Neither covers a
+  migration applied LIVE from an unmerged branch, which is the case that bit here.
+- **Fix shape (founder chose this 2026-09-28)**: `scripts/mint_migration.sh`, reusing
+  `mint_oi.sh`'s compare-and-swap ref reservation (`refs/heads/mig/N`), so two sessions cannot
+  claim one number; the mint also refuses N when live `list_migrations` (or
+  `backups/applied_migrations.json` on `origin/main`) already carries it. Plus a pre-apply check:
+  before any `apply_migration`, compare the file's number against live `list_migrations` and refuse
+  a taken number. Keeps the 3-digit scheme (tooling such as `latestMigrationDefining` parses it);
+  switching to timestamps was offered and not chosen. Needs its own tests, mutation-proven per
+  rule 24 if it becomes a `check_*` gate.
+- **Source**: day-swapper-sync-load Task 34 apply.
+
+## OI-264 — docs/sot_registry.yaml is not valid YAML (35 parse errors); every gate reads it line-wise, so a real YAML consumer would fail
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-09-28 — PyYAML safe_load, iterated to 35 errors
+- **Identified**: 2026-09-28 · filed via mint_oi.sh from branch `day-swapper-sync-load`; found by the merge-resolution B-pass (`docs/reviews/6e4819de87d7-review.md`)
+
+Measured 2026-09-28: `yaml.safe_load(open('docs/sot_registry.yaml'))` fails; commenting out each
+failing line and re-parsing finds **35** errors before the file loads. They are already present at
+merge base `7cb4eb78` (the first, a flow sequence `fields_read: [via … at :351, :357, …]`, dates to
+`c854332b`). Three shapes account for the samples read:
+1. **Double-quoted regex `pattern:` values** with backslash escapes YAML rejects
+   (`"workoutBox\.put\('schedule_"` → "unknown escape character").
+2. **Flow sequences holding prose** with `[`, `?` or ` :NNN` inside
+   (`fields_read: [meals[], meals[].name, …]`).
+3. **Unquoted `:` after a space** inside a flow item.
+
+- **Why it has not bitten**: no consumer uses a YAML parser. `grep -l sot_registry` over
+  `scripts/` and `test/` finds no file that also imports `package:yaml` or calls `loadYaml`; every
+  gate (`check_sot_registry_parity`, `check_writeservice_contracts`, `check_sot_behavioral_test_paths`,
+  …) reads it with line regexes.
+- **Why it is not a quick quote-everything fix**: shape 1 strings are consumed VERBATIM by
+  line-reading gates as regexes. Re-quoting them (single quotes, or doubled backslashes) changes the
+  bytes those gates extract, so each gate reading `pattern:` must be checked or updated in the same
+  change. That is a gate-semantics change and needs its own mutation-proven tests.
+- **Fix shape (not designed)**: either (a) make the file valid YAML and move every gate onto one
+  shared parser (removes the line-regex fragility OI-262 also records), or (b) rename it off `.yaml`
+  and document it as a line-oriented format, so nobody reaches for a YAML parser. Add a gate that
+  parses it, whichever is chosen.
+- **Source**: day-swapper-sync-load, second merge of origin/main (2026-09-28).
