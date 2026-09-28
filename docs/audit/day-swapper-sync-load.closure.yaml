@@ -83,16 +83,17 @@ findings:
 
   - id: BUG-a9d3f6
     title: "Sync write amplification: only 3 of 21 push steps skip unchanged rows (OI-237)"
-    terminal_state: blocked_on_user
-    reason: >
-      SyncSkipIndex and all 14 domain migrations onto it are committed and green (test/sync/ +
-      test/contracts/ across Tasks 4-5, 13-20). The server half — migration
-      148_sync_noop_suppress_completed_guard_sync_epoch.sql (no-op suppression trigger, the
-      scheduled_workouts completed-day guard, sync_epoch) — is drafted (Task 7, handed over
-      uncommitted) but requires the founder's explicit go to apply live (CLAUDE.md §4.3's "Live prod
-      apply needs its own explicit go" — plan approval is not deploy approval). Task 34 applies it
-      and flips this to closed_in_commit. Per plan deviation D17, closes-oi: OI-237 also waits for
-      the post-apply §10 IO-saving measurement, not merely the code landing.
+    terminal_state: closed_in_commit
+    commit: "day-swapper-sync-load (Task 34 migration-149 commit)"
+    verification: >
+      Client half: SyncSkipIndex and all 14 domain migrations onto it, committed and green across
+      Tasks 4-5 and 13-20 (test/sync/ + test/contracts/). Server half: migration
+      149_sync_noop_suppress_completed_guard_sync_epoch.sql applied live 2026-09-28 on the
+      founder's explicit go (cloud version 20260928083027), ledger entry in
+      backups/applied_migrations.json with the matching sha256; test/sql/day_swap_sync_load_live_verify.sql
+      run live, 18/18 labels =ok including both discrimination cases;
+      test/contracts/sync_noop_trigger_tables_test.dart 4/4. The bug closes here; OI-237 itself
+      stays open until the post-apply §10 IO measurement (snapshot 3) per plan deviation D17.
 
   - id: BUG-b6e1c8
     title: "Restore types a cloud rest day as a workout (28 live rows)"
@@ -160,7 +161,7 @@ findings:
     verification: >
       Task 1 Step 3's collision check fired twice more after round 1: 145/146 were taken by other
       batches, then 147 (147_alert_client_errors_spike_breadth.sql). The migration is now
-      148_sync_noop_suppress_completed_guard_sync_epoch.sql (ruling 2026-09-28, wave3-carry.md), swept
+      149_sync_noop_suppress_completed_guard_sync_epoch.sql (ruling 2026-09-28, wave3-carry.md), swept
       across sync_service.dart, sync_workout.dart, lib/core/services/CLAUDE.md, docs/architecture/
       sync.md, docs/adr/0020, docs/operations/SYNC_EPOCH_RESYNC.md, the spec's dated correction, the
       plan-review record and two test files in this Task 31 commit.
@@ -191,7 +192,7 @@ findings:
     verification: >
       private.scheduled_workouts_completed_guard() with a pinned search_path, following migrations
       133/138's precedent — confirmed by reading the migration file at
-      .superpowers/sdd/2026-09-26-day-swapper-sync-load/u1-handover/148_sync_noop_suppress_completed_guard_sync_epoch.sql.
+      .superpowers/sdd/2026-09-26-day-swapper-sync-load/u1-handover/149_sync_noop_suppress_completed_guard_sync_epoch.sql.
       A post-apply pg_namespace check and a contract assertion (test/contracts/sync_noop_trigger_tables_test.dart)
       exist; the live pg_namespace check runs at Task 34's apply.
 
@@ -336,13 +337,15 @@ findings:
 
   - id: H-h3F1
     title: "Migration file, contract test and live-verify runbook disagreed on the migration number"
-    terminal_state: blocked_on_user
-    reason: "Fixed in the untracked u1-handover files (all say 148); they enter the tree with the live apply in Task 34, which needs the founder's explicit go."
+    terminal_state: closed_in_commit
+    commit: "day-swapper-sync-load (Task 34 migration-149 commit)"
+    verification: "Migration, contract test and live-verify SQL all name 149 (renumbered from 148 at apply time after a live collision); the contract test reads the real 149 file, 4/4 green; B-pass lens 1 found no stale path."
 
   - id: H-h3F2
     title: "Migration 148 header cited a stale line range and the wrong time unit"
-    terminal_state: blocked_on_user
-    reason: "Corrected in the u1-handover 148 file; lands with the Task 34 live apply (founder go)."
+    terminal_state: closed_in_commit
+    commit: "day-swapper-sync-load (Task 34 migration-149 commit)"
+    verification: "The corrected header landed in the 149 file as applied (sha256 117ad48b…5d3a5b, matching the ledger); its line-range cites were replaced by symbol names before the apply."
 
   - id: H-h4F1
     title: "Carry-forward re-stamps arranged_at_ms = now, so a later edit on another device can win the week"
@@ -392,8 +395,9 @@ findings:
 
   - id: H-h7F3
     title: "The app must not ship before migration 148's completed-day guard is live"
-    terminal_state: blocked_on_user
-    reason: "Rollout precondition, not code: Task 34 applies 148 and confirms the completed-day trigger live BEFORE the merge to main (web deploys on push). Each step needs the founder's explicit go."
+    terminal_state: closed_in_commit
+    commit: "day-swapper-sync-load (Task 34 migration-149 commit)"
+    verification: "Migration 149 applied live 2026-09-28, before any merge to main; trg_scheduled_workouts_completed_guard confirmed enabled on scheduled_workouts, and the live-verify demote/discrimination cases passed."
 
   - id: H-h7F4
     title: "Pre-148 schema compatibility of the sync_epoch read"

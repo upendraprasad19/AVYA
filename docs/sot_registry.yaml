@@ -2161,8 +2161,8 @@ concepts:
       (unchanged statics body) so every fingerprint stored before this change
       still matches for a row whose payload SHAPE is unchanged.
       A-fix-1 (a `completed` row never skipped) is SUPERSEDED, not carried
-      forward: migration 148 (Task 7, NOT yet applied live as of this
-      commit) adds a server-side trigger rejecting a stale client overwrite of
+      forward: migration 149 (Task 7; applied live 2026-09-28, cloud version
+      20260928083027) adds a server-side trigger rejecting a stale client overwrite of
       a completed row's identity columns, making a fingerprint-matched
       completed row exactly as safe to skip as a planned one. See
       docs/diagnoses/2026-06-27-sched-dirty-filter-b4f7e2.md (A-fix-1's

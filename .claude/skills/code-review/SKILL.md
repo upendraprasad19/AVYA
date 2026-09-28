@@ -249,6 +249,18 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-28 (d)** — blast-radius **catastrophic** — branch `day-swapper-sync-load`, Task 34:
+  the already-applied migration 149 lands with its ledger entry and a 148→149 renumber. 2
+  findings (1 P1, 1 P2), 0 false alarms, both fixed before commit (`992f2cf23c2a-review.md`).
+  **New lesson, both findings the same shape:** a commit that records a STATE CHANGE (here: a
+  live apply) leaves every prose sentence describing the OLD state as drift — a closure
+  `reason:` still saying "awaiting the founder's go" and a registry note still saying "NOT yet
+  applied live", both inside files the commit was already editing for the renumber. A mechanical
+  rename sweep (148→149) touches the line and reads as reviewed, while the claim on that line goes
+  stale. **Reviewer prompt addition for apply/deploy/flip commits:** grep the whole diff's files
+  for the pre-change status words (`NOT yet`, `pending`, `awaiting`, `blocked_on_user`,
+  `uncommitted`, `drafted`) and check each against the new state.
+
 - **2026-09-28 (c)** — blast-radius **catastrophic** — branch `day-swapper-sync-load`, the
   MERGE of origin/main 7cb4eb78 (OI-252 stable template ids + B2a-2b telemetry dedup) into the
   branch. One context-blind Sonnet reviewer read the staged resolution against both parents.

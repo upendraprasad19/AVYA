@@ -2,7 +2,7 @@
 bug_id: a9d3f6
 date: 2026-09-26
 batch: day-swapper-sync-load
-status: fixed_pending_live_apply
+status: fixed
 blast_radius: platform
 symptom: |
   Of 21 push steps in lib/core/services/sync/, only 3 skip unchanged rows today; the other 18 push a
@@ -45,9 +45,8 @@ contract_test_path: "test/sync/sync_skip_index_test.dart (shared per-domain skip
   coordinator Task 5; the per-domain tests share the SyncHarness helper, which has no
   main and is not itself a test) plus 14 x test/contracts/<concept>_writer_to_reader_test.dart (one per new
   hash-index concept, Tasks 14-20) plus test/sql/day_swap_sync_load_live_verify.sql (BEGIN...ROLLBACK
-  discrimination test, Task 7) — that SQL file and migration 148 are held out of the tree until the
-  Task 34 live apply and land in that commit; until then neither exists at these paths (B-pass
-  2026-09-28)."
+  discrimination test, Task 7) — that SQL file and migration 149 were held out of the tree until the
+  Task 34 live apply (2026-09-28) and landed in that commit."
 ist_handling: []
 provider_invalidations: []
 telemetry_op_types:
@@ -73,9 +72,10 @@ proposed_fix: |
   a Hive-row loop in lib/core/services/sync/** that is not wrapped in a `pushIfChanged(` closure,
   except the allowlisted single-row steps and the coach loop's own cloud-id-stamped skip — replacing
   today's count-based swallow check with a rule the gate itself enforces rather than a hand
-  enumeration. One migration (`148_sync_noop_suppress_completed_guard_sync_epoch.sql` — numbered 145
+  enumeration. One migration (`149_sync_noop_suppress_completed_guard_sync_epoch.sql` — numbered 145
   at plan time since 144 was taken upstream, renumbered to 147 then 148 as other batches landed on
-  `main` first; ruling 2026-09-28, wave3-carry.md) adds a
+  `main` first; ruling 2026-09-28, wave3-carry.md; then 149 at apply time, because the live
+  database already held a `148_coach_extraction_locked_fields` from a branch not yet on `main`) adds a
   `suppress_redundant_updates_trigger()` BEFORE UPDATE trigger to every table a history loop writes
   (the gate's own enumeration is authoritative, per plan-time verification #6), a
   `scheduled_workouts`-specific guard function that also blocks demoting a completed day, and a
@@ -102,9 +102,9 @@ regression_test_planned: |
 touched_layers_checked:
   - { tier: 1, name: client_code, status: fixed_in_this_batch, evidence: "SyncSkipIndex (Task 4, commit 458b98bc) + test seams (Task 5, commit 61c0bb5e/d0186537) + G1 gate (Task 3, commit 52585f04/a5e491d7) + the 14 domain migrations onto it (Tasks 13-20: 6d26a177/094648df, ebddb44c, 3c376f77, 875c8f3e/b22592ed, 0a1a0548.../745fdb98, 865d891d, 70f1922b) plus the single launch fetch + epoch-after-clearAll fix (Task 20, commit 083b82a9 + a53f3305)." }
   - { tier: 2, name: hive_local_state, status: fixed_in_this_batch, evidence: "15 new sync_<domain>_payload_hash_index keys (14 domains + sync_skip_index's own storage), plus deletion of the stale userBox['progress'] plan_json copy (Task 20, commit 083b82a9)." }
-  - { tier: 3, name: postgres_schema, status: fixed_pending_live_apply, evidence: "Migration 148_sync_noop_suppress_completed_guard_sync_epoch.sql adds the no-op-update trigger to the 19 enumerated tables, the scheduled_workouts completed-day guard, and the sync_epoch column (Task 7, U1, drafted and handed over uncommitted per plan design — see u1-handover/). NOT yet applied to any live database; live information_schema/pg_trigger state is unchanged until Task 34's founder-approved apply." }
+  - { tier: 3, name: postgres_schema, status: verified, evidence: "Migration 149_sync_noop_suppress_completed_guard_sync_epoch.sql applied live 2026-09-28 (cloud version 20260928083027) on the founder's explicit go. Post-apply live checks: 19 trg_suppress_redundant_updates triggers, trg_scheduled_workouts_completed_guard enabled on scheduled_workouts, private.scheduled_workouts_completed_guard present, user_progress.sync_epoch integer NOT NULL DEFAULT 0 at ordinal 24 (information_schema). backups/live_schema_columns.json regenerated in the same commit." }
   - { tier: 4, name: postgres_data, status: verified, evidence: "Spec §1.5's own live, read-only pg_stat_user_tables measurement (2026-09-26) is cited directly above (rewrites-per-row table, the ~143-request heaviest-account figure). This drafting pass did not re-query the database." }
-  - { tier: 5, name: migrations_applied, status: fixed_pending_live_apply, evidence: "Migration 148 is drafted (Task 7) and blast-radius classified `catastrophic` (Task 31 — the content rule matches SECURITY DEFINER inside a header sentence that says the guard is NOT SECURITY DEFINER; accepted as-is, not reworded to dodge the classifier). Applied at Task 34 with its own explicit founder go, paired with backups/applied_migrations.json in the same commit (CLAUDE.md §4.5)." }
+  - { tier: 5, name: migrations_applied, status: verified, evidence: "list_migrations shows 20260928083027 / 149_sync_noop_suppress_completed_guard_sync_epoch; backups/applied_migrations.json carries the matching entry (sha256 117ad48b…5d3a5b of the file as applied) in the same commit (CLAUDE.md §4.5). Blast radius catastrophic (Task 31 — the content rule matches SECURITY DEFINER inside a header sentence saying the guard is NOT SECURITY DEFINER; accepted as-is). Live-verify test/sql/day_swap_sync_load_live_verify.sql run through execute_sql: 18 labels, all =ok, including both discrimination cases (triggers dropped in-transaction -> opposite outcome); rollback confirmed by a follow-up count (0 synthetic rows)." }
   - { tier: 6, name: edge_function_code_vs_deploy, status: not_applicable, evidence: "The sync write-amplification fix itself (skip index, no-op trigger, sync_epoch) touches no Edge Function; the allowance EF (consume-day-swap) is a separate concept shared with docs d5a1e7/e2b9d4." }
   - { tier: 7, name: cron_jobs, status: not_applicable, evidence: "No cron job is involved in the history-push skip mechanism or the no-op-suppression trigger." }
   - { tier: 8, name: rls_policies, status: not_applicable, evidence: "No RLS policy changes; the new scheduled_workouts trigger function is SECURITY INVOKER, not a policy change, and does not widen or narrow row visibility." }
@@ -156,9 +156,9 @@ so a missed loop fails the commit rather than silently shipping unskipped.
   Task 19 `70f1922b` (coach/onboarding/notifications); Task 20 `083b82a9` (plan/streak launch path) +
   fix `a53f3305` (sync_epoch stored only after `clearAll` `allSucceeded`, diagnosed the same day as
   this doc — see "Skipped-then-found fixes" below).
-- Migration 148 (no-op trigger, completed-day guard, sync_epoch, renumbered from 145→147→148 per
-  wave3-carry.md ruling 2026-09-28): Task 7 (U1) drafts it, handed over uncommitted; Task 34 applies
-  it with its own founder go.
+- Migration 149 (no-op trigger, completed-day guard, sync_epoch, renumbered from 145→147→148 per
+  wave3-carry.md ruling 2026-09-28, then →149 at apply time after a live collision): Task 7 (U1) drafted it, handed over uncommitted; Task 34
+  applied it 2026-09-28 on the founder's own go ("149 is free, renumber and go ahead").
 - The single launch fetch + plan_json double-download fix: Task 20 (coordinator), commit `083b82a9`.
 
 ## Skipped-then-found fixes (wave3-carry.md, Task 31 carry list)
@@ -178,8 +178,8 @@ so a missed loop fails the commit rather than silently shipping unskipped.
 
 `458b98bc`, `61c0bb5e`/`d0186537`, `52585f04`/`a5e491d7`, `6d26a177`/`094648df`, `ebddb44c`,
 `3c376f77`, `875c8f3e`/`b22592ed`, `0a1a0548`/`b1c3ddc2`/`ea33eacb`/`b503bcd6`/`53a177e0`/`745fdb98`,
-`865d891d`, `70f1922b`, `083b82a9`/`a53f3305`. Migration `148_sync_noop_suppress_completed_guard_sync_epoch.sql`
-uncommitted, applied at Task 34.
+`865d891d`, `70f1922b`, `083b82a9`/`a53f3305`. Migration `149_sync_noop_suppress_completed_guard_sync_epoch.sql`
+applied live 2026-09-28 and committed with its ledger entry in the Task 34 commit.
 
 ## Mutation evidence
 
@@ -264,3 +264,23 @@ Fix `a53f3305`: see "Skipped-then-found fixes" above.
   pre-renumber `147_…` path (would throw at apply) and the stale `147_…` copy sat beside `148_…`;
   repointed, stale copy deleted, run against the real `148_…` file: 4/4 green. Header's
   "same microsecond" corrected to millisecond (JS `toISOString`) and its `ai-proxy` cite re-derived.
+
+## Live apply (Task 34, 2026-09-28)
+
+- **Collision found at apply time.** Live `list_migrations` already held
+  `148_coach_extraction_locked_fields` from a branch not yet on `main`, so the file was renumbered
+  148 → 149 on the founder's go. A migration number is only free when BOTH `main` and the live
+  database say so; the tree alone cannot answer it (OI-258 class).
+- **Pre-apply checks:** no function writing a trigger table reads `FOUND` / `GET DIAGNOSTICS` /
+  `RETURNING` (0 rows); the only pre-existing UPDATE trigger on a covered table is main's
+  `workout_templates_delete_final_rename`, which fires after `trg_suppress_redundant_updates` by name
+  order and is unaffected (the suppress trigger only drops writes where nothing differs). IO
+  snapshot 2 recorded just before the apply (`docs/audit/2026-09-oi237-io-measurements.md`).
+- **Harness bug fixed before the run:** case 16 of the live-verify SQL re-read `workout_logs` by
+  `v_id`, which cases 5-9 had reassigned, so it compared NULL ctids and would have reported `fail`
+  whatever the trigger did. It now keeps its own `v_wl_id`.
+- **Verdict:** 18 labels, all `=ok`, including
+  `discrimination_workout_logs_noop_now_writes` and
+  `discrimination_scheduled_workouts_demote_now_succeeds`, and
+  `sync_epoch_untouched_by_progress_snapshot_rpc`. The RAISE at the tail aborts the transaction; a
+  follow-up count confirmed triggers + function present and 0 synthetic rows.

@@ -69,7 +69,7 @@ concept. Selected mappings (full list in `docs/sot_registry.yaml`):
 | `day_swap_engine` | `swap_service.dart` `SwapService.swapDays` — the ONE entry point for Train drag, Train ⇅, Home long-press and the coach; every check re-runs at confirm time under `WorkoutWriteService.swapScheduledDays`'s two-date lock, and the whole swap (allowance check → write → `recordSwap`) runs under `SwapService._withWeekLock`, one lock per IST Mon–Sun week, so two concurrent swaps on DIFFERENT pairs of one week cannot both pass "not spent" (B-pass R2-F2, diagnose `e2b9d4`). A swap is counted only after its write succeeds. | `day_swap_provider.dart` (`daySwapWeekProvider`, `daySwapAllowanceProvider`), `SwapPickerSheet`, `DaySwapRowTrailing`. |
 | `day_swap_allowance` | `day_swap/day_swap_allowance.dart` `DaySwapAllowance.recordSwap` — phone copy at `userBox['day_swap_allowance']` (+1 on the phone immediately, then a background `consume-day-swap` call corrects it; server wins when it answers, no answer keeps the phone copy) | `DaySwapAllowance.current` → `daySwapAllowanceProvider`, the picker/confirm sheets' allowance line. |
 | `schedule_arrangement_stamp` | `day_swap/day_swap_rules.dart` `buildSwap`/`landed` set `arranged_at_ms` (one `nowMs`, both rows) inside the build function `SwapService.swapDays` passes to `workout_write_service.dart` `swapScheduledDays`, which only writes it; `upsertScheduled`'s `carriesArrangement` carries it forward on a non-swap, non-restore rewrite of an already-arranged row | `plan_integrity_reconciler.dart` `snapshotArrangementWinsKeys` (restore-merge L3, `docs/architecture/sync.md`). |
-| `sync_epoch` | `user_progress.sync_epoch` (migration 148), operator-bumped via SQL (`docs/operations/SYNC_EPOCH_RESYNC.md`) | `sync_service.dart` `_applySyncEpochFromRestoreRow` compares against `workoutBox['sync_epoch_seen']` and calls `SyncSkipIndex.clearAll` on a strictly-greater cloud value. |
+| `sync_epoch` | `user_progress.sync_epoch` (migration 149), operator-bumped via SQL (`docs/operations/SYNC_EPOCH_RESYNC.md`) | `sync_service.dart` `_applySyncEpochFromRestoreRow` compares against `workoutBox['sync_epoch_seen']` and calls `SyncSkipIndex.clearAll` on a strictly-greater cloud value. |
 
 The WriteService pattern enforces three steps every write:
 
@@ -102,8 +102,8 @@ e7c1a9). Two rules this imposes on callers:
   shared `SyncSkipIndex` (domain `sched`, day-swapper + sync-load Task 15). ⚠ Since
   Task 15 that includes `completed` rows — the d9b2c5 "never skip a completed row"
   carve-out (A-fix-1) is deliberately SUPERSEDED, because the server-side
-  completed-day guard (migration 148) now refuses a stale overwrite of a completed
-  row. That makes migration 148 a HARD prerequisite: it must be applied live
+  completed-day guard (migration 149) now refuses a stale overwrite of a completed
+  row. That makes migration 149 a HARD prerequisite: it must be applied live
   before any build carrying Task 15 ships.
 
 **`SyncSkipIndex` is the ONLY way a sync history step may skip a push** — Gate G1

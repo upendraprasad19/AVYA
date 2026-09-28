@@ -21,7 +21,7 @@ Two runs, batch tier is the higher:
   (written files, base `origin/main` 7cb4eb78) → `platform`.
 - The migration file classified where it exists (U1's worktree at the time, copied into a scratch
   worktree for this run since it is untracked by design until Task 34):
-  `printf '%s\n' supabase/migrations/148_sync_noop_suppress_completed_guard_sync_epoch.sql | dart run
+  `printf '%s\n' supabase/migrations/149_sync_noop_suppress_completed_guard_sync_epoch.sql | dart run
   scripts/blast_radius_from_diff.dart -` → `catastrophic` (the content rule substring-matches
   "SECURITY DEFINER" inside the migration's own header, in a sentence that says the guard function
   is NOT `SECURITY DEFINER` — see ruling in `.superpowers/sdd/2026-09-26-day-swapper-sync-load/progress.md`.
@@ -63,8 +63,9 @@ Material findings, all fixed in the plan:
   (OI-252) held an uncommitted `145_workout_templates_stable_delete.sql` under the SAME number this
   batch's migration used at round 1. Task 1 Step 3 checked for it then; the collision recurred twice
   more as other batches landed 145/146/147 on `main` first (147 taken by
-  `147_alert_client_errors_spike_breadth.sql`), so this migration is now **148**
-  (`148_sync_noop_suppress_completed_guard_sync_epoch.sql`, ruling 2026-09-28,
+  `147_alert_client_errors_spike_breadth.sql`), so this migration became **148**, and then **149** at apply time: the live database already held
+  `148_coach_extraction_locked_fields` from a branch not yet on `main`, which no tree-side check
+  could see (`149_sync_noop_suppress_completed_guard_sync_epoch.sql`, ruling 2026-09-28,
   `.superpowers/sdd/2026-09-26-day-swapper-sync-load/wave3-carry.md`). This was found by the
   coordinator, not a reviewer.
 

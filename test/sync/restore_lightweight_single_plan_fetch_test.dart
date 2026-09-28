@@ -338,7 +338,7 @@ void main() {
     // Round-2 review D2 F1: the kill-switch path also makes one extra read
     // so the epoch lever keeps working (round-1 D2 F1). `_fetchSyncEpochRowForRestore`
     // is a BARE `.select()`, not `.select('sync_epoch')` (schema-column-refs
-    // gate: `sync_epoch` ships in migration 148, Task 7/U1, which had not
+    // gate: `sync_epoch` ships in migration 149, Task 7/U1, which had not
     // landed when this task executed — see that method's own doc comment),
     // so it is no longer distinguishable from the other two by query shape;
     // this asserts the TOTAL count instead (2 old per-writer + 1 epoch).

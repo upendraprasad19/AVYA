@@ -2057,7 +2057,7 @@ extension SyncServiceWorkout on SyncService {
           // The LOCAL template ref, not the cloud id (spec §5.9): a changed
           // local ref or a template arriving on this phone re-pushes.
           // day-swapper+sync-load Task 15 supersedes A-fix-1 (a `completed`
-          // row never skipped) — migration 148's server-side completed-day
+          // row never skipped) — migration 149's server-side completed-day
           // guard (Task 7) makes a fingerprint-matched completed row exactly
           // as safe to skip as a planned one; see
           // docs/diagnoses/2026-06-27-sched-dirty-filter-b4f7e2.md.

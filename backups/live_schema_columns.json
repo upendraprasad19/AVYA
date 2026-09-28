@@ -4,8 +4,8 @@
     "project_id": "dedsavbjuwgarrhphgnl",
     "captured_at": "2026-08-26",
     "captured_via": "SELECT table_name, array_agg(column_name) FROM information_schema.columns WHERE table_schema='public' GROUP BY table_name",
-    "regenerated_at": "2026-09-27",
-    "regenerated_for": "migration 145 (OI-252, workout_templates soft-delete/rename-on-delete tombstone). Verified against live information_schema on project dedsavbjuwgarrhphgnl AFTER the apply (cloud version 20260927011446, ordinal_position 11 -- confirmed via ORDER BY ordinal_position live query). workout_templates gained one nullable column (deleted_at); no other table changed. Two live cloud migrations (20260926183009 alert_sql_job_failures, 20260926183056 alert_cron_job_silent) are visible in list_migrations but absent from this worktree's local supabase/migrations/ -- local main is behind origin/main; neither touches a table column (cron.schedule() jobs), so this snapshot is unaffected, but check_migrations_applied may still flag them as unrecorded until this worktree syncs with main."
+    "regenerated_at": "2026-09-28",
+    "regenerated_for": "migration 149 (OI-237 day-swapper-sync-load: user_progress.sync_epoch). Verified against live information_schema on project dedsavbjuwgarrhphgnl AFTER the apply (cloud version 20260928083027; sync_epoch is ordinal 24, last, in the ORDER BY ordinal_position query). Only this column was added here. Live ALSO carries user_profile.coach_extraction_locked_fields and coach_memory.locked_field_conflicts from 148_coach_extraction_locked_fields, which was applied from a branch not yet on main; they are left for that branch's own migration+snapshot commit rather than recorded here without the migration that created them (OI-258 class). Every other table matched the previous snapshot (52 tables both sides)."
   },
   "storage_buckets": [
     "chat-media",
@@ -548,7 +548,8 @@
       "current_streak_days",
       "last_workout_date",
       "longest_gap_days",
-      "streak_freezes_first_pro_grant_done"
+      "streak_freezes_first_pro_grant_done",
+      "sync_epoch"
     ],
     "user_saved_meals": [
       "id",
