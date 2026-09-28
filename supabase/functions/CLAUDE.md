@@ -31,6 +31,8 @@ status: active
    `docs/superpowers/specs/2026-09-16-proactive-cron-ai-removal-design.md`.
 2. **Payment / subscription** — `verify-payment`, `razorpay-webhook`,
    `validate-promo`, `validate-referral`, `delete-account` (DPDP §17).
+   `consume-day-swap` (day-swapper + sync-load batch) is quota-shaped like these
+   but not payment — see the dedicated paragraph below.
 3. **Cron-dispatched jobs** — FUNCTION slugs (three of these were previously
    listed under their pg_cron JOB name, which is a different string; the
    job → function mapping lives in `docs/operations/CRON_REGISTRY.md`):
@@ -105,6 +107,40 @@ anon-key Bearer (reaches the module): `curl -X POST <url> -H "Authorization: Bea
 an import of the REMOVED `{ encode }` from `deno.land/std@≥0.210/encoding/(hex|base64)`
 boot-fails only on the NEXT redeploy of each affected function (the old bundle keeps
 serving) — gate `scripts/check_std_encoding_import_rot.dart` blocks it (deploy-skill bug-class 6.6).
+
+## `consume-day-swap` (day-swapper + sync-load batch)
+
+The ONE call site of quota key `day_swap` (day-swapper design spec section 5.3 "one
+key, one call site, one limit"). Input `{ week_start: "YYYY-MM-DD" }` (must be an IST Monday); output
+`{ allowed, used, limit }` or `{ error, request_id }`. `verify_jwt: true` — a pure
+service-role client authenticates via `supabase.auth.getUser(token)` (never passes the
+user JWT as the `supabaseKey` — CLAUDE.md §4.4 rule 9), then calls `consume_quota`
+(migration 130, EXECUTE revoked from PUBLIC) with `p_quota_key='day_swap'`,
+`p_window_start=<IST Monday 00:00 +05:30>`, `p_limit` = 1 (free) or 3 (PRO). Window
+start and per-tier limits are re-derived server-side from the caller's own
+subscription row (`isProUser`), never trusted from the request body.
+
+**First `logic.ts` / `logic_test.ts` split in the repo** — `index.ts` stays a thin
+`serve()` shell (auth, request parsing, the RPC call, response shaping); every pure
+piece (`validateWeekStart`, `windowStartIso`, `mapQuotaResult`, the quota-key/limit
+constants) lives in `logic.ts` and is unit-testable in `logic_test.ts` without booting
+a server. Use this as the pattern for any new EF whose validation/mapping logic is
+worth testing directly rather than only through a source-grep or a live HTTP round-trip.
+
+`day_swap_routing.ts` (`_shared/`) picks the ONE Captain-Manual block a request needs
+by `(isPro, capabilities)` rather than leaving the model to infer tier or app version —
+see `lib/features/ai_coach/CLAUDE.md` `coach_swap_workout_days` for the full routing
+contract and `client_capabilities.ts`'s parsing rules (≤32 entries, `^[a-z_]{1,48}$`,
+silently dropped rather than 400'd).
+
+The `swapWorkoutDays` tool's `requiresCapability` is checked TWICE, not once: the
+OFFER-time filter (`allTools(isPro, capabilities)` in `registry.ts` — the tool is not
+even shown to Gemini without the capability) and an EXECUTION-time re-check inside
+`tool-loop.ts` (`status: "capability_blocked"`, `error: "capability_required"`) — the
+model can still emit a functionCall BY NAME for a tool it was never offered
+(hallucinated, or recalled from an earlier turn's `history`), so the offer-time filter
+alone is not a complete defense. Any future capability-gated tool needs both checks,
+not just the offer-time one.
 
 ## AI Architecture (canonical)
 
@@ -186,6 +222,7 @@ into the response body (CLAUDE.md §4.4 rule 17).
 | `media_free_image_lifetime_gate` | `consume_quota('free_image_analysis', 'epoch')` in `ai-media-proxy/index.ts`, gated on `isFreeImageAnalysis && !interactionLogError` and running AFTER the `ai_coach_interactions` insert | the same function's advisory `usage_counters` read (`readFreeImageQuota`), feeding the 5-lifetime gate. ⚠ **REWIRED by OI-162 slice 3b (2026-09-08)**, same defect as `weekly_report_free_gate` on a different surface: it used to `count(*)` rows with `channel='free_image_analysis'` and no date bound — rows `rolling-context` prunes — so the 5 free analyses silently reset. ⚠ **TWO writes, both required**: the `ai_coach_interactions` insert is the sole persisted copy of the exchange and no longer feeds the gate; `consume_quota` is the quota. ⚠ The read uses **`.maybeSingle()`, never `.single()`** — an ABSENT row is `used = 0` and must GRANT; only a populated `error` fails closed. ⚠ The old reader was **fail-OPEN** (`if (error) return 0`, argued "safer … because 0 < 5" — precisely when the gate does NOT fire, audit CODE-3); it now fails CLOSED with its own `gate_reason: "quota_unavailable"`, never the paywall's. The client twin `getFreeImageAnalysisCount()` was **DELETED** (zero callers). ⚠ **v26 (2026-09-13, B-pass BP-2)**: the check now runs behind an exported `checkFreeImageQuota`, called from TWO sites — pre-fetch (the honest claim=image fast path) and a NEW post-fetch mirror (a claim=video caller whose served bytes reconcile to an image). Naively deleting the pre-fetch VIDEO paywall to fix that mislabel case (without this mirror) would have let a free user bypass THIS cap entirely by labelling every image "video". Pinned by `media_free_image_lifetime_gate_writer_to_reader_test.dart` and `pro_media_daily_caps_writer_to_reader_test.dart`'s "EXACTLY TWO sites, sharing ONE helper" test. |
 | `pro_media_daily_caps` | ONE atomic `consume_quota(proQuotaKey, istDayStartIso(), proCap)` in `ai-media-proxy/index.ts`, gated on `isPro`, placed AFTER `fetchImageAsBase64` and BEFORE `geminiChat` — key `pro_image_daily` (50) or `pro_video_daily` (10) selected by `isVideo`, as is the cap; since v25 `isVideo` is reconciled with the served content-type BEFORE the key/cap are derived (a mislabelled video is charged as a video, and a free caller's mislabelled video meets the paywall); since v26 the MIRROR direction (a free caller's mislabelled IMAGE, claimed as "video") no longer bypasses the free-image cap either — see `media_free_image_lifetime_gate` row | the RPC's own return: `-1` → HTTP 200 `gated: true`, `gate_reason: pro_image_daily_limit_reached` / `pro_video_daily_limit_reached`, `COACH_REPLIES.proImageDailyCapReached(proCap)` / `proVideoDailyCapReached(proCap)` (the number is the ARGUMENT — the copy file cannot import the constant without a cycle), `resets_at` = next IST midnight; an RPC error → `pro_quota_unavailable`, a `subscriptions`-read error → `tier_unavailable`, both fail CLOSED with rank-free "not a limit" copy. ⚠ **REWIRED by OI-153 (2026-09-12, diagnose a9d4e7)**: the H-23 gate counted `ai_coach_interactions` channels NOTHING writes (0 rows, ever) and was fail-open, so the 50/day cap had never fired; PRO+video matched neither tier branch and was uncapped. **Consume-FIRST here, consume-AFTER for the free meter above — both deliberate**: only the atomic check-and-increment bounds Gemini spend under concurrency, and a daily unit lost to a Gemini 5xx is cheap where a lifetime one is not. `-1` leaves the row untouched, so the ledger cannot count refusals — the `console.warn` is the only refusal telemetry. Pinned by `pro_media_daily_caps_writer_to_reader_test.dart`. |
 | `chat_media_signed_url` | `ai-media-proxy` issues short-TTL signed URL after SSRF allowlist check | `WardroomChatBubble` photo renderer. |
+| `day_swap_allowance` (server half) | `consume-day-swap/index.ts` — one atomic `consume_quota('day_swap', <IST Monday window>, limit)` call, called AFTER the phone's own optimistic +1 (client wins the race; server corrects in the background — see `lib/core/services/CLAUDE.md`) | the phone's `DaySwapAllowance._consume` background reply; `mapQuotaResult` (`logic.ts`) shapes the RPC's return into `{allowed, used, limit}`. |
 | `delete_account_rate_limit` | `consume_quota('delete_account', <hourly bucket>)` in `delete-account/index.ts`, called at the TOP of the handler (before the confirmation-token check), refusing with 429 on `-1` | none — this is a hard pre-action gate, not an advisory read; the RPC's own atomic check-and-increment IS the enforcement. ⚠ **REWIRED by OI-162 slice 4 (f2c8d5, 2026-09-11)**: the prior mechanism (`count(*)` on `ai_coach_interactions` rows with `channel='delete_account_attempt'`, plus a fire-and-forget insert into two nonexistent columns) had **never worked** — `attemptCount` was structurally always 0, so this limit never fired in production. Fails OPEN on a `consume_quota` error (a DPDP §17 erasure must not be blocked by a counter outage) — deliberately the OPPOSITE of `verify_payment_rate_limit` below. Pinned by `delete_account_rate_limit_writer_to_reader_test.dart`. |
 | `verify_payment_rate_limit` | `consume_quota('verify_payment', <10-minute bucket>)` in `verify-payment/index.ts`, called at the TOP of the handler (before body parsing), refusing with 429 on `-1` | none — same hard pre-action shape as `delete_account_rate_limit` above. ⚠ **REWIRED by OI-162 slice 4 (f2c8d5, 2026-09-11)**: the prior mechanism destructured only `{ count }` from its query, never `{ error }`, so a counter-query failure silently proceeded as if under the limit (fail-open by omission, not by design). Fails CLOSED on a `consume_quota` error here — this endpoint is background confirmation only (PRO activates optimistically in Hive on the Razorpay success callback; the webhook is an independent authoritative path; the client retries at 60s/5m/15m), so a refusal costs the user almost nothing, while fail-open under a correlated outage releases the exact brake this limit exists to protect. Pinned by `verify_payment_rate_limit_writer_to_reader_test.dart`. |
 | `log_client_error_payload` | client `ErrorTelemetry.recordNonFatal` POSTs to `log-client-error` Edge Function (rate-limit 100→2000/window, `next_window_at` signal, HIGH_PRIORITY_OP_TYPES bypass) | `client_errors` Postgres table + audit queries. APK Test #16.1 / D silent-drop fix. |

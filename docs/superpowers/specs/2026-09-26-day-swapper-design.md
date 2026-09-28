@@ -252,7 +252,7 @@ Server (one migration) ──► ignore no-op updates · completed days can't be
 | Train week list (`week_rows.dart`) | Drag, ⇅, MOVED tag, allowance line. | picker, confirm sheet |
 | Coach tool `swapWorkoutDays` | PRO tool shown only to capable clients. The client executes it through the same engine. | capability handshake |
 | `SyncSkipIndex` (new) | One skip mechanism for every history push. | Hive |
-| Migration `144_*` (number verified at plan time) | The three server rules. | none |
+| Migration `144_*` (number verified at plan time) *(corrected 2026-09-28 at implementation: `147_sync_noop_suppress_completed_guard_sync_epoch.sql` — see §5.10's own correction.)* | The three server rules. | none |
 
 ---
 
@@ -599,6 +599,8 @@ kill switches follow `disable_<domain>_hash_skip`. They live in the same box as 
 
 ### 5.10 Server migration (one file, `144_…sql`, number verified at plan time)
 
+*(corrected 2026-09-28 at implementation: the migration is `147_sync_noop_suppress_completed_guard_sync_epoch.sql`, not `144_…` — plan D1 said `145`, this section originally said `144`; renumbered to 147 because 145 and 146 landed on `main` first, from other concurrent work.)*
+
 1. **Ignore updates that change nothing.** Add a `BEFORE UPDATE … FOR EACH ROW EXECUTE FUNCTION
    suppress_redundant_updates_trigger()` trigger on every table a history loop writes: the
    workout, nutrition, health, custom-item and `ai_coach_interactions` tables in §5.9, plus
@@ -798,6 +800,7 @@ The long-press on the Home calendar strip opens the **shared picker** for that d
 - **G2: new `scripts/check_sync_no_now_fallback.dart`.**
   - Fails on `?? DateTime.now()` inside sync payload code (the same file set), comment-stripped.
   - It must fail on today's tree (11 hits) and pass after §5.12.
+    *(corrected 2026-09-28 at implementation: 14 hits, not 11 — plan D2; see §9 bug #4's own correction below for the same count.)*
   - Rule 24: a mutation-proven test plus a `docs/audit/gate_test_ledger.yaml` entry. It takes no
     gate number (the filename is the identity).
 - **Existing gates the batch must satisfy:**
@@ -852,6 +855,7 @@ The long-press on the Home calendar strip opens the **shared picker** for that d
 | `docs/superpowers/specs/2026-04-27-ai-coach-brilliance-design.md` §5 | the Captain Manual amendment |
 
 **OI board:** OI-237 closed by the commit that lands §5.9/§5.10 (`closes-oi: OI-237`).
+*(corrected 2026-09-28 at implementation: OI-237 closes only AFTER the §10 IO-saving measurement is actually taken against the applied migration, not merely once §5.9/§5.10's code lands — plan D17. Landing the code is necessary but not sufficient; the OI names the measured saving, and there is nothing to measure until migration 147 is live.)*
 
 **Closure file:** `docs/audit/day-swapper-sync-load.closure.yaml`, with every finding in a terminal
 state (Gate 40).
@@ -868,7 +872,7 @@ diagnose-doc records the mutation and how many tests reddened, per rule 21):
 | 1 | A swap reverts after a restart, and workout↔workout swaps never reach other devices | `swap_service.dart:113` → `plan_integrity_reconciler.dart:69-90` + `plan_engine_flags.dart:499-504` |
 | 2 | The coach sends swaps to rescheduleWeek | `captain_manual.ts:386`, `rescheduleWeek.ts:25-26` → `tool-loop.ts:265` |
 | 3 | The existing swap has no guards, is not atomic, miscounts, leaves stale markers, a stale template link and a skipped deload | `swap_service.dart:113-169`, `:479-530`, `:567`; `sync_workout.dart:1714`; `deload_evaluator.dart:210` |
-| 4 | Completion times overwritten with "now" (recurrence of `5a36ad`), plus the 11-instance class | `workout_write_service.dart:502` → `sync_workout.dart:628`, `:1707` |
+| 4 | Completion times overwritten with "now" (recurrence of `5a36ad`), plus the 11-instance class *(corrected 2026-09-28 at implementation: 14 instances, not 11 — plan D2, same recount as §7 G2's correction above)* | `workout_write_service.dart:502` → `sync_workout.dart:628`, `:1707` |
 | 5 | Sync write amplification (OI-237), the double plan download, and the Hive re-writes on launch | §1.5 |
 | 6 | Restore types rest days as workouts (28 live rows) | `sync_workout.dart:2097-2100` → `plan_integrity_reconciler.dart:96-107` |
 
@@ -899,6 +903,7 @@ diagnose-doc records the mutation and how many tests reddened, per rule 21):
   - the existing three domains keep their stored indexes, with no re-push burst.
 - **Live SQL** (`test/sql/*_live_verify.sql`, always `BEGIN … ROLLBACK`, never touching real rows):
   - an identical upsert creates no new row version (`xmin` unchanged) on each table;
+    *(corrected 2026-09-28 at implementation: "no new row version (`ctid` unchanged)", not "`xmin` unchanged" — inside one `BEGIN … ROLLBACK`, every row's `xmin` is the test's own transaction id, so `xmin` cannot tell a suppressed update from a real one; Task 7's harness header.)*
   - a completed row cannot be demoted, but its `completed_at` can be corrected;
   - `sync_epoch` defaults to 0 and the progress RPC leaves it alone.
   - **Discrimination:** inside the same transaction, drop the new triggers and re-run each

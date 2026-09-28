@@ -55,6 +55,7 @@ Pieces:
 | `weight_logs` | `health_write_service.dart` | home `WeightTrendChart` (`shared/widgets/weight_trend_chart.dart`; date-proportional x + carry-forward anchor — `weightTrendWindow()` is the testable extraction). |
 | `day_rollover_provider_invalidation` | `day_rollover_service.dart` (cold-start day-change tick) | mount-time invalidation of `todayWorkoutProvider`, `homeNutritionProvider`, `streakProvider`. |
 | Plan expiry (free day 29) | `WorkoutScheduleService.isPhaseExpired()` | `home_screen._buildTodayRow` → `PlanExpiredCard` (3 doors: Upgrade / Build custom / Re-do Week 4). PRO users auto-generate next phase on splash. |
+| Day-swap 🔄 marker (D8, day-swapper + sync-load batch) | `DaySwapRules.isMoved` (`is_swapped == true && status != 'completed'`) | `weekly_calendar.dart` day cell — `isCompleted` branches BEFORE `isSwapped` is checked, so DONE always wins over 🔄 for a day that was swapped and then finished. Long-press opens the shared `SwapPickerSheet` (`origin: DaySwapOrigin.homePicker`) — the SAME engine as Train's drag/⇅ and the coach; `widgets/swap_sheet.dart` was deleted in this batch. |
 
 ## Common pitfalls
 

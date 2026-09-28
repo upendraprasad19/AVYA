@@ -1567,7 +1567,7 @@ class SyncService {
   /// (no epoch action this launch), like the shared fetch.
   ///
   /// Deliberately a BARE `.select()`, not `.select('sync_epoch')`: the
-  /// `sync_epoch` column ships in migration 145 (Task 7/U1), which had not
+  /// `sync_epoch` column ships in migration 147 (Task 7/U1), which had not
   /// landed at the time this task executed (`check_schema_column_refs.dart`
   /// FAILs a literal reference to a column absent from
   /// `backups/live_schema_columns.json`, and this repo's own convention is
@@ -1575,11 +1575,11 @@ class SyncService {
   /// something this task cannot do without applying a live migration,
   /// forbidden by its own brief). A bare select is exempt from that gate by
   /// design (any column set is valid) and is forward-compatible: before
-  /// migration 145, `row['sync_epoch']` below reads null exactly like today;
-  /// after it, the same row simply carries a real value. Once the migration
-  /// is live, the coordinator may narrow this back to `.select('sync_epoch')`
-  /// as a follow-up (a network-cost micro-optimisation, not a correctness
-  /// fix) after regenerating the snapshot.
+  /// migration 147, `row['sync_epoch']` below reads null exactly like today;
+  /// after it, the same row simply carries a real value. The batch's
+  /// live-apply task (Task 34) narrows this to `.select('sync_epoch')` in the
+  /// same commit that applies 147 and regenerates the snapshot (a
+  /// network-cost saving, not a correctness fix).
   Future<List> _fetchSyncEpochRowForRestore(String userId) async {
     try {
       return await _supabase.client
