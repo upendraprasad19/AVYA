@@ -23,7 +23,7 @@ export const rescheduleWeekTool: ToolDefinition<Args> = {
   description:
     "Reshuffle this week's scheduled workouts to fit a new set of available days. Use when the user says 'I'm only free Mon/Wed/Fri this week', 'cut me down to 3 days', etc. The system moves workouts to the nearest available day; workouts that don't fit are DROPPED (not merged). Always destructive — review the full move plan before confirming.",
   selectionHints:
-    "Use when user wants to MOVE a workout to a different day (e.g., 'move Friday's pull to today', 'shift this week back by 1 day'). Distinct from logSet (records completed work) and pausePlan (rest day).",
+    "Use when the user says something like 'I'm only free on these days' or wants to reshape their whole week around availability (e.g., 'shift this week back by 1 day', 'cut me down to 3 days this week'). NOT for swapping or moving a single day's workout to another day within the week — that is swapWorkoutDays. Distinct from logSet (records completed work) and pausePlan (rest day).",
   schema,
   intentBuilder: (args) => {
     const sortedDays = [...args.daysAvailable].sort((a, b) => a - b);

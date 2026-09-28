@@ -240,11 +240,19 @@ void main() {
       // ran at all), so there is no row for a trigger to hang off. Each EF
       // calls the RPC itself, with a FIXED UTC bucket as p_window_start
       // (5/hour and 20/10min respectively).
+      //
+      // consume-day-swap (day-swapper-sync-load batch, Task 8, quota key
+      // `day_swap`) is the SAME shape again: the thing being limited is an
+      // HTTP request to spend one weekly day-swap allowance unit, and there
+      // is no row inserted at the moment that decision is made for a trigger
+      // to hang off — the EF calls consume_quota() itself, with the caller's
+      // IST Mon-Sun week start (istWeekStartIso-derived) as p_window_start.
       const allowed = {
         'supabase/functions/weekly-report/index.ts',
         'supabase/functions/ai-media-proxy/index.ts',
         'supabase/functions/delete-account/index.ts',
         'supabase/functions/verify-payment/index.ts',
+        'supabase/functions/consume-day-swap/index.ts',
         // Single-owner audit 2026-09-26 (P0 #5): an ai-proxy `prediction` is
         // an HTTP attempt with no row inserted — the weekly-report shape
         // exactly, so no trigger has anything to hang off. The handler calls

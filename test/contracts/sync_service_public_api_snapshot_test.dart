@@ -128,10 +128,12 @@ void main() {
         'restoreWeightLogsForSyncDomain',
         'restoreWorkoutLogsForSyncDomain',
         'restoreWorkoutPlanForSyncDomain',
-        // OI-252 — test seam: injects preFetched user_progress rows (+ an
-        // optional pre-resolved deleted-template-id set) so the ghost-day
-        // filter is behaviorally testable without a live Supabase query;
-        // delegates to _restoreWorkoutPlan, production path unchanged.
+        // T21 (day-swapper-sync-load) + OI-252 — test seam: injects
+        // preFetched user_progress rows (+ an optional pre-resolved
+        // deleted-template-id set) so the L1/L3 restore-merge (spec sec 5.7)
+        // and the ghost-day filter are behaviorally testable without a live
+        // Supabase query; delegates to _restoreWorkoutPlan, production path
+        // unchanged.
         'restoreWorkoutPlanForTest',
         'restoreWorkoutTemplatesForSyncDomain',
         // OI-252 B-pass finding 2 (2026-09-27) — test seam: injects
@@ -140,6 +142,16 @@ void main() {
         // a live Supabase query for the row read itself; delegates to
         // _restoreWorkoutTemplates, production path unchanged.
         'restoreWorkoutTemplatesForTest',
+        // Hermes h7F2 (diagnose f1c6b4) — test seams injecting
+        // user_progress / user_profile+users rows so the per-launch
+        // write-if-changed skip is behaviorally testable; delegate to the
+        // private restores, production path unchanged.
+        'restoreUserProgressForTest',
+        'restoreUserProfileForTest',
+        // Day-swapper + sync-load Task 19 — test-only wrapper for the
+        // onboarding-replay now()-fallback fix (no existing SyncDomain entry
+        // point for this one-shot migration replay).
+        'replayPendingOnboardingSyncForTest',
       };
 
       final files = <File>[
@@ -147,16 +159,27 @@ void main() {
         ...Directory('lib/core/services/sync')
             .let((dir) => dir.existsSync() ? dir.listSync() : <FileSystemEntity>[])
             .whereType<File>()
-            .where((f) => f.path.endsWith('.dart')),
+            .where((f) => f.path.endsWith('.dart'))
+            // Only the `part of` files ARE the SyncService library. A standalone
+            // library in the same directory (sync_skip_index.dart — the
+            // SyncSkipIndex helper, day-swapper + sync-load Task 4) has its own
+            // public API, and counting it here would read pushIfChanged/commit
+            // as SyncService methods.
+            .where((f) => RegExp(r'^part of ', multiLine: true)
+                .hasMatch(f.readAsStringSync())),
       ];
+      // The filter must never drop the SyncService library itself: every file
+      // in sync/ except the standalone helper is a part file.
+      expect(files.length, greaterThanOrEqualTo(8),
+          reason: 'sync_service.dart + its 7 part files must all be scanned');
 
       // Match instance method signatures at exactly 2-space indent
       // (class instance methods + extension methods). The pattern requires the
       // RETURN TYPE immediately after the 2-space indent, so it excludes two
       // classes by construction (NOT by indent):
       //   (a) `static `-prefixed members — the `^  static …` text never matches
-      //       `^  (Future|Stream|void)` (e.g. the H1b @visibleForTesting statics
-      //       schedPayloadFingerprint / schedShouldSkipUpsert / schedPrunedHashIndex);
+      //       `^  (Future|Stream|void)` (e.g. the H1b @visibleForTesting static
+      //       schedPayloadFingerprint);
       //   (b) non-Future/Stream/void return types (String/bool/Map/int).
       // (Known blind spot, acceptable for now: a future PUBLIC `static Future<…>`
       // would also be excluded — add an explicit static branch here if one is

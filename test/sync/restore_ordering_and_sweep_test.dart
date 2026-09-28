@@ -70,9 +70,11 @@ void main() {
       // restore path + the boot heal can't drift. Behavioral preservation
       // (a local 'completed' day survives the planned plan_json snapshot) is
       // pinned in test/contracts/restore_plan_json_authoritative_test.dart.
-      expect(method, contains('PlanIntegrityReconciler.mergeScheduleEntry'),
+      // T21: repointed — see restore_plan_json_authoritative_test.dart for
+      // why (the call moved one level down into mergeScheduleBundleIntoHive).
+      expect(method, contains('PlanIntegrityReconciler.mergeScheduleBundleIntoHive'),
           reason: 'restore must route schedule merges through the shared '
-              'completed-day-preserving helper');
+              'L1+L3 bundle helper');
     });
   });
 

@@ -40,7 +40,9 @@ import 'package:icanbefitter/features/train/widgets/workout_receipt_card.dart';
 import 'package:icanbefitter/features/train/widgets/workout_receipt_sheet.dart';
 import '../widgets/pr_snapshot.dart';
 import '../widgets/recent_food_logs.dart';
-import '../widgets/swap_sheet.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
+import 'package:icanbefitter/core/services/day_swap/day_swap_result.dart';
+import 'package:icanbefitter/features/train/widgets/swap_picker_sheet.dart';
 import '../widgets/water_quick_sheet.dart';
 import '../widgets/weight_log_sheet.dart';
 import 'package:icanbefitter/shared/widgets/streak_warning_banner.dart';
@@ -481,16 +483,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               );
             },
             onDayLongPress: (date, schedule) {
-              SwapSheet.show(
+              SwapPickerSheet.show(
                 context,
-                sourceDate: date,
-                onSwapComplete: () {
-                  // F11 · Invalidate all views that read schedule state so
-                  // the swap shows up immediately on Home, Calendar, Plan.
-                  ref.invalidate(todayWorkoutProvider);
-                  ref.invalidate(currentPlanProvider);
-                  ref.invalidate(calendarWeekProvider);
-                },
+                sourceDate: istDateStr(date),
+                origin: DaySwapOrigin.homePicker,
               );
             },
           ),

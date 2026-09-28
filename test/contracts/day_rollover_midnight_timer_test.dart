@@ -169,22 +169,6 @@ void main() {
         await HiveUserSession.openForUser(testUser);
       });
 
-      // Anchor a clock that ADVANCES IN LOCKSTEP with real wall time
-      // (not frozen) — the Timer fires on REAL time, so "now" must keep
-      // moving for _checkAndRollover's date comparison to actually see a
-      // change once the timer fires. Start ~90ms before the synthetic IST
-      // midnight of 2026-09-29.
-      final targetMidnightUtc = istMidnightUtc(DateTime.utc(2026, 9, 29));
-      final syntheticStart =
-          targetMidnightUtc.subtract(const Duration(milliseconds: 90));
-      final realStart = DateTime.now();
-      final offset = syntheticStart.difference(realStart);
-      setTestClock(() => DateTime.now().add(offset));
-
-      expect(istTodayStr(), istDateStr(syntheticStart),
-          reason: 'precondition: synthetic clock reads the day BEFORE the '
-              'target midnight');
-
       final refCompleter = Completer<WidgetRef>();
       await tester.pumpWidget(
         ProviderScope(
@@ -194,7 +178,30 @@ void main() {
       await tester.pump();
       final ref = await tester.runAsync(() => refCompleter.future);
 
+      // Anchor a clock that ADVANCES IN LOCKSTEP with real wall time
+      // (not frozen) — the Timer fires on REAL time, so "now" must keep
+      // moving for _checkAndRollover's date comparison to actually see a
+      // change once the timer fires. Start ~90ms before the synthetic IST
+      // midnight of 2026-09-29.
+      //
+      // Anchored AFTER the widget pump and ref capture, immediately before
+      // init() (day-swapper-sync-load, 2026-09-29): anchored before them,
+      // the pump could itself take longer than 90ms on a loaded machine, so
+      // the synthetic clock crossed midnight BEFORE init() stored "today" —
+      // preInitDate then already read the new day and the post-timer
+      // assertion failed with Expected: not '2026-09-29', Actual:
+      // '2026-09-29' (2 of 3 isolated runs, and the pre-push full suite).
+      final targetMidnightUtc = istMidnightUtc(DateTime.utc(2026, 9, 29));
+      final syntheticStart =
+          targetMidnightUtc.subtract(const Duration(milliseconds: 90));
+      final realStart = DateTime.now();
+      final offset = syntheticStart.difference(realStart);
+      setTestClock(() => DateTime.now().add(offset));
+
       final preInitDate = istTodayStr();
+      expect(preInitDate, istDateStr(syntheticStart),
+          reason: 'precondition: synthetic clock reads the day BEFORE the '
+              'target midnight at the moment init() is about to run');
 
       // init() constructed on the REAL zone (via runAsync) so the Timer it
       // schedules is a genuine dart:async Timer tied to real wall-clock

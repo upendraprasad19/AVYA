@@ -8,6 +8,7 @@ import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/singleton_lifecycle_registry.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/features/ai_coach/models/tool_intent.dart';
+import 'package:icanbefitter/features/ai_coach/services/coach_client_capabilities.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FunctionException;
 
 /// Structured response from any AI Edge Function.
@@ -362,6 +363,7 @@ class AiService {
           'message': message,
           'context': compact,
           'snapshot_json': compact,
+          'client_capabilities': kCoachClientCapabilities,
           // Unit 2 — coach short-term memory (optional; omitted when empty/off).
           if (history != null && history.isNotEmpty) 'history': history,
         },
@@ -504,6 +506,7 @@ class AiService {
           'message': message,
           'context': compact,
           'snapshot_json': compact,
+          'client_capabilities': kCoachClientCapabilities,
           // Unit 2 — coach short-term memory (optional; omitted when empty/off).
           if (history != null && history.isNotEmpty) 'history': history,
         },

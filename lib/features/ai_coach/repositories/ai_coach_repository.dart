@@ -322,6 +322,7 @@ class AiCoachRepository {
     'today_workout': null,
     'yesterday_workout': null,
     'week_lookahead': null,
+    'swaps_left': null,
     'current_plan_summary': null,
     'sleep_7d': null,
     'water_7d': null,

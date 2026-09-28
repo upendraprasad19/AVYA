@@ -10,12 +10,12 @@ wiring surface uses. A gate **number is an optional alias**: most gates have non
 the next free number: **55**. Declare it canonically as `// Gate: N` on its
 own line in the first 10 lines — that exact form is the only one this generator reads.
 
-Total gates: **109** (48 numbered, 61 by filename only).
+Total gates: **110** (48 numbered, 62 by filename only).
 
 | Gate | Script | Purpose | Test ledger |
 |---|---|---|---|
 | — | `check_adr_index_fresh.dart` | confirms docs/adr/INDEX.md is up-to-date relative to docs/adr/NNNN-*.md. | grandfathered |
-| — | `check_ai_tool_dispatcher_coverage.dart` | Every WRITE-kind AI tool registered server-side must have a matching | grandfathered |
+| — | `check_ai_tool_dispatcher_coverage.dart` | (E.13 — Audit 2026-05-16 framework deliverable; extended Task 27, | mutation_proven |
 | — | `check_alerts.dart` | SessionStart hook script: queries unacknowledged alerts and emits a JSON | grandfathered |
 | — | `check_analyze_narrower_than_lib_in_tooling.dart` | Blocks a committed script/skill from instructing `flutter analyze` scoped | mutation_proven |
 | 48 | `check_apk_release_signed.dart` | the built APK is signed with the RELEASE certificate, not the | grandfathered |
@@ -107,7 +107,8 @@ Total gates: **109** (48 numbered, 61 by filename only).
 | — | `check_sot_registry_parity.dart` | SoT registry parity — file:line references resolve AND no orphan | grandfathered |
 | — | `check_std_encoding_import_rot.dart` | ban importing the REMOVED | grandfathered |
 | 11 | `check_sync_fanout.dart` | Every sync_method and restore_method declared in the registry | grandfathered |
-| — | `check_sync_hash_skip_atomicity.dart` | OI-204 gate-before-refactor (CLAUDE.md §4.11). Verifies the sync-fingerprint | mutation_proven |
+| — | `check_sync_hash_skip_atomicity.dart` | G1 (day-swapper + sync-load batch, spec §7): every Supabase history | mutation_proven |
+| — | `check_sync_no_now_fallback.dart` | G2 (day-swapper + sync-load batch, spec §5.12 / §7): a sync payload | mutation_proven |
 | — | `check_tab_screen_uses_hive_scaffold.dart` | Tech-debt audit 2026-05-20 / B5 / C1 — pins the contract that every | grandfathered |
 | — | `check_teardown_no_unguarded_sibling_await.dart` | Blocks a STAGED test file whose tearDown/tearDownAll block mixes a | mutation_proven |
 | 22 | `check_telemetry_pii_classification.dart` | every `ErrorTelemetry.recordNonFatal` / `logEvent` callsite | grandfathered |

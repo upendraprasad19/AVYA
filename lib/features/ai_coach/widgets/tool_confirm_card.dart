@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/services/day_swap/day_swap_copy.dart';
+import '../../../core/services/day_swap/day_swap_result.dart';
+import '../../../core/services/day_swap/day_swap_rules.dart';
 import '../../../core/services/hive_service.dart';
 import '../../../core/theme/colors.dart';
 import '../models/tool_intent.dart';
 import '../providers/pending_tool_intents_provider.dart';
+import '../../train/providers/day_swap_provider.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 
 /// Inline confirmation card for an AI coach tool intent.
@@ -287,6 +291,9 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
           ? 'Shorten $date workout to $minutes min'
           : "Shorten today's workout to $minutes min";
     }
+    if (intent.type == 'swap_workout_days') {
+      return _buildSwapWorkoutDaysSummary(intent);
+    }
     if (intent.type == 'create_custom_exercise') {
       final name = intent.payload['name']?.toString() ?? '';
       final category = intent.payload['category']?.toString() ?? '';
@@ -305,6 +312,43 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
       return base;
     }
     return intent.previewSummary;
+  }
+
+  /// The card is a PREVIEW built from LIVE state (design decision 2): the
+  /// engine re-checks everything at APPLY (spec §5.1), so a lock or the
+  /// allowance shown here can go stale between the coach's suggestion and
+  /// the tap — the resulting failure surfaces via the normal
+  /// ToolExecutionResult.failure snackbar path, same as every other tool.
+  String _buildSwapWorkoutDaysSummary(ToolIntent intent) {
+    final dateA = intent.payload['dateA']?.toString();
+    final dateB = intent.payload['dateB']?.toString();
+    if (dateA == null || dateB == null) return intent.previewSummary;
+    final weekStart = DaySwapRules.mondayOf(dateA);
+    final week = ref.read(daySwapWeekProvider(weekStart));
+    DaySwapDayState stateOf(String d) => week.firstWhere(
+          (s) => s.date == d,
+          orElse: () => DaySwapDayState(
+              date: d,
+              row: null,
+              lock: DaySwapRefusal.noRow,
+              isMoved: false,
+              title: ''),
+        );
+    final a = stateOf(dateA);
+    final b = stateOf(dateB);
+    final preview =
+        ref.read(daySwapControllerProvider).preview(dateA, dateB);
+    final lines = <String>[
+      DaySwapCopy.coachCardTitle(dateA, dateB),
+      DaySwapCopy.coachCardMove(title: a.title, from: dateA, to: dateB),
+      DaySwapCopy.coachCardMove(title: b.title, from: dateB, to: dateA),
+      DaySwapCopy.coachCardAllowance(preview.allowance,
+          currentWeekStart: weekStart),
+    ];
+    if (preview.warning != null) {
+      lines.add(DaySwapCopy.restRunWarningLine(preview.warning!));
+    }
+    return lines.join('\n');
   }
 
   String? _resolveExerciseName(String id) {
@@ -338,6 +382,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return 'INJURY MODIFY';
       case 'reschedule_week':
         return 'RESCHEDULE WEEK';
+      case 'swap_workout_days':
+        return 'SWAP DAYS';
       case 'generate_hotel_workout':
         return 'HOTEL WORKOUT';
       case 'regenerate_plan_block':
@@ -371,6 +417,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return Icons.healing;
       case 'reschedule_week':
         return Icons.calendar_view_week;
+      case 'swap_workout_days':
+        return Icons.swap_horiz_rounded;
       case 'generate_hotel_workout':
         return Icons.luggage;
       case 'regenerate_plan_block':
@@ -404,6 +452,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
         return 'Workouts updated';
       case 'reschedule_week':
         return 'Week reshuffled';
+      case 'swap_workout_days':
+        return 'Days swapped';
       case 'generate_hotel_workout':
         return 'Hotel plan generated';
       case 'regenerate_plan_block':

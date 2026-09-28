@@ -5,7 +5,7 @@
     "captured_at": "2026-08-26",
     "captured_via": "SELECT table_name, array_agg(column_name) FROM information_schema.columns WHERE table_schema='public' GROUP BY table_name",
     "regenerated_at": "2026-09-28",
-    "regenerated_for": "migration 148 (coach_extraction_locked_fields, single-owner-a2b-2 batch). Verified with a FULL live information_schema.columns dump on project dedsavbjuwgarrhphgnl (not just the two columns this migration added) and diffed programmatically against every table already in this file, table-by-table and column-by-column — deliberately wide, since migrations 140-147 landed on other branches/sessions since this file's 2026-09-21 regen and were not individually re-verified one by one. Found and fixed THREE column gaps, only one of which is this batch's own: user_profile gained coach_extraction_locked_fields (migration 148, this batch); coach_memory gained locked_field_conflicts (migration 148, this batch); workout_templates gained deleted_at (migrations 145/146 on a DIFFERENT, already-merged-to-origin/main branch — see OI-258, the same investigation that found the 145/146 migration-number collision). No other table differed between the full live dump and the pre-this-commit file — every other table's column SET matched exactly."
+    "regenerated_for": "migrations 148 and 149, merged 2026-09-28. 148 (coach_extraction_locked_fields, single-owner-a2b-2) added user_profile.coach_extraction_locked_fields and coach_memory.locked_field_conflicts; 149 (OI-237 day-swapper-sync-load) added user_progress.sync_epoch (cloud version 20260928083027, ordinal 24). A full live information_schema.columns read on dedsavbjuwgarrhphgnl after the 149 apply matched this file: 52 tables, those three columns the only additions since the 145 regeneration."
   },
   "storage_buckets": [
     "chat-media",
@@ -550,7 +550,8 @@
       "current_streak_days",
       "last_workout_date",
       "longest_gap_days",
-      "streak_freezes_first_pro_grant_done"
+      "streak_freezes_first_pro_grant_done",
+      "sync_epoch"
     ],
     "user_saved_meals": [
       "id",

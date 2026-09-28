@@ -52,6 +52,22 @@ bool isRestoredHardFailureRow({
       modelUsed == kModelUsedLoopThrewSentinel;
 }
 
+/// Derives an ISO-8601 UTC timestamp from a `coach_<ms>` Hive key (spec
+/// §5.12 fallback order: recorded value -> derive from a *_ms sibling or the
+/// Hive key -> omit). `coach_interaction_repository.dart:70-77` mints every
+/// key as `coach_<millisecondsSinceEpoch>`, so the key itself IS the
+/// creation timestamp for a locally-written row. Returns null when the key
+/// carries no parseable millisecond suffix, so the caller OMITS the field
+/// rather than sending "now" — matching the existing "absence beats null on
+/// the wire" convention (sync_workout.dart:613-614).
+String? _coachCreatedAtFromKey(String key) {
+  if (!key.startsWith('coach_')) return null;
+  final ms = int.tryParse(key.substring('coach_'.length));
+  if (ms == null) return null;
+  return DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true)
+      .toIso8601String();
+}
+
 /// Sync + restore for AI coach surfaces: coach_memory (induction state +
 /// coach_notes) and ai_coach_interactions (chat history). See CLAUDE.md
 /// §11 for the AI architecture context.
@@ -198,16 +214,33 @@ extension SyncServiceCoach on SyncService {
         // so server-side analytics can isolate this fallback path if it
         // becomes surprisingly hot.
         final cloudId = SyncService._deterministicId('coach|$userId|$key');
-        await _supabase.client.from('ai_coach_interactions').upsert({
+        final createdAt =
+            entry['created_at'] as String? ?? _coachCreatedAtFromKey(key);
+        final payload = <String, dynamic>{
           'id': cloudId,
           'user_id': userId,
           'channel': 'in_app_orphan',
           'user_message': entry['user_message'] ?? '',
           'ai_response': entry['ai_response'] ?? '',
           'model_used': entry['model_used'] ?? 'unknown',
-          'created_at':
-              entry['created_at'] ?? DateTime.now().toUtc().toIso8601String(),
-        }, onConflict: 'id');
+          // Merge note (origin/main a2b, 2026-09-28): main changed the old
+          // `now()` fallback here to UTC; this branch removed the `now()`
+          // fallback entirely (G2 gate) and derives the time from the Hive key
+          // as UTC (`_coachCreatedAtFromKey`), which already covers it.
+          if (createdAt != null) 'created_at': createdAt,
+        };
+        await _supabase.client
+            .from('ai_coach_interactions')
+            .upsert(payload, onConflict: 'id');
+        // OI-204 write-amplification fix (day-swapper + sync-load Task 19):
+        // stamp the cloud id back into the Hive row, exactly like the
+        // dedup-hit branch above (:186-191). Without this, `entry['id']`
+        // never becomes a real UUID, so the rawId guard at :148-150 never
+        // catches the row and it re-upserts on every single sync pass.
+        if (entry['id'] != cloudId) {
+          final updated = Map<String, dynamic>.from(entry)..['id'] = cloudId;
+          await coachBox.put(key, updated);
+        }
       } catch (e, st) {
         debugPrint('[SyncService._syncCoachInteractions] $e');
         // audit-2026-05-11 H-42 — telemetry pair.

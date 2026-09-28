@@ -21,7 +21,7 @@ features (Start Workout → Train, Log Meal → Nutrition, Edit Goal → Profile
 Pieces:
 
 - `screens/home_screen.dart` — orchestrates the priority-ordered card stack.
-- `widgets/` — `weekly_calendar_strip`, `today_workout_card`, `nutrition_snapshot`, `pr_snapshot`, `recent_logs`, `step_counter`, `day_detail_sheet`, `swap_sheet`, `streak_warning_banner`, `plan_expired_card`. (Weight trend uses the shared `lib/shared/widgets/weight_trend_chart.dart` — the old `weight_sparkline` was removed 2026-06-02, diagnose e1c6a9.)
+- `widgets/` — `weekly_calendar_strip`, `today_workout_card`, `nutrition_snapshot`, `pr_snapshot`, `recent_logs`, `step_counter`, `day_detail_sheet`, `streak_warning_banner`, `plan_expired_card`. (Weight trend uses the shared `lib/shared/widgets/weight_trend_chart.dart` — the old `weight_sparkline` was removed 2026-06-02, diagnose e1c6a9. `widgets/swap_sheet.dart` was removed in the day-swapper batch — the calendar day long-press now opens the shared `lib/features/train/widgets/swap_picker_sheet.dart` via `DaySwapController`, same engine as Train's drag/⇅ and the coach.)
 - `providers/home_provider.dart` — `todayWorkoutProvider`, `homeNutritionProvider`, `streakWarningEligibilityNotifier`.
 
 ## Home Screen Layout (Priority Order)
@@ -55,6 +55,7 @@ Pieces:
 | `weight_logs` | `health_write_service.dart` | home `WeightTrendChart` (`shared/widgets/weight_trend_chart.dart`; date-proportional x + carry-forward anchor — `weightTrendWindow()` is the testable extraction). |
 | `day_rollover_provider_invalidation` | `day_rollover_service.dart` (cold-start day-change tick + resume + a foreground midnight `Timer` backstop added 2026-09-28) | mount-time invalidation of `todayWorkoutProvider`, `homeNutritionProvider`, `streakProvider`, and (since bug 9c8958, 2026-09-28) `streakFreezeProvider` — was missing entirely, so the Monday refill landed in Hive on time but the streak-freeze badge stayed stale until an app restart. See `docs/diagnoses/2026-09-28-streak-freeze-provider-invalidation-9c8958.md`. |
 | Plan expiry (free day 29) | `WorkoutScheduleService.isPhaseExpired()` | `home_screen._buildTodayRow` → `PlanExpiredCard` (3 doors: Upgrade / Build custom / Re-do Week 4). PRO users auto-generate next phase on splash. |
+| Day-swap 🔄 marker (D8, day-swapper + sync-load batch) | `DaySwapRules.isMoved` (`is_swapped == true && status != 'completed'`) | `weekly_calendar.dart` day cell — `isCompleted` branches BEFORE `isSwapped` is checked, so DONE always wins over 🔄 for a day that was swapped and then finished. Long-press opens the shared `SwapPickerSheet` (`origin: DaySwapOrigin.homePicker`) — the SAME engine as Train's drag/⇅ and the coach; `widgets/swap_sheet.dart` was deleted in this batch. |
 
 ## Common pitfalls
 

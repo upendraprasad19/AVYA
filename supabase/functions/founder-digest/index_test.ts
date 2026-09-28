@@ -68,6 +68,11 @@ function input(over: Partial<DigestInput> = {}): DigestInput {
     dayLabel: DAY,
     windowed: { rows: [] },
     lifetime: { rows: [] },
+    // fix1 batch (day-swapper-sync-load, coordinator ruling) grew
+    // DigestInput by 1 more field for the weekly day_swap section; same
+    // "readable-empty default, override via `over`" pattern as the B1/B2/B3
+    // fields below.
+    weekly: { rows: [] },
     alerts: { rows: [] },
     // Task 5 (telegram-admin-bot) grew DigestInput by two fields; this file's
     // fixtures predate that and don't exercise either section, so default them
@@ -237,6 +242,71 @@ Deno.test("an unlisted LIFETIME key reports MOVERS, never a summed cumulative co
   }));
   assertStringIncludes(windowed, "⚠ unlisted keys: not_a_key 100 — add to DIGEST_KEYS");
 });
+
+// ---------------------------------------------------------------------------
+// fix1 batch (day-swapper-sync-load, coordinator ruling): the WEEKLY section
+// (day_swap) — its own line, never the daily windowed summary or its
+// unlisted-keys warning.
+// ---------------------------------------------------------------------------
+
+Deno.test("buildDigestText renders the weekly day_swap line with users and a swap total", () => {
+  const text = buildDigestText(input({
+    weekly: { rows: [row(U1, "day_swap", 1), row(U2, "day_swap", 3)] },
+  }));
+  assertStringIncludes(text, "Day swaps (weekly, this week): 2 users · 4 swaps");
+});
+
+Deno.test("buildDigestText renders 'Day swaps (weekly): none' for a quiet week, never a bare zero", () => {
+  const text = buildDigestText(input({ weekly: { rows: [] } }));
+  assertStringIncludes(text, "Day swaps (weekly): none");
+});
+
+Deno.test("buildDigestText renders the weekly unreadable marker, never zeros for a failed read", () => {
+  const text = buildDigestText(input({ weekly: { unreadable: "connection reset" } }));
+  assertStringIncludes(text, "⚠ weekly meters unreadable: connection reset");
+});
+
+Deno.test(
+  "a day_swap row landing in windowed.rows (the Monday edge case) is skipped by " +
+    "the daily per-key line, the unlisted-keys warning, AND the Top Users ranking " +
+    "(fix2 batch, coordinator ruling) — a weekly total must never mix into a daily " +
+    "figure, while a genuine daily row for a DIFFERENT user still ranks normally",
+  () => {
+    // window_start = that week's Monday IST-midnight can fall inside
+    // YESTERDAY's [yStart, tStart) window on the one day of the week that IS
+    // that Monday — gatherDigestInput's windowed read has no way to exclude
+    // it by quota_key, so buildDigestText must never render OR count it
+    // there. U1 has ONLY a leaked weekly row; U2 has a genuine daily row, so
+    // the exclusion is proven scoped to the weekly key, not a blanket
+    // suppression of the per-user ranking.
+    const text = buildDigestText(input({
+      windowed: {
+        rows: [
+          row(U1, "day_swap", 1),
+          row(U2, "chat_app", 7),
+        ],
+      },
+      weekly: { rows: [] },
+    }));
+    // day_swap has no cap (kind: "weekly"), so WITHOUT the
+    // `|| k.kind === "weekly"` skip in the windowed per-key loop it would
+    // fall into the `k.cap === undefined` branch and land on the "Also:"
+    // line as "Day swaps (weekly) 1" — pin that exact substring absent so
+    // reverting that guard reddens this test.
+    assertNotIncludes(text, "Day swaps (weekly) 1");
+    assertNotIncludes(text, "unlisted keys");
+    // The weekly section is independent and unaffected by the leak above —
+    // still renders "none" from its own (separately-populated) input.
+    assertStringIncludes(text, "Day swaps (weekly): none");
+    // fix2 (closes the fix1 residual): U1's leaked weekly total must NOT
+    // appear in Top Users at all — it has no other windowed usage, so if the
+    // exclusion were dropped it would appear as "<prefix> ×1".
+    assertNotIncludes(text, `${U1.slice(0, 8)} ×1`);
+    // U2's genuine DAILY row still counts normally — the exclusion is
+    // scoped to the weekly key, not every row in the same read.
+    assertStringIncludes(text, `${U2.slice(0, 8)} ×7`);
+  },
+);
 
 // ---------------------------------------------------------------------------
 // Top users: 8-char prefixes, sorted, capped, never a whole uuid.
@@ -627,6 +697,7 @@ Deno.test("a failing alerts table makes the alerts section unreadable — never 
   // And the rendered message carries the marker, not "Alerts yesterday: none".
   const text = buildDigestText({
     dayLabel: DAY,
+    weekly: { rows: [] },
     subscriptions: { rows: [] },
     expiringSoon: { count7d: 0, count30d: 0 },
     signupsYesterday: { count: 0 },

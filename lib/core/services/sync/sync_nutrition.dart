@@ -182,7 +182,7 @@ extension SyncServiceNutrition on SyncService {
   /// and delegates.
   Future<void> syncSavedMealsNow() async {
     try {
-      final userId = _supabase.currentUser?.id;
+      final userId = _liveUserId;
       if (userId == null) return;
       await _syncSavedMeals(userId);
     } catch (e, st) {
@@ -213,25 +213,26 @@ extension SyncServiceNutrition on SyncService {
         ? _nutritionLogsMergedBySlot()
         : _nutritionLogsRaw();
 
-    // OI-204 preamble, inserted between the existing `logsToSync` assignment
-    // and `for (final log in logsToSync)`. Uses the extracted
-    // nlogHashSkipDisabledFor (plan-review round 1, finding I12) rather than
-    // an inline `||`/`!` expression, so the composition itself is unit-tested.
+    // Day-swapper + sync-load Task 13 — nlog pushes through the shared
+    // SyncSkipIndex helper. nlogHashSkipDisabledFor (unchanged, OI-204
+    // plan-review round 1 finding I12) still composes the domain kill switch
+    // with the slot-merge flag: the mechanism is inert whenever slot-merge is
+    // off, independent of its own kill switch.
     final bool nlogHashSkipDisabled = SyncService.nlogHashSkipDisabledFor(
-      killSwitchDisabled: _nlogHashSkipDisabled,
+      killSwitchDisabled: _hashSkipKillSwitchOn(SyncSkipDomain.nlog),
       mergeEnabled: mergeEnabled,
     );
-    final Map<String, String> nlogHashIndex = <String, String>{};
-    if (!nlogHashSkipDisabled) {
-      final rawIndex = _hive.nutritionBox.get(SyncService._nlogHashIndexKey);
-      if (rawIndex is Map) {
-        rawIndex.forEach((k, v) {
-          if (k is String && v is String) nlogHashIndex[k] = v;
-        });
-      }
-    }
+    final nlogIndex = SyncSkipIndex(
+      box: _hive.nutritionBox,
+      domain: SyncSkipDomain.nlog,
+      disabled: nlogHashSkipDisabled,
+      ownerChangedNow: () => ownerChangedSince(userId),
+      reportFailure: (op, e, st) =>
+          unawaited(_reportSyncFailure(opType: op, error: e)),
+    );
 
     for (final log in logsToSync) {
+      if (nlogIndex.aborted) break;
       try {
         // Diagnosed 2026-04-18: the parent-table payload used to spread
         // the full Hive map into the upsert, which included the Hive
@@ -313,229 +314,107 @@ extension SyncServiceNutrition on SyncService {
           if (log['created_at'] != null) 'created_at': log['created_at'],
         };
 
-        // OI-204 — skip-check, inserted here (before ownerChangedSince): a
-        // skip means no write happens for this slot, so the account-race
-        // guard below is moot on the skip path. A fingerprint-computation
-        // failure must never cause a silent skip (spec §5.4): default to
-        // "push normally" / "don't store" on any exception.
+        // Day-swapper + sync-load Task 13 — the fingerprint is a THUNK, and
+        // every write for this slot now runs inside ONE pushIfChanged
+        // closure. G1 (spec §7) requires every catch inside that closure to
+        // `rethrow` or `return false;` directly (not merely set a flag
+        // checked later), so a per-item or vacuum failure now abandons the
+        // REST of the slot immediately rather than trying every item first —
+        // correctness-neutral: nothing is ever recorded as sent unless the
+        // whole slot lands, so an abandoned slot simply re-pushes everything
+        // (including any items skipped by the early return) next pass.
         final slotId = '$nlogDate $nlogMeal';
-        bool nlogShouldSkip = false;
-        String? nlogFp;
-        try {
-          // `computedFp` (not `nlogFp`) feeds `currentFingerprint:` below —
-          // non-nullable by inference, sidesteps any doubt about `nlogFp`'s
-          // declared-nullable type needing an explicit `!`.
-          final computedFp = SyncService.nlogPayloadFingerprint(
-              parentPayload, (log['items'] as List?) ?? const []);
-          nlogFp = computedFp;
-          nlogShouldSkip = SyncService.nlogShouldSkipUpsert(
-            killSwitchDisabled: nlogHashSkipDisabled,
-            storedFingerprint: nlogHashIndex[slotId],
-            currentFingerprint: computedFp,
-          );
-        } catch (e) {
-          // OI-204 — fail-open to "push normally, never store" (spec §5.4),
-          // never SILENTLY (plan-review round 1, finding I13 — same as
-          // Task 2's exlog catch; this repo tracks a silent collapse as its
-          // own class, feedback_bad_news_vs_no_news).
-          unawaited(ErrorTelemetry.logEvent(
-            'sync_nlog_fingerprint_failed',
-            message: 'slot=$slotId error=$e',
-          ));
-          nlogFp = null;
-          nlogShouldSkip = false;
-        }
-        if (nlogShouldSkip) {
-          continue; // cloud already holds this exact slot
-        }
+        await nlogIndex.pushIfChanged(
+          slotId,
+          () => SyncService.nlogPayloadFingerprint(
+              parentPayload, (log['items'] as List?) ?? const []),
+          () async {
+            // closes-diagnose e5c2d1, CLASS 1 — guard AT THE SINK, one
+            // statement before each network write; every await since entry
+            // is a window an account swap can land in.
+            if (ownerChangedSince(userId)) return false;
 
-        // OI-204 — set false in the item/vacuum catches below; the
-        // fingerprint is recorded only if this stays true. Guarded by
-        // scripts/check_sync_hash_skip_atomicity.dart.
-        bool nlogSlotSynced = true;
+            await _supabase.client.from("nutrition_logs").upsert(
+              parentPayload,
+              onConflict: "user_id,date,meal_type",
+            );
 
-        // closes-diagnose e5c2d1, CLASS 1 — the guard sits AT THE SINK, one
-        // statement before the write, NOT at function entry. Per
-        // feedback_pause_flag_guard_the_sink: an in-flight call that is
-        // already past an entry check still reaches the sink, and every await
-        // between entry and here is a window the account swap can land in.
-        //
-        // On 2026-08-06 this produced 22 x 42501 "new row violates row-level
-        // security policy for table nutrition_logs" in ~9 seconds: `userId`
-        // was captured at entry and the session had since advanced to another
-        // user, so PostgREST carried the NEW token while the payload carried
-        // the OLD id.
-        //
-        // ⚠ RLS rejecting those writes was the LAST line of defence, not the
-        // intended one. The SAME race with the opposite interleaving — a
-        // captured id equal to the NEW user while the ROWS came from the
-        // previous user's Hive box — satisfies auth.uid() = user_id and would
-        // be WRITTEN, and Postgres cannot tell that from a legitimate write.
-        // This client-side check is what makes the direction not matter.
-        if (ownerChangedSince(userId)) return;
-
-        // onConflict on the natural key (Audit 2026-05-12 P0-B): the live
-        // schema has UNIQUE (user_id, date, meal_type), so PostgREST merges
-        // instead of 23505-ing when a dedup key rotates. With `id` omitted the
-        // DO UPDATE never touches the PK → no 23503.
-        await _supabase.client.from("nutrition_logs").upsert(
-          parentPayload,
-          onConflict: "user_id,date,meal_type",
-        );
-
-        // Resolve the real cloud id (gen_random_uuid() on insert, or the
-        // pre-existing id on conflict) so the child nutrition_log_items FK to
-        // the correct parent. If this lookup fails the parent has already
-        // landed safely; skip the children this pass and let the next sync
-        // retry them.
-        String? logCloudId;
-        try {
-          final parentRow = await _supabase.client
-              .from('nutrition_logs')
-              .select('id')
-              .eq('user_id', userId)
-              .eq('date', nlogDate)
-              .eq('meal_type', nlogMeal)
-              .maybeSingle();
-          logCloudId = parentRow?['id'] as String?;
-        } catch (idErr, st) {
-          debugPrint(
-              '[SyncService._syncNutritionLogs] parent id lookup: $idErr');
-          unawaited(ErrorTelemetry.recordNonFatal(idErr, st,
-              reason: 'sync_service_nutrition_parent_id'));
-        }
-        if (logCloudId == null || logCloudId.isEmpty) {
-          continue;
-        }
-
-        // Push individual nutrition_log_items. Same schema trap — id,
-        // log_id, food_id are uuid columns. The bundled food database
-        // uses string IDs like `food_indian_aloo_gobi` which are not
-        // valid uuids, so we skip food_id entirely (column is nullable)
-        // and use a deterministic v5 UUID for id + the parent's cloud
-        // id for log_id.
-        final items = log['items'];
-        if (items is List) {
-          for (int i = 0; i < items.length; i++) {
-            final item = items[i] is Map
-                ? Map<String, dynamic>.from(items[i] as Map)
-                : <String, dynamic>{};
+            String? logCloudId;
             try {
-              // Per-item projection — schema-matched. nutrition_log_items
-              // columns (post-migration 068): id, log_id, food_id,
-              // food_name, quantity_g, calories, protein, carbs, fat,
-              // fiber, created_at.
-              //
-              // Drift-fix batch 2026-05-24:
-              //   T3 / F3 — dropped dead fallback reads on `food_name`
-              //     and `serving_g`; FoodItem.toMap() (the canonical
-              //     writer) only emits `name` + `quantity_g`.
-              //   T4 / F4 — added `fiber` projection alongside
-              //     migration 068.
-              //
-              // Plan C-4 (Test #6): close obs #23 by making sure every
-              // Hive nlog_* row produces N nutrition_log_items rows on
-              // sync — verified in test/nutrition_write_service/
-              // logMeal_creates_logs_and_items_atomically_test.dart.
-              // e5c2d1 CLASS 1 — sink guard. The parent upsert cleared its own
-              // check, but every await since is a fresh swap window, and these
-              // children carry the same user's payload.
-              //
-              // Closure R2-N9 asked whether returning here abandons a
-              // half-written parent and skips the tail vacuum below. It does —
-              // and that is the correct trade, because it SELF-HEALS. OI-204
-              // changed the premise this used to rest on ("`_syncNutritionLogs`
-              // has no fingerprint/skip-unchanged optimisation") — that is no
-              // longer true, so the argument is RE-DERIVED here, not merely
-              // re-asserted: an abandoned pass persists NOTHING to
-              // nlogHashIndex, because the postamble's store-on-success write
-              // sits after the postamble's OWN `ownerChangedSince` guard
-              // (added this batch), which an abandoned pass never reaches —
-              // so an interrupted push is still safe to retry, and if content
-              // changed since the last CONFIRMED push the fingerprint no
-              // longer matches, so the next pass re-pushes it in full.
-              //
-              // One residue, NOT structurally closed this batch (plan-review
-              // round 1, finding M2): content C1 fully pushed (fingerprint
-              // stored) -> edited to C2 -> a pass pushes part of C2 then
-              // abandons here via ownerChangedSince (nothing persisted,
-              // self-heals) -> reverted back to C1 before the next pass ->
-              // the next pass fingerprint-matches C1 and SKIPS, while cloud
-              // may still hold a half-written C2. Narrow: requires an
-              // edit-then-exact-revert during an account-switch race.
-              // Documented as a known limitation in the diagnose-doc
-              // addendum, not fixed here.
-              if (ownerChangedSince(userId)) return;
-              await _supabase.client.from('nutrition_log_items').upsert({
-                // `id` OMITTED (gen_random_uuid default) — Diagnose f7e3a1
-                // (2026-06-03): the old `id: _deterministicId('${key}_item_$i')`
-                // had NO user component (the nlog key embeds date+meal+itemsHash,
-                // never user_id), so two users logging the same food in the same
-                // meal-type on the same date produced the SAME item uuid →
-                // onConflict:'id' DO UPDATE STOLE the row (flipped its log_id to
-                // the other user's parent). Same cross-user class as d4b8e2. Cure:
-                // omit id + a parent-scoped, POSITION-stable arbiter
-                // (log_id, item_index). food_name is NOT a safe arbiter — a meal
-                // legitimately holds the same food twice (12 live groups), so
-                // (log_id, food_name) would merge + lose data. item_index (the
-                // item's position in the meal) is unique within the user-scoped
-                // log, idempotent on re-sync, and never merges legit duplicates.
-                'log_id': logCloudId,
-                'item_index': i,
-                'food_name': item['name'] ?? '',
-                if (item['quantity_g'] != null)
-                  'quantity_g': item['quantity_g'],
-                if (item['calories'] != null) 'calories': item['calories'],
-                if (item['protein'] != null) 'protein': item['protein'],
-                if (item['carbs'] != null) 'carbs': item['carbs'],
-                if (item['fat'] != null) 'fat': item['fat'],
-                'fiber': item['fiber'] ?? 0,
-              }, onConflict: 'log_id,item_index');
-            } catch (itemErr, st) {
-              debugPrint('[SyncService._syncNutritionLogs] item $i: $itemErr');
-              // audit-2026-05-11 H-42 — telemetry pair.
-              unawaited(ErrorTelemetry.recordNonFatal(itemErr, st,
-                  reason: 'sync_service_for_3', skipServerPost: true));
-              try {
-                await _reportSyncFailure(opType: 'upsert_nutrition_log_item', error: itemErr);
-              } catch (_) {}
-              // OI-204 — an item failed; the slot is NOT fully synced.
-              nlogSlotSynced = false;
+              final parentRow = await _supabase.client
+                  .from('nutrition_logs')
+                  .select('id')
+                  .eq('user_id', userId)
+                  .eq('date', nlogDate)
+                  .eq('meal_type', nlogMeal)
+                  .maybeSingle();
+              logCloudId = parentRow?['id'] as String?;
+            } catch (idErr, st) {
+              debugPrint(
+                  '[SyncService._syncNutritionLogs] parent id lookup: $idErr');
+              unawaited(ErrorTelemetry.recordNonFatal(idErr, st,
+                  reason: 'sync_service_nutrition_parent_id'));
+              return false; // parent landed; id unresolved -- retry whole next pass
             }
-          }
-        }
-        // audit-fixwave B-pass — item tail-vacuum. After upserting the (possibly
-        // merged) slot's items at indices 0..N-1, delete any orphaned tail rows
-        // (item_index >= N) left when the slot SHRANK — e.g. a same-slot meal was
-        // deleted so the merged union has fewer items. Without this the deleted
-        // meal's items resurrect on restore + the parent totals diverge from the
-        // item list (Hermes P1). Mirrors the template_exercises tail-vacuum.
-        if (items is List) {
-          try {
-            // e5c2d1 CLASS 1 — sink guard. A DELETE under the wrong session is
-            // the most destructive shape this race can take, so it is guarded
-            // like the writes rather than treated as cleanup.
-            if (ownerChangedSince(userId)) return;
-            await _supabase.client
-                .from('nutrition_log_items')
-                .delete()
-                .eq('log_id', logCloudId)
-                .gte('item_index', items.length);
-          } catch (vErr, vSt) {
-            debugPrint('[SyncService._syncNutritionLogs] item vacuum: $vErr');
-            unawaited(ErrorTelemetry.recordNonFatal(vErr, vSt,
-                reason: 'sync_service_nlog_item_vacuum'));
-            // OI-204 — vacuum failed; the slot is NOT fully synced (a stale
-            // tail item could resurrect on restore).
-            nlogSlotSynced = false;
-          }
-        }
+            if (logCloudId == null || logCloudId.isEmpty) {
+              return false;
+            }
 
-        // OI-204 — store-on-full-success-only. Gate checked by
-        // scripts/check_sync_hash_skip_atomicity.dart.
-        if (nlogSlotSynced && nlogFp != null) {
-          nlogHashIndex[slotId] = nlogFp;
-        }
+            if (ownerChangedSince(userId)) return false;
+
+            final items = log['items'];
+            if (items is List) {
+              for (int i = 0; i < items.length; i++) {
+                final item = items[i] is Map
+                    ? Map<String, dynamic>.from(items[i] as Map)
+                    : <String, dynamic>{};
+                try {
+                  if (ownerChangedSince(userId)) return false;
+                  await _supabase.client.from('nutrition_log_items').upsert({
+                    'log_id': logCloudId,
+                    'item_index': i,
+                    'food_name': item['name'] ?? '',
+                    if (item['quantity_g'] != null) 'quantity_g': item['quantity_g'],
+                    if (item['calories'] != null) 'calories': item['calories'],
+                    if (item['protein'] != null) 'protein': item['protein'],
+                    if (item['carbs'] != null) 'carbs': item['carbs'],
+                    if (item['fat'] != null) 'fat': item['fat'],
+                    'fiber': item['fiber'] ?? 0,
+                  }, onConflict: 'log_id,item_index');
+                } catch (itemErr, st) {
+                  debugPrint('[SyncService._syncNutritionLogs] item $i: $itemErr');
+                  unawaited(ErrorTelemetry.recordNonFatal(itemErr, st,
+                      reason: 'sync_service_for_3', skipServerPost: true));
+                  // Fix round 1 (2026-09-27): restores the server-side
+                  // client_errors report (log-client-error EF) this catch
+                  // had before this task -- ErrorTelemetry.recordNonFatal
+                  // above is Crashlytics-only. Since nlog now abandons on
+                  // the FIRST failing item (G1's rethrow-or-return-false
+                  // rule), this emits at most ONE report per slot per pass
+                  // -- strictly fewer EF calls than before, which reported
+                  // per item.
+                  unawaited(_reportSyncFailure(
+                      opType: 'upsert_nutrition_log_item', error: itemErr));
+                  return false;
+                }
+              }
+              try {
+                if (ownerChangedSince(userId)) return false;
+                await _supabase.client
+                    .from('nutrition_log_items')
+                    .delete()
+                    .eq('log_id', logCloudId)
+                    .gte('item_index', items.length);
+              } catch (vErr, vSt) {
+                debugPrint('[SyncService._syncNutritionLogs] item vacuum: $vErr');
+                unawaited(ErrorTelemetry.recordNonFatal(vErr, vSt,
+                    reason: 'sync_service_nlog_item_vacuum'));
+                return false;
+              }
+            }
+            return true;
+          },
+        );
       } catch (e, st) {
         debugPrint('[SyncService._syncNutritionLogs] $e');
         // audit-2026-05-11 H-42 — telemetry pair.
@@ -547,43 +426,9 @@ extension SyncServiceNutrition on SyncService {
       }
     }
 
-    // OI-204 postamble, after the for loop, before the function closes.
-    //
-    // ownerChangedSince guard (plan-review round 1, finding B's-C3): every
-    // OTHER write in this function is preceded by its own `if
-    // (ownerChangedSince(userId)) return;` immediately at the sink
-    // (diagnose e5c2d1 CLASS 1's established idiom) — this Hive write is a
-    // NEW sink this batch introduces and must follow the same idiom, or an
-    // account switch mid-call (especially on an all-skip pass, where the
-    // loop body never reaches an ownerChangedSince check even once) can
-    // write into whatever nutritionBox _hive currently resolves to, which
-    // may by then belong to a different signed-in user. NOT extended to
-    // sched/exlog's own postambles — sync_workout.dart has ZERO
-    // ownerChangedSince calls anywhere (verified by grep), so this guard is
-    // a nutrition-specific idiom this function already established, not a
-    // repo-wide norm OI-204 should silently expand into an unrelated file.
-    if (ownerChangedSince(userId)) return;
-    if (!nlogHashSkipDisabled) {
-      final liveSlots = logsToSync
-          .map((l) => '${l['date']} ${l['meal_type']}')
-          .toSet();
-      await _hive.nutritionBox.put(
-        SyncService._nlogHashIndexKey,
-        SyncService.nlogPrunedHashIndex(nlogHashIndex, liveSlots),
-      );
-    } else {
-      // OI-204 (plan-review round 1, finding I9) — while the merge-disable
-      // emergency kill switch is set, do not merely skip READING the index;
-      // CLEAR it. `_nutritionLogsRaw()`'s legacy per-key path (the one this
-      // switch reverts to) can let "multiple raw keys share one slot, later
-      // ones overwriting earlier ones in cloud" (sync_nutrition.dart's own
-      // comment on that path). A stale index surviving the revert would
-      // fingerprint-match the (unchanged) local content and SKIP re-pushing
-      // exactly the slots the legacy path just corrupted in cloud, turning
-      // the emergency revert into the thing that makes the corruption
-      // permanent once slot-merge is re-enabled and the index is read again.
-      await _hive.nutritionBox.delete(SyncService._nlogHashIndexKey);
-    }
+    final liveSlots =
+        logsToSync.map((l) => '${l['date']} ${l['meal_type']}').toSet();
+    await nlogIndex.commit(liveKeys: liveSlots);
   }
 
   /// audit-fixwave / F5 — the raw per-key nlog list (legacy push path, used
@@ -611,105 +456,148 @@ extension SyncServiceNutrition on SyncService {
 
   Future<void> _syncWaterLogs(String userId) async {
     final healthBox = _hive.healthBox;
+    // Day-swapper + sync-load Task 17 — water pushes through the shared
+    // SyncSkipIndex helper (OI-237 write amplification). The index's own
+    // ownerChangedNow/abort check covers entry + immediately after the push,
+    // but `test/contracts/session_owner_inflight_guard_behavioral_test.dart`
+    // (e5c2d1) requires the LITERAL guard adjacent to each network sink in
+    // THIS file, not merely an equivalent check elsewhere -- so the push
+    // closure below still carries its own explicit re-check too, same
+    // pattern as `_syncNutritionLogs` above.
+    final index = SyncSkipIndex(
+      box: healthBox,
+      domain: SyncSkipDomain.water,
+      disabled: _hashSkipKillSwitchOn(SyncSkipDomain.water),
+      ownerChangedNow: () => ownerChangedSince(userId),
+      reportFailure: (op, e, st) =>
+          unawaited(_reportSyncFailure(opType: op, error: e)),
+    );
+    final liveKeys = <String>{};
     for (final key in healthBox.keys) {
+      if (index.aborted) break;
       if (key is! String || !key.startsWith('water_ml_')) continue;
       final raw = healthBox.get(key);
       if (raw is! int) continue;
       // Extract date from key: "water_ml_2026-04-06" → "2026-04-06"
       final date = key.substring('water_ml_'.length);
       if (date.isEmpty) continue;
-      try {
-        // e5c2d1 CLASS 1 — sink guard. _syncWaterLogs is a SIBLING of
-        // _syncNutritionLogs under Future.wait, so a `return` there does not
-        // stop this loop. Round-1 review caught exactly that: one guard in one
-        // sibling left the other two running on under the swapped session.
-        if (ownerChangedSince(userId)) return;
-        await _supabase.client.from('water_logs').upsert({
-          'user_id': userId,
-          'date': date,
-          'total_ml': raw,
-          // audit-fixwave 2026-07-02 / F18 — populate `glasses` (derived from
-          // total_ml at the 250 ml glass size) so the column is not a
-          // misleading stale 0. total_ml stays the hydration SoT.
-          'glasses': (raw / 250).round(),
-          'updated_at': DateTime.now().toIso8601String(),
-        }, onConflict: 'user_id,date');
-      } catch (e, st) {
-        debugPrint('[SyncService._syncWaterLogs] $e');
-        // audit-2026-05-11 H-42 — telemetry pair.
-        unawaited(ErrorTelemetry.recordNonFatal(e, st,
-            reason: 'sync_service_for_10', skipServerPost: true));
-        try {
-          await _reportSyncFailure(opType: 'upsert_water_log', error: e);
-        } catch (_) {}
-      }
+      liveKeys.add(date);
+      final payload = <String, dynamic>{
+        'user_id': userId,
+        'date': date,
+        'total_ml': raw,
+        // audit-fixwave 2026-07-02 / F18 — populate `glasses` (derived from
+        // total_ml at the 250 ml glass size) so the column is not a
+        // misleading stale 0. total_ml stays the hydration SoT.
+        'glasses': (raw / 250).round(),
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+      await index.pushIfChanged(
+        date,
+        // Global Constraint: fingerprint excludes water's `updated_at`
+        // sent-at stamp, or every push looks "changed" and never skips.
+        () => SyncFingerprint.of(<String, dynamic>{
+          for (final e in payload.entries)
+            if (e.key != 'updated_at') e.key: e.value,
+        }),
+        () async {
+          if (ownerChangedSince(userId)) return false;
+          await _supabase.client
+              .from('water_logs')
+              .upsert(payload, onConflict: 'user_id,date');
+          return true;
+        },
+      );
     }
+    await index.commit(liveKeys: liveKeys);
   }
 
   /// Pushes saved meals to Supabase user_saved_meals table.
   Future<void> _syncSavedMeals(String userId) async {
     final nutritionBox = _hive.nutritionBox;
+    // Day-swapper + sync-load Task 17 — saved meals push through the shared
+    // SyncSkipIndex helper (OI-237 write amplification).
+    final index = SyncSkipIndex(
+      box: nutritionBox,
+      domain: SyncSkipDomain.savedMeal,
+      disabled: _hashSkipKillSwitchOn(SyncSkipDomain.savedMeal),
+      ownerChangedNow: () => ownerChangedSince(userId),
+      reportFailure: (op, e, st) =>
+          unawaited(_reportSyncFailure(opType: op, error: e)),
+    );
+    final liveKeys = <String>{};
     for (final key in nutritionBox.keys) {
+      if (index.aborted) break;
       if (key is! String || !key.startsWith('saved_meal_')) continue;
       final raw = nutritionBox.get(key);
       if (raw is! Map) continue;
       final meal = Map<String, dynamic>.from(raw);
       if (meal['is_saved_meal'] != true) continue;
 
-      try {
-        // Diagnose f7e3a1 (2026-06-03) — the old `id: _deterministicId(hiveId)`
-        // where hiveId = `saved_meal_<...>` had NO user component, so two users
-        // who saved a meal with the same name produced the SAME uuid →
-        // onConflict:'id' DO UPDATE OVERWROTE one user's meal with the other's
-        // (and flipped `user_id`). Same cross-user class as d4b8e2. Cure: omit id
-        // (gen_random_uuid default) + the user-scoped natural key (user_id, name)
-        // as the arbiter — a saved meal's identity IS (user, name). Both columns
-        // are NOT NULL → non-partial unique index, no 42P10; the cloud table is
-        // empty today, so zero existing-data risk on the index. (NB: the LOCAL
-        // writer saveMealPreset currently keys Hive by `saved_meal_<ms>`, which
-        // disagrees with the restore's `saved_meal_<nameHash>` — a separate
-        // restore-duplication drift surfaced by the f7e3a1 B-pass, tracked as a
-        // follow-up; the cloud (user_id,name) key dedups regardless.)
-        //
-        // Null/empty name guard — (user_id, name) is the arbiter, so a blank name
-        // would be an invalid key AND would merge distinct nameless meals. Skip +
-        // telemetry, mirroring the nutrition_logs null-natural-key guard above.
-        final savedName = (meal['name'] as String?)?.trim();
-        if (savedName == null || savedName.isEmpty) {
-          unawaited(ErrorTelemetry.logEvent(
-            'sync_skipped_null_natural_key',
-            message: 'table=user_saved_meals key=$key',
-          ));
-          continue;
-        }
-        // e5c2d1 CLASS 1 — sink guard. Third sibling under the same
-        // Future.wait; guarded independently for the same reason as water.
-        if (ownerChangedSince(userId)) return;
-        await _supabase.client.from('user_saved_meals').upsert({
-          // `id` deliberately OMITTED — never rewrite the PK on conflict.
-          'user_id': userId,
-          'name': savedName,
-          'items': meal['items'],
-          'total_calories': meal['total_calories'],
-          'total_protein': meal['total_protein'],
-          'times_used': meal['times_used'] ?? 0,
-          'created_at': meal['created_at'] ?? DateTime.now().toIso8601String(),
-        }, onConflict: 'user_id,name');
-        // E.14.A · audit-2026-05-16 — success-path emission. Lets the
-        // next audit distinguish "user has zero saved meals" from
-        // "_syncSavedMeals silently throws on every run".
-        unawaited(ErrorTelemetry.logEvent('upsert_user_saved_meals_success',
-            message: 'name=${meal['name']}'));
-      } catch (e, st) {
-        debugPrint('[SyncService._syncSavedMeals] $e');
-        // audit-2026-05-11 H-42 — telemetry pair.
-        unawaited(ErrorTelemetry.recordNonFatal(e, st,
-            reason: 'sync_service_for_25', skipServerPost: true));
-        try {
-          await _reportSyncFailure(opType: 'upsert_saved_meal', error: e);
-        } catch (_) {}
+      // Diagnose f7e3a1 (2026-06-03) — the old `id: _deterministicId(hiveId)`
+      // where hiveId = `saved_meal_<...>` had NO user component, so two users
+      // who saved a meal with the same name produced the SAME uuid →
+      // onConflict:'id' DO UPDATE OVERWROTE one user's meal with the other's
+      // (and flipped `user_id`). Same cross-user class as d4b8e2. Cure: omit id
+      // (gen_random_uuid default) + the user-scoped natural key (user_id, name)
+      // as the arbiter — a saved meal's identity IS (user, name). Both columns
+      // are NOT NULL → non-partial unique index, no 42P10; the cloud table is
+      // empty today, so zero existing-data risk on the index. (NB: the LOCAL
+      // writer saveMealPreset currently keys Hive by `saved_meal_<ms>`, which
+      // disagrees with the restore's `saved_meal_<nameHash>` — a separate
+      // restore-duplication drift surfaced by the f7e3a1 B-pass, tracked as a
+      // follow-up; the cloud (user_id,name) key dedups regardless.)
+      //
+      // Null/empty name guard — (user_id, name) is the arbiter, so a blank name
+      // would be an invalid key AND would merge distinct nameless meals. Skip +
+      // telemetry, mirroring the nutrition_logs null-natural-key guard above.
+      final savedName = (meal['name'] as String?)?.trim();
+      if (savedName == null || savedName.isEmpty) {
+        unawaited(ErrorTelemetry.logEvent(
+          'sync_skipped_null_natural_key',
+          message: 'table=user_saved_meals key=$key',
+        ));
+        continue;
       }
+      liveKeys.add(savedName);
+
+      // day-swapper + sync-load plan D2 (closes-diagnose f4c7a9) — created_at
+      // is stamped once, at save time, by NutritionWriteService.saveMealPreset
+      // and never revised on re-log. The Hive key (`saved_meal_<v5(name)>`) is
+      // a name hash with no embedded timestamp, so a row missing this field
+      // (pre-migration data) has nothing to derive it from — OMIT rather than
+      // fabricate "now". Also required for the hash-skip above to actually
+      // skip such a row: `?? DateTime.now()` recomputes a NEW value on every
+      // pass, so the fingerprint could never repeat.
+      final createdAt = meal['created_at'] as String?;
+      final payload = <String, dynamic>{
+        // `id` deliberately OMITTED — never rewrite the PK on conflict.
+        'user_id': userId,
+        'name': savedName,
+        'items': meal['items'],
+        'total_calories': meal['total_calories'],
+        'total_protein': meal['total_protein'],
+        'times_used': meal['times_used'] ?? 0,
+        if (createdAt != null) 'created_at': createdAt,
+      };
+      await index.pushIfChanged(
+        savedName,
+        () => SyncFingerprint.of(payload),
+        () async {
+          if (ownerChangedSince(userId)) return false;
+          await _supabase.client
+              .from('user_saved_meals')
+              .upsert(payload, onConflict: 'user_id,name');
+          // E.14.A · audit-2026-05-16 — success-path emission. Lets the
+          // next audit distinguish "user has zero saved meals" from
+          // "_syncSavedMeals silently throws on every run".
+          unawaited(ErrorTelemetry.logEvent('upsert_user_saved_meals_success',
+              message: 'name=$savedName'));
+          return true;
+        },
+      );
     }
+    await index.commit(liveKeys: liveKeys);
   }
 
   // ── Pull helpers ────────────────────────────────────────────

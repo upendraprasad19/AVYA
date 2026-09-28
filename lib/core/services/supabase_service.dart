@@ -56,7 +56,15 @@ class SupabaseService {
 
   /// The global Supabase client instance.
   /// Throws if Supabase has not been initialized.
-  SupabaseClient get client => Supabase.instance.client;
+  ///
+  /// Test seam (day-swapper + sync-load plan D6): when set, [client] returns
+  /// this client instead of `Supabase.instance.client`, so sync tests can
+  /// point every PostgREST / Functions call at a local stub server. Always
+  /// null in production.
+  @visibleForTesting
+  static SupabaseClient? clientOverrideForTest;
+
+  SupabaseClient get client => clientOverrideForTest ?? Supabase.instance.client;
 
   /// Obs 4 (2026-06-05): warm the PostgREST/edge connection during splash so
   /// RestoringScreen's first restore query doesn't eat the cold-start penalty

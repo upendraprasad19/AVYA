@@ -122,6 +122,78 @@ class SyncFlags {
     }
   }
 
+  /// Kill-switch for spec sec 5.7 L1 (day-swapper-sync-load): "never refill a
+  /// rest row with workout content" in `PlanIntegrityReconciler
+  /// .mergeScheduleEntry`. Opt-OUT polarity, same reasoning as
+  /// [deriveDayOfWeekOnRestore] — the fix is LIVE by default; setting
+  /// `configBox['disable_rest_row_refill_guard'] = true` skips the L1 guard,
+  /// so a rest row CAN be refilled with stale workout content again (an
+  /// escape hatch, not a safety net). It is NOT a verbatim revert: the
+  /// merge-output normalizer is unswitched (spec sec 11), so a refill that
+  /// brings NO exercises still comes out `type: 'rest'`. Only a refill whose
+  /// snapshot row carries exercises reproduces the old workout-on-rest shape.
+  static bool get restRowRefillGuardEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('disable_rest_row_refill_guard') !=
+          true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// Kill-switch for spec sec 5.7 L3: "the newer arrangement wins, per
+  /// Mon-Sun week". Opt-OUT polarity. Setting
+  /// `configBox['disable_swap_arrangement_merge'] = true` makes every
+  /// restore/reconcile merge go through the per-entry rules only (L1 +
+  /// existing) — a genuinely newer arrangement from another device will NOT
+  /// override the local one until the switch is cleared.
+  static bool get swapArrangementMergeEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('disable_swap_arrangement_merge') !=
+          true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// Kill switch for spec sec 5.7 L2 (day-swapper-sync-load): "merge only
+  /// what is new". Opt-OUT polarity, same shape as [restRowRefillGuardEnabled]
+  /// / [swapArrangementMergeEnabled]. `true` disables BOTH L2 optimizations
+  /// TOGETHER (one flag): the whole-bundle-unchanged skip in
+  /// `SyncService._restoreWorkoutPlan`, and the per-row write-only-if-differs
+  /// check inside `PlanIntegrityReconciler.mergeScheduleBundleIntoHive`.
+  /// Reverts both to Task 21's own verbatim behaviour: the merge always
+  /// runs, and every processed row is unconditionally put.
+  static bool get planMergeSkipWhenKnownEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('disable_plan_merge_skip_when_known') !=
+          true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// Kill switch for the per-launch restore write skip (Hermes h7F1/h7F2,
+  /// diagnose f1c6b4). `_restoreWorkoutTemplates`, `_restoreUserProgress` and
+  /// `_restoreUserProfile` run on EVERY launch; each now writes Hive only when
+  /// the restored value differs from what is stored (compared with
+  /// `SyncFingerprint.canonicalJson`, so a jsonb key reorder is not a
+  /// change). `configBox['disable_restore_write_if_changed'] = true` reverts
+  /// all three to an unconditional write every pass. Opt-OUT polarity, same
+  /// shape as [planMergeSkipWhenKnownEnabled].
+  static bool get restoreWriteIfChangedEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('disable_restore_write_if_changed') !=
+          true;
+    } catch (_) {
+      return true;
+    }
+  }
+
   /// Test-only setter. Production callers MUST NOT toggle flags in
   /// code — they flip via `configBox.put` from a one-shot migration
   /// or remote-config write only.

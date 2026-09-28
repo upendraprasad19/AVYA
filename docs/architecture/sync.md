@@ -117,93 +117,252 @@ unawaited(SyncService.instance.pushSnapshot());       // 4. Refresh AI context (
 - **Water logs:** `onConflict: 'user_id,date'` (UNIQUE constraint added migration 013). One row per user per day.
 - **Scheduled workouts:** `onConflict: 'user_id,scheduled_date'` (UNIQUE constraint added migration 013). One schedule per user per date.
 
-### Sync fingerprint-skip pattern (H1b Part A / OI-204)
-Cited by name from `sync_service.dart`'s `_exlogHashIndexKey` doc comment (`:358`, added by
-OI-204 Task 2) — this section did not exist until OI-204 Task 3 added it, so that citation
-pointed at nothing until now. `_schedHashIndexKey`'s pre-existing comment (from the original
-H1b Part A work) and `_nlogHashIndexKey`'s own new comment do not cite this section by name.
+### Sync skip pattern: `SyncSkipIndex` (day-swapper + sync-load batch — supersedes the per-domain OI-204 fingerprint code)
 
-**Problem:** a coalesced, fire-and-forget sync entry (`syncWorkoutData()` /
-`syncNutritionData()`, fired after every single mutation) re-walked the caller's **entire**
-historical Hive log on **every** call — not just what changed since the last successful
-push — and `await`ed a network upsert per row, sequentially. As a user's history grew, a
-single pass routinely took 14-40s, tripping `SyncService.restoreOpTimeout` (45s, diagnose
-`b7e4c1`) — a ceiling meant to catch a genuinely wedged call, not bound normal-case latency
-(OI-204, diagnose `d3f8a6`).
+**Problem this closes (OI-204, diagnose `d3f8a6`):** a coalesced, fire-and-forget sync entry
+(`syncWorkoutData()` / `syncNutritionData()`, fired after every single mutation) re-walked the
+caller's **entire** historical Hive log on **every** call — not just what changed since the
+last successful push — and `await`ed a network upsert per row, sequentially. As a user's
+history grew, a single pass routinely took 14-40s, tripping `SyncService.restoreOpTimeout`
+(45s, diagnose `b7e4c1`).
 
-**Mechanism:** a sync-owned fingerprint index — a single reserved Hive key in the relevant
-user-scoped box, mapping `rowKey/slotId -> UUID-v5 fingerprint of the exact push bundle`.
-The **sole writer and sole reader is the sync method itself**, so writer/reader drift is
-structurally impossible. On each pass: compute the current fingerprint, compare against the
-stored one, and skip the upsert(s) entirely when they match (`shouldSkipUpsert`-family pure
-functions). **Store-on-full-success-only**: the fingerprint is recorded only when every
-network write in the bundle succeeded this pass (a local `*Synced`/`*BundleSynced` flag,
-`true` by default, flipped `false` inside any swallowing catch) — a partial failure leaves
-no entry, so the next pass retries. A fingerprint-computation exception fails OPEN to "push
-normally, never store" (never a silent permanent skip — `feedback_bad_news_vs_no_news`).
-Each domain also prunes its index to currently-live keys/slots after the loop, and each
-carries its own kill-switch (`disable_sched_hash_skip` / `disable_exlog_hash_skip` /
-`disable_nlog_hash_skip`) restoring the verbatim pre-pattern unconditional full sweep.
-`scripts/check_sync_hash_skip_atomicity.dart` statically guards the store-on-success
-invariant for every domain (gate-before-refactor, CLAUDE.md §4.11). **What it can and
-cannot verify, stated plainly so the guarantee isn't overread:** per domain it confirms
-the success flag is declared `true`, that the index-store assignment is guarded by a
-positive (non-negated) `if` on that flag within six lines above it, and — for the
-swallowing-catch half of the invariant — counts the file's total occurrences of
-`<flag> = false;` and compares that count against a hardcoded expected value
-(`sync_hash_skip_atomicity_lib.dart`'s `expectedSwallowCatches`: 1 for exlog's single
-per-set catch, 2 for nlog's item + tail-vacuum catches). **That is a changed-COUNT
-check, not structural "every catch block sets the flag" verification** — a *new*
-swallowing catch that forgets to flip the flag false leaves the total count exactly
-where it was, which the gate cannot distinguish from "nothing changed, still correct."
-**The severity is not merely ambiguity: that shape lets the flag stay `true` after a write
-that actually failed, so the store fires for content that was never pushed — a genuine
-FALSE-SKIP (the exact dangerous direction the whole store-on-full-success-only design
-exists to prevent), confirmed reachable by mutation during the OI-204 B-pass (2026-09-19,
-Finding 2) rather than merely theoretical.** Closing that gap would need real
-catch-block-boundary analysis, which this mechanism
-does not attempt — the count comparison is the cheap, mechanically-checkable
-approximation, not a claim of full coverage (an earlier spec draft overclaimed this;
-corrected at plan-review, spec §6 point 2).
+**1. The one helper — `lib/core/services/sync/sync_skip_index.dart`.** Every history push in
+the sync layer now goes through `SyncSkipIndex.pushIfChanged(rowKey, fingerprint, push,
+{opType})`:
+- Computes `fingerprint()` and compares it to the last CONFIRMED value stored for `rowKey`; a
+  match skips the push entirely (fail-open: a fingerprint-computation exception pushes anyway
+  and records nothing).
+- Owns the `push()` try/catch itself — the domain loop cannot record a row as sent after a
+  swallowed failure, the exact false-skip gap the pre-`SyncSkipIndex` per-domain OI-204 code
+  (three hand-rolled fingerprint indexes, one per domain, each with its own swallowing-catch
+  bookkeeping) could reach. `push()` throwing, or returning `false` (unconfirmed), both forget
+  any stored fingerprint for that row and leave it unrecorded for the next pass.
+- **Owner check:** `_ownerChangedNow()` is checked before AND after every push; once true the
+  index is `aborted` and pushes/writes no more for the rest of the pass (an in-flight
+  sign-out/account-swap cannot leak a write across accounts).
+- **Kill switch:** each `SyncSkipDomain` carries its own `configBox` flag (below); when set,
+  `pushIfChanged` never reads or writes the fingerprint (push every row, verbatim pre-pattern
+  behaviour), and `commit()` deletes that domain's stored index outright.
+- **`forcePushKeys`** (constructor, default empty; B-pass R1-F1, diagnose `a9d3f6`): row keys
+  that push even when their fingerprint matches the stored one — for a caller that KNOWS the
+  cloud lost a row the index still records as sent. Its one caller is the scheduled-workouts
+  FK self-heal (`sync_workout.dart` `_syncScheduledWorkouts` → `_syncWorkoutTemplates(forceKeys:
+  {rawTemplateId})`), which forces exactly the missing template. Deliberately not the kill
+  switch: a disabled index deletes itself at `commit`, which would re-push EVERY row of that
+  domain on the next pass. A forced push still records its fingerprint on success.
+- **`commit({required liveKeys})`** persists the index ONCE per pass: prunes rows not in
+  `liveKeys`, writes Hive only when something changed (`_dirty`), and no-ops entirely once the
+  pass is `aborted`.
+- **First failure per pass, per DISTINCT opType (D13):** a domain that shares one index across
+  several underlying tables (`customItem`, for both `user_custom_exercises` and
+  `user_custom_foods`) can see two different `opType` overrides fail in the same pass — both are
+  reported once each. A single-opType domain still reports exactly once per pass, matching the
+  pre-`SyncSkipIndex` behaviour.
+- `Gate G1` (`scripts/check_sync_hash_skip_atomicity.dart`) is a structural rule, not a hand
+  count: every `.upsert(`/`.insert(` inside a Hive-row loop in `lib/core/services/sync/**` and
+  `sync_service.dart` must sit inside a `pushIfChanged(` closure (a short allowlist covers the
+  single-row steps and the coach loop, which skips by its own stamped cloud id), and no code
+  outside `sync_skip_index.dart` may write a `*_payload_hash_index` key.
 
-**Domains, in the order the pattern was extended:**
-- `_syncScheduledWorkouts` (H1b Part A, diagnose `b4f7e2`, 2026-06-27) — the original.
-  Status-based carve-out: never skips a `completed` row (d9b2c5's cross-device-completion
-  contract). SoT: `sync_scheduled_payload_hash_index`.
-- `_syncExerciseLogs` (OI-204 Task 2, diagnose `d3f8a6`) — bundles the summary row plus its
-  per-set rows as one fingerprint; no status carve-out (verified no out-of-band cloud
-  mutator for `workout_log_exercises`/`workout_log_sets`). SoT:
-  `sync_exercise_log_payload_hash_index`.
-- `_syncNutritionLogs` (OI-204 Task 3, diagnose `d3f8a6`) — the worst per-key cost of the
-  three (parent upsert + id-resolution SELECT + N item upserts + 1 tail-vacuum DELETE, all
-  sequential), so the biggest win. Keyed by SLOT id (`'$date $mealType'`), matching the
-  existing same-slot merge, not a raw Hive key. Additionally goes inert whenever
-  `disable_nutrition_slot_merge` is set (the legacy per-key push predates the slot concept),
-  and while inert its postamble CLEARS the stored index rather than merely skipping the read
-  of it — a stale index surviving a disable/re-enable cycle would mis-skip re-pushing slots
-  the legacy path may have corrupted. SoT: `sync_nutrition_log_payload_hash_index`.
+**2. The domain table.** 17 `SyncSkipDomain` values (`lib/core/services/sync/sync_skip_index.dart`),
+each `(indexKey, killSwitchKey, opType, box)`:
 
-`_syncExerciseLogs` and `_syncNutritionLogs` share one private helper
-(`SyncService._fingerprintMatchesStored`) for the skip DECISION itself — the two were
-byte-identical and had no domain-specific content worth duplicating; each domain keeps its
-own named wrapper (`exlogShouldSkipUpsert` / `nlogShouldSkipUpsert`) and its own fingerprint
-function (the BUNDLING shape genuinely differs per domain).
+| Domain | Hive index key | box | Kill switch | Wraps |
+|---|---|---|---|---|
+| `sched` | `sync_sched_payload_hash_index` | workout | `disable_sched_hash_skip` | `_syncScheduledWorkouts` (`sync_workout.dart`) |
+| `exlog` | `sync_exlog_payload_hash_index` | workout | `disable_exlog_hash_skip` | `_syncExerciseLogs` (`sync_workout.dart`) |
+| `nlog` | `sync_nlog_payload_hash_index` | nutrition | `disable_nlog_hash_skip` | `_syncNutritionLogs` (`sync_nutrition.dart`) |
+| `wlog` | `sync_wlog_payload_hash_index` | workout | `disable_wlog_hash_skip` | `_syncWorkoutLogs` (`sync_workout.dart`) — SoT concept `sync_workout_log_payload_hash_index` (the Hive key stays the short `wlog` form; only the SoT registry concept name spells it out) |
+| `completion` | `sync_completion_payload_hash_index` | workout | `disable_completion_hash_skip` | `_syncScheduleCompletions` (`sync_workout.dart`) — SoT `sync_schedule_completion_payload_hash_index` |
+| `template` | `sync_template_payload_hash_index` | workout | `disable_template_hash_skip` | `_syncWorkoutTemplates` (`sync_workout.dart`) — SoT `sync_workout_template_payload_hash_index` |
+| `plan` | `sync_plan_payload_hash_index` | workout | `disable_plan_hash_skip` | `_syncWorkoutPlan` (`sync_workout.dart`, public entry `pushWorkoutPlanForSyncDomain`) — one row, key `kPlanBundleRowKey = 'bundle'`; SoT `sync_workout_plan_payload_hash_index`, aliased `plan_bundle_cloud_fingerprint` |
+| `streak` | `sync_streak_payload_hash_index` | health | `disable_streak_hash_skip` | `_syncStreaks` (`sync_workout.dart`) |
+| `water` | `sync_water_payload_hash_index` | health | `disable_water_hash_skip` | `_syncWaterLogs` (`sync_nutrition.dart`) — SoT `sync_water_log_payload_hash_index` |
+| `steps` | `sync_steps_payload_hash_index` | health | `disable_steps_hash_skip` | `_syncStepsLogs` (`sync_health.dart`) — SoT `sync_daily_steps_payload_hash_index` |
+| `urine` | `sync_urine_payload_hash_index` | health | `disable_urine_hash_skip` | `_syncUrineColorLogs` (`sync_health.dart`) — SoT `sync_urine_color_log_payload_hash_index` |
+| `sleep` | `sync_sleep_payload_hash_index` | health | `disable_sleep_hash_skip` | `_syncSleepLogs` (`sync_health.dart`) — SoT `sync_sleep_log_payload_hash_index` |
+| `weight` | `sync_weight_payload_hash_index` | health | `disable_weight_hash_skip` | `_syncWeightLogs` (`sync_health.dart`) — SoT `sync_weight_log_payload_hash_index` |
+| `measurement` | `sync_measurement_payload_hash_index` | health | `disable_measurement_hash_skip` | `_syncMeasurements` (`sync_health.dart`) — SoT `sync_body_measurement_payload_hash_index` |
+| `readiness` | `sync_readiness_payload_hash_index` | health | `disable_readiness_hash_skip` | `_syncReadiness` (`sync_health.dart`) — SoT `sync_readiness_daily_payload_hash_index` |
+| `savedMeal` | `sync_saved_meal_payload_hash_index` | nutrition | `disable_saved_meal_hash_skip` | `_syncSavedMeals` (`sync_nutrition.dart`) |
+| `customItem` | `sync_custom_item_payload_hash_index` | custom | `disable_custom_item_hash_skip` | `_syncCustomItems` (`sync_community.dart`, one shared index for `user_custom_exercises` + `user_custom_foods`, split by `opType` override) |
 
-**`ownerChangedSince` asymmetry (intentional, not a gap this batch introduced):**
-nutrition's postamble guards its hash-index Hive write with
-`if (ownerChangedSince(userId)) return;` immediately before the write
-(`sync_nutrition.dart:565`, ahead of the `nlogHashIndex` persist/clear at `:570-585`) —
-the same idiom every *other* write inside `_syncNutritionLogs` already follows
-(diagnose `e5c2d1` CLASS 1). Scheduled-workouts' and exercise-logs' postambles
-(`sync_workout.dart`) carry **no** `ownerChangedSince` guard anywhere in that file
-(verified: zero matches) — this is not an inconsistency OI-204 introduced silently; it
-is a pre-existing, nutrition-specific idiom that predates this batch (plan-review round
-1, finding B's-C3). Don't "fix" the asymmetry by bolting the guard onto sched/exlog or
-by removing it from nlog without first re-deriving why `_syncNutritionLogs` alone needed
-it.
+`sched`, `exlog` and `nlog` are the original OI-204 domains and deliberately kept their
+pre-existing index/kill-switch names so already-stored fingerprints stay valid across this
+batch. The other 14 are new to this batch. `sched` additionally dropped its old status-based
+carve-out (never skip a `completed` row, d9b2c5's A-fix-1): a completed row now skips on a
+fingerprint match like any other domain, because the server-side completed-day guard
+(migration 149, below) refuses a stale overwrite of a completed row — migration 149 must
+therefore be live BEFORE any build carrying this change of `sched`'s behaviour ships.
+
+**3. What each fingerprint excludes.** Every fingerprint is computed via
+`SyncFingerprint.of(value)` (UUID-v5 over canonical, key-sorted JSON) over the exact push
+payload MINUS its own "sent-at" stamp — the field that would otherwise change every pass with
+no other content change and defeat the skip on every call: `updated_at` on water and urine
+logs, `synced_at` on steps and the plan bundle. A domain whose writer stamps a genuinely fresh
+sent-at column on every push (water, steps) cannot be suppressed server-side either (point 4 below)
+for the same reason — the client-side skip index is its only protection for those two tables.
+
+**4. Server rules (migration `149_sync_noop_suppress_completed_guard_sync_epoch.sql`).**
+Three independent fixes, one file:
+1. **No-op suppression on 19 tables** — a `BEFORE UPDATE` trigger running Postgres's built-in
+   `suppress_redundant_updates_trigger()` (no extension, not `SECURITY DEFINER`) on
+   `workout_logs`, `workout_log_exercises`, `workout_log_sets`, `workout_schedule_completions`,
+   `streaks`, `workout_templates`, `template_exercises`, `nutrition_logs`,
+   `nutrition_log_items`, `water_logs`, `user_saved_meals`, `readiness_daily`, `sleep_logs`,
+   `weight_logs`, `body_measurements`, `daily_steps`, `user_custom_exercises`,
+   `user_custom_foods`, `ai_coach_interactions`. An identical UPDATE payload then creates no new
+   row version at all — a backstop for app versions already installed. `user_profile` is
+   deliberately excluded (its sole writer chains `.upsert(...).select()`, and a `RETURN NULL`
+   trigger would make PostgREST see zero rows and throw PGRST116 on `.single()`).
+2. **`scheduled_workouts` never demotes a completed day.** A dedicated `SECURITY INVOKER`
+   trigger function (`private.scheduled_workouts_completed_guard`) folds the same no-op check
+   PLUS: `RETURN NULL` (never RAISE) when `OLD.status = 'completed' AND NEW.status IS DISTINCT
+   FROM OLD.status` — the whole write is dropped, not just the status column, so a caller
+   trying to demote AND correct another field in the same statement gets neither. A
+   `completed_at`-only correction on an otherwise-unchanged completed row is NOT caught by that
+   branch and still lands. `RETURN NULL` (not `RAISE`) matters structurally: `pushIfChanged`'s
+   `push()` still resolves normally (no thrown error), so the row is recorded as sent and never
+   retried for no reason, where a raised error would make a stale device retry the same refused
+   write forever.
+3. **`sync_epoch`.** `user_progress.sync_epoch integer NOT NULL DEFAULT 0` — the operator-driven
+   "resend everything once" repair lever. See point 5 (launch reads) and
+   `docs/operations/SYNC_EPOCH_RESYNC.md`.
+
+**5. Launch reads.** `SyncService.restoreLightweightAlways` makes **one** `user_progress`
+select and hands the SAME row to `_restoreUserProgress` and `_restoreWorkoutPlan` (or, on the
+single-call restore path, to `_fetchSyncEpochRowForRestore`) via their existing pre-fetched
+injection parameters — previously two independent network reads of the same row on every
+returning-user launch. `_restoreUserProgress` (`sync/sync_profile.dart`) removes `plan_json`
+AND `sync_epoch` from the cloud row before `UserRepository.mergeCloudProgress`, so neither
+control-plane value lands inside `userBox['progress']` — the whole-blob `plan_json` copy that
+used to be spread there on every restore is gone (the migrator below deletes the copy already
+on disk for existing installs). `sync_epoch` is read separately and compared against
+`workoutBox['sync_epoch_seen']` (`SyncService.kSyncEpochSeenKey`) by
+`_applySyncEpochFromRestoreRow`: on first sight (no `sync_epoch_seen` key at all) it just
+stores the baseline; once a baseline exists, a STRICTLY GREATER cloud epoch calls
+`SyncSkipIndex.clearAll` (below) and only advances `sync_epoch_seen` when
+`ClearAllResult.allSucceeded` — a partial clear leaves the seen-epoch untouched so the very
+next launch retries the whole clear. The plan merge itself then follows point 6's L2: skip entirely
+when nothing bundled is new.
+
+**6. The restore merge (`PlanIntegrityReconciler`, `lib/core/services/plan_integrity_reconciler.dart`)
+— L1, L2, L3, the normalizer, and the accepted residual.** `mergeScheduleEntry` is the ONE merge
+function shared by `_restoreWorkoutPlan` and the boot-heal `reconcile` path, so the two
+consumers of the same cloud snapshot can never disagree:
+- A local `status: completed` row is always kept untouched — this guard runs FIRST, so nothing
+  below it can ever demote a completed day.
+- **L1 — never refill a rest row with workout content**
+  (`SyncFlags.restRowRefillGuardEnabled`, opt-out kill switch `disable_rest_row_refill_guard`):
+  a local row whose `type` is a rest type, or whose `status` is `'rest'`, is kept as-is rather
+  than filled from the snapshot's workout content. NOT a verbatim revert of the old behaviour —
+  the merge-output normalizer (next bullet) stays live even with L1 off, so a refill that brings
+  NO exercises still comes out `type: 'rest'`; only a refill whose snapshot row carries
+  exercises reproduces the old hybrid.
+- **The merge-output normalizer** (`_normalizeHybrid`, deliberately UNSWITCHED — no kill switch)
+  — applied to every `mergeScheduleEntry` return path: a row that would render `type: workout` +
+  `status: rest` + no exercises is corrected to `type: rest`. `isRestHybrid` is the ONE hybrid
+  predicate, shared with `ScheduleHybridRepairMigrator` (below) so the merge and the one-time
+  repair can never disagree about what a hybrid is. Its body lives in
+  `DaySwapRules.isRestHybrid` (`PlanIntegrityReconciler.isRestHybrid` delegates), so the swap
+  engine's `DaySwapRules.isRest` counts a not-yet-normalized hybrid as rest too (Hermes h4F3,
+  diagnose `c2d8e5`).
+- **L3 — the newer arrangement wins, per Mon–Sun IST week**
+  (`SyncFlags.swapArrangementMergeEnabled`, kill switch `disable_swap_arrangement_merge`):
+  `snapshotArrangementWinsKeys` compares the MAX `arranged_at_ms` per week between local and
+  downloaded rows (missing = 0; only dates stamped on either side and present on the snapshot
+  side are eligible; a TIE keeps local — strictly newer required) and forces the snapshot's row
+  WHOLESALE (content, status, markers) for every winning key. A `swap_merge_conflict` telemetry
+  event fires ONCE per merge call (never per row) when at least one non-completed, previously
+  `arranged_at_ms`-stamped local row was discarded this way.
+  **Carry-forward makes this last-writer-wins per week, by design (spec §5.7; Hermes h4F1,
+  2026-09-28).** `upsertScheduled`'s `carriesArrangement` re-stamps `arranged_at_ms = now` when a
+  non-swap, non-restore writer (plan regeneration, coach edit, template change, manual edit)
+  rewrites a date that ALREADY carries a stamp. A date that was never arranged is NOT re-stamped,
+  so an edit to an unrelated, unstamped date cannot move the week's MAX. The consequence: if device
+  B edits one of its own arranged dates AFTER device A's swap in the same week, B's week is newer,
+  and when the two meet in a merge, B's rows win the whole week and A's swap is discarded
+  (`swap_merge_conflict` fires). That is the spec's accepted residual ("the later swap wins that
+  whole week"), extended to a later edit of an arranged date, which the spec counts as a newer
+  arrangement. A stale device that never saw any arrangement in that week has no stamps, reads as
+  0, and cannot win. Same-device coverage: `restore_merge_invariants_test.dart` I5.
+- **L2 — merge only what is new**, one flag (`disable_plan_merge_skip_when_known`) gating BOTH
+  halves: (a) `_restoreWorkoutPlan` skips the WHOLE bundle merge when the downloaded bundle's
+  fingerprint equals the recorded one AND every bundled `schedule_<date>` key still exists
+  locally — a locally-deleted row defeats the whole-bundle skip (commit `18183762`; a
+  fingerprint match alone says the CLOUD is unchanged, not that local still holds it). An
+  OI-252 ghost day (its template was deleted) is filtered out of every merge and so never
+  written; an absent row whose `tmpl_<uuid>` template key is also absent locally therefore
+  counts as present, or one ghost day would defeat the skip forever (merge review F3, diagnose
+  `a3e7d9`). Residual: a real row deleted locally whose template is also missing locally is not
+  put back until the bundle changes; (b)
+  `mergeScheduleBundleIntoHive` writes a row only when the merged result's canonical fingerprint
+  differs from the existing row's, even when the whole-bundle skip above did not fire.
+- **Per-launch restore write-if-changed** (Hermes h7F1/h7F2, diagnose `f1c6b4`; kill switch
+  `disable_restore_write_if_changed`, `SyncFlags.restoreWriteIfChangedEnabled`) — the same idea
+  applied to the three other restore writers that run on EVERY launch via
+  `restoreLightweightAlways`: `_restoreWorkoutTemplates` (per template), `_restoreUserProgress`
+  (`userBox['progress']`) and `_restoreUserProfile` (`userBox['profile']`). Each compares the value
+  it would write with the stored one via `SyncFingerprint.canonicalJson` and skips an identical
+  write. The profile comparison drops `updated_at` from both sides, because
+  `ProfileWriteService.updateProfile` re-stamps it on every call and it would otherwise never
+  match (the field is server-set and never pushed). A declined progress demotion is still
+  reported when the write is skipped.
+- **The one-time `ScheduleHybridRepairMigrator`** (`lib/core/services/schedule_hybrid_repair_migrator.dart`,
+  diagnose `b6e1c8`) — gated by `workoutBox['hybrid_schedule_repair_v1_done']` (per-user, NOT
+  `migrationBox`, so a second account signing into the same device is repaired too). Walks every
+  `schedule_<date>` row once: a `status: rest` + workout `type` + no-exercises row (the hybrid
+  `isRestHybrid` predicate, shared with the normalizer above) is corrected to `type: 'rest'` (28
+  live rows found 2026-09-26); the SAME shape but WITH exercises is the one ambiguous live case
+  and is left alone (telemetry only — choosing a winner for the past would be a guess). Also
+  deletes the dead `swaps_this_week` / `swap_week_start` keys (superseded by
+  `DaySwapAllowance`) and the stale `plan_json` copy already sitting in
+  `userBox['progress']` for pre-existing installs.
+
+**7. The past-timestamp rule (never "now") and Gate G2.** A sync payload never sends `DateTime.now()`
+as a fallback for a timestamp describing the past. Resolution order: (1) the recorded value; (2)
+derived from a `*_ms` sibling or a timestamp embedded in the Hive key (`coach_<ms>`,
+`tmpl_<ms>`); (3) otherwise OMIT the field so the database keeps what it has (insert applies the
+column default) — the same "absence beats null on the wire" convention already used elsewhere
+in `sync_workout.dart`. **Completion time** gets its own resolver order:
+`entry['completed_at']` (ISO) → `entry['completed_at_ms']` → the matching `wlog_<date>`'s
+`completed_at` → omit — never `updated_at_ms` (recurrence of `5a36ad`).
+`scripts/check_sync_no_now_fallback.dart` (Gate G2) fails a comment-stripped `?? DateTime.now()`
+literal anywhere in sync payload code.
+
+**8. The schedule-row field contract.** `arranged_at_ms` — the swap timestamp; computed by the
+pure `DaySwapRules.landed`/`buildSwap` (`day_swap/day_swap_rules.dart`) with ONE `nowMs` for
+both rows (same value on both sides), inside the build function `SwapService.swapDays` hands to
+`WorkoutWriteService.swapScheduledDays` (which writes the rows it is given and never sets the field)
+and carried forward by `upsertScheduled` whenever an already-arranged row is rewritten by a
+non-swap, non-restore writer (`carriesArrangement`) — a swap writes its own stamp directly, a
+restore copies the source row's; NEVER removed by a swap-back. `is_swapped: true` +
+`original_date` — set together, `original_date` is the FIRST origin (kept across a chain of
+swaps if the content already carries one); both are removed together only when content lands
+back on its `original_date`. `displaced_<date>` — the backup a swap writes when the destination
+date already carried a template link; travels WITH the template so a swap-back can restore it.
+
+**9. Kill switches (all local `configBox` flags; no remote config for any of them):**
+`disable_sched_hash_skip` / `disable_exlog_hash_skip` / `disable_nlog_hash_skip` /
+`disable_wlog_hash_skip` / `disable_completion_hash_skip` / `disable_template_hash_skip` /
+`disable_plan_hash_skip` / `disable_streak_hash_skip` / `disable_water_hash_skip` /
+`disable_steps_hash_skip` / `disable_urine_hash_skip` / `disable_sleep_hash_skip` /
+`disable_weight_hash_skip` / `disable_measurement_hash_skip` / `disable_readiness_hash_skip` /
+`disable_saved_meal_hash_skip` / `disable_custom_item_hash_skip` (per-domain, point 2 table);
+`disable_rest_row_refill_guard` (L1); `disable_swap_arrangement_merge` (L3);
+`disable_plan_merge_skip_when_known` (L2, both halves); `disable_restore_write_if_changed`
+(template / progress / profile restore writes); `disable_restore_single_plan_fetch`;
+`disable_day_swap_train_ui` (Train UI only — see `lib/features/train/CLAUDE.md`).
+
+**M1 (unchanged limitation):** two overlapping sync passes for the same domain can still both
+read the OLD stored fingerprint before either writes the new one, so a genuinely concurrent
+double-push is not fully closed by `SyncSkipIndex` alone — the mutex per Hive key at the
+WriteService layer is the actual serialization point; the skip index is an optimization on top
+of it, not a replacement for it.
 
 Full detail: `docs/sot_registry.yaml` (search `payload_hash_index`),
-`docs/diagnoses/2026-09-19-full-rescan-sync-timeout-d3f8a6.md`.
+`docs/diagnoses/2026-09-19-full-rescan-sync-timeout-d3f8a6.md`,
+`docs/adr/0020-sync-sends-only-what-changed.md`.
 
 ### Restore conflict policy — local-wins / additive (ADR-0014, diagnose c5a1f2)
 Since the slow-boot guard, returning users reach /home WHILE the cloud restore runs in

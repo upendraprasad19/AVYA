@@ -48,12 +48,19 @@ void main() {
     );
 
     test(
-      '_syncWorkoutLogs uses _resolveCompletedAt which rejects empty strings',
+      '_syncWorkoutLogs uses _resolveCompletedAtOrNull which rejects empty strings',
       () {
         final src = loadSyncServiceSource().readAsStringSync();
 
-        // The helper itself filters empty strings. Slice from the
-        // declaration to the next sibling helper.
+        // day-swapper+sync-load Task 16 (round-1 review D1 F1): the helper
+        // was split so a fingerprinted payload never falls back to now().
+        // `_resolveCompletedAt` (steps 1-7, thin wrapper) delegates to
+        // `_resolveCompletedAtOrNull` (steps 1-6, no wall-clock fallback),
+        // which is where the empty-string rejection now lives. Slice from
+        // the wrapper's declaration to the next sibling helper — this span
+        // still covers BOTH methods (they sit back-to-back before
+        // `_dateFromKey`), so the isNotEmpty assertion below is unaffected
+        // by the split.
         final helperIdx = src.indexOf('String _resolveCompletedAt(');
         expect(helperIdx, greaterThan(0));
         final nextSibling = src.indexOf('String? _dateFromKey(', helperIdx);
@@ -63,13 +70,15 @@ void main() {
         expect(
           helperBody,
           contains('isNotEmpty'),
-          reason: '_resolveCompletedAt must reject empty strings on '
+          reason: '_resolveCompletedAtOrNull must reject empty strings on '
               'the string-ISO fields. Without this, empty `completed_at` '
               'entries (legacy Hive rows) reach PostgREST as `""` and '
               '22007.',
         );
 
-        // _syncWorkoutLogs MUST call the helper.
+        // _syncWorkoutLogs MUST call the OrNull helper (never the
+        // now()-falling-back wrapper — a now() inside a fingerprinted
+        // payload would never skip; see round-1 review D1 F1).
         final mIdx = src.indexOf('Future<void> _syncWorkoutLogs(');
         expect(mIdx, greaterThan(0));
         final mEnd = src.indexOf('\n  ///', mIdx + 10);
@@ -78,10 +87,11 @@ void main() {
 
         expect(
           mBody,
-          contains('_resolveCompletedAt('),
+          contains('_resolveCompletedAtOrNull('),
           reason: '_syncWorkoutLogs must route logged_at + created_at '
-              'through _resolveCompletedAt so empty strings can never '
-              'reach the cloud upsert.',
+              'through _resolveCompletedAtOrNull so empty strings can '
+              'never reach the cloud upsert, and a fresh now() never '
+              'feeds the fingerprint.',
         );
       },
     );

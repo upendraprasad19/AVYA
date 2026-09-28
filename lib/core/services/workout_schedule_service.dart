@@ -255,10 +255,6 @@ class WorkoutScheduleService {
 
   // ── Swap pass-throughs ───────────────────────────────────────────
 
-  Future<String?> swapDays(DateTime dateA, DateTime dateB,
-          {required bool isPro}) =>
-      swap.SwapService.instance.swapDays(dateA, dateB, isPro: isPro);
-
   Future<swap.SwapExerciseResult> swapExerciseInDay({
     required String date,
     required String fromExerciseId,

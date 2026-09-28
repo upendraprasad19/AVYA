@@ -29,6 +29,8 @@ import 'package:icanbefitter/core/services/sync_domains/profile_sync_domain.dart
 import 'package:icanbefitter/core/services/sync_domains/restore_completeness_sync_domain.dart';
 import 'package:icanbefitter/core/services/sync_domains/streaks_sync_domain.dart';
 import 'package:icanbefitter/core/services/sync_domains/workouts_sync_domain.dart';
+import 'package:icanbefitter/core/services/sync/schedule_completion_time.dart';
+import 'package:icanbefitter/core/services/sync/sync_skip_index.dart';
 import 'package:icanbefitter/core/services/sync_error.dart';
 import 'package:icanbefitter/core/services/sync_flags.dart';
 import 'package:icanbefitter/core/services/nutrition_write_service.dart';
@@ -46,6 +48,7 @@ import 'package:icanbefitter/features/profile/services/profile_target_recompute.
 import 'package:icanbefitter/features/ai_coach/models/coach_memory.dart';
 import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
 import 'package:icanbefitter/features/profile/services/profile_write_service.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
 part 'sync/sync_coach.dart';
@@ -287,18 +290,9 @@ class SyncService {
     }
   }
 
-  /// H1b Part A — reserved user-scoped `workoutBox` key holding the
-  /// `{scheduled_date: fingerprint}` index that lets an unchanged planned
-  /// `scheduled_workouts` row skip its idempotent re-upsert (a returning login
-  /// re-pushed ~96 rows the cloud already held). Sole writer+reader is
-  /// [_syncScheduledWorkouts] so writer/reader drift is structurally
-  /// impossible; the per-user box file IS the namespace, so it auto-clears on
-  /// user-swap / sign-out / DPDP — no extra wiring.
-  static const String _schedHashIndexKey = 'sync_sched_payload_hash_index';
-
-  /// H1b Part A — kill-switch reverting [_syncScheduledWorkouts] to the verbatim
-  /// pre-H1b unconditional full-sweep upsert (no fingerprint skip). Defensive
-  /// read (see [_syncDebounceDisabled]).
+  /// Kill-switch reverting [_syncScheduledWorkouts] to the verbatim
+  /// pre-SyncSkipIndex unconditional full-sweep upsert (no fingerprint skip).
+  /// Defensive read (see [_syncDebounceDisabled]).
   bool get _schedHashSkipDisabled {
     try {
       return _hive.configBox.get('disable_sched_hash_skip') == true;
@@ -311,63 +305,35 @@ class SyncService {
   /// pushed to cloud. Serializes EVERY entry under a deterministic key sort
   /// (null → '') so any value change — and a present-vs-absent `template_id`
   /// (the key set differs) — flips the fingerprint and forces a re-push.
-  /// Key-generic (not a fixed field list) so a future payload column is covered
-  /// automatically — no forget-to-fingerprint drift. [_deterministicId] is UUID
-  /// v5 (sha1-based) → STABLE across VMs/sessions (NOT `String.hashCode`, H-15).
-  /// Pure; extracted for behavioral coverage.
+  /// Key-generic (not a fixed field list) so a future payload column is
+  /// covered automatically. UUID v5 (sha1-based) → STABLE across
+  /// VMs/sessions (NOT `String.hashCode`, H-15). Pure; kept public
+  /// (`@visibleForTesting`) — pinned cross-checked against
+  /// `SyncFingerprint.ofCanonical` by `test/sync/sync_skip_index_test.dart`.
+  ///
+  /// day-swapper+sync-load Task 15: the row is now recorded/skipped by
+  /// `SyncSkipIndex` (domain `sched`), not a bespoke index + `status`-based
+  /// carve-out — `schedShouldSkipUpsert` and `schedPrunedHashIndex` are
+  /// deleted. A-fix-1 (a `completed` row never skipped) is SUPERSEDED by
+  /// migration 149's server-side completed-day guard (Task 7); see
+  /// docs/diagnoses/2026-06-27-sched-dirty-filter-b4f7e2.md.
   @visibleForTesting
   static String schedPayloadFingerprint(Map<String, dynamic> payload) {
-    // Delimiter-SAFE canonical form: sorted keys → jsonEncode. JSON quotes +
-    // escapes every value, so a literal `|`/`=`/`"` inside a value cannot alias
-    // two distinct payloads (the prior `'$k=$v'.join('|')` form was
-    // delimiter-ambiguous — review e7c1a9 P2 hardening).
     final sorted = <String, dynamic>{
       for (final k in payload.keys.toList()..sort()) k: payload[k],
     };
     return _deterministicId(jsonEncode(sorted));
   }
 
-  /// H1b Part A — the skip decision for one `scheduled_workouts` row. True iff
-  /// the idempotent re-upsert can be skipped because cloud already holds this
-  /// exact payload. A `completed` row NEVER skips (A-fix-1: cloud can be
-  /// silently stale per d9b2c5/B.1 and the resync migrator's one-shot flag makes
-  /// a mis-skip PERMANENT). A null [storedFingerprint] (never pushed, or a prior
-  /// push failed → store-on-200-only) never skips. Pure.
-  @visibleForTesting
-  static bool schedShouldSkipUpsert({
-    required bool killSwitchDisabled,
-    required String status,
-    required String? storedFingerprint,
-    required String currentFingerprint,
-  }) {
-    if (killSwitchDisabled) return false;
-    if (status == 'completed') return false;
-    return storedFingerprint != null &&
-        storedFingerprint == currentFingerprint;
-  }
-
-  /// H1b Part A (A-fix-2) — the fingerprint index pruned to the schedule rows
-  /// still present. A deleted date drops its entry so a later re-create
-  /// re-pushes. Pure (returns a new map).
-  @visibleForTesting
-  static Map<String, String> schedPrunedHashIndex(
-      Map<String, String> index, Set<String> liveDates) {
-    return <String, String>{
-      for (final e in index.entries)
-        if (liveDates.contains(e.key)) e.key: e.value,
-    };
-  }
-
-  /// OI-204 — Hive key for the exercise-log fingerprint index (workoutBox). See
-  /// docs/architecture/sync.md "Sync fingerprint-skip pattern" +
-  /// docs/sot_registry.yaml `sync_exercise_log_payload_hash_index`.
-  static const String _exlogHashIndexKey = 'sync_exlog_payload_hash_index';
-
-  /// Kill-switch reverting `_syncExerciseLogs` to the verbatim unconditional
-  /// full-sweep upsert (no fingerprint skip).
-  bool get _exlogHashSkipDisabled {
+  /// Whether [domain]'s Hive-index skip mechanism is turned off via its own
+  /// kill switch (day-swapper + sync-load Task 13). Replaces the per-domain
+  /// getters this batch removes (`_exlogHashSkipDisabled`, `_nlogHashSkipDisabled`,
+  /// ...) with one generic reader keyed on the enum's own `killSwitchKey`, so a
+  /// future domain never needs a bespoke getter. Defensive read, same shape as
+  /// the getters it replaces.
+  bool _hashSkipKillSwitchOn(SyncSkipDomain domain) {
     try {
-      return _hive.configBox.get('disable_exlog_hash_skip') == true;
+      return _hive.configBox.get(domain.killSwitchKey) == true;
     } catch (_) {
       return false;
     }
@@ -387,68 +353,6 @@ class SyncService {
       'sets': sets.map(sortKeys).toList(),
     };
     return _deterministicId(jsonEncode(combined));
-  }
-
-  /// Shared by exlogShouldSkipUpsert/nlogShouldSkipUpsert (plan-review round
-  /// 1, finding M11) — the two were byte-identical; unlike the per-domain
-  /// fingerprint functions (which genuinely differ in bundling shape), the
-  /// skip DECISION has no domain-specific content, so duplicating it was
-  /// pure divergence risk with no offsetting benefit (a future fix reaching
-  /// one and missing the other). Kept private + wrapped by named per-domain
-  /// functions so Task 1's gate, both test files, and any future domain
-  /// needing a carve-out shape like sched's `status` parameter all keep
-  /// stable, domain-specific call sites.
-  static bool _fingerprintMatchesStored({
-    required bool killSwitchDisabled,
-    required String? storedFingerprint,
-    required String currentFingerprint,
-  }) {
-    if (killSwitchDisabled) return false;
-    return storedFingerprint != null && storedFingerprint == currentFingerprint;
-  }
-
-  /// No status-based carve-out (unlike `schedShouldSkipUpsert`) — deliberate.
-  /// Exercise-log rows have no server-side out-of-band mutator (verified:
-  /// no Edge Function or migration writes to workout_log_exercises/
-  /// workout_log_sets outside a one-shot historical backfill, plus migration
-  /// 057's one-shot dedup DELETEs — see the diagnose-doc's spec §5.3
-  /// correction) and every edit rewrites the SAME Hive key in place, so any
-  /// edit changes the fingerprint on its own. Pure, static.
-  static bool exlogShouldSkipUpsert({
-    required bool killSwitchDisabled,
-    required String? storedFingerprint,
-    required String currentFingerprint,
-  }) =>
-      _fingerprintMatchesStored(
-        killSwitchDisabled: killSwitchDisabled,
-        storedFingerprint: storedFingerprint,
-        currentFingerprint: currentFingerprint,
-      );
-
-  @visibleForTesting
-  static Map<String, String> exlogPrunedHashIndex(
-      Map<String, String> index, Set<String> liveKeys) {
-    return <String, String>{
-      for (final e in index.entries)
-        if (liveKeys.contains(e.key)) e.key: e.value,
-    };
-  }
-
-  /// OI-204 — Hive key for the nutrition-log fingerprint index (nutritionBox),
-  /// keyed by SLOT id (`'$date $mealType'`), not raw Hive key — matches what
-  /// _syncNutritionLogs already merges same-slot logs into before pushing
-  /// (spec §5.2). Inert whenever `disable_nutrition_slot_merge` is set — the
-  /// legacy per-key path predates the slot concept this is keyed on.
-  static const String _nlogHashIndexKey = 'sync_nlog_payload_hash_index';
-
-  /// Kill-switch reverting `_syncNutritionLogs` to the verbatim unconditional
-  /// full-sweep upsert (no fingerprint skip).
-  bool get _nlogHashSkipDisabled {
-    try {
-      return _hive.configBox.get('disable_nlog_hash_skip') == true;
-    } catch (_) {
-      return false;
-    }
   }
 
   /// Pure — extracted so the boolean composition itself is directly testable
@@ -481,31 +385,6 @@ class SyncService {
       'items': sortedItems,
     };
     return _deterministicId(jsonEncode(combined));
-  }
-
-  /// No status-based carve-out — same reasoning as exlogShouldSkipUpsert
-  /// (spec §5.3): no out-of-band cloud mutator for nutrition_logs/
-  /// nutrition_log_items, every edit rewrites the same Hive key. Delegates
-  /// to the SHARED `_fingerprintMatchesStored` Task 2 adds (plan-review
-  /// round 1, finding M11) — do not redefine the body here.
-  static bool nlogShouldSkipUpsert({
-    required bool killSwitchDisabled,
-    required String? storedFingerprint,
-    required String currentFingerprint,
-  }) =>
-      SyncService._fingerprintMatchesStored(
-        killSwitchDisabled: killSwitchDisabled,
-        storedFingerprint: storedFingerprint,
-        currentFingerprint: currentFingerprint,
-      );
-
-  @visibleForTesting
-  static Map<String, String> nlogPrunedHashIndex(
-      Map<String, String> index, Set<String> liveSlots) {
-    return <String, String>{
-      for (final e in index.entries)
-        if (liveSlots.contains(e.key)) e.key: e.value,
-    };
   }
 
   /// H1a — best-effort flush fired on `AppLifecycleState.paused` (wired to
@@ -662,7 +541,7 @@ class SyncService {
   /// truth and the pass re-runs); an under-abort writes one user's rows under
   /// another's session.
   bool restoreAbortedFor(String ownerId) =>
-      restoreAborted(_restoreCancelled, ownerId, _supabase.currentUser?.id);
+      restoreAborted(_restoreCancelled, ownerId, _liveUserId);
 
   /// Pure form of [restoreAbortedFor], extracted so the predicate is
   /// behaviorally testable without a live Supabase session — the same
@@ -690,12 +569,30 @@ class SyncService {
   /// skipped push is retried on the next pass; a wrongly-allowed push writes
   /// one user's rows under another's session.
   bool ownerChangedSince(String ownerId) =>
-      ownerChangedFrom(ownerId, _supabase.currentUser?.id);
+      ownerChangedFrom(ownerId, _liveUserId);
 
   /// Pure form of [ownerChangedSince] — see [restoreAborted].
   @visibleForTesting
   static bool ownerChangedFrom(String ownerId, String? liveOwnerId) =>
       ownerId != liveOwnerId;
+
+  /// The live account id the sync layer compares against. Reads the SAME test
+  /// seam `HiveUserSession.ensureOpenedForCurrentSession` already honours
+  /// ([HiveUserSession.debugCurrentUidResolverForTests]), so one seam drives
+  /// both the session open and the owner checks. The resolver is null in
+  /// production, so this is exactly `_supabase.currentUser?.id` there.
+  ///
+  /// The field is `@visibleForTesting` in its declaring file because its
+  /// ORIGINAL sole caller was `ensureOpenedForCurrentSession` there; this
+  /// getter is now a second, production, cross-library caller, which the
+  /// analyzer cannot distinguish from a misuse — same shape
+  /// `UserRepository.mergeCloudProgress`'s doc comment already documents for
+  /// `phaseAdvanceTarget`. Ignored rather than de-annotated at the source so
+  /// the field's test-only contract for every OTHER reader stays intact.
+  String? get _liveUserId =>
+      // ignore: invalid_use_of_visible_for_testing_member
+      HiveUserSession.debugCurrentUidResolverForTests?.call() ??
+      _supabase.currentUser?.id;
 
   // ── Hive syncBox Keys ───────────────────────────────────────
 
@@ -937,7 +834,10 @@ class SyncService {
         'log-client-error',
         body: {
           'error_code': op.lastErrorCode ?? 'UnknownError',
-          'error_message': op.lastErrorMessage,
+          // h6F2: the op's last error text is a PostgrestException string too.
+          'error_message': op.lastErrorMessage == null
+              ? null
+              : ErrorTelemetry.redactRowValues(op.lastErrorMessage!),
           'op_type': op.opType,
           'retry_count': op.retryCount,
           'client_version': _currentClientVersion(),
@@ -1497,10 +1397,23 @@ class SyncService {
           // fresh insert (schema default), which is correct for a new user.
           'total_workouts_done': pr['total_workouts_done'] ?? 0,
           'current_streak_weeks': pr['current_streak_weeks'] ?? 0,
-          'phase_started_at':
-              pr['phase_started_at'] ?? DateTime.now().toIso8601String(),
-          'plan_generated_at':
-              pr['plan_generated_at'] ?? DateTime.now().toIso8601String(),
+          // Spec §5.12 / plan D2: this replay retries EVERY boot until it
+          // succeeds (line ~1421 clears the flag only on success), so a
+          // `DateTime.now()` fallback here re-stamped a moving "now" on
+          // every failed retry — the recurrence-of-5a36ad class.
+          // onboarding_provider.dart:577-578 and :890-891 always write both
+          // fields at onboarding-completion time, so the only time either is
+          // absent from `pr` is a malformed/partial local write; omit rather
+          // than fabricate. `pushOnboardingProgressSnapshot`'s RPC COALESCEs
+          // an omitted key to the existing column on UPDATE
+          // (sync_profile.dart:78-83, migration 115:162-163) and both
+          // columns are plain nullable timestamptz on INSERT with no
+          // default (001_create_users.sql:122-123), so an all-null fresh
+          // insert is a valid, harmless outcome.
+          if (pr['phase_started_at'] != null)
+            'phase_started_at': pr['phase_started_at'],
+          if (pr['plan_generated_at'] != null)
+            'plan_generated_at': pr['plan_generated_at'],
           'detected_experience_level': p['fitness_experience'],
         },
       );
@@ -1521,6 +1434,14 @@ class SyncService {
       ));
     }
   }
+
+  /// Test-only entry point for [_replayPendingOnboardingSync]. It has no
+  /// existing `SyncDomain` wrapper to reuse (it is a one-shot migration
+  /// replay, not a per-domain push) — same shape as the existing
+  /// `restoreScheduledWorkoutsForTest` precedent.
+  @visibleForTesting
+  Future<void> replayPendingOnboardingSyncForTest(String userId) =>
+      _replayPendingOnboardingSync(userId);
 
   /// Checks if local Hive is empty and restores from Supabase if so.
   /// Called automatically by checkAndSync() on app launch.
@@ -1547,31 +1468,90 @@ class SyncService {
     }
   }
 
+  /// day-swapper + sync-load Task 20 kill switch: `true` reverts
+  /// [restoreLightweightAlways] to today's verbatim two-fetch path (each of
+  /// _restoreUserProgress / _restoreWorkoutPlan does its own network
+  /// `user_progress` read) — CLAUDE.md §4.6, old path reachable.
+  @visibleForTesting
+  static const String kDisableRestoreSinglePlanFetchKey =
+      'disable_restore_single_plan_fetch';
+
+  /// day-swapper + sync-load Task 20 (spec §5.10 rule 3): the last cloud
+  /// `user_progress.sync_epoch` value this device has acted on. Lives in the
+  /// per-user workoutBox, beside the skip indexes it clears: the epoch is a
+  /// per-ACCOUNT lever, and in the shared configBox account A's high-water
+  /// mark masked account B's resync on the same device (Hermes L15
+  /// 2026-09-28). No `schedule_` prefix — eight readers treat those as rows.
+  @visibleForTesting
+  static const String kSyncEpochSeenKey = 'sync_epoch_seen';
+
+  bool get _restoreSinglePlanFetchDisabled {
+    try {
+      return _hive.configBox.get(kDisableRestoreSinglePlanFetchKey) == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// F6 · Lightweight restore that fires on every sign-in regardless of
   /// whether Hive has workout history. Pulls the small, frequently-drifting
   /// datasets: profile, progress, subscription-adjacent state, customs,
   /// templates. Bulk history (workout/nutrition logs) stays gated on
   /// empty-Hive so we don't re-download GBs every launch.
+  ///
+  /// Day-swapper + sync-load Task 20 (spec §5.11 / OI-237): runs ONE
+  /// `user_progress` select and hands the same row to BOTH
+  /// _restoreUserProgress and _restoreWorkoutPlan via their existing
+  /// `preFetched` injection params (the same pattern the C3 single-call
+  /// restore already uses at `_attemptSingleCallRestore`) — this used to be
+  /// two separate network reads of the same row on every returning-user
+  /// launch.
   Future<void> restoreLightweightAlways(String userId) async {
     try {
+      if (_restoreSinglePlanFetchDisabled) {
+        await Future.wait(
+          [
+            _safeRestoreOp('user_profile', _restoreUserProfile(userId)),
+            _safeRestoreOp('user_progress', _restoreUserProgress(userId)),
+            _safeRestoreOp('custom_exercises', _restoreCustomExercises(userId)),
+            _safeRestoreOp('custom_foods', _restoreCustomFoods(userId)),
+            _safeRestoreOp('workout_templates', _restoreWorkoutTemplates(userId)),
+            _safeRestoreOp('user_preferences', _restoreUserPreferences(userId)),
+            // F38 (2026-06-07): re-anchor the workout plan on every
+            // returning-user launch. A plan_start_date that advanced on
+            // another device was never re-applied on a normal (non-empty-
+            // Hive) launch, leaving this device's week number / day labels
+            // stale. _restoreWorkoutPlan is idempotent — it applies the
+            // cloud plan_json via the completed-day-preserving
+            // PlanIntegrityReconciler merge (diagnose a7d3f1).
+            _safeRestoreOp('workout_plan', _restoreWorkoutPlan(userId)),
+          ],
+          eagerError: false,
+        );
+        // The sync_epoch lever is independent of this switch (plan-review
+        // round 1, slice D2 F1): one narrow select, on this path only.
+        await _applySyncEpochFromRestoreRow(
+            await _fetchSyncEpochRowForRestore(userId));
+        return;
+      }
+
+      final progressRows = await _fetchUserProgressRowForRestore(userId);
       await Future.wait(
         [
           _safeRestoreOp('user_profile', _restoreUserProfile(userId)),
-          _safeRestoreOp('user_progress', _restoreUserProgress(userId)),
+          _safeRestoreOp('user_progress',
+              _restoreUserProgress(userId, preFetched: progressRows)),
           _safeRestoreOp('custom_exercises', _restoreCustomExercises(userId)),
           _safeRestoreOp('custom_foods', _restoreCustomFoods(userId)),
           _safeRestoreOp('workout_templates', _restoreWorkoutTemplates(userId)),
           _safeRestoreOp('user_preferences', _restoreUserPreferences(userId)),
-          // F38 (2026-06-07): re-anchor the workout plan on every returning-user
-          // launch. A plan_start_date that advanced on another device was never
-          // re-applied on a normal (non-empty-Hive) launch, leaving this device's
-          // week number / day labels stale. _restoreWorkoutPlan is idempotent —
-          // it applies the cloud plan_json via the completed-day-preserving
-          // PlanIntegrityReconciler merge (diagnose a7d3f1).
-          _safeRestoreOp('workout_plan', _restoreWorkoutPlan(userId)),
+          // F38 (2026-06-07) — see rationale above; unchanged.
+          _safeRestoreOp('workout_plan',
+              _restoreWorkoutPlan(userId, preFetched: progressRows)),
         ],
         eagerError: false,
       );
+      await _applySyncEpochFromRestoreRow(progressRows);
     } catch (e, st) {
       debugPrint('[SyncService.restoreLightweightAlways] $e');
       // audit-2026-05-11 H-42 — telemetry pair. skipServerPost:true
@@ -1584,6 +1564,113 @@ class SyncService {
         await _reportSyncFailure(opType: 'restore_lightweight_always', error: e);
       } catch (_) {}
     }
+  }
+
+  /// The ONE `user_progress` select [restoreLightweightAlways] shares
+  /// between _restoreUserProgress and _restoreWorkoutPlan. A fetch failure
+  /// degrades to an empty list — exactly the shape both consumers already
+  /// treat as "no row yet" via their own `if (rows.isEmpty) return;` guard —
+  /// so a transient failure simply no-ops this pass and retries on the next
+  /// launch, same outcome as today's per-writer network reads on failure.
+  Future<List> _fetchUserProgressRowForRestore(String userId) async {
+    try {
+      return await _supabase.client
+          .from('user_progress')
+          .select()
+          .eq('user_id', userId)
+          .limit(1);
+    } catch (e, st) {
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_restore_lightweight_progress_fetch',
+          skipServerPost: true));
+      try {
+        await _reportSyncFailure(
+            opType: 'restore_user_progress_fetch', error: e);
+      } catch (_) {}
+      return const [];
+    }
+  }
+
+  /// Kill-switch path only: the old two-fetch restore reads user_progress
+  /// inside each step, so the epoch needs its own extra read. That is one
+  /// extra request per launch, paid only while the switch is on (the
+  /// default single-fetch path adds nothing). A failure degrades to `[]`
+  /// (no epoch action this launch), like the shared fetch.
+  ///
+  /// Deliberately a BARE `.select()`, not `.select('sync_epoch')`: the
+  /// `sync_epoch` column ships in migration 149 (Task 7/U1), which had not
+  /// landed at the time this task executed (`check_schema_column_refs.dart`
+  /// FAILs a literal reference to a column absent from
+  /// `backups/live_schema_columns.json`, and this repo's own convention is
+  /// to regenerate that snapshot in the SAME commit as the migration —
+  /// something this task cannot do without applying a live migration,
+  /// forbidden by its own brief). A bare select is exempt from that gate by
+  /// design (any column set is valid) and is forward-compatible: before
+  /// migration 149, `row['sync_epoch']` below reads null exactly like today;
+  /// after it, the same row simply carries a real value. The batch's
+  /// live-apply task (Task 34) narrows this to `.select('sync_epoch')` in the
+  /// same commit that applies 148 and regenerates the snapshot (a
+  /// network-cost saving, not a correctness fix).
+  Future<List> _fetchSyncEpochRowForRestore(String userId) async {
+    try {
+      return await _supabase.client
+          .from('user_progress')
+          .select()
+          .eq('user_id', userId)
+          .limit(1);
+    } catch (e, st) {
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_restore_sync_epoch_fetch'));
+      return const [];
+    }
+  }
+
+  /// Day-swapper + sync-load Task 20 (spec §5.10 rule 3): the sync_epoch
+  /// resync lever. `null`/absent (column not yet live, or an older DB state)
+  /// reads as 0. On FIRST sight (no `sync_epoch_seen` key at all) just
+  /// stores the baseline — a fresh device has no skip indexes yet, so
+  /// clearing on every cold boot would be pure waste. Once a baseline is
+  /// known, a STRICTLY GREATER cloud epoch clears every domain's skip index
+  /// (forcing a full one-time re-push) then stores the new epoch; an equal
+  /// or lower epoch is a no-op.
+  Future<void> _applySyncEpochFromRestoreRow(List rows) async {
+    if (rows.isEmpty) return;
+    final row = rows.first;
+    if (row is! Map) return;
+    final cloudEpoch = (row['sync_epoch'] as num?)?.toInt() ?? 0;
+    final rawSeen = _hive.workoutBox.get(kSyncEpochSeenKey);
+    if (rawSeen == null) {
+      await _hive.workoutBox.put(kSyncEpochSeenKey, cloudEpoch);
+      return;
+    }
+    final seen = (rawSeen as num?)?.toInt() ?? 0;
+    if (cloudEpoch <= seen) return;
+    try {
+      final result = await SyncSkipIndex.clearAll((box) => switch (box) {
+            SyncSkipBox.workout => _hive.workoutBox,
+            SyncSkipBox.nutrition => _hive.nutritionBox,
+            SyncSkipBox.health => _hive.healthBox,
+            SyncSkipBox.custom => _hive.customBox,
+          });
+      // Fix (diagnose a9d3f6): clearAll catches per-domain failures
+      // internally and never rethrows, so a failed clear used to fall
+      // straight through to the unconditional store below and the operator's
+      // resync lever was marked handled even though a domain was left dirty.
+      // Only mark the epoch seen when every domain actually cleared — a
+      // partial failure leaves sync_epoch_seen untouched so the very next
+      // launch's cloudEpoch > seen check fires again and clearAll is retried
+      // (never within this same launch — this method runs at most once per
+      // restoreLightweightAlways call, which itself runs once per launch).
+      if (!result.allSucceeded) return;
+    } catch (e, st) {
+      // Defensive: clearAll itself does not throw today (every per-domain
+      // failure is caught inside it), but if that ever changes, still leave
+      // sync_epoch_seen unchanged so the retry isn't lost.
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_service_sync_epoch_clear_all'));
+      return;
+    }
+    await _hive.workoutBox.put(kSyncEpochSeenKey, cloudEpoch);
   }
 
   /// Pulls all user data from Supabase into Hive.
@@ -2503,7 +2590,9 @@ class SyncService {
       final queue =
           (_hive.syncBox.get(_telemetryQueueKey) as List?)?.cast<Map>().toList() ??
               [];
-      final msg = error.toString();
+      // h6F2: redact before the 500-char cut, so the queued copy at rest is
+      // clean too (the drain re-sends it through _reportSyncFailure).
+      final msg = ErrorTelemetry.redactRowValues(error.toString());
       queue.insert(0, {
         'op_type': opType,
         'error': msg.substring(0, msg.length.clamp(0, 500)),
@@ -2578,7 +2667,11 @@ class SyncService {
       // Truncate to keep the Edge Function request body reasonable — some
       // PostgrestException messages include the full echoed row which can
       // be several KB on user_profile.
-      var message = error.toString();
+      // Hermes h6F2 (diagnose e8c3a1): that echoed row is USER DATA — a
+      // failed ai_coach_interactions upsert carried the raw chat text into
+      // client_errors. Redact before truncating (the cap can cut the suffix
+      // the redactor anchors on).
+      var message = ErrorTelemetry.redactRowValues(error.toString());
       if (message.length > 2000) {
         message = '${message.substring(0, 2000)}…(truncated)';
       }

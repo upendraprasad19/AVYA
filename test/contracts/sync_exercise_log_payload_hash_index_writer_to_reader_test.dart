@@ -1,11 +1,51 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive/hive.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
+import 'package:icanbefitter/core/services/sync/sync_skip_index.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 
+import '../helpers/hive_test_setup.dart' show kTestUserId;
+import '../sync/sync_domain_skip_harness.dart';
+
+/// Fix round 1 (2026-09-27) helper. `_reportSyncFailure` fires `unawaited`
+/// (the fix brief requires the closure return promptly), so its
+/// `log-client-error` POST can land a tick or two after the push call
+/// returns; `ErrorTelemetry.recordNonFatal` ALSO posts to `log-client-error`
+/// on the SAME failure, but with `op_type` set to its own internal `reason`
+/// string (e.g. `sync_service_if_7`), not the domain op string -- so the
+/// filter must match on `op_type`, not merely count every log-client-error
+/// call. Polls briefly rather than a bare delay -- fast on the happy path,
+/// robust under full-suite load contention (CLAUDE.md's own documented class
+/// of full-suite-only timing flakiness).
+///
+/// Fix round 2 (F3, 2026-09-27): this call site only ever needs `isNotEmpty`
+/// (at least one report), so the "stop once non-empty" loop shape was never
+/// wrong the way the nlog sibling's `hasLength(2)` one was -- but its 500ms
+/// deadline is not "generous" under full-suite contention, so a genuinely
+/// slow (not dropped) post could still time out and read as a false
+/// failure. Raised to 10s for parity with the nlog fix; the happy path is
+/// unaffected since the loop still exits the instant the first match lands.
+Future<List<dynamic>> _logClientErrorReports(SyncHarness h, String opType,
+    {int maxWaitMs = 10000}) async {
+  List<dynamic> matches() => h.server.requests
+      .where((r) =>
+          r.path == '/functions/v1/log-client-error' &&
+          r.body is Map &&
+          (r.body! as Map)['op_type'] == opType)
+      .toList();
+  final deadline = DateTime.now().add(Duration(milliseconds: maxWaitMs));
+  var found = matches();
+  while (found.isEmpty && DateTime.now().isBefore(deadline)) {
+    await Future.delayed(const Duration(milliseconds: 20));
+    found = matches();
+  }
+  return found;
+}
+
 void main() {
-  group('exlogPayloadFingerprint', () {
+  group('exlogPayloadFingerprint (kept byte-identical -- plan D4, no re-push burst)', () {
     test('same payload -> same fingerprint, 36-char UUID shape', () {
       final summary = {'exercise_id': 'squat', 'reps': 30};
       final sets = [
@@ -29,22 +69,13 @@ void main() {
       expect(fp1, isNot(fp2));
     });
 
-    test('a changed per-set field flips the fingerprint (this is the edit-not-skipped proof)',
-        () {
+    test('a changed per-set field flips the fingerprint (edit-not-skipped proof)', () {
       final summary = {'exercise_id': 'squat'};
       final fp1 = SyncService.exlogPayloadFingerprint(
           summary, [{'set_number': 1, 'weight_kg': 60}]);
       final fp2 = SyncService.exlogPayloadFingerprint(
-          summary, [{'set_number': 1, 'weight_kg': 65}]); // edited weight
+          summary, [{'set_number': 1, 'weight_kg': 65}]);
       expect(fp1, isNot(fp2));
-      expect(
-        SyncService.exlogShouldSkipUpsert(
-          killSwitchDisabled: false,
-          storedFingerprint: fp1,
-          currentFingerprint: fp2,
-        ),
-        isFalse,
-      );
     });
 
     test('an added/removed set flips the fingerprint (key-set change, not just value)', () {
@@ -59,137 +90,127 @@ void main() {
     });
   });
 
-  group('exlogShouldSkipUpsert', () {
-    test('matching fingerprint -> skip', () {
+  group('exlog behavioral skip contract (day-swapper + sync-load Task 13)', () {
+    final h = SyncHarness();
+    setUp(h.setUp);
+    tearDown(h.tearDown);
+
+    // Carries a `sets` list (WorkoutWriteService shape) so `_resolvePerSetList`
+    // (sync_service.dart:2216) yields a non-empty `pendingSetRows` -- without
+    // it the per-set upsert never runs at all, and the second test's
+    // `failWritesTo.add('workout_log_sets')` premise would be a no-op.
+    Map<String, dynamic> row(int weightKg) => {
+          'date': '2026-09-20',
+          'exercise_name': 'Squat',
+          'weight_kg': weightKg,
+          'reps_completed': 5,
+          'set_number': 1,
+          'created_at': '2026-09-20T10:00:00.000Z',
+          'sets': [
+            {'weight_kg': weightKg, 'reps': 5},
+          ],
+        };
+
+    test('the full skip contract (first pass / unchanged skip / edit re-pushes / '
+        'retry after failure / kill switch)', () async {
+      await expectSkipContract(
+        h: h,
+        domain: SyncSkipDomain.exlog,
+        table: 'workout_log_exercises',
+        seed: () => HiveService.instance.workoutBox.put('exlog_2026-09-20_a1b2', row(100)),
+        runPass: () => SyncService.instance.pushExerciseLogsForSyncDomain(),
+        editOne: (generation) => HiveService.instance.workoutBox
+            .put('exlog_2026-09-20_a1b2', row(100 + generation)),
+      );
+    });
+
+    test('a per-set upsert failure abandons the bundle: nothing recorded, retried whole', () async {
+      // The shared SyncHarness's SyncStubServer instance (test/sync/
+      // sync_domain_skip_harness.dart) is constructed ONCE for this whole
+      // `group`, not per test (test/sync/sync_stub_server_test.dart's own
+      // multi-test group relies on the same fact) -- `tearDown` never clears
+      // `requests`, so a prior test's un-cleared tail requests are still
+      // present here. Clear first so `hasLength` assertions below count only
+      // this test's own writes.
+      h.server.clear();
+      await HiveService.instance.workoutBox.put('exlog_2026-09-20_a1b2', row(100));
+      h.server.failWritesTo.add('workout_log_sets');
+      await SyncService.instance.pushExerciseLogsForSyncDomain();
+      expect(h.server.writesTo('workout_log_exercises'), hasLength(1),
+          reason: 'the summary write is attempted even though the sets write will fail');
       expect(
-        SyncService.exlogShouldSkipUpsert(
-          killSwitchDisabled: false,
-          storedFingerprint: 'abc',
-          currentFingerprint: 'abc',
-        ),
-        isTrue,
-      );
+          SyncSkipIndex.readIndex(
+              skipBoxOf(SyncSkipDomain.exlog), SyncSkipDomain.exlog.indexKey),
+          isEmpty,
+          reason: 'a failed per-set write must not confirm the bundle');
+      // Fix round 1 (2026-09-27): _reportSyncFailure is the only path to the
+      // server-side client_errors row (via the log-client-error Edge
+      // Function) that server alerting reads -- the debugPrint + the
+      // preceding ErrorTelemetry.recordNonFatal(reason: 'sync_service_if_7')
+      // above are Crashlytics-tagged with an INTERNAL reason string, not the
+      // domain op_type (see _logClientErrorReports' doc comment above). The
+      // call is `unawaited` (the fix brief requires the closure return
+      // promptly), so poll for it rather than assuming it has landed the
+      // instant the push returns. The count is exact now: this test used to
+      // assert only `isNotEmpty` because `_reportSyncFailure` dual-posted
+      // (TWO requests per call). Main's B2a-2b dual-write fix (merged
+      // 2026-09-28) made its internal recordNonFatal skipServerPost:true, so
+      // ONE call is ONE request (pinned by test/sync/sync_telemetry_test.dart).
+      final reports =
+          await _logClientErrorReports(h, 'upsert_workout_log_sets');
+      expect(reports, hasLength(1),
+          reason: 'the per-set failure must report to log-client-error '
+              'exactly once, with op_type upsert_workout_log_sets');
+      h.server
+        ..clear()
+        ..failWritesTo.remove('workout_log_sets');
+      await SyncService.instance.pushExerciseLogsForSyncDomain();
+      expect(h.server.writesTo('workout_log_exercises'), hasLength(1),
+          reason: 'the WHOLE bundle (summary + sets) re-pushes next pass, not just the sets');
+      expect(h.server.writesTo('workout_log_sets'), hasLength(1));
     });
 
-    test('null stored fingerprint (never pushed) -> always push', () {
-      expect(
-        SyncService.exlogShouldSkipUpsert(
-          killSwitchDisabled: false,
-          storedFingerprint: null,
-          currentFingerprint: 'abc',
-        ),
-        isFalse,
-      );
-    });
-
-    test('kill-switch enabled -> always push, even on exact match', () {
-      expect(
-        SyncService.exlogShouldSkipUpsert(
-          killSwitchDisabled: true,
-          storedFingerprint: 'abc',
-          currentFingerprint: 'abc',
-        ),
-        isFalse,
-      );
-    });
-  });
-
-  group('exlogPrunedHashIndex', () {
-    test('drops entries for keys no longer present, keeps live ones intact', () {
-      final pruned = SyncService.exlogPrunedHashIndex(
-        {'exlog_a': 'fp_a', 'exlog_b': 'fp_b', 'exlog_deleted': 'fp_x'},
-        {'exlog_a', 'exlog_b'},
-      );
-      expect(pruned, {'exlog_a': 'fp_a', 'exlog_b': 'fp_b'});
-    });
-
-    test('empty liveKeys -> empty index', () {
-      expect(SyncService.exlogPrunedHashIndex({'exlog_a': 'fp'}, {}), isEmpty);
-    });
-  });
-
-  group('Hive round-trip', () {
-    // Matches the sched template's own setUp/tearDown + createTemp shape
-    // (plan-review round 1, finding M5) — a fixed directory path carries
-    // state across runs; setUpAll/tearDownAll run once for the whole group
-    // instead of once per test.
-    late Directory tempDir;
-    late Box box;
-    setUp(() async {
-      tempDir = await Directory.systemTemp.createTemp('exlog_hash_index_test_');
-      Hive.init(tempDir.path);
-      box = await Hive.openBox('exlog_hash_index_roundtrip_test');
-    });
-    tearDown(() async {
-      await box.close();
-      await Hive.close();
-      await tempDir.delete(recursive: true);
-    });
-
-    test('a fingerprint stored, read back through dynamic-typed Hive Map, still drives the skip decision', () async {
-      final fp = SyncService.exlogPayloadFingerprint({'a': 1}, []);
-      await box.put('sync_exlog_payload_hash_index', {'exlog_x': fp});
-
-      final rawIndex = box.get('sync_exlog_payload_hash_index');
-      final index = <String, String>{};
-      (rawIndex as Map).forEach((k, v) {
-        if (k is String && v is String) index[k] = v;
-      });
-
-      expect(
-        SyncService.exlogShouldSkipUpsert(
-          killSwitchDisabled: false,
-          storedFingerprint: index['exlog_x'],
-          currentFingerprint: fp,
-        ),
-        isTrue,
-      );
+    test('an account switch between the summary and the sets writes no sets '
+        '(guard at the sink; round-3 review S F1)', () async {
+      h.server.clear(); // see the previous test's comment -- shared server.
+      await HiveService.instance.workoutBox.put('exlog_2026-09-20_a1b2', row(100));
+      // The live owner changes the moment the summary write has landed.
+      HiveUserSession.debugCurrentUidResolverForTests = () =>
+          h.server.writesTo('workout_log_exercises').isEmpty
+              ? kTestUserId
+              : 'someone-else';
+      await SyncService.instance.pushExerciseLogsForSyncDomain();
+      expect(h.server.writesTo('workout_log_exercises'), hasLength(1));
+      expect(h.server.writesTo('workout_log_sets'), isEmpty,
+          reason: 'the sets must not be written under the previous owner');
+      HiveUserSession.debugCurrentUidResolverForTests = () => kTestUserId;
     });
   });
 
   group('resetJourney clears the index (source contract)', () {
-    test('sync_exlog_payload_hash_index is cleared by resetJourney, mirroring '
-        'the sched key it sits beside', () {
-      final src =
-          File('lib/features/dev/simulation_service.dart').readAsStringSync();
-      final start = src.indexOf('Future<void> resetJourney(');
-      expect(start, isNot(-1), reason: 'resetJourney must exist at this name');
-      final end = src.indexOf('\n  }\n', start);
-      final body = src.substring(start, end == -1 ? src.length : end);
-      expect(body, contains("'sync_exlog_payload_hash_index'"),
-          reason: 'a stale fingerprint entry survives a sim reset and '
-              'mis-skips the re-drive push — see the sync_sched_payload_hash_index '
-              'precedent this mirrors');
-    });
-  });
+    test(
+        'resetJourney delegates to clearJourneyLocalState, which clears '
+        'every domain via SyncSkipIndex.clearAll (day-swapper + sync-load '
+        'Task 20 generalized Task 13\'s per-domain symbolic reference — '
+        'exlog, sched and nlog — to all 17 domains)', () {
+      final src = File('lib/features/dev/simulation_service.dart').readAsStringSync();
+      final rjStart = src.indexOf('Future<void> resetJourney(');
+      expect(rjStart, isNot(-1), reason: 'resetJourney must exist at this name');
+      final rjEnd = src.indexOf('\n  }\n', rjStart);
+      final rjBody = src.substring(rjStart, rjEnd == -1 ? src.length : rjEnd);
+      expect(rjBody, contains('clearJourneyLocalState()'),
+          reason: 'a stale fingerprint entry survives a sim reset and mis-skips the '
+              're-drive push unless resetJourney routes through the Hive-only '
+              'reset helper');
 
-  // OI-204 Step 7b — spec §8's atomicity behavioral test requires simulating a
-  // per-set network failure and asserting no fingerprint is stored. Checked
-  // (grep): `_supabase` is `final SupabaseService _supabase =
-  // SupabaseService.instance;` (sync_service.dart:219) — a singleton with no
-  // constructor injection, and `grep -rln "MockSupabase|FakeSupabase|_supabase
-  // = Mock|SupabaseService(" test/` returns NOTHING. `_syncScheduledWorkouts`
-  // itself has no such test either — its own "store-on-200-only" group
-  // (sync_scheduled_payload_hash_index_writer_to_reader_test.dart) is this
-  // SAME call-site-count source-grep, not a live failure simulation. No DI
-  // seam exists anywhere in this codebase today; adding one is a separate,
-  // reviewed refactor decision, out of scope for this delta-sync fix (per the
-  // brief's explicit instruction not to invent one here). This test covers
-  // the "exactly one store site" half of the atomicity property mechanically;
-  // the "only reached when the flag is true" half is covered statically by
-  // scripts/check_sync_hash_skip_atomicity.dart (mutation-proven,
-  // docs/audit/gate_test_ledger.yaml). See docs/sot_registry.yaml's
-  // `sync_exercise_log_payload_hash_index` entry, `presence_only: true` on
-  // the atomicity sub-property, for the corresponding `presence_only_reason:`.
-  group('exact store call-site count (spec §8 item 4)', () {
-    test('the guarded exlogHashIndex[key] = fp store appears exactly once in '
-        'sync_workout.dart -- a second site would bypass the single-guard-scan '
-        'scripts/check_sync_hash_skip_atomicity.dart depends on', () {
-      final src =
-          File('lib/core/services/sync/sync_workout.dart').readAsStringSync();
-      final matches =
-          RegExp(r'exlogHashIndex\[key\]\s*=\s*fp\s*;').allMatches(src);
-      expect(matches.length, 1);
+      final clStart = src.indexOf('Future<void> clearJourneyLocalState(');
+      expect(clStart, isNot(-1),
+          reason: 'clearJourneyLocalState must exist at this name');
+      final clEnd = src.indexOf('\n  }\n', clStart);
+      final clBody = src.substring(clStart, clEnd == -1 ? src.length : clEnd);
+      expect(clBody, contains('SyncSkipIndex.clearAll('),
+          reason: 'clearJourneyLocalState must clear every domain via the '
+              'shared helper, not just exlog/sched/nlog individually');
     });
   });
 }

@@ -5,3 +5,4 @@ export { createCustomExerciseTool } from "./createCustomExercise.ts";
 export { modifyWorkoutForInjuryTool } from "./modifyWorkoutForInjury.ts";
 export { rescheduleWeekTool } from "./rescheduleWeek.ts";
 export { generateHotelWorkoutTool } from "./generateHotelWorkout.ts";
+export { swapWorkoutDaysTool } from "./swapWorkoutDays.ts";

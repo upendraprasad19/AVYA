@@ -7,6 +7,19 @@ part of '../sync_service.dart';
 /// color is merged onto water_logs rows by date — health_metrics
 /// table doesn't exist).
 extension SyncServiceHealth on SyncService {
+  /// day-swapper + sync-load plan D2 (closes-diagnose f4c7a9) — every
+  /// HealthWriteService writer (`logSleep`/`logReadiness`/`logWeight`/
+  /// `logMeasurement`, health_write_service.dart:67-253) stamps
+  /// `updated_at_ms` alongside `created_at` on every write, so a row missing
+  /// `created_at` (pre-WriteService legacy data) still carries a real
+  /// historical timestamp to derive from. Returns null (the caller then
+  /// OMITS the field) only when neither is present.
+  static String? _healthCreatedAtFromMs(Map<String, dynamic> log) {
+    final ms = log['updated_at_ms'];
+    if (ms is! int) return null;
+    return DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true).toIso8601String();
+  }
+
   // ── Public entry points (called from biometric provider) ────
 
   /// Immediately pushes Hive weight logs to Supabase. Safe to call
@@ -18,7 +31,7 @@ extension SyncServiceHealth on SyncService {
   Future<void> syncWeightNow() async {
     if (SyncService.pausedForSimulation) return; // sim bulk-backfill
     try {
-      final userId = _supabase.currentUser?.id;
+      final userId = _liveUserId;
       if (userId == null) return;
       await _syncWeightLogs(userId);
     } catch (e, st) {
@@ -45,7 +58,7 @@ extension SyncServiceHealth on SyncService {
   Future<void> syncReadinessNow() async {
     if (SyncService.pausedForSimulation) return;
     try {
-      final userId = _supabase.currentUser?.id;
+      final userId = _liveUserId;
       if (userId == null) return;
       await _syncReadiness(userId);
     } catch (e, st) {
@@ -60,34 +73,46 @@ extension SyncServiceHealth on SyncService {
 
   Future<void> _syncReadiness(String userId) async {
     final healthBox = _hive.healthBox;
+    final index = SyncSkipIndex(
+      box: healthBox,
+      domain: SyncSkipDomain.readiness,
+      disabled: _hashSkipKillSwitchOn(SyncSkipDomain.readiness),
+      ownerChangedNow: () => ownerChangedSince(userId),
+      reportFailure: (op, e, st) =>
+          unawaited(_reportSyncFailure(opType: op, error: e)),
+    );
+    final liveKeys = <String>{};
     for (final entry in healthBox.toMap().entries) {
+      if (index.aborted) break;
       if (!entry.key.toString().startsWith('readiness_')) continue;
       final raw = entry.value;
       if (raw is! Map) continue;
       final log = Map<String, dynamic>.from(raw);
       final dateStr = log['date'] as String?;
       if (dateStr == null) continue;
-      try {
-        await _supabase.client.from('readiness_daily').upsert({
-          'user_id': userId,
-          'date': dateStr,
-          'sleep': log['sleep'],
-          'soreness': log['soreness'],
-          'energy': log['energy'],
-          'level': log['level'],
-          'created_at':
-              log['created_at'] ?? DateTime.now().toUtc().toIso8601String(),
-        }, onConflict: 'user_id,date');
-      } catch (e, st) {
-        debugPrint('[SyncService._syncReadiness] $dateStr: $e');
-        unawaited(ErrorTelemetry.recordNonFatal(e, st,
-            reason: 'sync_service_sync_readiness', skipServerPost: true));
-        try {
-          await _reportSyncFailure(
-              opType: 'upsert_readiness_daily', error: e);
-        } catch (_) {}
-      }
+      liveKeys.add(dateStr);
+      final createdAt = log['created_at'] as String? ?? _healthCreatedAtFromMs(log);
+      final payload = <String, dynamic>{
+        'user_id': userId,
+        'date': dateStr,
+        'sleep': log['sleep'],
+        'soreness': log['soreness'],
+        'energy': log['energy'],
+        'level': log['level'],
+        if (createdAt != null) 'created_at': createdAt,
+      };
+      await index.pushIfChanged(
+        dateStr,
+        () => SyncFingerprint.of(payload),
+        () async {
+          await _supabase.client
+              .from('readiness_daily')
+              .upsert(payload, onConflict: 'user_id,date');
+          return true;
+        },
+      );
     }
+    await index.commit(liveKeys: liveKeys);
   }
 
   /// Restores `readiness_daily` → healthBox `readiness_<date>` keys. Additive /
@@ -124,51 +149,25 @@ extension SyncServiceHealth on SyncService {
   }
 
   /// Pushes recent sleep entries to Supabase `sleep_logs`. Fire-and-forget per
-  /// docs/architecture/sync.md. Handles two Hive storage patterns:
-  ///   • Per-day keys  `sleep_log_YYYY-MM-DD`  (standard log path)
-  ///   • List key      `sleep_logs`             (conversational AI tool path)
+  /// docs/architecture/sync.md. Delegates to `_syncSleepLogs`, which reads the
+  /// per-day `sleep_log_YYYY-MM-DD` keys only.
   Future<void> syncSleepNow() async {
     if (SyncService.pausedForSimulation) return; // sim bulk-backfill
     try {
-      final userId = _supabase.currentUser?.id;
+      final userId = _liveUserId;
       if (userId == null) return;
-      // Handle per-day keys (standard path) via existing helper
       await _syncSleepLogs(userId);
-      // Handle list key written by conversational_log_handler._logSleep
-      final healthBox = _hive.healthBox;
-      final listRaw = healthBox.get('sleep_logs');
-      if (listRaw is! List || listRaw.isEmpty) return;
-      for (final item in listRaw) {
-        if (item is! Map) continue;
-        final log = Map<String, dynamic>.from(item);
-        final dateStr = log['date'] as String?;
-        if (dateStr == null) continue;
-        final hours = (log['duration_hrs'] as num?)?.toDouble() ??
-            (log['sleep_hours'] as num?)?.toDouble() ??
-            (log['hours'] as num?)?.toDouble();
-        if (hours == null) continue;
-        try {
-          await _supabase.client.from('sleep_logs').upsert({
-            // id OMITTED + onConflict on the new user-inclusive natural key
-            // (migration 082). Bonus: this chat/list path and the per-day path
-            // below previously seeded DIFFERENT ids for the same date → two
-            // rows; now both merge onto one (user_id,date) row. Fix 2026-06-02.
-            'user_id': userId,
-            'date': dateStr,
-            'duration_hrs': hours,
-            if (log['quality'] != null) 'quality': log['quality'],
-            'created_at': log['created_at'] ?? DateTime.now().toUtc().toIso8601String(),
-          }, onConflict: 'user_id,date');
-        } catch (e, st) {
-          debugPrint('[SyncService.syncSleepNow] list-item $dateStr: $e');
-          // audit-2026-05-11 H-42 — telemetry pair.
-          unawaited(ErrorTelemetry.recordNonFatal(e, st,
-              reason: 'sync_service_for_4', skipServerPost: true));
-          try {
-            await _reportSyncFailure(opType: 'upsert_sleep_log_chat', error: e);
-          } catch (_) {}
-        }
-      }
+      // day-swapper + sync-load plan D18 — the legacy `sleep_logs` LIST
+      // push (conversational_log_handler._logSleep's old target) is
+      // DELETED here, not migrated: that writer moved to the per-day
+      // `sleep_log_<date>` key in 2026-05-16
+      // (conversational_log_handler.dart:120-139) and current build
+      // 1.0.0+46 is well past the "+28" the writer's own comment named as
+      // the retirement trigger. `profile_provider.dart:488`'s READ of
+      // `healthBox.get('sleep_logs')` is untouched (a UI fallback, not a
+      // push) — this only removes the CLOUD PUSH of that legacy list,
+      // which the loop being deleted already fully drained on every prior
+      // pass (nothing new is ever added to the list any more).
     } catch (e, st) {
       debugPrint('[SyncService.syncSleepNow] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
@@ -187,7 +186,7 @@ extension SyncServiceHealth on SyncService {
   Future<void> syncMeasurementsNow() async {
     if (SyncService.pausedForSimulation) return; // sim bulk-backfill
     try {
-      final userId = _supabase.currentUser?.id;
+      final userId = _liveUserId;
       if (userId == null) return;
       await _syncMeasurements(userId);
     } catch (e, st) {
@@ -205,117 +204,172 @@ extension SyncServiceHealth on SyncService {
 
   Future<void> _syncWeightLogs(String userId) async {
     final healthBox = _hive.healthBox;
+    final index = SyncSkipIndex(
+      box: healthBox,
+      domain: SyncSkipDomain.weight,
+      disabled: _hashSkipKillSwitchOn(SyncSkipDomain.weight),
+      ownerChangedNow: () => ownerChangedSince(userId),
+      reportFailure: (op, e, st) =>
+          unawaited(_reportSyncFailure(opType: op, error: e)),
+    );
+    final liveKeys = <String>{};
     // Writers use per-day keys like 'weight_2026-04-07', NOT a single list key.
     for (final key in healthBox.keys) {
+      if (index.aborted) break;
       if (key is! String || !key.startsWith('weight_')) continue;
       final raw = healthBox.get(key);
       if (raw is! Map) continue;
       final log = Map<String, dynamic>.from(raw);
       if (log['type'] != 'weight_log') continue;
-      try {
-        await _supabase.client.from('weight_logs').upsert({
+      final date = log['date'] as String?;
+      if (date == null) continue;
+      liveKeys.add(date);
+      final createdAt = log['created_at'] as String? ?? _healthCreatedAtFromMs(log);
+      final payload = <String, dynamic>{
+        'user_id': userId,
+        'date': date,
+        'weight_kg': log['weight_kg'],
+        'notes': log['notes'],
+        if (createdAt != null) 'created_at': createdAt,
+      };
+      await index.pushIfChanged(
+        date,
+        () => SyncFingerprint.of(payload),
+        () async {
           // id OMITTED + onConflict on the new user-inclusive natural key
           // (migration 082). Was id='weight_<date>' (date-only) + onConflict
           // 'id' → two users weighing in on the same date collided on the PK
           // (23505) and the second lost their row. Fix 2026-06-02.
-          'user_id': userId,
-          'date': log['date'],
-          'weight_kg': log['weight_kg'],
-          'notes': log['notes'],
-          'created_at': log['created_at'] ?? DateTime.now().toUtc().toIso8601String(),
-        }, onConflict: 'user_id,date');
-      } catch (e, st) {
-        debugPrint('[SyncService._syncWeightLogs] $key: $e');
-        // audit-2026-05-11 H-42 — telemetry pair.
-        unawaited(ErrorTelemetry.recordNonFatal(e, st,
-            reason: 'sync_service_for_5', skipServerPost: true));
-        try {
-          await _reportSyncFailure(opType: 'upsert_weight_log', error: e);
-        } catch (_) {}
-      }
+          await _supabase.client
+              .from('weight_logs')
+              .upsert(payload, onConflict: 'user_id,date');
+          return true;
+        },
+      );
     }
+    await index.commit(liveKeys: liveKeys);
   }
 
   Future<void> _syncMeasurements(String userId) async {
     final healthBox = _hive.healthBox;
+    final index = SyncSkipIndex(
+      box: healthBox,
+      domain: SyncSkipDomain.measurement,
+      disabled: _hashSkipKillSwitchOn(SyncSkipDomain.measurement),
+      ownerChangedNow: () => ownerChangedSince(userId),
+      reportFailure: (op, e, st) =>
+          unawaited(_reportSyncFailure(opType: op, error: e)),
+    );
+    final liveKeys = <String>{};
     // Writers use per-day keys like 'measurement_2026-04-07'.
     for (final key in healthBox.keys) {
+      if (index.aborted) break;
       if (key is! String || !key.startsWith('measurement_')) continue;
       final raw = healthBox.get(key);
       if (raw is! Map) continue;
       final log = Map<String, dynamic>.from(raw);
-      try {
-        await _supabase.client.from('body_measurements').upsert({
+      final date = log['date'] as String?;
+      if (date == null) continue;
+      liveKeys.add(date);
+      final createdAt = log['created_at'] as String? ?? _healthCreatedAtFromMs(log);
+      final payload = <String, dynamic>{
+        'user_id': userId,
+        'date': date,
+        'chest': log['chest'],
+        'waist': log['waist'],
+        'hips': log['hips'],
+        'arms': log['arms'],
+        'notes': log['notes'],
+        if (createdAt != null) 'created_at': createdAt,
+      };
+      await index.pushIfChanged(
+        date,
+        () => SyncFingerprint.of(payload),
+        () async {
           // id OMITTED + onConflict on the new user-inclusive natural key
           // (migration 082) — same cross-user PK-collision fix as weight_logs.
           // Fix 2026-06-02.
-          'user_id': userId,
-          'date': log['date'],
-          'chest': log['chest'],
-          'waist': log['waist'],
-          'hips': log['hips'],
-          'arms': log['arms'],
-          'notes': log['notes'],
-          'created_at': log['created_at'] ?? DateTime.now().toUtc().toIso8601String(),
-        }, onConflict: 'user_id,date');
-        // E.14.A · audit-2026-05-16 — success-path emission.
-        unawaited(ErrorTelemetry.logEvent('upsert_body_measurements_success',
-            message: 'date=${log['date']}'));
-      } catch (e, st) {
-        debugPrint('[SyncService._syncMeasurements] $key: $e');
-        // audit-2026-05-11 H-42 — telemetry pair.
-        unawaited(ErrorTelemetry.recordNonFatal(e, st,
-            reason: 'sync_service_for_6', skipServerPost: true));
-        try {
-          await _reportSyncFailure(opType: 'upsert_body_measurement', error: e);
-        } catch (_) {}
-      }
+          await _supabase.client
+              .from('body_measurements')
+              .upsert(payload, onConflict: 'user_id,date');
+          // E.14.A · audit-2026-05-16 — success-path emission.
+          unawaited(ErrorTelemetry.logEvent('upsert_body_measurements_success',
+              message: 'date=$date'));
+          return true;
+        },
+      );
     }
+    await index.commit(liveKeys: liveKeys);
   }
 
   Future<void> _syncSleepLogs(String userId) async {
     final healthBox = _hive.healthBox;
+    final index = SyncSkipIndex(
+      box: healthBox,
+      domain: SyncSkipDomain.sleep,
+      disabled: _hashSkipKillSwitchOn(SyncSkipDomain.sleep),
+      ownerChangedNow: () => ownerChangedSince(userId),
+      reportFailure: (op, e, st) =>
+          unawaited(_reportSyncFailure(opType: op, error: e)),
+    );
+    final liveKeys = <String>{};
     // Writers use per-day keys like 'sleep_log_2026-04-07'.
     for (final key in healthBox.keys) {
+      if (index.aborted) break;
       if (key is! String || !key.startsWith('sleep_log_')) continue;
       final raw = healthBox.get(key);
       if (raw is! Map) continue;
       final log = Map<String, dynamic>.from(raw);
-      try {
-        await _supabase.client.from('sleep_logs').upsert({
+      final date = log['date'] as String?;
+      if (date == null) continue;
+      liveKeys.add(date);
+      final createdAt = log['created_at'] as String? ?? _healthCreatedAtFromMs(log);
+      final payload = <String, dynamic>{
+        'user_id': userId,
+        'date': date,
+        'duration_hrs': log['duration_hrs'],
+        'quality': log['quality'],
+        'bed_time': log['bed_time'],
+        'wake_time': log['wake_time'],
+        'notes': log['notes'],
+        if (createdAt != null) 'created_at': createdAt,
+      };
+      await index.pushIfChanged(
+        date,
+        () => SyncFingerprint.of(payload),
+        () async {
           // id OMITTED + onConflict on the new user-inclusive natural key
           // (migration 082) — cross-user PK-collision fix + per-day/list-path
           // dedup. Fix 2026-06-02.
-          'user_id': userId,
-          'date': log['date'],
-          'duration_hrs': log['duration_hrs'],
-          'quality': log['quality'],
-          'bed_time': log['bed_time'],
-          'wake_time': log['wake_time'],
-          'notes': log['notes'],
-          'created_at': log['created_at'] ?? DateTime.now().toUtc().toIso8601String(),
-        }, onConflict: 'user_id,date');
-        // E.14.A · audit-2026-05-16 — success-path emission.
-        unawaited(ErrorTelemetry.logEvent('upsert_sleep_logs_success',
-            message: 'date=${log['date']}'));
-      } catch (e, st) {
-        debugPrint('[SyncService._syncSleepLogs] $key: $e');
-        // audit-2026-05-11 H-42 — telemetry pair.
-        unawaited(ErrorTelemetry.recordNonFatal(e, st,
-            reason: 'sync_service_for_7', skipServerPost: true));
-        try {
-          await _reportSyncFailure(opType: 'upsert_sleep_log', error: e);
-        } catch (_) {}
-      }
+          await _supabase.client
+              .from('sleep_logs')
+              .upsert(payload, onConflict: 'user_id,date');
+          // E.14.A · audit-2026-05-16 — success-path emission.
+          unawaited(ErrorTelemetry.logEvent('upsert_sleep_logs_success',
+              message: 'date=$date'));
+          return true;
+        },
+      );
     }
+    await index.commit(liveKeys: liveKeys);
   }
 
   /// F20 · Pushes daily step totals to Supabase `daily_steps`.
   Future<void> _syncStepsLogs(String userId) async {
     final healthBox = _hive.healthBox;
+    final index = SyncSkipIndex(
+      box: healthBox,
+      domain: SyncSkipDomain.steps,
+      disabled: _hashSkipKillSwitchOn(SyncSkipDomain.steps),
+      ownerChangedNow: () => ownerChangedSince(userId),
+      reportFailure: (op, e, st) =>
+          unawaited(_reportSyncFailure(opType: op, error: e)),
+    );
+    final liveKeys = <String>{};
     // Writers use per-day keys like 'step_2026-04-07' with
     // {type:'step_log', date, steps, source}.
     for (final key in healthBox.keys) {
+      if (index.aborted) break;
       if (key is! String || !key.startsWith('step_')) continue;
       final raw = healthBox.get(key);
       if (raw is! Map) continue;
@@ -324,55 +378,77 @@ extension SyncServiceHealth on SyncService {
       final date = log['date'] as String?;
       final steps = (log['steps'] as num?)?.toInt();
       if (date == null || steps == null) continue;
-      try {
-        await _supabase.client.from('daily_steps').upsert({
-          'user_id': userId,
-          'date': date,
-          'steps': steps,
-          'source': log['source'] ?? 'health_connect',
-          'synced_at': DateTime.now().toUtc().toIso8601String(),
-        }, onConflict: 'user_id,date');
-      } catch (e, st) {
-        debugPrint('[SyncService._syncStepsLogs] $key: $e');
-        // audit-2026-05-11 H-42 — telemetry pair.
-        unawaited(ErrorTelemetry.recordNonFatal(e, st,
-            reason: 'sync_service_for_8', skipServerPost: true));
-        try {
-          await _reportSyncFailure(opType: 'upsert_daily_steps', error: e);
-        } catch (_) {}
-      }
+      liveKeys.add(date);
+      final payload = <String, dynamic>{
+        'user_id': userId,
+        'date': date,
+        'steps': steps,
+        'source': log['source'] ?? 'health_connect',
+        'synced_at': DateTime.now().toUtc().toIso8601String(),
+      };
+      await index.pushIfChanged(
+        date,
+        // Global Constraint: steps' `synced_at` is a sent-at stamp, excluded.
+        () => SyncFingerprint.of(<String, dynamic>{
+          for (final e in payload.entries)
+            if (e.key != 'synced_at') e.key: e.value,
+        }),
+        () async {
+          await _supabase.client
+              .from('daily_steps')
+              .upsert(payload, onConflict: 'user_id,date');
+          return true;
+        },
+      );
     }
+    await index.commit(liveKeys: liveKeys);
   }
 
   Future<void> _syncUrineColorLogs(String userId) async {
-    // Urine color data is now merged into the water_logs table
-    // (health_metrics table does not exist).
+    // Urine color data is merged into the water_logs table (health_metrics
+    // table does not exist).
     final healthBox = _hive.healthBox;
+    final index = SyncSkipIndex(
+      box: healthBox,
+      domain: SyncSkipDomain.urine,
+      disabled: _hashSkipKillSwitchOn(SyncSkipDomain.urine),
+      ownerChangedNow: () => ownerChangedSince(userId),
+      reportFailure: (op, e, st) =>
+          unawaited(_reportSyncFailure(opType: op, error: e)),
+    );
+    final liveKeys = <String>{};
     for (final key in healthBox.keys) {
+      if (index.aborted) break;
       if (key is! String || !key.startsWith('urine_color_')) continue;
       final raw = healthBox.get(key);
       if (raw is! Map) continue;
       final log = Map<String, dynamic>.from(raw);
       final date = log['date'] as String?;
       if (date == null) continue;
-      try {
-        await _supabase.client.from('water_logs').upsert({
-          'user_id': userId,
-          'date': date,
-          'urine_color': (log['index'] as int?) ?? -1,
-          'urine_status': log['label'] ?? 'unknown',
-          'updated_at': DateTime.now().toUtc().toIso8601String(),
-        }, onConflict: 'user_id,date');
-      } catch (e, st) {
-        debugPrint('[SyncService._syncUrineColorLogs] $e');
-        // audit-2026-05-11 H-42 — telemetry pair.
-        unawaited(ErrorTelemetry.recordNonFatal(e, st,
-            reason: 'sync_service_for_9', skipServerPost: true));
-        try {
-          await _reportSyncFailure(opType: 'upsert_urine_color_log', error: e);
-        } catch (_) {}
-      }
+      liveKeys.add(date);
+      final payload = <String, dynamic>{
+        'user_id': userId,
+        'date': date,
+        'urine_color': (log['index'] as int?) ?? -1,
+        'urine_status': log['label'] ?? 'unknown',
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      };
+      await index.pushIfChanged(
+        date,
+        // Global Constraint: urine's `updated_at` is a sent-at stamp, excluded.
+        () => SyncFingerprint.of(<String, dynamic>{
+          for (final e in payload.entries)
+            if (e.key != 'updated_at') e.key: e.value,
+        }),
+        () async {
+          await _supabase.client
+              .from('water_logs')
+              .upsert(payload, onConflict: 'user_id,date');
+          return true;
+        },
+      );
     }
+    await index.commit(liveKeys: liveKeys);
   }
 
   // ── Private pull helpers ────────────────────────────────────

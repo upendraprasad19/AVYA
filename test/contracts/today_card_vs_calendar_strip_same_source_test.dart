@@ -15,6 +15,10 @@
 //   2. Color-merge regression — the `isCompleted && isToday` case is removed or
 //      collapsed into the plain `isCompleted` branch that uses the gold accent
 //      color (invisible against the gold today-border).
+//
+//   3. Swap-glyph regression (D8, day-swapper batch) — `if (isSwapped)`
+//      appears BEFORE `if (isCompleted)`, causing a completed-and-swapped day
+//      to show 🔄 instead of the tick.
 
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
@@ -64,7 +68,7 @@ void main() {
   //
   // The regression pattern: `if (isToday)` guard before `if (isCompleted)`.
   // In _buildIndicator the safe ordering is:
-  //   isSwapped → isCompleted (with isToday variants) → ... → isToday
+  //   isCompleted (with isToday variants) → isSwapped → ... → isToday
   //
   // We detect the specific bad ordering by asserting that the raw text
   // "if (isToday)" does NOT appear before "if (isCompleted)" in _buildIndicator.
@@ -216,6 +220,33 @@ void main() {
           '`if (isToday)` in _buildIndicator. '
           'Regression pattern: isToday returns em-dash before isCompleted check '
           '→ completed-today shows dash instead of tick.',
+    );
+  });
+
+  // ── Contract 4: DONE wins over the swapped glyph (spec §13 #3 / D8) ──────
+  //
+  // Added for the day-swapper batch: before this fix, `if (isSwapped)`
+  // returned the 🔄 glyph BEFORE either isCompleted branch ran, so a swapped
+  // day that was later completed kept showing 🔄 instead of the tick. This
+  // pins the STRUCTURAL half (source order); the behavioral half is
+  // test/widgets/weekly_calendar_swap_precedence_test.dart.
+
+  test('_buildIndicator checks isCompleted before isSwapped (D8)', () {
+    final indicatorStart = calendarSource.indexOf('Widget _buildIndicator(');
+    expect(indicatorStart, isNot(-1));
+    final indicatorBody = calendarSource.substring(indicatorStart);
+
+    final posCompletedToday = indicatorBody.indexOf('isCompleted && isToday');
+    final posSwapped = indicatorBody.indexOf('if (isSwapped)');
+
+    expect(posCompletedToday, isNot(-1));
+    expect(posSwapped, isNot(-1));
+    expect(
+      posCompletedToday < posSwapped,
+      isTrue,
+      reason: 'D8: `isCompleted && isToday` (and the plain `isCompleted` '
+          'branch right after it) must appear BEFORE `if (isSwapped)`, so a '
+          'completed day never shows the 🔄 glyph instead of the tick.',
     );
   });
 }

@@ -245,11 +245,31 @@ void main() {
                 'stopped concatenating the part files, and this test is '
                 'not exercising what it claims to');
 
+        // Pairing scope = the REST OF THE ENCLOSING BLOCK after the call
+        // (brace-matched), not a fixed character window. A fixed 300-char
+        // window was blind to a pair separated by a long comment: the
+        // merge-resolution review (2026-09-28) found sync_nutrition.dart's
+        // nlog item catch with a 583-char comment between its
+        // recordNonFatal and its _reportSyncFailure, missing
+        // skipServerPost -- a live dual-write this test reported green.
+        int enclosingBlockEnd(int from) {
+          var depth = 0;
+          for (var i = from; i < src.length; i++) {
+            final c = src[i];
+            if (c == '{') depth++;
+            if (c == '}') {
+              if (depth == 0) return i;
+              depth--;
+            }
+          }
+          return src.length;
+        }
+
         var pairedSiteCount = 0;
         for (final m in matches) {
           final callText = m.group(0)!;
           final windowStart = m.end;
-          final windowEnd = (windowStart + 300).clamp(0, src.length);
+          final windowEnd = enclosingBlockEnd(windowStart);
           final window = src.substring(windowStart, windowEnd);
           final isPaired = window.contains('_reportSyncFailure(');
           if (!isPaired) continue;
@@ -264,12 +284,22 @@ void main() {
                 'Offending call: $callText',
           );
         }
+        // 87 on main (2026-09-27); 70 after the day-swapper-sync-load merge
+        // (2026-09-28): that batch moved the per-row push loops onto
+        // SyncSkipIndex, whose own reportFailure sink calls
+        // _reportSyncFailure once per failing opType per pass with no caller-
+        // level recordNonFatal pair — net 17 fewer (measured: this test's own
+        // matcher run per file); the batch's one NEW pair, the
+        // restore_user_progress_fetch catch, needed the flag and now has it.
+        // 75 after the pairing scope moved from a 300-char window to the
+        // enclosing block (same day): 5 pairs the window could not see, 4
+        // already flagged and 1 (the nlog item catch) fixed with it.
         expect(
           pairedSiteCount,
-          equals(87),
-          reason: 'expected exactly 87 caller-level H-42 telemetry-pair '
+          equals(75),
+          reason: 'expected exactly 75 caller-level H-42 telemetry-pair '
               'sites across sync_service.dart + lib/core/services/sync/ '
-              '(verified live 2026-09-27) — if this count changes, a new '
+              '(verified live 2026-09-28) — if this count changes, a new '
               'pair was added (it needs skipServerPost:true from the '
               'start) or an existing one was removed/refactored (update '
               'this count deliberately, don\'t let it drift silently)',

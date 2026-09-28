@@ -1,11 +1,52 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive/hive.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/sync/sync_skip_index.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 
+import '../sync/sync_domain_skip_harness.dart';
+
+/// Fix round 1 (2026-09-27) helper. `_reportSyncFailure` fires `unawaited`
+/// (the fix brief requires the closure return promptly), so its
+/// `log-client-error` POST can land a tick or two after the push call
+/// returns; `ErrorTelemetry.recordNonFatal` ALSO posts to `log-client-error`
+/// on the SAME failure, but with `op_type` set to its own internal `reason`
+/// string (e.g. `sync_service_for_3`), not the domain op string -- so the
+/// filter must match on `op_type`, not merely count every log-client-error
+/// call. Polls briefly rather than a bare delay -- fast on the happy path,
+/// robust under full-suite load contention (CLAUDE.md's own documented class
+/// of full-suite-only timing flakiness).
+///
+/// Fix round 2 (F3, 2026-09-27): the loop used to stop as soon as
+/// `matches()` was NON-EMPTY, not once it reached the count the caller
+/// actually needs. `_reportSyncFailure` used to dual-post (two separate
+/// requests for one logical failure; ONE since main's B2a-2b fix, merged
+/// 2026-09-28), so under full-suite contention the FIRST of the two could
+/// land inside the old 500ms budget while the second was still in flight --
+/// the loop exited early on the first, and the caller's `hasLength(2)`
+/// failed on real, not-yet-arrived data, not a real defect.
+/// Now polls until [atLeast] have arrived (or a generous 10s deadline
+/// expires) so a slow-but-real second post is actually waited for.
+Future<List<dynamic>> _logClientErrorReports(SyncHarness h, String opType,
+    {int atLeast = 1, int maxWaitMs = 10000}) async {
+  List<dynamic> matches() => h.server.requests
+      .where((r) =>
+          r.path == '/functions/v1/log-client-error' &&
+          r.body is Map &&
+          (r.body! as Map)['op_type'] == opType)
+      .toList();
+  final deadline = DateTime.now().add(Duration(milliseconds: maxWaitMs));
+  var found = matches();
+  while (found.length < atLeast && DateTime.now().isBefore(deadline)) {
+    await Future.delayed(const Duration(milliseconds: 20));
+    found = matches();
+  }
+  return found;
+}
+
 void main() {
-  group('nlogPayloadFingerprint', () {
+  group('nlogPayloadFingerprint (kept byte-identical -- plan D4, no re-push burst)', () {
     test('same payload -> same fingerprint, 36-char UUID shape', () {
       final parent = {'date': '2026-09-19', 'meal_type': 'lunch', 'total_calories': 500};
       final items = [
@@ -31,16 +72,8 @@ void main() {
       final fp1 = SyncService.nlogPayloadFingerprint(
           parent, [{'name': 'rice', 'quantity_g': 150}]);
       final fp2 = SyncService.nlogPayloadFingerprint(
-          parent, [{'name': 'rice', 'quantity_g': 200}]); // edited portion
+          parent, [{'name': 'rice', 'quantity_g': 200}]);
       expect(fp1, isNot(fp2));
-      expect(
-        SyncService.nlogShouldSkipUpsert(
-          killSwitchDisabled: false,
-          storedFingerprint: fp1,
-          currentFingerprint: fp2,
-        ),
-        isFalse,
-      );
     });
 
     test('an added item flips the fingerprint', () {
@@ -52,202 +85,170 @@ void main() {
     });
   });
 
-  group('nlogShouldSkipUpsert', () {
-    test('matching fingerprint -> skip', () {
-      expect(
-        SyncService.nlogShouldSkipUpsert(
-          killSwitchDisabled: false,
-          storedFingerprint: 'abc',
-          currentFingerprint: 'abc',
-        ),
-        isTrue,
-      );
-    });
-
-    test('null stored fingerprint -> always push', () {
-      expect(
-        SyncService.nlogShouldSkipUpsert(
-          killSwitchDisabled: false,
-          storedFingerprint: null,
-          currentFingerprint: 'abc',
-        ),
-        isFalse,
-      );
-    });
-
-    test('kill-switch enabled -> always push', () {
-      expect(
-        SyncService.nlogShouldSkipUpsert(
-          killSwitchDisabled: true,
-          storedFingerprint: 'abc',
-          currentFingerprint: 'abc',
-        ),
-        isFalse,
-      );
-    });
-  });
-
-  group('nlogPrunedHashIndex', () {
-    test('drops slots no longer present, keeps live ones intact', () {
-      final pruned = SyncService.nlogPrunedHashIndex(
-        {'2026-09-19 lunch': 'fp1', '2026-09-19 dinner': 'fp2', '2026-09-01 lunch': 'fpOld'},
-        {'2026-09-19 lunch', '2026-09-19 dinner'},
-      );
-      expect(pruned, {'2026-09-19 lunch': 'fp1', '2026-09-19 dinner': 'fp2'});
-    });
-
-    test('empty liveSlots -> empty index', () {
-      expect(
-          SyncService.nlogPrunedHashIndex({'2026-09-19 lunch': 'fp'}, {}), isEmpty);
-    });
-  });
-
-  group('Hive round-trip', () {
-    // Matches Task 2's exlog test setup, which mirrors the sched template
-    // (plan-review round 1, finding M5).
-    late Directory tempDir;
-    late Box box;
-    setUp(() async {
-      tempDir = await Directory.systemTemp.createTemp('nlog_hash_index_test_');
-      Hive.init(tempDir.path);
-      box = await Hive.openBox('nlog_hash_index_roundtrip_test');
-    });
-    tearDown(() async {
-      await box.close();
-      await Hive.close();
-      await tempDir.delete(recursive: true);
-    });
-
-    test('fingerprint round-trips through dynamic-typed Hive Map and drives the skip decision',
-        () async {
-      final fp = SyncService.nlogPayloadFingerprint({'a': 1}, []);
-      await box.put('sync_nlog_payload_hash_index', {'2026-09-19 lunch': fp});
-
-      final rawIndex = box.get('sync_nlog_payload_hash_index');
-      final index = <String, String>{};
-      (rawIndex as Map).forEach((k, v) {
-        if (k is String && v is String) index[k] = v;
-      });
-
-      expect(
-        SyncService.nlogShouldSkipUpsert(
-          killSwitchDisabled: false,
-          storedFingerprint: index['2026-09-19 lunch'],
-          currentFingerprint: fp,
-        ),
-        isTrue,
-      );
-    });
-  });
-
-  group('nlogHashSkipDisabledFor (spec §5.2 composition)', () {
+  group('nlogHashSkipDisabledFor (kept -- composes the kill switch with slot-merge)', () {
     test('all 4 combinations', () {
-      expect(
-          SyncService.nlogHashSkipDisabledFor(
-              killSwitchDisabled: false, mergeEnabled: true),
+      expect(SyncService.nlogHashSkipDisabledFor(killSwitchDisabled: false, mergeEnabled: true),
           isFalse);
-      expect(
-          SyncService.nlogHashSkipDisabledFor(
-              killSwitchDisabled: true, mergeEnabled: true),
+      expect(SyncService.nlogHashSkipDisabledFor(killSwitchDisabled: true, mergeEnabled: true),
           isTrue);
-      expect(
-          SyncService.nlogHashSkipDisabledFor(
-              killSwitchDisabled: false, mergeEnabled: false),
+      expect(SyncService.nlogHashSkipDisabledFor(killSwitchDisabled: false, mergeEnabled: false),
           isTrue);
-      expect(
-          SyncService.nlogHashSkipDisabledFor(
-              killSwitchDisabled: true, mergeEnabled: false),
+      expect(SyncService.nlogHashSkipDisabledFor(killSwitchDisabled: true, mergeEnabled: false),
           isTrue);
     });
   });
 
-  // OI-204 Step 7 / plan-review round 1 finding I9 — while the merge-disable
-  // emergency kill switch is active, the postamble must CLEAR the stored
-  // index (not merely skip reading it), or a stale index survives a
-  // disable/re-enable cycle and mis-skips re-pushing slots the legacy
-  // per-key path may have corrupted in cloud. Source-grep form used here
-  // (not behavioral): `_syncNutritionLogs` needs a live `_supabase.client`
-  // (a singleton with no constructor injection — `grep -rln
-  // "MockSupabase|FakeSupabase|_supabase = Mock|SupabaseService(" test/`
-  // returns nothing anywhere in this repo, the same no-DI-seam finding
-  // already established for the atomicity sub-property in
-  // docs/sot_registry.yaml's sync_exercise_log_payload_hash_index entry) and
-  // `ownerChangedSince`/HiveUserSession auth state neither of which this
-  // pure-function test file's "Hive round-trip" group's real-box setup
-  // provides — it opens a bare temp Hive box, never invokes
-  // _syncNutritionLogs itself. A live-Supabase behavioral drive of the
-  // postamble is therefore not feasible here; falls back to the source-grep
-  // form, same as the atomicity sub-property's own presence_only reasoning.
-  group('I9 clear-on-revert (plan-review round 1, finding I9)', () {
-    test(
-        'while the merge-disable kill switch is active, the postamble '
-        'CLEARS the stored index rather than merely skipping the read of '
-        'it -- a stale index surviving the revert would fingerprint-match '
-        'unchanged local content and mis-skip re-pushing the slots the '
-        'legacy per-key path may have corrupted', () {
-      final src = File('lib/core/services/sync/sync_nutrition.dart')
-          .readAsStringSync();
-      // `if (!nlogHashSkipDisabled) {` appears TWICE — once in the preamble
-      // (index-hydration, no else) and once in the postamble (persist-or-
-      // clear, WITH the else this test targets). lastIndexOf anchors on the
-      // postamble occurrence, which is structurally last in the file.
-      final ifStart = src.lastIndexOf('if (!nlogHashSkipDisabled) {');
-      expect(ifStart, isNot(-1),
-          reason: 'postamble nlogHashSkipDisabled branch must exist');
-      // Generous window (comments included) from the if-branch through the
-      // else-branch body — same windowed-anchor technique
-      // sync_natural_key_guard_test.dart already uses in this repo.
-      final window =
-          src.substring(ifStart, (ifStart + 2000).clamp(0, src.length));
-      expect(window, contains('} else {'),
-          reason: 'the disabled-path branch must be an else, not a silent '
-              'no-op');
-      final elseBodyStart = window.indexOf('} else {') + '} else {'.length;
-      final elseBody = window.substring(elseBodyStart);
-      expect(
-        elseBody,
-        contains('_hive.nutritionBox.delete(SyncService._nlogHashIndexKey)'),
-        reason: 'the else branch must DELETE the index key, not merely '
-            'leave it unread (spec, plan-review round 1 finding I9)',
+  group('nlog behavioral skip contract (day-swapper + sync-load Task 13)', () {
+    final h = SyncHarness();
+    setUp(h.setUp);
+    tearDown(h.tearDown);
+
+    Map<String, dynamic> row(int calories) => {
+          'date': '2026-09-19',
+          'meal_type': 'lunch',
+          'total_calories': calories,
+          'total_fiber': 2,
+          'created_at': '2026-09-19T08:00:00.000Z',
+          'items': [
+            {'name': 'rice', 'quantity_g': 150, 'calories': calories},
+          ],
+        };
+
+    // Two items so an "abandon after the FIRST failure" vs. "try every item"
+    // distinction is actually observable: the stub server fails every write
+    // to 'nutrition_log_items' regardless of which item or the tail-vacuum
+    // sent it (SyncStubServer has no per-call/per-method fault injection --
+    // see test/helpers/sync_stub_server.dart's own "no query filtering"
+    // note), so with a single item the vacuum's OWN independent catch
+    // already returns false and masks whether the item catch's `return
+    // false;` fired at all (the class this repo calls a zero-red mutation --
+    // CLAUDE.md §4.4 rule 21). With two items, "abandon immediately" sends
+    // exactly ONE write attempt (item 0) while "try every item" would send
+    // two (item 0 AND item 1) before ever reaching the vacuum.
+    Map<String, dynamic> twoItemRow(int calories) => {
+          'date': '2026-09-19',
+          'meal_type': 'lunch',
+          'total_calories': calories,
+          'total_fiber': 2,
+          'created_at': '2026-09-19T08:00:00.000Z',
+          'items': [
+            {'name': 'rice', 'quantity_g': 150, 'calories': calories},
+            {'name': 'dal', 'quantity_g': 100, 'calories': calories},
+          ],
+        };
+
+    test('the full skip contract', () async {
+      // The push closure resolves the cloud-generated parent id via a
+      // follow-up SELECT (nutrition_logs.id is omitted from the upsert
+      // payload -- diagnose c9f2a7) before it will write any items and
+      // confirm the slot. The stub server answers every GET from
+      // `getResponders` (default `[]`, i.e. "no such row"), so without this
+      // the id lookup always comes back empty and the push is permanently
+      // `unconfirmed` -- nothing is ever recorded, regardless of the skip
+      // logic under test here.
+      h.server.getResponders['nutrition_logs'] = (_) => [
+            {'id': 'cloud-parent-1'}
+          ];
+      await expectSkipContract(
+        h: h,
+        domain: SyncSkipDomain.nlog,
+        table: 'nutrition_logs',
+        seed: () => HiveService.instance.nutritionBox.put('nlog_1758259200000', row(500)),
+        runPass: () => SyncService.instance.pushNutritionLogsForSyncDomain(),
+        editOne: (generation) => HiveService.instance.nutritionBox
+            .put('nlog_1758259200000', row(500 + generation)),
       );
+    });
+
+    test('an item-upsert failure abandons the slot immediately: nothing recorded, '
+        'no partial confirm, retried whole next pass', () async {
+      // The shared SyncHarness's SyncStubServer instance is constructed ONCE
+      // for this whole `group` (test/sync/sync_domain_skip_harness.dart);
+      // `tearDown` never clears `requests`, so the previous test's un-cleared
+      // tail requests are still present here (test/sync/sync_stub_server_test.dart's
+      // own multi-test group relies on the same fact). Clear first so
+      // `hasLength` below counts only this test's own writes.
+      h.server.clear();
+      await HiveService.instance.nutritionBox.put('nlog_1758259200000', twoItemRow(500));
+      h.server.getResponders['nutrition_logs'] = (_) => [
+            {'id': 'cloud-parent-1'}
+          ];
+      h.server.failWritesTo.add('nutrition_log_items');
+      await SyncService.instance.pushNutritionLogsForSyncDomain();
+      expect(h.server.writesTo('nutrition_logs'), hasLength(1),
+          reason: 'the parent upsert lands even though the item write will fail');
+      expect(h.server.writesTo('nutrition_log_items'), hasLength(1),
+          reason: 'abandon-on-first-failure: item 1 (and the vacuum) must never be '
+              'attempted once item 0 fails -- with two items, "try every item" would '
+              'send a second write here');
+      expect(
+          SyncSkipIndex.readIndex(
+              skipBoxOf(SyncSkipDomain.nlog), SyncSkipDomain.nlog.indexKey),
+          isEmpty);
+      // Fix round 1 (2026-09-27): _reportSyncFailure is the only path to the
+      // server-side client_errors row (via the log-client-error Edge
+      // Function) that server alerting reads. Exactly ONE CALL to
+      // _reportSyncFailure for the whole failed slot (not one per item) --
+      // the no-flood property: abandon-on-first-failure means only item 0's
+      // catch ever runs, and its `unawaited(_reportSyncFailure(...))` fires
+      // once. ErrorTelemetry.recordNonFatal (called just above in the same
+      // catch, tagged with its own internal reason 'sync_service_for_3', not
+      // the domain op_type) is a SEPARATE call filtered out by op_type (see
+      // _logClientErrorReports' doc comment above).
+      //
+      // The expected COUNT for that one call is 1. It was 2 until main's
+      // B2a-2b dual-write fix (merged 2026-09-28): `_reportSyncFailure`'s
+      // internal `ErrorTelemetry.recordNonFatal` now passes
+      // skipServerPost:true, so only its own explicit `functions.invoke`
+      // reaches log-client-error (pinned by test/sync/sync_telemetry_test.dart).
+      // The no-flood property this test pins is that the count stays fixed
+      // at 1 (one _reportSyncFailure call) regardless of item count, NOT that
+      // it scales to 2 with this fixture's two items -- "try every item"
+      // would produce exactly that 2.
+      final reports =
+          await _logClientErrorReports(h, 'upsert_nutrition_log_item');
+      expect(reports, hasLength(1),
+          reason: 'one _reportSyncFailure call, one log-client-error report, '
+              'for the whole slot -- not one per item, with op_type '
+              'upsert_nutrition_log_item (${reports.length} arrived within '
+              'the wait budget)');
+      h.server
+        ..clear()
+        ..failWritesTo.remove('nutrition_log_items');
+      await SyncService.instance.pushNutritionLogsForSyncDomain();
+      expect(h.server.writesTo('nutrition_logs'), hasLength(1),
+          reason: 'the parent re-upserts too -- the whole slot re-pushes, not just the item');
+      // 3, not 2: a successful slot push issues BOTH per-item upserts (item 0
+      // AND item 1) PLUS the tail-vacuum DELETE -- all three are writes to
+      // this table (`isWrite` counts any non-GET method).
+      expect(h.server.writesTo('nutrition_log_items'), hasLength(3));
     });
   });
 
   group('resetJourney clears the index (source contract)', () {
-    test('sync_nlog_payload_hash_index is cleared by resetJourney, mirroring '
-        'the sched/exlog keys it sits beside', () {
-      final src =
-          File('lib/features/dev/simulation_service.dart').readAsStringSync();
-      final start = src.indexOf('Future<void> resetJourney(');
-      expect(start, isNot(-1), reason: 'resetJourney must exist at this name');
-      final end = src.indexOf('\n  }\n', start);
-      final body = src.substring(start, end == -1 ? src.length : end);
-      expect(body, contains("'sync_nlog_payload_hash_index'"),
-          reason: 'a stale fingerprint entry survives a sim reset and '
-              'mis-skips the re-drive push — see the sync_sched_payload_hash_index '
-              '/ sync_exlog_payload_hash_index precedent this mirrors');
-    });
-  });
+    test(
+        'nlog is cleared by resetJourney via SyncSkipIndex.clearAll '
+        '(day-swapper + sync-load Task 20 -- see the exlog sibling test for '
+        'the full rationale, including why the check now traces through '
+        'clearJourneyLocalState)', () {
+      final src = File('lib/features/dev/simulation_service.dart').readAsStringSync();
+      final rjStart = src.indexOf('Future<void> resetJourney(');
+      expect(rjStart, isNot(-1), reason: 'resetJourney must exist at this name');
+      final rjEnd = src.indexOf('\n  }\n', rjStart);
+      final rjBody = src.substring(rjStart, rjEnd == -1 ? src.length : rjEnd);
+      expect(rjBody, contains('clearJourneyLocalState()'),
+          reason: 'a stale fingerprint entry survives a sim reset and mis-skips the '
+              're-drive push unless resetJourney routes through the Hive-only '
+              'reset helper');
 
-  // OI-204 Step 7b — spec §8's atomicity behavioral-test requirement (simulate
-  // a per-slot network failure, assert no fingerprint is stored) needs a
-  // test-time fault-injection seam that does not exist in this codebase
-  // today (same no-DI-seam finding as Task 2's exlog sibling; see that
-  // group's header comment above for the full grep evidence). This test
-  // covers the "exactly one store site" half of the atomicity property
-  // mechanically; the "only reached when the flag is true" half is covered
-  // statically by scripts/check_sync_hash_skip_atomicity.dart
-  // (mutation-proven, docs/audit/gate_test_ledger.yaml). See
-  // docs/sot_registry.yaml's sync_nutrition_log_payload_hash_index entry,
-  // `presence_only: true` on the atomicity sub-property.
-  group('exact store call-site count (spec §8 item 4)', () {
-    test('the guarded nlogHashIndex[slotId] = nlogFp store appears exactly '
-        'once in sync_nutrition.dart', () {
-      final src =
-          File('lib/core/services/sync/sync_nutrition.dart').readAsStringSync();
-      final matches =
-          RegExp(r'nlogHashIndex\[slotId\]\s*=\s*nlogFp\s*;').allMatches(src);
-      expect(matches.length, 1);
+      final clStart = src.indexOf('Future<void> clearJourneyLocalState(');
+      expect(clStart, isNot(-1),
+          reason: 'clearJourneyLocalState must exist at this name');
+      final clEnd = src.indexOf('\n  }\n', clStart);
+      final clBody = src.substring(clStart, clEnd == -1 ? src.length : clEnd);
+      expect(clBody, contains('SyncSkipIndex.clearAll('),
+          reason: 'clearJourneyLocalState must clear every domain via the '
+              'shared helper, not just exlog/sched/nlog individually');
     });
   });
 }

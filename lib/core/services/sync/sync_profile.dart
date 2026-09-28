@@ -827,6 +827,21 @@ extension SyncServiceProfile on SyncService {
       // canonical service with skipSync: true. The data we just merged
       // came FROM cloud; re-pushing it would create a redundant
       // upsert loop on every restore.
+      //
+      // Hermes h7F2 (diagnose f1c6b4): this runs on EVERY launch — skip the
+      // write when the merge changed nothing. `updated_at` is left out of the
+      // comparison because updateProfile re-stamps it with istNow() on every
+      // call, so it can never match and would defeat the skip; nothing else
+      // about the profile changed in that case. Kill switch
+      // disable_restore_write_if_changed.
+      if (SyncFlags.restoreWriteIfChangedEnabled &&
+          existing is Map &&
+          SyncFingerprint.canonicalJson(
+                  Map<String, dynamic>.from(existingMap)..remove('updated_at')) ==
+              SyncFingerprint.canonicalJson(
+                  Map<String, dynamic>.from(merged)..remove('updated_at'))) {
+        return;
+      }
       await ProfileWriteService.instance.updateProfile(merged, skipSync: true);
     } catch (e, st) {
       debugPrint('[SyncService._restoreUserProfile] $e');
@@ -940,6 +955,24 @@ extension SyncServiceProfile on SyncService {
       if (rows.isEmpty) return;
       final cloud = Map<String, dynamic>.from(rows.first as Map);
       cloud.remove('user_id');
+      // Day-swapper + sync-load Task 20 (spec §5.11): these two columns are
+      // control-plane values with no place in the progress SEMANTIC key set.
+      // Before this fix, mergeCloudProgress's cloud-non-null-wins loop over
+      // EVERY remaining `cloud` key spread the WHOLE plan_json blob into
+      // userBox['progress']['plan_json'] on every restore (verified: no
+      // reader in lib/ depends on that duplicate — `git grep` for
+      // `progress'\]\['plan_json'\]`-shaped reads is empty). sync_epoch is
+      // read separately by restoreLightweightAlways (below) from the SAME
+      // row and has its own dedicated Hive key (`sync_epoch_seen`); it does
+      // not belong in the progress map either. Leaving it in `cloud` would
+      // create a SECOND, unmaintained copy of the epoch inside
+      // userBox['progress']['sync_epoch'] — nothing would ever advance that
+      // copy after this one write, while the canonical value in
+      // workoutBox['sync_epoch_seen'] keeps moving via
+      // _applySyncEpochFromRestoreRow below, so the two would silently
+      // diverge on every restore after the first.
+      cloud.remove('plan_json');
+      cloud.remove('sync_epoch');
 
       // F6 · Merge semantics (same as _restoreUserProfile), plus the OI-83
       // monotonic guard on the 3 lifetime/phase fields.
@@ -951,7 +984,17 @@ extension SyncServiceProfile on SyncService {
         local: existingMap,
         cloud: cloud,
       );
-      await _hive.userBox.put('progress', result.merged);
+      // Hermes h7F2 (diagnose f1c6b4): EVERY launch — write only when the
+      // merge changed something. The declined-demotion report still runs:
+      // a refused demotion is news whether or not a write happened. Kill
+      // switch disable_restore_write_if_changed.
+      final unchanged = SyncFlags.restoreWriteIfChangedEnabled &&
+          existing is Map &&
+          SyncFingerprint.canonicalJson(existingMap) ==
+              SyncFingerprint.canonicalJson(result.merged);
+      if (!unchanged) {
+        await _hive.userBox.put('progress', result.merged);
+      }
       reportProgressDemotionsDeclined(result, source: 'restore_user_progress');
     } catch (e, st) {
       debugPrint('[SyncService._restoreUserProgress] $e');
@@ -1077,6 +1120,27 @@ extension SyncServiceProfile on SyncService {
     if (userId == null) return;
     await _restoreUserPreferences(userId);
   }
+
+  /// Hermes h7F2 (diagnose f1c6b4) test seam — drives [_restoreUserProgress]
+  /// with INJECTED `user_progress` rows. [preFetched] must be passed (even as
+  /// an empty list) or this falls through to a live network call.
+  @visibleForTesting
+  Future<void> restoreUserProgressForTest(
+    String userId, {
+    required Object? preFetched,
+  }) =>
+      _restoreUserProgress(userId, preFetched: preFetched);
+
+  /// Hermes h7F2 test seam — drives [_restoreUserProfile] with INJECTED
+  /// `user_profile` AND `users` rows; both must be passed.
+  @visibleForTesting
+  Future<void> restoreUserProfileForTest(
+    String userId, {
+    required Object? preFetched,
+    required Object? preFetchedUsers,
+  }) =>
+      _restoreUserProfile(userId,
+          preFetched: preFetched, preFetchedUsers: preFetchedUsers);
 }
 
 /// Builds the `user_preferences` upsert payload. PURE — no Hive, no network.

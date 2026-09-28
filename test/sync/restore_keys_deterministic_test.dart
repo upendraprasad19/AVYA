@@ -240,35 +240,41 @@ void main() {
       // template's permanent identity is now minted CLIENT-SIDE at create
       // time (WorkoutWriteService.newTemplateKey()) and is stable across
       // rename/delete/recreate, so the upsert targets it directly.
+      //
+      // Merge of day-swapper-sync-load (2026-09-28): the header map lives in
+      // a local `headerPayload()` closure (Task 16, so the same map also
+      // feeds the domain's SyncSkipIndex fingerprint), and the call site is
+      // `.upsert(headerPayload(), onConflict: 'id')`. The id assertion reads
+      // the closure body; the conflict-target assertion reads the call site.
       final start = src.indexOf('Future<void> _syncWorkoutTemplates(');
       expect(start, greaterThan(0));
       final next = src.indexOf('\n  Future<void> ', start + 1);
       final body = src.substring(start, next);
 
-      final upsertStart =
-          body.indexOf(".from('workout_templates').upsert({");
-      expect(upsertStart, greaterThan(0),
-          reason: 'workout_templates upsert must exist');
-      // Widened past the map literal's closing `}` — `onConflict:` is a
-      // separate named argument AFTER it (`.upsert({...}, onConflict:
-      // 'id')`), not inside the map body a bare `indexOf('}')` would stop
-      // at.
-      final upsertBlock =
-          body.substring(upsertStart, (upsertStart + 700).clamp(0, body.length));
+      final headerStart =
+          body.indexOf('Map<String, dynamic> headerPayload() =>');
+      expect(headerStart, greaterThan(0),
+          reason: 'headerPayload() closure must exist — it is what is '
+              'actually sent to workout_templates AND fingerprinted');
+      final headerEnd = body.indexOf('};', headerStart);
+      expect(headerEnd, greaterThan(headerStart));
+      final headerBlock = body.substring(headerStart, headerEnd);
 
       expect(
-        upsertBlock.contains("'id': cloudTmplId,"),
+        headerBlock.contains("'id': cloudTmplId,"),
         isTrue,
         reason: "OI-252 — parent upsert must pass 'id': cloudTmplId "
             '(the id resolved from the client-minted Hive key via '
             'cloudIdFromKey), not omit it',
       );
       expect(
-        upsertBlock.contains("onConflict: 'id'"),
+        body.contains(".from('workout_templates').upsert(headerPayload(), "
+            "onConflict: 'id')"),
         isTrue,
-        reason: "the upsert must target onConflict: 'id', not "
-            "'user_id,name' — the old name-based conflict target is what "
-            'let a delete and its same-named replacement collide',
+        reason: "the upsert must feed FROM headerPayload() and target "
+            "onConflict: 'id', not 'user_id,name' — the old name-based "
+            'conflict target is what let a delete and its same-named '
+            'replacement collide',
       );
     });
 
