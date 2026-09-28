@@ -14,7 +14,8 @@
  *   food_text_analysis  → gemini-2.5-flash, JSON mode, 10/day free · 200/day PRO
  *   scan_meal           → gemini-2.5-flash-lite (vision), JSON mode, 20/day server cap (combined w/ cart_auditor)
  *   cart_auditor        → gemini-2.5-flash-lite (vision), JSON mode, 20/day server cap (combined w/ scan_meal)
- *   prediction          → gemini-2.5-flash, JSON mode, no daily cap (onboarding/monthly)
+ *   prediction          → gemini-2.5-flash, JSON mode, 3/day per user (usage_counters
+ *                         key prediction_daily; _shared/prediction_handler.ts)
  *   (default)           → gemini-2.5-flash, chat — 10/day free forever, PRO unlimited
  *
  * Gating (server-side, never trust client):
@@ -46,7 +47,6 @@ import {
 import { capCoachHistory, runToolLoop } from "../_shared/tool-loop.ts";
 import {
   asAuthoredPrompt,
-  asPrincipalMessage,
   fenceAsData,
   sanitizeBlock,
   sanitizeIdentifier,
@@ -58,6 +58,12 @@ import { parseClientCapabilities } from "../_shared/client_capabilities.ts";
 import { daySwapRoutingBlock } from "../_shared/day_swap_routing.ts";
 import { istDateStr } from "../_shared/ist_date.ts";
 import { reportGeminiExhaustion } from "../_shared/gemini_failure_alert.ts";
+import { validateAiProxyInput } from "../_shared/ai_proxy_input_limits.ts";
+import { dedupDecision } from "../_shared/chat_dedup.ts";
+import {
+  consumePredictionQuota,
+  handlePrediction,
+} from "../_shared/prediction_handler.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -281,12 +287,13 @@ serve(async (req: Request) => {
 
     // ── Body ──
     const body = await req.json();
+    // `context` is no longer read (single-owner audit 2026-09-26, P0 #5: the
+    // prediction system prompt is server-owned).
     const {
       message,
       snapshot_json,
       type,
       text,
-      context,
       image_base64,
       history,
       client_capabilities,
@@ -297,10 +304,17 @@ serve(async (req: Request) => {
     // which is exactly today's behaviour: no tool has requiresCapability yet.
     const capabilities = parseClientCapabilities(client_capabilities);
 
+    // ── Request-size limits (rule 18) — ONE owner, before any branch runs ──
+    // Single-owner audit 2026-09-26, P0 #5: the prediction branch ran before
+    // the chat branch's checks and so had none. Same strings as before.
+    const limitViolation = validateAiProxyInput(body);
+    if (limitViolation) return err(limitViolation.status, limitViolation.error);
+
     // ── Food text analysis ────────────────────────────────────────
     // Free: 10/day  ·  PRO: 200/day. Enforced atomically by Postgres
-    // trigger `trg_food_text_rate_limit` (live definition: migration 127;
-    // first created by 026, IST boundary fixed by 113) on the
+    // trigger `trg_food_text_rate_limit` (live definition: migration 129,
+    // which moved it onto the usage_counters ledger; first created by 026,
+    // IST boundary fixed by 113, free cap 10 since 127) on the
     // `ai_coach_interactions` table — not by a check-then-insert dance
     // inside this handler. The old TOCTOU race (two simultaneous
     // requests both seeing count=49 and both inserting) is closed.
@@ -319,9 +333,7 @@ serve(async (req: Request) => {
       if (typeof text !== "string") {
         return err(400, "food_text_analysis: 'text' must be a string");
       }
-      if (text.length > 5000) {
-        return err(400, "food_text_analysis: text too long (max 5000 chars)");
-      }
+      // The 5000-char cap is enforced by validateAiProxyInput above.
 
       // Step 1 — reserve a slot (or get rejected by the trigger).
       //
@@ -528,7 +540,8 @@ Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the ex
     // Replaced with the same insert-first reservation pattern as
     // food_text_analysis above: reserve a row BEFORE calling Gemini,
     // let the `trg_vision_analysis_rate_limit` Postgres trigger
-    // (migration 111) raise P0001 if over cap, and only call Gemini on
+    // (live definition: migration 132; created by 111, ledger since 129)
+    // raise P0001 if over cap, and only call Gemini on
     // a successful reservation. Handlers below UPDATE the reserved row
     // instead of INSERTing a new one.
     // Declared outside the cap-check block below — the reservation is
@@ -592,12 +605,12 @@ Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the ex
     }
 
     // OI-46 round-1 review — mirrors food_text_analysis's resolvePlaceholder
-    // (line ~348): the reserved row MUST reach a terminal state on every
+    // (in the food_text branch above): the reserved row MUST reach a terminal state on every
     // exit path, not just success. Pre-fix, the `!content` and invalid-JSON
     // branches in both scan_meal and cart_auditor returned without ever
     // touching the row, leaving it stuck at model_used='pending' forever —
-    // which still counts toward today's 15-cap for a request that never
-    // actually got a result.
+    // which still counts toward today's 20-cap (migration 114) for a
+    // request that never actually got a result.
     const resolveVisionPlaceholder = async (
       finalModel: string,
       finalResponse: string,
@@ -710,71 +723,34 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
     }
 
     // ── Prediction handler ────────────────────────────────────────
-    // Onboarding predictions + PRO monthly refreshes. Free system
-    // function; no daily limits, no interaction logging.
+    // Onboarding predictions, regenerate, and the PRO 30-day refresh.
+    // 3/day per user; no interaction logging.
     if (type === "prediction") {
-      if (!message || typeof message !== "string") {
-        return err(400, "Missing 'message' for prediction");
-      }
-
-      // The derived gate flagged this, and it was right. `context.system_prompt`
-      // comes straight off the request body, so a caller can replace the SYSTEM
-      // prompt of this endpoint wholesale. That is a different bug class from
-      // OI-47 (an instruction field being writable, not a data field leaking
-      // into instructions) and whether it should be settable AT ALL is a product
-      // decision -- recorded in the closure YAML, not silently changed here.
-      //
-      // What is NOT a product decision: if it is accepted, it must not carry
-      // control characters, invisibles, or unbounded length into system trust.
-      // sanitizeBlock removes the structural lever while leaving the caller's
-      // intended instruction text intact.
-      const systemPrompt = sanitizeBlock(
-        (context?.system_prompt as string | null | undefined) ??
-          "You are a sports science expert making evidence-based fitness predictions. Be specific with numbers but realistic.",
-        { maxLen: 4000 },
-      );
-
-      const { content, modelUsed, tokensUsed, lastError } = await geminiChat({
-        model: MODEL_FLASH,
-        systemPrompt,
-        userPrompt: asPrincipalMessage(message),
-        maxTokens: 1024,
-        temperature: 0.7,
-        timeoutMs: 15_000,
-        jsonMode: true,
-        retries: 2, // f7a2c9 — no other retry on this path
+      // Owned by _shared/prediction_handler.ts: server-owned system prompt
+      // (the request's context.system_prompt is ignored), a 3/day quota on the
+      // usage_counters ledger, and a non-retried 500 on Gemini failure.
+      const result = await handlePrediction({ message }, {
+        consume: () => consumePredictionQuota(supabaseClient, userId),
+        geminiChat,
+        reportExhaustion: (lastError) =>
+          reportGeminiExhaustion(
+            supabaseClient,
+            "ai_proxy_gemini_exhausted",
+            lastError ?? null,
+            "prediction",
+          ),
       });
-
-      if (!content) {
-        // A5/OI-226 (f7a2c9, 2026-09-21): this was the OTHER half of OI-226 —
-        // the prediction handler never destructured lastError, so it could
-        // not report exhaustion at all. Mirrors the 3 nutrition sites' own
-        // pattern exactly (same source, distinct endpoint).
-        await reportGeminiExhaustion(supabaseClient, "ai_proxy_gemini_exhausted", lastError ?? null, "prediction");
-        return err(502, "AI temporarily unavailable");
-      }
-
-      return new Response(
-        JSON.stringify({
-          reply: content,
-          model_used: modelUsed === MODEL_FLASH_LITE ? LABEL_FLASH_LITE : LABEL_FLASH,
-          tokens_used: tokensUsed,
-          actions: [],
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return new Response(JSON.stringify(result.body), {
+        status: result.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // ── AI coach chat (free + PRO via single function) ────────────
     if (!message || typeof message !== "string") {
       return err(400, "Missing 'message' in request body");
     }
-    if (message.length > 5000) {
-      return err(400, "Message too long (max 5000 chars)");
-    }
-    if (snapshot_json && JSON.stringify(snapshot_json).length > 10000) {
-      return err(400, "Snapshot too large");
-    }
+    // message (5000) and snapshot_json (10000) sizes: validateAiProxyInput above.
 
     // ── isPro gate: PRO → no daily cap. Free → 10 msg/day forever (OQ-1). ──
     const isProUser = await checkPro(supabaseClient, userId);
@@ -792,7 +768,17 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
       .limit(1)
       .maybeSingle();
 
-    if (recentDup?.ai_response) {
+    // A failed attempt replays its failure, never its internal marker as a
+    // reply, and never re-runs (that would spend another cap unit) —
+    // _shared/chat_dedup.ts.
+    const dedup = dedupDecision(recentDup, MODEL_USED_LOOP_THREW_SENTINEL);
+    if (dedup === "replay_failure") {
+      console.log(`[ai-proxy] Dedup hit on a failed attempt for user ${userId} — replaying the failure`);
+      return err(502, "AI temporarily unavailable. Please try again.", {
+        deduplicated: true,
+      });
+    }
+    if (dedup === "replay_reply" && recentDup) {
       console.log(`[ai-proxy] Dedup hit for user ${userId} — returning cached response`);
       const extracted = extractLogActions(recentDup.ai_response as string);
       return new Response(
@@ -816,8 +802,9 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
     // unconditionally after the free-tier check with no re-check at
     // insert time. Replaced with the same insert-first reservation
     // pattern as food_text_analysis: reserve a row now, let the
-    // `trg_chat_app_rate_limit` trigger (migration 111, PRO-aware
-    // internally) raise P0001 if over cap. Safe to call unconditionally
+    // `trg_chat_app_rate_limit` trigger (live definition: migration 129 on
+    // the usage_counters ledger; created by 111; PRO-aware internally)
+    // raise P0001 if over cap. Safe to call unconditionally
     // for PRO users — the trigger short-circuits them with no exception.
     const chatReservation = await supabaseClient
       .from("ai_coach_interactions")
@@ -951,8 +938,10 @@ Parse "5x8 at 80kg" as 5 sets of 8 reps at 80kg. logging_type: weight_reps (weig
     //   CAPTAIN_MANUAL            ≈ 4–5 KB
     //   ICBF_LOG_INSTRUCTIONS     ≈ 1.5 KB
     //   coachMemoryBlock          ≤ ~2 KB (renderCoachMemoryBlock cap)
-    //   snapshot_json             ≤ 10 KB (the snapshot input check in the
-    //                             chat branch, which 400s over 10000 chars)
+    //   snapshot_json             ≤ 10 KB as it enters this prompt
+    //                             (validateAiProxyInput measures the
+    //                             sanitizeJsonForPrompt output and 400s
+    //                             over 10000 chars)
     //   retrievalBlock            ≤ ~1.2 KB (5 × 200 chars + header)
     // Total ceiling ≈ 19.5 KB, well under Gemini 2.5 Flash context limit.
     const promptParts: string[] = [CAPTAIN_MANUAL, ICBF_LOG_INSTRUCTIONS];

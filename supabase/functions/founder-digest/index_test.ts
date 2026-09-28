@@ -1095,3 +1095,25 @@ Deno.test("Hermes L23 #4 / L21 F4 (2026-09-21): both userNames fetchAllByIds " +
       `fetchAllByIds calls) inside userNamesRead, found ${maxPagesCount}`,
   );
 });
+
+// Hermes 2026-09-26, L1-F2 — gatherDigestInput must read the prediction-quota
+// kill switch itself; buildDigestText can only say UNMETERED if it is told.
+Deno.test("gatherDigestInput reports prediction_daily as unmetered while DISABLE_PREDICTION_QUOTA=true", async () => {
+  const prior = Deno.env.get("DISABLE_PREDICTION_QUOTA");
+  try {
+    Deno.env.delete("DISABLE_PREDICTION_QUOTA");
+    const { client } = wiringFakeClient({});
+    // deno-lint-ignore no-explicit-any
+    const off = await gatherDigestInput(client as any, new Date("2026-09-11T08:00:00Z"));
+    assertEquals(off.unmeteredKeys, []);
+
+    Deno.env.set("DISABLE_PREDICTION_QUOTA", "true");
+    const { client: client2 } = wiringFakeClient({});
+    // deno-lint-ignore no-explicit-any
+    const on = await gatherDigestInput(client2 as any, new Date("2026-09-11T08:00:00Z"));
+    assertEquals(on.unmeteredKeys, ["prediction_daily"]);
+  } finally {
+    if (prior === undefined) Deno.env.delete("DISABLE_PREDICTION_QUOTA");
+    else Deno.env.set("DISABLE_PREDICTION_QUOTA", prior);
+  }
+});

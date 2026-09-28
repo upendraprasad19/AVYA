@@ -18,23 +18,35 @@ String _stripComments(String src) =>
 
 void main() {
   group('OI-32 delete-account recursive Storage purge', () {
-    final src = File('supabase/functions/delete-account/index.ts')
+    // Repointed 2026-09-26 (single-owner audit P0 #6): the recursive purge was
+    // extracted verbatim into _shared/purge_user_storage.ts so the bucket list
+    // (_shared/user_owned_buckets.ts) and the purge each have one owner and
+    // the purge can be tested against a fake storage client
+    // (supabase/functions/_shared/purge_user_storage_test.ts). Same OI-32
+    // assertions, now on the module that holds the code, plus the wiring
+    // delete-account needs for them to mean anything.
+    final purge = File('supabase/functions/_shared/purge_user_storage.ts')
+        .readAsStringSync();
+    final handler = File('supabase/functions/delete-account/index.ts')
         .readAsStringSync();
 
     test('listAllObjectsRecursive helper exists', () {
       expect(
-        RegExp(r'function\s+listAllObjectsRecursive').hasMatch(src),
+        RegExp(r'function\s+listAllObjectsRecursive').hasMatch(purge),
         isTrue,
         reason:
-            'delete-account must define listAllObjectsRecursive(bucket, prefix) '
+            'purgeUserStorage must define listAllObjectsRecursive(bucket, prefix) '
             'to walk subfolders. Pre-fix purge only listed top-level entries '
             'and silently skipped nested user paths — DPDP §17 violation.',
       );
     });
 
     test('purge loop uses recursive helper, not flat list', () {
+      // Whitespace-tolerant and comment-stripped: the Hermes L37-F1 fix
+      // (2026-09-26) destructures the result, so the call now spans lines.
       expect(
-        src.contains('await listAllObjectsRecursive(bucket, userId)'),
+        RegExp(r'await\s+listAllObjectsRecursive\(\s*bucket\s*,\s*userId\s*,?\s*\)')
+            .hasMatch(_stripComments(purge)),
         isTrue,
         reason:
             'purge loop must call listAllObjectsRecursive(bucket, userId). '
@@ -42,14 +54,27 @@ void main() {
       );
       // Pre-fix shape `.list(userId)` without further depth. Strip comments
       // first since the OI-32 explanatory block quotes the old pattern.
-      final stripped = _stripComments(src);
       final flatListPattern = RegExp(r'\.list\(userId\)(?!\s*,)');
+      for (final src in [purge, handler]) {
+        expect(
+          flatListPattern.hasMatch(_stripComments(src)),
+          isFalse,
+          reason:
+              'flat `.list(userId)` without options re-introduced in CODE. Use '
+              'listAllObjectsRecursive instead.',
+        );
+      }
+    });
+
+    test('delete-account runs the shared purge over USER_OWNED_BUCKETS', () {
+      final code = _stripComments(handler);
       expect(
-        flatListPattern.hasMatch(stripped),
-        isFalse,
-        reason:
-            'flat `.list(userId)` without options re-introduced in CODE. Use '
-            'listAllObjectsRecursive instead.',
+        RegExp(r'purgeUserStorage\(\s*admin\.storage,\s*userId,\s*USER_OWNED_BUCKETS,')
+            .hasMatch(code),
+        isTrue,
+        reason: 'delete-account must purge through purgeUserStorage with the '
+            'one bucket list; a hard-coded bucket array here is how avatars '
+            'and banners were missed (single-owner audit P0 #6).',
       );
     });
   });

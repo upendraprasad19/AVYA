@@ -33,6 +33,10 @@ import { escapeHtml, TELEGRAM_MAX_CHARS } from "./telegram.ts";
 import { IST_OFFSET_MS, istWeekStartIso, istYesterdayWindow } from "./ist_date.ts";
 import { fetchAllByIds, fetchAllPages } from "./paged_fetch.ts";
 import { sanitizeIdentifier } from "./sanitize_for_prompt.ts";
+import {
+  envSwitchOn,
+  PREDICTION_QUOTA_KILL_SWITCH_ENV,
+} from "./prediction_quota_switch.ts";
 
 /** The lifetime sentinel `'epoch'::timestamptz`, as PostgREST renders it. */
 export const LIFETIME_WINDOW = "1970-01-01T00:00:00+00:00";
@@ -61,11 +65,11 @@ export interface DigestKey {
  * EVERY quota_key the ledger carries, enumerated — and pinned both ways by
  * test/contracts/founder_digest_caps_mirror_test.dart against the callers'
  * `p_quota_key` constants and the cap triggers (migration 129). A map of
- * "the keys I thought of" over a template of nine sections is membership
+ * "the keys I thought of" over a template of ten sections is membership
  * without completeness: a misspelt key returns 0 rows and renders "none",
  * which the three-state rendering cannot see.
  *
- * Explicit type, NOT `as const`: with `cap` present on 6 of 9 literals,
+ * Explicit type, NOT `as const`: with `cap` present on 7 of 10 literals,
  * `as const` makes a union whose members disagree on `cap`, and `k.cap` is
  * TS2339 under CI's `deno check`.
  */
@@ -76,6 +80,9 @@ export const DIGEST_KEYS: readonly DigestKey[] = [
   { key: "vision_analysis", label: "Vision (scan/cart)", kind: "daily", cap: 20 },
   // 10 free / 200 PRO — tier-dependent, so no single "at cap" ceiling.
   { key: "food_text", label: "Food text", kind: "daily" },
+  // ai-proxy `type: "prediction"` — _shared/prediction_handler.ts (single-owner
+  // audit 2026-09-26, P0 #5: was unmetered). Counts attempts, not results.
+  { key: "prediction_daily", label: "Prediction (3/day)", kind: "daily", cap: 3 },
   // Hourly buckets, totals only. ⚠ Known ≤30-min/day slop (B-pass 2026-09-13
   // finding 3): delete-account floors its bucket to the UTC hour, and IST
   // midnight is 18:30Z, so the 18:00Z-19:00Z bucket straddles the day
@@ -234,6 +241,26 @@ export function computeNewMrr(
 }
 
 /**
+ * Quota keys whose metering has a kill switch, with the switch's env name.
+ * With the switch on the ledger is never written, so the key's line would
+ * read "none" — indistinguishable from no usage (Hermes 2026-09-26, L1-F2).
+ * Kept beside DIGEST_KEYS rather than inside it: the entries' literal shape
+ * is pinned by test/contracts/founder_digest_caps_mirror_test.dart.
+ */
+export const QUOTA_KILL_SWITCHES: Readonly<Record<string, string>> = {
+  prediction_daily: PREDICTION_QUOTA_KILL_SWITCH_ENV,
+};
+
+/** The quota keys whose kill switch is on right now. */
+export function unmeteredQuotaKeys(
+  on: (envName: string) => boolean = envSwitchOn,
+): string[] {
+  return Object.entries(QUOTA_KILL_SWITCHES)
+    .filter(([, envName]) => on(envName))
+    .map(([key]) => key);
+}
+
+/**
  * A section's read result: rows, or the reason it could not be read.
  * `total` is the exact server-side count when the read was CAPPED (alerts
  * fetch only the lines they render) — a header that counted the page would
@@ -244,6 +271,12 @@ export type SectionRead<T> = { rows: T[]; total?: number } | { unreadable: strin
 export interface DigestInput {
   /** IST calendar day being reported, e.g. "2026-09-11". */
   dayLabel: string;
+  /**
+   * Quota keys whose kill switch was ON when the digest was gathered
+   * ([unmeteredQuotaKeys]). Their usage is not being recorded, so the line
+   * says UNMETERED instead of a count that reads as real. Absent = none.
+   */
+  unmeteredKeys?: readonly string[];
   /** Windowed rows whose window_start falls inside yesterday's IST day. */
   windowed: SectionRead<UsageRow>;
   /** Lifetime rows whose updated_at falls inside yesterday's IST day. */
@@ -412,6 +445,12 @@ export function buildDigestText(input: DigestInput): string {
       const mine = rows.filter((r) => r.quota_key === k.key);
       const total = mine.reduce((s, r) => s + (r.used ?? 0), 0);
       const users = new Set(mine.map((r) => r.user_id)).size;
+      if (input.unmeteredKeys?.includes(k.key)) {
+        lines.push(
+          `${k.label}: ⚠ UNMETERED — ${QUOTA_KILL_SWITCHES[k.key]} is on, usage is not being counted (ledger shows ${total})`,
+        );
+        continue;
+      }
       if (k.kind === "subday" || k.cap === undefined) {
         alsoParts.push(`${k.label} ${total}`);
         continue;
@@ -1096,6 +1135,7 @@ export async function gatherDigestInput(
   ]);
   return {
     dayLabel: window.label,
+    unmeteredKeys: unmeteredQuotaKeys(),
     windowed,
     lifetime,
     weekly,

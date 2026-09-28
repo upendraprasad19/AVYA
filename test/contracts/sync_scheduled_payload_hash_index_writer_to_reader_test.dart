@@ -21,8 +21,18 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/sync/sync_skip_index.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/core/services/template_identity.dart';
 
 import '../sync/sync_domain_skip_harness.dart';
+
+// Merge of origin/main (2026-09-28, OI-252 f4a8c2): a schedule row's
+// `template_id` is a Hive key `tmpl_<uuid>` whose cloud id is the uuid itself
+// (`cloudIdFromKey`), so there is no `workout_templates` SELECT any more. The
+// template cases below use real keys; the legacy-key case (a `tmpl_<ms>` row
+// from before OI-252) is resolved IN THE SAME PASS by the forced template
+// resync, which runs the legacy-key migrator and rewrites the reference.
+const _armsId = 'aaaaaaaa-1111-2222-3333-444444444444';
+const _pushId = 'bbbbbbbb-1111-2222-3333-444444444444';
 
 void main() {
   final h = SyncHarness();
@@ -177,10 +187,11 @@ void main() {
       h.server.clear();
       h.server.getResponders.clear();
       final box = HiveService.instance.workoutBox;
+      final armsKey = templateKeyFor(_armsId);
       await box.put('schedule_2026-09-24', {
         'date': '2026-09-24',
         'type': 'custom_template',
-        'template_id': 'tmpl_missing',
+        'template_id': armsKey,
         'status': 'planned',
         'day_of_week': 3,
         'week': 3,
@@ -189,93 +200,88 @@ void main() {
       final writes = h.server.writesTo('scheduled_workouts');
       expect(writes, hasLength(1), reason: 'status still reaches cloud');
       expect(writes.single.rows.single.containsKey('template_id'), isFalse,
-          reason: 'an unresolvable template_id is OMITTED, never guessed');
+          reason: 'a template not on this phone is OMITTED: its cloud row may '
+              'not exist yet, and the FK would reject it');
       expect(
           SyncSkipIndex.readIndex(box, SyncSkipDomain.sched.indexKey).containsKey('2026-09-24'),
           isTrue,
           reason: 'confirmed: an unconfirmed row would re-push every pass while the template is missing');
-      expect(
-          h.server.requests.where((r) => r.method == 'GET' && r.table == 'workout_templates'),
-          isEmpty,
-          reason: 'no cloud lookup when the local template row is absent');
 
       h.server.clear();
       await SyncService.instance.pushScheduledWorkoutsForSyncDomain();
       expect(h.server.writesTo('scheduled_workouts'), isEmpty, reason: 'unchanged: skipped');
 
       // The template arrives on this phone -> template_name enters the fingerprint.
-      await box.put('tmpl_missing', {'id': 'tmpl_missing', 'name': 'Arms'});
-      h.server.getResponders['workout_templates'] = (_) => [
-            {'id': 'cloud-tmpl-arms'}
-          ];
+      await box.put(armsKey, {'id': armsKey, 'type': 'template', 'name': 'Arms'});
       h.server.clear();
       await SyncService.instance.pushScheduledWorkoutsForSyncDomain();
       final healed = h.server.writesTo('scheduled_workouts');
       expect(healed, hasLength(1));
-      expect(healed.single.rows.single['template_id'], 'cloud-tmpl-arms');
+      expect(healed.single.rows.single['template_id'], _armsId,
+          reason: 'the cloud id is the uuid inside the Hive key');
+      expect(
+          h.server.requests.where((r) => r.method == 'GET' && r.table == 'workout_templates'),
+          isEmpty,
+          reason: 'OI-252: the id comes from the key, never from a lookup');
     });
 
-    test('case 3 — local template present but its cloud id is unresolvable: written without '
-        'template_id, UNCONFIRMED, retried next pass; resolves once the cloud id exists', () async {
+    test('case 3 — a LEGACY (pre-OI-252) template key is resolved in the same pass: the forced '
+        'template resync migrates it to tmpl_<uuid>, rewrites the reference, and the row is '
+        'pushed WITH that id and confirmed', () async {
       h.server.clear();
-      h.server.getResponders.clear();
+      h.server.getResponders.clear(); // the migrator's name lookup finds nothing -> mints a uuid
       final box = HiveService.instance.workoutBox;
-      await box.put('tmpl_legs', {'id': 'tmpl_legs', 'name': 'Legs'});
+      await box.put('tmpl_1700000000000', {
+        'id': 'tmpl_1700000000000',
+        'type': 'template',
+        'name': 'Legs',
+        'exercises': <Map<String, dynamic>>[],
+      });
       await box.put('schedule_2026-09-25', {
         'date': '2026-09-25',
         'type': 'custom_template',
-        'template_id': 'tmpl_legs',
+        'template_id': 'tmpl_1700000000000',
         'status': 'planned',
         'day_of_week': 4,
         'week': 3,
       });
-      // No workout_templates responder: the stub answers [] -> maybeSingle null.
       await SyncService.instance.pushScheduledWorkoutsForSyncDomain();
+
+      final rewritten = (box.get('schedule_2026-09-25') as Map)['template_id'] as String;
+      final newId = cloudIdFromKey(rewritten);
+      expect(newId, isNotNull,
+          reason: 'the migrator rewrote the reference to a tmpl_<uuid> key');
+      expect(box.get('tmpl_1700000000000'), isNull, reason: 'the legacy row is re-keyed');
+      expect(h.server.writesTo('workout_templates'), isNotEmpty,
+          reason: 'the forced resync pushed the template so its cloud row exists');
       final writes = h.server.writesTo('scheduled_workouts');
       expect(writes, hasLength(1));
-      expect(writes.single.rows.single.containsKey('template_id'), isFalse);
-      expect(
-          SyncSkipIndex.readIndex(box, SyncSkipDomain.sched.indexKey).containsKey('2026-09-25'),
-          isFalse,
-          reason: 'unconfirmed: the next pass retries the resolve');
-
-      h.server.getResponders['workout_templates'] = (_) => [
-            {'id': 'cloud-tmpl-legs'}
-          ];
-      h.server.clear();
-      await SyncService.instance.pushScheduledWorkoutsForSyncDomain();
-      final retried = h.server.writesTo('scheduled_workouts');
-      expect(retried, hasLength(1));
-      expect(retried.single.rows.single['template_id'], 'cloud-tmpl-legs');
+      expect(writes.single.rows.single['template_id'], newId);
       expect(
           SyncSkipIndex.readIndex(box, SyncSkipDomain.sched.indexKey).containsKey('2026-09-25'),
           isTrue);
     });
 
-    test('a skipped row makes NO workout_templates lookup (spec §14)', () async {
+    test('a skipped row makes NO workout_templates request (spec §14)', () async {
       h.server.clear();
       h.server.getResponders.clear();
       final box = HiveService.instance.workoutBox;
-      await box.put('tmpl_push', {'id': 'tmpl_push', 'name': 'Push'});
+      final pushKey = templateKeyFor(_pushId);
+      await box.put(pushKey, {'id': pushKey, 'type': 'template', 'name': 'Push'});
       await box.put('schedule_2026-09-26', {
         'date': '2026-09-26',
         'type': 'custom_template',
-        'template_id': 'tmpl_push',
+        'template_id': pushKey,
         'status': 'planned',
         'day_of_week': 5,
         'week': 3,
       });
-      h.server.getResponders['workout_templates'] = (_) => [
-            {'id': 'cloud-tmpl-push'}
-          ];
       await SyncService.instance.pushScheduledWorkoutsForSyncDomain();
       h.server.clear();
       await SyncService.instance.pushScheduledWorkoutsForSyncDomain();
       expect(h.server.writesTo('scheduled_workouts'), isEmpty);
-      expect(
-          h.server.requests.where((r) => r.method == 'GET' && r.table == 'workout_templates'),
-          isEmpty,
-          reason: 'resolveCloudTemplateId runs only inside the push closure');
+      expect(h.server.requests.where((r) => r.table == 'workout_templates'), isEmpty,
+          reason: 'a skipped row touches nothing about its template');
     });
 
     test('a deleted schedule row leaves the index on the next pass (liveKeys prune)', () async {

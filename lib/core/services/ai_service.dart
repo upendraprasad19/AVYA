@@ -9,6 +9,7 @@ import 'package:icanbefitter/core/services/singleton_lifecycle_registry.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/features/ai_coach/models/tool_intent.dart';
 import 'package:icanbefitter/features/ai_coach/services/coach_client_capabilities.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show FunctionException;
 
 /// Structured response from any AI Edge Function.
 ///
@@ -134,7 +135,7 @@ class AiService {
   /// callers would only see "status 400" and have no idea whether the user
   /// sent something too long, the snapshot blew past the 10KB limit, or
   /// the upstream model was actually down.
-  String? _extractError(dynamic data) {
+  static String? _extractError(dynamic data) {
     try {
       Map<String, dynamic>? map;
       if (data is String) {
@@ -157,6 +158,30 @@ class AiService {
   /// Server-side snapshot limit (ai-proxy, unified 2026-04-18).
   /// We stay a little under to absorb JSON overhead added by the platform.
   static const int _maxSnapshotBytes = 9500;
+
+  /// The three separator characters `_shared/sanitize_for_prompt.ts`'s
+  /// `sanitizeJsonForPrompt` re-escapes before the server measures the
+  /// snapshot (Hermes 2026-09-26, L37-F2): each 1-char occurrence of one of
+  /// these becomes the 6-char sequence `\uXXXX`, a net +5. `_compactContext`
+  /// must budget against that SAME sanitised length, or a snapshot near this
+  /// ceiling that happens to carry enough of these (a paste from certain
+  /// word processors / PDF extractors) passes here and is then rejected
+  /// server-side with "Snapshot too large" (B-pass finding, 2026-09-26).
+  static const Set<int> _promptSeparatorCodeUnits = {0x2028, 0x2029, 0x0085};
+
+  /// [encoded]'s length as the server measures it after
+  /// `sanitizeJsonForPrompt` — see [_promptSeparatorCodeUnits].
+  @visibleForTesting
+  static int sanitizedLengthForTest(String encoded) =>
+      _sanitizedLength(encoded);
+
+  static int _sanitizedLength(String encoded) {
+    var extra = 0;
+    for (final unit in encoded.codeUnits) {
+      if (_promptSeparatorCodeUnits.contains(unit)) extra += 5;
+    }
+    return encoded.length + extra;
+  }
 
   /// Compact the context JSON so it fits inside the server's snapshot limit.
   ///
@@ -186,7 +211,7 @@ class AiService {
   ///   committed_at, committed_to_lt_cdr, days_since_commitment.
   Map<String, dynamic> _compactContext(Map<String, dynamic> context) {
     Map<String, dynamic> working = Map<String, dynamic>.from(context);
-    int size() => json.encode(working).length;
+    int size() => _sanitizedLength(json.encode(working));
     if (size() <= _maxSnapshotBytes) return working;
 
     // Drop order — least load-bearing first.
@@ -377,21 +402,21 @@ class AiService {
     }
   }
 
-  /// Send a prediction request that bypasses daily limits and interaction
-  /// logging. Used for onboarding predictions and PRO monthly refreshes.
+  /// Send a prediction request (onboarding, regenerate, PRO 30-day refresh).
   ///
-  /// The Edge Function handles `type: 'prediction'` by skipping the daily
-  /// message count check and the `ai_coach_interactions` insert.
-  Future<AiChatResponse> predict(
-      String message, Map<String, dynamic> context) async {
-    final compact = _compactContext(context);
+  /// The Edge Function (`_shared/prediction_handler.ts`) owns the system
+  /// prompt and a 3/day per-user quota, separate from the chat quota, and
+  /// skips the `ai_coach_interactions` insert. Only the message is sent: the
+  /// server ignores any caller-supplied prompt (single-owner audit
+  /// 2026-09-26, P0 #5). A Gemini failure comes back as a 500, which
+  /// `callFunction` deliberately does NOT retry — each retry would spend one
+  /// of the day's 3 attempts.
+  Future<AiChatResponse> predict(String message) async {
     try {
       final response = await _supabase.callFunction(
         'ai-proxy',
         body: {
           'message': message,
-          'context': compact,
-          'snapshot_json': compact,
           'type': 'prediction',
         },
       );
@@ -401,14 +426,46 @@ class AiService {
         throw AiServiceException(
           serverError ?? 'Prediction failed with status ${response.status}',
           statusCode: response.status,
+          code: _extractCode(response.data),
         );
       }
 
       return _parseResponse(response.data);
+    } on FunctionException catch (e) {
+      // `invoke` THROWS on every non-2xx, so the status check above never
+      // sees a 429 or 500 — keep both here (B-pass c5d659f52986 Finding 1).
+      throw predictionFailure(e);
     } catch (e) {
       if (e is AiServiceException) rethrow;
       throw AiServiceException('Prediction request failed: $e');
     }
+  }
+
+  /// A non-2xx from `ai-proxy`'s `prediction` type as an
+  /// [AiServiceException] that keeps the HTTP status, the server's own
+  /// `error` text and its `code`: 429 + `RATE_LIMITED` is the 3/day cap, 500
+  /// a ledger or Gemini failure, 0 a request that never reached the server.
+  /// `PredictionService.outcomeForError` reads the status and the code.
+  @visibleForTesting
+  static AiServiceException predictionFailure(FunctionException e) =>
+      AiServiceException(
+        _extractError(e.details) ?? 'Prediction failed with status ${e.status}',
+        statusCode: e.status,
+        code: _extractCode(e.details),
+      );
+
+  /// The body's `code` string, from the same shapes [_extractError] reads.
+  static String? _extractCode(dynamic data) {
+    try {
+      final decoded = data is String ? json.decode(data) : data;
+      if (decoded is Map) {
+        final code = decoded['code'];
+        if (code is String && code.isNotEmpty) return code;
+      }
+    } catch (_) {
+      // Unparseable body — no code.
+    }
+    return null;
   }
 
   /// Direct HTTP fallback for web when Supabase client fails.
@@ -730,7 +787,12 @@ class AiServiceException implements Exception {
   final String message;
   final int? statusCode;
 
-  const AiServiceException(this.message, {this.statusCode});
+  /// The response body's machine-readable `code` (e.g. `RATE_LIMITED`), when
+  /// the server sent one. Distinguishes the prediction cap's own 429 from any
+  /// other 429.
+  final String? code;
+
+  const AiServiceException(this.message, {this.statusCode, this.code});
 
   @override
   String toString() => 'AiServiceException: $message (status: $statusCode)';

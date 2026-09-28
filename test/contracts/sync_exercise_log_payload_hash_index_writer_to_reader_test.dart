@@ -151,22 +151,16 @@ void main() {
       // domain op_type (see _logClientErrorReports' doc comment above). The
       // call is `unawaited` (the fix brief requires the closure return
       // promptly), so poll for it rather than assuming it has landed the
-      // instant the push returns. Do NOT assert an exact count here:
-      // `_reportSyncFailure` (sync_service.dart:2447) itself dual-posts to
-      // log-client-error -- once via its own explicit `functions.invoke`,
-      // once via its internal `ErrorTelemetry.recordNonFatal(reason:
-      // opType)` call, whose log-client-error leg uses `reason` AS the
-      // op_type (error_telemetry.dart:267, "idempotent dual posting", pinned
-      // by test/sync/sync_telemetry_test.dart) -- so ONE call to
-      // _reportSyncFailure yields TWO requests with this op_type. That
-      // multiplier is pre-existing, unrelated to this fix, and not a
-      // no-flood property this test needs to pin (the nlog sibling test
-      // pins the no-flood property instead, where the item count varies).
+      // instant the push returns. The count is exact now: this test used to
+      // assert only `isNotEmpty` because `_reportSyncFailure` dual-posted
+      // (TWO requests per call). Main's B2a-2b dual-write fix (merged
+      // 2026-09-28) made its internal recordNonFatal skipServerPost:true, so
+      // ONE call is ONE request (pinned by test/sync/sync_telemetry_test.dart).
       final reports =
           await _logClientErrorReports(h, 'upsert_workout_log_sets');
-      expect(reports, isNotEmpty,
+      expect(reports, hasLength(1),
           reason: 'the per-set failure must report to log-client-error '
-              'with op_type upsert_workout_log_sets');
+              'exactly once, with op_type upsert_workout_log_sets');
       h.server
         ..clear()
         ..failWritesTo.remove('workout_log_sets');

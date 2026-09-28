@@ -238,8 +238,22 @@ class SyncQueue {
   }
 
   /// Enqueue + retry immediately (no initial error — the caller just wants
-  /// the queue to own delivery). Used for push-snapshot where we want
-  /// the guarantee but don't want to block the UI.
+  /// the queue to own delivery).
+  ///
+  /// **Corrected 2026-09-27 (B2a-2b "queue drift" investigation, diagnose —
+  /// see docs/diagnoses/):** this comment claimed it was "used for
+  /// push-snapshot where we want the guarantee" — verified FALSE via
+  /// `grep -rn "enqueueFresh" lib/` (zero production callers; only this
+  /// definition and its own test file match). `pushSnapshotNow()`'s actual
+  /// failure path does not call this at all — on failure it only logs via
+  /// `ErrorTelemetry.recordNonFatal` + `_reportSyncFailure` and relies on the
+  /// in-memory `SyncCoalescer` "dirty" flag re-triggering on the next write,
+  /// NOT this durable, Hive-persisted queue. This method is currently DEAD
+  /// CODE with a misleading doc comment, not a live bug — no production path
+  /// is silently losing durability, because none currently claims this
+  /// guarantee. Left as a real, ready-to-use capability for a future caller
+  /// that DOES need the durability guarantee; do not re-add a caller-usage
+  /// claim here until one actually exists.
   Future<void> enqueueFresh({
     required String opType,
     required Map<String, dynamic> payload,

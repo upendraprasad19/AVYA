@@ -1,7 +1,7 @@
 // day-swapper+sync-load Task 16 — behavioral contract for the
 // workout_templates push, routed through SyncSkipIndex (domain `template`).
-// The header upsert, the id SELECT, the per-exercise upsert loop and the
-// tail-vacuum DELETE are now ONE bundle per template: any failure inside the
+// The header upsert, the per-exercise upsert loop and the tail-vacuum DELETE
+// are now ONE bundle per template: any failure inside the
 // bundle returns false (unconfirmed), so the WHOLE bundle retries next pass
 // (every write inside is already idempotent, so a retry is cheap and safe).
 // This is a deliberate tightening vs. the pre-Task-16 code, which continued
@@ -12,11 +12,21 @@
 // test/contracts/template_exercises_tail_vacuum_test.dart and
 // test/contracts/template_exercises_upsert_test.dart (source-grep,
 // unaffected by this task; re-run as part of Step 5 below).
+//
+// Merge of origin/main (2026-09-28, OI-252 f4a8c2): a template's cloud id is
+// now minted on the phone and lives in its Hive key (`tmpl_<uuid>`), so the
+// header upsert carries `id` directly (`onConflict: 'id'`) and the old id
+// SELECT is gone. The fixtures use real `templateKeyFor(<uuid>)` keys: a
+// legacy `tmpl_1` key has no recoverable cloud id and is skipped entirely
+// (`cloudIdFromKey` returns null), which is correct and is what these tests
+// hit (pushed 0, skipped 0) before this repoint. B2a-2b (also from main):
+// `_reportSyncFailure` now writes ONE client_errors row per failure, not two.
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/sync/sync_skip_index.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/core/services/template_identity.dart';
 
 import '../sync/sync_domain_skip_harness.dart';
 
@@ -49,14 +59,19 @@ Future<List<dynamic>> _logClientErrorReports(SyncHarness h, String opType,
   return matches();
 }
 
+const _id1 = '11111111-2222-3333-4444-555555555555';
+const _id2 = '66666666-7777-8888-9999-aaaaaaaaaaaa';
+final _key1 = templateKeyFor(_id1);
+final _key2 = templateKeyFor(_id2);
+
 void main() {
   final h = SyncHarness();
   setUp(h.setUp);
   tearDown(h.tearDown);
 
   Future<void> seed() async {
-    await HiveService.instance.workoutBox.put('tmpl_1', {
-      'id': 'tmpl_1',
+    await HiveService.instance.workoutBox.put(_key1, {
+      'id': _key1,
       'type': 'template',
       'name': 'Push Day A',
       'workout_focus': 'push',
@@ -69,18 +84,15 @@ void main() {
 
   Future<void> editOne(int generation) async {
     final box = HiveService.instance.workoutBox;
-    final raw = Map<String, dynamic>.from(box.get('tmpl_1') as Map);
+    final raw = Map<String, dynamic>.from(box.get(_key1) as Map);
     final exercises = (raw['exercises'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
     exercises[0]['sets'] = 4 + generation;
     raw['exercises'] = exercises;
-    await box.put('tmpl_1', raw);
+    await box.put(_key1, raw);
   }
 
-  test('the full contract: first push (header+id-select+exercise+vacuum), unchanged skip, edit '
+  test('the full contract: first push (header+exercise+vacuum), unchanged skip, edit '
       're-sends the whole bundle, retry after failure, kill switch', () async {
-    h.server.getResponders['workout_templates'] = (_) => [
-          {'id': 'tmpl-cloud-1'}
-        ];
     await expectSkipContract(
       h: h,
       domain: SyncSkipDomain.template,
@@ -95,12 +107,15 @@ void main() {
   test('a template header write, once confirmed, also sent the exercise + the tail vacuum in the '
       'same pass', () async {
     h.server.clear();
-    h.server.getResponders['workout_templates'] = (_) => [
-          {'id': 'tmpl-cloud-1'}
-        ];
     await seed();
     await SyncService.instance.pushWorkoutTemplatesForSyncDomain();
     expect(h.server.writesTo('workout_templates'), hasLength(1));
+    final header = h.server.writesTo('workout_templates').single.body;
+    final headerRow = (header is List ? header.single : header) as Map;
+    expect(headerRow['id'], _id1,
+        reason: 'OI-252: the header carries the cloud id derived from the '
+            'Hive key, so a delete-then-recreate with the same name can never '
+            'collide with the old row');
     expect(h.server.writesTo('template_exercises').where((r) => r.method == 'POST'), hasLength(1));
     expect(h.server.writesTo('template_exercises').where((r) => r.method == 'DELETE'), hasLength(1));
   });
@@ -108,15 +123,12 @@ void main() {
   test('a mid-bundle exercise upsert failure leaves the WHOLE bundle unconfirmed (bundle atomicity)',
       () async {
     h.server.clear();
-    h.server.getResponders['workout_templates'] = (_) => [
-          {'id': 'tmpl-cloud-1'}
-        ];
     h.server.failWritesTo.add('template_exercises');
     await seed();
     await SyncService.instance.pushWorkoutTemplatesForSyncDomain();
     expect(
         SyncSkipIndex.readIndex(HiveService.instance.workoutBox, SyncSkipDomain.template.indexKey)
-            .containsKey('tmpl_1'),
+            .containsKey(_key1),
         isFalse,
         reason: 'the header upsert succeeded but the bundle is not confirmed until the exercises '
             'and the tail vacuum also succeed');
@@ -137,11 +149,8 @@ void main() {
     // own `return false;` leaves the bundle unconfirmed either way (Task 16
     // mutation 3 reddened zero tests until this leg existed).
     h.server.clear();
-    h.server.getResponders['workout_templates'] = (_) => [
-          {'id': 'tmpl-cloud-1'}
-        ];
-    await HiveService.instance.workoutBox.put('tmpl_2', {
-      'id': 'tmpl_2',
+    await HiveService.instance.workoutBox.put(_key2, {
+      'id': _key2,
       'type': 'template',
       'name': 'Pull Day A',
       'workout_focus': 'pull',
@@ -158,17 +167,17 @@ void main() {
             'vacuum (DELETE) must never be attempted -- "try every exercise" sends 3');
     expect(
         SyncSkipIndex.readIndex(HiveService.instance.workoutBox, SyncSkipDomain.template.indexKey)
-            .containsKey('tmpl_2'),
+            .containsKey(_key2),
         isFalse);
     // `_reportSyncFailure` is the only path to the server-side client_errors
-    // row (recordNonFatal is Crashlytics-only), so the exercise catch keeps
-    // it. One call dual-posts by design (its own functions.invoke + its
-    // internal recordNonFatal(reason: opType)), so ONE failure == 2 requests.
-    // Fixed at 2 regardless of exercise count is the no-flood property.
-    final reports =
-        await _logClientErrorReports(h, 'upsert_template_exercise', atLeast: 2);
-    expect(reports, hasLength(2),
-        reason: 'one _reportSyncFailure call (dual-posted) for the whole failed bundle');
+    // row, so the exercise catch keeps it. Since main's B2a-2b dual-write fix
+    // its internal recordNonFatal passes skipServerPost:true, so ONE failure
+    // == ONE request. Fixed at 1 regardless of exercise count is the
+    // no-flood property.
+    final reports = await _logClientErrorReports(h, 'upsert_template_exercise');
+    expect(reports, hasLength(1),
+        reason: 'one _reportSyncFailure call, one client_errors row, for the '
+            'whole failed bundle');
     h.server
       ..clear()
       ..failWritesTo.remove('template_exercises');

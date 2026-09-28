@@ -75,7 +75,7 @@ extension SyncServiceCommunity on SyncService {
       debugPrint('[SyncService._backfillCustomEntityIds] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_if'));
+          reason: 'sync_service_if', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'backfill_custom_entity_ids', error: e);
       } catch (_) {}
@@ -219,7 +219,7 @@ extension SyncServiceCommunity on SyncService {
       debugPrint('[SyncService._syncCustomItems] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_catch_8'));
+          reason: 'sync_service_catch_8', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'sync_custom_items', error: e);
       } catch (_) {}
@@ -376,7 +376,7 @@ extension SyncServiceCommunity on SyncService {
       debugPrint('[SyncService._restoreCustomExercises] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_for_15'));
+          reason: 'sync_service_for_15', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'restore_custom_exercises', error: e);
       } catch (_) {}
@@ -428,7 +428,7 @@ extension SyncServiceCommunity on SyncService {
       debugPrint('[SyncService._restoreCustomFoods] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_for_16'));
+          reason: 'sync_service_for_16', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'restore_custom_foods', error: e);
       } catch (_) {}
@@ -522,7 +522,7 @@ extension SyncServiceCommunity on SyncService {
       debugPrint('[SyncService.syncCommunityItems] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_for_22'));
+          reason: 'sync_service_for_22', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'sync_community_items', error: e);
       } catch (_) {}

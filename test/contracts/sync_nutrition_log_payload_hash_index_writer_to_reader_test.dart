@@ -20,11 +20,12 @@ import '../sync/sync_domain_skip_harness.dart';
 ///
 /// Fix round 2 (F3, 2026-09-27): the loop used to stop as soon as
 /// `matches()` was NON-EMPTY, not once it reached the count the caller
-/// actually needs. `_reportSyncFailure` dual-posts (two separate requests
-/// for one logical failure), so under full-suite contention the FIRST of
-/// the two could land inside the old 500ms budget while the second was
-/// still in flight -- the loop exited early on the first, and the caller's
-/// `hasLength(2)` failed on real, not-yet-arrived data, not a real defect.
+/// actually needs. `_reportSyncFailure` used to dual-post (two separate
+/// requests for one logical failure; ONE since main's B2a-2b fix, merged
+/// 2026-09-28), so under full-suite contention the FIRST of the two could
+/// land inside the old 500ms budget while the second was still in flight --
+/// the loop exited early on the first, and the caller's `hasLength(2)`
+/// failed on real, not-yet-arrived data, not a real defect.
 /// Now polls until [atLeast] have arrived (or a generous 10s deadline
 /// expires) so a slow-but-real second post is actually waited for.
 Future<List<dynamic>> _logClientErrorReports(SyncHarness h, String opType,
@@ -195,28 +196,22 @@ void main() {
       // the domain op_type) is a SEPARATE call filtered out by op_type (see
       // _logClientErrorReports' doc comment above).
       //
-      // The expected COUNT for that one call is 2, not 1:
-      // `_reportSyncFailure` (sync_service.dart:2447) dual-posts to
-      // log-client-error by design -- once via its own explicit
-      // `functions.invoke`, once via its internal
-      // `ErrorTelemetry.recordNonFatal(reason: opType)` call, whose
-      // log-client-error leg uses `reason` AS the op_type
-      // (error_telemetry.dart:267, "idempotent dual posting", pinned by
-      // test/sync/sync_telemetry_test.dart) -- both requests therefore carry
-      // op_type upsert_nutrition_log_item. The no-flood property this test
-      // pins is that the count stays fixed at 2 (one _reportSyncFailure
-      // call's worth) regardless of item count, NOT that it scales to 4 with
-      // this fixture's two items -- "try every item" would produce exactly
-      // that 4, since each item's own failure would trigger its own
-      // dual-posted pair.
-      final reports = await _logClientErrorReports(
-          h, 'upsert_nutrition_log_item',
-          atLeast: 2);
-      expect(reports, hasLength(2),
-          reason: 'one _reportSyncFailure call worth of log-client-error '
-              'reports (dual-posted by design) for the whole slot -- not '
-              'one pair per item, with op_type upsert_nutrition_log_item '
-              '(${reports.length} arrived within the wait budget)');
+      // The expected COUNT for that one call is 1. It was 2 until main's
+      // B2a-2b dual-write fix (merged 2026-09-28): `_reportSyncFailure`'s
+      // internal `ErrorTelemetry.recordNonFatal` now passes
+      // skipServerPost:true, so only its own explicit `functions.invoke`
+      // reaches log-client-error (pinned by test/sync/sync_telemetry_test.dart).
+      // The no-flood property this test pins is that the count stays fixed
+      // at 1 (one _reportSyncFailure call) regardless of item count, NOT that
+      // it scales to 2 with this fixture's two items -- "try every item"
+      // would produce exactly that 2.
+      final reports =
+          await _logClientErrorReports(h, 'upsert_nutrition_log_item');
+      expect(reports, hasLength(1),
+          reason: 'one _reportSyncFailure call, one log-client-error report, '
+              'for the whole slot -- not one per item, with op_type '
+              'upsert_nutrition_log_item (${reports.length} arrived within '
+              'the wait budget)');
       h.server
         ..clear()
         ..failWritesTo.remove('nutrition_log_items');

@@ -146,10 +146,19 @@ void main() {
             'info/warn where trg_dispatch_critical_alert_notify never fires');
   });
 
-  test('scheduled via cron.schedule, not a new Edge Function', () {
-    // Checked against the FULL file, not the inner body — `cron.schedule(`
-    // wraps the `$$...$$` block from outside it.
-    expect(fileText.contains('cron.schedule('), isTrue);
+  test(
+      'scheduled via cron.schedule or cron.alter_job (jobid-preserving), not '
+      'a new Edge Function', () {
+    // Checked against the FULL file, not the inner body — both wrap the
+    // `$$...$$` block from outside it. Migration 147 re-defines this same
+    // combined job via cron.alter_job (keeps jobid 43 + its run history)
+    // rather than cron.unschedule+cron.schedule, so this must accept either
+    // form — a bare cron.schedule( check would fail the moment
+    // defined_in_migration advances past the last unschedule+schedule pair.
+    expect(
+      fileText.contains('cron.schedule(') || fileText.contains('cron.alter_job('),
+      isTrue,
+    );
     expect(fileText.contains('net.http_post'), isFalse,
         reason: 'B4 corrected design: no new Edge Function, plain SQL only, '
             'matching the 5 pre-existing alert_* jobs\' idiom');

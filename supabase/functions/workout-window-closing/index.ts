@@ -37,6 +37,10 @@ import { sanitizeIdentifier } from "../_shared/sanitize_for_prompt.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 import { fetchAllByIds, fetchAllPages } from "../_shared/paged_fetch.ts";
 import { buildWindowClosingMessage } from "./message.ts";
+import {
+  deletedTemplateIds,
+  excludeDeletedTemplateRows,
+} from "./deleted_template_filter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -193,7 +197,11 @@ serve(async (req: Request) => {
         { orderBy: "id", label: "workout-window-closing users" },
       ),
       fetchAllByIds<Record<string, unknown>>(
-        (chunk) => supabase.from("workout_templates").select("id, name").in("id", chunk),
+        (chunk) =>
+          supabase.from("workout_templates").select("id, name, deleted_at").in(
+            "id",
+            chunk,
+          ),
         templateIds,
         { orderBy: "id", label: "workout-window-closing templates" },
       ),
@@ -211,6 +219,26 @@ serve(async (req: Request) => {
         t.name as string,
       ]),
     );
+    // OI-252 (stable ID rework): a "window closing" nudge for a day whose
+    // template was deleted elsewhere is a stale reminder -- unscheduling is
+    // local-only today, so the cloud `scheduled_workouts` row can outlive
+    // the deleted template until the next push. Filtered in APP CODE
+    // against the templates fetch already above, not via a join -- an
+    // `!inner` embed join would drop rows whose `template_id` is null
+    // (a plain, non-template workout day) along with the ones we actually
+    // want excluded, which round-2 plan review flagged as the wrong shape.
+    // Logic extracted to deleted_template_filter.ts (pure, deno-tested).
+    const deletedIds = deletedTemplateIds(
+      (templates ?? []) as { id: string; deleted_at: string | null }[],
+    );
+    const filteredAtRisk = excludeDeletedTemplateRows(
+      atRiskByUser as Map<string, { template_id: string | null }>,
+      deletedIds,
+    );
+    atRiskByUser.clear();
+    for (const [userId, row] of filteredAtRisk) {
+      atRiskByUser.set(userId, row as Record<string, unknown>);
+    }
 
     // OI-98 / e4a1b7 — ONE batched preference lookup instead of a per-user
     // query inside the loop, reading `user_preferences.notification_preferences`

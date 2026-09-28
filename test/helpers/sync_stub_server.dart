@@ -63,6 +63,18 @@ class SyncStubServer {
   /// Writes to these tables answer 500, so a push throws PostgrestException.
   final Set<String> failWritesTo = {};
 
+  /// Optional per-table 500 body for [failWritesTo] -- lets a test make the
+  /// failure carry a real Postgres `details` shape (e.g. `Failing row
+  /// contains (...)`) instead of the fixed `stub failure` body. Hermes h6F2.
+  final Map<String, Map<String, Object?>> failBodies = {};
+
+  /// Per-table CONDITIONAL write failure: return a Postgres error body to
+  /// fail this request with 409, or null to let it succeed. Checked before
+  /// [failWritesTo]. Lets a test model state the cloud holds, e.g. a
+  /// 23503 FK violation until the parent row is written again.
+  final Map<String, Map<String, Object?>? Function(StubRequest)> writeFailers =
+      {};
+
   /// GET responders per table; a table without one answers `[]`.
   final Map<String, Object? Function(StubRequest)> getResponders = {};
 
@@ -135,10 +147,17 @@ class SyncStubServer {
         req.method, req.uri.path, req.uri.queryParameters, headers, body);
     requests.add(r);
     final res = req.response..headers.contentType = ContentType.json;
-    if (r.isWrite && failWritesTo.contains(r.table)) {
+    final conditionalFailure =
+        r.isWrite ? writeFailers[r.table]?.call(r) : null;
+    if (conditionalFailure != null) {
+      res
+        ..statusCode = 409
+        ..write(jsonEncode(conditionalFailure));
+    } else if (r.isWrite && failWritesTo.contains(r.table)) {
       res
         ..statusCode = 500
-        ..write(jsonEncode({'message': 'stub failure', 'code': 'XX000'}));
+        ..write(jsonEncode(failBodies[r.table] ??
+            {'message': 'stub failure', 'code': 'XX000'}));
     } else if (r.method == 'GET' && r.table != null) {
       res
         ..statusCode = 200

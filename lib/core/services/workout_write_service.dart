@@ -8,7 +8,9 @@ import 'package:uuid/uuid.dart';
 
 import 'error_telemetry.dart';
 import 'hive_service.dart';
+import 'pending_template_deletes.dart';
 import 'sync_service.dart';
+import 'template_identity.dart';
 import 'write_result.dart';
 
 /// The ONE writer for workout_logs / workout_log_exercises /
@@ -1272,6 +1274,15 @@ class WorkoutWriteService {
   // discipline. Recurring writer/reader drift class — see
   // `feedback_writer_reader_field_drift_recurring.md`.
 
+  /// OI-252 (stable ID rework) — the ONE way to mint a new template's
+  /// identity. Every create path (manual builder, the notifier's own
+  /// fallback, the AI coach's `createCustomTemplate`) calls this instead of
+  /// stamping a `tmpl_<ms>` key directly — the legacy timestamp-key shape
+  /// is what made a template's identity ambiguous between devices in the
+  /// first place. See `lib/core/services/template_identity.dart` and
+  /// `docs/superpowers/plans/2026-09-26-template-stable-identity.md`.
+  String newTemplateKey() => templateKeyFor(const Uuid().v4());
+
   /// Upsert a workout template at workoutBox key `<templateId>`.
   /// Stamps `updated_at` IST timestamp; triggers sync fan-out.
   Future<WriteResult> upsertTemplate({
@@ -1314,6 +1325,47 @@ class WorkoutWriteService {
       debugPrint('[WorkoutWriteService.upsertTemplate] $e\n$st');
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
           reason: 'workout_write_service_upsert_template'));
+      return WriteResult.fail(e.toString());
+    } finally {
+      _releaseLock('template::$templateId', c);
+    }
+  }
+
+  /// OI-252 (stable ID rework) — the ONE writer for a template delete.
+  /// Local Hive delete + queue a cloud tombstone (drained on the next
+  /// template push, which UPSERTs it so the delete wins regardless of a
+  /// racing creating push — see `SyncService._drainPendingTemplateDeletes`).
+  ///
+  /// Does NOT clean up the template's scheduled days — callers must call
+  /// `WorkoutScheduleService.cleanSyncTemplateSchedule(templateId)`
+  /// themselves BEFORE this, same as before this rework (this service
+  /// intentionally does not depend on `TemplateService`/
+  /// `WorkoutScheduleService`, which both depend on IT — importing either
+  /// here would be circular).
+  Future<WriteResult> deleteTemplate(String templateId) async {
+    final c = await _acquireLock('template::$templateId');
+    try {
+      final box = HiveService.instance.workoutBox;
+      final raw = box.get(templateId);
+      final name = (raw is Map ? raw['name'] as String? : null) ?? '';
+      await box.delete(templateId);
+
+      // `cloudIdFromKey` is null for a template still on a legacy
+      // (pre-migration) key -- `PendingTemplateDeletes` accepts a null
+      // id for exactly that case; the drain resolves it by name (see
+      // that class's doc for why the resolution can't happen here).
+      await PendingTemplateDeletes.add(
+        id: cloudIdFromKey(templateId),
+        name: name,
+      );
+
+      unawaited(SyncService.instance.syncWorkoutData());
+      unawaited(SyncService.instance.pushSnapshot());
+      return WriteResult.ok(templateId);
+    } catch (e, st) {
+      debugPrint('[WorkoutWriteService.deleteTemplate] $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'workout_write_service_delete_template'));
       return WriteResult.fail(e.toString());
     } finally {
       _releaseLock('template::$templateId', c);

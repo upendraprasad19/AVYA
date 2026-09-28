@@ -128,12 +128,20 @@ void main() {
         'restoreWeightLogsForSyncDomain',
         'restoreWorkoutLogsForSyncDomain',
         'restoreWorkoutPlanForSyncDomain',
-        // T21 (day-swapper-sync-load) — @visibleForTesting seam mirroring
-        // restoreScheduledWorkoutsForTest: injects a fake `user_progress`
-        // row so the L1/L3 restore-merge behaviour (spec sec 5.7) is testable
-        // against a real Hive box without a live Supabase session.
+        // T21 (day-swapper-sync-load) + OI-252 — test seam: injects
+        // preFetched user_progress rows (+ an optional pre-resolved
+        // deleted-template-id set) so the L1/L3 restore-merge (spec sec 5.7)
+        // and the ghost-day filter are behaviorally testable without a live
+        // Supabase query; delegates to _restoreWorkoutPlan, production path
+        // unchanged.
         'restoreWorkoutPlanForTest',
         'restoreWorkoutTemplatesForSyncDomain',
+        // OI-252 B-pass finding 2 (2026-09-27) — test seam: injects
+        // preFetched workout_templates rows so the legacy-key-migrator gate
+        // added to _restoreWorkoutTemplates is behaviorally testable without
+        // a live Supabase query for the row read itself; delegates to
+        // _restoreWorkoutTemplates, production path unchanged.
+        'restoreWorkoutTemplatesForTest',
         // Day-swapper + sync-load Task 19 — test-only wrapper for the
         // onboarding-replay now()-fallback fix (no existing SyncDomain entry
         // point for this one-shot migration replay).

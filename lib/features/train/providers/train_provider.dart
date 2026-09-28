@@ -2173,8 +2173,9 @@ class TemplatesNotifier extends Notifier<List<Map<String, dynamic>>> {
     // Audit 2026-05-20 / A3: routes through WorkoutWriteService.upsertTemplate
     // (was direct workoutBox.put). Service handles ID stamping, sync fan-out,
     // telemetry pair, and invalidation.
+    // OI-252: the ms-timestamp fallback minted a legacy, non-uuid key.
     final id = (template['id'] as String?) ??
-        'tmpl_${DateTime.now().millisecondsSinceEpoch}';
+        WorkoutWriteService.instance.newTemplateKey();
     await WorkoutWriteService.instance.upsertTemplate(
       templateId: id,
       template: template,
@@ -2217,15 +2218,20 @@ class TemplatesNotifier extends Notifier<List<Map<String, dynamic>>> {
   /// Invalidates every consumer and fires pushSnapshot so the AI
   /// coach stops referencing the deleted template immediately.
   Future<void> deleteTemplate(String templateId) async {
-    final hive = HiveService.instance;
-
     // Step 1: clean-sync wipes future entries for this template and
     // restores displaced originals where applicable.
     await WorkoutScheduleService.instance
         .cleanSyncTemplateSchedule(templateId);
 
-    // Step 2: delete the template row itself.
-    await hive.workoutBox.delete(templateId);
+    // Step 2: delete the template row + queue a cloud tombstone.
+    // OI-252 (stable ID rework) — routes through
+    // `WorkoutWriteService.deleteTemplate` instead of a raw
+    // `hive.workoutBox.delete(templateId)`. The raw delete is exactly
+    // what let a deleted template resurrect on restore: it never told
+    // the cloud anything, so the cloud row (and any other device that
+    // restored it) outlived the "delete". The new writer also fires the
+    // sync fan-out itself, so step 4 below is gone.
+    await WorkoutWriteService.instance.deleteTemplate(templateId);
 
     // Step 3: refresh every consumer.
     ref.invalidateSelf();
@@ -2234,13 +2240,6 @@ class TemplatesNotifier extends Notifier<List<Map<String, dynamic>>> {
     ref.invalidate(todayWorkoutProvider);
     ref.invalidate(workoutStatsProvider);
     ref.invalidate(streakProvider);
-
-    // Step 4: fire-and-forget cloud sync + snapshot push.
-    // C-11 (audit-2026-05-11) — pre-fix only pushSnapshot fired here.
-    // Without syncWorkoutData the cloud `workout_templates` row stays
-    // on prod forever (next restore re-imports the "deleted" template).
-    unawaited(SyncService.instance.syncWorkoutData());
-    unawaited(SyncService.instance.pushSnapshot());
   }
 }
 

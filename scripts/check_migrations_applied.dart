@@ -22,6 +22,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'migration_collision_lib.dart';
+
 void main(List<String> args) async {
   final projectRoot = Directory.current.path;
   final migrationsDir = Directory('$projectRoot/supabase/migrations');
@@ -53,6 +55,26 @@ void main(List<String> args) async {
   stdout.writeln('[Gate 14] Local migrations (${localMigrations.length}):');
   for (final m in localMigrations) {
     stdout.writeln('  $m');
+  }
+
+  // ── 1b. Collision check (OI-255) ───────────────────────────────────────────
+  //
+  // Two files can share the same bare numeric prefix when two branches each
+  // independently pick "the next free number" off their own diverged view of
+  // `main`. The "unapplied" check below cannot see this: `a.startsWith(prefix)`
+  // is satisfied by EITHER colliding file's applied-snapshot entry, so both
+  // pass silently. This is a separate, stricter check for exactly that shape.
+  final collisions = findMigrationPrefixCollisions(localMigrations);
+  if (collisions.isNotEmpty) {
+    stderr.writeln('\n[Gate 14] FAIL — migration number collision(s):');
+    for (final entry in collisions.entries) {
+      stderr.writeln('  "${entry.key}" claimed by: ${entry.value.join(', ')}');
+    }
+    stderr.writeln(
+        '\n  Fix: rename one file to the next free bare number before'
+        ' committing. Re-derive it fresh from origin/main plus any active'
+        ' sibling branch — do not trust the local tree alone (OI-255).');
+    exit(1);
   }
 
   // ── 2. Load snapshot ──────────────────────────────────────────────────────

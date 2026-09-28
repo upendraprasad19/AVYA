@@ -205,23 +205,23 @@ void main() {
     h.server.failWritesTo
         .removeAll(['user_custom_exercises', 'user_custom_foods']);
 
-    // `_reportSyncFailure` dual-posts (recordNonFatal's own log-client-error
-    // leg + its own direct one) -- ONE logical report is 2 requests, exactly
-    // the shape the *_payload_hash_index_writer_to_reader_test.dart siblings
-    // assert with `hasLength(2)`.
+    // One logical report is ONE request since main's B2a-2b dual-write fix
+    // (merged 2026-09-28): `_reportSyncFailure`'s internal recordNonFatal
+    // passes skipServerPost:true, so only its own direct invoke reaches
+    // log-client-error. Before that fix it was 2 requests.
     final exerciseReports =
-        await _logClientErrorReports(h, 'upsert_custom_exercise', atLeast: 2);
-    expect(exerciseReports, hasLength(2),
+        await _logClientErrorReports(h, 'upsert_custom_exercise');
+    expect(exerciseReports, hasLength(1),
         reason: 'the exercise failure must be reported exactly once '
-            '(dual-posted = 2 requests), even though the food failure in '
+            '(one request), even though the food failure in '
             'the SAME pass is the second failure overall '
             '(${exerciseReports.length} arrived)');
 
     final foodReports =
-        await _logClientErrorReports(h, 'upsert_custom_food', atLeast: 2);
-    expect(foodReports, hasLength(2),
+        await _logClientErrorReports(h, 'upsert_custom_food');
+    expect(foodReports, hasLength(1),
         reason: 'the food failure must ALSO be reported exactly once '
-            '(dual-posted = 2 requests) -- the mirror gap: `if (failed == 1)` '
+            '(one request) -- the mirror gap: `if (failed == 1)` '
             'would silence this because it is the second failure of the '
             'pass, not the first (${foodReports.length} arrived)');
 
@@ -247,10 +247,10 @@ void main() {
     h.server.failWritesTo.remove('user_custom_exercises');
 
     final exerciseReports =
-        await _logClientErrorReports(h, 'upsert_custom_exercise', atLeast: 2);
-    expect(exerciseReports, hasLength(2),
+        await _logClientErrorReports(h, 'upsert_custom_exercise');
+    expect(exerciseReports, hasLength(1),
         reason: 'two failures sharing the SAME opType in one pass must still '
-            'collapse to exactly one report (dual-posted = 2 requests) -- '
+            'collapse to exactly one report (one request) -- '
             'the throttle still holds per opType '
             '(${exerciseReports.length} arrived)');
 

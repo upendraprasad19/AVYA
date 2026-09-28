@@ -126,6 +126,20 @@ void main() {
     },
   );
 
+  test(
+    'a cited .dart that is not a _test.dart (a shared harness) is NOT run: '
+    'flutter test cannot load a file with no main',
+    () {
+      final split = splitDartAndSqlPaths([
+        'test/sync/sync_domain_skip_harness.dart',
+        'test/sync/a_test.dart',
+      ]);
+
+      expect(split.dartPaths, ['test/sync/a_test.dart']);
+      expect(split.helperPaths, ['test/sync/sync_domain_skip_harness.dart']);
+    },
+  );
+
   group('scrubbedChildEnvironment (diagnose 4f2a9e)', () {
     test('removes every git hook variable that overrides workingDirectory', () {
       final out = scrubbedChildEnvironment({

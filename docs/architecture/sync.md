@@ -80,7 +80,7 @@ backoff window, so the tap can never be a silent no-op; auto drains
 | `exercise_log_index_YYYY-MM-DD` | List of exercise log IDs for that date |
 | `exlog_<timestamp>_<hash>` | Exercise log: exercise_name, logging_type, weight_kg, reps_completed, sets_completed, volume_kg, is_pr |
 | `wlog_<timestamp>` | Workout log: workout_name, date, duration_seconds, sets_completed |
-| `tmpl_<timestamp>` | Workout template (single-day) — fields: id, name, exercises[], exercise_count, type:'template', assigned_days:[int], created_at. Multi-day AI templates (from `createCustomTemplate` tool) split into N rows tagged with `group_id`/`group_day_index`/`group_total_days` for cross-row identification. |
+| `tmpl_<uuid-v4>` | Workout template (single-day) — fields: id, name, exercises[], exercise_count, type:'template', assigned_days:[int], created_at. OI-252 (2026-09-27): the uuid is client-minted ONCE at create time (`WorkoutWriteService.newTemplateKey()`), never re-derived from name/content — stable across rename/delete/recreate. Supersedes the legacy `tmpl_<ms>` / `tmpl_<nameHash>` schemes (`TemplateIdentityMigrator` rekeys any surviving legacy row). Delete is a rename-on-delete tombstone (`deleted_at` set server-side), not a row drop. Multi-day AI templates (from `createCustomTemplate` tool) split into N rows tagged with `group_id`/`group_day_index`/`group_total_days` for cross-row identification. |
 
 ## Sync schedule + SoT rules
 

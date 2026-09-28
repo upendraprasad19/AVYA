@@ -44,7 +44,35 @@ import 'plan_window_reanchor.dart';
 import 'sync_flags.dart';
 import 'sync/sync_skip_index.dart';
 import 'supabase_service.dart';
+import 'sync_service.dart';
+import 'template_identity.dart';
 import 'workout_schedule_read_service.dart';
+
+/// OI-252 (stable ID rework) — true when [entry] (a raw `plan_json.schedules`
+/// value, LOCAL Hive-key shape) is assigned to a template that is in
+/// [deletedTemplateCloudIds] (cloud ids). A frozen `plan_json` snapshot can
+/// carry a day scheduled against a template deleted since the snapshot was
+/// taken — reapplying it during a restore/heal would resurrect exactly the
+/// reference the delete removed. Shared by `_restoreWorkoutPlan`
+/// (`sync/sync_workout.dart`) and [PlanIntegrityReconciler.reconcile] so the
+/// two ghost-day filters can't drift, the same reasoning as
+/// [PlanIntegrityReconciler.mergeScheduleEntry] being shared with the
+/// restore path.
+///
+/// PURE — no I/O, `@visibleForTesting`-exposed via being a public top-level
+/// function (this file already keeps `mergeScheduleEntry` etc. as static
+/// members instead; this one is top-level so `sync_workout.dart`, which is
+/// `part of '../sync_service.dart'` and cannot see file-private members of a
+/// DIFFERENT library, can call it without going through the class).
+bool isGhostScheduleEntry(
+  Map<String, dynamic> entry,
+  Set<String> deletedTemplateCloudIds,
+) {
+  final templateKey = entry['template_id'] as String?;
+  if (templateKey == null) return false;
+  final cloudId = cloudIdFromKey(templateKey);
+  return cloudId != null && deletedTemplateCloudIds.contains(cloudId);
+}
 
 class PlanIntegrityReconciler {
   PlanIntegrityReconciler._();
@@ -492,8 +520,30 @@ class PlanIntegrityReconciler {
       final schedules = bundle['schedules'];
       var healed = 0;
       if (schedules is Map) {
-        final result = await mergeScheduleBundleIntoHive(
-            Map<String, dynamic>.from(schedules));
+        // OI-252 (merged from main) — same ghost-day filter as
+        // `_restoreWorkoutPlan`: this frozen `plan_json` snapshot can carry a
+        // day scheduled against a template deleted since the snapshot was
+        // taken. Healing it back in would resurrect exactly the reference the
+        // delete removed. Filtered out BEFORE the L1/L3 bundle merge. The
+        // deleted-template set is resolved once, lazily, and only for an entry
+        // that carries a template_id — the common case (a rest/plan day with
+        // no template) never pays a live query it has no use for.
+        Set<String>? deletedTemplateIdsCache;
+        Future<Set<String>> deletedTemplateIds() async =>
+            deletedTemplateIdsCache ??=
+                await SyncService.instance.deletedTemplateCloudIdsForUser(userId);
+        final live = <String, dynamic>{};
+        for (final entry in schedules.entries) {
+          final incoming = entry.value;
+          if (incoming is Map &&
+              incoming['template_id'] != null &&
+              isGhostScheduleEntry(Map<String, dynamic>.from(incoming),
+                  await deletedTemplateIds())) {
+            continue;
+          }
+          live[entry.key.toString()] = incoming;
+        }
+        final result = await mergeScheduleBundleIntoHive(live);
         healed = result.processedCount;
         if (result.discardedLocalArrangement) {
           unawaited(ErrorTelemetry.logEvent('swap_merge_conflict',

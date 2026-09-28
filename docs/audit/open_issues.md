@@ -3613,8 +3613,9 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
 
 ## OI-178 — pg_cron SQL jobs are structurally invisible to the alerting stack: `cron_call_log` is written only by Edge Functions (P1)
 
-- **Status**: OPEN
-- **Blocked on**: a design decision — telemetry bridge vs. a second alert reading `cron.job_run_details`
+- **Status**: CLOSED (2026-09-27, `ops-alerting-b2a`) — diagnose `b4c8e2` + `f7a3d2`
+- **Blocked on**: none
+- **Resolution**: two new pg_cron alerts, applied live — `alert_sql_job_failures` (migration 145, jobid 46, hourly) reads `cron.job_run_details` for `status='failed'` rows; `alert_cron_job_silent` (migration 146, jobid 47, hourly) reads `cron.job` + `cron.job_run_details` for jobs stopped being launched or switched off. Together they cover both aggravations this entry named: `return_message = "1 row"` hiding retention volume is now filed separately as [[OI-251]] (not this entry's scope — that is disk-observability, not run-visibility), and the kill-switch-with-no-run-row gap is closed by 146's INACTIVE (warn) arm. Residual gaps this fix does NOT close, filed separately: self/correlated silence and the `cron.log_run` dependency ([[OI-250]]). Design converged after 4 rounds (145) / 3 rounds (146) of independent plan review plus an accepted B-pass (`docs/plan-reviews/ops-alerting-b2a.md`).
 - **Verified**: 2026-09-10 — `cron_call_log` holds **1,080 rows across 16 distinct `function_name`s**, and **0 rows** for any of `jrd_retention_daily`, `client_errors_retention_daily`, `jrd_vacuum_daily`, `client_errors_vacuum_daily`. All four are live and `active=true` in `cron.job` (jobids 33–36).
 - **Identified**: 2026-08-16 · Hermes L31-F2, same pass as [[OI-177]].
 - **The mechanism**: pg_cron records every run in `cron.job_run_details`. This project's alerting reads `public.cron_call_log`, which is written **only** by `_shared/cron_telemetry.ts` — i.e. only by Edge Functions. A cron job whose command is pure SQL therefore emits nothing any alert reads, no matter how it fails. `alerts/_thresholds.yaml` has no retention/vacuum/disk entry at all.
@@ -6034,3 +6035,143 @@ Fix shape: count distinct users and/or exclude network-class errors; client side
 - **Identified**: 2026-09-26 · filed via mint_oi.sh from branch `ci-green-batch-a` (backlog triage)
 
 Tables are small, so the timeout is not payload size; suspect connection/auth warm-up or serialised awaits.
+
+## OI-250 — pg_cron self/correlated silence has no out-of-band watcher (146 cannot see itself or a whole-scheduler stop; cron.log_run dependency)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-09-26 · filed via mint_oi.sh from branch `ops-alerting-b2a`
+- **Problem**: OI-178's two alerts (145 `alert_sql_job_failures`, 146
+  `alert_cron_job_silent`) both run INSIDE pg_cron. They cover each other only
+  partly: 146 sees 145's job go silent, and 145 sees 146's job fail. Nothing
+  sees 146 itself go silent, and nothing sees the case where pg_cron stops
+  launching jobs at all (scheduler down, DB saturated as on 2026-09-21 e8b4a1,
+  or all jobs stop together). Both alerts also read `cron.job_run_details`,
+  which is written only while `cron.log_run = on`, a postmaster-context GUC.
+  If it is ever switched off, 145 goes blind, and 146 pages every job, then
+  re-pages every 23 h and again at the next :33 after each acknowledgement.
+- **Fix shape**: a heartbeat checked from OUTSIDE pg_cron. For example, the
+  SessionStart alert hook or an external uptime check reads
+  `max(cron.job_run_details.start_time)` plus `cron.log_run` and complains if
+  either is stale or wrong.
+- **Class**: absence of a row reads as health (same family as OI-178, OI-179).
+- **Source**: diagnose `f7a3d2` residual (2); 146 header residuals.
+
+## OI-251 — Retention/vacuum effect is unobserved: return_message '1 row' hides DELETE counts; no retention/disk threshold in alerts/_thresholds.yaml
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-09-26 · filed via mint_oi.sh from branch `ops-alerting-b2a`
+- **Problem**: the retention jobs (`db_maintenance_nightly` after 144 B1,
+  `cleanup_cron_job_run_details`, and the others) report
+  `return_message = '1 row'` whatever they deleted, because the command is one
+  SELECT that wraps the DELETEs. So a job that deletes nothing, or everything,
+  looks identical. 145 catches a retention job that FAILS, and 146 one that
+  stops being LAUNCHED. Nothing catches one that runs "successfully" and deletes
+  nothing (the 141→144 shape, where retention was dead for weeks). There is also
+  no table-size or disk threshold in `alerts/_thresholds.yaml`.
+- **Fix shape**: have each retention job return or log its per-table deleted
+  counts (for example into `cron_call_log` or a `retention_runs` table), and
+  add a threshold entry that alerts on zero deletions over N days where rows
+  older than the retention window exist, plus a table-size growth alert.
+- **Source**: OI-178's third aggravation; diagnose `f7a3d2` residual (4) and
+  `b4c8e2`.
+
+## OI-252 — Workout templates: one stable identity (delete/rename propagation, unit 2a)
+
+- **Status**: OPEN
+- **Blocked on**: B-pass self-review (platform blast radius, mandatory before `--no-ff` merge) + the merge to `main` itself.
+- **Verified**: 2026-09-27 — implementation complete and gate-green: client restore rework across all three template_id-carrying restore paths, migration 145 applied live to dedsavbjuwgarrhphgnl (pg_trigger + information_schema.columns confirmed), `restore-user-snapshot` (v7) and `workout-window-closing` (v15) deployed and Deno-tested pre-deploy, `backups/applied_migrations.json` + `backups/live_schema_columns.json` updated, full `sh scripts/pre-commit.sh` reports OK. 10 new behavioral tests, mutation-proven on 3 legs. Diagnose-doc `docs/diagnoses/2026-09-27-deleted-workout-template-resurrects-via-restore-f4a8c2.md`.
+- **Identified**: 2026-09-26 · filed via mint_oi.sh from branch `template-stable-identity`
+
+Fix shape: migration 145 (add `deleted_at`, keep `UNIQUE(user_id,name)`, BEFORE UPDATE trigger renames on delete-transition + no-ops any write to an already-deleted row) + `restore-user-snapshot`/`workout-window-closing` EF updates + client rework of template create/push/restore/delete across `sync_workout.dart`, `template_service.dart`, `train_provider.dart`, `workout_write_service.dart`, plus a one-time legacy-key migrator. Saved meals (unit 2b, `reuse-audit-fixes` batch) reuse whatever this proves. Full design + 3 converged review rounds: `docs/superpowers/plans/2026-09-26-template-stable-identity.md`.
+
+## OI-253 — PendingTemplateDeletes queued delete lost on logout/offline sign-out before it drains
+
+- **Status**: OPEN
+- **Blocked on**: a durable, cross-session delete queue design (own-scope unit, not part of OI-252)
+- **Verified**: never
+- **Identified**: 2026-09-27 · filed via mint_oi.sh from branch `template-stable-identity`
+
+Symptom: `PendingTemplateDeletes` (`lib/core/services/pending_template_deletes.dart`) lives in
+`userBox`, which is cleared on logout. A template deleted locally but not yet drained to a cloud
+tombstone (offline, or the app closed/signed out before the next sync tick) loses its queued
+delete entry — the local Hive row is already gone (deleted eagerly in
+`WorkoutWriteService.deleteTemplate`), but the cloud row survives untouched and can resurrect on
+a later restore, same class of bug OI-252 fixes for the identity-collision case. Fix shape
+(not designed): either persist the queue somewhere that survives logout (a small dedicated table
+keyed by user id, drained on next login for that user) or drain synchronously/best-effort on
+sign-out before `userBox` clears. Surfaced during OI-252's B-pass (finding 7,
+`docs/reviews/template-stable-identity-bpass.md`); documented as a known limit in
+`pending_template_deletes.dart`'s class doc and the OI-252 diagnose-doc's `cross_account_guard`
+field rather than fixed in that batch (narrow, pre-existing gap; not a regression from OI-252's
+change, and no evidence it's hit in production yet).
+
+## OI-259 — check_plan_review_record_exists.dart cannot parse hand-authored reconciliation-merge subjects
+
+- **Status**: OPEN
+- **Blocked on**: none (false-positive class, not a missing-review class — see Impact)
+- **Verified**: 2026-09-28 — confirmed live on GitHub Actions, both failing commits, both
+  underlying plan-review records
+- **Identified**: 2026-09-28 · filed via mint_oi.sh from branch `oi-reconciliation-merge-gap`,
+  found while verifying CI for an unrelated push (`gate14-migration-collision`)
+
+Symptom: CI run 36339457678 (push of commit `d8832af8` to `main`, 2026-09-27T18:07) FAILED its
+"Plan-review record (>=account merge-to-main)" job with:
+```
+[plan-review-record] FAIL: 43b89035: could not recover merged branch from subject: 'Merge origin/main (ops-alerting-b2a2b) into local main -- second reconciliation, OI-254 client-side fix landed concurrently' (expected "Merge branch 'X'" or "Merge pull request #N from owner/X").
+[plan-review-record] FAIL: 82844bfd: could not recover merged branch from subject: 'Merge origin/main (ops-alerting-b2a2a) into local main -- reconciles after template-stable-identity merge' (expected "Merge branch 'X'" or "Merge pull request #N from owner/X").
+```
+Both commits are hand-authored **reconciliation merges** — `git merge origin/main` run from local
+`main` with a custom `-m` message, to fold in commits another concurrent session had pushed to
+`origin/main` while this session's `main` had diverged (the exact §4.13/multi-session shape this
+repo runs under routinely). `classifyMergeSubject()`'s three recognized shapes
+(`scripts/plan_review_record_lib.dart:61,87,92`) all expect a GIT-GENERATED subject —
+`Merge branch 'X'`, `Merge branch 'X' of <url>`, or `Merge pull request #N from owner/X` — none of
+which match a hand-written "Merge origin/main (X) into local main -- ..." subject, so both fall
+through to `MergeSubjectKind.unrecognized` and hard-fail, even though the diff range for each
+merge IS correctly classified >= account tier (the gate reaches the parse step at all only after
+that check passes).
+
+Impact, checked rather than assumed: **this is a false positive, not a missing review** — both
+merged branches, `ops-alerting-b2a2a` and `ops-alerting-b2a2b`, have real, converged plan-review
+records (`docs/plan-reviews/ops-alerting-b2a2a.md`: `review_rounds: 3`, `verdict: converged`,
+`bpass: accepted`; `docs/plan-reviews/ops-alerting-b2a2b.md`: `review_rounds: 2`,
+`verdict: converged`, `bpass: accepted`) — the gate simply cannot recover either branch NAME from
+the reconciliation commit's custom subject to go look for them. The existing
+`MergeSubjectKind.remoteSyncMerge` case (`check_plan_review_record_exists.dart:606`) already
+special-cases exactly this shape for the OTHER direction — "a `git pull` on main with divergent
+local history" — but only when `ms.branch == 'main'` (i.e., the STANDARD git-generated
+"Merge branch 'main' of <url>" subject from pulling main-into-main); a reconciliation merge that
+NAMES the *other* branch it was folding in (as both of these do, in parentheses) does not match
+that regex either, so it falls through past the exemption into `unrecognized`.
+
+Practical consequence, checked: because CI evaluates only the PUSHED RANGE (`PUSH_BEFORE..HEAD`)
+on each push, a subsequent clean push (this OI's own filing branch, and the preceding
+`gate14-migration-collision` push, `70895e15`) does NOT re-encounter these two already-landed
+commits and passes independently — so `main`'s LATEST push is not blocked by this. The residue is
+narrower but real: (1) that specific historical CI run (`36339457678`) sits permanently red in
+Actions history for a review that in fact happened; (2) the NEXT reconciliation merge with a
+similarly-shaped hand-written subject will hard-fail its own push's CI the same way, and — unlike
+this instance — a future reconciliation might not have every merged branch's plan-review record
+already sitting on disk to fall back on if someone tries to work around it by hand.
+
+Fix shape (not designed): widen `classifyMergeSubject()` with a new pattern recognizing
+"Merge origin/main ([branch]) into local main" (and close variants of the reconciliation-merge
+phrasing this repo's own sessions have now used at least twice) as a `remoteSyncMerge`-like kind
+that extracts `[branch]` as the branch to look up, rather than requiring `ms.branch == 'main'`.
+Needs care: the extracted name must still go through the same `recordSlug()` normalisation and
+Dependabot/foreign-PR checks as `branchMerge`, since a hand-written subject is exactly the kind of
+free-text a malicious or careless commit could use to smuggle an arbitrary string past the "branch
+merge" trust model this gate is built on (see the gate's own `foreignPullRequest` handling for the
+threat model it already defends against).
+- **Class**: a keystone gate's merge-subject classifier enumerates GIT-GENERATED subject shapes
+  only, and a legitimate, repo-sanctioned hand-authored merge shape (reconciling a diverged `main`
+  across concurrent sessions, §4.13) falls outside all of them — the same "enumerated allowlist
+  meets a real but unanticipated shape" class as `check_hive_first_pattern.dart`'s alias-set gap
+  and `mint_oi.sh`'s original three-shape-only design, just for merge subjects instead of function
+  calls or OI reservations.
+- **Source**: GitHub Actions run 36339457678 (job 108676553930), discovered while confirming CI
+  green for the unrelated `gate14-migration-collision` push (diagnose `d5f1b8`).

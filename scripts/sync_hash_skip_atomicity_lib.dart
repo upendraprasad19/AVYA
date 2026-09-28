@@ -19,9 +19,13 @@ import 'sync_no_now_fallback_lib.dart'
 // ─────────────────────────────────────────────────────────────────────────
 
 /// Methods whose Supabase writes need not sit inside `pushIfChanged(`:
-/// single-row pushes, and the coach loop, which skips by the cloud id it
-/// stamps into each Hive row (spec §5.9).
+/// single-row pushes, the coach loop, which skips by the cloud id it
+/// stamps into each Hive row (spec §5.9), and OI-252's
+/// `_drainPendingTemplateDeletes` (merged from main 2026-09-28): it drains a
+/// QUEUE, removing each entry once its tombstone lands, so it cannot resend
+/// an unchanged row every pass, which is the pattern G1 exists to stop.
 const Set<String> kSyncWriteAllowlist = {
+  '_drainPendingTemplateDeletes',
   '_executeUserProfileUpsert',
   '_syncUserProfile',
   '_syncUserPreferences',

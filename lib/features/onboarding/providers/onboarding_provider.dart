@@ -815,14 +815,9 @@ Format (use • not JSON):
 • Bench: 40kg → 60kg, Squat: 50kg → 80kg
 • One motivational line''';
 
-      final context = {
-        'system_prompt':
-            'You are a sports science expert making evidence-based fitness predictions. Be specific with numbers but realistic.',
-      };
-
-      // Use predict() — bypasses daily limit check and interaction logging.
-      // Predictions are a FREE feature, separate from the AI Coach quota.
-      final response = await AiService.instance.predict(predictionPrompt, context);
+      // predict() — its own 3/day quota, separate from the AI Coach chat
+      // quota, and no interaction logging. Free for every tier.
+      final response = await AiService.instance.predict(predictionPrompt);
       final reply = response.reply;
 
       if (reply.isNotEmpty) {

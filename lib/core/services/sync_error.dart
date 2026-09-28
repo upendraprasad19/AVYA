@@ -7,6 +7,53 @@
 /// Reference: docs/superpowers/specs/2026-04-17-sync-reliability.md Pillar A.
 library;
 
+/// Offline-network noise signature (B2a-2b, diagnose — see
+/// docs/diagnoses/, coupling risk named by d2c9f4's impact_analysis).
+/// Mirrors migration 147's `alert_client_errors_spike` exclusion signature
+/// BYTE-FOR-BYTE (see
+/// supabase/migrations/147_alert_client_errors_spike_breadth.sql) — the
+/// server-side alert and this client-side classification must agree on
+/// what counts as "offline noise" or the two sides of the same signal
+/// classify differently. Pinned by
+/// test/contracts/offline_signature_migration_147_parity_test.dart, which
+/// re-derives both sides from the migration file so drift is caught rather
+/// than silent (an applied migration is immutable, so if this ever needs
+/// to change, it can only be via a NEW migration re-defining the job).
+final RegExp _offlineNoiseSignature = RegExp(
+  r'(failed host lookup|socketexception|connection (refused|reset|closed|abort)|network is unreachable|software caused connection abort|failed to fetch|load failed|xmlhttprequest error)',
+  caseSensitive: false,
+);
+
+/// Never-offline override — a real HTTP status code. Case-insensitive in
+/// the migration (`~*`), mirrored the same way here.
+final RegExp _offlineNoiseStatusOverride = RegExp(
+  r'status(Code)?: ?[1-9][0-9]{2}',
+  caseSensitive: false,
+);
+
+/// Never-offline override — a server-answered Supabase exception type.
+/// Case-SENSITIVE in the migration (`~`, not `~*`) — mirrored the same way
+/// here; do not add `caseSensitive: false`.
+final RegExp _offlineNoiseTypeOverride = RegExp(
+  r'(PostgrestException|FunctionsHttpException|FunctionsRelayException|AuthApiException)',
+);
+
+/// True when [message] is shaped like offline-network connectivity loss
+/// per migration 147's exact signature, with NO override (a real HTTP
+/// status code, or one of the four server-answered exception types, which
+/// mean a server DID answer and this is never network-loss noise).
+///
+/// Deliberately does NOT special-case a bare "timeout" — migration 147
+/// does not exclude offline-caused client timeouts either (undercounting a
+/// real incident is worse than occasionally counting a stalled request),
+/// so this returns false for a timeout-only message, matching the SQL.
+bool isOfflineNoiseSignature(String message) {
+  if (!_offlineNoiseSignature.hasMatch(message)) return false;
+  if (_offlineNoiseStatusOverride.hasMatch(message)) return false;
+  if (_offlineNoiseTypeOverride.hasMatch(message)) return false;
+  return true;
+}
+
 /// Base class for all sync failures. Use the `SyncError.classify()`
 /// factory to convert caught exceptions into one of the concrete subtypes.
 sealed class SyncError {
@@ -30,6 +77,16 @@ sealed class SyncError {
   /// - Network / rate-limit / auth / unknown → retry
   /// - Validation / schema → pointless to retry; dead-letter immediately
   bool get isTransient;
+
+  /// True when this error's [message] matches migration 147's exact
+  /// offline-noise signature (see [isOfflineNoiseSignature]) — i.e., the
+  /// client and the alert_client_errors_spike alert classify this exact
+  /// failure the SAME way. Null-safe: an error with no message is never
+  /// offline-noise-shaped. This is broader-than-NetworkError-narrower: a
+  /// NetworkError classified via a bare "timeout" is NOT offline-noise per
+  /// this getter (matching the SQL), while it IS a NetworkError for retry
+  /// purposes — the two classifications answer different questions.
+  bool get isOfflineNoise => message != null && isOfflineNoiseSignature(message!);
 
   /// Build a `SyncError` from a caught exception. Inspects the error type
   /// and message to choose the most specific subtype. Falls back to

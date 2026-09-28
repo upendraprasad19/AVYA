@@ -45,19 +45,29 @@ Set<String> extractRecentTestPaths(String indexContent, DateTime cutoff) {
 /// "load" them. Splits an extracted path set into the Dart paths (runnable
 /// via `flutter test`) and the `.sql` paths (existence-checked only; each
 /// runs against live Postgres via its own dedicated harness, not this gate).
-({List<String> dartPaths, List<String> sqlPaths}) splitDartAndSqlPaths(
+///
+/// A cited `.dart` path that is not a `_test.dart` file (a shared harness or
+/// helper a diagnose doc names alongside its tests) goes to [helperPaths]:
+/// existence-checked only, never handed to `flutter test`, which fails to load
+/// a file with no `main` (2026-09-28, the day-swapper merge commit, where the
+/// doc a9d3f6 cited `sync_domain_skip_harness.dart`).
+({List<String> dartPaths, List<String> sqlPaths, List<String> helperPaths})
+    splitDartAndSqlPaths(
   Iterable<String> paths,
 ) {
   final dartPaths = <String>[];
   final sqlPaths = <String>[];
+  final helperPaths = <String>[];
   for (final p in paths) {
     if (p.endsWith('.sql')) {
       sqlPaths.add(p);
-    } else {
+    } else if (p.endsWith('_test.dart')) {
       dartPaths.add(p);
+    } else {
+      helperPaths.add(p);
     }
   }
-  return (dartPaths: dartPaths, sqlPaths: sqlPaths);
+  return (dartPaths: dartPaths, sqlPaths: sqlPaths, helperPaths: helperPaths);
 }
 
 /// The environment to hand the child `flutter test`, with git's hook variables

@@ -41,8 +41,9 @@ sync_methods: [_syncWorkoutLogs, _syncScheduleCompletions, _syncStreaks, _syncWo
 restore_methods: [_restoreUserProgress, _restoreWorkoutPlan]
 cloud_table: scheduled_workouts
 cloud_columns: [updated_at]
-contract_test_path: "test/sync/sync_domain_skip_harness.dart (shared per-domain skip contract,
-  coordinator Task 5) plus 14 x test/contracts/<concept>_writer_to_reader_test.dart (one per new
+contract_test_path: "test/sync/sync_skip_index_test.dart (shared per-domain skip contract,
+  coordinator Task 5; the per-domain tests share the SyncHarness helper, which has no
+  main and is not itself a test) plus 14 x test/contracts/<concept>_writer_to_reader_test.dart (one per new
   hash-index concept, Tasks 14-20) plus test/sql/day_swap_sync_load_live_verify.sql (BEGIN...ROLLBACK
   discrimination test, Task 7) — that SQL file and migration 148 are held out of the tree until the
   Task 34 live apply and land in that commit; until then neither exists at these paths (B-pass

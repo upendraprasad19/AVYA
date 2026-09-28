@@ -249,6 +249,30 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-28 (c)** — blast-radius **catastrophic** — branch `day-swapper-sync-load`, the
+  MERGE of origin/main 7cb4eb78 (OI-252 stable template ids + B2a-2b telemetry dedup) into the
+  branch. One context-blind Sonnet reviewer read the staged resolution against both parents.
+  **4 findings (1 P1, 2 P2, 1 P3), 0 false_alarm, all fixed** (F1 in the merge commit, F2-F4 in
+  the next, diagnose `a3e7d9`). Review: `docs/reviews/33fb1d332932-review.md`.
+  **Tuning 1 — a merge review asks where the two sides MEET, not whether each hunk is right.**
+  All four findings were semantics that neither parent had wrong on its own. A branch guard
+  written for pre-OI-252 identity (Case 2's "no local template ⇒ omit") became wrong once main
+  put the id in the key. A branch skip ("every bundled key present") was never satisfiable
+  once main filtered ghost days out of the write. Brief a merge reviewer with each side's
+  INVARIANTS (not just its diffs), and ask of every branch guard: does the other side's new
+  invariant make this guard's premise false?
+  **Tuning 2 — a sweep test's window IS its input set (lens 8).** H-42's pairing test matched
+  within 300 characters, and one real pair sat 583 characters apart behind a comment. The test
+  was green on a live defect. A fixed character window is a claim that no comment is ever long;
+  scope the pairing by syntax (the enclosing block) instead. On widening, re-derive the count
+  (70 → 75) and treat every newly visible site as a finding to check, not as noise.
+  **Tuning 3 — test STUBS encode old semantics too.** After the merge, a branch test's SELECT
+  stub answered one id for every template name. Harmless before OI-252; afterwards main's
+  migrator folded two templates into one key and the test failed for a reason that had nothing
+  to do with its subject. When a merge changes HOW the code learns a fact (here, SELECT → key),
+  grep the tests for stubs that answer the old question.
+  False-alarm rate 0/4 → no lens removed.
+
 - **2026-09-28** — blast-radius **catastrophic** — branch `day-swapper-sync-load` (one
   day-swap engine for Train/Home/coach + the OI-237 sync-load fix; 198 files). Whole-branch
   review split across FOUR context-blind Sonnet reviewers, each in its own isolated worktree
@@ -336,6 +360,110 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   keys on a different value than the check — mirror case "two concurrent callers". Fixed by
   serializing the check-then-write; proven with a `Future.wait` test.
   Review: `docs/reviews/reuse-audit-fixes-bpass.md`.
+
+- **2026-09-26** — blast-radius **platform** — branch `ops-alerting-b2a`
+  (OI-178: two new pg_cron alerts — migration 145 for a SQL job that ran and
+  failed, migration 146 for one that stopped being launched or was switched
+  off — plus their contract tests, a shared test-body-reading helper, yaml/
+  registry/doc updates, and two new OI board entries). Staged-diff review
+  (`docs/reviews/1c2e14c715da-review.md`), dispatched after 3 independent
+  plan-review rounds had already converged on the same diff (145 after 4
+  rounds, 146 after 3). **4 findings (1 P1, 2 P2, 1 P3); 0 false_alarm — all 4
+  fixed same batch.** The P1 is the interesting one: `guard_without_its_mirror`
+  caught a dedup `NOT EXISTS` whose two severity-branches were each pinned as
+  their OWN `contains()` substring, so an `OR`→`AND` mutation on the connective
+  BETWEEN them left both substrings intact and both target assertions green —
+  disabling dedup for both severities (a page-storm) with the mutation run
+  showing 7/7 pass. Three prior independent review rounds (context-blind, live
+  DB access, one of them explicitly mutation-testing 3 *other* survivors in
+  this same dedup block) all missed this exact one, because each one that
+  looked at the dedup mutated a BRANCH's content, never the token connecting
+  two already-individually-verified branches. The two P2s were a citation
+  drift (a diagnose doc's `line:` fields onto the migration's OWN header,
+  which had grown across those same 3 rounds — CLAUDE.md §4.9's own
+  documented recurring class) and a factual error in a migration's about-to-
+  be-immutable header comment ("14 jobs failed within 7 hours" — live query
+  independently re-run by both the reviewer and the coordinator: actual span
+  14h44m). **Tuning: widen `guard_without_its_mirror`'s method note.** The
+  existing method already says "mutate it and run it" and "follow the return
+  value to its call site" — add: *when a compound boolean condition has
+  multiple sub-clauses individually pinned by separate `contains()`
+  assertions, the CONNECTIVE ITSELF (the token joining two already-verified
+  operands) is a distinct mutation target that is invisible to per-clause
+  literal-substring assertions, because both operands survive verbatim in the
+  body regardless of what joins them.* The one-`contains()`-per-block pattern
+  reads as *more* thorough than a single sprawling assertion — it is not; a
+  single assertion spanning both blocks including their connective (145's own
+  sibling dedup does exactly this, and WAS caught) is strictly stronger here.
+- **2026-09-26** — blast-radius **catastrophic** — branch `single-owner-a` (single-owner
+  audit unit a1: ai-proxy `prediction` metered 3/day on the ledger with a server-owned
+  prompt, request-size limits in one validator, delete-account purging every user-owned
+  bucket through one list). Two context-blind reviewers: A read-only (lenses 1-5, 7, 9,
+  10 + rebase/decision/tool-side-effect), B mutation lenses 6 + 8 in an isolated
+  worktree with the staged patch applied, so no tree was ever mutated under A.
+  **7 findings (4 P1, 1 P2, 2 P3); 0 false_alarm — all fixed in-batch, each re-proven
+  by mutation.** Review: `docs/reviews/d65b986f910b-review.md` (dispatched at
+  c5d659f52986; renamed after the fixes moved the hash).
+  **Tuning 1 — lens 2 gains the SERVER-ADDS-A-STATUS question.** When a diff gives an
+  existing client caller a NEW status (here a 429 daily cap), follow it into the client:
+  `functions.invoke` THROWS on every non-2xx, so an `if (response.status != 200)` inside
+  the `try` is dead code and the status survives only if an `on FunctionException`
+  clause keeps `e.status`. Without one, the cap reached the user as "try again later".
+  The server half was correct and fully tested; the defect lived entirely in a file the
+  server change never needed to touch.
+  **Tuning 2 — lens 6: a test NAMED for an attack must ATTEMPT it.** "The system prompt
+  is the server's" called the handler with no `context` at all, so it proved only the
+  default path; the reviewer restored the exact pre-fix shape (fall back to
+  `context.system_prompt` when present) and 15 of 15 tests stayed green. The author's own
+  mutation had used a more detectable shape (`systemPrompt: String(message)`) and
+  reddened 1 — a mutation chosen for convenience certified a test against the one
+  regression it could not see. Mutate to the defect's real historical shape.
+  **Tuning 3 — lens 6 on discovery greps: resolve by VALUE and fail closed.** A contract
+  test finding client Storage buckets matched constants by NAME (`…Bucket =`); a const
+  named `_exportsLocation` was invisible, and the "every bucket is purged" check passed
+  vacuously. The fix resolves every bucket argument through same-file constants, treats
+  anything unreadable (a call, a qualified name, an aliased `.storage` handle) as a
+  failure, and keeps the one legitimate pass-through as an enumerated allowlist that must
+  stay in use — the OI-162 slice-2 precedent (resolve, then fail closed) applied to a new
+  surface.
+  **Process note:** `git apply --index` of the staged patch into the reviewer's isolated
+  worktree failed on one hunk of an auto-generated index that main had regenerated since
+  the base; `--exclude` on that file was the right call and the reviewer disclosed it.
+  Both reviewers were told "no writing statement, not even inside BEGIN…ROLLBACK"; both
+  used SELECT only.
+  False-alarm rate 0/7 → no lens removed; lenses 2 and 6 extended per above.
+
+- **2026-09-26 (b)** — blast-radius **catastrophic** — branch `single-owner-a`
+  (single-owner audit unit a1, ROUND 2: a fresh two-reviewer B-pass dispatched
+  against the delta on top of the round-1-reviewed state — the Hermes-pass
+  remediation itself, specifically the new `PredictionAttemptGate` and the
+  L37-F2 sanitized-length snapshot fix). **2 findings (1 P1, 1 P2); 0
+  false_alarm — both fixed in-batch, each re-proven by mutation.** Review:
+  `docs/reviews/a7fae1c65d95-review.md` (dispatched at the round-1-reviewed
+  hash; renamed twice after the fixes, then two purely mechanical
+  documentation trailers, each moved the hash — see the file's own header
+  for the full chain back to `d65b986f910b`).
+  **Tuning 4 — lens 6's mirror question extends to a whole SINGLETON
+  FAMILY, not just the one guard being added.** `PredictionService` was the
+  one of eight `SingletonLifecycleRegistry`-eligible services never
+  registered — the mirror of "does this NEW guard have a gap" is "does
+  every sibling of this class of state ALREADY have the guard this class
+  needs", and the registry's own SoT concept (`docs/sot_registry.yaml`)
+  made the omission a one-`grep` finding once asked. The fix registers it,
+  clears its in-flight gate on account switch, and separately guards the
+  write itself against the account changing while the network call was in
+  flight — two independent defects the same singleton-omission created.
+  **Tuning 5 — lens 8 (asserted_fixture_value) applies to a CLIENT/SERVER
+  measurement pair, not just one side's literal.** The client measured a
+  snapshot's plain `json.encode(...).length`; the server (this same batch's
+  own L37-F2 fix) measures it AFTER `sanitizeJsonForPrompt` re-escapes rare
+  separator characters. Neither side's number was wrong in isolation — the
+  finding is that the two measurements of the SAME bytes can disagree, and
+  the only way to see it is to compute both from a real fixture (a
+  throwaway probe script, not an estimate) and check they diverge across
+  the ceiling, which the fixture the fix landed with does.
+  False-alarm rate 0/2 → no lens removed; lenses 6 and 8 extended per above.
+
 - **2026-09-25** — blast-radius **platform** — branch `oi126-training-day-predicate`
   (OI-126: unifies the training-day predicate so a `type: 'logged'` schedule row
   agrees between the weekly streak and phase-completion/PRO-advance-gate/rest-day-banner
@@ -3142,3 +3270,168 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   `count(*) FILTER (WHERE <the function's own predicate>)` SELECT instead.** The same count query
   gave the exact answer (735 / 2,416 / 85 / 11) with zero writes. Review:
   `docs/reviews/3a9abffad52f-review.md`.
+- **2026-09-27** — blast-radius **platform** — branch `template-stable-identity` (OI-252, unit
+  2a: workout-template stable-identity rework — migration 145 already live, both Edge Functions
+  already deployed). **7 findings, 0 false alarms** (independently re-verified against live
+  code/cloud state by the dispatching session, not trusted from the subagent's prose) — 2 P1
+  (`guard_without_its_mirror` — migration 145's trigger is UPDATE-only and never fires on the
+  INSERT-lands-first race its own header describes; a class doc + a converged plan-review
+  record both claimed a design the code never implemented), 3 P2 (`asserted_fixture_value` — a
+  stray find/replace collateral swept 2 unrelated OI-board citations; a diagnose-doc
+  self-contradicting on a migration's live status; a "tracked separately on the OI board" claim
+  with zero matching board entries, fixed by filing OI-253), 2 P3 (`writer_reader_drift` — a
+  combined SoT registry entry's `line_range` was accurate for one of its two named methods and
+  ~800 lines off for the other; a diagnose-doc citation pointing at a shared helper's top-level
+  declaration instead of its actual call site inside the method it was cited for). **Tuning — a
+  suggested-fix's OWN regression-test proposal can assume test infrastructure that does not
+  exist.** Finding 2's suggested fix asked for "a behavioral test that seeds a legacy key and
+  drives restore" — reasonable on its face, but this repo has ZERO Supabase-mocking seam
+  anywhere (`SupabaseService.client` hardcodes `Supabase.instance.client`, never initialized in
+  unit tests) and the migrator's legacy-key path always makes a live query once a legacy key
+  exists, so the proposed test literally could not be written as specified without first
+  building mock infrastructure from scratch — disproportionate to a single-fix remediation. **No
+  lens currently checks whether its own `suggested-fix`'s proposed test is achievable against
+  the repo's real test infrastructure before proposing it** — worth watching for a second
+  instance before adding a dedicated check; the workaround here (a narrow test-only invocation
+  counter proving the gate is REACHED, without exercising the untestable network branch) is a
+  reusable pattern for this "live-network-gated logic, zero mock infra" shape. Review:
+  `docs/reviews/template-stable-identity-bpass.md`.
+- **2026-09-27** — blast-radius **platform** — branch `ops-alerting-b2a2a` (migration 147:
+  `alert_client_errors_spike` rewrite — distinct-event counting, offline-noise exclusion,
+  per-user + server-error-class breadth arms, rank-based dedup; recurrence of 2026-06-06's
+  f0b9d3 spike-filter-drift class). **1 finding (P1, guard_without_its_mirror): the migration
+  adds an `error_code NOT IN ('event', 'info')` guard to the NEW `users`/`server_events` arms
+  specifically to exclude the routine `subscription_refresh_query_returned_null` breadcrumb, but
+  the PRIMARY `cnt` metric — the one this whole migration exists to fix — has no equivalent
+  guard, so the same breadcrumb (and any other event/info-coded op_type matching the `_null`
+  reinclusion regex) still inflates `cnt` unconditionally.** Live data confirmed the exposure is
+  real (28 occurrences of this exact breadcrumb over 36 days, matched by the outer WHERE) but not
+  currently material (max observed `cnt`=24 vs. floor 40). **Tuning: a fix that hardens two new
+  arms against a NAMED noise source while leaving the pre-existing primary metric exposed to the
+  IDENTICAL noise source is easy to miss because the diagnose doc's own narrative frames the
+  breadcrumb problem as "solved" once the arm it explicitly discusses is protected — the reviewer
+  had to independently ask "which OTHER column reads from the same filtered rowset" rather than
+  trusting the doc's scoped framing.** Also mutation-tested two of the diff's own claimed
+  mutation-proofs directly (removed the `server_events` arm's exception-shaped guard alone;
+  removed the fire-condition's parens) rather than accepting the diagnose doc's mutation record on
+  faith — both reproduced the doc's claimed "exactly 1 of 10 tests reddens" exactly, restored via
+  `cp` + `sha256sum` verification each time. All of the diagnose doc's live-data numeric claims
+  (8 firing ticks, max_users=2, 770/6199 offline rows, 0 overridden, 8/66 status/type matches)
+  were independently re-derived from fresh read-only SQL rather than re-run from the doc's own
+  queries, and all matched exactly. Review: `docs/reviews/46c9b9ff3bde-review.md`. **Resolution:**
+  triaged `accepted`, fixed by documentation + a pinning test rather than a SQL change — narrowing
+  `cnt` would have undone migration 087's own P0 fix, and a name-based exclusion for this one
+  op_type is the exact "transient denylist" f0b9d3's diagnose doc already rejected. Filed OI-254
+  (the real fix is a client-side op_type rename, in scope for the batch's next unit B2a-2b, not
+  this pure-SQL migration); mutation-proven pinning test added asserting `cnt` carries no `FILTER`
+  clause, so a future silent change to either side of the asymmetry is caught.
+- **2026-09-27 (c)** — blast-radius **platform** — post-commit range review
+  `a60c7eac..HEAD` (`merge-reconciliation-82844bfd`): the `reuse-audit-fixes`/`template-stable-
+  identity` merge into `main`, scoped to the 2 commits nobody had reviewed yet (a founder-approved
+  `--no-verify` nutrition fix `fef26cbb`, and the merge-reconciliation commit `82844bfd` itself)
+  while explicitly told to spot-check rather than re-review the 5 already-B-passed
+  `template-stable-identity` commits underneath. **3 findings (1 P1, 1 P2, 1 P3); 0 false_alarm —
+  1 fixed with a mutation-proven test, 1 fixed by correcting a doc's shape, 1 not code-fixable
+  post-hoc (captured as a session memory lesson instead).** Review:
+  `docs/reviews/merge-reconciliation-82844bfd-review.md`.
+  **Tuning — a NEW P1 shape for process-discipline findings, not covered by any existing lens:
+  `--no-verify` is an ATOMIC bypass of the whole pre-commit hook chain, and a commit's own
+  justification can name only the ONE gate the author was thinking about while silently skipping
+  OTHERS the author never considered.** `fef26cbb` legitimately bypassed
+  `check_closes_oi_performed.dart` (a genuine false-positive, independently re-verified) — but it
+  was ALSO a non-merge commit in the primary/shared worktree, which `check_commit_from_worktree.dart`
+  (a gate CLAUDE.md itself says to "Never `--no-verify` around") would independently have blocked.
+  The reviewer proved this live by staging a throwaway file in that exact worktree and running the
+  gate directly (`[worktree-guard] FAIL`), rather than reasoning from the gate's source alone. No
+  actual harm occurred (the reviewer separately confirmed the staged content was correct
+  throughout), but the commit message's bypass justification was incomplete. **Add to the review
+  method: whenever a commit's message discloses a `--no-verify`/gate-bypass justification for ONE
+  named gate, independently re-derive every OTHER gate that would apply to that commit's actual
+  shape (worktree location, blast-radius tier, touched-concept registry membership) and check
+  whether the message discloses all of them — a single-gate justification is a claim about that
+  gate only, never about the whole bypass.**
+  **Second — lens 6 (`guard_without_its_mirror`) found the sharpest instance yet of "the fix
+  covers only the call site a failing TEST happened to exercise, not the bug class it belongs
+  to."** The P2: `fef26cbb`'s `ref.mounted` guard fixed exactly 1 of 7 structurally identical
+  unguarded `ref.invalidate`/`ref.invalidateSelf()`-after-`await` call sites in the SAME file —
+  found by a straightforward but exhaustive cross-reference of every `await` against the nearest
+  following `ref.invalidate*` call, not by anything exotic. One sibling
+  (`FoodLogNotifier.deleteFoodLog`) sits 30 lines below the fixed method, in the SAME class, same
+  invalidated provider, reachable from a swipe-to-delete gesture — as close to "the exact mirror
+  case" as this lens has recorded.
+  False-alarm rate 0/3 → no lens removed; the review-method note above is new (not a lens-prompt
+  change, since no single lens 1-8 is shaped to catch a commit-message's OWN disclosure
+  completeness — logged as a standing review-dispatch instruction instead).
+- **2026-09-27 (second entry today)** — blast-radius **platform** — branch `ops-alerting-b2a2b`
+  (unit B2a-2b: the sync-telemetry H-42 dual-write fix widened from 1 to 87 caller-level sites by
+  the batch's own round-1 plan-review, the OI-254 client-side op_type rename from the entry above,
+  and a new client-side `isOfflineNoiseSignature`/`isOfflineNoise` mirror of migration 147's
+  offline-noise exclusion regex). **5 findings (1 P1, 1 P2, 2 P4, 1 P3); 0 false_alarm — all 5
+  accepted and fixed/documented in-batch.** Review: `docs/reviews/af6a1b2fe201-review.md`
+  (renamed once from `d763fd5fd6cc-review.md` after the fixes below moved the staging hash).
+  **Every finding was a documentation/process-completeness gap, zero code defects** — the
+  underlying fixes (the 87-site dual-write correction, the op_type rename, the regex mirror) were
+  each independently re-derived from scratch and mutation-tested live by the reviewer and matched
+  the diagnose-doc's own claims exactly.
+  **Tuning 1 — self_attesting_artifact (lens 10) gains: a diagnose-doc's "OI-NNN is closed" claim
+  is checkable against the OI BOARD ITSELF, not just against the diagnose-doc's own internal
+  consistency.** The diagnose-doc and a staged test comment both asserted OI-254 was closed, but
+  `docs/audit/open_issues.md` — untouched by the diff — still carried `Status: OPEN` with no
+  `closes-oi:` transition anywhere in the commit. This is a NEW instance of the family, distinct
+  from every prior self_attesting_artifact finding in this history (which all checked a claimed
+  ARTIFACT's existence — a test file, a review file, a plan-review record): here the artifact
+  (the diagnose-doc) exists and is internally coherent, but the CLAIM IT MAKES ABOUT A DIFFERENT,
+  UNTOUCHED FILE is what's false. Add to lens 10's method: when a diff's own prose asserts an OI
+  is closed, diff `docs/audit/open_issues.md` against the staged set — if the board file isn't
+  even IN the diff, the claim is unverified by construction.
+  **Second, sharper half: fixing this finding required an INDEPENDENT AUDIT, not just a board
+  edit.** The OI-254 entry's own "Fix shape" field had instructed auditing "~24 other call-sites"
+  for the same `_null`-suffix classification defect before the OI could be honestly marked closed
+  — a step the diagnose-doc's frontmatter implied was already done (naming "6 deliberately-
+  instrumented op_types...investigated") but never showed the verification command for. Re-ran
+  the audit from scratch (`grep -rnoE` for every string literal matching migration 087's full
+  failure-shaped regex across `lib/`, spot-checked 2 of the 6 hits against their code comments)
+  before trusting the board closure — confirming the claim was actually true, not just repeating
+  it. **When an OI's own "Fix shape" names a follow-up verification step, closing that OI is not
+  complete until that step is independently reproduced, not merely cited as already done.**
+  **Tuning 2 — a recurrence, not new, of the "gate PASS is not evidence of full accuracy" class
+  (2026-08-30/2026-09-13(second) entries): `check_sot_registry_parity.dart` passed on a
+  `line_range` that covered a method's DECLARATION but not its BODY** — the method opened inside
+  the cited range and closed 35 lines past the end of it, with the exact `recordNonFatal(...)`
+  call this diff modifies sitting outside the range entirely. The gate only checks the symbol's
+  declaration line, never the range's actual span. No lens change (already documented); logged as
+  a fourth data point for this specific gate's known blind spot.
+  **Tuning 3 — blast_radius_mismatch (lens 3) on an unenforced `requires:` list benefits from a
+  PER-FIX rationale, not a blanket "telemetry is low-risk" wave-through.** The diff had no
+  kill-switch for any of 3 fixes; rather than accept the platform-tier `requires: feature_flag`
+  gap as uniformly mitigated (this skill's own precedent from 2026-08-11/2026-09-16(d)), the
+  resolution wrote a distinct one-sentence justification per fix (write-count-only vs. a durable
+  retained writer; a pure rename with a confirmed zero-reader cross-tree sweep; a pure function
+  with zero production callers) — because the three fixes have genuinely different risk shapes,
+  and a single blanket sentence would have hidden that Fix 1 (removing a write) and Fix 3 (adding
+  an inert function) sit at opposite ends of "how bad if this is wrong".
+  False-alarm rate 0/5 → no lens removed; lens 10 extended per Tuning 1 above.
+- **2026-09-27 (d)** — blast-radius **platform** — merge-reconciliation-only review of
+  `43b89035` (`Merge origin/main (ops-alerting-b2a2b) into local main`, a SECOND reconciliation
+  merge on the same push cycle as the `(c)` entry above — `origin/main` moved again between the
+  first merge and the first push attempt). Scoped explicitly to "did the conflict resolution
+  itself lose/corrupt/misplace anything", not a re-review of either parent's own feature work
+  (both already independently B-passed). **0 findings.** Review:
+  `docs/reviews/merge-reconciliation-43b89035-review.md`.
+  **No new lens — logged per this file's own "record a clean pass with real verification work
+  behind it" convention, since the alternative (a reviewer that reads the merge commit message,
+  finds it plausible, and reports 0 findings) is indistinguishable in the output file alone.**
+  Every claim was checked against git OBJECTS, not prose: `git merge-file` (the plumbing 3-way
+  merge primitive) was run independently on EVERY touched file — both the 5 hand-resolved
+  conflicts and the 2 auto-merged files — to reconstruct what an unassisted merge would have
+  produced and diff it against the actual committed content. For the 5 hand-resolved files, the
+  reconstruction differed from the committed result *only* in the literal conflict-marker lines
+  (a textbook clean resolution); for the 2 auto-merged files, the reconstruction was
+  byte-identical to the commit, proving git's own algorithm handled them correctly rather than
+  assuming it from their absence in the conflict list. Both generated index files were actually
+  re-run against the live tree and diffed (zero diff both times), not trusted from the "mechanical
+  regeneration" framing. One conflict (an OI being deleted on one side while additively edited on
+  the other, in `open_issues.md`) required tracing true 3-way arithmetic (base/HEAD/origin) rather
+  than reading the diff, to confirm the resolution correctly chose "accept the deletion" — worth
+  noting as a reusable pattern for a future add-vs-delete board conflict: verify the DELETED
+  entry exists intact in its new location (`closed_issues.md`) before accepting the removal.

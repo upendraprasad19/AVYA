@@ -322,15 +322,15 @@ Deno.test("ai-proxy cart_auditor — retries: 2 passed", async () => {
   );
 });
 
+// Single-owner audit 2026-09-26 (P0 #5): the prediction call moved out of
+// ai-proxy/index.ts into _shared/prediction_handler.ts (DI'd so it can be
+// tested behaviourally — see prediction_handler_test.ts). Repointed, same
+// assertion: the ONE geminiChat call there passes retries: 2.
 Deno.test("ai-proxy prediction — retries: 2 passed", async () => {
   const source = await Deno.readTextFile(
-    new URL("../ai-proxy/index.ts", import.meta.url),
+    new URL("./prediction_handler.ts", import.meta.url),
   );
-  assertRetriesNearAnchor(
-    source,
-    'if (type === "prediction") {',
-    "prediction",
-  );
+  assertSoleCallSiteHasRetries(source, "prediction");
 });
 
 // A5/OI-226 (f7a2c9, 2026-09-21) — the OTHER half of OI-226: the prediction
@@ -339,40 +339,66 @@ Deno.test("ai-proxy prediction — retries: 2 passed", async () => {
 // above already could — this was the one geminiChat() site left uninstrumented
 // after the food-logging-observations batch and the tool-loop.ts fix, per
 // docs/audit/open_issues.md's OI-226 entry naming BOTH gaps explicitly).
-// Bounded, position-scoped (not a whole-file `contains`, which could pass
-// even if the call were unreachable or in the wrong branch) — measured
-// distance from the anchor to the real call is 1871 chars; 2500 gives
-// margin without reaching an unrelated handler above or below.
+//
+// Repointed 2026-09-26 (single-owner audit P0 #5): the handler now lives in
+// _shared/prediction_handler.ts with reporting injected, so the pin is split
+// in two, each position-scoped rather than a whole-file `contains`:
+//   (1) in the handler, `lastError` is destructured from the ONE geminiChat
+//       call and the injected report runs BEFORE the !content return — now a
+//       500, deliberately not a 502 (a 502 is auto-retried by the client and
+//       each retry would consume a daily-quota unit; see the handler header);
+//   (2) in ai-proxy's prediction branch, the injected report is
+//       reportGeminiExhaustion with endpoint "prediction".
+// The behaviour itself (report called once, with lastError, and a 500) is
+// asserted with fakes in prediction_handler_test.ts.
 Deno.test(
   "ai-proxy prediction — reportGeminiExhaustion wired on !content (OI-226)",
   async () => {
-    const source = await Deno.readTextFile(
-      new URL("../ai-proxy/index.ts", import.meta.url),
+    const handler = await Deno.readTextFile(
+      new URL("./prediction_handler.ts", import.meta.url),
     );
-    const anchorIdx = source.indexOf('if (type === "prediction") {');
-    assert(anchorIdx >= 0, "prediction handler anchor not found");
-    const window = source.slice(anchorIdx, anchorIdx + 2500);
+    const fnIdx = handler.indexOf("export async function handlePrediction(");
+    assert(fnIdx >= 0, "handlePrediction not found");
+    const body = handler.slice(fnIdx);
 
     assert(
-      window.includes(
-        "const { content, modelUsed, tokensUsed, lastError } = await geminiChat(",
+      body.includes(
+        "const { content, modelUsed, tokensUsed, lastError } = await deps.geminiChat(",
       ),
       "prediction handler must destructure lastError from geminiChat() — " +
         "without it, reportGeminiExhaustion has nothing to report",
     );
-
-    const reportIdx = window.indexOf("reportGeminiExhaustion(");
-    const returnIdx = window.indexOf('return err(502, "AI temporarily unavailable")');
-    assert(returnIdx > 0, "the !content 502 return was not found in the window");
+    const reportIdx = body.indexOf("await deps.reportExhaustion(");
+    const returnIdx = body.indexOf(
+      'return { status: 500, body: { error: "AI temporarily unavailable" } };',
+    );
+    assert(returnIdx > 0, "the !content 500 return was not found in the handler");
     assert(
       reportIdx >= 0 && reportIdx < returnIdx,
-      "reportGeminiExhaustion must be called BEFORE the 502 return on the " +
-        "!content branch, mirroring the 3 nutrition sites' own pattern",
+      "the exhaustion report must run BEFORE the !content return, mirroring " +
+        "the 3 nutrition sites' own pattern",
     );
     assert(
-      window.slice(reportIdx, returnIdx).includes('"prediction"'),
+      !body.includes("status: 502"),
+      "the prediction handler must not return 502 — the client auto-retries " +
+        "502 and every retry would consume a daily-quota unit",
+    );
+
+    const proxy = await Deno.readTextFile(
+      new URL("../ai-proxy/index.ts", import.meta.url),
+    );
+    const anchorIdx = proxy.indexOf('if (type === "prediction") {');
+    assert(anchorIdx >= 0, "prediction branch anchor not found in ai-proxy");
+    const window = proxy.slice(anchorIdx, anchorIdx + 1500);
+    const wiredIdx = window.indexOf("reportGeminiExhaustion(");
+    assert(
+      wiredIdx >= 0 && window.indexOf("handlePrediction(") < wiredIdx,
+      "ai-proxy must inject reportGeminiExhaustion into handlePrediction",
+    );
+    assert(
+      window.slice(wiredIdx, wiredIdx + 300).includes('"prediction"'),
       'the call must pass endpoint="prediction" so this alert stays ' +
-        "distinguishable from the other 3 sites sharing the same source",
+        "distinguishable from the other sites sharing the same source",
     );
   },
 );

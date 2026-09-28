@@ -3782,3 +3782,164 @@ separate for the one cron site) IS the "adjustment" the filed text anticipated.
   2026-08-11 and 2026-08-20 recurrences.
 - **Closes**: `aca0237a` (fix), this closure entry (board reconciliation).
 
+## OI-254 — alert_client_errors_spike cnt metric still counts benign event-coded _null breadcrumbs the users/server_events arms now exclude
+
+- **Status**: CLOSED (2026-09-27, `ops-alerting-b2a2b` batch) — the client-side rename this
+  entry's own "Fix shape" called for landed as Fix 2 of that batch
+  (`subscription_refresh_query_returned_null` → `subscription_refresh_no_active_row`,
+  `lib/core/services/subscription_service.dart:906`), and the "Audit the other ~24 call-sites"
+  instruction below was also carried out: every op_type string in `lib/` matching migration 087's
+  failure-shaped reinclusion regex `(fail|error|crash|fallback|unknown|exception|timeout|denied|
+  _null)` was swept (`grep -rnoE "['\"][a-zA-Z0-9_]*['\"]" lib/` piped through the regex, plus a
+  manual review of every hit), turning up 6 other matches — `restoring_destination_unknown`,
+  `restoring_continue_still_unknown`, `sync_completed_at_fallback`,
+  `guarded_box_auto_open_fallback`, `sync_skipped_null_natural_key`,
+  `restore_users_row_null_via_singlecall` — each spot-verified to carry an explicit, pre-existing
+  code comment establishing it as a deliberate rare-event-surfacing signal, not an accidental
+  benign-state `_null` naming collision like this OI's own case. Zero further renames needed.
+  Per the entry's own reasoning, once the client-side name no longer matches the regex, "the
+  regex correctly stops matching" — no SQL change to migration 147's `cnt` metric was made or is
+  needed, so the SQL-side asymmetry this entry originally reported is closed by removing its one
+  cause, not by widening the SQL guard (which would have undone 087/f0b9d3's own P0 fix, per
+  this entry's "Why not fixed in 147 directly" reasoning below).
+- **Blocked on**: none.
+- **Verified**: 2026-09-27 — `test/contracts/oi254_subscription_refresh_op_type_rename_test.dart`
+  (5 tests, green) pins the rename and that the new name does not match the regex; live volume
+  this removes from `cnt`'s matched set (28 occurrences/36 days) reconfirmed against migration
+  147's own diagnose-doc (`d2c9f4`) impact_analysis.
+- **Identified**: 2026-09-27 · filed via mint_oi.sh from branch `ops-alerting-b2a2a`
+- **Problem**: migration 147 (diagnose `d2c9f4`) added an `error_code NOT IN
+  ('event','info')` guard to the NEW `users` and `server_events` breadth arms,
+  citing the routine `event`-coded `subscription_refresh_query_returned_null`
+  breadcrumb (`lib/core/services/subscription_service.dart:911-912`) as the
+  reason. The PRIMARY `cnt` metric — the one the threshold (40/100/200)
+  actually gates on, and the metric this whole migration exists to fix — has
+  no equivalent guard, because it inherits the outer breadcrumb-reinclusion
+  regex `(fail|error|crash|fallback|unknown|exception|timeout|denied|_null)`
+  from migration 087 (diagnose `f0b9d3`), which matches this breadcrumb's
+  `_null` suffix even though its `error_code='event'`. Found by the
+  self-triggered B-pass (`docs/reviews/46c9b9ff3bde-review.md`, Finding 1),
+  verified live: this exact breadcrumb fires 28 times over 36 days (41 total
+  across every event/info-coded op_type matching the same regex); currently
+  NON-MATERIAL (`max(cnt)` over the same window is 24, well under the 40
+  floor).
+- **Why not fixed in 147 directly**: two of three SQL-only fixes were
+  evaluated and rejected. (a) Adding the same `error_code NOT IN` guard to
+  `cnt` would UNDO 087/f0b9d3's own P0 fix — that guard exists specifically
+  to catch genuine failures the client mislabels `error_code='event'`, and
+  narrowing `cnt` back to exception-shaped-only reopens that exact blind
+  spot. (b) A literal/name-based exclusion for just this one op_type is the
+  "transient denylist" f0b9d3's own diagnose doc already evaluated and
+  rejected, because the SAME client-side mislabeling pattern recurs across
+  ~25 call-sites under different op_type strings — patching one name here
+  is whack-a-mole, not a fix. The actual root cause is CLIENT-SIDE: the
+  `_null` suffix on an op_type is supposed to signal "a query that should
+  have returned data returned null unexpectedly" (a bug), but this call site
+  uses `_null` for an EXPECTED, benign state transition ("no active
+  subscription row" is a normal outcome, not a bug) — a pure-SQL cron
+  migration cannot distinguish "benign business _null" from "buggy _null" by
+  regex alone.
+- **Fix shape**: rename this call site's `op_type` on the client (e.g. to
+  something that does not match the failure-reinclusion regex, or introduce
+  a distinct "expected state transition" telemetry category the regex
+  explicitly excludes) — this is a `lib/` change, naturally in scope for
+  B2a-2b (client telemetry, the next unit in this same batch) since that
+  unit already touches `ErrorTelemetry`/offline-signature semantics on the
+  client side. Audit the other ~24 call-sites f0b9d3 already identified for
+  the same class while there. Once fixed client-side, no SQL change is
+  needed here at all — the regex correctly stops matching.
+- **Class**: a shared classification regex (the breadcrumb-reinclusion
+  pattern) applied asymmetrically across three derived metrics computed from
+  the SAME filtered rowset, where narrowing the metric is worse than leaving
+  the asymmetry, and the real fix lives one layer up (client) from where the
+  finding surfaced (SQL migration).
+- **Source**: B-pass finding 1, `docs/reviews/46c9b9ff3bde-review.md`; diagnose
+  `d2c9f4` (147); diagnose `f0b9d3` (087, the original rejected-denylist
+  precedent this finding extends).
+- **Closes**: `docs/diagnoses/2026-09-27-sync-telemetry-dual-write-oi254-offline-signature-f7b2c9.md`
+  (fix), this closure entry (board reconciliation).
+
+## OI-255 — Migration numbering has no collision-proof allocator -- two branches both minted 145 AND 146
+
+- **Status**: CLOSED (2026-09-28, `gate14-migration-collision` batch) — implemented this entry's
+  own fix-shape option (b): Gate 14 (`scripts/check_migrations_applied.dart`) now hard-fails on
+  two `.sql` files sharing an exact bare numeric prefix, naming both, via a new
+  `scripts/migration_collision_lib.dart`. The two ALREADY-APPLIED collisions this entry documents
+  (145 and 146) are grandfathered by name in the check — permanently, since both pairs are
+  immutable once applied — with an explicit comment forbidding future additions to that list.
+  Option (a), a `mint_oi.sh`-style migration-number allocator (reserving a ref before drafting a
+  new migration file), was considered and explicitly NOT implemented — founder chose option (b)
+  alone for now as sufficient practical prevention at a fraction of the engineering cost; it
+  remains a legitimate future enhancement, not a deferral of this entry's own ask (the ask was "a
+  fix shape (a) and/or (b)", and (b) alone satisfies it). The underlying historical fact this
+  entry documents — that migrations 145 and 146 were each independently claimed twice — is
+  permanently true and cannot be undone; this closure is about the PREVENTION mechanism, not about
+  retroactively resolving four already-live, immutable files.
+- **Blocked on**: none.
+- **Verified**: 2026-09-28 — `test/scripts/migration_collision_lib_test.dart` (7 tests) +
+  `test/scripts/check_migrations_applied_collision_e2e_test.dart` (3 tests spawning the real gate
+  binary against a throwaway repo), all green. Mutation-proven: neutering the detection reddened
+  4/10 tests, neutering the grandfather exclusion reddened 2/10 — both mutations confirmed applied
+  and compiling, both reddened for the correct assertion-failure reason (not a compile error or a
+  swallowed exception). The real 145/146 quadruple was reproduced in the e2e suite and confirmed
+  to still pass Gate 14 (must not start failing every future commit); a NEW, non-grandfathered
+  collision (two files both prefixed "148") was reproduced and confirmed to fail it, naming both
+  files, closing the exact blind spot this entry's own "Impact" section named
+  (`appliedMigrations.any((a) => a.startsWith(prefix) || ...)` satisfying both colliding files'
+  ledger check independently).
+- **Identified**: 2026-09-27 · filed via mint_oi.sh from branch `template-stable-identity`
+- **Problem, Root cause, Impact**: see this entry's own body, preserved verbatim below — none of it
+  changed by this closure; only the fix-shape section is superseded by "Fix implemented" below.
+
+Symptom: `supabase/migrations/` now holds FOUR files across two colliding number prefixes, not one
+as first filed (corrected during the merge to `main` — the merge conflict in
+`backups/applied_migrations.json` exposed a second collision at 145 that a single-number
+investigation had missed): `145_alert_sql_job_failures.sql` / `146_alert_cron_job_silent.sql`
+(main, OI-178/ops-alerting-b2a batch, applied live 2026-09-26/27) and
+`145_workout_templates_stable_delete.sql` / `146_workout_templates_delete_trigger_insert_path.sql`
+(this branch, OI-252, applied live 2026-09-27T06:44:46+05:30 and 2026-09-27T10:22:49+05:30). All
+four have their own `"migration"` entry in `backups/applied_migrations.json` (main's two, then this
+branch's two, in that chronological order after the merge). Found when pulling `origin/main` into
+the primary worktree immediately before merging `template-stable-identity` — the two branches
+diverged from `main` before either side's migrations existed on the other, and each independently
+picked "145" then "146" as the next free number at draft time, in the same order, coincidentally.
+
+Root cause: migration numbers are chosen by hand from whatever `ls supabase/migrations/` shows the
+drafting branch at draft time — there is no reservation mechanism analogous to `mint_oi.sh`'s
+`refs/heads/oi/N` compare-and-swap for OI numbers (§7 pointer table, OI allocator row). Two
+branches developing in parallel off diverging `main` states have no way to see each other's
+in-flight migration numbers.
+
+Impact, checked rather than assumed: **no functional collision** — all four migrations touch
+entirely disjoint database objects (a `workout_templates` trigger function + soft-delete column vs.
+two new pg_cron alert jobs + their functions), all four applied successfully and independently.
+**Gate 14 (`scripts/check_migrations_applied.dart`) does not detect the ambiguity**: its
+"unapplied" check matches by bare numeric prefix via `appliedMigrations.any((a) =>
+a.startsWith(prefix) || ...)` (`check_migrations_applied.dart:97-101`), so both files under each
+colliding number independently satisfy the same ledger entry and the gate reports PASS for all
+four. The break is the implicit "one number names exactly one migration" invariant relied on for
+human navigability, `docs/naming_conventions.md`-style citation, and any future tooling that
+assumes strict 1:1 sequential numbering.
+
+Historical note (fix implemented 2026-09-28, superseding the paragraph below): **all four files
+remain immutable once applied** (same principle
+`docs/diagnoses/2026-09-21-hermes-pass-migration-138-139-fixes-h1a2b3.md` and this file's own
+common-pitfalls table state for migration 138/139) — renaming any of them post-apply would
+misrepresent what actually ran and would invalidate cross-references already pushed on both
+branches (diagnose-docs, commit messages, `backups/applied_migrations.json` `"migration"` values,
+OI-board prose). Fix shape (as originally filed, not designed): (a) a migration-number allocator
+mirroring `mint_oi.sh` — reserve a ref before drafting a new migration file so a second branch
+drafting in parallel sees the reservation on its next fetch — and/or (b) widen Gate 14 to hard-fail
+on two `.sql` files sharing an EXACT bare numeric prefix (distinct from today's loose "is this
+number present in the ledger at all" check), so a future collision is caught at commit/push time
+instead of only by a human noticing during a `git pull` before a merge. **Fix implemented:** option
+(b), via `scripts/migration_collision_lib.dart` — see Status above.
+- **Class**: a manual, unreserved numbering scheme with no cross-branch visibility, structurally
+  identical to the class `mint_oi.sh` was built to close for OI numbers — but for migration
+  numbers, which (unlike OI numbers) become permanently immutable the moment they are applied
+  live, so a collision here can never be un-collided, only prevented from a third recurrence.
+- **Source**: filed via `mint_oi.sh` from `template-stable-identity`, 2026-09-27; closed via
+  `docs/diagnoses/2026-09-28-gate14-migration-number-collision-detection-d5f1b8.md`.
+- **Closes**: `docs/diagnoses/2026-09-28-gate14-migration-number-collision-detection-d5f1b8.md`
+  (fix), this closure entry (board reconciliation).
+

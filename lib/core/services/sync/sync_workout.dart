@@ -76,7 +76,7 @@ extension SyncServiceWorkout on SyncService {
       debugPrint('[SyncService.syncWorkoutDataNow] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_sync_workout_data'));
+          reason: 'sync_service_sync_workout_data', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'sync_workout_data', error: e);
       } catch (_) {}
@@ -193,7 +193,7 @@ extension SyncServiceWorkout on SyncService {
         debugPrint('[SyncService._syncWorkoutLogs] Failed key=$key: $e');
         // audit-2026-05-11 H-42 — telemetry pair.
         unawaited(ErrorTelemetry.recordNonFatal(e, st,
-            reason: 'sync_service_for'));
+            reason: 'sync_service_for', skipServerPost: true));
         try {
           await _reportSyncFailure(opType: 'upsert_workout_log', error: e);
         } catch (_) {}
@@ -457,7 +457,7 @@ extension SyncServiceWorkout on SyncService {
                 debugPrint(
                     '[SyncService._syncExerciseLogs] per-set push failed key=$key: $e');
                 unawaited(ErrorTelemetry.recordNonFatal(e, st,
-                    reason: 'sync_service_if_7'));
+                    reason: 'sync_service_if_7', skipServerPost: true));
                 // G1 (spec §7): a catch inside pushIfChanged( must rethrow or
                 // return false; -- the bundle is NOT fully synced, so nothing
                 // is recorded and the whole bundle (summary + sets) re-pushes
@@ -479,7 +479,7 @@ extension SyncServiceWorkout on SyncService {
         debugPrint('[SyncService._syncExerciseLogs] Failed key=$key: $e');
         // audit-2026-05-11 H-42 — telemetry pair.
         unawaited(ErrorTelemetry.recordNonFatal(e, st,
-            reason: 'sync_service_catch_5'));
+            reason: 'sync_service_catch_5', skipServerPost: true));
         try {
           await _reportSyncFailure(opType: 'upsert_exercise_log', error: e);
         } catch (_) {}
@@ -660,7 +660,7 @@ extension SyncServiceWorkout on SyncService {
         debugPrint('[SyncService._syncScheduleCompletions] Failed key=$key: $e');
         // audit-2026-05-11 H-42 — telemetry pair.
         unawaited(ErrorTelemetry.recordNonFatal(e, st,
-            reason: 'sync_service_for_2'));
+            reason: 'sync_service_for_2', skipServerPost: true));
         // Task 13/14 review fix round 1 (2026-09-27) — this outer catch only
         // guards the payload-build code above (pushIfChanged never rethrows;
         // a push() failure is already reported via the domain's own opType
@@ -740,7 +740,7 @@ extension SyncServiceWorkout on SyncService {
         debugPrint('[SyncService._syncStreaks] $e');
         // audit-2026-05-11 H-42 — telemetry pair.
         unawaited(ErrorTelemetry.recordNonFatal(e, st,
-            reason: 'sync_service_for_11'));
+            reason: 'sync_service_for_11', skipServerPost: true));
         try {
           await _reportSyncFailure(opType: 'upsert_streak', error: e);
         } catch (_) {}
@@ -804,7 +804,7 @@ extension SyncServiceWorkout on SyncService {
       debugPrint('[SyncService._restoreWorkoutLogs] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_for_12'));
+          reason: 'sync_service_for_12', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'restore_workout_logs', error: e);
       } catch (_) {}
@@ -853,7 +853,7 @@ extension SyncServiceWorkout on SyncService {
         debugPrint('[SyncService._restoreExerciseLogs] per-set fetch failed: $e');
         // audit-2026-05-11 H-42 — telemetry pair.
         unawaited(ErrorTelemetry.recordNonFatal(e, st,
-            reason: 'sync_service_for_13'));
+            reason: 'sync_service_for_13', skipServerPost: true));
         try {
           await _reportSyncFailure(opType: 'restore_exercise_log_sets_fetch', error: e);
         } catch (_) {}
@@ -984,7 +984,7 @@ extension SyncServiceWorkout on SyncService {
       debugPrint('[SyncService._restoreExerciseLogs] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_for_14'));
+          reason: 'sync_service_for_14', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'restore_exercise_logs', error: e);
       } catch (_) {}
@@ -1076,7 +1076,7 @@ extension SyncServiceWorkout on SyncService {
       debugPrint('[SyncService._restoreScheduleCompletions] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_if_12'));
+          reason: 'sync_service_if_12', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'restore_schedule_completions', error: e);
       } catch (_) {}
@@ -1136,7 +1136,7 @@ extension SyncServiceWorkout on SyncService {
       debugPrint('[SyncService._restoreStreaks] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_for_21'));
+          reason: 'sync_service_for_21', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'restore_streaks', error: e);
       } catch (_) {}
@@ -1246,7 +1246,7 @@ extension SyncServiceWorkout on SyncService {
       debugPrint('[SyncService._syncWorkoutPlan] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_if_16'));
+          reason: 'sync_service_if_16', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'sync_workout_plan', error: e);
       } catch (_) {}
@@ -1270,7 +1270,8 @@ extension SyncServiceWorkout on SyncService {
   /// `user_progress` row carrying `plan_json`); legacy callers omit it → network
   /// read. Plan §4.
   Future<void> _restoreWorkoutPlan(String userId,
-      {Object? preFetched = _kNoInject}) async {
+      {Object? preFetched = _kNoInject,
+      Set<String>? preFetchedDeletedTemplateIds}) async {
     try {
       final rows = identical(preFetched, _kNoInject)
           ? await _supabase.client
@@ -1349,8 +1350,33 @@ extension SyncServiceWorkout on SyncService {
           storedPlanFingerprint == downloadedPlanFingerprint &&
           allBundledRowsPresent;
       if (schedules is Map && !skipPlanMerge) {
-        final result = await PlanIntegrityReconciler.mergeScheduleBundleIntoHive(
-            Map<String, dynamic>.from(schedules));
+        // OI-252 (merged from main) — the `plan_json` snapshot is a frozen
+        // bundle of whatever `schedule_*` rows looked like at push time, so a
+        // day scheduled against a template that has since been deleted is a
+        // GHOST day: applying it would resurrect exactly the reference the
+        // delete was meant to remove, via a separate restore path from
+        // `_restoreScheduledWorkouts`. Filtered out BEFORE the L1/L3 bundle
+        // merge. The deleted-template set is resolved once, lazily (unless
+        // injected for a test), and only if an entry carries a template_id,
+        // so a bundle with no template days costs no extra query. Shared
+        // predicate with `PlanIntegrityReconciler`'s own ghost-day filter —
+        // `isGhostScheduleEntry` — so the two paths cannot drift.
+        Set<String>? deletedTemplateIdsCache = preFetchedDeletedTemplateIds;
+        Future<Set<String>> deletedTemplateIds() async =>
+            deletedTemplateIdsCache ??= await _deletedTemplateCloudIds(userId);
+        final live = <String, dynamic>{};
+        for (final entry in schedules.entries) {
+          final incoming = entry.value;
+          if (incoming is Map &&
+              incoming['template_id'] != null &&
+              isGhostScheduleEntry(Map<String, dynamic>.from(incoming),
+                  await deletedTemplateIds())) {
+            continue;
+          }
+          live[entry.key.toString()] = incoming;
+        }
+        final result =
+            await PlanIntegrityReconciler.mergeScheduleBundleIntoHive(live);
         if (result.discardedLocalArrangement) {
           unawaited(ErrorTelemetry.logEvent('swap_merge_conflict',
               message: 'source=restoreWorkoutPlan'));
@@ -1367,24 +1393,77 @@ extension SyncServiceWorkout on SyncService {
       debugPrint('[SyncService._restoreWorkoutPlan] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_if_17'));
+          reason: 'sync_service_if_17', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'restore_workout_plan', error: e);
       } catch (_) {}
     }
   }
 
-  /// Pushes workout templates and their exercises to Supabase.
+  /// OI-252 (stable ID rework) — drains `PendingTemplateDeletes` by
+  /// UPSERTing a tombstone per queued id. UPSERT (not UPDATE) so the
+  /// tombstone can be CREATED directly even if the creating push for that
+  /// id hasn't reached the cloud yet — migration 145's
+  /// `workout_templates_delete_final_rename` trigger then makes the
+  /// creating push's own later upsert a no-op against the now-deleted row,
+  /// so the delete wins regardless of which side's write lands first
+  /// (round-1 plan review, finding 2). Called BEFORE the push loop so a
+  /// template deleted this session can never be re-created by its own
+  /// stale in-memory copy in the same sync pass.
+  Future<void> _drainPendingTemplateDeletes(String userId) async {
+    for (final entry in PendingTemplateDeletes.read()) {
+      var id = entry['id'] as String?;
+      final name = entry['name'] as String;
+      try {
+        // A null id means this template was deleted while still on a
+        // legacy (pre-migration) Hive key -- WorkoutWriteService cannot
+        // reach Supabase itself (layering), so resolve it here, the one
+        // place in this flow with both DB access and the name.
+        if (id == null) {
+          final rows = await _supabase.client
+              .from('workout_templates')
+              .select('id')
+              .eq('user_id', userId)
+              .eq('name', name)
+              .isFilter('deleted_at', null)
+              .limit(1);
+          if (rows.isEmpty || rows.first['id'] is! String) {
+            // Nothing live under this name -- either never synced (the
+            // common case) or already deleted elsewhere. Either way
+            // there is nothing to tombstone.
+            await PendingTemplateDeletes.removeByName(name);
+            continue;
+          }
+          id = rows.first['id'] as String;
+        }
+        await _supabase.client.from('workout_templates').upsert({
+          'id': id,
+          'user_id': userId,
+          'name': name,
+          'deleted_at': DateTime.now().toUtc().toIso8601String(),
+          'is_active': false,
+        }, onConflict: 'id');
+        await PendingTemplateDeletes.remove(id);
+      } catch (e, st) {
+        debugPrint('[SyncService._drainPendingTemplateDeletes] $name: $e');
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'sync_drain_pending_template_deletes'));
+        // Left queued — retried on the next template push.
+      }
+    }
+  }
+
   /// Pushes workout templates (header + exercises + tail vacuum) to
   /// Supabase workout_templates / template_exercises.
   ///
   /// day-swapper+sync-load Task 16: routed through SyncSkipIndex (domain
-  /// template). The header upsert, the id SELECT, the per-exercise upsert
-  /// loop and the tail-vacuum DELETE are now ONE bundle per template: any
-  /// failure inside the bundle returns false (unconfirmed), so the WHOLE
-  /// bundle retries next pass — every write inside is already idempotent, so
-  /// a retry is cheap and safe. This is a deliberate tightening vs. the
-  /// pre-Task-16 code, which continued past a single failed exercise upsert.
+  /// template). The header upsert, the per-exercise upsert loop and the
+  /// tail-vacuum DELETE are ONE bundle per template: any failure inside the
+  /// bundle returns false (unconfirmed), so the WHOLE bundle retries next
+  /// pass — every write inside is idempotent, so a retry is cheap and safe.
+  /// Since OI-252 (merged from main) the header upserts the client-minted id
+  /// from the Hive key (`onConflict: 'id'`), so the bundle no longer needs
+  /// the post-upsert id SELECT it carried before.
   ///
   /// [forceKeys]: `tmpl_*` keys to re-push even when their fingerprint is
   /// unchanged — the `_syncScheduledWorkouts` FK recovery passes the ONE
@@ -1394,6 +1473,18 @@ extension SyncServiceWorkout on SyncService {
   /// (B-pass R1-F1).
   Future<void> _syncWorkoutTemplates(String userId,
       {Set<String> forceKeys = const <String>{}}) async {
+    // OI-252 — legacy (`tmpl_<ms>` / `tmpl_<namehash>`) keys must resolve
+    // to a real cloud uuid before ANYTHING here can push safely: pushing a
+    // legacy-keyed row would mean re-deriving an id in this function too,
+    // reintroducing the exact ambiguity the migrator exists to remove.
+    // Scoped to THIS function only — never gates `_restoreIfNeeded` as a
+    // whole (round-2 plan review: that would starve unrelated domains for
+    // an offline user).
+    final migrated = await TemplateIdentityMigrator.runIfNeeded(userId);
+    if (!migrated) return;
+
+    await _drainPendingTemplateDeletes(userId);
+
     final workoutBox = _hive.workoutBox;
     final index = SyncSkipIndex(
       box: workoutBox,
@@ -1413,37 +1504,13 @@ extension SyncServiceWorkout on SyncService {
       if (raw is! Map) continue;
       final tmpl = Map<String, dynamic>.from(raw);
       if (tmpl['type'] != 'template') continue;
+      // Defensive — the migrator above should have resolved every legacy
+      // key already; skip rather than push under an ambiguous identity.
+      final cloudTmplId = cloudIdFromKey(key);
+      if (cloudTmplId == null) continue;
       liveKeys.add(key);
 
       try {
-        // Diagnosed 2026-04-18: the Hive template id (`tmpl_<ms>`) is a
-        // raw string, but Supabase `workout_templates.id` is uuid NOT
-        // NULL. Every upsert used to 400-reject. Same for child rows in
-        // `template_exercises` (id + template_id + exercise_id are all
-        // uuid columns; the Hive shape stores string ids from the
-        // bundled exercise library). Observed: workout_templates stayed
-        // at 0 rows despite a successfully saved template.
-        //
-        // Fix: coerce id + template_id to deterministic v5 UUIDs, and
-        // skip exercise_id entirely unless it's already a valid uuid
-        // (it's nullable, and the string library ids aren't meaningful
-        // cross-device). exercise_name carries the real identity.
-        // APK Test #12.8 / Bug #4 — drop `id` from the upsert payload
-        // entirely. Pre-fix Test #12.7 derived `id` from (user_id, name)
-        // and passed it to the upsert with `onConflict: 'user_id,name'`.
-        // Cloud's pre-migration-050 rows have DIFFERENT id values (the
-        // `keepers` from the migration 050 dedup). On conflict Postgres
-        // tried to UPDATE the existing row's id to the new derived
-        // value → blocked by `template_exercises_template_id_fkey`
-        // (and the same on `scheduled_workouts.template_id`,
-        // `workout_logs.template_id`) → 23503 fatal. Founder log
-        // showed 8 such errors in 10s.
-        //
-        // Fix: omit `id` so PostgREST's upsert keeps the existing id on
-        // conflict (UPDATE) and uses the column default `gen_random_uuid()`
-        // on first INSERT. Then SELECT the real cloud id by (user_id,
-        // name) BEFORE inserting child template_exercises rows so they
-        // FK to the correct parent.
         final tmplName = (tmpl['name'] as String?)?.trim() ?? 'Untitled';
         final exercises = tmpl['exercises'] as List? ?? [];
 
@@ -1451,12 +1518,24 @@ extension SyncServiceWorkout on SyncService {
         // rather than falling back to DateTime.now() (D2 site
         // sync_workout.dart|created_at). On insert, the column default
         // applies; on update, the column is left untouched.
+        //
+        // OI-252 — `id` is now the client-minted uuid (from the Hive
+        // key), and the upsert targets it directly: `onConflict: 'id'`.
+        // This REPLACES the old `onConflict: 'user_id,name'` + a
+        // follow-up SELECT-by-name to learn the cloud id — the id is
+        // already known, so that lookup (and its 23503-avoidance
+        // history, still true of the OLD approach but moot now) is gone.
+        // `deleted_at` is deliberately NOT sent — it is trigger-owned;
+        // migration 145's `workout_templates_delete_final_rename` makes
+        // this whole statement a no-op if the row is already deleted.
+        //
         // audit-2026-05-16 E.12 — migration 067 dropped
         // workout_templates.description + estimated_duration_mins (template
         // builder UI never exposes these inputs; 100% NULL across all
         // live rows). Hive `description` field is retained for the restore
         // round-trip (cloud read returns null → empty in Hive).
         Map<String, dynamic> headerPayload() => <String, dynamic>{
+              'id': cloudTmplId,
               'user_id': userId,
               'name': tmplName,
               'workout_type':
@@ -1476,44 +1555,11 @@ extension SyncServiceWorkout on SyncService {
             'exercises': exercises,
           }),
           () async {
-            // Upsert template header — `id` deliberately omitted. Kept as a
+            // Upsert template header on its client-minted id. Kept as a
             // single-line chain (`dead_columns_dropped_test.dart` source-greps
             // the literal `from('workout_templates').upsert(` with no
             // whitespace between).
-            await _supabase.client.from('workout_templates').upsert(headerPayload(), onConflict: 'user_id,name');
-
-            // SELECT the real cloud id post-upsert so child rows FK
-            // correctly. Pre-fix used
-            // `SyncService._deterministicId('tmpl|user|name')` which only
-            // matched on greenfield first-insert; pre-existing rows kept
-            // their migration-050 keeper id and the FK lookup mismatched
-            // → 23503.
-            String? cloudTmplId;
-            try {
-              final parentRow = await _supabase.client
-                  .from('workout_templates')
-                  .select('id')
-                  .eq('user_id', userId)
-                  .eq('name', tmplName)
-                  .maybeSingle();
-              cloudTmplId = parentRow?['id'] as String?;
-            } catch (idErr, st) {
-              debugPrint(
-                  '[SyncService._syncWorkoutTemplates] parent id lookup: $idErr');
-              // audit-2026-05-11 H-42 — telemetry pair.
-              unawaited(ErrorTelemetry.recordNonFatal(idErr, st,
-                  reason: 'sync_service_for_23'));
-              // G1 (spec §7): a catch inside pushIfChanged( must rethrow or
-              // return false; -- the bundle is not confirmed until the id
-              // lookup, the exercises and the vacuum all succeed.
-              return false;
-            }
-            if (cloudTmplId == null || cloudTmplId.isEmpty) {
-              // Without a valid parent id the bundle cannot proceed safely.
-              // Unconfirmed -> the whole bundle (idempotent header
-              // included) retries next pass.
-              return false;
-            }
+            await _supabase.client.from('workout_templates').upsert(headerPayload(), onConflict: 'id');
 
             // Backlog #2 (post-Test-#15) — switched from DELETE-then-INSERT
             // to UPSERT now that migration 051 added UNIQUE (template_id,
@@ -1573,10 +1619,11 @@ extension SyncServiceWorkout on SyncService {
                     '[SyncService._syncWorkoutTemplates] exercise $i: $exErr');
                 // audit-2026-05-11 H-42 — telemetry pair.
                 unawaited(ErrorTelemetry.recordNonFatal(exErr, st,
-                    reason: 'sync_service_for_24'));
+                    reason: 'sync_service_for_24', skipServerPost: true));
                 // `_reportSyncFailure` is the only path to the server-side
-                // client_errors table (recordNonFatal above is
-                // Crashlytics-only) — kept, same op string as pre-Task-16.
+                // client_errors table (recordNonFatal above is Crashlytics-
+                // only via skipServerPost, B2a-2b) — kept, same op string as
+                // pre-Task-16.
                 // `unawaited` so the closure returns promptly (Task 13
                 // precedent, the exlog per-set catch).
                 unawaited(_reportSyncFailure(
@@ -1621,7 +1668,7 @@ extension SyncServiceWorkout on SyncService {
         debugPrint('[SyncService._syncWorkoutTemplates] $e');
         // audit-2026-05-11 H-42 — telemetry pair.
         unawaited(ErrorTelemetry.recordNonFatal(e, st,
-            reason: 'sync_service_catch_10'));
+            reason: 'sync_service_catch_10', skipServerPost: true));
         try {
           await _reportSyncFailure(
               opType: 'upsert_workout_template', error: e);
@@ -1632,56 +1679,150 @@ extension SyncServiceWorkout on SyncService {
     await index.commit(liveKeys: liveKeys);
   }
 
+  /// OI-252 (stable ID rework) — the set of cloud `workout_templates.id`
+  /// values that are soft-deleted (migration 145's `deleted_at`), for
+  /// every restore-side function that must treat a deleted template's
+  /// downstream data (schedule days, plan_json entries) as gone rather
+  /// than as an ordinary missing reference. Independently self-contained
+  /// per caller (round-2 plan review, finding 3: the templates-restore,
+  /// plan-restore and schedule-restore Futures run in PARALLEL on most
+  /// restore paths, so nothing here may depend on another Future's
+  /// completion or on `workoutBox` state a sibling Future might still be
+  /// writing).
+  ///
+  /// Pass [preFetchedTemplateRows] when the caller already fetched the
+  /// FULL `workout_templates` set (live + deleted, e.g. `_restoreWorkoutTemplates`
+  /// itself, or the C3 single-call bundle's `workout_templates` key) — no
+  /// extra query. Every other caller (`_restoreWorkoutPlan`,
+  /// `_restoreScheduledWorkouts`, and both `*ForSyncDomain` entry points,
+  /// none of which receive templates rows) runs one light indexed query.
+  Future<Set<String>> _deletedTemplateCloudIds(
+    String userId, {
+    List? preFetchedTemplateRows,
+  }) async {
+    try {
+      final rows = preFetchedTemplateRows ??
+          await _supabase.client
+              .from('workout_templates')
+              .select('id, deleted_at')
+              .eq('user_id', userId)
+              .not('deleted_at', 'is', null)
+              .limit(1000);
+      final ids = <String>{};
+      for (final row in rows) {
+        final map = row as Map;
+        if (map['deleted_at'] == null) continue;
+        final id = map['id'] as String?;
+        if (id != null) ids.add(id);
+      }
+      return ids;
+    } catch (e, st) {
+      debugPrint('[SyncService._deletedTemplateCloudIds] $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_deleted_template_cloud_ids'));
+      // Fail EMPTY, never fail closed-as-"everything deleted" — an
+      // empty set means every downstream filter that uses it is a
+      // no-op this pass, which is the safe direction (nothing the user
+      // did not delete is ever removed by an uncertain answer here).
+      return const {};
+    }
+  }
+
+  /// Public forwarder for [_deletedTemplateCloudIds] — the boot-time
+  /// [PlanIntegrityReconciler] lives in a separate file/library (it is not
+  /// `part of` this one) and needs the same deleted-templates set for its
+  /// own `plan_json.schedules` ghost-day filter, so it cannot reach the
+  /// private method directly.
+  Future<Set<String>> deletedTemplateCloudIdsForUser(String userId) =>
+      _deletedTemplateCloudIds(userId);
+
   /// Restores workout templates (with exercises) from Supabase.
   /// [preFetched] (C3 single-call): injected `workout_templates` rows, each
   /// carrying its nested `template_exercises[]` embed (the verbatim PostgREST
   /// shape the parser reads). Legacy callers omit it → network read.
   /// Plan §4 (H-1 embed nesting preserved).
+  ///
+  /// OI-252 (stable ID rework) — REWRITTEN. The old restore keyed a Hive
+  /// row by `tmpl_<hash(lower(name))>` (colliding with the create path's
+  /// `tmpl_<ms>` only by luck of a later migrator pass) and SWEPT every
+  /// local `tmpl_*` key the cloud didn't return — which deleted a
+  /// not-yet-pushed local template on any transient partial response.
+  /// Both are gone: the key is now `templateKeyFor(id)` (the SAME key a
+  /// local create/push already uses, once the legacy-key migrator has
+  /// run), and removal happens ONLY on positive evidence — a row this
+  /// cloud fetch reports as `deleted_at`-set. A local row this fetch
+  /// simply doesn't mention (an unpushed creation, or a fetch that
+  /// legitimately returned fewer than the full set) is left alone.
+  ///
+  /// OI-252 B-pass finding 2 (2026-09-27) — the legacy-key migrator MUST
+  /// run here too, not just in `_syncWorkoutTemplates`. This is the
+  /// restore path `restoreLightweightAlways` calls on every normal
+  /// sign-in once Hive already has local data (the common case for a
+  /// returning user); before this fix a device holding a pre-rework
+  /// legacy-keyed template (`tmpl_<ms>` / `tmpl_<namehash>`) never got it
+  /// rekeyed on this path, so the cloud-authoritative copy landed under a
+  /// NEW `tmpl_<uuid>` key while the old legacy row sat untouched —
+  /// `TemplatesNotifier.build` filters by `type=='template'`, not key
+  /// prefix, so both rendered as separate templates until
+  /// `weeklyFullSync` happened to run. Scoped to this function only —
+  /// never gates `_restoreIfNeeded`/`restoreLightweightAlways` as a whole
+  /// (round-2 plan review: that would starve unrelated domains for an
+  /// offline user). Mirrors `_syncWorkoutTemplates`'s identical gate.
   Future<void> _restoreWorkoutTemplates(String userId,
       {Object? preFetched = _kNoInject}) async {
+    final migrated = await TemplateIdentityMigrator.runIfNeeded(userId);
+    if (!migrated) return;
+
     try {
       final rows = identical(preFetched, _kNoInject)
           ? await _supabase.client
               .from('workout_templates')
               .select('*, template_exercises(*)')
               .eq('user_id', userId)
-              .eq('is_active', true)
+              .order('deleted_at', ascending: true, nullsFirst: true)
               .limit(500)
           : (preFetched as List? ?? const []);
 
-      // APK Test #12.9 — collect canonical Hive keys we're about to
-      // write so we can sweep stragglers afterward. Pre-12.9 the user's
-      // workoutBox accumulated stale `tmpl_<ms>` and `tmpl_<id.hash>`
-      // keys from earlier APK builds with broken restore-key formulas
-      // (or local saves never pushed to cloud). Logout-login DOES wipe
-      // the namespaced box on disk, but in-place APK upgrades over a
-      // populated box don't, and any other future writer that puts a
-      // template-shaped Hive entry would also accumulate. Sweep
-      // ensures the templates list always matches the cloud set
-      // exactly after restore.
-      final canonicalKeys = <String>{};
+      final pendingDeleteIds = PendingTemplateDeletes.read()
+          .map((e) => e['id'] as String?)
+          .whereType<String>()
+          .toSet();
 
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);
         final id = map['id'] as String? ?? '';
         if (id.isEmpty) continue;
-        // APK Test #12.8 / Bug #1 — derive deterministic Hive key from
-        // (lower(name)) NOT from the cloud UUID hash. Pre-fix
-        // `'tmpl_${id.hashCode}'` produced a Hive key that didn't
-        // collide with the locally-saved `tmpl_<ms>` key on the same
-        // template, doubling the templates list on every cold restore.
-        // (user_id, name) is the canonical identity per migration 050;
-        // we omit user_id from the key since the userBox is already
-        // user-scoped and the migrator handles cross-user isolation.
-        final tmplName = (map['name'] as String? ?? '').toLowerCase().trim();
-        final hiveKey = tmplName.isEmpty
-            ? 'tmpl_${id.hashCode.toUnsigned(32).toRadixString(16)}'
-            : 'tmpl_${tmplName.hashCode.toUnsigned(32).toRadixString(16)}';
-        canonicalKeys.add(hiveKey);
-        // F6 · Always refresh template content from cloud — covers the case
-        // where the user edited a template on another device. Previous
-        // `if (workoutBox.get(hiveKey) != null) continue;` kept the stale
-        // local version.
+        final hiveKey = templateKeyFor(id);
+
+        if (map['deleted_at'] != null) {
+          // Positive evidence of a delete -- remove any local copy and
+          // its schedule references. `_cleanScheduleReferencesToTemplate`
+          // targets both the Hive-key AND the raw-cloud-id shapes (schedule
+          // rows may hold either — see that helper's doc), so this covers
+          // both. OI-252's replacement for the old canonicalKeys/deleteAll
+          // stale-key SWEEP (removed entirely — a blanket "not in the
+          // cloud's live set" sweep would have deleted every not-yet-pushed
+          // local template on a device's first restore).
+          final hadLocalCopy = _hive.workoutBox.get(hiveKey) != null;
+          if (hadLocalCopy) {
+            await _hive.workoutBox.delete(hiveKey);
+          }
+          await _cleanScheduleReferencesToTemplate(
+              hiveKey: hiveKey, cloudId: id);
+          if (hadLocalCopy) {
+            unawaited(ErrorTelemetry.logEvent(
+              'deleted_template_removed_during_restore',
+              message: 'id=$id',
+            ));
+          }
+          continue;
+        }
+
+        // An offline delete on THIS device must not be undone by a
+        // restore racing ahead of its own drain — skip a row this
+        // device itself queued for deletion, even though the cloud
+        // still (briefly) reports it live.
+        if (pendingDeleteIds.contains(id)) continue;
 
         // Sort exercises by order_index
         final exerciseRows = map['template_exercises'] as List? ?? [];
@@ -1715,6 +1856,8 @@ extension SyncServiceWorkout on SyncService {
           };
         }).toList();
 
+        // F6 · Always refresh template content from cloud — covers the
+        // case where the user edited a template on another device.
         await _hive.workoutBox.put(hiveKey, {
           'id': hiveKey,
           'type': 'template',
@@ -1728,39 +1871,36 @@ extension SyncServiceWorkout on SyncService {
           'source': 'cloud_restore',
         });
       }
-
-      // APK Test #12.9 — sweep stale `tmpl_*` keys not in canonical
-      // cloud set. Skipped when cloud returned zero rows (defensive:
-      // a transient query failure could otherwise wipe local-only
-      // unsynced templates). The skip is safe because if cloud truly
-      // has zero templates, the user has nothing to lose by keeping
-      // local stragglers visible until next successful sync.
-      if (canonicalKeys.isNotEmpty) {
-        final stale = <String>[];
-        for (final k in _hive.workoutBox.keys) {
-          if (k is String &&
-              k.startsWith('tmpl_') &&
-              !canonicalKeys.contains(k)) {
-            stale.add(k);
-          }
-        }
-        if (stale.isNotEmpty) {
-          await _hive.workoutBox.deleteAll(stale);
-          unawaited(ErrorTelemetry.logEvent(
-            'templates_stale_keys_swept',
-            message:
-                'count=${stale.length} canonical=${canonicalKeys.length}',
-          ));
-        }
-      }
     } catch (e, st) {
       debugPrint('[SyncService._restoreWorkoutTemplates] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_if_18'));
+          reason: 'sync_service_if_18', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'restore_workout_templates', error: e);
       } catch (_) {}
+    }
+  }
+
+  /// OI-252 — cleans every future, non-terminal `schedule_*`/`displaced_*`
+  /// entry referencing a deleted template, matching on EITHER [hiveKey]
+  /// (the shape a local `template_service.dart` assignment writes) or
+  /// [cloudId] as a bare string (the shape a pre-fix
+  /// `_restoreScheduledWorkouts` could have written, and the shape a
+  /// not-yet-migrated device's schedule rows may still hold). Delegates
+  /// to `TemplateService.cleanSyncTemplateSchedule`'s terminal-row-safe
+  /// unschedule logic rather than duplicating it.
+  Future<void> _cleanScheduleReferencesToTemplate({
+    required String hiveKey,
+    required String cloudId,
+  }) async {
+    try {
+      await TemplateService.instance.cleanSyncTemplateSchedule(hiveKey);
+      await TemplateService.instance.cleanSyncTemplateSchedule(cloudId);
+    } catch (e, st) {
+      debugPrint('[SyncService._cleanScheduleReferencesToTemplate] $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'sync_clean_schedule_refs_deleted_template'));
     }
   }
 
@@ -1795,15 +1935,15 @@ extension SyncServiceWorkout on SyncService {
           unawaited(_reportSyncFailure(opType: op, error: e)),
     );
 
-    // APK Test #14 / Bug B.1 — per-call cache of template_name → cloud
-    // UUID, and a one-shot _syncWorkoutTemplates recovery attempt bounded to
-    // once per call. Both preserved verbatim from the pre-Task-15 code;
-    // pinned by test/contracts/scheduled_workouts_fk_resilience_test.dart.
-    final templateNameToCloudId = <String, String?>{};
+    // A one-shot _syncWorkoutTemplates recovery attempt bounded to once per
+    // call, however many rows hit 23503. Pinned by
+    // test/contracts/scheduled_workouts_fk_resilience_test.dart.
     bool templatesResynced = false;
 
     // Local-only (no network): the template row's name on THIS phone, or
-    // null when the ref is empty or the template row is not here.
+    // null when the ref is empty or the template row is not here. Feeds the
+    // fingerprint (a template arriving on this phone re-pushes) and Case 2
+    // below.
     String? localTemplateName(String? rawHiveTemplateId) {
       if (rawHiveTemplateId == null || rawHiveTemplateId.isEmpty) return null;
       final localTmpl = workoutBox.get(rawHiveTemplateId);
@@ -1812,37 +1952,16 @@ extension SyncServiceWorkout on SyncService {
       return (n == null || n.isEmpty) ? null : n;
     }
 
-    /// Resolve the cloud `workout_templates.id` for a Hive `tmpl_<ms>` raw
-    /// key by reading the local template's name and SELECTing the cloud row
-    /// that matches `(user_id, name)`. Returns null when the local template
-    /// is missing/nameless or the cloud SELECT errors. Cache hits (including
-    /// null) short-circuit; never called when [localTemplateName] is null
-    /// (spec §14 — a skipped or genuinely-orphan row costs no SELECT).
-    Future<String?> resolveCloudTemplateId(String? rawHiveTemplateId) async {
-      final tmplName = localTemplateName(rawHiveTemplateId);
-      if (tmplName == null) return null;
-      if (templateNameToCloudId.containsKey(tmplName)) {
-        return templateNameToCloudId[tmplName];
-      }
-      try {
-        final parentRow = await _supabase.client
-            .from('workout_templates')
-            .select('id')
-            .eq('user_id', userId)
-            .eq('name', tmplName)
-            .maybeSingle();
-        final cloudId = parentRow?['id'] as String?;
-        templateNameToCloudId[tmplName] = cloudId;
-        return cloudId;
-      } catch (e, st) {
-        debugPrint(
-            '[SyncService._syncScheduledWorkouts] resolveCloudTemplateId($tmplName): $e');
-        // audit-2026-05-11 H-42 — telemetry pair.
-        unawaited(ErrorTelemetry.recordNonFatal(e, st,
-            reason: 'sync_service_if_19'));
-        templateNameToCloudId[tmplName] = null;
-        return null;
-      }
+    // OI-252 (merged from main) — `resolveCloudTemplateId` is a PURE key
+    // conversion, no network call and no cache. It REPLACES the old
+    // name-based SELECT (`(user_id, name)`) entirely: a schedule's
+    // `template_id` is a Hive key (`tmpl_<uuid>`) whose cloud id is embedded
+    // in the key itself, once the legacy-key migrator has run. A non-uuid
+    // (legacy) key returns null and takes the recovery path below, whose
+    // template resync runs that migrator.
+    String? resolveCloudTemplateId(String? rawHiveTemplateId) {
+      if (rawHiveTemplateId == null || rawHiveTemplateId.isEmpty) return null;
+      return cloudIdFromKey(rawHiveTemplateId);
     }
 
     final liveDates = <String>{};
@@ -1865,13 +1984,12 @@ extension SyncServiceWorkout on SyncService {
         final rawTemplateId = entry['template_id']?.toString();
         final bool hasLocalRef =
             rawTemplateId != null && rawTemplateId.isNotEmpty;
-        // Local only — the cloud id is resolved inside the push closure, so a
-        // skipped row costs no workout_templates SELECT (spec §14).
         final String? tmplName = localTemplateName(rawTemplateId);
 
         // day-swapper+sync-load Task 14 — never "now" for a past completion;
         // resolver order: completed_at (ISO) -> completed_at_ms -> the
-        // matching wlog's completed_at -> omit.
+        // matching wlog's completed_at -> omit. (Also covers APK Test #12.7:
+        // an empty string never reaches PostgREST.)
         final String? completedAt =
             ScheduleCompletionTime.scheduledCompletedAtIso(entry);
 
@@ -1882,6 +2000,11 @@ extension SyncServiceWorkout on SyncService {
         // and an absent key differently on upsert (NULLs the column vs.
         // leaves it untouched), so every row's first push under this scheme
         // changes payload shape and re-pushes once (the expected heal).
+        // OI-252's concern — an omitted key leaving a DELETED template's
+        // reference in the cloud row forever — is covered by Case 1: a
+        // template delete cleans the local refs
+        // (`_cleanScheduleReferencesToTemplate`), so the row pushes an
+        // explicit null.
         Map<String, dynamic> buildPayload(String? tmplId,
                 {required bool includeTemplateKey}) =>
             <String, dynamic>{
@@ -1899,12 +2022,12 @@ extension SyncServiceWorkout on SyncService {
 
         await index.pushIfChanged(
           date,
-          // The LOCAL template ref, not the cloud id (spec §5.9): a rename,
-          // a template arriving on this phone, or a changed local ref all
-          // re-push. day-swapper+sync-load Task 15 supersedes A-fix-1 (a
-          // `completed` row never skipped) — migration 148's server-side
-          // completed-day guard (Task 7) makes a fingerprint-matched
-          // completed row exactly as safe to skip as a planned one; see
+          // The LOCAL template ref, not the cloud id (spec §5.9): a changed
+          // local ref or a template arriving on this phone re-pushes.
+          // day-swapper+sync-load Task 15 supersedes A-fix-1 (a `completed`
+          // row never skipped) — migration 148's server-side completed-day
+          // guard (Task 7) makes a fingerprint-matched completed row exactly
+          // as safe to skip as a planned one; see
           // docs/diagnoses/2026-06-27-sched-dirty-filter-b4f7e2.md.
           () => SyncService.schedPayloadFingerprint(<String, dynamic>{
                 ...buildPayload(null, includeTemplateKey: false),
@@ -1931,26 +2054,25 @@ extension SyncServiceWorkout on SyncService {
 
             // Case 1 — no local ref: explicit null, confirmed.
             if (!hasLocalRef) return upsertOnce(null, true);
-            // Case 2 — the template row is not on this phone: nothing can
-            // resolve, so omit the key and CONFIRM. template_name (null) is
-            // in the fingerprint, so the template's arrival re-pushes.
-            // Unconfirmed here would re-push every pass while the template
-            // stays missing.
+            // Case 2 — the template row is not on this phone: omit the key
+            // and CONFIRM. template_name (null) is in the fingerprint, so the
+            // template's arrival re-pushes. Unconfirmed here would re-push
+            // (and fail its FK) every pass while the template stays missing.
             if (tmplName == null) return upsertOnce(null, false);
 
-            // Case 3 — resolve now (only rows being pushed pay this SELECT).
-            final cloudTemplateId =
-                await resolveCloudTemplateId(rawTemplateId);
+            // Case 3 — the id comes from the key (OI-252), no SELECT.
+            final cloudTemplateId = resolveCloudTemplateId(rawTemplateId);
             if (cloudTemplateId != null &&
                 await upsertOnce(cloudTemplateId, true)) {
               return true;
             }
 
-            // Unresolved, or 23503 on a stale id. First-time-this-CALL (not
-            // per-row): re-run _syncWorkoutTemplates so the parent row
-            // exists, then re-resolve and retry. The row's own template is
-            // FORCED past the skip index: it is only here because the cloud
-            // lacks it, which the index (confirmed once, earlier) cannot know.
+            // Unresolved (a legacy key), or 23503 because the cloud lacks the
+            // template. First-time-this-CALL (not per-row): re-run
+            // _syncWorkoutTemplates so the parent row exists, then retry. The
+            // row's own template is FORCED past the skip index: it is only
+            // here because the cloud lacks it, which the index (confirmed
+            // once, earlier) cannot know.
             if (!templatesResynced) {
               templatesResynced = true;
               try {
@@ -1964,10 +2086,18 @@ extension SyncServiceWorkout on SyncService {
                     reason: 'sync_service_if_20'));
                 return false;
               }
-              // Clear cache so the post-resync lookup hits cloud fresh
-              // instead of returning the stale null/miss.
-              templateNameToCloudId.clear();
-              final recovered = await resolveCloudTemplateId(rawTemplateId);
+              // OI-252 — the resync above may have run the legacy-key
+              // migrator as a side effect (`_syncWorkoutTemplates` gates on
+              // it), which can rewrite THIS entry's `template_id` in place
+              // (legacy key → `tmpl_<uuid>`). Re-read the entry rather than
+              // resolving the now-stale `rawTemplateId` captured before the
+              // resync — a pure key conversion can't discover a value it
+              // never received.
+              final refreshed = workoutBox.get(key);
+              final refreshedTemplateId = refreshed is Map
+                  ? refreshed['template_id']?.toString()
+                  : rawTemplateId;
+              final recovered = resolveCloudTemplateId(refreshedTemplateId);
               if (recovered != null && await upsertOnce(recovered, true)) {
                 unawaited(_reportSyncFailure(
                   opType: 'scheduled_workout_fk_recovered',
@@ -1996,7 +2126,7 @@ extension SyncServiceWorkout on SyncService {
                   '[SyncService._syncScheduledWorkouts] fallback upsert: $e');
               // audit-2026-05-11 H-42 — telemetry pair.
               unawaited(ErrorTelemetry.recordNonFatal(e, st,
-                  reason: 'sync_service_catch_11'));
+                  reason: 'sync_service_catch_11', skipServerPost: true));
               unawaited(_reportSyncFailure(
                   opType: 'upsert_scheduled_workout', error: e));
               return false;
@@ -2017,7 +2147,7 @@ extension SyncServiceWorkout on SyncService {
         debugPrint('[SyncService._syncScheduledWorkouts] $e');
         // audit-2026-05-11 H-42 — telemetry pair.
         unawaited(ErrorTelemetry.recordNonFatal(e, st,
-            reason: 'sync_service_catch_12'));
+            reason: 'sync_service_catch_12', skipServerPost: true));
         // Task 13/14 review fix round 1 (2026-09-27) — this outer catch only
         // guards the payload-build code above (pushIfChanged never
         // rethrows; a push() failure is already reported via the domain's
@@ -2082,7 +2212,7 @@ extension SyncServiceWorkout on SyncService {
               .from('scheduled_workouts')
               .select(
                 '*, template:template_id('
-                'id, name, workout_type, '
+                'id, name, workout_type, deleted_at, '
                 'template_exercises(*)'
                 ')',
               )
@@ -2095,11 +2225,29 @@ extension SyncServiceWorkout on SyncService {
         rows = (preFetched as List? ?? const []);
       }
 
+      // OI-252 — lazily-resolved fallback set of deleted cloud template ids,
+      // used ONLY when a row's embed is null (legacy/RLS edge case; the
+      // stable-ID rename-on-delete trigger keeps the FK alive so the embed
+      // is normally present and carries `deleted_at` directly). Cached
+      // across the loop so at most one extra query runs per restore call.
+      Set<String>? deletedTemplateIdsCache;
+      Future<Set<String>> deletedTemplateIds() async =>
+          deletedTemplateIdsCache ??= await _deletedTemplateCloudIds(userId);
+
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);
         final date = map['scheduled_date'] as String? ?? '';
         if (date.isEmpty) continue;
         final key = 'schedule_$date';
+        // OI-252 — the cloud id this row's template_id points at, and its
+        // stable Hive-key form. `_syncScheduledWorkouts`'s push writes the
+        // raw cloud uuid (payload() always sends `template_id: tmplId`
+        // where tmplId is the cloud id), so that's what we read back here;
+        // the LOCAL representation must always be the `tmpl_<uuid>` key.
+        final rawCloudTemplateId = map['template_id'] as String?;
+        final hiveTemplateKey = rawCloudTemplateId != null
+            ? templateKeyFor(rawCloudTemplateId)
+            : null;
         // APK Test #12.8 / Bug #3 — pre-fix this returned early when a
         // schedule entry already existed locally (typically because the
         // _restoreWorkoutPlan path populated it first with status='planned').
@@ -2193,11 +2341,20 @@ extension SyncServiceWorkout on SyncService {
         String? hydratedWorkoutFocus;
         List<Map<String, dynamic>>? hydratedExercises;
         bool templateResolved = false;
+        // OI-252 — true when this row's assigned template is a tombstone
+        // (rename-on-delete trigger: `deleted_at` set, `is_active` false,
+        // name mangled). Such a row must never hydrate template content,
+        // and the schedule reference itself must be cleaned regardless of
+        // whether `_restoreWorkoutTemplates` has already run this pass.
+        bool templateDeleted = false;
 
         if (map['template_id'] != null) {
           final templateEmbed = map['template'];
           if (templateEmbed is Map) {
             final tmpl = Map<String, dynamic>.from(templateEmbed);
+            if (tmpl['deleted_at'] != null) {
+              templateDeleted = true;
+            } else {
             final tmplName = tmpl['name'] as String?;
             if (tmplName != null && tmplName.isNotEmpty) {
               hydratedWorkoutName = tmplName;
@@ -2234,16 +2391,41 @@ extension SyncServiceWorkout on SyncService {
                 };
               }).toList();
             }
+            }
+          } else if (rawCloudTemplateId != null &&
+              (await deletedTemplateIds()).contains(rawCloudTemplateId)) {
+            // OI-252 fallback — embed null but the id shows up in a live
+            // deleted-templates cross-check. Post-migration this should be
+            // rare (the rename-on-delete trigger keeps the FK alive, so the
+            // embed above is normally present), but a legacy/RLS edge case
+            // could still surface a null embed for a tombstoned template.
+            templateDeleted = true;
           } else {
-            // template_id set but embed null — template was deleted
-            // (FK SET NULL would zero it; an RLS-hidden row would
-            // also surface as null embed). Don't overwrite local
-            // workout_name/exercises with empties.
+            // template_id set, embed null, AND not in the deleted set —
+            // genuinely unresolvable (RLS-hidden or an orphaned FK). Don't
+            // overwrite local workout_name/exercises with empties.
             unawaited(ErrorTelemetry.logEvent(
               'restore_scheduled_workouts_template_missing',
               message: 'date=$date template_id=${map['template_id']}',
             ));
           }
+        }
+
+        if (templateDeleted) {
+          // OI-252 — never write/keep a schedule day pointing at a deleted
+          // template. Clean any local schedule reference to it (this date's
+          // row AND any other row that happens to share the id/key — the
+          // helper is a full sweep, same one `_restoreWorkoutTemplates`
+          // calls, safe to run redundantly) and skip writing this row
+          // entirely. Independent of Future-ordering: this runs whether or
+          // not `_restoreWorkoutTemplates` has processed the delete yet.
+          if (rawCloudTemplateId != null && hiveTemplateKey != null) {
+            await _cleanScheduleReferencesToTemplate(
+              hiveKey: hiveTemplateKey,
+              cloudId: rawCloudTemplateId,
+            );
+          }
+          continue;
         }
 
         // OI-170 — see the `day_of_week` key below. Computed once, here, so the
@@ -2279,7 +2461,10 @@ extension SyncServiceWorkout on SyncService {
                       (map['template_id'] != null
                           ? 'custom_template'
                           : 'workout'))),
-          if (map['template_id'] != null) 'template_id': map['template_id'],
+          // OI-252 — the LOCAL representation of a scheduled workout's
+          // template link is always the stable `tmpl_<uuid>` Hive-key
+          // shape, never the raw cloud uuid `map['template_id']` carries.
+          if (hiveTemplateKey != null) 'template_id': hiveTemplateKey,
           if (mergedStatus != null && mergedStatus.isNotEmpty)
             'status': mergedStatus,
           if (mergedCompletedAt != null && mergedCompletedAt.isNotEmpty)
@@ -2318,7 +2503,7 @@ extension SyncServiceWorkout on SyncService {
       debugPrint('[SyncService._restoreScheduledWorkouts] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'sync_service_if_21'));
+          reason: 'sync_service_if_21', skipServerPost: true));
       try {
         await _reportSyncFailure(opType: 'restore_scheduled_workouts', error: e);
       } catch (_) {}
@@ -2436,12 +2621,32 @@ extension SyncServiceWorkout on SyncService {
           userId, since ?? _kSyncDomainRestoreSince,
           preFetched: preFetched);
 
-  /// Mirrors [restoreScheduledWorkoutsForTest]: runs `_restoreWorkoutPlan`
-  /// with INJECTED cloud rows (no Supabase query, no live session), so the
-  /// L1/L3 restore-merge behaviour (spec sec 5.7) is testable against a
-  /// real Hive box.
+  /// Test seam: runs `_restoreWorkoutPlan` with INJECTED
+  /// `user_progress` rows AND (optionally) a pre-resolved deleted-template-id
+  /// set, so the L1/L2/L3 restore-merge (spec sec 5.7, day-swapper) and the
+  /// OI-252 ghost-day filter are behaviorally testable without a live
+  /// Supabase call for either query the real path would otherwise make.
   @visibleForTesting
-  Future<void> restoreWorkoutPlanForTest(String userId,
-          {Object? preFetched}) =>
-      _restoreWorkoutPlan(userId, preFetched: preFetched);
+  Future<void> restoreWorkoutPlanForTest(
+    String userId, {
+    Object? preFetched,
+    Set<String>? preFetchedDeletedTemplateIds,
+  }) =>
+      _restoreWorkoutPlan(
+        userId,
+        preFetched: preFetched,
+        preFetchedDeletedTemplateIds: preFetchedDeletedTemplateIds,
+      );
+
+  /// OI-252 B-pass finding 2 — test seam: runs `_restoreWorkoutTemplates`
+  /// with INJECTED cloud rows (no Supabase query for the row read itself),
+  /// so the legacy-key-migrator gate this fix added is behaviorally
+  /// testable. [preFetched] must be passed (even as an empty list) or this
+  /// falls through to a live network call, which unit tests cannot make.
+  @visibleForTesting
+  Future<void> restoreWorkoutTemplatesForTest(
+    String userId, {
+    required Object? preFetched,
+  }) =>
+      _restoreWorkoutTemplates(userId, preFetched: preFetched);
 }

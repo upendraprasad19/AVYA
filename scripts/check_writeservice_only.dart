@@ -111,7 +111,12 @@ const knownViolations = <String>{
   'lib/features/train/providers/train_provider.dart:ActiveWorkoutNotifier:workoutBox.put',
   'lib/features/train/providers/train_provider.dart:ActiveWorkoutNotifier:healthBox.put',
   'lib/features/train/providers/train_provider.dart:TemplatesNotifier:workoutBox.put',
-  'lib/features/train/providers/train_provider.dart:TemplatesNotifier:workoutBox.delete',
+  // OI-252 (2026-09-27): TemplatesNotifier.deleteTemplate's own
+  // workoutBox.delete was REMOVED — it now routes through
+  // WorkoutWriteService.instance.deleteTemplate(templateId), so this
+  // entry's violation no longer occurs. Left out deliberately (not just
+  // left in as dead weight): an orphaned allowlist entry is the same
+  // stale-doc-rot class as a stale file:line citation.
   'lib/features/train/repositories/workout_repository.dart:WorkoutRepository:workoutBox.put',
   'lib/features/train/screens/active_workout_screen.dart:ActiveWorkoutScreen:workoutBox.put',
   // E.7-adjacent — ActiveWorkoutPersistence is a legitimate single-purpose

@@ -9,9 +9,53 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### day_swap_train_ui_kill_switch (1 bugs)
 - 2026-09-28 a7f2d9 — task-25-review.md (reviewing commit c9fbcd64, the unmerged day-swap Train UI feature) found 5 gaps, the two most consequential being real bugs rather than style nits: (1)…
 
-### day_swap_engine (2 bugs)
+### migration-number-collision-detection (1 bugs)
+- 2026-09-28 d5f1b8 — OI-255 (filed 2026-09-27 from `template-stable-identity`) documented that `template-stable-identity` and `ops-alerting` independently minted BOTH migration 145 and migration 146 before either branch…
+
+### sync_fanout_workout_domain (4 bugs)
+- 2026-09-28 a3e7d9 — A context-blind review of the merge of origin/main into this branch (OI-252 stable template ids, B2a-2b telemetry dedup) found four defects where the two lines of work met. None was a conflict git…
+- 2026-06-02 d4b8e2 — Investigating the weekly report's "0 workouts" for upendra, the cloud had workout_log_exercises rows through today but NO workout_logs session-summary row newer than 05-21. Root: the cloud sync id was…
+- 2026-05-15 76c8f4 — PostgREST raises 42P10 "no unique or exclusion constraint matching the ON CONFLICT specification" on every upsert to workout_logs (onConflict=user_id,date,exercise_name), workout_log_exercises…
+- 2026-05-04 b621c6 — Four pre-existing test failures in rank_service_test and sync_gap_test reflected outdated test assumptions from pre-Test #6 architecture.
+
+### restore-write-if-changed (1 bugs)
+- 2026-09-28 f1c6b4 — Hermes seat h7 (L31, I/O cost) found three restore writers that run on every launch through `restoreLightweightAlways` (sync_service.dart:1508) and write Hive unconditionally, even when the cloud row…
+
+### day_swap_engine (3 bugs)
+- 2026-09-28 c2d8e5 — Hermes seat h4 (L37, legacy shapes) found that the day-swap engine's `DaySwapRules.isRest` counted a row as rest only when `type == 'rest'`. It missed the legacy rest hybrid (`status: 'rest'` + a…
 - 2026-09-26 c3e8b2 — Asking the AI coach to "shift today's workout to tomorrow and tomorrow's workout to today" (the APK observation that triggered this whole batch, spec §1.1: Fri 25 Pull+Core <-> Sat 26 Legs+Core) makes…
 - 2026-09-26 e2b9d4 — The only shipped day-swap path, `SwapService.swapDays` (lib/core/services/swap_service.dart:113-169), reached solely via a long-press on the Home calendar strip, has nine independent defects, each…
+
+### telemetry-row-value-redaction (1 bugs)
+- 2026-09-28 e8c3a1 — Hermes seat h6 (L40, PII in telemetry) found that a failed `ai_coach_interactions` upsert could send the user's raw AI-coach chat text into the `client_errors` table. Postgres echoes the rejected…
+
+### alert_threshold_tuning (2 bugs)
+- 2026-09-27 d2c9f4 — The live alert_client_errors_spike sub-block of ops_alerts_30min (jobid 43) counted RAW client_errors rows over a 1-hour window, with no offline-noise exclusion, no per-user breadth signal, and no…
+- 2026-06-06 f0b9d3 — The alert_client_errors_spike cron paged critical for benign volume. Alert #24 fired "client_errors spike: 354 rows in last hour" (critical) for what was the founder's own reinstall/restore burst on…
+
+### alert-contract-test-infra (1 bugs)
+- 2026-09-27 d4a7c1 — Merging `template-stable-identity` into `main` triggered the pre-merge-commit hook's `check_regression_catalog.dart` gate (a merge-only gate that runs the Dart regression tests cited by diagnose-docs…
+
+### workout_templates (2 bugs)
+- 2026-09-27 f4a8c2 — Found by the reuse audit. Deleting a workout template on one device, then restoring on another (or after a reinstall), could bring the deleted template — and any workout day scheduled against it —…
+- 2026-05-08 5a36ad — Sync stack had systemic failures — workout templates were not deduped (UNIQUE constraint added), streak pill showed cached value instead of live calculateCurrentStreak(), completed_at was overwritten…
+
+### food_log_provider_invalidation (1 bugs)
+- 2026-09-27 b7f3e2 — The `main` push (after merging `template-stable-identity`) ran the full `flutter test` suite under `scripts/pre-push.sh` and hit one failure:…
+
+### sync_error_telemetry (1 bugs)
+- 2026-09-27 f7b2c9 — Three independent client-side telemetry defects, scoped together as unit B2a-2b of the ops-alerting batch (the "client classification, queue drift, dual write" scope named by the original —…
+
+### usage_quota_ledger (new key prediction_daily) + ai_proxy_input_limits (1 bugs)
+- 2026-09-26 125b81 — ai-proxy's `type: "prediction"` branch (`ai-proxy/index.ts:700-757` before this fix) had three defects, each verified by reading the code on 2026-09-26: 1. Unmetered. No quota, no tier check. Every…
+
+### coach_chat_history_replay (3 bugs)
+- 2026-09-26 e5c9d2 — ai-proxy's chat dedup (`ai-proxy/index.ts`, "Deduplication: return cached response for same user+message in last 30s") served ANY recent row with a non-empty `ai_response` back as a 200 reply. When…
+- 2026-09-20 d3e8a1 — CI went red on `main` twice in a row (merge-triggered run 35485792369, then its rerun) on the "Supabase Integration Tests" job: `test/edge_functions/ai_proxy_test.dart`'s "AI Proxy — Free Tier T19: AI…
+- 2026-09-16 a1c6b9 — Founder reported (APK 1.0.0+43, two screenshots) that the AI Coach chat showed "I had trouble reaching the model. Try again in a moment." on every turn since the previous day, including a plain "hi"…
+
+### Migration 145 (b4c8e2) reads cron.job_run_details for runs that FAILED. A job that is never launched produces no row there, so 145 cannot see it. OI-178's class line names exactly this: "a failing job and a job that never ran are the same observation here: nothing". Nothing read cron.job's schedule or active flag against run history. (1 bugs)
+- 2026-09-26 f7a3d2 — A pg_cron job that stops being launched, or is switched off with the documented kill switch (`cron.job.active = false`), writes no run row at all, and nothing raises an alert. On 2026-09-21 two hourly…
 
 ### custom_exercises_mutations (3 bugs)
 - 2026-09-26 d5c2e8 — Found by the reuse audit, not by a user report. `CreateCustomExerciseSheet` created a custom exercise with a raw `HiveService.instance.customBox.put` plus a hand-rolled `syncCustomItemsNow()` /…
@@ -23,6 +67,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ### Migration 141 (disk-IO audit, 2026-09-22) consolidated six single-statement maintenance jobs into one command: four `SELECT cleanup_*()` + two `VACUUM (ANALYZE)`. With `cron.use_background_workers=off` (live) pg_cron sends the command over libpq as one simple query, which Postgres runs as a single implicit transaction; VACUUM refuses to run in a transaction block. As separate single-statement jobs (pre-141 jobids 35/36) the same VACUUMs succeeded every night 09-06 → 09-20 — the consolidation, not the statements, is the defect. 141's registry row even described the new shape as an improvement ("sequenced explicitly AFTER retention in the same job"). (1 bugs)
 - 2026-09-26 d6b2f9 — pg_cron job 41 `db_maintenance_nightly` FAILED every run 2026-09-22 → 09-26 (5/5, `ERROR: VACUUM cannot run inside a transaction block`, avg 0.93 s). Because pg_cron executes a multi-statement command…
+
+### user_owned_storage_buckets (1 bugs)
+- 2026-09-26 40054f — delete-account's Storage purge (`delete-account/index.ts:398` before this fix) looped over a hard-coded list of three buckets — progress-photos, chat-media, coach-media — while the client also uploads…
 
 ### `isPro()` on an expired row starts `_downgradeLocally()` WITHOUT awaiting it (`subscription_service.dart:480-483`, and :461 for the cross-account wipe) — correct, since isPro() is a synchronous bool. `_downgradeLocally` (:1175) awaits its Hive writes one at a time (:1191-1195), then fires onStateChanged (:1199), then onDowngrade (:1213). The tests waited for that chain with a PROXY (`pumpEventQueue()`, a banner `_settle` quiescence sampler, a fixed sleep). Every write after the first await sits behind real per-box-serialised file I/O, so on a loaded runner the proxy returned first: the assertion read pre-downgrade state, and the file's tearDown then closed Hive under the still running chain, which is where the trailing Box-not-found comes from. The fix waits for the production signal (onDowngrade, which has exactly one caller) instead of any proxy. (1 bugs)
 - 2026-09-26 b3f8e5 — CI "Unit Tests" failed intermittently on `test/contracts/realtime_pro_gate_behavioral_test.dart` — "e4a7c9 — the teardown half … THE SECOND BUG: a downgrade fires onDowngrade" — `Expected: true…
@@ -43,6 +90,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### saved_meals (2 bugs)
 - 2026-09-26 a8e3f1 — Found by the reuse audit. Saved meals are sorted most-used first and show "used N×", but the count only ever moved for LEGACY `saved_meal_*` rows. The bump lived in…
 - 2026-06-03 b8d5c2 — Surfaced by the f7e3a1 B-pass (Finding 1) while reviewing the saved-meals sync. `NutritionWriteService.saveMealPreset` keyed the local Hive row by `saved_meal_<millisecondsSinceEpoch>`, but the cloud…
+
+### The alerting stack reads public.cron_call_log (alert_cron_failures, alert_cron_silence, alert_cron_function_dead). Only Edge Functions write that table, through _shared/cron_telemetry.ts. A pg_cron job whose command is SQL never calls an EF, so its only run record is the one pg_cron writes itself, cron.job_run_details, and before this batch no alert read that table. The failure path had a writer and no reader. (1 bugs)
+- 2026-09-26 b4c8e2 — A pure-SQL pg_cron job can fail on every run and nothing raises an alert. db_maintenance_nightly (jobid 41) failed 5 of 5 nights, 2026-09-22 → 09-26, and it was found by hand while planning batch B…
 
 ### sync_completion_time_resolution (1 bugs)
 - 2026-09-26 f4c7a9 — Two workout-completion sync paths, plus 12 other sync-payload sites, fall back to `DateTime.now()` when a timestamp describing something that already happened is missing, so a past event gets…
@@ -140,10 +190,6 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ### (new — no prior SoT concept; UI-lifecycle fix, not a data contract) (1 bugs)
 - 2026-09-21 b4e7f1 — Founder observation #1 (screenshot): the swap "UNDO" snackbar banner stayed visible even after the workout reached 100% completion. Investigation found the gap was wider than the report: the snackbar…
-
-### coach_chat_history_replay (2 bugs)
-- 2026-09-20 d3e8a1 — CI went red on `main` twice in a row (merge-triggered run 35485792369, then its rerun) on the "Supabase Integration Tests" job: `test/edge_functions/ai_proxy_test.dart`'s "AI Proxy — Free Tier T19: AI…
-- 2026-09-16 a1c6b9 — Founder reported (APK 1.0.0+43, two screenshots) that the AI Coach chat showed "I had trouble reaching the model. Try again in a moment." on every turn since the previous day, including a plain "hi"…
 
 ### diet_plan_immediate_load_no_modal (1 bugs)
 - 2026-09-20 6642b5 — Opening the Diet Plan screen shows a blank spinner behind a "Saved Diet Plan Found — load it or generate fresh?" modal, even though the saved plan is already available synchronously from local Hive…
@@ -918,9 +964,6 @@ rather than a Hive box. (1 bugs)
 ### client_ux_flow_and_restore_correctness (1 bugs)
 - 2026-06-07 a8e3c5 — Twelve client UX/flow/restore defects from the 2026-06-07 audit. F3: the streak explainer claimed "+1 each week you complete at least 80% of scheduled workouts", but the real algorithm is +1 per…
 
-### alert_threshold_tuning (1 bugs)
-- 2026-06-06 f0b9d3 — The alert_client_errors_spike cron paged critical for benign volume. Alert #24 fired "client_errors spike: 354 rows in last hour" (critical) for what was the founder's own reinstall/restore burst on…
-
 ### coach_interactions (4 bugs)
 - 2026-06-06 c3f9a1 — Two AI-coach interactions saved within the same millisecond both minted the Hive key coach_<ms>; the second coachBox.put overwrote the first (silent data loss). Surfaced as a non-deterministic CI…
 - 2026-05-29 9e1d4c — Every rank promotion silently fails to deliver its celebration — no AI congrats message is stored and no OneSignal "Promotion Day" push is sent.
@@ -952,11 +995,6 @@ rather than a Hive box. (1 bugs)
 - 2026-06-03 f7e3a1 — The d4b8e2 sweep (workout_logs / weight / sleep / body / wle / wls) left TWO nutrition tables on the same un-user-scoped deterministic-id pattern — found by the Hermes deep-pass and folded into this…
 - 2026-06-01 c9f2a7 — Driving the AI coach live as amar (a year-sim power user), a coach `logMealByText` wrote to Hive correctly — the Nutrition Today's Summary card bumped exactly right (4314 -> 4644 kcal, protein 290 ->…
 - 2026-05-06 344121 — Second cloud-side audit revealed 4 bugs — NutritionWriteService.onStateChanged hook missing, foodLogProvider missing from invalidation set, LoggingTypeRepairMigrator had unhandled edge cases, and…
-
-### sync_fanout_workout_domain (3 bugs)
-- 2026-06-02 d4b8e2 — Investigating the weekly report's "0 workouts" for upendra, the cloud had workout_log_exercises rows through today but NO workout_logs session-summary row newer than 05-21. Root: the cloud sync id was…
-- 2026-05-15 76c8f4 — PostgREST raises 42P10 "no unique or exclusion constraint matching the ON CONFLICT specification" on every upsert to workout_logs (onConflict=user_id,date,exercise_name), workout_log_exercises…
-- 2026-05-04 b621c6 — Four pre-existing test failures in rank_service_test and sync_gap_test reflected outdated test assumptions from pre-Test #6 architecture.
 
 ### ui_header_no_clip (1 bugs)
 - 2026-06-02 b2e9d4 — Tab-screen headings clipped to an ellipsis: the Train screen showed "Intensificati…" (phase name "Intensification") and the Nutrition screen showed "Fueling the pl…". Both used a single-line Text…
@@ -1375,9 +1413,6 @@ rather than a Hive box. (1 bugs)
 ### workout_template_sync (1 bugs)
 - 2026-05-10 a8b2c7 — _syncWorkoutTemplates used a DELETE-then-INSERT pattern for child template_exercises rows. If the DELETE succeeded but a subsequent INSERT errored mid-loop (network blip, FK constraint, payload…
 
-### workout_templates (1 bugs)
-- 2026-05-08 5a36ad — Sync stack had systemic failures — workout templates were not deduped (UNIQUE constraint added), streak pill showed cached value instead of live calculateCurrentStreak(), completed_at was overwritten…
-
 ### subscription_payment_grace_window (2 bugs)
 - 2026-05-06 5456c4 — Multiple issues in one batch — PRO upgrade did not unlock after payment, receipt showed wrong set counts, today card had duplicate text, weight chart decimals were static, swap kept stale…
 - 2026-05-06 d9b546 — PRO unlock still failed systemically across multiple code paths; logging_type repair migrator was not library-aware, repairing to wrong types for exercises present in the library.
@@ -1417,19 +1452,34 @@ rather than a Hive box. (1 bugs)
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
 | 2026-09-28 | a7f2d9 | task-25-review.md (reviewing commit c9fbcd64, the unmerged day-swap Train UI feature) found 5 gaps, the two most consequential being real bugs rather than style nits: (1)… | day_swap_train_ui_kill_switch | "test/widgets/week_rows_kill_switch_test.dart (new — asserts by widget type/key and child count, not pixels), plus updated test/widgets/day_swap_drag_wrapper_test.dart (new switch-OFF test, F3) and its new F5 standing-reset group" |
+| 2026-09-28 | d5f1b8 | OI-255 (filed 2026-09-27 from `template-stable-identity`) documented that `template-stable-identity` and `ops-alerting` independently minted BOTH migration 145 and migration 146 before either branch… | migration-number-collision-detection | "test/scripts/migration_collision_lib_test.dart (7 pure unit tests) + test/scripts/check_migrations_applied_collision_e2e_test.dart (3 e2e tests spawning the real gate binary)" |
+| 2026-09-28 | a3e7d9 | A context-blind review of the merge of origin/main into this branch (OI-252 stable template ids, B2a-2b telemetry dedup) found four defects where the two lines of work met. None was a conflict git… | sync_fanout_workout_domain | "test/contracts/sync_scheduled_payload_hash_index_writer_to_reader_test.dart (case 2a/2b, F2); test/sync/restore_plan_merge_skip_test.dart (ghost-day skip + mirror, F3); test/sync/restore_rest_row_content_test.dart (F4, 4 tests); test/sync/sync_telemetry_test.dart (block-scoped pairing, F1); test/sync/sched_template_fk_recovery_test.dart (repointed to OI-252)" |
+| 2026-09-28 | f1c6b4 | Hermes seat h7 (L31, I/O cost) found three restore writers that run on every launch through `restoreLightweightAlways` (sync_service.dart:1508) and write Hive unconditionally, even when the cloud row… | restore-write-if-changed | "test/sync/restore_write_if_changed_test.dart (3 behavioural tests counting real Hive write events via box.watch)" |
+| 2026-09-28 | c2d8e5 | Hermes seat h4 (L37, legacy shapes) found that the day-swap engine's `DaySwapRules.isRest` counted a row as rest only when `type == 'rest'`. It missed the legacy rest hybrid (`status: 'rest'` + a… | day_swap_engine | "test/services/day_swap/day_swap_rules_test.dart ('a legacy rest hybrid counts as a rest day' + its mirror) and test/services/schedule_hybrid_repair_migrator_test.dart (the migrator still honours the moved predicate)" |
+| 2026-09-28 | e8c3a1 | Hermes seat h6 (L40, PII in telemetry) found that a failed `ai_coach_interactions` upsert could send the user's raw AI-coach chat text into the `client_errors` table. Postgres echoes the rejected… | telemetry-row-value-redaction | "test/core/error_telemetry_redact_row_values_test.dart (6 unit) + test/sync/sync_error_row_values_redacted_test.dart (1 behavioural, real coach push against a stub PostgREST)" |
+| 2026-09-27 | d2c9f4 | The live alert_client_errors_spike sub-block of ops_alerts_30min (jobid 43) counted RAW client_errors rows over a 1-hour window, with no offline-noise exclusion, no per-user breadth signal, and no… | alert_threshold_tuning | test/contracts/ops_alerts_spike_breadth_test.dart |
+| 2026-09-27 | d4a7c1 | Merging `template-stable-identity` into `main` triggered the pre-merge-commit hook's `check_regression_catalog.dart` gate (a merge-only gate that runs the Dart regression tests cited by diagnose-docs… | alert-contract-test-infra | "test/contracts/alert_cron_job_silent_test.dart and test/contracts/alert_sql_job_failures_test.dart (both pre-existing, this fix repairs their own assertion rather than adding a new test)" |
+| 2026-09-27 | f4a8c2 | Found by the reuse audit. Deleting a workout template on one device, then restoring on another (or after a reinstall), could bring the deleted template — and any workout day scheduled against it —… | workout_templates | test/sync/oi252_deleted_template_restore_behavioral_test.dart |
+| 2026-09-27 | b7f3e2 | The `main` push (after merging `template-stable-identity`) ran the full `flutter test` suite under `scripts/pre-push.sh` and hit one failure:… | food_log_provider_invalidation | "test/widgets/log_food_sheet_search_respects_locked_slot_test.dart (pre-existing; repairs the production code the test's own teardown was exposing) + test/contracts/nutrition_provider_ref_mounted_guard_test.dart (NEW — source-grep pinning ALL ref.invalidate/ref.invalidateSelf call sites in this file are ref.mounted-guarded; mutation-proven, see below)" |
+| 2026-09-27 | f7b2c9 | Three independent client-side telemetry defects, scoped together as unit B2a-2b of the ops-alerting batch (the "client classification, queue drift, dual write" scope named by the original —… | sync_error_telemetry | test/sync/sync_telemetry_test.dart (Fix 1); test/contracts/oi254_subscription_refresh_op_type_rename_test.dart (Fix 2); test/contracts/offline_signature_migration_147_parity_test.dart (Fix 3) |
+| 2026-09-26 | 125b81 | ai-proxy's `type: "prediction"` branch (`ai-proxy/index.ts:700-757` before this fix) had three defects, each verified by reading the code on 2026-09-26: 1. Unmetered. No quota, no tier check. Every… | usage_quota_ledger (new key prediction_daily) + ai_proxy_input_limits | supabase/functions/_shared/prediction_handler_test.ts |
+| 2026-09-26 | e5c9d2 | ai-proxy's chat dedup (`ai-proxy/index.ts`, "Deduplication: return cached response for same user+message in last 30s") served ANY recent row with a non-empty `ai_response` back as a 200 reply. When… | coach_chat_history_replay | supabase/functions/_shared/chat_dedup_test.ts |
 | 2026-09-26 | c3e8b2 | Asking the AI coach to "shift today's workout to tomorrow and tomorrow's workout to today" (the APK observation that triggered this whole batch, spec §1.1: Fri 25 Pull+Core <-> Sat 26 Legs+Core) makes… | day_swap_engine | "must add: supabase/functions/_shared/tools/workout/__tests__/swapWorkoutDays_test.ts |
+| 2026-09-26 | f7a3d2 | A pg_cron job that stops being launched, or is switched off with the documented kill switch (`cron.job.active = false`), writes no run row at all, and nothing raises an alert. On 2026-09-21 two hourly… | Migration 145 (b4c8e2) reads cron.job_run_details for runs that FAILED. A job that is never launched produces no row there, so 145 cannot see it. OI-178's class line names exactly this: "a failing job and a job that never ran are the same observation here: nothing". Nothing read cron.job's schedule or active flag against run history. | test/contracts/alert_cron_job_silent_test.dart |
 | 2026-09-26 | d5c2e8 | Found by the reuse audit, not by a user report. `CreateCustomExerciseSheet` created a custom exercise with a raw `HiveService.instance.customBox.put` plus a hand-rolled `syncCustomItemsNow()` /… | custom_exercises_mutations | test/contracts/custom_exercises_mutations_behavioral_test.dart |
 | 2026-09-26 | d5a1e7 | A day swap made with the existing `SwapService.swapDays` (lib/core/services/swap_service.dart:113) can silently revert on the next app launch, and a workout-to-workout swap never propagates to a… | schedule_arrangement_stamp | "test/sync/restore_merge_invariants_test.dart (invariants I1-I8, spec §5.7) |
 | 2026-09-26 | e2b9d4 | The only shipped day-swap path, `SwapService.swapDays` (lib/core/services/swap_service.dart:113-169), reached solely via a long-press on the Home calendar strip, has nine independent defects, each… | day_swap_engine | "test/workout_write_service/swap_scheduled_days_test.dart (atomic write |
 | 2026-09-26 | d6b2f9 | pg_cron job 41 `db_maintenance_nightly` FAILED every run 2026-09-22 → 09-26 (5/5, `ERROR: VACUUM cannot run inside a transaction block`, avg 0.93 s). Because pg_cron executes a multi-statement command… | Migration 141 (disk-IO audit, 2026-09-22) consolidated six single-statement maintenance jobs into one command: four `SELECT cleanup_*()` + two `VACUUM (ANALYZE)`. With `cron.use_background_workers=off` (live) pg_cron sends the command over libpq as one simple query, which Postgres runs as a single implicit transaction; VACUUM refuses to run in a transaction block. As separate single-statement jobs (pre-141 jobids 35/36) the same VACUUMs succeeded every night 09-06 → 09-20 — the consolidation, not the statements, is the defect. 141's registry row even described the new shape as an improvement ("sequenced explicitly AFTER retention in the same job"). | test/contracts/cron_vacuum_single_statement_test.dart |
+| 2026-09-26 | 40054f | delete-account's Storage purge (`delete-account/index.ts:398` before this fix) looped over a hard-coded list of three buckets — progress-photos, chat-media, coach-media — while the client also uploads… | user_owned_storage_buckets | test/contracts/delete_account_purges_all_user_buckets_test.dart |
 | 2026-09-26 | b3f8e5 | CI "Unit Tests" failed intermittently on `test/contracts/realtime_pro_gate_behavioral_test.dart` — "e4a7c9 — the teardown half … THE SECOND BUG: a downgrade fires onDowngrade" — `Expected: true… | `isPro()` on an expired row starts `_downgradeLocally()` WITHOUT awaiting it (`subscription_service.dart:480-483`, and :461 for the cross-account wipe) — correct, since isPro() is a synchronous bool. `_downgradeLocally` (:1175) awaits its Hive writes one at a time (:1191-1195), then fires onStateChanged (:1199), then onDowngrade (:1213). The tests waited for that chain with a PROXY (`pumpEventQueue()`, a banner `_settle` quiescence sampler, a fixed sleep). Every write after the first await sits behind real per-box-serialised file I/O, so on a loaded runner the proxy returned first: the assertion read pre-downgrade state, and the file's tearDown then closed Hive under the still running chain, which is where the trailing Box-not-found comes from. The fix waits for the production signal (onDowngrade, which has exactly one caller) instead of any proxy. | test/contracts/pro_downgrade_waiter_behavioral_test.dart |
 | 2026-09-26 | d9e4b1 | `main` was RED for four consecutive CI runs (0c92c105 merge of main-sync-warning, b4a42556, fc797551, fafec56a), job "Unit Tests", one test of 6430:… | not_applicable — a test-fixture environment defect, not a Hive/cloud | test/scripts/discipline_hook_main_sync_e2e_test.dart |
 | 2026-09-26 | c7b4d2 | Found by the reuse audit (two separate referral redeem paths). The sign-up step's REFERRAL CODE field was redeemed only by the sign-in screen's `AuthStatus.success` listener, reading its own… | referral_redemption | test/contracts/referral_signup_metadata_behavioral_test.dart |
 | 2026-09-26 | b6e1c8 | `_restoreScheduledWorkouts` (lib/core/services/sync/sync_workout.dart:1904-2135, the reinstall restore path) derives the local `type` field as "template resolved -> custom_template, else the existing… | restore_type_derivation | "must add: test/services/schedule_hybrid_repair_migrator_test.dart (one-time |
 | 2026-09-26 | c6f2a8 | A live Supabase Management API token sat at the repo ROOT, `.supabase/supabase access token.txt` (44 B, 2026-09-23), untracked and NOT ignored: `git check-ignore -v` on it exited 1 in the primary… | not_applicable — repository secret hygiene, not a Hive/cloud contract. | test/scripts/gitignore_classification_test.dart |
 | 2026-09-26 | a8e3f1 | Found by the reuse audit. Saved meals are sorted most-used first and show "used N×", but the count only ever moved for LEGACY `saved_meal_*` rows. The bump lived in… | saved_meals | test/contracts/saved_meal_relog_times_used_behavioral_test.dart |
+| 2026-09-26 | b4c8e2 | A pure-SQL pg_cron job can fail on every run and nothing raises an alert. db_maintenance_nightly (jobid 41) failed 5 of 5 nights, 2026-09-22 → 09-26, and it was found by hand while planning batch B… | The alerting stack reads public.cron_call_log (alert_cron_failures, alert_cron_silence, alert_cron_function_dead). Only Edge Functions write that table, through _shared/cron_telemetry.ts. A pg_cron job whose command is SQL never calls an EF, so its only run record is the one pg_cron writes itself, cron.job_run_details, and before this batch no alert read that table. The failure path had a writer and no reader. | test/contracts/alert_sql_job_failures_test.dart |
 | 2026-09-26 | f4c7a9 | Two workout-completion sync paths, plus 12 other sync-payload sites, fall back to `DateTime.now()` when a timestamp describing something that already happened is missing, so a past event gets… | sync_completion_time_resolution | "test/sync/schedule_completion_time_test.dart (the completion-time order, |
-| 2026-09-26 | a9d3f6 | Of 21 push steps in lib/core/services/sync/, only 3 skip unchanged rows today; the other 18 push a single row (profile, progress, preferences) or re-send the user's WHOLE history on every pass (14… | sync_skip_index | "test/sync/sync_domain_skip_harness.dart (shared per-domain skip contract, |
+| 2026-09-26 | a9d3f6 | Of 21 push steps in lib/core/services/sync/, only 3 skip unchanged rows today; the other 18 push a single row (profile, progress, preferences) or re-send the user's WHOLE history on every pass (14… | sync_skip_index | "test/sync/sync_skip_index_test.dart (shared per-domain skip contract, |
 | 2026-09-24 | b2f7e4 | A B-pass adversarial review of commit `1db54e4f` (the SessionStart main-vs-origin/main sync warning added to `scripts/discipline_hook.dart` this same batch) found that `_mainSyncWarning()`'s bounded… | discipline_hook_main_sync_bounded_fetch | test/scripts/discipline_hook_main_sync_e2e_test.dart |
 | 2026-09-24 | b7e3a1 | A `type: 'logged'` schedule row (written by WorkoutWriteService.markCompleted's no-prior-schedule branch for AI-coach-only logging, or by the restore synthesize path in sync/sync_workout.dart) counts… | training_day_predicate_logged_agreement | test/contracts/training_day_predicate_wiring_test.dart |
 | 2026-09-23 | f2a8c6 | scripts/check_hooks_installed.dart (Gate 32) has always documented its own contract as "never hard-fail unexpectedly" -- a hygiene gate whose freshness/presence checks degrade to a WARN or an… | check_hooks_installed_unguarded_reads | test/scripts/check_hooks_installed_e2e_test.dart |
