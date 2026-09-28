@@ -64,7 +64,7 @@ Each lens has a focused prompt the dispatched agent runs against the staged diff
 3. **blast_radius_mismatch** — `docs/blast_radius.yaml` says path `X` is tier `T`. Does the diff treat it that way? E.g. catastrophic-tier changes must have rollback documented.
 4. **secrets_in_tree** — credential-shaped literals (`sk-`, `rzp_live_`, `AKIA`, `-----BEGIN`) anywhere in the staged diff. Source: `feedback_secrets_pattern_audit_before_first_push.md`.
 5. **unawaited_no_error_sink** — every `unawaited(` in the diff has either an inner `.catchError` or sits inside a function with declared error sink. Source: `feedback_observability_silent_drop.md`.
-   - **Refactor-onto-a-shared-helper sub-check (2026-09-27, 3 instances in one batch).** When a diff moves N per-domain call sites onto one shared helper (e.g. `SyncSkipIndex.pushIfChanged`), the helper's OWN handling is not a substitute for what each site did on top of it. Take the pre-change file (`git show <base>:<path>`) and diff the SET of per-site extras before vs after: every `_reportSyncFailure(<opType>)` / `recordNonFatal(<reason>)` op-type string, and every inline guard (e.g. the literal `ownerChangedSince(` sink guard a contract test pins adjacent to each write). Any member missing afterwards is a finding, even if the helper "already does something similar". Instances: day-swapper Task 13 (exlog/nlog failure reports dropped), Task 16 (`upsert_template_exercise` report dropped), Task 17 (inline sink guard dropped, caught only by the full `test/contracts/` run).
+   - **Refactor-onto-a-shared-helper sub-check (2026-09-27, 3 instances in one batch).** When a diff moves N per-domain call sites onto one shared helper (e.g. `SyncSkipIndex.pushIfChanged`), the helper's OWN handling is not a substitute for what each site did on top of it. Take the pre-change file (`git show <base>:<path>`) and diff the SET of per-site extras before vs after: every `_reportSyncFailure(<opType>)` / `recordNonFatal(<reason>)` op-type string, and every inline guard (e.g. the literal `ownerChangedSince(` sink guard a contract test pins adjacent to each write). Any member missing afterwards is a finding, even if the helper "already does something similar". Instances: day-swapper Task 13 (exlog/nlog failure reports dropped), Task 16 (`upsert_template_exercise` report dropped), Task 17 (inline sink guard dropped, caught only by the full `test/contracts/` run), Task 17 again (per-table opTypes `upsert_custom_exercise`/`upsert_custom_food` collapsed into one generic `sync_custom_items` string — the 4th instance in the same batch; fixed in the Task 17 fix round, `b503bcd6`/`745fdb98`, with a coordinator-found MIRROR gap: the fix's own `if (failed == 1)` reported only the first failure per pass, so two different tables failing in one pass under a shared index would report only one — closed with a distinct-opType-once report, diagnose `docs/diagnoses/2026-09-26-sync-write-amplification-a9d3f6.md`).
 6. **guard_without_its_mirror** — for every guard, existence check, early return, or narrowed match ADDED in the diff, name its **mirror case** and check whether that is guarded too: local vs remote, present vs absent, too-narrow vs too-wide, first-of-N vs the rest. Then ask the sharper question: **is the new code WORSE than what it replaced for the mirror case?** A guard written for the failure the author just hit routinely breaks the symmetric case that the previous code handled fine. Source: `feedback_mistake_guard_without_its_mirror.md`.
    **Do NOT accept the diff's own tests as evidence for this lens** — they are written from the same mental model as the code and will cover the same side. Ask instead: what does *every* test in this file silently assume?
    **Method (added 2026-08-11 after this lens found its third consecutive escape in ONE guard):** do not read the guard — *mutate it and run it*. Two rules that came out of that:
@@ -248,6 +248,43 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 - Bundle this with `/hermes-pass`. That's a different skill (per-batch, all 53 lenses, Opus, slower).
 
 ## 7. Tuning history
+
+- **2026-09-28** — blast-radius **catastrophic** — branch `day-swapper-sync-load` (OI-237: day-swap
+  engine rebuild + 21-push-step sync write-amplification fix; subagent-driven, ~30 tasks across 3
+  waves). Three new red flags surfaced across the wave-1/wave-2 review rounds, none previously named
+  in this skill; recorded here per Task 31's self-evolution carry (bpass review itself is Task 33's,
+  `bpass_review: pending (Task 33)` in `docs/audit/day-swapper-sync-load.closure.yaml`).
+  - **Red flag: a swallow-and-report helper whose return value is a success COUNT.** A count cannot
+    distinguish "N failed" from "nothing to do" — the caller that only checks `count > 0` or ignores
+    the return entirely treats both as success. Instance: Task 20's `SyncSkipIndex.clearAll` stored
+    `sync_epoch_seen` even when the clear partially failed, permanently losing the repair lever's
+    retry (fixed same-day, `a53f3305`; diagnose `docs/diagnoses/2026-09-26-sync-write-amplification-a9d3f6.md`).
+    Same family as `feedback_bad_news_vs_no_news.md` #7 — prefer a typed result (e.g.
+    `ClearAllResult.allSucceeded`) over a bare int/bool whenever a caller's next action depends on
+    which failure mode occurred.
+  - **Red flag: a duplicate helper justified by "the other unit has not landed yet" expires at
+    integration — the integrator must delete it, not just note it.** Parallel subagent-driven work
+    legitimately duplicates a helper when the canonical one is still in flight on another branch; the
+    duplicate's justification is time-bound and silently stops being true the moment both land.
+    Instance: Task 21's `_mondayOfIsoWeek` duplicated `DaySwapRules.mondayOf` (which landed later in
+    the same batch); the review caught it as a Minor, and the integrator re-pointed the duplicate to
+    delegate to the canonical helper and deleted the now-unjustified file-wide gate allowlist entry it
+    required (`5c0c00ff`). **Check:** at integration, grep for any helper whose only doc-comment
+    justification is "X hasn't landed yet" and verify X has, in fact, now landed.
+  - **Red flag: a skip/cache keyed on ONE side's state must also check the OTHER side, or a deletion
+    on the unchecked side is invisible to the equality check.** A cloud-fingerprint-unchanged skip
+    (or any cache keyed on a single source's version/hash) implicitly assumes the OTHER side is
+    unchanged too; it is not, whenever something on that side was DELETED — deletion is exactly the
+    case an equality/presence check on the checked side cannot see. Instance: Task 22's L2 plan-bundle
+    merge skip (fingerprint match against the downloaded bundle) missed a LOCALLY deleted
+    `schedule_<date>` row, since the cloud side's fingerprint had not changed; `PlanIntegrityReconciler
+    .needsHeal`'s own `getWeek()`-style reader omits absent keys, so no self-heal could compensate
+    either. Fixed by requiring every bundled key present locally, not just a fingerprint match
+    (`18183762`; memory `feedback_mistake_guard_without_its_mirror.md` #37). **Check:** for any skip
+    keyed on a hash/fingerprint/version of side A, ask whether side B can independently regress
+    (deletion, corruption, manual edit) without side A's fingerprint changing — if so, the skip is
+    unsafe without an explicit side-B presence/consistency check.
+  Review: pending (Task 33).
 
 - **2026-09-26** — blast-radius **account** — branch `reuse-audit-fixes` (B1 saved-meal
   times_used owner, C sign-up referral via auth metadata, D custom-exercise sheet through the

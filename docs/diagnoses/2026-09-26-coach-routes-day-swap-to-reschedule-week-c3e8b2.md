@@ -2,7 +2,7 @@
 bug_id: c3e8b2
 date: 2026-09-26
 batch: day-swapper-sync-load
-status: in_progress
+status: fixed_pending_live_apply
 blast_radius: platform
 symptom: |
   Asking the AI coach to "shift today's workout to tomorrow and tomorrow's workout to today" (the
@@ -18,9 +18,10 @@ symptom: |
   (`rescheduleWeek.ts:23`) — a two-day exchange has no "unavailable" day, so every day stays available
   and the move planner produces zero moves, matching the observed 6/0/0 result exactly.
 concept: day_swap_engine
-sot_registry_entry: scheduled_workouts_mutations (interim until Task 29 registers day_swap_engine; Task 31 re-points this line to it — see docs/sot_registry.yaml; this concept's coach-facing
-  half is the new swapWorkoutDays tool plus the manual's routing rule that sends a two-day exchange
-  to it instead of rescheduleWeek)
+sot_registry_entry: day_swap_engine (re-pointed by Task 31 — Task 29 registered the concept at
+  docs/sot_registry.yaml:12696; this concept's coach-facing half is the swapWorkoutDays tool
+  (supabase/functions/_shared/tools/workout/swapWorkoutDays.ts, listed there as a reader) plus the
+  manual's routing rule that sends a two-day exchange to it instead of rescheduleWeek)
 writers:
   - { file: supabase/functions/_shared/captain_manual.ts, method: "multi-intent worked example", line: 386 }
   - { file: supabase/functions/_shared/tools/workout/rescheduleWeek.ts, method: selectionHints, line: 25 }
@@ -74,18 +75,18 @@ regression_test_planned: |
   present in the client's const (spec §5.8) — mutation proof planned: remove the new dispatcher case
   and confirm the extended gate fails.
 touched_layers_checked:
-  - { tier: 1, name: client_code, status: fixed_in_this_batch, evidence: "New swap_workout_days case in tool_dispatcher.dart's intent-type switch (Task 27, U6), calling the day-swap engine with origin: coach." }
+  - { tier: 1, name: client_code, status: fixed_in_this_batch, evidence: "New swap_workout_days case in tool_dispatcher.dart's intent-type switch (Task 27, U6, commit 9925bf71, integrated cf99ff1c), calling the day-swap engine with origin: coach. The tool-loop.ts execute-time capability recheck (fix round F2, commit ae700095, integrated 5a764182) closes the guard-without-its-mirror gap the review found: only the offer-time filter checked requiresCapability before." }
   - { tier: 2, name: hive_local_state, status: not_applicable, evidence: "No new Hive key is introduced by the routing fix itself." }
   - { tier: 3, name: postgres_schema, status: not_applicable, evidence: "No DDL is involved in tool routing." }
   - { tier: 4, name: postgres_data, status: not_applicable, evidence: "No cloud data read or write is involved in tool selection." }
   - { tier: 5, name: migrations_applied, status: not_applicable, evidence: "No migration is needed for this bug." }
-  - { tier: 6, name: edge_function_code_vs_deploy, status: fixed_in_this_batch, evidence: "captain_manual.ts, rescheduleWeek.ts and registry.ts all ship in the ai-proxy Edge Function deploy (spec §11 rollout step 2)." }
+  - { tier: 6, name: edge_function_code_vs_deploy, status: fixed_pending_live_apply, evidence: "captain_manual.ts, rescheduleWeek.ts, registry.ts and the new swapWorkoutDays.ts all committed (Task 9 commit 8d56ccd3/2cb978c1; Task 27 commit 9925bf71/cf99ff1c + fix ae700095/5a764182), deno check ai-proxy/index.ts exit 0, but NOT yet deployed to the live ai-proxy Edge Function — Task 34 deploys with its own founder go and this status moves to fixed_in_this_batch then." }
   - { tier: 7, name: cron_jobs, status: not_applicable, evidence: "No cron job is involved in coach tool routing." }
   - { tier: 8, name: rls_policies, status: not_applicable, evidence: "No RLS-governed table is touched by this fix." }
   - { tier: 9, name: storage, status: not_applicable, evidence: "No Storage bucket or object is involved." }
   - { tier: 10, name: secrets_api_keys, status: not_applicable, evidence: "No secret is involved." }
-  - { tier: 11, name: external_services, status: verified, evidence: "The symptom itself is a live Gemini tool-call observation cited in spec §1.1: the coach emitted reschedule_week with daysAvailable=[Fri, Sat] and APPLY showed '6 keep - 0 move - 0 drop' for the founder's actual request. This drafting pass did not re-query Gemini; the evidence is the spec's own recorded observation." }
-  - { tier: 12, name: client_to_server_contract, status: fixed_in_this_batch, evidence: "The client_capabilities request field (spec §5.8) and the server's capability-filtered tool list are the contract that lets an old client keep getting the fallback line instead of a tool call it cannot execute." }
+  - { tier: 11, name: external_services, status: verified, evidence: "The symptom itself is a live Gemini tool-call observation cited in spec §1.1: the coach emitted reschedule_week with daysAvailable=[Fri, Sat] and APPLY showed '6 keep - 0 move - 0 drop' for the founder's actual request. Not re-verified live post-fix (that needs the ai-proxy deploy, Task 34); the fix is proven by Deno tests exercising the same tool-selection code path." }
+  - { tier: 12, name: client_to_server_contract, status: fixed_in_this_batch, evidence: "commit 8d56ccd3/2cb978c1 (Task 9): the client_capabilities request field and the server's capability-filtered tool list are the contract that lets an old client keep getting the fallback line instead of a tool call it cannot execute; execute-time recheck added in ae700095 closes the same contract's mirror gap at call time." }
 impact_analysis: |
   Severity: P2. Every PRO user who asks the coach to swap or exchange two days' workouts gets a
   silent no-op today (APPLY shows 6 keep / 0 move / 0 drop with no explanation), which reads as the
@@ -110,12 +111,37 @@ this is filed as new (spec §1.2's bug-history check reaches the same conclusion
 - The new tool file, its registration, the dispatcher case and the tool-count pin: Task 27 (U6, Wave
   2) — deliberately held to Wave 2 because `check_ai_tool_dispatcher_coverage.dart` requires the
   dispatcher case to exist in the same commit as the tool file, and the dispatcher case needs U4's
-  engine (integrated by then).
+  engine (integrated by then). Landed `9925bf71` (integrated `cf99ff1c`).
 - The capability plumbing (`client_capabilities` request field, server-side filter,
-  `_shared/client_capabilities.ts`, `_shared/day_swap_routing.ts`): Task 9 (U3, Wave 1).
+  `_shared/client_capabilities.ts`, `_shared/day_swap_routing.ts`): Task 9 (U3, Wave 1). Landed
+  `8d56ccd3` (integrated `2cb978c1`).
 - The manual amendment and hints rewrite: also Task 9 (U3), landing with the capability plumbing since
   both touch `captain_manual.ts` / `rescheduleWeek.ts`.
+- Review fix round (Task 27): the execution-time `requiresCapability` recheck in `tool-loop.ts`
+  (only the offer-time filter existed before — a guard-without-its-mirror gap), real-calendar-date
+  validation on `swapWorkoutDays.ts`'s ISO_DATE params, and the docstring truth-fix. Landed `ae700095`
+  (integrated `5a764182`).
+
+## Commits
+
+`8d56ccd3`/`2cb978c1`, `9925bf71`/`cf99ff1c`, `ae700095`/`5a764182`.
 
 ## Mutation evidence
 
-Recorded at Task 31: each mutation, the grep that confirmed it applied, and the red count.
+Task 27 (`9925bf71`), 5 legs: Deno 9/9, Dart 47/47, widget 4/4, contracts 4116/1/0. Mutation 3
+(deleted the `tool_dispatcher` swap_workout_days invalidation block) reddened **0** tests — both
+`currentPlanProvider` (watch) and `DaySwapAllowance` (ValueNotifier) refresh via other paths, so the
+block is a defensive redundant guard, not dead code. Investigated per rule 21, ruled: keep the block,
+rewrite its docstring to say it is redundant-by-design and name the two real refresh paths
+(day_swap_provider.dart:97-102, :110-116) — fixed in the F1 review finding below, not accepted as a
+zero-red surprise.
+
+Task 27 fix round (`ae700095`), F2 + F3:
+- F2 (execute-time capability recheck): block deleted → 1 red on the direct assertion, mirror green
+  on the paired assertion (2 new e2e Deno tests via real `runToolLoop`).
+- F3 (`isRealCalendarDate` via Zod `.refine()`): neutered → 3 reds. Side effect surfaced and fixed in
+  the same commit: `zodToGemini` threw on `ZodEffects` (the refine wrapper), which would have crashed
+  the tool offer for every capable client — an additive unwrap was added, verified unreachable for
+  every other existing tool.
+
+Deno 54/54 after the fix round; `deno check ai-proxy/index.ts` clean throughout.

@@ -42,7 +42,7 @@ value on every re-sync, 14 instances across the sync layer.
    every history-loop upsert sits inside this one helper and that no other
    code writes a `*_payload_hash_index` key.
 2. **The server drops no-op updates and never demotes a completed day**
-   (migration `147_sync_noop_suppress_completed_guard_sync_epoch.sql`): a
+   (migration `148_sync_noop_suppress_completed_guard_sync_epoch.sql`): a
    generic `suppress_redundant_updates_trigger()` (Postgres built-in) on 19
    tables makes an identical re-sent row create no new row version at all —
    a backstop for app versions already installed, and the only protection

@@ -185,7 +185,7 @@ pre-existing index/kill-switch names so already-stored fingerprints stay valid a
 batch. The other 14 are new to this batch. `sched` additionally dropped its old status-based
 carve-out (never skip a `completed` row, d9b2c5's A-fix-1): a completed row now skips on a
 fingerprint match like any other domain, because the server-side completed-day guard
-(migration 147, below) refuses a stale overwrite of a completed row — migration 147 must
+(migration 148, below) refuses a stale overwrite of a completed row — migration 148 must
 therefore be live BEFORE any build carrying this change of `sched`'s behaviour ships.
 
 **3. What each fingerprint excludes.** Every fingerprint is computed via
@@ -196,7 +196,7 @@ logs, `synced_at` on steps and the plan bundle. A domain whose writer stamps a g
 sent-at column on every push (water, steps) cannot be suppressed server-side either (point 4 below)
 for the same reason — the client-side skip index is its only protection for those two tables.
 
-**4. Server rules (migration `147_sync_noop_suppress_completed_guard_sync_epoch.sql`).**
+**4. Server rules (migration `148_sync_noop_suppress_completed_guard_sync_epoch.sql`).**
 Three independent fixes, one file:
 1. **No-op suppression on 19 tables** — a `BEFORE UPDATE` trigger running Postgres's built-in
    `suppress_redundant_updates_trigger()` (no extension, not `SECURITY DEFINER`) on

@@ -1,0 +1,292 @@
+# Closure ledger — day-swapper-sync-load batch (OI-237)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no
+# `deferred:` key. `closed_in_commit` entries cite the specific SHA(s) that
+# landed the fix (see each commit's own diagnose-doc for the full mutation
+# evidence); a batch this large cites per-finding SHAs rather than one
+# branch-wide pointer, since the six bugs and ~26 review findings each landed
+# in different tasks across three waves.
+#
+# Findings come from four sources: the six diagnose-docs' own bugs (Task 1),
+# plan-review round 1 on the drafted plan (16 findings, 2 P0/8 P1/6 P2),
+# round 2 on the hardened plan (21 findings, 1 P0/7 P1/13 P2), round 3 scoped
+# to the round-2 corrections (3 findings), and the plan-time deviations that
+# changed behaviour from the spec (D2, D3, D5, D7, D8, D9 — D1/D4/D6/D10-D19
+# are process/API-shape notes with no independent finding to close here; see
+# docs/superpowers/plans/2026-09-26-day-swapper-sync-load.md's own deviations
+# list for all 19). Plan-review findings whose fix changed the PLAN TEXT
+# before any implementer wrote code are `verified_clean` (no fix commit
+# exists because the shipped code never had the defect); findings whose fix
+# is a discrete post-hoc code change are `closed_in_commit`.
+#
+# bpass_review is intentionally NOT a path to a not-yet-existing file — Task
+# 33 runs /code-review after this ledger exists, and pointing at a file
+# before it exists is the exact anti-pattern this batch's own precedent
+# (docs/audit/unitb-deload-reason.closure.yaml finding B3) warns against.
+
+batch: day-swapper-sync-load
+plan_review_record: docs/plan-reviews/day-swapper-sync-load.md
+bpass_review: pending (Task 33)
+diagnose_docs:
+  - docs/diagnoses/2026-09-26-day-swap-reverts-after-restart-d5a1e7.md
+  - docs/diagnoses/2026-09-26-coach-routes-day-swap-to-reschedule-week-c3e8b2.md
+  - docs/diagnoses/2026-09-26-day-swap-unguarded-non-atomic-e2b9d4.md
+  - docs/diagnoses/2026-09-26-sync-past-timestamps-overwritten-with-now-f4c7a9.md
+  - docs/diagnoses/2026-09-26-sync-write-amplification-a9d3f6.md
+  - docs/diagnoses/2026-09-26-restore-types-rest-days-as-workouts-b6e1c8.md
+
+findings:
+  # ── The six bugs (Task 1's diagnose-docs) ──────────────────────────
+  - id: BUG-d5a1e7
+    title: "A day swap can revert after a restart, or never reach a second device"
+    terminal_state: closed_in_commit
+    commit: "3b2fd2c0, aa697efd, eb07e849, ef021699, 372f478b, a9366949, 64edfc6b, 595c68b4, ea93f97d, 82bd604e, 5c0c00ff, 18183762"
+    verification: >
+      All 12 commits on the batch branch; full mutation evidence (7 legs for the L1/L2/L3 merge, 4
+      legs for the atomic write, aggregate 21 legs for the U4 engine) recorded in the diagnose-doc's
+      own Mutation evidence section. test/sync/ 262/262 at Task 22 integration.
+
+  - id: BUG-c3e8b2
+    title: "The coach routes a two-day workout exchange to rescheduleWeek instead of swapping"
+    terminal_state: blocked_on_user
+    reason: >
+      Code and tests are complete and committed (8d56ccd3/2cb978c1, 9925bf71/cf99ff1c, ae700095/
+      5a764182 — Deno 54/54, deno check ai-proxy/index.ts exit 0), but the fix lives in ai-proxy,
+      which is not yet deployed live. Deploying an Edge Function needs the founder's explicit go per
+      commit (CLAUDE.md §4.3) — Task 34 requests it and flips this to closed_in_commit with the
+      live deploy's evidence.
+
+  - id: BUG-e2b9d4
+    title: "The existing day swap has no guards and is not atomic (9 defects)"
+    terminal_state: closed_in_commit
+    commit: "3b2fd2c0, aa697efd, eb07e849, ef021699, 372f478b, a9366949, 64edfc6b, 595c68b4, ea93f97d, 1ccce8be, ed2655e0, 6ef55e2d, 1001b41d, 3c376f77"
+    verification: >
+      All 9 defects fixed: the atomic write, field partition and markers (U4, Tasks 10-12), the
+      server-backed allowance (Task 8, EF committed but not yet deployed — tolerated by design since
+      the client allowance is fail-open), the template_id: null fix (Task 15) and the deload
+      is_swapped skip removal (Task 11). test/services/day_swap/ 61/61, 7/7+84/84 (Task 12) green.
+
+  - id: BUG-f4c7a9
+    title: "Completion times are overwritten with 'now' on sync (recurrence of 5a36ad, 14-instance class)"
+    terminal_state: closed_in_commit
+    commit: "e7a0cffa, ebddb44c, d370a0bc, 875c8f3e, b22592ed, 0a1a0548, b1c3ddc2, ea33eacb, b503bcd6, 53a177e0, 745fdb98, 865d891d, 70f1922b"
+    verification: >
+      Gate G2 (scripts/check_sync_no_now_fallback.dart) went from 14 hits pre-fix to 0 after Task 19
+      (progress.md: "Task 19: DONE 70f1922b. G2 6->0"). All 14 sites' own mutation tables recorded in
+      the diagnose-doc.
+
+  - id: BUG-a9d3f6
+    title: "Sync write amplification: only 3 of 21 push steps skip unchanged rows (OI-237)"
+    terminal_state: blocked_on_user
+    reason: >
+      SyncSkipIndex and all 14 domain migrations onto it are committed and green (test/sync/ +
+      test/contracts/ across Tasks 4-5, 13-20). The server half — migration
+      148_sync_noop_suppress_completed_guard_sync_epoch.sql (no-op suppression trigger, the
+      scheduled_workouts completed-day guard, sync_epoch) — is drafted (Task 7, handed over
+      uncommitted) but requires the founder's explicit go to apply live (CLAUDE.md §4.3's "Live prod
+      apply needs its own explicit go" — plan approval is not deploy approval). Task 34 applies it
+      and flips this to closed_in_commit. Per plan deviation D17, closes-oi: OI-237 also waits for
+      the post-apply §10 IO-saving measurement, not merely the code landing.
+
+  - id: BUG-b6e1c8
+    title: "Restore types a cloud rest day as a workout (28 live rows)"
+    terminal_state: closed_in_commit
+    commit: "82bd604e, 5c0c00ff, 9ffb48a1"
+    verification: >
+      The _restoreScheduledWorkouts type-derivation fix and merge-output normalizer (82bd604e) plus
+      the one-time ScheduleHybridRepairMigrator (9ffb48a1, gated per-account per D10) both landed.
+      test/services/schedule_hybrid_repair_migrator_test.dart green; test/sync/ 246/246 at Task 23
+      integration.
+
+  # ── Plan-review round 1 (drafted plan, material findings) ──────────
+  - id: R1-1
+    title: "P0 x2/P1 — Task 29 cited three files no task creates (day_swap_engine reader rows + an invariant test path)"
+    terminal_state: verified_clean
+    evidence: >
+      Fixed in the plan before Task 29 branched — the registry citations Task 29 actually wrote
+      (integrated ca088c18) reference the real Task 22/24/25/26 files. The same wrong test path also
+      sat in diagnose docs d5a1e7 and b6e1c8 at drafting time; both were corrected before Task 1
+      committed them and re-validated (dart run scripts/validate_diagnose_doc.dart, both OK).
+
+  - id: R1-2
+    title: "P1 — Task 16 wlog fingerprint could contain DateTime.now(), making an unchanged row push every pass"
+    terminal_state: closed_in_commit
+    commit: "875c8f3e, b22592ed"
+    verification: "_resolveCompletedAt split into _resolveCompletedAtOrNull; unresolvable timestamps omitted, not now()-stamped. Task 16 contracts 4110/0."
+
+  - id: R1-3
+    title: "P1 — Task 15 resolved the cloud template id BEFORE the skip check, costing a SELECT per template per pass and violating spec §5.9/§14"
+    terminal_state: closed_in_commit
+    commit: "3c376f77"
+    verification: "resolveCloudTemplateId moved inside the push closure — a skipped row now costs zero SELECTs (Task 15 review: 'a real IO win'). Three explicit cases recorded as D19."
+
+  - id: R1-4
+    title: "P1 — Task 20's restore kill switch also disabled the sync_epoch lever, making the two work as one"
+    terminal_state: closed_in_commit
+    commit: "083b82a9"
+    verification: "The two now work independently; test/sync/ 196/196 including the kill-switch-path tests."
+
+  - id: R1-5
+    title: "P1 — Task 21's swap_merge_conflict fired for completed rows, which should never be discarded at all"
+    terminal_state: closed_in_commit
+    commit: "82bd604e"
+    verification: "Telemetry now fires only for rows where something was actually discarded; verified by the Task 21 review (0 Critical/0 Important/3 Minor)."
+
+  - id: R1-6
+    title: "P1 x3 — Task 26/27/28 test and citation defects (.notifier on a plain Provider; a String passed as a DateTime; a 1000-line citation drift)"
+    terminal_state: verified_clean
+    evidence: >
+      Fixed in the plan before U5/U6 branched. Task 12's DaySwapController ships as a real Riverpod
+      Notifier (not a plain Provider misuse — Task 21 review even notes this is "the first legacy
+      StateProvider in the repo" for an UNRELATED, accepted case, not this one); Task 24/25's date
+      handling uses DateTime throughout (no String-as-DateTime); Task 28's snapshot citations use the
+      corrected line numbers verified at Task 28 integration (writer_line 1317->1324).
+
+  - id: R1-7
+    title: "P2 — allowance replies can land out of order under a high-water-mark guard"
+    terminal_state: verified_clean
+    evidence: "Round-1's high-water-mark fix was itself replaced in round 2 by a per-request sequence guard — see R2-C2 below for the shipped fix."
+
+  - id: R1-8
+    title: "P2 — migration 145 is contested with the in-flight templates batch's own 145_workout_templates_stable_delete.sql"
+    terminal_state: closed_in_commit
+    commit: "(this commit — Task 31's 148 renumber sweep)"
+    verification: >
+      Task 1 Step 3's collision check fired twice more after round 1: 145/146 were taken by other
+      batches, then 147 (147_alert_client_errors_spike_breadth.sql). The migration is now
+      148_sync_noop_suppress_completed_guard_sync_epoch.sql (ruling 2026-09-28, wave3-carry.md), swept
+      across sync_service.dart, sync_workout.dart, lib/core/services/CLAUDE.md, docs/architecture/
+      sync.md, docs/adr/0020, docs/operations/SYNC_EPOCH_RESYNC.md, the spec's dated correction, the
+      plan-review record and two test files in this Task 31 commit.
+
+  # ── Plan-review round 2 (hardened plan) ────────────────────────────
+  - id: R2-C1
+    title: "Round-1's Task 20 epoch fix made its sibling kill-switch test expect 2 fetches while the code made 3"
+    terminal_state: closed_in_commit
+    commit: "083b82a9"
+    verification: "The test now splits the fetches by select=; test/sync/ 196/196 at Task 20 integration."
+
+  - id: R2-C2
+    title: "Round-1's allowance guard was a high-water mark, blocking a legitimate LOWER server count (an admin correction) for the rest of the week"
+    terminal_state: closed_in_commit
+    commit: "ef021699, 372f478b, a9366949"
+    verification: "Replaced with a per-request sequence guard, so only the newest in-flight reply writes. Task 11 review traced the sequence guard through Dart's synchronous-until-first-await semantics and approved."
+
+  - id: R2-1
+    title: "P0 — Task 29's restore_type_derivation prose contained a hive_key_prefix: \"\" literal, which Gate 9's regex reads as a non-empty prefix"
+    terminal_state: closed_in_commit
+    commit: "ca088c18"
+    verification: "Task 29's registered concept carries a real hive_key_prefix value; check_writeservice_contracts.dart (Gate 9) PASS."
+
+  - id: R2-2
+    title: "P1 — migration 145's completed-day guard function was public, anon-executable by default project privileges"
+    terminal_state: closed_in_commit
+    commit: "(U1 handover, applied at Task 34)"
+    verification: >
+      private.scheduled_workouts_completed_guard() with a pinned search_path, following migrations
+      133/138's precedent — confirmed by reading the migration file at
+      .superpowers/sdd/2026-09-26-day-swapper-sync-load/u1-handover/148_sync_noop_suppress_completed_guard_sync_epoch.sql.
+      A post-apply pg_namespace check and a contract assertion (test/contracts/sync_noop_trigger_tables_test.dart)
+      exist; the live pg_namespace check runs at Task 34's apply.
+
+  - id: R2-3
+    title: "P1 — Task 34 had no action when 148 (145 at round-1 time) is taken at apply time"
+    terminal_state: verified_clean
+    evidence: >
+      The plan's corrective procedure (Task 34 Step 2.1) exists and has already been exercised twice
+      in substance: the migration number moved 145->147->148 as other batches landed first, each time
+      via the documented rename-and-re-sweep procedure this Task 31 commit itself performs for the
+      147->148 leg.
+
+  - id: R2-4
+    title: "P1 x2 — Task 27 widget test rendered free-tier copy (missing PRO override) and had a missing allowance import"
+    terminal_state: closed_in_commit
+    commit: "9925bf71, cf99ff1c"
+    verification: "Task 27 review: SPEC checked, quality Approved, 0 Important findings on the PRO-override/import fix; Deno 9/9, Dart 47/47, widget 4/4."
+
+  - id: R2-5
+    title: "P1 — Task 1 Step 3's rename sweep edited a diagnose doc not yet copied into the coordinator worktree"
+    terminal_state: closed_in_commit
+    commit: "ca813a4d"
+    verification: "The edit now happens at the source before the copy step, per Task 1's own progress.md entry (steps 1-3b done)."
+
+  - id: R2-6
+    title: "P1 — Task 11's mutation list never exercised the new sequence guard"
+    terminal_state: closed_in_commit
+    commit: "ef021699, 372f478b"
+    verification: "Mutations 8 and 9 added, covering the sequence guard; Task 11 review re-derived all mutation legs independently (10 mutations / 15 reds)."
+
+  - id: R2-7
+    title: "P2 group — exlog aborted breaks, exlog sink guard (matching nlog), D19's three explicit cases, the harness filter warning, repairRow reuse, a water_logs trigger-limit note, client-capabilities truncation documented"
+    terminal_state: closed_in_commit
+    commit: "0a1a0548, b1c3ddc2, ea33eacb, 3c376f77, 9ffb48a1, 8d56ccd3"
+    verification: >
+      exlog sink guard + aborted-break handling: Task 17 (0a1a0548/ea33eacb, self-found and fixed a
+      dropped sink guard in ea33eacb). D19's three cases: Task 15 (3c376f77). repairRow reuse: Task 23
+      (9ffb48a1). Water_logs trigger-limit note: recorded in the migration 148 header (u1-handover).
+      client_capabilities truncation (<=32 entries, <=48 chars, [a-z_]): Task 9 (8d56ccd3), pinned by
+      global-constraints.md.
+
+  # ── Plan-review round 3 (scoped to round-2 corrections) ────────────
+  - id: R3-1
+    title: "P1 — the apply-time rename procedure used git mv on a file that is still untracked"
+    terminal_state: verified_clean
+    evidence: >
+      The plan's Task 34 procedure now uses plain mv (not git mv) for the untracked handover file —
+      exercised in substance by this Task 31 commit's own 147->148 sweep, which used plain file
+      operations (cp/rm), never git mv, on the untracked migration copy.
+
+  - id: R3-2
+    title: "P2 — the new exlog sink guard had no test"
+    terminal_state: closed_in_commit
+    commit: "b503bcd6, 745fdb98"
+    verification: "A test (owner switch after the summary write) and mutation 5 were added in the Task 17 fix round; each mutation reddens exactly its own test."
+
+  - id: R3-3
+    title: "P2 — the private schema placement for the completed-day guard function is not pinned by any test"
+    terminal_state: closed_in_commit
+    commit: "(U1 handover — test/contracts/sync_noop_trigger_tables_test.dart, applied at Task 34)"
+    verification: "The migration contract test asserts the trigger list and (per R2-2) the private-schema pg_namespace check runs post-apply at Task 34."
+
+  # ── Plan-time deviations that changed behaviour ────────────────────
+  - id: D2
+    title: "14 sync-payload now-fallback sites, not the spec's original 11"
+    terminal_state: closed_in_commit
+    commit: "70f1922b"
+    verification: "All 14 fixed across Tasks 14/16/17/18/19; G2 reads 0 after Task 19 (progress.md)."
+
+  - id: D3
+    title: "A third completion-time reader: _restoreScheduledWorkouts' local-completed carve-out read the ISO completed_at that markCompleted never writes on the schedule row"
+    terminal_state: closed_in_commit
+    commit: "ebddb44c"
+    verification: "Fixed with the same ScheduleCompletionTime resolver as the other two completion paths; Task 14's restore carve-out mutation (mutation 4) reddens exactly the pre-fix bug shape."
+
+  - id: D5
+    title: "Hybrids re-enter through mergeScheduleEntry(null, snapshot)'s wholesale take, undoing the writer-side fix on every fresh restore"
+    terminal_state: closed_in_commit
+    commit: "82bd604e"
+    verification: "Every merge output passes through a normalizer (status: rest + workout type + no exercises -> type: rest); invariant I8 in test/sync/restore_merge_l1_l3_test.dart."
+
+  - id: D7
+    title: "The snapshot trimmer's keep set omitted week_lookahead, so a heavy user's lookahead could be halved"
+    terminal_state: closed_in_commit
+    commit: "c4da4a5f, 452ece9c"
+    verification: "week_lookahead and swaps_left both joined the keep set; Task 28 review confirmed spec §5.8 mandates all fields and the worst-case size (1489B) is well inside the 10K cap."
+
+  - id: D8
+    title: "Home's weekly-calendar strip needed DONE to win over the swap glyph, without changing the glyph itself (single-glyph-wide cell)"
+    terminal_state: closed_in_commit
+    commit: "d30c30f4"
+    verification: "_buildIndicator reordered (completed checked first); Task 26 review confirmed against spec §13#3 after an initial reviewer mis-read was corrected."
+
+  - id: D9
+    title: "Dead code found: WorkoutScheduleService.swapDays, WorkoutRepository.swapDays, rescheduleDay, and the two dead counter keys"
+    terminal_state: closed_in_commit
+    commit: "a9366949, 9ffb48a1"
+    verification: >
+      The three dead methods deleted with the old signature (Task 11, a9366949); the two dead keys
+      (swaps_this_week, swap_week_start) deleted through MigratedKey.delete by the one-time repair
+      migrator (Task 23, 9ffb48a1). test/contracts/deload_eval_behavioral_test.dart split per D9 into
+      "a swapped row IS lifted" and "a shortened row is NOT rewritten".
+
+total_findings: 32
+closed_count: 32

@@ -2,7 +2,7 @@
 bug_id: b6e1c8
 date: 2026-09-26
 batch: day-swapper-sync-load
-status: in_progress
+status: fixed
 blast_radius: platform
 symptom: |
   `_restoreScheduledWorkouts` (lib/core/services/sync/sync_workout.dart:1904-2135, the reinstall
@@ -21,10 +21,11 @@ symptom: |
   these rows and can never fix them, because healing re-derives exercises for a "workout" day that
   should never have been typed `workout` at all.
 concept: restore_type_derivation
-sot_registry_entry: scheduled_workouts_mutations (interim until Task 29 registers restore_type_derivation; Task 31 re-points this line to it — see docs/sot_registry.yaml; this is the reader-side
-  half of schedule_arrangement_stamp's writer/reader pair — `_restoreScheduledWorkouts` is a second,
-  independent writer of the same hybrid shape that d5a1e7's restore-merge fix does not cover, because
-  d5a1e7 fixes `_restoreWorkoutPlan`'s merge, not this separate reinstall-only restore path)
+sot_registry_entry: restore_type_derivation (re-pointed by Task 31 — Task 29 registered the concept
+  at docs/sot_registry.yaml:13036; this is the reader-side half of schedule_arrangement_stamp's
+  writer/reader pair — `_restoreScheduledWorkouts` is a second, independent writer of the same hybrid
+  shape that d5a1e7's restore-merge fix does not cover, because d5a1e7 fixes `_restoreWorkoutPlan`'s
+  merge, not this separate reinstall-only restore path)
 writers:
   - { file: lib/core/services/sync/sync_workout.dart, method: "_restoreScheduledWorkouts (type derivation ignores cloud status)", line: 1904 }
   - { file: lib/core/services/sync_service.dart, method: "weeklyFullSync (copies the hybrid into the plan_json backup on every daily push)", line: 1343 }
@@ -79,8 +80,8 @@ regression_test_planned: |
   planned: reverting the `:2097-2100` derivation to the pre-fix fallthrough order must redden the
   behavioral restore test; disabling the normalizer must redden I8.
 touched_layers_checked:
-  - { tier: 1, name: client_code, status: fixed_in_this_batch, evidence: "The type-derivation fix at sync_workout.dart:2097-2100, the merge-output normalizer (D5), and the one-time repair migrator (Task 21, Task 23)." }
-  - { tier: 2, name: hive_local_state, status: fixed_in_this_batch, evidence: "The repair migrator rewrites existing local schedule_<date> rows from the hybrid shape to type: rest, gated on a workoutBox flag per D10." }
+  - { tier: 1, name: client_code, status: fixed_in_this_batch, evidence: "The type-derivation fix at sync_workout.dart's _restoreScheduledWorkouts and the merge-output normalizer (D5) landed in Task 21 (commit 82bd604e, fix1 5c0c00ff); the one-time repair migrator (ScheduleHybridRepairMigrator) landed in Task 23 (commit 9ffb48a1). test/services/schedule_hybrid_repair_migrator_test.dart green; test/sync/ 246/246 at Task 23 integration." }
+  - { tier: 2, name: hive_local_state, status: fixed_in_this_batch, evidence: "The repair migrator (commit 9ffb48a1) rewrites existing local schedule_<date> rows from the hybrid shape to type: rest, gated on a workoutBox flag per D10 (per-account, not device-scoped migrationBox, so a second account on the same device is also repaired); also deletes the two dead swaps_this_week/swap_week_start keys and strips the stale userBox['progress'] plan_json copy in the same pass." }
   - { tier: 3, name: postgres_schema, status: not_applicable, evidence: "No DDL is needed; the fix corrects how the client derives a local field from an existing cloud column." }
   - { tier: 4, name: postgres_data, status: verified, evidence: "Spec §1.4's own live, read-only investigation (2026-09-26) found 28 hybrid rows across 3 users' plan_json backups, all source=cloud_restore, 27 of 28 with no exercises, all matching a scheduled_workouts row of status=rest. This drafting pass cites that evidence and did not re-query the database." }
   - { tier: 5, name: migrations_applied, status: not_applicable, evidence: "No migration is needed; this is a pure client-side type-derivation and local-repair fix." }
@@ -90,7 +91,7 @@ touched_layers_checked:
   - { tier: 9, name: storage, status: not_applicable, evidence: "No Storage bucket or object is involved." }
   - { tier: 10, name: secrets_api_keys, status: not_applicable, evidence: "No secret is involved." }
   - { tier: 11, name: external_services, status: not_applicable, evidence: "None involved." }
-  - { tier: 12, name: client_to_server_contract, status: fixed_in_this_batch, evidence: "The restore reader now derives the local type from the cloud status the writer actually encodes, instead of ignoring it — the writer/reader agreement this whole diagnose-doc concept is named for." }
+  - { tier: 12, name: client_to_server_contract, status: fixed_in_this_batch, evidence: "commit 82bd604e: the restore reader now derives the local type from the cloud status the writer actually encodes, instead of ignoring it — the writer/reader agreement this whole diagnose-doc concept is named for." }
 impact_analysis: |
   Severity: P2, latent but real. 28 confirmed live rows across 3 users show a genuinely scheduled rest
   day rendering as a workout with no exercises after a reinstall, and `needsHeal` cannot self-correct
@@ -125,10 +126,32 @@ for the shared mechanism.
 
 - The `_restoreScheduledWorkouts` type-derivation fix and the merge-output normalizer (D5): Task 21
   (coordinator, Wave 2) — bundled with d5a1e7's L1/L3 merge work since both touch the same restore
-  code paths.
+  code paths. Landed `82bd604e`; review Minors fixed in `5c0c00ff`.
 - The one-time repair migrator (`schedule_hybrid_repair_migrator.dart`), gated per-account per D10:
-  Task 23 (coordinator, Wave 2).
+  Task 23 (coordinator, Wave 2). Landed `9ffb48a1`.
+
+## Commits
+
+`82bd604e`, `5c0c00ff`, `9ffb48a1`.
 
 ## Mutation evidence
 
-Recorded at Task 31: each mutation, the grep that confirmed it applied, and the red count.
+Task 21's normalizer/type-derivation mutations are recorded in
+docs/diagnoses/2026-09-26-day-swap-reverts-after-restart-d5a1e7.md's Mutation evidence section
+(mutation 7, "delete `cloudStatus == 'rest' ? 'rest' :` clause" → 1 red, exact match — that IS this
+bug's type-derivation fix; both diagnose-docs cite the same commit `82bd604e` for the same lines).
+
+Task 23 (`9ffb48a1`, `ScheduleHybridRepairMigrator`), 6 legs, restored via backup-and-diff (never
+`git checkout --`):
+
+| # | Mutation | Confirm-applied | Reds | Failure reason |
+|---|---|---|---|---|
+| 1 | `hasExercisesLeaveAlone` branch → `needsTypeFix` | count 1→0 | 2 | non-empty-exercises classify test + "leaves a with-exercises hybrid alone" behavioral assertion |
+| 2 | Delete the first `isRestHybrid(row)` check | count 1→0 | 5 (brief predicted 3) | the two `needsTypeFix` classify tests + the first behavioral test, PLUS the flag-gating and D10 tests — both also seed a no-exercise hybrid and assert `repaired == 1`, which the brief's estimate didn't trace through; all 5 verified genuine (no compile errors) |
+| 3 | Delete the `hasRun()` short-circuit block | 2→1 (brief's baseline of 1 was wrong — `hasRun()` shares the same literal) | 1 | "the flag genuinely gates re-runs": the row is repaired again on the second call |
+| 4 | Delete `await MigratedKey.delete('swaps_this_week')` | count 1→0 | 1 | first behavioral test's `isNull` assertion on the migrated key fails (key survives) |
+| 5 | Delete the `plan_json` strip block | `progress.containsKey('plan_json')` count 1→0 | 1 | first behavioral test's `isFalse` assertion fails |
+| 6 | Delete the `schedule_hybrid_left_alone` telemetry line | count 1→0 | 1 | first behavioral test's telemetry-events assertion fails; the row-left-alone assertion itself stays green |
+
+All 6 compiled and ran (no compile-error-as-proof); mutation 2's actual red count (5) exceeding the
+brief's estimate (3) was investigated and explained, not accepted at face value (rule 21).

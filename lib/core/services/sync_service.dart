@@ -310,7 +310,7 @@ class SyncService {
   /// `SyncSkipIndex` (domain `sched`), not a bespoke index + `status`-based
   /// carve-out — `schedShouldSkipUpsert` and `schedPrunedHashIndex` are
   /// deleted. A-fix-1 (a `completed` row never skipped) is SUPERSEDED by
-  /// migration 147's server-side completed-day guard (Task 7); see
+  /// migration 148's server-side completed-day guard (Task 7); see
   /// docs/diagnoses/2026-06-27-sched-dirty-filter-b4f7e2.md.
   @visibleForTesting
   static String schedPayloadFingerprint(Map<String, dynamic> payload) {
@@ -1567,7 +1567,7 @@ class SyncService {
   /// (no epoch action this launch), like the shared fetch.
   ///
   /// Deliberately a BARE `.select()`, not `.select('sync_epoch')`: the
-  /// `sync_epoch` column ships in migration 147 (Task 7/U1), which had not
+  /// `sync_epoch` column ships in migration 148 (Task 7/U1), which had not
   /// landed at the time this task executed (`check_schema_column_refs.dart`
   /// FAILs a literal reference to a column absent from
   /// `backups/live_schema_columns.json`, and this repo's own convention is
@@ -1575,10 +1575,10 @@ class SyncService {
   /// something this task cannot do without applying a live migration,
   /// forbidden by its own brief). A bare select is exempt from that gate by
   /// design (any column set is valid) and is forward-compatible: before
-  /// migration 147, `row['sync_epoch']` below reads null exactly like today;
+  /// migration 148, `row['sync_epoch']` below reads null exactly like today;
   /// after it, the same row simply carries a real value. The batch's
   /// live-apply task (Task 34) narrows this to `.select('sync_epoch')` in the
-  /// same commit that applies 147 and regenerates the snapshot (a
+  /// same commit that applies 148 and regenerates the snapshot (a
   /// network-cost saving, not a correctness fix).
   Future<List> _fetchSyncEpochRowForRestore(String userId) async {
     try {

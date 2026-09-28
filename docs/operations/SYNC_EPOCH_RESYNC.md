@@ -1,7 +1,7 @@
 # sync_epoch resync runbook
 
 > Operator-driven repair lever for the day-swapper + sync-load batch
-> (migration `147_sync_noop_suppress_completed_guard_sync_epoch.sql`,
+> (migration `148_sync_noop_suppress_completed_guard_sync_epoch.sql`,
 > `docs/adr/0020-sync-sends-only-what-changed.md`). This is a **prod
 > data write** — it needs a founder go before running, per CLAUDE.md §4.3
 > ("live prod apply needs its own explicit go").

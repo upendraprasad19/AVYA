@@ -2,7 +2,7 @@
 bug_id: a9d3f6
 date: 2026-09-26
 batch: day-swapper-sync-load
-status: in_progress
+status: fixed_pending_live_apply
 blast_radius: platform
 symptom: |
   Of 21 push steps in lib/core/services/sync/, only 3 skip unchanged rows today; the other 18 push a
@@ -25,8 +25,10 @@ symptom: |
   whole blob into `userBox['progress']`, where nothing reads it, then the plan merge re-writes up to
   112 schedule rows to Hive on every launch regardless of whether anything changed.
 concept: sync_skip_index
-sot_registry_entry: sync_scheduled_payload_hash_index (interim until Task 29 registers sync_skip_index; Task 31 re-points this line to it — see docs/sot_registry.yaml; one skip mechanism,
-  SyncSkipIndex.pushIfChanged, shared by every history push in lib/core/services/sync/)
+sot_registry_entry: sync_skip_index (re-pointed by Task 31 — Task 29 registered the concept at
+  docs/sot_registry.yaml:12045; one skip mechanism, SyncSkipIndex.pushIfChanged, shared by every
+  history push in lib/core/services/sync/, with the 15 per-domain `sync_<domain>_payload_hash_index`
+  concepts — including `sync_scheduled_payload_hash_index` — as its sibling instances)
 writers:
   - { file: lib/core/services/sync/sync_workout.dart, method: "syncWorkoutDataNow (fires after every workout write, no time debounce beyond SyncCoalescer's in-flight merge)", line: 44 }
   - { file: lib/core/services/workout_write_service.dart, method: "logExercise (triggers syncWorkoutDataNow)", line: 210 }
@@ -68,7 +70,9 @@ proposed_fix: |
   a Hive-row loop in lib/core/services/sync/** that is not wrapped in a `pushIfChanged(` closure,
   except the allowlisted single-row steps and the coach loop's own cloud-id-stamped skip — replacing
   today's count-based swallow check with a rule the gate itself enforces rather than a hand
-  enumeration. One migration (145, number verified at plan time since 144 was taken upstream) adds a
+  enumeration. One migration (`148_sync_noop_suppress_completed_guard_sync_epoch.sql` — numbered 145
+  at plan time since 144 was taken upstream, renumbered to 147 then 148 as other batches landed on
+  `main` first; ruling 2026-09-28, wave3-carry.md) adds a
   `suppress_redundant_updates_trigger()` BEFORE UPDATE trigger to every table a history loop writes
   (the gate's own enumeration is authoritative, per plan-time verification #6), a
   `scheduled_workouts`-specific guard function that also blocks demoting a completed day, and a
@@ -93,11 +97,11 @@ regression_test_planned: |
   confirm G1 reddens; write a *_payload_hash_index key directly outside sync_skip_index.dart and
   confirm G1 reddens that too.
 touched_layers_checked:
-  - { tier: 1, name: client_code, status: fixed_in_this_batch, evidence: "SyncSkipIndex + the 14 domain migrations onto it (Tasks 4-5, 13-20) plus the single launch fetch (Task 20)." }
-  - { tier: 2, name: hive_local_state, status: fixed_in_this_batch, evidence: "14 new sync_<domain>_payload_hash_index keys, plus deletion of the stale userBox['progress'] plan_json copy." }
-  - { tier: 3, name: postgres_schema, status: fixed_in_this_batch, evidence: "Migration 145 adds the no-op-update trigger to the enumerated tables, the scheduled_workouts completed-day guard, and the sync_epoch column (Task 7, U1)." }
+  - { tier: 1, name: client_code, status: fixed_in_this_batch, evidence: "SyncSkipIndex (Task 4, commit 458b98bc) + test seams (Task 5, commit 61c0bb5e/d0186537) + G1 gate (Task 3, commit 52585f04/a5e491d7) + the 14 domain migrations onto it (Tasks 13-20: 6d26a177/094648df, ebddb44c, 3c376f77, 875c8f3e/b22592ed, 0a1a0548.../745fdb98, 865d891d, 70f1922b) plus the single launch fetch + epoch-after-clearAll fix (Task 20, commit 083b82a9 + a53f3305)." }
+  - { tier: 2, name: hive_local_state, status: fixed_in_this_batch, evidence: "15 new sync_<domain>_payload_hash_index keys (14 domains + sync_skip_index's own storage), plus deletion of the stale userBox['progress'] plan_json copy (Task 20, commit 083b82a9)." }
+  - { tier: 3, name: postgres_schema, status: fixed_pending_live_apply, evidence: "Migration 148_sync_noop_suppress_completed_guard_sync_epoch.sql adds the no-op-update trigger to the 19 enumerated tables, the scheduled_workouts completed-day guard, and the sync_epoch column (Task 7, U1, drafted and handed over uncommitted per plan design — see u1-handover/). NOT yet applied to any live database; live information_schema/pg_trigger state is unchanged until Task 34's founder-approved apply." }
   - { tier: 4, name: postgres_data, status: verified, evidence: "Spec §1.5's own live, read-only pg_stat_user_tables measurement (2026-09-26) is cited directly above (rewrites-per-row table, the ~143-request heaviest-account figure). This drafting pass did not re-query the database." }
-  - { tier: 5, name: migrations_applied, status: fixed_in_this_batch, evidence: "Migration 145 is applied at Task 34 with its own explicit founder go, paired with backups/applied_migrations.json in the same commit (CLAUDE.md §4.5)." }
+  - { tier: 5, name: migrations_applied, status: fixed_pending_live_apply, evidence: "Migration 148 is drafted (Task 7) and blast-radius classified `catastrophic` (Task 31 — the content rule matches SECURITY DEFINER inside a header sentence that says the guard is NOT SECURITY DEFINER; accepted as-is, not reworded to dodge the classifier). Applied at Task 34 with its own explicit founder go, paired with backups/applied_migrations.json in the same commit (CLAUDE.md §4.5)." }
   - { tier: 6, name: edge_function_code_vs_deploy, status: not_applicable, evidence: "The sync write-amplification fix itself (skip index, no-op trigger, sync_epoch) touches no Edge Function; the allowance EF (consume-day-swap) is a separate concept shared with docs d5a1e7/e2b9d4." }
   - { tier: 7, name: cron_jobs, status: not_applicable, evidence: "No cron job is involved in the history-push skip mechanism or the no-op-suppression trigger." }
   - { tier: 8, name: rls_policies, status: not_applicable, evidence: "No RLS policy changes; the new scheduled_workouts trigger function is SECURITY INVOKER, not a policy change, and does not widen or narrow row visibility." }
@@ -135,14 +139,76 @@ so a missed loop fails the commit rather than silently shipping unskipped.
 
 ## Fix ownership in the plan
 
-- `SyncSkipIndex` helper: Task 4 (coordinator, Wave 0). Test seams + local PostgREST stub: Task 5.
+- `SyncSkipIndex` helper: Task 4 (coordinator, Wave 0). Landed `458b98bc`. Test seams + local
+  PostgREST stub: Task 5, landed `61c0bb5e` (coordinator commit `d0186537` for the public-API-snapshot
+  scope fix and the two teardown-never-throws wraps).
 - G1 (`check_sync_hash_skip_atomicity.dart` extension): Task 3 (coordinator, Wave 0, lands before any
-  domain migration per CLAUDE.md §4.11).
-- The 14 domain migrations onto the helper: Tasks 14-20 (coordinator, inline during Wave 1).
-- Migration 145 (no-op trigger, completed-day guard, sync_epoch): Task 7 (U1) drafts it; Task 34
-  applies it with its own founder go.
-- The single launch fetch + plan_json double-download fix: Task 20 (coordinator).
+  domain migration per CLAUDE.md §4.11). Landed `52585f04` + fix round `a5e491d7`
+  (`aliased_query_builder` kind).
+- The 14 domain migrations onto the helper: Tasks 13-20 (coordinator, inline during Wave 1). Task 13
+  `6d26a177`/`094648df` (nlog/exlog); Task 14 `ebddb44c` (schedule completions); Task 15 `3c376f77`
+  (scheduled workouts, template_id null fix); Task 16 `875c8f3e`/`b22592ed` (templates); Task 17
+  `0a1a0548`/`b1c3ddc2`/`ea33eacb` + fix round `b503bcd6` (integrated `53a177e0`/`745fdb98`, saved
+  meals + custom items + per-distinct-opType report mirror); Task 18 `865d891d` (5 health domains);
+  Task 19 `70f1922b` (coach/onboarding/notifications); Task 20 `083b82a9` (plan/streak launch path) +
+  fix `a53f3305` (sync_epoch stored only after `clearAll` `allSucceeded`, diagnosed the same day as
+  this doc — see "Skipped-then-found fixes" below).
+- Migration 148 (no-op trigger, completed-day guard, sync_epoch, renumbered from 145→147→148 per
+  wave3-carry.md ruling 2026-09-28): Task 7 (U1) drafts it, handed over uncommitted; Task 34 applies
+  it with its own founder go.
+- The single launch fetch + plan_json double-download fix: Task 20 (coordinator), commit `083b82a9`.
+
+## Skipped-then-found fixes (wave3-carry.md, Task 31 carry list)
+
+- **`a53f3305`** (Task 20 review finding, integrated same day): `sync_epoch_seen` was stored even when
+  `clearAll` failed partway, permanently losing the repair lever's retry. Fixed by only advancing the
+  stored epoch when `ClearAllResult.allSucceeded` is true. Mutation: the guard reverted to
+  unconditional store → 1 red (expected 1, got 2 — the guard test's own assertion), restored clean.
+  test/sync + G1/G2 lib 228/228, parity PASS. Coordinator-reviewed (no separate reviewer dispatch —
+  4-file single-guard fix per the ruling in progress.md).
+- **`5c0c00ff`** (Task 21 review Minors, not this doc's own fix but recorded here since it landed
+  alongside the sync-load work): `_mondayOfIsoWeek` now delegates to `DaySwapRules.mondayOf` instead
+  of a duplicate helper — a duplicate justified by "the other unit has not landed yet" that expired at
+  integration (code-review red-flag class, see the skill entry below).
+
+## Commits
+
+`458b98bc`, `61c0bb5e`/`d0186537`, `52585f04`/`a5e491d7`, `6d26a177`/`094648df`, `ebddb44c`,
+`3c376f77`, `875c8f3e`/`b22592ed`, `0a1a0548`/`b1c3ddc2`/`ea33eacb`/`b503bcd6`/`53a177e0`/`745fdb98`,
+`865d891d`, `70f1922b`, `083b82a9`/`a53f3305`. Migration `148_sync_noop_suppress_completed_guard_sync_epoch.sql`
+uncommitted, applied at Task 34.
 
 ## Mutation evidence
 
-Recorded at Task 31: each mutation, the grep that confirmed it applied, and the red count.
+Gate G1 (`52585f04`/`a5e491d7`): 41/41 targeted; mutation-1 (aliased query builder evading the
+statement-scoped `.from(` match) → 1 red, confirmed by the new `aliased_query_builder` kind; recount
+after fix 28 unwrapped_write / 3 index_literal / 0, exit 0.
+
+Task 4 (`458b98bc`, SyncSkipIndex): 4 mutations, sched/exlog/nlog index + kill-switch keys verified
+byte-identical to the pre-batch sync_service.dart line numbers.
+
+Task 5 (`61c0bb5e`): 2 mutations against the stub/harness seams; teardown-never-throws wraps added by
+the coordinator (`d0186537`) per the Task 5 review's Minor (CLAUDE.md §4.9 socket-teardown row).
+
+Task 13 (`6d26a177`, fix `094648df`): the fix round restored a dropped `unawaited(_reportSyncFailure(...))`
+in two catches (the only path to server-side `client_errors`); test: stub-server asserts the
+log-client-error invoke plus exactly-one call for nlog, mutation per line. `hasLength(2)` is the
+no-op-flood invariant (removed=0 / correct=2 / per-item-flood=4).
+
+Task 14 (`ebddb44c`): 31/31 targeted; the implementer independently caught and restored a dropped
+`upsert_schedule_completion` `_reportSyncFailure` call the plan's own draft had omitted.
+
+Task 17 fix round (`b503bcd6`, integrated `745fdb98`): F1 (per-table opTypes collapsed into one
+generic string, 4th instance of the code-review lens-5 refactor-drops-per-site-extras class) — 2
+mutations (1 red each) confirm `upsert_custom_exercise`/`upsert_custom_food` are reported under their
+own opType again; the coordinator's own self-review then found a MIRROR gap (the fix's `if (failed ==
+1)` reports only the first failure per pass, so two different tables failing in one pass under a
+shared index would report only one) — closed at integration with a `Set<String> _reportedOpTypes`
+(distinct-opType-once) plus 2 new tests (both-tables-fail-once, two-rows-same-table-once), each
+mutation reddening exactly its own test.
+
+Task 20 (`083b82a9`): 9 mutations; launch path verified 8→7 Supabase calls (the bare `.select()` on
+`user_progress` is a real IO win — the old code fetched it twice with two different projections, one
+of which the shared select now subsumes; independently confirmed by the reviewer, correcting this
+doc's own drafting-time claim in `regression_test_planned` about which projection was doubled).
+Fix `a53f3305`: see "Skipped-then-found fixes" above.

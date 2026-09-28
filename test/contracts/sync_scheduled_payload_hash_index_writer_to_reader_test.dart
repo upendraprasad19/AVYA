@@ -3,7 +3,7 @@
 // `sched`) instead of the bespoke schedShouldSkipUpsert/schedPrunedHashIndex
 // pair (both deleted by this task).
 //
-// A-fix-1 (a `completed` row never skips) is SUPERSEDED here: migration 147
+// A-fix-1 (a `completed` row never skips) is SUPERSEDED here: migration 148
 // (Task 7) adds a server-side guard that rejects a stale client overwrite of
 // a completed row's identity columns, so a fingerprint-matched completed row
 // is exactly as safe to skip as a fingerprint-matched planned row. See
@@ -145,7 +145,7 @@ void main() {
       h.server.clear();
       await SyncService.instance.pushScheduledWorkoutsForSyncDomain();
       expect(h.server.writesTo('scheduled_workouts'), isEmpty,
-          reason: 'a completed row is no longer special-cased; migration 147 (Task 7) protects it '
+          reason: 'a completed row is no longer special-cased; migration 148 (Task 7) protects it '
               'server-side, so a fingerprint match skips exactly like a planned row');
     });
 

@@ -252,7 +252,7 @@ Server (one migration) ──► ignore no-op updates · completed days can't be
 | Train week list (`week_rows.dart`) | Drag, ⇅, MOVED tag, allowance line. | picker, confirm sheet |
 | Coach tool `swapWorkoutDays` | PRO tool shown only to capable clients. The client executes it through the same engine. | capability handshake |
 | `SyncSkipIndex` (new) | One skip mechanism for every history push. | Hive |
-| Migration `144_*` (number verified at plan time) *(corrected 2026-09-28 at implementation: `147_sync_noop_suppress_completed_guard_sync_epoch.sql` — see §5.10's own correction.)* | The three server rules. | none |
+| Migration `144_*` (number verified at plan time) *(corrected 2026-09-28 at implementation: `147_sync_noop_suppress_completed_guard_sync_epoch.sql`, then re-corrected the same day to `148_sync_noop_suppress_completed_guard_sync_epoch.sql` once 147 was also taken on `main` — see §5.10's own correction.)* | The three server rules. | none |
 
 ---
 
@@ -599,7 +599,7 @@ kill switches follow `disable_<domain>_hash_skip`. They live in the same box as 
 
 ### 5.10 Server migration (one file, `144_…sql`, number verified at plan time)
 
-*(corrected 2026-09-28 at implementation: the migration is `147_sync_noop_suppress_completed_guard_sync_epoch.sql`, not `144_…` — plan D1 said `145`, this section originally said `144`; renumbered to 147 because 145 and 146 landed on `main` first, from other concurrent work.)*
+*(corrected 2026-09-28 at implementation: the migration is `148_sync_noop_suppress_completed_guard_sync_epoch.sql`, not `144_…` — plan D1 said `145`, this section originally said `144`; renumbered to 147 because 145 and 146 landed on `main` first, then to 148 the same day because 147 also landed on `main` first (`147_alert_client_errors_spike_breadth.sql`), from other concurrent work.)*
 
 1. **Ignore updates that change nothing.** Add a `BEFORE UPDATE … FOR EACH ROW EXECUTE FUNCTION
    suppress_redundant_updates_trigger()` trigger on every table a history loop writes: the
@@ -855,7 +855,7 @@ The long-press on the Home calendar strip opens the **shared picker** for that d
 | `docs/superpowers/specs/2026-04-27-ai-coach-brilliance-design.md` §5 | the Captain Manual amendment |
 
 **OI board:** OI-237 closed by the commit that lands §5.9/§5.10 (`closes-oi: OI-237`).
-*(corrected 2026-09-28 at implementation: OI-237 closes only AFTER the §10 IO-saving measurement is actually taken against the applied migration, not merely once §5.9/§5.10's code lands — plan D17. Landing the code is necessary but not sufficient; the OI names the measured saving, and there is nothing to measure until migration 147 is live.)*
+*(corrected 2026-09-28 at implementation: OI-237 closes only AFTER the §10 IO-saving measurement is actually taken against the applied migration, not merely once §5.9/§5.10's code lands — plan D17. Landing the code is necessary but not sufficient; the OI names the measured saving, and there is nothing to measure until migration 148 (renumbered from 147 the same day) is live.)*
 
 **Closure file:** `docs/audit/day-swapper-sync-load.closure.yaml`, with every finding in a terminal
 state (Gate 40).

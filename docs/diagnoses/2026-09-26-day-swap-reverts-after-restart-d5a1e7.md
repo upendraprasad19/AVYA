@@ -2,7 +2,7 @@
 bug_id: d5a1e7
 date: 2026-09-26
 batch: day-swapper-sync-load
-status: in_progress
+status: fixed
 blast_radius: platform
 symptom: |
   A day swap made with the existing `SwapService.swapDays` (lib/core/services/swap_service.dart:113)
@@ -23,9 +23,11 @@ symptom: |
   a second device: that device's own non-empty local rows always win the merge, so a workout-to-workout
   swap made on device A is invisible on device B even after a successful cloud push.
 concept: schedule_arrangement_stamp
-sot_registry_entry: scheduled_workouts_mutations (interim until Task 29 registers schedule_arrangement_stamp; Task 31 re-points this line to it — see docs/sot_registry.yaml; the merge's
-  `arranged_at_ms` timestamp comparison is what this fix adds as the tie-breaker between a device's
-  local schedule rows and a downloaded plan_json snapshot)
+sot_registry_entry: schedule_arrangement_stamp (re-pointed by Task 31 — Task 29 registered the
+  concept at docs/sot_registry.yaml:2835; the merge's `arranged_at_ms` timestamp comparison is the
+  tie-breaker between a device's local schedule rows and a downloaded plan_json snapshot, and is
+  decided by DaySwapRules.buildSwap/landed, not inline in SwapService — see the sibling
+  day_swap_engine concept for the writer that calls it)
 writers:
   - { file: lib/core/services/swap_service.dart, method: swapDays, line: 113 }
   - { file: lib/core/services/sync_service.dart, method: "weeklyFullSync (plan backup push)", line: 1343 }
@@ -83,8 +85,8 @@ regression_test_planned: |
   per-week `arranged_at_ms` comparison to unconditionally prefer the snapshot must redden I1 and I3;
   reverting L1's type/status guard to the pre-fix unconditional refill must redden I1 and I8.
 touched_layers_checked:
-  - { tier: 1, name: client_code, status: fixed_in_this_batch, evidence: "PlanIntegrityReconciler.mergeScheduleEntry (L1/L3), the new plan_bundle_cloud_fingerprint (L2), and WorkoutWriteService.swapScheduledDays's immediate plan push (spec §5.4, §5.7) — planned for coordinator Task 21 and Wave 0 Task 6." }
-  - { tier: 2, name: hive_local_state, status: fixed_in_this_batch, evidence: "schedule_<date> rows gain a correct arranged_at_ms comparison instead of an unconditional snapshot refill; plan_bundle_cloud_fingerprint is a new stored Hive value (spec §5.7 L2)." }
+  - { tier: 1, name: client_code, status: fixed_in_this_batch, evidence: "PlanIntegrityReconciler.mergeScheduleEntry L1/L3 (commit 82bd604e, fix1 5c0c00ff), the L2 plan-bundle skip incl. the presence-check fix (commit 18183762), and WorkoutWriteService.swapScheduledDays's immediate plan push (commit 3b2fd2c0). test/sync/restore_merge_l1_l3_test.dart + restore_plan_json_authoritative_test.dart + the two-week real-Hive L3 test (5c0c00ff) all green; test/sync/ 262/262 at Task 22 integration." }
+  - { tier: 2, name: hive_local_state, status: fixed_in_this_batch, evidence: "schedule_<date> rows now compare arranged_at_ms per Mon-Sun IST week instead of an unconditional snapshot refill; plan_bundle_cloud_fingerprint is a stored Hive value gating the L2 skip (commit 82bd604e), with the added every-bundled-key-present-locally precondition (commit 18183762) so a locally deleted row is never masked by a matching fingerprint." }
   - { tier: 3, name: postgres_schema, status: not_applicable, evidence: "This bug's fix is entirely client-side restore-merge logic; no DDL is needed for it (the sync_epoch column belongs to the OI-237 fix, doc a9d3f6)." }
   - { tier: 4, name: postgres_data, status: not_applicable, evidence: "No cloud data was queried for this specific symptom; the revert is reproduced by tracing the writer/reader chain in code (spec §1.3, 'Verified chain')." }
   - { tier: 5, name: migrations_applied, status: not_applicable, evidence: "No migration is required to fix this bug." }
@@ -94,7 +96,7 @@ touched_layers_checked:
   - { tier: 9, name: storage, status: not_applicable, evidence: "No Storage bucket or object is involved." }
   - { tier: 10, name: secrets_api_keys, status: not_applicable, evidence: "No secret is involved." }
   - { tier: 11, name: external_services, status: not_applicable, evidence: "None involved." }
-  - { tier: 12, name: client_to_server_contract, status: fixed_in_this_batch, evidence: "The immediate plan push after a swap plus the per-week arrangement-stamp merge rule is what makes a workout<->workout swap actually reach a second device (spec §1.3's point 'workout<->workout swaps never reach a second device')." }
+  - { tier: 12, name: client_to_server_contract, status: fixed_in_this_batch, evidence: "commit 3b2fd2c0 (Task 6): swapScheduledDays pushes the plan backup immediately after a successful atomic write, instead of waiting for the once-daily weeklyFullSync — this is what makes a workout<->workout swap actually reach a second device (spec §1.3's point 'workout<->workout swaps never reach a second device')." }
 impact_analysis: |
   Severity: P1. Any user who swaps a workout with a rest day, then restarts the app before the next
   daily full sync, gets a silently-reverted swap that shows the wrong workout on both the old and new
@@ -131,11 +133,57 @@ a7d3f1 (noted above as `related_bugs`).
 
 - L1/L2/L3 restore-merge rules, the hybrid normalizer and the `plan_bundle_cloud_fingerprint`: Task 21
   (coordinator, Wave 2), touching `lib/core/services/plan_integrity_reconciler.dart` and
-  `lib/core/services/sync/sync_workout.dart`.
+  `lib/core/services/sync/sync_workout.dart`. Landed `82bd604e`; review Minors fixed in `5c0c00ff`
+  (softened doc/test-name, `_mondayOfIsoWeek` delegates to `DaySwapRules.mondayOf`, new two-week
+  real-Hive L3 test). The L2 presence-check gap the review found (a locally deleted row could be
+  masked by a matching cloud fingerprint) fixed in `18183762`.
 - The atomic `swapScheduledDays` write with its immediate plan push: Task 6 (coordinator, Wave 0),
   touching `lib/core/services/workout_write_service.dart` and `lib/core/services/write_result.dart`.
+  Landed `3b2fd2c0`.
 - The engine that calls both: Tasks 10-12 (U4), touching `lib/core/services/swap_service.dart`.
+  Task 10 landed `aa697efd` (integrated `eb07e849`); Task 11 landed `ef021699` + fix round `372f478b`
+  (integrated `a9366949` with the write/record-catch reason split); Task 12 landed `64edfc6b` + fix
+  `595c68b4` (integrated `ea93f97d`).
+
+## Commits
+
+`3b2fd2c0`, `aa697efd`/`eb07e849`, `ef021699`/`372f478b`/`a9366949`, `64edfc6b`/`595c68b4`/`ea93f97d`,
+`82bd604e`, `5c0c00ff`, `18183762`.
 
 ## Mutation evidence
 
-Recorded at Task 31: each mutation, the grep that confirmed it applied, and the red count.
+Task 6 (`3b2fd2c0`, atomic write + immediate push), 4/4 legs, each restored via `git diff` clean:
+
+| # | Mutation | Confirm-applied | Reds |
+|---|---|---|---|
+| 1 | Rollback loop body removed (`catch (_) { rethrow; }`) | `grep -c "written.reversed"` 1→0 | 2 ("both or neither"; "a failing backup write rolls back BOTH rows") |
+| 2 | Completed-guard `if` block deleted | `grep -c "completed_guard"` 1→0 | 1 ("a completed day is never moved") |
+| 3 | `daySwap \|\| restore` early-return deleted from `carriesArrangement` | `grep -c "daySwap \|\| source == WriteSource.restore"` 1→0 | 2 ("daySwap and restore never stamp"; "restore copies the source row verbatim") |
+| 4 | `read()` returns shallow copy instead of `_swapDeepCopyMap` | manual diff | 1 ("build sees deep copies") |
+
+Tasks 10-12 (U4 engine, aggregate; coordinator re-verified one mutation per unit per Execution model):
+Task 10 6 mutations / 7 reds (day_swap_rules.dart eligibility/field-partition/3-rest-warning);
+Task 11 10 mutations / 15 reds (atomic engine, allowance sequencing) + fix round 2 mutations (nowWall
+stamp; write/record-catch split, each reddening exactly its own test); Task 12 5 mutations / 7 reds
+(provider wiring — mutation 3 gave 2 vs 1 expected, traced to Riverpod `==`-equality suppression with
+a const-returning test double, not a weak mutation) + fix round 1 mutation (invalidate-batch catch).
+
+Task 21 (`82bd604e`, L1/L2/L3 restore-merge), 7 legs, each restored via `git checkout --` (committed
+first, per global constraints):
+
+| # | Mutation | Confirm-applied | Reds |
+|---|---|---|---|
+| 1 | Delete the L1 guard block (`restRowRefillGuardEnabled`) | `grep -c` 1→0 | 4 |
+| 2 | L1 branch's normalizer call dropped | `grep -c` 3→2 (branch-scoped) | 1 |
+| 3 | Delete `forceSnapshotArrangement` early-return | `grep -c` 1→0 | 3 |
+| 4 | `snapshotMax > localMax` → `>=` | `grep -c` 0→1 | 1 |
+| 5 | Delete `discardedLocalArrangement = true;` | `grep -c` 1→0 | 1 |
+| 5b | Delete `existingMap['status'] != 'completed' &&` | `grep -c` 1→0 | 1 |
+| 6 | Kill-switch getter `!= true` → `== true` | split-line grep 0→1 / 1→0 | 3 (brief predicted 5; 2 pure `mergeScheduleEntry` tests never open Hive so hit the getter's intentional exception-fallback `catch(_) { return true; }` regardless — investigated, not a weak mutation: the 3 real-Hive tests correctly redden) |
+| 7 | Delete `cloudStatus == 'rest' ? 'rest' :` clause | `grep -c` 1→0 | 1 |
+
+Task 22's L2 presence-check fix (`18183762`): mutation dropped the `containsKey` check for every
+bundled key — 0 reds on first measurement (the two existing skip-mechanism tests structurally cannot
+observe "skipped vs. ran-and-recorded-the-same-value"), investigated per rule 21 (not accepted at
+face value), root-caused to two absorption paths, closed by adding a stamped-row test that the skip
+would incorrectly wholesale-overwrite; re-ran mutation → 1 red (the new test), restored clean.

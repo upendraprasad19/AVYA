@@ -5,13 +5,28 @@ spec: docs/superpowers/specs/2026-09-26-day-swapper-design.md
 review_rounds: 3
 ground_truth_verified: true
 verdict: converged
+blast_radius: catastrophic
 ---
 
 # Plan review — day swapper + sync-load (OI-237)
 
-`blast_radius:` is added by Task 31, which classifies the real diff including the migration file.
-`bpass:` / `bpass_review:` (and `hermes:` if that tier is `catastrophic`) are added by Task 33,
-after the implementation exists.
+## Blast radius (Task 31, CLAUDE.md §4.9 bare `-` form)
+
+Two runs, batch tier is the higher:
+- `git diff --name-only origin/main...HEAD | dart run scripts/blast_radius_from_diff.dart -`
+  (written files, base `origin/main` 7cb4eb78) → `platform`.
+- The migration file classified where it exists (U1's worktree at the time, copied into a scratch
+  worktree for this run since it is untracked by design until Task 34):
+  `printf '%s\n' supabase/migrations/148_sync_noop_suppress_completed_guard_sync_epoch.sql | dart run
+  scripts/blast_radius_from_diff.dart -` → `catastrophic` (the content rule substring-matches
+  "SECURITY DEFINER" inside the migration's own header, in a sentence that says the guard function
+  is NOT `SECURITY DEFINER` — see ruling in `.superpowers/sdd/2026-09-26-day-swapper-sync-load/progress.md`.
+  Accepted as-is per that ruling: the SQL is not reworded to dodge the classifier).
+- **Batch blast_radius: `catastrophic`.** Task 33 runs `/hermes-pass` and the plan-review record
+  needs `hermes: accepted` before the merge (`check_plan_review_record_exists.dart` requires it at
+  the `catastrophic` tier).
+
+`bpass:` / `bpass_review:` (and `hermes:`) are added by Task 33, after the implementation exists.
 
 **Method.** Every round was context-blind. Reviewers ran on Sonnet, at most four at once. The plan
 is 1.37 MB, so each round was split into eight slices: Wave 0; U1–U3; U4; Tasks 13–16; Tasks 17–20;
@@ -39,9 +54,14 @@ Material findings, all fixed in the plan:
 - **Task 26/27/28 test and citation defects** (P1 ×3): a `.notifier` on a plain Provider, a
   `String` passed as a `DateTime`, and a 1000-line citation drift.
 - **Allowance replies can land out of order** (P2). Its round-1 fix was replaced in round 2.
-- **Migration 145 is contested:** the in-flight templates batch (OI-252) holds an uncommitted
-  `145_workout_templates_stable_delete.sql`. Task 1 Step 3 now checks for it, and whichever batch
-  lands second renumbers. This was found by the coordinator, not a reviewer.
+- **Migration 148 (numbered 145 at round-1 time) was contested:** the in-flight templates batch
+  (OI-252) held an uncommitted `145_workout_templates_stable_delete.sql` under the SAME number this
+  batch's migration used at round 1. Task 1 Step 3 checked for it then; the collision recurred twice
+  more as other batches landed 145/146/147 on `main` first (147 taken by
+  `147_alert_client_errors_spike_breadth.sql`), so this migration is now **148**
+  (`148_sync_noop_suppress_completed_guard_sync_epoch.sql`, ruling 2026-09-28,
+  `.superpowers/sdd/2026-09-26-day-swapper-sync-load/wave3-carry.md`). This was found by the
+  coordinator, not a reviewer.
 
 ## Round 2 — the hardened plan (21 findings: 1 P0, 7 P1, 13 P2)
 
@@ -56,10 +76,10 @@ introduced defects, both caught here:
 New material findings, all fixed:
 - **Task 29 `restore_type_derivation`** (P0): its prose contained a `hive_key_prefix: ""`
   literal, which Gate 9's regex reads as a non-empty prefix.
-- **Migration 145's guard function was `public`** (P1): it moved to the `private` schema with a
+- **Migration 148's guard function was `public`** (P1): it moved to the `private` schema with a
   pinned `search_path`, following migrations 133 and 138. A post-apply `pg_namespace` check and a
   contract assertion were added.
-- **Task 34 had no action when 145 is taken at apply time** (P1): a corrective procedure now keeps
+- **Task 34 had no action when 148 is taken at apply time** (P1): a corrective procedure now keeps
   the founder go intact.
 - **Task 27 widget test rendered free-tier copy** (P1): it now has a PRO override. The missing
   allowance import was also fixed (P1).
