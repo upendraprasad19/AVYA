@@ -438,6 +438,7 @@ concepts:
       - { file: lib/features/train/widgets/week_selector.dart, reason: "Theme K — past-phase scroll-back iterates schedule_* keys for completed-phase chips" }
       - { file: lib/core/services/scheduled_workouts_resync_migrator.dart, reason: "one-shot resync sweep over schedule_* keys" }
       - { file: lib/core/services/sync/sync_workout.dart, reason: "cloud sync writer scans schedule_* prefix" }
+      - { file: lib/core/services/schedule_hybrid_repair_migrator.dart, reason: "day-swapper + sync-load Task 23 (diagnose b6e1c8) — one-shot per-user hybrid repair sweep over schedule_* keys" }
     regression_test: test/workout_write_service/upsert_scheduled_test.dart
     hive:
       box: workoutBox
