@@ -294,8 +294,10 @@ in `sync_workout.dart`. **Completion time** gets its own resolver order:
 `scripts/check_sync_no_now_fallback.dart` (Gate G2) fails a comment-stripped `?? DateTime.now()`
 literal anywhere in sync payload code.
 
-**8. The schedule-row field contract.** `arranged_at_ms` — the swap timestamp; stamped by
-`WorkoutWriteService.swapScheduledDays` on both rows of a day-swap (same value on both sides)
+**8. The schedule-row field contract.** `arranged_at_ms` — the swap timestamp; computed by the
+pure `DaySwapRules.landed`/`buildSwap` (`day_swap/day_swap_rules.dart`) with ONE `nowMs` for
+both rows (same value on both sides), inside the build function `SwapService.swapDays` hands to
+`WorkoutWriteService.swapScheduledDays` (which writes the rows it is given and never sets the field)
 and carried forward by `upsertScheduled` whenever an already-arranged row is rewritten by a
 non-swap, non-restore writer (`carriesArrangement`) — a swap writes its own stamp directly, a
 restore copies the source row's; NEVER removed by a swap-back. `is_swapped: true` +
