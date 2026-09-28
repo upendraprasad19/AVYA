@@ -373,7 +373,7 @@ concepts:
       key_formula: "'exercise_log_index_${istDateStr(date)}'"
     ist_sites:
       - { file: lib/core/utils/date_utils.dart, line: 27, fn: formatDateKey }
-      - { file: lib/core/services/workout_write_service.dart, line: 1355, fn: wlogKey }
+      - { file: lib/core/services/workout_write_service.dart, line: 1363, fn: wlogKey }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\\.keys.*manually.*date", reason: "O(n) scan — use the index key instead" }
       - { pattern: "DateTime\\.now\\(\\)\\.toIso8601String\\(\\)\\.substring\\(0,\\s*10\\)", reason: "UTC date, disagrees with IST-keyed reader; use istDateStr(DateTime.now())" }
@@ -466,7 +466,7 @@ concepts:
     restore_methods: [_restoreScheduledWorkouts, _restoreScheduleCompletions]
     provider_invalidation_set: [currentPlanProvider, calendarWeekProvider, todayWorkoutProvider]
     ist_sites:
-      - { file: lib/core/services/workout_write_service.dart, line: 1358, fn: scheduleKey }
+      - { file: lib/core/services/workout_write_service.dart, line: 1366, fn: scheduleKey }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\.put\('schedule_", reason: "Never write schedule keys directly from a widget — use WorkoutScheduleService" }
     class_constraints: |
@@ -1349,9 +1349,17 @@ concepts:
         fields_read: [weight, calories, protein, workouts]
         notes: |
           ONE display surface. Renders 4-up sparkline grid; "no data
-          yet" empty state when series.isEmpty. Not watched anywhere
-          else — invalidate manually after mutation if real-time
-          refresh needed.
+          yet" empty state when series.isEmpty.
+          Bug b1bfea (2026-09-28): confirmed this note's own "invalidate
+          manually if real-time refresh needed" had NEVER actually been
+          wired — grep found zero ref.invalidate(weeklyReportDataProvider)
+          call sites anywhere in lib/ before this fix. DayRolloverObserver
+          now invalidates it on every day-rollover (see
+          day_rollover_provider_invalidation concept), so the 7-day window
+          advances correctly at midnight. Write-time invalidation (on a
+          new weight/meal/workout log, so the sparkline reflects a log
+          made TODAY without waiting for tomorrow's rollover) is still
+          NOT wired — filed as OI-267, not silently dropped.
       - file: lib/core/services/badge_service.dart
         line_range: 110-115
         method: BadgeService weight-log counter
@@ -1388,23 +1396,40 @@ concepts:
       truth for which providers must rebuild when the date flips.
     writers:
       - file: lib/core/services/day_rollover_service.dart
-        line_range: 103-178
+        line_range: 129-138
         method: runRolloverNow
         notes: "Class is DayRolloverObserver (not DayRolloverService — stale name in registry)"
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/day_rollover_service.dart
-        line_range: 136-178
+        line_range: 152-296
         method: _doRolloverWithRef (self-contained)
         semantic: pass-through
         fields_read: [<provider invalidation only — no Hive read>]
         notes: |
-          Core implementation shared between cold-start
-          (runRolloverNow at :114) and resume-time (_doRollover at
-          :126). Both paths funnel through _doRolloverWithRef so the
-          invalidation list lives in exactly one place. Touches 22
-          providers (workout 6 + nutrition 5 + health 3 + AI 4 +
-          misc 4).
+          Core implementation shared between cold-start (runRolloverNow)
+          and resume-time (_doRollover), AND (since 2026-09-28, bug
+          e8f95e's sibling `feat`) a third trigger: a foreground
+          midnight Timer (_scheduleMidnightTimer/_onMidnightTimerFired)
+          for a session that never backgrounds across midnight. All
+          three funnel through _doRolloverWithRef so the invalidation
+          list lives in exactly one place. Touches 27 providers
+          (workout 7 + nutrition 6 + health 3 + profile 3 + AI 3 + misc 5) —
+          recount 2026-09-28 after adding streakFreezeProvider (bug 9c8958),
+          weeklyNutritionProvider (bug bae4dd), weeklyReportDataProvider
+          (bug b1bfea, found by plan-review round 1 while independently
+          verifying a separate false-positive finding about
+          UserStatsNotifier), and referralEligibilityProvider +
+          usageWeeksProvider (bugs 4018b3/ff3131, found by plan-review
+          round 2's independent audit from a different starting angle —
+          every DateTime.now()-computing provider under
+          lib/features/*/providers/) — all five previously absent from
+          this list entirely (not a stale-name drift, a plain omission).
+          Re-derive with
+          `sed -n '<_doRolloverWithRef start>,<end>p' day_rollover_service.dart
+          | grep -c 'ref\.invalidate('` rather than trusting this number —
+          it is prose, per CLAUDE.md §0's own warning about exactly this
+          class of count.
       - file: lib/app.dart
         line_range: 35-75
         method: ICanBeFitterApp init / dispose (registers + tears down observer)
@@ -1424,15 +1449,26 @@ concepts:
           Cold-launch entry point — calls runRolloverNow with the
           splash ref. Resume-time path runs via WidgetsBindingObserver
           inside DayRolloverObserver itself.
-    regression_test: test/safety/day_rollover_service_test.dart
+    regression_test: test/contracts/day_rollover_provider_invalidation_writer_to_reader_test.dart
+    # ⚠ Corrected 2026-09-28 — this previously cited
+    # test/safety/day_rollover_service_test.dart, which does not exist
+    # (phantom citation, same class CLAUDE.md §0 warns about). Found
+    # while touching this entry for bugs 9c8958/bae4dd; fixed opportunistically
+    # rather than left for a separate pass, per the "conversion-on-touch"
+    # pitfall row.
     provider_invalidation_set:
       - todayWorkoutProvider
       - dailyNutritionProvider
       - streakProvider
       - aiInsightProvider
       - allExercisePRsProvider
+      - streakFreezeProvider  # bug 9c8958, 2026-09-28 — was missing entirely
+      - weeklyNutritionProvider  # bug bae4dd, 2026-09-28 — was missing entirely
+      - weeklyReportDataProvider  # bug b1bfea, 2026-09-28 — was missing entirely (no invalidation anywhere, not just here)
+      - referralEligibilityProvider  # bug 4018b3, 2026-09-28 — had write-time invalidation, missing rollover leg only
+      - usageWeeksProvider  # bug ff3131, 2026-09-28 — had write-time invalidation, missing rollover leg only
     ist_sites:
-      - { file: lib/core/services/day_rollover_service.dart, line: 124, fn: runRolloverNow }
+      - { file: lib/core/services/day_rollover_service.dart, line: 133, fn: runRolloverNow }
     class_constraints: |
       All "today"-derived providers (todayWorkoutProvider,
       dailyNutritionProvider, streakProvider, aiInsightProvider,
@@ -3952,7 +3988,13 @@ concepts:
       unique_constraint: "(user_id, week_start)"
     sync_methods: [_syncStreaks, syncFreezes]
     restore_methods: [_restoreStreaks, _restoreFreezes]
-    provider_invalidation_set: [streakProvider, allExercisePRsProvider]
+    provider_invalidation_set: [streakProvider, allExercisePRsProvider, streakFreezeProvider]
+    # streakFreezeProvider added 2026-09-28 (bug 9c8958) — was missing from
+    # BOTH this list and DayRolloverObserver._doRolloverWithRef's own
+    # invalidation block, so the Monday refill (StreakProgressService.
+    # refillIfNewWeek, already correct) landed in Hive on time but the
+    # cached NotifierProvider serving the streak-freeze badge never
+    # rebuilt until an unrelated invalidation or app restart.
     telemetry:
       failure_op_types: [upsert_streak]
     class_constraints: |
@@ -5527,9 +5569,14 @@ concepts:
         method: deleteAllFilesForCurrentUser
         notes: hard-wipes all Hive boxes for current user on account deletion
       - file: lib/core/services/workout_write_service.dart
-        line_range: 537-582
+        line_range: 584-656
         method: upsertScheduled
-        notes: upserts a scheduled workout entry to workoutBox under schedule_ key
+        notes: |
+          upserts a scheduled workout entry to workoutBox under schedule_
+          key. Re-derived 2026-09-28 — was already stale (537-582) before
+          this batch's logExercise edit (bug e8f95e) shifted the file's
+          line count further; caught by check_sot_registry_parity.dart
+          and fixed opportunistically while touching this file.
       - file: lib/core/services/workout_write_service.dart
         line_range: 1091-1161
         method: deleteLog

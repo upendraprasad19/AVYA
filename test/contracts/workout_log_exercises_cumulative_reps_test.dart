@@ -36,11 +36,20 @@ void main() {
       final writerSrc =
           File('lib/core/services/workout_write_service.dart').readAsStringSync();
 
-      // The canonical writer folds every merged set's reps into a single
-      // total. The exact line (workout_write_service.dart:134):
-      //   final totalReps = mergedSets.fold<int>(0, (a, s) => a + s.reps);
+      // The canonical writer folds every cleaned set's reps into a single
+      // total. The exact line (workout_write_service.dart:175):
+      //   final totalReps = cleanedSets.fold<int>(0, (a, s) => a + s.reps);
+      //
+      // Repointed from `mergedSets` to `cleanedSets` by bug e8f95e
+      // (2026-09-28): the aggregate is now computed from the POST-normalization
+      // set list so reps_completed can never diverge from what sets[] actually
+      // persists. Both are cumulative folds over set.reps — this test's
+      // semantic intent (cumulative, not per-set) is unchanged; only the
+      // variable name this source-grep pins moved. Per CLAUDE.md's
+      // "extracting/moving code breaks source-grep contracts" pitfall class:
+      // repoint at the new location, don't loosen the assertion.
       final hasFold = RegExp(
-        r'mergedSets\.fold<int>\(\s*0\s*,\s*\(a,\s*s\)\s*=>\s*a\s*\+\s*s\.reps\)',
+        r'cleanedSets\.fold<int>\(\s*0\s*,\s*\(a,\s*s\)\s*=>\s*a\s*\+\s*s\.reps\)',
       ).hasMatch(writerSrc);
       expect(
         hasFold,

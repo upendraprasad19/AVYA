@@ -6315,3 +6315,102 @@ If ANY of these 4 functions is ever refactored to call Gemini through an injecta
 **Fix, when picked up:** apply the exact same widening `e35936` did to `_shared/gemini_backoff_retry_test.ts`'s `assertSoleCallSiteHasRetries` — recognize either `geminiChat({` or `geminiChatFn({`, sum occurrences of both — to each of these 4 files' own call-site-finding logic. Four small, independent, mechanical edits; no shared helper currently links them (each function's `index_test.ts` has its own copy of this check, unlike the retries-pinning tests which share `assertSoleCallSiteHasRetries`).
 
 **Reopen when:** one of the 4 functions actually adopts a `geminiChatFn`-style seam (its own test will fail loud at that point regardless of whether this OI was ever picked up first) — or on general principle at the next quarterly tech-debt audit (§4.10).
+
+## OI-265 — Boot-time healer needed for pre-existing exlog rows corrupted by the duration-controller-seeding leak (e8f95e) — reps_completed/duration_seconds duplication predates this fix and is not retroactively healed
+
+- **Status**: OPEN
+- **Blocked on**: none — needs its own writer/reader-chain analysis + regression test before pickup
+- **Verified**: never
+- **Identified**: 2026-09-28 · filed via mint_oi.sh from branch `reps-secs-invalidation-fixes`, surfaced by the B-pass on diagnose `e8f95e`'s fix (`docs/reviews/b6f1837bf486-review.md` P1 — the diagnose-doc had claimed this was already "tracked via mint_oi.sh" when no such entry existed anywhere on either board; this OI is that missing filing, done for real)
+
+Bug `e8f95e` (`docs/diagnoses/2026-09-28-duration-controller-seeding-leak-e8f95e.md`) stopped a
+leak that fed a phantom duration into `_resolveLoggingType`'s data-shape fallback, mis-resolving
+certain custom bodyweight exercises to `'timed'` and — via the separate pre-normalization-aggregate
+bug fixed in the same batch — writing `reps_completed`/`duration_seconds` values that disagree with
+the exercise's own `sets[]`. The fix is forward-only: any `exlog_*` row already written before this
+fix landed keeps its corrupted aggregate fields.
+
+**Fix, when picked up:** mirror bug `a4c7d1`'s Part 2 pattern (a boot-time or on-read healer) —
+detect "this row's top-level `reps_completed`/`duration_seconds` disagrees with what `sets[]`
+itself would fold to" and rewrite the aggregate fields to match `sets[]`. Needs its own
+false-positive analysis first: a genuinely `'timed'`-resolved exercise SHOULD have
+`duration_seconds` populated and `reps_completed` at 0, so the healer must distinguish "aggregate
+disagrees with sets[] because of this bug" from "aggregate correctly reflects a timed exercise" —
+likely by recomputing the aggregate from `sets[]` directly and comparing, not by pattern-matching
+on which fields are non-zero.
+
+**Reopen when:** picked up as a dedicated fix, or resurfaced by a live query on
+`workout_log_exercises` showing the same `reps_completed == duration_seconds` duplication shape for
+an account that logged before 2026-09-28.
+
+## OI-266 — _resolveLoggingType never consults customBox/user_custom_exercises for a custom exercise's own logging_type — data-shape fallback can misclassify e.g. a custom weighted_bodyweight exercise as weight_reps
+
+- **Status**: OPEN
+- **Blocked on**: none — fixable any time by whoever's own batch next touches `_resolveLoggingType` or the custom-exercise creation path
+- **Verified**: never
+- **Identified**: 2026-09-28 · filed via mint_oi.sh from branch `reps-secs-invalidation-fixes`, surfaced by the B-pass on diagnose `e8f95e`'s fix (`docs/reviews/b6f1837bf486-review.md` P1 — same missing-filing gap as OI-265; see that OI's note)
+
+`WorkoutWriteService._resolveLoggingType` (`workout_write_service.dart`) resolves a custom
+exercise's `logging_type` purely from data-shape inference (`hasDur`/`hasWeight` on the logged
+sets) — it never consults `HiveService.instance.customBox`/`user_custom_exercises`, where the
+exercise's OWN `logging_type` was already stamped at creation time (confirmed live during the
+e8f95e investigation: `user_custom_exercises.logging_type = "bodyweight_reps"` for the founder's
+"Single Leg Front Lever" exercise, never read here). For bug e8f95e itself this didn't matter — once
+the duration-controller leak stops, the data-shape fallback resolves correctly on its own
+(`hasDur` becomes `false`). But data-shape inference is structurally unable to distinguish some
+type pairs: a custom `weighted_bodyweight` exercise (added weight + reps) has `hasWeight=true` just
+like `weight_reps`, so it would resolve to the wrong type even with a perfectly clean input — no
+duration-controller leak required.
+
+**Fix, when picked up:** in `_resolveLoggingType`, look up the exercise's own `logging_type` from
+`customBox`/`user_custom_exercises` FIRST (mirroring how the seeded library lookup already takes
+priority over data-shape inference), falling back to data-shape inference only when the exercise is
+in neither the seeded library nor `customBox` (a shape that should be rare/impossible in practice,
+but the fallback should stay as the safety net it already is).
+
+**Reopen when:** picked up as a dedicated fix, or resurfaced by a founder report of a custom
+`weighted_bodyweight` (or similarly data-shape-ambiguous) exercise logging with the wrong type.
+
+## OI-267 — weeklyReportDataProvider has no write-time invalidation across weight/meal/workout logs (3 domains, 15+ raw call sites) — only day-rollover invalidation was added; the sparkline can still show a just-logged entry's absence until the next unrelated rebuild
+
+- **Status**: OPEN
+- **Blocked on**: none — fixable any time; needs a per-domain call-site audit before pickup
+- **Verified**: never
+- **Identified**: 2026-09-28 · filed via mint_oi.sh from branch `reps-secs-invalidation-fixes`, found during plan-review round 1 of the day-rollover invalidation batch (`docs/plan-reviews/reps-secs-invalidation-fixes.md`) while independently verifying a different (false-positive) finding about `UserStatsNotifier`
+
+`WeeklyReportDataNotifier.build()` (`lib/features/profile/providers/weekly_report_data_provider.dart`)
+computes a rolling 7-day window from `DateTime.now()` directly and watches nothing except
+`authUserIdTokenProvider` — confirmed via `grep -rn weeklyReportDataProvider lib/ test/` that it has
+ZERO `ref.invalidate(weeklyReportDataProvider)` call sites anywhere in `lib/` (the day-rollover leg
+added in the same batch that filed this OI is the FIRST invalidation this provider has ever had).
+Its own doc comment already names the gap: "invalidate when the user logs a workout or meal if you
+want the sparkline to refresh without an app restart" — aspirational, never wired. Since Profile
+lives under `StatefulShellRoute.indexedStack` (never disposed on tab switch), once built this
+provider can show a stale weight/calorie/protein/workout window for the rest of the app session,
+even across new logs in all three domains it aggregates.
+
+Unlike `weeklyNutritionProvider` (bug bae4dd, same batch) — which already had write-time
+invalidation via `nutrition_provider.dart`'s `logFood` and was only missing the rollover leg — this
+provider had NO invalidation at all until this OI's sibling fix added the rollover leg. The
+write-time leg is a materially larger fix than the rollover leg: `HealthWriteService.logWeight`,
+`NutritionWriteService.logMeal` and `WorkoutWriteService.markCompleted` are plain service methods
+with no `WidgetRef`, so invalidation can't be added inside them — it has to be added at each
+Riverpod-layer CALL SITE instead, and there are many: `logWeight` alone has 5 raw call sites
+(`weight_log_sheet.dart` → `weightLogNotifierProvider.notifier.logWeight`,
+`conversational_log_handler.dart`, `onboarding_provider.dart`, `home_provider.dart`,
+`simulation_service.dart`); `logMeal` has 7 (`nutrition_provider.dart` ×2, `search_mode_body.dart`,
+`barcode_scan_sheet.dart`, `scan_meal_section.dart`, `tool_dispatcher.dart`,
+`simulation_service.dart`); `markCompleted` has 7 more. A fix needs to find EVERY Riverpod-layer
+wrapper around each (mirroring how `nutrition_provider.dart:1081` wraps `logMeal` for
+`weeklyNutritionProvider`) and add the invalidation there — or, better, audit whether a SINGLE
+lower-fan-in wrapper already exists for each domain that all UI paths route through, to avoid
+repeating the invalidation call at every one of the 15+ sites (which is itself the kind of
+easy-to-miss-one pattern this whole batch's day-rollover 27-provider list already demonstrates).
+
+**Fix, when picked up:** for each domain (weight/meal/workout), find the Riverpod-layer call site(s)
+that wrap the raw WriteService call and add `ref.invalidate(weeklyReportDataProvider)` there —
+verify with a live grep whether one narrow chokepoint exists per domain before assuming all 5-7
+raw call sites need their own edit.
+
+**Reopen when:** picked up as a dedicated fix, or resurfaced by a founder report of the Weekly
+Report sparkline not reflecting a just-logged weight/meal/workout entry.

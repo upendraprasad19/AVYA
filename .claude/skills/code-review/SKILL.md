@@ -248,6 +248,33 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-28** — blast-radius **account** — branch `reps-secs-invalidation-fixes` (4 confirmed
+  fixes + 1 `feat` in the same batch: duration-controller-seeding leak e8f95e, aggregate
+  pre-normalization in the same fix, missing streakFreezeProvider invalidation 9c8958, missing
+  weeklyNutritionProvider invalidation bae4dd, foreground midnight-timer backstop). Staged-diff
+  review, `docs/reviews/b6f1837bf486-review.md`. **3 findings, 0 false alarms, all 3 addressed
+  (2 fixed, 1 no-change-needed).** F1 (P1, deferred_work_tracking) caught that the e8f95e
+  diagnose-doc claimed two residuals (a boot-time healer for pre-existing corrupted rows; the
+  `_resolveLoggingType` customBox-lookup gap) were "tracked via `sh scripts/mint_oi.sh`" when
+  neither had an actual OI entry anywhere — `check_no_deferral_euphemism.dart` passed cleanly
+  because the *phrasing* was sanctioned, which is exactly the gap an adversarial read exists to
+  catch (a script can verify wording, not whether a claimed action actually happened). Fixed by
+  minting OI-265/OI-266 for real and correcting both citations. F2 (P2, asserted_fixture_value)
+  caught that Test D's ground-truth computation hardcoded its clamp ceiling to `1` rather than
+  deriving it from `subscriptionInfoProvider.isPro` the way the real provider does — safe today
+  only because the test never grants PRO; fixed by deriving it the same way. F3 (P2) — two
+  non-blocking observations (dead code in a defensive while-loop; a pre-existing,
+  already-mitigated TOCTOU race the new Timer joins) — no code change, per the review's own
+  "non-blocking" framing. **Lesson:** a diagnose-doc's claim that something was "filed" or
+  "tracked" is itself a checkable fact, not just checkable phrasing — verify the board, not just
+  the words, exactly the same distinction `feedback_claimed_fixed_not_actually_landed.md` already
+  makes for "fixed" claims, now extended to "tracked" claims. A second, independent plan-review
+  round (context-blind, run in parallel with this B-pass) separately surfaced a real, confirmed
+  4th bug of the SAME class this batch was already fixing (`weeklyReportDataProvider` had NO
+  invalidation anywhere at all) while also raising and then ruling out a false-positive about
+  `UserStatsNotifier` — see `docs/diagnoses/2026-09-28-weekly-report-data-provider-invalidation-b1bfea.md`
+  for the full transitive-watch-chain verification that closed the false positive.
+
 - **2026-09-27** — blast-radius **platform** — branch `single-owner-a2` (a2a: daily-snapshot's
   coaching-notes extraction gains a test seam, kill switch, and a private-mode-before-any-read
   gate; diagnose `c3f8e6`). Staged-diff review, `docs/reviews/aa943309c727-review.md`.
@@ -3433,3 +3460,33 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   diff — it needs a structural union-completeness proof instead (extract every section by its own
   identifier from both parents, confirm the final set is exactly their union with byte-identical
   bodies).
+- **2026-09-28 (third entry today)** — blast-radius **account** — branch
+  `reps-secs-invalidation-fixes` (day-rollover provider-invalidation batch: 6 confirmed instances of
+  the "provider derives from `DateTime.now()` but is absent from `DayRolloverObserver`'s invalidation
+  list" class, found across a founder-requested audit and two independent plan-review rounds).
+  **3 findings (0 P0/P1, 1 P2, 2 P3); 0 false_alarm — all 3 fixed in-batch.** Review:
+  `docs/reviews/2d63662f9e59-review.md`.
+  **Tuning — `asserted_fixture_value` (lens 8) gains a specific sub-shape: a citation "correction"
+  applied by the SAME flawed derivation method that produced the original error moves the number
+  the WRONG amount, not to the right one, and looks like progress while staying wrong.** Two of the
+  8 off-by-one citations this pass found had ALREADY been "corrected" once earlier in this same
+  batch (9c8958 216→217, bae4dd 232→233) — each correction shifted the citation from two lines short
+  to exactly one line short, never to the real target. All 8 instances shared one shape: a
+  newly-inserted `ref.invalidate(X);` line immediately below a freshly-authored multi-line comment
+  block, cited by counting the comment's own lines and using that count as "the next line" rather
+  than a final `grep -n`/direct-read sanity check against the finished file. The mechanical gates
+  (`check_sot_registry_parity.dart`'s ±5/±6-line slack window, `validate_diagnose_doc.dart`'s
+  shape-only check) both PASS cleanly on every instance — by design, neither checks citation
+  accuracy at single-line precision. **Add to lens 8's method: when a "corrected" citation is
+  re-verified, check whether the SAME production method (recount a comment block, don't re-grep the
+  finished file) could have produced BOTH the error and its "fix" — a correction is not evidence of
+  correctness if nothing about the derivation method changed.**
+  **Second — the coordinator independently re-verified every one of the review's 8 claimed
+  citations, plus its "6 lenses clean" and "prior review's 3 findings still resolved" claims, by
+  direct `Read` + line-count against the real files BEFORE applying any fix** (per this skill's own
+  standing "verify a subagent's claims, don't just trust the report" discipline) — all matched
+  exactly, including the subagent's own independent re-derivation of the mutation-proofs for the two
+  presence-only tests (4018b3/ff3131) and the previously-unrun Test F (b1bfea). Recorded because a
+  clean cross-check of a subagent's OWN verification work, not just its top-line claims, is the
+  stronger form of "record a negative result" this file's history already values.
+  False-alarm rate 0/3 → no lens removed; lens 8 extended per above.

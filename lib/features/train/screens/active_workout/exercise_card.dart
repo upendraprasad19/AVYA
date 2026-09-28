@@ -110,7 +110,17 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
 
     _weightControllers = List.generate(n, (_) => TextEditingController(text: weightValue));
     _repsControllers = List.generate(n, (_) => TextEditingController(text: repsValue));
-    _durationControllers = List.generate(n, (_) => TextEditingController(text: repsValue));
+    // Bug e8f95e — this used to seed with `repsValue` (a copy-paste of the reps
+    // line above). LastPerformanceData carries no duration field (only
+    // lastWeight/lastReps), so there is no legitimate prefill source for
+    // duration — leave it empty, exactly like `_distanceControllers` below,
+    // which has the same "no prefill data" shape. `_captureSetValues` parses
+    // BOTH this and the reps controller unconditionally regardless of which
+    // one the active `set_input_row.dart` actually renders for this
+    // exercise's `loggingType`, so a non-empty seed here silently leaks into
+    // `SetInputValues.durationSeconds` even when the user never saw or
+    // touched a duration field.
+    _durationControllers = List.generate(n, (_) => TextEditingController());
     _distanceControllers = List.generate(n, (_) => TextEditingController());
 
     // Restore any values already captured in the provider (e.g. after widget rebuild).

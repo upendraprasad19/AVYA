@@ -25,6 +25,8 @@ import 'package:icanbefitter/features/train/repositories/workout_repository.dart
 
 // ── Profile providers (biometrics from health sync) ──
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
+import 'package:icanbefitter/features/profile/providers/referral_eligibility_provider.dart';
+import 'package:icanbefitter/features/profile/providers/weekly_report_data_provider.dart';
 
 /// Observes app lifecycle and invalidates all daily-scoped providers
 /// when the calendar date changes (midnight rollover).
@@ -37,6 +39,7 @@ class DayRolloverObserver with WidgetsBindingObserver {
 
   WidgetRef? _ref;
   bool _attached = false;
+  Timer? _midnightTimer;
 
   /// Call once from a [ConsumerStatefulWidget.initState] or similar.
   void init(WidgetRef ref) {
@@ -44,6 +47,7 @@ class DayRolloverObserver with WidgetsBindingObserver {
     if (!_attached) {
       WidgetsBinding.instance.addObserver(this);
       _attached = true;
+      _scheduleMidnightTimer();
     }
     // Store today's date on init so we can compare later.
     _storeCurrentDate();
@@ -54,6 +58,8 @@ class DayRolloverObserver with WidgetsBindingObserver {
       WidgetsBinding.instance.removeObserver(this);
       _attached = false;
     }
+    _midnightTimer?.cancel();
+    _midnightTimer = null;
     _ref = null;
   }
 
@@ -201,6 +207,15 @@ class DayRolloverObserver with WidgetsBindingObserver {
     ref.invalidate(workoutStatsProvider);
     ref.invalidate(streakProvider);
     ref.invalidate(allExercisePRsProvider);
+    // Bug 9c8958 — streakFreezeProvider was absent from this list. The
+    // Monday refill (StreakProgressService.refillIfNewWeek, called above)
+    // wrote the new count to Hive correctly and on time; nothing told
+    // this NotifierProvider its cached build was stale, so the streak
+    // badge kept showing the pre-refill count until an unrelated
+    // invalidation (or app restart) happened to rebuild it. Reader:
+    // StreakFreezeNotifier.build() (home_provider.dart) — same file/class
+    // as streakProvider two lines up, which WAS already invalidated here.
+    ref.invalidate(streakFreezeProvider);
 
     // ── Nutrition providers ──
     ref.invalidate(nutritionSummaryProvider);
@@ -208,11 +223,60 @@ class DayRolloverObserver with WidgetsBindingObserver {
     ref.invalidate(dailyNutritionProvider);
     ref.invalidate(selectedDateProvider); // reset to today
     ref.invalidate(waterIntakeProvider);
+    // Bug bae4dd — weeklyNutritionProvider was absent from this list. Its
+    // build() computes weekStart fresh from DateTime.now() every time, so
+    // once invalidated it always reflects the current week correctly; the
+    // bug is purely that NOTHING invalidated it here, so a week-boundary
+    // crossing left the weekly chart/avg pinned to the OLD week's cached
+    // NotifierProvider state. Reader: WeeklyNutritionNotifier.build()
+    // (nutrition_provider.dart) — already invalidated on every meal log
+    // (NutritionWriteService.logMeal) but not on rollover.
+    ref.invalidate(weeklyNutritionProvider);
 
     // ── Health providers ──
     ref.invalidate(todayStepsProvider);
     ref.invalidate(todayWeightLoggedProvider);
     ref.invalidate(biometricProvider);
+
+    // ── Profile providers ──
+    // Plan-review round 1 finding (docs/plan-reviews/reps-secs-invalidation-fixes.md)
+    // — weeklyReportDataProvider (Profile PRO Weekly Report sparkline) computes
+    // its rolling 7-day window from `DateTime.now()` directly and had NO
+    // invalidation anywhere in the app: not here, not on a new weight/meal/
+    // workout log. Unlike weeklyNutritionProvider (bug bae4dd, same batch),
+    // which already had write-time invalidation and was only missing this
+    // rollover leg, this provider was missing invalidation entirely — once
+    // built, its 7-day window (dates AND values) never advances for the rest
+    // of the app session. The write-time leg (invalidate on a new weight/meal/
+    // workout log, matching the provider's own doc comment's stated intent)
+    // is a separable, larger fix spanning 3 domains' call sites and is filed
+    // as OI-267, not silently expanded into this batch or silently dropped.
+    ref.invalidate(weeklyReportDataProvider);
+
+    // Plan-review round 2 finding — two more day/week-boundary providers
+    // with the SAME missing-rollover-invalidation shape, found by an
+    // independent audit starting from a different angle (every
+    // DateTime.now()-computing provider under lib/features/*/providers/).
+    // Unlike weeklyReportDataProvider, both already had a SINGLE existing
+    // write-time invalidation call site, so — like streakFreezeProvider/
+    // weeklyNutritionProvider — only the rollover leg was missing; no
+    // fan-out complexity, so fixed directly rather than filed as an OI.
+    //
+    // referralEligibilityProvider (bug 4018b3): daysRemaining counts down
+    // from signup via DateTime.now().difference(signupDate).inDays — its
+    // only invalidation call site (profile_content.dart's
+    // ApplyReferralSheet.show onTap handler, on redemption success) fires
+    // on a REDEMPTION, never on the day boundary
+    // itself, so an un-redeemed user's "N DAYS LEFT" CTA could keep
+    // showing a since-expired window for as long as Profile stays mounted
+    // (StatefulShellRoute.indexedStack never disposes it on tab switch).
+    ref.invalidate(referralEligibilityProvider);
+    // usageWeeksProvider (bug ff3131): DateTime.now().difference(createdAt)
+    // ~/ 7 gates the Weekly Report card's "Available after Week 1" lock —
+    // its only invalidation call site is invalidateOnRetry (an explicit
+    // user retry tap OR a background cloud-restore heal), neither of which
+    // is a day/week-boundary event.
+    ref.invalidate(usageWeeksProvider);
 
     // ── AI providers ──
     ref.invalidate(aiInsightProvider);
@@ -230,4 +294,59 @@ class DayRolloverObserver with WidgetsBindingObserver {
 
     debugPrint('[DayRollover] All daily providers invalidated.');
   }
+
+  // ── Foreground midnight-timer backstop ───────────────────────────
+  //
+  // [didChangeAppLifecycleState] only checks the date on resume (and
+  // [runRolloverNow] on cold launch). An app left open in the FOREGROUND
+  // straight through midnight — no background/foreground transition —
+  // never hits either trigger, so daily-scoped providers silently go
+  // stale until the next resume. Founder-raised design gap, 2026-09-28.
+  // This timer is a second, independent trigger: it fires once at the
+  // next IST midnight and re-arms itself for the following one, so a
+  // foreground session gets the same rollover a resume would have
+  // triggered — without needing a resume.
+  //
+  // Uses the GATED `_checkAndRollover()` (not the unconditional
+  // `_doRollover`), so a resume that happens to land within a few ms of
+  // the same midnight can't double-invalidate.
+
+  void _scheduleMidnightTimer() {
+    _midnightTimer?.cancel();
+    _midnightTimer =
+        Timer(durationUntilNextIstMidnight(), _onMidnightTimerFired);
+  }
+
+  void _onMidnightTimerFired() {
+    debugPrint('[DayRollover] Foreground midnight timer fired.');
+    unawaited(_checkAndRollover());
+    // Re-arm for the following midnight. Guarded by _attached so a
+    // dispose() racing the callback (already queued when cancel() ran)
+    // can't resurrect a timer after this observer has been torn down.
+    if (_attached) {
+      _scheduleMidnightTimer();
+    }
+  }
+}
+
+/// Wall-clock [Duration] until the next IST 00:00:00, honoring the
+/// dev/test clock override ([nowWall] in `ist_date.dart`) so the year-sim
+/// harness and tests can exercise this without waiting real time.
+///
+/// Not private (and top-level, not a class member) so
+/// `day_rollover_midnight_timer_test.dart` can pin the arithmetic
+/// directly, independent of Timer/Hive machinery — see CLAUDE.md's
+/// "await-ing real disk I/O inside testWidgets hangs" pitfall for why a
+/// pure formula test is preferable to routing every case through a real
+/// Timer + real Hive I/O.
+@visibleForTesting
+Duration durationUntilNextIstMidnight() {
+  final now = nowWall().toUtc();
+  var nextMidnightUtc = istMidnightUtc(nowWall()).add(const Duration(days: 1));
+  // Defensive: never schedule a zero/negative-duration timer even if `now`
+  // lands exactly on (or fractionally past) a midnight boundary.
+  while (!nextMidnightUtc.isAfter(now)) {
+    nextMidnightUtc = nextMidnightUtc.add(const Duration(days: 1));
+  }
+  return nextMidnightUtc.difference(now);
 }
