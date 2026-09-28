@@ -42,7 +42,11 @@ import 'package:icanbefitter/core/services/guarded_box.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
+import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
+import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
+import 'package:icanbefitter/features/profile/providers/weekly_report_data_provider.dart';
+import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
@@ -268,6 +272,220 @@ void main() {
           reason:
               "waterIntakeProvider must rebuild with today's 750ml after "
               'runRolloverNow invalidates the provider');
+    });
+
+    // ── Test D: streakFreezeProvider (bug 9c8958) ──────────────────────
+    //
+    // Regression test for the missing ref.invalidate(streakFreezeProvider)
+    // in _doRolloverWithRef. Isolates the invalidation gap from
+    // StreakProgressService.refillIfNewWeek (which already runs correctly
+    // inside runRolloverNow and is NOT what was broken) by comparing the
+    // provider's post-rollover value against a fresh ground-truth read of
+    // UserRepository.getProgress() taken at the same point, rather than
+    // hard-coding an expected count — robust to whatever refillIfNewWeek
+    // itself does on the day the suite happens to run.
+
+    testWidgets(
+        'streakFreezeProvider rebuilds from Hive after rollover, not the '
+        'value cached before a freeze count changed', (tester) async {
+      await tester.runAsync(() async {
+        await HiveUserSession.openForUser(testUser);
+      });
+
+      // Baseline: 0 freezes available (distinct from whatever value
+      // follows, so staleness is observable).
+      await tester.runAsync(() async {
+        await UserRepository.instance
+            .updateProgress({'streak_freezes_available': 0});
+      });
+
+      final refCompleter =
+          Completer<({WidgetRef ref, ProviderContainer container})>();
+      await tester.pumpWidget(
+        ProviderScope(
+          child: _RefCaptureWidget(onCapture: refCompleter.complete),
+        ),
+      );
+      await tester.pump();
+      final captured = await tester.runAsync(() => refCompleter.future);
+
+      final before = captured!.container.read(streakFreezeProvider);
+      expect(before, 0,
+          reason: 'precondition: streak_freezes_available=0 (clamped)');
+
+      // Simulate a refill landing directly in Hive while the provider is
+      // already cached from the read above (mirrors what
+      // refillIfNewWeek/reckonStreakDecayAndPersist do for real, without
+      // depending on today being a Monday).
+      await tester.runAsync(() async {
+        await UserRepository.instance
+            .updateProgress({'streak_freezes_available': 1});
+      });
+
+      final stillCached = captured.container.read(streakFreezeProvider);
+      expect(stillCached, 0,
+          reason:
+              'Riverpod serves the CACHED value until invalidated — this is '
+              'the staleness the founder observed (had to restart the app)');
+
+      await tester.runAsync(() async {
+        await DayRolloverObserver.instance.runRolloverNow(captured.ref);
+      });
+
+      // B-pass finding 2 (docs/reviews/b6f1837bf486-review.md): derive the
+      // clamp ceiling the SAME way StreakFreezeNotifier.build() does
+      // (isPro ? 3 : 1), rather than hardcoding 1 — safe today only because
+      // this test never grants PRO, but a hardcoded cap would silently
+      // diverge from the real provider's contract the moment it did.
+      final capForGroundTruth =
+          captured.container.read(subscriptionInfoProvider).isPro ? 3 : 1;
+      final groundTruth = ((UserRepository.instance.getProgress()
+                  ?['streak_freezes_available']) as int? ??
+              1)
+          .clamp(0, capForGroundTruth);
+      final afterValue = captured.container.read(streakFreezeProvider);
+
+      expect(afterValue, groundTruth,
+          reason:
+              'runRolloverNow must invalidate streakFreezeProvider so it '
+              'rebuilds from the CURRENT Hive progress value');
+      expect(afterValue, isNot(0),
+          reason:
+              'must have actually moved off the stale cached 0 — a '
+              'ground-truth comparison that trivially stayed at 0 would '
+              'prove nothing (StreakFreezeNotifier never lowers this value '
+              'on its own)');
+    });
+
+    // ── Test E: weeklyNutritionProvider (bug bae4dd) ────────────────────
+    //
+    // Regression test for the missing ref.invalidate(weeklyNutritionProvider)
+    // in _doRolloverWithRef. WeeklyNutritionNotifier.build() always computes
+    // weekStart fresh from DateTime.now() — the bug is not stale week-math,
+    // it's that nothing tells the cached NotifierProvider to rebuild at all,
+    // so a raw Hive write is invisible to it until something invalidates it.
+
+    testWidgets(
+        'weeklyNutritionProvider rebuilds to reflect a new nutritionBox '
+        'entry after rollover', (tester) async {
+      await tester.runAsync(() async {
+        await HiveUserSession.openForUser(testUser);
+      });
+
+      final nutritionBox = HiveService.instance.nutritionBox;
+      await tester.runAsync(() async {
+        await nutritionBox.clear();
+      });
+
+      final refCompleter =
+          Completer<({WidgetRef ref, ProviderContainer container})>();
+      await tester.pumpWidget(
+        ProviderScope(
+          child: _RefCaptureWidget(onCapture: refCompleter.complete),
+        ),
+      );
+      await tester.pump();
+      final captured = await tester.runAsync(() => refCompleter.future);
+
+      final before = captured!.container.read(weeklyNutritionProvider);
+      expect(before.avgCalories, 0,
+          reason: 'precondition: empty nutritionBox → avgCalories 0');
+
+      // Write a log entry for "today" using the SAME clock
+      // (DateTime.now()) WeeklyNutritionNotifier.build() uses for its
+      // weekStart math — avoids any device-timezone-vs-IST skew, which is
+      // orthogonal to the invalidation gap this test targets.
+      await tester.runAsync(() async {
+        await nutritionBox.put('nlog_test_today', {
+          'date': DateTime.now().toIso8601String(),
+          'total_calories': 850,
+          'total_protein': 40,
+        });
+      });
+
+      final stillCached = captured.container.read(weeklyNutritionProvider);
+      expect(stillCached.avgCalories, 0,
+          reason:
+              'Riverpod serves the CACHED WeeklyNutritionData until '
+              'invalidated, even though nutritionBox now has a row build() '
+              'would pick up on a fresh build');
+
+      await tester.runAsync(() async {
+        await DayRolloverObserver.instance.runRolloverNow(captured.ref);
+      });
+
+      final afterValue = captured.container.read(weeklyNutritionProvider);
+      expect(afterValue.avgCalories, 850,
+          reason:
+              'runRolloverNow must invalidate weeklyNutritionProvider so it '
+              'rebuilds and picks up the 850-calorie entry written while '
+              'the old build was cached');
+    });
+
+    // ── Test F: weeklyReportDataProvider (bug b1bfea) ───────────────────
+    //
+    // Regression test for the missing ref.invalidate(weeklyReportDataProvider)
+    // in _doRolloverWithRef. Unlike Test D/E's providers, this one had NO
+    // invalidation anywhere in the app before this fix (confirmed via
+    // `grep -rn weeklyReportDataProvider lib/` — zero ref.invalidate call
+    // sites). WeeklyReportDataNotifier.build() computes today's 7-day
+    // window from DateTime.now() directly — the bug is purely that
+    // nothing ever told the cached NotifierProvider to rebuild.
+
+    testWidgets(
+        'weeklyReportDataProvider rebuilds to reflect a new healthBox '
+        'weight entry after rollover', (tester) async {
+      await tester.runAsync(() async {
+        await HiveUserSession.openForUser(testUser);
+      });
+
+      final healthBox = HiveService.instance.healthBox;
+      await tester.runAsync(() async {
+        await healthBox.clear();
+      });
+
+      final refCompleter =
+          Completer<({WidgetRef ref, ProviderContainer container})>();
+      await tester.pumpWidget(
+        ProviderScope(
+          child: _RefCaptureWidget(onCapture: refCompleter.complete),
+        ),
+      );
+      await tester.pump();
+      final captured = await tester.runAsync(() => refCompleter.future);
+
+      final before = captured!.container.read(weeklyReportDataProvider);
+      expect(before.weight.last, 0,
+          reason: 'precondition: empty healthBox → today\'s weight slot 0');
+
+      // Write a weight entry for "today" using the SAME clock
+      // (DateTime.now(), fed through istDateStr — matching
+      // WeeklyReportDataNotifier's own `_fmt` helper) the provider uses
+      // for its 7-day window's date keys.
+      await tester.runAsync(() async {
+        await healthBox.put('weight_test_today', {
+          'date': istDateStr(DateTime.now()),
+          'weight_kg': 72.5,
+        });
+      });
+
+      final stillCached = captured.container.read(weeklyReportDataProvider);
+      expect(stillCached.weight.last, 0,
+          reason:
+              'Riverpod serves the CACHED WeeklyReportSeries until '
+              'invalidated, even though healthBox now has a row build() '
+              'would pick up on a fresh build');
+
+      await tester.runAsync(() async {
+        await DayRolloverObserver.instance.runRolloverNow(captured.ref);
+      });
+
+      final afterValue = captured.container.read(weeklyReportDataProvider);
+      expect(afterValue.weight.last, 72.5,
+          reason:
+              'runRolloverNow must invalidate weeklyReportDataProvider so it '
+              'rebuilds and picks up the 72.5kg entry written while the old '
+              'build was cached');
     });
   });
 }

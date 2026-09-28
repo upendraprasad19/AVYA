@@ -1105,6 +1105,22 @@ added, false of the flip being performed.
   patched. **Absence of a new fix's telemetry is a signal, not silence.**
   Tests `test/contracts/profile_provider_single_source_test.dart`,
   `test/contracts/background_restore_test.dart`. SoT concept `user_full_name`.
+  **4th/5th incidents (2026-09-28, diagnoses `9c8958`/`bae4dd`) — same class,
+  DIFFERENT trigger and discovery path**: not a restore-timing race, a plain
+  omission from `DayRolloverObserver._doRolloverWithRef`'s ~24-provider
+  hand-maintained invalidation list. `streakFreezeProvider` and
+  `weeklyNutritionProvider` were BOTH absent entirely — founder observed the
+  streak-freeze case directly ("had to close the app and restart it"); the
+  weekly-nutrition case was found by the founder's own follow-up request to
+  audit the app for "possible areas where we might have missed" this exact
+  class, confirming the "who else reads this Hive value, and does rollover
+  reach them" question generalizes as a systematic audit, not just a
+  post-review grep. Two OTHER candidates the audit fork flagged
+  (`WeightHistoryNotifier`, `UserStatsNotifier`) were independently verified
+  and ruled OUT before being counted — a multi-agent survey's finding is a
+  hypothesis, not a fact (see `feedback_audit_findings_require_live_verification.md`).
+  Tests `test/contracts/day_rollover_provider_invalidation_behavioral_test.dart`
+  (Test D/E).
 
 ### 2.59 A gating read discards its `error`, so the FAILURE path grants access instead of denying it (NEW 2026-09-03)
 
@@ -1424,3 +1440,62 @@ added, false of the flip being performed.
 - **Class rule:** before trusting a heal/reconcile path to catch "state A drifted from state B", ask whether its READER can even SEE the specific drift shape "a key existed, now it does not" — an existence-only iteration is blind to deletion by construction, and no amount of comparison logic downstream fixes that.
 - **Prior incidents:** day-swapper Task 22 (2026-09-28), `docs/diagnoses/2026-09-26-day-swap-reverts-after-restart-d5a1e7.md`'s L2 fix. Sibling of `feedback_mistake_guard_without_its_mirror.md` #37 (the code-review lens-6 finding for the same defect, filed from the guard-symmetry angle rather than the reader-blindness angle).
 - **Regression test:** `test/contracts/restore_plan_json_authoritative_test.dart` — the stamped, week-winning local row test added at Task 22 (mutation: drop the presence check → 1 red, restored clean).
+
+### 2.75 An input controller with no legitimate prefill source gets seeded from a sibling field's value anyway, leaking into type-resolution logic that has no way to know it was never user-visible (NEW 2026-09-28)
+
+- **Telltale:** a value was logged correctly in ONE field, but the persisted
+  record shows a DIFFERENT field's unit/label — "8 reps" logged, "8 seconds"
+  persisted. No swap, no edit, no multi-session — a single, direct log. This
+  is the shape to distinguish from the swap-triggered instances of the same
+  "reps renders as seconds" symptom family (2026-09-15 `9b1e7a`, 2026-09-22
+  `a4c7d1`): if the founder/user report contains no mention of swapping,
+  editing, or a multi-day gap, look ONE layer further upstream — at the input
+  WIDGET's own `initState`, before any write path is even reached.
+- **Root-cause shape:** a `TextEditingController` for field B is seeded with
+  field A's value — usually a copy-paste of the line seeding field A's own
+  controller, immediately above it, surviving because it happens to be the
+  same numeric shape (a rep count and a duration both read as a plausible
+  small integer string). The model backing the prefill (`LastPerformanceData`
+  here) has no field for B at all — there was never a legitimate value to
+  seed it with, which is the tell that the seed is a mistake, not a design
+  choice. A downstream capture step (`_captureSetValues`) then parses BOTH
+  controllers unconditionally regardless of which one the active UI mode
+  actually renders, so the phantom non-empty value survives all the way to a
+  type-resolution function several layers away (`_resolveLoggingType`'s
+  data-shape fallback: `hasDuration && !hasWeight → 'timed'`), which has
+  absolutely no way to know the duration value was never user-visible.
+- **Why it survives review:** the leak is invisible at the WRITE site
+  (`workout_write_service.dart` correctly strips phantom fields once it
+  KNOWS the type is wrong) and invisible at the READ site (the active
+  workout screen reads the exercise's DEFINITION, not the leaked value, so
+  it renders correctly while logging — the founder-visible bug only appears
+  in a DIFFERENT reader, the edit-log/receipt view, reading the PERSISTED
+  data). A source-grep for the buggy line alone would not have caught this
+  without also checking the enclosing seeding block against its own backing
+  model's actual fields.
+- **A pre-existing debug-only diagnostic can name the exact path before you
+  find it — check for one before assuming this is undiscovered territory.**
+  `train_provider.dart` already carried a `kDebugMode`-gated
+  `[durationCtl-leak]` log line, added in an EARLIER batch (APK Test #12.5)
+  specifically to find "WHEN this happens at the source" — it had been
+  sitting unfired-on in production for weeks, waiting for exactly this bug.
+  Grep for a "-leak"/"-diagnostic"/"TODO: find" style debug print in the
+  suspect file before assuming a fresh instrumentation pass is needed.
+- **Fix pattern:** leave the controller EMPTY when its backing model has no
+  field to prefill from — never seed a copy of a sibling field "just in
+  case". If the surrounding capture code parses every controller
+  unconditionally (a design smell in its own right, since it means the UI's
+  `loggingType` and the capture logic disagree about which fields are
+  "real" for this mode), that is a second, independent hardening target:
+  make the AGGREGATE fields written from the same post-type-resolution data
+  the per-item array is written from, so even a future leak from a different
+  path can never make a top-level summary field disagree with the detail
+  array in the same record.
+- **Prior incidents:** diagnose `e8f95e` (2026-09-28) — this one. Third
+  instance of the "reps renders as seconds" family; the two priors
+  (`9b1e7a`, `a4c7d1`, both 2026-09-15/22) are swap-triggered and covered
+  their OWN root causes, which this bug is independent of and does not
+  duplicate. Tests
+  `test/train/duration_controller_seeding_writer_to_reader_test.dart`
+  (source-grep) + `test/workout_write_service/aggregate_reflects_cleaned_sets_test.dart`
+  (behavioral).
