@@ -18,14 +18,15 @@
 # exists because the shipped code never had the defect); findings whose fix
 # is a discrete post-hoc code change are `closed_in_commit`.
 #
-# bpass_review is intentionally NOT a path to a not-yet-existing file — Task
-# 33 runs /code-review after this ledger exists, and pointing at a file
-# before it exists is the exact anti-pattern this batch's own precedent
-# (docs/audit/unitb-deload-reason.closure.yaml finding B3) warns against.
+# bpass_review was deliberately left `pending (Task 33)` until the review file
+# existed (pointing at a file before it exists is the anti-pattern
+# docs/audit/unitb-deload-reason.closure.yaml finding B3 warns against). Task
+# 33 wrote it in the same commit as this line; its 12 findings carry their own
+# terminal statuses there (10 fixed in 2675345b, 2 verified_clean).
 
 batch: day-swapper-sync-load
 plan_review_record: docs/plan-reviews/day-swapper-sync-load.md
-bpass_review: pending (Task 33)
+bpass_review: docs/reviews/day-swapper-sync-load-bpass.md
 diagnose_docs:
   - docs/diagnoses/2026-09-26-day-swap-reverts-after-restart-d5a1e7.md
   - docs/diagnoses/2026-09-26-coach-routes-day-swap-to-reschedule-week-c3e8b2.md

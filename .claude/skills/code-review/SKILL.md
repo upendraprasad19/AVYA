@@ -249,6 +249,44 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-28** — blast-radius **catastrophic** — branch `day-swapper-sync-load` (one
+  day-swap engine for Train/Home/coach + the OI-237 sync-load fix; 198 files). Whole-branch
+  review split across FOUR context-blind Sonnet reviewers, each in its own isolated worktree
+  (sync core + migration / swap engine + UI / EFs + AI routing / gates + docs). **12 findings
+  (0 P0, 4 P1, 5 P2, 3 P3); 0 false_alarm — 10 fixed in `2675345b` + a ledger re-measure,
+  2 verified_clean.** Review: `docs/reviews/day-swapper-sync-load-bpass.md`.
+  **Tuning 1 — a recovery path that must bypass a cache should bypass it for ONE KEY, never by
+  switching the cache off.** R1-F1: the scheduled_workouts FK self-heal re-ran the template sync,
+  which a new skip index then skipped (the index still said "confirmed"), so the self-heal was a
+  silent no-op and the row retried the dead end every pass. The obvious fix — pass
+  `disabled: true` — was wrong in a way only the cache's own code shows: a disabled index
+  DELETES itself at commit, so a persistent orphan would have re-pushed every template on every
+  pass. Add to lens 6: when a diff adds a cache/skip layer in front of a function, list every
+  caller that re-invokes that function to REPAIR something, and ask whether the cache now
+  answers "already done" to the repair.
+  **Tuning 2 — lens 10 gains diagnose-doc FRONTMATTER as an input set.** Four diagnose docs
+  carried `contract_test_path: "must add: <file>"` for plan-time filenames that were never
+  created; the contracts existed under other names. `validate_diagnose_doc.dart` checks the
+  field is present, not that its path resolves, and the reviewer sweeping "every cited path"
+  covered the ledger and the registry but not this field. One regex + `Test-Path` over every
+  `test/**_test.dart` string in the new docs found all of them. Run it on every batch that
+  adds diagnose docs.
+  **Tuning 3 — a correct finding with a wrong mechanism (third recorded instance, cf.
+  2026-09-10).** R2-F2 said the allowance counter loses an increment in a read-modify-write
+  race; Hive's in-memory put is synchronous and `recordSwap` has no await before it, so that
+  cannot happen. The defect was real anyway — check-then-act across awaits under a lock keyed
+  by the wrong thing (two dates, not the week) — and a deterministic test (a seam that holds
+  swap 1 between its check and its count) reproduced it. Verify the mechanism before writing
+  the fix: the reviewer's mechanism would have led to a lock around `recordSwap`, which fixes
+  nothing.
+  **Tuning 4 — a source-grep gate's "token anywhere in the block" check is the same bug class
+  as a missing guard.** R4-F2: G1 accepted `catch (e) { if (false) { rethrow; } }`. The fix
+  reads the LAST top-level statement; it still is a text scan, and says so. Paired with R4-F1
+  (`??=` slipping past `\?\?\s*`), both hard-fail gates of this batch were defeated by the
+  reviewer on the first realistic re-entry it tried — lens 6's standing "assume a grep is
+  defeatable" rule, confirmed twice more.
+  False-alarm rate 0/12 → no lens removed; lenses 6 and 10 extended per above.
+
 - **2026-09-28** — blast-radius **catastrophic** — branch `day-swapper-sync-load` (OI-237: day-swap
   engine rebuild + 21-push-step sync write-amplification fix; subagent-driven, ~30 tasks across 3
   waves). Three new red flags surfaced across the wave-1/wave-2 review rounds, none previously named

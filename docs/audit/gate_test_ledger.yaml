@@ -784,9 +784,15 @@ check_sync_hash_skip_atomicity.dart:
     Task 32 (day-swapper + sync-load) retired the OI-204 count-based exlog/nlog
     check; the gate is now the G1 structural rule only, hard-fail. Deleting the
     runner's exit(1) reddens "G1: an unwrapped history write FAILS by default"
-    and "G1: --hard FAILS (exit 1) on the same fixture" (2 tests); Task 3's lib
-    mutation (checkSyncStructure short-circuited to accept every call) reddens
-    4 lib/e2e tests.
+    and "G1: --hard FAILS (exit 1) on the same fixture" (2 tests). Task 3's lib
+    mutation (checkSyncStructure short-circuited to accept every call),
+    RE-MEASURED 2026-09-28 at 2675345b against both test_path files: 10 red
+    (8 lib + 2 e2e). The "4 lib/e2e" this entry said before was stale — the
+    fixture set grew after Task 3 wrote it (B-pass R4-F3; 9 at dfcd2bde, +1
+    for the B-pass's own dead-rethrow test). B-pass R4-F2 leg: restoring the
+    pre-fix "rethrow/return false anywhere in the block" match reddens 2 lib
+    tests (the dead-rethrow violation test and the endsInUnconditionalExit
+    unit test).
 # ---------------------------------------------------------------------------
 # self-learning discipline batch, 2026-09-19 (discipline-gates-tier12) — 8
 # gates mechanizing sub-patterns from feedback_green_check_input_set_width.md
@@ -1031,7 +1037,12 @@ check_sync_no_now_fallback.dart:
     - test/scripts/sync_no_now_fallback_e2e_test.dart
   evidence: >
     Gate G2, day-swapper + sync-load Task 2. Mutation 1: findNowFallbacks never
-    adds a finding -- reddens 8 tests (6 lib + 2 e2e expected). Mutation 2:
+    adds a finding -- RE-MEASURED 2026-09-28 at 2675345b: 8 red (6 lib + 2 e2e),
+    one of the 6 being the B-pass's own `??=` test, so 7 at dfcd2bde against
+    the "8" recorded here (whether 8 held when Task 2 measured it is not
+    re-derivable now).
+    B-pass R4-F1 leg: restoring the pre-fix `\?\?` (no `=?`) reddens exactly the
+    "`x ??= DateTime.now()` (compound assignment)" test (1). Mutation 2:
     stripDartCommentsPreservingLines returns its input -- reddens 2 tests
     (2 expected). Mutation 3: block comments stop preserving newlines --
     reddens 1 (1 expected). All confirmed applied with grep -c before the run.
