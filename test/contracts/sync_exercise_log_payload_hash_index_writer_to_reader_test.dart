@@ -33,7 +33,7 @@ Future<List<dynamic>> _logClientErrorReports(SyncHarness h, String opType,
       .where((r) =>
           r.path == '/functions/v1/log-client-error' &&
           r.body is Map &&
-          (r.body as Map)['op_type'] == opType)
+          (r.body! as Map)['op_type'] == opType)
       .toList();
   final deadline = DateTime.now().add(Duration(milliseconds: maxWaitMs));
   var found = matches();

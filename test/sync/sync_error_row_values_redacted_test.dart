@@ -22,8 +22,8 @@ Future<List<Map>> _reports(SyncHarness h, String opType) async {
       .where((r) =>
           r.path == '/functions/v1/log-client-error' &&
           r.body is Map &&
-          (r.body as Map)['op_type'] == opType)
-      .map((r) => r.body as Map)
+          (r.body! as Map)['op_type'] == opType)
+      .map((r) => r.body! as Map)
       .toList();
   final deadline = DateTime.now().add(const Duration(seconds: 10));
   while (matches().isEmpty && DateTime.now().isBefore(deadline)) {

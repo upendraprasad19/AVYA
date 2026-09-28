@@ -67,7 +67,7 @@ void main() {
     expect(after, const DayAllowance(weekStart: week, used: 1, limit: 3));
     expect(allowance.current(week, isPro: true).used, 1);
     final raw = HiveService.instance.userBox.get(DaySwapAllowance.hiveKey);
-    expect((raw as Map)[week]['used'], 1);
+    expect(((raw as Map)[week] as Map)['used'], 1);
   });
 
   test('weeks are independent', () async {

@@ -15,6 +15,8 @@
 @Timeout(Duration(minutes: 3))
 library;
 
+import 'dart:async';
+
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -79,7 +81,8 @@ void main() {
       ErrorTelemetry.debugOnRecordNonFatalForTests = null;
       DaySwapAllowance.debugConsumeForTests = null;
       SwapService.debugOnPlanPushForTests = null;
-      HiveService.instance.configBox.delete('disable_day_swap_train_ui');
+      unawaited(
+          HiveService.instance.configBox.delete('disable_day_swap_train_ui'));
       resetTestClock();
       await tearDownHiveForTests(dir);
     });
