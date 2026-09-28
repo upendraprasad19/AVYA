@@ -140,13 +140,6 @@ class WorkoutWriteService {
             .toList();
       }
 
-      // 3. Recompute aggregates
-      final totalReps = mergedSets.fold<int>(0, (a, s) => a + s.reps);
-      final maxWeight = mergedSets.fold<double>(
-          0.0, (a, s) => s.weightKg > a ? s.weightKg : a);
-      final volume = mergedSets.fold<double>(
-          0.0, (a, s) => a + (s.weightKg * s.reps));
-
       // APK Test #12.5 / Class 1a-1b — library-aware logging_type +
       // phantom-durationSec stripping.
       //
@@ -169,6 +162,21 @@ class WorkoutWriteService {
       // format; ensure they're cleared when persisted with a NEW type.
       final normalizedSets = _normalizeSetsByLoggingType(mergedSets, resolvedType);
       final cleanedSets = _stripPhantomFields(normalizedSets, resolvedType);
+
+      // 3. Recompute aggregates — from `cleanedSets` (POST-normalization),
+      // never `mergedSets`. Bug e8f95e: computing these from mergedSets let
+      // a phantom pre-normalization value leak into the top-level
+      // reps_completed/weight_kg/volume_kg fields even after cleanedSets had
+      // already zeroed/stripped it — e.g. a wrongly timed-resolved bodyweight
+      // exercise zeroes reps in cleanedSets (correct once resolvedType is
+      // fixed upstream) but this aggregate, read from mergedSets, would still
+      // report the pre-strip reps count. The three aggregate fields must
+      // always agree with what `sets[]` actually persists.
+      final totalReps = cleanedSets.fold<int>(0, (a, s) => a + s.reps);
+      final maxWeight = cleanedSets.fold<double>(
+          0.0, (a, s) => s.weightKg > a ? s.weightKg : a);
+      final volume = cleanedSets.fold<double>(
+          0.0, (a, s) => a + (s.weightKg * s.reps));
 
       // APK Test #12 / Task A-2 — workout session id. Defaults to
       // `wlog_<date>` (one workout per IST date). Multi-session days

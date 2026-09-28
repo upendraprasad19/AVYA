@@ -6,11 +6,22 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### duration_controller_seeding_leak (1 bugs)
+- 2026-09-28 e8f95e — Founder-reported (screenshot, 2026-09-28): logged "Single Leg Front Lever" (a custom bodyweight_reps exercise) as reps during an active workout scheduled from a template. The active workout screen…
+
 ### migration-number-collision-detection (1 bugs)
 - 2026-09-28 d5f1b8 — OI-255 (filed 2026-09-27 from `template-stable-identity`) documented that `template-stable-identity` and `ops-alerting` independently minted BOTH migration 145 and migration 146 before either branch…
 
 ### retries_2_sole_call_site_pin (existing SoT-adjacent test contract, no registry entry — presence-only Deno source-grep, per docs/sot_registry.yaml's own convention for this test file) (1 bugs)
 - 2026-09-28 e35936 — `supabase/functions/_shared/gemini_backoff_retry_test.ts`'s `assertSoleCallSiteHasRetries` helper — which exists specifically to pin `retries: 2` at each of 5 single-call-site Gemini functions…
+
+### day_rollover_provider_invalidation (6 bugs)
+- 2026-09-28 4018b3 — Found during plan-review round 2 of this same batch (context-blind, independent audit that started from a different angle than round 1: every top-level Provider/NotifierProvider under…
+- 2026-09-28 9c8958 — Founder-reported (2026-09-28): "streak freeze being Monday should increase by 1. I had to close the app and restart it before it got reflected." Live Supabase/telemetry investigation (client_errors…
+- 2026-09-28 ff3131 — Found during plan-review round 2 of this same batch (context-blind, independent audit that started from a different angle than round 1: every top-level Provider/NotifierProvider under…
+- 2026-09-28 bae4dd — Found during the same-batch audit the founder requested ("check where all should be using invalidation etc, in the app — possible areas where we might have missed it?"), triggered by the confirmed…
+- 2026-09-28 b1bfea — Found during plan-review round 1 of this same batch (context-blind, independent review of the streakFreezeProvider/weeklyNutritionProvider fixes and the founder-requested invalidation audit), while…
+- 2026-05-12 b7e3f1 — On Sunday morning cold start, home today-card showed Saturday's completed workout ("BACK DAY A · DONE · Lat Pulldown 40kg") even though the IST calendar had advanced to Sunday May 10.
 
 ### alert_threshold_tuning (2 bugs)
 - 2026-09-27 d2c9f4 — The live alert_client_errors_spike sub-block of ops_alerts_30min (jobid 43) counted RAW client_errors rows over a 1-hour window, with no offline-noise exclusion, no per-user breadth signal, and no…
@@ -1270,9 +1281,6 @@ rather than a Hive box. (1 bugs)
 ### user_scoped_riverpod_providers (1 bugs)
 - 2026-05-12 c4055a — After signOut+signUp on the same app session, every user-scoped Riverpod provider continues to serve the previous user's cached state even though Hive boxes have correctly switched to the new user's…
 
-### day_rollover_provider_invalidation (1 bugs)
-- 2026-05-12 b7e3f1 — On Sunday morning cold start, home today-card showed Saturday's completed workout ("BACK DAY A · DONE · Lat Pulldown 40kg") even though the IST calendar had advanced to Sunday May 10.
-
 ### exercise_log_per_set (1 bugs)
 - 2026-05-12 e1f8a2 — When the user opens the Edit Workout Log sheet for a previously-completed exercise that was logged via the modern WorkoutWriteService (post-Test-#6), the per-set inputs show the legacy aggregate…
 
@@ -1436,8 +1444,14 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-28 | e8f95e | Founder-reported (screenshot, 2026-09-28): logged "Single Leg Front Lever" (a custom bodyweight_reps exercise) as reps during an active workout scheduled from a template. The active workout screen… | duration_controller_seeding_leak | test/train/duration_controller_seeding_writer_to_reader_test.dart |
 | 2026-09-28 | d5f1b8 | OI-255 (filed 2026-09-27 from `template-stable-identity`) documented that `template-stable-identity` and `ops-alerting` independently minted BOTH migration 145 and migration 146 before either branch… | migration-number-collision-detection | "test/scripts/migration_collision_lib_test.dart (7 pure unit tests) + test/scripts/check_migrations_applied_collision_e2e_test.dart (3 e2e tests spawning the real gate binary)" |
 | 2026-09-28 | e35936 | `supabase/functions/_shared/gemini_backoff_retry_test.ts`'s `assertSoleCallSiteHasRetries` helper — which exists specifically to pin `retries: 2` at each of 5 single-call-site Gemini functions… | retries_2_sole_call_site_pin (existing SoT-adjacent test contract, no registry entry — presence-only Deno source-grep, per docs/sot_registry.yaml's own convention for this test file) | supabase/functions/_shared/gemini_backoff_retry_test.ts |
+| 2026-09-28 | 4018b3 | Found during plan-review round 2 of this same batch (context-blind, independent audit that started from a different angle than round 1: every top-level Provider/NotifierProvider under… | day_rollover_provider_invalidation | test/contracts/day_rollover_provider_invalidation_writer_to_reader_test.dart |
+| 2026-09-28 | 9c8958 | Founder-reported (2026-09-28): "streak freeze being Monday should increase by 1. I had to close the app and restart it before it got reflected." Live Supabase/telemetry investigation (client_errors… | day_rollover_provider_invalidation | test/contracts/day_rollover_provider_invalidation_behavioral_test.dart |
+| 2026-09-28 | ff3131 | Found during plan-review round 2 of this same batch (context-blind, independent audit that started from a different angle than round 1: every top-level Provider/NotifierProvider under… | day_rollover_provider_invalidation | test/contracts/day_rollover_provider_invalidation_writer_to_reader_test.dart |
+| 2026-09-28 | bae4dd | Found during the same-batch audit the founder requested ("check where all should be using invalidation etc, in the app — possible areas where we might have missed it?"), triggered by the confirmed… | day_rollover_provider_invalidation | test/contracts/day_rollover_provider_invalidation_behavioral_test.dart |
+| 2026-09-28 | b1bfea | Found during plan-review round 1 of this same batch (context-blind, independent review of the streakFreezeProvider/weeklyNutritionProvider fixes and the founder-requested invalidation audit), while… | day_rollover_provider_invalidation | test/contracts/day_rollover_provider_invalidation_behavioral_test.dart |
 | 2026-09-27 | d2c9f4 | The live alert_client_errors_spike sub-block of ops_alerts_30min (jobid 43) counted RAW client_errors rows over a 1-hour window, with no offline-noise exclusion, no per-user breadth signal, and no… | alert_threshold_tuning | test/contracts/ops_alerts_spike_breadth_test.dart |
 | 2026-09-27 | d4a7c1 | Merging `template-stable-identity` into `main` triggered the pre-merge-commit hook's `check_regression_catalog.dart` gate (a merge-only gate that runs the Dart regression tests cited by diagnose-docs… | alert-contract-test-infra | "test/contracts/alert_cron_job_silent_test.dart and test/contracts/alert_sql_job_failures_test.dart (both pre-existing, this fix repairs their own assertion rather than adding a new test)" |
 | 2026-09-27 | a2b2f1 | Two independent, unsynchronized writers to the same three `user_profile` columns (`diet_preference`, `lifestyle_activity`, `injuries`): 1. The user, directly — via Profile → Edit Profile… | coach_extraction_locked_fields (new SoT concept — docs/sot_registry.yaml) | test/contracts/coach_extraction_locked_fields_writer_to_reader_test.dart |
