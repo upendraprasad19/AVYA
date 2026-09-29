@@ -1,7 +1,7 @@
 // scripts/check_skill_tuning_history.dart
 //
 // Gate: a commit that ADDS a `docs/reviews/<x>-review.md` must also append a
-// same-dated entry to `.claude/skills/code-review/SKILL.md`'s Tuning history.
+// same-dated entry to `.claude/skills/code-review/tuning-history.md` (Tuning history).
 //
 // CLAUDE.md §5.1 (skill self-evolution) and the skill's own §5 both require it.
 // Neither was enforced. On 2026-08-25 a B-pass produced a 4-finding review and
@@ -21,7 +21,7 @@ import 'dart:io';
 
 import 'skill_tuning_lib.dart';
 
-const _skillPath = '.claude/skills/code-review/SKILL.md';
+const _skillPath = '.claude/skills/code-review/tuning-history.md';
 const _tag = '[check_skill_tuning_history]';
 
 ProcessResult? _git(List<String> args) {

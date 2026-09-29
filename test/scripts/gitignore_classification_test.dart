@@ -59,6 +59,9 @@ const deliberatelyPreciousIgnoredPaths = <String>[
   // --- Secrets. Destroying any of these is unrecoverable and was the round-1
   // P0 that created the exact-match rule in the first place (d7b3e9). ---
   '.claude/.alerts.env',
+  '.claude/.razorpay_live.env', // live Razorpay key handoff (2026-09-29) — a real
+  // secret a human types in by hand, not something any script in this repo
+  // regenerates; same shape as .claude/.alerts.env above.
   '.env.dev',
   '.env.local',
   '.env.prod',

@@ -142,7 +142,7 @@ void main() {
   test('BLOCKS: a review added with no matching tuning entry', () {
     final d = _repo({
       'docs/reviews/2e9503eb-review.md': _review,
-      '.claude/skills/code-review/SKILL.md': _skillWithoutEntry,
+      '.claude/skills/code-review/tuning-history.md': _skillWithoutEntry,
     });
     addTearDown(() => _cleanup(d));
 
@@ -156,7 +156,7 @@ void main() {
   test('PASSES: the same review WITH its entry', () {
     final d = _repo({
       'docs/reviews/2e9503eb-review.md': _review,
-      '.claude/skills/code-review/SKILL.md': _skillWithEntry,
+      '.claude/skills/code-review/tuning-history.md': _skillWithEntry,
     });
     addTearDown(() => _cleanup(d));
     expect(_runGate(d.path).exitCode, 0);
@@ -174,10 +174,10 @@ void main() {
     // still wrong, which is the OI-72 failure shape.
     final d = _repo({
       'docs/reviews/2e9503eb-review.md': _review,
-      '.claude/skills/code-review/SKILL.md': _skillWithoutEntry,
+      '.claude/skills/code-review/tuning-history.md': _skillWithoutEntry,
     });
     addTearDown(() => _cleanup(d));
-    File('${d.path}/.claude/skills/code-review/SKILL.md')
+    File('${d.path}/.claude/skills/code-review/tuning-history.md')
         .writeAsStringSync(_skillWithEntry); // working tree only — NOT staged
 
     expect(_runGate(d.path).exitCode, 1,
@@ -187,7 +187,7 @@ void main() {
   test('--warn-only reports without blocking', () {
     final d = _repo({
       'docs/reviews/2e9503eb-review.md': _review,
-      '.claude/skills/code-review/SKILL.md': _skillWithoutEntry,
+      '.claude/skills/code-review/tuning-history.md': _skillWithoutEntry,
     });
     addTearDown(() => _cleanup(d));
     final r = _runGate(d.path, args: ['--warn-only']);
@@ -207,7 +207,7 @@ void main() {
   test('FAILS OPEN when the review carries no parseable date', () {
     final d = _repo({
       'docs/reviews/x-review.md': '# no frontmatter here\n',
-      '.claude/skills/code-review/SKILL.md': _skillWithoutEntry,
+      '.claude/skills/code-review/tuning-history.md': _skillWithoutEntry,
     });
     addTearDown(() => _cleanup(d));
     expect(_runGate(d.path).exitCode, 0);
@@ -221,7 +221,7 @@ void main() {
     // exists to catch, reopened by an over-narrow pattern. Round 1 found it.
     final d = _repo({
       'docs/reviews/some-batch-bpass.md': _review,
-      '.claude/skills/code-review/SKILL.md': _skillWithoutEntry,
+      '.claude/skills/code-review/tuning-history.md': _skillWithoutEntry,
     });
     addTearDown(() => _cleanup(d));
 
@@ -241,7 +241,7 @@ void main() {
     // real use. Date alone is not identity.
     final d = _repo({
       'docs/reviews/a-totally-different-batch-bpass.md': _review,
-      '.claude/skills/code-review/SKILL.md': _skillWithEntry, // names 2e9503eb
+      '.claude/skills/code-review/tuning-history.md': _skillWithEntry, // names 2e9503eb
     });
     addTearDown(() => _cleanup(d));
 
@@ -254,7 +254,7 @@ void main() {
   test('the generated INDEX.md is NOT treated as a review', () {
     final d = _repo({
       'docs/reviews/INDEX.md': '# Reviews',
-      '.claude/skills/code-review/SKILL.md': _skillWithoutEntry,
+      '.claude/skills/code-review/tuning-history.md': _skillWithoutEntry,
     });
     addTearDown(() => _cleanup(d));
     expect(_runGate(d.path).exitCode, 0);
@@ -268,7 +268,7 @@ void main() {
     final d = _repo({
       'docs/reviews/stray-notes.md': '# no frontmatter',
       'docs/reviews/real-bpass.md': _review,
-      '.claude/skills/code-review/SKILL.md': _skillWithoutEntry,
+      '.claude/skills/code-review/tuning-history.md': _skillWithoutEntry,
     });
     addTearDown(() => _cleanup(d));
     final r = _runGate(d.path);

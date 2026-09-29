@@ -15,6 +15,7 @@ import { fetchCoachMemory } from "../_shared/coach_memory.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 import { sanitizeIdentifier } from "../_shared/sanitize_for_prompt.ts";
 import { composeMessage } from "./message.ts";
+import { excludeDeletedPrs } from "./live_pr_filter.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
 import { fetchAllPages } from "../_shared/paged_fetch.ts";
 import {
@@ -34,6 +35,7 @@ interface PRRow {
   weight_kg: number | null;
   reps: number | null;
   completed_at: string; // F43: real workout time, not row sync time
+  deleted_at: string | null; // OI-246 follow-up — migrations 150/151
 }
 
 // Audit C-4 (2026-05-11, closes-diagnose 7ad0c4): added CRON_SECRET / service-role-key gate.
@@ -80,11 +82,13 @@ Deno.serve(async (req) => {
     // shuffle between page requests and drop or duplicate a PR. `id` is added as
     // the unique tiebreaker; completed_at DESC stays first so the existing
     // newest-first ordering the grouping below relies on is unchanged.
-    const rows = await fetchAllPages<PRRow>(
+    const rawRows = await fetchAllPages<PRRow>(
       () =>
         supabase
           .from("workout_log_exercises")
-          .select("user_id, exercise_id, weight_kg, reps, completed_at")
+          .select(
+            "user_id, exercise_id, weight_kg, reps, completed_at, deleted_at",
+          )
           .eq("is_pr", true)
           .gte("completed_at", since),
       {
@@ -95,6 +99,13 @@ Deno.serve(async (req) => {
         label: "pr-detection prs",
       },
     );
+
+    // OI-246 follow-up — a deleted-then-suffixed row's `is_pr`/`completed_at`
+    // are untouched by the tombstone UPSERT, so it would otherwise still
+    // match the window above. Exclude before grouping/composing so a
+    // deleted PR never reaches a push notification. See
+    // live_pr_filter.ts's header for the full symptom.
+    const rows = excludeDeletedPrs(rawRows);
 
     if (!rows || rows.length === 0) {
       console.log(

@@ -24,8 +24,12 @@ import 'sync_no_now_fallback_lib.dart'
 /// `_drainPendingTemplateDeletes` (merged from main 2026-09-28): it drains a
 /// QUEUE, removing each entry once its tombstone lands, so it cannot resend
 /// an unchanged row every pass, which is the pattern G1 exists to stop.
+/// `_drainPendingExlogDeletes` (OI-246, same batch as this merge) is the
+/// identical shape one domain over: drains `PendingExlogDeletes`, removing
+/// each entry once its tombstone upsert succeeds.
 const Set<String> kSyncWriteAllowlist = {
   '_drainPendingTemplateDeletes',
+  '_drainPendingExlogDeletes',
   '_executeUserProfileUpsert',
   '_syncUserProfile',
   '_syncUserPreferences',

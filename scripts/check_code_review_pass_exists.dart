@@ -159,6 +159,7 @@ Future<String> stagedDiffHash() async {
         ':(top)',
         ':(top,exclude)$_reviewsDir',
         ':(top,exclude).claude/skills/code-review/SKILL.md',
+        ':(top,exclude).claude/skills/code-review/tuning-history.md',
       ],
       stdoutEncoding: null);
   if (diff.exitCode != 0) return '';
