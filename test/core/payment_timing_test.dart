@@ -124,11 +124,12 @@ void main() {
         expect(thrown, isNull, reason: 'must not fire before the bound');
 
         async.elapse(const Duration(milliseconds: 1));
-        expect(thrown, isA<TimeoutException>());
         // The message names the call and the bound (a bare harness timeout
         // would name neither).
-        expect((thrown as TimeoutException).message,
-            'subscription poll timed out after 8s');
+        expect(
+            thrown,
+            isA<TimeoutException>().having((e) => e.message, 'message',
+                'subscription poll timed out after 8s'));
       });
     });
 

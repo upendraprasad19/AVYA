@@ -323,9 +323,10 @@ void main() {
         async.elapse(kRetryAttemptTimeout - const Duration(milliseconds: 1));
         expect(thrown, isNull);
         async.elapse(const Duration(milliseconds: 1));
-        expect(thrown, isA<TimeoutException>());
-        expect((thrown as TimeoutException).message,
-            'verify-payment retry timed out after 60s');
+        expect(
+            thrown,
+            isA<TimeoutException>().having((e) => e.message, 'message',
+                'verify-payment retry timed out after 60s'));
         expect(r.calls, isEmpty);
 
         // A LATE verified reply, after the timeout, must not be able to write:
