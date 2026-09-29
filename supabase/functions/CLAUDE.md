@@ -120,6 +120,8 @@ user JWT as the `supabaseKey` — CLAUDE.md §4.4 rule 9), then calls `consume_q
 start and per-tier limits are re-derived server-side from the caller's own
 subscription row (`isProUser`), never trusted from the request body.
 
+**No `users.subscription_status` / `subscription_expires_at` (OI-202, migration 152).** Those mirror columns, `trg_subscription_update_user`, `update_user_subscription_status()` and `extend_subscription()` are dropped; PRO is `fetchProUserIds` / `isProUser` and any per-user expiry question is `fetchLatestActiveEndByUser` + the pure reducers, all in `_shared/subscription.ts`. A failed read returns `null` (NOT an empty map — that would print "nobody is expiring"). Deploy order when the columns are dropped: Edge Functions FIRST (razorpay-webhook 500s when its `users.update` fails). Scan: `test/contracts/subscription_columns_dropped_test.dart`.
+
 **First `logic.ts` / `logic_test.ts` split in the repo** — `index.ts` stays a thin
 `serve()` shell (auth, request parsing, the RPC call, response shaping); every pure
 piece (`validateWeekStart`, `windowStartIso`, `mapQuotaResult`, the quota-key/limit

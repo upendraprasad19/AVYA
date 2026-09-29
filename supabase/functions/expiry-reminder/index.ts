@@ -12,7 +12,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { sendPushNotification } from "../_shared/send_notification.ts";
 import { markProactiveSent, shouldSendProactive } from "../_shared/proactive_dedup.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
-import { fetchAllPages } from "../_shared/paged_fetch.ts";
+import { fetchLatestActiveEndByUser, usersWithLatestEndIn } from "../_shared/subscription.ts";
 import {
   fetchNotificationPrefsDetailed,
   isNotificationEnabled,
@@ -56,23 +56,22 @@ serve(async (req: Request) => {
     const now = new Date();
     const threeDaysFromNow = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
 
-    // 1. Find active subscriptions expiring within 3 days.
-    //    OI-79: paged. Also splits the old `subErr || !expiringSubs || length
-    //    === 0` guard: that conflated a FAILED read with an EMPTY one, so a
-    //    broken query reported a healthy tick while nobody got an expiry
-    //    reminder — on a renewal-critical path (a7e2c4 bug class).
-    //    `fetchAllPages` throws, so a real failure now reaches the outer catch
-    //    and closes cron telemetry as "failed"; genuinely-empty still exits 200.
-    const expiringSubs = await fetchAllPages<Record<string, unknown>>(
-      () =>
-        supabase
-          .from("subscriptions")
-          .select("user_id, end_date, plan")
-          .eq("status", "active")
-          .gte("end_date", now.toISOString())
-          .lte("end_date", threeDaysFromNow.toISOString()),
-      { orderBy: "id", label: "expiry-reminder expiring-subs" },
-    );
+    // 1. Find users whose LATEST active subscription ends within 3 days.
+    //    OI-202 (Hermes L1 2026-09-29): this used to select EVERY active row
+    //    ending inside the window, so a user with an older row about to lapse
+    //    AND a later renewal row (live: 7 active rows for 5 users) got a
+    //    "PRO plan expiring soon" push while already renewed — the exact case
+    //    the latest-end reduction exists for. It also yielded one entry per row
+    //    rather than per user. `fetchLatestActiveEndByUser` is paged (OI-79)
+    //    and returns null on ANY read failure: that must reach the outer catch
+    //    (cron telemetry "failed"), never read as "nobody is expiring" — the
+    //    a7e2c4 bug class on a renewal-critical path. Genuinely empty still
+    //    exits 200.
+    const latestEnd = await fetchLatestActiveEndByUser(supabase, now.toISOString());
+    if (latestEnd === null) throw new Error("expiry-reminder: subscriptions read failed");
+    const expiringSubs: Array<{ user_id: string; end_date: string }> =
+      usersWithLatestEndIn(latestEnd, now, threeDaysFromNow, true)
+        .map(([user_id, end_date]) => ({ user_id, end_date }));
 
     if (expiringSubs.length === 0) {
       await logCronEnd(logId, "success", { httpStatus: 200 });

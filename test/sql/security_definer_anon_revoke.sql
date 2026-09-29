@@ -6,12 +6,19 @@
 -- so no role-switch / no writes are needed.
 --
 -- Expected after apply: every row's `ok` = true.
+--
+-- OI-202 (migration 152) dropped public.extend_subscription(uuid, integer), so its
+-- three rows below are written as "revoked OR no longer exists" — to_regprocedure()
+-- returns NULL for a dropped function, where has_function_privilege() would ERROR
+-- on it and abort the whole check. Dropped is a stronger form of revoked.
 
-SELECT 'extend_subscription anon revoked' AS check,
-       has_function_privilege('anon', 'public.extend_subscription(uuid, integer)', 'EXECUTE') = false AS ok
+SELECT 'extend_subscription anon revoked (or dropped)' AS check,
+       CASE WHEN to_regprocedure('public.extend_subscription(uuid, integer)') IS NULL THEN true
+            ELSE has_function_privilege('anon', 'public.extend_subscription(uuid, integer)', 'EXECUTE') = false END AS ok
 UNION ALL
-SELECT 'extend_subscription authenticated revoked',
-       has_function_privilege('authenticated', 'public.extend_subscription(uuid, integer)', 'EXECUTE') = false
+SELECT 'extend_subscription authenticated revoked (or dropped)',
+       CASE WHEN to_regprocedure('public.extend_subscription(uuid, integer)') IS NULL THEN true
+            ELSE has_function_privilege('authenticated', 'public.extend_subscription(uuid, integer)', 'EXECUTE') = false END
 UNION ALL
 SELECT 'redeem_referral_atomic anon revoked',
        has_function_privilege('anon', 'public.redeem_referral_atomic(text, uuid, uuid, integer)', 'EXECUTE') = false
@@ -38,8 +45,9 @@ SELECT 'update_streak_progress cross-account guard present',
          ILIKE '%cross-account streak write blocked%'
 UNION ALL
 -- service_role keeps execute on the revoked-from-client functions.
-SELECT 'extend_subscription service_role retained',
-       has_function_privilege('service_role', 'public.extend_subscription(uuid, integer)', 'EXECUTE') = true
+SELECT 'extend_subscription service_role retained (or dropped)',
+       CASE WHEN to_regprocedure('public.extend_subscription(uuid, integer)') IS NULL THEN true
+            ELSE has_function_privilege('service_role', 'public.extend_subscription(uuid, integer)', 'EXECUTE') = true END
 UNION ALL
 -- Unit 3b (OI-45 cross-device half, e6b9c4, migration 115) — the new sibling
 -- RPC needs the SAME anon-blocked / authenticated-retained shape as

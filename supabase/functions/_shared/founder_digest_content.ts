@@ -34,6 +34,10 @@ import { IST_OFFSET_MS, istWeekStartIso, istYesterdayWindow } from "./ist_date.t
 import { fetchAllByIds, fetchAllPages } from "./paged_fetch.ts";
 import { sanitizeIdentifier } from "./sanitize_for_prompt.ts";
 import {
+  fetchLatestActiveEndByUser,
+  usersWithLatestEndIn,
+} from "./subscription.ts";
+import {
   envSwitchOn,
   PREDICTION_QUOTA_KILL_SWITCH_ENV,
 } from "./prediction_quota_switch.ts";
@@ -305,7 +309,7 @@ export interface DigestInput {
   alerts: SectionRead<AlertRow>;
   /** `subscriptions` rows created inside yesterday's IST day (status='active'). */
   subscriptions: SectionRead<SubscriptionRow>;
-  /** Users whose `subscription_expires_at` falls within 7d / 30d of `now`. */
+  /** Users whose LATEST active `subscriptions.end_date` falls within 7d / 30d of `now` (OI-202: derived, not a mirror column). */
   expiringSoon: { count7d: number; count30d: number } | { unreadable: string };
 
   /**
@@ -338,9 +342,10 @@ export interface DigestInput {
    */
   cancelledYesterday: { count: number } | { unreadable: string };
   /**
-   * Count of `users` rows whose PRO access lapsed (`subscription_expires_at`
-   * fell inside yesterday's IST window while `subscription_status` is still
-   * `'pro'` — never reconciled by any job, per `_shared/subscription.ts`).
+   * Count of users whose PRO access lapsed: their LATEST `status='active'`
+   * `subscriptions.end_date` fell inside yesterday's IST window (a user who
+   * renewed has a later row and is not counted). Derived from `subscriptions`
+   * (OI-202) — the `users.subscription_*` mirror this used to read is dropped.
    * The corrected "churn" proxy (B3, review round 2) — NOT
    * `AdminMetricsRow.pro_expired`, which is an un-windowed cumulative total
    * that would read as a "yesterday" figure but isn't one.
@@ -906,30 +911,27 @@ export async function gatherDigestInput(
     ),
   }), callerLabel);
 
+  // ONE shared read of every user's latest active `subscriptions.end_date`
+  // (floor = yesterday's IST start), feeding BOTH `expiringSoon` and
+  // `lapsedYesterday` below (OI-202 — these two used to read the dropped
+  // `users.subscription_expires_at` mirror). One paged scan instead of four
+  // count queries; `null` means the read FAILED, which each section must
+  // surface as "unreadable", never as a zero.
+  const latestEndRead = fetchLatestActiveEndByUser(supabase, yStart);
+
   // Users whose subscription expires within 7 / 30 days of `now` — a
   // point-in-time snapshot (not windowed to yesterday), so it uses `now`
   // directly rather than the yesterday-window instants above.
   const expiringSoonRead: Promise<DigestInput["expiringSoon"]> = (async () => {
     try {
-      const in7dIso = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
-      const in30dIso = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
-      const [r7, r30] = await Promise.all([
-        supabase
-          .from("users")
-          .select("id", { count: "exact", head: true })
-          .not("subscription_expires_at", "is", null)
-          .gte("subscription_expires_at", now.toISOString())
-          .lte("subscription_expires_at", in7dIso),
-        supabase
-          .from("users")
-          .select("id", { count: "exact", head: true })
-          .not("subscription_expires_at", "is", null)
-          .gte("subscription_expires_at", now.toISOString())
-          .lte("subscription_expires_at", in30dIso),
-      ]);
-      if (r7.error) throw new Error(r7.error.message);
-      if (r30.error) throw new Error(r30.error.message);
-      return { count7d: r7.count ?? 0, count30d: r30.count ?? 0 };
+      const latestEnd = await latestEndRead;
+      if (latestEnd === null) throw new Error("subscriptions latest-end read failed");
+      const in7d = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const in30d = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      return {
+        count7d: usersWithLatestEndIn(latestEnd, now, in7d, true).length,
+        count30d: usersWithLatestEndIn(latestEnd, now, in30d, true).length,
+      };
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       console.error(`[${callerLabel}] section read failed:`, reason.slice(0, 300));
@@ -1016,20 +1018,18 @@ export async function gatherDigestInput(
   })();
 
   // B3 (review round 2, corrected): the real "churn" proxy — a user whose
-  // `subscription_expires_at` fell inside yesterday's IST window while
-  // `subscription_status` is still 'pro' (never reconciled to 'expired' by
-  // any job — `_shared/subscription.ts`). NOT `AdminMetricsRow.pro_expired`,
-  // which is an un-windowed cumulative total.
+  // LATEST active `subscriptions.end_date` fell inside yesterday's IST window
+  // (a renewed user has a later row, so is not counted). NOT
+  // `AdminMetricsRow.pro_expired`, which is an un-windowed cumulative total.
+  // OI-202: derived from `subscriptions`; the `users.subscription_*` mirror
+  // this used to read (and the "drifts from the mirror" caveat with it) is gone.
   const lapsedYesterdayRead: Promise<DigestInput["lapsedYesterday"]> = (async () => {
     try {
-      const { count, error } = await supabase
-        .from("users")
-        .select("id", { count: "exact", head: true })
-        .eq("subscription_status", "pro")
-        .gte("subscription_expires_at", yStart)
-        .lt("subscription_expires_at", tStart);
-      if (error) throw new Error(error.message);
-      return { count: count ?? 0 };
+      const latestEnd = await latestEndRead;
+      if (latestEnd === null) throw new Error("subscriptions latest-end read failed");
+      return {
+        count: usersWithLatestEndIn(latestEnd, new Date(yStart), new Date(tStart)).length,
+      };
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       console.error(`[${callerLabel}] section read failed:`, reason.slice(0, 300));

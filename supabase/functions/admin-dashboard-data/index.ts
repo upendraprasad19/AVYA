@@ -15,8 +15,9 @@
  *   - subscriptions.plan breakdown (live query, ~11 rows today) — for the
  *     derived-MRR calc; not in the daily snapshot since the plan only
  *     promised a *current* MRR figure, not a trend, for v1.
- *   - users.subscription_expires_at (live query, canonical field per
- *     founder_metrics()'s own convention) — expiring/expired lists.
+ *   - subscriptions latest active end_date per user (live, derived — OI-202;
+ *     the `users.subscription_expires_at` mirror column is dropped) plus
+ *     users.email for the rows inside the window — expiring/expired lists.
  *   - alerts table (live query) — reused as-is for the Ops Health feed.
  */
 
@@ -24,6 +25,8 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { clientError, corsHeaders, ok, serverError } from "../_shared/error.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
+import { fetchAllByIds } from "../_shared/paged_fetch.ts";
+import { fetchLatestActiveEndByUser, usersWithLatestEndIn } from "../_shared/subscription.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -84,6 +87,46 @@ export function bucketSubscriptionsByExpiry(
     // Beyond 30 days out: not shown on this tab, intentionally.
   }
   return buckets;
+}
+
+/**
+ * OI-202 — the expiring/expired list, DERIVED from `subscriptions` (each user's
+ * LATEST `status='active'` end_date in `[floorIso, windowIso]`) plus
+ * `users.email` for those users. Replaces the read of the dropped
+ * `users.subscription_expires_at` mirror column.
+ *
+ * `null` = the subscriptions read FAILED (the caller must fail the request,
+ * never render it as an empty list). A failure of the email lookup throws.
+ * A renewed user (a later active row) is outside the window and so is never
+ * listed as lapsed.
+ */
+export async function loadExpiryRows(
+  // deno-lint-ignore no-explicit-any
+  admin: any,
+  floorIso: string,
+  windowIso: string,
+): Promise<ExpirySubscriptionRow[] | null> {
+  const latestEnd = await fetchLatestActiveEndByUser(admin, floorIso);
+  if (latestEnd === null) return null;
+  const inWindow = usersWithLatestEndIn(
+    latestEnd,
+    new Date(floorIso),
+    new Date(windowIso),
+    true,
+  );
+  // Email lives on `users`; fetched only for the (small) in-window set, in
+  // paged id-chunks so neither the URL nor db-max-rows can clip it.
+  const emailRows = await fetchAllByIds<{ id: string; email: string | null }>(
+    (idChunk) => admin.from("users").select("id, email").in("id", idChunk),
+    inWindow.map(([uid]) => uid),
+    { orderBy: "id", label: "admin-dashboard-data expiry emails" },
+  );
+  const emailById = new Map(emailRows.map((r) => [r.id, r.email]));
+  return inWindow.map(([uid, endIso]) => ({
+    user_id: uid,
+    email: emailById.get(uid) ?? null,
+    subscription_expires_at: endIso,
+  }));
 }
 
 export interface PlanCounts {
@@ -198,12 +241,9 @@ export const handler = async (req: Request): Promise<Response> => {
         admin.rpc("founder_metrics_engagement").single(),
         admin.rpc("founder_metrics_ops").single(),
         admin.from("subscriptions").select("plan").eq("status", "active"),
-        admin
-          .from("users")
-          .select("id, email, subscription_expires_at")
-          .not("subscription_expires_at", "is", null)
-          .gte("subscription_expires_at", expiryFloorIso)
-          .lte("subscription_expires_at", expiryWindowIso),
+        // OI-202: derived from `subscriptions` (null = the read failed —
+        // handled below).
+        loadExpiryRows(admin, expiryFloorIso, expiryWindowIso),
         admin
           .from("alerts")
           .select("id, detected_at, source, severity, summary, suggested_action")
@@ -213,7 +253,10 @@ export const handler = async (req: Request): Promise<Response> => {
       ]);
 
     const firstError = trendRes.error || growthRes.error || engagementRes.error ||
-      opsRes.error || planRes.error || expiryRes.error || alertsRes.error;
+      opsRes.error || planRes.error || alertsRes.error ||
+      // A failed expiry read must fail the request like every sibling read,
+      // never render as "nobody is expiring".
+      (expiryRes === null ? new Error("subscriptions latest-end read failed") : null);
     if (firstError) {
       return serverError("admin-dashboard-data", firstError);
     }
@@ -229,13 +272,7 @@ export const handler = async (req: Request): Promise<Response> => {
       (planRes.data ?? []) as Array<{ plan: string | null }>,
     );
 
-    const expiryRows: ExpirySubscriptionRow[] = ((expiryRes.data ?? []) as Array<
-      { id: string; email: string | null; subscription_expires_at: string }
-    >).map((r) => ({
-      user_id: r.id,
-      email: r.email,
-      subscription_expires_at: r.subscription_expires_at,
-    }));
+    const expiryRows = expiryRes as ExpirySubscriptionRow[];
     const expiryBuckets = bucketSubscriptionsByExpiry(expiryRows, now);
 
     const derivedMrr = computeDerivedMrr(planCounts, {

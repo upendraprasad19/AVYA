@@ -16,7 +16,7 @@
  *   }
  *
  * Output shape:
- *   200 { verified: true, subscription_status: "active", end_date: ISO }
+ *   200 { verified: true, plan, end_date: ISO, source }
  *   200 { verified: false, status: "pending" }   // webhook hasn't fired yet
  *   400 { error: "invalid_signature" | "amount_mismatch" | ... , request_id }
  *   409 { error: "already_pro", request_id }     // user already PRO (idempotent)
@@ -522,10 +522,9 @@ serve(async (req: Request) => {
     // The idempotency pre-SELECT mirrors razorpay-webhook's H-19 guard: a row
     // already present means the creator already redeemed any promo, so we skip
     // both the insert and the redemption (idempotent success).
-    // Review d6b736 F1/F2: keep users.subscription_expires_at consistent with the
-    // canonical subscriptions row (never re-anchor it to verify-time on a replay /
-    // race), and surface a pre-SELECT DB error instead of silently treating it as
-    // "no row".
+    // Review d6b736 F1/F2: report the canonical subscriptions row's end_date
+    // (never re-anchor it to verify-time on a replay / race), and surface a
+    // pre-SELECT DB error instead of silently treating it as "no row".
     let weInsertedTheRow = false;
     let canonicalEndDateIso = endDate.toISOString();
     // NB: a different `existingSub` (active-only, early-return) is declared near
@@ -601,8 +600,8 @@ serve(async (req: Request) => {
             },
           );
         }
-        // The webhook owns the row; use ITS end_date for the users update so
-        // users.subscription_expires_at stays consistent with the canonical row.
+        // The webhook owns the row; report ITS end_date so the response
+        // matches the canonical row.
         const { data: raceRow } = await supabase
           .from("subscriptions")
           .select("end_date")
@@ -622,14 +621,11 @@ serve(async (req: Request) => {
       if (existingEnd) canonicalEndDateIso = existingEnd;
     }
 
-    // Update users table — canonical expiry keeps users + subscriptions in sync.
-    await supabase
-      .from("users")
-      .update({
-        subscription_status: "pro",
-        subscription_expires_at: canonicalEndDateIso,
-      })
-      .eq("id", userId);
+    // OI-202: no `users` mirror write. users.subscription_status /
+    // users.subscription_expires_at are dropped (migration 152); the
+    // `subscriptions` row written above (or already present) is the only
+    // entitlement record. `canonicalEndDateIso` is still what the response
+    // reports, so the client sees the canonical row's end_date.
 
     // ── Redeem promo code if applied (ONCE) ─────────────────────
     // F31: gate on weInsertedTheRow so a webhook-won race (or an already-present

@@ -8,7 +8,7 @@
 
 ```sql
 users (id uuid PK, email text UNIQUE, phone text, full_name text,
-  subscription_status text DEFAULT 'free', subscription_expires_at timestamptz,
+  -- (subscription_status / subscription_expires_at DROPPED by migration 152, OI-202 — entitlement is derived from `subscriptions`)
   telegram_chat_id text, telegram_connected bool, ai_chat_started_at timestamptz,
   onboarding_completed bool, last_active_at timestamptz, created_at timestamptz)
 

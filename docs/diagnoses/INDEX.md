@@ -6,6 +6,11 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### subscription_payment_grace_window (3 bugs)
+- 2026-09-29 f2a6d1 — OI-182. After a successful Razorpay checkout the app opens a payment grace window (SubscriptionService.markPaymentInFlight) that suppresses the server downgrade path (verifyFromServer ->…
+- 2026-05-06 5456c4 — Multiple issues in one batch — PRO upgrade did not unlock after payment, receipt showed wrong set counts, today card had duplicate text, weight chart decimals were static, swap kept stale…
+- 2026-05-06 d9b546 — PRO unlock still failed systemically across multiple code paths; logging_type repair migrator was not library-aware, repairing to wrong types for exercises present in the library.
+
 ### workout_completion_status (9 bugs)
 - 2026-09-29 d83505 — Founder-reported (screenshot, 2026-09-29): a workout completed on 2026-09-28 (Monday, "Calisthenics Day", logged via the app that same morning) rendered as NOT DONE on the Train tab on 2026-09-29.…
 - 2026-07-20 b7f30a — Tapping START on Home's Today's Workout card dead-ended. The handler was a bare `onStart: () => context.go('/train/active-workout')` (home_screen.dart:875) — pure navigation with no call to…
@@ -16,6 +21,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 - 2026-05-10 d9b2c5 — Saturday's locally-completed workout was overwritten back to 'planned' on every cold-start restore, because cloud still held the older 'planned' row (Bug B.1's FK violation prevented push) and…
 - 2026-05-10 e3f7a8 — A subset of users (founder included) holds Hive `schedule_<date>` rows with `status='completed'` while the cloud `scheduled_workouts` row stays at `status='planned'` for those dates. Once Bugs B.1 +…
 - 2026-05-10 a7c1e2 — Calendar checkmarks for May 5/6/7 vanished on the founder's account after restore, despite cloud workout_logs and scheduled_workouts.status='completed' being correct for those dates.
+
+### subscription_expiry_derived (1 bugs)
+- 2026-09-29 c7e3b9 — OI-202. users.subscription_status never reconciles back to 'free' after a subscription expires, and users.subscription_expires_at is only ever written forward. Live (2026-09-29, project…
 
 ### coach_chat_history_replay (4 bugs)
 - 2026-09-28 a2c9e5 — OI-245. `SyncService._restoreCoachInteractions` (sync_coach.dart) hardcoded every restored `ai_coach_interactions` row's Hive `mode` field to `'quick'`.…
@@ -1436,10 +1444,6 @@ rather than a Hive box. (1 bugs)
 ### workout_template_sync (1 bugs)
 - 2026-05-10 a8b2c7 — _syncWorkoutTemplates used a DELETE-then-INSERT pattern for child template_exercises rows. If the DELETE succeeded but a subsequent INSERT errored mid-loop (network blip, FK constraint, payload…
 
-### subscription_payment_grace_window (2 bugs)
-- 2026-05-06 5456c4 — Multiple issues in one batch — PRO upgrade did not unlock after payment, receipt showed wrong set counts, today card had duplicate text, weight chart decimals were static, swap kept stale…
-- 2026-05-06 d9b546 — PRO unlock still failed systemically across multiple code paths; logging_type repair migrator was not library-aware, repairing to wrong types for exercises present in the library.
-
 ### hive_field_name_exlog (2 bugs)
 - 2026-05-06 519075 — Cloud-side audit surfaced multiple failures — logging_type repair migrator needed systematic rebuild, razorpay 409 detection was dead code (FunctionException class), sync had IST gaps, train screen…
 - 2026-05-04 270ea3 — Workout restore wrote Hive keys using cloud UUIDs instead of deterministic WriteService keys, causing exercise logs to be unreadable by receipt and calendar readers.
@@ -1474,7 +1478,9 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-09-29 | f2a6d1 | OI-182. After a successful Razorpay checkout the app opens a payment grace window (SubscriptionService.markPaymentInFlight) that suppresses the server downgrade path (verifyFromServer ->… | subscription_payment_grace_window | test/contracts/subscription_payment_grace_window_behavioral_test.dart |
 | 2026-09-29 | d83505 | Founder-reported (screenshot, 2026-09-29): a workout completed on 2026-09-28 (Monday, "Calisthenics Day", logged via the app that same morning) rendered as NOT DONE on the Train tab on 2026-09-29.… | workout_completion_status | test/contracts/sync_schedule_completion_payload_hash_index_writer_to_reader_test.dart |
+| 2026-09-29 | c7e3b9 | OI-202. users.subscription_status never reconciles back to 'free' after a subscription expires, and users.subscription_expires_at is only ever written forward. Live (2026-09-29, project… | subscription_expiry_derived | test/contracts/subscription_columns_dropped_test.dart |
 | 2026-09-28 | a2c9e5 | OI-245. `SyncService._restoreCoachInteractions` (sync_coach.dart) hardcoded every restored `ai_coach_interactions` row's Hive `mode` field to `'quick'`.… | coach_chat_history_replay | test/contracts/coach_restored_media_mode_writer_to_reader_test.dart |
 | 2026-09-28 | a7f2d9 | task-25-review.md (reviewing commit c9fbcd64, the unmerged day-swap Train UI feature) found 5 gaps, the two most consequential being real bugs rather than style nits: (1)… | day_swap_train_ui_kill_switch | "test/widgets/week_rows_kill_switch_test.dart (new — asserts by widget type/key and child count, not pixels), plus updated test/widgets/day_swap_drag_wrapper_test.dart (new switch-OFF test, F3) and its new F5 standing-reset group" |
 | 2026-09-28 | e8f95e | Founder-reported (screenshot, 2026-09-28): logged "Single Leg Front Lever" (a custom bodyweight_reps exercise) as reps during an active workout scheduled from a template. The active workout screen… | duration_controller_seeding_leak | test/train/duration_controller_seeding_writer_to_reader_test.dart |

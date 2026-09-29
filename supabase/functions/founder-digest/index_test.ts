@@ -999,6 +999,118 @@ Deno.test("B1: gatherDigestInput calls all 3 metrics RPCs by their exact live na
   assert(rpcCalls.includes("founder_metrics_engagement"));
 });
 
+// --- OI-202: expiringSoon / lapsedYesterday are DERIVED from `subscriptions`
+// (latest active end_date per user), not read from the dropped
+// `users.subscription_expires_at` mirror. `wiringFakeClient`'s filters are
+// no-ops, so these tests pin the per-user reduction and the section wiring;
+// the `.eq/.gte` filter behaviour itself is pinned in
+// `_shared/subscription_test.ts` against a filter-evaluating fake.
+
+const OI202_NOW = new Date("2026-09-11T08:00:00Z");
+// Yesterday's IST day for OI202_NOW is [2026-09-09T18:30Z, 2026-09-10T18:30Z).
+const UA = "a0000000-1111-4222-8333-444455556666"; // lapsed yesterday, never renewed
+const UB = "b0000000-1111-4222-8333-444455556666"; // lapsed row yesterday, RENEWED to December
+const UC = "c0000000-1111-4222-8333-444455556666"; // expires in 4 days
+const UD = "d0000000-1111-4222-8333-444455556666"; // expires in 24 days
+const UE = "e0000000-1111-4222-8333-444455556666"; // near row + far row -> latest is far
+
+function subRow(id: number, user_id: string, end_date: string) {
+  return { id, user_id, status: "active", end_date, plan: "monthly", created_at: "2026-01-01T00:00:00Z" };
+}
+
+Deno.test("OI-202: expiringSoon and lapsedYesterday reduce to the LATEST active end per user", async () => {
+  const { client } = wiringFakeClient({
+    rows: {
+      subscriptions: [
+        subRow(1, UA, "2026-09-10T02:00:00Z"),
+        subRow(2, UB, "2026-09-10T03:00:00Z"),
+        subRow(3, UB, "2026-12-01T00:00:00Z"),
+        subRow(4, UC, "2026-09-15T00:00:00Z"),
+        subRow(5, UD, "2026-10-05T00:00:00Z"),
+        subRow(6, UE, "2026-09-14T00:00:00Z"),
+        subRow(7, UE, "2026-11-30T00:00:00Z"),
+      ],
+    },
+  });
+  // deno-lint-ignore no-explicit-any
+  const out = await gatherDigestInput(client as any, OI202_NOW);
+  // Only UA lapsed: UB renewed (a mirror-column reader counts UB too).
+  assertEquals(out.lapsedYesterday, { count: 1 });
+  // 7d: UC only (UE's near row is superseded by its November row).
+  // 30d: UC + UD.
+  assertEquals(out.expiringSoon, { count7d: 1, count30d: 2 });
+});
+
+Deno.test("OI-202: boundaries — lapsed is [yStart, tStart) (start in, end OUT); expiring is [now, now+N d] (both in)", async () => {
+  const { yStart, tStart } = istYesterdayWindow(OI202_NOW);
+  const in7 = new Date(OI202_NOW.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const in30 = new Date(OI202_NOW.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  const { client } = wiringFakeClient({
+    rows: {
+      subscriptions: [
+        subRow(1, UA, yStart), // exactly the window start -> lapsed
+        subRow(2, UB, tStart), // exactly the window END -> NOT lapsed yesterday
+        subRow(3, UC, in7), // exactly now+7d -> in BOTH 7d and 30d
+        subRow(4, UD, in30), // exactly now+30d -> 30d only
+        subRow(5, UE, OI202_NOW.toISOString()), // exactly now -> counted expiring
+      ],
+    },
+  });
+  // deno-lint-ignore no-explicit-any
+  const out = await gatherDigestInput(client as any, OI202_NOW);
+  assertEquals(out.lapsedYesterday, { count: 1 });
+  assertEquals(out.expiringSoon, { count7d: 2, count30d: 3 });
+});
+
+Deno.test("OI-202: the shared subscriptions read floors at yesterday's IST start and filters status=active", async () => {
+  const { client } = wiringFakeClient({ rows: { subscriptions: [] } });
+  const seen: Array<[string, string, unknown]> = [];
+  const wrapped = {
+    ...client,
+    from(table: string) {
+      const b = client.from(table) as Record<string, (...a: unknown[]) => unknown>;
+      if (table !== "subscriptions") return b;
+      for (const m of ["eq", "gte"]) {
+        const orig = b[m];
+        b[m] = (...a: unknown[]) => {
+          seen.push([m, String(a[0]), a[1]]);
+          return orig(...a);
+        };
+      }
+      return b;
+    },
+  };
+  // deno-lint-ignore no-explicit-any
+  await gatherDigestInput(wrapped as any, OI202_NOW);
+  const { yStart } = istYesterdayWindow(OI202_NOW);
+  assert(
+    seen.some(([m, c, v]) => m === "gte" && c === "end_date" && v === yStart),
+    `expected .gte("end_date", ${yStart}); saw ${JSON.stringify(seen)}`,
+  );
+  assert(
+    seen.some(([m, c, v]) => m === "eq" && c === "status" && v === "active"),
+    "expected .eq(\"status\", \"active\")",
+  );
+});
+
+Deno.test("OI-202: a failed subscriptions read makes BOTH sections unreadable, never zero", async () => {
+  const { client } = wiringFakeClient({ rows: { subscriptions: [] } });
+  const wrapped = {
+    ...client,
+    from(table: string) {
+      const b = client.from(table) as Record<string, unknown>;
+      if (table === "subscriptions") {
+        b.range = () => Promise.resolve({ data: null, error: { message: "boom" } });
+      }
+      return b;
+    },
+  };
+  // deno-lint-ignore no-explicit-any
+  const out = await gatherDigestInput(wrapped as any, OI202_NOW);
+  assert("unreadable" in out.expiringSoon, "expiringSoon must be unreadable, not {0,0}");
+  assert("unreadable" in out.lapsedYesterday, "lapsedYesterday must be unreadable, not {count:0}");
+});
+
 Deno.test("B1: a DigestClient with no rpc() degrades all 3 metrics sections to " +
     "unreadable instead of throwing out of gatherDigestInput", async () => {
   const { client } = fakeClient({});

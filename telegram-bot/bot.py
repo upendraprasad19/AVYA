@@ -21,7 +21,7 @@ Connection flow:
 
 import os
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import httpx
 from dotenv import load_dotenv
@@ -139,19 +139,35 @@ def get_user_context(user_id: str) -> dict:
 
 
 def is_pro(user: dict) -> bool:
-    """Check if user has active PRO subscription."""
-    status = user.get("subscription_status", "free")
-    expires = user.get("subscription_expires_at")
-    if status != "pro":
+    """Check if user has an active PRO subscription.
+
+    Derived from `subscriptions` (status='active' AND end_date > now()) — the
+    single PRO predicate (supabase/functions/_shared/subscription.ts). The
+    `users.subscription_status` / `users.subscription_expires_at` mirror this
+    used to read is dropped (OI-202, migration 152). Fail-safe: any error
+    reads as NOT pro.
+    """
+    user_id = user.get("id")
+    if not user_id:
         return False
-    if expires:
-        try:
-            exp_dt = datetime.fromisoformat(expires.replace("Z", "+00:00"))
-            if exp_dt < datetime.now(exp_dt.tzinfo):
-                return False
-        except (ValueError, TypeError):
-            pass
-    return True
+    try:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        result = (
+            supabase.table("subscriptions")
+            .select("id")
+            .eq("user_id", user_id)
+            .eq("status", "active")
+            .gt("end_date", now_iso)
+            .limit(1)
+            .execute()
+        )
+        return bool(result.data)
+    except Exception:
+        # Fail-safe direction (reads as NOT pro) but never silent: a wrong column,
+        # an outage or a permission change would otherwise downgrade every paying
+        # user to the FREE model with no trace (B-pass 2026-09-29).
+        logger.exception("is_pro lookup failed for %s", user_id)
+        return False
 
 
 def is_trial_active(user: dict) -> bool:

@@ -3691,8 +3691,8 @@ enforced by **Postgres triggers**, not Edge Function code, so an EF-only search 
 
 ## OI-182 — the payment grace window closes before the last verify-payment retry fires (P2)
 
-- **Status**: OPEN
-- **Blocked on**: none — needs a founder call on the widened value, then a 1-line change
+- **Status**: CLOSED · 2026-09-29 · fixed on branch `oi-182-202-subscription-state` — `kPaymentGraceWindow` is now DERIVED from the retry schedule and the per-call bounds (`lib/core/constants/payment_timing.dart`, ≈21m45s, was a bare 10-minute literal) and every activation-flow network call is bounded; the retry success path now clears the grace and writes PRO state in a tested order. Diagnose `f2a6d1` (`docs/diagnoses/2026-09-29-payment-grace-window-shorter-than-last-retry-f2a6d1.md`). Client-only: reaches users with the next founder-initiated APK build. Stated residue: the retries are in-memory timers (best-effort under suspend / app kill).
+- **Blocked on**: none
 - **Verified**: 2026-09-11 — read both constants directly, no live query needed
 - **What**: `SubscriptionService._paymentGraceWindow` is **10 minutes**
   (`lib/core/services/subscription_service.dart:162`). `RazorpayService`'s
@@ -5194,6 +5194,17 @@ board's own common-pitfalls note) — 0 errors/warnings, 45 pre-existing infos
 unrelated to these files. `telegram_view.dart` / `channelProvider` /
 `_openTelegramBot()` left in place (dead but harmless) for phase 2.
 
+**Phase 2 must not reuse the email flow (2026-09-29, Hermes L22/L35 on `oi-182-202-subscription-state`).**
+`telegram-bot/bot.py` `receive_email` (`:281-332`) links a Telegram chat to whichever `users` row
+matches a typed email, with no proof of ownership: no code, no link, no token. Anyone who knows or
+guesses a victim's email can link their own chat to that account, chat as that user (the coach
+context is built from the victim's data via `get_user_context`), and probably replace the real
+owner's `chat_id` in `telegram_connections`, which `morning-alert` uses as a push fallback. It is
+dormant only because the feature is hidden and the bot is not deployed (founder, 2026-09-29). The
+phase-2 linking-token handshake above (the app mints a one-time token, opened as
+`t.me/AVYACoachBot?start=<token>`) removes the flaw; the email prompt must be deleted, not kept as
+a fallback.
+
 Two related items surfaced, deliberately NOT resolved by this OI:
 - `lib/shared/widgets/paywall_sheet.dart:120` markets "Weekly AI nutrition
   report + Telegram push" as a PRO perk bullet. With the connect entry points
@@ -5992,18 +6003,18 @@ not something resolvable from this session.
 
 ## OI-245 — Restored PRO photo-coach turns are replayed to Gemini as text (sync_coach hardcodes mode quick)
 
-- **Status**: OPEN
-- **Blocked on**: none — P1, unscheduled (candidate: batch D).
-- **Verified**: 2026-09-26 — code read: `lib/core/services/sync/sync_coach.dart:261` restores every row with `mode: 'quick'`; the history filter at `coach_interaction_repository.dart:362` excludes only `mode == 'media'`; PRO photo rows are channel `app`. So a restored photo turn loses its media marker and is replayed into Gemini context as a plain-text turn.
+- **Status**: CLOSED · 2026-09-29 · fixed by `6e3975ae` (branch `oi-245-246-restore-fixes`, merged via PR #50) — a restored photo/video coach row now gets its real media mode back, so the context builder's `mode == 'media'` filter sees it. Diagnose `a2c9e5` (`docs/diagnoses/2026-09-28-coach-restored-media-mode-a2c9e5.md`). Client-only fix: it reaches users with the next APK build.
+- **Blocked on**: none
+- **Verified**: 2026-09-29 — fix commit read on `main`; diagnose-doc `a2c9e5` exists. (Filed 2026-09-26 — code read: `lib/core/services/sync/sync_coach.dart:261` restores every row with `mode: 'quick'`; the history filter at `coach_interaction_repository.dart:362` excludes only `mode == 'media'`; PRO photo rows are channel `app`. So a restored photo turn loses its media marker and is replayed into Gemini context as a plain-text turn.
 - **Identified**: 2026-09-26 · filed via mint_oi.sh from branch `ci-green-batch-a` (backlog triage)
 
 Writer: `sync_coach.dart:261` (restore). Reader: `coach_interaction_repository.dart:362` (context builder). Classic writer/reader field drift — fix is to restore the row's real mode, with a writer→reader test.
 
 ## OI-246 — Deleted exercise logs reappear after a cloud restore (deleteLog removes the Hive key only)
 
-- **Status**: OPEN
-- **Blocked on**: none — P1, unscheduled (candidate: batch F).
-- **Verified**: 2026-09-26 — code read: `deleteLog` removes the Hive `exlog_` key only (no tombstone, no cloud delete), and restore re-puts every cloud row whose key is absent locally (`lib/core/services/sync/sync_workout.dart:916`). A user-deleted log therefore comes back on the next restore.
+- **Status**: CLOSED · 2026-09-29 · fixed by `6e3975ae` (branch `oi-245-246-restore-fixes`, merged via PR #50) — a deleted exercise log is now tombstoned in the cloud instead of only removed from Hive (`PendingExlogDeletes` queue + drain, restore skips queued keys). Server side is live: migrations 150 + 151 applied, `weekly-recalc` v25 and `pr-detection` v17 deployed with the `deleted_at` filter (`88fef854`). Diagnose `e1c8b4` (`docs/diagnoses/2026-09-28-exlog-tombstone-resurrection-e1c8b4.md`). The client half reaches users with the next APK build. Read-side residue is filed separately as OI-269 (4 other `workout_log_exercises` readers that still skip the `deleted_at` filter).
+- **Blocked on**: none
+- **Verified**: 2026-09-29 — fix commit and deploy record read on `main`. (Filed 2026-09-26 — code read: `deleteLog` removes the Hive `exlog_` key only (no tombstone, no cloud delete), and restore re-puts every cloud row whose key is absent locally (`lib/core/services/sync/sync_workout.dart:916`). A user-deleted log therefore comes back on the next restore.
 - **Identified**: 2026-09-26 · filed via mint_oi.sh from branch `ci-green-batch-a` (backlog triage)
 
 Needs a tombstone or cloud-side delete; restore-completeness class (docs/architecture/sync.md).

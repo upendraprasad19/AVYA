@@ -101,7 +101,7 @@ BEGIN
     NULL;
   END;
 
-  -- a1c9f4 — synthetic referrer + greatest users for cases 27/28. public.users.id
+  -- a1c9f4 — synthetic referrer + `greatest` users for cases 27/28 (28 is now the OI-202 mirror-dropped case). public.users.id
   -- FKs auth.users (users_id_fk_auth), so seed auth.users FIRST then public.users,
   -- both best-effort like the v_user setup above.
   BEGIN
@@ -450,28 +450,38 @@ BEGIN
     INSERT INTO _v_results VALUES ('redeem_referral_atomic:2_referral_trial_rows', 'fail', SQLSTATE, SQLERRM);
   END;
 
-  ----- 28. update_user_subscription_status monotonic GREATEST guard (a1c9f4) ----
-  -- A far-future active grant, then an EARLIER one: the trigger must NOT lower
-  -- users.subscription_expires_at. Pre-094 the first insert 23502s (razorpay NOT
-  -- NULL) AND the old trigger overwrote the expiry downward -> 'fail'. Post-094 the
-  -- GREATEST guard keeps the 365-day expiry -> 'ok'.
+  ----- 28. subscription mirror dropped; an active grant needs no mirror (OI-202) ----
+  -- Migration 152 dropped users.subscription_status / users.subscription_expires_at
+  -- and the trigger (trg_subscription_update_user) + functions that maintained them.
+  -- (This case used to pin that trigger's monotonic GREATEST expiry guard, a1c9f4 —
+  -- moot once the mirror is gone.) Asserts the drop AND that granting an active
+  -- subscription still works with no trigger behind it. Pre-152 the columns exist
+  -- -> 'fail'; post-152 -> 'ok'.
   BEGIN
     INSERT INTO public.users (id, email, full_name)
       VALUES (v_greatest, 'test+arbiter-greatest@avya.local', 'arbiter greatest')
       ON CONFLICT (id) DO NOTHING;
     INSERT INTO public.subscriptions (user_id, plan, status, start_date, end_date)
-      VALUES (v_greatest, 'referral_trial', 'active', v_now, v_now + interval '365 days');
-    INSERT INTO public.subscriptions (user_id, plan, status, start_date, end_date)
       VALUES (v_greatest, 'referral_trial', 'active', v_now, v_now + interval '7 days');
-    IF (SELECT subscription_expires_at FROM public.users WHERE id = v_greatest)
-         >= v_now + interval '364 days' THEN
-      INSERT INTO _v_results VALUES ('trigger_greatest:no_expiry_demotion', 'ok', NULL, NULL);
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'users'
+                  AND column_name IN ('subscription_status', 'subscription_expires_at')) THEN
+      INSERT INTO _v_results VALUES ('subscription_mirror:dropped', 'fail', 'ASSERT',
+        'users.subscription_status / subscription_expires_at still exist');
+    ELSIF EXISTS (SELECT 1 FROM pg_trigger
+                   WHERE tgname = 'trg_subscription_update_user' AND NOT tgisinternal) THEN
+      INSERT INTO _v_results VALUES ('subscription_mirror:dropped', 'fail', 'ASSERT',
+        'trg_subscription_update_user still exists');
+    ELSIF (SELECT count(*) FROM public.subscriptions
+             WHERE user_id = v_greatest AND status = 'active'
+               AND end_date > v_now) <> 1 THEN
+      INSERT INTO _v_results VALUES ('subscription_mirror:dropped', 'fail', 'ASSERT',
+        'active grant row missing after insert');
     ELSE
-      INSERT INTO _v_results VALUES ('trigger_greatest:no_expiry_demotion', 'fail', 'ASSERT',
-        'expiry lowered below the existing 365-day grant');
+      INSERT INTO _v_results VALUES ('subscription_mirror:dropped', 'ok', NULL, NULL);
     END IF;
   EXCEPTION WHEN OTHERS THEN
-    INSERT INTO _v_results VALUES ('trigger_greatest:no_expiry_demotion', 'fail', SQLSTATE, SQLERRM);
+    INSERT INTO _v_results VALUES ('subscription_mirror:dropped', 'fail', SQLSTATE, SQLERRM);
   END;
 
 END $outer$;
