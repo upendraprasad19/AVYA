@@ -3722,3 +3722,12 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   vs. one) before trusting a finding is fully closed**, since the coordinator's own recheck found
   a citation the subagent's narrower single-pattern grep missed.
   False-alarm rate 0/1 → no lens removed.
+  **Addendum, same day, hours later:** the exact same collision class recurred IMMEDIATELY on
+  this same branch's NEXT merge-reconciliation pass (a third, unrelated branch landing on `main`
+  in between) — the number this fix had just renumbered TO (`2.77`) was independently claimed by
+  yet another concurrent branch's own new entry. Fixed identically (re-derive true next-free
+  number, renumber, fix the resulting stale citation); no review-file rename needed since this
+  fix did not touch a hash-affecting path. Confirms the class is not a one-off: a shared
+  self-numbered file with no allocator collides on every sufficiently-fast-moving concurrent
+  merge, not just the first one. Detail: `docs/reviews/07f2a817bbdd-review.md`'s own "Addendum"
+  section; generalized into the CLAUDE.md §4.9 pitfall row this batch added.

@@ -117,10 +117,15 @@ code. Fixed by extending the marker with a trailing newline, exploiting a
 genuine structural difference between the two call shapes (inline-map vs.
 named-variable upsert), mutation-proven in both directions. Documented as a
 new ("fifth") variant of an already-tracked CLAUDE.md §4.9 pitfall row, and
-as a new bug-class entry (§2.77, renumbered from §2.74 during the origin/main
-merge-reconciliation after a genuine collision with an unrelated origin/main
-entry that independently claimed §2.74 the same week) in
-`.claude/skills/debugging/SKILL.md`.
+as a new bug-class entry, currently §2.78, in `.claude/skills/debugging/SKILL.md`
+— renumbered TWICE during origin/main merge-reconciliation, first §2.74→§2.77
+(collision with an unrelated origin/main day-swapper-batch entry independently
+claiming §2.74 the same week), then §2.77→§2.78 (an immediate second collision:
+a THIRD independent branch, `schedule-status-single-writer` (PR #51), landed on
+`main` between this branch's two merge-reconciliation passes and independently
+claimed §2.77 for its own unrelated entry). Both collisions and both fixes are
+recorded in `docs/reviews/07f2a817bbdd-review.md` and the CLAUDE.md §4.9 pitfall
+row this batch added for the class.
 
 ## Ground truth verification (this record's own, not just the reviewers')
 

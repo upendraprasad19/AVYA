@@ -3223,25 +3223,83 @@ concepts:
 
   - concept: workout_completion_status
     domain: workout
-    behavioral_test_path: test/contracts/workout_completion_status_writer_to_reader_test.dart
+    behavioral_test_path: test/contracts/sync_schedule_completion_payload_hash_index_writer_to_reader_test.dart
     description: |
       The schedule_<date>.status field drives the calendar, home card state,
       and streak logic. Legal values: planned | completed | skipped | shifted.
-      "completed" is sacred — WorkoutScheduleService guards against overwriting
-      it on reschedule or re-generate. Driven APK Test #12.9 Bug 5.1 (restore
-      was writing status=planned over cloud-authoritative status=completed).
+      "completed" is sacred — the live completion writer never overwrites it,
+      and the restore-side merge below must not demote it either. Driven APK
+      Test #12.9 Bug 5.1 (restore was writing status=planned over
+      cloud-authoritative status=completed). The restore-side guard's own
+      local-timestamp derivation went dead 2026-05-10, fixed 2026-09-27
+      (Task 14, commit ebddb44c — see the writer note below); a founder
+      report 2026-09-29 (diagnose
+      2026-09-29-restore-completed-guard-dead-branch-window-d83505) traced a
+      2026-09-28 data corruption to a build that predates that fix, plus a
+      registry/test-coverage cross-reference gap this entry now closes.
+      ⚠ A THIRD implementation, WorkoutScheduleWriteService.markCompleted
+      (lib/core/services/workout_schedule_write_service.dart:73, reached via
+      the WorkoutScheduleService.markCompleted shim and
+      WorkoutRepository.markWorkoutCompleted), also independently sets this
+      field but has ZERO live callers (verified 2026-09-29 —
+      `grep -rn markWorkoutCompleted lib/` finds only the definition and a
+      comment in train_provider.dart documenting its own replacement). NOT
+      listed as a writer below because it is unreachable; flagged here so a
+      future edit doesn't treat it as a live third path. Left in place
+      pending a founder decision on removal — not fixed in this batch.
     writers:
-      - file: lib/core/services/workout_schedule_service.dart
-        line_range: 1-9999
+      - file: lib/core/services/workout_write_service.dart
+        line_range: 492-593
         method: markCompleted
-        notes: sole setter for status='completed'; guards if already completed
+        notes: |
+          The canonical LIVE completion writer (there is no `completeWorkout`
+          method on WorkoutWriteService — ActiveWorkoutNotifier.completeWorkout
+          in train_provider.dart routes here, as does the coach's
+          tool_dispatcher._maybeCompleteScheduledDay auto-completion path).
+          Sets status='completed' + completed_at_ms + completed_via together
+          in one Map mutation. Never writes the legacy completed_at ISO field
+          — see SyncService._restoreScheduledWorkouts below, whose guard
+          assumed that field would be present.
+      - file: lib/core/services/sync/sync_workout.dart
+        line_range: 2238-2568
+        method: _restoreScheduledWorkouts
+        notes: |
+          Timestamp-aware MERGE writer (deliberate design, not redundant with
+          the writer above — docs/architecture/sync.md's "Restore conflict
+          policy"): on every restore/relaunch, decides keep-local-completed vs
+          cloud-authoritative per row. The keep-local branch
+          (localStatus=='completed' && cloudStatus in {planned,rest} &&
+          localCompletedAt present) requires a local completion TIMESTAMP to
+          decide freshness — it derives one via
+          ScheduleCompletionTime.scheduledCompletedAtIso(existingMap)
+          (schedule_completion_time.dart), which prefers the legacy ISO
+          completed_at field but falls back to completed_at_ms. Before
+          2026-09-27 (Task 14, commit ebddb44c, closes-diagnose f4c7a9) it
+          read existingMap['completed_at'] DIRECTLY — a field the writer
+          above never sets on a schedule row — so this branch's own
+          condition could never be true for any real on-device completion,
+          and a stale cloud 'planned' row (the ordinary state right after a
+          completion, before push-side fan-out lands) silently demoted the
+          local completion on the next restore. Dead for ~4.5 months
+          (2026-05-10 d9b2c5 → 2026-09-27 ebddb44c). Task 14 landed its own
+          genuinely behavioral, mutation-proven test for this exact arm
+          (this entry's behavioral_test_path) as a side effect of an
+          unrelated live-timestamp audit — the source-grep tests that had
+          named this guard the whole dead window never caught it. See
+          diagnose 2026-09-29-restore-completed-guard-dead-branch-window-d83505
+          for the false-confidence-window analysis and the founder-facing
+          data-repair this recurrence required (Task 14 does not retroactively
+          heal rows already corrupted before it landed).
       - file: lib/core/services/sync_service.dart
         line_range: 1-9999
         method: _restoreWorkoutPlan
         notes: |
           APK Test #12.9 — _restoreWorkoutPlan now runs BEFORE
           _restoreScheduledWorkouts so cloud-authoritative status='completed'
-          rows survive the schedule overwrite window.
+          rows survive the schedule overwrite window. This ordering guard
+          protects the "cloud already completed" direction; it does nothing
+          for the "local completed, cloud stale" direction, which is
+          _restoreScheduledWorkouts's own job (row above).
     reader_manifest_complete: true
     readers:
       - file: lib/features/home/providers/home_provider.dart

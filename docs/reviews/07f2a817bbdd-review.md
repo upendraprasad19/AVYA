@@ -198,3 +198,26 @@ Also found, independently, ONE additional stale cross-reference the review's own
 cited "§2.74" by number for this same entry — updated to "§2.77 (renumbered from §2.74 during
 the origin/main merge-reconciliation...)". Re-grepped the whole tree for `§2\.74\|bug-class 2\.74\|class 2\.74\b`
 excluding the SKILL.md file itself after both fixes: zero remaining hits.
+
+## Addendum (2026-09-29, later same day) — the collision recurred IMMEDIATELY
+
+Before this branch's PR could be merged, a THIRD independent branch
+(`schedule-status-single-writer`, PR #51) landed on `main`, requiring a second
+merge-reconciliation pass (`origin/main` `6d733480`→`3a930526` into this branch).
+That pass auto-merged `debugging/SKILL.md` with NO textual conflict — but the
+post-merge `grep -oE "^### [0-9]+\.[0-9]+" .claude/skills/debugging/SKILL.md | sort | uniq -d`
+sweep (now a standing habit per this review's own detection recipe, added to
+CLAUDE.md §4.9 in commit `66a0e367`) caught a SECOND collision: PR #51 had
+independently claimed `### 2.77` — the exact number this review had JUST
+renumbered this branch's own entry to, hours earlier — for its own unrelated
+entry ("A source-grep test survives not just the dead branch it guards, but
+also the LATER fix that repairs it", line 1585). Fixed identically: re-derived
+the true next-free number (`2.78`, confirmed free), renumbered this branch's
+smaller-diff entry again, and fixed the resulting stale citation in
+`docs/plan-reviews/oi-245-246-restore-fixes.md`. **This confirms the class is
+not a one-off**: a shared self-numbered file with no allocator collides on
+every sufficiently-fast-moving concurrent-branch merge, not just the first one
+encountered. No change needed to the detection/fix recipe itself — it worked
+identically the second time — but the CLAUDE.md pitfall row now cites this
+recurrence explicitly as evidence the check must be re-run on EVERY merge
+touching the file, not treated as a one-time fix.
