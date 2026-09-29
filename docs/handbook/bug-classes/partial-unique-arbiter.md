@@ -65,5 +65,5 @@ Verified live on the fitness-app project:
 ## References
 
 - This is a sub-class of writer/reader drift, at the writer-to-DB-target layer.
-- Debugging skill: `.claude/skills/debugging/SKILL.md` § "Bug class catalog".
+- Debugging skill: `.claude/skills/debugging/bug-classes.md` (index in `debugging/SKILL.md`).
 - Related: [`writer-reader-drift.md`](writer-reader-drift.md), [`live-verification.md`](../audit/live-verification.md).

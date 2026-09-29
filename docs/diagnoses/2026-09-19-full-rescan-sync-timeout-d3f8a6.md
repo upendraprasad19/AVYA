@@ -5,7 +5,7 @@ batch: oi204-delta-sync
 status: fixed
 blast_radius: platform
 symptom: >
-  OI-204 (docs/audit/open_issues.md:4432-4485, filed 2026-09-16). Live
+  OI-204 (`## OI-204` in docs/audit/closed_issues.md, filed 2026-09-16). Live
   `client_errors` telemetry on the founder's account showed 34x
   `sync_exercise_logs` timeouts + 11x `sync_nutrition_logs` timeouts in one
   25h window (2026-09-14->16), still ongoing as of filing. `_syncExerciseLogs`

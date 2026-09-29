@@ -145,10 +145,25 @@ List<String> _governingDocs() {
   final skills = Directory('.claude/skills');
   if (skills.existsSync()) {
     for (final e in skills.listSync(recursive: true, followLinks: false)) {
-      if (e is File && e.path.replaceAll(r'\', '/').endsWith('/SKILL.md')) {
-        out.add(e.path.replaceAll(r'\', '/'));
+      final p = e.path.replaceAll(r'\', '/');
+      // bug-classes.md / tuning-history.md: skill bodies moved out of SKILL.md by
+      // the 2026-09-29 context-lean batch. They were swept while inline; moving
+      // them must not silently shrink the sweep (B-pass finding 3).
+      if (e is File &&
+          (p.endsWith('/SKILL.md') ||
+              p.endsWith('/bug-classes.md') ||
+              p.endsWith('/tuning-history.md'))) {
+        out.add(p);
       }
     }
+  }
+  // Root CLAUDE.md prose moved verbatim into these docs (same batch, same reason).
+  for (final moved in const [
+    'docs/architecture/hooks.md',
+    'docs/architecture/process-invariants-detail.md',
+    'docs/playbook/common-pitfalls.md',
+  ]) {
+    if (File(moved).existsSync()) out.add(moved); // file-only: fixed roster of regular .md files, never a directory
   }
   out.sort();
   return out;

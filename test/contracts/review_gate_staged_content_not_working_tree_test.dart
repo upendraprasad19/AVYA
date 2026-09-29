@@ -284,7 +284,8 @@ void main() {
           // byte-identical-argv reason, not because this fixture exercises it.
           'git', ['-C', tmp.path, 'diff', '--cached', '--', ':(top)',
               ':(top,exclude)docs/reviews',
-              ':(top,exclude).claude/skills/code-review/SKILL.md'],
+              ':(top,exclude).claude/skills/code-review/SKILL.md',
+              ':(top,exclude).claude/skills/code-review/tuning-history.md'],
           stdoutEncoding: null,
           environment: Map<String, String>.from(Platform.environment)
             ..removeWhere((k, _) => _gitEnvKeysToStrip.contains(k.toUpperCase())),
@@ -354,7 +355,7 @@ void main() {
         'review does not move the demanded hash', () async {
       // Reproduces the live failure this addendum fixes: §5.1's own gate
       // (check_skill_tuning_history.dart) requires a same-dated Tuning-
-      // history entry in .claude/skills/code-review/SKILL.md in the SAME
+      // history entry in .claude/skills/code-review/tuning-history.md in the SAME
       // commit as any new docs/reviews/**.md. Before the exclusion, staging
       // that required entry moved stagedDiffHash()'s result, so the gate
       // demanded a DIFFERENT filename than the one the review was actually
@@ -374,6 +375,12 @@ void main() {
       final skillFile = File('${skillDir.path}/SKILL.md');
       await skillFile.writeAsString('# code-review\n\n## Tuning history\n');
       await _git(s.tmp.path, ['add', '.claude/skills/code-review/SKILL.md']);
+      // Since context-lean (2026-09-29) the REQUIRED entry lives in
+      // tuning-history.md; that path must be excluded from the hash too.
+      final historyFile = File('${skillDir.path}/tuning-history.md');
+      await historyFile.writeAsString('# tuning\n\n## 7. Tuning history\n');
+      await _git(
+          s.tmp.path, ['add', '.claude/skills/code-review/tuning-history.md']);
 
       final r = await runGate(s.tmp);
       expect(r.exitCode, 0,

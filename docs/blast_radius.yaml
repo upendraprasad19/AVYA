@@ -66,6 +66,18 @@ paths:
   - { glob: "lib/core/services/hive_service.dart", tier: platform }
   - { glob: "lib/shared/repositories/plan_engine/**", tier: platform }
   - { glob: "CLAUDE.md", tier: platform }
+  # context-lean batch 2026-09-29: the FULL text of the binding rules (§4.3/4.4/
+  # 4.10/4.12/4.13) moved out of root CLAUDE.md into process-invariants-detail.md,
+  # so it must carry root's tier or weakening a rule there would clear no review
+  # gate (round-2 review P1). Each nested-CLAUDE.md overflow doc mirrors its parent.
+  - { glob: "docs/architecture/process-invariants-detail.md", tier: platform }
+  - { glob: "docs/architecture/hooks.md", tier: platform }   # gate/hook internals; the hooks it documents are platform-tier (B-pass finding 2)
+  - { glob: "docs/architecture/functions-detail.md", tier: platform }
+  - { glob: "docs/architecture/migrations-detail.md", tier: platform }   # mirrors supabase/migrations/** (platform)
+  - { glob: "docs/architecture/plan-engine-detail.md", tier: platform }   # mirrors lib/shared/repositories/plan_engine/** (platform)
+  - { glob: "docs/architecture/services-detail.md", tier: account }
+  - { glob: "docs/architecture/auth-detail.md", tier: account }
+  - { glob: "docs/architecture/ai-coach-detail.md", tier: account }
   # PreToolUse/PreCommit hooks that gate EVERY future git operation platform-
   # wide are platform-tier on their own merits, not just when a change also
   # happens to touch CLAUDE.md (B-pass finding #2, discipline-overhead batch

@@ -4046,6 +4046,959 @@ the ledger/migration-file findings above, which need their own standalone commit
 - **Source**: filed via `mint_oi.sh` from `single-owner-a2b`, 2026-09-27.
 - **Closes**: this closure entry (board reconciliation; no diagnose-doc — no code changed).
 
+## OI-63 — Restore C2: 137-policy RLS initplan
+
+- **Status**: CLOSED · 2026-09-26 · verified_clean, no code change · branch `ci-green-batch-a`
+- **Verified**: 2026-09-26 — LIVE: 144 public policies, 137 mention `auth.uid()`, **0** still unwrapped (case-insensitive strip of `( SELECT auth.uid() AS uid)`); 0 `auth.jwt()`/`auth.role()`/`current_setting` hits; performance advisor has no `auth_rls_initplan`/`multiple_permissive` lints. Done by migration 100 (2026-07-07, before this OI was filed) + 141 (readiness_daily).
+  PRIOR (kept verbatim): 2026-08-05 — BLOCKER ONLY (OI-52 confirmed CLOSED at `closed_issues.md:1048`,
+  2026-07-27). This issue's own substance has NOT been re-checked since filing.
+- **Identified**: 2026-07-26 · restore-perf C3 shipped
+- **Blocked on**: none — it was sequenced after OI-52, which closed 2026-07-27. Pickable now.
+
+## OI-66 — Prove or remove the CI gradle cache
+
+- **Status**: CLOSED · 2026-09-26 · proven win, keep the cache · branch `ci-green-batch-a`
+- **Blocked on**: none
+- **Verified**: 2026-09-26 — CI run on `fafec56a`: 'Cache hit … Cache restored successfully' (setup-java gradle key), Build Check (APK) 02:59:14→03:02:39Z = 3m25s; 3m52s/3m37s/3m50s on the 3 prior runs, vs the 7m41s uncached baseline.
+  PRIOR (kept verbatim): never
+- **Identified**: 2026-07-26 · ci-speed batch `904e6961`
+- **Risk class**: unverified optimisation
+- **What's missing**: The cache is **3.4 GB**; restore-and-extract cost may exceed the Gradle work it
+  saves. First run only populated it, so its value is still unmeasured. Compare a warm-cache run's
+  `Build Check (APK)` duration against the 7m41s/7m47s uncached baseline. **If it is not a clear win,
+  take it back out** — an unmeasured optimisation is tech debt.
+
+## OI-153 — PRO media caps read a `channel` value nothing writes (P1)
+
+- **Status**: CLOSED (2026-09-13, `oi153-pro-media-caps`) — diagnose `a9d4e7`
+- **Blocked on**: none
+- **Verified**: 2026-09-13 — source (`67ba6ba4`, `f15fad75` + the review-remediation commit),
+  4 context-blind plan rounds, a 2-agent B-pass (6 findings, 0 false alarms, all fixed), 13 + 15
+  mutations restored byte-identically; LIVE: `ai-media-proxy` **v24** deployed 2026-09-13
+  02:17Z (verify_jwt=true unchanged) from the branch bytes that the merge carries to `main`
+  unchanged — decoded multipart `/body` SHA-256 of `index.ts` (`48549aa1…`) and
+  `_shared/coach_replies.ts` (`0fea2a5a…`) equal the git blobs; anon-Bearer probe → the module's
+  own 401; a real-user-token smoke (QA account, `{}` body, session revoked after) → the module's
+  own 400 `Missing 'message'`, never 401. `founder-digest` v1 deployed the same morning
+  (verify_jwt=false), first digest delivered 02:00Z. THEN, after the Hermes E-pass
+  (`docs/audit/2026-09-13-hermes-oi153-pro-media-caps.md`, catastrophic tier — migration 131's
+  COMMENT carries "SECURITY DEFINER"): `ai-media-proxy` **v25** (~06:39Z; the L23 P0 path
+  traversal through the OI-28 guard, diagnose `c7e2a4`, plus the served-MIME cap key and the
+  non-numeric RPC refusal; real-user traversal probes → 403) and `founder-digest` **v2** (~06:47Z;
+  exact alert count, line-boundary truncation, parallel bounded reads, unlisted keys surfaced,
+  the reached-yesterday label; manual re-run 200 with a `cron_call_log` row). Both byte-identical
+  to the committed blobs by decoded `/body`. THEN, after a B-pass on this same apply commit found
+  2 more real defects in `ai-media-proxy` (BP-1: a vestigial raw-string SSRF pre-check, strictly
+  MORE restrictive than `parseStorageUrl`, deleted; BP-2: the served-MIME paywall reconciliation
+  only ran one direction — the mirror extracted as `checkFreeImageQuota`, called pre- AND
+  post-fetch): `ai-media-proxy` **v26** (~13:04Z; anon/real-user/traversal probes unchanged, byte-
+  identical). Separately, `founder-digest` **v3** (~13:08Z; the alerts `.limit()` literal fixed for
+  `check_unbounded_cron_reads.dart`; `unlistedTotals` made mode-aware — a lifetime key now reports
+  movers, never a summed cumulative counter) — delivered live (200, reachable only post-send) but
+  this ONE run's own `cron_call_log` row was lost to a live PostgREST 504 on the start-insert, a
+  fresh recurrence of OI-194 during the batch's own verification. Both v26/v3 byte-identical to the
+  committed blobs by decoded `/body`. Ledger: `docs/audit/oi153-pro-media-caps.closure.yaml`.
+- **CLOSED BY** the OI-153 batch (plan `docs/audit/oi153-plan.md`, record
+  `docs/plan-reviews/oi153-pro-media-caps.md` whose `bpass_review:` is the one pointer to the
+  review). What changed, per defect in this entry:
+  - **CODE-1/CODE-3 (the dormant 50/day image cap, fail-open)**: the channel-counting gate and
+    `countProImageAnalysesToday` are DELETED. PRO callers now hit ONE atomic
+    `consume_quota(pro_image_daily | pro_video_daily, istDayStartIso(), 50 | 10)` placed after the
+    Storage fetch (a rejected upload never spends a unit) and before the Gemini call (the spend is
+    bounded under concurrency — an advisory read is not). `-1` → HTTP 200 `gated: true` with a
+    rank-free Bridge reply naming the midnight-IST reset; every installed APK renders it as an
+    ordinary coach bubble. A ledger error fails CLOSED (`pro_quota_unavailable`), as does the
+    `subscriptions` read error that the old code DISCARDED (`tier_unavailable` — it used to route a
+    paying user down the free path). Founder decisions 2026-09-12: 50 images / 10 videos per IST
+    day, in-app reply not the paywall, midnight-IST reset.
+  - **CODE-2 (PRO video uncapped)**: the same guard — `if (isPro)`, image and video alike; the key
+    AND the cap are selected by `isVideo`, association pinned by two regexes and a
+    literal-independent guard assertion (B-pass finding 5).
+  - **CODE-4 / the enumeration this entry demanded**: the `pro_image_analysis` /
+    `image_analysis` channel literals are gone from the repo (the "dead reader" test greps for
+    them); `founder_metrics_engagement()` (migration 120) never needed a change because nothing
+    writes those channels — the enumeration ran to empty in the plan's ground truth (0 rows, ever).
+  - **The last of the ten**: the ledger census (`usage_quota_ledger_writer_to_reader_test.dart`)
+    reads ZERO legacy quota readers; `usage_counter_source_lib.dart`'s ai-media-proxy entry is 0.
+  - **The founder digest** (Unit D, `founder-digest` cron EF, migration 131 in the apply commit):
+    one Telegram message at 08:00 IST with yesterday's ledger per key, users at a ceiling, top id
+    prefixes, and the day's alerts — three states per section, never zeros for a failed read. The
+    OI-183 trigger asymmetry closes in the same apply commit (migration 132).
+- **Filed from this batch, not fixed here**: OI-196 (morning-alert's sender can log the bot
+  token), OI-192 (orphan-sync dedupe never matches a photo turn), OI-193 (Gate 31 blind to a
+  commented `cron.unschedule`), OI-194 (`compute_admin_metrics_daily` silent-skip class),
+  OI-195 (Gate 42 never checks a cited test path exists).
+- **Was** (retained for provenance):
+- **Verified (at filing)**: 2026-09-03 — source + live prod
+- **What**: tech-debt audit 2026-09-02 findings CODE-1, CODE-2, CODE-3, CODE-4 (Slice B). The PRO
+  50/day image cap counts `channel IN ('pro_image_analysis','image_analysis')`
+  (`ai-media-proxy/index.ts:98`) but the only insert writes `'free_image_analysis'` or `'app'`
+  (`:663-666`). `pro_image_analysis` appears **once** in the repo — that read. Live prod
+  `ai_coach_interactions` holds **0** rows on either counted channel, so the cap has never fired.
+  CODE-2: PRO+video matches neither `:433` (`isVideo && !isPro`) nor `:504` (`!isVideo && isPro`) —
+  the most expensive request type is uncapped.
+- **Why it is not a one-line fix**: stamping `pro_image_analysis` drops those rows out of two
+  allowlists outside `supabase/functions/` — `coach_interaction_repository.dart:282`
+  (`_coachChatChannels`, filters the coach's replayed history) and
+  `migrations/120_...sql:125` (`founder_metrics_engagement()`, live). Three review passes each
+  found readers the previous one missed, so **the enumeration must be run to empty before design**.
+  Changing the read to count `'app'` is REJECTED — `'app'` is shared with ai-proxy text chat.
+- **Also**: CODE-1/CODE-2 share one ternary at `:663-665`; `"image_analysis"` is a second dead
+  channel with no disposition; updating `founder_metrics_engagement()` needs a migration that may
+  collide with the in-flight backend-CPU-starvation batch (migration 120).
+- **Related**: `docs/audit/2026-09-02/remediation-plan.md` §11 Slice B.
+
+### ✅ CLOSED 2026-09-08 by OI-162 slice 3b — the FREE-IMAGE LIFETIME QUOTA resets itself
+
+A third instance of the counter-in-a-summarized-table class, split out of OI-162 because its storage
+semantics are the OPPOSITE of a windowed rate limit and it belongs with this entry's channel work.
+
+- **The defect**: `ai-media-proxy/index.ts:62-76` `countFreeImageAnalyses` enforces
+  `FREE_IMAGE_ANALYSIS_LIMIT = 5` (`:16`, checked `:466`) by counting **lifetime** rows —
+  `.eq("user_id").eq("channel","free_image_analysis")` with **no `created_at` bound** (its own
+  docstring says "lifetime"). Those rows are non-`app_event`, so `rolling-context:329-351` selects
+  them and `:463-472` deletes all but the newest 10 once `:364` passes `MESSAGE_THRESHOLD = 50`.
+  **A lifetime quota has no window to survive deletion on — the 5-image free cap resets toward
+  unlimited.** Verified: no guard blocks it.
+- ⚠ **Second, independent defect in the same function**: `if (error) return 0` with a docstring
+  arguing *"fail-open is safer … because 0 < 5"* — which is precisely when the gate does NOT fire.
+  (Audit finding CODE-3.) Both must be fixed together.
+- ⚠ **A client-side TWIN exists and is easy to miss**:
+  `lib/features/ai_coach/repositories/ai_coach_repository.dart:279-292`
+  `getFreeImageAnalysisCount()` reads the same `channel='free_image_analysis'`. Currently **uncalled**
+  (`grep -rn getFreeImageAnalysisCount lib/ test/` → 1 hit, its own definition), which makes it cheap
+  to fix now and easy to forget later — textbook writer/reader drift (§4.1).
+- **LATENT, not live** (verified 2026-09-03): **zero** `free_image_analysis` rows exist, and no user
+  is near the 50-row prune threshold (max non-`app_event` = 25). The mechanism is real; nobody has
+  hit it. So the "migrate existing consumed quota" question is currently moot — there is nothing to
+  migrate.
+- **Why NOT in the OI-162 table**: a lifetime quota must never be pruned, while a windowed rate limit
+  must be. Fusing them forced a retention exclusion that would have retained a `user_id` forever
+  after a DPDP erasure. They are different concepts that share a word.
+- **CLOSED 2026-09-08 by slice 3b.** The gate now does an ADVISORY `.maybeSingle()` read of
+  `usage_counters` (quota_key `free_image_analysis`, `'epoch'` window) and `consume_quota` is the
+  authoritative writer, running AFTER the conversation-log insert and gated on it having succeeded.
+  Both defects above are closed together, as this entry required: the fail-OPEN `if (error) return 0`
+  now fails CLOSED and returns its own `gate_reason: "quota_unavailable"` rather than the paywall's
+  (telling a user who spent nothing that they spent 5 would be a lie). The client twin
+  `getFreeImageAnalysisCount()` was DELETED, not repointed — zero production callers.
+  Pinned by `test/contracts/media_free_image_lifetime_gate_writer_to_reader_test.dart` (10 assertions,
+  mutation-proven on 6 legs) + the ratcheted allowlist in `scripts/usage_counter_source_lib.dart`
+  (2 → 1). No migration: `quota_key` is unconstrained `text`.
+- ⚠ **Two corrections to this entry, recorded rather than silently fixed.** Its
+  `ai-media-proxy/index.ts:62-76` citation was stale by the time it was closed — the function sat at
+  `:67-82`; the entry was written 2026-09-03 and the file shifted under it. And its
+  `grep -rn getFreeImageAnalysisCount lib/ test/ → 1 hit` was scoped to `lib/` in practice: there
+  were **2**, the second being a `stillLegacy` map entry in
+  `usage_quota_ledger_writer_to_reader_test.dart` that asserted this very file still read the old
+  table. Deleting the method broke it. Found by plan-review round 1, before landing.
+- ⚠ **Still LATENT at closure, verified live 2026-09-08:** `select count(*) from
+  ai_coach_interactions where channel = 'free_image_analysis'` → **0**, across 0 distinct users. So
+  the cutover regrant ("everyone starts at used=0") affected nobody. Re-measure rather than citing
+  this; the mechanism was real and would have bitten the first user to spend one.
+
+### ✅ CLOSED 2026-09-06 by OI-162 slice 3a — the WEEKLY-REPORT first-free gate
+
+**Was:** "ALSO 2026-09-03 — the WEEKLY-REPORT first-free gate is a lifetime count and resets the
+same way."
+
+**Fixed in OI-162 slice 3a.** The gate now reads `usage_counters` (quota_key
+`weekly_report_free`, `'epoch'` lifetime sentinel) via an advisory fail-closed read, and
+`consume_quota()` writes it gated on `!hasPro`. `rolling-context` cannot touch that table, so the
+one free Gemini 2.5 Pro report can no longer regenerate. The `ai_coach_interactions` insert stays
+verbatim — it is the sole persisted copy of the report and the row a reinstall restores — but it
+no longer feeds the gate. Pinned by `weekly_report_lifetime_meter_test.dart` (9 assertions, 9
+mutations) and the repointed `weekly_report_pro_gate_writer_to_reader_test.dart`.
+
+⚠ The free-IMAGE lifetime quota below is NOT closed by this — that is slice 3b.
+
+⚠ **Found in code shipped to prod hours earlier the same day** (`a0e20576`, diagnose `e4d1b7`).
+That fix closed the gate's FAIL-OPEN half (a failed count granted a free Gemini 2.5 **Pro** report).
+It did not touch — and the diagnose-doc never asked about — what DELETES the rows the gate counts.
+
+- `weekly-report/index.ts:93-98`: `.select("id", { count: "exact", head: true })
+  .eq("user_id", …).eq("channel", "weekly_report")` — **no `created_at` bound**, i.e. a LIFETIME
+  count, feeding `isFirstReport` at `:113` and the PRO gate at `:116`.
+- `weekly_report` is non-`app_event`, so `rolling-context:329-351` summarizes and `:463-472` deletes
+  it once the user passes `MESSAGE_THRESHOLD = 50`. Count returns to 0 ⇒ `isFirstReport` true ⇒
+  **another free Gemini 2.5 Pro report**, repeatedly.
+- Same class as the free-image lifetime quota above; same remedy (a quota ledger that is not pruned).
+- **How it was found, worth recording:** a plan reviewer proposed replacing a VOCABULARY-based gate
+  matcher (`rate.?limit|attempt|throttle` near the table) with a STRUCTURAL one — `count: "exact"`
+  in the same statement as an `.eq/.in("channel")` filter. Run over `supabase/functions/` it returns
+  **exactly 5 sites, zero false positives**, and this was site 5. The vocabulary matcher missed it
+  and two others, while firing on two `rate_limit` mentions that were COMMENTS. **Match on what the
+  code DOES, not on what its prose calls itself.**
+
+### ⚠ STALE 2026-09-06 — the nightly summarizer RESETS two paid-tier daily caps
+
+**Superseded by OI-162 slice 2 (`c7b95fe5`, migration 129), not by any work under this OI.**
+Live-verified with `pg_get_functiondef`: all three cap triggers
+(`enforce_chat_app_daily_limit`, `enforce_vision_analysis_daily_limit`,
+`enforce_food_text_daily_limit`) now read `usage_counters` EXCLUSIVELY — zero
+`ai_coach_interactions` references in any trigger body. This subsection's premise, that those
+caps are resettable because the summarizer prunes the rows they count, is structurally
+impossible now.
+
+⚠ Its **"THREE DEFECTS MOVED HERE 2026-09-04"** sub-list below stays OPEN — those are separate
+items, mostly slice-3b scoped, and item 3 (CI cannot drive cron-gated SQL) is unaddressed.
+
+*Original text retained below for provenance.*
+
+
+Found while checking a different question; nobody had looked. Same root as the entry above
+(a counter whose rows `rolling-context` deletes) but a DIFFERENT mechanism — these caps are
+enforced by **Postgres triggers**, not Edge Function code, so an EF-only search misses them.
+
+- `rolling-context/index.ts:27-28` — `MESSAGE_THRESHOLD = 50`, `KEEP_RECENT = 10`; `:369-370`
+  summarizes everything except the newest 10 and `:463-472` DELETES it, for any user with >= 50
+  non-`app_event` rows.
+- The three daily caps count an **IST-day window** over `ai_coach_interactions` (live
+  `pg_get_functiondef`): `enforce_chat_app_daily_limit` >= **10**,
+  `enforce_food_text_daily_limit` >= **50** free / 200 PRO, `enforce_vision_analysis_daily_limit`
+  >= **20**.
+- **Where the cap exceeds KEEP_RECENT, the cap is resettable.** A free user who reaches the 50/day
+  food-text cap has 50 rows today; the 02:30 IST cron keeps the newest 10 and deletes 40, the
+  trigger recounts 10, and **40 more analyses unlock**. Same shape for vision (20/day).
+- ✅ **chat (10/day) is SAFE — by coincidence, not design.** The cap blocks the 11th row, so a user
+  can hold at most 10 rows for the day, and KEEP_RECENT is also 10, so today's rows are exactly the
+  ones kept. ⚠ **That safety evaporates if either constant is changed independently** — they are in
+  different files with no comment linking them.
+- **LATENT** (verified 2026-09-03): max non-`app_event` rows for any user is **25**, below the 50
+  threshold, so this has not fired. Both caps are paid-tier boundaries, so it is a revenue issue
+  once usage grows.
+- **Design note for whoever takes this**: this is a **quota ledger**, not a rate limiter. It also
+  needs `countProImageAnalysesToday` (`:88-99`, IST-day) resolved at the same time — that is CODE-1
+  above, the dead `pro_image_analysis` read, so the two are one piece of work.
+- **THREE DEFECTS MOVED HERE from the OI-162 review, 2026-09-04** — they were surfaced by review
+  round 1 of the usage-counter redesign and, until this edit, lived ONLY in
+  `docs/plan-reviews/oi162-round1-findings.md`. A known bug parked in a review-notes file nobody
+  has a reason to open is a §4.2 deferral in substance, whatever it is called. They are recorded
+  here because this OI already owns `ai-media-proxy` + `weekly-report` quota territory:
+  1. **Consumption moves from success-time to request-time** if a counter is naively swapped to an
+     increment call. Today the free-image row is written at `ai-media-proxy:669`, AFTER Gemini
+     returns; the 502 path returns at `:645` writing nothing. An increment at the pre-flight gate
+     means **a free user whose Gemini call fails permanently loses one of five lifetime analyses**,
+     and a weekly-report failure burns their single free Gemini 2.5 Pro report — with no report.
+     Needs either a read-only pre-flight (`peek`) plus consume-at-the-existing-write-point, or an
+     explicit release-on-failure path with every failure path enumerated.
+  2. **`ai-media-proxy:687` is a SECOND call to the same counter** — a display re-count after the
+     insert, commented at `:680-682` as "re-count AFTER insert so the displayed remaining is
+     accurate". Under an increment-based counter it burns a second unit on every success, turning
+     the 5-image cap into 2. Any fix must make `:687` read the value the single consume returned,
+     not re-query.
+  3. **The `rolling-context` prune interaction is not testable in CI.** `rolling-context:117-125` is
+     cron-only (`isAuthorizedCronCall`), and CI carries no `CRON_SECRET` — so "the summarizer runs
+     and the quota survives", the assertion that most directly pins this whole bug class, has no
+     automated home. Either drive the SQL directly in a Deno test under `supabase/functions/`
+     (CI's `deno-edge-functions` job runs), or record it as a manual live check in the diagnose-doc.
+     Do NOT ship a test that silently skips and reads as green.
+
+## OI-155 — six gates are wired to no runner, and Gate 33 cannot detect it (P1)
+
+- **Status**: CLOSED (2026-09-19, `gate-integrity`) — diagnose `b3e7a1`
+- **Blocked on**: none
+- **Verified**: 2026-09-19 — Gate 33's `_allowList` is now `Map<String, List<GateRunner>>` (`file(path)` / `loop(preCommit|ci)` / `manual(OI-NNN)`), each runner machine-checked on every commit by `scripts/gate_scripts_wired_lib.dart` (22 pure tests + 5 lib mutations = 9 reds; two real-gate mutations — a `manual` target changed to OI-9999 and one pointed at a CLOSED OI — both FAIL exit 1; coordinator re-ran both legs by hand on the integrated branch). The six: `snapshot_contract` → runs in BOTH loops (skip lines deleted; passes today); `unawaited_has_error_sink` → `loop(ci)` (advisory; pre-commit's `>/dev/null` loop has no reader); `migrations_live` → `manual(OI-223)` — cannot pass by construction (125/139 never registered live, 75 founder raw-SQL applies; RETIRE recommended, founder's call). **Founder chose retire, same batch, same commit as this row's last edit: `check_migrations_live.dart` deleted, its allowlist entry with it — the five remaining runners above are current, `migrations_live` is no longer among them (96 `check_*`, not 97).** `onconflict_live_arbiter` + `two_user_cross_account` → `manual(OI-165)` (403); `test_runtime_budget` → `manual(OI-101)`. A `manual` runner must name an OPEN/IN_PROGRESS OI on the merged boards, so closing OI-223/165/101 turns Gate 33 red until that gate gets a real runner. Wiring inference now requires an INVOCATION (`run scripts/<gate>` on a non-comment line), not a mention; a stale allowlist key is a violation. Counts re-derived: 97 `check_*`, pre-commit loop 84 (13 case-skipped), 86 of 97 + 1 on a merge; test.yml skip 13 → 11.
+- **What**: audit findings INFRA-2, INFRA-11 (Slice D). `check_gate_scripts_wired.dart` allow-lists
+  gates with a free-text reason such as *"runs in /build-apk skill Gate 14b"*. For six of them
+  `.claude/commands/build-apk.md` contains **0** occurrences (control: `check_apk_size_within_bounds`
+  → 1), while their only occurrences in `pre-commit.sh:327-341` and `test.yml:236-249` are **skip
+  entries**. They execute nowhere. Two are security-relevant
+  (`check_two_user_cross_account`, `check_onconflict_live_arbiter`).
+- **The audit said five; it is six** — `check_test_runtime_budget.dart` (`pre-commit.sh:338`,
+  `test.yml:248`, 0 in `build-apk.md`) has the identical shape. Re-derive with `comm` rather than
+  copying a number.
+- **INFRA-11 is the mechanism, not a duplicate**: the allowlist reason is prose nobody parses. Fixing
+  the six entries without machine-checking the allowlist leaves the class open.
+- **Landing hazard**: a hard-fail INFRA-11 landing before INFRA-2 blocks every commit repo-wide.
+  Land together, or warn-only first (§4.11 point 2). `check_test_runtime_budget` may need an explicit
+  `runner: manual` state since it can name no runner file.
+- **Un-dormanting these surfaces pre-existing violations** their allowlist already names
+  ("1 unapplied migration", "3 schema-arbiter conflicts", "1 missing test"). ⚠ The
+  snapshot-contract one is **stale** — that gate now passes ("57 keys checked").
+- **Related**: `docs/audit/2026-09-02/remediation-plan.md` §11 Slice D.
+
+## OI-162 — the delete-account rate limit is INERT in production; its counter has never written a row (P1)
+
+- **Status**: CLOSED (2026-09-12, `oi162-slice4-windowed-counters`) — diagnose `f2c8d5`
+- **Blocked on**: none
+- **Verified**: 2026-09-12 — LIVE, post-deploy: `delete-account` v9 and `verify-payment` v18 read back
+  byte-identical to `main` `f95cae45` (SHA-256 of the decoded `index.ts` via the Management API,
+  `Accept: multipart/form-data`); `has_function_privilege(anon|authenticated, consume_quota)` = false
+  (migration 130 intact); anon-Bearer boot probes reached both modules (their own sanitized 401).
+- **CLOSED BY slice 4 of 4** (`0c13a144` + `ed4d5f05`, merge `f95cae45`, catastrophic — B-pass
+  `docs/reviews/3cd1891ee7eb-review.md`, Hermes `docs/audit/2026-09-11-hermes-oi162-slice4-windowed-counters.md`,
+  record `docs/plan-reviews/oi162-slice4-windowed-counters.md`). Each claim above, in order:
+  - **The title defect**: `delete-account` now enforces 5/hour via `consume_quota('delete_account',
+    <UTC hourly bucket>, 5)` at the top of the handler; `-1` → 429 + true `Retry-After`. The malformed
+    attempt insert is GONE, not corrected. `verify-payment` (instance B) enforces 20/10min the same way,
+    reads `{ error }` and now fails CLOSED by design; the un-awaited `.then()` and the inline `20`/`600`
+    are gone (named constants).
+  - **The TRAP** (a new channel value falling into rolling-context's denylist): avoided by construction —
+    NO attempt row is written to `ai_coach_interactions` any more; both `*_attempt` channel literals
+    are removed repo-wide and `test/contracts/usage_quota_ledger_writer_to_reader_test.dart` pins that
+    neither file touches that table in code. The channel enumeration this entry was blocked on was
+    still run to empty (`docs/audit/oi162-slice4-channel-enumeration.md`), which is what dissolved the
+    OI-153 blocker: slice 4 mints no channel, so OI-153's reader work is independent of it.
+  - **DPDP**: `usage_counters.user_id` is `REFERENCES users(id) ON DELETE CASCADE` (migration 128), so
+    the attempt counters still erase with the user — the no-FK regression this entry warned about did
+    not happen.
+  - **Hardening the fix exposed** (diagnose `f2c8d5` part C): `consume_quota` is SECURITY INVOKER with
+    no `p_user_id` ownership check and was EXECUTE-granted to PUBLIC/anon/authenticated (direct grants,
+    not PUBLIC-inherited); migration 130 revoked all three, live-verified 42501 for `authenticated`.
+    The raw table grants under the RLS-zero-policy default-deny are a separate, pre-existing gap → OI-184.
+  - **Paired gate finding INFRA-14** (`check_schema_column_refs.dart` validates only the first line of a
+    multi-line insert map — how the phantom columns shipped undetected): NOT touched by slice 4; carried
+    as its own entry, **OI-185**, so this closure drops nothing.
+  - **Not runtime-exercised yet**: `usage_counters` holds 0 rows for `delete_account`/`verify_payment`
+    as of closing — the chain is source-, SQL- (`test/sql/oi162_slice4_quota_boundary_and_acl_live_verify.sql`,
+    27/27 in a rolled-back txn) and deploy-verified. The first real attempt writes the row.
+  - **Cost of landing**: the pre-push full suite refused the first merge on the slice-1 ledger census
+    (2 assertions this slice deliberately falsified and had not repointed) — third slice that file has
+    caught; repointed in `ed4d5f05`, mutation-proven.
+- **PROGRESS 2026-09-06 (does NOT close this)**: slice 3a moved the `weekly-report` first-free
+  lifetime gate onto the ledger — the first EDGE FUNCTION reader to migrate, where slices 1-2 were
+  database-side only. It proves the EF-side pattern this issue's own fix will use: an advisory
+  fail-closed `.maybeSingle()` read, `consume_quota` written AFTER the durable row and gated on
+  tier, and `-1` treated as a successful refusal rather than an error. Six readers → five.
+- **PROGRESS 2026-09-05 (does NOT close this)**: the `usage_counters` ledger this issue's fix will
+  use is now live AND proven in production with three real readers — migration 129 (`c7b95fe5`)
+  moved the chat / vision / food_text cap triggers onto `consume_quota()`. That is slice 2 of 4;
+  this issue is slice 4's target and is untouched. What it de-risks: the ledger's atomicity, its
+  RLS-with-no-policy guard and its retention are no longer theoretical. ⚠ The trap noted below is
+  UNCHANGED and still applies — the fix here still introduces a new channel value, and
+  `delete_account_attempt` rows must not become quota state.
+- **Security impact**: `7ad009` (2026-05-11) added a rate limit to the delete-account
+  confirmation-token check because *"a malicious actor knowing a target's 8-char user_id prefix could
+  repeatedly POST attempts."* **That limit has never functioned.** `attemptCount` is structurally
+  always 0, so `delete-account/index.ts:159`'s `>= RATE_LIMIT_MAX` can never fire and the
+  token-guessing path on the DPDP §17 erasure endpoint is unthrottled.
+- **Why the counter always fails** — the insert at `:176-182` is malformed two independent ways:
+  1. `prompt_snippet` (`:179`) and `response_snippet` (`:180`) **do not exist** on
+     `ai_coach_interactions`. Live snapshot: `[id, user_id, snapshot_id, channel, user_message,
+     ai_response, model_used, tokens_used, was_helpful, created_at, summarized, tool_calls]`.
+     Repo-wide `prompt_snippet` appears **once** — that line. ⇒ 400 / PGRST204.
+  2. `user_message text NOT NULL` (`005_create_ai_tables.sql:32`) is never sent ⇒ 23502.
+  **Prod confirms**: the `ai_coach_interactions` channel census lists `in_app_orphan` 57, `app_event`
+  30, `food_text_analysis` 25, `app` 8, `in_app` 5, `promotion_ceremony` 5 — `delete_account_attempt`
+  is absent at a granularity that shows 5-row channels.
+- ⚠ **The obvious fix is a TRAP — do not just correct the columns and ship.** Making the insert
+  succeed introduces a NEW channel value, and `rolling-context/index.ts:351` filters by
+  `.neq("channel","app_event")` — a **denylist**, deliberately (`:347-350`), so any new channel is
+  treated as conversation. Its own header (`:332-344`) records the Hermes P1-E/P1-F incident of
+  2026-08-20: such rows *"were being embedded into memory_embeddings as source_type='conversation' —
+  92 of 598 rows"* and reached ai-proxy's **SYSTEM prompt**, and the delete at `:466-472` then
+  **removed them** — which here would silently reset the very counter the limit reads.
+  ⇒ Either add `.neq("channel","delete_account_attempt")` to rolling-context's predicates in the same
+  batch (also re-check `restore-user-snapshot:254`, `daily-snapshot:61`, `sync_coach.dart:121`), or
+  record the attempt somewhere that is not `ai_coach_interactions`.
+- **Paired gate finding (INFRA-14) — why this shipped undetected**:
+  `scripts/check_schema_column_refs.dart` validates insert-map keys *"single-line + **first line** of
+  multi-line maps"* (its own SCOPE/LIMITS, `:32-34`). `.insert({` puts every key from line 2 onward,
+  so most of every multi-line insert map is unchecked; it runs clean today
+  (`840 references validated; 0 drift`) while missing both phantom columns. Its header states this
+  class *"was invisible BY CONSTRUCTION. Measured: 53% of recent fix-regressions were this
+  cloud-contract class"* — it closed the single-line half only.
+  ⚠ **A naive balanced-brace extension produces false positives**: a prototype measured 12
+  violations of which **10** were keys of nested JSONB value objects (`ai-proxy:1081-1088`
+  `metadata: { date, channel, model, is_pro }`, `rolling-context:394-397`, `daily-snapshot:222`,
+  `proactive-coach-promotion:154-157`). The fix needs **brace-depth-1-only** key validation, and
+  should also add ES6 **shorthand** keys (`.insert({ user_id, embedding, content })` currently
+  contributes zero checked refs). ⚠ It can never catch defect #2 — the snapshot stores column
+  **names only**, no nullability — so a Deno test asserting `error === null` is the acceptance
+  evidence for the NOT NULL half.
+- **Provenance**: tech-debt audit 2026-09-02 finding CODE-7, root cause rewritten by Slice A review
+  round 1, hazard found by round 2. Split out of Slice A because its blocker is OI-153's enumeration.
+- **RESCOPED 2026-09-03 to the WINDOWED counters only** (`delete_account` 5/60min,
+  `verify_payment` 20/10min). The free-image LIFETIME quota — a third instance found during this
+  plan review — **folded into OI-153**, because a lifetime quota must never be pruned while a
+  windowed limit must be, and fusing them forced a retention exclusion that would have retained a
+  `user_id` forever after a DPDP erasure.
+- ⚠ **verify-payment is instance B and its root cause is NOT deletion** (corrected in review round 2):
+  it counts only `>= now()-10min` and `rolling-context` is nightly, so the overlap is narrow. Its
+  real defects are the **un-awaited** fire-and-forget `.then()` (`verify-payment/index.ts:258`) and
+  inline magic numbers (`>= 20` at `:230`, `600`) instead of named constants.
+- ⚠ **DPDP, settled by live query**: `ai_coach_interactions.user_id` is already
+  `REFERENCES users(id) ON DELETE CASCADE`, and `users.id` is `REFERENCES auth.users(id) ON DELETE
+  CASCADE`. So today's attempt rows ALREADY erase with the user. Any new table must preserve that —
+  a no-FK design would be a REGRESSION on the erasure endpoint, not a neutral choice.
+- **Related**: OI-153, `docs/audit/2026-09-02/slice-a-plan.md`, `docs/audit/oi162-plan.md`,
+  diagnose `7ad009`.
+
+## OI-176 — the OI-collision gate answers `PASS (vacuous)` for a branch with no commits, which is the exact state in which numbers are minted (P2)
+
+- **Status**: CLOSED · 2026-09-12 · diagnose f3a9c1 · branch oi-allocator — working-tree arm in check_oi_numbering_unique.dart (dispatch on `git diff --quiet HEAD -- <boards>` before HEAD's shape); allocator in scripts/mint_oi.sh
+- **Blocked on**: none
+- **Verified**: 2026-09-08 — observed live, not reasoned about. On branch `regen-wave-alignment` with **zero commits** and a real three-way collision sitting in the index, `dart run scripts/check_oi_numbering_unique.dart` printed: *"PASS (vacuous): merge commit (HEAD^1 vs HEAD^2) — the … side minted no OI number that the merge-base lacked, so no cross-branch collision is expressible. 163 entries … were read and compared; **this is a checked answer, not a skipped one**."* Meanwhile `git show main:docs/audit/open_issues.md` and the staged board each carried `## OI-167`, `## OI-168`, `## OI-169` under completely different titles
+- **Identified**: 2026-09-08 · B-pass finding 1 on the OI-166 Unit 1 batch (`docs/reviews/df96a61cf598-bpass.md`). The collision was found BY HAND; the gate that exists for it was green throughout
+- **The mechanism**: a session works in a fresh worktree per §4.13 and mints OI numbers into the working tree BEFORE its first commit. In that state `HEAD` is whatever commit the branch was cut from — routinely a **merge commit** on `main`. The gate detects that shape and compares `HEAD^1` vs `HEAD^2`, which are two ancestors of the branch point, so it is answering a real question about the wrong pair of trees. The staged board is never compared against mainline
+- ⚠ **Why this is worse than a skip**: the gate distinguishes SKIPPED from PASS deliberately (its own first live run reported PASS against an empty mainline board, which is why that wording exists) — and then emits `PASS` plus *"this is a checked answer, not a skipped one"* for a comparison that structurally cannot see the branch's own additions. A reader doing the right thing, trusting a gate that says it checked, is misled
+- **Why the other two invocation points do not cover it**: `pre-merge-commit` runs when both boards first coexist, which is AFTER the numbers are already committed and pushed — the repair there is a renumber commit, which is exactly the five-renumber-commit history CLAUDE.md §7 records. CI is per-push, same timing. Only the pre-commit invocation is early enough to catch the mint as it happens, and that is the one going vacuous
+- **Proposed repair, not yet reviewed**: when the working tree or index has board changes, compare the **staged/working board** against `origin/main` (or the merge-base's mainline board) rather than dispatching on HEAD's shape. Keep the fail-open posture and keep saying SKIPPED when it genuinely cannot answer — the bug is not the fail-open, it is calling an unanswerable comparison a PASS
+- **Blast radius**: `scripts/**` here is `platform` (the review/blast-radius machinery is individually pinned) — needs its own gate test + `mutation_proven` ledger entry per rule 24
+- **Class**: `feedback_green_check_input_set_width` — the gate is correct; its input set was empty of the change under test
+
+## OI-168 — nothing fires §4.9's "grep the test tree before you land" rule, so it is re-learned by breaking main (P2)
+
+- **Status**: CLOSED · 2026-09-26 · superseded by OI-220's sweep arm · branch `ci-green-batch-a`
+- **Blocked on**: nothing technical — needs the gate written, mutation-proven, ledger entry
+- **Verified**: 2026-09-26 — `scripts/contract_sweep.dart:99` runs `git grep -l -F <basename> -- test/` for every changed non-doc file and runs the hits at pre-push, for EVERY tier. That is this rule, mechanised. The remaining hard-fail flip is owned by OI-220.
+  PRIOR (kept verbatim): 2026-09-07 — the pre-push full suite on `493d230b` failed 3 assertions in **files the batch never opened**: `test/contracts/usage_quota_ledger_writer_to_reader_test.dart` (×2) and `test/scripts/usage_counter_source_lib_test.dart` (×1). None was a code defect; all three were contracts the change deliberately falsified. Cost: one full push cycle (~20 min) plus a red local `main`
+- **Identified**: 2026-09-07 · during OI-162 slice 3a
+- **Symptom**: you change a production file, run the tests you wrote, they pass, and the full suite then fails in test files you never opened — because source-grep contracts pin code by LOCATION and CONTENT, so relocating or repairing something breaks assertions in files the diff does not touch. A targeted run structurally cannot see them.
+
+- **Root cause is NOT ignorance of the rule — it is that the rule has no trigger.** CLAUDE.md §4.9 already carries this class **twice** ("Extracting or moving code breaks source-grep contracts in files you never touched"; "Repairing a broken ENFORCEMENT breaks every test that was silently relying on it not enforcing"), and the second row's closing sentence, written during slice 2, reads verbatim: *"**Expect this again in slices 3-4** — six more quota readers move onto the same ledger."* That row was loaded into context at session start. The grep it prescribes was not run. **Prediction accuracy was perfect; delivery was zero.** This is §4.13 point 6's own law — *everything with a gate holds, everything on intention decays* — applied to a prose row that names its own future failure.
+
+- **Proposed gate** (`scripts/check_test_grep_coverage.dart`, pre-commit, WARN-first per §4.11):
+  for each staged non-test path P, `grep -rln "<basename or symbol>" test/` and print every hit.
+  v1 is a **reporter, not a blocker** — it prints "these N test files reference what you changed;
+  run them" and exits 0. That alone closes the gap, because the failure mode is not knowing, not
+  refusing.
+- **Why not a blocker on day one**: it cannot know which tests were actually run, so a hard fail
+  would either need a test-run ledger (real work) or would block every commit. §4.11 says the gate
+  ships first and flips later; this is the WARN half.
+- **Sharpest form if it graduates**: pair it with the pre-push tier so a `feature`-tier push that
+  skips the full suite gets the reporter's list run explicitly.
+
+- **Recommendation**: write the WARN reporter. Two commands' worth of logic, and it would have caught this exact batch.
+
+## OI-172 — killing a backgrounded `safe_push` does NOT kill the push; it keeps running and can land (P1)
+
+- **Status**: CLOSED
+- **Blocked on**: nothing — option 2 shipped 2026-09-10
+- **Verified**: 2026-09-10 — option 2 shipped. `safe_push.sh` writes a terminal record and `scripts/push_result_lib.dart` reads it; all three outcomes confirmed end-to-end against a real remote (LANDED exit 0, FAILED exit 1, UNVERIFIED exit 2 with an empty `remote_sha`), plus a mid-flight `STARTED` record carrying a live pid. 51 assertions across three files, mutation-proven on 15 legs. Original 2026-09-07 finding: a backgrounded `safe_push.sh` was reported by the harness as `status: killed`; its process (PID 86281) was **still alive**, still holding `.git/.safe_git_op.lock` (`holder` file: `pid=86281 op=safe_push`), and it subsequently completed the full suite and **landed the push** — `[safe_push] OK -- origin/main now at 493d230b… (matches local)`
+- **Identified**: 2026-09-07
+- **Symptom**: the harness's kill terminates the *wrapper* it spawned, not the shell script's own process tree. A reader who trusts "killed" concludes the push did not happen. If they then start a second push, two pushes race one lock; if they conclude the remote is unchanged, they are asserting something they did not check.
+
+- **What saved it this time**: the lock. A second `safe_push` would have found `.safe_git_op.lock` held by a LIVE pid and refused. So the failure mode is not corruption — it is a **false belief about production state**, which is the same class as `feedback_git_landing_verification.md`'s "git said OK but it didn't land", inverted: here the tool said FAILED and it did land.
+- ⚠ **This already has a documented sibling**: that memory file records "a killed push landed anyway and reddened main". The new information is the MECHANISM — the pid survives the harness's kill, and the lock's `holder` file is the way to find out.
+
+- **Options**:
+  1. Document only: after any killed/interrupted git operation, read `.git/.safe_git_op.lock/holder` and `kill -0` the pid before concluding anything. (This is what worked.)
+  2. Have `safe_push.sh` write a terminal result file (`.claude/.last_push_result`) with `LANDED|FAILED|UNVERIFIED` + the sha, so a caller has a machine-readable answer that survives losing the stdout.
+  3. Trap `SIGTERM`/`SIGINT` in the wrapper so a kill releases the lock and records `INTERRUPTED` — ⚠ but NOT so it aborts the push mid-flight, which would be worse.
+
+- **Recommendation**: option 2. It also fixes the adjacent hazard that made this expensive — `safe_push.sh` prints its verdict to stdout, and a caller who appends `; echo $?` gets the ECHO's exit code, not the script's (CLAUDE.md §4.9 documents that footgun; it fired again this session and made a FAILED push read as exit 0). A result file cannot be destroyed by shell composition.
+
+- **RESOLUTION (2026-09-10)**: option 2 shipped, with **two deliberate deviations from the text above**, both recorded because the board is the thing future-me will read:
+  1. **The path is `$(git rev-parse --absolute-git-dir)/.safe_push_result`, NOT `.claude/.last_push_result`.** The option as written would have been the **fourth** instance of "a tool wrote a gitignored file into a worktree and made it permanently unretirable" (`docs/diagnoses/INDEX.md:45`, diagnose `b4d7e9`, OI-128) — `retire_worktree_lib.dart` treats any unlisted gitignored path as PRECIOUS, so it would also have owed that list TWO entries (the file and its `.tmp` mirror). Inside `.git` it is invisible to `git status --ignored` and cannot trip the predicate at all. `--absolute-git-dir` rather than `--git-dir` because the latter is **relative** in the primary worktree. Per-worktree, matching `_git_lock.sh`'s own key, so the existing lock already serialises writes — `--git-common-dir` would be one shared path with no such serialisation, since the lock is keyed on `--git-dir` and two linked worktrees can push concurrently.
+  2. **The reader is CODE, not prose** — `scripts/push_result_lib.dart`, pure parse + classify. Plan review round 3 caught that a prose contract's test had to invent its own reader, making it circular: it could only prove a stand-in agreed with prose by the same author. Same pure-lib/own-test split as `ci_reconcile_state_lib.dart`.
+- **The record also answers the in-flight question, which a terminal-only file could not.** A `STARTED` record carrying the pid is written before the push, so the 2026-09-07 scenario — process still running, no verdict yet — reads as `cat` + one `kill -0`. An earlier draft of this fix claimed it would have replaced a whole `ps` forensics pass; that was wrong for this incident's timeline and the design was widened rather than the claim kept.
+- **Found while fixing it, and fixed in the same batch**: `safe_push.sh:75`'s own guard was inert. Plain `git rev-parse <unresolvable>` prints the NAME to **stdout** and exits 128, so `LOCAL_SHA` became the literal branch string, the `-z` check never fired, and the script pushed a bogus refspec instead of printing "could not resolve local ref". Now `--verify --quiet`, which prints nothing on failure and resolves real branches and tags identically. Surfaced by the new abort test, not by reading.
+- **Residues, neither fixed, both now visible**: a `kill -9` still leaves no record (the same limit `_git_lock.sh`'s trap has — which is exactly why an absent record must read UNVERIFIED, never FAILED); and a **tag** passed where a branch is expected still gets a wrong `FAILED`, because `probe_remote_sha()` hardcodes `refs/heads/$BRANCH`. The record carries `verified_ref` so a reader can SEE the probe used the wrong namespace, but the verdict is still wrong. Zero call sites pass `--tags` today. Option 3 (trapping SIGTERM) remains **rejected**, as the entry itself argued.
+- Diagnose `docs/diagnoses/2026-09-10-safe-push-outcome-not-recorded-a7f3c1.md`; plan review `docs/plan-reviews/oi172-push-result-file.md` (3 rounds).
+
+## OI-178 — pg_cron SQL jobs are structurally invisible to the alerting stack: `cron_call_log` is written only by Edge Functions (P1)
+
+- **Status**: CLOSED (2026-09-27, `ops-alerting-b2a`) — diagnose `b4c8e2` + `f7a3d2`
+- **Blocked on**: none
+- **Resolution**: two new pg_cron alerts, applied live — `alert_sql_job_failures` (migration 145, jobid 46, hourly) reads `cron.job_run_details` for `status='failed'` rows; `alert_cron_job_silent` (migration 146, jobid 47, hourly) reads `cron.job` + `cron.job_run_details` for jobs stopped being launched or switched off. Together they cover both aggravations this entry named: `return_message = "1 row"` hiding retention volume is now filed separately as [[OI-251]] (not this entry's scope — that is disk-observability, not run-visibility), and the kill-switch-with-no-run-row gap is closed by 146's INACTIVE (warn) arm. Residual gaps this fix does NOT close, filed separately: self/correlated silence and the `cron.log_run` dependency ([[OI-250]]). Design converged after 4 rounds (145) / 3 rounds (146) of independent plan review plus an accepted B-pass (`docs/plan-reviews/ops-alerting-b2a.md`).
+- **Verified**: 2026-09-10 — `cron_call_log` holds **1,080 rows across 16 distinct `function_name`s**, and **0 rows** for any of `jrd_retention_daily`, `client_errors_retention_daily`, `jrd_vacuum_daily`, `client_errors_vacuum_daily`. All four are live and `active=true` in `cron.job` (jobids 33–36).
+- **Identified**: 2026-08-16 · Hermes L31-F2, same pass as [[OI-177]].
+- **The mechanism**: pg_cron records every run in `cron.job_run_details`. This project's alerting reads `public.cron_call_log`, which is written **only** by `_shared/cron_telemetry.ts` — i.e. only by Edge Functions. A cron job whose command is pure SQL therefore emits nothing any alert reads, no matter how it fails. `alerts/_thresholds.yaml` has no retention/vacuum/disk entry at all.
+- ⚠ **Two aggravations that make manual inspection useless as a fallback**:
+  - `return_message` is `"1 row"` for BOTH retention jobs (verified live) — that is the wrapping SELECT's row count, not the DELETE's. **Reading it cannot distinguish 29,029 rows deleted from 0 deleted.**
+  - the documented kill switch (`UPDATE cron.job SET active = false`) writes **no run row at all**, and Gate 31 reads migration files rather than live `cron.job.active` ([[OI-177]]), so a job left switched off is noticed by nothing, anywhere.
+- ⚠ **The migration's own header rejects "a human remembering to run it" as a mitigation, and then adopts exactly that.** Worth reading before designing the fix: the gap is not an oversight, it is a mitigation that was argued against and then relied on.
+- **Blast radius**: `supabase/migrations/**` — content-classified; a `SECURITY DEFINER` body forces **catastrophic**, so classify the written file, never the planned path (§4.9).
+- **Class**: `feedback_observability_silent_drop` + `feedback_bad_news_vs_no_news` — a failing job and a job that never ran are the same observation here: nothing.
+
+## OI-181 — nothing catches a MISSING plan-review record at merge time; both prechecks miss the plain absent case (P1)
+
+- **Status**: CLOSED (2026-09-19, `gate-integrity`) — diagnose `b7e2d4`
+- **Blocked on**: none
+- **Verified**: 2026-09-19 — `scripts/safe_merge.sh:235-` classifies the three-dot `refs/heads/main...refs/heads/$BRANCH` range with the real classifier and WARNS (advisory; `NO plan-review record` / `unwinding this merge`) when the tier is ≥ account and `git show $BRANCH:docs/plan-reviews/<slug>.md` is empty — the keystone gate's own predicate (`check_plan_review_record_exists.dart:617-620`) mirrored BEFORE the merge; one `NOTE:` when the classifier yields no tier for a non-empty path list; every other failure path silent; the gate's version-bump exemption deliberately NOT mirrored (OI-222). `test/scripts/safe_merge_test.dart` 12 → 15; 3 mutations = 4 reds (block deleted 1, case arm widened 2, three-dot → two-dot 1; the last re-run by hand by the coordinator). Third instance closed (2026-08-30, `dcb94a93` 2026-09-10, `0768a0ce` 2026-09-19).
+- **Verified (pre-fix, kept)**: 2026-09-10 — live, by causing it. Branch `hipri-parity` (blast-radius `account`, `supabase/functions/**`) was merged as `dcb94a93` with no `docs/plan-reviews/hipri-parity.md`. Neither merge-time guard fired. The warning arrived from `git_safety_hook.dart` at PUSH time — after the merge — and CI's keystone gate reads the record from the tree AT the merge commit, so no later commit can repair that commit's evaluation.
+- **The two-sided gap, and why "there are two prechecks" reads like coverage**:
+  - `scripts/safe_merge.sh` warns when a record CLAIMS `bpass: accepted` while its `bpass_review:` file lacks `verdict: accepted`. It says nothing when the record is **absent entirely** — its whole predicate starts by reading a file that is not there, and every failure path falls through silently BY DESIGN (advisory, must never wedge the only path onto main).
+  - `scripts/git_safety_hook.dart` DOES detect the missing record — and runs on `git push`. By then the merge commit exists and is immutable for this purpose.
+  So the case that is easiest to hit (forgot the record entirely) is the one case checked only after it is too late to fix cheaply. CLAUDE.md §7 already documents the push-time timing as a known limitation of that hook; what is NOT documented is that `safe_merge.sh` does not cover the absent case either.
+- ⚠ **Cost, measured not estimated**: a red `main`. The repair for a merged-without-record branch is a `git reset --hard` unwind, which §7 records costing a full cycle on 2026-08-30 — the same shape, six weeks apart.
+- **Proposed repair**: extend `safe_merge.sh`'s existing precheck with the absent-record case — it already computes `recordSlug(branch)` and already reads `git show "$BRANCH:<path>"`, so this is a `git cat-file -e` on a path it has in hand. Keep it ADVISORY for the same reason the rest of that script is: a hygiene guard must never be the thing that blocks landing work. An advisory warning BEFORE the merge is worth more than a hard block after it.
+- ⚠ **Do not "fix" this by making the hook block the push** — that is the wrong end. The push-time check is already correct and already fires; the problem is that merge time has no equivalent.
+- **Blast radius**: `scripts/**` is individually pinned `platform`; needs its own test (`test/scripts/safe_merge_test.dart` already exists and its fixture commits the record ON THE BRANCH deliberately — extend it with an absent-record leg) plus mutation proof.
+- **Class**: `feedback_gates_unsatisfiable_at_merge` + `feedback_green_check_input_set_width` — two guards whose union looks total and whose intersection with "record absent, before the merge" is empty.
+
+## OI-183 — `enforce_vision_analysis_daily_limit`'s channel guard is NULL-unsafe, unlike its two siblings (P3, dormant)
+
+- **Status**: CLOSED (2026-09-13, `oi153-pro-media-caps`, migration 132) — OI-153 Unit F
+- **Blocked on**: none
+- **Verified**: 2026-09-13 — LIVE: `pg_get_functiondef` shows the guard as
+  `IF NEW.channel IS NULL OR NEW.channel NOT IN ('scan_meal', 'cart_auditor') THEN`
+  (migration 132 applied 07:28:48 IST, cloud version `20260913015848`);
+  `test/sql/oi153_pro_media_caps_live_verify.sql` Part B ran green inside a
+  rolled-back transaction — a NULL-channel insert leaves the `vision_analysis`
+  ledger row untouched while a `scan_meal` control consumes one unit — and
+  the DISCRIMINATION run (migration 129's body restored in the same rolled-back
+  transaction) turned that probe RED, so the probe measures 132 and not
+  nothing. SOURCE: `cap_triggers_use_usage_counters_test.dart` "every channel
+  guard is NULL-safe" pins the `IS NULL OR` arm on the vision trigger and
+  `IS DISTINCT FROM` on the two siblings; mutation M12 (the arm removed from
+  132) reddens exactly that test, 1/11.
+- **CLOSED BY**: migration 132 (`132_vision_trigger_null_channel_guard.sql`)
+  — migration 129's vision body verbatim with the one guard line made
+  NULL-safe. Shipped as OI-153 Unit F on the founder's 2026-09-12 apply-go,
+  in the same apply commit as migration 131. Still dormant at closure (0
+  NULL-channel rows), which is the point: the sibling asymmetry was the
+  shape a future writer copies.
+- **Was** (retained for provenance):
+- **Verified (at filing)**: 2026-09-11 — read the live trigger body directly; confirmed
+  `ai_coach_interactions.channel` is nullable (`information_schema.columns`)
+  and holds 0 NULL rows today (live count query)
+- **What**: `enforce_vision_analysis_daily_limit`
+  (`supabase/migrations/129_cap_triggers_use_usage_counters.sql:149`) guards
+  its early-return with `IF NEW.channel NOT IN ('scan_meal', 'cart_auditor')
+  THEN RETURN NEW; END IF;`. Its two siblings in the same migration use the
+  NULL-safe form instead: `IF NEW.channel IS DISTINCT FROM 'app' THEN` (chat,
+  line 99) and `IF NEW.channel IS DISTINCT FROM 'food_text_analysis' THEN`
+  (food_text, line 183). In Postgres, `NULL NOT IN (...)` evaluates to NULL,
+  and PL/pgSQL treats a NULL `IF` condition as false (the branch is NOT
+  taken) — so a row with `channel IS NULL` does not take the early return and
+  falls through to `consume_quota('vision_analysis', ...)`, unlike the other
+  two triggers, which correctly early-return for any non-matching value
+  including NULL.
+- **Consequence**: dormant today (0 NULL-channel rows exist, and nothing in
+  `lib/` or any Edge Function writes a NULL channel deliberately), but any
+  future write path that omits `channel` would silently consume a vision-
+  analysis quota unit for a row that was never a vision request, and could
+  eventually raise `vision_analysis_daily_limit_reached` for an unrelated
+  insert.
+- **Surfaced by**: `docs/audit/oi162-slice4-channel-enumeration.md:66-73`
+  (OI-162 slice 4's own channel census), which correctly identified and
+  labelled the class (`guard_without_its_mirror`) and correctly assessed it
+  as dormant and out of scope — but never minted an OI for it, unlike the
+  sibling out-of-scope discovery from the same review round (OI-182), which
+  was filed properly. Caught by slice 4's own B-pass review (Finding 2 —
+  the file is hash-named and was renamed three times as the batch grew;
+  `docs/plan-reviews/oi162-slice4-windowed-counters.md`'s `bpass_review:`
+  field is the stable pointer to it), which is the correct
+  outcome but should not have been necessary — a dormant defect found during
+  a batch's own investigation should not depend on a later reviewer
+  re-reading prose to be rediscovered.
+- **Proposed repair**: `IF NEW.channel IS DISTINCT FROM 'scan_meal' AND
+  NEW.channel IS DISTINCT FROM 'cart_auditor' THEN RETURN NEW; END IF;` (or
+  equivalent NULL-safe rewrite) via `CREATE OR REPLACE FUNCTION`, same shape
+  as migration 129's own two correct siblings. Mechanically trivial; treat
+  as its own reviewed unit since it touches a live cap trigger, not a
+  drive-by edit.
+- **Blast radius**: `supabase/migrations/**` — platform tier (live Postgres
+  trigger function).
+- **Related**: OI-162 (parent), OI-182 (sibling out-of-scope finding from the
+  same review round, filed correctly the first time).
+
+## OI-189 — Edit-Profile regen now stops at `plan_end`, so orphan rows past it keep OLD-GOAL workouts after a goal change (Q7 from the OI-166 review, dropped by the Unit 2 re-plan) (P2)
+
+- **Status**: CLOSED (2026-09-13, `oi189-plan-end-bound`) — diagnose `b9e4d1`
+- **Blocked on**: none — founder decided 2026-09-12: option (b), widened to a sweep on BOTH regen paths (D2: user-placed rows past `plan_end` are swept too); the restore residual stays on OI-174 (D1)
+- **Verified**: 2026-09-13 — closed by `oi189-plan-end-bound`: `test/contracts/oi189_plan_end_bound_behavioral_test.dart` 27/27 (12 behavioural through the real plan()→cache()→execute() path + 9 source pins incl. B-pass B-1's sim push pin + 6 unit tests on the extracted phaseNote()/phaseDayLabel()), 22 mutation legs each reddened; both prod censuses (plan_json + scheduled_workouts, 10 users, 369 rows each) → 0 rows past `plan_end`
+- **Identified**: 2026-09-06 as **Q7** in OI-166's plan review (round 3), parked on the OI-166 entry *"because an open question inside a document under rewrite has no owner"* — and then lost anyway: the Unit 2 re-plan (v4→v10), nine review rounds and the B-pass contain **zero** mentions of it (`grep -c 'Q7\|orphan rows\|refresh regression'` over the plan, diagnose `d7f3b2`, the record and rounds 5-9 → 0). Filed as its own number 2026-09-12 by the post-ship audit.
+- **Mechanism (verified)**: writer B (`WorkoutScheduleReadService.generateAndScheduleFromDate`, called from `edit_profile_screen.dart:2029` via `workout_schedule_service.dart:118`) has ALWAYS deleted only `today..planEnd` (`workout_schedule_read_service.dart:362`, unchanged since before Unit 2). Before Unit 2 its WRITE loop laid out 4 weeks from the regen date regardless of `plan_end` (`for (int week = 0; week < 4; week++)` at old `:435`) — which is exactly how OI-174's orphan rows past `plan_end` were CREATED, and which also meant a goal change REWROTE any orphans that already existed. Unit 2 bounded the write loop at the stored `plan_end` (`:489 … date.isAfter(effectivePlanEnd) → skip`). Net effect: B no longer manufactures orphans (good), but orphans manufactured earlier are now neither deleted nor rewritten by an Edit-Profile regen, so after a goal change they keep the OLD goal's workouts. They stay user-visible for as long as OI-174 says orphans live (`isPhaseExpiredFrom` keeps the phase looking un-expired while any row exists on-or-after today).
+- **Scope, so it is not over-read**: writer C (`RegeneratePlanPlanner.plan`, the coach's `switchGoal` / `regeneratePlanBlock`) is NOT bounded at `plan_end` — it still writes its requested `weeks` from today (no `plan_end` reference in `regenerate_plan_planner.dart`), so the coach's switch-goal refreshes the same rows it always did. C therefore also still CREATES orphans past `plan_end`; that half belongs to OI-174, not here.
+- **Options** (carried verbatim from the round-3 question, plus what Unit 2 changed about them):
+  1. **(a) Accept until OI-174's prune** — leaves stale forward workouts after an explicit goal change for the lifetime of the orphans. Cheapest; contradicts what the user asked for.
+  2. **(b) Extend B's DELETE range past `plan_end` to cover existing forward rows** — i.e. OI-174's prune scoped to the rows this one regen is replacing. The delete loop at `:362` is the single site; the write loop stays bounded. "Rows this regen is replacing" is a smaller claim than a global prune. **Lean: (b)**, unchanged from round 3.
+  3. A THIRD option Unit 2 makes available: since B now stamps `plan_end`-bounded rows and C does not, unify the two under OI-190's de-duplication and decide the horizon ONCE there. Only worth it if OI-190 is picked up first; otherwise (b) stands alone.
+- **Regression test owed with the fix**: seed orphan rows dated `plan_end+1..plan_end+7` carrying goal X, run an Edit-Profile regen with goal Y, assert the rows are (b) deleted or (a) explicitly still X and documented as such — the behavioural file for Unit 2 (`oi166_unit2_regen_content_cycling_behavioral_test.dart`) seeds the same Hive boxes and is the natural home.
+- **Blast radius**: `lib/core/services/**` default → `account` (`docs/blast_radius.yaml:326`); no schema, no EF.
+- **Related**: OI-166 (parent, still OPEN on OI-175), OI-174 (the orphans' existence + prune design — this is the *content* of those rows, that is their *lifetime*), OI-175, OI-190.
+- **CLOSED 2026-09-13 by `oi189-plan-end-bound` (diagnose `b9e4d1`)**: (1) writer C (`RegeneratePlanPlanner.plan()`) now bounds every day at the stored `plan_end` by the same literal-date comparison B uses, and reports `totalWeeks` (bounded) / `requestedWeeks` / `phaseEndsOn` / `clearsPastPhaseEnd`; (2) one shared sweep `WorkoutScheduleReadService.sweepNonCompletedRowsPastPlanEnd` runs on B and on both coach commit sites — removes non-completed `schedule_*` rows of any type and `displaced_*` shadows past `plan_end`, keeps completed history, no-op unless BOTH window keys are stored; (3) every writer that sweeps or MOVES the window pushes `plan_json` immediately (B, both coach commits incl. the "nothing to write" branch, `redoWeek4`, and A only at its two phase-advance sites via `pushPlanWindow: true` — the reinstall/repair callers must NOT push, they would replace the cloud copy); `pushWorkoutPlanForSyncDomain` gained the `pausedForSimulation` guard. Five context-blind review rounds (plan v5) + a two-reviewer B-pass (`docs/reviews/oi189-plan-end-bound-bpass.md`) that fixed 3 more findings in-batch: the sweep now also honours `completed` on `displaced_*` shadows (not just `schedule_*` rows), the dev year-sim harness's end-of-run flush now pushes `plan_json` too (it never did — every in-loop push had been no-op'd by the very `pausedForSimulation` guard this unit added), and `_phaseNote`/`_dayLabel` were extracted from both diff-preview widgets into a shared `phase_note.dart` with 6 new unit tests (the two widgets' private copies had zero coverage). Residuals: OI-174 (cloud `scheduled_workouts` never pruned; restore writers unbounded; offline-advance revert window; a NEW fourth residual from the B-pass — a future-dated completed row keeps `isPhaseExpiredFrom` false), OI-190 (coach-card copy for the bounded case: EF `previewSummary` + `_executedMessage`).
+
+## OI-195 — Gate 42 accepts any non-empty `behavioral_test_path:` / `presence_only:` text and never checks the cited file EXISTS (P3, gate gap, zero live violations)
+
+- **Status**: CLOSED (2026-09-19, `gate-integrity`) — diagnose `c7d2e4`
+- **Blocked on**: none
+- **Verified**: 2026-09-19 — every `behavioral_test_path(_*)` value (comment-stripped; sibling `_cqrs` key at registry `:826` included) and every repo-shaped path inside `presence_only` prose / `presence_only_reason` blocks (block scalar, blank lines kept, or plain) is resolved on disk via ONE helper (`_missingOnDisk`, `FileSystemEntity.typeSync` — a DIRECTORY citation is valid; `File.existsSync` would have flagged `test/sql/` as missing, caught at integration). Real registry: `138 behavioral_test_path value(s) + 4 presence_only prose citation(s) resolved on disk`, 0 missing; positive control with 2 injected fakes → exit 1 naming exactly those two. `test/scripts/sot_behavioral_test_paths_gate_test.dart` 10 tests; 5 mutations = 12 reds; ledger promoted out of the grandfathered set. The tally now counts every `presence_only: true` line: **17 (10 also cite a behavioral path; 7 presence-only)** — the "7" the gate printed before, and the "6" CLAUDE.md rule 21 carried, both counted only the presence-only-WITHOUT-behavioral subset, which is the under-report OI-161 documents as its third instance.
+- **Verified (pre-fix, kept)**: 2026-09-13 — `grep -n "existsSync\|File(" scripts/check_sot_behavioral_test_paths.dart` → only `docs/sot_registry.yaml` itself is opened; a census of the registry's 134 distinct `behavioral_test_path:` values found **0 missing** today (`test -e` over each), so this is a gap, not a live breach
+- **What**: rule 21 says every SoT concept MUST have a `behavioral_test_path:` (or `presence_only: true` with a justification). Gate 42 enforces the FIELD is present and non-empty; it never resolves the value. A concept can cite a test that was never written — or, the case the OI-153 B-pass caught (its finding 2), a `presence_only:` justification can cite a live-verify SQL file that did not exist yet — and the gate is green. `check_sot_registry_parity.dart` DOES resolve writer/reader `file:` citations, so the asymmetry is within one registry: the writer/reader half is checked, the test half is not.
+- **Why it is cheap and worth doing**: the fix is the same `existsSync` the parity gate already runs; the `presence_only:` prose is free text and should be scanned for repo-shaped paths (`test/…`, `docs/…`) the same way `check_sot_registry_citations.dart` scans diagnose-docs for identifier-shaped citations.
+- **Blast radius**: `scripts/**` pinned platform (gate script); rule 24 applies (mutation-proven test + ledger entry).
+- **Related**: OI-153 (found by its B-pass), OI-180 (the same registry's other silently-skipped field), `feedback_mistake_unverified_done_claims` (a path is a claim).
+
+## OI-198 — pr-detection cron: repeated Gateway Timeout on paged_fetch (4x in 24h, 2026-09-13/14)
+
+- **Status**: CLOSED · 2026-09-26 · no recurrence · branch `ci-green-batch-a`
+- **Blocked on**: none
+- **Verified**: 2026-09-26 — LIVE: 812 success / 0 non-success pr-detection rows in retained `cron_call_log` (earliest retained row 2026-09-14; the failures were 09-13). Closed on that evidence. The CAUSE (disk-IO starvation era, or migration 141's hourly-cadence change) is a HYPOTHESIS, not a finding. Note the 12-day-deep retention is itself a symptom of the failing `db_maintenance_nightly` job (filed separately 2026-09-26).
+  PRIOR (kept verbatim): 2026-09-14, live query against `public.cron_call_log`
+- **Identified**: 2026-09-14 · filed via mint_oi.sh from branch `telegram-admin-bot`
+- **How found**: telegram-admin-bot's `/status` smoke test (Task 13, Step 5) reported
+  "Cron failures (24h): 4" — unexpected against the naive assumption of a quiet cron
+  schedule. Independently verified by re-running `founder_metrics_ops()`'s live SQL
+  (`select count(*) from public.cron_call_log where started_at >= now() - interval '24
+  hours' and (status = 'failed' or (status = 'started' and started_at < now() - interval
+  '1 hour')))`) — matched the bot's reported 4 exactly, plus the underlying rows.
+- **Evidence**: all 4 failing rows are `function_name = 'pr-detection'`, `status =
+  'failed'`, `http_status = 500`, error `paged_fetch[pr-detection prs]: page 0 (rows
+  0-999) failed: Gateway Timeout`, at 2026-09-13 19:30/20:45/21:30/23:45 UTC
+  (request_ids `8c2ec592`, `052a49ab`, `b4ca04c1`, `7e2ce940`).
+- **Scope note**: pre-existing production reliability issue, unrelated to the
+  telegram-admin-bot batch's own code — `pr-detection` and its `_shared/paged_fetch.ts`
+  usage are untouched by this branch. Out of scope to fix here; filed so it isn't lost.
+  The consistent shape (page 0, rows 0-999, every failure) suggests the first page's
+  query itself is timing out rather than an intermittent network blip — worth checking
+  the `prs`-source query plan / row count before assuming it's transient.
+
+## OI-204 — Full-rescan sync architecture (_syncExerciseLogs/_syncNutritionLogs) times out at 45s under growing history
+
+- **Status**: CLOSED · 2026-09-19 · Both halves shipped in the
+  `oi204-delta-sync` batch: exercise-log fingerprint-skip (`a44dafb5`, Task 2)
+  and nutrition-log fingerprint-skip (Task 3, this commit — closes-diagnose
+  `d3f8a6`). Extends the proven H1b Part A pattern
+  (`sync_scheduled_payload_hash_index`) to both `_syncExerciseLogs` and
+  `_syncNutritionLogs`: a sync-owned fingerprint index lets an unchanged
+  key/slot skip its idempotent re-upsert instead of re-walking the entire
+  historical log every coalesced pass. See
+  `docs/diagnoses/2026-09-19-full-rescan-sync-timeout-d3f8a6.md` for the
+  full root cause + fix + verification detail on both domains.
+- **Blocked on**: none
+- **Verified**: 2026-09-16, `client_errors` telemetry for user `d7a67a37` (founder's
+  device) + live read of `lib/core/services/sync/sync_workout.dart:185-308` and
+  the `_syncNutritionLogs` sibling in `sync_nutrition.dart`
+- **Identified**: 2026-09-16 · filed via mint_oi.sh from branch `apk43-obs-fixes`
+- **How found**: investigating APK +43 founder observations 1 (snack save fails)
+  and 2 (AI coach stuck apologising). Neither symptom's own root cause is this
+  bug, but `client_errors` showed a 25+ hour sustained pathology overlapping
+  both windows: since 2026-09-14 ~23:06 IST, **424** `restore_op_done` events,
+  **34×** 45s `TimeoutException` on `sync_exercise_logs`, **22×** on the
+  generic `sync_service_restore_op_timeout` wrapper, **11×** on
+  `sync_nutrition_logs`, plus one DNS failure and one Supabase PGRST002
+  "schema cache… Service Unavailable" blip. Still ongoing as of the last query
+  (2026-09-16 00:11 IST).
+- **Root cause**: `syncWorkoutData()`/`syncNutritionData()` are the COALESCED,
+  per-write fire-and-forget sync entries (`lib/core/services/CLAUDE.md`'s
+  `SyncCoalescer` — fired after every `WorkoutWriteService.logExercise` /
+  `NutritionWriteService.logMeal`). `_syncExerciseLogs` (`sync_workout.dart:185`)
+  and `_syncNutritionLogs` iterate **every** Hive key with the domain prefix
+  (`exlog_*` / `nlog_*`) — the ENTIRE historical log, not just what changed
+  since the last sync — and `await`s an individual `.upsert()` network call
+  per row, sequentially, inside the loop (`sync_workout.dart:287-308` for the
+  summary row alone; per-set rows add more). No "unchanged since last sync"
+  skip exists anywhere in this path. As the founder's historical log count
+  grows, each coalesced pass takes proportionally longer; `restore_op_done`
+  telemetry shows individual passes at 14-40s even on success, and `_safeRestoreOp`'s
+  45s `restoreOpTimeout` ceiling (`sync_service.dart:2204`, added 2026-08-07 for
+  a DIFFERENT class — an unbounded wedge, diagnose b7e4c1) now gets tripped
+  routinely rather than only on a genuine network wedge.
+- **Consequence**: every workout set or meal logged fires another full
+  historical re-sync in the background; on this account it now frequently
+  exceeds 45s and aborts (silently, from the user's perspective — `_safeRestoreOp`
+  swallows the timeout and reports only to telemetry). Plausible (unconfirmed)
+  contributor to APK +43 observation 1 (snack save) via device resource
+  contention during the save window, though the actual observation-1 root
+  cause was traced to a separate telemetry gap (see the `apk43-obs-fixes`
+  branch's diagnose-docs for observations 1 and 2, shipped in this same batch).
+- **Fix shape (not decided)**: real fix is incremental/delta sync — track a
+  per-row "last synced" marker (timestamp, dirty-flag, or hash) so
+  `_syncExerciseLogs`/`_syncNutritionLogs` only push rows that changed since
+  their last successful sync, collapsing each coalesced pass from O(total
+  historical rows) to O(rows changed). This is a platform-blast-radius change
+  to `sync_fanout_workout_domain`/`sync_fanout_nutrition_domain` — a
+  SoT-registered, contract-tested concept (`test/contracts/sync_fanout_contract_test.dart`,
+  `docs/architecture/sync.md`) in the codebase's most heavily-guarded
+  subsystem (writer/reader drift is the single most recurrent bug class here).
+  Needs its own §4.11 gate-before-refactor + §4.12 ×2 plan review, not a
+  same-batch patch.
+- **Scope note**: founder explicitly scoped this out of the apk43-obs-fixes
+  batch (2026-09-16) — document + file now, design + implement as its own
+  dedicated follow-up.
+
+## OI-206 — retire_worktree.dart's regenerable-ignored-paths allowlist is missing deno.lock
+
+- **Status**: CLOSED · 2026-09-26 · already fixed in `8bf79dde` (2026-09-18) · branch `ci-green-batch-a`
+- **Blocked on**: none
+- **Verified**: 2026-09-26 — `'deno.lock'` is at `scripts/retire_worktree_lib.dart:255`; `8bf79dde` is an ancestor of `main`; `test/scripts/gitignore_classification_test.dart` pins every literal `.gitignore` entry into exactly one list. The board was never updated.
+  PRIOR (kept verbatim): 2026-09-16, live read of `scripts/retire_worktree_lib.dart:236-303`
+  (`regenerableIgnoredPaths`) — no `deno.lock` entry anywhere in the list —
+  plus `.gitignore:140` (`deno.lock` is gitignored, 0 tracked files by that
+  name per `git ls-files`) and a live check of the primary worktree, where
+  `deno.lock` exists untracked (16,625 bytes, last written 2026-07-27),
+  produced as a side effect of running Deno tooling and never committed.
+- **How found**: while closing out plan-review round 2 on the apk43-obs-fixes
+  batch, which added `deno check --node-modules-dir=none` runs against
+  `tool-loop.ts` and `ai-proxy/index.ts` per CLAUDE.md's Deno mandate — each
+  run leaves a fresh `deno.lock` in the worktree root.
+- **Root cause**: the allowlist is exact-match-only by design (its own header
+  comment records three prior review rounds each finding a P0 from looser
+  matching), so it only protects paths someone has explicitly enumerated.
+  `deno.lock` was never added — most likely because Deno itself was not
+  installed on this machine until 2026-09-12 (CLAUDE.md's git-hooks section,
+  Deno 2.9.6 via winget), so before that date no worktree could produce the
+  file at all and the gap was latent rather than live.
+- **Consequence**: CLAUDE.md now directs running `deno check
+  --node-modules-dir=none supabase/functions/<fn>/index.ts` (and `deno test`)
+  on every touched Edge Function before the commit. Both commands write
+  `deno.lock` into the worktree root as a side effect. Any worktree that
+  follows that mandate and then merges cleanly will report `KEEP` from
+  `retire_worktree.dart` forever afterward — leg 3 (no non-regenerable
+  ignored files) fails on a file that is, in fact, fully regenerable
+  (`deno check`/`deno test` recreate it byte-for-byte from
+  `supabase/functions/**`'s import graph). Same bug-class this exact file has
+  already fixed twice before, for `.claude/.batch_close_state` (diagnose
+  `b4d7e9`, OI-128's shape) and the `.claude/.ci_reconcile_pending.jsonl`
+  pair — a tool that writes a new gitignored file into the worktree owes this
+  list an entry, and the 2026-09-12 Deno adoption shipped without one.
+- **Fix shape (not decided)**: add `'deno.lock'` as one more exact-match entry
+  to `regenerableIgnoredPaths` (`scripts/retire_worktree_lib.dart:236`), with
+  a comment citing this OI, plus a case in
+  `test/scripts/retire_worktree_lib_test.dart` asserting
+  `isRegenerableIgnored('deno.lock')`. Filed only, not implemented, per
+  founder instruction (documentation-only batch).
+- **Identified**: 2026-09-16 · filed via mint_oi.sh from branch `deno-lock-retire-fix`
+
+## OI-209 — check_sot_registry_parity.dart's line_range parser is blind to bare (non-dash) entries -- 15 stale citations invisible, 14 predating cron-ai-removal in unrelated subsystems
+
+- **Status**: CLOSED · 2026-09-26 · DUPLICATE of OI-180 (same line_range regex); its violation census moved onto OI-180 · branch `ci-green-batch-a`
+- **Blocked on**: none
+- **Verified**: 2026-09-26 — read side by side with OI-180; the survivor carries this entry's content (see its 2026-09-26 UPDATE).
+  PRIOR (kept verbatim): 2026-09-16, B-pass on the cron-ai-removal batch
+  (`docs/reviews/247d945d1ba0-review.md` Finding 4) plus independent
+  re-verification. `scripts/check_sot_registry_parity.dart`'s block-form
+  parser (`blockRegex`) requires a dash-separated `line_range: N-M` —
+  `grep -cE "^\s*line_range:\s*[0-9]+\s*$" docs/sot_registry.yaml` finds
+  **30** bare-number entries the gate has never checked at all. Widening
+  the regex to accept a bare `line_range: N` as a 1-line range (the same
+  convention the file's own `ist_sites` inline-map parser already applies
+  for `line: N`) surfaces **15** stale-line-range errors, spanning
+  `lib/core/services/phase_progress_reconciler.dart`,
+  `lib/core/services/sync_service.dart` (x2),
+  `supabase/functions/streak-guardian/index.ts`,
+  `lib/features/auth/screens/sign_in_screen.dart` (x3),
+  `lib/core/services/supabase_service.dart` (x4),
+  `lib/features/profile/services/notification_inbox_service.dart` (x2),
+  `lib/core/services/day_rollover_service.dart` — confirmed via
+  `git diff main...cron-ai-removal -- docs/sot_registry.yaml` that NONE of
+  these 15 registry entries were touched by this batch's diff, i.e. all 15
+  predate this branch. The one entry this batch's own review actually
+  named (`streak-guardian/index.ts`, `line_range: 214`, method
+  `streakDays`) was corrected directly in the same batch
+  (`docs/sot_registry.yaml`, now `264`, matching
+  `grep -n "const streakDays" supabase/functions/streak-guardian/index.ts`
+  → line 264) — trivial, verified, no gate-behavior change required. The
+  other 14 are unrelated to cron-ai-removal (auth, sync, notification
+  inbox, day rollover) and were deliberately NOT fixed in that batch —
+  see Scope note.
+- **Scope note**: `check_sot_registry_parity.dart` runs UNCONDITIONALLY in
+  the pre-commit gate loop (`scripts/pre-commit.sh:324`, `for GATE in
+  scripts/check_*.dart`, not in the case-skip allowlist), on every commit
+  in the whole repo, with no arguments (hard-fail mode, not
+  `--warn-only`). Widening the parser without first fixing all 15 exposed
+  violations would fail pre-commit for every future commit until they
+  are all cleared — a repo-wide blocking-gate regression wildly out of
+  proportion to a "remove Gemini calls from cron functions" batch, and
+  touching 5 subsystems that batch never opened a single file in. Reverted
+  the parser widening from the worktree rather than commit it half-done
+  (`git checkout -- scripts/check_sot_registry_parity.dart`); filed here
+  instead per precedent OI-207 (same shape: a review found stale
+  `sot_registry.yaml` citations predating the batch that found them, filed
+  separately rather than folded in).
+- **Suggested fix**: (1) widen the parser per the diff already drafted and
+  reverted (accept a bare `line_range: N` as `N-N`); (2) fix the 14
+  newly-exposed pre-existing stale citations, most likely across several
+  small, unrelated commits grouped by subsystem rather than one giant
+  diff; (3) land the parser widening only once (2) is clean, so the gate
+  never goes red for a pre-existing reason.
+- **Identified**: 2026-09-16 · filed via mint_oi.sh from branch `cron-ai-removal`,
+  during the self-triggered `/code-review` B-pass required before merge
+  (CLAUDE.md §4.3).
+
+## OI-223 — check_migrations_live cannot pass by construction: 125/139 local migrations never registered live (75 founder raw-SQL applies) -- retire in favour of Gate 14 or redesign the matcher
+
+- **Status**: CLOSED (2026-09-19, `gate-integrity`) — retired (no diagnose-doc: a deletion, not a `fix`/`bug`/`regression` commit)
+- **Blocked on**: none
+- **Verified**: 2026-09-19 — founder chose RETIRE. Six sites done: `scripts/check_migrations_live.dart` deleted; `docs/audit/gate_test_ledger.yaml` entry removed; `check_gate_scripts_wired.dart`'s `_allowList` entry removed (Gate 33 PASS on the real tree, 96 `check_*`, down from 97); the two case-skip lines removed from `pre-commit.sh` and `test.yml`; `test/contracts/phase_c_oi_closures_test.dart`'s OI-34 group INVERTED (asserts the file no longer exists, not deleted, so a reintroduction with no ledger/allowlist entry is caught — 58/58 green); `docs/runbooks/restore-drill.md` step 5 repointed at Gate 14 (`check_migrations_applied.dart`) + a manual cross-check note. Original verification kept below.
+- **Verified (pre-retirement, kept)**: 2026-09-19 — exact run from the primary with the PAT: exit 1, `local migrations: 139, live migrations: 130`, `FAIL — 125 local migration(s) NOT applied live`; 14/139 prefix matches
+- **Identified**: 2026-09-19 · filed via mint_oi.sh from branch `worktree-agent-a57ce47ba764ba91c` (gate-integrity batch, OI-155 unit)
+
+`scripts/check_migrations_live.dart` compares every local `supabase/migrations/*.sql`
+numeric prefix (139 distinct prefixes over 142 files; `all_*` skipped) against the live
+versions the Management API lists at `/v1/projects/<id>/database/migrations` (`:58`). Its own header
+(`:27-32`) admits the local→live matcher is a prefix HEURISTIC. It cannot pass by
+construction: `backups/applied_migrations.json` records **75 `applier: founder`** raw-SQL
+applies (25 `claude`), and a raw-SQL apply never registers a version in Supabase's
+migrations table, so those files are "unapplied" to this gate forever. Only 14 of 139
+prefixes match a live version.
+
+Where it runs today: NOWHERE automated. Case-skipped in `scripts/pre-commit.sh:333` and
+`.github/workflows/test.yml:243`; its allowlist prose in `check_gate_scripts_wired.dart`
+claimed "runs in /build-apk skill Gate 14b" — `grep -ic 14b .claude/commands/build-apk.md`
+→ 0, and build-apk's "first failure stops the build" would have stopped every full-gate
+build had it been wired. Its ONLY documented runner is by hand
+(`docs/runbooks/restore-drill.md:63`), where it fails. The OI-155 fix (gate-integrity
+batch) replaces that prose with a machine-checked `GateRunner.manual('OI-223', …)` entry:
+Gate 33 now re-verifies on every commit that THIS OI is still OPEN/IN_PROGRESS — closing
+it without giving the gate a real runner (or deleting the gate) turns Gate 33 red.
+
+**Recommendation: RETIRE.** Gate 14 (`scripts/check_migrations_applied.dart`) +
+`backups/applied_migrations.json` already own "applied live", and the live matcher
+contradicts the project's own raw-SQL apply history. **Retire checklist (six sites, all
+in one commit):** delete `scripts/check_migrations_live.dart`; its
+`docs/audit/gate_test_ledger.yaml` entry (`:391`); its `_allowList` entry in
+`scripts/check_gate_scripts_wired.dart` (the stale-key mirror there FAILS if the file
+goes and the entry stays); its case-skip lines `scripts/pre-commit.sh:333` +
+`.github/workflows/test.yml:243`; the exists-assertion at
+`test/contracts/phase_c_oi_closures_test.dart:81-85` (OI-34's "exists" pin — repoint it
+to the retirement, do not just delete the group); and the by-hand invocation at
+`docs/runbooks/restore-drill.md:63`. **Redesign alternative:** match by file CONTENT
+hash against `backups/applied_migrations.json` (the ledger Gate 14 already validates)
+instead of by live version prefix — then the gate would be a ledger-vs-disk check, which
+Gate 14 already is, which is the argument for retiring.
+
+## OI-224 — alert_cron_function_dead threshold unreachable, cron_call_log pruned at 7 days
+
+- **Status**: CLOSED · 2026-09-26 · DUPLICATE of OI-179 (same predicate, same prune interaction) · branch `ci-green-batch-a`
+- **Blocked on**: none
+- **Verified**: 2026-09-26 — read side by side with OI-179; the survivor carries this entry's content (see its 2026-09-26 UPDATE).
+  PRIOR (kept verbatim): 2026-09-20 — live on dedsavbjuwgarrhphgnl: `cron_call_log` `min(started_at)` 7.04 days back, alert has fired 0 times ever, `cleanup_cron_call_log()` body unchanged (still 7-day / global-newest-success)
+- **Identified**: 2026-08-16 (Hermes pass, `debugging-stuck-issue-89b2e9`) — re-verified + filed 2026-09-20 via mint_oi.sh from branch `oi224-alert-cron-threshold`
+
+`alert_cron_function_dead` (migration 110, `supabase/migrations/110_cron_silence_per_function_and_cleanup_null_guard.sql:112`)
+fires on `days_silent >= 8`, where `days_silent` is computed from `MAX(started_at)`
+over `public.cron_call_log` filtered to `status = 'success'` (`:107`). But
+`cleanup_cron_call_log()` (`:30-47`, run daily as `cron_call_log_cleanup_daily`,
+jobid 23, 03:30 UTC) prunes that same table to `started_at < now() - interval
+'7 days'` (`:37`), sparing only the single newest success row and the single
+newest row of any status — GLOBALLY, not per function.
+
+The ceiling this creates: `days_silent` for ANY function can never exceed roughly
+7 days plus the gap between two consecutive cleanup runs (~24h), because the row
+that would prove a longer silence is deleted before the alert's next tick. The
+`>= 8` threshold sits just past that ceiling — unreachable by construction, not
+by bad luck. Verified LIVE, twice, six weeks apart (2026-08-16 and 2026-09-20):
+`min(started_at)` in `cron_call_log` reached back 7.21 days on the first check
+and 7.04 days on the second; `select count(*) from public.alerts where source =
+'alert_cron_function_dead'` returns 0 both times. The alert has never fired once
+since it was created (migration 110).
+
+Consequence: the ONE alert designed to catch a single dead cron function (as
+opposed to `alert_cron_silence`, which only catches a total fleet outage) cannot
+ever fire. A function that silently stops succeeding — the exact scenario
+`alert_cron_function_dead`'s own doc comment describes, "boot failure, a module
+that fails to load writes NO cron_call_log row at all, and pg_cron still
+reports success" — gets no alert, ever, regardless of how many days pass.
+
+Two independent fixes, either sufficient alone:
+- Lower the threshold below the achievable ceiling (`>= 6` would clear it with
+  margin; `>= 8` needs either a longer cleanup retention or a per-function
+  spare in `cleanup_cron_call_log` rather than one global newest-row).
+- Make `cleanup_cron_call_log` spare the newest SUCCESS row PER FUNCTION_NAME,
+  not one global newest-success row — this also closes a second latent gap:
+  a function that has never once succeeded recently while others have keeps
+  ZERO rows after cleanup regardless of the threshold, because the single
+  global newest-success spare belongs to whichever function ran most recently.
+
+Found by a Hermes pass (L1-F3) on `claude/debugging-stuck-issue-89b2e9`, a
+branch whose own migration work (log-table retention) was independently
+reconstructed and shipped to main as `121_log_table_retention.sql`
+(OI-132/c8e5b3) before this branch was ever merged — this finding is the one
+piece of that pass's output that did NOT get carried forward with the
+reconstruction, and does not appear to have been independently found since.
+The branch itself is being retired as superseded; this is the one live defect
+worth keeping.
+
+**Recommendation**: small, self-contained migration. Pick the threshold fix
+(simplest, lowest blast-radius) unless the per-function-silent-forever gap
+above is also worth closing in the same pass — if so, do the per-function
+spare instead, since it fixes both.
+
+## OI-234 — alert_edge_function_health never fires — 401s write no cron_call_log row, so its err_rate guard structurally never matches an auth outage
+
+- **Status**: CLOSED · 2026-09-26 · DUPLICATE of OI-197 item 2 (EF auth-outage alert never fires) · branch `ci-green-batch-a`
+- **Blocked on**: none
+- **Verified**: 2026-09-26 — read side by side with OI-197; the survivor carries this entry's content (see its 2026-09-26 UPDATE).
+  PRIOR (kept verbatim): never
+- **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/next-aab-decision-d1227b`
+
+## OI-235 — proactive_plateau_alert (~116s avg) and i-see-you-daily (~93s avg) run unusually long once daily — likely per-user loop instead of set-based query, needs Edge Function code review
+
+- **Status**: CLOSED · 2026-09-26 · misattributed · branch `ci-green-batch-a`
+- **Blocked on**: none
+- **Verified**: 2026-09-26 — LIVE `cron.job_run_details`: both jobs run 0.1–1.3 s every day EXCEPT the two 2026-09-21 'job startup timeout' failures (1488 s / 1853 s, the e8b4a1 DB-starvation incident); 0 runs > 5 s otherwise. The ~116 s / ~93 s averages were one outlier each. Also: this metric times the pg_net DISPATCH, not the Edge Function runtime, so it never measured a per-user loop either way.
+  PRIOR (kept verbatim): 2026-09-22, re-confirmed live by a B-pass review of the disk-io-audit-cleanup work (diagnose e8b4a1) (`select avg/min/max(extract(epoch from (end_time-start_time))) from cron.job_run_details join cron.job ... where jobname in (...)`) — both averages reproduced exactly (93.1s, 116.0s over 16 runs each). Distribution is genuinely bimodal, not uniformly slow: min=0.1s, max=1488.1s (~24.8min) for i-see-you-daily and max=1853.8s (~30.9min) for proactive_plateau_alert — most runs are fast and one outlier per job pulls the average up. Sharpens the likely cause: a conditional expensive path (e.g. a per-user loop that only fires under some condition) rather than a uniformly slow query.
+- **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/next-aab-decision-d1227b`
+
+## OI-242 — realtime_pro_gate_behavioral_test.dart flakes on full-suite CI run with a Box-not-found HiveError, passes clean in isolation
+
+- **Status**: CLOSED · 2026-09-26 · fixed, diagnose `b3f8e5` · branch `ci-green-batch-a`
+- **Blocked on**: nothing — closed.
+- **Verified**: 2026-09-26 — ROOT CAUSE is NOT a cross-file state leak (the
+  hypothesis below is refuted). `isPro()` starts `_downgradeLocally()` unawaited
+  (`subscription_service.dart:480-483`); the test waited with `pumpEventQueue()`,
+  a turn-bounded proxy racing an I/O-bounded chain. On a loaded runner the proxy
+  won, the assertion read pre-downgrade state, and tearDown closed Hive under the
+  still-running chain (the trailing Box-not-found). Reproduced DETERMINISTICALLY
+  in-process: 2000 unawaited puts queued before `isPro()` ⇒ old wait RED 5/5,
+  new `ProDowngradeWaiter` (`test/helpers/pro_downgrade_waiter.dart`, waits on
+  `onDowngrade` :1213) green 3/3. Same fix applied to the expiry-banner and
+  paused-guard files. Test: `test/contracts/pro_downgrade_waiter_behavioral_test.dart`.
+  PRIOR (kept verbatim): 2026-09-22 — reproduced the CI failure signature exactly via
+  GitHub Actions logs; ruled out as unrelated to the PR that surfaced it by
+  running the file alone locally (9/9 green) and by confirming the same
+  failure independently hit an unrelated merge's CI run too.
+- **Identified**: 2026-09-22 · filed via mint_oi.sh from branch `claude/oi-batching-strategy-e5e359`
+
+Found while checking CI on PR #37 (Batch B, a docs-only investigation commit
+touching only `docs/audit/open_issues.md`/`OPEN_INDEX.md` — no Dart/Hive code
+whatsoever). The "Unit Tests" job failed on
+`test/contracts/realtime_pro_gate_behavioral_test.dart`'s "e4a7c9 — the
+teardown half (an attached channel never re-enters the gate) THE SECOND BUG:
+a downgrade fires onDowngrade" case:
+
+```
+Expected: true
+  Actual: <false>
+an expiry downgrade must release PRO-owned resources
+
+[MigratedKey.delete] userBox expiresAt threw: HiveError: Box not found. Did you forget to call Hive.openBox()?
+...
+HiveError: Box not found. Did you forget to call Hive.openBox()?
+  package:hive/src/hive_impl.dart 186:7           HiveImpl._getBoxInternal
+  package:hive/src/hive_impl.dart 197:33          HiveImpl.box
+  .../guarded_box.dart 341:20                     wrapUserScopedBox
+  .../hive_service.dart 235:7                     HiveService.userBoxGuarded
+  .../hive_service.dart 226:22                    HiveService.userBox
+  .../user_repository.dart 159:23                 UserRepository.getProgress
+  .../streak_progress_service.dart 246:46         StreakProgressService.resetToFreeCapOnLapse
+  .../subscription_service.dart 1225:38           SubscriptionService._downgradeLocally
+```
+
+**This is genuinely NOT related to PR #37's diff** — a docs-only merge
+cannot affect this code path. Checking `main`'s own recent CI history
+(`gh run list --branch main`) confirms it's flapping independently of any
+single PR: the merge-to-main run for PR #34 (`024d7a82`) also FAILED, the
+merge-to-main run for PR #36 (`e7733cb8`, in between) PASSED, and this
+PR #37 run failed again on the exact same test. **Confirmed NOT
+reproducible in isolation**: `flutter test
+test/contracts/realtime_pro_gate_behavioral_test.dart --exclude-tags golden`
+run alone, locally, against current `main` — all 9 tests pass, INCLUDING the
+exact case that failed on CI. Re-running the failed CI job (`gh run rerun
+--failed`) is the practical workaround used so far and it clears the check,
+consistent with order/state-leak-dependent flakiness rather than a
+deterministic regression.
+
+**Hypothesis, not yet confirmed:** some earlier test file in the full
+`test/` suite run leaves global/static state (a Hive box left open, or a
+singleton — `SubscriptionService`/`HiveService`/`UserRepository` are all
+involved in the failure's call chain) that this test's `setUp`/`tearDown`
+assumes is clean. This is the SAME general class CLAUDE.md's own
+common-pitfalls table already documents for GoogleFonts/`path_provider`
+box-lifecycle races and for concurrent-session Hive temp-dir contention —
+but this instance reproduces WITHIN a single suite run on an isolated CI
+runner (no concurrent session possible there), so it is a distinct,
+narrower case: ordering/state-leak between test FILES in one process, not
+cross-process contention.
+
+**Recommendation**: (1) Bisect by running larger and larger prefixes of the
+full `test/` suite (or binary-search which OTHER file, run immediately
+before this one in suite order, causes the box to be left in the state that
+trips `userBoxGuarded`) to find the actual leaking test. (2) Once found, fix
+via proper `tearDown`/`tearDownAll` box closure in the leaking file, or make
+this test's own `setUp` more defensive (re-open/re-verify the box it needs
+rather than assuming a clean slate). (3) Short-term mitigation already in
+use: `gh run rerun --failed` clears it reliably when it fires — acceptable
+for now given it does not block any specific PR's own correctness, but
+should not become a standing habit given CLAUDE.md rule 20's ban on treating
+CI flakiness as permanently acceptable.
+
 
 ## OI-135 — 60 of 125 migration-ledger hashes do not match their files, and nothing recomputes them (P2)
 
