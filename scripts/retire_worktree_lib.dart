@@ -145,7 +145,8 @@ RetireDecision classifyWorktree({
   // so fix the description.
   if (!upstreamConfigured) {
     return const RetireDecision(RetireVerdict.retire,
-        'merged + clean (no upstream configured — commits reachable from main)');
+        'merged + clean (no upstream configured, or it was deleted on the '
+        'remote — commits reachable from main)');
   }
   return const RetireDecision(
       RetireVerdict.retire, 'merged + clean + pushed');
@@ -347,3 +348,56 @@ RetireDecision classifyOrphan({required int entryCount}) {
       '$entryCount entr${entryCount == 1 ? "y" : "ies"} and no git to vouch '
       'for them — manual review');
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Branch deletion after a worktree is retired (OI-138). Pure helpers only: the
+// caller (retire_worktree.dart) owns every git call.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Why [branch] must NEVER be deleted by the retire tool, or `null` when it may
+/// be. The tool only ever asks after a worktree removal succeeded and the
+/// branch was in `git branch --merged main`; this is the floor UNDER that.
+///
+/// `main` and `develop` are matched by EXACT name, case-insensitively (a plan
+/// review asked for case-sensitive; insensitive is the fail-closed direction —
+/// on a case-insensitive filesystem `Main` and `main` can be the same ref, and
+/// the only cost of over-matching is an extra KEPT-BRANCH). This is the
+/// only thing standing between the tool and deleting `main`: reproduced
+/// 2026-09-29 that with the primary on another branch and a linked worktree on
+/// `main`, `git worktree remove` followed by `git branch -d -- main` prints
+/// `Deleted branch main` (rc 0), and the tool's own predicate calls that
+/// worktree retirable (`main` is trivially merged into `main`).
+///
+/// The prefixes are matched case-insensitively: `oi/N` are the OI reservation
+/// refs (CLAUDE.md §7), `rescue/*` holds unmerged unique work, `dependabot/*`
+/// belongs to open PRs. An empty name is a detached HEAD — no branch to delete.
+String? protectedBranchReason(String branch) {
+  if (branch.isEmpty) return 'detached HEAD — no branch';
+  final lower = branch.toLowerCase();
+  if (lower == 'main' || lower == 'develop') return 'protected branch name';
+  for (final prefix in const ['rescue/', 'oi/', 'dependabot/']) {
+    if (lower.startsWith(prefix)) return 'protected prefix $prefix';
+  }
+  return null;
+}
+
+/// A one-line, safe-to-print reason from `git branch -d`'s refusal text.
+///
+/// git's refusal reads `error: the branch 'b' is not fully merged.` followed by
+/// `If you are sure you want to delete it, run 'git branch -D b'`. Echoing that
+/// second line would hand a session the force-delete command from the tool's own
+/// output — so only the first line that does not mention `-D` is kept, and a
+/// fixed sentence replaces the rest. Never returns text containing `-D`.
+String sanitizeBranchRefusal(String stderrText) {
+  String? first;
+  for (final raw in stderrText.split('\n')) {
+    final line = raw.trim();
+    if (line.isEmpty) continue;
+    if (line.contains('-D')) continue;
+    first = line.replaceFirst(RegExp(r'^(error|warning|fatal):\s*'), '');
+    break;
+  }
+  final reason = (first == null || first.isEmpty) ? 'git refused' : first;
+  return '$reason — not deleted; resolve by hand';
+}
+

@@ -429,4 +429,92 @@ void main() {
       expect(classify().shouldRetire, isTrue);
     });
   });
+
+  group('protectedBranchReason — the floor under branch deletion (OI-138)', () {
+    test('main and develop are protected by exact name, any case', () {
+      // Reproduced 2026-09-29: with the primary on another branch and a linked
+      // worktree on `main`, `git branch -d -- main` DELETES main. This guard is
+      // the only thing that prevents it.
+      expect(protectedBranchReason('main'), isNotNull);
+      expect(protectedBranchReason('develop'), isNotNull);
+      expect(protectedBranchReason('Main'), isNotNull);
+      expect(protectedBranchReason('DEVELOP'), isNotNull);
+    });
+
+    test('a name merely CONTAINING main or develop is not protected', () {
+      // Exact match, not substring: the fail-closed direction must not turn
+      // every `maintenance-*` branch into a permanent leftover.
+      expect(protectedBranchReason('maintenance'), isNull);
+      expect(protectedBranchReason('feature/main-menu'), isNull);
+      expect(protectedBranchReason('develop-tools'), isNull);
+    });
+
+    test('rescue/, oi/ and dependabot/ prefixes are protected in any case', () {
+      for (final b in const [
+        'rescue/post38-auth-inflight',
+        'oi/271',
+        'OI/271',
+        'Dependabot/pub/x',
+        'RESCUE/y',
+      ]) {
+        expect(protectedBranchReason(b), isNotNull, reason: b);
+      }
+    });
+
+    test('a detached HEAD (empty branch) has nothing to delete', () {
+      expect(protectedBranchReason(''), isNotNull);
+    });
+
+    test('an ordinary merged session branch is deletable', () {
+      expect(protectedBranchReason('oi-154-profile-clear-tombstone'), isNull);
+      expect(protectedBranchReason('claude/some-session-abc123'), isNull);
+      expect(protectedBranchReason('feature/x'), isNull);
+      // `oi-154-...` starts with `oi-`, NOT `oi/` — the prefix is the reservation
+      // ref namespace, not every branch that begins with the letters.
+      expect(protectedBranchReason('oi-numbering-fix'), isNull);
+    });
+  });
+
+  group('sanitizeBranchRefusal — never hands out the force-delete command', () {
+    const gitRefusal = "error: the branch 'b2' is not fully merged.\n"
+        "If you are sure you want to delete it, run 'git branch -D b2'.\n";
+
+    test('keeps git\'s first line and drops the -D advice', () {
+      final r = sanitizeBranchRefusal(gitRefusal);
+      expect(r, contains('is not fully merged'));
+      expect(r, isNot(contains('-D')));
+      expect(r, contains('resolve by hand'));
+      expect(r, isNot(startsWith('error:')));
+    });
+
+    test('never returns text containing -D, whatever git prints', () {
+      for (final t in const [
+        gitRefusal,
+        "If you are sure, run 'git branch -D x'\n",
+        "fatal: something -D odd\n",
+        '',
+        '\n\n',
+      ]) {
+        expect(sanitizeBranchRefusal(t), isNot(contains('-D')), reason: t);
+      }
+    });
+
+    test('empty or advice-only output degrades to a fixed reason', () {
+      expect(sanitizeBranchRefusal(''), startsWith('git refused'));
+      expect(sanitizeBranchRefusal("run 'git branch -D x'"),
+          startsWith('git refused'));
+    });
+  });
+
+  group('no-upstream reason also covers an upstream deleted on the remote', () {
+    test('the wording keeps the pinned substring AND names deletion', () {
+      // The e2e matrix shows a remote-deleted upstream reads as "no upstream"
+      // (push --delete, or fetch --prune). The description must not claim the
+      // branch was never configured.
+      final d = classify(upstreamConfigured: false);
+      expect(d.shouldRetire, isTrue);
+      expect(d.reason, contains('no upstream configured'));
+      expect(d.reason, contains('deleted on the remote'));
+    });
+  });
 }

@@ -2250,7 +2250,7 @@ OI-136, OI-132.
 
 ## OI-138 — `retire_worktree` removes the worktree but leaves the BRANCH, silently burning the slug
 
-- **Status**: OPEN
+- **Status**: CLOSED (2026-09-29, `branch-lifecycle-cleanup`) — `retire_worktree.dart` now deletes the worktree's own local branch after a successful removal; diagnose `4c3fc4`
 - **Verified**: 2026-08-25 — read `scripts/retire_worktree.dart:275-282` directly: it calls
   `git worktree remove <path>`, reports RETIRED on exit 0, and never references the branch.
 - **Identified**: 2026-08-16, as a "second, smaller gap" inside OI-128. **Split out 2026-08-25**
@@ -2278,11 +2278,22 @@ OI-136, OI-132.
   merged worktree deletes its branch and the slug is immediately reusable; (2) a worktree whose
   BRANCH NAME DIFFERS FROM ITS SLUG deletes the branch, not the slug-named ref — construct it the
   way `rescue/*` did, with `git worktree add -b rescue/<x> .claude/worktrees/<x>`.
-- **Blast radius estimate**: `platform` — `scripts/retire_worktree*.dart` is individually pinned
-  above the `scripts/** → feature` catch-all in `docs/blast_radius.yaml`. Adds a DESTRUCTIVE
+- **Blast radius estimate**: `platform` — `scripts/retire_worktree*.dart` is NOT individually pinned — CORRECTED 2026-09-29: this entry
+  claimed it was pinned above the `scripts/** → feature` catch-all in `docs/blast_radius.yaml`, but `grep retire_worktree docs/blast_radius.yaml` returns nothing (OI-139 records the same fact), and the classifier returns `feature` for the tool + its test alone; this batch is `platform` only because its diff also touches CLAUDE.md. Adds a DESTRUCTIVE
   operation (branch deletion) to a tool that currently only removes directories, so it needs the
   mutation-proven treatment its siblings already carry.
 - **Related**: OI-128 (parent, CLOSED 2026-08-25 — the regenerable-list half), §4.13 point 6.
+
+**Closed 2026-09-29 (`branch-lifecycle-cleanup`, `closes-oi: OI-138`).** Shipped: after `git worktree remove`
+succeeds the tool runs `git merge-base --is-ancestor` then `git branch -d --` on `w.branch` (never the
+folder slug, never `-D`); `main`/`develop` and `rescue/*` `oi/*` `dependabot/*` are never deleted; a
+refusal prints `KEPT-BRANCH` with git's first line and no force-delete advice. Also fixed in passing:
+the merged set used `%(refname:short)`, which prints `heads/T` when a tag `T` exists, silently keeping
+that worktree forever. Tests: `test/scripts/retire_worktree_e2e_test.dart` (9 new, each on its own repo,
+incl. the folder-slug-differs case this entry called the trap, and the remote-deleted-upstream matrix) +
+`retire_worktree_lib_test.dart`. The ancestry re-check closes a race and is pinned by a hook-driven e2e test that makes the race deterministic (mutation: 1 red). Remote
+branches are out of scope here: GitHub's `delete_branch_on_merge` covers PR merges; any other route is OI-273.
+
 
 ## OI-139 — the only tool that DELETES developer work is tiered `feature`; every tool that merely BLOCKS a commit is pinned `platform`
 
@@ -6648,3 +6659,23 @@ re-hydrates it). So a real fix is either UI-only (keep-on-empty, with a message)
 coupled to OI-154's design. Pick the first unless the founder wants removal.
 
 **Reopen when**: picked up. Needs a diagnose-doc, a behavioral test on the save map, and a mutation run.
+
+## OI-273 — Branch sweep for merged branches that never had a worktree here (retire_worktree --sweep-branches)
+
+- **Status**: OPEN
+- **Blocked on**: none — this unit's exclusion from its batch is a REVIEW OUTCOME, not a schedule: plan-review round 1 of the `branch-lifecycle-cleanup` batch (2026-09-29) returned two P0s against this unit and §4.12.1 says split and ship the converged piece. Once GitHub auto-delete is on and `retire_worktree` deletes its own local branch (OI-138), this unit covers only branches that never had a worktree here (cloud `claude/*`), so its value is lower.
+- **Verified**: 2026-09-29 — every constraint below was reproduced by the round-1 reviewer in throwaway repos or read from the cited file; not re-run after filing
+- **Identified**: 2026-09-29 · filed via mint_oi.sh from branch `branch-lifecycle-cleanup`
+
+**What**: a `--sweep-branches` mode (dry-run default) that repeats the by-hand cleanup done 2026-09-29 (17 local + 55 remote merged branches, name→sha saved, every tip an ancestor of `main`). Outline: `docs/superpowers/specs/2026-09-29-branch-lifecycle-cleanup-design.md` §8 (the original v1 Unit 2 text was replaced by that section; this entry is the authoritative record of its constraints).
+
+**Constraints found by round 1 — a design that ignores any of these is unsound:**
+1. **Remote transport must be `gh api -X DELETE repos/<owner>/<repo>/git/refs/heads/<b>`, never `git push --delete` inside the tool.** `scripts/pre-push.sh:39-42` states analyze runs on `git push --delete` "deliberately"; `scripts/mint_oi.sh:316` already refuses git transport for `--prune` for this reason (analyze once PER ref, ~212 s each, and an untracked primary draft fails it). `gh api` has no compare-and-swap: re-read `ls-remote` immediately before each delete.
+2. **A "merged + last commit older than 3 days" recency guard is WRONG.** `%(committerdate)` of a branch cut fresh with zero own commits is the date of the main commit it was cut from, and `ls-remote` gives no push time. After a quiet weekend a live cloud branch qualifies. Require positive proof for the exact tip: e.g. `gh pr list --state merged --head <b> --json headRefOid` equals the current remote tip sha, or the tip is the second parent of a merge on `origin/main`. This also covers "merged, then re-used".
+3. **`gh pr list` needs `--state open --limit 1000 --json headRefName,headRefOid,headRepositoryOwner`** (default limit 30 truncates and fails open; compare owner, forks collide by name). Follow `scripts/reconcile_ci.dart:216-232`: return null, not an empty list, on missing `gh` / non-zero exit / unparseable output, and skip the remote half loudly.
+4. **The e2e harness leaks the real `gh`**: `test/scripts/retire_worktree_e2e_test.dart:34-38` strips `GIT_*`, `GITHUB_*`, `PUSH_BEFORE` but not `GH_TOKEN` / `GH_REPO`, and keeps `HOME` and `PATH`. Tests need a stub `gh` first on `PATH`, `GH_*` stripped, and a private `HOME`. Never let a test reach real GitHub.
+5. **`git branch -d` is not the safety guarantee.** It tests "merged into HEAD or upstream": with an upstream that contains the tip it deletes an UNMERGED branch (reproduced). The candidate list is the only guard for the sweep's local half, so it must be derived from `--merged main`, fully-qualified (`refs/heads/`), never `%(refname:short)` (a tag and branch of one name print `heads/T`), and passed after `--`. Protected-prefix matching must be case-insensitive.
+6. **Multi-machine gap**: "not held by a worktree" sees only this clone's worktrees, not a laptop's.
+7. Protected forever: `main`, `oi/*` (OI reservation refs, CLAUDE.md §7), `rescue/*` (unmerged unique work), `dependabot/*` (open PRs), any open-PR head.
+
+**Reopen when**: picked up as its own plan with its own ×2 review. Needs a diagnose-doc, a bare-origin + stub-`gh` e2e, and a mutation run per guard.

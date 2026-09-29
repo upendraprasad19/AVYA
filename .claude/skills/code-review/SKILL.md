@@ -249,6 +249,34 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-29 (b)** — blast-radius **platform** — branch `branch-lifecycle-cleanup` (OI-138:
+  `retire_worktree.dart` now deletes the retired worktree's own merged local branch with
+  `git branch -d`, behind protected-name, ancestor-of-main and `-d` guards). One context-blind
+  Sonnet reviewer in an isolated worktree, dispatched after two plan-review rounds, a green
+  full suite (7071) and clean analyze. **5 findings (2 P2, 2 P3, 1 P4); 0 false alarms, all
+  fixed in-batch, 2 by new mutation-proven tests** (`0f5002adfd8c-review.md`, renamed twice from
+  `223280051c51` after the fixes and the hook's regenerated indexes moved the hash).
+  **Tuning 1 — "not e2e-testable" is a claim to be attacked, not a limitation to be recorded
+  (lens 6/8).** The author's own mutation of the ancestry re-check reddened ZERO tests, and the
+  diagnose-doc, a code comment and the board entry all explained it as
+  "a race, cannot be reproduced". The reviewer reproduced it in about 20 lines: a
+  `reference-transaction` git hook fires inside `git branch -d` and commits on the next
+  candidate, making the window deterministic. It also showed the premise behind "defense in
+  depth" was false, because `git branch -d` accepts a branch merged into its UPSTREAM, so the
+  re-check is the only guard. **When a mutation reddens nothing and the explanation offered is
+  "timing", ask which git hook, env var or stub gives a deterministic seam before accepting it.**
+  Sibling of the 2026-09-06 zero-red rule (something absorbed it), here the absorber was the
+  author's assumption.
+  **Tuning 2 — a claim that a tool "refuses X" is checked against the EXISTING tests for the
+  opposite behaviour.** The diagnose-doc said bare `--execute` was still refused; a pre-existing
+  e2e test runs it bare and expects exit 0. One `grep "retire(\['--execute'\])"` settles it.
+  **Tuning 3 — when a diff rewords a tool's own output, the prose that tells a reader which
+  output to wait for is a second reader.** §4.13.8 named `[merged + clean + pushed]` as the go
+  signal while the reworded string is what the tool now prints in the case the batch exists for.
+  **A negative result worth keeping:** the reviewer re-ran the case-insensitive-protection
+  mutation (3 red) and reported which mutations it had NOT re-derived rather than implying it
+  had. Full detail: `docs/reviews/0f5002adfd8c-review.md`.
+
 - **2026-09-29** — blast-radius **platform** — branch `worktree-retirement-autonomy` (docs-only:
   new CLAUDE.md §4.13 point 8 + a §4.9 pitfall row, codifying autonomous worktree retirement on
   batch close). Per §4.3's docs/process-only ≥account carve-out, this was a **self-consistency**

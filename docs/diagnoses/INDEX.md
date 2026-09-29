@@ -17,6 +17,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 - 2026-05-10 e3f7a8 — A subset of users (founder included) holds Hive `schedule_<date>` rows with `status='completed'` while the cloud `scheduled_workouts` row stays at `status='planned'` for those dates. Once Bugs B.1 +…
 - 2026-05-10 a7c1e2 — Calendar checkmarks for May 5/6/7 vanished on the founder's account after restore, despite cloud workout_logs and scheduled_workouts.status='completed' being correct for those dates.
 
+### worktree_retirement_branch_lifecycle (1 bugs)
+- 2026-09-29 4c3fc4 — Founder-observed (2026-09-29, after PR #54 merged and its worktree was retired): the local branch `oi-154-profile-clear-tombstone` still existed (and so did the remote one).…
+
 ### coach_chat_history_replay (4 bugs)
 - 2026-09-28 a2c9e5 — OI-245. `SyncService._restoreCoachInteractions` (sync_coach.dart) hardcoded every restored `ai_coach_interactions` row's Hive `mode` field to `'quick'`.…
 - 2026-09-26 e5c9d2 — ai-proxy's chat dedup (`ai-proxy/index.ts`, "Deduplication: return cached response for same user+message in last 30s") served ANY recent row with a non-empty `ai_response` back as a 200 reply. When…
@@ -1475,6 +1478,7 @@ rather than a Hive box. (1 bugs)
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
 | 2026-09-29 | d83505 | Founder-reported (screenshot, 2026-09-29): a workout completed on 2026-09-28 (Monday, "Calisthenics Day", logged via the app that same morning) rendered as NOT DONE on the Train tab on 2026-09-29.… | workout_completion_status | test/contracts/sync_schedule_completion_payload_hash_index_writer_to_reader_test.dart |
+| 2026-09-29 | 4c3fc4 | Founder-observed (2026-09-29, after PR #54 merged and its worktree was retired): the local branch `oi-154-profile-clear-tombstone` still existed (and so did the remote one).… | worktree_retirement_branch_lifecycle | test/scripts/retire_worktree_e2e_test.dart |
 | 2026-09-28 | a2c9e5 | OI-245. `SyncService._restoreCoachInteractions` (sync_coach.dart) hardcoded every restored `ai_coach_interactions` row's Hive `mode` field to `'quick'`.… | coach_chat_history_replay | test/contracts/coach_restored_media_mode_writer_to_reader_test.dart |
 | 2026-09-28 | a7f2d9 | task-25-review.md (reviewing commit c9fbcd64, the unmerged day-swap Train UI feature) found 5 gaps, the two most consequential being real bugs rather than style nits: (1)… | day_swap_train_ui_kill_switch | "test/widgets/week_rows_kill_switch_test.dart (new — asserts by widget type/key and child count, not pixels), plus updated test/widgets/day_swap_drag_wrapper_test.dart (new switch-OFF test, F3) and its new F5 standing-reset group" |
 | 2026-09-28 | e8f95e | Founder-reported (screenshot, 2026-09-28): logged "Single Leg Front Lever" (a custom bodyweight_reps exercise) as reps during an active workout scheduled from a template. The active workout screen… | duration_controller_seeding_leak | test/train/duration_controller_seeding_writer_to_reader_test.dart |
