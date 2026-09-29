@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 
 import 'error_telemetry.dart';
 import 'hive_service.dart';
+import 'pending_exlog_deletes.dart';
 import 'pending_template_deletes.dart';
 import 'sync_service.dart';
 import 'template_identity.dart';
@@ -1231,6 +1232,19 @@ class WorkoutWriteService {
         });
       }
 
+      // OI-246 — queue the cloud tombstone BEFORE deleting locally, using
+      // the exact natural key (workout_log_id, exercise_id, set_number) the
+      // last push computed for this row, so `_drainPendingExlogDeletes`
+      // targets the SAME `workout_log_exercises` row via
+      // `uniq_wle_user_wlog_ex_set`. Local Hive delete alone never reached
+      // the cloud row — restore then resurrected it (writer:
+      // deleteLog/reader: SyncService._restoreExerciseLogs).
+      await PendingExlogDeletes.add(
+        workoutLogId: SyncService.workoutLogIdForDate(dateStr),
+        exerciseId: exerciseName, // stable identity, mirrors sync_workout.dart:224
+        setNumber: resolveSummarySetCount(m),
+      );
+
       await box.delete(logKey);
 
       // Drop from exercise_log_index_<date>
@@ -1463,6 +1477,32 @@ class WorkoutWriteService {
 
   /// Deterministic Hive key for a workout-level summary.
   static String wlogKey(DateTime date) => 'wlog_${istDateStr(date)}';
+
+  /// Pure natural-key set-count resolver, mirroring
+  /// `SyncService._resolvePerSetList` + the `summarySetCount` fallback chain
+  /// `_syncExerciseLogs` uses to compute the cloud
+  /// `workout_log_exercises.set_number` column -- part of the
+  /// `(user_id, workout_log_id, exercise_id, set_number)` natural key
+  /// (`uniq_wle_user_wlog_ex_set`, migration 082). `deleteLog`'s OI-246
+  /// tombstone queue calls this so the natural key it targets is
+  /// BYTE-IDENTICAL to what the push last computed for this row — never
+  /// re-derive the count independently, the recurring writer/reader-drift
+  /// bug class this repo tracks.
+  static int resolveSummarySetCount(Map<String, dynamic> log) {
+    final detail = log['sets_detail'];
+    if (detail is List) {
+      final n = detail.whereType<Map>().length;
+      if (n > 0) return n;
+    }
+    final sets = log['sets'];
+    if (sets is List) {
+      final n = sets.whereType<Map>().length;
+      if (n > 0) return n;
+    }
+    return (log['sets_completed'] as num?)?.toInt() ??
+        (log['set_number'] as num?)?.toInt() ??
+        1;
+  }
 
   /// Deterministic Hive key for a schedule entry.
   static String scheduleKey(DateTime date) =>

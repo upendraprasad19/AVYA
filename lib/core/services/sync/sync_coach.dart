@@ -52,6 +52,25 @@ bool isRestoredHardFailureRow({
       modelUsed == kModelUsedLoopThrewSentinel;
 }
 
+/// True when a cloud `ai_coach_interactions.user_message` is a media/photo
+/// turn's placeholder text — `ai-media-proxy/index.ts` writes
+/// `'[Photo: ${media_type}] ...'` for every image/video-analysis insert
+/// (paywall-exhausted, video-paywall, AND the successful PRO analysis, whose
+/// `channel` is `'app'` — indistinguishable by channel from a normal chat
+/// turn). The client's own local write is `'[Photo] ...'`
+/// (`ai_coach_provider.dart:654`, never itself pushed — the server row above
+/// is always the sync source of truth). OI-245: the cloud table carries NO
+/// `mode` column (same gap [isRestoredHardFailureRow] documents for the
+/// hard-failure case), so `_restoreCoachInteractions` used to hardcode every
+/// restored row's `mode` to `'quick'` — a restored photo turn then passed
+/// `CoachInteractionRepository.recentHistoryExchanges`'s `mode == 'media'`
+/// exclusion and was replayed into Gemini context as plain text. This text
+/// match lets restore recover the real mode. Pure — mutation-testable.
+bool isRestoredMediaRow(String? userMessage) {
+  final m = userMessage ?? '';
+  return m.startsWith('[Photo') || m.startsWith('[Video');
+}
+
 /// Derives an ISO-8601 UTC timestamp from a `coach_<ms>` Hive key (spec
 /// §5.12 fallback order: recorded value -> derive from a *_ms sibling or the
 /// Hive key -> omit). `coach_interaction_repository.dart:70-77` mints every
@@ -292,7 +311,12 @@ extension SyncServiceCoach on SyncService {
           'user_message': map['user_message'] ?? '',
           'ai_response': map['ai_response'] ?? '',
           'model_used': map['model_used'] ?? 'unknown',
-          'mode': 'quick',
+          // OI-245 — was hardcoded 'quick', which made a restored photo turn
+          // replay into Gemini context as plain text (see
+          // [isRestoredMediaRow] doc above).
+          'mode': isRestoredMediaRow(map['user_message'] as String?)
+              ? 'media'
+              : 'quick',
           'is_user_message': true,
           'created_at': map['created_at'],
           // Preserve the cloud channel so recentHistoryExchanges can exclude
