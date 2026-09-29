@@ -1532,3 +1532,75 @@ added, false of the flip being performed.
   restored from a byte copy.
 - **Regression test:** the same file (its own precondition assertion now
   pins the anchor ordering).
+
+### 2.77 A source-grep test survives not just the dead branch it guards, but also the LATER fix that repairs it (NEW 2026-09-29)
+
+- **Telltale:** a guard's literal conditional text (`if (x == 'completed' &&
+  y == 'planned' && z != null)`) has ONE test naming it, that test is a
+  source-grep (`source.contains("x == 'completed' &&") &&
+  source.contains("y == 'planned'")`), and the guard's own INPUT is computed
+  by a helper call whose RETURN VALUE silently changed while the calling
+  line's surrounding text did not. The source-grep is blind twice over: it
+  never catches the guard being dead in the first place, and it ALSO never
+  notices when an unrelated later fix repairs the guard's input — because
+  the literal tokens it checks are present in both the broken and the fixed
+  version of the surrounding code.
+- **Root-cause shape:** `_restoreScheduledWorkouts`'s keep-local-completed
+  guard (`lib/core/services/sync/sync_workout.dart:2337`) read
+  `localCompletedAt = existingMap['completed_at']` directly for 4.5 months
+  (2026-05-10 `d9b2c5` → 2026-09-27). The live completion writer
+  (`WorkoutWriteService.markCompleted`) never populates that field on a
+  schedule row — only `completed_at_ms` — so `localCompletedAt` was ALWAYS
+  null and the guard's own `localCompletedAt != null` condition could never
+  be true. The ONE test naming this guard for the whole window
+  (`logout_login_round_trip_test.dart`'s "T3" group) asserts
+  `source.contains("localStatus == 'completed' &&") &&
+  source.contains("cloudStatus == 'planned'")` — true before AND after the
+  eventual fix, since the fix changed `localCompletedAt`'s DERIVATION
+  (swapping a direct field read for
+  `ScheduleCompletionTime.scheduledCompletedAtIso(existingMap)`), not the
+  guard's own conditional text at all. The fix that eventually repaired this
+  landed via a COMPLETELY UNRELATED investigation (a live-timestamp audit
+  chasing a different symptom — wrong completion times sent to the cloud,
+  not wrong statuses) that happened to touch the same derivation for its own
+  reasons. The source-grep test would have stayed green through an infinite
+  number of such coincidental touches, because it was never watching the
+  right thing.
+- **Fix pattern:** when a guard's protection depends on a VALUE a helper
+  call resolves (not on the guard's own conditional structure), the
+  regression test must drive the guard's REAL INPUT through the REAL CODE
+  PATH and assert the OUTCOME — never grep the conditional's literal text.
+  Here: seed a real Hive row shaped exactly like the live writer's output
+  (`completed_at_ms` present, legacy `completed_at` absent), run the real
+  `_restoreScheduledWorkouts` via its test seam, assert the merged status.
+  This is CLAUDE.md §4.4 rule 21 in its most literal form — but note the
+  sharper failure mode this instance adds to that rule: it is not enough to
+  ask "does a behavioral test exist for this guard" once. A behavioral test
+  written for a DIFFERENT bug (here, the timestamp-fallback bug) can end up
+  covering this guard as an accidental side effect, which is a lucky
+  outcome, not a designed one — the source-grep test sitting right next to
+  it never flagged that it had become redundant/blind, and would have kept
+  silently vouching for a guard it could not actually see.
+- **Class rule:** a source-grep test asserting on a guard's conditional
+  syntax gives zero signal about that guard's INPUT DERIVATION. Two
+  independent failure windows follow from this, not one: (1) the ordinary
+  dead-branch window (the derivation is wrong from day one and stays wrong
+  until someone mutates it), and (2) a SILENT-REPAIR window (an unrelated
+  later change fixes the derivation, and the source-grep test cannot tell
+  the difference — it was never distinguishing broken from fixed to begin
+  with). Distinct from §2.18 (source-grep stale after a code MOVE/rename) —
+  this class needs no move at all; the surrounding text is bit-for-bit
+  identical before and after both the breakage and the repair.
+- **Prior incidents:** `d9b2c5` (2026-05-10, introduced the guard) →
+  `f4c7a9` (2026-09-26/27, `ebddb44c`, fixed the derivation as a side effect
+  of an unrelated fix, and itself added the first real behavioral test for
+  this exact scenario) → `d83505` (2026-09-29, this entry — the founder-
+  visible fallout of the gap between `ebddb44c` landing on main and it
+  reaching a built APK, plus a stale SoT-registry writer citation that
+  survived all of the above unnoticed because it named a dead THIRD writer
+  implementation instead of either real one).
+- **Regression test:** `test/contracts/sync_schedule_completion_payload_hash_index_writer_to_reader_test.dart`
+  (Task 14's own behavioral test, the canonical one) +
+  `test/sync/restore_terminal_row_merge_test.dart` group "F1" (this entry's
+  supplementary field-survival coverage, mutation-proven against the exact
+  pre-fix derivation).
