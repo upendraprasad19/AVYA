@@ -55,7 +55,23 @@ check_app_version_matches_pubspec.dart:
   grandfathered: 2026-08-10
 
 check_applied_migrations_ledger.dart:
-  grandfathered: 2026-08-10
+  mutation_proven: true
+  test_path:
+    - test/scripts/migration_ledger_hash_lib_test.dart
+    - test/scripts/check_applied_migrations_ledger_e2e_test.dart
+  evidence: >
+    Extended 2026-09-29 (OI-135 + OI-137 batch): the gate now VERIFIES each ledger hash (shape,
+    then sha256 of the file under its LF or CRLF form, five drifts grandfathered by name with a
+    pinned sha) instead of only checking the key exists; a literal `sha256:%s` used to pass.
+    Moved off `grandfathered:` because the batch materially changes the gate's protection
+    (precedent: check_ai_tool_dispatcher_coverage.dart); the name stays in the script's
+    grandfathered set. Mutations RUN, counts read: stale-exemption check removed 2 red, sentinel
+    accepted beside a file 2, CRLF-form acceptance removed 5, LF-form acceptance removed 12, shape
+    regex loosened to `sha256:.+` 7, pin compare removed 2, resolver anchored to 3 digits 5, gate
+    main() not calling verifyLedgerHashes 5, grandfather map emptied at the call site 6. B-pass round 2 (2026-09-29) added and proved:
+    grandfather pin compared on RAW bytes 1 red (a CRLF checkout of a pinned file), resolver
+    dropping the `.sql` filter 1, a non-String `hash` classified real 3. None red
+    for a compile error (each run read, not counted).
 
 check_authed_invoke_fresh_token.dart:
   grandfathered: 2026-08-10
@@ -474,7 +490,34 @@ check_local_date_key_drift.dart:
   grandfathered: 2026-08-10
 
 check_migration_ledger_paired.dart:
-  grandfathered: 2026-08-10
+  mutation_proven: true
+  test_path:
+    - test/scripts/check_migration_ledger_paired_e2e_test.dart
+  evidence: >
+    Extended 2026-09-29 (OI-263 batch, plan-review rounds 2-3): this gate had NO test. Its staged
+    regex `(\d{3,})_.*\.sql$` let `.*` match `/`, so `supabase/migrations/041_chunks/041_00_alter.sql`
+    read as migration 041, and a letter-suffix file (`152b_x.sql`) was never matched at all; the
+    ledger-side extractor also dropped the suffix (`152b` -> `152`). Now anchored to a top-level
+    `NNN[x]_*.sql` and the same grammar on both sides; timestamp-scheme adds still require an entry.
+    Moved off `grandfathered:` (name stays in the script's set). Mutations RUN against a real
+    scratch git repo: chunk anchor loosened to `.*` 1 red, letter suffix dropped from the staged
+    regex 1 red, ledger extractor dropping the suffix 1 red. None red for a compile error.
+
+check_migration_number_reserved.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/check_migration_number_reserved_e2e_test.dart
+    - test/scripts/migration_number_reserved_lib_test.dart
+  evidence: >
+    New 2026-09-29 (OI-263). Every ADDED top-level `NNN[x]_*.sql` needs a `mig/N` reservation, a
+    number already taken on origin/main by a DIFFERENT file fails, and a letter-suffix follow-up
+    needs its base published or reserved. Proves EXISTENCE of a reservation only — not ownership.
+    Mutations RUN against real scratch git repos, counts read across the four OI-263 test files:
+    published-skip removed 2 red, same-token collision removed 3, grandfather set emptied 1,
+    letter-suffix base leg removed 3, `--no-renames` dropped 1, offline-as-violation 2, chunk-dir
+    anchor loosened 3, ls-remote fallback removed 6, staged adds ignored 7, committed range ignored
+    1, failed committed-range diff ignored again (old shape: the empty-set PASS) 1; B-pass round 2 added and proved: `--no-renames` dropped from the RANGE diff (committed `git mv`) 1, three-dot -> two-dot 2, local reservation refs ignored 1, `mig/N` regexp end anchor dropped 1, base-published ignoring origin/main files 1 (the range-failure leg was added after the first B-pass: an orphan branch has no merge base, so the diff fails and the gate used to print "no added files" — now a SKIP that says so). None red for a compile error. The ls-remote test also asserts the run was NOT skipped —
+    a SKIP exits 0 too, so the exit code alone could not have told the fallback from a skip.
 
 check_migrations_applied.dart:
   grandfathered: 2026-08-10

@@ -222,6 +222,20 @@ paths:
   # through `scripts/**` to feature, so an edit to either alone would get no B-pass
   # and no full suite (plan-review round 1, finding 10).
   - { glob: "scripts/mint_oi.sh", tier: platform }
+  # Migration ledger integrity + allocator (2026-09-29, OI-135/137/263): each of these fell through
+  # `scripts/**` to feature (verified per path with blast_radius_from_diff.dart, B-pass F2). mint_migration.sh carries a copy of mint_oi.sh's compare-and-swap;
+  # the reserved-number gate and the hash lib decide whether a commit lands; Gate 39 now verifies
+  # every ledger hash. An edit to any of them alone would otherwise get no B-pass and no full suite.
+  - { glob: "scripts/mint_migration.sh", tier: platform }
+  - { glob: "scripts/check_migration_number_reserved.dart", tier: platform }
+  - { glob: "scripts/migration_number_reserved_lib.dart", tier: platform }
+  - { glob: "scripts/check_applied_migrations_ledger.dart", tier: platform }
+  - { glob: "scripts/migration_ledger_hash_lib.dart", tier: platform }
+  - { glob: "scripts/migration_ledger_hash.dart", tier: platform }
+  # Its staged-path regex decides whether a commit lands (changed this batch, B-pass F2 P3).
+  - { glob: "scripts/check_migration_ledger_paired.dart", tier: platform }
+  # The one-shot ledger writer now delegates its hash to the lib (B-pass, lens 8).
+  - { glob: "scripts/migrate_applied_migrations_ledger.dart", tier: platform }
   - { glob: "scripts/discipline_hook.dart", tier: platform }
   - { glob: "scripts/check_hooks_installed.dart", tier: platform }
   # Discipline v3 Phase 3 (2026-09-23, round-1 review, P1): a NEW harness hook
