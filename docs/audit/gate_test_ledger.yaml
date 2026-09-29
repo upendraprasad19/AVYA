@@ -177,6 +177,7 @@ check_context_artifact_budget.dart:
   test_path:
     - test/scripts/context_budget_lib_test.dart
     - test/scripts/context_artifact_budget_e2e_test.dart
+    - test/scripts/context_artifact_tracked_list_test.dart
   evidence: >
     NEW gate 2026-08-30. Guards the size of the artifacts an AGENT loads, the
     way check_apk_size_within_bounds.dart guards the one USERS download.
@@ -215,6 +216,14 @@ check_context_artifact_budget.dart:
     Restored: 37/37 green. Growth bands stay two-tier — soft 15% warns and never
     blocks (open_issues.md legitimately grows when an issue is filed), hard 50%
     blocks, because that is growth nobody reaches by accident.
+    (6) ADDED 2026-09-29 (context-lean batch, round-2 review P1): DELETE ONE
+    ENTRY FROM kTrackedArtifacts — 0 red before this leg existed, because every
+    other test used synthetic fixtures and none asserted which real files are
+    tracked; the gate then printed "SKIPPED ... not readable", exit 0. Leg (6)
+    is test/scripts/context_artifact_tracked_list_test.dart (3 tests: pinned
+    names, list<->baseline equality both ways, files exist). Mutation: removed
+    the ai_coach path (grep -c 1 -> 0 confirmed) — 2 of 3 red on assertion text
+    naming the dropped path, no compile error; restored, 3/3 green.
 
 check_copy_centralization.dart:
   grandfathered: 2026-08-10

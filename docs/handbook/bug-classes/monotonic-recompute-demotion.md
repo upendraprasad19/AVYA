@@ -59,5 +59,5 @@ Symptoms:
 
 ## References
 
-- Debugging skill: `.claude/skills/debugging/SKILL.md` §2.19.
+- Debugging skill: `.claude/skills/debugging/bug-classes.md` §2.19.
 - Related: [`writer-reader-drift.md`](writer-reader-drift.md), [source-grep-limits](../testing/source-grep-limits.md).

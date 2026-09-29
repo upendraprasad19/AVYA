@@ -1,0 +1,317 @@
+# Edge Functions - moved-out detail
+
+On-demand detail for `supabase/functions/CLAUDE.md`. Everything here was moved VERBATIM out of the nested file (dated incident narratives, `Corrected <date>` histories, REWIRED provenance, long worked examples) to keep the auto-loaded file lean. The nested file keeps the current contract for each item and points here. Read this when you need the history, the provenance of a cap/gate, or the long-form pitfall narrative.
+
+## Role 1: not-the-full-set warning with correction history (full)
+
+_Moved verbatim from `supabase/functions/CLAUDE.md` (original lines 23-31, context-lean batch 2026-09-29)._
+
+   ⚠️ These three are NOT the full set of functions that call an LLM. One of the
+   cron jobs in role 3 below (`rolling-context`) calls Gemini too, as do two
+   client-invoked non-proxy functions — **6 in total**. The AI Architecture
+   section carries the complete list; derive it by grep, never by hand.
+   Corrected 2026-09-16 (`cron-ai-removal` batch): this cell previously read
+   "15 in total" (9 cron + 3 client-invoked + 3 proxies) — 8 cron functions
+   and `future-prediction` had their Gemini calls removed in favour of
+   deterministic templates / real trend math, per
+   `docs/superpowers/specs/2026-09-16-proactive-cron-ai-removal-design.md`.
+
+## Role 4: trigger/webhook-dispatched functions (full)
+
+_Moved verbatim from `supabase/functions/CLAUDE.md` (original lines 49-62, context-lean batch 2026-09-29)._
+
+4. **Trigger/webhook-dispatched, not cron** (telegram-admin-bot batch,
+   2026-09-14): `alert-critical-notify` — invoked ONLY by the
+   `private.dispatch_critical_alert_notify()` Postgres trigger (migration
+   133, telemetry added by 134) via `pg_net.http_post` on a critical
+   `alerts` INSERT; cron-secret authenticated via `_shared/cron_auth.ts`
+   like the role-3 functions, but never reachable from `cron.job_run_details`
+   — its own telemetry lives in `cron_call_log` under `function_name =
+   'alert-critical-notify'` regardless. `telegram-admin-bot` — the founder's
+   read-only admin console over Telegram (`@IcanbefitterBot`), `verify_jwt
+   =false`, internet-facing; auth is Telegram's webhook secret token header
+   + a single allowlisted chat id, both checked in-handler (never at the
+   gateway). Reuses `founder-digest`'s own `_shared/founder_digest_content.ts`
+   builder for its `/digest` command. See
+   `docs/superpowers/specs/2026-09-13-telegram-admin-bot-design.md`.
+
+## Boot-verification caveat (full)
+
+_Moved verbatim from `supabase/functions/CLAUDE.md` (original lines 100-109, context-lean batch 2026-09-29)._
+
+**Boot-verification caveat (2026-06-08, diagnose f5d8c3):** for a `verify_jwt=true`
+function (verify-payment, ai-media-proxy, weekly-report…) the unauthenticated smoke
+gets a **401 from the GATEWAY before the module loads** — it does NOT confirm the
+module booted, so a parse/import error reads as "healthy". Boot-verify with an
+anon-key Bearer (reaches the module): `curl -X POST <url> -H "Authorization: Bearer
+<SUPABASE_ANON_KEY>"` → **503 = boot-broken**, the module's own 4xx = booted. See
+`/edge-function-deploy-rollback` bug-class 6.5. **Latent dep-rot (diagnose d4c8e1):**
+an import of the REMOVED `{ encode }` from `deno.land/std@≥0.210/encoding/(hex|base64)`
+boot-fails only on the NEXT redeploy of each affected function (the old bundle keeps
+serving) — gate `scripts/check_std_encoding_import_rot.dart` blocks it (deploy-skill bug-class 6.6).
+
+## consume-day-swap: logic.ts split, routing, double capability check (full)
+
+_Moved verbatim from `supabase/functions/CLAUDE.md` (original lines 123-143, context-lean batch 2026-09-29)._
+
+**First `logic.ts` / `logic_test.ts` split in the repo** — `index.ts` stays a thin
+`serve()` shell (auth, request parsing, the RPC call, response shaping); every pure
+piece (`validateWeekStart`, `windowStartIso`, `mapQuotaResult`, the quota-key/limit
+constants) lives in `logic.ts` and is unit-testable in `logic_test.ts` without booting
+a server. Use this as the pattern for any new EF whose validation/mapping logic is
+worth testing directly rather than only through a source-grep or a live HTTP round-trip.
+
+`day_swap_routing.ts` (`_shared/`) picks the ONE Captain-Manual block a request needs
+by `(isPro, capabilities)` rather than leaving the model to infer tier or app version —
+see `lib/features/ai_coach/CLAUDE.md` `coach_swap_workout_days` for the full routing
+contract and `client_capabilities.ts`'s parsing rules (≤32 entries, `^[a-z_]{1,48}$`,
+silently dropped rather than 400'd).
+
+The `swapWorkoutDays` tool's `requiresCapability` is checked TWICE, not once: the
+OFFER-time filter (`allTools(isPro, capabilities)` in `registry.ts` — the tool is not
+even shown to Gemini without the capability) and an EXECUTION-time re-check inside
+`tool-loop.ts` (`status: "capability_blocked"`, `error: "capability_required"`) — the
+model can still emit a functionCall BY NAME for a tool it was never offered
+(hallucinated, or recalled from an earlier turn's `history`), so the offer-time filter
+alone is not a complete defense. Any future capability-gated tool needs both checks,
+not just the offer-time one.
+
+## AI Architecture: proxies-only warning (full)
+
+_Moved verbatim from `supabase/functions/CLAUDE.md` (original lines 147-154, context-lean batch 2026-09-29)._
+
+> ⚠️ **This table covers the CLIENT-FACING AI proxies only. It is NOT the list of functions
+> that call an LLM.** One cron-dispatched function (`rolling-context`) also calls Gemini (see
+> below). Read the full list before making any "does this function touch a model?" decision —
+> that judgement sets prompt-sanitiser scope and redeploy scope.
+>
+> Also: `food-text-analysis`, `food-scan-analysis` and `cart-auditor` are **NOT** Edge
+> Functions — they are `type` values POSTed to `ai-proxy`. The table claimed they were
+> separate functions until 2026-07-28.
+
+## AI Architecture: cron-ai-removal correction history (full)
+
+_Moved verbatim from `supabase/functions/CLAUDE.md` (original lines 167-178, context-lean batch 2026-09-29)._
+
+Corrected 2026-09-16 (`cron-ai-removal` batch, `docs/superpowers/specs/2026-09-16-proactive-cron-ai-removal-design.md`):
+this section previously listed **15** — 9 cron functions (`morning-alert`, `plateau-alert`,
+`pr-detection`, `proactive-coach-promotion`, `protein-gap-alert`, `re-engagement`,
+`rolling-context`, `streak-guardian`, `workout-window-closing`) plus `future-prediction`
+(client-invoked) had a Gemini call at the time; that was also the set the OI-47
+prompt-sanitiser had to cover, historically. All 8 cron functions except `rolling-context`,
+plus `future-prediction`, had their Gemini call removed in this batch in favour of
+deterministic templates (8 functions) or real trend math over the user's own history
+(`future-prediction`) — see the spec for the full rationale (a 429 quota-exhaustion
+incident where these calls contributed to shared project-wide rate-limit pressure, and an
+audit finding that the underlying send-decision was already deterministic SQL in every case).
+`weekly-recap-ready` is NOT among the 6 — it sends the "recap ready" push and calls no model.
+
+## AI table row: ai-proxy (full)
+
+_Moved verbatim from `supabase/functions/CLAUDE.md` (original lines 182-182, context-lean batch 2026-09-29)._
+
+| Function | Model | Tier | Notes |
+|---|---|---|---|
+
+| `ai-proxy` | Gemini 2.5 Flash (`MODEL_FLASH`) + Gemini 2.5 Flash Lite (`MODEL_FLASH_LITE`) for the vision types | Free 10/day forever (no trial), PRO unlimited | Single chat entry, and the ONLY host of the food/scan/cart AI. Inserts placeholder row BEFORE Gemini call (rate-limit trigger SoT). 60s client dedup + placeholder dedup + 3-strike circuit breaker (APK Test #16.1 / Theme B). Per-`type` routing table below. |
+
+## AI table row: ai-media-proxy (full)
+
+_Moved verbatim from `supabase/functions/CLAUDE.md` (original lines 183-183, context-lean batch 2026-09-29)._
+
+| Function | Model | Tier | Notes |
+|---|---|---|---|
+
+| `ai-media-proxy` | Gemini 2.5 Flash **Lite** (Vision) — `MODEL_FLASH_LITE`, self-labelled at `ai-media-proxy/index.ts:119` | **5 free LIFETIME image analyses, then PRO** · video is PRO-only · **PRO: 50 images / 10 videos per IST day** (OI-153, 2026-09-12 — `pro_media_daily_caps` row below; the H-23 "50/day soft cap" this cell never mentioned had never fired) ⚠ This cell read "PRO only" until 2026-09-08 and was wrong in the same way the `weekly-report` row below was: the free gate is the `usedSoFar >= FREE_IMAGE_ANALYSIS_LIMIT` check (5) in the serve handler — cited by SYMBOL, not line, because this row has already drifted once: it said `:465-466`, correct when written and wrong in the same commit that shipped it, since the diff inserted ~83 lines above it, so a free user gets five image reads. Since OI-162 slice 3b that allowance is metered on `usage_counters` (quota_key `free_image_analysis`, `'epoch'` window) — previously a `count(*)` on a table `rolling-context` prunes, which made the 5 silently reset. | Photo/video chat. SSRF allowlist (`ALLOWED_BUCKETS` in `ai-media-proxy/index.ts` — cited by SYMBOL; this cell carried `:170-174` and drifted — verified live 2026-07-30): `chat-media`, `coach-media`, `progress-photos` Storage buckets only + user-scope assertion on path (OI-28). ⚠ **Since v25 (2026-09-13, diagnose `c7e2a4`) the assertion runs over the URL as `fetch` will REQUEST it, not as the caller sent it**: `parseStorageUrl` parses with `new URL()`, prefix-checks the normalised `href`, reads bucket/path from `url.pathname`, and `fetchImageAsBase64` fetches that same `href`. The first version split the raw string, so `<own>/../<victim>/x.jpg` (and `%2e%2e`) passed the guard while the runtime fetched the victim's object with the service role, and six `..` reached `/rest/v1/users` — a P0 found by the Hermes L23 lens four months after OI-28 "fixed" the guard. Behavioural pins: `supabase/functions/ai-media-proxy/index_test.ts` (16 Deno tests through an injected fetch, incl. a property test at the fetch seam). **After the fetch the cap key follows Storage's content-type, not the client's `media_type`** (L23 F2): an "image" served as `video/*` is re-typed, meets the free-tier paywall, and is charged as a video. ⚠ **v26 (2026-09-13, B-pass BP-1/BP-2)**: a VESTIGIAL raw-string pre-check (`imageUrl.startsWith(STORAGE_PREFIX)`) used to run BEFORE `parseStorageUrl` and was strictly MORE restrictive than it (rejected a valid uppercase host or an explicit `:443` port) — deleted, so `parseStorageUrl`'s null branch is now the ONLY origin check. And the F2 reconciliation above only closed ONE direction: a free caller who mislabelled a real VIDEO as `media_type: "image"` was paywalled pre-fetch on the false claim, denying a legitimate free analysis — fixed by extracting the free-image-cap check into an exported `checkFreeImageQuota`, called from both the pre-fetch fast path and a new post-fetch mirror (see `media_free_image_lifetime_gate` row below). Corrected in the coach-media-consent batch — this row previously said `progress-photos` + `chat-attachments`, a bucket name (`chat-attachments`) that has never existed in this codebase and was stale from before `coach-media` (migration 070) was added to the allowlist. |
+
+## AI table row: weekly-report (full)
+
+_Moved verbatim from `supabase/functions/CLAUDE.md` (original lines 184-184, context-lean batch 2026-09-29)._
+
+| Function | Model | Tier | Notes |
+|---|---|---|---|
+
+| `weekly-report` | Gemini 2.5 Pro (`MODEL_PRO`) — deepest reasoning | **1 free LIFETIME report, then PRO** | The Weekly Report deep-dive. **This is the Gemini 2.5 Pro function** — not `weekly-recap-ready`, which only sends the "recap ready" push and calls no model at all. ⚠ The "PRO only" label this row used to carry was wrong: `:118` is `if (!hasPro && !isFirstReport) return 403`, so a free user gets exactly ONE. Since OI-162 slice 3a that allowance is metered on `usage_counters` (quota_key `weekly_report_free`, `'epoch'` window) — previously a `count(*)` on a table `rolling-context` prunes, which made the one free report silently regenerate. |
+
+## type row: food_text_analysis (full)
+
+_Moved verbatim from `supabase/functions/CLAUDE.md` (original lines 193-193, context-lean batch 2026-09-29)._
+
+| `type` | Model | Cap | Client call site |
+|---|---|---|---|
+
+| `food_text_analysis` | `gemini-2.5-flash`, JSON mode | 10/day free · 200/day PRO — enforced atomically by the `trg_food_text_rate_limit` Postgres trigger (live definition migration 129 — counts usage_counters, not ai_coach_interactions rows; free cap set by 127, created by 026, IST boundary fixed by 113, free arm lowered 50→10 by 127 per b8f4c2), which raises `food_text_daily_limit_reached` (SQLSTATE P0001) → 429 | `lib/features/nutrition/providers/nutrition_provider.dart:733` |
+
+## type row: scan_meal (full)
+
+_Moved verbatim from `supabase/functions/CLAUDE.md` (original lines 194-194, context-lean batch 2026-09-29)._
+
+| `type` | Model | Cap | Client call site |
+|---|---|---|---|
+
+| `scan_meal` | `gemini-2.5-flash-lite` (vision), JSON mode | **20/day COMBINED with `cart_auditor`** — one shared budget, not two independent caps (corrected 2026-07-29, OI-46; raised 15→20 same day, usage-counter-race batch, to match the documented PRO product promise of 10+10 independent — see `docs/architecture/business-rules.md`). Enforced atomically by `trg_vision_analysis_rate_limit` (live definition migration 129, which moved it onto `usage_counters` quota_key `vision_analysis`; created by 111, cap raised 15→20 by 114), which raises `vision_analysis_daily_limit_reached` (SQLSTATE P0001) → 429. | `nutrition_provider.dart:1356` |
+
+## prediction type paragraph (full)
+
+_Moved verbatim from `supabase/functions/CLAUDE.md` (original lines 197-197, context-lean batch 2026-09-29)._
+
+`prediction` (`gemini-2.5-flash`, JSON mode) — 3/day per user on `usage_counters` quota_key `prediction_daily`, consumed by `_shared/prediction_handler.ts` BEFORE Gemini (fail-closed on a ledger error, 429 at the cap, a non-retried 500 on Gemini failure), server-owned system prompt — the request's `context.system_prompt` is ignored (single-owner audit 2026-09-26, P0 #5; client call site `AiService.predict`, which keeps the 429's status so the Profile refresh can say the daily limit was reached). Kill switch: the Edge Function secret `DISABLE_PREDICTION_QUOTA=true` skips the ledger only — the prompt stays server-owned — and is read per call, so it needs no redeploy; its name and rule live in the import-free `_shared/prediction_quota_switch.ts`, which the founder digest also reads so `prediction_daily` prints UNMETERED instead of "none" while it is on. The client gives automatic refreshes (PRO 30-day, PRO goal change) one attempt per IST day (`PredictionAttemptGate`), and only a 429 carrying `code: RATE_LIMITED` reads as the daily limit (Hermes 2026-09-26). Request-size limits for every `type` are validated once, before any branch, by `_shared/ai_proxy_input_limits.ts`.
+
+## SoT row: weekly_report_free_gate (full)
+
+_Moved verbatim from `supabase/functions/CLAUDE.md` (original lines 223-223, context-lean batch 2026-09-29)._
+
+| Concept | Writer | Reader |
+|---|---|---|
+
+| `weekly_report_free_gate` | `consume_quota('weekly_report_free', 'epoch')` in `weekly-report/index.ts`, gated on `!hasPro` and running AFTER the `ai_coach_interactions` insert | the same function's advisory `usage_counters` read, feeding `isFirstReport` → the 403. ⚠ **REWIRED by OI-162 slice 3a (2026-09-06)**: it used to `count(*)` rows with `channel='weekly_report'` and no date bound — non-`app_event` rows that `rolling-context` prunes, so a LIFETIME quota with no window to survive deletion on, and the one free Gemini 2.5 Pro report silently regenerated. ⚠ **TWO writes now, both required**: the `ai_coach_interactions` insert is the SOLE persisted copy of the report text and the row a reinstall restores (`sync_coach.dart` restores every channel unfiltered) and no longer feeds the gate; `consume_quota` is the quota. ⚠ The read uses **`.maybeSingle()`, never `.single()`** — an ABSENT row is a legitimate `used = 0` and must GRANT; only a populated `error` fails closed. `.single()` throws PGRST116 on absence, which would refuse every first-time free user. Pinned by `weekly_report_lifetime_meter_test.dart` + `weekly_report_pro_gate_writer_to_reader_test.dart`. |
+
+## SoT row: media_free_image_lifetime_gate (full)
+
+_Moved verbatim from `supabase/functions/CLAUDE.md` (original lines 224-224, context-lean batch 2026-09-29)._
+
+| Concept | Writer | Reader |
+|---|---|---|
+
+| `media_free_image_lifetime_gate` | `consume_quota('free_image_analysis', 'epoch')` in `ai-media-proxy/index.ts`, gated on `isFreeImageAnalysis && !interactionLogError` and running AFTER the `ai_coach_interactions` insert | the same function's advisory `usage_counters` read (`readFreeImageQuota`), feeding the 5-lifetime gate. ⚠ **REWIRED by OI-162 slice 3b (2026-09-08)**, same defect as `weekly_report_free_gate` on a different surface: it used to `count(*)` rows with `channel='free_image_analysis'` and no date bound — rows `rolling-context` prunes — so the 5 free analyses silently reset. ⚠ **TWO writes, both required**: the `ai_coach_interactions` insert is the sole persisted copy of the exchange and no longer feeds the gate; `consume_quota` is the quota. ⚠ The read uses **`.maybeSingle()`, never `.single()`** — an ABSENT row is `used = 0` and must GRANT; only a populated `error` fails closed. ⚠ The old reader was **fail-OPEN** (`if (error) return 0`, argued "safer … because 0 < 5" — precisely when the gate does NOT fire, audit CODE-3); it now fails CLOSED with its own `gate_reason: "quota_unavailable"`, never the paywall's. The client twin `getFreeImageAnalysisCount()` was **DELETED** (zero callers). ⚠ **v26 (2026-09-13, B-pass BP-2)**: the check now runs behind an exported `checkFreeImageQuota`, called from TWO sites — pre-fetch (the honest claim=image fast path) and a NEW post-fetch mirror (a claim=video caller whose served bytes reconcile to an image). Naively deleting the pre-fetch VIDEO paywall to fix that mislabel case (without this mirror) would have let a free user bypass THIS cap entirely by labelling every image "video". Pinned by `media_free_image_lifetime_gate_writer_to_reader_test.dart` and `pro_media_daily_caps_writer_to_reader_test.dart`'s "EXACTLY TWO sites, sharing ONE helper" test. |
+
+## SoT row: pro_media_daily_caps (full)
+
+_Moved verbatim from `supabase/functions/CLAUDE.md` (original lines 225-225, context-lean batch 2026-09-29)._
+
+| Concept | Writer | Reader |
+|---|---|---|
+
+| `pro_media_daily_caps` | ONE atomic `consume_quota(proQuotaKey, istDayStartIso(), proCap)` in `ai-media-proxy/index.ts`, gated on `isPro`, placed AFTER `fetchImageAsBase64` and BEFORE `geminiChat` — key `pro_image_daily` (50) or `pro_video_daily` (10) selected by `isVideo`, as is the cap; since v25 `isVideo` is reconciled with the served content-type BEFORE the key/cap are derived (a mislabelled video is charged as a video, and a free caller's mislabelled video meets the paywall); since v26 the MIRROR direction (a free caller's mislabelled IMAGE, claimed as "video") no longer bypasses the free-image cap either — see `media_free_image_lifetime_gate` row | the RPC's own return: `-1` → HTTP 200 `gated: true`, `gate_reason: pro_image_daily_limit_reached` / `pro_video_daily_limit_reached`, `COACH_REPLIES.proImageDailyCapReached(proCap)` / `proVideoDailyCapReached(proCap)` (the number is the ARGUMENT — the copy file cannot import the constant without a cycle), `resets_at` = next IST midnight; an RPC error → `pro_quota_unavailable`, a `subscriptions`-read error → `tier_unavailable`, both fail CLOSED with rank-free "not a limit" copy. ⚠ **REWIRED by OI-153 (2026-09-12, diagnose a9d4e7)**: the H-23 gate counted `ai_coach_interactions` channels NOTHING writes (0 rows, ever) and was fail-open, so the 50/day cap had never fired; PRO+video matched neither tier branch and was uncapped. **Consume-FIRST here, consume-AFTER for the free meter above — both deliberate**: only the atomic check-and-increment bounds Gemini spend under concurrency, and a daily unit lost to a Gemini 5xx is cheap where a lifetime one is not. `-1` leaves the row untouched, so the ledger cannot count refusals — the `console.warn` is the only refusal telemetry. Pinned by `pro_media_daily_caps_writer_to_reader_test.dart`. |
+
+## SoT row: delete_account_rate_limit (full)
+
+_Moved verbatim from `supabase/functions/CLAUDE.md` (original lines 228-228, context-lean batch 2026-09-29)._
+
+| Concept | Writer | Reader |
+|---|---|---|
+
+| `delete_account_rate_limit` | `consume_quota('delete_account', <hourly bucket>)` in `delete-account/index.ts`, called at the TOP of the handler (before the confirmation-token check), refusing with 429 on `-1` | none — this is a hard pre-action gate, not an advisory read; the RPC's own atomic check-and-increment IS the enforcement. ⚠ **REWIRED by OI-162 slice 4 (f2c8d5, 2026-09-11)**: the prior mechanism (`count(*)` on `ai_coach_interactions` rows with `channel='delete_account_attempt'`, plus a fire-and-forget insert into two nonexistent columns) had **never worked** — `attemptCount` was structurally always 0, so this limit never fired in production. Fails OPEN on a `consume_quota` error (a DPDP §17 erasure must not be blocked by a counter outage) — deliberately the OPPOSITE of `verify_payment_rate_limit` below. Pinned by `delete_account_rate_limit_writer_to_reader_test.dart`. |
+
+## SoT row: verify_payment_rate_limit (full)
+
+_Moved verbatim from `supabase/functions/CLAUDE.md` (original lines 229-229, context-lean batch 2026-09-29)._
+
+| Concept | Writer | Reader |
+|---|---|---|
+
+| `verify_payment_rate_limit` | `consume_quota('verify_payment', <10-minute bucket>)` in `verify-payment/index.ts`, called at the TOP of the handler (before body parsing), refusing with 429 on `-1` | none — same hard pre-action shape as `delete_account_rate_limit` above. ⚠ **REWIRED by OI-162 slice 4 (f2c8d5, 2026-09-11)**: the prior mechanism destructured only `{ count }` from its query, never `{ error }`, so a counter-query failure silently proceeded as if under the limit (fail-open by omission, not by design). Fails CLOSED on a `consume_quota` error here — this endpoint is background confirmation only (PRO activates optimistically in Hive on the Razorpay success callback; the webhook is an independent authoritative path; the client retries at 60s/5m/15m), so a refusal costs the user almost nothing, while fail-open under a correlated outage releases the exact brake this limit exists to protect. Pinned by `verify_payment_rate_limit_writer_to_reader_test.dart`. |
+
+## SoT row: gemini_failure_alert (full)
+
+_Moved verbatim from `supabase/functions/CLAUDE.md` (original lines 231-231, context-lean batch 2026-09-29)._
+
+| Concept | Writer | Reader |
+|---|---|---|
+
+| `gemini_failure_alert` (food-logging-observations, 2026-09-20; extended A5/OI-226, f7a2c9, 2026-09-21) | `_shared/gemini_failure_alert.ts` `reportGeminiExhaustion(client, source, lastError, endpoint?)`, called from `ai-proxy/index.ts` at 4 call sites — `food_text_analysis` (:471), `scan_meal` (:632), `cart_auditor` (:676; line numbers shifted from the food-logging-observations batch's own :443/:603/:646 by this same batch's A2b `retries: 2` insertions earlier in the file — re-verify by grep, not by citation, per this file's own common-pitfalls row on line-count drift), `prediction` (new — its `geminiChat()` call never destructured `lastError` before this fix; since 2026-09-26 the call and its report live in `_shared/prediction_handler.ts`, injected from ai-proxy's prediction branch, and the failure status is a non-retried 500, not 502) — on total Gemini attempt-list exhaustion, PLUS (since A5/OI-226) `tool-loop.ts`'s `runToolLoop` hard-failure catch (`tool-loop.ts:300`) on the coach chat/tool-calling path's own total exhaustion. Inserts into `public.alerts`, reusing `trg_dispatch_critical_alert_notify` (migration 133) for the founder's existing Telegram alert channel — no new Telegram wiring. `source` stays constant (`ai_proxy_gemini_exhausted`) across all 5 call sites so a 30-min dedup window spans chat + nutrition together; `endpoint` (`"chat"` / `"food_text_analysis"` / `"scan_meal"` / `"cart_auditor"` / `"prediction"`) is used only in `summary`/`context_json` so otherwise-identical alerts stay distinguishable. Gated behind `DISABLE_GEMINI_FAILURE_ALERT` (§4.6 platform-tier kill-switch — the founder can silence it from the Edge Function secrets dashboard without a redeploy). **OI-226 is now CLOSED (both of its named gaps)** — this row previously said the chat/tool-calling gap was "tracked as OI-226, not silently absent"; the OI's own text named a SECOND gap (the `prediction` handler) that a first pass at this fix nearly missed — caught only by re-reading the OI's filed text in full rather than a partial recollection of it, per `docs/diagnoses/2026-09-21-ai-failure-telemetry-gap-oi226-f7a2c9.md`. A5 wired both: `geminiChatWithTools` (`gemini.ts`) now attaches `{status, geminiMessage}` onto its total-exhaustion throw via `Object.assign` (the pre-existing thrown Error carried no structured field `reportGeminiExhaustion` could consume) for the chat path, and `prediction`'s own `geminiChat()` call now destructures `lastError` for the direct path. Mechanically enforced going forward by `scripts/check_gemini_retry_and_telemetry_coverage.dart` (client-side telemetry + retries only — this server-side `reportGeminiExhaustion` wiring itself has no mechanical gate, by scope decision; see the diagnose-doc). **OI-238 is now CLOSED (batch C, 2026-09-22, `b6e3a8`)** — the 5 OTHER Gemini-calling Edge Functions this row's ai-proxy-only coverage never named (`weekly-report`, `ai-media-proxy`, `assess-body-composition`, `daily-snapshot`, `rolling-context` — see the "Every function that calls an LLM (6)" list in the AI Architecture section above) had ZERO `reportGeminiExhaustion` wiring; none even destructured `lastError` from `GeminiResult`. All 5 now call it from their own `!content`-style total-exhaustion branch. **Dedup source split by traffic shape, not by function identity**: the 4 LIVE user-invoked sites reuse the SAME `ai_proxy_gemini_exhausted` source as the 5 sites above (`endpoint` values `"weekly_report"` / `"ai_media_proxy"` / `"assess_body_composition"` / `"daily_snapshot_extraction"`) — a real outage should page the founder once across the whole app, not once per surface; `rolling-context` — the ONE cron-dispatched site among these 5, looping over every user with >50 stored messages in a single nightly run — deliberately uses its OWN source (`rolling_context_gemini_exhausted`, `endpoint: "rolling_context_summarize"`) so a burst of per-user failures in one bad run can't suppress a same-day live-traffic alert to "warn" for the rest of the shared source's 30-min window. Same `DISABLE_GEMINI_FAILURE_ALERT` kill-switch covers all 10 call sites (it is a function-level env var, not per-source). Still no mechanical gate for server-side wiring (same scope decision as OI-226 — see `docs/diagnoses/2026-09-22-gemini-exhaustion-telemetry-oi238-b6e3a8.md`). Testing note: `weekly-report`, `assess-body-composition`, `daily-snapshot` and `rolling-context` all call `serve(...)` at module scope with no `import.meta.main` guard (importing them directly would boot a real HTTP server), and `ai-media-proxy`'s exported `handleRequest` has no injectable auth seam past `createClient(...).auth.getUser()` — 4 of the 5 (`weekly-report`, `assess-body-composition`, `rolling-context`, plus `ai-media-proxy`'s own seam limit) are covered by position-scoped, comment-stripped SOURCE-GREP tests (`index_test.ts` per function) rather than end-to-end behavioral tests. **`daily-snapshot` is no longer in that set** (single-owner a2b-1, 2026-09-27, watermark/metering rewrite): its `extractCoachingNotes` exported function takes `SupabaseClient` as a plain parameter with no module-global dependency, so `daily-snapshot/index_test.ts` now gets genuine behavioral coverage via the dynamic-import-with-pre-set-env-vars pattern (`Deno.env.set(...)` before `await import("./index.ts")`) plus an in-memory Postgres-filter-engine fixture (`FakeBuilder`/`runFilters`) — this proved a real reversal of the file's own prior header comment claiming dynamic import "would still throw at import time." The `reportGeminiExhaustion`-import/call-site assertions specifically (`index_test.ts:109-160`) remain source-grep, since asserting on the alert payload itself is out of scope for that check; the extraction/watermark/metering logic around it is what moved to behavioral. | `alerts` table → Telegram, founder-only, zero client-facing effect either way. |
+
+## Pitfall: _shared change breaks another function's test (full)
+
+_Moved verbatim from `supabase/functions/CLAUDE.md` (original lines 239-239, context-lean batch 2026-09-29)._
+
+| Pitfall | How to avoid | Source |
+|---|---|---|
+
+| **A `_shared/` change breaks a test in a function folder you never opened** | `deno check` per touched function and the `_shared` module's own `*_test.ts` are NOT CI's input set. CI runs `deno test --no-check --allow-all supabase/functions/` over the WHOLE tree, and another function's test can hold a fake client that your new query shape outgrows. Before pushing any `_shared/` change, run CI's exact command locally with `--node-modules-dir=none` (the `auto` default rewrites the tracked `node_modules/pg`, see root CLAUDE.md §0): ~21 s for 739 tests measured 2026-09-28. | 2026-09-28, PR #47: the day-swap weekly digest read added `.in()` in `_shared/founder_digest_content.ts`; `telegram-admin-bot/index_test.ts`'s empty-digest fake had no `in`, so CI failed 1/739 while every per-function check was green (`bd6e5b1f`) |
+
+## Pitfall: deploying from a stale feature branch (full)
+
+_Moved verbatim from `supabase/functions/CLAUDE.md` (original lines 240-240, context-lean batch 2026-09-29)._
+
+| Pitfall | How to avoid | Source |
+|---|---|---|
+
+| **Deploying a function from a feature branch that is behind `main` rolls back main's live code** | A deploy uploads the WHOLE bundle — the function and every `_shared/` file it imports — from the tree it runs in (`emit_payload.js --auto` is byte-identical to that tree, stale or not). If `main` has already deployed a newer `_shared` file, deploying from an older branch silently reverts it in prod; `list_edge_functions` versions will not show it. Before any deploy from a non-`main` tree: `git fetch origin main` then `git diff --name-only HEAD...origin/main -- supabase/functions`. Non-empty and touching the function or a `_shared` file it imports ⇒ merge `origin/main`, `deno check` the merged tree, then deploy. Also list which OTHER functions import the changed `_shared` files — an additive export changes nothing for a non-caller, a changed body does. | 2026-09-28 near-miss (day-swapper-sync-load Task 34: main's `founder_digest_content.ts` / `coach_memory.ts` sat inside 3 of the 5 bundles being deployed; merge `19b42747`) |
+
+## Pitfall: cron jobs send Bearer null (full)
+
+_Moved verbatim from `supabase/functions/CLAUDE.md` (original lines 245-245, context-lean batch 2026-09-29)._
+
+| Pitfall | How to avoid | Source |
+|---|---|---|
+
+| Cron jobs send `Authorization: Bearer null` → 401 every tick | Closed by user action 2026-05-12 (audit P0 Vault fix). Cause: `private.morning_alert_get_service_key()` reads `vault.decrypted_secrets WHERE name='service_role_key'`; the Vault row had never been populated, so the function returned `NULL` and every cron job sent `Bearer null` → Edge Function gateway 401. 12 cron jobs affected (0 successful invocations across thousands of attempts). pg_cron reports "succeeded" for `net.http_post()` dispatches regardless of HTTP response — symptom invisible from `cron.job_run_details`. Fix: Dashboard → Settings → Vault → add secret named exactly `service_role_key` with the project's service_role JWT. **Don't add new cron jobs that hardcode the anon JWT** — always resolve via `private.morning_alert_get_service_key()` (migration 061 P1-D retrofitted `rolling-context-nightly` + `streak-guardian-daily` to this pattern). Server-side cron execution telemetry is still a gap — `client_errors` doesn't capture these failures (audit 2026-05-12 M2 follow-up). | (relocated 2026-05-18 — see docs/diagnoses/INDEX.md) |
+
+## Pitfall: pr-detection 401 despite Vault fix (full)
+
+_Moved verbatim from `supabase/functions/CLAUDE.md` (original lines 246-246, context-lean batch 2026-09-29)._
+
+| Pitfall | How to avoid | Source |
+|---|---|---|
+
+| `pr-detection` cron loops 401 every 15 min despite audit P1-D fix | Closed (operational fix flagged to founder) in APK Test #16 (2026-05-15). Audit 2026-05-11 C-4 / 2026-05-12 P1-D `private.morning_alert_get_service_key()` retrofit was applied correctly to every cron entry — the `cron.job.command` for `pr-detection` (jobid 9) USES `Bearer ' \|\| private.morning_alert_get_service_key()`. The Vault row IS populated (219-char real JWT). **Actual root cause:** the in-function gate at `supabase/functions/pr-detection/index.ts:56` compares `token === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")`. Between 2026-05-11 and 2026-05-15 the Vault-stored JWT and the env-injected `SUPABASE_SERVICE_ROLE_KEY` drifted (likely Supabase platform-side rotation or someone re-saved Vault). Equality check fails → 401. **Operational fix (founder-only):** Dashboard → Settings → API → copy current service_role JWT → Dashboard → Settings → Vault → edit row `service_role_key` → paste → save. **Class fix deferred:** replace the brittle env-equality check in `_shared/cron_auth.ts` with a JWT signature+role decode. Migration 065 ships a sanity-audit DO block that warns on hardcoded JWTs or `app.settings.service_role_key` (which returns NULL on this project — flagged jobid 7 `promote_community_item_daily` as separate deferred bug). Same shape affects every C-4-gated function (re-engagement, plateau-alert, protein-gap-alert, workout-window-closing, streak-guardian, evaluate-rank-promotions, i-see-you-callout, clean-orphan-media, expiry-reminder, weekly-recap-ready) — all latent on the same drift. closes-diagnose: 5a65bd. | (relocated 2026-05-18 — see docs/diagnoses/INDEX.md) |
+
+## Pitfall: local deno rewrites tracked node_modules (full)
+
+_Moved verbatim from `supabase/functions/CLAUDE.md` (original lines 249-249, context-lean batch 2026-09-29)._
+
+| Pitfall | How to avoid | Source |
+|---|---|---|
+
+| **Local `deno check` / `deno test` (Deno 2.9.6, installed 2026-09-12) silently rewrites the tracked `node_modules/`** | Always pass **`--node-modules-dir=none`**: `deno check --node-modules-dir=none supabase/functions/<fn>/index.ts` and `deno test --no-check --allow-all --node-modules-dir=none supabase/functions/<fn>/`. The default (`auto`, which CI also uses on a throwaway checkout) resolves `npm:` specifiers by materialising `node_modules/.deno/` and REPLACING `node_modules/pg` — a TRACKED directory here — with a symlink, so `git status` shows 22 deletions you never made. Recovery: `rm -f node_modules/pg && rm -rf node_modules/.deno && git checkout -- node_modules/`. Binary: `%LOCALAPPDATA%/Microsoft/WinGet/Links/deno.exe`. Second trap, same batch: `deno test` imports `./index.ts`, which evaluates module scope — keep `Deno.env.get(...)!` reads and `if (import.meta.main) serve(handler)` the only side effects there (the `compute-admin-metrics-daily` / `founder-digest` / `ai-media-proxy` shape), or the test file boots a server. A module whose guard depends on `SUPABASE_URL` at import (`ai-media-proxy`'s `STORAGE_PREFIX`) needs `Deno.env.set(...)` BEFORE a dynamic `await import("./index.ts")` in the test — a static import is hoisted above the `set`. | OI-153 (2026-09-12) — cost one `git checkout -- node_modules/` recovery |
+
+## Pitfall: Telegram fetch error carries the bot token (full)
+
+_Moved verbatim from `supabase/functions/CLAUDE.md` (original lines 250-250, context-lean batch 2026-09-29)._
+
+| Pitfall | How to avoid | Source |
+|---|---|---|
+
+| **A Telegram fetch error's `.message` carries the bot token** | Deno's `fetch` rejects with `TypeError: error sending request for url (https://api.telegram.org/bot<TOKEN>/sendMessage)…`. `console.error(err)`, `String(err)` or `logCronEnd(..., { errorSummary: err.message })` therefore writes the token into function logs / `cron_call_log`. `founder-digest` wraps its send in a private try/catch and surfaces `err.name` only (`telegramErrorSummary`, pinned by its `index_test.ts`). ⚠ `morning-alert`'s sender (`supabase/functions/morning-alert/index.ts`, `sendTelegramMessage` — its `catch (err) { console.error(..., err) }`) does NOT have this guard — filed as an OI in the OI-153 close-out, not fixed there (different function, different blast radius). | OI-153 (2026-09-12) |
+
+## Tests pinning the rules here: one-per-line inventory (full)
+
+_Moved verbatim from `supabase/functions/CLAUDE.md` (original lines 254-274, context-lean batch 2026-09-29)._
+
+- `test/contracts/ai_proxy_placeholder_resolution_test.dart`
+- `test/contracts/ai_proxy_day_injection_test.dart`
+- `test/contracts/ai_media_proxy_ssrf_allowlist_test.dart`
+- `test/contracts/ai_media_proxy_user_scope_test.dart`
+- `supabase/functions/ai-media-proxy/index_test.ts` (Deno — the user-scope guard over the RESOLVED URL, behaviourally)
+- `test/contracts/ai_media_proxy_status_code_classification_test.dart`
+- `test/contracts/ai_media_proxy_telemetry_test.dart`
+- `test/contracts/media_free_image_lifetime_gate_writer_to_reader_test.dart`
+- `test/contracts/pro_media_daily_caps_writer_to_reader_test.dart`
+- `test/contracts/coach_replies_test.dart` (server ↔ client copy mirror, every key)
+- `test/contracts/delete_account_rate_limit_writer_to_reader_test.dart`
+- `test/contracts/verify_payment_rate_limit_writer_to_reader_test.dart`
+- `test/contracts/cron_auth_adoption_test.dart`
+- `test/contracts/cron_telemetry_adoption_test.dart`
+- `test/contracts/food_text_analysis_daily_cap_test.dart`
+- `test/contracts/edge_function_safety_test.dart`
+- `test/contracts/edge_function_503_retry_test.dart`
+- `test/contracts/edge_function_cold_start_retry_behavioral_test.dart`
+- `test/contracts/edge_function_storage_race_retry_test.dart`
+- `test/contracts/error_telemetry_payload_contract_test.dart`
+- `test/contracts/chat_media_signed_url_test.dart`
+
+
+## consume-day-swap: opening paragraph (full)
+
+_Moved verbatim from `supabase/functions/CLAUDE.md` (original lines 113-121, context-lean batch 2026-09-29)._
+
+The ONE call site of quota key `day_swap` (day-swapper design spec section 5.3 "one
+key, one call site, one limit"). Input `{ week_start: "YYYY-MM-DD" }` (must be an IST Monday); output
+`{ allowed, used, limit }` or `{ error, request_id }`. `verify_jwt: true` — a pure
+service-role client authenticates via `supabase.auth.getUser(token)` (never passes the
+user JWT as the `supabaseKey` — CLAUDE.md §4.4 rule 9), then calls `consume_quota`
+(migration 130, EXECUTE revoked from PUBLIC) with `p_quota_key='day_swap'`,
+`p_window_start=<IST Monday 00:00 +05:30>`, `p_limit` = 1 (free) or 3 (PRO). Window
+start and per-tier limits are re-derived server-side from the caller's own
+subscription row (`isProUser`), never trusted from the request body.
+
+## Rows and list items condensed in place (verbatim originals)
+
+_Moved verbatim from `supabase/functions/CLAUDE.md` (context-lean batch 2026-09-29); the nested file keeps a condensed form of each._
+
+| `food_text_analysis_daily_cap` | `trg_food_text_rate_limit` Postgres trigger (live definition migration 129) on `ai_coach_interactions`, consuming quota_key `food_text` in `usage_counters` | `ai-proxy` renders the 429 body from `FOOD_TEXT_FREE_DAILY_CAP`/`FOOD_TEXT_PRO_DAILY_CAP` (pinned to the trigger by `food_text_analysis_daily_cap_writer_to_reader_test.dart`); client maps 429 → "limit reached". |
+| `chat_app_daily_cap` | `trg_chat_app_rate_limit` Postgres trigger (live definition migration 129, PRO-aware) on `ai_coach_interactions`, channel='app', consuming quota_key `chat_app` in `usage_counters` | `ai-proxy/index.ts` catches `chat_app_daily_limit_reached` → 429; client maps to "Daily message limit reached". |
+| `vision_analysis_daily_cap` | `trg_vision_analysis_rate_limit` Postgres trigger (live definition migration 129; created by 111, cap raised 15→20 by 114) on `ai_coach_interactions`, consuming quota_key `vision_analysis` in `usage_counters`, channel IN ('scan_meal','cart_auditor') — one shared 20/day budget | `ai-proxy/index.ts` catches `vision_analysis_daily_limit_reached` → 429; client maps to "Daily vision analysis limit reached". |
+| `day_swap_allowance` (server half) | `consume-day-swap/index.ts` — one atomic `consume_quota('day_swap', <IST Monday window>, limit)` call, called AFTER the phone's own optimistic +1 (client wins the race; server corrects in the background — see `lib/core/services/CLAUDE.md`) | the phone's `DaySwapAllowance._consume` background reply; `mapQuotaResult` (`logic.ts`) shapes the RPC's return into `{allowed, used, limit}`. |
+| food_text_analysis 429 when user is below daily cap | Trigger `trg_food_text_rate_limit` on `ai_coach_interactions` (live definition migration 129, 2026-09-05; free cap set by 127, created by 026) enforces the 10/day free / 200/day PRO cap atomically. ⚠ The free arm was 50/day until b8f4c2 while the client and business-rules both said 10 — read the cap from the HIGHEST-numbered migration defining the function, never from 026. Insert-first pattern — `ai-proxy` inserts a placeholder row BEFORE calling Gemini. If trigger raises `food_text_daily_limit_reached` (SQLSTATE P0001), return 429. Do NOT re-add a separate check-then-insert pre-check; the trigger is the single source of truth. | (relocated 2026-05-18 — see docs/diagnoses/INDEX.md) |

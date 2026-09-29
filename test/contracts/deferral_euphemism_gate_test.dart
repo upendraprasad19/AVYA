@@ -68,6 +68,7 @@ void main() {
     String? markdown, {
     String? phrasesContent,
     bool omitPhrasesFile = false,
+    Map<String, String> committedFiles = const {},
   }) {
     final repo = Directory.systemTemp.createTempSync('deu_gate_');
     addTearDown(() {
@@ -97,6 +98,14 @@ void main() {
     // Seed commit so `git diff --cached` is meaningful.
     File('${repo.path}/seed.txt').writeAsStringSync('seed\n');
     git(['add', 'seed.txt']);
+    // [committedFiles] land in the seed commit, NOT the staged diff: they are
+    // only visible to the gate's full sweep, never to its staged-diff scan.
+    for (final e in committedFiles.entries) {
+      final f = File('${repo.path}/${e.key}');
+      f.parent.createSync(recursive: true);
+      f.writeAsStringSync(e.value);
+      git(['add', e.key]);
+    }
     git(['commit', '-m', 'seed']);
 
     if (markdown != null) {
@@ -228,6 +237,38 @@ void main() {
           reason: 'it must not claim to have swept a set it never read');
       expect(r.exitCode, 0,
           reason: 'still fails OPEN — an unexpected CWD must not wedge a commit');
+    });
+
+    // context-lean batch (2026-09-29, B-pass finding 3): prose that INSTRUCTS an
+    // agent moved out of root CLAUDE.md and the skills' SKILL.md into these
+    // files. They were swept while inline; the full sweep must still read them,
+    // or a banned phrase committed there is invisible forever (the staged-diff
+    // scan only sees the commit that adds it).
+    const movedGoverning = [
+      'docs/architecture/hooks.md',
+      'docs/architecture/process-invariants-detail.md',
+      'docs/playbook/common-pitfalls.md',
+      '.claude/skills/code-review/tuning-history.md',
+      '.claude/skills/debugging/bug-classes.md',
+    ];
+    const banned = '# Doc\n\nRoll the old path deletion into a follow-up batch.\n';
+
+    for (final path in movedGoverning) {
+      test('the full sweep reads $path (a COMMITTED euphemism is caught)', () {
+        final r = runGateOn(null, committedFiles: {path: banned});
+        expect(r.exitCode, 1,
+            reason: '$path holds moved governing prose but the sweep did not '
+                'read it\n${r.out}');
+      });
+    }
+
+    test('CONTROL — the same phrase in a NON-governing doc is not swept', () {
+      // Diagnose-docs legitimately quote banned phrases; without this control
+      // the five tests above could pass because the gate flags everything.
+      final r = runGateOn(null, committedFiles: {
+        'docs/diagnoses/2026-01-01-example-abc123.md': banned,
+      });
+      expect(r.exitCode, isNot(1), reason: r.out);
     });
 
     test('the PASS message states HOW MANY documents it actually swept', () {
