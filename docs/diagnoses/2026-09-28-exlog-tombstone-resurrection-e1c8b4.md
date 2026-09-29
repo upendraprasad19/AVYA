@@ -447,3 +447,33 @@ mutation-proven) + a full corrected suite run (`TZ=Asia/Kolkata flutter test
 test/ --exclude-tags golden`) — no regressions. Two-agent self-triggered
 B-pass (round 3, CLAUDE.md §4.3): 2 findings, both resolved (see above) — 0
 outstanding.
+
+## Deploy (2026-09-29, post-merge)
+
+PR #50 merged to `main` at `2d4ff50df097d921f7c7ac9dc5aec8923cc8028c` (all CI
+green, incl. the plan-review-record gate on the merge commit). Both Edge
+Function fixes from the round-3 B-pass (`excludeDeletedPrs` /
+`excludeDeletedLogs`) deployed to project `dedsavbjuwgarrhphgnl` from that
+exact merge commit's content (`git show 2d4ff50d:<path>`, bypassing the
+working tree to guarantee byte-identical source):
+
+- **`pr-detection`**: v16 → **v17**. `verify_jwt: false` (unchanged).
+- **`weekly-recalc`**: v24 → **v25**. `verify_jwt: false` (unchanged).
+
+Post-deploy smoke test (both `CRON_SECRET`-gated, not client-JWT): an
+unauthenticated POST to each returned `401 {"error":"Unauthorized"}` — the
+expected shape, confirming the function booted, its full import closure
+(`_shared/cron_auth.ts`, `_shared/cron_telemetry.ts`, etc.) resolved, and the
+auth gate executed rather than crashing.
+
+Cron registration checked live (`select * from cron.job where command ilike
+'%pr-detection%' or command ilike '%weekly-recalc%'`), not assumed: **`pr-detection`
+IS registered** — jobid 9, `proactive_pr_detection`, `0 * * * *` (hourly) —
+so this deploy's fix takes effect on the next scheduled tick, within the
+hour. **`weekly-recalc` has ZERO `cron.job` rows**, matching the function's
+own header comment ("scheduled by nothing"); it is only reachable via a
+manual/direct POST with the correct bearer secret until a founder wires a
+schedule for it. No live-traffic verification of the fix's actual runtime
+behavior (the delete-filter excluding tombstoned rows under real data) was
+performed as part of this deploy step — only that the new code is live and
+boots.
