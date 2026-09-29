@@ -249,6 +249,28 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-30** — blast-radius **platform** — branch `claude/sync-aab-build-check-408772`
+  (live Razorpay order-tagging + Vercel preview-build-skip fix + OI-274 filing; 3 commits, all
+  `docs:`/`feat:`/`chore:` — no diagnose-doc required). Whole-branch review (nothing staged, all
+  commits already landed), reviewed against `main...HEAD` per the whole-branch/no-staged-diff
+  convention (branch-named review file, not staging-hash-named): `docs/reviews/sync-aab-build-check-408772-bpass.md`.
+  **4 findings (0 P0, 1 P1, 1 P2, 2 P4); 0 false_alarm** — the P1 (branch had no
+  `docs/plan-reviews/` record — required at `platform` tier per §4.12.3) and the P2 (a live
+  Razorpay credential handoff file, `.claude/.razorpay_live.env`, still populated on disk one day
+  past its own stated "delete after pushed to Supabase + Vercel" purpose — both destinations were
+  in fact already done) were both fixed in the same batch immediately after the review landed; the
+  2 P4s (Razorpay `notes` object has headroom under the Orders API's 15-key cap; the new
+  `ignoreCommand`'s catch-all `*) exit 0` arm would silently skip a hypothetical Deploy-Hook/CLI
+  deploy with no resolvable git ref — no such trigger exists in this repo today) accepted with no
+  code change. **No new lens — recorded because this is the first review to surface the P1 shape
+  from the *reviewer's own side*: a B-pass finding whose fix is "write the very artifact this
+  review's acceptance feeds into" (the plan-review record cites this review file as `bpass_review`,
+  and this review was written specifically to satisfy that citation) — a small but real
+  ordering dependency worth naming for the next whole-branch, nothing-staged, platform-tier case:
+  write the plan-review record and its `bpass_review` citation together, right after the B-pass
+  lands, rather than assuming an already-committed branch has one.**
+  False-alarm rate 0/4 → no lens removed; no lens change needed.
+
 - **2026-09-28 (f)** — blast-radius **platform** — branch `day-swapper-sync-load`, third merge
   of origin/main (PR #48). 1 finding (P2), 0 false alarms, fixed pre-commit
   (`330f5d0c27fc-review.md`). **Lesson: when a finding names a stale string, grep the WHOLE file
