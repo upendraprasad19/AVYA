@@ -1499,3 +1499,36 @@ added, false of the flip being performed.
   `test/train/duration_controller_seeding_writer_to_reader_test.dart`
   (source-grep) + `test/workout_write_service/aggregate_reflects_cleaned_sets_test.dart`
   (behavioral).
+
+### 2.76 A real-time test whose synthetic-clock anchor precedes setup that eats its own time budget (NEW 2026-09-29)
+
+- **Telltale:** a test that drives a REAL `Timer` against a synthetic clock
+  ("start N ms before midnight, let real time pass, assert the rollover
+  fired") passes alone most of the time and fails intermittently, often
+  only in the full suite, with an assertion that reads as if the product
+  did nothing: `Expected: not '2026-09-29', Actual: '2026-09-29'`.
+- **Root-cause shape:** the clock is anchored (`setTestClock(() =>
+  DateTime.now().add(offset))`, offset chosen so "now" sits N ms before the
+  boundary) BEFORE setup that itself takes wall time: `pumpWidget`, a ref
+  capture through `runAsync`, a Hive open. The clock advances in lockstep
+  with real time, so when setup takes longer than N ms the synthetic clock
+  has already crossed the boundary before the code under test records its
+  "before" state. The "before" and "after" then read the same day and the
+  test blames the timer. The product is not at fault.
+- **Fix pattern:** anchor the synthetic clock IMMEDIATELY before the call
+  whose start state matters (here `init()`), after every pump/capture, and
+  assert the precondition on the recorded before-state itself
+  (`expect(preInitDate, istDateStr(syntheticStart))`), so a blown budget
+  fails as a named precondition instead of as a product assertion.
+- **Class rule:** in any lockstep synthetic clock with a small margin,
+  count every awaited step between the anchor and the observation as
+  budget spend. Setup belongs before the anchor. A margin that "usually"
+  holds on an idle dev box is exactly what a loaded full-suite run breaks.
+- **Prior incidents:** `test/contracts/day_rollover_midnight_timer_test.dart`,
+  which arrived from main in PR #48 and blocked the day-swapper-sync-load
+  pre-push full suite (it failed 2 of 3 isolated runs). Fixed in `79541336`.
+  Afterwards it passed 10 of 10 isolated runs. Mutation check: replacing the
+  Timer callback with a no-op gave 1 red ("Expected: not '2026-09-28'"),
+  restored from a byte copy.
+- **Regression test:** the same file (its own precondition assertion now
+  pins the anchor ordering).

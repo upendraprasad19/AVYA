@@ -6479,3 +6479,36 @@ raw call sites need their own edit.
 
 **Reopen when:** picked up as a dedicated fix, or resurfaced by a founder report of the Weekly
 Report sparkline not reflecting a just-logged weight/meal/workout entry.
+
+## OI-268 — contract_sweep sets TZ=Asia/Kolkata for its flutter child; on Windows the CRT reads that IANA name as UTC, so date contracts fail falsely
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-09-29 — same test, TZ unset PASS vs TZ=Asia/Kolkata FAIL
+- **Identified**: 2026-09-29 · filed via mint_oi.sh from branch `day-swapper-sync-load`
+
+Measured 2026-09-29 on the Windows dev machine (system timezone IST):
+`flutter test test/contracts/logout_login_round_trip_test.dart --plain-name "Local ISO string"`
+passes with `TZ` unset and FAILS with `$env:TZ='Asia/Kolkata'` (`Expected: '2026-05-09'
+Actual: '2026-05-10'` — the fixed local input `2026-05-09T21:00:00.000` was read as UTC and
+shifted into the next IST day). The Windows C runtime parses `TZ` as a POSIX `tzn[+|-]hh[:mm]`
+string; an IANA name like `Asia/Kolkata` is not one, and the process silently runs as UTC.
+
+- **Where it bites**: `scripts/contract_sweep.dart:30` passes `..['TZ'] = 'Asia/Kolkata'` in
+  the Dart `Process` environment for its `flutter test` child. In the day-swapper-sync-load
+  pre-push runs, the sweep reported failures in `logout_login_round_trip_test.dart` T1,
+  `ai_snapshot_building_behavioral_test.dart`, `coaching_notes_behavioral_test.dart` (2),
+  `coach_interaction_repository_only_test.dart` and `coach_memory_service_only_test.dart` —
+  all of which passed in the same hook's full suite minutes later.
+- **Why the full suite is unaffected here**: `scripts/pre-push.sh:151` sets
+  `TZ=Asia/Kolkata flutter test …` from Git's `sh`, and those same tests pass there; the
+  MSYS layer evidently does not hand the literal IANA string to the native process. Not proven
+  beyond that observation.
+- **Why it matters now**: the sweep is `--warn-only || true` today, so these are noise. OI-220's
+  planned flip to hard-fail would turn them into a push-blocker on every Windows push.
+- **CI is unaffected**: Linux glibc understands `Asia/Kolkata` (`test.yml:28`).
+- **Fix shape (not designed)**: on Windows, do not set `TZ` in `contract_sweep.dart`'s child
+  env (the system zone is already IST on the dev box), or set a POSIX form the CRT accepts
+  (`IST-5:30`), and add a test that runs one IST-sensitive contract through the sweep's own
+  spawn path on Windows. Check `pre-push.sh:151` with the same experiment before relying on it.
+- **Source**: day-swapper-sync-load pre-push run, 2026-09-29.
