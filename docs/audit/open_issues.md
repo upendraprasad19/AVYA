@@ -2735,11 +2735,48 @@ change.
 
 ---
 
-## OI-154 — a cleared profile field silently reverts on the next sign-in (P1)
+## OI-154 — a cleared profile field silently reverts on the next sign-in (P3, was P1)
 
 - **Status**: OPEN
-- **Blocked on**: needs a design spec (tombstone + migration)
-- **Verified**: 2026-09-03 — source, full chain traced
+- **Blocked on**: FOUNDER — product choice (below). Deferred 2026-09-29 as non-critical; nothing technical blocks it.
+- **Verified**: 2026-09-29 — re-traced against `main` @ 628798ec; citations below are corrected, the chain is unchanged. See "2026-09-29 re-scoping". Not reproduced on a device.
+
+### 2026-09-29 re-scoping (supersedes the P1 framing and the "only a tombstone survives" conclusion below)
+
+**Reachable blast radius is ONE field, `city` — not 33.** Only fields a user can empty through the UI
+can hit this: `phone` has no client writer to `users.phone` and is not in the `user_profile` payload;
+`avatar_url`/`banner_url` are set-only (`profile_provider.dart:136-140, 214-218`);
+`date_of_birth`/`wake_up_time`/`preferred_workout_time` use `?iso` and omit the key when unset
+(`edit_profile_screen.dart:1866-1868`); `injuries`/`equipment_*` use `[]` as "not answered".
+`body_fat_percent` never reaches sync when cleared, so it is a separate defect: **OI-271**. The other
+~27 guarded fields have no clear affordance, so they are LATENT, not user-visible. Only readers of
+`city`: `ai_snapshot_builder.dart:107` (already skips empty) and the Edit Profile seed `:214` — hence P3.
+
+**Corrected citations** (the code moved): payload builder `lib/core/services/sync/sync_profile.dart:197-255`
+(`city` at `:230`); restore merge `sync_profile.dart:764-771` (a second cloud-over-Hive merge sits at
+`auth_session_bootstrapper.dart:525-532`); `_hasValue`/`_hasNumber` at `sync_service.dart:2718`/`:2726`;
+`restoreLightweightAlways` defined `:1520`, called `:1478`. Counts still hold: `_hasValue(p[` ×20, `_hasNumber(p[` ×13.
+
+**A design was drafted and REJECTED on cost (2 plan-review rounds, both NOT CONVERGED)** —
+`docs/superpowers/specs/2026-09-29-oi-154-profile-city-clear-design.md` (kept as the record). v1 "send `''`
+when Hive holds `''`" is WRONG: `edit_profile_screen.dart:1864` writes `'city': _cityController.text.trim()`
+on EVERY save, so anyone who ever saved without a city already holds `city: ''`, and an unrelated save from a
+stale device would wipe a real cloud city. v2 (a local clear-intent marker) needs, per round 2: success
+detection on `Result.isOk` (the failed-push path enqueues a marker then `return;`s normally —
+`sync_profile.dart:258-296`), a generation stamp with compare-and-clear, the second merge site, and the marker
+written inside the `ProfileWriteService` lock before the profile write. Judged disproportionate for one P3 field.
+Do NOT re-propose v1. Verified clean by round 2: sending `''` to `user_profile.city` is safe at the DB
+(nullable text, no CHECK/trigger/RLS obstacle, nothing in `supabase/functions/` reads it).
+
+**Options when picked up (founder to choose):**
+1. **A — UI guard (recommended)**: if a city is already stored and the box is emptied, block Save with
+   "City can't be removed. Change it to another city instead."; a user with no stored city can still save empty.
+   One file (`edit_profile_screen.dart` ~`:1864`), S-tier, no sync/migration. Cost: a user can never remove a
+   stored city (privacy question for the founder; delete-account is the only erasure).
+2. **B — empty means unchanged**: omit `city` from the save map when the box is empty. Simpler, but silently ignores the user.
+3. **v2 marker design** from the spec, if removal must work — L-tier, needs the round-2 amendments and a third review round.
+
+### Original entry (2026-09-03, kept for history; its P1 rating and tombstone-only conclusion are superseded above)
 - **What**: audit finding ARCH-1 (Slice C). `_hasValue` returns false for `''`
   (`sync_service.dart:2366-2370`), so `sync_profile.dart:230` omits a cleared field from the upsert
   entirely; the cloud keeps its old value; restore at `:766-767`
@@ -5630,3 +5667,31 @@ review re-checked and confirmed unchanged).
 
 **Reopen when:** picked up as a dedicated fix — the repair is a one-line copy-to-growable-list
 change, identical to `pending_exlog_deletes.dart`'s own fix, in each of `add`/`remove`.
+
+## OI-271 — Edit Profile: emptying the Body fat % box does not clear the stored value (P3)
+
+- **Status**: OPEN
+- **Blocked on**: none — nothing external; founder deferred 2026-09-29 as non-critical (P3)
+- **Verified**: 2026-09-29 — read `edit_profile_screen.dart:1869-1870` and `ProfileWriteService.patchProfile` (`profile_write_service.dart:86`); NOT reproduced on a device
+- **Identified**: 2026-09-29 · filed via mint_oi.sh from branch `oi-154-profile-clear-tombstone` · found while scoping OI-154
+
+**What**: Edit Profile builds its save map with `if (_bodyFatController.text.isNotEmpty) 'body_fat_percent': double.tryParse(...)`
+(`edit_profile_screen.dart:1869-1870`). When the user empties the box, the key is simply
+absent from the map. `patchProfile` is a MERGE (`profile_write_service.dart:86-96`), so the old
+value survives in Hive. The clear never reaches local storage, let alone sync — a different
+defect from OI-154, which is about a clear that DOES reach Hive and is lost in the cloud round trip.
+`body_fat_assessed_at` has the same `!= null` guard (`:1871`), so the "last assessed" date also stays.
+
+**Not the sync bug**: do not fix this by changing `sync_profile.dart:233` (`_hasNumber`). Nothing
+reaches that line for a cleared box.
+
+**Decision needed before coding (product)**: should emptying the box REMOVE the stored body fat
+(and its assessed-at date), or keep it? If it removes it, the derived calorie targets
+(`recalculateTargets`, Katch-McArdle vs Mifflin fallback — see `lib/features/profile/CLAUDE.md`
+"Edit Profile silently recomputes calories" row and diagnose `c3f2d8`) must fall back to Mifflin
+for that user, and a cleared `null` must then also reach the cloud, which lands on OI-154's sync
+conflation (`_hasNumber(null)` is false, so the cloud keeps the old number and restore
+re-hydrates it). So a real fix is either UI-only (keep-on-empty, with a message) or is
+coupled to OI-154's design. Pick the first unless the founder wants removal.
+
+**Reopen when**: picked up. Needs a diagnose-doc, a behavioral test on the save map, and a mutation run.
