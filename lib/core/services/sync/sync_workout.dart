@@ -177,12 +177,53 @@ extension SyncServiceWorkout on SyncService {
     }
   }
 
+  /// OI-246 — drains `PendingExlogDeletes` by UPSERTing a tombstone per
+  /// queued natural key. UPSERT (not UPDATE) so the tombstone can be CREATED
+  /// directly even if the creating push for that row hasn't reached the
+  /// cloud yet — migration 150's `workout_log_exercises_delete_final_rename`
+  /// trigger then makes the creating push's own later upsert a no-op against
+  /// the now-deleted row, so the delete wins regardless of which side's
+  /// write lands first (mirrors `_drainPendingTemplateDeletes`, OI-252).
+  /// Called BEFORE the per-key push loop so an exercise log deleted this
+  /// session can never be re-created by its own stale in-memory copy in the
+  /// same sync pass.
+  Future<void> _drainPendingExlogDeletes(String userId) async {
+    for (final entry in PendingExlogDeletes.read()) {
+      final workoutLogId = entry['workout_log_id'] as String;
+      final exerciseId = entry['exercise_id'] as String;
+      final setNumber = entry['set_number'] as int;
+      try {
+        await _supabase.client.from('workout_log_exercises').upsert({
+          'user_id': userId,
+          'workout_log_id': workoutLogId,
+          'exercise_id': exerciseId,
+          'exercise_name': exerciseId,
+          'set_number': setNumber,
+          'deleted_at': DateTime.now().toUtc().toIso8601String(),
+        }, onConflict: 'user_id,workout_log_id,exercise_id,set_number');
+        await PendingExlogDeletes.remove(
+          workoutLogId: workoutLogId,
+          exerciseId: exerciseId,
+          setNumber: setNumber,
+        );
+      } catch (e, st) {
+        debugPrint(
+            '[SyncService._drainPendingExlogDeletes] $workoutLogId|$exerciseId|$setNumber: $e');
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'sync_drain_pending_exlog_deletes'));
+        // Left queued — retried on the next exercise-log push.
+      }
+    }
+  }
+
   /// Pushes individual exercise logs (exlog_* keys) to
   /// Supabase workout_log_exercises (summary) + workout_log_sets (per-set).
   ///
   /// F4 · Per-set rows preserve granular weight/reps/duration across devices.
   /// The summary row (workout_log_exercises) stays for AI features + analytics.
   Future<void> _syncExerciseLogs(String userId) async {
+    await _drainPendingExlogDeletes(userId);
+
     final workoutBox = _hive.workoutBox;
 
     // OI-204 — sync-owned fingerprint index so an unchanged exercise log can
@@ -800,6 +841,12 @@ extension SyncServiceWorkout on SyncService {
 
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);
+        // OI-246 — a tombstoned row (migration 150's `deleted_at`) must
+        // never be restored; it exists only so a racing creating-push can
+        // never revive a user's delete. Reader half of the deleteLog fix —
+        // writer: WorkoutWriteService.deleteLog → PendingExlogDeletes →
+        // _drainPendingExlogDeletes above.
+        if (map['deleted_at'] != null) continue;
         final completedAt = map['completed_at'] as String? ?? '';
         final name = map['exercise_name'] as String? ?? '';
         // APK Test #16.1 / Agent A — single SoT for exlog key. The

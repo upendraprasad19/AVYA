@@ -1,5 +1,6 @@
 import { assertEquals, assertStringIncludes } from "https://deno.land/std@0.224.0/testing/asserts.ts";
 import { composeMessage } from "./message.ts";
+import { excludeDeletedPrs } from "./live_pr_filter.ts";
 
 Deno.test("composeMessage: single PR with weight uses the approved copy", () => {
   const msg = composeMessage("Rahul", [
@@ -43,5 +44,62 @@ Deno.test("pr-detection no longer calls Gemini — the geminiChat import and cal
   }
   if (src.includes("import { geminiChat")) {
     throw new Error("expected the geminiChat import to be removed from pr-detection/index.ts");
+  }
+});
+
+// OI-246 follow-up (B-pass review A, round 3, 2026-09-29). Mirrors
+// weekly-recalc/index_test.ts's excludeDeletedLogs test group exactly.
+
+Deno.test("excludeDeletedPrs: drops a row with a non-null deleted_at", () => {
+  const rows = [
+    { id: "live-1", deleted_at: null },
+    { id: "dead-1", deleted_at: "2026-09-29T00:00:00Z" },
+  ];
+  const kept = excludeDeletedPrs(rows);
+  assertEquals(kept.map((r) => r.id), ["live-1"]);
+});
+
+Deno.test("excludeDeletedPrs: keeps every row when none are deleted", () => {
+  const rows = [
+    { id: "a", deleted_at: null },
+    { id: "b", deleted_at: null },
+  ];
+  assertEquals(excludeDeletedPrs(rows).length, 2);
+});
+
+Deno.test("excludeDeletedPrs: drops every row when all are deleted", () => {
+  const rows = [
+    { id: "a", deleted_at: "2026-09-29T00:00:00Z" },
+    { id: "b", deleted_at: "2026-09-28T00:00:00Z" },
+  ];
+  assertEquals(excludeDeletedPrs(rows), []);
+});
+
+Deno.test("excludeDeletedPrs: empty input yields empty output", () => {
+  assertEquals(excludeDeletedPrs([]), []);
+});
+
+// Wiring — the fetch must select deleted_at, and the fetched rows must be
+// routed through excludeDeletedPrs before grouping/composing. Source-grep
+// because the main handler makes a live Supabase call and is not otherwise
+// unit-tested at the Deno level (same scope note as weekly-recalc's own
+// wiring test).
+Deno.test("pr-detection: selects deleted_at and filters through excludeDeletedPrs before grouping", async () => {
+  const src = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
+  if (!src.includes("deleted_at: string | null")) {
+    throw new Error("expected the workout_log_exercises fetch to select+type deleted_at");
+  }
+  if (!src.includes(
+    '"user_id, exercise_id, weight_kg, reps, completed_at, deleted_at"',
+  )) {
+    throw new Error("expected the workout_log_exercises select column list to include deleted_at");
+  }
+  if (!src.includes("excludeDeletedPrs(rawRows)")) {
+    throw new Error("expected rawRows to be routed through excludeDeletedPrs(rawRows) before grouping");
+  }
+  const filterIdx = src.indexOf("excludeDeletedPrs(rawRows)");
+  const groupIdx = src.indexOf("const prsByUser = new Map");
+  if (filterIdx === -1 || groupIdx === -1 || filterIdx > groupIdx) {
+    throw new Error("expected excludeDeletedPrs to run BEFORE grouping by user, not after");
   }
 });

@@ -6335,3 +6335,74 @@ raw call sites need their own edit.
 
 **Reopen when:** picked up as a dedicated fix, or resurfaced by a founder report of the Weekly
 Report sparkline not reflecting a just-logged weight/meal/workout entry.
+
+## OI-269 — workout_log_exercises readers don't filter deleted_at (weekly-recalc + pr-detection fixed; 4 remain)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-09-29 · filed via mint_oi.sh from branch `oi-245-246-restore-fixes`
+
+From the `oi-245-246-restore-fixes` batch's own adversarial review rounds 2 and 3 (B-pass).
+Migration 150/151 (OI-246) added `workout_log_exercises.deleted_at` so a deleted exercise log
+can be told apart from a live one. Two readers were fixed IN THIS SAME BATCH because the
+delete-transition trigger's `exercise_id` suffix genuinely NEWLY broke them (not merely a
+pre-existing gap):
+- `weekly-recalc/index.ts` grouped by `exercise_id ?? exercise_name` for experience-level
+  scoring — a deleted log fragmented into its own bogus single-entry "exercise" (inflating
+  variety score). Fixed via `supabase/functions/weekly-recalc/live_log_filter.ts`'s
+  `excludeDeletedLogs` (round 2 finding).
+- `pr-detection/index.ts` (`composeMessage` in `message.ts`) interpolates `exercise_id`
+  DIRECTLY into a push-notification body with **no `exercise_name` fallback** (unlike
+  `i-see-you-callout`'s `exercise_name ?? exercise_id`), and the query had no `deleted_at`
+  filter — so a PR logged and deleted inside the same ~20-min cron window would send a real
+  push reading e.g. `"new Bench Press ‹del:a1b2c3d4› 100kg PR"`, leaking an internal id
+  fragment + non-ASCII delimiter into user-facing copy. Fixed via
+  `supabase/functions/pr-detection/live_pr_filter.ts`'s `excludeDeletedPrs` (round 3 / B-pass
+  review A finding 1).
+
+Four OTHER readers of this table still do not filter `deleted_at` at all. Verified
+individually (not assumed): none of them render `exercise_id` raw to a user, so none share
+pr-detection's display-corruption defect — these are correctness-only gaps (a deleted PR/log
+still counted), unchanged by 150/151 relative to their pre-migration behavior:
+- `supabase/functions/i-see-you-callout/index.ts:230` (`checkPRAfterBadSleep`) — safe:
+  `exName = pr.exercise_name ?? pr.exercise_id ?? "that lift"` (`:264`) prefers the name.
+- `supabase/functions/future-prediction/index.ts:68` (`liftPrediction`; uses
+  `ilike("exercise_id", "%squat%")` wildcard substring match — a suffixed row's `exercise_id`
+  still CONTAINS the searched substring, so this one would match a deleted row both before and
+  after 150/151, unchanged either way, but is still worth fixing for correctness)
+- `supabase/functions/weekly-report/index.ts:215` (7-day PRO AI report) — safe: selects/renders
+  `exercise_name` only (`:246`, `:533`), never `exercise_id`.
+- `supabase/functions/_shared/tools/progress/getProgressSummary.ts` (AI coach tool — volume +
+  PR count) — safe: aggregates numeric counts, does not read or render `exercise_id`/
+  `exercise_name` at all.
+
+Two readers checked and found naturally immune (exact-ish `ilike` match against a known clean
+name that a suffixed row can't match): `getPRTimeline.ts`, `getExerciseHistory.ts`.
+
+**Reopen when:** picked up as a dedicated fix, or resurfaced by a founder report of a deleted
+exercise log still influencing a PR alert, prediction, or the weekly AI report.
+
+## OI-270 — PendingTemplateDeletes shares PendingExlogDeletes' fixed const-list mutation crash
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-09-29 · filed via mint_oi.sh from branch `oi-245-246-restore-fixes`
+
+From the `oi-245-246-restore-fixes` batch (OI-246). `PendingExlogDeletes.add`/`.remove`
+(`lib/core/services/pending_exlog_deletes.dart`, new this batch) initially called `.add()` /
+`.removeWhere()` directly on `read()`'s return value, which is the `const []` literal
+(immutable) on a fresh box — the very first exercise-log delete for any user would have thrown
+`UnsupportedError` and failed the whole `deleteLog` call. Caught by this batch's own new test
+on its first run, fixed by copying to a growable list first
+(`List<Map<String, dynamic>>.of(read())`) before mutating.
+
+The pre-existing sibling `PendingTemplateDeletes` (`lib/core/services/pending_template_deletes.dart`)
+shares the IDENTICAL `return const []` shape in its own `read()`, and its `add`/`remove` still
+mutate that return value directly — the same latent crash, unfixed, deliberately left out of
+this batch's approved OI-245/OI-246 scope. Confirmed still present as of this filing (round-2
+review re-checked and confirmed unchanged).
+
+**Reopen when:** picked up as a dedicated fix — the repair is a one-line copy-to-growable-list
+change, identical to `pending_exlog_deletes.dart`'s own fix, in each of `add`/`remove`.

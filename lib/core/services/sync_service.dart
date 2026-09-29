@@ -32,6 +32,7 @@ import 'package:icanbefitter/core/services/sync_domains/workouts_sync_domain.dar
 import 'package:icanbefitter/core/services/sync_error.dart';
 import 'package:icanbefitter/core/services/sync_flags.dart';
 import 'package:icanbefitter/core/services/nutrition_write_service.dart';
+import 'package:icanbefitter/core/services/pending_exlog_deletes.dart';
 import 'package:icanbefitter/core/services/pending_template_deletes.dart';
 import 'package:icanbefitter/core/services/sync_queue.dart';
 import 'package:icanbefitter/core/services/template_identity.dart';
@@ -715,6 +716,16 @@ class SyncService {
   static String _deterministicId(String localKey) {
     return _uuidGen.v5(_syncNamespace, localKey);
   }
+
+  /// Public wrapper for [_deterministicId] applied to a workout session's
+  /// cloud `workout_log_id` -- the natural-key parent for both
+  /// `workout_log_exercises` and `workout_log_sets` (`_syncExerciseLogs`).
+  /// Exposed so `WorkoutWriteService.deleteLog` can compute the EXACT same
+  /// natural key at delete time to target the OI-246 tombstone, instead of
+  /// re-deriving the UUID v5 namespace/salt independently -- the recurring
+  /// writer/reader-drift bug class this repo tracks.
+  static String workoutLogIdForDate(String istDateStr) =>
+      _deterministicId('workout_$istDateStr');
 
   /// APK Test #12.7 — true when [s] structurally looks like a v4/v5 UUID.
   /// 36 chars, hyphens at 8/13/18/23, hex elsewhere. Used by the coach

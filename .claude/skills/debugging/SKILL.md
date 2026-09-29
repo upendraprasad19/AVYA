@@ -1480,3 +1480,52 @@ added, false of the flip being performed.
   `test/train/duration_controller_seeding_writer_to_reader_test.dart`
   (source-grep) + `test/workout_write_service/aggregate_reflects_cleaned_sets_test.dart`
   (behavioral).
+
+### 2.74 A NEW call site shares an EXISTING source-grep test's marker literal — `indexOf`'s first-match silently re-anchors the window onto unrelated code (NEW 2026-09-29)
+
+- **Telltale:** a PRE-EXISTING source-grep contract test — one this batch never
+  touched and has no reason to suspect — goes red after a batch adds a brand
+  new call site elsewhere in the SAME file, to a DIFFERENT table/function.
+  The failure reads as unrelated to the diff (a full-suite run is required to
+  even see it — a targeted run of the batch's own new/touched tests cannot,
+  because the failing file is neither new nor touched). This is a SIBLING
+  class to §2.18 (source-grep stale after refactor), not the same one: §2.18
+  is code MOVING away from a marker; this is a second occurrence of the exact
+  marker TEXT being added earlier in the file than the original one.
+- **Root-cause shape:** a `windowBefore(marker)`-style helper (used across
+  many `test/contracts/*_writer_to_reader_test.dart` files) calls
+  `src.indexOf(marker)` to find its anchor and slices a fixed char-window
+  backward from there. `indexOf` returns the FIRST occurrence. If a diff adds
+  a new call sharing the literal marker string — e.g. a second
+  `.from('workout_log_exercises').upsert({` for an unrelated tombstone-drain
+  operation, added earlier in the file than the pre-existing per-row push the
+  test was written to anchor on — the window silently re-anchors onto the
+  new, unrelated code. The test doesn't error or warn; it just measures the
+  wrong 800-6000 characters and its assertions about the REAL call site fail.
+- **Why it survives review:** neither a diff-scoped B-pass nor a targeted
+  test run touches the affected file — it is untouched by the diff's OWN
+  file list. Only a full corrected `flutter test` run surfaces it (see root
+  CLAUDE.md §4.9's own "extracting or moving code" pitfall row, which this
+  instance was folded into as its documented "fifth variant" rather than a
+  new table row).
+- **Fix pattern:** disambiguate the marker using a genuine STRUCTURAL
+  difference between the two call shapes — never a fragile whitespace/
+  indentation coincidence. Here: the new drain call is an inline-map upsert
+  (`.upsert({`, brace on the same line); the real per-row call passes a named
+  multi-line variable (`.upsert(\n  summaryPayload,`). Extending the marker
+  with a trailing `\n` matches only the latter. Before landing such a fix,
+  `grep -c "<new marker>"` the stripped source to confirm exactly one match.
+- **General rule:** whenever a batch adds a new call site to a table/function
+  that an EXISTING source-grep test already anchors on by literal text —
+  even in a file the batch isn't otherwise touching — grep that file's test
+  counterpart for the shared literal before assuming the new call site is
+  safe to add anywhere in the file.
+- **Prior incidents:** diagnose `e1c8b4` (2026-09-29, OI-246 exlog-tombstone
+  batch) — `_drainPendingExlogDeletes`'s new upsert call (`sync_workout.dart:196`)
+  collided with `test/contracts/sync_natural_key_guard_test.dart`'s
+  pre-existing marker for the real per-row push at `:495`. Caught only by a
+  corrected full-suite re-run, not by either of two independent adversarial
+  review rounds (neither ran `flutter test`) nor by a targeted run of the
+  batch's own new/touched test files (this file was in neither set). Fixed
+  by extending the marker with a trailing newline; mutation-proven in both
+  directions (reverting the fix reproduces the exact original failure).

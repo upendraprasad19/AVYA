@@ -218,6 +218,21 @@ overwrite a present local row (`if (box.get(key) != null) continue;`).
   additive because schedule status genuinely needs merging.
 - **Trade-off:** offline-first local-wins — a row edited on a 2nd device won't overwrite
   the local copy. Revisit with cloud-newer-wins if true multi-device editing is a goal.
+- **Deletion survives restore via a server-side rename-on-delete trigger, NOT via the
+  additive/skip-if-local-exists policy above.** `_restoreExerciseLogs` is additive, so a
+  cloud row for a natural key the device no longer has locally would normally be treated
+  as "new" and restored — a genuine `workout_log_exercises` delete instead lands as a
+  cloud row whose `exercise_id` is suffixed (`workout_log_exercises_delete_final_rename`,
+  migrations 150+151; same pattern as `workout_templates`' tombstone at the table above),
+  which frees the natural key and makes the row invisible to every normal reader. OI-246
+  (2026-09-29, diagnose `e1c8b4`): migration 150 only fired `BEFORE UPDATE`, so a client
+  upsert that landed as a plain INSERT (no pre-existing cloud row for that natural key —
+  exactly the shape a fresh device sync produces) never suffixed at all, and the additive
+  restore then legitimately treated the un-suffixed deleted row as new data, resurrecting
+  it. Migration 151 extends the trigger to `BEFORE INSERT OR UPDATE`. **Any future
+  soft-delete-via-rename trigger on a natural-keyed table must fire on INSERT too, not
+  just UPDATE** — an UPSERT from the client is a real INSERT whenever no conflicting row
+  exists yet.
 
 ### Restore Pagination
 - All restore queries use paginated fetch (1,000 rows per page, offset-based).

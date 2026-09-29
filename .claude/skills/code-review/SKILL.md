@@ -248,6 +248,57 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-29** — blast-radius **platform** — branch `oi-245-246-restore-fixes` (OI-245:
+  restored PRO photo-coach turns replayed to Gemini as plain text; OI-246: deleted exercise
+  logs reappearing after a cloud restore, migrations 150+151 already live). This is the
+  self-triggered B-pass round 3, dispatched AFTER two independent adversarial plan-review
+  rounds and a corrected full-suite re-run had already converged the diff — per CLAUDE.md
+  §4.3, the B-pass is a SEPARATE, mandatory step from the ×2 plan-review rounds, not covered
+  by them. Two agents, split lens set (A: 1,2,3,4,5,7; B: 6,8 with live mutation testing).
+  Staged-diff review, `docs/reviews/82620b20f504-review.md`. **2 findings, 0 false alarms,
+  both fixed in-batch.** Reviewer B: 0 findings (independently re-ran every mutation-proof
+  claim already in both diagnose-docs and every one reproduced exactly — a clean pass with
+  real verification behind it, not a rubber stamp). F1 (P2, writer_reader_drift) caught that
+  the batch's own round-2 finding (and the OI-269 board entry it produced) mischaracterized
+  ALL 5 un-patched `workout_log_exercises` readers as "not newly broken, unchanged" — true
+  for 4, **false for `pr-detection`**: its `composeMessage` renders `exercise_id` directly
+  with no `exercise_name` fallback (unlike the sibling `i-see-you-callout`, which prefers the
+  name), so the batch's own exercise_id-suffix design would leak an internal id fragment into
+  a real push notification for any PR deleted within the ~20-minute cron window — the exact
+  regression class already recognized and fixed for weekly-recalc one finding earlier in the
+  same doc, mischaracterized here as out-of-scope. Fixed by mirroring the identical
+  `excludeDeletedLogs`/`live_log_filter.ts` pattern for pr-detection
+  (`live_pr_filter.ts`/`excludeDeletedPrs`), mutation-proven (1 of 11 tests reddens on
+  revert). OI-269 corrected to move `pr-detection` from "5 remain" to "fixed"; the other 4
+  readers were each individually re-verified (not assumed from the blanket claim) to be
+  genuinely safe. F2 (P2, blast_radius_mismatch) caught platform tier's unenforced
+  `feature_flag` requirement going undiscussed for 3 new sync-domain code paths — resolved
+  by DOCUMENTING the exemption rather than adding a switch, after confirming the established
+  sibling mechanism this batch's own code explicitly mirrors (`_drainPendingTemplateDeletes`,
+  OI-252, already shipped and live for weeks) has the identical gap with no kill-switch: a
+  switch here would let someone silently re-open the exact data-corruption bug this batch
+  exists to close, purely to satisfy a checklist item.
+  **Tuning — a batch's own "N of these readers are unchanged, only fixing M" scoping claim
+  is exactly as checkable as any other citation, and it takes a SECOND finding of the SAME
+  class (found by an earlier round in the SAME batch) to catch it.** The round-2 finding this
+  batch's own diagnose-doc already contains found and fixed this exact defect shape for
+  weekly-recalc; the blanket "5 remain, unchanged" sentence describing the OTHER 5 readers
+  was written in the same breath and never re-derived per-reader. **When a finding says "N
+  other call sites share this shape but are out of scope because they're unaffected", verify
+  EACH one individually rather than accepting the count** — this is the direct sibling of the
+  2026-09-17 entry's "sibling-seam sweep" lesson (verify a guard-narrowing's full call-site
+  set) and the 2026-09-20(a) entry's "same finding can recur identically across independent
+  files" lesson, here applied to a batch's own scoping decision about which siblings are safe
+  to leave alone. **Tuning — an unmet platform-tier `feature_flag` requirement does not
+  always mean "add a switch"; it can mean "verify the established precedent already accepts
+  this shape, and say so."** Reflexively adding a kill-switch to a fix that exists specifically
+  to close a data-corruption bug can itself be the wrong move (this file's own 2026-08-25 P0
+  entry already warns: a switch that re-enables corruption to satisfy a checklist is worse
+  than no switch) — the correct response here was investigating whether this batch's own
+  "mirrors an existing pattern" claim extends to the missing kill-switch too, and it does.
+  False-alarm rate 0/2 → no lens removed; both tunings above are general-method notes, not
+  lens-prompt edits (the existing lenses already caught both findings correctly).
+
 - **2026-09-28** — blast-radius **account** — branch `reps-secs-invalidation-fixes` (4 confirmed
   fixes + 1 `feat` in the same batch: duration-controller-seeding leak e8f95e, aggregate
   pre-normalization in the same fix, missing streakFreezeProvider invalidation 9c8958, missing

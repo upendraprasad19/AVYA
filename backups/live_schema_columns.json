@@ -650,7 +650,8 @@
       "has_warmup_sets",
       "notes",
       "completed_at",
-      "created_at"
+      "created_at",
+      "deleted_at"
     ],
     "workout_log_sets": [
       "id",
