@@ -118,8 +118,24 @@ void main() {
     // now sits between this guard and the marker where ~0 used to. Measured
     // via a scratch script walking the same stripComments() this file uses;
     // 800 (the old default) is stale by 4x. 6000 leaves ~900 chars of margin.
+    //
+    // OI-246 (2026-09-29) — a SECOND `from('workout_log_exercises').upsert(`
+    // call site was added earlier in the file (`_drainPendingExlogDeletes`'s
+    // tombstone UPSERT, sync_workout.dart:196), sharing the bare marker
+    // literal with the real per-row push at :495. `src.indexOf(marker)`
+    // (used by windowBefore) matches the FIRST occurrence, so the marker
+    // silently re-anchored onto the drain call — nowhere near this guard —
+    // and this test went from PASS to FAIL for a reason entirely unrelated
+    // to the guard itself. Disambiguated by extending the marker with a
+    // trailing newline: the drain's call is `.upsert({` (inline map literal,
+    // brace on the SAME line, no newline immediately after the open paren);
+    // the real per-row call is `.upsert(\n  summaryPayload,` (named
+    // variable, multi-line) — a stable structural difference between an
+    // inline-map upsert and a named-variable upsert, not a fragile
+    // indentation match. Verified this now matches ONLY the :495 occurrence
+    // via a scratch grep before landing.
     final marker =
-        "from('workout_log_exercises').upsert(";
+        "from('workout_log_exercises').upsert(\n";
     test('guard validates workout_log_id + exercise_id', () {
       final pre = windowBefore(marker, windowChars: 6000);
       // Guard pulls workoutLogId / exerciseId into local guards.

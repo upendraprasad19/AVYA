@@ -4,6 +4,7 @@ import { istDateStr } from "../_shared/ist_date.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 import { logCronEnd, logCronStart } from "../_shared/cron_telemetry.ts";
 import { fetchAllByIds } from "../_shared/paged_fetch.ts";
+import { excludeDeletedLogs } from "./live_log_filter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -225,10 +226,18 @@ serve(async (req: Request) => {
     // Read from workout_log_exercises (per-exercise data) instead of workout_logs
     // (which now stores summary rows after sync refactor).
     const [rawLogs, allScheduled] = await Promise.all([
-      fetchAllRows<{ user_id: string; exercise_id: string; exercise_name: string; weight_kg: number | null; reps: number | null; completed_at: string }>(
+      fetchAllRows<{ user_id: string; exercise_id: string; exercise_name: string; weight_kg: number | null; reps: number | null; completed_at: string; deleted_at: string | null }>(
         supabaseClient,
         "workout_log_exercises",
-        "user_id, exercise_id, exercise_name, weight_kg, reps, completed_at",
+        // OI-246 follow-up (round-2 review finding P2, 2026-09-29): deleted_at
+        // is now selected so a deleted-and-tombstoned row can be excluded
+        // below. Migration 150/151 mutate exercise_id on the delete
+        // transition (suffix), which without this filter would fragment a
+        // deleted log into its own bogus single-entry "exercise" for both
+        // the variety score (unique exercise count) and the weight-
+        // progression grouping — inflating both instead of correctly
+        // excluding a log the user deleted.
+        "user_id, exercise_id, exercise_name, weight_kg, reps, completed_at, deleted_at",
         "completed_at",
         fourWeeksAgoStr + "T00:00:00Z",
         "id", // OI-79: PK — the only stable page key (completed_at is not unique).
@@ -243,8 +252,14 @@ serve(async (req: Request) => {
       ),
     ]);
 
+    // OI-246 follow-up (round-2 review finding P2) — exclude tombstoned rows
+    // BEFORE deriving allLogs, so a deleted exercise log never reaches the
+    // exercise-variety / weight-progression grouping below (see the fetch
+    // comment above for why this matters specifically for this table).
+    const liveRawLogs = excludeDeletedLogs(rawLogs);
+
     // Derive date from completed_at for downstream scoring
-    const allLogs: WorkoutLog[] = rawLogs.map((r) => ({
+    const allLogs: WorkoutLog[] = liveRawLogs.map((r) => ({
       ...r,
       date: r.completed_at ? r.completed_at.split("T")[0] : fourWeeksAgoStr,
     }));
