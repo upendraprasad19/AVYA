@@ -6479,3 +6479,53 @@ raw call sites need their own edit.
 
 **Reopen when:** picked up as a dedicated fix, or resurfaced by a founder report of the Weekly
 Report sparkline not reflecting a just-logged weight/meal/workout entry.
+
+## OI-274 — Vercel Flutter SDK re-clone on every build wastes ~1/3 of build time (no persistent flutter/ cache)
+
+- **Status**: OPEN
+- **Blocked on**: none — fixable any time; needs `scripts/vercel_build.sh` migrated to
+  emit Build Output API v3 (`.vercel/output/config.json` with `"cache": ["flutter/**"]`)
+  instead of the current simple `outputDirectory` config, built and tested against a
+  non-`main` deploy before it touches `app.icanbefitter.com`
+- **Verified**: 2026-09-30 — confirmed live via Vercel's `list_deployment_events` on two
+  consecutive `avya` deployments (`dpl_HD8uzw6u...` main, `dpl_9qgumkdU...` preview)
+- **Identified**: 2026-09-30 · filed via mint_oi.sh from branch
+  `claude/sync-aab-build-check-408772`, found during a Vercel Pro billing-usage
+  investigation (same investigation that shipped the `vercel.json` ignoreCommand fix,
+  commit `8113406c`)
+
+`scripts/vercel_build.sh:75-81`'s `if [ -d flutter ]` branch was written to reuse a cached
+Flutter SDK checkout across builds "when Vercel's cache persists" — that condition was never
+verified until now. Build logs for two back-to-back `avya` deployments both show the FULL
+cold-start sequence on every single build: `Cloning into 'flutter'...`, a fresh 218.7 MB
+Linux Dart SDK download, `Building flutter tool...`, `Resolving dependencies...`. Each
+build's own upload afterward is `Uploading build cache [136.00 kB]` — nowhere near large
+enough to hold a Flutter checkout, so whatever Vercel's default cache mechanism persists for
+a `"framework": null` project, it is not the `flutter/` directory. The `if [ -d flutter ]`
+reuse branch has therefore never fired in production.
+
+Cost, measured directly from the two builds' timestamps: cloning + bootstrapping the Flutter
+tool takes ~57-70s of each ~180s (3 min) build — roughly **a third of every single build**,
+on top of the compile step (`flutter build web`, ~107-127s) which is inherent to the app's
+size and not addressed by this fix.
+
+Corrected the stale assumption in
+`docs/superpowers/specs/2026-06-05-vercel-flutter-web-build-fix-design.md:147` (§8, "Out of
+scope") in the same investigation — it had claimed the reuse path "already helps when
+Vercel's cache persists" with no verification; that doc now records the confirmed finding.
+
+**Fix, when picked up:** switch `scripts/vercel_build.sh` from relying on `vercel.json`'s
+`outputDirectory` field to writing the Build Output API v3 format directly — build
+`flutter build web --release` into a working dir, copy its output into
+`.vercel/output/static`, and write `.vercel/output/config.json` with an explicit
+`"cache": ["flutter/**"]` entry so Vercel actually persists the SDK checkout between builds.
+This is a real change to how the deploy pipeline produces its output (not a config toggle),
+so it needs its own test cycle against a non-`main` branch deploy before landing on `main`.
+
+**Reopen when:** picked up as a dedicated fix, or Vercel build-minute spend becomes a
+recurring concern again before this lands.
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-09-30 · filed via mint_oi.sh from branch `claude/sync-aab-build-check-408772`
