@@ -5,7 +5,7 @@ batch: observation-batch-and-digest-redesign (A5)
 status: fixed
 blast_radius: platform
 symptom: |
-  OI-226 (open_issues.md:5059): "ai-proxy chat/tool-calling Gemini exhaustion
+  OI-226 (`## OI-226` in closed_issues.md): "ai-proxy chat/tool-calling Gemini exhaustion
   paths have no reportGeminiExhaustion alert wiring." The OI's own text names
   TWO distinct gaps on the server — re-verified against the live source
   before this doc was written, not assumed from the OI's prose alone: (a) the

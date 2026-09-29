@@ -14,7 +14,7 @@ symptom: |
   per live row of about 29 for workout_schedule_completions, 30 for workout_templates, 33 for
   template_exercises (764 updates against 23 live rows), 23 for streaks, 21 for workout_logs, 41 for
   water_logs, and scheduled_workouts at 1,377 updates versus 84 inserts — the OI-237 board filing
-  (docs/audit/open_issues.md:5595, "Extreme update:insert ratios on scheduled_workouts (34:1) and
+  (docs/audit/open_issues.md `## OI-237`, "Extreme update:insert ratios on scheduled_workouts (34:1) and
   template_exercises (39:1)"). Postgres writes a new row version on every UPDATE even when nothing
   changed, because none of the heavy tables has a user trigger (the only existing triggers are
   INSERT-only rate-limit triggers on ai_coach_interactions), so the built-in
@@ -128,7 +128,7 @@ impact_analysis: |
 
 `docs/diagnoses/INDEX.md` was grepped for `write amplification`, `no-op update`, `suppress_redundant`,
 `OI-237` — no hits besides the OI-237 board filing itself
-(`docs/audit/open_issues.md:5595`, "Extreme update:insert ratios on scheduled_workouts (34:1) and
+(`docs/audit/open_issues.md` `## OI-237`, "Extreme update:insert ratios on scheduled_workouts (34:1) and
 template_exercises (39:1) — possible sync write-amplification..."). This is the first diagnose-doc for
 that board item, so it is filed as new and closes OI-237 per spec §8.
 

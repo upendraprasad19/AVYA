@@ -47,6 +47,20 @@ const List<String> kTrackedArtifacts = [
   'CLAUDE.md',
   'docs/audit/OPEN_INDEX.md',
   'docs/audit/open_issues.md',
+  // 2026-09-29 context-lean batch: the two skills and the five nested CLAUDE.md
+  // files trimmed in this batch (30-90%), plus the three next-largest nested files
+  // that were NOT trimmed (plan_engine, migrations, onboarding); tracked so none
+  // can silently regrow.
+  '.claude/skills/code-review/SKILL.md',
+  '.claude/skills/debugging/SKILL.md',
+  'supabase/functions/CLAUDE.md',
+  'lib/features/train/CLAUDE.md',
+  'lib/features/auth/CLAUDE.md',
+  'lib/core/services/CLAUDE.md',
+  'lib/features/ai_coach/CLAUDE.md',
+  'lib/shared/repositories/plan_engine/CLAUDE.md',
+  'supabase/migrations/CLAUDE.md',
+  'lib/features/onboarding/CLAUDE.md',
 ];
 
 const String kBaselinePath = 'backups/context_artifact_sizes.json';
