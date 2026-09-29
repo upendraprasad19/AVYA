@@ -520,7 +520,7 @@ String _oiBoardLine() {
     return 'OI board: next free number is at least $next (as of the last sync; '
         'mint_oi.sh re-syncs before reserving). Reserved-but-unfiled: $unfiledText.\n'
         'File new OIs ONLY with:  sh scripts/mint_oi.sh "<title>"  from YOUR worktree — an '
-        'UNRESERVED number fails the commit (CLAUDE.md §7, OI allocator row).';
+        'UNRESERVED number fails the commit (CLAUDE.md §7 open-issues row; docs/architecture/hooks.md, OI allocator).';
   } catch (_) {
     return '';
   }
