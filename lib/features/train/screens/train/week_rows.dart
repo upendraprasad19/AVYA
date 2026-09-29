@@ -1,5 +1,64 @@
 part of 'screen.dart';
 
+/// The Train week-list row's day-swap trailing slot: the [DaySwapRowTrailing]
+/// widget plus the 8px gap it needs before the EX count — or an empty list
+/// when [date] is null (no real calendar date). Extracted as a top-level
+/// function (rather than left inline in `_buildCompactRow`) so it is
+/// directly testable: `_buildCompactRow`/`_buildCompactWeekRows` are private
+/// extension methods on `_TrainScreenState` and cannot be pumped from a
+/// test in another library, but a top-level function declared in a `part
+/// of` file is visible to anyone importing `screen.dart` (task-25-fix1, F2 —
+/// the caller must not add layout residue when the kill switch is off).
+///
+/// task-25-fix2 (coordinator correction, spec lines ~217/699/736,
+/// task-25-brief.md design decision 3): the kill switch
+/// (`disable_day_swap_train_ui`) stops NEW swaps — it hides the ⇅
+/// affordance and the drag interaction — but it must not hide the "⇄
+/// MOVED" tag of a swap that already happened, because that tag is a
+/// DISPLAY of past state, not an affordance. So with the switch off this
+/// slot is empty ONLY when the day is not already moved; a moved,
+/// not-yet-completed day still gets [DaySwapRowTrailing] (which itself
+/// hides the ⇅ when the switch is off, via `enabled && state.movable`) so
+/// its MOVED tag keeps showing. `SwapService.instance.weekStates` is read
+/// directly (not through `daySwapWeekProvider`) because this is a plain
+/// function, not a widget — it uses the exact same `DaySwapDayState.isMoved`
+/// (`DaySwapRules.isMoved`, DONE-wins-over-MOVED already baked in there) that
+/// [DaySwapRowTrailing] itself watches via the provider, so both sides agree
+/// on one canonical predicate.
+List<Widget> daySwapRowTrailingSlot(String? date) {
+  if (date == null) return const [];
+  if (!daySwapTrainUiEnabled()) {
+    final week = SwapService.instance.weekStates(date);
+    final isMoved = week.any((d) => d.date == date && d.isMoved);
+    if (!isMoved) return const [];
+  }
+  return [
+    DaySwapRowTrailing(date: date),
+    const SizedBox(width: 8),
+  ];
+}
+
+/// Wraps [card] with the day-swap allowance-line footer beneath it — a
+/// separate `Column` (card + 8px gap + [DaySwapAllowanceLine]) ONLY when the
+/// switch is on and the week has at least one real calendar date
+/// ([anyDatedIstDate] non-null). Otherwise returns [card] itself, unchanged
+/// — byte-identical to the pre-feature tree (task-25-fix1, F2): merely
+/// having [DaySwapAllowanceLine] render `SizedBox.shrink()` when the switch
+/// is off was not enough, because the 8px gap before it and the enclosing
+/// `Column` (whose default `mainAxisSize.max` differs from `WardCard` alone)
+/// were still being added unconditionally.
+Widget wrapWithDaySwapAllowanceFooter(Widget card, String? anyDatedIstDate) {
+  if (anyDatedIstDate == null || !daySwapTrainUiEnabled()) return card;
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      card,
+      const SizedBox(height: 8),
+      DaySwapAllowanceLine(anyDateInWeek: anyDatedIstDate),
+    ],
+  );
+}
+
 extension _WeekRows on _TrainScreenState {
   // ── 3. Compact Week Rows ──────────────────────────────────────
 
@@ -7,31 +66,40 @@ extension _WeekRows on _TrainScreenState {
       BuildContext context, List<WorkoutDayData> weekDays) {
     final todayStr = istTodayStr();
     final expandedIdx = ref.watch(expandedDayProvider);
+    final firstDated = weekDays.where((d) => d.date != null).toList();
+
+    final card = WardCard(
+      padding: EdgeInsets.zero,
+      child: Column(
+        children: [
+          for (int i = 0; i < weekDays.length; i++) ...[
+            _buildCompactRow(context, weekDays[i], todayStr, i),
+            // Inline expanded exercises for completed days (W5)
+            if (expandedIdx == i && weekDays[i].isDone && weekDays[i].date != null)
+              _buildExpandedExercises(weekDays[i]),
+            // Inline expanded preview + Start Workout for today-planned
+            if (expandedIdx == i &&
+                !weekDays[i].isDone &&
+                !weekDays[i].isRest &&
+                weekDays[i].date != null &&
+                _formatDateKey(weekDays[i].date!) == todayStr)
+              _buildPlannedExpansion(context, weekDays[i]),
+            if (i < weekDays.length - 1)
+              const WardRule(margin: EdgeInsets.zero),
+          ],
+        ],
+      ),
+    );
 
     return Padding(
       padding:
           const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
-      child: WardCard(
-        padding: EdgeInsets.zero,
-        child: Column(
-          children: [
-            for (int i = 0; i < weekDays.length; i++) ...[
-              _buildCompactRow(context, weekDays[i], todayStr, i),
-              // Inline expanded exercises for completed days (W5)
-              if (expandedIdx == i && weekDays[i].isDone && weekDays[i].date != null)
-                _buildExpandedExercises(weekDays[i]),
-              // Inline expanded preview + Start Workout for today-planned
-              if (expandedIdx == i &&
-                  !weekDays[i].isDone &&
-                  !weekDays[i].isRest &&
-                  weekDays[i].date != null &&
-                  _formatDateKey(weekDays[i].date!) == todayStr)
-                _buildPlannedExpansion(context, weekDays[i]),
-              if (i < weekDays.length - 1)
-                const WardRule(margin: EdgeInsets.zero),
-            ],
-          ],
-        ),
+      // Day-swap allowance line (Task 25) — added only when the kill switch
+      // is on and the week has a dated day; otherwise `card` is returned
+      // unchanged (F2).
+      child: wrapWithDaySwapAllowanceFooter(
+        card,
+        firstDated.isNotEmpty ? istDateStr(firstDated.first.date!) : null,
       ),
     );
   }
@@ -75,7 +143,7 @@ extension _WeekRows on _TrainScreenState {
 
     // Today's incomplete workout navigates to active workout;
     // completed days expand inline (W5); future/past show preview; rest days show recovery sheet
-    return GestureDetector(
+    final content = GestureDetector(
       onTap: () {
         if (day.isRest) {
           _showRestDaySheet(context);
@@ -137,6 +205,16 @@ extension _WeekRows on _TrainScreenState {
                 ),
               ),
 
+              // Day-swap trailing controls: "⇄ MOVED" tag + ⇅ affordance
+              // (Task 24/25). Self-contained; skipped for a day with no
+              // real calendar date (a not-yet-generated future phase), and
+              // for a non-moved dated day when the kill switch is off — a
+              // moved-but-not-completed day still gets it so the MOVED tag
+              // keeps showing (task-25-fix2) — see daySwapRowTrailingSlot's
+              // doc comment.
+              ...daySwapRowTrailingSlot(
+                  day.date != null ? istDateStr(day.date!) : null),
+
               // Exercise count (only for workout days)
               if (!day.isRest) ...[
                 Text(
@@ -161,6 +239,9 @@ extension _WeekRows on _TrainScreenState {
         ),
       ),
     );
+
+    if (day.date == null) return content;
+    return DaySwapDragWrapper(date: istDateStr(day.date!), child: content);
   }
 
   Widget _buildStatusIndicator(_RowStatus status, {bool isExpanded = false}) {

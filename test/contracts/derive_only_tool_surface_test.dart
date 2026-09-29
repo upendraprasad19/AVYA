@@ -43,6 +43,7 @@ void main() {
     'generateHotelWorkoutTool',
     'modifyWorkoutForInjuryTool',
     'rescheduleWeekTool',
+    'swapWorkoutDaysTool',
     'regeneratePlanBlockTool',
     'pausePlanTool',
     'switchGoalTool',
@@ -72,7 +73,7 @@ void main() {
       });
     }
 
-    test('exactly 20 tools registered (FREE 9 / PRO 11, down from 24)', () {
+    test('exactly 21 tools registered (FREE 9 / PRO 12, up from 20)', () {
       // Count the ALL_TOOLS array entries: `  <name>Tool,` lines that are NOT
       // inside an import block. Import lines also end in `Tool,`, so scope to
       // the array body between `ALL_TOOLS` and its closing `];`.
@@ -84,8 +85,8 @@ void main() {
       final body = _stripComments(raw.substring(start, end));
       final entries =
           RegExp(r'\b\w+Tool\b').allMatches(body).map((m) => m.group(0)).toSet();
-      expect(entries.length, 20,
-          reason: 'Expected 20 distinct kept tools; found ${entries.length}: $entries');
+      expect(entries.length, 21,
+          reason: 'Expected 21 distinct kept tools; found ${entries.length}: $entries');
     });
   });
 

@@ -18,8 +18,12 @@
 // and the production singleton can't be DI'd from a unit test.
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/sync/schedule_completion_time.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
 
 import '../contracts/_sync_service_source.dart';
+import 'sync_domain_skip_harness.dart';
 
 void main() {
   group('Test #12.7 — completed_at preservation in workout sync', () {
@@ -122,25 +126,73 @@ void main() {
       },
     );
 
-    test(
-      '_syncWorkoutLogs uses _resolveCompletedAt for both logged_at and created_at',
-      () {
-        final src = loadSyncServiceSource().readAsStringSync();
+    // day-swapper + sync-load Task 20 (coordinator addition, 2026-09-28) —
+    // REPOINTED. Task 16 moved _syncWorkoutLogs onto SyncSkipIndex and, per
+    // its own D1 F1 review fix, switched it from `_resolveCompletedAt(` (the
+    // wall-clock-fallback form) to `_resolveCompletedAtOrNull(` — a fingerprinted
+    // payload must never contain `now()`, or an unchanged row would never
+    // skip. The source-grep for the OLD symbol name therefore false-reds at
+    // the batch head even though the underlying property (both `logged_at`
+    // and `created_at` derive from the row's real authoring time, never from
+    // NOW) still holds. Converted to BEHAVIOURAL per CLAUDE.md §4.9's
+    // conversion-on-touch rule, so a future rename of the helper can't make
+    // this drift again — it proves the outcome, not a symbol name.
+    group('_syncWorkoutLogs timestamp behaviour (behavioural, Task 20 repoint)', () {
+      final h = SyncHarness();
+      setUp(h.setUp);
+      tearDown(h.tearDown);
 
-        final mIdx = src.indexOf('Future<void> _syncWorkoutLogs(');
-        expect(mIdx, greaterThan(0));
-        final mEnd = src.indexOf('\n  ///', mIdx + 10);
-        final body = src.substring(mIdx,
-            mEnd > mIdx ? mEnd : (mIdx + 3000).clamp(0, src.length));
+      test(
+        'both logged_at and created_at resolve to the row\'s authoring time, '
+        'never to DateTime.now()',
+        () async {
+          await HiveService.instance.workoutBox.put('wlog_2020-01-01', {
+            'date': '2020-01-01',
+            'workout_name': 'Push A',
+            'created_at': '2020-01-01T08:00:00.000Z',
+            'duration_seconds': 1800,
+          });
 
-        expect(
-          body,
-          contains('_resolveCompletedAt('),
-          reason: '_syncWorkoutLogs must use _resolveCompletedAt so the '
-              'wlog timestamp matches the original authoring time, not '
-              'the moment the backlog flushed.',
-        );
-      },
-    );
+          await SyncService.instance.pushWorkoutLogsForSyncDomain();
+
+          final writes = h.server.writesTo('workout_logs');
+          expect(writes, hasLength(1));
+          final payload = writes.single.rows.single;
+          expect(payload['logged_at'], '2020-01-01T08:00:00.000Z',
+              reason: '_syncWorkoutLogs must use the row\'s authoring time '
+                  '(whatever helper resolves it), never the moment the '
+                  'backlog flushed.');
+          expect(payload['created_at'], '2020-01-01T08:00:00.000Z',
+              reason: 'created_at must resolve from the same authoring '
+                  'time as logged_at, not a separate NOW() stamp.');
+        },
+      );
+    });
+  });
+
+  group('Task 14 — schedule-completion time preservation (recurrence of 5a36ad, spec §1.6)', () {
+    test('ScheduleCompletionTime never falls back to now() for a completed row', () {
+      expect(
+        ScheduleCompletionTime.scheduledCompletedAtIso({'status': 'completed'}),
+        isNull,
+        reason: 'the resolver must OMIT (spec §5.12), never fabricate DateTime.now()',
+      );
+    });
+
+    test('_syncScheduleCompletions source no longer contains the pre-fix now() fallback', () {
+      // Source-grep companion to the behavioral test in
+      // test/contracts/sync_schedule_completion_payload_hash_index_writer_to_reader_test.dart
+      // (which proves the BEHAVIOR); this pins the removed literal shape so a
+      // future edit cannot silently reintroduce it (same style as this file's
+      // existing _resolveCompletedAt group, which is source-grep for the same
+      // reason -- SyncService is a singleton, no DI seam).
+      final src = loadSyncServiceSource().readAsStringSync();
+      expect(
+        src.contains("entry['completed_at'] ?? DateTime.now()"),
+        isFalse,
+        reason: '_syncScheduleCompletions must not reintroduce the pre-Task-14 '
+            'now() fallback for completed_at',
+      );
+    });
   });
 }

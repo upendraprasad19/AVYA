@@ -7,8 +7,13 @@
 // new device, or the background restore most returning users get on cold start.
 // Readers add one (`train_provider.dart:619` / `:816`:
 // `(week - 1) * 7 + day_of_week + 1`) and render the result as the `D<n>` badge
-// (`week_rows.dart:54`, `day_card.dart:54`, `expandable_day_card.dart:196`), so
-// Monday of week 1 displayed `D2` and Sunday `D8` inside a seven-day week.
+// (`week_rows.dart`'s `_buildCompactRow`, the `dayLabel = 'D${day.dayNumber}'`
+// fallback used when `day.date` is null; `day_card.dart:54`,
+// `expandable_day_card.dart:196`), so Monday of week 1 displayed `D2` and
+// Sunday `D8` inside a seven-day week. (task-25-fix2, 2026-09-28: repointed
+// from a stale `week_rows.dart:54` line citation — CLAUDE.md §4.9
+// conversion-on-touch — to a symbol reference, since this file only ever
+// reads `date_utils.dart` sources and never grepped week_rows.dart itself.)
 // `preview_plan_provider.dart:117` also MATCHES on that number, silently falling
 // through to its positional fallback at `:122`.
 //

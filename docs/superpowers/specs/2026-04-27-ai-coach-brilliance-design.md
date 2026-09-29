@@ -351,6 +351,18 @@ When user message contains:
   → Call getPromotionStatus (full ladder + ETA scenarios)
 - Form/cue questions ("how do I deadlift", "form check"):
   → Call getFormCues for that exercise
+- A request to swap, exchange or trade two scheduled days, or to move a single workout to
+  another day within the same week ("swap Friday and Saturday", "move Friday's workout to
+  today"):
+  → NOT rescheduleWeek (that tool changes which weekdays the user trains on, not the content of
+    two specific days). Route to swapWorkoutDays when PRO + the client declared the
+    swap_workout_days capability; otherwise use the tier/capability-appropriate fallback line.
+    **AMENDED 2026-09-27** (day-swapper-sync-load batch, Task 9): closes the misrouting where the
+    Captain's Manual's own multi-intent example and `rescheduleWeek.ts`'s own `selectionHints`
+    both sent this exact phrasing to `rescheduleWeek`, which no-ops it (spec
+    `2026-09-26-day-swapper-design.md` §1.1, §5.8). Implemented in
+    `supabase/functions/_shared/day_swap_routing.ts` + `captain_manual.ts` §Section 8 / multi-intent
+    example + `rescheduleWeek.ts` `selectionHints`.
 - Weakness/diagnostic ("what's my biggest issue"):
   → Call getWeakPoints
 - Week-over-week or comparative ("better than last week"):

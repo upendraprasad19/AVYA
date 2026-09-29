@@ -87,6 +87,58 @@ void main() {
       );
       expect(merged['completed_at'], '2026-06-02T08:00:00Z');
     });
+
+    test('L1: a genuine rest row (type rest, no exercises) is kept as-is, '
+        'never refilled with a stale workout snapshot', () {
+      final merged = PlanIntegrityReconciler.mergeScheduleEntry(
+        {'type': 'rest', 'status': 'rest', 'exercises': <dynamic>[]},
+        {'type': 'workout', 'workout_name': 'Legs B', 'exercises': [1, 2, 3], 'status': 'planned'},
+      );
+      expect(merged['type'], 'rest');
+      expect(merged['status'], 'rest');
+      expect((merged['exercises'] as List), isEmpty,
+          reason: 'the snapshot workout content must never land on a rest row (spec sec 5.7 L1)');
+    });
+
+    test('L1: status rest with a stale workout type is kept local, and the '
+        'normalizer fixes the type label (a pre-existing hybrid self-heals)', () {
+      final merged = PlanIntegrityReconciler.mergeScheduleEntry(
+        {'type': 'workout', 'status': 'rest', 'exercises': <dynamic>[]},
+        {'type': 'workout', 'workout_name': 'Legs B', 'exercises': [1, 2, 3], 'status': 'planned'},
+      );
+      expect(merged['type'], 'rest',
+          reason: 'the merge-output normalizer (D5) fixes the label on every return path');
+      expect((merged['exercises'] as List), isEmpty);
+    });
+
+    test('D5 normalizer: a hybrid snapshot taken WHOLESALE (no local row) is '
+        'normalized on the way in', () {
+      final merged = PlanIntegrityReconciler.mergeScheduleEntry(
+        null,
+        {'type': 'workout', 'status': 'rest', 'exercises': <dynamic>[]},
+      );
+      expect(merged['type'], 'rest',
+          reason: 'a hybrid snapshot must not re-enter Hive through the wholesale-take branch');
+    });
+
+    test('L3: forceSnapshotArrangement takes the snapshot wholesale, but '
+        'never over a completed local row', () {
+      final forced = PlanIntegrityReconciler.mergeScheduleEntry(
+        {'type': 'workout', 'status': 'planned', 'exercises': ['stale local']},
+        {'type': 'workout', 'workout_name': 'Legs B', 'exercises': ['from device B'], 'status': 'planned'},
+        forceSnapshotArrangement: true,
+      );
+      expect((forced['exercises'] as List).first, 'from device B');
+
+      final protectedCompleted = PlanIntegrityReconciler.mergeScheduleEntry(
+        {'type': 'workout', 'status': 'completed', 'exercises': ['what I actually did']},
+        {'type': 'workout', 'exercises': ['from device B'], 'status': 'planned'},
+        forceSnapshotArrangement: true,
+      );
+      expect(protectedCompleted['status'], 'completed');
+      expect((protectedCompleted['exercises'] as List).first, 'what I actually did',
+          reason: 'I6: a completed local row is never overwritten, even when L3 says the snapshot wins');
+    });
   });
 
   group('needsHeal (restore-skip symptom)', () {
@@ -168,11 +220,23 @@ void main() {
         reason: 'the blanket early-return that skipped plan_json must be gone '
             '— it is the restore-skip root cause',
       );
-      expect(slice.contains('PlanIntegrityReconciler.mergeScheduleEntry'),
+      // T21: the per-entry helper is now reached through the shared L1+L3
+      // bundle helper, not called directly from here. The sibling assertion
+      // in the `wiring` group below (mergeScheduleBundleIntoHive's OWN body)
+      // proves the chain still reaches mergeScheduleEntry, so together the
+      // two assertions prove exactly what this one proved alone before.
+      expect(slice.contains('PlanIntegrityReconciler.mergeScheduleBundleIntoHive'),
           isTrue,
-          reason: 'restore must apply plan_json via the shared merge helper');
+          reason: 'restore must apply plan_json via the shared L1+L3 bundle helper');
       expect(slice.contains("MigratedKey.write('plan_start_date'"), isTrue,
           reason: 'restore must always re-anchor plan_start_date');
+    });
+
+    test('the shared bundle helper reaches the completed-preserving per-entry '
+        'merge (the other half of the wiring proof above)', () {
+      final slice = _methodSlice(reconcilerSrc, 'mergeScheduleBundleIntoHive');
+      expect(slice, isNotNull);
+      expect(slice!.contains('mergeScheduleEntry('), isTrue);
     });
 
     test('boot heal runs in restoring_screen (foreground + background)', () {

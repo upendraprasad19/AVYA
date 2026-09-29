@@ -119,6 +119,13 @@ const _expectedEmitFields = <String, Set<String>>{
     // Read back by the terminal-row contract test; 'moved'/'dropped' statuses
     // are skipped by WorkoutRepository.isInvisibleToStreak (c1a9d4).
     'moved_to', 'moved_via', 'moved_at', 'dropped_via', 'dropped_at',
+    // day-swapper-sync-load: WorkoutWriteService.upsertScheduled (:643) stamps
+    // arranged_at_ms on any rewrite of a date that already carries it (unless
+    // the source is daySwap, which sets it itself, or restore, which copies
+    // it); DaySwapRules also sets it directly on a swap (day_swap_rules.dart:151).
+    // First READ by PlanIntegrityReconciler.snapshotArrangementWinsKeys (T21,
+    // spec sec 5.7 L3) — which is why the gate only fires now.
+    'arranged_at_ms',
     // OI-252 (f4a8c2): the cloud `template_id` FK, carried into the Hive
     // schedule map so a restore/reconcile pass can resolve the referenced
     // template's identity (incl. detecting a deleted one) without a second
@@ -454,4 +461,14 @@ const _alwaysOk = <String>{
   // ai_snapshot_builder.dart also reads those log prefixes elsewhere for the
   // PR/meals/logs snapshot.
   'code', 'binding_constraint',
+  // Day-swapper + sync-load Task 20 (a9d3f6, 2026-09-28) — `sync_epoch` is a
+  // cloud `user_progress.sync_epoch` COLUMN, read off the REST response row
+  // in `SyncService._applySyncEpochFromRestoreRow` (the resync lever, spec
+  // §5.10 rule 3) and stripped from the `cloud` map in
+  // `sync/sync_profile.dart`'s `_restoreUserProgress` before the progress
+  // merge. NOT an exlog_*/wlog_* Hive-map field (neither emit set carries
+  // it); the prefix heuristic mis-attributes it because sync_service.dart
+  // also walks those prefixes elsewhere for restore/sync — same mechanism as
+  // `streak_progress_version` above.
+  'sync_epoch',
 };

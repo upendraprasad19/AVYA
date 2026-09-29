@@ -785,6 +785,8 @@ added, false of the flip being performed.
 
 ## Changelog
 
+- **2026-09-27 (day-swapper-sync-load)** — Self-evolution. §2.73 NEW — a widget test hanging straight through `--timeout` is unwrapped real I/O in the `testWidgets` body, not a synchronous product loop (3 hangs in one batch; one misdirected product-loop hunt before bisection found the bare `await box.put`).
+
 - **2026-08-28 (OI-144, same branch)** — Self-evolution. §2.55 NEW — a deliberately SCOPED
   capability wired to an UNSCOPED surface (collect-but-ignore). The Profile picker offered
   13 chips at a tier the capability model never reached; ticking one raised the reschedule
@@ -1422,7 +1424,24 @@ added, false of the flip being performed.
 - **Prior incidents:** `d9e4b1` (2026-09-26) — `discipline_hook_main_sync_e2e_test.dart`'s `lone` repo, `main` red for 4 CI runs. First instance.
 - **Regression test:** `test/scripts/discipline_hook_main_sync_e2e_test.dart` (hermetic `_cleanEnv`; mutation-proven — deleting the `lone` identity lines reddens exactly 1 of 8 with CI's `Expected: <0> Actual: <128>`, on a VPS that has a global identity).
 
-### 2.73 An input controller with no legitimate prefill source gets seeded from a sibling field's value anyway, leaking into type-resolution logic that has no way to know it was never user-visible (NEW 2026-09-28)
+### 2.73 A widget test hangs for 20+ minutes straight through `--timeout 90s` and `@Timeout` — and it is NOT a synchronous product loop (NEW 2026-09-27)
+- **Telltale:** one `flutter_tester.exe` sits for 18–26 min on a widget-test file; the runner prints nothing; `--timeout 90s` and a file-level `@Timeout(Duration(minutes: 3))` never fire. It recurs even after `tester.runAsync` was added to the obvious Hive calls. Hit 3× in one batch (day-swapper, Tasks 24/27).
+- **Root-cause shape:** ONE remaining bare `await box.put(...)` (real disk I/O) directly in the `testWidgets` body — outside `setUp` and outside `tester.runAsync` — the CLAUDE.md §4.9 class. The fake-async zone never completes it, and the test timeout does not rescue it either.
+- **The misdiagnosis this entry exists to prevent:** "a timeout that cannot fire ⇒ the isolate is blocked synchronously ⇒ an infinite loop in product code". The coordinator reasoned exactly that and sent an agent hunting for a date-stepping `while` loop in the swap engine; instrumenting the call chain proved execution never even reached the widget under test. There was no product loop.
+- **Fix pattern:** bisect with `flutter test <file> --plain-name "<one test>" --timeout 90s`, one test per run, with a 5-minute wall-clock cutoff; then grep THAT test's body for unwrapped `await` on Hive/File/path_provider and move it into `tester.runAsync(() async {...})` or `setUp`. Never run the hanging file in the background — an API/rate-limit stop kills the agent and leaves the tester orphaned.
+- **Class rule:** a dead test timeout is evidence of unwrapped real I/O in a widget test before it is evidence of a product loop. Check the test body first; instrument before blaming `lib/`.
+- **Prior incidents:** day-swapper batch 2026-09-27 (U6 `tool_confirm_card_day_swap_test.dart`, U5b/U5c `swap_confirm_sheet_test.dart` "a stale day…"). Sibling of §4.9's "`await`-ing real disk I/O inside a `testWidgets` body" row.
+- **Regression test:** `test/widgets/swap_confirm_sheet_test.dart` (Task 24 — the stale-day test with its I/O inside `tester.runAsync`).
+
+### 2.74 A `getWeek()`-style reader that omits absent keys cannot drive a self-heal for a DELETED row (NEW 2026-09-28)
+- **Telltale:** a repair/heal path (e.g. `PlanIntegrityReconciler.needsHeal`) that is supposed to catch a stale-vs-authoritative mismatch stays silent for exactly the case where the LOCAL side deleted a row the CLOUD side still expects, even though the heal logic looks otherwise complete.
+- **Root-cause shape:** the heal reader iterates a MAP/collection built by reading present keys only (`getWeek()`-style: `for (date in knownDates) { row = hive.get(date); ... }`), so a key that was DELETED locally never enters the loop at all — there is no "row" to compare, so there is nothing to flag as needing repair. A companion skip mechanism upstream (Task 22's L2 plan-bundle merge skip) compounds this: it also only checks the CLOUD fingerprint, so a matching fingerprint short-circuits the whole merge before the heal reader would even run, on the theory that "nothing changed cloud-side" — but something changed LOCAL-side (a deletion), which the fingerprint cannot see and the heal reader cannot backstop.
+- **Fix pattern:** the skip/merge condition must check BOTH sides — not just "does the cloud fingerprint match" but also "does every key the bundle expects still exist locally" (`containsKey`, no extra I/O). A heal reader that structurally cannot observe absence needs an explicit presence check from its caller, not a fix to the reader's own iteration (rewriting `getWeek()` to also report absent keys would change its contract for every other caller).
+- **Class rule:** before trusting a heal/reconcile path to catch "state A drifted from state B", ask whether its READER can even SEE the specific drift shape "a key existed, now it does not" — an existence-only iteration is blind to deletion by construction, and no amount of comparison logic downstream fixes that.
+- **Prior incidents:** day-swapper Task 22 (2026-09-28), `docs/diagnoses/2026-09-26-day-swap-reverts-after-restart-d5a1e7.md`'s L2 fix. Sibling of `feedback_mistake_guard_without_its_mirror.md` #37 (the code-review lens-6 finding for the same defect, filed from the guard-symmetry angle rather than the reader-blindness angle).
+- **Regression test:** `test/contracts/restore_plan_json_authoritative_test.dart` — the stamped, week-winning local row test added at Task 22 (mutation: drop the presence check → 1 red, restored clean).
+
+### 2.75 An input controller with no legitimate prefill source gets seeded from a sibling field's value anyway, leaking into type-resolution logic that has no way to know it was never user-visible (NEW 2026-09-28)
 
 - **Telltale:** a value was logged correctly in ONE field, but the persisted
   record shows a DIFFERENT field's unit/label — "8 reps" logged, "8 seconds"
@@ -1481,7 +1500,7 @@ added, false of the flip being performed.
   (source-grep) + `test/workout_write_service/aggregate_reflects_cleaned_sets_test.dart`
   (behavioral).
 
-### 2.74 A NEW call site shares an EXISTING source-grep test's marker literal — `indexOf`'s first-match silently re-anchors the window onto unrelated code (NEW 2026-09-29)
+### 2.77 A NEW call site shares an EXISTING source-grep test's marker literal — `indexOf`'s first-match silently re-anchors the window onto unrelated code (NEW 2026-09-29)
 
 - **Telltale:** a PRE-EXISTING source-grep contract test — one this batch never
   touched and has no reason to suspect — goes red after a batch adds a brand
@@ -1529,3 +1548,36 @@ added, false of the flip being performed.
   batch's own new/touched test files (this file was in neither set). Fixed
   by extending the marker with a trailing newline; mutation-proven in both
   directions (reverting the fix reproduces the exact original failure).
+
+### 2.76 A real-time test whose synthetic-clock anchor precedes setup that eats its own time budget (NEW 2026-09-29)
+
+- **Telltale:** a test that drives a REAL `Timer` against a synthetic clock
+  ("start N ms before midnight, let real time pass, assert the rollover
+  fired") passes alone most of the time and fails intermittently, often
+  only in the full suite, with an assertion that reads as if the product
+  did nothing: `Expected: not '2026-09-29', Actual: '2026-09-29'`.
+- **Root-cause shape:** the clock is anchored (`setTestClock(() =>
+  DateTime.now().add(offset))`, offset chosen so "now" sits N ms before the
+  boundary) BEFORE setup that itself takes wall time: `pumpWidget`, a ref
+  capture through `runAsync`, a Hive open. The clock advances in lockstep
+  with real time, so when setup takes longer than N ms the synthetic clock
+  has already crossed the boundary before the code under test records its
+  "before" state. The "before" and "after" then read the same day and the
+  test blames the timer. The product is not at fault.
+- **Fix pattern:** anchor the synthetic clock IMMEDIATELY before the call
+  whose start state matters (here `init()`), after every pump/capture, and
+  assert the precondition on the recorded before-state itself
+  (`expect(preInitDate, istDateStr(syntheticStart))`), so a blown budget
+  fails as a named precondition instead of as a product assertion.
+- **Class rule:** in any lockstep synthetic clock with a small margin,
+  count every awaited step between the anchor and the observation as
+  budget spend. Setup belongs before the anchor. A margin that "usually"
+  holds on an idle dev box is exactly what a loaded full-suite run breaks.
+- **Prior incidents:** `test/contracts/day_rollover_midnight_timer_test.dart`,
+  which arrived from main in PR #48 and blocked the day-swapper-sync-load
+  pre-push full suite (it failed 2 of 3 isolated runs). Fixed in `79541336`.
+  Afterwards it passed 10 of 10 isolated runs. Mutation check: replacing the
+  Timer callback with a no-op gave 1 red ("Expected: not '2026-09-28'"),
+  restored from a byte copy.
+- **Regression test:** the same file (its own precondition assertion now
+  pins the anchor ordering).

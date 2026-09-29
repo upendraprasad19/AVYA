@@ -30,6 +30,22 @@ Future<void> wwsTestSetup() async {
   // boxes. Must be called before HiveUserSession.openForUser so the
   // user-scoped boxes pick up the same adapter registry.
   await HiveService.instance.init();
+  // HiveService is a singleton whose _initialized flag never resets, so from
+  // the SECOND test in a worker init() returns early (hive_service.dart:75)
+  // while wwsTestTeardown's Hive.close() has closed every shared box. Reopen
+  // them here — the list mirrors HiveService._sharedBoxNames, same as
+  // test/helpers/hive_test_setup.dart — or HiveUserSession's migrationBox
+  // read logs "migrationBox unavailable" on every later test (day-swapper +
+  // sync-load Task 31 finding).
+  for (final name in const [
+    'exerciseBox',
+    'foodBox',
+    'syncBox',
+    'configBox',
+    'migrationBox',
+  ]) {
+    if (!Hive.isBoxOpen(name)) await Hive.openBox(name);
+  }
 
   // Test user — full UUID (HiveUserSession derives 8-hex hash).
   await HiveUserSession.openForUser(

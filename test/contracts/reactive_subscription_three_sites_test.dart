@@ -76,54 +76,58 @@ void main() {
     );
 
     test(
-      'H-2b — swap_sheet does NOT cache isPro at initState',
+      'H-2b successor — SwapPickerSheet/SwapConfirmSheet read '
+      'subscriptionInfoProvider reactively, never cached at initState',
       () {
-        final src = _src('lib/features/home/widgets/swap_sheet.dart');
-        // The original bug pattern: `late final bool _isPro;` field
-        // plus an assignment in initState. Both must be absent.
+        // swap_sheet.dart (the original H-2b fix site) was deleted in the
+        // day-swapper batch. Home's long-press now opens the shared
+        // SwapPickerSheet (Task 24), and every swap ultimately runs through
+        // DaySwapController (lib/features/train/providers/day_swap_provider.dart,
+        // Task 12), which reads isPro FRESH on every call, never cached:
+        //
+        //   bool get _isPro => _ref.read(subscriptionInfoProvider).isPro;
+        //
+        //   Future<DaySwapResult> swap({...}) async {
+        //     final result = await _ref.read(swapServiceProvider).swapDays(
+        //           ..., isPro: _isPro, ...);
+        //     ...
+        //   }
+        //
+        // `_isPro` is a GETTER (re-evaluated on every read), and `swap()`
+        // reads it at call time, not in a constructor/initState — so a
+        // subscription change between opening the sheet and confirming the
+        // swap is picked up. This test pins the STRUCTURAL half (no cached
+        // field on the widgets themselves, consistent with H-2b's original
+        // fix); the FRESH-READ half is the controller code quoted above,
+        // verified by reading day_swap_provider.dart directly (Task 12).
+        for (final path in const [
+          'lib/features/train/widgets/swap_picker_sheet.dart',
+          'lib/features/train/widgets/swap_confirm_sheet.dart',
+        ]) {
+          final src = _src(path);
+          expect(
+            src.contains('late final bool _isPro'),
+            isFalse,
+            reason: '$path must not cache isPro at initState (H-2b class).',
+          );
+          expect(
+            src,
+            contains('subscriptionInfoProvider'),
+            reason: '$path must read subscriptionInfoProvider.',
+          );
+          expect(
+            src,
+            contains('extends ConsumerState'),
+            reason: '$path must be a ConsumerStatefulWidget for ref access.',
+          );
+        }
+        final controllerSrc =
+            _src('lib/features/train/providers/day_swap_provider.dart');
         expect(
-          src.contains('late final bool _isPro'),
-          isFalse,
-          reason:
-              'swap_sheet must not declare `late final bool _isPro`. '
-              'Cached at initState time → stays stale if user upgrades '
-              'while the sheet is open.',
-        );
-        expect(
-          src.contains('_isPro = _subscriptionService.isPro()'),
-          isFalse,
-          reason:
-              'swap_sheet must not assign _isPro from a cached snapshot. '
-              'Use ref.read(subscriptionInfoProvider) inside _onConfirm '
-              'instead.',
-        );
-        expect(
-          src,
-          contains('ref.read(subscriptionInfoProvider)'),
-          reason:
-              'swap_sheet must read subscriptionInfoProvider at the '
-              'moment of confirmation so the PRO branch reflects '
-              'mid-session upgrades.',
-        );
-      },
-    );
-
-    test(
-      'swap_sheet upgraded to ConsumerStatefulWidget for ref access',
-      () {
-        final src = _src('lib/features/home/widgets/swap_sheet.dart');
-        expect(
-          src,
-          contains('class SwapSheet extends ConsumerStatefulWidget'),
-          reason:
-              'swap_sheet must be a ConsumerStatefulWidget so the state '
-              'class has ref access for the H-2b reactive read.',
-        );
-        expect(
-          src,
-          contains('extends ConsumerState<SwapSheet>'),
-          reason:
-              'State class must extend ConsumerState for ref access.',
+          controllerSrc,
+          contains('bool get _isPro => _ref.read(subscriptionInfoProvider).isPro;'),
+          reason: 'DaySwapController must read isPro as a fresh getter, not '
+              'cache it, so every swap sees the current tier.',
         );
       },
     );

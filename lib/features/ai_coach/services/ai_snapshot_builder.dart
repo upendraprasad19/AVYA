@@ -35,6 +35,11 @@ import 'package:icanbefitter/features/nutrition/repositories/nutrition_repositor
 import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
 import 'package:icanbefitter/features/ai_coach/services/pattern_detector.dart';
 import 'package:icanbefitter/features/train/services/active_workout_persistence.dart';
+import 'package:icanbefitter/core/services/swap_service.dart';
+import 'package:icanbefitter/core/services/day_swap/day_swap_allowance.dart';
+import 'package:icanbefitter/core/services/day_swap/day_swap_copy.dart';
+import 'package:icanbefitter/core/services/day_swap/day_swap_result.dart';
+import 'package:icanbefitter/core/services/day_swap/day_swap_rules.dart';
 import '../models/coach_memory.dart';
 import 'package:icanbefitter/core/constants/equipment_defaults.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/training_history_analyzer.dart';
@@ -180,6 +185,7 @@ class AiSnapshotBuilder {
       'today_workout': _getTodayWorkout(),
       'yesterday_workout': _getYesterdayWorkout(),
       'week_lookahead': _getWeekLookahead(),
+      'swaps_left': _getSwapsLeftForLookahead(),
 
       'current_plan_summary': _getCurrentPlanSummary(),
 
@@ -285,6 +291,12 @@ class AiSnapshotBuilder {
       // that says LESS the more the user has logged, while still looking
       // present. It is ~90 chars; keeping it whole costs nothing that matters.
       'hold',
+      // day-swapper-sync-load (plan D7): the trimmer's largest-non-keep-field
+      // loop would otherwise halve a heavy user's 7-day lookahead (a List
+      // branch) before ever touching genuinely bulky fields like
+      // personal_records, and 'swaps_left' is tiny (~2 entries) but useless
+      // without the lookahead it annotates.
+      'week_lookahead', 'swaps_left',
     };
 
     var size = jsonEncode(s).length;
@@ -1240,29 +1252,86 @@ class AiSnapshotBuilder {
 
   List<Map<String, dynamic>> _getWeekLookahead() {
     const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final today = istTodayStr();
+    // ActiveWorkoutPersistence never persists a DATE (checked
+    // active_workout_persistence.dart in full) — its mere presence means
+    // TODAY has a live in-progress session. Narrower than the Riverpod
+    // inProgressDateOf this file cannot reach (plain class, no Ref), but
+    // sufficient for a display-only hint (spec §5.8 — this is not the
+    // engine's own gate, which re-checks everything at apply time).
+    final inProgressDate =
+        ActiveWorkoutPersistence.readState() != null ? today : null;
+    final weekStateCache = <String, List<DaySwapDayState>>{};
+    List<DaySwapDayState> statesFor(String date) => weekStateCache.putIfAbsent(
+        DaySwapRules.mondayOf(date),
+        // ignore: deprecated_member_use
+        () => SwapService.instance
+            .weekStates(date, inProgressDate: inProgressDate));
+
     final results = <Map<String, dynamic>>[];
     for (int i = 0; i < 7; i++) {
-      final date = DateTime.now().add(Duration(days: i));
+      // nowWall() (not DateTime.now()) so the dev-panel / year-sim / test
+      // clock override (ist_date.dart) is honored — this loop must stay in
+      // lockstep with istTodayStr() above and with SwapService.weekStates'
+      // own istTodayStr()-derived "today", or the lookahead and its
+      // can_swap/swap_block annotations would disagree about what "today" is.
+      final date = nowWall().add(Duration(days: i));
       final dateStr = istDateStr(date);
       final dayLabel = dayNames[(istDateOf(date).weekday - 1) % 7];
-      final schedule = _hive.workoutBox.get('schedule_$dateStr');
-      if (schedule is Map) {
-        results.add({
-          'day': dayLabel,
-          'date': dateStr,
-          'type': (schedule['type'] ?? schedule['workout_name'] ?? 'UNKNOWN') as String,
-          'status': (schedule['status'] ?? 'pending') as String,
-        });
-      } else {
-        results.add({
-          'day': dayLabel,
-          'date': dateStr,
-          'type': 'REST',
-          'status': 'rest',
-        });
-      }
+      final rawSchedule = _hive.workoutBox.get('schedule_$dateStr');
+      final row =
+          rawSchedule is Map ? Map<String, dynamic>.from(rawSchedule) : null;
+      final state = statesFor(dateStr).firstWhere(
+          (d) => d.date == dateStr,
+          orElse: () => DaySwapDayState(
+              date: dateStr,
+              row: row,
+              lock: DaySwapRefusal.noRow,
+              isMoved: false,
+              title: ''));
+      // Conditional map-literal element (not a `map['swap_block'] = ...`
+      // bracket-index write) — Gate 19 (check_hive_map_field_drift.dart)
+      // greps the whole file for `['field']` bracket-index syntax once it
+      // sees an unrelated exlog_*/nlog_*/wlog_* Hive-key pattern anywhere in
+      // it (this file has several, for genuinely unrelated reads), and a
+      // bracket-index write here false-positived as if it read one of those
+      // Hive maps. This `entry` is a plain output map this method builds —
+      // not a value pulled out of any Hive box.
+      final entry = <String, dynamic>{
+        'day': dayLabel,
+        'date': dateStr,
+        'type': row != null
+            ? (row['type'] ?? row['workout_name'] ?? 'UNKNOWN') as String
+            : 'REST',
+        'status': row != null ? (row['status'] ?? 'pending') as String : 'rest',
+        'name': row != null ? DaySwapCopy.titleOf(row) : DaySwapCopy.restDay,
+        'can_swap': state.movable,
+        'week_start': DaySwapRules.mondayOf(dateStr),
+        if (!state.movable && state.lock != null)
+          'swap_block': state.lock!.code,
+      };
+      results.add(entry);
     }
     return results;
+  }
+
+  /// Top-level `swaps_left` map — `{<IST Monday>: <swaps left>}` for every
+  /// week [_getWeekLookahead] touches (spec §5.8:535 — the SoT for this key's
+  /// name; a coordinator-dispatch text calling it `day_swaps` was drift,
+  /// corrected 2026-09-27). Recomputes the date range independently rather
+  /// than threading `_getWeekLookahead`'s own output through the snapshot
+  /// literal (design decision 4).
+  Map<String, int> _getSwapsLeftForLookahead() {
+    final isPro = SubscriptionService.instance.isPro();
+    final weekStarts = <String>{};
+    for (int i = 0; i < 7; i++) {
+      weekStarts.add(
+          DaySwapRules.mondayOf(istDateStr(nowWall().add(Duration(days: i)))));
+    }
+    return {
+      for (final w in weekStarts)
+        w: DaySwapAllowance.instance.current(w, isPro: isPro).left,
+    };
   }
 
   Map<String, dynamic> _getCurrentPlanSummary() {

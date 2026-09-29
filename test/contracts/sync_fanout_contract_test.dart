@@ -79,12 +79,30 @@ void main() {
       }
     });
 
-    test('_syncScheduledWorkouts coerces template_id via _deterministicId', () {
-      final body = methodBody(syncServiceSrc, '_syncScheduledWorkouts');
-      expect(body.contains('_deterministicId'), isTrue,
-          reason: '_syncScheduledWorkouts must coerce template_id to '
-                  'deterministic UUID (F3). Raw Hive tmpl_<ms> strings '
-                  'silently uuid-reject on the server.');
+    test(
+        '_syncScheduledWorkouts resolves template_id by NAME lookup, never '
+        '_deterministicId coercion (APK Test #14 / Bug B.1)', () {
+      // day-swapper+sync-load Task 15 correction (2026-09-27): this
+      // assertion previously read `isTrue` — the OLD (pre-2026-05-10)
+      // contract, which was removed by APK Test #14 / Bug B.1 (the v5 hash
+      // on the raw Hive tmpl_<ms> key never matched cloud's
+      // gen_random_uuid() id and 23503'd every push carrying a template;
+      // see docs/diagnoses/2026-05-10-fk-violation-saturday-c8e4a1.md).
+      // It kept passing only because the pre-Task-15 body's own explanatory
+      // comment happened to quote the literal `_deterministicId` string —
+      // a coincidental pass, not a real assertion of the coercion contract.
+      // Task 15's rewritten doc comment no longer quotes it, which exposed
+      // the staleness. Comment-stripped (mirrors the `_syncSavedMeals`
+      // check below) so a future explanatory comment can't re-trip this
+      // either way. The real contract (name-based resolution) is pinned in
+      // full by test/contracts/scheduled_workouts_fk_resilience_test.dart.
+      final body = methodBody(syncServiceSrc, '_syncScheduledWorkouts')
+          .replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '')
+          .replaceAll(RegExp(r'//[^\n]*'), '');
+      expect(body.contains('_deterministicId'), isFalse,
+          reason: 'APK Test #14 / Bug B.1: template_id is resolved by '
+                  'lookup-by-name (resolveCloudTemplateId), never coerced '
+                  'via _deterministicId(rawTemplateId).');
     });
 
     test('_syncSavedMeals omits id + upserts onConflict (user_id,name) — f7e3a1', () {

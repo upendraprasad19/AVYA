@@ -219,6 +219,37 @@ class ErrorTelemetry {
         until ?? DateTime.now().toUtc().add(_fallbackCooldown);
   }
 
+  // Hermes h6F2 (L40, diagnose e8c3a1). Postgres echoes the offending row's
+  // VALUES into three error shapes, and PostgrestException.toString() carries
+  // them into every telemetry sink. Each pattern prefers the structural suffix
+  // PostgREST/Postgres puts after the value; with none (a string truncated
+  // mid-value by a 500/2000-char cap) it redacts to the END — over-redacting
+  // is safe, under-redacting is the leak.
+  static final RegExp _failingRow = RegExp(
+      // Postgres ends this detail with ")." — the period is optional here.
+      r'Failing row contains \((?:.*?\)\.?(?=, hint:)|.*)',
+      dotAll: true);
+  static final RegExp _keyValues = RegExp(
+      r'Key \(([^)]*)\)=\((?:.*?\)(?= already exists| is not present'
+      r'| is still referenced| conflicts with|, hint:)|.*)',
+      dotAll: true);
+  static final RegExp _invalidInput = RegExp(
+      r'(invalid input (?:syntax|value) for [^:"]+: )"(?:.*?"(?=, code:)|[^"]*"|.*)',
+      dotAll: true);
+
+  /// Strips the row VALUES Postgres echoes into an error's text, keeping the
+  /// message, SQLSTATE code and column names. Every telemetry sink that ships
+  /// an error's text off the device runs it through this first: the
+  /// `log-client-error` leg and the Crashlytics leg of [recordNonFatal], and
+  /// `SyncService`'s own `_reportSyncFailure` / dead-letter posts. A failed
+  /// `ai_coach_interactions` upsert otherwise put the user's raw chat text
+  /// into `client_errors`. Text with none of the three shapes is returned
+  /// unchanged.
+  static String redactRowValues(String raw) => raw
+      .replaceAll(_failingRow, 'Failing row contains (<redacted>)')
+      .replaceAllMapped(_keyValues, (m) => 'Key (${m[1]})=(<redacted>)')
+      .replaceAllMapped(_invalidInput, (m) => '${m[1]}"<redacted>"');
+
   /// Record a non-fatal error. Fire-and-forget — never throws.
   ///
   /// Posts to Firebase Crashlytics with `fatal: false` and to the
@@ -268,8 +299,14 @@ class ErrorTelemetry {
             }
           }
         }
+        // h6F2: Crashlytics is a third party — hand it the redacted text
+        // when redaction changed anything, the original object otherwise.
+        final text = error.toString();
+        final redacted = redactRowValues(text);
         await FirebaseCrashlytics.instance.recordError(
-          error,
+          redacted == text
+              ? error
+              : _RedactedError(error.runtimeType.toString(), redacted),
           stack,
           reason: reason,
           fatal: false,
@@ -294,7 +331,9 @@ class ErrorTelemetry {
       return;
     }
     try {
-      final raw = error.toString();
+      // h6F2: redact BEFORE truncating — a cap can cut the structural suffix
+      // the redactor anchors on.
+      final raw = redactRowValues(error.toString());
       final message = raw.length > 500 ? raw.substring(0, 500) : raw;
       final code = error.runtimeType.toString();
       // Same signed-out branch as [logEvent] (b6e4f2). Kept CONSISTENT on
@@ -420,4 +459,16 @@ class ErrorTelemetry {
   static String _currentClientVersion() {
     return kDebugMode ? '${AppConstants.appVersion}+dev' : AppConstants.appVersion;
   }
+}
+
+/// h6F2 — what Crashlytics receives in place of an error whose text carried
+/// row values: the redacted text, prefixed with the original type name so
+/// issue grouping by type still works.
+class _RedactedError {
+  const _RedactedError(this.typeName, this.text);
+  final String typeName;
+  final String text;
+
+  @override
+  String toString() => '$typeName (redacted): $text';
 }

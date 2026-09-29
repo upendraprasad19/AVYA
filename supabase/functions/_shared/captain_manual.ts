@@ -357,6 +357,13 @@ PAST temporal queries (CALL TOOLS):
   → Call getPromotionStatus (full ladder + ETA scenarios).
 - Form/cue questions ("how do I deadlift", "form check"):
   → Call getFormCues for that exercise.
+- A request to swap, exchange or trade two scheduled days, or to move a single workout to
+  another day within the same week ("swap Friday and Saturday", "move Friday's workout to
+  today"):
+  → This is NOT rescheduleWeek — that tool changes WHICH weekdays you train on, not the content
+    of two specific days, and it silently no-ops a two-day swap. See the DAY SWAP ROUTING block
+    injected earlier in this prompt for the exact rule for this request (it already knows the
+    user's tier and app capability).
 - Weakness/diagnostic, comparative, projection, or one-off equipment queries
   ("what's my biggest issue", "better than last week", "when will I hit target",
   "at hotel today, no barbell"):
@@ -387,7 +394,9 @@ Examples:
   Friday."
   → emit two intents:
     1. logSet for back exercises (parse the workout description)
-    2. rescheduleWeek from Friday to today + Today to Friday
+    2. swapWorkoutDays for Friday and today — a two-day content swap, not a
+       full-week reshuffle. See DAY SWAP ROUTING above for tier/capability
+       handling.
 
 - "Mark today as rest. I went on a long walk instead."
   → emit two intents:

@@ -5,12 +5,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/fitness_goals.dart';
+import '../../../core/services/day_swap/day_swap_allowance.dart';
+import '../../../core/services/day_swap/day_swap_copy.dart';
+import '../../../core/services/day_swap/day_swap_result.dart';
 import '../../../core/services/error_telemetry.dart';
 import '../../../core/services/hive_service.dart';
 import '../../../core/utils/ist_date.dart';
 import '../../../core/services/nutrition_write_service.dart';
 import '../../../core/services/nutrition_write_source.dart';
 import '../../../core/services/subscription_service.dart';
+import '../../../core/services/swap_service.dart';
 import '../../../core/services/sync_service.dart';
 import '../../../core/services/usage_counter_service.dart';
 import '../../../core/services/workout_schedule_read_service.dart';
@@ -35,7 +39,13 @@ import '../../profile/services/profile_write_service.dart';
 import '../../profile/providers/profile_provider.dart'
     show userProfileProvider, userStatsProvider;
 import '../../train/providers/train_provider.dart'
-    show currentPlanProvider, templatesProvider, workoutStatsProvider;
+    show
+        currentPlanProvider,
+        templatesProvider,
+        workoutStatsProvider,
+        activeWorkoutProvider;
+import '../../train/providers/day_swap_provider.dart'
+    show daySwapWeekProvider, daySwapAllowanceProvider, inProgressDateOf;
 import '../../train/repositories/workout_repository.dart';
 import '../providers/ai_coach_provider.dart' show chatHistoryProvider;
 import '../models/tool_intent.dart';
@@ -136,6 +146,9 @@ class ToolDispatcher {
         case 'reschedule_week':
           result = await _executeRescheduleWeek(intent);
           break;
+        case 'swap_workout_days':
+          result = await _executeSwapWorkoutDays(intent, ref);
+          break;
         case 'generate_hotel_workout':
           result = await _executeGenerateHotelWorkout(intent);
           break;
@@ -161,6 +174,25 @@ class ToolDispatcher {
           return ToolExecutionResult.failure(
             'Unknown tool intent type: ${intent.type}',
           );
+      }
+
+      // Day-swap's own two providers refresh on EVERY outcome, before the
+      // failure early-return below — the same rule DaySwapController._refresh
+      // follows for the other three origins. A refusal usually means the rows
+      // changed under the cached week (a day completed or moved since it was
+      // built), so it is exactly the case where the cache is stale.
+      // B-pass R2-F3. (daySwapWeekProvider / daySwapAllowanceProvider are not
+      // in the general workout batch below.)
+      if (intent.type == 'swap_workout_days') {
+        try {
+          ref.invalidate(daySwapWeekProvider);
+          ref.invalidate(daySwapAllowanceProvider);
+        } catch (e, st) {
+          debugPrint('[tool_dispatcher] invalidate daySwap providers failed: $e\n$st');
+          // Hermes L34 2026-09-28: a debugPrint alone is invisible in release.
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'tool_dispatcher_day_swap_invalidate'));
+        }
       }
 
       if (!result.success) return result;
@@ -851,6 +883,38 @@ class ToolDispatcher {
         'partial_errors': errors,
       });
     }
+  }
+
+  /// spec 2026-09-26-day-swapper-design.md §5.8 — the coach's day-swap tool.
+  /// Calls the ONE swap engine directly (not the Riverpod controller — see
+  /// this task's design decision 1) with origin `coach`. The engine re-checks
+  /// everything against live rows inside the write lock (spec §5.1); this
+  /// handler does no concurrent-edit pre-check of its own.
+  Future<ToolExecutionResult> _executeSwapWorkoutDays(
+      ToolIntent intent, Ref ref) async {
+    final dateA = intent.payload['dateA'] as String?;
+    final dateB = intent.payload['dateB'] as String?;
+    if (dateA == null || dateB == null) {
+      return const ToolExecutionResult.failure('Invalid swap intent payload.');
+    }
+    final isPro = SubscriptionService.instance.isPro();
+    final inProgressDate = inProgressDateOf(ref.read(activeWorkoutProvider));
+    final result = await SwapService.instance.swapDays(
+      dateA: dateA,
+      dateB: dateB,
+      origin: DaySwapOrigin.coach,
+      isPro: isPro,
+      inProgressDate: inProgressDate,
+    );
+    final error = DaySwapCopy.errorFor(
+      result,
+      isPro: isPro,
+      limit: isPro ? DaySwapAllowance.proLimit : DaySwapAllowance.freeLimit,
+    );
+    if (error != null) {
+      return ToolExecutionResult.failure(error);
+    }
+    return ToolExecutionResult.success(data: result);
   }
 
   Future<ToolExecutionResult> _executeGenerateHotelWorkout(

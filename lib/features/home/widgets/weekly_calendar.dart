@@ -193,9 +193,6 @@ class WeeklyCalendar extends ConsumerWidget {
     required bool isMissed,
     required bool isPreOnboarding,
   }) {
-    if (isSwapped) {
-      return const Text('\u{1F504}', style: TextStyle(fontSize: 8));
-    }
     // Bug a9f3d2 (APK Test #13): when both isToday and isCompleted are true,
     // the full-gold today-border makes a gold checkmark invisible. Use
     // AppColors.ok (green) so the two signals are visually independent:
@@ -206,6 +203,11 @@ class WeeklyCalendar extends ConsumerWidget {
     }
     if (isCompleted) {
       return const Icon(Icons.check, size: 10, color: AppColors.accent);
+    }
+    // D8 (day-swapper batch, spec §13 #3): isSwapped now runs AFTER both
+    // isCompleted branches, so DONE always wins over the 🔄 marker.
+    if (isSwapped) {
+      return const Text('\u{1F504}', style: TextStyle(fontSize: 8));
     }
     if (isTravel) {
       return const Text('\u{1F9F3}', style: TextStyle(fontSize: 8));

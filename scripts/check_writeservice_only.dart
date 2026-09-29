@@ -64,6 +64,10 @@ const allowedClasses = <String>{
   // planned day content-less. Writes schedule_* directly like the SyncService
   // restore methods (shares mergeScheduleEntry); a legitimate restore writer.
   'PlanIntegrityReconciler',
+  // day-swapper + sync-load Task 23 (diagnose b6e1c8) — one-time per-user
+  // repair of schedule_<date> hybrid rows. Writes schedule_* directly, same
+  // shape as every other one-shot *_migrator.dart above.
+  'ScheduleHybridRepairMigrator',
 };
 
 // Files whose top-level scope is OK (e.g. extension files / part files
@@ -77,6 +81,7 @@ const allowedFilePathFragments = <String>[
   'lib/core/services/exlog_key_migrator.dart',
   'lib/core/services/hive_field_rename_migrator.dart',
   'lib/core/services/logging_type_repair_migrator.dart',
+  'lib/core/services/schedule_hybrid_repair_migrator.dart',
   'lib/core/services/workout_schedule_service.dart',
   // SyncService is part-split.
   'lib/core/services/sync_service.dart',

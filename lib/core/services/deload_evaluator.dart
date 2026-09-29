@@ -207,7 +207,6 @@ class DeloadEvaluator {
       if ((row['type'] ?? '') != 'workout') continue;
       if (row['status'] != 'planned') continue;
       if (row['shortened_via'] != null) continue; // time-shortened day
-      if (row['is_swapped'] == true) continue; // day-swap
       final dateStr = row['date'] as String?;
       if (dateStr == null) continue;
       if (dateStr.compareTo(todayKey) < 0) continue; // past → leave as-is

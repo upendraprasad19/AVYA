@@ -66,10 +66,23 @@ void main() {
   }
 
   group('sync_skipped_null_natural_key guard — workout_logs', () {
+    // day-swapper+sync-load Task 16: the payload moved into a named
+    // `payload` variable (feeds a SyncSkipIndex fingerprint), so the upsert
+    // call is now `.upsert(\n  payload,\n  onConflict: ...)` — a `{` no
+    // longer immediately follows `upsert(`. Dropping the trailing `{`
+    // handles the marker itself (windowBefore only uses it as a
+    // look-BACKWARD anchor), same fix already applied to the
+    // workout_log_exercises group below for the identical OI-204 shape.
+    // windowChars widened from the 800 default: the guard now sits inside
+    // an `if (index.aborted) break;`-guarded loop with the resolved
+    // timestamp computed between the guard and the upsert — measured via a
+    // scratch script (same technique as the groups below) at 1585 chars
+    // (comment-stripped) from `log['date']` to the marker; 2000 leaves
+    // ~400 chars margin.
     final marker =
-        "from('workout_logs').upsert({";
+        "from('workout_logs').upsert(";
     test('guard reads natural-key columns and skips on null/empty', () {
-      final pre = windowBefore(marker);
+      final pre = windowBefore(marker, windowChars: 2000);
       // Reads `date` + `workout_name` (exercise_name is sourced from
       // workout_name in this projection).
       expect(pre.contains("log['date']"), isTrue,

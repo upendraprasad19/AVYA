@@ -37,6 +37,10 @@ const dartAllowlist = <String>{
   'lib/core/services/streak_progress_service.dart', // builds from mondayOfIst() — already IST
   // Manual-IST-correct: applies +5:30 Duration offset before slicing — equivalent to istDateStr.
   'lib/features/onboarding/providers/onboarding_provider.dart',
+  // format() only serializes a DateTime.utc() built by utcDate() from an already-IST
+  // YYYY-MM-DD string (or +N days of pure date arithmetic on it) — no DateTime.now(),
+  // no device-local clock. Pure string round-trip (day-swap Task 10).
+  'lib/core/services/day_swap/day_swap_rules.dart',
 };
 
 // TS files where a .toISOString().slice/substring(0,10) is KNOWN-CORRECT (IST-derived).
@@ -44,6 +48,14 @@ const dartAllowlist = <String>{
 // by definition.
 const tsAllowlist = <String>{
   'supabase/functions/_shared/ist_date.ts', // IST helper itself; its toISOString() is on an already-shifted Date
+  // Round-trips a CLIENT-SUPPLIED calendar-date string (week_start) through a
+  // Z-anchored Date solely to catch Date.parse's silent day-of-month rollover
+  // (e.g. '2026-02-30' -> '2026-03-02') — never derives "today"/"this week"
+  // from the current moment or Date.now(), so it carries no timezone
+  // ambiguity to begin with. Same exemption class as
+  // edit_profile_screen.dart's date-of-birth (a fixed calendar date), not an
+  // "already IST" site.
+  'supabase/functions/consume-day-swap/logic.ts',
 };
 
 // IST-helper signal words: if the expression or its immediately-preceding variable

@@ -22,6 +22,7 @@ import 'package:icanbefitter/core/services/user_config_migrator.dart';
 import 'package:icanbefitter/core/services/body_fat_default_healer.dart';
 import 'package:icanbefitter/core/services/logging_type_repair_migrator.dart';
 import 'package:icanbefitter/core/services/wlog_type_backfill_migrator.dart';
+import 'package:icanbefitter/core/services/schedule_hybrid_repair_migrator.dart';
 import 'package:icanbefitter/features/ai_coach/services/induction_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
@@ -1264,6 +1265,18 @@ class AuthNotifier extends Notifier<AuthState2> {
       await WlogTypeBackfillMigrator.runIfNeeded();
     } catch (e) {
       debugPrint('[auth/_ensureLocalUser] wlog type backfill failed: $e');
+    }
+
+    // Diagnose b6e1c8 (day-swapper + sync-load Task 23) — one-time per-user
+    // repair of schedule_<date> hybrid rows (status:rest + workout type + no
+    // exercises -> type:rest), the two dead swap-counter keys, and the stale
+    // plan_json copy inside userBox['progress']. Gated on a workoutBox flag
+    // (D10 — per-account, not per-device, unlike migrationBox-gated
+    // migrators). Idempotent. Non-fatal on failure.
+    try {
+      await ScheduleHybridRepairMigrator.runIfNeeded();
+    } catch (e) {
+      debugPrint('[auth/_ensureLocalUser] schedule hybrid repair failed: $e');
     }
 
     // closes-diagnose: b3f9e7

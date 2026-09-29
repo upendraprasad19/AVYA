@@ -89,6 +89,39 @@ Deno.test({
 // the next item to add when CI grows that capability.
 void makeReadTool;
 
+Deno.test({
+  name: "tool-loop — registry hides a capability-gated tool when the capability isn't declared",
+  fn: () => {
+    _clearRegistryForTesting();
+    _registerToolForTesting(makeWriteTool("noCapTool", "free"));
+    const gated = makeWriteTool("gatedTool", "pro");
+    (gated as ToolDefinition).requiresCapability = "swap_workout_days";
+    _registerToolForTesting(gated);
+
+    const proNoCaps = allTools(true).map((t) => t.name).sort();
+    assertEquals(proNoCaps, ["noCapTool"]);
+
+    const proWithCaps = allTools(true, new Set(["swap_workout_days"]))
+      .map((t) => t.name).sort();
+    assertEquals(proWithCaps, ["gatedTool", "noCapTool"]);
+  },
+});
+
+Deno.test({
+  name: "tool-loop — a tool with no requiresCapability is unaffected by an absent or empty capability set",
+  fn: () => {
+    _clearRegistryForTesting();
+    _registerToolForTesting(makeWriteTool("plainFree", "free"));
+    _registerToolForTesting(makeWriteTool("plainPro", "pro"));
+
+    assertEquals(allTools(true).map((t) => t.name).sort(), ["plainFree", "plainPro"]);
+    assertEquals(
+      allTools(true, new Set()).map((t) => t.name).sort(),
+      ["plainFree", "plainPro"],
+    );
+  },
+});
+
 // TODO: Add full multi-round loop tests once module mocking is set up.
 // Current minimum coverage: schema validation + tier filter + intent builder
 // shapes are exercised through framework + per-tool tests.

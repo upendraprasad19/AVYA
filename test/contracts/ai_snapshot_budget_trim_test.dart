@@ -145,4 +145,75 @@ void main() {
               'trends re-breach the 10000-char server cap for power users.');
     });
   });
+
+  group('week_lookahead / swaps_left join the keep set (day-swapper-sync-load, plan D7)', () {
+    // DESIGN NOTE (re-derived during implementation, not per the brief's literal
+    // fixture): the brief's own Step 2 flagged a real risk — a single giant
+    // `personal_records` bloat field (3000 entries) is SO much bigger than
+    // week_lookahead's ~940-byte encoding that the trim loop's "pick the
+    // single biggest non-kept field" step never gets anywhere near
+    // week_lookahead before the budget is satisfied, regardless of whether
+    // week_lookahead is in the keep set. Running that exact fixture against
+    // the REAL trimSnapshotToBudget (both with and without the keep-set
+    // entries) confirmed it: 0 reds either way — a false-negative regression
+    // pin (rule 21 requires investigating a zero-red mutation, not accepting
+    // it). This fixture instead uses MANY decoy fields each individually
+    // SMALLER than week_lookahead's own encoded size, so week_lookahead is
+    // genuinely the single biggest non-kept field on iteration 1 when it is
+    // not protected — matching the real-world scenario the source comment
+    // describes ("a heavy user's 7-day lookahead... before genuinely bulky
+    // fields").
+    test('week_lookahead survives an over-budget trim untouched when many '
+        'smaller fields are the real bloat', () {
+      final weekLookahead = List.generate(
+          7,
+          (i) => {
+                'day': 'Day$i',
+                'date': '2026-09-2$i',
+                'type': 'workout',
+                'status': 'planned',
+                'name': 'Pull + Core',
+                'can_swap': true,
+                'week_start': '2026-09-21',
+              });
+      const swapsLeft = {'2026-09-21': 3, '2026-09-28': 3};
+      const decoyCount = 13;
+      final decoy = 'x' * 600; // encodes to 602 chars incl. quotes
+      final fixture = <String, dynamic>{
+        'profile': {'name': 'Amar'},
+        'week_lookahead': weekLookahead,
+        'swaps_left': Map<String, int>.from(swapsLeft),
+        for (var i = 0; i < decoyCount; i++) 'decoy_$i': decoy,
+      };
+
+      // Preconditions (self-verifying, per rule 21 — no hand-arithmetic).
+      final wlLen = jsonEncode(weekLookahead).length;
+      final decoyLen = jsonEncode(decoy).length;
+      expect(wlLen, greaterThan(decoyLen),
+          reason: 'precondition: week_lookahead must be the single BIGGEST '
+              'non-kept field (bigger than any one decoy), or an unprotected '
+              'trim loop would pick a decoy first and this fixture would not '
+              'traceably exercise the keep-set addition');
+      final totalLen = jsonEncode(fixture).length;
+      expect(totalLen, greaterThan(8500),
+          reason: 'precondition: the fixture must start oversized');
+
+      final trimmed =
+          AiSnapshotBuilder.trimSnapshotToBudget(fixture, budget: 8500);
+
+      expect(jsonEncode(trimmed).length, lessThanOrEqualTo(8500));
+      expect(trimmed['week_lookahead'], weekLookahead,
+          reason: 'week_lookahead must survive the trim UNCHANGED (keep set) '
+              'even though it is the single biggest non-kept field pre-fix');
+      expect(trimmed['swaps_left'], swapsLeft,
+          reason: 'swaps_left must survive the trim UNCHANGED (keep set)');
+      // At least one decoy absorbed the shrink instead — proves the loop
+      // actually ran (not merely "nothing needed trimming").
+      final survivingDecoys =
+          List.generate(decoyCount, (i) => 'decoy_$i').where(trimmed.containsKey).length;
+      expect(survivingDecoys, lessThan(decoyCount),
+          reason: 'a decoy field must be the one that shrank/was removed, '
+              'not week_lookahead or swaps_left');
+    });
+  });
 }

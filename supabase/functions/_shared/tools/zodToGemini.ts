@@ -40,6 +40,20 @@ export function zodToGeminiSchema(zodType: z.ZodTypeAny): GeminiSchema {
     return zodToGeminiSchema((zodType._def as any).innerType);
   }
 
+  // ZodEffects (`.refine()` / `.superRefine()` / `.transform()`): unwrap to
+  // the PRE-effect schema. Gemini's function-declaration schema describes
+  // the WIRE shape the model must send — a `.refine()` adds a business-rule
+  // check that runs during `safeParse`, not a different wire shape, so the
+  // inner schema is exactly what Gemini should see. Added for
+  // swapWorkoutDays.ts's real-calendar-date `.refine()` (Task 27 fix round,
+  // F3) — the first tool in this registry to use `.refine()` on a field;
+  // every other tool stays on the plain types below, unaffected.
+  if (zodType instanceof z.ZodEffects) {
+    // deno-lint-ignore no-explicit-any
+    const inner = zodToGeminiSchema((zodType._def as any).schema);
+    return { ...inner, ...(description ? { description } : {}) };
+  }
+
   if (zodType instanceof z.ZodString) {
     return { type: "STRING", ...(description ? { description } : {}) };
   }

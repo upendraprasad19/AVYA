@@ -64,6 +64,12 @@ enum WriteSource {
   /// this from [manual] is what lets the readiness sheet render "◆ SYNCED"
   /// over a measured value instead of one the user typed.
   healthConnect,
+
+  /// The day-swap engine (SwapService.swapDays → WorkoutWriteService
+  /// .swapScheduledDays): two dated schedule rows exchanged their content.
+  /// Distinct from [schedSwap] (exercise swap / shorten / travel), so the
+  /// carry-forward rule and telemetry can tell them apart.
+  daySwap,
 }
 
 extension WriteSourceCode on WriteSource {
@@ -91,6 +97,8 @@ extension WriteSourceCode on WriteSource {
         return 'onboarding';
       case WriteSource.healthConnect:
         return 'health_connect';
+      case WriteSource.daySwap:
+        return 'day_swap';
     }
   }
 }

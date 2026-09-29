@@ -251,11 +251,25 @@ void main() {
     });
   });
 
-  group('sync gap — swap_sheet._onConfirm', () {
-    test('fires syncWorkoutData + pushSnapshot on successful swap', () {
-      final src = _src('lib/features/home/widgets/swap_sheet.dart');
-      expect(src, contains('unawaited(SyncService.instance.syncWorkoutData())'));
-      expect(src, contains('unawaited(SyncService.instance.pushSnapshot())'));
+  group('sync gap — day swap fan-out (was swap_sheet._onConfirm)', () {
+    test('the Home sheet delegates to the engine and does not fan out itself', () {
+      final src = _src('lib/features/train/widgets/swap_picker_sheet.dart');
+      // daySwapControllerProvider is a plain Provider<DaySwapController>
+      // (Task 12) — no `.notifier` (round-1 review F F1).
+      expect(src, contains('ref.read(daySwapControllerProvider).swap('));
+      expect(src, isNot(contains('SyncService.instance')),
+          reason: 'the engine write (swapScheduledDays) owns the fan-out; a '
+              'second call here would double every swap push');
+    });
+
+    test('swapScheduledDays fires syncWorkoutData + pushSnapshot', () {
+      final src = _src('lib/core/services/workout_write_service.dart');
+      final start = src.indexOf('Future<WriteResult> swapScheduledDays(');
+      expect(start, isNot(-1));
+      final end = src.indexOf('\n  }\n', start);
+      final body = src.substring(start, end == -1 ? src.length : end);
+      expect(body, contains('unawaited(SyncService.instance.syncWorkoutData())'));
+      expect(body, contains('unawaited(SyncService.instance.pushSnapshot())'));
     });
   });
 

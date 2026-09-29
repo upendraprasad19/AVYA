@@ -18,7 +18,29 @@ check_adr_index_fresh.dart:
   grandfathered: 2026-08-10
 
 check_ai_tool_dispatcher_coverage.dart:
-  grandfathered: 2026-08-10
+  mutation_proven: true
+  test_path:
+    - test/scripts/ai_tool_dispatcher_coverage_lib_test.dart
+  evidence: >
+    Extended 2026-09-27 (day-swapper-sync-load batch, Task 27, spec §5.8):
+    the pure matching logic moved into ai_tool_dispatcher_coverage_lib.dart
+    (parseTools / checkCoverage) and gained a SECOND check — a tool
+    declaring `requiresCapability` must have that string present in the
+    client's kCoachClientCapabilities const, not just a dispatcher case.
+    Moved off `grandfathered:` because this batch materially changes the
+    gate's protection surface (rule 24). Mutation: deleted the
+    `t.requiresCapability != null && !clientCapabilities.contains(...)`
+    block from checkCoverage. Confirmed applied
+    (`grep -c "requiresCapability != null &&" scripts/ai_tool_dispatcher_coverage_lib.dart`
+    → 0, was 1). Reddened exactly 1 of 9 tests — "a capability-gated tool
+    NOT declared by the client is a violation" (its first assertion,
+    `uncoveredCapabilities, isNotEmpty`, throws and aborts the test body
+    before the second assertion runs, so only 1 test failure is reported).
+    Restored via a pre-mutation file backup; `grep -c` on the restored file
+    returned to 1, confirming the diff is gone. Verified live via
+    `flutter test test/scripts/ai_tool_dispatcher_coverage_lib_test.dart`
+    in this worktree: 9/9 before, 8/9 under the mutation, 9/9 after
+    restore.
 
 check_alerts.dart:
   grandfathered: 2026-08-10
@@ -756,28 +778,21 @@ check_single_schedule_row_builder.dart:
 check_sync_hash_skip_atomicity.dart:
   mutation_proven: true
   test_path:
-    - test/scripts/sync_hash_skip_atomicity_lib_test.dart
     - test/scripts/sync_hash_skip_atomicity_e2e_test.dart
+    - test/scripts/sync_write_structure_lib_test.dart
   evidence: >
-    Neutered checkDomainAtomicity's guard-detection (forced `guarded = true`
-    unconditionally) -- reddens "FAILS when the guard is inverted" and "FAILS when the
-    store is not guarded by the flag" (2 tests). Neutered the swallow-count comparison
-    (deleted the setFalseCount mismatch check) -- reddens "FAILS when a swallowing catch
-    forgets to set the flag false (exlog, expects 1)" and "FAILS on nlog fixture with only
-    1 of 2 expected flag-false sites" (2 tests). 4 reds total on 2 independent mutations
-    to the checker itself (not a test fixture -- see Step 9). e2e test
-    (sync_hash_skip_atomicity_e2e_test.dart) proves main() is wired to the lib by running
-    the real compiled script as a subprocess against a controlled fixture tree.
-    OI-204 B-pass Finding 1 (2026-09-19): reverted the multi-line-safe `storeLineIdxs`
-    computation (the per-match-offset scan) back to the pre-fix per-line `storeRe.hasMatch`
-    re-scan -- reddens exactly "FAILS when the store is unconditional AND split across two
-    lines" (1 test; `Expected: not null, Actual: <null>`), proving the pre-fix checker
-    silently PASSED an unguarded store wrapped across two lines (a plausible dart-format
-    output, not a contrived shape). The paired positive-control test ("passes when a
-    CORRECTLY-guarded store is split across two lines") stayed green on both sides of the
-    mutation, confirming the fix doesn't newly false-positive on a legitimate wrap. Restored,
-    re-confirmed all 15 lib tests + 3 e2e tests green, re-ran the real gate against
-    lib/core/services/sync/sync_workout.dart + sync_nutrition.dart -- still OK.
+    Task 32 (day-swapper + sync-load) retired the OI-204 count-based exlog/nlog
+    check; the gate is now the G1 structural rule only, hard-fail. Deleting the
+    runner's exit(1) reddens "G1: an unwrapped history write FAILS by default"
+    and "G1: --hard FAILS (exit 1) on the same fixture" (2 tests). Task 3's lib
+    mutation (checkSyncStructure short-circuited to accept every call),
+    RE-MEASURED 2026-09-28 at 2675345b against both test_path files: 10 red
+    (8 lib + 2 e2e). The "4 lib/e2e" this entry said before was stale — the
+    fixture set grew after Task 3 wrote it (B-pass R4-F3; 9 at dfcd2bde, +1
+    for the B-pass's own dead-rethrow test). B-pass R4-F2 leg: restoring the
+    pre-fix "rethrow/return false anywhere in the block" match reddens 2 lib
+    tests (the dead-rethrow violation test and the endsInUnconditionalExit
+    unit test).
 # ---------------------------------------------------------------------------
 # self-learning discipline batch, 2026-09-19 (discipline-gates-tier12) — 8
 # gates mechanizing sub-patterns from feedback_green_check_input_set_width.md
@@ -1014,3 +1029,23 @@ check_gemini_retry_and_telemetry_coverage.dart:
     comment-blind `.contains()` — reddened EXACTLY the 2 new tests (nothing
     else), confirming they and only they detect this specific class.
     Reverted; 19/19 green.
+
+check_sync_no_now_fallback.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/sync_no_now_fallback_lib_test.dart
+    - test/scripts/sync_no_now_fallback_e2e_test.dart
+  evidence: >
+    Gate G2, day-swapper + sync-load Task 2. Mutation 1: findNowFallbacks never
+    adds a finding -- RE-MEASURED 2026-09-28 at 2675345b: 8 red (6 lib + 2 e2e),
+    one of the 6 being the B-pass's own `??=` test, so 7 at dfcd2bde against
+    the "8" recorded here (whether 8 held when Task 2 measured it is not
+    re-derivable now).
+    B-pass R4-F1 leg: restoring the pre-fix `\?\?` (no `=?`) reddens exactly the
+    "`x ??= DateTime.now()` (compound assignment)" test (1). Mutation 2:
+    stripDartCommentsPreservingLines returns its input -- reddens 2 tests
+    (2 expected). Mutation 3: block comments stop preserving newlines --
+    reddens 1 (1 expected). All confirmed applied with grep -c before the run.
+    Task 32 (day-swapper + sync-load): default flipped to hard-fail after the
+    24 h baseline; setting _hardFailByDefault back to false reddens exactly
+    "default run FAILS (exit 1)" (1 test).

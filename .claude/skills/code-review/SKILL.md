@@ -64,6 +64,7 @@ Each lens has a focused prompt the dispatched agent runs against the staged diff
 3. **blast_radius_mismatch** — `docs/blast_radius.yaml` says path `X` is tier `T`. Does the diff treat it that way? E.g. catastrophic-tier changes must have rollback documented.
 4. **secrets_in_tree** — credential-shaped literals (`sk-`, `rzp_live_`, `AKIA`, `-----BEGIN`) anywhere in the staged diff. Source: `feedback_secrets_pattern_audit_before_first_push.md`.
 5. **unawaited_no_error_sink** — every `unawaited(` in the diff has either an inner `.catchError` or sits inside a function with declared error sink. Source: `feedback_observability_silent_drop.md`.
+   - **Refactor-onto-a-shared-helper sub-check (2026-09-27, 3 instances in one batch).** When a diff moves N per-domain call sites onto one shared helper (e.g. `SyncSkipIndex.pushIfChanged`), the helper's OWN handling is not a substitute for what each site did on top of it. Take the pre-change file (`git show <base>:<path>`) and diff the SET of per-site extras before vs after: every `_reportSyncFailure(<opType>)` / `recordNonFatal(<reason>)` op-type string, and every inline guard (e.g. the literal `ownerChangedSince(` sink guard a contract test pins adjacent to each write). Any member missing afterwards is a finding, even if the helper "already does something similar". Instances: day-swapper Task 13 (exlog/nlog failure reports dropped), Task 16 (`upsert_template_exercise` report dropped), Task 17 (inline sink guard dropped, caught only by the full `test/contracts/` run), Task 17 again (per-table opTypes `upsert_custom_exercise`/`upsert_custom_food` collapsed into one generic `sync_custom_items` string — the 4th instance in the same batch; fixed in the Task 17 fix round, `b503bcd6`/`745fdb98`, with a coordinator-found MIRROR gap: the fix's own `if (failed == 1)` reported only the first failure per pass, so two different tables failing in one pass under a shared index would report only one — closed with a distinct-opType-once report, diagnose `docs/diagnoses/2026-09-26-sync-write-amplification-a9d3f6.md`).
 6. **guard_without_its_mirror** — for every guard, existence check, early return, or narrowed match ADDED in the diff, name its **mirror case** and check whether that is guarded too: local vs remote, present vs absent, too-narrow vs too-wide, first-of-N vs the rest. Then ask the sharper question: **is the new code WORSE than what it replaced for the mirror case?** A guard written for the failure the author just hit routinely breaks the symmetric case that the previous code handled fine. Source: `feedback_mistake_guard_without_its_mirror.md`.
    **Do NOT accept the diff's own tests as evidence for this lens** — they are written from the same mental model as the code and will cover the same side. Ask instead: what does *every* test in this file silently assume?
    **Method (added 2026-08-11 after this lens found its third consecutive escape in ONE guard):** do not read the guard — *mutate it and run it*. Two rules that came out of that:
@@ -298,6 +299,137 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   "mirrors an existing pattern" claim extends to the missing kill-switch too, and it does.
   False-alarm rate 0/2 → no lens removed; both tunings above are general-method notes, not
   lens-prompt edits (the existing lenses already caught both findings correctly).
+
+- **2026-09-28 (f)** — blast-radius **platform** — branch `day-swapper-sync-load`, third merge
+  of origin/main (PR #48). 1 finding (P2), 0 false alarms, fixed pre-commit
+  (`330f5d0c27fc-review.md`). **Lesson: when a finding names a stale string, grep the WHOLE file
+  for that string before fixing only the cited copy** — the reviewer cited 4 stale free-text line
+  numbers in one registry entry; the same text was duplicated into two sibling entries (11
+  occurrences). Also recorded: two branches can mint the same numbered bug class in a skill
+  (`2.73` twice); resolve by keeping whichever number something already CITES and renumbering the
+  other, after grepping for citations of both.
+
+- **2026-09-28 (e)** — blast-radius **platform** — branch `day-swapper-sync-load`, second merge
+  of origin/main (b7239acf, single-owner-a2b) before the Task 34 EF deploys. 1 finding (P2), 0
+  false alarms, fixed pre-commit (`6e4819de87d7-review.md`). **Lesson for merge reviews: the
+  dangerous hunk is the one git did NOT flag.** Both sides appended one entry to the same array
+  in different places, so the auto-merge was textually clean while the doc comment counting that
+  array ("7 of 11") went stale — each side had correctly updated the count for its own addition.
+  **Reviewer prompt addition:** for every file BOTH parents changed (not just conflicted files),
+  re-derive any count, list or "N of M" prose against the merged content. Also: the reviewer
+  flagged, and the coordinator confirmed, that `sot_registry.yaml` has never been valid YAML
+  (35 errors) — worth knowing before anyone reaches for a YAML parser on it.
+
+- **2026-09-28 (d)** — blast-radius **catastrophic** — branch `day-swapper-sync-load`, Task 34:
+  the already-applied migration 149 lands with its ledger entry and a 148→149 renumber. 2
+  findings (1 P1, 1 P2), 0 false alarms, both fixed before commit (`992f2cf23c2a-review.md`).
+  **New lesson, both findings the same shape:** a commit that records a STATE CHANGE (here: a
+  live apply) leaves every prose sentence describing the OLD state as drift — a closure
+  `reason:` still saying "awaiting the founder's go" and a registry note still saying "NOT yet
+  applied live", both inside files the commit was already editing for the renumber. A mechanical
+  rename sweep (148→149) touches the line and reads as reviewed, while the claim on that line goes
+  stale. **Reviewer prompt addition for apply/deploy/flip commits:** grep the whole diff's files
+  for the pre-change status words (`NOT yet`, `pending`, `awaiting`, `blocked_on_user`,
+  `uncommitted`, `drafted`) and check each against the new state.
+
+- **2026-09-28 (c)** — blast-radius **catastrophic** — branch `day-swapper-sync-load`, the
+  MERGE of origin/main 7cb4eb78 (OI-252 stable template ids + B2a-2b telemetry dedup) into the
+  branch. One context-blind Sonnet reviewer read the staged resolution against both parents.
+  **4 findings (1 P1, 2 P2, 1 P3), 0 false_alarm, all fixed** (F1 in the merge commit, F2-F4 in
+  the next, diagnose `a3e7d9`). Review: `docs/reviews/33fb1d332932-review.md`.
+  **Tuning 1 — a merge review asks where the two sides MEET, not whether each hunk is right.**
+  All four findings were semantics that neither parent had wrong on its own. A branch guard
+  written for pre-OI-252 identity (Case 2's "no local template ⇒ omit") became wrong once main
+  put the id in the key. A branch skip ("every bundled key present") was never satisfiable
+  once main filtered ghost days out of the write. Brief a merge reviewer with each side's
+  INVARIANTS (not just its diffs), and ask of every branch guard: does the other side's new
+  invariant make this guard's premise false?
+  **Tuning 2 — a sweep test's window IS its input set (lens 8).** H-42's pairing test matched
+  within 300 characters, and one real pair sat 583 characters apart behind a comment. The test
+  was green on a live defect. A fixed character window is a claim that no comment is ever long;
+  scope the pairing by syntax (the enclosing block) instead. On widening, re-derive the count
+  (70 → 75) and treat every newly visible site as a finding to check, not as noise.
+  **Tuning 3 — test STUBS encode old semantics too.** After the merge, a branch test's SELECT
+  stub answered one id for every template name. Harmless before OI-252; afterwards main's
+  migrator folded two templates into one key and the test failed for a reason that had nothing
+  to do with its subject. When a merge changes HOW the code learns a fact (here, SELECT → key),
+  grep the tests for stubs that answer the old question.
+  False-alarm rate 0/4 → no lens removed.
+
+- **2026-09-28** — blast-radius **catastrophic** — branch `day-swapper-sync-load` (one
+  day-swap engine for Train/Home/coach + the OI-237 sync-load fix; 198 files). Whole-branch
+  review split across FOUR context-blind Sonnet reviewers, each in its own isolated worktree
+  (sync core + migration / swap engine + UI / EFs + AI routing / gates + docs). **12 findings
+  (0 P0, 4 P1, 5 P2, 3 P3); 0 false_alarm — 10 fixed in `2675345b` + a ledger re-measure,
+  2 verified_clean.** Review: `docs/reviews/day-swapper-sync-load-bpass.md`.
+  **Tuning 1 — a recovery path that must bypass a cache should bypass it for ONE KEY, never by
+  switching the cache off.** R1-F1: the scheduled_workouts FK self-heal re-ran the template sync,
+  which a new skip index then skipped (the index still said "confirmed"), so the self-heal was a
+  silent no-op and the row retried the dead end every pass. The obvious fix — pass
+  `disabled: true` — was wrong in a way only the cache's own code shows: a disabled index
+  DELETES itself at commit, so a persistent orphan would have re-pushed every template on every
+  pass. Add to lens 6: when a diff adds a cache/skip layer in front of a function, list every
+  caller that re-invokes that function to REPAIR something, and ask whether the cache now
+  answers "already done" to the repair.
+  **Tuning 2 — lens 10 gains diagnose-doc FRONTMATTER as an input set.** Four diagnose docs
+  carried `contract_test_path: "must add: <file>"` for plan-time filenames that were never
+  created; the contracts existed under other names. `validate_diagnose_doc.dart` checks the
+  field is present, not that its path resolves, and the reviewer sweeping "every cited path"
+  covered the ledger and the registry but not this field. One regex + `Test-Path` over every
+  `test/**_test.dart` string in the new docs found all of them. Run it on every batch that
+  adds diagnose docs.
+  **Tuning 3 — a correct finding with a wrong mechanism (third recorded instance, cf.
+  2026-09-10).** R2-F2 said the allowance counter loses an increment in a read-modify-write
+  race; Hive's in-memory put is synchronous and `recordSwap` has no await before it, so that
+  cannot happen. The defect was real anyway — check-then-act across awaits under a lock keyed
+  by the wrong thing (two dates, not the week) — and a deterministic test (a seam that holds
+  swap 1 between its check and its count) reproduced it. Verify the mechanism before writing
+  the fix: the reviewer's mechanism would have led to a lock around `recordSwap`, which fixes
+  nothing.
+  **Tuning 4 — a source-grep gate's "token anywhere in the block" check is the same bug class
+  as a missing guard.** R4-F2: G1 accepted `catch (e) { if (false) { rethrow; } }`. The fix
+  reads the LAST top-level statement; it still is a text scan, and says so. Paired with R4-F1
+  (`??=` slipping past `\?\?\s*`), both hard-fail gates of this batch were defeated by the
+  reviewer on the first realistic re-entry it tried — lens 6's standing "assume a grep is
+  defeatable" rule, confirmed twice more.
+  False-alarm rate 0/12 → no lens removed; lenses 6 and 10 extended per above.
+
+- **2026-09-28** — blast-radius **catastrophic** — branch `day-swapper-sync-load` (OI-237: day-swap
+  engine rebuild + 21-push-step sync write-amplification fix; subagent-driven, ~30 tasks across 3
+  waves). Three new red flags surfaced across the wave-1/wave-2 review rounds, none previously named
+  in this skill; recorded here per Task 31's self-evolution carry (bpass review itself is Task 33's,
+  `bpass_review: pending (Task 33)` in `docs/audit/day-swapper-sync-load.closure.yaml`).
+  - **Red flag: a swallow-and-report helper whose return value is a success COUNT.** A count cannot
+    distinguish "N failed" from "nothing to do" — the caller that only checks `count > 0` or ignores
+    the return entirely treats both as success. Instance: Task 20's `SyncSkipIndex.clearAll` stored
+    `sync_epoch_seen` even when the clear partially failed, permanently losing the repair lever's
+    retry (fixed same-day, `a53f3305`; diagnose `docs/diagnoses/2026-09-26-sync-write-amplification-a9d3f6.md`).
+    Same family as `feedback_bad_news_vs_no_news.md` #7 — prefer a typed result (e.g.
+    `ClearAllResult.allSucceeded`) over a bare int/bool whenever a caller's next action depends on
+    which failure mode occurred.
+  - **Red flag: a duplicate helper justified by "the other unit has not landed yet" expires at
+    integration — the integrator must delete it, not just note it.** Parallel subagent-driven work
+    legitimately duplicates a helper when the canonical one is still in flight on another branch; the
+    duplicate's justification is time-bound and silently stops being true the moment both land.
+    Instance: Task 21's `_mondayOfIsoWeek` duplicated `DaySwapRules.mondayOf` (which landed later in
+    the same batch); the review caught it as a Minor, and the integrator re-pointed the duplicate to
+    delegate to the canonical helper and deleted the now-unjustified file-wide gate allowlist entry it
+    required (`5c0c00ff`). **Check:** at integration, grep for any helper whose only doc-comment
+    justification is "X hasn't landed yet" and verify X has, in fact, now landed.
+  - **Red flag: a skip/cache keyed on ONE side's state must also check the OTHER side, or a deletion
+    on the unchecked side is invisible to the equality check.** A cloud-fingerprint-unchanged skip
+    (or any cache keyed on a single source's version/hash) implicitly assumes the OTHER side is
+    unchanged too; it is not, whenever something on that side was DELETED — deletion is exactly the
+    case an equality/presence check on the checked side cannot see. Instance: Task 22's L2 plan-bundle
+    merge skip (fingerprint match against the downloaded bundle) missed a LOCALLY deleted
+    `schedule_<date>` row, since the cloud side's fingerprint had not changed; `PlanIntegrityReconciler
+    .needsHeal`'s own `getWeek()`-style reader omits absent keys, so no self-heal could compensate
+    either. Fixed by requiring every bundled key present locally, not just a fingerprint match
+    (`18183762`; memory `feedback_mistake_guard_without_its_mirror.md` #37). **Check:** for any skip
+    keyed on a hash/fingerprint/version of side A, ask whether side B can independently regress
+    (deletion, corruption, manual edit) without side A's fingerprint changing — if so, the skip is
+    unsafe without an explicit side-B presence/consistency check.
+  Review: pending (Task 33).
 
 - **2026-09-28** — blast-radius **account** — branch `reps-secs-invalidation-fixes` (4 confirmed
   fixes + 1 `feat` in the same batch: duration-controller-seeding leak e8f95e, aggregate
@@ -3541,3 +3673,52 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
   clean cross-check of a subagent's OWN verification work, not just its top-line claims, is the
   stronger form of "record a negative result" this file's history already values.
   False-alarm rate 0/3 → no lens removed; lens 8 extended per above.
+- **2026-09-29** — blast-radius **catastrophic** (the staged diff's ~95 inbound commits from
+  `origin/main` included a `SECURITY DEFINER` migration, forcing this tier per
+  `blast_radius_content_rules_lib.dart`, on a commit that is itself a routine merge-conflict
+  resolution) — branch `oi-245-246-restore-fixes`, **merge-reconciliation-only review** of
+  `origin/main` (`day-swapper-closeout`, tip `6d733480`) merged into this branch (pre-merge tip
+  `2d0e7240`), same scope as the three prior merge-reconciliation entries in this file's history:
+  did the conflict RESOLUTION lose/corrupt/misplace anything, not a re-review of either parent's
+  own already-reviewed feature work. **1 finding, fixed in-batch.** Review:
+  `docs/reviews/07f2a817bbdd-review.md` (staged initially against `c57a4d922cb1`; the fix below
+  moved the hash and the file was renamed to match — see the note at the top of that file).
+  This merge hit 8 real conflicts (2 skill-tuning-history files, 2 append-only ledgers
+  — `backups/applied_migrations.json`, `docs/audit/open_issues.md` — both boards independently
+  extended while this branch's work was in flight, 1 line-citation file — `docs/sot_registry.yaml`,
+  6 sub-conflicts, each re-derived from the real merged file content rather than trusting either
+  side's stale number — 1 source file where both branches independently inserted unrelated
+  top-level functions at the same point, and 2 generated indexes, regenerated from scratch via
+  their own canonical scripts rather than hand-merged). Verification discipline matched the
+  established precedent: `git merge-file -p` naive-reconstruction diffed against the actual
+  staged content for every hand-resolved file (worth noting: git's own naive reconstruction of
+  `sync_coach.dart` is syntactically BROKEN — drops a closing brace — so the correct hand
+  resolution differs from a naive 3-way merge in a way that matters, not just cosmetically);
+  `open_issues.md`'s union-completeness proof (176 staged = exact union of 171 ours + 174 theirs,
+  spot-checked byte-identical on one section from each side); independent re-derivation of all 3
+  post-gate-fix `sot_registry.yaml` line-range corrections plus one more spot-check, all exact
+  matches; both generated files diffed byte-for-byte against a fresh regen, zero diff.
+  **The finding — a NEW instance of the OI-number-collision class, but for a DIFFERENT numbering
+  scheme with no allocator:** both branches independently picked bug-class `### 2.74` in
+  `.claude/skills/debugging/SKILL.md` as their own "next free number" for an unrelated new entry
+  (this branch's `_drainPendingExlogDeletes`/`indexOf`-anchoring fix, dated 2026-09-29; origin's
+  `getWeek()`-reader/self-heal entry, dated 2026-09-28). The merge combined both bodies intact —
+  no content lost — but neither was renumbered, so the file briefly held two unrelated entries
+  both citing `### 2.74`. This repo has `mint_oi.sh`/`check_oi_numbering_unique.dart` for exactly
+  this collision class on OI numbers; no equivalent exists for this file's `### N.M` scheme, so
+  nothing in the gate loop caught it — a human/review-time-only defect. Fixed by renumbering the
+  smaller-diff side to the real next-free number (`2.77`, confirmed free) and by finding —
+  independently of the review subagent's own `grep -rn "2\.74" .claude .` check, which missed it —
+  one further stale numeric citation in `docs/plan-reviews/oi-245-246-restore-fixes.md` that named
+  the old number.
+  **Tuning — a merge-reconciliation review's checklist should explicitly include "does the
+  conflicted file have its OWN internal numbering/uniqueness scheme, and did each side
+  independently advance it into the same slot" wherever two branches both append dated,
+  self-numbered entries to a shared file** (skill tuning histories, bug-class indexes, ADR/OI-style
+  logs) — this is a strict superset of the append-only-ledger check the three prior
+  merge-reconciliation entries already established, generalizing from "did content get lost" to
+  "did content get lost OR collide". Also: **a subagent's own "no other file references the old
+  value" grep is not proof — rerun it yourself with a wider pattern (here, three literal variants
+  vs. one) before trusting a finding is fully closed**, since the coordinator's own recheck found
+  a citation the subagent's narrower single-pattern grep missed.
+  False-alarm rate 0/1 → no lens removed.

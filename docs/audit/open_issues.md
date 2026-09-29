@@ -6082,8 +6082,27 @@ Tables are small, so the timeout is not payload size; suspect connection/auth wa
 ## OI-252 — Workout templates: one stable identity (delete/rename propagation, unit 2a)
 
 - **Status**: OPEN
-- **Blocked on**: B-pass self-review (platform blast radius, mandatory before `--no-ff` merge) + the merge to `main` itself.
-- **Verified**: 2026-09-27 — implementation complete and gate-green: client restore rework across all three template_id-carrying restore paths, migration 145 applied live to dedsavbjuwgarrhphgnl (pg_trigger + information_schema.columns confirmed), `restore-user-snapshot` (v7) and `workout-window-closing` (v15) deployed and Deno-tested pre-deploy, `backups/applied_migrations.json` + `backups/live_schema_columns.json` updated, full `sh scripts/pre-commit.sh` reports OK. 10 new behavioral tests, mutation-proven on 3 legs. Diagnose-doc `docs/diagnoses/2026-09-27-deleted-workout-template-resurrects-via-restore-f4a8c2.md`.
+- **Blocked on**: founder on-device verification only. Everything else this entry previously
+  listed as blocking (B-pass self-review, the merge to `main`) is done — see Verified below. This
+  field went stale the same way OI-258's did (board not re-read after the work that closed it);
+  corrected 2026-09-29 rather than left for a future session to re-discover.
+- **Verified**: 2026-09-28 (superseding the 2026-09-27 note below) — merged to `main` in two
+  waves (`82844bfd`, `43b89035`, final `d8832af8`), both self-triggered B-pass reviews on the
+  reconciliation merges accepted (`docs/reviews/merge-reconciliation-82844bfd-review.md`: 3
+  findings, 2 fixed + 1 false_alarm; `merge-reconciliation-43b89035-review.md`: 0 findings).
+  Migration 145 confirmed live via `list_migrations` + `backups/applied_migrations.json`
+  (`20260927011446`); migration 146 (same-unit B-pass Finding 1 fix, BEFORE INSERT OR UPDATE)
+  also live (`20260927045029`). `restore-user-snapshot` (v7) and `workout-window-closing` (v15)
+  confirmed deployed via `list_edge_functions` (`updated_at` matching the local payload-backup
+  timestamps) AND a live `get_edge_function` source fetch matching the committed code
+  byte-for-byte at the OI-252 markers. Full local suite green (6589 tests) at push time.
+  PRIOR (2026-09-27, kept for record): implementation complete and gate-green: client restore
+  rework across all three template_id-carrying restore paths, migration 145 applied live to
+  dedsavbjuwgarrhphgnl (pg_trigger + information_schema.columns confirmed),
+  `restore-user-snapshot` (v7) and `workout-window-closing` (v15) deployed and Deno-tested
+  pre-deploy, `backups/applied_migrations.json` + `backups/live_schema_columns.json` updated,
+  full `sh scripts/pre-commit.sh` reports OK. 10 new behavioral tests, mutation-proven on 3 legs.
+  Diagnose-doc `docs/diagnoses/2026-09-27-deleted-workout-template-resurrects-via-restore-f4a8c2.md`.
 - **Identified**: 2026-09-26 · filed via mint_oi.sh from branch `template-stable-identity`
 
 Fix shape: migration 145 (add `deleted_at`, keep `UNIQUE(user_id,name)`, BEFORE UPDATE trigger renames on delete-transition + no-ops any write to an already-deleted row) + `restore-user-snapshot`/`workout-window-closing` EF updates + client rework of template create/push/restore/delete across `sync_workout.dart`, `template_service.dart`, `train_provider.dart`, `workout_write_service.dart`, plus a one-time legacy-key migrator. Saved meals (unit 2b, `reuse-audit-fixes` batch) reuse whatever this proves. Full design + 3 converged review rounds: `docs/superpowers/plans/2026-09-26-template-stable-identity.md`.
@@ -6217,6 +6236,67 @@ threat model it already defends against).
 - **Source**: GitHub Actions run 36339457678 (job 108676553930), discovered while confirming CI
   green for the unrelated `gate14-migration-collision` push (diagnose `d5f1b8`).
 
+## OI-261 — displaced_<date> swap backups are local-only: never in plan_json or any cloud table, so swap-back on a new device silently loses the displaced template link
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-09-28 — `git grep displaced -- lib/core/services/sync/` returns nothing
+- **Identified**: 2026-09-28 · filed via mint_oi.sh from branch `day-swapper-sync-load`
+
+Symptom: `displaced_<date>` is the backup `TemplateService.assignTemplateToDate` writes when a
+template is assigned over a date that already held a workout, so removing the template later
+brings that workout back. It has existed since 2026-04-10 (`708d2910`) and has only ever lived in
+local Hive. `git grep -n displaced -- lib/core/services/sync/` finds nothing, no cloud table or
+column holds it, and `_syncWorkoutPlan`'s bundle loop collects `schedule_` keys only. On a new
+device or a reinstall, the template day restores through `plan_json`, but its backup does not, so
+removing the template there brings back nothing. No error is shown. The day-swapper batch
+(spec §5.1 row 4, §5.5) made the backup TRAVEL with the template when a day is swapped, which
+makes the backup matter more, but did not create the local-only gap.
+- **Class**: restore-completeness. A Hive key that carries user-meaningful state but belongs to
+  no sync domain, the same class as the historical `_restoreXxx` gaps in
+  `test/sync/restore_completeness_test.dart`.
+- **Fix shape (not designed)**: carry `displaced_<date>` inside the `plan_json` bundle next to its
+  `schedule_<date>` row (the only schedule vehicle that round-trips content), with the same L1/L3
+  merge rules as the row it belongs to; or fold it into the row itself as a nested field so it can
+  never be separated from it. Either way it needs a restore test in
+  `restore_completeness_test.dart`.
+- **Source**: Hermes E-pass, day-swapper-sync-load, findings h2F2 and h4F2
+  (`docs/audit/2026-09-28-hermes-day-swapper-sync-load.md`).
+
+## OI-262 — check_sot_registry_parity only checks N-M line_ranges: bare :NNNN citations and (push)/(pull)-suffixed ranges are never validated, and a wide range passes while pointing at the wrong span
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-09-28 — measured against the gate's own regexes (below)
+- **Identified**: 2026-09-28 · filed via mint_oi.sh from branch `day-swapper-sync-load`
+
+Symptom, measured 2026-09-28 against `scripts/check_sot_registry_parity.dart`:
+1. **Single-number ranges are never parsed.** The block regex at `:141` requires
+   `line_range:\s*(\d+)-(\d+)`, so a `line_range: 137` entry matches nothing and gets neither the
+   bounds check nor the method-location check. `grep -c "line_range: [0-9]\+ *$"
+   docs/sot_registry.yaml` → **34** such entries.
+2. **A method value with trailing text gets no symbol check.** `_extractSymbol` (`:79-97`)
+   accepts only a backticked name or a bare/dotted identifier. `_syncStreaks (push) + restore
+   merge`, `_syncSleepLogs (push)` and every `"X (confirmed :NNN; ...)"` prose value fall to
+   case 3 ("prose — skip"), so a stale range on those entries is invisible.
+3. **Bare `:NNNN` citations inside prose are never checked.** For example, the `sync_epoch`
+   entry's "confirmed :1485" and "at :1532 and :1553". The day-swapper-sync-load batch re-derived
+   these by hand three times in one day as edits above them shifted the file.
+4. **A wide range passes while pointing at the wrong span.** The check only asks whether the
+   method's signature falls inside `[start, end]`. On 2026-09-28, `mergeScheduleEntry` was cited
+   `72-115` while it sat at `100-143`, and `_restoreScheduledWorkouts` was cited `2000-2296` while
+   it sat at `2185-2524`. Both passed.
+- **Class**: a green check is only as wide as its input set
+  (`feedback_green_check_input_set_width`). The gate reports PASS over the subset it can parse,
+  and that looks identical to a PASS over the whole registry.
+- **Fix shape (not designed)**: accept `N` as `N-N`; extract the leading identifier from a method
+  value before any `(` or space instead of skipping it as prose; add a `:NNNN`-in-prose resolver
+  that at least checks bounds and names the nearest symbol; tighten (4) by requiring the cited
+  start to be within a small window of the method's doc-comment or signature line. Each leg needs
+  a mutation-proven test (the gate already has a rule-24 ledger entry).
+- **Source**: founder-queued during the day-swapper-sync-load batch after repeated hand
+  re-derivation of shifted citations.
+
 ## OI-260 — 4 sibling reportGeminiExhaustion-wiring tests (weekly-report/assess-body-composition/ai-media-proxy/rolling-context) share e35936's exact literal-string blind spot if any adopts an injectable geminiChatFn seam
 
 - **Status**: OPEN
@@ -6236,6 +6316,70 @@ If ANY of these 4 functions is ever refactored to call Gemini through an injecta
 **Fix, when picked up:** apply the exact same widening `e35936` did to `_shared/gemini_backoff_retry_test.ts`'s `assertSoleCallSiteHasRetries` — recognize either `geminiChat({` or `geminiChatFn({`, sum occurrences of both — to each of these 4 files' own call-site-finding logic. Four small, independent, mechanical edits; no shared helper currently links them (each function's `index_test.ts` has its own copy of this check, unlike the retries-pinning tests which share `assertSoleCallSiteHasRetries`).
 
 **Reopen when:** one of the 4 functions actually adopts a `geminiChatFn`-style seam (its own test will fail loud at that point regardless of whether this OI was ever picked up first) — or on general principle at the next quarterly tech-debt audit (§4.10).
+
+## OI-263 — Migration-number allocator: reserve migration numbers server-side (mint_oi.sh pattern) and refuse a number already applied live
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-09-28 — live list_migrations held 148 while the tree did not
+- **Identified**: 2026-09-28 · filed via mint_oi.sh from branch `day-swapper-sync-load`; founder asked for it
+
+Symptom, measured 2026-09-28: the day-swapper-sync-load migration was renumbered 145 → 147 → 148
+as other batches landed on `main`, then had to become **149 at apply time**, because live
+`list_migrations` already held `20260927224028 / 148_coach_extraction_locked_fields`. That branch
+(`single-owner-a2b`) had applied 148 to prod before merging to `main`, so no file in this
+worktree's tree and nothing on `origin/main` showed 148 as taken. Nothing allocates a migration
+number today: the next number is read off `ls supabase/migrations/` by whoever writes the file.
+OI-258 is the ledger-side symptom of the same gap (145/146 collided across diverged `main`s).
+
+- **Class**: a green check is only as wide as its input set
+  (`feedback_green_check_input_set_width` #60). "Is N free?" has THREE sources — the local tree,
+  `origin/main`, and the live database — and both collisions so far came from the one nobody
+  checked.
+- **Industry norm, for the record**: timestamp-prefixed filenames (Rails, Supabase's own
+  `supabase migration new`) make a git collision near-impossible with no coordination; sequential
+  numbering (Django, Alembic, Flyway) relies on a merge-time "two heads" detector. Neither covers a
+  migration applied LIVE from an unmerged branch, which is the case that bit here.
+- **Fix shape (founder chose this 2026-09-28)**: `scripts/mint_migration.sh`, reusing
+  `mint_oi.sh`'s compare-and-swap ref reservation (`refs/heads/mig/N`), so two sessions cannot
+  claim one number; the mint also refuses N when live `list_migrations` (or
+  `backups/applied_migrations.json` on `origin/main`) already carries it. Plus a pre-apply check:
+  before any `apply_migration`, compare the file's number against live `list_migrations` and refuse
+  a taken number. Keeps the 3-digit scheme (tooling such as `latestMigrationDefining` parses it);
+  switching to timestamps was offered and not chosen. Needs its own tests, mutation-proven per
+  rule 24 if it becomes a `check_*` gate.
+- **Source**: day-swapper-sync-load Task 34 apply.
+
+## OI-264 — docs/sot_registry.yaml is not valid YAML (35 parse errors); every gate reads it line-wise, so a real YAML consumer would fail
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-09-28 — PyYAML safe_load, iterated to 35 errors
+- **Identified**: 2026-09-28 · filed via mint_oi.sh from branch `day-swapper-sync-load`; found by the merge-resolution B-pass (`docs/reviews/6e4819de87d7-review.md`)
+
+Measured 2026-09-28: `yaml.safe_load(open('docs/sot_registry.yaml'))` fails; commenting out each
+failing line and re-parsing finds **35** errors before the file loads. They are already present at
+merge base `7cb4eb78` (the first, a flow sequence `fields_read: [via … at :351, :357, …]`, dates to
+`c854332b`). Three shapes account for the samples read:
+1. **Double-quoted regex `pattern:` values** with backslash escapes YAML rejects
+   (`"workoutBox\.put\('schedule_"` → "unknown escape character").
+2. **Flow sequences holding prose** with `[`, `?` or ` :NNN` inside
+   (`fields_read: [meals[], meals[].name, …]`).
+3. **Unquoted `:` after a space** inside a flow item.
+
+- **Why it has not bitten**: no consumer uses a YAML parser. `grep -l sot_registry` over
+  `scripts/` and `test/` finds no file that also imports `package:yaml` or calls `loadYaml`; every
+  gate (`check_sot_registry_parity`, `check_writeservice_contracts`, `check_sot_behavioral_test_paths`,
+  …) reads it with line regexes.
+- **Why it is not a quick quote-everything fix**: shape 1 strings are consumed VERBATIM by
+  line-reading gates as regexes. Re-quoting them (single quotes, or doubled backslashes) changes the
+  bytes those gates extract, so each gate reading `pattern:` must be checked or updated in the same
+  change. That is a gate-semantics change and needs its own mutation-proven tests.
+- **Fix shape (not designed)**: either (a) make the file valid YAML and move every gate onto one
+  shared parser (removes the line-regex fragility OI-262 also records), or (b) rename it off `.yaml`
+  and document it as a line-oriented format, so nobody reaches for a YAML parser. Add a gate that
+  parses it, whichever is chosen.
+- **Source**: day-swapper-sync-load, second merge of origin/main (2026-09-28).
 
 ## OI-265 — Boot-time healer needed for pre-existing exlog rows corrupted by the duration-controller-seeding leak (e8f95e) — reps_completed/duration_seconds duplication predates this fix and is not retroactively healed
 
@@ -6335,6 +6479,39 @@ raw call sites need their own edit.
 
 **Reopen when:** picked up as a dedicated fix, or resurfaced by a founder report of the Weekly
 Report sparkline not reflecting a just-logged weight/meal/workout entry.
+
+## OI-268 — contract_sweep sets TZ=Asia/Kolkata for its flutter child; on Windows the CRT reads that IANA name as UTC, so date contracts fail falsely
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-09-29 — same test, TZ unset PASS vs TZ=Asia/Kolkata FAIL
+- **Identified**: 2026-09-29 · filed via mint_oi.sh from branch `day-swapper-sync-load`
+
+Measured 2026-09-29 on the Windows dev machine (system timezone IST):
+`flutter test test/contracts/logout_login_round_trip_test.dart --plain-name "Local ISO string"`
+passes with `TZ` unset and FAILS with `$env:TZ='Asia/Kolkata'` (`Expected: '2026-05-09'
+Actual: '2026-05-10'` — the fixed local input `2026-05-09T21:00:00.000` was read as UTC and
+shifted into the next IST day). The Windows C runtime parses `TZ` as a POSIX `tzn[+|-]hh[:mm]`
+string; an IANA name like `Asia/Kolkata` is not one, and the process silently runs as UTC.
+
+- **Where it bites**: `scripts/contract_sweep.dart:30` passes `..['TZ'] = 'Asia/Kolkata'` in
+  the Dart `Process` environment for its `flutter test` child. In the day-swapper-sync-load
+  pre-push runs, the sweep reported failures in `logout_login_round_trip_test.dart` T1,
+  `ai_snapshot_building_behavioral_test.dart`, `coaching_notes_behavioral_test.dart` (2),
+  `coach_interaction_repository_only_test.dart` and `coach_memory_service_only_test.dart` —
+  all of which passed in the same hook's full suite minutes later.
+- **Why the full suite is unaffected here**: `scripts/pre-push.sh:151` sets
+  `TZ=Asia/Kolkata flutter test …` from Git's `sh`, and those same tests pass there; the
+  MSYS layer evidently does not hand the literal IANA string to the native process. Not proven
+  beyond that observation.
+- **Why it matters now**: the sweep is `--warn-only || true` today, so these are noise. OI-220's
+  planned flip to hard-fail would turn them into a push-blocker on every Windows push.
+- **CI is unaffected**: Linux glibc understands `Asia/Kolkata` (`test.yml:28`).
+- **Fix shape (not designed)**: on Windows, do not set `TZ` in `contract_sweep.dart`'s child
+  env (the system zone is already IST on the dev box), or set a POSIX form the CRT accepts
+  (`IST-5:30`), and add a test that runs one IST-sensitive contract through the sweep's own
+  spawn path on Windows. Check `pre-push.sh:151` with the same experiment before relying on it.
+- **Source**: day-swapper-sync-load pre-push run, 2026-09-29.
 
 ## OI-269 — workout_log_exercises readers don't filter deleted_at (weekly-recalc + pr-detection fixed; 4 remain)
 

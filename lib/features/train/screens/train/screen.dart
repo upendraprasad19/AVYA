@@ -13,6 +13,7 @@ import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/core/services/swap_service.dart';
 import 'package:icanbefitter/core/services/workout_read_service.dart';
 import 'package:icanbefitter/core/utils/hold_week_labels.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
@@ -46,6 +47,9 @@ import 'package:icanbefitter/shared/repositories/user_repository.dart';
 // and only the FULL analyze at pre-push could see it — a per-file analyze of
 // screen.dart reports clean because the parts are analysed with the library.
 import '../../widgets/readiness_sheet.dart';
+import '../../widgets/day_swap_row_trailing.dart';
+import '../../widgets/day_swap_drag_wrapper.dart';
+import '../../widgets/day_swap_allowance_line.dart';
 
 part 'plan_header.dart';
 part 'hero_cards.dart';
