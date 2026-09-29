@@ -249,6 +249,23 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
+- **2026-09-29** — blast-radius **platform** — branch `worktree-retirement-autonomy` (docs-only:
+  new CLAUDE.md §4.13 point 8 + a §4.9 pitfall row, codifying autonomous worktree retirement on
+  batch close). Per §4.3's docs/process-only ≥account carve-out, this was a **self-consistency**
+  pass (`lens_set: [self_consistency, accuracy_verification, scope_clarity, format_consistency]`),
+  not the standard 8-lens adversarial set. 1 finding (P3), 0 false alarms, folded in before commit
+  (`858880296599-review.md`). Nothing tuned in the standard lens set — this entry exists because
+  the gate requires one per review regardless. **Worth recording as a pattern, not a defect:** the
+  reviewer, unprompted, went one step past the self-consistency brief and independently re-verified
+  the branch's single highest-risk factual claim (whether `retire_worktree.dart` checks local
+  `main` or `origin/main`) by reading the real script end-to-end, AND checked a tool-boundary quote
+  (`ExitWorktree`'s "do NOT call this proactively") against the tool's actual live schema via
+  `ToolSearch` rather than trusting the brief's framing of it as unverifiable. Both independently
+  confirmed the author's own ground-truth checks. **For a future self-consistency pass: if the
+  brief cites a claim as "treat as asserted," a reviewer with an available means to check it
+  anyway should still check** — this one did, at negligible extra cost, and it is what let this
+  review return a *stronger* convergence signal than a same-conclusion re-read would have.
+
 - **2026-09-29** — blast-radius **platform** — branch `oi-245-246-restore-fixes` (OI-245:
   restored PRO photo-coach turns replayed to Gemini as plain text; OI-246: deleted exercise
   logs reappearing after a cloud restore, migrations 150+151 already live). This is the
