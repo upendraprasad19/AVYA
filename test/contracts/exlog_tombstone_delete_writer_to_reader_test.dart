@@ -31,8 +31,6 @@
 //   4. WIRING — _drainPendingExlogDeletes is called before the push loop,
 //      and _restoreExerciseLogs skips a deleted_at row (source-grep).
 
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/pending_exlog_deletes.dart';
