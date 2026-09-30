@@ -69,14 +69,15 @@ enforces it. This change ships **without a kill switch**, deliberately:
   branch is recoverable from the reflog and from `main` itself.
 - A switch would only give an operator a way to go back to leaving dead branches behind.
 
-**Founder decision left open (not made here):** `retire_worktree.dart` does not refuse a bare
-`--execute` (a pre-existing test runs it bare). A bare `--execute` now also deletes the branch of
-every retirable worktree, each behind the same guards. Sessions pass their own slug by rule
-(CLAUDE.md §4.13.6/§4.13.8), which is prose, not enforcement.
+**Founder decision (2026-09-29, Option A):** `retire_worktree.dart` did not refuse a bare
+`--execute` (a pre-existing test ran it bare), so the branch deletion was reachable by an
+accidental sweep. The tool now refuses a bare `--execute`; `--execute --all` is the explicit
+sweep. A sweep now has to be asked for by name, so it cannot happen by accident. Which slug a
+session names is still governed by CLAUDE.md §4.13.8 (prose): the tool cannot know whose
+slug is "own".
 
 ## Authorization scope
 
 CLAUDE.md §4.13.8's added sentence describes the tool; it is not additional authority. The
 standing authorization still covers only retiring the worktree THIS session just finished. It is
-deliberately not widened to sweeping other branches, deleting remote branches or an unscoped
-`--execute`.
+deliberately not widened to sweeping other branches, deleting remote branches or `--all`.

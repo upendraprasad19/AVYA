@@ -5,8 +5,12 @@
 // count reached 106 directories / 17 GB (2026-08-09).
 //
 //   dart run scripts/retire_worktree.dart                 # dry-run (DEFAULT)
-//   dart run scripts/retire_worktree.dart --execute        # actually remove
-//   dart run scripts/retire_worktree.dart --execute <slug> # one worktree
+//   dart run scripts/retire_worktree.dart --execute <slug> # ONE worktree (+ its branch)
+//   dart run scripts/retire_worktree.dart --execute --all  # sweep EVERY retirable one
+//
+// A bare `--execute` (no slug, no --all) is REFUSED: the sweep also deletes each
+// worktree's branch, which exceeds what a session that just finished ONE worktree
+// is entitled to retire (CLAUDE.md 4.13 point 8), so it must be asked for by name.
 //
 // DRY-RUN IS THE DEFAULT and --execute is opt-in, because removal is
 // irreversible for exactly the work legs 2-3 exist to catch.
@@ -171,6 +175,16 @@ void _deleteBranchAfterRetire(String branch, String root) {
 void main(List<String> args) {
   final execute = args.contains('--execute');
   final only = args.where((a) => !a.startsWith('--')).firstOrNull;
+  final all = args.contains('--all');
+  if (all && only != null) {
+    stderr.writeln('[retire] --all and <slug> are mutually exclusive.');
+    exit(1);
+  }
+  if (execute && only == null && !all) {
+    stderr.writeln('[retire] refusing a bare --execute: pass <slug> to retire ONE '
+        'worktree, or --all to sweep every retirable worktree and its branch.');
+    exit(1);
+  }
 
   final repoRoot = _git(['rev-parse', '--path-format=absolute', '--show-toplevel']);
   if (repoRoot == null || repoRoot.exitCode != 0) {
@@ -411,7 +425,10 @@ void main(List<String> args) {
     stdout.writeln('[retire] scoped to "$only" — orphan sweep skipped.');
   }
   if (!execute) {
-    stdout.writeln('[retire] dry-run only — re-run with --execute to remove.');
+    stdout.writeln(only == null
+        ? '[retire] dry-run only — re-run with --execute <slug> (one worktree) or '
+            '--execute --all (sweep every retirable worktree).'
+        : '[retire] dry-run only — re-run with --execute $only to remove.');
   }
   exit(failed > 0 ? 1 : 0);
 }

@@ -9,6 +9,8 @@
 // The scenarios below are the ACTUAL 2026-08-09 population, not invented
 // shapes. If any of these regress, real uncommitted work becomes deletable.
 
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../scripts/retire_worktree_lib.dart';
@@ -516,5 +518,34 @@ void main() {
       expect(d.reason, contains('no upstream configured'));
       expect(d.reason, contains('deleted on the remote'));
     });
+
+  group('retireCommandFor — the slug is the DIRECTORY name, never the branch', () {
+    test('uses the folder, so a branch that differs from it still works', () {
+      // `worktree_status.dart` used to print the BRANCH here; the retire tool
+      // matches the directory name, so that command failed whenever they differed.
+      final cmd = retireCommandFor('/repo/.claude/worktrees/dash-folder');
+      expect(cmd,
+          'dart run scripts/retire_worktree.dart --execute -- dash-folder');
+      expect(cmd, isNot(contains('rescue/')));
+    });
+
+    test('tolerates a trailing slash and Windows separators', () {
+      expect(retireCommandFor('/repo/.claude/worktrees/a1/'), endsWith('-- a1'));
+      expect(retireCommandFor(r'C:\repo\.claude\worktrees\a2'), endsWith('-- a2'));
+    });
+
+    test('worktree_status.dart builds its command from it (PRESENCE only: the '
+        'script has no harness, so this pins the call site by source)', () {
+      final src = File('scripts/worktree_status.dart').readAsStringSync();
+      expect(src, contains('retireCommandFor(path)'));
+      expect(src, isNot(contains(r'--execute -- $branch')),
+          reason: 'the branch is not what the retire tool matches on');
+    });
+
+    test('a folder starting with a dash is kept after the -- separator', () {
+      expect(retireCommandFor('/repo/.claude/worktrees/-dash'),
+          endsWith('--execute -- -dash'));
+    });
+  });
   });
 }

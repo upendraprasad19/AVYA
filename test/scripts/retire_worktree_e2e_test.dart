@@ -251,7 +251,7 @@ void main() {
   });
 
   test('--execute removes ONLY the retirable worktrees', () {
-    final r = retire(['--execute']);
+    final r = retire(['--execute', '--all']);
     expect(r.exitCode, 0,
         reason: 'a locked worktree must not redden a routine sweep: '
             '${r.stdout}${r.stderr}');
@@ -432,7 +432,7 @@ void main() {
       addMerged(r, 'oy', branch: 'OI/y');
       addMerged(r, 'dz', branch: 'Dependabot/z');
 
-      final run = retireIn(r, ['--execute']);
+      final run = retireIn(r, ['--execute', '--all']);
       expect(run.exitCode, 0, reason: '${run.stdout}${run.stderr}');
       final out = run.stdout as String;
       for (final b in ['rescue/x', 'OI/y', 'Dependabot/z']) {
@@ -461,7 +461,7 @@ void main() {
           _run('git', ['worktree', 'add', '-q', w(r, 'wd'), 'develop'], r).exitCode,
           0);
 
-      final run = retireIn(r, ['--execute']);
+      final run = retireIn(r, ['--execute', '--all']);
       _run('git', ['checkout', '-q', 'main'], r);
 
       expect(run.exitCode, 0, reason: '${run.stdout}${run.stderr}');
@@ -524,7 +524,7 @@ void main() {
       expect(dout, contains('deleted on the remote'),
           reason: 'states (i) and (iii) read as no-upstream');
 
-      final run = retireIn(r, ['--execute']);
+      final run = retireIn(r, ['--execute', '--all']);
       expect(run.exitCode, 0, reason: '${run.stdout}${run.stderr}');
       for (final n in ['g1', 'g2', 'g3']) {
         expect(run.stdout as String, contains('BRANCH-DELETED $n'), reason: n);
@@ -565,7 +565,7 @@ void main() {
           'done\n');
       if (!Platform.isWindows) _run('chmod', ['+x', hook.path], r);
 
-      final run = retireIn(r, ['--execute']);
+      final run = retireIn(r, ['--execute', '--all']);
       expect(run.exitCode, 0, reason: '${run.stdout}${run.stderr}');
       expect(File(mark).existsSync(), isTrue,
           reason: 'the hook never fired, so this test proved nothing');
@@ -596,7 +596,7 @@ void main() {
       File('${sub.path}/x.txt').writeAsStringSync('x');
       _run('chmod', ['000', sub.path], r);
       try {
-        final run = retireIn(r, ['--execute']);
+        final run = retireIn(r, ['--execute', '--all']);
         final out = run.stdout as String;
         expect(out, contains('FAILED  f1'), reason: '${run.stdout}${run.stderr}');
         expect(out, isNot(contains('BRANCH-DELETED')), reason: out);
@@ -605,6 +605,45 @@ void main() {
       } finally {
         _run('chmod', ['755', sub.path], r);
       }
+    });
+
+    test('a BARE --execute is refused: nothing removed, no branch touched, and '
+        '--all plus a slug is rejected too', () {
+      // The sweep also deletes every retirable worktree's branch, so it must be
+      // asked for by name (--all). A session that just finished ONE worktree
+      // passes its own slug; this is what stops it sweeping by accident.
+      final r = freshRepo();
+      addMerged(r, 'k1');
+      addMerged(r, 'k2');
+
+      final bare = retireIn(r, ['--execute']);
+      expect(bare.exitCode, isNot(0), reason: '${bare.stdout}${bare.stderr}');
+      expect(bare.stderr as String, contains('refusing a bare --execute'),
+          reason: 'the refusal must say WHY, not just fail');
+      expect(Directory(w(r, 'k1')).existsSync(), isTrue);
+      expect(Directory(w(r, 'k2')).existsSync(), isTrue);
+      expect(branches(r), containsAll(['k1', 'k2']));
+
+      final both = retireIn(r, ['--execute', '--all', 'k1']);
+      expect(both.exitCode, isNot(0), reason: '${both.stdout}${both.stderr}');
+      expect(both.stderr as String, contains('mutually exclusive'));
+      expect(Directory(w(r, 'k1')).existsSync(), isTrue);
+
+      // The scoped form still works and touches ONLY the named worktree.
+      final one = retireIn(r, ['--execute', 'k1']);
+      expect(one.exitCode, 0, reason: '${one.stdout}${one.stderr}');
+      expect(Directory(w(r, 'k1')).existsSync(), isFalse);
+      expect(branches(r), isNot(contains('k1')));
+      expect(Directory(w(r, 'k2')).existsSync(), isTrue,
+          reason: 'a slug must never sweep a sibling');
+      expect(branches(r), contains('k2'));
+
+      // A DRY-RUN with no slug stays allowed: it removes nothing.
+      final dry = retireIn(r, []);
+      expect(dry.exitCode, 0, reason: '${dry.stdout}${dry.stderr}');
+      // ...and its footer must not tell the reader to run the refused form.
+      expect(dry.stdout as String, contains('--execute <slug>'));
+      expect(dry.stdout as String, contains('--execute --all'));
     });
   });
 }

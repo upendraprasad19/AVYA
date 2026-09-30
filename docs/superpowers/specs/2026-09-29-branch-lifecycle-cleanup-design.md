@@ -106,6 +106,7 @@ in place above as the record of what was planned, and corrected here.
   diagnose-doc. With an in-sync upstream, `git branch -d` alone deletes an unmerged
   branch, so the ancestry re-check is the guard, not defense in depth.
 - **"`--execute` without a slug is refused."** The tool never refused it (an existing
-  test runs it bare). Bare `--execute` deletes the branch of every retirable worktree,
-  each behind the same guards. Sessions pass their own slug by rule (CLAUDE.md
-  §4.13.6/§4.13.8), not by enforcement.
+  test ran it bare). The founder chose to make a bare sweep impossible by accident: a bare `--execute` is now
+  refused (exit 1), `--execute --all` is the explicit sweep, `--all` plus a slug is
+  rejected, and a dry-run with no slug is still allowed. Mutations M11 and M12 in the
+  diagnose-doc.

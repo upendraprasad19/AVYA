@@ -5040,7 +5040,7 @@ succeeds the tool runs `git merge-base --is-ancestor` then `git branch -d --` on
 folder slug, never `-D`); `main`/`develop` and `rescue/*` `oi/*` `dependabot/*` are never deleted; a
 refusal prints `KEPT-BRANCH` with git's first line and no force-delete advice. Also fixed in passing:
 the merged set used `%(refname:short)`, which prints `heads/T` when a tag `T` exists, silently keeping
-that worktree forever. Tests: `test/scripts/retire_worktree_e2e_test.dart` (9 new, each on its own repo,
+that worktree forever. Tests: `test/scripts/retire_worktree_e2e_test.dart` (10 new, each on its own repo,
 incl. the folder-slug-differs case this entry called the trap, and the remote-deleted-upstream matrix) +
 `retire_worktree_lib_test.dart`. The ancestry re-check closes a race and is pinned by a hook-driven e2e test that makes the race deterministic (mutation: 1 red). Remote
 branches are out of scope here: GitHub's `delete_branch_on_merge` covers PR merges; any other route is OI-273.

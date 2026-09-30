@@ -29,12 +29,28 @@ out of `SKILL.md` section 7 by the context-lean batch (2026-09-29).
   **Tuning 2 — a claim that a tool "refuses X" is checked against the EXISTING tests for the
   opposite behaviour.** The diagnose-doc said bare `--execute` was still refused; a pre-existing
   e2e test runs it bare and expects exit 0. One `grep "retire(\['--execute'\])"` settles it.
+  (The founder then chose to make the tool enforce it: a bare `--execute` is now refused and
+  `--all` is the explicit sweep.)
   **Tuning 3 — when a diff rewords a tool's own output, the prose that tells a reader which
   output to wait for is a second reader.** §4.13.8 named `[merged + clean + pushed]` as the go
   signal while the reworded string is what the tool now prints in the case the batch exists for.
   **A negative result worth keeping:** the reviewer re-ran the case-insensitive-protection
   mutation (3 red) and reported which mutations it had NOT re-derived rather than implying it
   had. Full detail: `docs/reviews/0f5002adfd8c-review.md`.
+  **Round 2 (same day, delta only — the founder chose to make the tool refuse a bare
+  `--execute`): 6 findings (5 P3, 1 P4), 0 false alarms, all closed.** The useful one:
+  **a tool that PRINTS a command is a reader of its own CLI contract.** Tightening the flag made
+  the dry-run footer (`re-run with --execute`) and `worktree_status.dart`'s printed command
+  point at forms that no longer worked — and the second had been wrong before the change (it
+  printed the BRANCH, the tool matches the DIRECTORY), so the delta merely made it the only
+  ready-made command. When a diff narrows what a CLI accepts, `git grep` every place that
+  PRINTS an invocation, not only every place that runs one. Also: "enforced by the tool" was an
+  overclaim — the tool forces a sweep to be named but cannot know whose slug is "own"; state
+  which half moved from prose to code. **Process lesson: a killed mutation run (exit 137) left
+  `retire_worktree_lib.dart` mutated in the worktree;** caught only because I compared each
+  script against its pre-mutation backup with `cmp` before trusting anything. Run mutations from
+  a script that restores on `EXIT`, and after ANY killed or resumed session diff the scripts
+  against the backups before reading a single test result.
 
 - **2026-09-29** — blast-radius **platform** — branch `worktree-retirement-autonomy` (docs-only:
   new CLAUDE.md §4.13 point 8 + a §4.9 pitfall row, codifying autonomous worktree retirement on

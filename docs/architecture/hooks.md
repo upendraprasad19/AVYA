@@ -597,7 +597,7 @@ See `feedback_gates_before_refactor.md`. This rule turns multi-day refactors int
     failure message prints.
 [ ] Skill self-evolution: does any .claude/skills/<topic>/SKILL.md need a new bug-class entry, red flag, or trigger phrase?
 [ ] Runtime verified on device — app launched, went through core flow, observed expected state (NON-NEGOTIABLE).
-[ ] After the merge: `dart run scripts/retire_worktree.dart --execute` in the primary (§4.13.6).
+[ ] After the merge: `dart run scripts/retire_worktree.dart --execute <slug>` in the primary (§4.13.6).
 ```
 
 ##### 5.1 Skill self-evolution

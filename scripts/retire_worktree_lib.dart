@@ -401,3 +401,16 @@ String sanitizeBranchRefusal(String stderrText) {
   return '$reason — not deleted; resolve by hand';
 }
 
+/// The command that retires ONE registered worktree. `retire_worktree.dart`
+/// matches its slug against the worktree's DIRECTORY name, never its branch (they
+/// can differ — a `rescue/*` branch has lived in a differently-named folder), so
+/// the command is built from the path. The `--` keeps a slug that starts with `-`
+/// from being read as a flag. Used by `worktree_status.dart`.
+String retireCommandFor(String worktreePath) {
+  final slug = worktreePath
+      .replaceAll('\\', '/')
+      .split('/')
+      .where((s) => s.isNotEmpty)
+      .last;
+  return 'dart run scripts/retire_worktree.dart --execute -- $slug';
+}
