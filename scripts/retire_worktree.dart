@@ -5,11 +5,20 @@
 // count reached 106 directories / 17 GB (2026-08-09).
 //
 //   dart run scripts/retire_worktree.dart                 # dry-run (DEFAULT)
-//   dart run scripts/retire_worktree.dart --execute        # actually remove
-//   dart run scripts/retire_worktree.dart --execute <slug> # one worktree
+//   dart run scripts/retire_worktree.dart --execute <slug> # ONE worktree (+ its branch)
+//   dart run scripts/retire_worktree.dart --execute --all  # sweep EVERY retirable one
+//
+// A bare `--execute` (no slug, no --all) is REFUSED: the sweep also deletes each
+// worktree's branch, which exceeds what a session that just finished ONE worktree
+// is entitled to retire (CLAUDE.md 4.13 point 8), so it must be asked for by name.
 //
 // DRY-RUN IS THE DEFAULT and --execute is opt-in, because removal is
 // irreversible for exactly the work legs 2-3 exist to catch.
+//
+// After a worktree is removed, the branch it was on is deleted with
+// `git branch -d` (never -D) — see _deleteBranchAfterRetire and OI-138. `main`,
+// `develop`, `rescue/*`, `oi/*` and `dependabot/*` are never deleted. Remote
+// branches are never touched by this tool.
 //
 // Decision logic lives in scripts/retire_worktree_lib.dart (pure, git-free,
 // unit-tested). This file only gathers git facts and performs removal — it
@@ -113,9 +122,69 @@ int _countEntries(Directory d) {
   return n;
 }
 
+/// Deletes the branch a just-retired worktree was on (OI-138), or says why not.
+///
+/// A dead local branch burns the worktree slug: `new-worktree.sh <slug>` refuses
+/// while a branch of that name exists. Keyed on [branch] — the branch git says
+/// the worktree was on — NEVER on the folder slug, which can differ (a `rescue/*`
+/// branch has lived in a differently-named folder).
+///
+/// The guarantee that the branch is merged is the caller's `--merged main`
+/// predicate plus the ancestry re-check below, NOT `git branch -d`: `-d` tests
+/// "merged into HEAD or upstream", so with an in-sync upstream it deletes an
+/// UNMERGED branch (reproduced 2026-09-29). It is a second, fail-closed check
+/// (it also refuses when the primary's HEAD is not on `main`); that direction is
+/// safe — the branch is kept and reported. Never `-D`, never a retry with force.
+///
+/// The `merged` set is computed once, before the loop, and the loop can run for
+/// minutes; the re-check closes the window where another session pushes a commit
+/// to the candidate branch in between. The window is reproduced deterministically
+/// in the e2e suite with a reference-transaction hook (see the OI-138 group).
+///
+/// Every git call runs with `cwd: root` — the process cwd is wherever
+/// `dart run` was started, which is not necessarily the primary.
+void _deleteBranchAfterRetire(String branch, String root) {
+  final why = protectedBranchReason(branch);
+  if (why != null) {
+    if (branch.isNotEmpty) stdout.writeln('    KEPT-BRANCH $branch [$why]');
+    return;
+  }
+  final anc = _git(
+      ['merge-base', '--is-ancestor', 'refs/heads/$branch', 'refs/heads/main'],
+      cwd: root);
+  if (anc == null) {
+    stdout.writeln('    KEPT-BRANCH $branch [git unavailable]');
+    return;
+  }
+  if (anc.exitCode != 0) {
+    stdout.writeln(
+        '    KEPT-BRANCH $branch [not an ancestor of main at delete time]');
+    return;
+  }
+  final del = _git(['branch', '-d', '--', branch], cwd: root);
+  if (del == null) {
+    stdout.writeln('    KEPT-BRANCH $branch [git unavailable]');
+  } else if (del.exitCode == 0) {
+    stdout.writeln('    BRANCH-DELETED $branch');
+  } else {
+    stdout.writeln(
+        '    KEPT-BRANCH $branch [${sanitizeBranchRefusal(del.stderr as String)}]');
+  }
+}
+
 void main(List<String> args) {
   final execute = args.contains('--execute');
   final only = args.where((a) => !a.startsWith('--')).firstOrNull;
+  final all = args.contains('--all');
+  if (all && only != null) {
+    stderr.writeln('[retire] --all and <slug> are mutually exclusive.');
+    exit(1);
+  }
+  if (execute && only == null && !all) {
+    stderr.writeln('[retire] refusing a bare --execute: pass <slug> to retire ONE '
+        'worktree, or --all to sweep every retirable worktree and its branch.');
+    exit(1);
+  }
 
   final repoRoot = _git(['rev-parse', '--path-format=absolute', '--show-toplevel']);
   if (repoRoot == null || repoRoot.exitCode != 0) {
@@ -155,13 +224,18 @@ void main(List<String> args) {
     exit(1);
   }
 
-  final mergedR = _git(['branch', '--merged', 'main', '--format=%(refname:short)']);
+  // FULL refnames, not `%(refname:short)`: with a tag `T` AND a branch `T`,
+  // `:short` prints `heads/T`, so `merged.contains('T')` was false and a merged
+  // worktree was silently KEPT (reproduced 2026-09-29). `refs/heads/` is
+  // stripped below so callers keep comparing against the plain branch name.
+  final mergedR = _git(['branch', '--merged', 'main', '--format=%(refname)']);
   final merged = <String>{
     if (mergedR != null && mergedR.exitCode == 0)
       ...(mergedR.stdout as String)
           .split('\n')
           .map((e) => e.trim())
-          .where((e) => e.isNotEmpty),
+          .where((e) => e.startsWith('refs/heads/'))
+          .map((e) => e.substring('refs/heads/'.length)),
   };
 
   stdout.writeln('[retire] mode: ${execute ? "EXECUTE" : "DRY-RUN"}');
@@ -268,6 +342,11 @@ void main(List<String> args) {
 
     if (!execute) {
       stdout.writeln('  RETIRE  $name  [${d.reason}]');
+      final why = protectedBranchReason(branch);
+      stdout.writeln(why == null
+          ? '    branch $branch would be deleted (git branch -d, after an '
+              'ancestor-of-main re-check)'
+          : '    branch ${branch.isEmpty ? "(none)" : branch} would be kept [$why]');
       retired++;
       continue;
     }
@@ -276,6 +355,10 @@ void main(List<String> args) {
     if (rm != null && rm.exitCode == 0) {
       stdout.writeln('  RETIRED $name');
       retired++;
+      // ONLY here, inside the successful-remove branch: a failed removal can
+      // never touch a branch. Pinned by the e2e test that makes removal fail
+      // (an unreadable directory) and asserts no branch line is printed.
+      _deleteBranchAfterRetire(branch, root);
     } else {
       stdout.writeln('  FAILED  $name  [${rm == null ? "git error" : (rm.stderr as String).trim()}]');
       failed++;
@@ -342,7 +425,10 @@ void main(List<String> args) {
     stdout.writeln('[retire] scoped to "$only" — orphan sweep skipped.');
   }
   if (!execute) {
-    stdout.writeln('[retire] dry-run only — re-run with --execute to remove.');
+    stdout.writeln(only == null
+        ? '[retire] dry-run only — re-run with --execute <slug> (one worktree) or '
+            '--execute --all (sweep every retirable worktree).'
+        : '[retire] dry-run only — re-run with --execute $only to remove.');
   }
   exit(failed > 0 ? 1 : 0);
 }

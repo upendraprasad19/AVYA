@@ -351,7 +351,7 @@ a commit from one can silently MIX in the other's staged files (2 incidents 2026
    rather than citing these). That is not neglect, it is an unclosed loop in the rule itself, so
    it regrows on its own unless the rule closes it.
    - **Retire a worktree once its branch is merged, clean (tracked AND ignored) and carries
-     nothing unpushed:** `dart run scripts/retire_worktree.dart --execute [<slug>]` — run from the PRIMARY worktree
+     nothing unpushed:** `dart run scripts/retire_worktree.dart --execute <slug>` — run from the PRIMARY worktree
      (it refuses from a linked one; removing the tree you stand in is undefined). **Dry-run is the
      DEFAULT**; `--execute` is opt-in.
    - **WHEN — the trigger, without which this is just prose.** The §5 per-batch checklist carries
@@ -390,6 +390,24 @@ a commit from one can silently MIX in the other's staged files (2 incidents 2026
      gone. The tool reads `--ignored=matching` and keeps the worktree unless every ignored path is
      regenerable (`.env`, `build/`, `.dart_tool/`, …). Regenerables are excluded deliberately:
      point 1 copies `.env` into EVERY worktree, so counting them would make nothing retirable.
+   - **The branch (OI-138, added 2026-09-29).** After `git worktree remove` succeeds, the tool
+     deletes the branch that worktree was on with `git branch -d` — never `-D` — keyed on the
+     branch git reports, NOT the folder slug (they can differ). It re-checks
+     `git merge-base --is-ancestor <branch> main` immediately before, because the merged set is
+     computed once and the loop can run for minutes. `git branch -d` alone is NOT the guarantee: it
+     tests "merged into HEAD *or upstream*" and deletes an unmerged branch whose upstream contains
+     it (reproduced). **Never deleted:** `main` and `develop` (that guard alone stands between the
+     tool and deleting `main` when the primary sits on another branch — reproduced), `rescue/*`,
+     `oi/*`, `dependabot/*`. A refusal prints `KEPT-BRANCH` with git's first line and no
+     force-delete advice; the worktree is still retired and a human decides. A bare
+     `--execute` is REFUSED by the tool (founder decision 2026-09-29, after the B-pass showed it never
+     was); `--execute --all` sweeps every retirable worktree (and removes genuinely empty orphan dirs) and
+     deletes each branch, and `--all` with a slug is rejected; that is why a session passes its
+     own slug (point 8). The tool forces a sweep to be NAMED; it cannot know whose slug is "own". This tool never touches a REMOTE branch: a GitHub-PR merge removes its head
+     branch through the repo's `delete_branch_on_merge` setting, and a merge NOT made through a
+     GitHub PR keeps its remote branch until OI-273. Freeing a slug does not make reuse risk-free:
+     `check_plan_review_record_exists.dart` prints a stale-reuse NOTE for a branch name that
+     already landed.
    - Tooling: `scripts/retire_worktree.dart` + pure `scripts/retire_worktree_lib.dart`; tests
      `test/scripts/retire_worktree_lib_test.dart` (predicate) and
      `test/scripts/retire_worktree_e2e_test.dart` (real linked worktrees). **Mutation-proven on
@@ -428,7 +446,7 @@ a commit from one can silently MIX in the other's staged files (2 incidents 2026
    ignored-file/orphan checks) → from primary, `dart run scripts/retire_worktree.dart <slug>`
    (dry-run) → if it reports `[branch not merged]` despite a confirmed merge, check primary's
    local `main` for staleness first (see the §4.9 pitfall row below) before assuming anything is
-   actually wrong → `--execute` once the dry-run shows `[merged + clean + pushed]`. (See also the
+   actually wrong → `--execute` once the dry-run shows `[merged + clean + pushed]` (or, when the upstream is gone or was never set, `[merged + clean (no upstream configured, or it was deleted on the remote — commits reachable from main)]`). `retire_worktree.dart --execute <slug>` also deletes that worktree's own merged local branch with `git branch -d`, never `-D`, and never any other branch. This describes the tool; it is not additional authority. A session runs it only with its own slug, never `--all` (a bare `--execute` is refused by the tool), and this authorization never covers deleting a remote branch (a founder-directed sweep is a separate, explicit instruction). (See also the
    main-sync `SessionStart` warning, §7 `discipline_hook.dart` row — that one covers the same
    local-vs-`origin/main` drift class at session-boundary time; this point covers it at the
    different, mid-session, post-`ExitWorktree` moment retirement actually needs it.)

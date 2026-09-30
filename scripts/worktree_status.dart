@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:async';
 import 'package:path/path.dart' as p;
+import 'retire_worktree_lib.dart' show retireCommandFor;
 
 // Worktree status report — shows which worktrees can be retired.
 // Mirrors ICANBEFITTER's worktree-status.mjs.
@@ -96,7 +97,7 @@ Future<void> main() async {
       }
 
       stdout.writeln('    status: ✓ ready to retire');
-      stdout.writeln('    command: dart run scripts/retire_worktree.dart --execute -- $branch');
+      stdout.writeln('    command: ${retireCommandFor(path)}');
     }
 
     // Check for orphans

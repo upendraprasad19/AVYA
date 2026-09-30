@@ -195,7 +195,7 @@ runs the same gates). See §4 process invariants for the no-deferred-failures po
 
 | Topic | Path / detail |
 |---|---|
-| Worktree **lifecycle** — retirement (the half §4.13 originally lacked; the count reached 106 dirs / 17 GB before this existed, reclaimed to 1.4 GB) | **§4.13 point 6.** `dart run scripts/retire_worktree.dart` (dry-run DEFAULT, `--execute` opt-in) + pure `scripts/retire_worktree_lib.dart`. Four-leg predicate: merged AND no tracked changes AND no non-regenerable ignored files AND nothing unpushed — "merged" alone would have destroyed 21 uncommitted files across 5 worktrees on 2026-08-09. Orphans (on disk, not in `git worktree list`) are a stricter separate category: only genuinely empty dirs (0 entries, counting directories) auto-remove. Operator-invoked, NOT a blocking gate. Tests `test/scripts/retire_worktree_lib_test.dart` + `retire_worktree_e2e_test.dart` (mutation-proven). |
+| Worktree **lifecycle** — retirement (the half §4.13 originally lacked; the count reached 106 dirs / 17 GB before this existed, reclaimed to 1.4 GB) | **§4.13 point 6.** `dart run scripts/retire_worktree.dart` (dry-run DEFAULT, `--execute` opt-in) + pure `scripts/retire_worktree_lib.dart`. Four-leg predicate: merged AND no tracked changes AND no non-regenerable ignored files AND nothing unpushed — "merged" alone would have destroyed 21 uncommitted files across 5 worktrees on 2026-08-09. Orphans (on disk, not in `git worktree list`) are a stricter separate category: only genuinely empty dirs (0 entries, counting directories) auto-remove. Operator-invoked, NOT a blocking gate. **OI-138 (2026-09-29):** after removal it also deletes the worktree's local branch with `git branch -d` (protected names/prefixes, ancestry re-check, `KEPT-BRANCH` on refusal) — §4.13 point 6. Tests `test/scripts/retire_worktree_lib_test.dart` + `retire_worktree_e2e_test.dart` (mutation-proven). |
 
 ### Gate registry — which script owns gate number N, and can that gate's test actually FAIL? (Before this, neit...
 
@@ -597,7 +597,7 @@ See `feedback_gates_before_refactor.md`. This rule turns multi-day refactors int
     failure message prints.
 [ ] Skill self-evolution: does any .claude/skills/<topic>/SKILL.md need a new bug-class entry, red flag, or trigger phrase?
 [ ] Runtime verified on device — app launched, went through core flow, observed expected state (NON-NEGOTIABLE).
-[ ] After the merge: `dart run scripts/retire_worktree.dart --execute` in the primary (§4.13.6).
+[ ] After the merge: `dart run scripts/retire_worktree.dart --execute <slug>` in the primary (§4.13.6).
 ```
 
 ##### 5.1 Skill self-evolution

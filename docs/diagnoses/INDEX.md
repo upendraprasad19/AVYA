@@ -22,6 +22,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 - 2026-05-10 e3f7a8 — A subset of users (founder included) holds Hive `schedule_<date>` rows with `status='completed'` while the cloud `scheduled_workouts` row stays at `status='planned'` for those dates. Once Bugs B.1 +…
 - 2026-05-10 a7c1e2 — Calendar checkmarks for May 5/6/7 vanished on the founder's account after restore, despite cloud workout_logs and scheduled_workouts.status='completed' being correct for those dates.
 
+### worktree_retirement_branch_lifecycle (1 bugs)
+- 2026-09-29 4c3fc4 — Founder-observed (2026-09-29, after PR #54 merged and its worktree was retired): the local branch `oi-154-profile-clear-tombstone` still existed (and so did the remote one).…
+
 ### subscription_expiry_derived (1 bugs)
 - 2026-09-29 c7e3b9 — OI-202. users.subscription_status never reconciles back to 'free' after a subscription expires, and users.subscription_expires_at is only ever written forward. Live (2026-09-29, project…
 
@@ -1480,6 +1483,7 @@ rather than a Hive box. (1 bugs)
 |---|---|---|---|---|
 | 2026-09-29 | f2a6d1 | OI-182. After a successful Razorpay checkout the app opens a payment grace window (SubscriptionService.markPaymentInFlight) that suppresses the server downgrade path (verifyFromServer ->… | subscription_payment_grace_window | test/contracts/subscription_payment_grace_window_behavioral_test.dart |
 | 2026-09-29 | d83505 | Founder-reported (screenshot, 2026-09-29): a workout completed on 2026-09-28 (Monday, "Calisthenics Day", logged via the app that same morning) rendered as NOT DONE on the Train tab on 2026-09-29.… | workout_completion_status | test/contracts/sync_schedule_completion_payload_hash_index_writer_to_reader_test.dart |
+| 2026-09-29 | 4c3fc4 | Founder-observed (2026-09-29, after PR #54 merged and its worktree was retired): the local branch `oi-154-profile-clear-tombstone` still existed (and so did the remote one).… | worktree_retirement_branch_lifecycle | test/scripts/retire_worktree_e2e_test.dart |
 | 2026-09-29 | c7e3b9 | OI-202. users.subscription_status never reconciles back to 'free' after a subscription expires, and users.subscription_expires_at is only ever written forward. Live (2026-09-29, project… | subscription_expiry_derived | test/contracts/subscription_columns_dropped_test.dart |
 | 2026-09-28 | a2c9e5 | OI-245. `SyncService._restoreCoachInteractions` (sync_coach.dart) hardcoded every restored `ai_coach_interactions` row's Hive `mode` field to `'quick'`.… | coach_chat_history_replay | test/contracts/coach_restored_media_mode_writer_to_reader_test.dart |
 | 2026-09-28 | a7f2d9 | task-25-review.md (reviewing commit c9fbcd64, the unmerged day-swap Train UI feature) found 5 gaps, the two most consequential being real bugs rather than style nits: (1)… | day_swap_train_ui_kill_switch | "test/widgets/week_rows_kill_switch_test.dart (new — asserts by widget type/key and child count, not pixels), plus updated test/widgets/day_swap_drag_wrapper_test.dart (new switch-OFF test, F3) and its new F5 standing-reset group" |
