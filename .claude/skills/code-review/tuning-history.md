@@ -8,6 +8,50 @@ out of `SKILL.md` section 7 by the context-lean batch (2026-09-29).
 
 ## 7. Tuning history
 
+- **2026-09-29 (b)** — blast-radius **platform** — branch `migration-ledger-integrity` (OI-135 /
+  OI-137 / OI-263: Gate 39 recomputes ledger hashes, a `refs/heads/mig/N` number allocator copied
+  from `mint_oi.sh`, a reservation gate, and a paired-gate grammar fix; 29 files, +3200). Two
+  context-blind agents split by lens (A read-only lenses 1-5/7/10 + hash/SHA/mint semantics; B
+  lenses 6+8 as ~70 live mutations in an isolated worktree from the exported staged patch),
+  dispatched AFTER three plan-review rounds and a green gate loop / analyze / full suite (7182).
+  **18 findings (5 P2, 13 P3); 0 false alarms — 14 fixed with a regression test and a mutation, 4
+  accepted with a stated limit written into the docs.** Review:
+  `docs/reviews/migration-ledger-integrity-bpass.md`. Both reports reproduced the batch's core claims
+  exactly (hash core, real-ledger counts, all 159 ids resolving), so the value was in the edges.
+  **Tuning 1 — lens 6: a test can be NAMED for a guard, sit right next to it, and never reach it.**
+  The mint's "--stub refuses to overwrite" test ended by re-reserving an already-taken number, which
+  exits 3 at the CAS before `write_stub` is ever called; deleting the no-clobber guard reddened 0 of
+  23. The author's own comment said the guard was tested. Ask of every "refuses/does not clobber/skips"
+  test: *which exit does this actually take, and does it run the guard's line?* — answered in one
+  step by mutating the guard to `if false`, never by reading the assertion.
+  **Tuning 2 — lens 6: a guard applied at N call sites is N mutation targets.** `--no-renames` sat on
+  BOTH the staged diff and the committed-range diff; only the staged half had a test (a `git mv`
+  never committed), so a committed renumber — the exact 145→147→148→149 shape that motivated the
+  batch — would have dodged the CI/PR check. Same shape for the three-dot range. Grep the flag and
+  mutate each occurrence separately.
+  **Tuning 3 — lens 10 (self_attesting_artifact) gains: every "ADOPTED" row in a plan-review
+  disposition table is a claim that an edit landed — grep the diff for it.** Round 1's F4 said
+  `new-worktree.sh`'s fetch line "gains `+refs/heads/mig/*`"; it never did, through two further
+  plan-review rounds and a green gate loop, and it took a code reviewer reading that one script to
+  see it. Nothing gates it. The same review also caught the batch's own closure text citing a
+  "lease sentence in the gate ledger" that did not exist and a count (21) that was really 20 — and my
+  first correction of those counts was itself wrong, so every count was re-derived by running the file.
+  **Tuning 4 — a fixture must break ONLY the edge under test; read the failure, do not tweak until
+  green.** The mid-retry test first broke the FETCH url to fail `sync_refs`; that also broke the
+  existence probe that decides "lost race", so the script correctly took a different exit-2 path and
+  the test asserted the wrong message. Reading the actual stderr showed why; the working fixture
+  drops a `.lock` on the one tracking ref the fetch must update (and advances `main` so it must).
+  Likewise a mutation whose failure mode is an infinite loop (dropping the 10-attempt give-up) needs a
+  BOUNDED hook, or it hangs the run instead of failing an assertion.
+  **Process notes worth keeping.** (i) Reviewer A ran `mint_migration.sh --next` once against the
+  REAL repo, not knowing it does a `git fetch --prune`; it disclosed it, and it only moved shared
+  tracking refs. A brief for a script with a network-touching read mode should say so up front.
+  (ii) Reviewer B could not write its findings file and returned the report inline — plan for the
+  inline path. (iii) The git-safety hook pattern-matches Bash command TEXT, including the body of a
+  heredoc or python one-liner that merely *contains* `git push` / the hook-bypass flag as test
+  fixture or doc prose; write such edits with the Write tool and run the file.
+  False-alarm rate 0/18 → no lens removed; lens 6 extended per Tunings 1-2, lens 10 per Tuning 3.
+
 - **2026-09-29** — blast-radius **platform** — branch `worktree-retirement-autonomy` (docs-only:
   new CLAUDE.md §4.13 point 8 + a §4.9 pitfall row, codifying autonomous worktree retirement on
   batch close). Per §4.3's docs/process-only ≥account carve-out, this was a **self-consistency**

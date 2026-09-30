@@ -27,8 +27,9 @@
   ls-remote after, so "it reported success" and "it actually landed" can't silently diverge.
   Escape hatch for a case the hook mis-detects: `ALLOW_RAW_GIT=1`. `--no-verify` has NO such
   hatch — it requires explicit founder approval in chat first, then `FOUNDER_APPROVED_NO_VERIFY=1`
-  for that one invocation. One documented exemption: the ref-CREATE push inside
-  `scripts/mint_oi.sh` (OI allocator row in `docs/architecture/hooks.md`) — it creates a ref that must not exist, so its
+  for that one invocation. Documented exemptions: the ref-CREATE pushes inside
+  `scripts/mint_oi.sh` (OI allocator row in `docs/architecture/hooks.md`) and its sibling `scripts/mint_migration.sh`
+  (migration numbers, `supabase/migrations/CLAUDE.md`) — each creates a ref that must not exist, so its
   exit code is the verification and there is no range to gate.
 - **What `safe_push.sh` CANNOT tell you, and what now does.** It proves the push LANDED; CI runs
   asynchronously *after* it returns, so its verdict says nothing about whether the build went green.

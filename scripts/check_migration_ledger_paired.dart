@@ -66,9 +66,15 @@ void main(List<String> args) async {
       .where((l) => l.isNotEmpty)
       .toList();
 
-  // Match `supabase/migrations/NNN_*.sql` (NNN = 3+ digits).
+  // Match a TOP-LEVEL `supabase/migrations/NNN[x]_*.sql` (NNN = 3+ digits, optional letter
+  // suffix like `050b`). `[^/]*` is load-bearing: the old `.*` let
+  // `supabase/migrations/041_chunks/041_00_alter.sql` match as migration 041, and the old
+  // grammar never matched a letter-suffix file at all (OI-263 batch, plan-review round 2 #9
+  // + round 3 5a/5b). 3+ digits (not exactly 3) is deliberate: timestamp-scheme files made
+  // by `supabase migration new` must still require a ledger entry. The strict 3-digit
+  // grammar belongs to number ALLOCATION (mint_migration.sh), not to ledger pairing.
   final migrationRegex =
-      RegExp(r'^supabase/migrations/(\d{3,})_.*\.sql$', caseSensitive: false);
+      RegExp(r'^supabase/migrations/(\d{3,}[a-z]?)_[^/]*\.sql$', caseSensitive: false);
 
   final stagedMigrations = <String, String>{}; // NNN → full path
   for (final f in stagedFiles) {
@@ -116,8 +122,10 @@ void main(List<String> args) async {
   for (final entry in ledger) {
     if (entry is Map && entry['migration'] is String) {
       final raw = (entry['migration'] as String).trim();
-      // Accept bare NNN ("093") or full filename ("093_foo.sql") alike.
-      final prefixMatch = RegExp(r'^(\d{3,})').firstMatch(raw);
+      // Accept bare NNN ("093"), a letter-suffixed id ("050b") or a full filename
+      // ("093_foo.sql") alike — the SAME grammar as the staged-path regex above, so
+      // `152b_x.sql` pairs with ledger id `152b` (before, the ledger side yielded `152`).
+      final prefixMatch = RegExp(r'^(\d{3,}[a-z]?)').firstMatch(raw);
       if (prefixMatch != null) ledgerNnns.add(prefixMatch.group(1)!);
     }
   }
