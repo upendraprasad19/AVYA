@@ -140,6 +140,34 @@ blocked_on_user_items: |
      phase-2 constraint (the linking-token handshake replaces the email prompt); no new OI.
   3. The pre-152 admin_metrics_daily history keeps the old pro_expired/free
      definition, so the trend has a one-day step at the apply.
+migration_152_test_and_mutations: |
+  test/contracts/migration_152_drop_subscription_mirror_test.dart (16 tests after the B-pass hardening) pins the applied
+  file: rewrite-before-drop order, writers-before-columns, no dropped column inside the
+  founder_metrics body, pro_expired = any-row AND NOT EXISTS (never NOT IN), pro_active /
+  free_users expressions, is_deleted join, search_path + SECURITY DEFINER, REVOKE/GRANT after the
+  create, plain SET + closing RESET lock_timeout (not SET LOCAL), the orphan restore in the
+  commented rollback and no BEGIN/COMMIT in it, a real 14-digit ledger cloud_version, and the
+  schema snapshot. Mutated 2026-09-30 by single-match replace on the SQL file, each confirmed
+  applied, none a compile error, file restored and re-hashed after: M1 column drop before the
+  rewrite 2 reds; M2 NOT EXISTS->NOT IN 1; M3 any-row clause filtered to status=active 1; M4 SET
+  LOCAL lock_timeout 1; M5 REVOKE removed 1; M6 RESET removed 1; M7 orphan id changed 1; M8 IF
+  EXISTS dropped 1; M9 body re-reads a dropped column 1; M10 SECURITY DEFINER removed 1. The
+  first run had one red from a test typo (whitespace before )::bigint in the free_users
+  expectation), fixed in the TEST, not the SQL.
+  B-pass hardening (2026-09-30, all in the TEST; the applied SQL is immutable): the GRANT check
+  was a bare substring, so `TO service_role, authenticated` still passed (P2). It now matches
+  the whole statement and asserts service_role is the only grantee. `_code()` also strips
+  block comments, the founder_metrics group pins the six unchanged column expressions, and the
+  rollback group pins the reverse DDL (columns, both writers, trigger, 093 body) and any
+  BEGIN/COMMIT/START TRANSACTION line. Re-mutated, each confirmed applied (single-occurrence
+  assert), file restored with cp and re-hashed equal to the ledger: A grant widened to
+  `, authenticated` 2 reds (the statement test and the sole-grantee test); B DROP COLUMN
+  subscription_expires_at hidden in a block comment 1; C active_subscriptions status filter
+  removed 1; D `-- START TRANSACTION;` added to the rollback 1; E rollback trigger WHEN clause
+  corrupted 1. Finding 5 (plain SET/RESET leaks if a non-transactional runner dies between
+  them) needs no change: the postgres log shows apply_migration wraps the file in
+  begin/commit, so the SET and RESET ran inside one transaction. The header comment calling
+  that "unverified" stays in the immutable file, corrected here.
 impact_analysis: |
   Who is affected: the founder-facing surfaces (admin dashboard expiry tab, daily
   admin metrics snapshot, founder digest, Telegram /expiring and /user) and the
@@ -157,10 +185,10 @@ impact_analysis: |
 touched_layers_checked:
   - { tier: 1, name: "Client code", status: verified, evidence: "git grep over lib/ finds no read or write of either column; the only hit is the admin RESPONSE key subscription_expires_at in admin_dashboard_data.dart, kept so no client release is needed. Whole-tree flutter analyze clean." }
   - { tier: 2, name: "Hive (local state)", status: not_applicable, evidence: "Server-only concern." }
-  - { tier: 3, name: "Postgres schema", status: blocked_on_user, evidence: "Migration 152 drafted (kept outside the repo tree until applied, so Gate 14 and the applied-migrations parity test never see an unapplied file). Requires the founder's explicit go for the dry-run and for the apply; to be re-marked fixed_in_this_batch with information_schema evidence after the apply." }
+  - { tier: 3, name: "Postgres schema", status: fixed_in_this_batch, evidence: "Migration 152 applied 2026-09-30 (cloud version 20260930065332) after a prod DO-block dry-run that always aborted (pro_active 5, pro_expired 3->2, free 30->31, total 38 unchanged). Post-apply information_schema: 0 subscription_status/subscription_expires_at columns on public.users (14 columns left, same order); pg_trigger trg_subscription_update_user count 0; to_regprocedure of update_user_subscription_status() and extend_subscription(uuid,integer) both NULL; no pg_proc body in any non-system schema names either column; private.founder_metrics() proconfig search_path=public, private, ACL postgres+service_role only; public.founder_metrics_for_admin_api() returns the same row." }
   - { tier: 4, name: "Postgres data", status: verified, evidence: "Live 2026-09-29 read-only: 8 users with a non-default mirror, 5 with a live active subscription, 2 lapsed with rows, 1 orphan with zero rows. Snapshot of all 8 written to backups/subscription_mirror_columns_snapshot_2026-09-29.json before any DDL." }
-  - { tier: 5, name: "Migrations applied", status: blocked_on_user, evidence: "backups/applied_migrations.json gets the 152 entry (real cloud_version, sha256) in the SAME commit as the SQL file, after the live apply. Not yet applied." }
-  - { tier: 6, name: "Edge Function code vs deploy", status: blocked_on_user, evidence: "Six deploys pending the founder's go, before the column drop: razorpay-webhook v25 (verify_jwt false), verify-payment v21 (true), founder-digest v8 (false), telegram-admin-bot v5 (false), admin-dashboard-data v6 (true), expiry-reminder (verify_jwt and live version to be read live immediately before the deploy). deno check of the whole functions tree is clean; the full deno test run is 743 passed with 2 failures that are the known VPS :8000 AddrInUse bind in two untouched files (future-prediction, re-engagement)." }
+  - { tier: 5, name: "Migrations applied", status: fixed_in_this_batch, evidence: "schema_migrations top row is 20260930065332 / 152_drop_users_subscription_mirror (then 151). backups/applied_migrations.json entry 152 carries that REAL cloud_version and the LF-form sha256 from scripts/migration_ledger_hash.dart; number 152 was reserved with scripts/mint_migration.sh (mig/152) before the file existed." }
+  - { tier: 6, name: "Edge Function code vs deploy", status: fixed_in_this_batch, evidence: "Deployed from the committed tree 2026-09-30 via .claude/deploy_via_api.js, BEFORE the drop: razorpay-webhook v27 (verify_jwt false), verify-payment v23 (true), founder-digest v10 (false), telegram-admin-bot v7 (false), admin-dashboard-data v8 (true), expiry-reminder v24 (false); verified with list_edge_functions (fresh updated_at + changed ezbr_sha256; untouched functions unchanged). Merged to main as 93e61579 with CI green (all jobs incl. plan-review-record) BEFORE the apply; origin/main has zero mirror writes in the two payment functions. deno check clean for the whole functions tree; full deno run 748 passed with 2 known port-8000 AddrInUse failures in untouched files." }
   - { tier: 7, name: "Cron jobs", status: verified, evidence: "compute-admin-metrics-daily (cron 30) and the founder digest (cron 38) read founder_metrics_for_admin_api() -> private.founder_metrics(); both are covered by the rewrite and by the post-apply smoke test." }
   - { tier: 8, name: "RLS policies", status: verified, evidence: "An all-schema pg_proc scan found exactly three functions referencing the columns (update_user_subscription_status, extend_subscription, private.founder_metrics); no policy, view, index, cron command or publication references them." }
   - { tier: 12, name: "Client -> server contract", status: verified, evidence: "Traced checkout -> razorpay-webhook / verify-payment -> subscriptions insert -> derived readers; the webhook's 500-on-failed-users-update is the reason EF deploy precedes the drop." }
