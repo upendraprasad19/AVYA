@@ -83,6 +83,12 @@ supabase/.supabase/
 # DO NOT commit. See scripts/check_alerts.dart credential-model header.
 .claude/.alerts.env
 
+# Live Razorpay key handoff for the live-key flip (2026-09-29). DELIBERATELY
+# separate from .env/.env.prod: RAZORPAY_KEY_SECRET must NEVER be dart-defined
+# into a client build. Two lines: RAZORPAY_KEY_ID=rzp_live_..., RAZORPAY_KEY_SECRET=....
+# DO NOT commit. Delete after the values have been pushed to Supabase + Vercel.
+.claude/.razorpay_live.env
+
 # Post-push CI reconciler state — pushes that landed whose CI outcome is not
 # yet known. Written by scripts/arm_ci_reconcile.sh, consumed + rewritten by
 # scripts/reconcile_ci.dart (SessionStart). Machine-local and transient; each

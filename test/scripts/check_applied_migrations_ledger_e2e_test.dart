@@ -144,7 +144,7 @@ void main() {
     // Proves grandfatheredLedgerHashDrift reaches verifyLedgerHashes from main(): entry 057
     // is on the closed list, so a file that no longer equals its pin is a drift violation.
     // Overwrite the REAL 057 file with different content; the real ledger row stays.
-    final real057 = Directory('${tmp.path}/supabase/migrations').listSync().whereType<File>().firstWhere((f) => f.path.contains('/057_'));
+    final real057 = Directory('${tmp.path}/supabase/migrations').listSync().whereType<File>().firstWhere((f) => f.uri.pathSegments.last.startsWith('057_'));
     real057.writeAsStringSync('not the pinned content\n');
     writeLedger([]);
     final r = run();

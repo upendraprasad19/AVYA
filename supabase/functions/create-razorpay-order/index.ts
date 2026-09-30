@@ -195,6 +195,13 @@ serve(async (req: Request) => {
         notes: {
           user_id: userId,
           plan: plan,
+          // Dashboard-reconciliation tags only — never read back for entitlement
+          // (razorpay-webhook/verify-payment derive plan from the on-wire amount,
+          // not from notes; see docs/architecture/payment.md rule 1). Added so
+          // orders from this app are distinguishable from the website's own
+          // Razorpay orders in the shared live account's dashboard/settlement feed.
+          source: "AVYA_app",
+          billing_cycle: plan === "monthly" ? "monthly" : "annual",
           ...(appliedPromoCode ? { promo_code: appliedPromoCode } : {}),
         },
       }),
