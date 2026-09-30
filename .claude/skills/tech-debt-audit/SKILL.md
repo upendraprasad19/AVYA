@@ -120,7 +120,7 @@ For every NEW gate script you wired during remediation, add a row to `docs/audit
 ### 9. Skill self-evolution (per CLAUDE.md §5.1)
 
 For every NEW bug class surfaced:
-- Append to `.claude/skills/debugging/SKILL.md` §2 Bug Classes.
+- Append the full `### 2.N` body to `.claude/skills/debugging/bug-classes.md` and add ONE index row to `.claude/skills/debugging/SKILL.md` (the index table is what SKILL.md keeps).
 - Cite the discovering finding + the new gate script + the regression test path.
 - Skill edit lands in the SAME commit as the discovering fix.
 
@@ -153,7 +153,7 @@ A successful audit produces:
 - N new `scripts/check_*.dart` gates wired into pre-commit + CI
 - N new `docs/diagnoses/<date>-*-<id>.md` per closed finding
 - N new behavioral contract tests under `test/contracts/`
-- M new entries in `.claude/skills/debugging/SKILL.md` §2 Bug Classes
+- M new entries in `.claude/skills/debugging/bug-classes.md` (+ M index rows in `debugging/SKILL.md`)
 - M new entries in `docs/audit/LENS_REGISTRY.md`
 - 1 retrospective at `~/.claude/projects/<project>/memory/project_<date>_audit.md`
 - MEMORY.md index updated

@@ -192,7 +192,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ### ai_failure_telemetry_coverage (2 bugs)
 - 2026-09-22 b6e3a8 — OI-238 (open_issues.md, filed 2026-09-22 from the Hermes pass on `observation-batch-and-digest-redesign`): OI-226's own fix (`docs/diagnoses/2026-09-21-ai-failure-telemetry-gap-oi226-f7a2c9.md`) wired…
-- 2026-09-21 f7a2c9 — OI-226 (open_issues.md:5059): "ai-proxy chat/tool-calling Gemini exhaustion paths have no reportGeminiExhaustion alert wiring." The OI's own text names TWO distinct gaps on the server — re-verified…
+- 2026-09-21 f7a2c9 — OI-226 (`## OI-226` in closed_issues.md): "ai-proxy chat/tool-calling Gemini exhaustion paths have no reportGeminiExhaustion alert wiring." The OI's own text names TWO distinct gaps on the server —…
 
 ### log_workout_sheet_completed_day_state (1 bugs)
 - 2026-09-22 e6a2f8 — OI-228 Bug A (founder observed live, one of two bugs in the original filing — Bug B is unrelated and remains open): opening "Log Workout" from the AI coach chat on a day whose scheduled workout is…
@@ -273,7 +273,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 - 2026-09-20 1dded5 — Scan Meal fails instantly on any full-resolution camera photo with "Check your connection and try again." ai-proxy rejects base64-encoded images over ~5.6MB decoded before calling Gemini.
 
 ### exercise_log_sync_fingerprint_skip (1 bugs)
-- 2026-09-19 d3f8a6 — OI-204 (docs/audit/open_issues.md:4432-4485, filed 2026-09-16). Live `client_errors` telemetry on the founder's account showed 34x `sync_exercise_logs` timeouts + 11x `sync_nutrition_logs` timeouts in…
+- 2026-09-19 d3f8a6 — OI-204 (`## OI-204` in docs/audit/closed_issues.md, filed 2026-09-16). Live `client_errors` telemetry on the founder's account showed 34x `sync_exercise_logs` timeouts + 11x `sync_nutrition_logs`…
 
 ### sot_registry_behavioral_test_path_resolution (1 bugs)
 - 2026-09-19 c7d2e4 — `dart run scripts/check_sot_behavioral_test_paths.dart` printed `[Gate 42] PASS: all 133 SoT concepts have behavioral_test_path; 7 carry presence_only: true` for ANY non-empty value — a fixture…
@@ -1545,7 +1545,7 @@ supabase/functions/rolling-context/index_test.ts |
 | 2026-09-22 | a8f3e2 | OI-230 (founder APK screenshot, Phase 1): AI coach snapshot showed self-contradictory rank-promotion info — next_rank.binding_constraint correctly named the real bottleneck (e.g. "weeks",… | rank_monotonic_current_code | test/ai_coach/snapshot_keys_test.dart |
 | 2026-09-22 | a4c7d1 | Founder-reported (2026-09-22, session "supabase-outage-check"): Single Leg Front Lever exercise swapped mid-active-workout from timed to weight/reps. Active workout screen showed "8 reps" (correct).… | logged_sets_format_normalization | test/contracts/logged_sets_format_normalization_test.dart |
 | 2026-09-22 | b4e7d2 | tool_dispatcher.dart's own comment near _executePausePlan asserts "every dispatcher failure path logs ErrorTelemetry" (C5 comment, originally added to justify that method's own telemetry call). This… | tool_dispatcher_failure_telemetry | test/contracts/tool_dispatcher_telemetry_gaps_test.dart |
-| 2026-09-21 | f7a2c9 | OI-226 (open_issues.md:5059): "ai-proxy chat/tool-calling Gemini exhaustion paths have no reportGeminiExhaustion alert wiring." The OI's own text names TWO distinct gaps on the server — re-verified… | ai_failure_telemetry_coverage | test/contracts/ai_media_proxy_telemetry_test.dart
+| 2026-09-21 | f7a2c9 | OI-226 (`## OI-226` in closed_issues.md): "ai-proxy chat/tool-calling Gemini exhaustion paths have no reportGeminiExhaustion alert wiring." The OI's own text names TWO distinct gaps on the server —… | ai_failure_telemetry_coverage | test/contracts/ai_media_proxy_telemetry_test.dart
 test/contracts/ai_breakdown_notifier_cart_auditor_telemetry_test.dart
 supabase/functions/_shared/tool-loop_gemini_exhaustion_alert_test.ts
 supabase/functions/_shared/gemini_backoff_retry_test.ts
@@ -1571,7 +1571,7 @@ test/scripts/gemini_retry_coverage_lib_test.dart |
 | 2026-09-20 | a3f6c9 | NutritionWriteService.moveMealLog's collision-merge branch (two logs retagged into the same destination slot+item-hash bucket) wrote merged totals (total_calories/protein/carbs/fat/fiber) WITHOUT ever… | nutrition_log_retag | test/contracts/nutrition_log_retag_writer_to_reader_test.dart |
 | 2026-09-20 | d9a3f7 | NutritionWriteService.moveMealLog applied a caller's `macroUpdates` map to `row` BEFORE the collision-merge branch (destination slot already holds a log) ran. The collision-merge branch… | nutrition_log_retag | test/contracts/nutrition_log_retag_writer_to_reader_test.dart |
 | 2026-09-20 | 1dded5 | Scan Meal fails instantly on any full-resolution camera photo with "Check your connection and try again." ai-proxy rejects base64-encoded images over ~5.6MB decoded before calling Gemini. | scan_meal_image_downscale | test/contracts/scan_meal_image_downscale_test.dart |
-| 2026-09-19 | d3f8a6 | OI-204 (docs/audit/open_issues.md:4432-4485, filed 2026-09-16). Live `client_errors` telemetry on the founder's account showed 34x `sync_exercise_logs` timeouts + 11x `sync_nutrition_logs` timeouts in… | exercise_log_sync_fingerprint_skip | test/contracts/sync_exercise_log_payload_hash_index_writer_to_reader_test.dart |
+| 2026-09-19 | d3f8a6 | OI-204 (`## OI-204` in docs/audit/closed_issues.md, filed 2026-09-16). Live `client_errors` telemetry on the founder's account showed 34x `sync_exercise_logs` timeouts + 11x `sync_nutrition_logs`… | exercise_log_sync_fingerprint_skip | test/contracts/sync_exercise_log_payload_hash_index_writer_to_reader_test.dart |
 | 2026-09-19 | c7d2e4 | `dart run scripts/check_sot_behavioral_test_paths.dart` printed `[Gate 42] PASS: all 133 SoT concepts have behavioral_test_path; 7 carry presence_only: true` for ANY non-empty value — a fixture… | sot_registry_behavioral_test_path_resolution | test/scripts/sot_behavioral_test_paths_gate_test.dart |
 | 2026-09-19 | d6f1b8 | Founder-flagged verbosity + a live writer/reader-drift bug found while investigating it. Muster asked 3 questions (injuries, wake/workout time, physique focus) AFTER the induction narrative's "I… | muster_to_profile_bridge | test/contracts/muster_to_profile_bridge_behavioral_test.dart |
 | 2026-09-19 | e2b8a4 | THREE friend-reported live-web bugs from the same voice-message batch. Two are live-reproduced in-session (not just hypothesized): (1) on the onboarding DOB date picker, the… | responsive_picker_host | test/contracts/responsive_picker_host_test.dart, test/contracts/wake_workout_time_picker_dial_only_test.dart, test/contracts/dob_picker_calendar_only_and_builder_test.dart, test/contracts/mobile_frame_mediaquery_test.dart |

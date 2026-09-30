@@ -190,7 +190,7 @@ TuningResult evaluateTuning({
   }
   if (skillMarkdown == null) {
     return const TuningResult(TuningVerdict.undetermined,
-        'could not read .claude/skills/code-review/SKILL.md — failing OPEN');
+        'could not read .claude/skills/code-review/tuning-history.md — failing OPEN');
   }
   final unparseable =
       addedReviews.where((r) => r.reviewedOn == null).map((r) => r.path).toList();
