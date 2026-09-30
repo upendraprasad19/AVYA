@@ -55,7 +55,7 @@ void main() {
   });
 
   group('a1c9f4 — migration 094 makes the grant trigger expiry monotonic', () {
-    test('update_user_subscription_status uses GREATEST on subscription_expires_at',
+    test('(historical) migration 094 — update_user_subscription_status uses GREATEST on subscription_expires_at',
         () {
       expect(
         mig.contains('GREATEST(COALESCE(subscription_expires_at'),
@@ -88,9 +88,14 @@ void main() {
               'collision) must stay in the arbiter SQL');
     });
 
-    test('a GREATEST no-expiry-demotion case exists', () {
-      expect(arb.contains('trigger_greatest:no_expiry_demotion'), isTrue,
-          reason: 'the monotonic-expiry behavioral case must stay in the arbiter SQL');
+    test('the OI-202 mirror-dropped case replaced the GREATEST case', () {
+      // Migration 152 dropped the trigger the old case pinned. Keeping it
+      // would fail against the live schema forever; the replacement asserts the
+      // drop itself and that an active grant needs no mirror.
+      expect(arb.contains('trigger_greatest:no_expiry_demotion'), isFalse,
+          reason: 'the case pinned a trigger migration 152 dropped');
+      expect(arb.contains('subscription_mirror:dropped'), isTrue,
+          reason: 'the live schema must be asserted mirror-free (OI-202)');
     });
   });
 }

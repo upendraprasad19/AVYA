@@ -350,7 +350,7 @@ class SubscriptionInfoData {
   /// subscription row. Pills/badges that watch this provider can
   /// render a "verifying" hint (e.g. ⟳ glyph) instead of a regular
   /// PRO badge during this window. Cleared once the webhook fires
-  /// or the 10-min grace window expires.
+  /// or the payment grace window (kPaymentGraceWindow) expires.
   final bool isVerifying;
 
   const SubscriptionInfoData({

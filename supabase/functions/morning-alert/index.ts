@@ -214,7 +214,7 @@ async function generateAndStoreAlert(
 ): Promise<void> {
   try {
     // PRO status comes from the `subscriptions` table via _shared/subscription.ts,
-    // NOT from `users.subscription_status`.
+    // NOT from `users.subscription_status` (a column since DROPPED — OI-202).
     //
     // That column has no expiry term and nothing ever writes it back to 'free'
     // — three code paths set it to 'pro' and none unset it. Live it claimed 6

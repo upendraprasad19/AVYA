@@ -16,6 +16,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
+import 'package:icanbefitter/core/constants/payment_timing.dart';
 import 'package:icanbefitter/core/services/guarded_box.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
@@ -104,18 +105,51 @@ void main() {
       expect(MigratedKey.read<dynamic>('paymentInFlightUntil'), isNull);
     });
 
-    test('expired event-based marker reads as not-in-flight', () async {
-      // Manually write an event-based map with started_at well past
-      // the 10-min ceiling.
-      final past = DateTime.now()
-          .subtract(const Duration(minutes: 11))
-          .toIso8601String();
-      await MigratedKey.write('paymentInFlightOrder', <String, dynamic>{
-        'order_id': 'order_expired',
-        'started_at': past,
+    Future<void> seedStartedAgo(Duration ago, {String order = 'order_seeded'}) {
+      return MigratedKey.write('paymentInFlightOrder', <String, dynamic>{
+        'order_id': order,
+        'started_at': DateTime.now().subtract(ago).toIso8601String(),
       });
+    }
+
+    test('marker older than the derived window reads as not-in-flight', () async {
+      // OI-182: was "11 min ago" against a 10-minute literal. The window is now
+      // DERIVED from the retry schedule (kPaymentGraceWindow, 21m45s), so the
+      // "expired" seed is defined relative to it, one minute past.
+      await seedStartedAgo(kPaymentGraceWindow + const Duration(minutes: 1),
+          order: 'order_expired');
       expect(SubscriptionService.instance.isPaymentInFlight, isFalse,
-          reason: '11-min-old started_at exceeds the 10-min fallback ceiling');
+          reason: 'older than kPaymentGraceWindow exceeds the fallback ceiling');
+    });
+
+    test('marker inside the window but PAST the old 10-minute literal is still in flight',
+        () async {
+      // The OI-182 regression: a paying user whose webhook is late, checked at
+      // minute 17. Under the old 10-minute constant this read false and
+      // verifyFromServer/refreshFromSupabase would _downgradeLocally() them.
+      await seedStartedAgo(const Duration(minutes: 17));
+      expect(SubscriptionService.instance.isPaymentInFlight, isTrue,
+          reason: '17 min < kPaymentGraceWindow — the last retry may not have fired yet');
+    });
+
+    test('the window covers every retry: started (retry delay + activation budget) ago is in flight',
+        () async {
+      // Credit honestly: under the OLD 10-min literal the d=60s and d=5m legs
+      // are ALSO true (285s / 525s < 600s). Only the d=15m leg (1125s) — and the
+      // 17-minute test above — redden against the old constant. The loop is
+      // still worth having: it is what ties the assertion to the schedule.
+      for (final d in kVerificationRetryDelays) {
+        await seedStartedAgo(d + kActivationPhasesBudget);
+        expect(SubscriptionService.instance.isPaymentInFlight, isTrue,
+            reason: 'a retry scheduled at +$d after Phase 1+2 must still be inside grace');
+      }
+    });
+
+    test('the boundary is the derived window itself, not a rounder number', () async {
+      await seedStartedAgo(kPaymentGraceWindow - const Duration(seconds: 5));
+      expect(SubscriptionService.instance.isPaymentInFlight, isTrue);
+      await seedStartedAgo(kPaymentGraceWindow + const Duration(seconds: 5));
+      expect(SubscriptionService.instance.isPaymentInFlight, isFalse);
     });
 
     test('legacy paymentInFlightUntil key is honoured for back-compat',

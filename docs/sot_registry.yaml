@@ -1049,7 +1049,7 @@ concepts:
           Canonical reactive reader; lives in profile_provider.dart (NOT a
           separate file). Build-method callsites must use ref.watch on this
           provider so payment success rebuilds them. Razorpay invalidates it via
-          razorpay_service.dart:540. Its build() MUST use proStateSnapshot(),
+          razorpay_service.dart:668 (_invalidateSubscriptionProviders). Its build() MUST use proStateSnapshot(),
           never isPro() — pinned by subscription_cqrs_behavioral_test group E.
       - file: lib/features/home/providers/home_provider.dart
         line_range: 512-517
@@ -1160,8 +1160,10 @@ concepts:
       - { pattern: "SubscriptionService\\.instance\\.isPro\\(\\)\\s*\\?\\s|isPro\\s*==\\s*true\\b", reason: "Inline isPro check in widget build method is forbidden; use ref.watch(subscriptionInfoProvider).isPro or subscription.gate()" }
     class_constraints: |
       High-value set: phases_2_to_12, ai_coach_unlimited,
-      progress_photos. Payment grace window (paymentInFlightUntil)
-      suppresses downgrade for 10 min after Razorpay success.
+      progress_photos. Payment grace window (paymentInFlightOrder;
+      kPaymentGraceWindow, payment_timing.dart) suppresses downgrade for
+      ~21m45s after Razorpay success — DERIVED from the verify-payment retry
+      schedule so it always outlives the last retry (OI-182).
 
   - concept: water_target
     domain: water
@@ -3162,29 +3164,34 @@ concepts:
   - concept: subscription_payment_grace_window
     domain: subscription
     behavioral_test_path: test/contracts/subscription_payment_grace_window_behavioral_test.dart
+    behavioral_test_path_derivation: test/core/payment_timing_test.dart  # OI-182 — independent recompute of 45s/225s/1305s + boundedAttempt (fakeAsync)
+    behavioral_test_path_retry_order: test/core/payment_retry_attempt_test.dart  # OI-182 — writeState→clearGrace→refresh→clearLocalActivation order, session guard, 60s bound
     description: |
-      10-min grace window after Razorpay success during which
-      verifyFromServer is suppressed from downgrading the
+      Grace window (kPaymentGraceWindow = last verify retry 15m + activation
+      phases budget + one retry attempt + 2m margin ≈ 21m45s, DERIVED in
+      lib/core/constants/payment_timing.dart — OI-182; it was a bare 10-minute
+      literal that closed before the last retry fired) after Razorpay success
+      during which verifyFromServer is suppressed from downgrading the
       optimistic isPro=true. Closes the race where webhook fires
       seconds after a splash-time verify.
     writers:
       - file: lib/core/services/subscription_service.dart
-        line_range: 192-215
+        line_range: 217-229
         method: markPaymentInFlight
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/subscription_service.dart
-        line_range: 101-160
+        line_range: 181-241
         method: isPaymentInFlight / clearPaymentInFlight / paymentInFlightOrderId
         semantic: flag-check
         fields_read: [paymentInFlightOrder, paymentInFlightUntil]
         notes: |
-          Canonical reader. Event-based primary path (10-min ceiling
-          as fallback safety cap). Legacy paymentInFlightUntil read
+          Canonical reader. Event-based primary path (kPaymentGraceWindow
+          ceiling as fallback safety cap). Legacy paymentInFlightUntil read
           once per device after upgrade until first event-based write.
       - file: lib/core/services/subscription_service.dart
-        line_range: 317-605
-        method: verifyFromServer + gate (isPaymentInFlight guard)
+        line_range: 1021-1118
+        method: verifyFromServer (isPaymentInFlight guard; gateAndVerify at 729 and refreshFromSupabase at 834 also read it)
         semantic: flag-check
         fields_read: [paymentInFlightOrder]
         notes: |
@@ -3202,7 +3209,7 @@ concepts:
           dossier shows "CONFIRMING ⟳ AWAITING WEBHOOK CONFIRMATION"
           copy.
       - file: lib/core/services/razorpay_service.dart
-        line_range: 453-568
+        line_range: 455-579
         method: RazorpayService.handlePaymentConfirmed
         semantic: pass-through
         fields_read: []
@@ -3211,13 +3218,42 @@ concepts:
           checkout.js success callback both land here — web-razorpay
           batch 2026-09-17). Writes order via markPaymentInFlight FIRST
           so the grace window opens before any subsequent verify race
-          fires.
+          fires. OI-182: the post-checkout session refresh that runs BEFORE
+          this is now bounded (SupabaseService.refreshTimeout).
+      - file: lib/core/services/razorpay_service.dart
+        line_range: 688-905
+        method: RazorpayService._pollAndActivate (Phase 1 polls + Phase 2 verify, both bounded; clears the grace on success)
+        semantic: pass-through
+        fields_read: []
+        notes: |
+          OI-182: every network call is bounded (kPollCallTimeout /
+          kPhase2CallTimeout, payment_timing.dart); a timed-out poll is
+          counted and summarised once (razorpay_poll_timeouts), never one
+          telemetry POST per attempt. The exhausted-phases budget
+          (kActivationPhasesBudget) is what kPaymentGraceWindow is derived from.
+      - file: lib/core/services/razorpay_service.dart
+        line_range: 908-981
+        method: RazorpayService._scheduleVerificationRetry
+        semantic: pass-through
+        fields_read: []
+        notes: |
+          Retries at kVerificationRetryDelays (60s, 5m, 15m), all scheduled
+          together AFTER Phase 1 + Phase 2. Each attempt runs through
+          runVerificationRetryAttempt (payment_retry_attempt.dart): write
+          PRO state from the verified reply → clearPaymentInFlight →
+          refreshFromSupabase → clear localActivationAt, in that order, and
+          only if the session is unchanged (H-20 class). Retries 2-3 do
+          nothing once one is verified. In-memory timers: best-effort under
+          suspend / app kill.
     regression_test: test/subscription/payment_grace_window_test.dart
+    regression_test_wiring: test/contracts/payment_grace_window_derived_wiring_test.dart  # presence-only source pin of the razorpay_service wiring
     telemetry:
       success_op_types: [subscription_refresh_grace_skip, subscription_refresh_success]
     class_constraints: |
-      Grace window is 10 minutes. Cleared on webhook confirmation
-      OR grace expiry, whichever is first.
+      Grace window is kPaymentGraceWindow (~21m45s, derived from the retry
+      schedule). Cleared on webhook confirmation, on Phase 1 / Phase 2 /
+      retry verification, OR grace expiry, whichever is first. The separate
+      localActivationAt 10-minute grace is unchanged (OI-182 leaves it).
 
   # ─── NEW CONCEPTS (Phase B) ────────────────────────────────────────────────
 
@@ -7071,7 +7107,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/subscription_service.dart
-        line_range: 251-251
+        line_range: 257-257
         method: onStateChanged
         semantic: callback-invocation
         fields_read: []
@@ -7100,6 +7136,86 @@ concepts:
       sites (`!kIsWeb`, `!kDebugMode`) — an unbind running where the bind never
       did is a new failure mode, not a fix.
 
+  - concept: subscription_expiry_derived
+    domain: subscription
+    behavioral_test_path: supabase/functions/_shared/subscription_test.ts
+    description: |
+      OI-202. Every server-side "who expires / who lapsed" number is DERIVED from
+      `public.subscriptions` — each user's LATEST `status='active'` end_date —
+      never read from a users.* mirror. `users.subscription_status` and
+      `users.subscription_expires_at` (and trg_subscription_update_user,
+      update_user_subscription_status(), extend_subscription()) were DROPPED by
+      migration 152. The single PRO predicate stays `status='active' AND end_date
+      > now()` (_shared/subscription.ts fetchProUserIds / isProUser); this concept
+      is its expiry-window sibling: fetchLatestActiveEndByUser (paged, pinned
+      floor, `null` on failure — NOT an empty map, which would read as "nobody
+      is expiring") + the pure reducers reduceLatestEndByUser /
+      usersWithLatestEndIn. A user with a renewal (an old row lapsing AND a later
+      row) is correctly not reported as lapsing or expiring.
+      private.founder_metrics() (SECURITY DEFINER) derives pro_active /
+      pro_expired / free_users the same way, with total_users = pro_active +
+      pro_expired + free_users preserved.
+      Migration 152 (applied 2026-09-30, cloud version 20260930065332) dropped
+      users.subscription_status / subscription_expires_at, the trigger and the two
+      functions; pinned by test/contracts/migration_152_drop_subscription_mirror_test.dart.
+    writers:
+      - file: supabase/functions/razorpay-webhook/index.ts
+        line_range: 555-600
+        method: subscriptions insert (the ONLY entitlement write)
+        notes: The users.update mirror write this handler used to make was removed; the insert is the whole write.
+      - file: supabase/functions/verify-payment/index.ts
+        line_range: 526-625
+        method: subscriptions insert / canonical end_date
+        notes: Same — no users mirror write; the response reports the canonical row's end_date.
+      - file: supabase/migrations/038_redeem_referral_atomic.sql
+        line_range: 1-9999
+        method: redeem_referral_atomic
+        notes: The OTHER entitlement writer — inserts a referral_trial row or extends an active end_date (see referral_trial_subscription_grant). Together with the two Edge Functions above these are every write to subscriptions.end_date.
+    reader_manifest_complete: true
+    readers:
+      - file: supabase/functions/_shared/subscription.ts
+        line_range: 236-262
+        method: fetchLatestActiveEndByUser
+        semantic: derived-latest-end-per-user
+        fields_read: [subscriptions.user_id, subscriptions.end_date, subscriptions.status]
+      - file: supabase/functions/_shared/founder_digest_content.ts
+        line_range: 915-940
+        method: gatherDigestInput latestEndRead + expiringSoon
+        semantic: one-shared-read-two-sections
+        fields_read: [subscriptions.user_id, subscriptions.end_date]
+      - file: supabase/functions/_shared/founder_digest_content.ts
+        line_range: 1020-1042
+        method: gatherDigestInput lapsedYesterday
+        semantic: half-open-yesterday-window
+        fields_read: [subscriptions.user_id, subscriptions.end_date]
+      - file: supabase/functions/telegram-admin-bot/index.ts
+        line_range: 281-300
+        method: cmdExpiring
+        semantic: throws-on-null
+        fields_read: [subscriptions.user_id, subscriptions.end_date]
+      - file: supabase/functions/expiry-reminder/index.ts
+        line_range: 58-80
+        method: cron selection of users to remind (3-day window)
+        semantic: latest-end-per-user
+        fields_read: [subscriptions.user_id, subscriptions.end_date]
+      - file: supabase/functions/admin-dashboard-data/index.ts
+        line_range: 100-130
+        method: loadExpiryRows
+        semantic: latest-end-in-window-plus-emails
+        fields_read: [subscriptions.user_id, subscriptions.end_date, users.email]
+    cloud_table: subscriptions
+    cloud_columns:
+      - user_id
+      - status
+      - end_date
+    regression_test: test/contracts/subscription_columns_dropped_test.dart
+    forbidden_legacy_patterns:
+      - "reading or writing users.subscription_status / users.subscription_expires_at (dropped by migration 152)"
+      - "treating a failed subscriptions read as an empty map / zero count"
+    related_concepts:
+      - subscription_state
+      - referral_trial_subscription_grant
+
   - concept: referral_trial_subscription_grant
     domain: profile
     description: |
@@ -7107,15 +7223,17 @@ concepts:
       `referral_redemption`, which covers the redemption row + transport).
       redeem_referral_atomic (migration 038) INSERTs a `referral_trial` row
       into `subscriptions` for BOTH referrer and referee (or extends an
-      existing active sub's end_date), and the AFTER INSERT/UPDATE trigger
-      trg_subscription_update_user -> update_user_subscription_status()
-      promotes users.subscription_status='pro' + sets subscription_expires_at.
-      Migration 094 (a1c9f4) made this path actually work for the first time
-      ever: it DROPPED the razorpay_* NOT NULL that 23502'd every referral_trial
-      INSERT (referral has never once succeeded — 0 rows), and hardened the
-      shared trigger's expiry write to a monotonic GREATEST (never lower an
-      existing future expiry). The granted PRO state is consumed client-side via
-      the `subscription_state` concept.
+      existing active sub's end_date). Migration 094 (a1c9f4) made this path
+      actually work for the first time ever: it DROPPED the razorpay_* NOT NULL
+      that 23502'd every referral_trial INSERT (referral has never once
+      succeeded — 0 rows). It also hardened the AFTER INSERT/UPDATE trigger
+      trg_subscription_update_user -> update_user_subscription_status(), which
+      mirrored the grant onto users.subscription_status / subscription_expires_at.
+      That trigger, its function, and both mirror columns were DROPPED by
+      migration 152 (OI-202): the `subscriptions` row IS the entitlement, and
+      the granted PRO state is derived from it (status='active' AND end_date >
+      now(), _shared/subscription.ts) and consumed client-side via the
+      `subscription_state` concept.
     writers:
       - file: supabase/migrations/038_redeem_referral_atomic.sql
         line_range: 1-9999
@@ -7127,25 +7245,26 @@ concepts:
           requires migration 094's DROP NOT NULL to succeed.
       - file: supabase/migrations/094_subscriptions_razorpay_nullable.sql
         line_range: 1-9999
-        method: update_user_subscription_status trigger + DROP NOT NULL
+        method: DROP NOT NULL (+ historical update_user_subscription_status trigger)
         notes: |
           a1c9f4. (a) DROP NOT NULL on subscriptions.razorpay_order_id /
           razorpay_payment_id / razorpay_signature so the referral_trial INSERT
-          stops 23502-ing. (b) CREATE OR REPLACE the shared grant trigger with a
-          monotonic expiry write GREATEST(COALESCE(subscription_expires_at,
-          NEW.end_date), NEW.end_date) — closes a reachable expiry-demotion vector.
+          stops 23502-ing. (b) HISTORICAL: it also replaced the grant trigger with
+          a monotonic GREATEST expiry write on users.subscription_expires_at —
+          that trigger and column were dropped by migration 152 (OI-202), so (b)
+          no longer runs; the file is immutable and stays as the record.
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/subscription_service.dart
         line_range: 1-9999
         method: SubscriptionService.isPro / gate
         semantic: pass-through
-        fields_read: [via users.subscription_status]
+        fields_read: [via subscriptions.status, subscriptions.end_date]
         notes: |
           The grant's user-visible effect (PRO) is read through the
-          `subscription_state` concept: the trigger sets users.subscription_status,
-          which subscription_service reads. The server trigger
-          trg_subscription_update_user is the intermediate writer of that column.
+          `subscription_state` concept, derived from the `subscriptions` row
+          (status='active' AND end_date > now()). Since migration 152 (OI-202)
+          there is no users.* mirror and no intermediate trigger writer.
     cloud_table: subscriptions
     cloud_columns:
       - user_id
@@ -7157,7 +7276,7 @@ concepts:
       - razorpay_payment_id
       - razorpay_signature
     regression_test: test/contracts/referral_trial_subscription_grant_test.dart
-    behavioral_test_path: test/sql/onconflict_live_arbiter.sql  # a1c9f4 — live RPC-call case 'redeem_referral_atomic:2_referral_trial_rows' (2 rows, no UNIQUE-NULL collision) + 'trigger_greatest:no_expiry_demotion'
+    behavioral_test_path: test/sql/onconflict_live_arbiter.sql  # a1c9f4 — live RPC-call case 'redeem_referral_atomic:2_referral_trial_rows' (2 rows, no UNIQUE-NULL collision) + 'subscription_mirror:dropped' (OI-202 replaced the GREATEST case)
     telemetry:
       failure_op_types:
         - referral_repository_redeem
@@ -7351,7 +7470,7 @@ concepts:
       - { file: lib/core/services/workout_schedule_service.dart, line: 177, method: "WorkoutScheduleService._() constructor → _registerLifecycle()", notes: "All state in workoutBox / userBox; reset hook is a no-op placeholder." }
       - { file: lib/core/services/usage_counter_service.dart, line: 13, method: "UsageCounterService._() constructor → _registerLifecycle()", notes: "Counters live in per-user userBox; reset hook is a no-op placeholder." }
       - { file: lib/core/services/ai_service.dart, line: 54, method: "AiService._() constructor → _registerLifecycle()", notes: "Reset closes + drops the cached http.Client via dispose()." }
-      - { file: lib/core/services/razorpay_service.dart, line: 26, method: "RazorpayService._() constructor → _registerLifecycle()", notes: "Reset nulls _onSuccess / _onFailure / _pendingPlan." }
+      - { file: lib/core/services/razorpay_service.dart, line: 30, method: "RazorpayService._() constructor → _registerLifecycle()", notes: "Reset nulls _onSuccess / _onFailure / _pendingPlan." }
       - { file: lib/core/services/seed_service.dart, line: 36, method: "SeedService._() constructor → _registerLifecycle()", notes: "Seeds are shared-box; reset is a no-op placeholder." }
       - { file: lib/core/services/prediction_service.dart, line: 1, method: "PredictionService._() constructor → SingletonLifecycleRegistry.register", notes: "Added 2026-09-26 (B-pass round 2, single-owner-a): PredictionService was the one singleton in this family never registered, so a device-level account switch never cleared PredictionAttemptGate's in-flight Future — the new account's own tap could join the old account's stale request via PredictionAttemptGate.run's `if (running != null) return running;`. Reset hook (`_onUserChanged`) calls `_gate.clearInFlightForAccountChange()`, which nulls `_inFlight` so the next call starts fresh rather than joining." }
     reader_manifest_complete: true
@@ -8487,8 +8606,11 @@ concepts:
       current-value stat tile is genuinely live. The snapshot table
       (`public.admin_metrics_daily`, written nightly by the cron) backs ONLY
       the `trend` series - a live query can't show "how PRO count moved over
-      30 days." Expiring-subscription emails come from a live `users` query
-      BOUNDED to [now-30d, now+30d] (Hermes L1/L37/L40 - was unbounded).
+      30 days." Expiring-subscription rows are DERIVED from `subscriptions`
+      (each user's LATEST active end_date, `loadExpiryRows`, OI-202) plus
+      `users.email`, BOUNDED to [now-30d, now+30d] (Hermes L1/L37/L40 - was
+      unbounded). The `users.subscription_expires_at` column this used to read
+      is dropped (migration 152).
 
       Architecture note (private -> public schema correction, caught during
       plan review): the existing `private.founder_metrics()` (migration 093)
@@ -8497,7 +8619,8 @@ concepts:
       `[api] schemas = ["public", "graphql_public"]`. Migration 101 adds
       `public.founder_metrics_engagement()`, `public.founder_metrics_ops()`,
       and a thin `public.founder_metrics_for_admin_api()` wrapper around the
-      untouched existing private function - all three SECURITY DEFINER +
+      existing private function (REWRITTEN by migration 152, OI-202, to derive
+      from `subscriptions`; same signature) - all three SECURITY DEFINER +
       REVOKE ALL FROM PUBLIC + GRANT EXECUTE TO service_role, same lockdown
       as 093, just in the schema PostgREST actually serves.
 
@@ -8574,6 +8697,14 @@ concepts:
         semantic: aggregated
         fields_read: [current.activeSubscriptions, current.freeUsers, current.proExpired, revenue.monthlyActive, revenue.yearlyActive, revenue.trialActive, revenue.otherActive, revenue.derivedMrrInr, revenue.currentMonthlyPriceInr, revenue.currentYearlyPriceInr, subscriptionsExpiring.expired, subscriptionsExpiring.expiring7d, subscriptionsExpiring.expiring30d]
         notes: |
+          CHANGED MEANING under migration 152 (OI-202): current.proExpired and current.freeUsers
+          now derive from `subscriptions` (proExpired = has a row of any status and no live active
+          one; freeUsers = never subscribed; total = proActive + proExpired + freeUsers). Live effect
+          on the day it applies: proExpired 3 -> 2 and freeUsers 30 -> 31 with no user change (an
+          orphan whose mirror said 'pro' but who has no subscription rows now reads as never
+          subscribed); proActive stays 5. admin_metrics_daily history keeps the old definition, so
+          the trend shows a one-day step. subscriptionsExpiring rows keep their key
+          `subscription_expires_at` (the response key, not the dropped column).
           derivedMrrInr is computed (monthly x price + yearly x price/12), NOT a stored figure -
           accurate only while promo_code_uses has 0 rows; current price shown read-only (out of scope
           of this batch, see plan's "explicitly out of scope" section). trialActive (referral_trial)
@@ -10899,7 +11030,7 @@ concepts:
       - "streak-guardian reading current_streak_days from the snapshot instead of the selected user_progress row"
       - "a `?? streakWeeks * 7` fallback for streakDays — unreachable under the gate, but silently restores the two-cache contradiction if the gate is loosened"
       - "recentPR / recent_pr_exercise anywhere in streak-guardian, including the Gemini userState"
-      - "weekly-recap-ready reading users.subscription_status — a stale denormalized mirror"
+      - "weekly-recap-ready reading users.subscription_status — a stale denormalized mirror (column DROPPED by migration 152, OI-202)"
       - "re-implementing the PRO predicate locally instead of importing _shared/subscription.ts"
       - "advancing the pagination offset by the FILTERED count — .range() walked the raw page, so this skips users"
     contract_test_path: test/contracts/weekly_recap_pro_filter_test.dart

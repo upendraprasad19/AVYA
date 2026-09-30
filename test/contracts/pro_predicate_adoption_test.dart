@@ -21,8 +21,11 @@
 //
 // Rule 1 — the shared helper exists and implements BOTH terms.
 // Rule 2 — no Edge Function READS `users.subscription_status` to decide tier.
-//          (Writing it is fine — it stays as a cache for the admin dashboard;
-//          it is reading it as truth that is the bug.)
+//          Since OI-202 (migration 152) the column no longer exists AT ALL, so
+//          this rule has no exemption left; the stricter "no reference to the
+//          dropped columns anywhere" scan lives in
+//          test/contracts/subscription_columns_dropped_test.dart. This rule stays
+//          as the read-shape detector with its positive control.
 //
 // This test FAILS on the pre-fix source and PASSES after, per CLAUDE.md r21.
 
@@ -34,9 +37,8 @@ const _helper = '$_functionsDir/_shared/subscription.ts';
 
 /// Reads of the denormalized column — the bug shape.
 ///
-/// Deliberately does NOT match a write (`subscription_status: "pro"` inside an
-/// update payload), which is legitimate: the column remains a cache, it just
-/// must never be the source of truth for a tier decision.
+/// Matches READS only; a stray WRITE of the (now dropped) column is caught by
+/// subscription_columns_dropped_test.dart instead.
 final _readPatterns = <RegExp>[
   // .select("... subscription_status ...")
   RegExp(r'''\.select\(\s*['"][^'"]*subscription_status'''),
@@ -52,28 +54,6 @@ Iterable<File> _edgeFunctionSources() => Directory(_functionsDir)
     .listSync(recursive: true)
     .whereType<File>()
     .where((f) => f.path.endsWith('.ts'));
-
-/// File + exact literal snippet for the ONE reviewed exception to the rule
-/// below (2026-09-22, diagnose 9c4f2e). `founder_digest_content.ts`'s
-/// `lapsedYesterday` metric deliberately reads `subscription_status` to
-/// COUNT how often it drifts from `subscription_expires_at` — a
-/// founder-facing "churn proxy" KPI, not a tier/access decision (see that
-/// file's own doc comment on `lapsedYesterday` for the full reasoning: it
-/// measures the exact cache-vs-truth drift this test exists to keep OUT of
-/// tier decisions elsewhere; no user's access or AI-generated content
-/// changes based on this read). Rewriting it to use fetchProUserIds()
-/// instead would defeat the metric's own purpose — that helper reports who
-/// is AUTHORITATIVELY pro right now, not who the stale cache still claims
-/// is pro after expiry, which is the drift being measured.
-///
-/// Exempted by exact snippet removal, not a file-level skip, so a
-/// DIFFERENT, illegitimate read added later to this same file is still
-/// caught by the patterns below — and the companion `expect` in the loop
-/// fails loudly if this literal ever stops matching, so the exemption
-/// cannot silently widen or go stale.
-const _metricsOnlyExemptFile =
-    'supabase/functions/_shared/founder_digest_content.ts';
-const _metricsOnlyExemptSnippet = '.eq("subscription_status", "pro")';
 
 /// Strips block and line comments so prose describing the bug (including this
 /// file's own rationale, mirrored into the helper's docstring) is not mistaken
@@ -113,18 +93,6 @@ void main() {
       final violations = <String>[];
       for (final file in _edgeFunctionSources()) {
         var src = _stripComments(file.readAsStringSync());
-        final relPath = file.path.replaceAll('\\', '/');
-        if (relPath == _metricsOnlyExemptFile) {
-          final before = src;
-          src = src.replaceFirst(_metricsOnlyExemptSnippet, '');
-          expect(src, isNot(before),
-              reason: 'the reviewed metrics-only exemption snippet '
-                  '($_metricsOnlyExemptSnippet) no longer appears verbatim '
-                  'in $relPath — either it moved/was reformatted (update '
-                  '_metricsOnlyExemptSnippet to match the new text) or it '
-                  'was removed entirely (delete the now-unused exemption '
-                  'too). Do not let this assertion go red silently.');
-        }
         for (final p in _readPatterns) {
           if (p.hasMatch(src)) {
             violations.add('${file.path} matches ${p.pattern}');
@@ -137,8 +105,7 @@ void main() {
         reason: '`users.subscription_status` has no expiry term and nothing '
             'writes it back to "free" — reading it as truth marks lapsed users '
             'as PRO indefinitely. Use fetchProUserIds()/isProUser() from '
-            '_shared/subscription.ts instead. Writing the column is still '
-            'allowed (it is a cache for the admin dashboard).\n'
+            '_shared/subscription.ts instead. (The column is dropped — OI-202.)\n'
             'Violations:\n  ${violations.join("\n  ")}',
       );
     });
@@ -164,13 +131,29 @@ void main() {
           reason: 'Loose `$op` comparison must be flagged too.',
         );
       }
-      // And a legitimate WRITE must NOT be flagged.
+      // EACH pattern must catch its OWN shape. `any(...)` above is satisfied by
+      // the `===` pattern alone, so a broken `.select` or `.eq` pattern left every
+      // assertion green (mutation B18, OI-202: a deliberately broken `.eq(`
+      // pattern reddened nothing).
+      const ownShapes = <String>[
+        '.select("id, subscription_status")',
+        'if (u.subscription_status === "pro") {}',
+        '.eq("subscription_status", "pro")',
+      ];
+      expect(ownShapes.length, _readPatterns.length);
+      for (var i = 0; i < _readPatterns.length; i++) {
+        expect(_readPatterns[i].hasMatch(ownShapes[i]), isTrue,
+            reason: 'read pattern #$i (${_readPatterns[i].pattern}) does not '
+                'match its own known-bad shape `${ownShapes[i]}`');
+      }
+      // A WRITE-shaped line is not a READ and must not trip THIS detector (the
+      // dropped-columns scan owns writes) — keeps the two rules' scopes distinct.
       const knownGood = '.update({ subscription_status: "pro" })';
       expect(
         _readPatterns.any((p) => p.hasMatch(knownGood)),
         isFalse,
-        reason: 'Writing the cache column is legitimate and must not trip the '
-            'guard — otherwise razorpay-webhook and verify-payment fail.',
+        reason: 'the read detector must stay read-shaped; writes belong to '
+            'subscription_columns_dropped_test.dart.',
       );
     });
   });

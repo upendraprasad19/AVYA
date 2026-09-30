@@ -6,10 +6,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FunctionException;
 import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/core/constants/payment_timing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
+import 'package:icanbefitter/core/services/payment_retry_attempt.dart';
 import 'package:icanbefitter/core/services/razorpay_web_checkout.dart';
 import 'package:icanbefitter/core/services/singleton_lifecycle_registry.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
@@ -465,8 +467,16 @@ class RazorpayService {
     // Force-refresh Supabase JWT. The app was backgrounded during Razorpay
     // WebView checkout, so the access token may have expired. Without this,
     // subsequent Edge Function calls (AI chat, food analysis) fail with 401.
+    //
+    // OI-182 — bounded. This runs BEFORE the optimistic activation below, so a
+    // hung network here used to block "PRO is active" forever; a timeout lands
+    // in the catch (non-fatal) and activation proceeds.
     try {
-      await SupabaseService.instance.client.auth.refreshSession();
+      await boundedAttempt(
+        () => SupabaseService.instance.client.auth.refreshSession(),
+        SupabaseService.refreshTimeout,
+        label: 'post-checkout session refresh',
+      );
       debugPrint('RazorpayService: session refreshed after checkout');
     } catch (e, st) {
       // audit-2026-05-11 H-42 — telemetry pair.
@@ -509,8 +519,9 @@ class RazorpayService {
     try {
       // H-41 (audit-2026-05-11) — record the Razorpay order_id so
       // the webhook + verify-payment confirmation paths have an
-      // event-based handle to clear by. The 10-min time ceiling is
-      // a fallback only now.
+      // event-based handle to clear by. The time ceiling
+      // (kPaymentGraceWindow, derived from the retry schedule — OI-182)
+      // is a fallback only now.
       await SubscriptionService.instance
           .markPaymentInFlight(orderId: orderId);
     } catch (e, st) {
@@ -695,9 +706,16 @@ class RazorpayService {
     // keep writing PRO state for the WRONG user. Re-read
     // `currentUser?.id` at the top of every iteration and abort if it
     // changed (or went null).
-    for (int attempt = 0; attempt < 15; attempt++) {
-      final delay = attempt < 5 ? 2 : (attempt < 10 ? 3 : 4);
-      await Future.delayed(Duration(seconds: delay));
+    //
+    // OI-182 — each poll query is bounded (kPollCallTimeout) so a hung request
+    // cannot stall Phase 1 indefinitely; the schedule and the bounds are the
+    // ones kActivationPhasesBudget / kPaymentGraceWindow are DERIVED from
+    // (payment_timing.dart). A timed-out poll is COUNTED, not individually
+    // reported: up to 15 log-client-error POSTs over the same degraded network
+    // would only add load — one summary event is emitted after the loop.
+    var pollTimeouts = 0;
+    for (int attempt = 0; attempt < kPhase1PollAttempts; attempt++) {
+      await Future.delayed(Duration(seconds: pollDelaySeconds(attempt)));
 
       // H-20 — cancel if session changed during the wait.
       final currentSessionUserId =
@@ -712,15 +730,19 @@ class RazorpayService {
       try {
         Map<String, dynamic>? row;
 
-        if (attempt < 12) {
+        if (attempt < kPhase1ExactMatchAttempts) {
           // Exact match: only accept the subscription created by THIS payment
-          row = await SupabaseService.instance.client
-              .from('subscriptions')
-              .select()
-              .eq('user_id', userId)
-              .eq('razorpay_payment_id', paymentId)
-              .eq('status', 'active')
-              .maybeSingle();
+          row = await boundedAttempt<Map<String, dynamic>?>(
+            () async => await SupabaseService.instance.client
+                .from('subscriptions')
+                .select()
+                .eq('user_id', userId)
+                .eq('razorpay_payment_id', paymentId)
+                .eq('status', 'active')
+                .maybeSingle(),
+            kPollCallTimeout,
+            label: 'subscription poll',
+          );
         } else {
           // Fallback: any active subscription for THIS PLAN created in the
           // last 5 minutes. Plan filter is the critical safety rail:
@@ -729,19 +751,30 @@ class RazorpayService {
           // 365. The plan column on `subscriptions` is set by the webhook
           // from `payment.amount_paise` (never trusted from client).
           final cutoff = DateTime.now().subtract(const Duration(minutes: 5)).toUtc().toIso8601String();
-          row = await SupabaseService.instance.client
-              .from('subscriptions')
-              .select()
-              .eq('user_id', userId)
-              .eq('status', 'active')
-              .eq('plan', fallbackPlan)
-              .gte('created_at', cutoff)
-              .order('created_at', ascending: false)
-              .limit(1)
-              .maybeSingle();
+          row = await boundedAttempt<Map<String, dynamic>?>(
+            () async => await SupabaseService.instance.client
+                .from('subscriptions')
+                .select()
+                .eq('user_id', userId)
+                .eq('status', 'active')
+                .eq('plan', fallbackPlan)
+                .gte('created_at', cutoff)
+                .order('created_at', ascending: false)
+                .limit(1)
+                .maybeSingle(),
+            kPollCallTimeout,
+            label: 'subscription poll (fallback)',
+          );
         }
 
         if (row != null) {
+          // The query above can take up to kPollCallTimeout; re-check the
+          // session AFTER it, before any write (B-pass 2026-09-29 — the only
+          // check was before the query).
+          if (SupabaseService.instance.currentUser?.id != userId) {
+            debugPrint('RazorpayService: H-20 cancel — session changed during the poll query.');
+            return;
+          }
           final endDate = row['end_date'] as String?;
           final plan = row['plan'] as String? ?? fallbackPlan;
 
@@ -756,14 +789,22 @@ class RazorpayService {
           // Trigger another provider invalidation now that we have the
           // server-confirmed end date (different from optimistic).
           _invalidateSubscriptionProviders();
-          debugPrint('RazorpayService: webhook confirmed at attempt $attempt (exact=${attempt < 12})');
+          debugPrint('RazorpayService: webhook confirmed at attempt $attempt (exact=${attempt < kPhase1ExactMatchAttempts})');
           return;
         }
+      } on TimeoutException {
+        // OI-182 — counted, summarised once after the loop (see above).
+        pollTimeouts++;
       } catch (e, st) {
         debugPrint('RazorpayService: poll attempt $attempt failed: $e');
         unawaited(ErrorTelemetry.recordNonFatal(e, st,
             reason: 'razorpay_poll_attempt'));
       }
+    }
+    if (pollTimeouts > 0) {
+      unawaited(ErrorTelemetry.logEvent('razorpay_poll_timeouts',
+          message: 'count=$pollTimeouts of $kPhase1PollAttempts '
+              'bound=${kPollCallTimeout.inSeconds}s'));
     }
 
     // Phase 2: Direct verification via Edge Function (server checks Razorpay API)
@@ -775,12 +816,19 @@ class RazorpayService {
     if (paymentId.isNotEmpty) {
       try {
         debugPrint('RazorpayService: polling exhausted, trying verify-payment Edge Function...');
-        final verifyResponse = await SupabaseService.instance.callFunction(
-          'verify-payment',
-          body: {
-            'payment_id': paymentId,
-            'plan': fallbackPlan,
-          },
+        // OI-182 — bounded (kPhase2CallTimeout). A timeout lands in the catch
+        // below and falls through to the retries; the server may still have
+        // completed the verify, which the retries (idempotent) reconcile.
+        final verifyResponse = await boundedAttempt(
+          () => SupabaseService.instance.callFunction(
+            'verify-payment',
+            body: {
+              'payment_id': paymentId,
+              'plan': fallbackPlan,
+            },
+          ),
+          kPhase2CallTimeout,
+          label: 'verify-payment (phase 2)',
         );
 
         // H-20 — abort write if session changed during the Edge Function call.
@@ -832,6 +880,7 @@ class RazorpayService {
       paymentId: paymentId,
       orderId: orderId,
       plan: fallbackPlan,
+      userId: userId,
     );
 
     // Also refresh from Supabase a few times in case the webhook arrives late.
@@ -849,57 +898,86 @@ class RazorpayService {
   /// payment server-side via the Razorpay API. On success, it writes
   /// to the Supabase subscriptions table (server-side, with proof).
   ///
-  /// 3 attempts at 60s, 5m, 15m. On final failure, does nothing —
-  /// existing safety nets reconcile on next app launch.
+  /// Attempts at [kVerificationRetryDelays] (60s, 5m, 15m), all scheduled
+  /// together from the moment Phase 1 + Phase 2 exhaust. On final failure,
+  /// does nothing — existing safety nets reconcile on next app launch.
+  ///
+  /// OI-182 — the payment grace window ([kPaymentGraceWindow]) is DERIVED from
+  /// this schedule, so it always outlives the last retry. Each attempt runs
+  /// through [runVerificationRetryAttempt], which owns the ORDER of the side
+  /// effects on a verified reply (write PRO state → clear grace → refresh →
+  /// clear localActivationAt) and is what the behavioural test exercises. Once
+  /// one attempt is verified the later timers do nothing.
+  ///
+  /// Best-effort: these are in-memory timers — they do not fire while the
+  /// process is suspended and an app kill loses them (reconcile then happens
+  /// on next launch). See payment_timing.dart.
   void _scheduleVerificationRetry({
     required String paymentId,
     required String orderId,
     required String plan,
+    required String userId,
   }) {
-    const delays = [
-      Duration(seconds: 60),
-      Duration(minutes: 5),
-      Duration(minutes: 15),
-    ];
-
-    for (final delay in delays) {
-      Future.delayed(delay, () async {
+    scheduleVerificationRetries(
+      delays: kVerificationRetryDelays,
+      userId: userId,
+      orderId: orderId,
+      // The bounded unit: refresh AND call together, so the inner catch below
+      // cannot swallow a timeout and grant a second budget.
+      callVerify: () async {
+        // Refresh JWT before retry — the original token from checkout
+        // is likely expired (app was backgrounded during Razorpay WebView).
         try {
-          // Refresh JWT before retry — the original token from checkout
-          // is likely expired (app was backgrounded during Razorpay WebView).
-          try {
-            await SupabaseService.instance.client.auth.refreshSession();
-          } catch (_) {}
+          await SupabaseService.instance.client.auth.refreshSession();
+        } catch (_) {}
 
-          final response = await SupabaseService.instance.callFunction(
-            'verify-payment',
-            body: {
-              'payment_id': paymentId,
-              'order_id': orderId,
-              'plan': plan,
-            },
-          );
-          if (response.status == 200) {
-            // verify-payment returns 200 with verified:false for uncaptured
-            // payments, and 200 with verified:true even if the subscription
-            // row insert failed. Only trust verified:true.
-            final data = response.data is Map
-                ? Map<String, dynamic>.from(response.data as Map)
-                : <String, dynamic>{};
-            if (data['verified'] == true) {
-              debugPrint('RazorpayService: verify-payment retry confirmed after ${delay.inSeconds}s');
-              await SubscriptionService.instance.refreshFromSupabase();
-              await MigratedKey.delete('localActivationAt');
-              return; // Payment verified server-side — stop retrying
-            }
-            debugPrint('RazorpayService: verify-payment returned 200 but verified=${data['verified']} — continuing retries');
-          }
-        } catch (e, st) {
-          debugPrint('RazorpayService: verify-payment retry failed after ${delay.inSeconds}s: $e');
-          unawaited(ErrorTelemetry.recordNonFatal(e, st,
-              reason: 'razorpay_verify_payment_retry'));
-        }
-      });
-    }
+        final response = await SupabaseService.instance.callFunction(
+          'verify-payment',
+          body: {
+            'payment_id': paymentId,
+            'order_id': orderId,
+            'plan': plan,
+          },
+        );
+        if (response.status != 200) return null;
+        // verify-payment returns 200 with verified:false for
+        // uncaptured payments. Only verified:true is trusted (the
+        // helper checks it); a verified:true reply always means an
+        // active subscriptions row exists (F33: a failed insert
+        // returns verified:false + 500).
+        return response.data is Map
+            ? Map<String, dynamic>.from(response.data as Map)
+            : <String, dynamic>{};
+      },
+      // The retry can land minutes later, after an account switch.
+      currentUserId: () => SupabaseService.instance.currentUser?.id,
+      inFlightOrderId: () =>
+          SubscriptionService.instance.paymentInFlightOrderId,
+      fallbackPlan: plan,
+      fallbackEndDate: _computeEndDate,
+      writeState: ({required String expiresAt, required String plan}) =>
+          SubscriptionService.instance.writeSubscriptionState(
+            isPro: true,
+            expiresAt: expiresAt,
+            plan: plan,
+          ),
+      clearPaymentInFlight: () =>
+          SubscriptionService.instance.clearPaymentInFlight(),
+      refresh: () => SubscriptionService.instance.refreshFromSupabase(),
+      clearLocalActivation: () => MigratedKey.delete('localActivationAt'),
+      onVerified: (delay) {
+        _invalidateSubscriptionProviders();
+        debugPrint(
+            'RazorpayService: verify-payment retry confirmed after ${delay.inSeconds}s');
+      },
+      onNotVerified: (delay) => debugPrint(
+          'RazorpayService: verify-payment retry after ${delay.inSeconds}s not verified — continuing retries'),
+      onError: (delay, e, st) {
+        debugPrint(
+            'RazorpayService: verify-payment retry failed after ${delay.inSeconds}s: $e');
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'razorpay_verify_payment_retry'));
+      },
+    );
   }
 }

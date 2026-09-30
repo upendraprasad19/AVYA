@@ -18,7 +18,7 @@
 --
 -- That trade makes an accidental prod run WORSE, not better: every statement
 -- below is an upsert (ON CONFLICT DO UPDATE), so instead of erroring it would
--- SILENTLY overwrite that account's profile, goal, subscription_status and
+-- SILENTLY overwrite that account's profile, goal and
 -- measurements, and insert synthetic workout/nutrition/weight rows into its
 -- real history. The failure mode moved from loud to silent, which is the
 -- opposite of the direction you want.
@@ -57,8 +57,6 @@ INSERT INTO public.users (
   id,
   email,
   full_name,
-  subscription_status,
-  subscription_expires_at,
   telegram_chat_id,
   telegram_connected,
   ai_chat_started_at,
@@ -70,8 +68,6 @@ VALUES (
   '039b8eb3-f9e9-4673-b7eb-7f14c1a53bc4',   -- fixed UUID for QA user
   'test6@gmail.com',
   'QA Tester',
-  'free',
-  NULL,
   NULL,
   false,
   NOW(),
@@ -82,7 +78,6 @@ VALUES (
 ON CONFLICT (id) DO UPDATE
   SET email               = EXCLUDED.email,
       full_name           = EXCLUDED.full_name,
-      subscription_status = EXCLUDED.subscription_status,
       onboarding_completed = EXCLUDED.onboarding_completed,
       last_active_at      = NOW();
 
@@ -271,11 +266,16 @@ VALUES (
 ON CONFLICT (id) DO NOTHING;
 
 -- ── 9. Mark QA user as free (no subscription) ───────────────────────────
--- This is the default state. Tests that need PRO use TestDataHelper.setProUser()
--- which writes to Hive configBox, not Supabase.
+-- This is the default state: the user has NO active `subscriptions` row
+-- (entitlement is derived from `subscriptions`; the users.subscription_status
+-- mirror column is dropped — OI-202). Tests that need PRO use
+-- TestDataHelper.setProUser() which writes to Hive configBox, not Supabase.
 
 -- ── VERIFICATION ─────────────────────────────────────────────────────────
 -- After running this seed, verify:
---   SELECT id, email, subscription_status FROM public.users
---     WHERE email = 'test6@gmail.com';
--- Expected: 1 row, subscription_status = 'free'
+--   SELECT u.id, u.email,
+--          EXISTS (SELECT 1 FROM public.subscriptions s
+--                   WHERE s.user_id = u.id AND s.status = 'active'
+--                     AND s.end_date > now()) AS is_pro
+--     FROM public.users u WHERE u.email = 'test6@gmail.com';
+-- Expected: 1 row, is_pro = false

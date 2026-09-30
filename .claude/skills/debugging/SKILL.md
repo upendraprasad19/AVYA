@@ -200,6 +200,7 @@ Per CLAUDE.md rules 21 + 22:
 | 2.78 | A NEW call site shares an EXISTING source-grep test's marker litera... | a PRE-EXISTING source-grep contract test — one this batch never touched and has no reas... | test/contracts/sync_natural_key_guard_test.dart |
 | 2.76 | A real-time test whose synthetic-clock anchor precedes setup that e... | a test that drives a REAL Timer against a synthetic clock ("start N ms before midnight,... | test/contracts/day_rollover_midnight_timer_test.dart |
 | 2.77 | A source-grep test survives not just the dead branch it guards, but... | a guard's literal conditional text (if (x == 'completed' && y == 'planned' && z != null... | test/contracts/sync_schedule_completion_payload_hash_index_writer_to_reader_test.dart |
+| 2.79 | A denormalized "cache" column outlives the fix that stopped trusting it; its last readers are the founder's dashboards | a docstring says "the column stays as a cache" / "writing it is fine, reading it as truth ... | test/contracts/subscription_columns_dropped_test.dart |
 
 ---
 

@@ -4998,3 +4998,256 @@ use: `gh run rerun --failed` clears it reliably when it fires — acceptable
 for now given it does not block any specific PR's own correctness, but
 should not become a standing habit given CLAUDE.md rule 20's ban on treating
 CI flakiness as permanently acceptable.
+
+
+## OI-135 — 60 of 125 migration-ledger hashes do not match their files, and nothing recomputes them (P2)
+
+- **Status**: CLOSED (2026-09-29, `migration-ledger-integrity`): Gate 39 now VERIFIES every ledger hash. A hash is valid iff it equals the sha256 of the file under its LF **or** CRLF form, so the 56 entries hashed on a Windows CRLF working copy stay byte-for-byte as recorded (no re-stamp — they are as-applied records). The 5 genuine drifts (057, 069, 070, 108, 123) are grandfathered BY NAME with a PINNED sha (`grandfatheredLedgerHashDrift`), so a further edit still fails and a pin that starts matching fails as stale. Founder call on the 5 was taken as the recommended default (pin, do not re-stamp) and flagged for veto at merge. Limits stated in `supabase/migrations/CLAUDE.md`: catches a forgotten re-stamp, not a deliberate edit + re-stamp. Tests: `migration_ledger_hash_lib_test.dart`, `check_applied_migrations_ledger_e2e_test.dart`; 9 mutations run (`gate_test_ledger.yaml`).
+- **Blocked on**: nothing technical. The fix shape is settled (below); what it needs is a decision on whether to backfill the 60 or grandfather them by name.
+- **Verified**: 2026-09-26 — RECOMPUTED by the coordinator: 147 hashable ledger entries, **61** mismatches, of which **56** equal sha256 of the file with LF→CRLF (hashed on a Windows CRLF working copy — content-identical) and only **5** are genuine content drift: 057, 069, 070, 108, 123.
+  PRIOR (kept verbatim): 2026-08-20 — measured, not estimated. Recomputed sha256 for every entry in `backups/applied_migrations.json` against its `supabase/migrations/*.sql` file: **125 entries → 64 match, 60 mismatch, 1 non-hash sentinel (120b, deliberate)**.
+
+`backups/applied_migrations.json` records a `hash` per applied migration. Its documented purpose
+is drift auditing — "recompute hashes on drift", per `applied_migrations_parity_test.dart:36`.
+**Nothing recomputes them.** `check_applied_migrations_ledger.dart` requires the `hash` KEY to be
+present (`_requiredKeys`) and never looks at its value; no other gate reads it. So the field has
+been decorative since it was introduced, and has silently drifted on 48% of entries.
+
+**Found by the round-2 review of `claude/oi-pending-hold-weeks-1od97o`**, which correctly flagged
+migration 120's hash as stale — I had updated it in one commit and then edited the file again in
+the next, invalidating it. That instance is fixed. The finding only became interesting when the
+count was checked: 120 was not special, it was the 61st.
+
+**Why it drifts by construction:** the hash tracks the FILE, and migration files legitimately get
+edited after they are applied — corrected comments, added rollback blocks, clarified headers. Every
+such edit invalidates a hand-maintained hash, and nothing notices. A hash maintained by memory
+across a repo this size will always converge on wrong.
+
+**Fix shape:**
+1. A gate that recomputes sha256 for every ledger entry naming a real file and fails on mismatch.
+   It must skip entries with no file by design (120b's `unverifiable:no-artifact` sentinel) and
+   entries hand-applied outside the migration system (119).
+2. The 60 existing mismatches get **enumerated by name** as `grandfathered:` in that script — a
+   terminal exemption, exactly the precedent `check_gate_test_ledger.dart` set for its 84
+   pre-2026-08-10 gates, and explicitly NOT a deferral. Membership by name, not by date.
+3. Mutation-prove it per rule 24 and add its `gate_test_ledger.yaml` entry.
+
+**Deliberately NOT bundled into the batch that found it.** Adding a hard-failing gate with 60
+pre-existing violations to a merge-blocking step would be a ship-stop for a hygiene problem — the
+same error class as the 2026-07-25/26 required-status-checks incident. The one instance that batch
+caused is fixed in it; the class is filed here.
+
+---
+
+**UPDATE 2026-09-26 (backlog triage + `ci-green-batch-a`):** The decision shrinks from 'grandfather ~60' to: hash LF-normalised content, re-stamp the 56 (provably content-identical), and a FOUNDER call on the 5 genuine drifts (grandfather by name or re-stamp after review). A raw-byte gate would disagree between the Windows laptop and Linux CI — normalise first. Pairs with OI-137 (hash shape) and OI-163 (header gate).
+
+## OI-137 — the migration-ledger gate checks that `hash:` EXISTS, never that it is a hash; a literal `%s` passed it (P2)
+
+- **Status**: CLOSED (2026-09-29, `migration-ledger-integrity`): step 1 (shape) and step 2 (value) both shipped with OI-135. `hash` must be `sha256:<64 hex>` or an `unverifiable:<reason>` sentinel; a sentinel is legal only when the migration has no `.sql` of its own (`120b`, `123b`), and a sentinel beside an existing file fails so it cannot become the new escape hatch. A literal `sha256:%s` now fails (pinned by both the lib test and the gate e2e).
+- **Blocked on**: nothing technical. Same grandfather-or-backfill decision as OI-135 — 60 of 126 entries already carry hashes that match no artifact, so a strict flip is a ship-stop until they are recomputed or enumerated by name.
+- **Verified**: 2026-08-20 — reproduced, not inferred. The entry for migration `121` was written with `"hash": "sha256:%s"` — an unsubstituted Python format placeholder. `dart run scripts/check_applied_migrations_ledger.dart` reported PASS. Caught by the B-pass on the same commit, and corrected there to `sha256:ac8c01a26e32…`.
+
+`scripts/check_applied_migrations_ledger.dart:26` is the whole story:
+
+```dart
+const _requiredKeys = ['migration', 'applied_at', 'hash', 'applier'];
+```
+
+The gate asserts every entry HAS the four keys. It never looks at what is in them. So
+`sha256:%s`, `sha256:`, `TODO`, or the empty-ish `sha256:x` all satisfy it identically, and the
+field that exists to attest replay fidelity attests nothing.
+
+**Why this one is worth a number rather than a quiet fix.** It is the third instance in two days
+of the same shape — a gate green because it checks the presence of a thing rather than the thing
+(OI-132: Gate 31's input could not see a fileless migration; OI-136: Gate 40 "validates" YAML it
+never parses). And it landed *inside the commit whose own note explains why a meaningless hash on
+this entry must not happen*, which is as close to a controlled demonstration as this class gets:
+the author knew the failure mode, wrote it down, and still shipped an instance of it past the gate
+in the same file.
+
+**Fix shape:** two cheap checks, one strict and one advisory.
+1. Shape: `hash:` must match `^sha256:[0-9a-f]{64}$` OR a documented sentinel string (the `120b`
+   entry deliberately carries one, because a fileless entry has nothing to hash — see its note).
+   That alone would have caught `%s`, and costs nothing.
+2. Value: where a `.sql` file exists for the migration, recompute its sha256 and compare. That is
+   the OI-135 half and is the one that needs the grandfather decision first, because it reddens 60
+   pre-existing entries on day one.
+
+Step 1 is separable and blocks nothing — it is the part worth doing on its own.
+
+**Related:** OI-135 (60 of 126 ledger hashes match nothing, and nothing recomputes them — this is
+its mint-time sibling: 135 is about drift, 137 is about a value that was never a hash at all),
+OI-136, OI-132.
+
+## OI-263 — Migration-number allocator: reserve migration numbers server-side (mint_oi.sh pattern) and refuse a number already applied live
+
+- **Status**: CLOSED (2026-09-29, `migration-ledger-integrity`) for what shipped: `scripts/mint_migration.sh` (server-side `mig/N` compare-and-swap, copy of `mint_oi.sh`'s core with a parity test), `scripts/check_migration_number_reserved.dart` (every added `NNN_*.sql` needs a reservation; same-number collision with a different file on origin/main fails), `vercel.json` skips `mig/*`, blast pins, docs. **The apply-time "refuse a number already applied live" half of the chosen fix shape was CUT** by founder decision after three plan-review rounds each found new defects in it, and is **OI-272** (with the round-3 evidence). Honest scope of what shipped: a reservation proves the author looked at the allocator, NOT that the branch owns N; two branches can still share one reservation and only Gate 14 catches it at merge; live names are 69/145 unprefixed so `--live` cannot see those. The planning also fixed `check_migration_ledger_paired.dart`, which read `041_chunks/041_00_alter.sql` as migration 041 and never matched a letter-suffix file (it had no test).
+- **Blocked on**: none
+- **Verified**: 2026-09-28 — live list_migrations held 148 while the tree did not
+- **Identified**: 2026-09-28 · filed via mint_oi.sh from branch `day-swapper-sync-load`; founder asked for it
+
+Symptom, measured 2026-09-28: the day-swapper-sync-load migration was renumbered 145 → 147 → 148
+as other batches landed on `main`, then had to become **149 at apply time**, because live
+`list_migrations` already held `20260927224028 / 148_coach_extraction_locked_fields`. That branch
+(`single-owner-a2b`) had applied 148 to prod before merging to `main`, so no file in this
+worktree's tree and nothing on `origin/main` showed 148 as taken. Nothing allocates a migration
+number today: the next number is read off `ls supabase/migrations/` by whoever writes the file.
+OI-258 is the ledger-side symptom of the same gap (145/146 collided across diverged `main`s).
+
+- **Class**: a green check is only as wide as its input set
+  (`feedback_green_check_input_set_width` #60). "Is N free?" has THREE sources — the local tree,
+  `origin/main`, and the live database — and both collisions so far came from the one nobody
+  checked.
+- **Industry norm, for the record**: timestamp-prefixed filenames (Rails, Supabase's own
+  `supabase migration new`) make a git collision near-impossible with no coordination; sequential
+  numbering (Django, Alembic, Flyway) relies on a merge-time "two heads" detector. Neither covers a
+  migration applied LIVE from an unmerged branch, which is the case that bit here.
+- **Fix shape (founder chose this 2026-09-28)**: `scripts/mint_migration.sh`, reusing
+  `mint_oi.sh`'s compare-and-swap ref reservation (`refs/heads/mig/N`), so two sessions cannot
+  claim one number; the mint also refuses N when live `list_migrations` (or
+  `backups/applied_migrations.json` on `origin/main`) already carries it. Plus a pre-apply check:
+  before any `apply_migration`, compare the file's number against live `list_migrations` and refuse
+  a taken number. Keeps the 3-digit scheme (tooling such as `latestMigrationDefining` parses it);
+  switching to timestamps was offered and not chosen. Needs its own tests, mutation-proven per
+  rule 24 if it becomes a `check_*` gate.
+- **Source**: day-swapper-sync-load Task 34 apply.
+
+## OI-138 — `retire_worktree` removes the worktree but leaves the BRANCH, silently burning the slug
+
+- **Status**: CLOSED (2026-09-29, `branch-lifecycle-cleanup`) — `retire_worktree.dart` now deletes the worktree's own local branch after a successful removal; diagnose `4c3fc4`
+- **Verified**: 2026-08-25 — read `scripts/retire_worktree.dart:275-282` directly: it calls
+  `git worktree remove <path>`, reports RETIRED on exit 0, and never references the branch.
+- **Identified**: 2026-08-16, as a "second, smaller gap" inside OI-128. **Split out 2026-08-25**
+  when OI-128 closed, rather than being closed with its parent — the parent's fix (the
+  regenerable list) does not touch this at all, so closing both on one commit would have recorded
+  a fix that was never written.
+- **Blocked on**: none. Small, but see the trap below — it is not a one-liner.
+- **What's missing**: after a successful `git worktree remove`, delete the branch with
+  `git branch -d`. Use `-d`, NEVER `-D`: the safe form refuses an unmerged branch, and that
+  refusal is the entire guarantee. The four-leg predicate has already proven the branch merged by
+  the time we get here, so `-d` is expected to succeed; if it does not, that is new information
+  and the branch must be KEPT and reported, not force-deleted.
+- ⚠ **THE TRAP: the worktree slug is NOT the branch name.** Verified live 2026-08-25 —
+  `git worktree list` shows `.claude/worktrees/post38-auth-fixes` sitting on branch
+  `rescue/post38-auth-inflight`, and three other `rescue/*` branches are in the same shape. A
+  delete keyed on the directory slug would either fail to find a ref or, worse, match an
+  unrelated branch that happens to share the name. The loop already has the real branch in scope
+  (`classifyWorktree` is called with `merged.contains(branch)`), so the fix must use THAT value,
+  not `name`.
+- **Symptom when it bites**: `sh scripts/new-worktree.sh <same-slug>` fails with "branch already
+  exists". The slug is burned and the operator has to `git branch -d <slug>` by hand — which is
+  exactly the state OI-128's own workaround note describes.
+- **Regression test shape**: extend `test/scripts/retire_worktree_e2e_test.dart` (it already
+  builds real linked worktrees). Two cases, and the second is the one that matters: (1) retiring a
+  merged worktree deletes its branch and the slug is immediately reusable; (2) a worktree whose
+  BRANCH NAME DIFFERS FROM ITS SLUG deletes the branch, not the slug-named ref — construct it the
+  way `rescue/*` did, with `git worktree add -b rescue/<x> .claude/worktrees/<x>`.
+- **Blast radius estimate**: `platform` — `scripts/retire_worktree*.dart` is NOT individually pinned — CORRECTED 2026-09-29: this entry
+  claimed it was pinned above the `scripts/** → feature` catch-all in `docs/blast_radius.yaml`, but `grep retire_worktree docs/blast_radius.yaml` returns nothing (OI-139 records the same fact), and the classifier returns `feature` for the tool + its test alone; this batch is `platform` only because its diff also touches CLAUDE.md. Adds a DESTRUCTIVE
+  operation (branch deletion) to a tool that currently only removes directories, so it needs the
+  mutation-proven treatment its siblings already carry.
+- **Related**: OI-128 (parent, CLOSED 2026-08-25 — the regenerable-list half), §4.13 point 6.
+
+**Closed 2026-09-29 (`branch-lifecycle-cleanup`, `closes-oi: OI-138`).** Shipped: after `git worktree remove`
+succeeds the tool runs `git merge-base --is-ancestor` then `git branch -d --` on `w.branch` (never the
+folder slug, never `-D`); `main`/`develop` and `rescue/*` `oi/*` `dependabot/*` are never deleted; a
+refusal prints `KEPT-BRANCH` with git's first line and no force-delete advice. Also fixed in passing:
+the merged set used `%(refname:short)`, which prints `heads/T` when a tag `T` exists, silently keeping
+that worktree forever. Tests: `test/scripts/retire_worktree_e2e_test.dart` (10 new, each on its own repo,
+incl. the folder-slug-differs case this entry called the trap, and the remote-deleted-upstream matrix) +
+`retire_worktree_lib_test.dart`. The ancestry re-check closes a race and is pinned by a hook-driven e2e test that makes the race deterministic (mutation: 1 red). Remote
+branches are out of scope here: GitHub's `delete_branch_on_merge` covers PR merges; any other route is OI-273.
+
+## OI-182 — the payment grace window closes before the last verify-payment retry fires (P2)
+
+- **Status**: CLOSED · 2026-09-29 · fixed on branch `oi-182-202-subscription-state` — `kPaymentGraceWindow` is now DERIVED from the retry schedule and the per-call bounds (`lib/core/constants/payment_timing.dart`, ≈21m45s, was a bare 10-minute literal) and every activation-flow network call is bounded; the retry success path now clears the grace and writes PRO state in a tested order. Diagnose `f2a6d1` (`docs/diagnoses/2026-09-29-payment-grace-window-shorter-than-last-retry-f2a6d1.md`). Client-only: reaches users with the next founder-initiated APK build. Stated residue: the retries are in-memory timers (best-effort under suspend / app kill).
+- **Blocked on**: none
+- **Verified**: 2026-09-11 — read both constants directly, no live query needed
+- **What**: `SubscriptionService._paymentGraceWindow` is **10 minutes**
+  (`lib/core/services/subscription_service.dart:162`). `RazorpayService`'s
+  verification-retry schedule is **`[60s, 5m, 15m]`**
+  (`lib/core/services/razorpay_service.dart:734-738`). The grace window closes
+  **5 minutes before the final retry even fires**.
+- **Consequence**: if a `verifyFromServer()` check lands in that 10–15 minute gap
+  while the webhook is also delayed, `isPaymentInFlight` already reads `false` and
+  the code runs `_downgradeLocally()` (`subscription_service.dart:1087-1089`) for a
+  user who genuinely paid. Requires the webhook AND the first two retries to all be
+  late — rare, but the two constants disagreeing is a plain authoring gap, not a
+  designed tradeoff; nothing suggests 10 minutes was chosen deliberately against a
+  15-minute retry tail.
+- **Surfaced by**: OI-162 slice 4's review round 2, while checking whether
+  switching `verify-payment`'s rate limit to fail-closed removes user-visible
+  safety margin. It does, marginally — one of the four attempts that could still
+  land inside the grace window is now refused if the 20/10min cap is exhausted.
+  That interaction is real but secondary; the mismatch itself pre-exists slice 4
+  and is unrelated to its scope (an EF-side rate-limit fix has no coupling to a
+  client-side Dart timing constant), so it is filed separately rather than folded
+  in. Per CLAUDE.md §4.2 this is a genuinely different bug, not a re-wrapped
+  deferral of slice 4's own scope.
+- **Proposed repair**: widen `_paymentGraceWindow` to comfortably exceed 15
+  minutes (e.g. 20) so it never closes before the retry schedule completes.
+  Mechanically trivial — one constant — but touches the subscription-downgrade
+  path, so treat it as its own reviewed unit rather than a drive-by edit.
+- **Blast radius**: `lib/core/services/subscription_service.dart` — account tier
+  (payment/subscription path).
+- **Related**: OI-162 (slice 4 plan, `docs/audit/oi162-slice4-plan.md`).
+
+## OI-202 — users.subscription_status never reconciles to free after expiry
+
+- **Status**: CLOSED · 2026-09-30 · diagnose `c7e3b9` · migration 152 (cloud version 20260930065332)
+- **Blocked on**: none
+- **Closure**: chose fix shape (b) — derive and drop. Every reader now derives from `public.subscriptions` (`fetchLatestActiveEndByUser` + `fetchProUserIds`/`isProUser`): founder digest, `telegram-admin-bot` `/expiring` + `/user`, `admin-dashboard-data`, `expiry-reminder`, `bot.py` `is_pro`, and `private.founder_metrics()` (pro_expired = any subscriptions row and no live active one; free = never subscribed). The webhook and verify-payment stopped writing the mirror (deployed webhook v27 / verify-payment v23, merged to `main` as 93e61579 with CI green BEFORE the apply, per Hermes L35 F1). Migration 152 dropped both columns, `trg_subscription_update_user`, `update_user_subscription_status()` and `extend_subscription(uuid,integer)`. Live after apply: 0 columns / 0 trigger / both functions absent / no function body names either column; `founder_metrics()` 38 / pro_active 5 / pro_expired 2 / free 31 (dry-run predicted exactly this). The 8 pre-drop mirror rows are in `backups/subscription_mirror_columns_snapshot_2026-09-29.json`. Pinned by `test/contracts/migration_152_drop_subscription_mirror_test.dart` (13, 10 mutations reddened), `test/contracts/subscription_columns_dropped_test.dart` and `supabase/functions/_shared/subscription_test.ts`.
+- **Verified**: 2026-09-15, founder spot-check of `public.users` via the Supabase
+  table editor — `test6@gmail.com` (`subscription_status='pro'`,
+  `subscription_expires_at` 2026-07-03) and `test3@gmail.com` (same,
+  `subscription_expires_at` 2026-06-22), both over 2 months past their own
+  listed expiry, still read `'pro'`. Cross-checked against the already-shipped
+  fix at the consumption layer: `supabase/functions/_shared/subscription.ts`'s
+  docstring (added 2026-07-26) documents the identical symptom in production
+  ("Live it claimed 6 PRO users, all 6 lapsed. `morning-alert` read it and sent
+  Gemini-generated PRO-tier copy to churned users") and names the root cause —
+  three writers (the `update_user_subscription_status` trigger,
+  `razorpay-webhook/index.ts:604`, `verify-payment/index.ts:629`) set the column
+  to `'pro'`; NONE unset it, no cron/trigger reconciles it. Confirmed every real
+  consumer has since been migrated off this column: the client
+  (`subscription_service.dart` → `verify-subscription/index.ts:66-73` queries
+  `subscriptions` directly with `status='active'` + a live `end_date > now()`
+  compare; zero references to `subscription_status` anywhere under `lib/`),
+  `morning-alert`/`weekly-recap-ready` (via `_shared/subscription.ts`'s
+  `fetchProUserIds`/`isProUser`, same predicate), and `telegram-admin-bot`'s
+  `/user` command (`index.ts:404-436` — selects `subscription_expires_at` from
+  `users` but never displays it; the printed "plan: X (ends Y)" line is
+  re-derived from a fresh `subscriptions` query, per its own inline comment at
+  `:413-417`).
+- **Scope note**: not a live bug — nothing that gates an actual decision reads
+  this column today (verified above). Purely misleading for anyone — founder,
+  future session, ad-hoc dashboard — manually inspecting `public.users`
+  directly, exactly as happened here. The column drifts further from reality
+  forever under the current architecture, since no writer ever resets it on
+  expiry.
+- **Fix shape (not decided)**: either (a) add a reconciliation job/trigger that
+  flips `subscription_status` back to `'free'` and nulls
+  `subscription_expires_at` once the backing `subscriptions.end_date` lapses
+  (keeps the column trustworthy for ad-hoc queries), or (b) drop both columns
+  outright since no code path reads them for a decision — would need a
+  dependency sweep first (the 3 writers above, plus `telegram-admin-bot`'s
+  unused `subscription_expires_at` select at `:406`) and its own migration.
+- **Identified**: 2026-09-15 · filed via mint_oi.sh from branch `oi-stale-subscription-status`
+
+## OI-245 — Restored PRO photo-coach turns are replayed to Gemini as text (sync_coach hardcodes mode quick)
+
+- **Status**: CLOSED · 2026-09-29 · fixed by `6e3975ae` (branch `oi-245-246-restore-fixes`, merged via PR #50) — a restored photo/video coach row now gets its real media mode back, so the context builder's `mode == 'media'` filter sees it. Diagnose `a2c9e5` (`docs/diagnoses/2026-09-28-coach-restored-media-mode-a2c9e5.md`). Client-only fix: it reaches users with the next APK build.
+- **Blocked on**: none
+- **Verified**: 2026-09-29 — fix commit read on `main`; diagnose-doc `a2c9e5` exists. (Filed 2026-09-26 — code read: `lib/core/services/sync/sync_coach.dart:261` restores every row with `mode: 'quick'`; the history filter at `coach_interaction_repository.dart:362` excludes only `mode == 'media'`; PRO photo rows are channel `app`. So a restored photo turn loses its media marker and is replayed into Gemini context as a plain-text turn.
+- **Identified**: 2026-09-26 · filed via mint_oi.sh from branch `ci-green-batch-a` (backlog triage)
+
+Writer: `sync_coach.dart:261` (restore). Reader: `coach_interaction_repository.dart:362` (context builder). Classic writer/reader field drift — fix is to restore the row's real mode, with a writer→reader test.
+
+## OI-246 — Deleted exercise logs reappear after a cloud restore (deleteLog removes the Hive key only)
+
+- **Status**: CLOSED · 2026-09-29 · fixed by `6e3975ae` (branch `oi-245-246-restore-fixes`, merged via PR #50) — a deleted exercise log is now tombstoned in the cloud instead of only removed from Hive (`PendingExlogDeletes` queue + drain, restore skips queued keys). Server side is live: migrations 150 + 151 applied, `weekly-recalc` v25 and `pr-detection` v17 deployed with the `deleted_at` filter (`88fef854`). Diagnose `e1c8b4` (`docs/diagnoses/2026-09-28-exlog-tombstone-resurrection-e1c8b4.md`). The client half reaches users with the next APK build. Read-side residue is filed separately as OI-269 (4 other `workout_log_exercises` readers that still skip the `deleted_at` filter).
+- **Blocked on**: none
+- **Verified**: 2026-09-29 — fix commit and deploy record read on `main`. (Filed 2026-09-26 — code read: `deleteLog` removes the Hive `exlog_` key only (no tombstone, no cloud delete), and restore re-puts every cloud row whose key is absent locally (`lib/core/services/sync/sync_workout.dart:916`). A user-deleted log therefore comes back on the next restore.
+- **Identified**: 2026-09-26 · filed via mint_oi.sh from branch `ci-green-batch-a` (backlog triage)
+
+Needs a tombstone or cloud-side delete; restore-completeness class (docs/architecture/sync.md).

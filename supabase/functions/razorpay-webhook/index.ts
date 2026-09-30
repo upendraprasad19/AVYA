@@ -552,18 +552,17 @@ serve(async (req: Request) => {
     // create a duplicate subscription row and double the user's PRO
     // duration. UNIQUE constraint on razorpay_payment_id (migration 010)
     // lets us upsert with ignoreDuplicates. If a row already exists for
-    // this payment_id we skip the insert entirely but still proceed to
-    // promo redemption / users.subscription_status update (safe because
-    // those are idempotent themselves: RPC uses `used_count + 1` under
-    // the promo_code_uses audit row which is write-once, and the users
-    // update is a pure upsert of the same (status, end_date) pair).
+    // this payment_id we skip the insert AND the promo redemption below
+    // (`!alreadyProcessed` gate): increment_promo_used_count is NOT
+    // idempotent, so redeeming again would double-burn used_count. The same
+    // holds when the insert itself loses a race (23505, below).
     const { data: existing } = await supabaseClient
       .from("subscriptions")
       .select("id")
       .eq("razorpay_payment_id", razorpayPaymentId)
       .maybeSingle();
 
-    const alreadyProcessed = existing !== null;
+    let alreadyProcessed = existing !== null;
     if (alreadyProcessed) {
       console.log(
         `Idempotent webhook: payment ${razorpayPaymentId} already recorded, skipping insert`,
@@ -583,8 +582,16 @@ serve(async (req: Request) => {
           created_at: now.toISOString(),
         });
 
-      // 23505 = unique_violation (Postgres). A concurrent webhook racer
-      // beat us to the insert — not an error, the row exists either way.
+      // 23505 = unique_violation (Postgres). A concurrent racer (another
+      // webhook delivery, or verify-payment) beat us to the insert — not an
+      // error, the row exists either way. Whoever CREATED the row owns the
+      // promo redemption, so this path must NOT redeem again: mark it processed
+      // (Hermes L21 2026-09-29 — before this the 23505 arm fell through with
+      // alreadyProcessed=false and double-burned used_count; verify-payment's
+      // weInsertedTheRow gate is the mirror of this).
+      if (insertError && insertError.code === "23505") {
+        alreadyProcessed = true;
+      }
       if (insertError && insertError.code !== "23505") {
         console.error("Failed to insert subscription:", insertError);
         return new Response(
@@ -597,25 +604,12 @@ serve(async (req: Request) => {
       }
     }
 
-    // Update users table
-    const { error: updateError } = await supabaseClient
-      .from("users")
-      .update({
-        subscription_status: "pro",
-        subscription_expires_at: endDate.toISOString(),
-      })
-      .eq("id", userId);
-
-    if (updateError) {
-      console.error("Failed to update user subscription status:", updateError);
-      return new Response(
-        JSON.stringify({ error: "Subscription created but failed to update user status" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
+    // OI-202: there is deliberately NO `users` write here any more. This
+    // handler used to mirror (status, end_date) onto users.subscription_status /
+    // users.subscription_expires_at. Both columns are dropped (migration 152) —
+    // `subscriptions` is the only entitlement record, and the insert above is
+    // the complete, idempotent write. A failed insert returns 500 (Razorpay
+    // then retries; the 23505 guard makes the retry safe).
 
     // ── Redeem promo code if applied ────────────────────────────
     // Skip on idempotent replay — increment_promo_used_count is NOT

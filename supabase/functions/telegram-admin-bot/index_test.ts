@@ -5,7 +5,7 @@ Deno.env.set("TELEGRAM_WEBHOOK_SECRET", "test-webhook-secret-12345");
 Deno.env.set("FOUNDER_TELEGRAM_CHAT_ID", "12345");
 Deno.env.set("TELEGRAM_BOT_TOKEN", "dummy-telegram-token");
 
-import { assertEquals, assertRejects, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assert, assertEquals, assertRejects, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { HELP_TEXT, handler, isAuthorizedTelegramSender, parseCommand, routeCommand, cmdStatus, cmdRevenue, cmdSubs, bucketSubsByPlan, cmdExpiring, cmdUsers, cmdFind, sanitizeFindQuery, cmdUser, cmdAlerts, cmdErrors, cmdCron, cmdDigest, looksLikeUuid } from "./index.ts";
 
 Deno.test("isAuthorizedTelegramSender requires BOTH the secret token and the chat id to match", async () => {
@@ -380,29 +380,93 @@ Deno.test("cmdSubs renders an explicit cap marker when the read hits SUBS_QUERY_
   assertStringIncludes(text, "capped at 1000 rows");
 });
 
-Deno.test("cmdExpiring reports 7d and 30d counts", async () => {
-  let lteCallCount = 0;
-  const fake = {
-    from: () => ({
-      select: () => ({
-        not: () => ({
-          gte: () => ({
-            lte: () => {
-              lteCallCount++;
-              if (lteCallCount === 1) {
-                return Promise.resolve({ count: 3, data: null, error: null }); // 7d: 3
-              } else {
-                return Promise.resolve({ count: 9, data: null, error: null }); // 30d: 9
-              }
-            },
-          }),
-        }),
-      }),
-    }),
+/**
+ * OI-202: cmdExpiring reads `subscriptions` through `fetchLatestActiveEndByUser`
+ * (paged .select().eq().gte().order().range()). The fake serves `rows` for that
+ * table and records the filters, so a wrong table / status filter / floor is a
+ * red test rather than a silent zero.
+ */
+function expiringFake(
+  rows: Array<{ user_id: string; end_date: string }> | "error",
+  seen: { table?: string; filters: Array<[string, string, unknown]> } = { filters: [] },
+) {
+  return {
+    from: (table: string) => {
+      seen.table = table;
+      const builder: Record<string, unknown> = {};
+      builder.select = () => builder;
+      builder.eq = (c: string, v: unknown) => (seen.filters.push(["eq", c, v]), builder);
+      builder.gte = (c: string, v: unknown) => (seen.filters.push(["gte", c, v]), builder);
+      builder.order = () => builder;
+      builder.range = (from: number, to: number) =>
+        Promise.resolve(
+          rows === "error"
+            ? { data: null, error: { message: "boom" } }
+            : { data: rows.slice(from, to + 1), error: null },
+        );
+      return builder;
+    },
   };
-  const text = await cmdExpiring(fake);
-  assertStringIncludes(text, "7d: 3");
-  assertStringIncludes(text, "30d: 9");
+}
+
+const inDays = (d: number) => new Date(Date.now() + d * 24 * 60 * 60 * 1000).toISOString();
+
+Deno.test("cmdExpiring reports 7d and 30d counts from each user's LATEST active end (OI-202)", async () => {
+  const seen: { table?: string; filters: Array<[string, string, unknown]> } = { filters: [] };
+  const text = await cmdExpiring(expiringFake([
+    { user_id: "u-a", end_date: inDays(3) },
+    // u-b renewed: a near row AND a far row -> latest is 90d, so NOT expiring
+    { user_id: "u-b", end_date: inDays(2) },
+    { user_id: "u-b", end_date: inDays(90) },
+    { user_id: "u-c", end_date: inDays(20) },
+    { user_id: "u-d", end_date: inDays(45) },
+  ], seen));
+  assertStringIncludes(text, "7d: 1");
+  assertStringIncludes(text, "30d: 2");
+  assertEquals(seen.table, "subscriptions");
+  assert(seen.filters.some(([m, c, v]) => m === "eq" && c === "status" && v === "active"));
+  assert(seen.filters.some(([m, c]) => m === "gte" && c === "end_date"));
+});
+
+Deno.test("cmdExpiring boundary: a user ending exactly at now+7d counts in 7d (window is closed at the top)", async () => {
+  // The command reads the clock itself, so pin the instants by stubbing Date.now
+  // through a fixed `now` around the call.
+  const realNow = Date.now;
+  const fixed = new Date("2026-09-11T08:00:00Z").getTime();
+  Date.now = () => fixed;
+  try {
+    const OrigDate = Date;
+    // deno-lint-ignore no-explicit-any
+    (globalThis as any).Date = class extends OrigDate {
+      // deno-lint-ignore no-explicit-any
+      constructor(...a: any[]) {
+        // deno-lint-ignore no-explicit-any
+        if (a.length === 0) super(fixed); else super(...(a as [any]));
+      }
+    };
+    try {
+      const at7 = new OrigDate(fixed + 7 * 24 * 60 * 60 * 1000).toISOString();
+      const at30 = new OrigDate(fixed + 30 * 24 * 60 * 60 * 1000).toISOString();
+      const text = await cmdExpiring(expiringFake([
+        { user_id: "u7", end_date: at7 },
+        { user_id: "u30", end_date: at30 },
+      ]));
+      assertStringIncludes(text, "7d: 1");
+      assertStringIncludes(text, "30d: 2");
+    } finally {
+      // deno-lint-ignore no-explicit-any
+      (globalThis as any).Date = OrigDate;
+    }
+  } finally {
+    Date.now = realNow;
+  }
+});
+
+Deno.test("cmdExpiring THROWS on a failed read instead of printing a zero (OI-202)", async () => {
+  // The MESSAGE is pinned, not just "it throws": without the explicit null
+  // guard the code would still throw — a TypeError from iterating `null` — so a
+  // bare assertRejects cannot tell the guard from an accident (mutation B10).
+  await assertRejects(() => cmdExpiring(expiringFake("error")), Error, "subscriptions read failed");
 });
 
 Deno.test("looksLikeUuid recognizes a v4-shaped uuid and rejects an email", () => {
@@ -562,6 +626,25 @@ Deno.test("cmdUser routes a uuid-shaped arg to an id lookup and an email-shaped 
   assertEquals(usedColumn, "email");
 });
 
+Deno.test("cmdUser's users select names no dropped mirror column (OI-202)", async () => {
+  let selected = "";
+  const fake = {
+    from: () => ({
+      select: (cols: string) => {
+        selected = cols;
+        return {
+          eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }),
+        };
+      },
+    }),
+  };
+  await cmdUser(fake, ["someone@example.com"]);
+  // Selecting a column that no longer exists makes PostgREST 400 EVERY /user.
+  assertEquals(selected.includes("subscription_expires_at"), false);
+  assertEquals(selected.includes("subscription_status"), false);
+  assertEquals(selected, "id, email, full_name, created_at, last_active_at");
+});
+
 Deno.test("cmdUser reports 'not found' rather than a raw null/error for a missing user", async () => {
   const fake = {
     from: () => ({
@@ -609,7 +692,7 @@ Deno.test("cmdUser with an active subscription renders the plan line with end da
                   return {
                     order: () => ({
                       limit: () => Promise.resolve({
-                        data: [{ plan: "yearly", status: "active", end_date: "2027-01-15T00:00:00Z" }],
+                        data: [{ plan: "yearly", status: "active", end_date: "2099-01-15T00:00:00Z" }],
                         error: null,
                       }),
                     }),
@@ -628,7 +711,7 @@ Deno.test("cmdUser with an active subscription renders the plan line with end da
   assertEquals(subEqCalls, [["user_id", "u42"], ["status", "active"]]);
   assertEquals(
     text,
-    "<b>VIP User</b>\nvip@example.com\nid: u42\nsigned up: 2026-01-15\nlast active: 2026-09-12\nplan: yearly (ends 2027-01-15)",
+    "<b>VIP User</b>\nvip@example.com\nid: u42\nsigned up: 2026-01-15\nlast active: 2026-09-12\nplan: yearly (ends 2099-01-15)",
   );
 });
 
@@ -674,8 +757,8 @@ Deno.test("cmdUser with TWO active subscription rows (a real live shape — rene
                       limitArg = n;
                       return Promise.resolve({
                         data: [
-                          { plan: "yearly", status: "active", end_date: "2026-08-01T00:00:00Z" },
-                          { plan: "monthly", status: "active", end_date: "2027-06-01T00:00:00Z" },
+                          { plan: "yearly", status: "active", end_date: "2098-08-01T00:00:00Z" },
+                          { plan: "monthly", status: "active", end_date: "2099-06-01T00:00:00Z" },
                         ],
                         error: null,
                       });
@@ -698,8 +781,44 @@ Deno.test("cmdUser with TWO active subscription rows (a real live shape — rene
   // the code trusts data[0], not that it re-sorts client-side).
   assertEquals(
     text,
-    "<b>Renewed User</b>\nrenewed@example.com\nid: u-multi\nsigned up: 2026-01-01\nlast active: 2026-09-10\nplan: yearly (ends 2026-08-01)",
+    "<b>Renewed User</b>\nrenewed@example.com\nid: u-multi\nsigned up: 2026-01-01\nlast active: 2026-09-10\nplan: yearly (ends 2098-08-01)",
   );
+});
+
+Deno.test("cmdUser: an active-status row whose end_date has PASSED reads as free with the lapse date, not as a live plan (Hermes L1)", async () => {
+  const fake = {
+    from: (table: string) => {
+      if (table === "users") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: () => Promise.resolve({
+                data: { id: "u77", email: "lapsed@example.com", full_name: "Lapsed", created_at: "2026-01-15T10:30:00Z", last_active_at: "2026-09-12T08:00:00Z" },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      return {
+        select: () => ({
+          eq: () => ({
+            eq: () => ({
+              order: () => ({
+                limit: () => Promise.resolve({
+                  data: [{ plan: "monthly", status: "active", end_date: "2026-07-03T00:00:00Z" }],
+                  error: null,
+                }),
+              }),
+            }),
+          }),
+        }),
+      };
+    },
+  };
+  const text = await cmdUser(fake, ["lapsed@example.com"]);
+  assertStringIncludes(text, "plan: free (monthly lapsed 2026-07-03)");
+  assertEquals(text.includes("ends 2026-07-03"), false);
 });
 
 Deno.test("cmdUser without an active subscription renders 'plan: free', reading from `subscriptions` (never users.subscription_status)", async () => {
@@ -1129,19 +1248,9 @@ function makeEmptyDigestFake() {
       order: (_col: string, _opts?: Record<string, unknown>) => builder,
       // Terminal methods that return Promises
       //
-      // `.lte()` is terminal here, not intermediate: readDigestSections'
-      // expiringSoonRead (founder_digest_content.ts:484-510) is the ONLY
-      // caller of `.lte()` in this module and awaits it directly (no
-      // trailing .order()/.range()/.limit()), reading `r7.count`/`r7.error`
-      // off the result directly. Grepped: `.lte(` has exactly 2 call sites
-      // in founder_digest_content.ts, both this one pair, neither chained
-      // further. Matching the real terminal shape here is a structural-
-      // fidelity fix, not a mutation-sensitivity one — a 0-valued count is
-      // indistinguishable whether it comes from this Promise's explicit 0
-      // or from a broken chainable `.lte()`'s `undefined ?? 0` fallback, so
-      // no assertion on THIS fixture's zero counts can catch a regression
-      // here; only a nonzero fixture could, which would conflict with this
-      // test's "empty digest" premise.
+      // `.lte()` is kept terminal for structural fidelity only: after OI-202
+      // no digest section calls it (expiringSoon/lapsedYesterday now read
+      // `subscriptions` through the paged `.range()` path below).
       lte: (_col: string, _val?: unknown) => Promise.resolve({
         count: 0,
         error: null,

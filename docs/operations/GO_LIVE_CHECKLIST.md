@@ -78,7 +78,7 @@ Play. Razorpay on web is unaffected, and live Razorpay keys are needed for web r
 | 1.3 | Register the LIVE webhook: `https://dedsavbjuwgarrhphgnl.supabase.co/functions/v1/razorpay-webhook`, events `payment.captured` + `payment.authorized` | FOUNDER | A test event delivered and 200-acked |
 | 1.4 | **Set the dashboard webhook secret to the live `RAZORPAY_KEY_SECRET`, byte-identical** | FOUNDER | See the warning below — get this wrong and every payment silently fails |
 | 1.5 | Flip `.env.prod` `RAZORPAY_KEY_ID` to the `rzp_live_` key | AGENT (needs 1.1) | Gate 24 (`check_razorpay_key_flavor.dart`) turns green — it hard-fails today, correctly |
-| 1.6 | One real ₹349 transaction end-to-end | FOUNDER | A `subscriptions` row + `users.subscription_status='pro'` |
+| 1.6 | One real ₹349 transaction end-to-end | FOUNDER | A `subscriptions` row (`status='active'`, `end_date` in the future) — that row alone IS the entitlement (the `users.subscription_*` mirror is dropped, OI-202) |
 
 > ⚠ **1.4 is the trap.** `razorpay-webhook/index.ts` used to document a *separate*
 > `RAZORPAY_WEBHOOK_SECRET` — *"NOT the Razorpay key secret; separate value"* — and list it under

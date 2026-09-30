@@ -19,6 +19,7 @@ import { timingSafeEqual } from "../_shared/cron_auth.ts";
 import { istYesterdayWindow } from "../_shared/ist_date.ts";
 import { buildDigestText, gatherDigestInput } from "../_shared/founder_digest_content.ts";
 import { fetchAllPages } from "../_shared/paged_fetch.ts";
+import { fetchLatestActiveEndByUser, usersWithLatestEndIn } from "../_shared/subscription.ts";
 
 
 export const HELP_TEXT = [
@@ -280,30 +281,22 @@ export async function cmdSubs(supabase: any): Promise<string> {
 
 // deno-lint-ignore no-explicit-any
 export async function cmdExpiring(supabase: any): Promise<string> {
-  // Deliberately reads `users.subscription_expires_at`, NOT `subscriptions`
-  // (unlike cmdRevenue/cmdSubs/cmdUser) — this mirrors founder_digest_content.ts's
-  // own `expiringSoon` section, which already reads this denormalised
-  // mirror column for the same "who's coming due" question. Review round 1
-  // F10: this is a structural drift RISK against the Global Constraint that
-  // `subscriptions` is the entitlement source of truth (no live divergence
-  // found as of 2026-09-14 — both read 0 for the 30d window) — if the two
-  // ever disagree, trust `subscriptions` and fix this column's writer.
+  // OI-202: derived from `subscriptions` — each user's LATEST `status='active'`
+  // end_date — the same source as founder_digest_content.ts's `expiringSoon`
+  // section. This used to read the `users.subscription_expires_at` mirror
+  // column, which is DROPPED (migration 152); the file's earlier "deliberately
+  // reads the mirror" note and its drift-risk caveat no longer apply.
+  // A user who renewed has a later row and is correctly NOT listed as expiring.
   const now = new Date();
-  const in7d = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
-  const in30d = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
-  const [r7, r30] = await Promise.all([
-    supabase.from("users").select("id", { count: "exact", head: true })
-      .not("subscription_expires_at", "is", null)
-      .gte("subscription_expires_at", now.toISOString())
-      .lte("subscription_expires_at", in7d),
-    supabase.from("users").select("id", { count: "exact", head: true })
-      .not("subscription_expires_at", "is", null)
-      .gte("subscription_expires_at", now.toISOString())
-      .lte("subscription_expires_at", in30d),
-  ]);
-  if (r7.error) throw r7.error;
-  if (r30.error) throw r30.error;
-  return `<b>Expiring soon</b>\n7d: ${r7.count ?? 0}\n30d: ${r30.count ?? 0}`;
+  const in7d = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const in30d = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const latestEnd = await fetchLatestActiveEndByUser(supabase, now.toISOString());
+  // null = the read FAILED. Throw (the router turns it into an error reply)
+  // rather than print "7d: 0 / 30d: 0", which would read as good news.
+  if (latestEnd === null) throw new Error("subscriptions read failed");
+  const c7 = usersWithLatestEndIn(latestEnd, now, in7d, true).length;
+  const c30 = usersWithLatestEndIn(latestEnd, now, in30d, true).length;
+  return `<b>Expiring soon</b>\n7d: ${c7}\n30d: ${c30}`;
 }
 
 const USERS_PAGE_SIZE = 10;
@@ -403,7 +396,7 @@ export async function cmdUser(supabase: any, args: string[]): Promise<string> {
   const column = looksLikeUuid(query) ? "id" : "email";
   const { data, error } = await supabase
     .from("users")
-    .select("id, email, full_name, created_at, last_active_at, subscription_expires_at")
+    .select("id, email, full_name, created_at, last_active_at")
     .eq(column, query)
     .maybeSingle();
   if (error) throw error;
@@ -431,7 +424,15 @@ export async function cmdUser(supabase: any, args: string[]): Promise<string> {
     `id: ${data.id.slice(0, 8)}`,
     `signed up: ${data.created_at?.slice(0, 10) ?? "unknown"}`,
     `last active: ${data.last_active_at?.slice(0, 10) ?? "never"}`,
-    sub ? `plan: ${escapeHtml(sub.plan)} (ends ${sub.end_date?.slice(0, 10) ?? "?"})` : "plan: free",
+    // Only a row whose end_date is still in the future is PRO (the single
+    // predicate: status='active' AND end_date > now). A lapsed row keeps
+    // status='active' forever, so print it as free with the lapse date instead
+    // of as a live plan (Hermes L1 2026-09-29).
+    sub && Date.parse(sub.end_date) > Date.now()
+      ? `plan: ${escapeHtml(sub.plan)} (ends ${sub.end_date?.slice(0, 10) ?? "?"})`
+      : sub
+      ? `plan: free (${escapeHtml(sub.plan)} lapsed ${sub.end_date?.slice(0, 10) ?? "?"})`
+      : "plan: free",
   ];
   return lines.join("\n");
 }

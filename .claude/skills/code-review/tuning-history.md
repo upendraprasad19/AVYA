@@ -8,6 +8,23 @@ out of `SKILL.md` section 7 by the context-lean batch (2026-09-29).
 
 ## 7. Tuning history
 
+- **2026-09-30 (c)** — blast-radius **catastrophic** (gate-forced) — merge commit hash
+  `e64a2b47cba6`, branch `claude/sync-aab-build-check-408772` merging in `origin/main`.
+  `check_code_review_pass_exists.dart` escalated this merge to catastrophic because the staged
+  diff includes `supabase/migrations/152_drop_users_subscription_mirror.sql` (`SECURITY DEFINER`
+  content rule) — a file authored, reviewed (`docs/reviews/f0facb0c2183-review.md`, verdict
+  accepted) and merged entirely on `origin/main` (`oi-182-202-subscription-state`, PRs #57/#60),
+  not new content from this branch. **0 findings; review documents provenance only** — this
+  branch's own commits were already independently reviewed at `platform` tier
+  (`docs/reviews/sync-aab-build-check-408772-bpass.md`). Review:
+  `docs/reviews/e64a2b47cba6-review.md`. **No new lens.** Confirms
+  `docs/plan-reviews/review-gate-tier-gap.md`'s 2026-07-27 finding is PARTIALLY STALE: that
+  record says an unstaged review file at the working-tree path satisfies the gate without
+  moving the hash; as of this run the gate explicitly requires the file be STAGED (its own error
+  message states this plainly and confirms staging does not move the hash, since `docs/reviews/`
+  is hash-excluded). The gate was hardened sometime after that finding was written — re-verify
+  gate behaviour against the live script rather than a dated plan-review record's prose.
+
 - **2026-09-30** — blast-radius **platform** — branch `claude/sync-aab-build-check-408772`
   (live Razorpay order-tagging + Vercel preview-build-skip fix + OI-274 filing; 3 commits, all
   `docs:`/`feat:`/`chore:` — no diagnose-doc required). Whole-branch review (nothing staged, all
@@ -29,6 +46,97 @@ out of `SKILL.md` section 7 by the context-lean batch (2026-09-29).
   write the plan-review record and its `bpass_review` citation together, right after the B-pass
   lands, rather than assuming an already-committed branch has one.**
   False-alarm rate 0/4 → no lens removed; no lens change needed.
+
+- **2026-09-30 (b)** - blast-radius **catastrophic** - branch `oi-182-202-subscription-state`, Commit 2 (migration 152 drop of the `users` subscription mirror, ledger, snapshot, board move). One fresh read-only B-pass reviewer after the live dry-run and apply; 5 findings (1 P2, 4 P3), 0 false alarms, 4 fixed in the test and 1 verified_clean (`docs/reviews/f0facb0c2183-review.md`). **Pattern worth keeping:** a migration-TEXT contract written after the apply is weakest exactly where the assertion is a bare `contains()` on a security-relevant statement. The GRANT check passed on `TO service_role, authenticated`, and the reviewer proved it by replicating the test's normalizer in Python rather than by reading. Ask of every privilege assertion: *does it pin the whole statement and the complete grantee list?* Also: comment-stripping that handles only `--` lets a `/* */` block hide a DROP from the order tests. Findings 2-4 are the same family (a pin that is looser than the thing it guards). All five mutations were re-run against the final file and the applied SQL restored with `cp` plus a re-hash. False-alarm rate 0/5, no lens removed.
+
+- **2026-09-29 (second entry today)** - blast-radius **catastrophic** - branch `oi-182-202-subscription-state` (OI-182 grace window derived from the retry schedule; OI-202 drop of the `users` subscription mirror columns, Commit 1, no migration file). Two independent B-pass reviewers (Flutter half, EF/SQL half), 11 findings, 0 false alarms, all fixed in-batch (`docs/reviews/8c18c99a0443-review.md`). **Pattern worth keeping:** the strongest findings were guards that lived in an untested closure (the retry's session compare, only-this-order clear and latch sat inline in the service, so deleting any reddened nothing) and mutation survivors at boundary flags (five survived until boundary fixtures existed). Extracting the closures into a function with an injected scheduler, then mutating each guard once, is what made them provable. A later Hermes pass changed the diff after review; those deltas are named in the review file and covered by its hash. Nothing tuned in the lens set.
+- **2026-09-29 (b)** — blast-radius **platform** — branch `migration-ledger-integrity` (OI-135 /
+  OI-137 / OI-263: Gate 39 recomputes ledger hashes, a `refs/heads/mig/N` number allocator copied
+  from `mint_oi.sh`, a reservation gate, and a paired-gate grammar fix; 29 files, +3200). Two
+  context-blind agents split by lens (A read-only lenses 1-5/7/10 + hash/SHA/mint semantics; B
+  lenses 6+8 as ~70 live mutations in an isolated worktree from the exported staged patch),
+  dispatched AFTER three plan-review rounds and a green gate loop / analyze / full suite (7182).
+  **18 findings (5 P2, 13 P3); 0 false alarms — 14 fixed with a regression test and a mutation, 4
+  accepted with a stated limit written into the docs.** Review:
+  `docs/reviews/migration-ledger-integrity-bpass.md`. Both reports reproduced the batch's core claims
+  exactly (hash core, real-ledger counts, all 159 ids resolving), so the value was in the edges.
+  **Tuning 1 — lens 6: a test can be NAMED for a guard, sit right next to it, and never reach it.**
+  The mint's "--stub refuses to overwrite" test ended by re-reserving an already-taken number, which
+  exits 3 at the CAS before `write_stub` is ever called; deleting the no-clobber guard reddened 0 of
+  23. The author's own comment said the guard was tested. Ask of every "refuses/does not clobber/skips"
+  test: *which exit does this actually take, and does it run the guard's line?* — answered in one
+  step by mutating the guard to `if false`, never by reading the assertion.
+  **Tuning 2 — lens 6: a guard applied at N call sites is N mutation targets.** `--no-renames` sat on
+  BOTH the staged diff and the committed-range diff; only the staged half had a test (a `git mv`
+  never committed), so a committed renumber — the exact 145→147→148→149 shape that motivated the
+  batch — would have dodged the CI/PR check. Same shape for the three-dot range. Grep the flag and
+  mutate each occurrence separately.
+  **Tuning 3 — lens 10 (self_attesting_artifact) gains: every "ADOPTED" row in a plan-review
+  disposition table is a claim that an edit landed — grep the diff for it.** Round 1's F4 said
+  `new-worktree.sh`'s fetch line "gains `+refs/heads/mig/*`"; it never did, through two further
+  plan-review rounds and a green gate loop, and it took a code reviewer reading that one script to
+  see it. Nothing gates it. The same review also caught the batch's own closure text citing a
+  "lease sentence in the gate ledger" that did not exist and a count (21) that was really 20 — and my
+  first correction of those counts was itself wrong, so every count was re-derived by running the file.
+  **Tuning 4 — a fixture must break ONLY the edge under test; read the failure, do not tweak until
+  green.** The mid-retry test first broke the FETCH url to fail `sync_refs`; that also broke the
+  existence probe that decides "lost race", so the script correctly took a different exit-2 path and
+  the test asserted the wrong message. Reading the actual stderr showed why; the working fixture
+  drops a `.lock` on the one tracking ref the fetch must update (and advances `main` so it must).
+  Likewise a mutation whose failure mode is an infinite loop (dropping the 10-attempt give-up) needs a
+  BOUNDED hook, or it hangs the run instead of failing an assertion.
+  **Process notes worth keeping.** (i) Reviewer A ran `mint_migration.sh --next` once against the
+  REAL repo, not knowing it does a `git fetch --prune`; it disclosed it, and it only moved shared
+  tracking refs. A brief for a script with a network-touching read mode should say so up front.
+  (ii) Reviewer B could not write its findings file and returned the report inline — plan for the
+  inline path. (iii) The git-safety hook pattern-matches Bash command TEXT, including the body of a
+  heredoc or python one-liner that merely *contains* `git push` / the hook-bypass flag as test
+  fixture or doc prose; write such edits with the Write tool and run the file.
+  False-alarm rate 0/18 → no lens removed; lens 6 extended per Tunings 1-2, lens 10 per Tuning 3.
+
+- **2026-09-29 (c)** — blast-radius **platform** — branch `branch-lifecycle-cleanup` (OI-138:
+  `retire_worktree.dart` now deletes the retired worktree's own merged local branch with
+  `git branch -d`, behind protected-name, ancestor-of-main and `-d` guards). One context-blind
+  Sonnet reviewer in an isolated worktree, dispatched after two plan-review rounds, a green
+  full suite (7071) and clean analyze. **5 findings (2 P2, 2 P3, 1 P4); 0 false alarms, all
+  fixed in-batch, 2 by new mutation-proven tests** (`0f5002adfd8c-review.md`, renamed twice from
+  `223280051c51` after the fixes and the hook's regenerated indexes moved the hash).
+  **Tuning 1 — "not e2e-testable" is a claim to be attacked, not a limitation to be recorded
+  (lens 6/8).** The author's own mutation of the ancestry re-check reddened ZERO tests, and the
+  diagnose-doc, a code comment and the board entry all explained it as
+  "a race, cannot be reproduced". The reviewer reproduced it in about 20 lines: a
+  `reference-transaction` git hook fires inside `git branch -d` and commits on the next
+  candidate, making the window deterministic. It also showed the premise behind "defense in
+  depth" was false, because `git branch -d` accepts a branch merged into its UPSTREAM, so the
+  re-check is the only guard. **When a mutation reddens nothing and the explanation offered is
+  "timing", ask which git hook, env var or stub gives a deterministic seam before accepting it.**
+  Sibling of the 2026-09-06 zero-red rule (something absorbed it), here the absorber was the
+  author's assumption.
+  **Tuning 2 — a claim that a tool "refuses X" is checked against the EXISTING tests for the
+  opposite behaviour.** The diagnose-doc said bare `--execute` was still refused; a pre-existing
+  e2e test runs it bare and expects exit 0. One `grep "retire(\['--execute'\])"` settles it.
+  (The founder then chose to make the tool enforce it: a bare `--execute` is now refused and
+  `--all` is the explicit sweep.)
+  **Tuning 3 — when a diff rewords a tool's own output, the prose that tells a reader which
+  output to wait for is a second reader.** §4.13.8 named `[merged + clean + pushed]` as the go
+  signal while the reworded string is what the tool now prints in the case the batch exists for.
+  **A negative result worth keeping:** the reviewer re-ran the case-insensitive-protection
+  mutation (3 red) and reported which mutations it had NOT re-derived rather than implying it
+  had. Full detail: `docs/reviews/0f5002adfd8c-review.md`.
+  **Round 2 (same day, delta only — the founder chose to make the tool refuse a bare
+  `--execute`): 6 findings (5 P3, 1 P4), 0 false alarms, all closed.** The useful one:
+  **a tool that PRINTS a command is a reader of its own CLI contract.** Tightening the flag made
+  the dry-run footer (`re-run with --execute`) and `worktree_status.dart`'s printed command
+  point at forms that no longer worked — and the second had been wrong before the change (it
+  printed the BRANCH, the tool matches the DIRECTORY), so the delta merely made it the only
+  ready-made command. When a diff narrows what a CLI accepts, `git grep` every place that
+  PRINTS an invocation, not only every place that runs one. Also: "enforced by the tool" was an
+  overclaim — the tool forces a sweep to be named but cannot know whose slug is "own"; state
+  which half moved from prose to code. **Process lesson: a killed mutation run (exit 137) left
+  `retire_worktree_lib.dart` mutated in the worktree;** caught only because I compared each
+  script against its pre-mutation backup with `cmp` before trusting anything. Run mutations from
+  a script that restores on `EXIT`, and after ANY killed or resumed session diff the scripts
+  against the backups before reading a single test result.
 
 - **2026-09-29** — blast-radius **platform** — branch `worktree-retirement-autonomy` (docs-only:
   new CLAUDE.md §4.13 point 8 + a §4.9 pitfall row, codifying autonomous worktree retirement on

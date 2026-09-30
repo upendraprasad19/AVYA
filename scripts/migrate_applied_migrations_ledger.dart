@@ -17,7 +17,8 @@
 
 import 'dart:convert';
 import 'dart:io';
-import 'package:crypto/crypto.dart';
+
+import 'migration_ledger_hash_lib.dart';
 
 const _migrationsDir = 'supabase/migrations';
 const _ledgerPath = 'backups/applied_migrations.json';
@@ -60,7 +61,7 @@ Future<void> main() async {
     records.add({
       'migration': entry,
       'applied_at': appliedAt ?? '2026-04-15T08:00:00Z', // safe default — earliest project commit era
-      'hash': hash != null ? 'sha256:$hash' : null,
+      'hash': hash,
       'applier': 'founder',
     });
   }
@@ -85,10 +86,9 @@ Future<File?> _findMigrationFile(String migrationId) async {
   return null;
 }
 
-Future<String> _sha256(File f) async {
-  final bytes = await f.readAsBytes();
-  return sha256.convert(bytes).toString();
-}
+/// `sha256:<hex>` of the file's LF form — the canonical ledger form (OI-135). Shared with
+/// Gate 39 through migration_ledger_hash_lib.dart so writer and verifier cannot drift.
+Future<String> _sha256(File f) async => canonicalLedgerHash(await f.readAsBytes());
 
 Future<String?> _firstCommitTimestamp(String path) async {
   try {

@@ -76,7 +76,7 @@ Beyond the 11-node knowledge-graph protocol above, every batch must also walk th
 
 11. **Are CLAUDE.md `§N` citations live?** Run `dart run scripts/check_claude_md_citations.dart`. If FAIL, replace broken cites with `docs/diagnoses/INDEX.md` or `docs/playbook/common-pitfalls.md` per convention.
 
-12. **Is `backups/applied_migrations.json` in structured ledger form?** Each row must be `{migration, applied_at, hash, applier}`, not a bare string. Gate: `scripts/check_applied_migrations_ledger.dart` (lands in B3).
+12. **Is `backups/applied_migrations.json` in structured ledger form?** Each row must be `{migration, applied_at, hash, applier}`, not a bare string. Gate: `scripts/check_applied_migrations_ledger.dart` — also verifies each `hash` against the file (LF or CRLF form; write new hashes with `dart run scripts/migration_ledger_hash.dart <NNN>`, never a raw `sha256sum`).
 
 13. **Is `docs/operations/SECRET_INVENTORY.md` current?** If this batch added a new local-only secret file (env var, key file, PAT), append a row.
 

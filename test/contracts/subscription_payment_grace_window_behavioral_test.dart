@@ -6,8 +6,11 @@
 //   A. Tests isPro() expiry boundary — expired expiresAt → isPro() = false;
 //      future expiresAt → isPro() = true.
 //   B. Tests isPaymentInFlight boundaries independently:
-//      - started_at within 10 min → isPaymentInFlight = true
-//      - started_at > 10 min ago → isPaymentInFlight = false
+//      - started_at within kPaymentGraceWindow → isPaymentInFlight = true
+//      - started_at older than kPaymentGraceWindow → isPaymentInFlight = false
+//        (OI-182: the window is DERIVED from the verify-retry schedule in
+//        payment_timing.dart — it was a bare 10-minute literal that closed
+//        before the last retry fired)
 //      - clearPaymentInFlight() → isPaymentInFlight = false immediately
 //
 // Run: flutter test test/contracts/subscription_payment_grace_window_behavioral_test.dart
@@ -16,6 +19,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
+import 'package:icanbefitter/core/constants/payment_timing.dart';
 import 'package:icanbefitter/core/services/guarded_box.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
@@ -146,8 +150,8 @@ void main() {
     });
   });
 
-  group('isPaymentInFlight — 10-min grace window boundary', () {
-    test('markPaymentInFlight → isPaymentInFlight = true within 10 min',
+  group('isPaymentInFlight — derived grace window boundary (kPaymentGraceWindow)', () {
+    test('markPaymentInFlight → isPaymentInFlight = true within the window',
         () async {
       await HiveUserSession.openForUser(userA);
       await MigratedKey.delete('paymentInFlightOrder');
@@ -156,15 +160,17 @@ void main() {
       await sub.markPaymentInFlight(orderId: 'order_test_001');
 
       expect(sub.isPaymentInFlight, isTrue,
-          reason: 'payment marked in-flight just now → must be within 10-min window');
+          reason: 'payment marked in-flight just now → must be within the grace window');
     });
 
-    test('stale started_at > 10 min ago → isPaymentInFlight = false', () async {
+    test('stale started_at older than kPaymentGraceWindow → isPaymentInFlight = false',
+        () async {
       await HiveUserSession.openForUser(userA);
 
-      // Write a started_at that is 11 minutes in the past.
+      // A started_at one minute past the derived window (OI-182: was a bare
+      // "11 minutes" against a 10-minute literal).
       final staleStart = DateTime.now()
-          .subtract(const Duration(minutes: 11))
+          .subtract(kPaymentGraceWindow + const Duration(minutes: 1))
           .toIso8601String();
       await MigratedKey.write('paymentInFlightOrder', <String, dynamic>{
         'order_id': 'order_stale_test',
@@ -173,8 +179,23 @@ void main() {
 
       expect(sub.isPaymentInFlight, isFalse,
           reason:
-              'started_at > 10 min ago → grace window expired; '
+              'started_at older than kPaymentGraceWindow → grace window expired; '
               'isPaymentInFlight must return false');
+    });
+
+    test('started_at 17 min ago → STILL in flight (OI-182: the old 10-min literal read false here)',
+        () async {
+      await HiveUserSession.openForUser(userA);
+      await MigratedKey.write('paymentInFlightOrder', <String, dynamic>{
+        'order_id': 'order_minute_17',
+        'started_at': DateTime.now()
+            .subtract(const Duration(minutes: 17))
+            .toIso8601String(),
+      });
+      expect(sub.isPaymentInFlight, isTrue,
+          reason:
+              'the last verify-payment retry fires ~15 min + phases after grace opened; '
+              'a paying user checked at minute 17 must not be downgraded');
     });
 
     test('clearPaymentInFlight → isPaymentInFlight = false immediately',
