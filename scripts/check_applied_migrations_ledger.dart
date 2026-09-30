@@ -16,13 +16,27 @@
 // Run after every migration: `dart run scripts/migrate_applied_migrations_ledger.dart`
 // is idempotent and brings the ledger up to date.
 //
+// OI-135 + OI-137 (2026-09-29): the `hash` VALUE is now verified, not just its presence.
+// Shape must be `sha256:<64 hex>` or an `unverifiable:<reason>` sentinel (a literal
+// `sha256:%s` once passed this gate), and a real hash must equal the sha256 of the
+// migration file under its LF or CRLF form. Logic lives in
+// migration_ledger_hash_lib.dart (pure, no package deps — this runs on every commit and a
+// fresh worktree has no .dart_tool). Five historical drifts are grandfathered BY NAME with
+// a pinned sha there. LIMITS, stated plainly: it catches a FORGOTTEN re-stamp, not a
+// deliberate edit + re-stamp in one commit; and it reads the WORKING TREE, not the staged
+// blobs, so with partial staging it can verify bytes that are not what gets committed
+// (CI verifies the committed tree).
+//
 // Exit 0 = pass.
-// Exit 1 = fail (any record missing required field).
+// Exit 1 = fail (any record missing required field, malformed hash, or hash drift).
 
 import 'dart:convert';
 import 'dart:io';
 
+import 'migration_ledger_hash_lib.dart';
+
 const _ledgerPath = 'backups/applied_migrations.json';
+const _migrationsDir = 'supabase/migrations';
 const _requiredKeys = ['migration', 'applied_at', 'hash', 'applier'];
 
 void main(List<String> args) async {
@@ -68,9 +82,27 @@ void main(List<String> args) async {
     }
   }
 
+  // Hash VALUE verification (OI-135 / OI-137). Only meaningful once the shape check above
+  // has found record-shaped entries.
+  if (violations.isEmpty && parsed.isNotEmpty && parsed.first is Map) {
+    final files = <String, List<int>>{};
+    final dir = Directory(_migrationsDir);
+    if (dir.existsSync()) {
+      for (final e in dir.listSync()) {
+        if (e is File && e.path.endsWith('.sql')) {
+          files[e.uri.pathSegments.last] = e.readAsBytesSync();
+        }
+      }
+    }
+    violations.addAll(verifyLedgerHashes(
+      parsed.cast<Map<String, dynamic>>(),
+      files,
+    ));
+  }
+
   final tag = warnOnly ? '[Gate 39 WARN]' : '[Gate 39]';
   if (violations.isEmpty) {
-    stdout.writeln('$tag PASS: ledger has ${parsed.length} structured records.');
+    stdout.writeln('$tag PASS: ledger has ${parsed.length} structured records; hashes verified (${grandfatheredLedgerHashDrift.length} grandfathered by name).');
     exit(0);
   }
   stderr.writeln('$tag FAIL: ${violations.length} violation(s):');

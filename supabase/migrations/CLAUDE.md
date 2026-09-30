@@ -67,20 +67,29 @@ ALTER TABLE subscriptions ALTER COLUMN end_date SET NOT NULL;
 
 ### Backups manifest pairing
 
-Every `mcp__supabase__apply_migration` call MUST be paired with a `backups/applied_migrations.json` update in the same git commit (CLAUDE.md §4.5 `feedback_migration_apply_record_pair.md`). The pre-commit hook does not enforce this yet; manual gate via review.
+Every `mcp__supabase__apply_migration` call MUST be paired with a `backups/applied_migrations.json` update in the same git commit (CLAUDE.md §4.5 `feedback_migration_apply_record_pair.md`). Enforced file → ledger by `check_migration_ledger_paired.dart` (a staged migration needs a staged ledger entry; matches top-level `NNN[x]_*.sql`, letter suffixes and timestamp-scheme files, NOT `041_chunks/`) and Gate 14 `check_migrations_applied.dart` (every file needs an entry); the entry's `hash` is verified by Gate 39 (see the immutability section below). **Nothing enforces live → ledger** — a migration applied to prod that nobody recorded is invisible to every gate (OI-272).
+
+### Allocating a migration number — `scripts/mint_migration.sh` (OI-263)
+
+Never read the next number off `ls supabase/migrations/`: a number applied **live** from an unmerged branch is invisible to every other branch's tree (148 → the 145→147→148→149 renumber, 2026-09-28). Reserve it:
+
+```bash
+sh scripts/mint_migration.sh --stub <slug>   # reserves refs/heads/mig/N (server-side compare-and-swap), writes the four-tag stub
+sh scripts/mint_migration.sh --next          # read-only: NEXT=<n> and UNFILED=<n,n>
+```
+
+Also `--reserve N <slug>` (adopt a number already used), `--release N` (drop an UNFILED reservation), `--prune`, `--live snap.json`. Offline ⇒ it refuses (exit 2). Only top-level 3-digit `NNN_*.sql` names count (a naive `[0-9]+` reads a timestamp file as the ceiling; `041_chunks/` is not migration 041); letter suffixes are manual follow-ups needing their base published or reserved. Gate `scripts/check_migration_number_reserved.dart` (pre-commit + CI) requires a reservation for every ADDED `NNN_*.sql` and fails a number already taken on `origin/main` by a different file; it fails OPEN offline.
+
+⚠ A reservation proves a `mig/N` ref EXISTS — not that this branch owns N — and cannot see a raw apply that never registered a row (OI-223). The apply-time "refuse a number already live" check is **OI-272**. Mechanism, reader-side limits, live-name coverage: `docs/architecture/migrations-detail.md`.
 
 ### An APPLIED migration is IMMUTABLE — including its comments (b8f4c2, 2026-09-04)
 
 Once a migration has been applied to prod, **do not edit the file at all** — not the
 DDL, not the four-tag header, not a typo in a comment. The `hash` field in
 `backups/applied_migrations.json` is a sha256 of the file *as applied*, so any edit
-silently falsifies the audit trail: the ledger then claims a hash that no version of
-the file has.
+falsifies the audit trail: the ledger then claims a hash that no version of the file has.
 
-⚠ **Nothing catches this.** `scripts/check_applied_migrations_ledger.dart` (Gate 39)
-checks only that the `hash` key is PRESENT and non-empty — it never recomputes or
-compares it. Board item **OI-135** already documents the class as open and explicitly
-non-gated. So the only guard is this rule.
+**Since 2026-09-29 Gate 39 VERIFIES the hash** (`check_applied_migrations_ledger.dart` + `migration_ledger_hash_lib.dart`): `sha256:<64 hex>` (or an `unverifiable:` sentinel, only for a migration with no `.sql` of its own, e.g. `120b`), equal to the sha256 of the file under its LF **or** CRLF form. **Write a ledger hash with `dart run scripts/migration_ledger_hash.dart <NNN|path>`, never a raw `sha256sum`.** It catches the FORGOTTEN re-stamp, not an edit plus a re-stamp in the same commit, and it reads the working tree, not staged blobs. Five historical drifts (057, 069, 070, 108, 123) are grandfathered BY NAME with a pinned sha — a closed list, never add. Migration 120's note "the hash tracks the FILE" is superseded: the hash is of the file **as applied**. Detail (dual-form limits, why each of the five drifted): `docs/architecture/migrations-detail.md`.
 
 **Measured 2026-09-04.** A review correctly flagged that migration 127's header called
 itself the "FOURTH definition" when there are three (026 / 113 / 127). Correcting that
@@ -111,12 +120,14 @@ Restore with **`cp` from a copy you made first**, then prove it:
 cp supabase/migrations/NNN_x.sql "$SCRATCH/NNN.bak"   # BEFORE mutating
 # ... mutate, run the test, then:
 cp "$SCRATCH/NNN.bak" supabase/migrations/NNN_x.sql
-sha256sum supabase/migrations/NNN_x.sql              # MUST equal the ledger entry
+dart run scripts/migration_ledger_hash.dart NNN      # MUST equal the ledger entry (LF form)
 ```
 
-This is the same OI-135 class the section above describes — the ledger hash is unguarded —
-but arriving through a completely ordinary action rather than a deliberate edit, which is
-what makes it worth its own note. A `git status` that says "M" on such a file after a restore
+Gate 39 now hashes both line-ending forms (above), so a CRLF/LF flip no longer reddens it — but
+that is a safety net, not a licence: the restore is still `cp`, because a `git checkout` that
+silently rewrites bytes is the wrong tool for an immutable file. This was the OI-135 class
+arriving through a completely ordinary action rather than a deliberate edit, which is
+what made it worth its own note. A `git status` that says "M" on such a file after a restore
 is expected (an eol attribute artifact) and is NOT evidence of drift; **the sha256 is the only
 thing that settles it, in either direction.**
 
