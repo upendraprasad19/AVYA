@@ -8,6 +8,7 @@ out of `SKILL.md` section 7 by the context-lean batch (2026-09-29).
 
 ## 7. Tuning history
 
+- **2026-09-29 (second entry today)** - blast-radius **catastrophic** - branch `oi-182-202-subscription-state` (OI-182 grace window derived from the retry schedule; OI-202 drop of the `users` subscription mirror columns, Commit 1, no migration file). Two independent B-pass reviewers (Flutter half, EF/SQL half), 11 findings, 0 false alarms, all fixed in-batch (`docs/reviews/8c18c99a0443-review.md`). **Pattern worth keeping:** the strongest findings were guards that lived in an untested closure (the retry's session compare, only-this-order clear and latch sat inline in the service, so deleting any reddened nothing) and mutation survivors at boundary flags (five survived until boundary fixtures existed). Extracting the closures into a function with an injected scheduler, then mutating each guard once, is what made them provable. A later Hermes pass changed the diff after review; those deltas are named in the review file and covered by its hash. Nothing tuned in the lens set.
 - **2026-09-29 (b)** — blast-radius **platform** — branch `migration-ledger-integrity` (OI-135 /
   OI-137 / OI-263: Gate 39 recomputes ledger hashes, a `refs/heads/mig/N` number allocator copied
   from `mint_oi.sh`, a reservation gate, and a paired-gate grammar fix; 29 files, +3200). Two

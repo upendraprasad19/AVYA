@@ -12,12 +12,13 @@
  * non-admin account -> clean "not authorized").
  */
 
-import { assertEquals } from "https://deno.land/std@0.224.0/testing/asserts.ts";
+import { assertEquals, assertRejects } from "https://deno.land/std@0.224.0/testing/asserts.ts";
 import {
   bucketActivePlans,
   bucketSubscriptionsByExpiry,
   computeDerivedMrr,
   isAuthorizedAdminCaller,
+  loadExpiryRows,
 } from "./index.ts";
 
 const ADMIN_UUID = "11111111-1111-1111-1111-111111111111";
@@ -205,4 +206,162 @@ Deno.test("bucketActivePlans — empty input returns all-zero counts, not an err
     trialActive: 0,
     otherActive: 0,
   });
+});
+
+// ── OI-202: loadExpiryRows derives the list from `subscriptions` ───────────
+
+interface FakeSub {
+  id: number;
+  user_id: string;
+  status: string;
+  end_date: string;
+}
+
+/**
+ * Filter-evaluating fake: `subscriptions` honours .eq(status) and .gte(end_date);
+ * `users` honours .in(id). A wrong status filter, a missing floor, or an email
+ * lookup keyed on the wrong column changes the answer.
+ */
+function adminFake(
+  subs: FakeSub[],
+  users: Array<{ id: string; email: string | null }>,
+  opts: { subsError?: boolean; usersError?: boolean } = {},
+) {
+  const queried: string[] = [];
+  return {
+    queried,
+    from(table: string) {
+      queried.push(table);
+      const filters: Array<[string, string, unknown]> = [];
+      const b: Record<string, unknown> = {};
+      b.select = () => b;
+      b.eq = (c: string, v: unknown) => (filters.push(["eq", c, v]), b);
+      b.gte = (c: string, v: unknown) => (filters.push(["gte", c, v]), b);
+      b.in = (c: string, v: unknown) => (filters.push(["in", c, v]), b);
+      b.order = () => b;
+      b.range = (from: number, to: number) => {
+        if ((table === "subscriptions" && opts.subsError) || (table === "users" && opts.usersError)) {
+          return Promise.resolve({ data: null, error: { message: "boom" } });
+        }
+        const src: Array<Record<string, unknown>> = table === "subscriptions"
+          ? subs as unknown as Array<Record<string, unknown>>
+          : users as unknown as Array<Record<string, unknown>>;
+        const rows = src.filter((r) =>
+          filters.every(([op, c, v]) =>
+            op === "eq"
+              ? r[c] === v
+              : op === "gte"
+              ? String(r[c]) >= String(v)
+              : (v as unknown[]).includes(r[c])
+          )
+        );
+        return Promise.resolve({ data: rows.slice(from, to + 1), error: null });
+      };
+      return b;
+    },
+  };
+}
+
+const FLOOR = daysFromNow(-30);
+const WINDOW = daysFromNow(30);
+
+Deno.test("loadExpiryRows — latest active end per user, in [floor, window], with emails from users", async () => {
+  const fake = adminFake(
+    [
+      // lapsed 5d ago, never renewed -> listed
+      { id: 1, user_id: "u-lapsed", status: "active", end_date: daysFromNow(-5) },
+      // renewed: old row lapsed 3d ago, NEW row 60d out -> NOT listed at all
+      // (its latest end is beyond the window)
+      { id: 2, user_id: "u-renewed", status: "active", end_date: daysFromNow(-3) },
+      { id: 3, user_id: "u-renewed", status: "active", end_date: daysFromNow(60) },
+      // expiring in 4d -> listed
+      { id: 4, user_id: "u-soon", status: "active", end_date: daysFromNow(4) },
+      // cancelled row must never count, however recent
+      { id: 5, user_id: "u-cancelled", status: "cancelled", end_date: daysFromNow(2) },
+      // lapsed 90d ago -> below the floor, not fetched
+      { id: 6, user_id: "u-ancient", status: "active", end_date: daysFromNow(-90) },
+    ],
+    [
+      { id: "u-lapsed", email: "lapsed@x.com" },
+      { id: "u-soon", email: "soon@x.com" },
+      { id: "u-renewed", email: "renewed@x.com" },
+    ],
+  );
+  const rows = await loadExpiryRows(fake, FLOOR, WINDOW);
+  assertEquals(
+    rows!.map((r) => [r.user_id, r.email]).sort(),
+    [["u-lapsed", "lapsed@x.com"], ["u-soon", "soon@x.com"]],
+  );
+  // The response key stays `subscription_expires_at` (the Flutter model reads it).
+  assertEquals(
+    rows!.find((r) => r.user_id === "u-soon")!.subscription_expires_at,
+    daysFromNow(4),
+  );
+  // and it composes with the existing pure bucketer:
+  const buckets = bucketSubscriptionsByExpiry(rows!, NOW);
+  assertEquals(buckets.expired.map((r) => r.user_id), ["u-lapsed"]);
+  assertEquals(buckets.expiring7d.map((r) => r.user_id), ["u-soon"]);
+  assertEquals(buckets.expiring30d, []);
+});
+
+Deno.test("loadExpiryRows — the window is CLOSED at both ends: end == floor and end == window are listed", async () => {
+  const fake = adminFake(
+    [
+      { id: 1, user_id: "u-floor", status: "active", end_date: FLOOR },
+      { id: 2, user_id: "u-top", status: "active", end_date: WINDOW },
+      { id: 3, user_id: "u-past-top", status: "active", end_date: new Date(new Date(WINDOW).getTime() + 1000).toISOString() },
+    ],
+    [],
+  );
+  const rows = await loadExpiryRows(fake, FLOOR, WINDOW);
+  assertEquals(rows!.map((r) => r.user_id).sort(), ["u-floor", "u-top"]);
+});
+
+Deno.test("loadExpiryRows — a user with no users row still appears, email null", async () => {
+  const fake = adminFake(
+    [{ id: 1, user_id: "u-orphan", status: "active", end_date: daysFromNow(3) }],
+    [],
+  );
+  const rows = await loadExpiryRows(fake, FLOOR, WINDOW);
+  assertEquals(rows, [{ user_id: "u-orphan", email: null, subscription_expires_at: daysFromNow(3) }]);
+});
+
+Deno.test("loadExpiryRows — the users lookup selects only id, email (never a dropped mirror column)", async () => {
+  const selects: Array<[string, string]> = [];
+  const base = adminFake(
+    [{ id: 1, user_id: "u1", status: "active", end_date: daysFromNow(3) }],
+    [{ id: "u1", email: "a@x.com" }],
+  );
+  const wrapped = {
+    from(table: string) {
+      const b = base.from(table);
+      const origSelect = b.select as () => unknown;
+      b.select = (cols: string) => {
+        selects.push([table, cols]);
+        return origSelect();
+      };
+      return b;
+    },
+  };
+  await loadExpiryRows(wrapped, FLOOR, WINDOW);
+  const userSelects = selects.filter(([t]) => t === "users").map(([, c]) => c);
+  assertEquals(userSelects.length >= 1, true);
+  for (const c of userSelects) assertEquals(c, "id, email");
+  const subSelects = selects.filter(([t]) => t === "subscriptions").map(([, c]) => c);
+  assertEquals(subSelects.length >= 1, true);
+  for (const c of subSelects) assertEquals(c, "user_id, end_date");
+});
+
+Deno.test("loadExpiryRows — returns null (NOT []) when the subscriptions read fails", async () => {
+  const rows = await loadExpiryRows(adminFake([], [], { subsError: true }), FLOOR, WINDOW);
+  assertEquals(rows, null);
+});
+
+Deno.test("loadExpiryRows — a failed email lookup throws (handler turns it into a 500)", async () => {
+  const fake = adminFake(
+    [{ id: 1, user_id: "u1", status: "active", end_date: daysFromNow(3) }],
+    [],
+    { usersError: true },
+  );
+  await assertRejects(() => loadExpiryRows(fake, FLOOR, WINDOW));
 });

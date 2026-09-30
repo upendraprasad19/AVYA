@@ -35,5 +35,20 @@ void main() {
             'Without this, replays double-burn promo used_count.',
       );
     });
+
+    test('a 23505 (lost insert race) marks the payment processed so it cannot re-redeem', () {
+      // PRESENCE ONLY (no runtime seam for the webhook handler). The racer that
+      // won the insert also redeemed (another webhook, or verify-payment via
+      // weInsertedTheRow); redeeming here too double-burns used_count and the
+      // second promo_code_uses insert silently hits UNIQUE(code,user_id).
+      expect(src.contains('let alreadyProcessed'), isTrue,
+          reason: '`const alreadyProcessed` cannot be reassigned by the 23505 arm');
+      expect(
+        RegExp(r'insertError\.code === "23505"\s*\)\s*\{\s*alreadyProcessed = true;')
+            .hasMatch(src),
+        isTrue,
+        reason: 'the 23505 arm must set alreadyProcessed = true before the gate below',
+      );
+    });
   });
 }

@@ -89,7 +89,6 @@ BEFORE calling Gemini, so a failed generation still consumes one.
 
 **Setup:** Set user as PRO via:
 ```sql
-UPDATE users SET subscription_status = 'pro' WHERE id = '<USER_ID>';
 INSERT INTO subscriptions (user_id, plan, status, start_date, end_date)
 VALUES ('<USER_ID>', 'monthly', 'active', NOW(), NOW() + INTERVAL '30 days');
 ```
@@ -113,6 +112,5 @@ LIMIT 5;
 
 **Cleanup:**
 ```sql
-UPDATE users SET subscription_status = 'free' WHERE id = '<USER_ID>';
 DELETE FROM subscriptions WHERE user_id = '<USER_ID>';
 ```

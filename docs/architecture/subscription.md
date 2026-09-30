@@ -73,6 +73,8 @@ if (isPro) { analyseFood(); }  // ❌ NEVER
 - If expired and offline → downgrade to free immediately (no grace period)
 - Downgrade = soft lock: keep all data, show paywall on PRO features, read-only on PRO content
 - **Phantom PRO fix:** `localActivationAt` is force-cleared after grace period expires on network error. Prevents stale local timestamp from keeping users in PRO after subscription lapses.
+- **Grace window is DERIVED (OI-182):** `kPaymentGraceWindow` in `lib/core/constants/payment_timing.dart` = last verify retry (15 m) + `kActivationPhasesBudget` (225 s) + one bounded retry attempt (60 s) + 2 m margin ≈ 21 m 45 s; every network call in the activation flow is wrapped in `boundedAttempt`. A retry that verifies runs write-PRO-state → clear grace → refresh → clear `localActivationAt` in that order (`payment_retry_attempt.dart`). Retries are in-memory timers: best-effort under suspend / app kill.
+- **No `users.subscription_*` mirror (OI-202, migration 152):** entitlement is derived from `public.subscriptions` only (`status='active' AND end_date > now()`); server-side expiry windows use `fetchLatestActiveEndByUser` (`_shared/subscription.ts`). razorpay-webhook and verify-payment write the `subscriptions` row and nothing else.
 - **JWT refresh:** `razorpay_service` refreshes JWT before each verify-payment retry to prevent 401 errors during polling.
 - **Server-side verification:** `gate()` calls `verifyFromServer()` (5-min cache TTL) for high-value features (`phases_2_to_12`, `ai_coach_unlimited`, `progress_photos`). Other features use local check only for low latency.
 

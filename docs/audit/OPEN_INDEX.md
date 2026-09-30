@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**153 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**150 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -92,7 +92,6 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-177 | the live-cron snapshot that gives Gate 31 its only fileless-migration… | none | 2026-09-10 —… | [:3083](open_issues.md#L3083) |
 | OI-179 | `alert_cron_function_dead` cannot fire across 100% of its range, and never… | none — one-line predicate fix; the value… | 2026-09-26 — the R2-11 PRECONDITION is… | [:3096](open_issues.md#L3096) |
 | OI-180 | `check_sot_registry_parity` silently skips every single-number… | none | 2026-09-10 —… | [:3129](open_issues.md#L3129) |
-| OI-182 | the payment grace window closes before the last verify-payment retry fires… | none — needs a founder call on the… | 2026-09-11 — read both constants… | [:3142](open_issues.md#L3142) |
 | OI-184 | 4 tables rely on RLS-zero-policy default-deny alone; the raw grants under… | none — mechanically straightforward (a… | 2026-09-11 — LIVE, via the Management… | [:3177](open_issues.md#L3177) |
 | OI-185 | `check_schema_column_refs.dart` validates only the FIRST line of a… | none — carried out of OI-162 (closed… | 2026-09-03 — by the audit (a prototype… | [:3251](open_issues.md#L3251) |
 | OI-186 | the AI coach cannot replace ONE day with a different workout: the only… | founder product decision on tier (see… | 2026-09-10 — full census of… | [:3277](open_issues.md#L3277) |
@@ -126,38 +125,36 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-221 | tool_dispatcher defensive date-parse fallbacks can clobber the wrong date… | none | never | [:4173](open_issues.md#L4173) |
 | OI-222 | Document versionCode-bump-via-merge CI gap in CLAUDE.md §4.9 | none | never | [:4191](open_issues.md#L4191) |
 | OI-227 | Telegram coach connect is broken (no linking token, bot says no user… | none — UI removal is self-contained; the… | 2026-09-21 — founder tapped "Connect… | [:4217](open_issues.md#L4217) |
-| OI-228 | AI coach shortenWorkout tool calls get stuck at status:queued with no… | none — Bug A is CLOSED; Bug B's "stuck… | 2026-09-22 (Batch B) — live-traced the… | [:4281](open_issues.md#L4281) |
-| OI-229 | AI coach chat replies violate captain_manual.ts hard rules: 100-word cap… | none — both are prompt-adherence gaps in… | 2026-09-21 — both cited… | [:4424](open_issues.md#L4424) |
-| OI-231 | AI coach addressed a promoted user by their OLD rank term (Recruit instead… | none — live verification DONE (Batch B,… | 2026-09-22 (Batch B) — settled via the… | [:4536](open_issues.md#L4536) |
-| OI-233 | user_daily_snapshots' 4 cron/client writers are not atomic against each… | none — scope and fix shape are already… | 2026-09-21 — explicitly scoped out in | [:4656](open_issues.md#L4656) |
-| OI-236 | 12 of 14 Supabase advisor-flagged unused indexes (idx_scan=0) left… | none | never | [:4702](open_issues.md#L4702) |
-| OI-237 | Extreme update:insert ratios on scheduled_workouts (34:1) and… | none | never | [:4709](open_issues.md#L4709) |
-| OI-239 | Acknowledging an alert re-arms its dedup window instead of waiting out the… | none | never | [:4716](open_issues.md#L4716) |
-| OI-240 | _getNextRankFromLadder's remaining/binding_constraint is inaccurate for 3… | none — bounded work, but a genuinely… | 2026-09-22 — every claim below re-read… | [:4743](open_issues.md#L4743) |
-| OI-241 | Cross-worktree concurrency: no lock prevents multiple sessions running… | none | never | [:4818](open_issues.md#L4818) |
-| OI-244 | Confirm-link tap left auth.one_time_tokens unconsumed — unexplained low… | (1) Vercel deploy authorization for BOTH… | 2026-09-23 — reproduced live on 2 real… | [:4845](open_issues.md#L4845) |
-| OI-245 | Restored PRO photo-coach turns are replayed to Gemini as text (sync_coach… | none — P1, unscheduled (candidate: batch… | 2026-09-26 — code read:… | [:4963](open_issues.md#L4963) |
-| OI-246 | Deleted exercise logs reappear after a cloud restore (deleteLog removes… | none — P1, unscheduled (candidate: batch… | 2026-09-26 — code read: `deleteLog`… | [:4972](open_issues.md#L4972) |
-| OI-247 | db_maintenance_nightly (jobid 41) fails every run: VACUUM cannot run… | the first nightly run after the fix… | 2026-09-26 — FIX APPLIED: migration 144… | [:4981](open_issues.md#L4981) |
-| OI-248 | client_errors_spike trips on one device's offline telemetry-queue replay… | none — scheduled: batch B. | 2026-09-26 — LIVE: the spike rows came… | [:4991](open_issues.md#L4991) |
-| OI-249 | 45 s restore-op timeouts on tiny tables on builds +45 to +47 | none — P2, unscheduled. | 2026-09-26 — LIVE client telemetry:… | [:5000](open_issues.md#L5000) |
-| OI-250 | pg_cron self/correlated silence has no out-of-band watcher (146 cannot see… | none | never | [:5009](open_issues.md#L5009) |
-| OI-251 | Retention/vacuum effect is unobserved: return_message '1 row' hides DELETE… | none | never | [:5031](open_issues.md#L5031) |
-| OI-252 | Workout templates: one stable identity (delete/rename propagation, unit… | founder on-device verification only.… | 2026-09-28 (superseding the 2026-09-27… | [:5052](open_issues.md#L5052) |
-| OI-253 | PendingTemplateDeletes queued delete lost on logout/offline sign-out… | a durable, cross-session delete queue… | never | [:5080](open_issues.md#L5080) |
-| OI-256 | Profile field-level conflict resolution: per-field merge instead of… | none | never | [:5101](open_issues.md#L5101) |
-| OI-257 | Onboarding diet_preference default 'veg' doesn't match Edit Profile's chip… | a product decision — change onboarding's… | `lib/features/onboarding/screens/plan_sc… | [:5132](open_issues.md#L5132) |
-| OI-259 | check_plan_review_record_exists.dart cannot parse hand-authored… | none (false-positive class, not a… | 2026-09-28 — confirmed live on GitHub… | [:5142](open_issues.md#L5142) |
-| OI-260 | 4 sibling reportGeminiExhaustion-wiring tests… | none — fixable any time by whoever's own… | never | [:5270](open_issues.md#L5270) |
-| OI-261 | displaced_<date> swap backups are local-only: never in plan_json or any… | none | 2026-09-28 — `git grep displaced --… | [:5209](open_issues.md#L5209) |
-| OI-262 | check_sot_registry_parity only checks N-M line_ranges: bare :NNNN… | none | 2026-09-28 — measured against the gate's… | [:5236](open_issues.md#L5236) |
-| OI-264 | docs/sot_registry.yaml is not valid YAML (35 parse errors); every gate… | none | 2026-09-28 — PyYAML safe_load, iterated… | [:5290](open_issues.md#L5290) |
-| OI-265 | Boot-time healer needed for pre-existing exlog rows corrupted by the… | none — needs its own writer/reader-chain… | never | [:5321](open_issues.md#L5321) |
-| OI-266 | _resolveLoggingType never consults customBox/user_custom_exercises for a… | none — fixable any time by whoever's own… | never | [:5348](open_issues.md#L5348) |
-| OI-267 | weeklyReportDataProvider has no write-time invalidation across… | none — fixable any time; needs a… | never | [:5376](open_issues.md#L5376) |
-| OI-268 | contract_sweep sets TZ=Asia/Kolkata for its flutter child; on Windows the… | none | 2026-09-29 — same test, TZ unset PASS vs… | [:5420](open_issues.md#L5420) |
-| OI-269 | workout_log_exercises readers don't filter deleted_at (weekly-recalc +… | none | never | [:5453](open_issues.md#L5453) |
-| OI-270 | PendingTemplateDeletes shares PendingExlogDeletes' fixed const-list… | none | never | [:5500](open_issues.md#L5500) |
-| OI-271 | Edit Profile: emptying the Body fat % box does not clear the stored value… | none — nothing external; founder… | 2026-09-29 — read… | [:5524](open_issues.md#L5524) |
-| OI-272 | Reconcile live prod migrations against the applied-migrations ledger… | none | 2026-09-29 — data below re-derived by… | [:5552](open_issues.md#L5552) |
-| OI-273 | Branch sweep for merged branches that never had a worktree here… | none — this unit's exclusion from its… | 2026-09-29 — every constraint below was… | [:5590](open_issues.md#L5590) |
+| OI-228 | AI coach shortenWorkout tool calls get stuck at status:queued with no… | none — Bug A is CLOSED; Bug B's "stuck… | 2026-09-22 (Batch B) — live-traced the… | [:4292](open_issues.md#L4292) |
+| OI-229 | AI coach chat replies violate captain_manual.ts hard rules: 100-word cap… | none — both are prompt-adherence gaps in… | 2026-09-21 — both cited… | [:4435](open_issues.md#L4435) |
+| OI-231 | AI coach addressed a promoted user by their OLD rank term (Recruit instead… | none — live verification DONE (Batch B,… | 2026-09-22 (Batch B) — settled via the… | [:4547](open_issues.md#L4547) |
+| OI-233 | user_daily_snapshots' 4 cron/client writers are not atomic against each… | none — scope and fix shape are already… | 2026-09-21 — explicitly scoped out in | [:4667](open_issues.md#L4667) |
+| OI-236 | 12 of 14 Supabase advisor-flagged unused indexes (idx_scan=0) left… | none | never | [:4713](open_issues.md#L4713) |
+| OI-237 | Extreme update:insert ratios on scheduled_workouts (34:1) and… | none | never | [:4720](open_issues.md#L4720) |
+| OI-239 | Acknowledging an alert re-arms its dedup window instead of waiting out the… | none | never | [:4727](open_issues.md#L4727) |
+| OI-240 | _getNextRankFromLadder's remaining/binding_constraint is inaccurate for 3… | none — bounded work, but a genuinely… | 2026-09-22 — every claim below re-read… | [:4754](open_issues.md#L4754) |
+| OI-241 | Cross-worktree concurrency: no lock prevents multiple sessions running… | none | never | [:4829](open_issues.md#L4829) |
+| OI-244 | Confirm-link tap left auth.one_time_tokens unconsumed — unexplained low… | (1) Vercel deploy authorization for BOTH… | 2026-09-23 — reproduced live on 2 real… | [:4856](open_issues.md#L4856) |
+| OI-247 | db_maintenance_nightly (jobid 41) fails every run: VACUUM cannot run… | the first nightly run after the fix… | 2026-09-26 — FIX APPLIED: migration 144… | [:4992](open_issues.md#L4992) |
+| OI-248 | client_errors_spike trips on one device's offline telemetry-queue replay… | none — scheduled: batch B. | 2026-09-26 — LIVE: the spike rows came… | [:5002](open_issues.md#L5002) |
+| OI-249 | 45 s restore-op timeouts on tiny tables on builds +45 to +47 | none — P2, unscheduled. | 2026-09-26 — LIVE client telemetry:… | [:5011](open_issues.md#L5011) |
+| OI-250 | pg_cron self/correlated silence has no out-of-band watcher (146 cannot see… | none | never | [:5020](open_issues.md#L5020) |
+| OI-251 | Retention/vacuum effect is unobserved: return_message '1 row' hides DELETE… | none | never | [:5042](open_issues.md#L5042) |
+| OI-252 | Workout templates: one stable identity (delete/rename propagation, unit… | founder on-device verification only.… | 2026-09-28 (superseding the 2026-09-27… | [:5063](open_issues.md#L5063) |
+| OI-253 | PendingTemplateDeletes queued delete lost on logout/offline sign-out… | a durable, cross-session delete queue… | never | [:5091](open_issues.md#L5091) |
+| OI-256 | Profile field-level conflict resolution: per-field merge instead of… | none | never | [:5112](open_issues.md#L5112) |
+| OI-257 | Onboarding diet_preference default 'veg' doesn't match Edit Profile's chip… | a product decision — change onboarding's… | `lib/features/onboarding/screens/plan_sc… | [:5143](open_issues.md#L5143) |
+| OI-259 | check_plan_review_record_exists.dart cannot parse hand-authored… | none (false-positive class, not a… | 2026-09-28 — confirmed live on GitHub… | [:5153](open_issues.md#L5153) |
+| OI-260 | 4 sibling reportGeminiExhaustion-wiring tests… | none — fixable any time by whoever's own… | never | [:5281](open_issues.md#L5281) |
+| OI-261 | displaced_<date> swap backups are local-only: never in plan_json or any… | none | 2026-09-28 — `git grep displaced --… | [:5220](open_issues.md#L5220) |
+| OI-262 | check_sot_registry_parity only checks N-M line_ranges: bare :NNNN… | none | 2026-09-28 — measured against the gate's… | [:5247](open_issues.md#L5247) |
+| OI-264 | docs/sot_registry.yaml is not valid YAML (35 parse errors); every gate… | none | 2026-09-28 — PyYAML safe_load, iterated… | [:5301](open_issues.md#L5301) |
+| OI-265 | Boot-time healer needed for pre-existing exlog rows corrupted by the… | none — needs its own writer/reader-chain… | never | [:5332](open_issues.md#L5332) |
+| OI-266 | _resolveLoggingType never consults customBox/user_custom_exercises for a… | none — fixable any time by whoever's own… | never | [:5359](open_issues.md#L5359) |
+| OI-267 | weeklyReportDataProvider has no write-time invalidation across… | none — fixable any time; needs a… | never | [:5387](open_issues.md#L5387) |
+| OI-268 | contract_sweep sets TZ=Asia/Kolkata for its flutter child; on Windows the… | none | 2026-09-29 — same test, TZ unset PASS vs… | [:5431](open_issues.md#L5431) |
+| OI-269 | workout_log_exercises readers don't filter deleted_at (weekly-recalc +… | none | never | [:5464](open_issues.md#L5464) |
+| OI-270 | PendingTemplateDeletes shares PendingExlogDeletes' fixed const-list… | none | never | [:5511](open_issues.md#L5511) |
+| OI-271 | Edit Profile: emptying the Body fat % box does not clear the stored value… | none — nothing external; founder… | 2026-09-29 — read… | [:5535](open_issues.md#L5535) |
+| OI-272 | Reconcile live prod migrations against the applied-migrations ledger… | none | 2026-09-29 — data below re-derived by… | [:5563](open_issues.md#L5563) |
+| OI-273 | Branch sweep for merged branches that never had a worktree here… | none — this unit's exclusion from its… | 2026-09-29 — every constraint below was… | [:5601](open_issues.md#L5601) |

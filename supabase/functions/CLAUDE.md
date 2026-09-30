@@ -95,6 +95,8 @@ boot-broken**, the module's own 4xx = booted (deploy-skill bug-class 6.5). Remov
 
 The ONE call site of quota key `day_swap`. Input `{ week_start: "YYYY-MM-DD" }` (an IST Monday); output `{ allowed, used, limit }` or `{ error, request_id }`. `verify_jwt: true`, authenticates via `supabase.auth.getUser(token)` (CLAUDE.md §4.4 rule 9), then calls `consume_quota` (migration 130, EXECUTE revoked from PUBLIC) with `p_quota_key='day_swap'`, `p_window_start=<IST Monday 00:00 +05:30>`, `p_limit` 1 (free) / 3 (PRO), re-derived server-side from the caller's subscription row (`isProUser`), never from the request body.
 
+**No `users.subscription_status` / `subscription_expires_at` (OI-202, migration 152).** Those mirror columns, `trg_subscription_update_user`, `update_user_subscription_status()` and `extend_subscription()` are dropped; PRO is `fetchProUserIds` / `isProUser` and any per-user expiry question is `fetchLatestActiveEndByUser` + the pure reducers, all in `_shared/subscription.ts`. A failed read returns `null` (NOT an empty map — that would print "nobody is expiring"). Deploy order when the columns are dropped: Edge Functions FIRST (razorpay-webhook 500s when its `users.update` fails). Scan: `test/contracts/subscription_columns_dropped_test.dart`.
+
 `index.ts` is a thin `serve()` shell; every pure piece (`validateWeekStart`, `windowStartIso`,
 `mapQuotaResult`, quota-key/limit constants) lives in `logic.ts` with `logic_test.ts` — the pattern for any
 new EF whose validation/mapping is worth testing directly. `_shared/day_swap_routing.ts` picks the ONE

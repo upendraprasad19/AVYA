@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/core/constants/payment_timing.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
@@ -140,26 +141,30 @@ class SubscriptionService {
   ///
   /// H-41 — pre-fix this was a pure ISO-timestamp `until` value.
   /// Time-based windows have two pathologies: (a) a slow webhook past
-  /// 10 min flips grace to false even though we're still legitimately
+  /// the window flips grace to false even though we're still legitimately
   /// awaiting verdict; (b) a fast confirmation in 5s leaves the
-  /// window open for another 9:55, masking unrelated downgrade events
+  /// window open for the rest of it, masking unrelated downgrade events
   /// during that window.
   ///
   /// Now stores `{order_id, started_at_iso}`. Event-based clear from
   /// [clearPaymentInFlight] (webhook landed / final verdict). The
-  /// 10-min ceiling is preserved ONLY as a fallback safety cap, in
-  /// case the clear path is missed.
+  /// time ceiling ([kPaymentGraceWindow]) is preserved ONLY as a fallback
+  /// safety cap, in case the clear path is missed.
   static const String _paymentInFlightOrderKey = 'paymentInFlightOrder';
 
   /// Legacy key — read for back-compat one cold start after upgrade,
   /// then never written again. Removed in a future cleanup batch.
   static const String _paymentInFlightUntilKey = 'paymentInFlightUntil';
 
-  /// Hard ceiling — even with the event-based clear path, never honour
-  /// a stale grace window past this duration. Protects against the
-  /// clear path being missed (network drop after webhook, app killed
-  /// mid-verify, etc.).
-  static const Duration _paymentGraceWindow = Duration(minutes: 10);
+  // Hard ceiling — even with the event-based clear path, never honour a stale
+  // grace window past [kPaymentGraceWindow] (payment_timing.dart). Protects
+  // against the clear path being missed (network drop after webhook, app
+  // killed mid-verify, etc.).
+  //
+  // OI-182 — it was a bare `Duration(minutes: 10)` here while the verify
+  // retries live in razorpay_service.dart on a `[60s, 5m, 15m]` schedule that
+  // only starts AFTER Phase 1 + Phase 2, so the last retry fired after the
+  // window had closed. The window is now DERIVED from that schedule.
 
   /// Server-side verification cache TTL (5 minutes).
   static const Duration _verifyCacheTtl = Duration(minutes: 5);
@@ -169,7 +174,7 @@ class SubscriptionService {
   ///
   /// H-41 evaluation logic:
   ///   1. If a `paymentInFlightOrder` record exists AND `started_at`
-  ///      is within the 10-min ceiling → in flight.
+  ///      is within the ceiling ([kPaymentGraceWindow]) → in flight.
   ///   2. Else if the legacy `paymentInFlightUntil` timestamp exists
   ///      and is still in the future (cold-start upgrade) → in flight.
   ///   3. Otherwise → not in flight.
@@ -179,7 +184,7 @@ class SubscriptionService {
       final startedAt =
           DateTime.tryParse((rec['started_at'] ?? '').toString());
       if (startedAt != null) {
-        return DateTime.now().difference(startedAt) < _paymentGraceWindow;
+        return DateTime.now().difference(startedAt) < kPaymentGraceWindow;
       }
     }
     // Legacy fallback — read once per device until first event-based
@@ -206,8 +211,9 @@ class SubscriptionService {
 
   /// Marks a payment as in-flight by recording its Razorpay order_id +
   /// the start timestamp. Public so [RazorpayService] can call it on
-  /// payment success. The 10-min ceiling enforced by [isPaymentInFlight]
-  /// is a fallback only — the canonical clear path is event-based.
+  /// payment success. The ceiling enforced by [isPaymentInFlight]
+  /// ([kPaymentGraceWindow]) is a fallback only — the canonical clear path
+  /// is event-based.
   Future<void> markPaymentInFlight({String? orderId}) async {
     final startedAt = DateTime.now().toIso8601String();
     await MigratedKey.write(_paymentInFlightOrderKey, <String, dynamic>{

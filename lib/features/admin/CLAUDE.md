@@ -134,3 +134,7 @@ Hive?". SoT registry concept: `admin_dashboard_metrics_snapshot`.
 - `docs/operations/SECRET_INVENTORY.md` — `ADMIN_USER_IDS` row.
 - `supabase/functions/CLAUDE.md` — Edge Function deploy + auth pattern.
 - `lib/shared/widgets/wardroom/CLAUDE.md` — palette + primitives used by the tabs.
+
+## OI-202 note — expiry tab data source
+
+`admin-dashboard-data`'s `subscriptions_expiring` lists are derived from `public.subscriptions` (each user's LATEST active `end_date`, via `loadExpiryRows`), not from the dropped `users.subscription_expires_at` column. The response KEY `subscription_expires_at` is unchanged, so `AdminDashboardData` parsing needs no release. `private.founder_metrics()` derives `pro_active` / `pro_expired` / `free_users` from `subscriptions` too (total = sum of the three preserved).

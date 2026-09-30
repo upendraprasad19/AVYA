@@ -19,21 +19,21 @@
  * expired 13 days earlier. A status-only check would have reported 4 PRO
  * users where the correct answer is 0.
  *
- * WHY NOT `users.subscription_status`
- * -----------------------------------
- * That denormalized column is worse than the status-only shape: it carries no
- * expiry term at all, and **nothing writes it back to 'free'**. Three code
- * paths set it to 'pro' (the `update_user_subscription_status` trigger,
- * razorpay-webhook, verify-payment); none unset it. Live it claimed 6 PRO
- * users, all 6 lapsed. `morning-alert` read it and sent Gemini-generated
- * PRO-tier copy to churned users — paid tokens spent on people who had
- * stopped paying, and the churn signal destroyed. That is the bug this file
- * exists to make unrepeatable.
+ * WHY THERE IS NO `users.subscription_status` / `users.subscription_expires_at`
+ * -----------------------------------------------------------------------------
+ * Those two denormalized mirror columns (and the `update_user_subscription_status`
+ * trigger + `extend_subscription` RPC that wrote them) were DROPPED by migration
+ * 152 (OI-202). The mirror carried no expiry term and nothing wrote it back to
+ * 'free', so it drifted from the truth by construction: live it claimed 6 PRO
+ * users, all 6 lapsed, and `morning-alert` read it and sent Gemini-generated
+ * PRO-tier copy to churned users -- paid tokens spent on people who had stopped
+ * paying, and the churn signal destroyed. Migration 093 had called that column
+ * "the canonical PRO gate" while ai-proxy called the `subscriptions` predicate
+ * canonical: two canonical answers that disagreed by 6 users.
  *
- * Migration 093 calls that column "the canonical PRO gate" while
- * ai-proxy/index.ts calls the `subscriptions` predicate canonical. Two
- * canonical answers that disagree by 6 users. THIS FILE is the tiebreak: the
- * `subscriptions` table is the source of truth; the column is a stale cache.
+ * THE `subscriptions` TABLE IS THE ONLY SOURCE. Anything that used to read the
+ * mirror for a per-user expiry ("who lapses / expires soon") reads
+ * `fetchLatestActiveEndByUser` below instead.
  */
 
 import { fetchAllPages } from "./paged_fetch.ts";
@@ -143,4 +143,134 @@ export async function isProUser(
     console.error("[subscription] isProUser threw:", err);
     return false;
   }
+}
+
+
+/**
+ * One `subscriptions` row as `fetchLatestActiveEndByUser` reads it.
+ * `end_date` is a timestamptz, returned by PostgREST as an ISO-8601 string.
+ */
+export interface ActiveSubscriptionEndRow {
+  user_id: string;
+  end_date: string;
+}
+
+/**
+ * PURE. Reduces subscription rows to the LATEST `end_date` per user.
+ *
+ * A user can hold several `status='active'` rows across a renewal (live
+ * evidence, 2026-09: 7 active rows for 5 users), so "the user's expiry" is the
+ * max over their rows -- NOT the value of an arbitrary one. Compared by parsed
+ * instant, not by string, because PostgREST may render the same instant with
+ * `+00:00` or `Z` and a lexical compare would then order them wrongly. Rows
+ * whose `end_date` does not parse are skipped rather than allowed to poison the
+ * comparison (`NaN > x` is always false, which would silently keep the FIRST
+ * row seen).
+ *
+ * Deliberately has no try/catch: every returned value has exactly one source,
+ * so a test asserting on it cannot be satisfied by an exception handler.
+ */
+export function reduceLatestEndByUser(
+  rows: readonly ActiveSubscriptionEndRow[],
+): Map<string, string> {
+  const latest = new Map<string, { iso: string; ms: number }>();
+  for (const r of rows) {
+    const ms = Date.parse(r.end_date);
+    if (Number.isNaN(ms)) continue;
+    const cur = latest.get(r.user_id);
+    if (cur === undefined || ms > cur.ms) {
+      latest.set(r.user_id, { iso: r.end_date, ms });
+    }
+  }
+  const out = new Map<string, string>();
+  for (const [uid, v] of latest) out.set(uid, v.iso);
+  return out;
+}
+
+/**
+ * PURE. The users whose LATEST active end_date falls in `[from, to)`, or
+ * `[from, to]` when `toInclusive` is set. Returns `[user_id, end_date]` pairs.
+ *
+ * Because the input is already reduced to the latest end per user, a user who
+ * renewed (an old row lapsing in the window AND a newer row ending after it) is
+ * correctly NOT reported as lapsing or expiring.
+ */
+export function usersWithLatestEndIn(
+  latestEndByUser: ReadonlyMap<string, string>,
+  from: Date,
+  to: Date,
+  toInclusive = false,
+): Array<[string, string]> {
+  const fromMs = from.getTime();
+  const toMs = to.getTime();
+  const out: Array<[string, string]> = [];
+  for (const [uid, iso] of latestEndByUser) {
+    const ms = Date.parse(iso);
+    if (Number.isNaN(ms)) continue;
+    if (ms < fromMs) continue;
+    if (toInclusive ? ms > toMs : ms >= toMs) continue;
+    out.push([uid, iso]);
+  }
+  return out;
+}
+
+/**
+ * The latest `status='active'` `end_date` per user, for every user whose latest
+ * end is at or after `sinceIso`. `null` on ANY read failure.
+ *
+ * `sinceIso` is a floor, not a page filter: filtering rows by `end_date >= since`
+ * before taking the per-user max is exact for users whose global max is >= since
+ * (the max row survives the filter) and simply omits the rest -- which is what a
+ * caller asking "who ends after X" wants. It also bounds the scan: a
+ * years-old lapsed row is never fetched.
+ *
+ * NULL, NOT AN EMPTY MAP, ON ERROR -- the opposite of `fetchProUserIds`. There an
+ * empty set is the fail-safe direction ("nobody is PRO"); here an empty map
+ * would read as "no one is expiring" / "no one lapsed", a confident and wrong
+ * number in a founder digest. Callers MUST branch on `null` and surface an
+ * unreadable section.
+ *
+ * Paged (OI-79) with a cutoff pinned by the caller, so every page is cut from
+ * the same result set.
+ */
+export async function fetchLatestActiveEndByUser(
+  client: SupabaseLike,
+  sinceIso: string,
+): Promise<Map<string, string> | null> {
+  let rows: ActiveSubscriptionEndRow[];
+  try {
+    rows = await fetchAllPages<ActiveSubscriptionEndRow>(
+      () =>
+        client
+          .from("subscriptions")
+          .select("user_id, end_date")
+          .eq("status", "active")
+          .gte("end_date", sinceIso),
+      {
+        orderBy: "id",
+        pageSize: 1000,
+        label: "subscription latest-active-end-by-user",
+        // Bounded like every other digest/bot read (MAX_PAGES = 200 in
+        // founder_digest_content.ts): /expiring and /digest run this inside a
+        // Telegram webhook, where a slow scan outlasts the timeout and
+        // triggers a duplicate update (Hermes L21 2026-09-29).
+        maxPages: 200,
+      },
+    ) ?? [];
+  } catch (err) {
+    console.error("[subscription] fetchLatestActiveEndByUser threw:", err);
+    return null;
+  }
+  // Sanity tripwire, like fetchProUserIds': there is no upper bound on end_date
+  // here, so an unexpectedly large active base (or a filter that stopped
+  // filtering) should be loud, not silent (Hermes L23 2026-09-29).
+  if (rows.length >= _proFetchCap) {
+    console.warn(
+      `[subscription] fetchLatestActiveEndByUser returned ${rows.length} rows, ` +
+        `at or above the ${_proFetchCap} sanity ceiling — check the filter.`,
+    );
+  }
+  // Reduced OUTSIDE the try: a bug in the reducer must not be mistaken for a
+  // read failure and swallowed into `null`.
+  return reduceLatestEndByUser(rows);
 }

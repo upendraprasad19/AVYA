@@ -43,9 +43,17 @@ void main() {
       );
     });
 
-    test('review d6b736 F1: users expiry uses the canonical row, not re-anchored', () {
-      expect(s.contains('subscription_expires_at: canonicalEndDateIso'), isTrue,
-          reason: 'users.subscription_expires_at must match the canonical subscriptions row, not verify-time');
+    test('review d6b736 F1 (post OI-202): the response reports the CANONICAL row end_date, and no users mirror is written', () {
+      // d6b736 F1 originally pinned `subscription_expires_at: canonicalEndDateIso`
+      // on a `users` update. OI-202 (migration 152) dropped that mirror column, so
+      // the write is gone; what stays true is that the canonical row's end_date is
+      // what verify-payment reports (never re-anchored to verify-time).
+      expect(s.contains('end_date: canonicalEndDateIso'), isTrue,
+          reason: 'the 200 body must report the canonical subscriptions row end_date');
+      expect(s.contains('subscription_expires_at'), isFalse,
+          reason: 'users.subscription_expires_at is dropped — nothing may write it');
+      expect(RegExp(r'\.from\(\s*"users"\s*\)[\s\S]{0,40}\.update\(').hasMatch(s), isFalse,
+          reason: 'verify-payment must not mirror entitlement onto `users`');
     });
 
     test('Hermes f5d8c3: idempotency pre-SELECT uses a DISTINCT binding (no duplicate const existingSub)', () {

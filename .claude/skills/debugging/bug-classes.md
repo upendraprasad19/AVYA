@@ -1435,3 +1435,11 @@ added, false of the flip being performed.
   `test/sync/restore_terminal_row_merge_test.dart` group "F1" (this entry's
   supplementary field-survival coverage, mutation-proven against the exact
   pre-fix derivation).
+
+### 2.79 A denormalized "cache" column outlives the fix that stopped trusting it, and its last readers are the founder's own dashboards (NEW 2026-09-29)
+
+- **Telltale:** a docstring says "the column stays as a cache" / "writing it is fine, reading it as truth is the bug", no job ever reconciles it, and a `SECURITY DEFINER` SQL function (`private.founder_metrics()`) or a bot still selects it. Every consumer of a PRO decision was moved to `subscriptions` (a7d2e9) while the mirror kept feeding metrics.
+- **Root-cause shape:** three writers set the mirror forward (trigger, webhook, verify-payment) and none unsets it, so it drifts by construction (live: 8 mirror-pro vs 5 real, 2 lapsed with rows, 1 orphan with no rows). Patching consumers one at a time leaves a residue that is only ever read by people who trust it.
+- **Fix pattern:** derive and drop. A dependency scan for the drop must cover ALL schemas (`pg_proc` across every schema, not `public` only — the schema-scoped query missed `private.founder_metrics()`), because `DROP COLUMN` succeeds silently on a function body and breaks at call time. Rewrite the reader first, in the same transaction; deploy every writer BEFORE the drop (the webhook 500s on a failed `users.update`).
+- **Test discipline:** a helper that returns "nothing" on error must return `null`, not an empty collection, when zero would read as good news; and pin the error MESSAGE — a bare `assertRejects` is satisfied by the `TypeError` from iterating `null` (mutation B10 reddened nothing until the message was pinned). A positive control satisfied by `any(pattern)` proves one pattern, not three (B18).
+- **Regression test:** `test/contracts/subscription_columns_dropped_test.dart`, `supabase/functions/_shared/subscription_test.ts`. Diagnose `c7e3b9`.

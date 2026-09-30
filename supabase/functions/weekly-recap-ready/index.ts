@@ -127,7 +127,8 @@ serve(async (req: Request) => {
     // Confirmed live 2026-08-07 on the founder's own account (PRO ended
     // 2026-07-05, still receiving it). Same shared helper morning-alert /
     // plateau-alert / protein-gap-alert already use — `status='active' AND
-    // end_date > now()`, NOT the stale denormalized `users.subscription_status`.
+    // end_date > now()`, NOT the stale denormalized `users.subscription_status`
+    // (a column since DROPPED — OI-202).
     // Fetched ONCE, outside the page loop (it is a full-table set, not per-page).
     // Fail-safe: fetchProUserIds returns an EMPTY set on error and never throws,
     // so a lookup failure sends to nobody rather than to everybody — the safe
