@@ -7155,6 +7155,9 @@ concepts:
       private.founder_metrics() (SECURITY DEFINER) derives pro_active /
       pro_expired / free_users the same way, with total_users = pro_active +
       pro_expired + free_users preserved.
+      Migration 152 (applied 2026-09-30, cloud version 20260930065332) dropped
+      users.subscription_status / subscription_expires_at, the trigger and the two
+      functions; pinned by test/contracts/migration_152_drop_subscription_mirror_test.dart.
     writers:
       - file: supabase/functions/razorpay-webhook/index.ts
         line_range: 555-600

@@ -3139,41 +3139,6 @@ Do NOT re-propose v1. Verified clean by round 2: sending `''` to `user_profile.c
 - **Class**: `feedback_green_check_input_set_width` — the gate's input set silently excluded 4.5% of the citations it exists to police. Also `feedback_bad_news_vs_no_news`: an unchecked citation and a valid one both report nothing.
 
 **UPDATE 2026-09-26 (backlog triage + `ci-green-batch-a`):** OI-209 closed as a duplicate of this entry. Its census, re-measured 2026-09-26 by simulating the gate regex: **39** bare single-number `line_range` entries (was 30); of the 28 that name a symbol, **21** would go stale if bare-N were parsed (OI-209 said 15); 11 are prose. Related blind spot found the same day — see OI-207's UPDATE: `method: a / b / c` fails `_bareSymbolRe` and is prose-skipped entirely (417 of 663 dash-form entries).
-## OI-182 — the payment grace window closes before the last verify-payment retry fires (P2)
-
-- **Status**: CLOSED · 2026-09-29 · fixed on branch `oi-182-202-subscription-state` — `kPaymentGraceWindow` is now DERIVED from the retry schedule and the per-call bounds (`lib/core/constants/payment_timing.dart`, ≈21m45s, was a bare 10-minute literal) and every activation-flow network call is bounded; the retry success path now clears the grace and writes PRO state in a tested order. Diagnose `f2a6d1` (`docs/diagnoses/2026-09-29-payment-grace-window-shorter-than-last-retry-f2a6d1.md`). Client-only: reaches users with the next founder-initiated APK build. Stated residue: the retries are in-memory timers (best-effort under suspend / app kill).
-- **Blocked on**: none
-- **Verified**: 2026-09-11 — read both constants directly, no live query needed
-- **What**: `SubscriptionService._paymentGraceWindow` is **10 minutes**
-  (`lib/core/services/subscription_service.dart:162`). `RazorpayService`'s
-  verification-retry schedule is **`[60s, 5m, 15m]`**
-  (`lib/core/services/razorpay_service.dart:734-738`). The grace window closes
-  **5 minutes before the final retry even fires**.
-- **Consequence**: if a `verifyFromServer()` check lands in that 10–15 minute gap
-  while the webhook is also delayed, `isPaymentInFlight` already reads `false` and
-  the code runs `_downgradeLocally()` (`subscription_service.dart:1087-1089`) for a
-  user who genuinely paid. Requires the webhook AND the first two retries to all be
-  late — rare, but the two constants disagreeing is a plain authoring gap, not a
-  designed tradeoff; nothing suggests 10 minutes was chosen deliberately against a
-  15-minute retry tail.
-- **Surfaced by**: OI-162 slice 4's review round 2, while checking whether
-  switching `verify-payment`'s rate limit to fail-closed removes user-visible
-  safety margin. It does, marginally — one of the four attempts that could still
-  land inside the grace window is now refused if the 20/10min cap is exhausted.
-  That interaction is real but secondary; the mismatch itself pre-exists slice 4
-  and is unrelated to its scope (an EF-side rate-limit fix has no coupling to a
-  client-side Dart timing constant), so it is filed separately rather than folded
-  in. Per CLAUDE.md §4.2 this is a genuinely different bug, not a re-wrapped
-  deferral of slice 4's own scope.
-- **Proposed repair**: widen `_paymentGraceWindow` to comfortably exceed 15
-  minutes (e.g. 20) so it never closes before the retry schedule completes.
-  Mechanically trivial — one constant — but touches the subscription-downgrade
-  path, so treat it as its own reviewed unit rather than a drive-by edit.
-- **Blast radius**: `lib/core/services/subscription_service.dart` — account tier
-  (payment/subscription path).
-- **Related**: OI-162 (slice 4 plan, `docs/audit/oi162-slice4-plan.md`).
-
-
 ## OI-184 — 4 tables rely on RLS-zero-policy default-deny alone; the raw grants under it were never narrowed (P2, systemic, pre-existing)
 
 - **Status**: OPEN
@@ -3745,47 +3710,6 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
   honored), both separate infrastructure work with their own blast radius
   and test surface. Filed here rather than fixed in-batch per the same
   reasoning as OI-199/OI-179 above.
-
-## OI-202 — users.subscription_status never reconciles to free after expiry
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: 2026-09-15, founder spot-check of `public.users` via the Supabase
-  table editor — `test6@gmail.com` (`subscription_status='pro'`,
-  `subscription_expires_at` 2026-07-03) and `test3@gmail.com` (same,
-  `subscription_expires_at` 2026-06-22), both over 2 months past their own
-  listed expiry, still read `'pro'`. Cross-checked against the already-shipped
-  fix at the consumption layer: `supabase/functions/_shared/subscription.ts`'s
-  docstring (added 2026-07-26) documents the identical symptom in production
-  ("Live it claimed 6 PRO users, all 6 lapsed. `morning-alert` read it and sent
-  Gemini-generated PRO-tier copy to churned users") and names the root cause —
-  three writers (the `update_user_subscription_status` trigger,
-  `razorpay-webhook/index.ts:604`, `verify-payment/index.ts:629`) set the column
-  to `'pro'`; NONE unset it, no cron/trigger reconciles it. Confirmed every real
-  consumer has since been migrated off this column: the client
-  (`subscription_service.dart` → `verify-subscription/index.ts:66-73` queries
-  `subscriptions` directly with `status='active'` + a live `end_date > now()`
-  compare; zero references to `subscription_status` anywhere under `lib/`),
-  `morning-alert`/`weekly-recap-ready` (via `_shared/subscription.ts`'s
-  `fetchProUserIds`/`isProUser`, same predicate), and `telegram-admin-bot`'s
-  `/user` command (`index.ts:404-436` — selects `subscription_expires_at` from
-  `users` but never displays it; the printed "plan: X (ends Y)" line is
-  re-derived from a fresh `subscriptions` query, per its own inline comment at
-  `:413-417`).
-- **Scope note**: not a live bug — nothing that gates an actual decision reads
-  this column today (verified above). Purely misleading for anyone — founder,
-  future session, ad-hoc dashboard — manually inspecting `public.users`
-  directly, exactly as happened here. The column drifts further from reality
-  forever under the current architecture, since no writer ever resets it on
-  expiry.
-- **Fix shape (not decided)**: either (a) add a reconciliation job/trigger that
-  flips `subscription_status` back to `'free'` and nulls
-  `subscription_expires_at` once the backing `subscriptions.end_date` lapses
-  (keeps the column trustworthy for ad-hoc queries), or (b) drop both columns
-  outright since no code path reads them for a decision — would need a
-  dependency sweep first (the 3 writers above, plus `telegram-admin-bot`'s
-  unused `subscription_expires_at` select at `:406`) and its own migration.
-- **Identified**: 2026-09-15 · filed via mint_oi.sh from branch `oi-stale-subscription-status`
 
 ## OI-205 — Already-authenticated user opening a valid /reset link is silently switched to a different account with no consent prompt (/confirm partially guarded — no same-vs-different-account distinction yet)
 
@@ -4970,24 +4894,6 @@ work end-to-end for every real user, not just the founder's test accounts.
 OI-244 stays OPEN because the Android App Links sub-issue is independent
 of both fixes and still requires the founder's own Play Console check —
 not something resolvable from this session.
-
-## OI-245 — Restored PRO photo-coach turns are replayed to Gemini as text (sync_coach hardcodes mode quick)
-
-- **Status**: CLOSED · 2026-09-29 · fixed by `6e3975ae` (branch `oi-245-246-restore-fixes`, merged via PR #50) — a restored photo/video coach row now gets its real media mode back, so the context builder's `mode == 'media'` filter sees it. Diagnose `a2c9e5` (`docs/diagnoses/2026-09-28-coach-restored-media-mode-a2c9e5.md`). Client-only fix: it reaches users with the next APK build.
-- **Blocked on**: none
-- **Verified**: 2026-09-29 — fix commit read on `main`; diagnose-doc `a2c9e5` exists. (Filed 2026-09-26 — code read: `lib/core/services/sync/sync_coach.dart:261` restores every row with `mode: 'quick'`; the history filter at `coach_interaction_repository.dart:362` excludes only `mode == 'media'`; PRO photo rows are channel `app`. So a restored photo turn loses its media marker and is replayed into Gemini context as a plain-text turn.
-- **Identified**: 2026-09-26 · filed via mint_oi.sh from branch `ci-green-batch-a` (backlog triage)
-
-Writer: `sync_coach.dart:261` (restore). Reader: `coach_interaction_repository.dart:362` (context builder). Classic writer/reader field drift — fix is to restore the row's real mode, with a writer→reader test.
-
-## OI-246 — Deleted exercise logs reappear after a cloud restore (deleteLog removes the Hive key only)
-
-- **Status**: CLOSED · 2026-09-29 · fixed by `6e3975ae` (branch `oi-245-246-restore-fixes`, merged via PR #50) — a deleted exercise log is now tombstoned in the cloud instead of only removed from Hive (`PendingExlogDeletes` queue + drain, restore skips queued keys). Server side is live: migrations 150 + 151 applied, `weekly-recalc` v25 and `pr-detection` v17 deployed with the `deleted_at` filter (`88fef854`). Diagnose `e1c8b4` (`docs/diagnoses/2026-09-28-exlog-tombstone-resurrection-e1c8b4.md`). The client half reaches users with the next APK build. Read-side residue is filed separately as OI-269 (4 other `workout_log_exercises` readers that still skip the `deleted_at` filter).
-- **Blocked on**: none
-- **Verified**: 2026-09-29 — fix commit and deploy record read on `main`. (Filed 2026-09-26 — code read: `deleteLog` removes the Hive `exlog_` key only (no tombstone, no cloud delete), and restore re-puts every cloud row whose key is absent locally (`lib/core/services/sync/sync_workout.dart:916`). A user-deleted log therefore comes back on the next restore.
-- **Identified**: 2026-09-26 · filed via mint_oi.sh from branch `ci-green-batch-a` (backlog triage)
-
-Needs a tombstone or cloud-side delete; restore-completeness class (docs/architecture/sync.md).
 
 ## OI-247 — db_maintenance_nightly (jobid 41) fails every run: VACUUM cannot run inside a transaction block
 

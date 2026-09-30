@@ -28,8 +28,7 @@ carry their own ratings.
 
 ## Summary
 
-- 14 findings, all terminal: 11 fixed in this batch, 1 `blocked_on_user` (4, gated on the live
-  apply), 2 `verified_clean` (8 and 12: the deployed bot does not exist, per the founder). One
+- 14 findings, all terminal: 12 fixed in this batch (finding 4 closed by Commit 2 after the live apply), 2 `verified_clean` (8 and 12: the deployed bot does not exist, per the founder). One
   further pre-existing observation (the `receive_email` flaw) is recorded on OI-227 and not counted.
 - No `false_alarm` and no `spawn_followup_batch`.
 - Ship-blockers before the live steps: none open. The P1 from L35 (live schema ahead of
@@ -50,9 +49,10 @@ carry their own ratings.
 3. **Stale or wrong comments** on the mirror and the response key (unrated). **Fixed** in
    `razorpay-webhook`, `verify-payment`, `subscription.ts`, docs.
 4. **The new `private.founder_metrics()` must have its REVOKE/GRANT lines pinned**
-   (unrated). **blocked_on_user:** the pin is a Commit-2 test (`migration text`), and Commit 2
-   exists only after the founder-authorized live apply. The lines themselves are in the
-   draft (`REVOKE ALL ... FROM PUBLIC, anon, authenticated; GRANT EXECUTE ... TO service_role`).
+   (unrated). **Fixed in Commit 2 (2026-09-30), after the founder-authorized live apply:**
+   `test/contracts/migration_152_drop_subscription_mirror_test.dart` pins the REVOKE ... FROM
+   PUBLIC, anon, authenticated and the GRANT to service_role, in order after the create;
+   mutation M5 (REVOKE removed) reddened 1 test. Live ACL after the apply: postgres + service_role only.
 
 ### L1 writer/reader drift
 5. **`expiry-reminder` was a reader of the same semantic the inventory missed** (unrated).
@@ -110,7 +110,7 @@ carry their own ratings.
 - [x] 1, 2, 3, 5, 6, 7 fixed in this batch, each with a test or a re-checkable artifact.
 - [x] 9, 10 fixed in this batch.
 - [x] 11, 13, 14 fixed in this batch (plan step 1b; migration draft).
-- [ ] 4 blocked_on_user: Commit-2 migration-text test, gated on the founder's apply go.
+- [x] 4 fixed: Commit-2 migration-text test (13 tests, 10 mutations reddened).
 - [x] 8, 12 verified_clean: bot not deployed (founder, 2026-09-29).
 - [x] Pre-existing, out of scope: `bot.py` `receive_email` links a chat to an account from an
       unverified typed email (P2, dormant while the bot is off). Recorded on OI-227 as a phase-2

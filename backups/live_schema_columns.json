@@ -4,8 +4,8 @@
     "project_id": "dedsavbjuwgarrhphgnl",
     "captured_at": "2026-08-26",
     "captured_via": "SELECT table_name, array_agg(column_name) FROM information_schema.columns WHERE table_schema='public' GROUP BY table_name",
-    "regenerated_at": "2026-09-28",
-    "regenerated_for": "migrations 148 and 149, merged 2026-09-28. 148 (coach_extraction_locked_fields, single-owner-a2b-2) added user_profile.coach_extraction_locked_fields and coach_memory.locked_field_conflicts; 149 (OI-237 day-swapper-sync-load) added user_progress.sync_epoch (cloud version 20260928083027, ordinal 24). A full live information_schema.columns read on dedsavbjuwgarrhphgnl after the 149 apply matched this file: 52 tables, those three columns the only additions since the 145 regeneration."
+    "regenerated_at": "2026-09-30",
+    "regenerated_for": "migration 152 (OI-202, drop_users_subscription_mirror, applied 2026-09-30, cloud version 20260930065332): dropped users.subscription_status and users.subscription_expires_at. A live information_schema.columns read of public.users after the apply matched this file (14 columns, same order as before minus those two)."
   },
   "storage_buckets": [
     "chat-media",
@@ -589,8 +589,6 @@
       "email",
       "phone",
       "full_name",
-      "subscription_status",
-      "subscription_expires_at",
       "telegram_chat_id",
       "telegram_connected",
       "ai_chat_started_at",
