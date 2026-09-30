@@ -5111,3 +5111,49 @@ OI-258 is the ledger-side symptom of the same gap (145/146 collided across diver
   switching to timestamps was offered and not chosen. Needs its own tests, mutation-proven per
   rule 24 if it becomes a `check_*` gate.
 - **Source**: day-swapper-sync-load Task 34 apply.
+
+## OI-138 — `retire_worktree` removes the worktree but leaves the BRANCH, silently burning the slug
+
+- **Status**: CLOSED (2026-09-29, `branch-lifecycle-cleanup`) — `retire_worktree.dart` now deletes the worktree's own local branch after a successful removal; diagnose `4c3fc4`
+- **Verified**: 2026-08-25 — read `scripts/retire_worktree.dart:275-282` directly: it calls
+  `git worktree remove <path>`, reports RETIRED on exit 0, and never references the branch.
+- **Identified**: 2026-08-16, as a "second, smaller gap" inside OI-128. **Split out 2026-08-25**
+  when OI-128 closed, rather than being closed with its parent — the parent's fix (the
+  regenerable list) does not touch this at all, so closing both on one commit would have recorded
+  a fix that was never written.
+- **Blocked on**: none. Small, but see the trap below — it is not a one-liner.
+- **What's missing**: after a successful `git worktree remove`, delete the branch with
+  `git branch -d`. Use `-d`, NEVER `-D`: the safe form refuses an unmerged branch, and that
+  refusal is the entire guarantee. The four-leg predicate has already proven the branch merged by
+  the time we get here, so `-d` is expected to succeed; if it does not, that is new information
+  and the branch must be KEPT and reported, not force-deleted.
+- ⚠ **THE TRAP: the worktree slug is NOT the branch name.** Verified live 2026-08-25 —
+  `git worktree list` shows `.claude/worktrees/post38-auth-fixes` sitting on branch
+  `rescue/post38-auth-inflight`, and three other `rescue/*` branches are in the same shape. A
+  delete keyed on the directory slug would either fail to find a ref or, worse, match an
+  unrelated branch that happens to share the name. The loop already has the real branch in scope
+  (`classifyWorktree` is called with `merged.contains(branch)`), so the fix must use THAT value,
+  not `name`.
+- **Symptom when it bites**: `sh scripts/new-worktree.sh <same-slug>` fails with "branch already
+  exists". The slug is burned and the operator has to `git branch -d <slug>` by hand — which is
+  exactly the state OI-128's own workaround note describes.
+- **Regression test shape**: extend `test/scripts/retire_worktree_e2e_test.dart` (it already
+  builds real linked worktrees). Two cases, and the second is the one that matters: (1) retiring a
+  merged worktree deletes its branch and the slug is immediately reusable; (2) a worktree whose
+  BRANCH NAME DIFFERS FROM ITS SLUG deletes the branch, not the slug-named ref — construct it the
+  way `rescue/*` did, with `git worktree add -b rescue/<x> .claude/worktrees/<x>`.
+- **Blast radius estimate**: `platform` — `scripts/retire_worktree*.dart` is NOT individually pinned — CORRECTED 2026-09-29: this entry
+  claimed it was pinned above the `scripts/** → feature` catch-all in `docs/blast_radius.yaml`, but `grep retire_worktree docs/blast_radius.yaml` returns nothing (OI-139 records the same fact), and the classifier returns `feature` for the tool + its test alone; this batch is `platform` only because its diff also touches CLAUDE.md. Adds a DESTRUCTIVE
+  operation (branch deletion) to a tool that currently only removes directories, so it needs the
+  mutation-proven treatment its siblings already carry.
+- **Related**: OI-128 (parent, CLOSED 2026-08-25 — the regenerable-list half), §4.13 point 6.
+
+**Closed 2026-09-29 (`branch-lifecycle-cleanup`, `closes-oi: OI-138`).** Shipped: after `git worktree remove`
+succeeds the tool runs `git merge-base --is-ancestor` then `git branch -d --` on `w.branch` (never the
+folder slug, never `-D`); `main`/`develop` and `rescue/*` `oi/*` `dependabot/*` are never deleted; a
+refusal prints `KEPT-BRANCH` with git's first line and no force-delete advice. Also fixed in passing:
+the merged set used `%(refname:short)`, which prints `heads/T` when a tag `T` exists, silently keeping
+that worktree forever. Tests: `test/scripts/retire_worktree_e2e_test.dart` (10 new, each on its own repo,
+incl. the folder-slug-differs case this entry called the trap, and the remote-deleted-upstream matrix) +
+`retire_worktree_lib_test.dart`. The ancestry re-check closes a race and is pinned by a hook-driven e2e test that makes the race deterministic (mutation: 1 red). Remote
+branches are out of scope here: GitHub's `delete_branch_on_merge` covers PR merges; any other route is OI-273.
