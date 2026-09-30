@@ -272,6 +272,19 @@ older "decoded-bundle hash" verifications (streak-guardian v23, ai-media-proxy v
 decoded path; this entry exists because the default body looked like the obvious input and cost a
 detour.
 
+### 6.10 A merged Edge Function fix is not a fixed bug until it is DEPLOYED and the LIVE output shape is checked (NEW 2026-09-30)
+
+**Telltale:** the diagnose-doc says "changed in this worktree but NOT yet deployed", the commit is in
+`main`, tests are green, and the symptom is still on the founder's phone. The stored rows are the proof:
+`proactive-coach-promotion` rows kept `model_used = 'gemini-2.5-flash'` and 29-59 char truncated
+`ai_response` for 14 days after `f4d771d2` (which writes `congrats_template`) merged.
+**Root cause:** an EF's runtime source comes from the last deploy, not from git; source-shape tests
+(Deno / Flutter contract) pass on the repo and cannot see production.
+**Fix:** for any EF fix, the batch is not closed until (1) a deploy is authorised and run, and (2) a
+live query shows a row created AFTER the deploy with the new shape (here: `model_used =
+'congrats_template'`). If the deploy is deferred to the founder, put it on the OI board, not in prose.
+Diagnose `e3a7c1`. Self-attested; no gate.
+
 ## 7. Verification gates
 
 After every deploy:
