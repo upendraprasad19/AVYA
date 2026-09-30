@@ -145,6 +145,19 @@ The length error masked everything downstream; these can only be confirmed once 
 ## 8. Out of scope (not deferred bugs — optimizations on an already-working build)
 
 - **Cache the Flutter SDK** to avoid re-cloning each build (Hobby build-minute savings). The `if [ -d flutter ]` reuse path already helps when Vercel's cache persists.
+  ⚠ **Corrected 2026-09-30 (Vercel-spend investigation): it does not persist.** Build
+  logs for two consecutive `avya` deployments both show `Cloning into 'flutter'...` +
+  a fresh 218.7 MB Dart SDK download + `Building flutter tool...`, and the cache
+  Vercel actually uploads afterward is `[136.00 kB]` — nowhere near big enough to hold
+  a Flutter checkout. The "when Vercel's cache persists" clause above was never
+  verified until now; it doesn't, so the reuse branch has never fired in production.
+  This costs ~57-70s of every ~180s build (~⅓ of build time), on every build, not
+  just previews. Making it actually persist needs Build Output API v3 (a
+  `.vercel/output/config.json` with an explicit `"cache": ["flutter/**"]` entry) —
+  a real change to how `scripts/vercel_build.sh` produces its output, not a config
+  toggle. Filed as a real follow-up now that "build minutes become a constraint"
+  (the trigger condition named below) has arrived — not implemented yet, pending
+  founder go-ahead to build + test it against a non-`main` deploy first.
 - **Approach C (GitHub Actions decouple)** if build minutes/time become a constraint.
 
 These are performance optimizations on a build that works without them — revisit only if cost/latency warrants. No in-scope bug is being punted.

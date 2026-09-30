@@ -8,7 +8,46 @@ out of `SKILL.md` section 7 by the context-lean batch (2026-09-29).
 
 ## 7. Tuning history
 
-- **2026-09-30** - blast-radius **catastrophic** - branch `oi-182-202-subscription-state`, Commit 2 (migration 152 drop of the `users` subscription mirror, ledger, snapshot, board move). One fresh read-only B-pass reviewer after the live dry-run and apply; 5 findings (1 P2, 4 P3), 0 false alarms, 4 fixed in the test and 1 verified_clean (`docs/reviews/f0facb0c2183-review.md`). **Pattern worth keeping:** a migration-TEXT contract written after the apply is weakest exactly where the assertion is a bare `contains()` on a security-relevant statement. The GRANT check passed on `TO service_role, authenticated`, and the reviewer proved it by replicating the test's normalizer in Python rather than by reading. Ask of every privilege assertion: *does it pin the whole statement and the complete grantee list?* Also: comment-stripping that handles only `--` lets a `/* */` block hide a DROP from the order tests. Findings 2-4 are the same family (a pin that is looser than the thing it guards). All five mutations were re-run against the final file and the applied SQL restored with `cp` plus a re-hash. False-alarm rate 0/5, no lens removed.
+- **2026-09-30 (c)** — blast-radius **catastrophic** (gate-forced) — merge commit hash
+  `e64a2b47cba6`, branch `claude/sync-aab-build-check-408772` merging in `origin/main`.
+  `check_code_review_pass_exists.dart` escalated this merge to catastrophic because the staged
+  diff includes `supabase/migrations/152_drop_users_subscription_mirror.sql` (`SECURITY DEFINER`
+  content rule) — a file authored, reviewed (`docs/reviews/f0facb0c2183-review.md`, verdict
+  accepted) and merged entirely on `origin/main` (`oi-182-202-subscription-state`, PRs #57/#60),
+  not new content from this branch. **0 findings; review documents provenance only** — this
+  branch's own commits were already independently reviewed at `platform` tier
+  (`docs/reviews/sync-aab-build-check-408772-bpass.md`). Review:
+  `docs/reviews/e64a2b47cba6-review.md`. **No new lens.** Confirms
+  `docs/plan-reviews/review-gate-tier-gap.md`'s 2026-07-27 finding is PARTIALLY STALE: that
+  record says an unstaged review file at the working-tree path satisfies the gate without
+  moving the hash; as of this run the gate explicitly requires the file be STAGED (its own error
+  message states this plainly and confirms staging does not move the hash, since `docs/reviews/`
+  is hash-excluded). The gate was hardened sometime after that finding was written — re-verify
+  gate behaviour against the live script rather than a dated plan-review record's prose.
+
+- **2026-09-30** — blast-radius **platform** — branch `claude/sync-aab-build-check-408772`
+  (live Razorpay order-tagging + Vercel preview-build-skip fix + OI-274 filing; 3 commits, all
+  `docs:`/`feat:`/`chore:` — no diagnose-doc required). Whole-branch review (nothing staged, all
+  commits already landed), reviewed against `main...HEAD` per the whole-branch/no-staged-diff
+  convention (branch-named review file, not staging-hash-named): `docs/reviews/sync-aab-build-check-408772-bpass.md`.
+  **4 findings (0 P0, 1 P1, 1 P2, 2 P4); 0 false_alarm** — the P1 (branch had no
+  `docs/plan-reviews/` record — required at `platform` tier per §4.12.3) and the P2 (a live
+  Razorpay credential handoff file, `.claude/.razorpay_live.env`, still populated on disk one day
+  past its own stated "delete after pushed to Supabase + Vercel" purpose — both destinations were
+  in fact already done) were both fixed in the same batch immediately after the review landed; the
+  2 P4s (Razorpay `notes` object has headroom under the Orders API's 15-key cap; the new
+  `ignoreCommand`'s catch-all `*) exit 0` arm would silently skip a hypothetical Deploy-Hook/CLI
+  deploy with no resolvable git ref — no such trigger exists in this repo today) accepted with no
+  code change. **No new lens — recorded because this is the first review to surface the P1 shape
+  from the *reviewer's own side*: a B-pass finding whose fix is "write the very artifact this
+  review's acceptance feeds into" (the plan-review record cites this review file as `bpass_review`,
+  and this review was written specifically to satisfy that citation) — a small but real
+  ordering dependency worth naming for the next whole-branch, nothing-staged, platform-tier case:
+  write the plan-review record and its `bpass_review` citation together, right after the B-pass
+  lands, rather than assuming an already-committed branch has one.**
+  False-alarm rate 0/4 → no lens removed; no lens change needed.
+
+- **2026-09-30 (b)** - blast-radius **catastrophic** - branch `oi-182-202-subscription-state`, Commit 2 (migration 152 drop of the `users` subscription mirror, ledger, snapshot, board move). One fresh read-only B-pass reviewer after the live dry-run and apply; 5 findings (1 P2, 4 P3), 0 false alarms, 4 fixed in the test and 1 verified_clean (`docs/reviews/f0facb0c2183-review.md`). **Pattern worth keeping:** a migration-TEXT contract written after the apply is weakest exactly where the assertion is a bare `contains()` on a security-relevant statement. The GRANT check passed on `TO service_role, authenticated`, and the reviewer proved it by replicating the test's normalizer in Python rather than by reading. Ask of every privilege assertion: *does it pin the whole statement and the complete grantee list?* Also: comment-stripping that handles only `--` lets a `/* */` block hide a DROP from the order tests. Findings 2-4 are the same family (a pin that is looser than the thing it guards). All five mutations were re-run against the final file and the applied SQL restored with `cp` plus a re-hash. False-alarm rate 0/5, no lens removed.
 
 - **2026-09-29 (second entry today)** - blast-radius **catastrophic** - branch `oi-182-202-subscription-state` (OI-182 grace window derived from the retry schedule; OI-202 drop of the `users` subscription mirror columns, Commit 1, no migration file). Two independent B-pass reviewers (Flutter half, EF/SQL half), 11 findings, 0 false alarms, all fixed in-batch (`docs/reviews/8c18c99a0443-review.md`). **Pattern worth keeping:** the strongest findings were guards that lived in an untested closure (the retry's session compare, only-this-order clear and latch sat inline in the service, so deleting any reddened nothing) and mutation survivors at boundary flags (five survived until boundary fixtures existed). Extracting the closures into a function with an injected scheduler, then mutating each guard once, is what made them provable. A later Hermes pass changed the diff after review; those deltas are named in the review file and covered by its hash. Nothing tuned in the lens set.
 - **2026-09-29 (b)** — blast-radius **platform** — branch `migration-ledger-integrity` (OI-135 /
