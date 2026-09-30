@@ -1,6 +1,6 @@
 # Core Services - moved-out detail
 
-On-demand detail for `lib/core/services/CLAUDE.md`. Everything here was moved VERBATIM out of the nested file (dated incident narratives, `Corrected <date>` histories, per-batch provenance, long pitfall bodies, audit results) to keep the auto-loaded file lean. The nested file keeps the current rule for each item and points here.
+On-demand detail for `lib/core/services/CLAUDE.md`. Everything here was moved VERBATIM out of the nested file, except sections marked "Added" (written for this file) (dated incident narratives, `Corrected <date>` histories, per-batch provenance, long pitfall bodies, audit results) to keep the auto-loaded file lean. The nested file keeps the current rule for each item and points here.
 
 ## subscription_service.dart bullet (full)
 
@@ -290,3 +290,12 @@ _Moved verbatim from `lib/core/services/CLAUDE.md` (original lines 112-112, cont
 
 | An error's text reaches telemetry with the user's row data in it | Postgres echoes the rejected row into its error (`Failing row contains (...)`, `Key (cols)=(values)`, `invalid input syntax ... "value"`), and `PostgrestException.toString()` carries it. Every sink that ships error text off the device calls `ErrorTelemetry.redactRowValues` first: both `recordNonFatal` legs, `_reportSyncFailure`, the retry queue, the dead-letter post and `_logRefreshFailure`. A NEW direct `log-client-error` post owes the same call. Diagnose `e8c3a1`. | `test/core/error_telemetry_redact_row_values_test.dart`, `test/sync/sync_error_row_values_redacted_test.dart` |
 
+
+## Pitfall: caller-level `recordNonFatal` + `_reportSyncFailure` double-post (full)
+
+_Added 2026-09-30 to accompany the condensed row in `lib/core/services/CLAUDE.md` (fix `b2baab45`, diagnose `f7b2c9`). Written for this file, not moved from it._
+
+| Pitfall | How to avoid | Source |
+|---|---|---|
+
+| A caller's own `ErrorTelemetry.recordNonFatal` call sits earlier in the same catch block as a call to the canonical funnel (`_reportSyncFailure`), so the SAME failure posts to `client_errors` TWICE | This is the "audit-2026-05-11 H-42 — telemetry pair" idiom: a catch block calls `recordNonFatal` for a broad Crashlytics-only signal, then separately calls `_reportSyncFailure(opType:, error:)` for the canonical, retry-queue-integrated write. Left at `recordNonFatal`'s default `skipServerPost: false`, BOTH calls independently POST to `log-client-error`, doubling the row count per failure. Fixing `_reportSyncFailure`'s own INTERNAL double-write (its own `recordNonFatal` call vs. its own direct `functions.invoke`) is NOT sufficient — a `grep "H-42" sync_service.dart` alone saw only ~13 `H-42` hits (of the real caller-level pairs) (87 existed at fix time; `sync_telemetry_test.dart` pins 75 today) because at fix time 8 of the 9 affected files were `part of sync_service.dart` under `lib/core/services/sync/`, invisible to a single-file grep. Fix: every caller-level `recordNonFatal` call earlier in the same enclosing block as a `_reportSyncFailure` call for the SAME caught error (the sweep test pairs to the end of the brace-matched block, because a ~570-580-char comment once separated a pair in `sync_nutrition.dart`) must pass `skipServerPost: true` — this preserves the caller's real stack trace for Crashlytics while leaving `_reportSyncFailure`'s own retry-queue-integrated write as the sole `client_errors` writer. Regression test must concatenate ALL `part of` files (`test/contracts/_sync_service_source.dart`'s `loadSyncServiceSource()`), not just the root file, or it will undercount exactly like the first fix attempt did. Diagnose `f7b2c9`, B2a-2b. | `test/sync/sync_telemetry_test.dart` |
