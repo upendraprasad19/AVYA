@@ -10,7 +10,7 @@ wiring surface uses. A gate **number is an optional alias**: most gates have non
 the next free number: **55**. Declare it canonically as `// Gate: N` on its
 own line in the first 10 lines — that exact form is the only one this generator reads.
 
-Total gates: **110** (48 numbered, 62 by filename only).
+Total gates: **111** (48 numbered, 63 by filename only).
 
 | Gate | Script | Purpose | Test ledger |
 |---|---|---|---|
@@ -21,7 +21,7 @@ Total gates: **110** (48 numbered, 62 by filename only).
 | 48 | `check_apk_release_signed.dart` | the built APK is signed with the RELEASE certificate, not the | grandfathered |
 | 13 | `check_apk_size_within_bounds.dart` | APK size within ±10% of last shipped size. | grandfathered |
 | 51 | `check_app_version_matches_pubspec.dart` | Build-gate script: asserts `AppConstants.appVersion` in | grandfathered |
-| 39 | `check_applied_migrations_ledger.dart` | assert that `backups/applied_migrations.json` is in the structured-record shape | grandfathered |
+| 39 | `check_applied_migrations_ledger.dart` | assert that `backups/applied_migrations.json` is in the structured-record shape | mutation_proven |
 | — | `check_authed_invoke_fresh_token.dart` | every authed Edge Function call from the client sends a FRESH token | grandfathered |
 | — | `check_blast_radius_coverage.dart` | Asserts that every top-level directory under `lib/features/`, | grandfathered |
 | — | `check_blast_radius_stdin_usage.dart` | Blocks a STAGED ADDED line that pipes into | mutation_proven |
@@ -70,7 +70,8 @@ Total gates: **110** (48 numbered, 62 by filename only).
 | — | `check_local_date_key_drift.dart` | Ban device-local `YYYY-MM-DD` date-key construction in lib/, i.e. | grandfathered |
 | — | `check_merge_tree_write_tree_form.dart` | flag the legacy `git merge-tree <base> <a> <b>` (3-arg) form in | mutation_proven |
 | — | `check_migration_contains_assertion_uniqueness.dart` | WARN-ONLY. Never exits 1. See migration_contains_uniqueness_lib.dart for | mutation_proven |
-| — | `check_migration_ledger_paired.dart` | assert that whenever a new | grandfathered |
+| — | `check_migration_ledger_paired.dart` | assert that whenever a new | mutation_proven |
+| — | `check_migration_number_reserved.dart` | (A new gate takes no number — the filename is the identity, CLAUDE.md §4.4 rule 24.) | mutation_proven |
 | 14 | `check_migrations_applied.dart` | Local migrations match the prod state snapshot. | grandfathered |
 | — | `check_mutation_invalidation_set.dart` | Mutation methods must invalidate the canonical provider set per | grandfathered |
 | 8 | `check_naming_audit.dart` | Forbidden legacy patterns absent. | grandfathered |

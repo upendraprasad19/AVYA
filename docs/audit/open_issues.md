@@ -2104,47 +2104,6 @@ forced to invent mid-flight, and it should not be an improvisation.
 
 ---
 
-## OI-135 — 60 of 125 migration-ledger hashes do not match their files, and nothing recomputes them (P2)
-
-- **Status**: OPEN
-- **Blocked on**: nothing technical. The fix shape is settled (below); what it needs is a decision on whether to backfill the 60 or grandfather them by name.
-- **Verified**: 2026-09-26 — RECOMPUTED by the coordinator: 147 hashable ledger entries, **61** mismatches, of which **56** equal sha256 of the file with LF→CRLF (hashed on a Windows CRLF working copy — content-identical) and only **5** are genuine content drift: 057, 069, 070, 108, 123.
-  PRIOR (kept verbatim): 2026-08-20 — measured, not estimated. Recomputed sha256 for every entry in `backups/applied_migrations.json` against its `supabase/migrations/*.sql` file: **125 entries → 64 match, 60 mismatch, 1 non-hash sentinel (120b, deliberate)**.
-
-`backups/applied_migrations.json` records a `hash` per applied migration. Its documented purpose
-is drift auditing — "recompute hashes on drift", per `applied_migrations_parity_test.dart:36`.
-**Nothing recomputes them.** `check_applied_migrations_ledger.dart` requires the `hash` KEY to be
-present (`_requiredKeys`) and never looks at its value; no other gate reads it. So the field has
-been decorative since it was introduced, and has silently drifted on 48% of entries.
-
-**Found by the round-2 review of `claude/oi-pending-hold-weeks-1od97o`**, which correctly flagged
-migration 120's hash as stale — I had updated it in one commit and then edited the file again in
-the next, invalidating it. That instance is fixed. The finding only became interesting when the
-count was checked: 120 was not special, it was the 61st.
-
-**Why it drifts by construction:** the hash tracks the FILE, and migration files legitimately get
-edited after they are applied — corrected comments, added rollback blocks, clarified headers. Every
-such edit invalidates a hand-maintained hash, and nothing notices. A hash maintained by memory
-across a repo this size will always converge on wrong.
-
-**Fix shape:**
-1. A gate that recomputes sha256 for every ledger entry naming a real file and fails on mismatch.
-   It must skip entries with no file by design (120b's `unverifiable:no-artifact` sentinel) and
-   entries hand-applied outside the migration system (119).
-2. The 60 existing mismatches get **enumerated by name** as `grandfathered:` in that script — a
-   terminal exemption, exactly the precedent `check_gate_test_ledger.dart` set for its 84
-   pre-2026-08-10 gates, and explicitly NOT a deferral. Membership by name, not by date.
-3. Mutation-prove it per rule 24 and add its `gate_test_ledger.yaml` entry.
-
-**Deliberately NOT bundled into the batch that found it.** Adding a hard-failing gate with 60
-pre-existing violations to a merge-blocking step would be a ship-stop for a hygiene problem — the
-same error class as the 2026-07-25/26 required-status-checks incident. The one instance that batch
-caused is fixed in it; the class is filed here.
-
----
-
-**UPDATE 2026-09-26 (backlog triage + `ci-green-batch-a`):** The decision shrinks from 'grandfather ~60' to: hash LF-normalised content, re-stamp the 56 (provably content-identical), and a FOUNDER call on the 5 genuine drifts (grandfather by name or re-stamp after review). A raw-byte gate would disagree between the Windows laptop and Linux CI — normalise first. Pairs with OI-137 (hash shape) and OI-163 (header gate).
-
 ## OI-136 — Gate 40 validates "closure YAML" without ever parsing it as YAML; 2 files in the repo are invalid and it passes all 32 (P2)
 
 - **Status**: OPEN
@@ -2188,43 +2147,6 @@ checking what its name claims.
 
 ---
 
-## OI-137 — the migration-ledger gate checks that `hash:` EXISTS, never that it is a hash; a literal `%s` passed it (P2)
-
-- **Status**: OPEN
-- **Blocked on**: nothing technical. Same grandfather-or-backfill decision as OI-135 — 60 of 126 entries already carry hashes that match no artifact, so a strict flip is a ship-stop until they are recomputed or enumerated by name.
-- **Verified**: 2026-08-20 — reproduced, not inferred. The entry for migration `121` was written with `"hash": "sha256:%s"` — an unsubstituted Python format placeholder. `dart run scripts/check_applied_migrations_ledger.dart` reported PASS. Caught by the B-pass on the same commit, and corrected there to `sha256:ac8c01a26e32…`.
-
-`scripts/check_applied_migrations_ledger.dart:26` is the whole story:
-
-```dart
-const _requiredKeys = ['migration', 'applied_at', 'hash', 'applier'];
-```
-
-The gate asserts every entry HAS the four keys. It never looks at what is in them. So
-`sha256:%s`, `sha256:`, `TODO`, or the empty-ish `sha256:x` all satisfy it identically, and the
-field that exists to attest replay fidelity attests nothing.
-
-**Why this one is worth a number rather than a quiet fix.** It is the third instance in two days
-of the same shape — a gate green because it checks the presence of a thing rather than the thing
-(OI-132: Gate 31's input could not see a fileless migration; OI-136: Gate 40 "validates" YAML it
-never parses). And it landed *inside the commit whose own note explains why a meaningless hash on
-this entry must not happen*, which is as close to a controlled demonstration as this class gets:
-the author knew the failure mode, wrote it down, and still shipped an instance of it past the gate
-in the same file.
-
-**Fix shape:** two cheap checks, one strict and one advisory.
-1. Shape: `hash:` must match `^sha256:[0-9a-f]{64}$` OR a documented sentinel string (the `120b`
-   entry deliberately carries one, because a fileless entry has nothing to hash — see its note).
-   That alone would have caught `%s`, and costs nothing.
-2. Value: where a `.sql` file exists for the migration, recompute its sha256 and compare. That is
-   the OI-135 half and is the one that needs the grandfather decision first, because it reddens 60
-   pre-existing entries on day one.
-
-Step 1 is separable and blocks nothing — it is the part worth doing on its own.
-
-**Related:** OI-135 (60 of 126 ledger hashes match nothing, and nothing recomputes them — this is
-its mint-time sibling: 135 is about drift, 137 is about a value that was never a hash at all),
-OI-136, OI-132.
 
 ## OI-139 — the only tool that DELETES developer work is tiered `feature`; every tool that merely BLOCKS a commit is pinned `platform`
 
@@ -5365,39 +5287,6 @@ If ANY of these 4 functions is ever refactored to call Gemini through an injecta
 
 **Reopen when:** one of the 4 functions actually adopts a `geminiChatFn`-style seam (its own test will fail loud at that point regardless of whether this OI was ever picked up first) — or on general principle at the next quarterly tech-debt audit (§4.10).
 
-## OI-263 — Migration-number allocator: reserve migration numbers server-side (mint_oi.sh pattern) and refuse a number already applied live
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: 2026-09-28 — live list_migrations held 148 while the tree did not
-- **Identified**: 2026-09-28 · filed via mint_oi.sh from branch `day-swapper-sync-load`; founder asked for it
-
-Symptom, measured 2026-09-28: the day-swapper-sync-load migration was renumbered 145 → 147 → 148
-as other batches landed on `main`, then had to become **149 at apply time**, because live
-`list_migrations` already held `20260927224028 / 148_coach_extraction_locked_fields`. That branch
-(`single-owner-a2b`) had applied 148 to prod before merging to `main`, so no file in this
-worktree's tree and nothing on `origin/main` showed 148 as taken. Nothing allocates a migration
-number today: the next number is read off `ls supabase/migrations/` by whoever writes the file.
-OI-258 is the ledger-side symptom of the same gap (145/146 collided across diverged `main`s).
-
-- **Class**: a green check is only as wide as its input set
-  (`feedback_green_check_input_set_width` #60). "Is N free?" has THREE sources — the local tree,
-  `origin/main`, and the live database — and both collisions so far came from the one nobody
-  checked.
-- **Industry norm, for the record**: timestamp-prefixed filenames (Rails, Supabase's own
-  `supabase migration new`) make a git collision near-impossible with no coordination; sequential
-  numbering (Django, Alembic, Flyway) relies on a merge-time "two heads" detector. Neither covers a
-  migration applied LIVE from an unmerged branch, which is the case that bit here.
-- **Fix shape (founder chose this 2026-09-28)**: `scripts/mint_migration.sh`, reusing
-  `mint_oi.sh`'s compare-and-swap ref reservation (`refs/heads/mig/N`), so two sessions cannot
-  claim one number; the mint also refuses N when live `list_migrations` (or
-  `backups/applied_migrations.json` on `origin/main`) already carries it. Plus a pre-apply check:
-  before any `apply_migration`, compare the file's number against live `list_migrations` and refuse
-  a taken number. Keeps the 3-digit scheme (tooling such as `latestMigrationDefining` parses it);
-  switching to timestamps was offered and not chosen. Needs its own tests, mutation-proven per
-  rule 24 if it becomes a `check_*` gate.
-- **Source**: day-swapper-sync-load Task 34 apply.
-
 ## OI-264 — docs/sot_registry.yaml is not valid YAML (35 parse errors); every gate reads it line-wise, so a real YAML consumer would fail
 
 - **Status**: OPEN
@@ -5659,6 +5548,44 @@ re-hydrates it). So a real fix is either UI-only (keep-on-empty, with a message)
 coupled to OI-154's design. Pick the first unless the founder wants removal.
 
 **Reopen when**: picked up. Needs a diagnose-doc, a behavioral test on the save map, and a mutation run.
+
+## OI-272 — Reconcile live prod migrations against the applied-migrations ledger (apply-time check; a live apply nobody recorded is invisible to every gate)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-09-29 — data below re-derived by plan-review round 3 and by a live `list_migrations` read; the design is NOT settled (three review rounds each broke the previous round's rules)
+- **Identified**: 2026-09-29 · filed via mint_oi.sh from branch `migration-ledger-integrity`; carved out of OI-263 at founder direction
+
+**What is missing.** Every gate goes file → ledger (`check_migration_ledger_paired.dart`, Gate 14).
+Nothing goes live prod → `backups/applied_migrations.json`. The ledger is a per-branch copy of a
+global fact, so a migration applied live from an unmerged branch (the 148/149 case, 2026-09-28)
+is invisible to every other branch until merge. The one gate that compared live to the ledger
+(`check_migrations_live.dart`) was retired under OI-223 because it could not pass: 125 of 139
+migrations had been applied raw and never registered live.
+
+**Why the first design (an apply-time preflight script, plan
+`docs/plan-reviews/migration-ledger-integrity.md` D8) was cut** — three plan-review rounds, each
+finding new defects introduced by the previous round's fixes:
+- Live names are NOT reliably number-prefixed: 76 of 145 rows are prefixed, 69 are not
+  (`alert_sql_job_failures`, `log_table_retention`, `usage_counters`), and prefixed numbers repeat
+  (`050_` x2, `068_` x2). "Is N taken live?" cannot be answered from live names alone.
+- The ledger is a thin bridge: 65 of 159 entries carry `slug`, 24 carry `cloud_version` and only 21
+  of those are 14-digit (3 are prose such as `live-apply-2026-09-29`).
+- Raw applies (`.claude/apply_migration_via_api.js`) never register a `schema_migrations` row, so
+  a live list is structurally blind to that class.
+- The `--live` snapshot is agent-supplied and no hook runs the script, so it is self-attested.
+- Round-3 defects: the 145/146 exemption must cover the live-name leg too; a sibling branch that
+  applied but has not merged serialises every other branch; "N" is undefined for letter-suffix
+  files (`151b_`) across the legs.
+- Round-3 measured a rule that IS neither always-red nor always-green on today's data: consider
+  only live versions >= the ledger's earliest 14-digit `cloud_version` (20260905071759);
+  accounted = version in the `cloud_version` set, OR name (`N_slug` / bare `slug`) equals a ledger
+  `slug`, OR its N equals a ledger id. Result: 0 unaccounted rows today, and a live apply with no
+  ledger entry still refuses. Starting point, not a decision.
+
+**Framing for the redesign.** Treat this as reconciliation (detect an unrecorded live apply after
+the fact, from somewhere the database is reachable) rather than a gate an agent must remember to
+run first. A git hook cannot query prod. Needs its own plan and its own x2 review.
 
 ## OI-273 — Branch sweep for merged branches that never had a worktree here (retire_worktree --sweep-branches)
 
