@@ -11,12 +11,14 @@
  *   `isPro` gate is simpler.
  *
  * Routing table (set by request body `type`):
- *   food_text_analysis  → gemini-2.5-flash, JSON mode, 10/day free · 200/day PRO
- *   scan_meal           → gemini-2.5-flash-lite (vision), JSON mode, 20/day server cap (combined w/ cart_auditor)
- *   cart_auditor        → gemini-2.5-flash-lite (vision), JSON mode, 20/day server cap (combined w/ scan_meal)
- *   prediction          → gemini-2.5-flash, JSON mode, 3/day per user (usage_counters
+ *   (Model = MODEL_FLASH / MODEL_FLASH_LITE in _shared/gemini.ts — gemini-3.1-flash-lite
+ *    for every tier since 2026-10-01; second attempt MODEL_FALLBACK gemini-3.5-flash-lite.)
+ *   food_text_analysis  → MODEL_FLASH, JSON mode, 10/day free · 200/day PRO
+ *   scan_meal           → MODEL_FLASH_LITE (vision), JSON mode, 20/day server cap (combined w/ cart_auditor)
+ *   cart_auditor        → MODEL_FLASH_LITE (vision), JSON mode, 20/day server cap (combined w/ scan_meal)
+ *   prediction          → MODEL_FLASH, JSON mode, 3/day per user (usage_counters
  *                         key prediction_daily; _shared/prediction_handler.ts)
- *   (default)           → gemini-2.5-flash, chat — 10/day free forever, PRO unlimited
+ *   (default)           → MODEL_FLASH, chat — 10/day free forever, PRO unlimited
  *
  * Gating (server-side, never trust client):
  *   isPro = SELECT 1 FROM subscriptions WHERE user_id AND status='active' AND end_date > now()
@@ -37,9 +39,11 @@ import {
 } from "../_shared/memory_retrieval.ts";
 import {
   geminiChat,
+  labelForModel,
   MODEL_FLASH,
   MODEL_FLASH_LITE,
 } from "../_shared/gemini.ts";
+import { rowModelLabel } from "../_shared/row_model_label.ts";
 import {
   fetchCoachMemory,
   renderCoachMemoryBlock,
@@ -95,9 +99,9 @@ const FOOD_TEXT_PRO_DAILY_CAP = 200;
 
 const DEDUP_WINDOW_SECS = 30; // Ignore duplicate messages within 30 seconds
 
-// Human-readable labels for the ai_coach_interactions.model_used column.
-const LABEL_FLASH = "Gemini 2.5 Flash";
-const LABEL_FLASH_LITE = "Gemini 2.5 Flash Lite";
+// Human-readable labels for the ai_coach_interactions.model_used column come
+// from `labelForModel(<slug that actually answered>)` (gemini.ts); the chat turn
+// goes through `rowModelLabel` (_shared/row_model_label.ts).
 
 /**
  * Sentinel `model_used` value for the runToolLoop-THREW catch (a genuine
@@ -440,7 +444,7 @@ Analyse this as a meal and return ONLY a JSON object (no markdown, no code block
 Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the exact quantity mentioned. One item per distinct food. All values (protein, carbs, fat, fiber) are in grams — numbers only, no "g" suffix. Fiber must reflect actual dietary fiber content. If quantity is unclear, assume a typical single serving for an Indian adult. Return ONLY the JSON object, nothing else.`;
 
       // Step 2 — call Gemini on the valid reservation.
-      const { content, modelUsed, tokensUsed, lastError } = await geminiChat({
+      const { content, modelUsed, tokensUsed, lastError, attemptStatuses } = await geminiChat({
         model: MODEL_FLASH,
         systemPrompt: "You are a nutritionist. Return ONLY valid JSON, no markdown.",
         userPrompt: asAuthoredPrompt(prompt),
@@ -495,7 +499,7 @@ Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the ex
           JSON.stringify({ error: "Gemini returned no content" }),
           0,
         );
-        await reportGeminiExhaustion(supabaseClient, "ai_proxy_gemini_exhausted", lastError ?? null, "food_text_analysis");
+        await reportGeminiExhaustion(supabaseClient, "ai_proxy_gemini_exhausted", lastError ?? null, "food_text_analysis", undefined, attemptStatuses);
         return err(502, "Food analysis failed");
       }
 
@@ -508,7 +512,7 @@ Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the ex
         // Bug fix (2026-04-25 F11): the pre-pre-fix UPDATE omitted
         // `ai_response` entirely → empty placeholder forever.
         await resolvePlaceholder(
-          modelUsed === MODEL_FLASH_LITE ? LABEL_FLASH_LITE : LABEL_FLASH,
+          labelForModel(modelUsed),
           JSON.stringify(parsed),
           tokensUsed,
         );
@@ -641,7 +645,7 @@ Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the ex
 {"meal_name":"short name describing the meal","items":[{"name":"food item name","quantity":"estimated quantity e.g. 1 bowl, 2 rotis, 100g","calories":120,"protein":25,"carbs":3,"fat":2,"fiber":4}]}
 Rules: identify every distinct food item, estimate realistic portion sizes for an Indian adult, use ACCURATE USDA/ICMR nutrition values, all macro values are numbers in grams no g suffix, fiber must reflect actual dietary fiber never return 0 for high-fiber foods, return ONLY the JSON object nothing else`;
 
-      const { content, tokensUsed, lastError } = await geminiChat({
+      const { content, modelUsed, tokensUsed, lastError, attemptStatuses } = await geminiChat({
         model: MODEL_FLASH_LITE,
         systemPrompt: "You are a nutritionist. Return ONLY valid JSON, no markdown.",
         userPrompt: asAuthoredPrompt(scanPrompt),
@@ -651,19 +655,18 @@ Rules: identify every distinct food item, estimate realistic portion sizes for a
         temperature: 0.2,
         timeoutMs: 20_000,
         jsonMode: true,
-        fallbackToLite: false, // already Flash-Lite; no point
         retries: 2, // f7a2c9 — no other retry on this path
       });
 
       if (!content) {
         await resolveVisionPlaceholder("failed_gemini", JSON.stringify({ error: "Gemini returned no content" }), 0);
-        await reportGeminiExhaustion(supabaseClient, "ai_proxy_gemini_exhausted", lastError ?? null, "scan_meal");
+        await reportGeminiExhaustion(supabaseClient, "ai_proxy_gemini_exhausted", lastError ?? null, "scan_meal", undefined, attemptStatuses);
         return err(502, "Image analysis failed");
       }
 
       try {
         const parsed = JSON.parse(stripJsonFences(content));
-        await resolveVisionPlaceholder(LABEL_FLASH_LITE, "success", tokensUsed);
+        await resolveVisionPlaceholder(labelForModel(modelUsed), "success", tokensUsed);
         return new Response(JSON.stringify(parsed), {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -685,7 +688,7 @@ Rules: identify every distinct food item, estimate realistic portion sizes for a
 {"items":[{"name":"product name","category":"e.g. dairy, snack, staple, beverage, protein","quantity":"e.g. 1 pack, 500g, 1L","calories_per_serving":120,"protein_per_serving":5,"carbs_per_serving":20,"fat_per_serving":3,"is_healthy":true,"concern":"brief note if unhealthy e.g. high sugar, ultra-processed"}],"summary":{"total_items":5,"healthy_count":3,"unhealthy_count":2,"total_estimated_calories":1500,"total_estimated_protein":45,"health_score":65,"top_suggestion":"Replace Maggi with whole wheat pasta for more fiber and protein"}}
 Rules: identify every distinct food product, use ACCURATE nutrition values from standard USDA/FSSAI data, is_healthy=false for ultra-processed/high-sugar/high-sodium items, health_score is 0-100, provide actionable suggestions for healthier alternatives, return ONLY the JSON object nothing else`;
 
-      const { content, tokensUsed, lastError } = await geminiChat({
+      const { content, modelUsed, tokensUsed, lastError, attemptStatuses } = await geminiChat({
         model: MODEL_FLASH_LITE,
         systemPrompt: "You are a nutrition expert. Return ONLY valid JSON, no markdown.",
         userPrompt: asAuthoredPrompt(cartPrompt),
@@ -695,19 +698,18 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
         temperature: 0.2,
         timeoutMs: 25_000,
         jsonMode: true,
-        fallbackToLite: false,
         retries: 2, // f7a2c9 — no other retry on this path
       });
 
       if (!content) {
         await resolveVisionPlaceholder("failed_gemini", JSON.stringify({ error: "Gemini returned no content" }), 0);
-        await reportGeminiExhaustion(supabaseClient, "ai_proxy_gemini_exhausted", lastError ?? null, "cart_auditor");
+        await reportGeminiExhaustion(supabaseClient, "ai_proxy_gemini_exhausted", lastError ?? null, "cart_auditor", undefined, attemptStatuses);
         return err(502, "Cart analysis failed");
       }
 
       try {
         const parsed = JSON.parse(stripJsonFences(content));
-        await resolveVisionPlaceholder(LABEL_FLASH_LITE, "success", tokensUsed);
+        await resolveVisionPlaceholder(labelForModel(modelUsed), "success", tokensUsed);
         return new Response(JSON.stringify(parsed), {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -732,12 +734,14 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
       const result = await handlePrediction({ message }, {
         consume: () => consumePredictionQuota(supabaseClient, userId),
         geminiChat,
-        reportExhaustion: (lastError) =>
+        reportExhaustion: (lastError, attemptStatuses) =>
           reportGeminiExhaustion(
             supabaseClient,
             "ai_proxy_gemini_exhausted",
             lastError ?? null,
             "prediction",
+            undefined,
+            attemptStatuses,
           ),
       });
       return new Response(JSON.stringify(result.body), {
@@ -778,13 +782,29 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
         deduplicated: true,
       });
     }
+    if (dedup === "replay_hard_failure" && recentDup) {
+      // The loop returned the hardcoded apology (a5c8e2): replay the SAME delivered
+      // 200 the first request got, flagged so the client keeps it out of history.
+      console.log(`[ai-proxy] Dedup hit on a hard-failure apology for user ${userId} — replaying it`);
+      return new Response(
+        JSON.stringify({
+          reply: recentDup.ai_response,
+          model_used: labelForModel(MODEL_FLASH),
+          tokens_used: 0,
+          actions: [],
+          had_hard_failure: true,
+          deduplicated: true,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
     if (dedup === "replay_reply" && recentDup) {
       console.log(`[ai-proxy] Dedup hit for user ${userId} — returning cached response`);
       const extracted = extractLogActions(recentDup.ai_response as string);
       return new Response(
         JSON.stringify({
           reply: extracted.reply,
-          model_used: recentDup.model_used ?? LABEL_FLASH,
+          model_used: recentDup.model_used ?? labelForModel(MODEL_FLASH),
           tokens_used: recentDup.tokens_used ?? 0,
           actions: extracted.actions,
           deduplicated: true,
@@ -935,7 +955,8 @@ Parse "5x8 at 80kg" as 5 sets of 8 reps at 80kg. logging_type: weight_reps (weig
     //
     // Size envelope (not separately validated — size is bounded by
     // construction):
-    //   CAPTAIN_MANUAL            ≈ 4–5 KB
+    //   CAPTAIN_MANUAL            ≈ 20 KB (20.3K chars measured 2026-10-01; ≈ 5.8K tokens
+    //                             with tools + dynamic blocks per request)
     //   ICBF_LOG_INSTRUCTIONS     ≈ 1.5 KB
     //   coachMemoryBlock          ≤ ~2 KB (renderCoachMemoryBlock cap)
     //   snapshot_json             ≤ 10 KB as it enters this prompt
@@ -943,7 +964,7 @@ Parse "5x8 at 80kg" as 5 sets of 8 reps at 80kg. logging_type: weight_reps (weig
     //                             sanitizeJsonForPrompt output and 400s
     //                             over 10000 chars)
     //   retrievalBlock            ≤ ~1.2 KB (5 × 200 chars + header)
-    // Total ceiling ≈ 19.5 KB, well under Gemini 2.5 Flash context limit.
+    // Total ceiling ≈ 35 KB, far under Gemini 3.1 Flash Lite's context limit.
     const promptParts: string[] = [CAPTAIN_MANUAL, ICBF_LOG_INSTRUCTIONS];
     if (isChatChannel) {
       // Unit 3 (day-swapper-sync-load) — deterministic per-request routing
@@ -1139,10 +1160,19 @@ yet" — never make up a number.
     const extracted = extractLogActions(loop.text);
     const cleanReply = extracted.reply;
 
-    // If the loop fell back to Flash-Lite at any round, label the row
-    // accordingly so analytics see the actual provider that produced
-    // the final response.
-    const modelLabel = loop.usedFallback ? LABEL_FLASH_LITE : LABEL_FLASH;
+    // Label from the slug that ACTUALLY answered the last round (so analytics
+    // see the real provider), or stamp the failure SENTINEL when the reply is
+    // the hardcoded apology — see _shared/row_model_label.ts (a1c6b9 class:
+    // a real label on an apology row let dedup replay it as a normal reply).
+    const rowModelUsed = rowModelLabel(
+      loop.hadHardFailure,
+      loop.modelUsed,
+      MODEL_USED_LOOP_THREW_SENTINEL,
+    );
+    // The CLIENT response + embedding metadata keep the real provider label
+    // (the sentinel is a DB-row marker only; the client already learns of a
+    // failed turn through `had_hard_failure`).
+    const modelLabel = labelForModel(loop.modelUsed ?? MODEL_FLASH);
 
     // Fetch latest snapshot_id for logging
     const { data: snapshotData } = await supabaseClient
@@ -1162,7 +1192,7 @@ yet" — never make up a number.
         .update({
           snapshot_id: snapshotData?.id ?? null,
           ai_response: cleanReply,
-          model_used: modelLabel,
+          model_used: rowModelUsed,
           tokens_used: loop.tokensUsed,
           tool_calls: loop.toolCallsLog.length > 0 ? loop.toolCallsLog : null,
         })

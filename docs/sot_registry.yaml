@@ -5091,6 +5091,26 @@ concepts:
           one of two fields `recentHistoryExchanges`'s exclusion filter
           checks — so a genuine hard-failure apology turn no longer replays
           into the next request's history.
+      - file: supabase/functions/_shared/row_model_label.ts
+        line_range: 1-9999
+        method: "`rowModelLabel` (ai-proxy's chat reservation-resolve UPDATE, `model_used`)"
+        notes: |
+          Gemini 3.x migration (2026-10-01, diagnose recurrence of a1c6b9) — the
+          SERVER-side writer of the failure marker. ai-proxy used to resolve a
+          hard-failure reply (the hardcoded apology) with the REAL model label
+          and tokens_used=0, so chat_dedup.ts `dedupDecision` replayed it as a
+          normal 200 reply inside the dedup window and the apology sat in the
+          cloud table indistinguishable from a real reply. `rowModelLabel(
+          loop.hadHardFailure, loop.modelUsed, MODEL_USED_LOOP_THREW_SENTINEL)`
+          now stamps the sentinel when `hadHardFailure` (dedup then returns
+          `replay_hard_failure` — the same flagged 200 the first request got — while
+          `replay_failure`/502 stays for the loop-THREW marker row; sync_coach.dart
+          already keys on the sentinel, and daily-snapshot / rolling-context skip
+          `failed` rows when building prompts/embeddings) and
+          otherwise `labelForModel(<slug that answered>)`. The CLIENT response
+          keeps the real label + `had_hard_failure`. Deno behavioral test (the
+          label is what dedupDecision reads on the next request):
+          supabase/functions/_shared/row_model_label_test.ts.
       - file: lib/core/services/sync/sync_coach.dart
         line_range: 245-319
         method: "`_restoreCoachInteractions` (SyncServiceCoach extension)"
@@ -10454,7 +10474,7 @@ concepts:
         method: weekly brief userMessage
         semantic: pass-through
         fields_read: [current_week]
-        notes: "'Current week: ${current_week}' into the Gemini 2.5 Pro prompt."
+        notes: "'Current week: ${current_week}' into the Gemini weekly-report prompt."
       - file: supabase/functions/_shared/captain_manual.ts
         line_range: 1-9999
         method: temporal routing instruction
@@ -11455,8 +11475,8 @@ concepts:
 
       FAIL-CLOSED CONTRACT: on a read error the gate must DENY (treat as NOT
       first report), never grant. A null count from a failed query previously
-      read as "first report" and handed a free user an unbounded Gemini 2.5
-      Pro call.
+      read as "first report" and handed a free user an unbounded weekly-report
+      (thinking-on Gemini) call.
     writers:
       - file: supabase/functions/weekly-report/index.ts
         method: serve handler — report-log insert
@@ -11980,8 +12000,8 @@ concepts:
       WHY IT EXISTS: nine quota checks derive their count from rows in
       `ai_coach_interactions`, and `rolling-context` prunes that table nightly.
       Deleting a log is correct; deleting a ledger resets every quota built on
-      it. A free user regains 5 lifetime image analyses and a free Gemini 2.5
-      Pro weekly report; brute-force guards can be reset by chatting.
+      it. A free user regains 5 lifetime image analyses and a free weekly
+      report; brute-force guards can be reset by chatting.
 
       THE CONTRACT:
       1. `consume_quota()` is the ONLY writer. It is atomic — a single

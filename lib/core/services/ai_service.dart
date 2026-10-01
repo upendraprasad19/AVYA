@@ -61,7 +61,7 @@ class AiChatResponse {
 /// Free users: Edge Function `ai-proxy` with 3-tier fallback
 ///   Cerebras Llama 3.1 8B -> Groq Llama 4 -> Gemini 2.0 Flash Lite
 ///
-/// All users: single Edge Function `ai-proxy` (Gemini 2.5 Flash)
+/// All users: single Edge Function `ai-proxy` (Gemini 3.1 Flash Lite)
 ///   Cerebras Llama 3.3 70B (direct)
 class AiService {
   AiService._() {

@@ -19,8 +19,8 @@ Screens / sections:
 
 - `nutrition_screen.dart` — top targets + today's macros + 2-tab Log Food (AI text + Scan meal) + saved meals + water + today's meals card (from saved diet plan). Each meal-slot's "LOG TO {SLOT}" tap opens `log_food_sheet.dart` with `lockedSlot` set; the free-floating "+ LOG FOOD" entry point opens it unlocked.
 - `log_food_sheet.dart` — the single bottom sheet for logging food (5 tabs: AI / Scan / Cart / Barcode / Search), replacing the retired `log_to_slot_sheet.dart` (deleted 2026-09-20, obs 5). `showLogFoodSheet(context, {initial, lockedSlot})`; when `lockedSlot` is set it seeds `mealTypeProvider` to that slot on open via a deferred `addPostFrameCallback` and retitles to "LOG TO {SLOT}" — the title then TRACKS the live provider value for the rest of the sheet's lifetime (corrected 2026-09-20, diagnose e1c5b8: previously read the static `lockedSlot` param and went stale if a tab's own selector moved the write destination).
-- `food_logger_section.dart` — AI text analysis ("2 chapatis and dal") via `ai-proxy` with `type: 'food_text_analysis'` (gemini-2.5-flash) → AI breakdown card. NOT a `food-text-analysis` Edge Function — no such function exists.
-- `scan_meal_section.dart` — photo capture → `ai-proxy` with `type: 'scan_meal'` (gemini-2.5-flash-lite vision, 20/day server cap combined with cart_auditor) → editable result via `_ScanResultEditor`.
+- `food_logger_section.dart` — AI text analysis ("2 chapatis and dal") via `ai-proxy` with `type: 'food_text_analysis'` (gemini-3.1-flash-lite) → AI breakdown card. NOT a `food-text-analysis` Edge Function — no such function exists.
+- `scan_meal_section.dart` — photo capture → `ai-proxy` with `type: 'scan_meal'` (gemini-3.1-flash-lite vision, 20/day server cap combined with cart_auditor) → editable result via `_ScanResultEditor`.
 - `cart_auditor_section.dart` — paste / photograph grocery cart → AI macro/cost audit.
 - `diet_plan_screen.dart` — generated diet plan + PDF export.
 - `water_section.dart` — `WardGlassGrid` 8-cell tracker.

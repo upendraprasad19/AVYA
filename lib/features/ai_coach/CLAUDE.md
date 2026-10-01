@@ -13,7 +13,7 @@ status: active
 
 ## What lives here
 
-`lib/features/ai_coach/` owns the AI Coach tab: a single server-side agent (`ai-proxy` → Gemini 2.5 Flash) with **tool access** to log raw workouts / meals, do confirmed plan edits, swap exercises, and read the user's activity snapshot. The surface is **derive-only** (ADR-0012): the AI logs raw input only — PRs, completion and calorie targets are *computed* by the app. **21 tools (FREE 9 / PRO 12)**; a client that omits `client_capabilities` sees exactly the 20 legacy tools (`allTools` requires the capability string to be present, not merely PRO). See `coach_swap_workout_days` below.
+`lib/features/ai_coach/` owns the AI Coach tab: a single server-side agent (`ai-proxy` → Gemini 3.1 Flash Lite) with **tool access** to log raw workouts / meals, do confirmed plan edits, swap exercises, and read the user's activity snapshot. The surface is **derive-only** (ADR-0012): the AI logs raw input only — PRs, completion and calorie targets are *computed* by the app. **21 tools (FREE 9 / PRO 12)**; a client that omits `client_capabilities` sees exactly the 20 legacy tools (`allTools` requires the capability string to be present, not merely PRO). See `coach_swap_workout_days` below.
 
 Pieces:
 

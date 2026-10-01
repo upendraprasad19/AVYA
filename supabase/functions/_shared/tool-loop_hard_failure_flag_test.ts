@@ -87,8 +87,8 @@ function functionCallResponse(
 function installAlwaysFailFetch(): { restore: () => void } {
   const original = globalThis.fetch;
   // Persistent 429 on every attempt/pass/model — mirrors the live evidence
-  // exactly ("You exceeded your current quota…" on both gemini-2.5-flash
-  // AND gemini-2.5-flash-lite, both bounded-retry passes).
+  // exactly ("You exceeded your current quota…" on both the primary
+  // AND its fallback model, both bounded-retry passes).
   globalThis.fetch = ((_input: unknown, _init?: unknown): Promise<Response> =>
     Promise.resolve(httpErrorResponse(429, "quota exceeded"))) as typeof fetch;
   return { restore: () => (globalThis.fetch = original) };
@@ -154,7 +154,7 @@ Deno.test(
         systemPrompt: "you are The Captain",
         userMessage: "hi",
         ctx,
-        model: "gemini-2.5-flash",
+        model: "gemini-3.1-flash-lite",
       });
 
       assertEquals(result.hadHardFailure, true);
@@ -178,7 +178,7 @@ Deno.test(
         systemPrompt: "you are The Captain",
         userMessage: "hi",
         ctx,
-        model: "gemini-2.5-flash",
+        model: "gemini-3.1-flash-lite",
       });
 
       assertEquals(result.hadHardFailure, false);
@@ -198,7 +198,7 @@ Deno.test(
         systemPrompt: "you are The Captain",
         userMessage: "log my bench: 80kg 4 sets of 10",
         ctx,
-        model: "gemini-2.5-flash",
+        model: "gemini-3.1-flash-lite",
       });
 
       // Sanity: this is the same scenario tool-loop_intent_apology_test.ts
@@ -225,7 +225,7 @@ Deno.test(
         systemPrompt: "you are The Captain",
         userMessage: "how do I do a bench press",
         ctx,
-        model: "gemini-2.5-flash",
+        model: "gemini-3.1-flash-lite",
         maxRounds: 2,
       });
 

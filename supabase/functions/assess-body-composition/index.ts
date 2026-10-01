@@ -156,7 +156,7 @@ Rules:
 Return ONLY valid JSON — no markdown, no code fences:
 {"bf_low": 18, "bf_high": 22, "confidence": "medium", "suitable": true, "note": "One brief clinical observation"}`;
 
-    const { content: rawText, lastError } = await geminiChat({
+    const { content: rawText, lastError, attemptStatuses } = await geminiChat({
       model: MODEL_FLASH_LITE,
       systemPrompt: "You are a clinical body composition assessment tool. Return ONLY valid JSON.",
       userPrompt: asAuthoredPrompt(prompt),
@@ -166,7 +166,6 @@ Return ONLY valid JSON — no markdown, no code fences:
       temperature: 0.1,
       timeoutMs: 20_000,
       jsonMode: true,
-      fallbackToLite: false, // already on Flash-Lite
       retries: 2, // f7a2c9 — no other retry on this path
     });
 
@@ -180,6 +179,8 @@ Return ONLY valid JSON — no markdown, no code fences:
         "ai_proxy_gemini_exhausted",
         lastError ?? null,
         "assess_body_composition",
+        undefined,
+        attemptStatuses,
       );
       return json({ error: "AI assessment failed" }, 502);
     }

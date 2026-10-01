@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { encode as base64Encode } from "https://deno.land/std@0.177.0/encoding/base64.ts";
-import { geminiChat, MODEL_FLASH_LITE } from "../_shared/gemini.ts";
+import { geminiChat, labelForModel, MODEL_FLASH_LITE } from "../_shared/gemini.ts";
 import { reportGeminiExhaustion } from "../_shared/gemini_failure_alert.ts";
 import { COACH_REPLIES } from "../_shared/coach_replies.ts";
 import { istDayStartIso } from "../_shared/ist_date.ts";
@@ -156,9 +156,11 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-// 2026-04-18 · Migrated off OpenRouter Gemma cascade. Now Flash-Lite only
-// via the shared _shared/gemini.ts helper.
-const MODEL_LABEL = "Gemini 2.5 Flash Lite (Vision)";
+// 2026-10-01 · Vision runs on MODEL_FLASH_LITE through the shared
+// _shared/gemini.ts helper. The persisted label is built from the slug that
+// ACTUALLY answered (`labelForModel(modelUsed) + MODEL_LABEL_SUFFIX`), because
+// the attempt list is now [primary, MODEL_FALLBACK].
+const MODEL_LABEL_SUFFIX = " (Vision)";
 
 /**
  * Extract structured log actions from AI response.
@@ -912,14 +914,15 @@ export async function handleRequest(req: Request): Promise<Response> {
       }
     }
 
-    // Single Gemini call (Flash Lite is the vision SKU). No fallback —
-    // already on the cheapest Gemini SKU; falling back to the same model
-    // wouldn't add resilience.
+    // Single Gemini call (MODEL_FLASH_LITE is the vision SKU). The fallback
+    // (MODEL_FALLBACK, probe-proven for vision) is ON: the old "already the
+    // cheapest SKU" reasoning was a property of the 2.5 matrix, and a retired
+    // primary (404) is now survivable.
     //
     // `geminiChat` swallows timeouts / 5xx / safety-filter blocks and
     // returns `{content: null}` rather than throwing. We map that to a
     // 502 below (upstream, retry-eligible) — not a 500.
-    const { content: rawReply, tokensUsed, lastError } = await geminiChat({
+    const { content: rawReply, modelUsed, tokensUsed, lastError, attemptStatuses } = await geminiChat({
       model: MODEL_FLASH_LITE,
       systemPrompt,
       userPrompt: asPrincipalMessage(message),
@@ -928,10 +931,9 @@ export async function handleRequest(req: Request): Promise<Response> {
       maxTokens: 2048,
       temperature: 0.7,
       timeoutMs: 25_000,
-      fallbackToLite: false,
       retries: 2, // f7a2c9 — no other retry on this path
     });
-    const modelLabel = MODEL_LABEL;
+    const modelLabel = `${labelForModel(modelUsed)}${MODEL_LABEL_SUFFIX}`;
 
     if (!rawReply) {
       // OI-238 (sibling of A5/OI-226): same shared dedup source as
@@ -943,6 +945,8 @@ export async function handleRequest(req: Request): Promise<Response> {
         "ai_proxy_gemini_exhausted",
         lastError ?? null,
         "ai_media_proxy",
+        undefined,
+        attemptStatuses,
       );
       // Bug 2026-05-16 photo-analysis-500 — was already 502 here, but
       // adding `error_type` so the client can recognise an upstream

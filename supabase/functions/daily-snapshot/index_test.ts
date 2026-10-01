@@ -345,6 +345,8 @@ interface Row {
   ai_response: string;
   channel: string;
   created_at: string;
+  // Optional: absent = NULL (rows written by other channels carry no model label).
+  model_used?: string | null;
 }
 
 interface RecordedCall {
@@ -379,6 +381,30 @@ function runFilters(rows: Row[], calls: RecordedCall[]): Row[] {
       case "neq": {
         const [col, val] = args as [keyof Row, unknown];
         result = result.filter((r) => r[col] !== val);
+        break;
+      }
+      case "or": {
+        // PostgREST `.or("a.is.null,b.neq.x")`: clauses OR-ed. Only the two
+        // operators extractCoachingNotes uses are implemented; anything else
+        // throws so a changed filter cannot silently pass through this fake.
+        const [expr] = args as [string];
+        const clauses = expr.split(",").map((c) => {
+          const [col, op, ...rest] = c.split(".");
+          const val = rest.join(".");
+          if (op === "is" && val === "null") {
+            return (r: Row) => ((r as unknown as Record<string, unknown>)[col] ?? null) === null;
+          }
+          if (op === "neq") {
+            // SQL three-valued logic: NULL <> 'x' is NULL, which a WHERE drops. A
+            // fake that returns true here would hide a bare `.neq` (no is.null arm).
+            return (r: Row) => {
+              const v = (r as unknown as Record<string, unknown>)[col] ?? null;
+              return v !== null && v !== val;
+            };
+          }
+          throw new Error(`fake .or(): unsupported clause ${c}`);
+        });
+        result = result.filter((r) => clauses.some((f) => f(r)));
         break;
       }
       case "not": {
@@ -446,6 +472,9 @@ class FakeBuilder {
   }
   not(...a: unknown[]) {
     return this.rec("not", a);
+  }
+  or(...a: unknown[]) {
+    return this.rec("or", a);
   }
   order(...a: unknown[]) {
     return this.rec("order", a);
@@ -593,6 +622,32 @@ Deno.test("extractCoachingNotes: an app_event-shaped user_message is excluded ev
   const prompt = String(gemini.calls[0].userPrompt);
   assert(!prompt.includes("{event:"), "app_event-shaped content must never reach the prompt");
   assert(prompt.includes("I'm vegetarian and have a bad knee"), "real message content must reach the prompt");
+});
+
+Deno.test("extractCoachingNotes: a hard-failure apology row (model_used='failed') never reaches the prompt; NULL and real-label rows still do (a5c8e2)", async () => {
+  const failed = row({
+    created_at: pgTs(-50_000),
+    user_message: "FAILED-TURN user text",
+    ai_response: "I had trouble reaching the model. Try again in a moment.",
+    model_used: "failed",
+  });
+  const nullModel = row({ created_at: pgTs(-40_000), user_message: "NULL-model user text" });
+  const labelled = row({
+    created_at: pgTs(-30_000),
+    user_message: "LABELLED user text",
+    model_used: "Gemini 3.1 Flash Lite",
+  });
+  const supabase = fakeSupabase({ convoRows: [failed, nullModel, labelled] });
+  const gemini = fakeGemini("{}");
+
+  await extractCoachingNotes(supabase, "u1", null, { geminiChatFn: gemini.fn });
+
+  assertEquals(gemini.calls.length, 1);
+  const prompt = String(gemini.calls[0].userPrompt);
+  assert(!prompt.includes("FAILED-TURN"), "the apology turn must not reach the extraction prompt");
+  assert(!prompt.includes("I had trouble reaching the model"), "the apology text must not reach the prompt");
+  assert(prompt.includes("NULL-model user text"), "a NULL model_used row must be KEPT (.or is.null, not a bare .neq)");
+  assert(prompt.includes("LABELLED user text"), "a real-label row must be kept");
 });
 
 Deno.test("extractCoachingNotes: an empty {} extraction is ok:true and still advances the watermark", async () => {

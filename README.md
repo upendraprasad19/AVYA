@@ -21,8 +21,8 @@ Personalised fitness and nutrition platform for young professionals (22-35) in I
 
 ### PRO
 - Auto-generate new plans after Week 4 (phases 2–12)
-- Unlimited AI Coach (same Gemini 2.5 Flash backend, server-side `isPro` gate removes daily cap)
-- Reasoning tab — deeper coaching via Gemini 2.5 Pro on weekly report
+- Unlimited AI Coach (same Gemini 3.1 Flash Lite backend, server-side `isPro` gate removes daily cap)
+- Reasoning tab — deeper coaching via the thinking-on weekly report
 - Scan meal — 50 scans/day; Cart Auditor — 50 scans/day
 - Progress photos (full timeline)
 - Weekly AI nutrition report (ongoing) + Telegram push
@@ -42,9 +42,9 @@ Personalised fitness and nutrition platform for young professionals (22-35) in I
 | Auth | Supabase Auth (Email + Google OAuth + Phone OTP) |
 | Database | Supabase Postgres (**46 tables** — see [`docs/architecture/database.md`](docs/architecture/database.md) for the canonical schema) |
 | Storage | Supabase Storage (exercise images, progress photos PRO) |
-| AI (all tiers) | Single Edge Function `ai-proxy` → Google Gemini 2.5 Flash. Server-side PRO gate (no daily cap for PRO; 10/day chat for free). |
-| Food AI | Gemini 2.5 Flash (text analysis) + Gemini 2.5 Flash Lite (scan meal, cart auditor) |
-| Weekly AI Report | Gemini 2.5 Pro (PRO-only, deepest reasoning) |
+| AI (all tiers) | Single Edge Function `ai-proxy` → Google Gemini 3.1 Flash Lite. Server-side PRO gate (no daily cap for PRO; 10/day chat for free). |
+| Food AI | Gemini 3.1 Flash Lite (text analysis, scan meal, cart auditor) |
+| Weekly AI Report | Gemini 3.1 Flash Lite, thinking on (PRO-only) |
 | Plan Generator | Local Dart engine (queries Hive `exerciseBox`, zero API cost) |
 | Payments | Razorpay (WebView checkout → webhook → Supabase → poll → Hive) |
 | Push Notifications | OneSignal + Firebase (AVYA project) |

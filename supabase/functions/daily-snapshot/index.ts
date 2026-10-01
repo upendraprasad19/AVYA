@@ -27,8 +27,8 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 // 2026-04-18 · Migrated from OpenRouter Gemma cascade (+ Gemini fallback)
-// to Gemini 2.5 Flash only. The geminiChat helper already has built-in
-// Flash → Flash-Lite fallback so we retain single-provider resilience.
+// to Gemini Flash only. The geminiChat helper already has built-in
+// primary → MODEL_FALLBACK fallback so we retain single-provider resilience.
 
 // ── Coaching Notes Extraction ────────────────────────────────────────────────
 //
@@ -123,6 +123,11 @@ export async function extractCoachingNotes(
     .in("channel", ["app", "food_text_analysis", "in_app_orphan", "free_image_analysis"])
     .gt("created_at", readFromIso)
     .lte("created_at", readStartIso) // excludes future-dated in_app_orphan rows
+    // A hard-failure apology row (ai-proxy stamps model_used = "failed", a5c8e2)
+    // is not coaching conversation: its "Coach:" text would be fed to the
+    // extraction prompt as if the model had said it. `.or(... is.null ...)`, not
+    // `.neq`, so a NULL model_used row is KEPT (SQL `<>` drops NULLs).
+    .or("model_used.is.null,model_used.neq.failed")
     .not("user_message", "is", null)
     .neq("user_message", "")
     .not("user_message", "like", "{event:%") // drops app_event-shaped rows
@@ -247,7 +252,7 @@ Return ONLY valid JSON (no markdown, no code fences). Include only fields that w
 
 If nothing was found, return: {}`;
 
-  const { content: rawText, lastError } = await geminiChatFn({
+  const { content: rawText, lastError, attemptStatuses } = await geminiChatFn({
     model: MODEL_FLASH,
     systemPrompt: "Extract factual profile data from fitness coaching conversations. Return ONLY valid JSON.",
     userPrompt: asAuthoredPrompt(prompt),
@@ -271,6 +276,8 @@ If nothing was found, return: {}`;
       "ai_proxy_gemini_exhausted",
       lastError ?? null,
       "daily_snapshot_extraction",
+      undefined,
+      attemptStatuses,
     );
     return { ok: false };
   }

@@ -79,19 +79,17 @@ function fakeAlertsClient() {
   return {
     inserted,
     from(_table: string) {
+      // One chainable builder: eq/is/gte return it, limit resolves. The dedup
+      // select gained a `context_json->>class` filter (A3, 2026-10-01); a fake
+      // that hard-codes the chain length breaks on every added filter.
+      const builder = {
+        eq: (_a: string, _b: unknown) => builder,
+        is: (_a: string, _b: unknown) => builder,
+        gte: (_a: string, _b: unknown) => builder,
+        limit: (_n: number) => Promise.resolve({ data: [], error: null }),
+      };
       return {
-        select: (_cols: string) => ({
-          eq: (_a: string, _b: string) => ({
-            eq: (_c: string, _d: string) => ({
-              is: (_e: string, _f: null) => ({
-                gte: (_g: string, _h: string) => ({
-                  limit: (_n: number) =>
-                    Promise.resolve({ data: [], error: null }),
-                }),
-              }),
-            }),
-          }),
-        }),
+        select: (_cols: string) => builder,
         insert: (row: Record<string, unknown>) => {
           inserted.push(row);
           return Promise.resolve({ error: null });
@@ -118,7 +116,7 @@ Deno.test(
         systemPrompt: "you are The Captain",
         userMessage: "how am I doing this week?",
         ctx,
-        model: "gemini-2.5-flash",
+        model: "gemini-3.1-flash-lite",
       });
 
       // Pre-existing behavior unchanged: the user still sees the apology.
@@ -180,7 +178,7 @@ Deno.test(
         systemPrompt: "you are The Captain",
         userMessage: "log my bench: 80kg 4 sets of 10",
         ctx,
-        model: "gemini-2.5-flash",
+        model: "gemini-3.1-flash-lite",
       });
 
       // FC2: the queued intent means NO apology text — the loop-exit
@@ -224,7 +222,7 @@ Deno.test(
         systemPrompt: "you are The Captain",
         userMessage: "how am I doing this week?",
         ctx,
-        model: "gemini-2.5-flash",
+        model: "gemini-3.1-flash-lite",
       });
       assertEquals(client.inserted.length, 1);
       const context = client.inserted[0].context_json as Record<string, unknown>;
@@ -258,7 +256,7 @@ Deno.test(
         systemPrompt: "you are The Captain",
         userMessage: "log my bench: 80kg 4 sets of 10",
         ctx,
-        model: "gemini-2.5-flash",
+        model: "gemini-3.1-flash-lite",
       });
       assertEquals(result.hadHardFailure, false);
       assertEquals(
@@ -268,6 +266,44 @@ Deno.test(
       );
     } finally {
       globalThis.fetch = original;
+    }
+  },
+);
+
+Deno.test(
+  "runToolLoop — a 404 primary + 503 fallback reaches the alert as class model_unavailable WITH both attempt statuses (the thrown Error's attemptStatuses, end to end)",
+  async () => {
+    const { installFakeFetch, httpError } = await import("./gemini_fake_fetch.ts");
+    const { calls, restore } = installFakeFetch([
+      httpError(404, "This model models/gemini-2.5-flash-lite is no longer available to new users."),
+      httpError(503, "overloaded"),
+    ]);
+    const client = fakeAlertsClient();
+    const ctx: ToolContext = {
+      userId: "test-user",
+      isPro: false,
+      sb: client,
+      requestId: "test-req-404",
+    };
+    try {
+      const result = await runToolLoop({
+        systemPrompt: "you are The Captain",
+        userMessage: "how am I doing this week?",
+        ctx,
+        model: "gemini-3.1-flash-lite",
+      });
+      assertEquals(result.hadHardFailure, true);
+      assertEquals(client.inserted.length, 1);
+      const context = client.inserted[0].context_json as Record<string, unknown>;
+      // last status was 503 (transient) but an earlier attempt was a 404
+      assertEquals(context.status, 503);
+      assertEquals(context.class, "model_unavailable");
+      const statuses = context.attempt_statuses as Array<{ model: string; status: number }>;
+      assert(statuses.some((a) => a.status === 404), JSON.stringify(statuses));
+      assert(statuses.some((a) => a.status === 503), JSON.stringify(statuses));
+      assert(calls.length >= 2);
+    } finally {
+      restore();
     }
   },
 );

@@ -9,24 +9,39 @@
  *          daily-snapshot, rolling-context, morning-alert,
  *          future-prediction, weekly-report.
  *
- * Model matrix (stay in sync with docs/architecture/ai.md):
- *   gemini-2.5-flash       — primary chat + structured JSON (ai-proxy,
- *                            morning-alert, rolling-context,
- *                            future-prediction, daily-snapshot text,
- *                            food_text_analysis)
- *   gemini-2.5-flash-lite  — vision paths (scan_meal, cart_auditor,
- *                            assess-body-composition, ai-media-proxy)
- *                            and fallback for Flash
- *   gemini-2.5-pro         — weekly-report only (deepest reasoning)
+ * Model matrix (stay in sync with docs/architecture/ai.md). Migrated to
+ * Gemini 3.x on 2026-10-01: the new API key returns HTTP 404 for the retired
+ * gemini-2.5-* slugs ("no longer available to new users"; 2.5-flash-lite was
+ * probed, 2.5-flash and 2.5-pro were reported 404 by the founder). EVERY tier now runs
+ * on ONE model, gemini-3.1-flash-lite (founder decision D2), and each tier keeps
+ * its own constant below so a per-tier revert is a ONE-LINE change:
+ *   MODEL_FLASH       — chat, structured JSON, food text, prediction
+ *   MODEL_FLASH_LITE  — vision paths (scan_meal, cart_auditor, ai-media-proxy,
+ *                       assess-body-composition)
+ *   MODEL_PRO         — weekly-report (runs with `thinking: "on"`)
+ *   MODEL_FALLBACK    — gemini-3.5-flash-lite, the second attempt for every call
  *
- * Fallback: on 5xx / 429 / empty-content from the primary model, retry
- * once against `gemini-2.5-flash-lite` (cheaper + usually has quota
- * headroom when Flash is rate-limited). Set `fallbackToLite: false` to
- * skip (e.g. when primary is ALREADY Flash-Lite, or when the call is so
- * vision-heavy that a text-only Lite retry is meaningless).
+ * Fallback: on 5xx / 429 / empty-content / 404 from the primary model, retry
+ * once against MODEL_FALLBACK. Because every tier shares one slug, the guard is
+ * `model !== MODEL_FALLBACK` (NOT the old "primary is not Flash-Lite" test,
+ * which with a shared slug would remove the fallback for every call). Pass
+ * `fallbackToLite: false` to skip (the option NAME is kept: CI runs
+ * `deno test --no-check`, so a rename would silently ignore stale call sites).
  *
- * Not retried: 4xx other than 429 (request is broken; retrying won't
- * help) and explicit quota-exceeded responses.
+ * Thinking is a per-call option (`thinking: "off" | "on"`, default off) and the
+ * request config follows the ATTEMPT's model through THINKING_BY_MODEL —
+ * the fallback attempt must never inherit the primary's config (3.5 rejects
+ * the 2.5-era `thinkingBudget: 0` with HTTP 400; `thinkingLevel: "minimal"` is
+ * accepted by both Lite models).
+ *
+ * Gemini 3 thought signatures: a functionCall part carries `thoughtSignature`
+ * and a replayed model turn WITHOUT it is a 400. `geminiChatWithTools` therefore
+ * returns the RAW parts Gemini sent (see `GeminiPart`) and the tool loop stores
+ * them unchanged.
+ *
+ * Not retried: 4xx other than 429 (request is broken; retrying won't help; a 404
+ * additionally prunes that model for the rest of the call) and explicit
+ * quota-exceeded responses.
  */
 
 import type { GeminiFunctionDeclaration } from "./tools/zodToGemini.ts";
@@ -61,9 +76,104 @@ export function redactSecrets(input: string): string {
 }
 
 // Stable SKU names — colocated here so callers pick from a canonical list.
-export const MODEL_FLASH = "gemini-2.5-flash";
-export const MODEL_FLASH_LITE = "gemini-2.5-flash-lite";
-export const MODEL_PRO = "gemini-2.5-pro";
+// One constant PER TIER (all the same string today — founder decision D2,
+// 2026-10-01) so a per-tier revert is one line. Do NOT compare a model against
+// one of these to infer "which tier is this" — with a shared slug the answer is
+// always yes; use MODEL_FALLBACK and THINKING_BY_MODEL instead.
+export const MODEL_FLASH = "gemini-3.1-flash-lite";
+export const MODEL_FLASH_LITE = "gemini-3.1-flash-lite";
+export const MODEL_PRO = "gemini-3.1-flash-lite";
+/** Second attempt for every call (probe-proven on every request shape). */
+export const MODEL_FALLBACK = "gemini-3.5-flash-lite";
+
+/** Per-call thinking switch. Default "off". */
+export type GeminiThinking = "off" | "on";
+
+/**
+ * Capability table: attempt-model slug -> thinkingConfig per mode.
+ * `thinkingLevel: "minimal"` = off (0 thought tokens) and `"low"` = on (~135
+ * thought tokens) are probe-proven on BOTH Lite models; `thinkingBudget: 0` is
+ * accepted by 3.1 and REJECTED (HTTP 400) by 3.5, so it must never be sent.
+ * A new MODEL_* slug needs a row here (pinned by gemini_thinking_config_test.ts, which iterates every exported MODEL_* constant).
+ */
+export const THINKING_BY_MODEL: Record<
+  string,
+  Record<GeminiThinking, Record<string, unknown>>
+> = {
+  "gemini-3.1-flash-lite": {
+    off: { thinkingLevel: "minimal" },
+    on: { thinkingLevel: "low" },
+  },
+  "gemini-3.5-flash-lite": {
+    off: { thinkingLevel: "minimal" },
+    on: { thinkingLevel: "low" },
+  },
+};
+
+/**
+ * thinkingConfig for ONE attempt. Unknown slug => null (send NO thinkingConfig,
+ * warn, never throw: tests pass legacy slugs through the real function, and an
+ * omitted config is the safe default on the Lite models — 0 thoughts).
+ */
+export function thinkingConfigFor(
+  attemptModel: string,
+  thinking: GeminiThinking,
+): Record<string, unknown> | null {
+  const row = THINKING_BY_MODEL[attemptModel];
+  if (!row) {
+    console.warn(
+      `[gemini] no thinking capability row for model=${attemptModel}; sending no thinkingConfig`,
+    );
+    return null;
+  }
+  return row[thinking];
+}
+
+/** Human label for a model slug (the value stored in ai_coach_interactions.model_used). */
+export function labelForModel(modelUsed: string | null | undefined): string {
+  switch (modelUsed) {
+    case "gemini-3.1-flash-lite":
+      return "Gemini 3.1 Flash Lite";
+    case "gemini-3.5-flash-lite":
+      return "Gemini 3.5 Flash Lite";
+    default:
+      return modelUsed && modelUsed.length > 0 ? modelUsed : "Gemini";
+  }
+}
+
+/** One attempt's outcome, for classification (404 = model unavailable). */
+export interface GeminiAttemptStatus {
+  model: string;
+  status: number | null;
+}
+
+/**
+ * `finishReason`s that are a deterministic content decision: a second model or a
+ * retry gives the same answer, so they must not burn retry passes.
+ */
+const DETERMINISTIC_FINISH_REASONS = new Set([
+  "SAFETY",
+  "RECITATION",
+  "PROHIBITED_CONTENT",
+  "BLOCKLIST",
+  "SPII",
+]);
+
+/** True for the Gemini "model does not exist for this key" shape (HTTP 404). */
+export function isModelUnavailableStatus(status: number | null | undefined): boolean {
+  return status === 404;
+}
+
+/** Log the cached/thought token counts per call (console only; absent fields = 0). */
+function logUsage(label: string, model: string, usage: unknown): void {
+  const u = (usage ?? {}) as Record<string, unknown>;
+  const num = (v: unknown) => (typeof v === "number" ? v : 0);
+  console.log(
+    `[gemini] usage ${label} model=${model} prompt=${num(u.promptTokenCount)} ` +
+      `out=${num(u.candidatesTokenCount)} cached=${num(u.cachedContentTokenCount)} ` +
+      `thoughts=${num(u.thoughtsTokenCount)} total=${num(u.totalTokenCount)}`,
+  );
+}
 
 export interface GeminiOptions {
   /** SKU name — use the MODEL_* constants above. */
@@ -85,13 +195,18 @@ export interface GeminiOptions {
   /** Request structured JSON output (sets responseMimeType). */
   jsonMode?: boolean;
   /**
-   * On 5xx / 429 / empty content, retry once against Flash-Lite.
-   * Default true. Pass false when primary is already Flash-Lite or
-   * when fallback wouldn't add value.
+   * On 5xx / 429 / empty content / 404, retry once against MODEL_FALLBACK.
+   * Default true. Pass false only when a second model genuinely adds nothing
+   * (no call site does today). The option NAME is historical and kept on purpose.
    */
   fallbackToLite?: boolean;
   /**
-   * FC3 (diagnose 7fbe21): EXTRA passes over the whole [primary, Flash-Lite]
+   * "off" (default) or "on". Resolved PER ATTEMPT through THINKING_BY_MODEL —
+   * thinking tokens count against `maxTokens`, so an "on" caller must size it.
+   */
+  thinking?: GeminiThinking;
+  /**
+   * FC3 (diagnose 7fbe21): EXTRA passes over the whole [primary, MODEL_FALLBACK]
    * attempt list on a null (transient empty / quota) result, each spaced by a
    * short backoff. Default 0 = current single-pass behavior. Opt in ONLY where
    * a one-shot empty is user-visible (e.g. parseFoodText) — the tool loop has
@@ -115,6 +230,19 @@ export interface GeminiResult {
    * never into an HTTP response body.
    */
   lastError?: { status: number | null; message: string } | null;
+  /**
+   * Present only when content is null: EVERY attempt's HTTP status (not just the
+   * last). A retired primary (404) followed by a transient fallback failure must
+   * still classify as `model_unavailable`. A side field — `lastError` stays
+   * `{status, message}` (tests deep-equal it).
+   */
+  attemptStatuses?: GeminiAttemptStatus[];
+  /**
+   * True when this failure is a deterministic content block (SAFETY etc.): the
+   * retry loop does not spend extra passes on it. A side field for the same reason
+   * as `attemptStatuses`.
+   */
+  deterministicFailure?: boolean;
 }
 
 /**
@@ -122,7 +250,7 @@ export interface GeminiResult {
  *   - System-instruction translation from OpenAI-style roles
  *   - Optional inline-data image (Gemini's `inline_data` part)
  *   - JSON mode via `responseMimeType: application/json`
- *   - Flash → Flash-Lite fallback on retriable errors
+ *   - Primary → MODEL_FALLBACK on retriable errors (and 404, which also prunes the model)
  */
 export async function geminiChat(options: GeminiOptions): Promise<GeminiResult> {
   const {
@@ -136,6 +264,7 @@ export async function geminiChat(options: GeminiOptions): Promise<GeminiResult> 
     imageMimeType = "image/jpeg",
     jsonMode = false,
     fallbackToLite = true,
+    thinking = "off",
     retries = 0,
   } = options;
 
@@ -149,10 +278,12 @@ export async function geminiChat(options: GeminiOptions): Promise<GeminiResult> 
     };
   }
 
-  // Try primary, then (optionally) Flash-Lite. Never chain Lite → Lite.
-  const attempts: string[] = [model];
-  if (fallbackToLite && model !== MODEL_FLASH_LITE) {
-    attempts.push(MODEL_FLASH_LITE);
+  // Try primary, then (optionally) MODEL_FALLBACK. Never chain fallback → fallback.
+  // The guard is `model !== MODEL_FALLBACK`: every tier shares one slug today, so
+  // the old "primary is not Flash-Lite" test would drop the fallback for every call.
+  let attempts: string[] = [model];
+  if (fallbackToLite && model !== MODEL_FALLBACK) {
+    attempts.push(MODEL_FALLBACK);
   }
 
   // FC3 (diagnose 7fbe21): optional EXTRA passes over the attempt list on a
@@ -168,8 +299,15 @@ export async function geminiChat(options: GeminiOptions): Promise<GeminiResult> 
   const retryStartedAt = Date.now();
   const retryDeadlineMs = 20_000;
   let lastFailure: GeminiResult | null = null;
+  const attemptStatuses: GeminiAttemptStatus[] = [];
   for (let pass = 0; pass <= retries; pass++) {
-    for (const attemptModel of attempts) {
+    // Retry only if SOME attempt this pass failed transiently (no HTTP status =
+    // timeout/empty/transport, 429, 5xx). A pass whose every failure was a
+    // non-429 4xx (400/403/404) cannot be fixed by waiting.
+    let passHadTransientFailure = false;
+    // Snapshot: a 404 reassigns `attempts` mid-pass; the index below stays valid.
+    const passAttempts = attempts;
+    for (const [attemptIdx, attemptModel] of passAttempts.entries()) {
       const result = await _callOnce({
         model: attemptModel,
         systemPrompt,
@@ -180,11 +318,12 @@ export async function geminiChat(options: GeminiOptions): Promise<GeminiResult> 
         imageBase64,
         imageMimeType,
         jsonMode,
+        thinking,
       });
 
       if (result.content !== null) {
         // Success on the first attempt is the common path; log the
-        // fallback / retry case so we can monitor Flash quota health in prod.
+        // fallback / retry case so we can monitor primary health in prod.
         if (attemptModel !== model || pass > 0) {
           console.warn(
             `[geminiChat] recovered (${model} → ${attemptModel}, pass ${pass})`,
@@ -193,13 +332,30 @@ export async function geminiChat(options: GeminiOptions): Promise<GeminiResult> 
         return result;
       }
       lastFailure = result;
+      const status = result.lastError?.status ?? null;
+      attemptStatuses.push({ model: attemptModel, status });
+      if (isModelUnavailableStatus(status)) {
+        // Retired / unknown model: never try it again within this call.
+        console.warn(`[gemini] MODEL_UNAVAILABLE model=${attemptModel}`);
+        attempts = attempts.filter((m) => m !== attemptModel);
+      } else if (
+        !result.deterministicFailure &&
+        // no HTTP status (timeout / empty / transport), 408/425/429, 5xx
+        (status === null || status === 408 || status === 425 || status === 429 ||
+          status >= 500)
+      ) {
+        passHadTransientFailure = true;
+      }
       console.warn(
-        `[geminiChat] ${attemptModel} returned null — ${attempts.indexOf(attemptModel) < attempts.length - 1 ? "trying fallback" : "attempt list exhausted"}`,
+        `[geminiChat] ${attemptModel} returned null — ${attemptIdx < passAttempts.length - 1 ? "trying fallback" : "attempt list exhausted"}`,
       );
     }
     // Space the next pass so a transient quota/empty blip can clear — but only
     // if we're still inside the retry wall-clock budget (B-pass P2).
     if (pass >= retries) break;
+    // `attempts.length === 0` is defensive: a pass can only be transient if some
+    // model it tried survived the prune, so it cannot decide alone today.
+    if (attempts.length === 0 || !passHadTransientFailure) break;
     if (Date.now() - retryStartedAt >= retryDeadlineMs) {
       console.warn(
         `[geminiChat] retry budget (${retryDeadlineMs}ms) exhausted for primary=${model}`,
@@ -212,7 +368,14 @@ export async function geminiChat(options: GeminiOptions): Promise<GeminiResult> 
   console.error(
     `[geminiChat] All attempts failed for primary=${model} (retries=${retries})`,
   );
-  return { content: null, modelUsed: null, tokensUsed: 0, lastError: lastFailure?.lastError ?? null };
+  return {
+    content: null,
+    modelUsed: null,
+    tokensUsed: 0,
+    lastError: lastFailure?.lastError ?? null,
+    attemptStatuses,
+    deterministicFailure: lastFailure?.deterministicFailure ?? false,
+  };
 }
 
 // ── Private: single HTTP call to Gemini. Returns null on any failure. ──
@@ -226,6 +389,7 @@ async function _callOnce(opts: {
   imageBase64?: string;
   imageMimeType: string;
   jsonMode: boolean;
+  thinking: GeminiThinking;
 }): Promise<GeminiResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs);
@@ -267,19 +431,14 @@ async function _callOnce(opts: {
         "application/json";
     }
 
-    // FC1 (diagnose 7fbe21): Gemini 2.5 Flash runs "thinking" ON by default,
-    // and thinking tokens count against maxOutputTokens. With our low output
-    // caps (120–2048) the model can spend the whole budget thinking and return
-    // an EMPTY candidate (finishReason=MAX_TOKENS) — which the caller then
-    // degrades to Flash-Lite (Lite has thinking OFF by default, so it answers).
-    // Disable thinking for every NON-Pro attempt (Flash + its Lite fallback);
-    // MODEL_PRO (weekly-report) keeps dynamic thinking. Keyed on the ATTEMPT
-    // model (opts.model here is the attempt model — see the geminiChat attempt
-    // loop) so Lite never receives a Pro budget (Lite's floor is 512).
-    if (opts.model !== MODEL_PRO) {
-      (body.generationConfig as Record<string, unknown>).thinkingConfig = {
-        thinkingBudget: 0,
-      };
+    // Thinking config follows the ATTEMPT model (diagnose 7fbe21 FC1 history:
+    // thinking tokens count against maxOutputTokens, so an uncontrolled default
+    // can return an EMPTY candidate at our low caps). `minimal` = off,
+    // `low` = on; `thinkingBudget: 0` is NOT used — 3.5 rejects it with HTTP 400.
+    const thinkingConfig = thinkingConfigFor(opts.model, opts.thinking);
+    if (thinkingConfig) {
+      (body.generationConfig as Record<string, unknown>).thinkingConfig =
+        thinkingConfig;
     }
 
     const response = await fetch(url, {
@@ -294,7 +453,8 @@ async function _callOnce(opts: {
     clearTimeout(timer);
 
     // Retriable statuses: 429 (rate-limited), 500/502/503/504 (server).
-    // Non-retriable 4xx returns null immediately — caller logs & moves on.
+    // Non-retriable 4xx (incl. 404 = model unavailable) returns null immediately —
+    // the caller logs, prunes a 404'd model and moves on.
     if (!response.ok) {
       const status = response.status;
       let preview = "";
@@ -329,6 +489,7 @@ async function _callOnce(opts: {
         modelUsed: null,
         tokensUsed: 0,
         lastError: { status: null, message: `no candidate (finishReason=${finishReason})` },
+        deterministicFailure: DETERMINISTIC_FINISH_REASONS.has(finishReason),
       };
     }
 
@@ -348,6 +509,7 @@ async function _callOnce(opts: {
     }
 
     const tokensUsed = data.usageMetadata?.totalTokenCount ?? 0;
+    logUsage("single", opts.model, data.usageMetadata);
 
     return {
       content: text,
@@ -396,10 +558,68 @@ export interface GeminiContent {
  * single-turn helper).
  */
 export type GeminiPart =
-  | { text: string }
-  | { functionCall: { name: string; args: Record<string, unknown> } }
+  | { text: string; thoughtSignature?: string }
+  | {
+    functionCall: { name: string; args: Record<string, unknown> };
+    /**
+     * Gemini 3: the signature rides on the part, beside `functionCall`. A
+     * replayed model turn whose functionCall part lacks it is an HTTP 400
+     * ("Function call is missing a thought_signature"). Echo it RAW.
+     */
+    thoughtSignature?: string;
+  }
   | { functionResponse: { name: string; response: Record<string, unknown> } }
-  | { inline_data: { mime_type: string; data: string } };
+  | { inline_data: { mime_type: string; data: string } }
+  | { thoughtSignature: string };
+
+/** Documented Google value that bypasses signature validation (probe: 200 on 3.1 + 3.5). */
+export const DUMMY_THOUGHT_SIGNATURE = "skip_thought_signature_validator";
+
+/**
+ * Defensive fill for a model turn about to be stored/replayed: ONLY the FIRST
+ * functionCall part, ONLY when NO part in the turn carries a signature
+ * (parallel calls carry a single signature on the first call; the dummy is
+ * probe-proven for a single call). Returns a NEW array; never mutates input.
+ */
+export function fillMissingThoughtSignature(
+  parts: GeminiPart[],
+  opts: { force?: boolean } = {},
+): GeminiPart[] {
+  const hasSig = (p: GeminiPart) =>
+    typeof (p as { thoughtSignature?: unknown }).thoughtSignature === "string";
+  // Default: act only when NO part in the turn carries a signature (so a turn
+  // that already has one is returned UNCHANGED, same reference). `force` (the
+  // 400 safety net only) puts the dummy on the first functionCall that itself
+  // lacks a signature even when a text part carries one — a turn Google just
+  // rejected is already known to be missing something.
+  if (!opts.force && parts.some(hasSig)) return parts;
+  const idx = parts.findIndex((p) => "functionCall" in p && !hasSig(p));
+  if (idx < 0) return parts;
+  const out = parts.slice();
+  out[idx] = {
+    ...(out[idx] as { functionCall: { name: string; args: Record<string, unknown> } }),
+    thoughtSignature: DUMMY_THOUGHT_SIGNATURE,
+  };
+  return out;
+}
+
+/** Apply {@link fillMissingThoughtSignature} to every model turn of a history. */
+export function fillMissingThoughtSignaturesInHistory(
+  messages: GeminiContent[],
+  opts: { force?: boolean } = {},
+): GeminiContent[] {
+  let changed = false;
+  const out = messages.map((m) => {
+    if (m.role !== "model") return m;
+    const parts = fillMissingThoughtSignature(m.parts, opts);
+    if (parts === m.parts) return m;
+    changed = true;
+    return { ...m, parts };
+  });
+  // Same reference when nothing needed filling: lets a caller tell "retry with
+  // dummies" from "an identical request would be re-sent".
+  return changed ? out : messages;
+}
 
 export interface GeminiToolsOptions {
   /** SKU name — use the MODEL_* constants. */
@@ -426,8 +646,10 @@ export interface GeminiToolsOptions {
    * stack these, so we keep each single round tighter than `geminiChat`'s 30s.
    */
   timeoutMs?: number;
-  /** Default true. On 5xx / 429 / empty content, retry once on Flash-Lite. */
+  /** Default true. On 5xx / 429 / empty content / 404, retry once on MODEL_FALLBACK. */
   fallbackToLite?: boolean;
+  /** "off" (default) | "on"; resolved per attempt via THINKING_BY_MODEL. */
+  thinking?: GeminiThinking;
   /** Optional correlation ID — surfaced in log lines for cross-referencing. */
   requestId?: string;
 }
@@ -450,12 +672,12 @@ export interface GeminiToolsResult {
   parts: GeminiPart[];
   /**
    * Model that ultimately produced this response. Equal to `opts.model` on
-   * the happy path; `MODEL_FLASH_LITE` if the fallback path fired.
+   * the happy path; `MODEL_FALLBACK` if the fallback path fired.
    */
   modelUsed: string;
   /** Total tokens (input + output) per Gemini's usageMetadata. 0 on failure. */
   tokensUsed: number;
-  /** True iff this response came from the Flash-Lite fallback. */
+  /** True iff this response came from the fallback model. */
   usedFallback: boolean;
 }
 
@@ -488,7 +710,7 @@ function _sleepMs(ms: number): Promise<void> {
  * `role: "function"` even though some older spec drafts referenced it.
  *
  * Resilience (diagnose d4f1c2): each pass tries the primary model then (if
- * `fallbackToLite`) `MODEL_FLASH_LITE`. On a RETRIABLE failure of the whole
+ * `fallbackToLite`) `MODEL_FALLBACK`. On a RETRIABLE failure of the whole
  * pass (429 / 5xx / empty content) it sleeps a short backoff and retries the
  * pass, bounded by TOOLS_MAX_PASSES and a wall-clock deadline. Timeouts and
  * non-429 4xx are treated as non-retriable (another attempt won't help / has
@@ -507,6 +729,7 @@ export async function geminiChatWithTools(
     maxTokens = 1024,
     timeoutMs = 25_000,
     fallbackToLite = true,
+    thinking = "off",
     requestId,
   } = opts;
 
@@ -517,29 +740,60 @@ export async function geminiChatWithTools(
     throw new Error("GEMINI_API_KEY not configured");
   }
 
-  const attempts: string[] = [model];
-  if (fallbackToLite && model !== MODEL_FLASH_LITE) {
-    attempts.push(MODEL_FLASH_LITE);
+  // Guard is `model !== MODEL_FALLBACK` (see the header): a shared tier slug
+  // must not remove the fallback.
+  let attempts: string[] = [model];
+  if (fallbackToLite && model !== MODEL_FALLBACK) {
+    attempts.push(MODEL_FALLBACK);
   }
 
   const startedAt = Date.now();
   let lastError: unknown = null;
   let lastReason = "";
-  let lastRetriable = true;
   let lastStatus: number | null = null;
+  const attemptStatuses: GeminiAttemptStatus[] = [];
+  // Once an attempt 400s on a missing thought signature we replay the dummy-filled
+  // history for every LATER attempt/pass of this call too (re-sending the raw
+  // history would just 400 again). null = the raw history is still in use.
+  let dummyHistory: GeminiContent[] | null = null;
 
   for (let pass = 0; pass < TOOLS_MAX_PASSES; pass++) {
+    // Per-ATTEMPT retriability: a primary 429 followed by a fallback 404 must
+    // still retry the (healthy-but-throttled) primary. Keying on the LAST
+    // attempt only (the old `lastRetriable`) aborted that retry.
+    let passHadRetriableFailure = false;
+    // `attempts` is reassigned (never mutated) on a 404, so iterating it directly
+    // is already a snapshot.
     for (const attemptModel of attempts) {
-      const result = await _callOnceWithTools({
+      const callArgs = {
         model: attemptModel,
         systemPrompt,
-        messages,
+        messages: dummyHistory ?? messages,
         tools,
         temperature,
         maxTokens,
         timeoutMs,
+        thinking,
         requestId,
-      });
+      };
+      let result = await _callOnceWithTools(callArgs);
+
+      // Safety net (A2): cross-model replay under `minimal` is unproven. If any
+      // attempt (primary included) 400s on a missing thought signature, fill the
+      // documented dummy (forced, see fillMissingThoughtSignature) and retry THAT
+      // attempt once; the dummy history is then kept for the rest of the call.
+      // Skipped when the fill would change nothing (an identical re-send) or the
+      // dummy history was already the one that 400'd.
+      if (!result.ok && result.status === 400 && result.signatureMissing && dummyHistory === null) {
+        const filled = fillMissingThoughtSignaturesInHistory(messages, { force: true });
+        if (filled !== messages) {
+          console.warn(
+            `[geminiChatWithTools] ${attemptModel} 400 thought_signature — retrying once with dummy signatures request_id=${requestId ?? "n/a"}`,
+          );
+          dummyHistory = filled;
+          result = await _callOnceWithTools({ ...callArgs, messages: filled });
+        }
+      }
 
       if (result.ok) {
         const usedFallback = attemptModel !== model;
@@ -558,8 +812,17 @@ export async function geminiChatWithTools(
 
       lastError = result.error;
       lastReason = result.reason;
-      lastRetriable = result.retriable;
       lastStatus = result.status ?? null;
+      attemptStatuses.push({ model: attemptModel, status: lastStatus });
+      if (isModelUnavailableStatus(lastStatus)) {
+        // Retired / unknown model: prune it for the rest of THIS call.
+        console.warn(
+          `[gemini] MODEL_UNAVAILABLE model=${attemptModel} request_id=${requestId ?? "n/a"}`,
+        );
+        attempts = attempts.filter((m) => m !== attemptModel);
+      } else if (result.retriable) {
+        passHadRetriableFailure = true;
+      }
       // Redact again at this log sink, defense-in-depth: result.reason is
       // already redacted at its source (_callOnceWithTools), but this line
       // must not depend on that staying true — a B-pass mutation proved
@@ -573,12 +836,15 @@ export async function geminiChatWithTools(
       );
     }
 
-    // Whole attempt list failed this pass. Spend another pass only if the
-    // last failure was retriable (a transient 429/5xx/empty — NOT a timeout
-    // or a 4xx) and we still have wall-clock budget headroom.
+    // Whole attempt list failed this pass. Spend another pass only if SOME
+    // attempt failed retriably (a transient 429/5xx/empty — NOT a timeout or a
+    // 4xx), a live model remains, and we still have wall-clock budget headroom.
     const elapsedMs = Date.now() - startedAt;
+    // `attempts.length > 0` is defensive (see geminiChat): unreachable as the sole
+    // deciding term today.
     const canRetry = pass < TOOLS_MAX_PASSES - 1 &&
-      lastRetriable &&
+      passHadRetriableFailure &&
+      attempts.length > 0 &&
       elapsedMs < TOOLS_RETRY_DEADLINE_MS;
     if (!canRetry) break;
     await _sleepMs(TOOLS_PASS_BACKOFF_MS);
@@ -597,6 +863,7 @@ export async function geminiChatWithTools(
   Object.assign(exhaustionError, {
     status: lastStatus,
     geminiMessage: lastReason,
+    attemptStatuses,
   });
   throw exhaustionError;
 }
@@ -609,6 +876,7 @@ interface CallOnceWithToolsArgs {
   temperature: number;
   maxTokens: number;
   timeoutMs: number;
+  thinking: GeminiThinking;
   requestId?: string;
 }
 
@@ -624,6 +892,10 @@ type CallOnceResult =
     // error) — mirrors geminiChat's own GeminiResult.lastError.status
     // convention so both paths feed reportGeminiExhaustion identically.
     status?: number | null;
+    // True when the (untruncated, redacted) 400 body names a missing thought
+    // signature. Computed BEFORE the 200-char preview cut so a long tool name
+    // cannot push the token past it.
+    signatureMissing?: boolean;
   };
 
 // ── Private: single HTTP call to Gemini with tool config. ──────────
@@ -649,14 +921,12 @@ async function _callOnceWithTools(
       },
     };
 
-    // FC1 (diagnose 7fbe21): disable Gemini 2.5 "thinking" for non-Pro attempts
-    // so the low maxOutputTokens budget isn't consumed by hidden reasoning
-    // (which returns an empty candidate → silent Flash-Lite degradation). Keyed
-    // on the attempt model; MODEL_PRO keeps dynamic thinking. See _callOnce.
-    if (opts.model !== MODEL_PRO) {
-      (body.generationConfig as Record<string, unknown>).thinkingConfig = {
-        thinkingBudget: 0,
-      };
+    // Thinking config follows the ATTEMPT model (see _callOnce). `minimal` =
+    // off, `low` = on; never `thinkingBudget: 0` (3.5 rejects it with a 400).
+    const thinkingConfig = thinkingConfigFor(opts.model, opts.thinking);
+    if (thinkingConfig) {
+      (body.generationConfig as Record<string, unknown>).thinkingConfig =
+        thinkingConfig;
     }
 
     if (opts.tools.length > 0) {
@@ -680,10 +950,13 @@ async function _callOnceWithTools(
     if (!response.ok) {
       const status = response.status;
       let preview = "";
+      let signatureMissing = false;
       try {
         // Redact BEFORE truncating — see the identical fix + comment in
         // _callOnce above (B-pass F2, 2026-09-21).
-        preview = redactSecrets(await response.text()).slice(0, 200);
+        const full = redactSecrets(await response.text());
+        signatureMissing = /thought[\s_]?signature/i.test(full);
+        preview = full.slice(0, 200);
       } catch (_) { /* body read may also fail */ }
       // 429 + 5xx are the retriable bucket — a spaced retry / fallback can
       // help. Other 4xx (e.g. 400 malformed request) won't be helped by a
@@ -693,6 +966,7 @@ async function _callOnceWithTools(
         reason: `HTTP ${status}: ${preview}`,
         retriable: status === 429 || status >= 500,
         status,
+        signatureMissing,
       };
     }
 
@@ -705,9 +979,7 @@ async function _callOnceWithTools(
       // (SAFETY / RECITATION / PROHIBITED_CONTENT) is deterministic, so don't
       // burn extra passes on it.
       const finishReason = candidate?.finishReason ?? "unknown";
-      const deterministicBlock = finishReason === "SAFETY" ||
-        finishReason === "RECITATION" ||
-        finishReason === "PROHIBITED_CONTENT";
+      const deterministicBlock = DETERMINISTIC_FINISH_REASONS.has(finishReason);
       return {
         ok: false,
         reason: `no candidate (finishReason=${finishReason})`,
@@ -723,16 +995,23 @@ async function _callOnceWithTools(
     const textBuffer: string[] = [];
     const functionCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
 
+    // Gemini 3 thought signatures: every recognised part is kept RAW (so a
+    // `thoughtSignature` beside `functionCall`/`text` survives into the stored
+    // model turn). The convenience accessors still carry only name/args/text.
     for (const p of rawParts) {
       if (typeof p.text === "string") {
-        parts.push({ text: p.text });
+        parts.push(p as unknown as GeminiPart);
         textBuffer.push(p.text);
       } else if (p.functionCall && typeof p.functionCall === "object") {
         const fc = p.functionCall as { name?: string; args?: Record<string, unknown> };
         if (typeof fc.name === "string") {
-          const normalised = { name: fc.name, args: fc.args ?? {} };
-          parts.push({ functionCall: normalised });
-          functionCalls.push(normalised);
+          parts.push(
+            {
+              ...p,
+              functionCall: { name: fc.name, args: fc.args ?? {} },
+            } as unknown as GeminiPart,
+          );
+          functionCalls.push({ name: fc.name, args: fc.args ?? {} });
         }
       } else if (p.functionResponse && typeof p.functionResponse === "object") {
         // Defensive — model normally never emits these, but keep round-trip safe.
@@ -747,6 +1026,9 @@ async function _callOnceWithTools(
         }
       } else if (p.inline_data && typeof p.inline_data === "object") {
         parts.push(p as unknown as GeminiPart);
+      } else if (typeof p.thoughtSignature === "string") {
+        // Signature-only part (no text / call): echo it raw too.
+        parts.push({ thoughtSignature: p.thoughtSignature });
       }
     }
 
@@ -756,7 +1038,10 @@ async function _callOnceWithTools(
     if (parts.length === 0) {
       return { ok: false, reason: "empty parts array", retriable: true };
     }
-    if (textBuffer.length === 0 && functionCalls.length === 0) {
+    // Judge the JOINED, trimmed text: Gemini 3 can send an empty-text part that
+    // only carries a signature, which must not pass as a terminal reply
+    // (geminiChat already treats `!text` as a failure; the two paths must agree).
+    if (functionCalls.length === 0 && textBuffer.join("").trim() === "") {
       return {
         ok: false,
         reason: "no text and no function calls",
@@ -765,6 +1050,7 @@ async function _callOnceWithTools(
     }
 
     const tokensUsed = data.usageMetadata?.totalTokenCount ?? 0;
+    logUsage("tools", opts.model, data.usageMetadata);
 
     return {
       ok: true,

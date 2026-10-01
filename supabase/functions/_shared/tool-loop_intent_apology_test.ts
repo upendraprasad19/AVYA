@@ -119,7 +119,7 @@ Deno.test(
         systemPrompt: "you are The Captain",
         userMessage: "log my bench: 80kg 4 sets of 10",
         ctx,
-        model: "gemini-2.5-flash",
+        model: "gemini-3.1-flash-lite",
       });
 
       // The write intent WAS queued.
