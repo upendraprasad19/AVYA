@@ -107,24 +107,24 @@ findings:
     reason: "Founder decision once data exists; source = usage_counters chat_app rows for PRO users, which exist only from the 2026-10-02 apply onward."
 
   - id: A5-SMOKE
-    title: "Part A post-deploy smoke with a REAL free and PRO user token (2-round tool turn)"
+    title: "Real free and PRO user-token smoke on the DEPLOYED ai-proxy (Part A 2-round tool turn; Part B 429 copy at 7/7 and 20/20, a forced transport failure refunding once)"
     terminal_state: blocked_on_user
-    reason: "Needs the founder's real user tokens and the founder-run EF deploys."
+    reason: "Needs real user JWTs (ai-proxy authenticates via auth.getUser(token)); the agent has none and will not mint prod users unasked. Founder runs a free and a PRO account in the app, or hands over a test account."
 
   - id: DEPLOY-A
-    title: "Part A Edge Function deploys (ai-proxy first, boot-verify, then weekly-report, ai-media-proxy, assess-body-composition, daily-snapshot, rolling-context)"
-    terminal_state: blocked_on_user
-    reason: "Per-action founder deploy go; founder-run (host-shell deploy). Deployed versions get appended to the Part A diagnose-docs once reported."
+    title: "Part A Edge Function deploys (ai-proxy, ai-media-proxy, weekly-report, assess-body-composition, daily-snapshot, rolling-context)"
+    terminal_state: verified_clean
+    evidence: "Deployed 2026-10-02 on the founder's go from merged main 9fb68189: ai-proxy v92, ai-media-proxy v31, weekly-report v34, assess-body-composition v21, daily-snapshot v32, rolling-context v25; confirmed read-only via MCP list_edge_functions, verify_jwt unchanged; ai-proxy anon-Bearer boot check answered its own 401, not 503."
 
   - id: DEPLOY-B
-    title: "Part B Edge Function deploys (ai-proxy, ai-media-proxy, weekly-report, founder-digest, telegram-admin-bot, alert-critical-notify + every importer of a changed _shared file) and the Part B smoke (free at 7/7, PRO at 20/20 right 429 copy, forced transport failure refunds once)"
-    terminal_state: blocked_on_user
-    reason: "Per-action founder deploy go, run after the push, migration already applied."
+    title: "Part B Edge Function deploys (founder-digest, telegram-admin-bot, alert-critical-notify + the shared importers)"
+    terminal_state: verified_clean
+    evidence: "Deployed 2026-10-02 with Part A (same go): founder-digest v12, telegram-admin-bot v9, alert-critical-notify v6 (its unauthenticated smoke 401 is the cron-secret auth working); confirmed via MCP list_edge_functions."
 
   - id: LIVE-SQL
     title: "Run test/sql/gemini3_limits_refund_live_verify.sql and oi46_daily_cap_triggers_live_verify.sql against prod"
-    terminal_state: blocked_on_user
-    reason: "Writes inside BEGIN..ROLLBACK on prod need the founder's explicit go; the latch / budget / used>0 / window behaviour is proven ONLY by these scripts."
+    terminal_state: verified_clean
+    evidence: "Run 2026-10-02 on the founder's go via scripts/check_onconflict_live_arbiter.dart inside BEGIN..ROLLBACK: gemini3_limits_refund_live_verify 15/15 ok (R1-R9 incl. R3b), oi46_daily_cap_triggers_live_verify 23/23 ok; follow-up MCP reads found zero residue test rows."
 
   - id: RESIDUE-ROW
     title: "A client can store a non-pending channel='app' row (a pending insert is still refused: INVOKER trigger, authenticated cannot execute consume_quota)"

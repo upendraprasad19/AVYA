@@ -1444,7 +1444,22 @@ added, false of the flip being performed.
 - **Test discipline:** a helper that returns "nothing" on error must return `null`, not an empty collection, when zero would read as good news; and pin the error MESSAGE — a bare `assertRejects` is satisfied by the `TypeError` from iterating `null` (mutation B10 reddened nothing until the message was pinned). A positive control satisfied by `any(pattern)` proves one pattern, not three (B18).
 - **Regression test:** `test/contracts/subscription_columns_dropped_test.dart`, `supabase/functions/_shared/subscription_test.ts`. Diagnose `c7e3b9`.
 
-### 2.80 A retry mechanism with no trigger for the failure mode that actually occurs — a connectivity trigger cannot fire in a backend-only outage (NEW 2026-10-01)
+### 2.80 A rule "X never refunds / never does Y" is enforced from the LAST attempt's flag and the one response shape the author pictured (NEW 2026-10-02)
+
+- **Telltale:** a decision such as `refundableFailure(...)` reads a per-attempt flag (`deterministicFailure`) that every retry or fallback attempt OVERWRITES, and its test feeds the same body to every attempt. A user-caused block (SAFETY, `promptFeedback.blockReason`, `IMAGE_SAFETY`, `MAX_TOKENS`) then looks transport-class the moment the fallback model returns a 404/503, or whenever Gemini answers HTTP 200 with NO `candidates` at all.
+- **Root-cause shape:** last-writer-wins state in a loop, plus an enumerated allowlist of "bad" values that the real provider extends. Same family as the e7c4b2 recurrence (a counted set wider than the budget it meters).
+- **Fix pattern:** classify EVERY no-reply body in one pure function (`classifyNoReply`), make the block flag STICKY (`blockSeen ||= ...`) across attempts, passes and loops, and default unknown shapes to the SAFE side for the money-like action (no refund).
+- **Test discipline:** test SEQUENCES (A then B and B then A) end to end through the real function with a mocked `fetch`, and name each response shape (200 no candidates, empty parts, empty text). A test that pins "unknown empty candidate is refundable" encodes the hole as intended: re-read such a pin before trusting it. Mutate the flag to last-only: it must redden something.
+- **Regression test:** `supabase/functions/_shared/quota_refund_test.ts`, `gemini_chat_block_seen_test.ts`, `tool-loop_failure_kind_test.ts`. Diagnose `c4e9b2`.
+
+### 2.81 A Postgres boolean interpolated into `RAISE` / `format('%s')` prints `t` / `f`, so a reader that regex-matches `true` / `false` never fires (NEW 2026-10-02)
+
+- **Telltale:** a trigger raises `... (cap=%, pro=%)` with a `bool` argument and a reader (`ai-proxy`) parses `/pro=true/`. The reader's fallback hides it in one path (chat falls back to `isProUser`) and shows it in another (vision had none: a PRO user at the cap was told `tier:"free", limit:4`). Older food-text triggers emitted `pro=%` for years because nothing parsed it.
+- **Fix pattern:** pass explicit text, `CASE WHEN is_pro THEN 'true' ELSE 'false' END`, and make the reader tolerant (`/pro=(true|t)\b/`) with a tier fallback for every site.
+- **Test discipline:** the live SQL assertion `LIKE '%pro=true%'` is what catches it; unit tests over migration TEXT never will. Verify with `select format('pro=%s', true)` (read-only) before writing the parser.
+- **Regression test:** `test/sql/gemini3_limits_refund_live_verify.sql` R7/R8 (run live 2026-10-02, ok). Diagnose `c4e9b2`.
+
+### 2.82 A retry mechanism with no trigger for the failure mode that actually occurs — a connectivity trigger cannot fire in a backend-only outage (NEW 2026-10-01)
 
 - **Telltale:** data logged during a Supabase API-gateway outage (521/522/504, PGRST002 — the DB stays `ACTIVE_HEALTHY`) never reaches the cloud and nothing retries it until the next write or app launch; `weeklyFullSync` was even stamped "done" after a sweep in which every op failed.
 - **Root-cause shape:** the retry triggers that exist (connectivity restore, the 5-min `SyncQueue` drain) key on "device offline", but the device is ONLINE and only the backend is down; the push path is state-based (`SyncSkipIndex` records a row as sent only after a confirmed push) so a re-run is safe — only the trigger was missing. A retry predicate built on `SyncError.isTransient` would loop forever (`UnknownError`/`AuthError` are "transient" and a `'401'` substring matches UUIDs).
@@ -1452,7 +1467,7 @@ added, false of the flip being performed.
 - **Prior incidents:** `b7c2a9` / `d2e8f4` (SyncQueue auto-drain never wired — same class, different mechanism).
 - **Regression test:** `test/contracts/sync_retry_controller_test.dart`, `test/contracts/serial_slot_test.dart`. Diagnose `e5b2a9`.
 
-### 2.81 Awaiting an unbounded network read before a local-evidence fallback (NEW 2026-10-01)
+### 2.83 Awaiting an unbounded network read before a local-evidence fallback (NEW 2026-10-01)
 
 - **Telltale:** the splash sits on "Getting you ready…" for minutes on a 504/521 backend although the device holds a fully onboarded Hive; only the 30 s CONTINUE button escapes.
 - **Root-cause shape:** `RestoringScreen._kickoffRestore` `await`ed `AuthSessionBootstrapper.resolveDestination` (token refresh + SELECT + hard-refresh retry + SELECT, each hanging 10-36 s) BEFORE the local-evidence branch could run.
@@ -1460,7 +1475,7 @@ added, false of the flip being performed.
 - **Prior incidents:** `c2e9f4`, `d7b1f8`.
 - **Regression test:** `test/contracts/restoring_destination_timeout_test.dart`, `test/contracts/evidence_first_routing_test.dart`. Diagnose `e5b2a9`.
 
-### 2.82 An SDK-level automatic retry multiplies a "one tiny request" probe — and a test stub that answers 503 hits it (NEW 2026-10-01)
+### 2.84 An SDK-level automatic retry multiplies a "one tiny request" probe — and a test stub that answers 503 hits it (NEW 2026-10-01)
 
 - **Telltale:** a reachability probe or a "first failing read aborts, ONE failing request" assertion sees FOUR requests over ~7 s against a server answering 503.
 - **Root-cause shape:** `postgrest` 2.9.1 `_executeWithRetry` retries every GET/HEAD that is answered 503/520 — or that THROWS — three more times (1 s/2 s/4 s) when `retryEnabled` (the default); 503 is the real PGRST002 outage shape, so the amplification lands exactly when the backend is struggling. Only GET/HEAD are retried — pushes (POST) are not.

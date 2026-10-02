@@ -82,7 +82,7 @@ findings:
     title: "B-pass F9 (P3): staged docs asserted OI-board state that did not exist, an OI-N placeholder, a stale telemetry-test reason string"
     terminal_state: closed_in_commit
     commit: claude/resilient-client-phase1@branch
-    verification: "OIs OI-279..OI-282 minted and the placeholders substituted in this commit; reason string and bug-class 2.82 wording fixed"
+    verification: "OIs OI-279..OI-282 minted and the placeholders substituted in this commit; reason string and bug-class 2.84 wording fixed"
   - id: BP-F10
     title: "B-pass F10 (P3): banner tap fanned an un-throttled drain into SyncQueue; the copy could wrap; probe rate while paused"
     terminal_state: closed_in_commit
@@ -137,7 +137,7 @@ findings:
     title: "Review A3 (P3): docs said an owner-null box serves EMPTY; the raw getter throws"
     terminal_state: closed_in_commit
     commit: claude/resilient-client-phase1@branch
-    verification: "reworded in the bootstrapper, screen, local_onboarding_evidence.dart, auth CLAUDE.md, registry, diagnose, bug-class 2.81"
+    verification: "reworded in the bootstrapper, screen, local_onboarding_evidence.dart, auth CLAUDE.md, registry, diagnose, bug-class 2.83"
   - id: EF-A4
     title: "Review A4 (P3): the 8 s ceiling window starts after the evidence await"
     terminal_state: closed_in_commit
