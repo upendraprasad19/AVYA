@@ -34,8 +34,8 @@ Request → Validate JWT → Read user subscription status
   → If fail/timeout (3s) → Try Gemini 2.0 Flash Lite (direct)
   → Return { reply, model_used, tokens_used }
 ```
-- Check: is user under 10 msg/day? (free tier is 10/day FOREVER — no trial window; OQ-1)
-- Rate limit: 10 messages/day for free users (PRO unlimited)
+- Check: is user under the daily cap? (free 7/day FOREVER; PRO 20/day — no trial window; OQ-1)
+- Rate limit: 7 messages/day for free users, 20/day for PRO (caps in `_shared/ai_limits.ts`; no tier is unlimited)
 
 ## AI Proxy PRO
 ```

@@ -20,10 +20,10 @@ status: scaffold
 - Weight + body measurements tracking
 - Streak counter + water tracking
 - Steps + sleep sync (Google Fit / Health Connect)
-- AI Coach — 10/day forever, no trial (Gemini 2.5 Flash)
+- AI Coach — 7/day forever, no trial (Gemini 3.1 Flash Lite)
 - AI coach photo analysis — 5 image reads LIFETIME (metered on `usage_counters`); video is PRO-only
 - Voice (mic) input to AI coach — on-device transcription via `speech_to_text`; zero infra cost. Made free 2026-05-03 (Test #9 / F13).
-- Telegram bot — free (AI coach over Telegram; same 10/day forever cap, no trial)
+- Telegram bot — free (AI coach over Telegram; Telegram bot is disabled; parity with the 7/day cap is OI-278)
 - Morning alert — generic push notification
 - Weekly nutrition report — first report free (after Week 1)
 - Future Prediction card — one card post-onboarding
@@ -40,8 +40,8 @@ status: scaffold
 - Weekly AI nutrition report + Telegram push (ongoing)
 - Future Prediction card — fresh AI prediction every month
 - Progress photos (full timeline)
-- Unlimited AI coach (Gemini 2.5 Flash — no daily cap, no trial window)
-- AI coach photo / video analysis — **50 image reads + 10 video reads per IST day** (OI-153, founder decision 2026-09-12; enforced atomically server-side, reset at midnight IST, an in-app coach reply at the ceiling — not the paywall). ⚠ Not "unlimited": every copy string that promised unlimited media reads was reworded the same day, and `test/contracts/coach_replies_test.dart` pins the word absent
+- Dedicated AI coaching with a higher daily limit (Gemini 3.1 Flash Lite — 20 messages/day, no trial window; NOT unlimited)
+- AI coach photo / video analysis — **10 image reads + 5 video reads per IST day** (OI-153, founder decision 2026-09-12; lowered from 50/10 by Part B, founder 2026-10-01; enforced atomically server-side, reset at midnight IST, an in-app coach reply at the ceiling — not the paywall). ⚠ Not "unlimited": every copy string that promised unlimited media reads was reworded the same day, and `test/contracts/coach_replies_test.dart` pins the word absent
 - Audio-First UI (voice notes to AI coach)
 - Morning alert — AI-personalised message with yesterday's data
 - Adaptive workout recommendations from biometric data (Phase 2)

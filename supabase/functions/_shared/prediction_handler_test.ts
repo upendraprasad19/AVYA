@@ -27,13 +27,14 @@ interface Harness {
   log: string[];
   geminiCalls: GeminiOptions[];
   reports: unknown[];
+  attemptStatusesReported: unknown[];
 }
 
 function harness(
   consume: ConsumeOutcome,
   gemini: Partial<GeminiResult> = { content: "• Weight: 80 → 78 kg" },
 ) {
-  const h: Harness = { log: [], geminiCalls: [], reports: [] };
+  const h: Harness = { log: [], geminiCalls: [], reports: [], attemptStatusesReported: [] };
   const deps = {
     consume: () => {
       h.log.push("consume");
@@ -44,15 +45,19 @@ function harness(
       h.geminiCalls.push(options);
       return Promise.resolve({
         content: null,
-        modelUsed: "gemini-2.5-flash",
+        modelUsed: "gemini-3.1-flash-lite",
         tokensUsed: 42,
         lastError: null,
         ...gemini,
       } as GeminiResult);
     },
-    reportExhaustion: (lastError: GeminiResult["lastError"]) => {
+    reportExhaustion: (
+      lastError: GeminiResult["lastError"],
+      attemptStatuses?: GeminiResult["attemptStatuses"],
+    ) => {
       h.log.push("report");
       h.reports.push(lastError);
+      h.attemptStatusesReported.push(attemptStatuses);
       return Promise.resolve();
     },
   };
@@ -65,7 +70,7 @@ Deno.test("happy path — consume once, THEN Gemini, 200 with the old response s
   assertEquals(r.status, 200);
   assertEquals(h.log, ["consume", "gemini"]);
   assertEquals(r.body.reply, "• Weight: 80 → 78 kg");
-  assertEquals(r.body.model_used, "Gemini 2.5 Flash");
+  assertEquals(r.body.model_used, "Gemini 3.1 Flash Lite");
   assertEquals(r.body.tokens_used, 42);
   assertEquals(r.body.actions, []);
 });
@@ -137,6 +142,23 @@ Deno.test("Gemini exhausted → report with lastError BEFORE a 500 (never a clie
   assertEquals(r.status, 500);
   assertEquals(h.log, ["consume", "gemini", "report"]);
   assertEquals(h.reports, [lastError]);
+});
+
+Deno.test("Gemini exhausted → the per-attempt statuses reach the report (a 404'd primary must classify as model_unavailable)", async () => {
+  const lastError = { status: 503, message: "overloaded" };
+  const attemptStatuses = [
+    { model: "gemini-3.1-flash-lite", status: 404 },
+    { model: "gemini-3.5-flash-lite", status: 503 },
+  ];
+  const { h, deps } = harness({ used: 2, error: null }, { content: null, lastError, attemptStatuses });
+  await handlePrediction({ message: "Predict" }, deps);
+  assertEquals(h.attemptStatusesReported, [attemptStatuses]);
+});
+
+Deno.test("the fallback model's slug is labelled as such in model_used", async () => {
+  const { deps } = harness({ used: 1, error: null }, { content: "ok", modelUsed: "gemini-3.5-flash-lite" });
+  const r = await handlePrediction({ message: "Predict" }, deps);
+  assertEquals(r.body.model_used, "Gemini 3.5 Flash Lite");
 });
 
 Deno.test("kill switch ON → no quota consumed, Gemini still gets the SERVER prompt", async () => {

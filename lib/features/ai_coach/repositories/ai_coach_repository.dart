@@ -127,12 +127,14 @@ class AiCoachRepository {
     required String aiResponse,
     required String modelUsed,
     bool hadHardFailure = false,
+    bool refunded = false,
   }) =>
       CoachInteractionRepository.instance.updateInteractionWithResponse(
         key,
         aiResponse: aiResponse,
         modelUsed: modelUsed,
         hadHardFailure: hadHardFailure,
+        refunded: refunded,
       );
 
   /// Bug 2026-05-22 / diagnose b4a09c — A10 refactor (commit d6e472c,

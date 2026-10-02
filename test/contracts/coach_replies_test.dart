@@ -166,15 +166,15 @@ void main() {
     // cap as an ARGUMENT so the number can never drift from the constant.
     test('the PRO cap copies state the reset and sell nothing', () {
       for (final c in [
-        CoachReplies.proImageDailyCapReached(50),
-        CoachReplies.proVideoDailyCapReached(10),
+        CoachReplies.proImageDailyCapReached(10),
+        CoachReplies.proVideoDailyCapReached(5),
       ]) {
         expect(c, contains('midnight IST'));
         expect(c.contains('Upgrade'), isFalse);
         expect(c.contains('Recruit'), isFalse);
       }
-      expect(CoachReplies.proImageDailyCapReached(50), contains('50 image reads'));
-      expect(CoachReplies.proVideoDailyCapReached(10), contains('10 video reads'));
+      expect(CoachReplies.proImageDailyCapReached(10), contains('10 image reads'));
+      expect(CoachReplies.proVideoDailyCapReached(5), contains('5 video reads'));
       expect(CoachReplies.proImageDailyCapReached(7), contains('7 image reads'),
           reason: 'the number must be the argument, not a typed literal');
       for (final c in [
@@ -218,8 +218,8 @@ void main() {
         'imageQuotaUnavailable': [CoachReplies.imageQuotaUnavailable],
         'imageLedgerUnavailable': [CoachReplies.imageLedgerUnavailable],
         'videoLedgerUnavailable': [CoachReplies.videoLedgerUnavailable],
-        'proImageDailyCapReached': [CoachReplies.proImageDailyCapReached(50)],
-        'proVideoDailyCapReached': [CoachReplies.proVideoDailyCapReached(10)],
+        'proImageDailyCapReached': [CoachReplies.proImageDailyCapReached(10)],
+        'proVideoDailyCapReached': [CoachReplies.proVideoDailyCapReached(5)],
         'freeImageCounter': [
           CoachReplies.freeImageCounter(3),
           CoachReplies.freeImageCounter(1),
@@ -227,8 +227,8 @@ void main() {
         ],
       };
       const templateArgs = <String, Map<String, String>>{
-        'proImageDailyCapReached': {r'${cap}': '50'},
-        'proVideoDailyCapReached': {r'${cap}': '10'},
+        'proImageDailyCapReached': {r'${cap}': '10'},
+        'proVideoDailyCapReached': {r'${cap}': '5'},
         'freeImageCounter': {r'${remaining}': '3'},
       };
 

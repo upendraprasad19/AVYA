@@ -111,7 +111,7 @@ _Moved verbatim from `lib/features/ai_coach/CLAUDE.md` (original lines 110-118, 
 _Moved verbatim from `lib/features/ai_coach/CLAUDE.md` (original lines 16-26, context-lean batch 2026-09-29)._
 
 `lib/features/ai_coach/` owns the 💬 AI Coach tab. The user chats with a single
-server-side AI agent (`ai-proxy` Edge Function → Gemini 2.5 Flash) that has
+server-side AI agent (`ai-proxy` Edge Function → Gemini 3.1 Flash Lite) that has
 **tool access** to log raw workouts / meals, do confirmed plan edits, swap
 exercises, and read the user's recent activity snapshot. The surface is
 **derive-only** (ADR-0012): the AI logs raw input only — PRs, completion, and

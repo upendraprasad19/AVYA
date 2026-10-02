@@ -122,7 +122,7 @@ Deno.test(
         systemPrompt: "you are The Captain",
         userMessage: "swap Friday and Saturday",
         ctx: proCtx,
-        model: "gemini-2.5-flash",
+        model: "gemini-3.1-flash-lite",
         // No `capabilities` passed at all — the exact shape of an old
         // client build that predates `client_capabilities` entirely, or one
         // that simply never declared this specific capability.
@@ -149,7 +149,7 @@ Deno.test(
         systemPrompt: "you are The Captain",
         userMessage: "swap Friday and Saturday",
         ctx: proCtx,
-        model: "gemini-2.5-flash",
+        model: "gemini-3.1-flash-lite",
         capabilities: new Set(["swap_workout_days"]),
       });
 

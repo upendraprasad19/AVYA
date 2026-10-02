@@ -1,114 +1,149 @@
 // supabase/functions/_shared/gemini_thinking_config_test.ts
 //
-// FC1 (diagnose 7fbe21) — Gemini 2.5 Flash runs "thinking" ON by default, and
-// the hidden thinking tokens count against maxOutputTokens. With our low output
-// caps the model could spend the whole budget thinking and return an EMPTY
-// candidate (finishReason=MAX_TOKENS), which the caller then silently degraded
-// to Flash-Lite. The fix sets `generationConfig.thinkingConfig.thinkingBudget=0`
-// for every NON-Pro attempt (Flash + its Lite fallback); MODEL_PRO keeps dynamic
-// thinking (weekly-report needs the reasoning headroom).
+// Thinking config, Gemini 3.x (rewritten 2026-10-01; originally FC1, diagnose
+// 7fbe21, which keyed on MODEL_PRO identity and `thinkingBudget: 0`).
 //
-// This is a BEHAVIORAL test: it stubs `globalThis.fetch` (mirrors the pattern in
-// the sibling `gemini_backoff_retry_test.ts`), captures the request body that
-// geminiChat sends, and asserts:
-//   • MODEL_FLASH  → generationConfig.thinkingConfig.thinkingBudget === 0
-//   • MODEL_PRO    → generationConfig.thinkingConfig is undefined (untouched)
+// Facts pinned here (probe v2/v3 on the new key):
+//   - `thinkingLevel: "minimal"` = off, `"low"` = on, accepted by BOTH Lite models.
+//   - `thinkingBudget: 0` is REJECTED (HTTP 400) by gemini-3.5-flash-lite, so it
+//     must never be sent — the fallback attempt would 400 on every call.
+//   - The config follows the ATTEMPT's model (THINKING_BY_MODEL), never the
+//     primary's, and per-call `thinking` replaces the old "not MODEL_PRO" test
+//     (every tier now shares one slug, so identity can no longer tell tiers apart).
 //
-// Run: deno test --allow-env supabase/functions/_shared/gemini_thinking_config_test.ts
-//
-// NOTE: Deno may not be installed on the dev machine — this test is written for
-// CI (which runs the Deno suite). It could not be executed locally.
+// Behavioral: a fake fetch records the URL + body of EVERY attempt.
 
-import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 
-// The module reads GEMINI_API_KEY at eval time — set it BEFORE the dynamic
-// import so geminiChat doesn't short-circuit on the missing-key guard.
 Deno.env.set("GEMINI_API_KEY", "test-key-not-a-real-secret");
 
-const { geminiChat, MODEL_FLASH, MODEL_PRO } = await import("./gemini.ts");
+const gemini = await import("./gemini.ts");
+const {
+  geminiChat,
+  geminiChatWithTools,
+  MODEL_FLASH,
+  MODEL_FLASH_LITE,
+  MODEL_PRO,
+  MODEL_FALLBACK,
+  THINKING_BY_MODEL,
+  thinkingConfigFor,
+} = gemini;
+const { installFakeFetch, okText, httpError } = await import("./gemini_fake_fetch.ts");
 
-// A minimal well-formed Gemini success response — enough for geminiChat to
-// return content and stop after one call.
-function okResponse(text: string): Response {
-  return {
-    ok: true,
-    status: 200,
-    text: () => Promise.resolve(""),
-    json: () =>
-      Promise.resolve({
-        candidates: [{ content: { parts: [{ text }] } }],
-        usageMetadata: { totalTokenCount: 5 },
-      }),
-  } as unknown as Response;
-}
+const tc = (call: { body: { generationConfig?: { thinkingConfig?: unknown } } }) =>
+  call.body.generationConfig?.thinkingConfig;
 
-/**
- * Stub globalThis.fetch, capturing the parsed JSON body of the FIRST request.
- * Returns the captured-body holder + a restore fn. No real network is touched.
- */
-function installBodyCapture(): {
-  captured: { body: Record<string, unknown> | null };
-  restore: () => void;
-} {
-  const original = globalThis.fetch;
-  const captured: { body: Record<string, unknown> | null } = { body: null };
-  globalThis.fetch = ((_input: unknown, init?: unknown): Promise<Response> => {
-    const reqInit = init as { body?: string } | undefined;
-    if (captured.body === null && reqInit?.body) {
-      captured.body = JSON.parse(reqInit.body) as Record<string, unknown>;
-    }
-    return Promise.resolve(okResponse("ok"));
-  }) as typeof fetch;
-  return { captured, restore: () => (globalThis.fetch = original) };
-}
-
-Deno.test("geminiChat — MODEL_FLASH disables thinking (thinkingBudget=0)", async () => {
-  const { captured, restore } = installBodyCapture();
+Deno.test("geminiChat — default thinking is OFF = {thinkingLevel:'minimal'}, never thinkingBudget", async () => {
+  const { calls, restore } = installFakeFetch([okText("ok")]);
   try {
     const res = await geminiChat({
       model: MODEL_FLASH,
-      systemPrompt: "you are a coach",
+      systemPrompt: "s",
       userPrompt: "hi",
       maxTokens: 1024,
-      // Keep the attempt list to a single call so the captured body is Flash's.
       fallbackToLite: false,
     });
     assertEquals(res.content, "ok");
-
-    const gc = (captured.body?.generationConfig ?? {}) as Record<
-      string,
-      unknown
-    >;
-    const thinkingConfig = gc.thinkingConfig as
-      | { thinkingBudget?: number }
-      | undefined;
-    assertEquals(thinkingConfig?.thinkingBudget, 0);
+    assertEquals(calls.length, 1);
+    assertEquals(tc(calls[0]), { thinkingLevel: "minimal" });
+    assertEquals(JSON.stringify(calls[0].body).includes("thinkingBudget"), false);
   } finally {
     restore();
   }
 });
 
-Deno.test("geminiChat — MODEL_PRO leaves thinkingConfig untouched (dynamic thinking)", async () => {
-  const { captured, restore } = installBodyCapture();
+Deno.test("geminiChat — thinking:'on' sends {thinkingLevel:'low'} (weekly-report path)", async () => {
+  const { calls, restore } = installFakeFetch([okText("ok")]);
+  try {
+    await geminiChat({
+      model: MODEL_PRO,
+      systemPrompt: "s",
+      userPrompt: "hi",
+      maxTokens: 4096,
+      thinking: "on",
+      fallbackToLite: false,
+    });
+    assertEquals(tc(calls[0]), { thinkingLevel: "low" });
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("geminiChat — the FALLBACK attempt resolves its OWN row, not the primary's", async () => {
+  // Make the two rows differ for the duration of the test so inheritance is visible.
+  const saved = THINKING_BY_MODEL[MODEL_FALLBACK].off;
+  THINKING_BY_MODEL[MODEL_FALLBACK].off = { thinkingLevel: "high" };
+  const { calls, restore } = installFakeFetch([httpError(503), okText("ok")]);
   try {
     const res = await geminiChat({
-      model: MODEL_PRO,
-      systemPrompt: "you are a coach",
+      model: MODEL_FLASH,
+      systemPrompt: "s",
       userPrompt: "hi",
-      maxTokens: 2048,
-      // Pro must not fall back to Lite (a text-only Lite retry is meaningless
-      // for the weekly-report reasoning path) — and it keeps the single-call
-      // guarantee for this assertion.
+      maxTokens: 1024,
+    });
+    assertEquals(res.content, "ok");
+    assertEquals(res.modelUsed, MODEL_FALLBACK);
+    assertEquals(calls.map((c) => c.model), [MODEL_FLASH, MODEL_FALLBACK]);
+    assertEquals(tc(calls[0]), { thinkingLevel: "minimal" });
+    assertEquals(tc(calls[1]), { thinkingLevel: "high" });
+  } finally {
+    THINKING_BY_MODEL[MODEL_FALLBACK].off = saved;
+    restore();
+  }
+});
+
+Deno.test("geminiChatWithTools — fallback attempt resolves its own row and thinking:'on' is honoured per attempt", async () => {
+  const saved = THINKING_BY_MODEL[MODEL_FALLBACK].on;
+  THINKING_BY_MODEL[MODEL_FALLBACK].on = { thinkingLevel: "high" };
+  const { calls, restore } = installFakeFetch([httpError(503), okText("ok")]);
+  try {
+    const res = await geminiChatWithTools({
+      model: MODEL_FLASH,
+      systemPrompt: "s",
+      messages: [{ role: "user", parts: [{ text: "hi" }] }],
+      tools: [],
+      thinking: "on",
+    });
+    assertEquals(res.usedFallback, true);
+    assertEquals(tc(calls[0]), { thinkingLevel: "low" });
+    assertEquals(tc(calls[1]), { thinkingLevel: "high" });
+  } finally {
+    THINKING_BY_MODEL[MODEL_FALLBACK].on = saved;
+    restore();
+  }
+});
+
+Deno.test("an UNKNOWN slug sends NO thinkingConfig and does not throw (legacy test slugs pass through the real function)", async () => {
+  assertEquals(thinkingConfigFor("gemini-2.5-flash", "off"), null);
+  const { calls, restore } = installFakeFetch([okText("ok")]);
+  try {
+    const res = await geminiChat({
+      model: "gemini-2.5-flash",
+      systemPrompt: "s",
+      userPrompt: "hi",
+      maxTokens: 64,
       fallbackToLite: false,
     });
     assertEquals(res.content, "ok");
-
-    const gc = (captured.body?.generationConfig ?? {}) as Record<
-      string,
-      unknown
-    >;
-    assertEquals(gc.thinkingConfig, undefined);
+    assertEquals(calls[0].body.generationConfig.thinkingConfig, undefined);
   } finally {
     restore();
+  }
+});
+
+Deno.test("every exported MODEL_* constant has a capability row with off+on, and neither mode uses thinkingBudget", () => {
+  // Iterate EVERY exported MODEL_* constant (not a hand-written list), so a newly
+  // added export without a capability row fails here.
+  const exported = Object.entries(gemini)
+    .filter(([k, v]) => k.startsWith("MODEL_") && typeof v === "string")
+    .map(([, v]) => v as string);
+  assert(exported.length >= 4, "expected at least the four MODEL_* constants");
+  for (const slug of new Set(exported)) {
+    const row = THINKING_BY_MODEL[slug];
+    assert(row, `no THINKING_BY_MODEL row for ${slug}`);
+    for (const mode of ["off", "on"] as const) {
+      assert(row[mode], `${slug} missing ${mode}`);
+      assertEquals("thinkingBudget" in row[mode], false);
+    }
   }
 });

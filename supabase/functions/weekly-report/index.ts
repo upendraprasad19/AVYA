@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { geminiChat, MODEL_PRO } from "../_shared/gemini.ts";
+import { geminiChat, labelForModel, MODEL_PRO } from "../_shared/gemini.ts";
 import { reportGeminiExhaustion } from "../_shared/gemini_failure_alert.ts";
 import { CAPTAIN_MANUAL } from "../_shared/captain_manual.ts";
 import { istDateStr } from "../_shared/ist_date.ts";
@@ -18,10 +18,12 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-// 2026-04-18 · Migrated from Cerebras gpt-oss-120b (via OpenRouter) to
-// Gemini 2.5 Pro. Weekly report is the ONLY surface using Pro — deepest
-// reasoning needed, runs at most once per week per user.
-const PRO_MODEL_LABEL = "Gemini 2.5 Pro";
+// 2026-10-01 · The weekly report runs on MODEL_PRO (gemini-3.1-flash-lite since
+// the Gemini 3.x migration; the 2.5 slugs 404 on the new key) with `thinking:
+// "on"`. It is the ONLY surface that turns thinking on — runs at most once per
+// week per user. The persisted `model_used` is the RAW slug that answered
+// (`modelUsed ?? PRO_MODEL_LABEL` below); PRO_MODEL_LABEL is only the fallback.
+const PRO_MODEL_LABEL = labelForModel(MODEL_PRO);
 
 // ── OI-162 slice 3a — the free first-report gate reads a LEDGER, not a log ──
 //
@@ -104,7 +106,7 @@ serve(async (req: Request) => {
     //
     // audit-2026-09-02 CODE-8 — FAIL CLOSED on a query error. `count` is null
     // when the query fails, and `(null ?? 0) === 0` made isFirstReport TRUE, so
-    // any transient PostgREST failure granted an unbounded Gemini 2.5 Pro
+    // any transient PostgREST failure granted an unbounded thinking-on Gemini
     // report to a free user. The sibling subscription query above already
     // destructures its error (`subError`); this one did not — same function,
     // mirror not applied. Related: c8f229 (verify-payment fail-open guard).
@@ -139,7 +141,7 @@ serve(async (req: Request) => {
     // A failed count DENIES rather than grants. Compound case, stated because
     // it is a real cost: if the subscription query ALSO failed, a genuine PRO
     // user gets 403 NOT_PRO. That is the intended trade — a denied report is
-    // recoverable, an unbounded Gemini 2.5 Pro call is not — and the log above
+    // recoverable, an unbounded thinking-on Gemini call is not — and the log above
     // is what makes such a 403 attributable rather than mysterious.
     // The three outcomes, spelled out because getting the third wrong locks
     // out every free user:
@@ -542,15 +544,19 @@ ${Object.entries(dailyTotals)
 - Streak: ${userProgress?.current_streak_weeks ?? 0} weeks
 - Total workouts all time: ${userProgress?.total_workouts_done ?? 0}`;
 
-    // ── Call Gemini 2.5 Pro (Flash-Lite fallback on 5xx/429) ──────
+    // ── Call MODEL_PRO with thinking ON (MODEL_FALLBACK on 5xx/429/404) ──
     // jsonMode: false — Captain Brief returns plain text, not JSON.
     // The JSON parse below will fall through to fallback, which places
     // the full brief in report.summary (correct client behaviour).
-    const { content: aiContent, modelUsed, tokensUsed, lastError } = await geminiChat({
+    const { content: aiContent, modelUsed, tokensUsed, lastError, attemptStatuses } = await geminiChat({
       model: MODEL_PRO,
       systemPrompt,
       userPrompt: asAuthoredPrompt(userMessage),
-      maxTokens: 1500,
+      // Thought tokens count against maxOutputTokens (~135 at `low` in the
+      // probe, up to ~850 at `high`): 1500 left too little headroom for the
+      // visible report once thinking is on, so the cap is 4096.
+      thinking: "on",
+      maxTokens: 4096,
       temperature: 0.7,
       timeoutMs: 40_000,
       jsonMode: false,
@@ -575,6 +581,8 @@ ${Object.entries(dailyTotals)
         "ai_proxy_gemini_exhausted",
         lastError ?? null,
         "weekly_report",
+        undefined,
+        attemptStatuses,
       );
       return jsonResponse(
         { error: "Empty response from AI. Please try again." },

@@ -336,7 +336,7 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
     }
 
     if (messageCount >= AppConstants.freeAiMessagesPerDay) {
-      showPaywallSheet(context, feature: 'Unlimited AI Coach');
+      showPaywallSheet(context, feature: 'Higher daily AI coach limit');
       return;
     }
 

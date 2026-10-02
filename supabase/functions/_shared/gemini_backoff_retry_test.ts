@@ -393,7 +393,7 @@ Deno.test(
 
     assert(
       body.includes(
-        "const { content, modelUsed, tokensUsed, lastError } = await deps.geminiChat(",
+        "const { content, modelUsed, tokensUsed, lastError, attemptStatuses } = await deps.geminiChat(",
       ),
       "prediction handler must destructure lastError from geminiChat() — " +
         "without it, reportGeminiExhaustion has nothing to report",

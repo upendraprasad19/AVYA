@@ -45,7 +45,7 @@ extension _StatusPill on _AiCoachScreenState {
     // Free user — tap opens paywall.
     return GestureDetector(
       onTap: () =>
-          showPaywallSheet(context, feature: 'Unlimited AI Coach'),
+          showPaywallSheet(context, feature: 'Higher daily AI coach limit'),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(

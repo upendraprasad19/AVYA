@@ -1162,5 +1162,15 @@
     "slug": "drop_users_subscription_mirror",
     "cloud_version": "20260930065332",
     "note": "OI-202. Drops users.subscription_status and users.subscription_expires_at, trigger trg_subscription_update_user, update_user_subscription_status() and extend_subscription(uuid,integer) after rewriting private.founder_metrics() to derive pro_active / pro_expired / free_users from public.subscriptions (pro_expired = any subscriptions row and no live active one, via NOT EXISTS; free = never subscribed). Ordered after the payment Edge Functions stopped writing the mirror (webhook v27, verify-payment v23 deployed 2026-09-30, and merged to main as 93e61579 with CI green before this apply, per Hermes L35 F1). Dry-run on prod inside an always-aborting DO block matched: pro_active 5, pro_expired 3->2, free 30->31, total unchanged. Live verified post-apply: version 20260930065332 in schema_migrations; 0 columns, 0 trigger, both functions absent; no pg_proc body names either column; founder_metrics 38/5/2/31; ACL service_role only, search_path public,private; founder_metrics_for_admin_api() returns the same row. Founder authorized the dry-run and the apply explicitly 2026-09-30. Orphan mirror row 4d27a40b backed up in backups/subscription_mirror_columns_snapshot_2026-09-29.json. Diagnose-doc: docs/diagnoses/2026-09-29-subscription-mirror-columns-dropped-c7e3b9.md."
+  },
+  {
+      "migration": "153",
+      "applied_at": "2026-10-02T14:06:56+05:30",
+      "hash": "sha256:cf1285813dfe0921c6bf1ab21e19c858f234054ae05588664688b70da96a0771",
+      "applier": "claude-via-mcp-apply-migration",
+      "diagnose": "c4e9b2",
+      "slug": "gemini3_limits_refund",
+      "cloud_version": "20261002083656",
+      "note": "Part B of gemini3-limits-caching. Chat cap free 7 / PRO 20 (PRO no longer exempt; the trigger counts ONLY the model_used='pending' reservation row so PRO media rows on channel app spend no chat unit); vision cap free 4 / PRO 20 on one shared key; adds refund_quota(uuid,text) SECURITY INVOKER, service_role only (REVOKE names PUBLIC, anon, authenticated): latch on model_used='pending', ledger row checked before the 3/IST-day refund_budget is spent, used-1 AND used>0. Trigger messages print pro=true|false. Applied via MCP apply_migration after the founder's explicit go 2026-10-02 (pre-apply live read: top 152, no refund_quota, 0 pending rows, nobody at the new caps). Live verified post-apply: version 20261002083656; anon/authenticated execute on refund_quota false, service_role true, prosecdef false; both trigger bodies carry the new caps; 3 cap triggers still bound. Diagnose-docs: c4e9b2, d7a1f5. Live behavioural script test/sql/gemini3_limits_refund_live_verify.sql NOT yet run."
   }
 ]

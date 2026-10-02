@@ -58,12 +58,14 @@ import type {
   ToolIntent,
 } from "./tools/types.ts";
 import {
+  fillMissingThoughtSignature,
   type GeminiContent,
   type GeminiPart,
   geminiChatWithTools,
   type GeminiToolsResult,
+  refundableFailure,
 } from "./gemini.ts";
-import { reportGeminiExhaustion } from "./gemini_failure_alert.ts";
+import { type AttemptStatusLike, reportGeminiExhaustion } from "./gemini_failure_alert.ts";
 
 const MAX_ROUNDS = 3;
 
@@ -139,8 +141,14 @@ export interface ToolLoopResult {
   toolCallsLog: ToolCallRecord[];
   /** Total Gemini tokens consumed across all rounds. */
   tokensUsed: number;
-  /** Whether at least one round used the Flash-Lite fallback. */
+  /** Whether at least one round used the fallback model. */
   usedFallback: boolean;
+  /**
+   * Slug of the model that produced the LAST successful round (null when no
+   * round succeeded). The caller labels the row from this (`labelForModel`) —
+   * it must not guess from `usedFallback` once every tier shares one slug.
+   */
+  modelUsed: string | null;
   /** Number of rounds executed (1..maxRounds). */
   roundsExecuted: number;
   /**
@@ -155,6 +163,15 @@ export interface ToolLoopResult {
    * "stuck" conversation that outlives the outage itself.
    */
   hadHardFailure: boolean;
+  /**
+   * Why a hard failure happened, for the quota refund decision (Part B):
+   * `transport` = the Gemini call failed in a way the user cannot cause
+   * (refundableFailure: 5xx / 429 / 404 / timeout / empty); `deterministic` =
+   * a content block (SAFETY etc.) or a non-refundable 4xx; `rounds_exhausted` =
+   * the model kept calling tools. `none` when `hadHardFailure` is false. Only
+   * `transport` earns the unit back.
+   */
+  failureKind: "none" | "transport" | "deterministic" | "rounds_exhausted";
 }
 
 /**
@@ -272,9 +289,11 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
   const toolCallsLog: ToolCallRecord[] = [];
   let tokensUsed = 0;
   let usedFallback = false;
+  let modelUsed: string | null = null;
   let finalText = "";
   let roundsExecuted = 0;
   let hadHardFailure = false;
+  let failureKind: ToolLoopResult["failureKind"] = "none";
 
   // Tier-filtered tool list passed to the model. Pre-converted once
   // (registry is small; conversion is cheap; doing it once avoids
@@ -293,7 +312,8 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
         messages,
         tools: visibleTools,
         // FC1 (diagnose 7fbe21): headroom for the visible answer now that
-        // thinkingBudget:0 stops hidden reasoning from consuming the cap.
+        // thinking is off by default (no `thinking` option passed here), so
+        // hidden reasoning cannot consume the cap.
         // 1024 default → 2048 at the call site (coach is the only caller).
         maxTokens: 2048,
         requestId: opts.ctx.requestId,
@@ -333,6 +353,7 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
         },
         "chat",
         { hadQueuedIntent },
+        (e as { attemptStatuses?: AttemptStatusLike[] } | null)?.attemptStatuses,
       );
       // FC2 (diagnose 7fbe21): only apologize when NOTHING was queued. If an
       // earlier round already produced a write intent (queued for the APPLY
@@ -342,12 +363,24 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
       if (!finalText && !hadQueuedIntent) {
         finalText = HARD_FAILURE_APOLOGY_GEMINI_CALL_FAILED;
         hadHardFailure = true;
+        failureKind = refundableFailure({
+            status: (e as { status?: number | null } | null)?.status ?? null,
+            message: (e as { geminiMessage?: string; message?: string } | null)?.geminiMessage ??
+              (e as { message?: string } | null)?.message ?? null,
+            deterministicFailure:
+              (e as { deterministicFailure?: boolean } | null)?.deterministicFailure ??
+                false,
+            blockSeen: (e as { blockSeen?: boolean } | null)?.blockSeen ?? false,
+          })
+          ? "transport"
+          : "deterministic";
       }
       break;
     }
 
     tokensUsed += resp.tokensUsed;
     if (resp.usedFallback) usedFallback = true;
+    modelUsed = resp.modelUsed;
 
     // No tool calls → terminal response. We're done.
     if (resp.functionCalls.length === 0) {
@@ -357,7 +390,11 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
 
     // Append the model's turn to history before processing tool calls.
     // Gemini requires the model turn to precede the function-response turn.
-    messages.push({ role: "model", parts: resp.parts });
+    // Gemini 3 thought signatures: `resp.parts` are the RAW parts Gemini sent
+    // (signature intact). The dummy fill is a defensive net for a turn where the
+    // model emitted a functionCall with NO signature anywhere; it touches only
+    // the first call of such a turn and never a turn that already carries one.
+    messages.push({ role: "model", parts: fillMissingThoughtSignature(resp.parts) });
 
     // Process each tool call. Each call yields exactly one functionResponse
     // part, in order — Gemini matches them positionally, so 1:1 is mandatory.
@@ -609,6 +646,7 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
     } else {
       console.log(`[tool-loop] max rounds (${maxRounds}) exhausted without terminal response`);
       finalText = HARD_FAILURE_APOLOGY_ROUNDS_EXHAUSTED;
+      failureKind = "rounds_exhausted";
       // APK +43 obs 2 (B-pass finding, diagnose a1c6b9) — this is the OTHER
       // hardcoded non-model apology in this file (the catch block above sets
       // the first one). It has the exact same self-perpetuation shape: if
@@ -627,8 +665,10 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
     toolCallsLog,
     tokensUsed,
     usedFallback,
+    modelUsed,
     roundsExecuted,
     hadHardFailure,
+    failureKind,
   };
 }
 

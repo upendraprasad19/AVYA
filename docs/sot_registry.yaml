@@ -5091,6 +5091,26 @@ concepts:
           one of two fields `recentHistoryExchanges`'s exclusion filter
           checks — so a genuine hard-failure apology turn no longer replays
           into the next request's history.
+      - file: supabase/functions/_shared/row_model_label.ts
+        line_range: 1-9999
+        method: "`rowModelLabel` (ai-proxy's chat reservation-resolve UPDATE, `model_used`)"
+        notes: |
+          Gemini 3.x migration (2026-10-01, diagnose recurrence of a1c6b9) — the
+          SERVER-side writer of the failure marker. ai-proxy used to resolve a
+          hard-failure reply (the hardcoded apology) with the REAL model label
+          and tokens_used=0, so chat_dedup.ts `dedupDecision` replayed it as a
+          normal 200 reply inside the dedup window and the apology sat in the
+          cloud table indistinguishable from a real reply. `rowModelLabel(
+          loop.hadHardFailure, loop.modelUsed, MODEL_USED_LOOP_THREW_SENTINEL)`
+          now stamps the sentinel when `hadHardFailure` (dedup then returns
+          `replay_hard_failure` — the same flagged 200 the first request got — while
+          `replay_failure`/502 stays for the loop-THREW marker row; sync_coach.dart
+          already keys on the sentinel, and daily-snapshot / rolling-context skip
+          `failed` rows when building prompts/embeddings) and
+          otherwise `labelForModel(<slug that answered>)`. The CLIENT response
+          keeps the real label + `had_hard_failure`. Deno behavioral test (the
+          label is what dedupDecision reads on the next request):
+          supabase/functions/_shared/row_model_label_test.ts.
       - file: lib/core/services/sync/sync_coach.dart
         line_range: 245-319
         method: "`_restoreCoachInteractions` (SyncServiceCoach extension)"
@@ -10454,7 +10474,7 @@ concepts:
         method: weekly brief userMessage
         semantic: pass-through
         fields_read: [current_week]
-        notes: "'Current week: ${current_week}' into the Gemini 2.5 Pro prompt."
+        notes: "'Current week: ${current_week}' into the Gemini weekly-report prompt."
       - file: supabase/functions/_shared/captain_manual.ts
         line_range: 1-9999
         method: temporal routing instruction
@@ -11455,8 +11475,8 @@ concepts:
 
       FAIL-CLOSED CONTRACT: on a read error the gate must DENY (treat as NOT
       first report), never grant. A null count from a failed query previously
-      read as "first report" and handed a free user an unbounded Gemini 2.5
-      Pro call.
+      read as "first report" and handed a free user an unbounded weekly-report
+      (thinking-on Gemini) call.
     writers:
       - file: supabase/functions/weekly-report/index.ts
         method: serve handler — report-log insert
@@ -11608,7 +11628,7 @@ concepts:
     sync_methods: []
 
   # OI-153 (2026-09-12) — the PRO tier's per-IST-day media caps: 50 image
-  # reads, 10 video reads. Registered as its own concept, one concept per
+  # reads, 10 video reads (lowered to 10 / 5 by Part B, founder 2026-10-01). Registered as its own concept, one concept per
   # gate, like media_free_image_lifetime_gate above. The LAST of the ten
   # quota readers that derived their count from the pruned `ai_coach_
   # interactions` log (OI-162 slices 1-4 moved the other nine).
@@ -11617,7 +11637,8 @@ concepts:
     behavioral_test_path: test/contracts/pro_media_daily_caps_writer_to_reader_test.dart
     presence_only: true  # Deno Edge Function; the CAP GATE sits inside `handleRequest` behind a module-level `createClient(...)`, so no Dart or Deno test can round-trip it without a live client. (Since v25, 2026-09-13, the module IS importable — `serve` runs under `import.meta.main` and `handleRequest` / `fetchImageAsBase64` / `parseStorageUrl` / `HttpError` are exported — and supabase/functions/ai-media-proxy/index_test.ts drives the Storage user-scope guard behaviourally through an injected fetch; the gate itself remains presence-only.) CI `deno check` (and, since 2026-09-12, a local Deno) is the compile proof; the live-ledger behaviour is proven by test/sql/oi153_pro_media_caps_live_verify.sql inside BEGIN…ROLLBACK (rule 21 honesty).
     description: |
-      "Has this PRO user spent today's 50 image reads (or 10 video reads)?" —
+      "Has this PRO user spent today's 10 image reads (or 5 video reads)?" (50 / 10
+      until Part B, 2026-10-01) —
       the per-IST-day ceiling on Gemini Vision fan-out from a PRO token. Reset
       at midnight IST; a reached cap returns an in-app coach reply (HTTP 200,
       `gated: true`), never the paywall — the reader already pays.
@@ -11931,7 +11952,7 @@ concepts:
           — which is why ai-proxy's 60s dedup refresh does not burn a slot.
     readers:
       - file: lib/core/constants/app_constants.dart
-        line_range: 76-79
+        line_range: 84-87
         method: freeAiTextLogsPerDay
         semantic: client-constant
         notes: must equal the trigger's FREE arm; pinned by the behavioral_test_path above
@@ -11980,14 +12001,20 @@ concepts:
       WHY IT EXISTS: nine quota checks derive their count from rows in
       `ai_coach_interactions`, and `rolling-context` prunes that table nightly.
       Deleting a log is correct; deleting a ledger resets every quota built on
-      it. A free user regains 5 lifetime image analyses and a free Gemini 2.5
-      Pro weekly report; brute-force guards can be reset by chatting.
+      it. A free user regains 5 lifetime image analyses and a free weekly
+      report; brute-force guards can be reset by chatting.
 
       THE CONTRACT:
-      1. `consume_quota()` is the ONLY writer. It is atomic — a single
-         INSERT ... ON CONFLICT DO UPDATE ... RETURNING — which also removes the
-         read-then-write race every legacy site has (c9e3b1 found that same
-         defect client-side in July).
+      1. `consume_quota()` is the ONLY writer that spends a unit. It is atomic —
+         a single INSERT ... ON CONFLICT DO UPDATE ... RETURNING — which also
+         removes the read-then-write race every legacy site has (c9e3b1 found
+         that same defect client-side in July). PART B (migration 153, 2026-10-01)
+         adds ONE giver-back: `refund_quota(reservation_id, label)` decrements
+         a unit (`used = used - 1 ... AND used > 0`, never below 0) after a
+         TRANSPORT failure, only for the caller that wins the latch
+         (`UPDATE ai_coach_interactions ... WHERE id = $1 AND model_used =
+         'pending'`), and only while the user's `refund_budget` (3 per IST day,
+         itself spent through consume_quota) lasts. service_role only.
       2. `cleanup_usage_counters()` is the ONLY deleter, and its predicate is
          TWO-SIDED: it never deletes a lifetime row. Dropping the epoch
          exclusion recreates the original bug inside the new table.
@@ -12009,16 +12036,14 @@ concepts:
       slices 3-4 migrate them. Dispositions in
       docs/plan-reviews/oi162-round1-findings.md.
 
-      ⚠ CHAT'S PRO EXEMPTION IS ASYMMETRIC WITH THE OTHER TWO, and the
-      difference is invisible unless stated. Chat returns BEFORE consuming, so
-      a PRO user writes no ledger row at all; food_text always consumes and
-      only varies its limit. Consequence: a PRO user's ledger FREEZES, and a
-      same-day downgrade resumes from the pre-upgrade value — granting up to a
-      full extra 10 messages. The old count(*) form re-counted the PRO-era
-      rows instead. Accepted deliberately (bounded, needs a subscription
-      lapsing mid-day mid-conversation, no security consequence); the
-      alternative required inventing a sentinel limit for a tier documented as
-      unlimited.
+      ⚠ CHAT'S PRO EXEMPTION IS GONE (Part B, migration 153, 2026-10-01). Until
+      then chat returned BEFORE consuming for a PRO user (the ledger froze, a
+      same-day downgrade could grant up to 10 extra). Now chat, like vision and
+      food_text, always consumes and only varies its limit through a
+      `daily_cap` VARIABLE: free 7 / PRO 20 (vision free 4 / PRO 20). The chat
+      trigger counts ONLY the `model_used = 'pending'` reservation row, because
+      ai-media-proxy writes PRO media rows on the same channel `app` with a real
+      model label and those have their own caps.
 
       ⚠ THE INVARIANT THE DATABASE DOES NOT ENFORCE (B-pass on 303c57af):
       `p_limit` is a per-CALL argument, so the `WHERE uc.used < p_limit` guard
@@ -12055,6 +12080,36 @@ concepts:
           `WHERE uc.used < p_limit` so the counter cannot pass the limit, and
           the INSERT arm inserts 1 (not the column default, which would grant
           one extra unit on the first call).
+      - file: supabase/migrations/153_gemini3_limits_refund.sql
+        line_range: 162-244
+        method: refund_quota
+        semantic: cloud-write
+        notes: |
+          Part B. The ONLY decrementer. Latch on the reservation row
+          (`model_used = 'pending'` -> failure label, one statement) THEN spend
+          `refund_budget` (3/IST day) THEN `used = used - 1 ... AND used > 0`.
+          Maps channel -> key (app -> chat_app, scan_meal/cart_auditor ->
+          vision_analysis, food_text_analysis -> food_text); window = IST day of
+          the ROW's created_at (COALESCE'd to now() for a NULL). The ledger row
+          is checked (`used > 0`, FOR UPDATE) BEFORE the budget is spent, so a
+          refund with nothing to give back never burns it. Callers: ai-proxy via
+          `_shared/quota_refund.ts` after a transport-class failure only
+          (`refundableFailure`: no status, 404/408/425/429/5xx, plus OUR credential
+          failing: 401/403 and 400 API_KEY_INVALID); never for a content block seen
+          on ANY attempt (SAFETY-class, promptFeedback.blockReason, IMAGE_*,
+          MAX_TOKENS/LANGUAGE/MALFORMED: sticky `blockSeen`), rounds-exhausted,
+          parse failures, cap refusals, a food dedup hit (the reused row is another
+          request's), PRO media, or prediction. Live proof:
+          test/sql/gemini3_limits_refund_live_verify.sql.
+          ACCEPTED RESIDUE: (a) a client can now insert a `channel='app'` row with
+          a non-pending `model_used` (before Part B the trigger refused it 42501;
+          a `pending` insert is STILL refused because the trigger is SECURITY
+          INVOKER and authenticated cannot execute consume_quota); it spends and
+          refunds nothing and only touches the user's own history (founder
+          decision 2026-10-02: ship as-is); (b) a runToolLoop THROW refunds whatever the cause, bounded
+          by the 3/day budget; (c) a turn reserved before IST midnight and refunded
+          after refunds the ROW's day (correct) but the user sees no unit back for
+          "today".
       - file: supabase/migrations/128_usage_counters.sql
         line_range: 133-145
         method: cleanup_usage_counters
@@ -12063,18 +12118,22 @@ concepts:
           Sole deleter, run by pg_cron as postgres (rolbypassrls). BOTH
           conjuncts of its predicate are load-bearing.
     readers:
-      - file: supabase/migrations/129_cap_triggers_use_usage_counters.sql
+      - file: supabase/migrations/153_gemini3_limits_refund.sql
+        line_range: 76-116
         method: enforce_chat_app_daily_limit
         semantic: cloud-read
         notes: |
-          quota_key `chat_app`, 10/day, IST window. Returns BEFORE consuming
-          when the user is PRO — see the asymmetry note in the description.
-      - file: supabase/migrations/129_cap_triggers_use_usage_counters.sql
+          quota_key `chat_app`, free 7 / PRO 20 per IST day via `daily_cap`.
+          Consumes only on the `pending` reservation row; PRO consumes too
+          (migration 129's early return is gone) — see the description.
+      - file: supabase/migrations/153_gemini3_limits_refund.sql
+        line_range: 120-158
         method: enforce_vision_analysis_daily_limit
         semantic: cloud-read
         notes: |
-          quota_key `vision_analysis`, 20/day. scan_meal and cart_auditor share
-          ONE key deliberately — it is one combined budget, not two caps.
+          quota_key `vision_analysis`, free 4 / PRO 20 per IST day.
+          scan_meal and cart_auditor share ONE key deliberately — it is one
+          combined budget, not two caps.
       - file: supabase/migrations/129_cap_triggers_use_usage_counters.sql
         method: enforce_food_text_daily_limit
         semantic: cloud-read

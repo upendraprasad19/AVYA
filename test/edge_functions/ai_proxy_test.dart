@@ -177,12 +177,12 @@ void main() {
   }
 
   /// Decoded 200 body, or `null` when the shared QA account has exhausted its
-  /// REAL 10/day chat cap — in which case the cap contract is asserted instead,
+  /// REAL daily chat cap (free 7 since migration 153; was 10) — in which case the cap contract is asserted instead,
   /// so neither branch is a free pass.
   ///
   /// ⚠ WHY THIS EXISTS, because "tolerate a 429" looks like weakening a test.
   /// Three tests below (T15, T18, T19) each send ONE live chat as ONE shared QA
-  /// account, so a CI run costs 3 of that account's 10 daily messages. They
+  /// account, so a CI run costs 3 of that account's 7 daily messages (Part B, migration 153: free cap 10 -> 7). They
   /// asserted a bare `200` and were green for months — **because the cap was
   /// broken.** Until 2026-09-05 the trigger counted rows in
   /// `ai_coach_interactions`, which `rolling-context` prunes nightly, so the
@@ -190,7 +190,7 @@ void main() {
   /// moved it onto the durable `usage_counters` ledger and the cap started
   /// working — main went red on the 4th run of the IST day with
   /// `Expected: <200> Actual: <429>`, and the live ledger showed
-  /// `test6@gmail.com chat_app used=10`.
+  /// `test6@gmail.com chat_app used=10` (the cap was 10 then; it is 7 now).
   ///
   /// So this is not a test being loosened to accommodate a bug. It is a test
   /// that asserted something it does not control — the quota state of a shared
@@ -199,10 +199,11 @@ void main() {
   /// branch pins the `RATE_LIMITED` contract that `nutrition_provider.dart` and
   /// the client error-mapping depend on, which nothing asserted before.
   ///
-  /// ⚠ The 3-runs-per-IST-day ceiling is REAL and is not fixed by this helper.
-  /// A dedicated per-run QA account (or a PRO one, which the chat trigger
-  /// exempts entirely) is the actual fix; it needs a founder decision about
-  /// test-account provisioning, so it is raised rather than assumed here.
+  /// ⚠ The 2-runs-per-IST-day ceiling (7 / 3) is REAL and is not fixed by this
+  /// helper. A dedicated per-run QA account is the actual fix (a PRO account no
+  /// longer helps: since migration 153 PRO is capped at 20/day too, no longer
+  /// exempt); it needs a founder decision about test-account provisioning, so
+  /// it is raised rather than assumed here.
   Map<String, dynamic>? chatBodyOrAssertCapped(http.Response response) {
     if (response.statusCode == 429) {
       final capped = json.decode(response.body) as Map<String, dynamic>;

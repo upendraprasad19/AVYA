@@ -20,10 +20,15 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-// 2026-04-18 · Migrated from Cerebras Llama 3.1 8B (via OpenRouter) to
-// Gemini 2.5 Flash as part of the single-provider consolidation. Flash
-// handles the ~200-token summary well within Gemini quota.
-const SUMMARY_MODEL_LABEL = "Gemini 2.5 Flash";
+// Summary model = MODEL_FLASH (gemini-3.1-flash-lite since 2026-10-01); the
+// ~200-token summary sits well within Gemini quota.
+
+/**
+ * `ai_coach_interactions.model_used` of a hard-failure turn. Mirrors ai-proxy's
+ * exported MODEL_USED_LOOP_THREW_SENTINEL (its module calls serve() at import, so
+ * it cannot be imported here); gemini3_callsites_test.ts pins the two equal.
+ */
+const MODEL_USED_FAILED = "failed";
 
 const MESSAGE_THRESHOLD = 50;
 const KEEP_RECENT = 10;
@@ -82,7 +87,7 @@ async function summarizeMessages(
   // injected instruction here persists past the one conversation that carried
   // it. Sanitised for the structural lever, fenced for the part sanitising
   // cannot cover.
-  const { content, lastError } = await geminiChat({
+  const { content, lastError, attemptStatuses } = await geminiChat({
     model: MODEL_FLASH,
     systemPrompt,
     // maxLen from the same measurement as daily-snapshot (see its comment):
@@ -129,6 +134,8 @@ async function summarizeMessages(
       "rolling_context_gemini_exhausted",
       lastError ?? null,
       "rolling_context_summarize",
+      undefined,
+      attemptStatuses,
     );
   }
 
@@ -348,6 +355,7 @@ serve(async (req: Request) => {
           user_message: string;
           ai_response: string;
           created_at: string;
+          model_used: string | null;
         }[] = [];
         let msgError: unknown = null;
         try {
@@ -356,11 +364,12 @@ serve(async (req: Request) => {
             user_message: string;
             ai_response: string;
             created_at: string;
+            model_used: string | null;
           }>(
             () =>
               supabaseClient
                 .from("ai_coach_interactions")
-                .select("id, user_message, ai_response, created_at")
+                .select("id, user_message, ai_response, created_at, model_used")
                 .eq("user_id", userId)
                 // Analytics rows are NOT conversation. Without this filter they
                 // are summarized like chat turns and then DELETED, which breaks
@@ -409,12 +418,21 @@ serve(async (req: Request) => {
           continue;
         }
 
+        // Hard-failure apology rows (model_used = "failed", a5c8e2) are still
+        // DELETED with the rest, but never embedded into memory or fed to the
+        // summary: their "Coach:" text is the hardcoded apology, not the model.
+        const forMemory = toSummarize.filter((m) => m.model_used !== MODEL_USED_FAILED);
+        if (forMemory.length === 0) {
+          skipped++;
+          continue;
+        }
+
         // ── Phase C: Embed each message BEFORE deleting it ─────────────────
         // Preserves semantic memory permanently in memory_embeddings.
         // Delete only happens after this block — safe to re-run on failure.
         // Partial embedding is acceptable (logged but doesn't abort the run).
         let embeddedCount = 0;
-        for (const msg of toSummarize) {
+        for (const msg of forMemory) {
           try {
             const content = `User: ${msg.user_message}\nCoach: ${msg.ai_response}`;
             const embedding = await getEmbedding(content, "RETRIEVAL_DOCUMENT");
@@ -439,11 +457,11 @@ serve(async (req: Request) => {
           }
         }
         console.log(
-          `[rolling-context] User ${userId}: embedded ${embeddedCount}/${toSummarize.length} messages before archival`,
+          `[rolling-context] User ${userId}: embedded ${embeddedCount}/${forMemory.length} messages before archival`,
         );
 
         // Summarize the older messages
-        const summary = await summarizeMessages(toSummarize, supabaseClient);
+        const summary = await summarizeMessages(forMemory, supabaseClient);
 
         if (!summary) {
           console.error(

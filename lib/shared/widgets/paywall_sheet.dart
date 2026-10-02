@@ -114,7 +114,7 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
   bool _upgradeTapped = false;
 
   static const List<String> _proBenefits = [
-    'Unlimited AI Coach with deep personalised coaching',
+    'Dedicated AI coaching with higher daily limits',
     'AI food analysis & meal scanning (camera)',
     'Generate new plans after Week 4 (phases 2-12)',
     'Weekly AI nutrition report + Telegram push',
@@ -134,8 +134,8 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
     switch (widget.feature) {
       case 'Phases 2-12':
         return 'You crushed Phase 1. Unlock progressive phases to keep building strength and muscle.';
-      case 'Unlimited AI Coach':
-        return 'Get unlimited coaching conversations with deep personalised insights.';
+      case 'Higher daily AI coach limit':
+        return 'Dedicated coaching with higher daily limits.';
       case 'Deep Analysis':
         return 'Unlock advanced reasoning for detailed workout and nutrition analysis.';
       case 'Scan Meal':

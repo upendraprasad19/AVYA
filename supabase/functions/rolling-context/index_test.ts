@@ -60,7 +60,7 @@ Deno.test("summarizeMessages takes a Supabase client parameter (needed to alert)
 
 Deno.test("the call site passes supabaseClient into summarizeMessages", () => {
   assert(
-    source.includes("await summarizeMessages(toSummarize, supabaseClient)"),
+    source.includes("await summarizeMessages(forMemory, supabaseClient)"),
     "summarizeMessages must be called with the loop's supabaseClient",
   );
 });

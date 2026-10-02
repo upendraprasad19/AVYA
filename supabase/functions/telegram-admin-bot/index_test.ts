@@ -1288,7 +1288,11 @@ function makeEmptyDigestFake() {
 Deno.test("cmdDigest builds text via the shared founder_digest_content module, not a re-implementation", async () => {
   const text = await cmdDigest(makeEmptyDigestFake());
   // Every section should render as empty ("none"), never as "unreadable" due to chain failures
-  assertStringIncludes(text, "Chat (free, 10/day): none");
+  // Part B: chat + vision are tier-mixed (free 7 / PRO 20, free 4 / PRO 20), so they are
+  // totals on the Also line, and the new refund budget + heavy-chat lines render.
+  assertStringIncludes(text, "Chat (free 7 / PRO 20) 0");
+  assertStringIncludes(text, "Refunds (3/day): none");
+  assertStringIncludes(text, "Heavy chat (>15 msgs/day): none");
   assertStringIncludes(text, "Free image reads (lifetime): none");
   assertStringIncludes(text, "Weekly report (free) (lifetime): none");
   assertStringIncludes(text, "<b>Top users</b>: none");

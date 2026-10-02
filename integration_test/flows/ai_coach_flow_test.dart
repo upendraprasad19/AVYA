@@ -199,7 +199,7 @@ void main() {
 
     // PaywallSheet must appear with upgrade wording.
     final paywallVisible = anyTextVisible(
-        ['Upgrade', 'upgrade', 'PRO', '₹349', 'Unlimited', 'unlimited']);
+        ['Upgrade', 'upgrade', 'PRO', '₹349', 'higher limits', 'Higher limits']);
     expect(paywallVisible, isTrue,
         reason:
             'PaywallSheet must appear when free user exceeds daily message limit');

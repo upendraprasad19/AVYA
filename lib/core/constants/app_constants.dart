@@ -71,8 +71,16 @@ class AppConstants {
   // ── Free Tier Limits ──────────────────────────────────────
 
   /// Maximum AI coach messages per day for free users.
-  /// Must match FREE_DAILY_LIMIT in ai-proxy Edge Function (10).
-  static const int freeAiMessagesPerDay = 10;
+  /// Must match FREE_CHAT_DAILY_CAP in supabase/functions/_shared/ai_limits.ts
+  /// (re-exported as ai-proxy's FREE_DAILY_LIMIT) AND the free arm of
+  /// `enforce_chat_app_daily_limit` (migration 153): 7. Pinned by
+  /// test/contracts/ai_message_limit_parity_test.dart.
+  static const int freeAiMessagesPerDay = 7;
+
+  /// Maximum AI coach messages per day for PRO users (migration 153: 20).
+  /// Used ONLY to word the PRO "daily limit reached" reply; PRO has no message
+  /// counter in the UI. Must match PRO_CHAT_DAILY_CAP in ai_limits.ts.
+  static const int proAiMessagesPerDay = 20;
 
   /// Free AI food text logs per day.
   static const int freeAiTextLogsPerDay = 10;

@@ -42,6 +42,13 @@ class AiChatResponse {
   /// already cleared.
   final bool hadHardFailure;
 
+  /// Part B — true only when the server's `refund_quota` actually gave this
+  /// turn's daily unit back (a transport-class failure inside the 3/day refund
+  /// budget). A hard failure that was NOT refunded (a content block, the budget
+  /// spent, an older server that omits the field) still spent the unit, so the
+  /// local daily tally must tick for it.
+  final bool refunded;
+
   const AiChatResponse({
     required this.reply,
     required this.modelUsed,
@@ -50,6 +57,7 @@ class AiChatResponse {
     this.toolIntents = const [],
     this.toolCallsLog = const [],
     this.hadHardFailure = false,
+    this.refunded = false,
   });
 }
 
@@ -61,7 +69,7 @@ class AiChatResponse {
 /// Free users: Edge Function `ai-proxy` with 3-tier fallback
 ///   Cerebras Llama 3.1 8B -> Groq Llama 4 -> Gemini 2.0 Flash Lite
 ///
-/// All users: single Edge Function `ai-proxy` (Gemini 2.5 Flash)
+/// All users: single Edge Function `ai-proxy` (Gemini 3.1 Flash Lite)
 ///   Cerebras Llama 3.3 70B (direct)
 class AiService {
   AiService._() {
@@ -340,6 +348,7 @@ class AiService {
       toolIntents: parsedIntents,
       toolCallsLog: parsedCallsLog,
       hadHardFailure: data['had_hard_failure'] as bool? ?? false,
+      refunded: data['refunded'] as bool? ?? false,
     );
   }
 
