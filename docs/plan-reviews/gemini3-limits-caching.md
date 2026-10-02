@@ -5,7 +5,8 @@ blast_radius: platform
 review_rounds: 4
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
+bpass_review: docs/reviews/5329ffacce23-review.md
 ---
 
 # Plan review — Gemini 3.x migration + free/PRO limit reset (`gemini3-limits-caching`)
@@ -29,4 +30,8 @@ Three context-blind Sonnet reviewers ran on the staged Part A diff (R1 `gemini.t
 
 - §4.12.1 says to split a unit when reviews keep surfacing material issues. Rounds 1–3 did. The founder's explicit instruction was ONE branch, which overrides the split; the mitigation is that Part A (the outage fix) is built, reviewed and deployable first, from its own SHA. Round 3's findings were plan-text/ordering, not redesign, and round 4 found no P0/P1.
 - Execution mode: INLINE (coordinator is the single writer; subagents read-only).
-- `bpass` stays `pending` until the whole-branch B-pass (`/code-review`) runs after Part B; it becomes `accepted` only if that review's findings are closed.
+- `bpass` is `accepted` (2026-10-02): Part A's B-pass is `docs/reviews/a5a985e852f1-review.md` (32 findings, all closed); Part B's is `docs/reviews/5329ffacce23-review.md` (28 findings, all fixed or recorded as accepted residue in c4e9b2 / d7a1f5). `bpass_review` names the Part B file; its scope note points at Part A's.
+
+## Part B B-pass (2026-10-01/02, after the migration draft froze, before the apply)
+
+Three context-blind Sonnet reviewers (migration + live SQL scripts / Edge Function refund wiring / client + docs + copy): 28 findings, 0 P0, 3 P1 (SAFETY-class and promptFeedback blocks refundable; the block flag taken from the LAST attempt only; the `pro=%` bool printing `t`/`f`). All closed in the batch; the author re-ran 28 new mutations (all redden after two test gaps were fixed). Migration 153 was applied only after the founder's explicit go (2026-10-02).
