@@ -157,11 +157,87 @@ const DETERMINISTIC_FINISH_REASONS = new Set([
   "PROHIBITED_CONTENT",
   "BLOCKLIST",
   "SPII",
+  // Image-input blocks (scan_meal / cart_auditor): the same image gets the same answer.
+  "IMAGE_SAFETY",
+  "IMAGE_PROHIBITED_CONTENT",
+  "IMAGE_OTHER",
+  "NO_IMAGE",
 ]);
+
+/**
+ * `finishReason`s that a retry MAY fix (so they keep their retry passes) but that the
+ * USER's own request produced, so they must never earn a quota refund: our output cap was
+ * too small for their ask, the language is unsupported, or the model emitted a malformed call.
+ */
+const NON_REFUNDABLE_RETRIABLE_FINISH_REASONS = new Set([
+  "MAX_TOKENS",
+  "LANGUAGE",
+  "MALFORMED_FUNCTION_CALL",
+]);
+
+/**
+ * Classify a 200-OK Gemini body that produced no usable reply. `promptFeedback.blockReason`
+ * (the most common user-input block: HTTP 200, NO `candidates`) is a content block exactly like
+ * a SAFETY finishReason. `deterministic` = a retry/second model gets the same answer (do not
+ * burn passes); `blocked` = never refund (deterministic OR user-caused).
+ */
+export function classifyNoReply(
+  finishReason: string | null | undefined,
+  blockReason?: string | null,
+): { finishReason: string; deterministic: boolean; blocked: boolean } {
+  if (blockReason) {
+    return { finishReason: `blocked:${blockReason}`, deterministic: true, blocked: true };
+  }
+  const fr = finishReason ?? "unknown";
+  const deterministic = DETERMINISTIC_FINISH_REASONS.has(fr);
+  return {
+    finishReason: fr,
+    deterministic,
+    blocked: deterministic || NON_REFUNDABLE_RETRIABLE_FINISH_REASONS.has(fr),
+  };
+}
 
 /** True for the Gemini "model does not exist for this key" shape (HTTP 404). */
 export function isModelUnavailableStatus(status: number | null | undefined): boolean {
   return status === 404;
+}
+
+/**
+ * Part B (gemini3-limits-caching): may a failed Gemini turn give its quota unit
+ * back? ONLY a transport-class failure qualifies, the kind the user cannot cause
+ * and a retry would plausibly fix: no HTTP status (timeout / empty candidate /
+ * network), 404 (model gone for this key), 408/425/429 and 5xx.
+ *
+ * Our own credential failing is ALSO ours, not the user's: 401, 403, and the HTTP 400
+ * Gemini returns for a revoked/invalid key (`API_KEY_INVALID`) refund.
+ *
+ * Never refundable: a content block seen on ANY attempt (`blockSeen`: SAFETY-class
+ * finishReasons incl. image blocks, a `promptFeedback.blockReason`, or a user-caused
+ * MAX_TOKENS / LANGUAGE / MALFORMED_FUNCTION_CALL) even if a later fallback attempt failed
+ * for a transport reason (the fallback must not launder the block); any other 4xx (a
+ * request the caller built); and an UNKNOWN failure (`failure` null/undefined: no
+ * evidence). Pure; the SQL side (`refund_quota`) enforces the latch + budget.
+ */
+export function refundableFailure(
+  failure:
+    | {
+      status?: number | null;
+      message?: string | null;
+      deterministicFailure?: boolean;
+      blockSeen?: boolean;
+    }
+    | null
+    | undefined,
+): boolean {
+  if (!failure) return false;
+  if (failure.deterministicFailure === true || failure.blockSeen === true) return false;
+  const status = failure.status ?? null;
+  if (status === null) return true;
+  if (status === 400) {
+    return /API_KEY_INVALID|API key (not valid|expired)/i.test(failure.message ?? "");
+  }
+  return status === 401 || status === 403 || status === 404 || status === 408 ||
+    status === 425 || status === 429 || status >= 500;
 }
 
 /** Log the cached/thought token counts per call (console only; absent fields = 0). */
@@ -243,6 +319,13 @@ export interface GeminiResult {
    * as `attemptStatuses`.
    */
   deterministicFailure?: boolean;
+  /**
+   * True when ANY attempt (any model, any pass) hit a content block or a user-caused
+   * no-reply (classifyNoReply.blocked). Sticky, unlike `deterministicFailure` (which is the LAST
+   * failure's): the refund decision must not let a transport failure on the fallback launder a
+   * block on the primary.
+   */
+  blockSeen?: boolean;
 }
 
 /**
@@ -300,6 +383,7 @@ export async function geminiChat(options: GeminiOptions): Promise<GeminiResult> 
   const retryDeadlineMs = 20_000;
   let lastFailure: GeminiResult | null = null;
   const attemptStatuses: GeminiAttemptStatus[] = [];
+  let blockSeen = false;
   for (let pass = 0; pass <= retries; pass++) {
     // Retry only if SOME attempt this pass failed transiently (no HTTP status =
     // timeout/empty/transport, 429, 5xx). A pass whose every failure was a
@@ -332,6 +416,7 @@ export async function geminiChat(options: GeminiOptions): Promise<GeminiResult> 
         return result;
       }
       lastFailure = result;
+      if (result.blockSeen === true) blockSeen = true;
       const status = result.lastError?.status ?? null;
       attemptStatuses.push({ model: attemptModel, status });
       if (isModelUnavailableStatus(status)) {
@@ -375,6 +460,7 @@ export async function geminiChat(options: GeminiOptions): Promise<GeminiResult> 
     lastError: lastFailure?.lastError ?? null,
     attemptStatuses,
     deterministicFailure: lastFailure?.deterministicFailure ?? false,
+    blockSeen,
   };
 }
 
@@ -480,7 +566,8 @@ async function _callOnce(opts: {
 
     // Safety-filter blocks or missing candidate: treat as failure.
     if (!candidate || !candidate.content?.parts) {
-      const finishReason = candidate?.finishReason ?? "unknown";
+      const cls = classifyNoReply(candidate?.finishReason, data.promptFeedback?.blockReason);
+      const finishReason = cls.finishReason;
       console.warn(
         `[geminiChat] ${opts.model} no candidate (finishReason=${finishReason})`,
       );
@@ -489,7 +576,8 @@ async function _callOnce(opts: {
         modelUsed: null,
         tokensUsed: 0,
         lastError: { status: null, message: `no candidate (finishReason=${finishReason})` },
-        deterministicFailure: DETERMINISTIC_FINISH_REASONS.has(finishReason),
+        deterministicFailure: cls.deterministic,
+        blockSeen: cls.blocked,
       };
     }
 
@@ -500,11 +588,15 @@ async function _callOnce(opts: {
       .trim();
 
     if (!text) {
+      // An empty candidate can still carry a block finishReason (SAFETY with `parts: []`).
+      const cls = classifyNoReply(candidate.finishReason, data.promptFeedback?.blockReason);
       return {
         content: null,
         modelUsed: null,
         tokensUsed: 0,
         lastError: { status: null, message: "empty text in candidate" },
+        deterministicFailure: cls.deterministic,
+        blockSeen: cls.blocked,
       };
     }
 
@@ -751,6 +843,8 @@ export async function geminiChatWithTools(
   let lastError: unknown = null;
   let lastReason = "";
   let lastStatus: number | null = null;
+  let lastDeterministic = false;
+  let blockSeen = false;
   const attemptStatuses: GeminiAttemptStatus[] = [];
   // Once an attempt 400s on a missing thought signature we replay the dummy-filled
   // history for every LATER attempt/pass of this call too (re-sending the raw
@@ -813,6 +907,8 @@ export async function geminiChatWithTools(
       lastError = result.error;
       lastReason = result.reason;
       lastStatus = result.status ?? null;
+      lastDeterministic = result.deterministic === true;
+      if (result.blocked === true) blockSeen = true;
       attemptStatuses.push({ model: attemptModel, status: lastStatus });
       if (isModelUnavailableStatus(lastStatus)) {
         // Retired / unknown model: prune it for the rest of THIS call.
@@ -864,6 +960,8 @@ export async function geminiChatWithTools(
     status: lastStatus,
     geminiMessage: lastReason,
     attemptStatuses,
+    deterministicFailure: lastDeterministic,
+    blockSeen,
   });
   throw exhaustionError;
 }
@@ -896,6 +994,11 @@ type CallOnceResult =
     // signature. Computed BEFORE the 200-char preview cut so a long tool name
     // cannot push the token past it.
     signatureMissing?: boolean;
+    // True when the failure is a deterministic content block (SAFETY etc.):
+    // carried onto the thrown exhaustion error for refundableFailure().
+    deterministic?: boolean;
+    // True for a content block OR a user-caused no-reply (see classifyNoReply): never refund.
+    blocked?: boolean;
   };
 
 // ── Private: single HTTP call to Gemini with tool config. ──────────
@@ -978,12 +1081,13 @@ async function _callOnceWithTools(
       // help (matches the existing fallback intent). A hard content block
       // (SAFETY / RECITATION / PROHIBITED_CONTENT) is deterministic, so don't
       // burn extra passes on it.
-      const finishReason = candidate?.finishReason ?? "unknown";
-      const deterministicBlock = DETERMINISTIC_FINISH_REASONS.has(finishReason);
+      const cls = classifyNoReply(candidate?.finishReason, data.promptFeedback?.blockReason);
       return {
         ok: false,
-        reason: `no candidate (finishReason=${finishReason})`,
-        retriable: !deterministicBlock,
+        reason: `no candidate (finishReason=${cls.finishReason})`,
+        retriable: !cls.deterministic,
+        deterministic: cls.deterministic,
+        blocked: cls.blocked,
       };
     }
 
@@ -1036,16 +1140,26 @@ async function _callOnceWithTools(
     // so the caller's fallback can fire. This matches geminiChat()'s
     // empty-text behaviour.
     if (parts.length === 0) {
-      return { ok: false, reason: "empty parts array", retriable: true };
+      const cls = classifyNoReply(candidate.finishReason, data.promptFeedback?.blockReason);
+      return {
+        ok: false,
+        reason: "empty parts array",
+        retriable: !cls.deterministic,
+        deterministic: cls.deterministic,
+        blocked: cls.blocked,
+      };
     }
     // Judge the JOINED, trimmed text: Gemini 3 can send an empty-text part that
     // only carries a signature, which must not pass as a terminal reply
     // (geminiChat already treats `!text` as a failure; the two paths must agree).
     if (functionCalls.length === 0 && textBuffer.join("").trim() === "") {
+      const cls = classifyNoReply(candidate.finishReason, data.promptFeedback?.blockReason);
       return {
         ok: false,
         reason: "no text and no function calls",
-        retriable: true,
+        retriable: !cls.deterministic,
+        deterministic: cls.deterministic,
+        blocked: cls.blocked,
       };
     }
 

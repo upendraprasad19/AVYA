@@ -97,7 +97,7 @@ that still calls an LLM (6, as of the same batch).
 |---|---|---|
 | `ai-proxy` (chat + food text + prediction) | `gemini-3.1-flash-lite` | Free + PRO coach, food text analysis, prediction card |
 | `ai-proxy` (scan_meal, cart_auditor) | `gemini-3.1-flash-lite` | Vision: nutrition JSON from photos |
-| `ai-media-proxy` | `gemini-3.1-flash-lite` | Photo-upload chat — 5 free LIFETIME image reads (`usage_counters` key `free_image_analysis`), then PRO; PRO is capped **50 images / 10 videos per IST day** (keys `pro_image_daily` / `pro_video_daily`, OI-153, 2026-09-12) via ONE atomic `consume_quota` after the Storage fetch and before Gemini; a reached cap is an HTTP 200 `gated: true` coach reply (`gate_reason: pro_image_daily_limit_reached` / `pro_video_daily_limit_reached`, `resets_at` = next IST midnight), never the paywall and never a 429. Fails CLOSED on a ledger error (`pro_quota_unavailable`) or a tier-read error (`tier_unavailable`). Video has no client picker today — the cap protects the API surface |
+| `ai-media-proxy` | `gemini-3.1-flash-lite` | Photo-upload chat — 5 free LIFETIME image reads (`usage_counters` key `free_image_analysis`), then PRO; PRO is capped **10 images / 5 videos per IST day** (lowered from 50/10 by Part B, 2026-10-01) (keys `pro_image_daily` / `pro_video_daily`, OI-153, 2026-09-12) via ONE atomic `consume_quota` after the Storage fetch and before Gemini; a reached cap is an HTTP 200 `gated: true` coach reply (`gate_reason: pro_image_daily_limit_reached` / `pro_video_daily_limit_reached`, `resets_at` = next IST midnight), never the paywall and never a 429. Fails CLOSED on a ledger error (`pro_quota_unavailable`) or a tier-read error (`tier_unavailable`). Video has no client picker today — the cap protects the API surface |
 | `assess-body-composition` | `gemini-3.1-flash-lite` | Body-fat % from photo |
 | `daily-snapshot` (coaching notes) | `gemini-3.1-flash-lite` | Extract facts from daily conversations |
 | `rolling-context` | `gemini-3.1-flash-lite` | Nightly conversation summary |
@@ -120,9 +120,9 @@ that still calls an LLM (6, as of the same batch).
 Client (free + PRO) → ai-proxy (Gemini 3.1 Flash Lite)
   JWT → auth.getUser(token)
   isPro = SELECT 1 FROM subscriptions WHERE user_id AND active AND end_date > now()
-  If !isPro: enforce 10/day cap via ai_coach_interactions (FOREVER — no trial
-  window; OQ-1 removed it. ai-proxy/index.ts:71 FREE_DAILY_LIMIT = 10.)
-  If  isPro: no cap, no trial
+  Chat cap (both tiers) via the insert-first reservation row + trigger `enforce_chat_app_daily_limit`
+  (migration 153): free 7/day FOREVER (no trial; OQ-1), PRO 20/day. Numbers: _shared/ai_limits.ts.
+  A transport-failed turn calls refund_quota (3 refunds/IST day) and gets its unit back.
   ← Response + model_used + tokens_used
 ```
 The old separate `ai-proxy-pro` function returns **410 Gone** for any orphan clients still calling it.
@@ -158,16 +158,16 @@ Input $0.075/M · output $0.30/M for Flash; $1.25/M · $10/M for Pro; Flash-Lite
 - **Never use "restart the app" copy.** It doesn't fix any of these root causes.
 
 ## Edge Function Auth
-- `ai-proxy`: `verify_jwt: false` (Supabase gateway bug). Manual JWT validation via `auth.getUser()` + server-side `isPro` check for unlimited tier.
+- `ai-proxy`: `verify_jwt: false` (Supabase gateway bug). Manual JWT validation via `auth.getUser()` + server-side `isPro` check for the PRO chat cap (20/day vs free 7/day; `_shared/ai_limits.ts`).
 - `ai-media-proxy`: `verify_jwt: true` + manual JWT + PRO subscription check.
 - `validate-promo`: `verify_jwt: true` + manual JWT validation (prevents unauthenticated promo enumeration).
 - `future-prediction`: `verify_jwt: true` + manual JWT validation.
 
 ## Vision Features (ai-proxy — Gemini 3.1 Flash Lite)
 - `food_text_analysis`: Text → nutrition JSON. **Rate limited: 10/day free, 200/day PRO** (client enforces 10 via `AppConstants.freeAiTextLogsPerDay`; the trigger is the authoritative backstop and must agree — b8f4c2). Counted via `ai_coach_interactions` rows with `channel='food_text_analysis'`.
-- `scan_meal`: Photo → nutrition JSON. Client: 3 free / 10 PRO per day. Server: 20/day combined abuse cap (raised from 15, 2026-07-29 usage-counter-race batch, to cover PRO's full documented 10+10 combined allowance).
-- `cart_auditor`: Grocery screenshot → health audit JSON (items, health_score, suggestions). Client: 1 free / 10 PRO per day. Server: 20/day combined abuse cap (same shared budget as scan_meal).
-- Server-side rate limit: scan_meal + cart_auditor combined counted via `ai_coach_interactions` rows with `channel IN ('scan_meal', 'cart_auditor')`. Client-side limits handle exact free/PRO tiers.
+- `scan_meal`: Photo → nutrition JSON. Client: 3 free / 10 PRO per day. Server: shared `vision_analysis` cap, free 4 / PRO 20 per day (migration 153, 2026-10-01; flat 20 from 132 until then), combined with `cart_auditor`.
+- `cart_auditor`: Grocery screenshot → health audit JSON (items, health_score, suggestions). Client: 1 free / 10 PRO per day. Server: the same shared cap as scan_meal (free 4 / PRO 20 per day).
+- Server-side rate limit: scan_meal + cart_auditor combined counted via `ai_coach_interactions` rows with `channel IN ('scan_meal', 'cart_auditor')`. The trigger is tier-aware (free 4 / PRO 20); client-side per-feature limits (free 3+1, PRO 10+10) fit under it. A transport-failed turn gives its unit back through `refund_quota` (3/IST day).
 
 ## Edge Function Error Sanitization (ALL functions)
 - **Never leak raw exceptions, stack traces, or database error strings to the client.** Every Edge Function catch block follows this shape:

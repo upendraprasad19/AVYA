@@ -184,14 +184,23 @@ void main() {
       }
     });
 
-    test('chat exempts PRO before it consumes anything', () {
+    test('chat charges PRO too and counts only the reservation row (migration 153)', () {
+      // Migration 129 returned BEFORE consuming for PRO (a frozen ledger). Part B
+      // (migration 153, founder 2026-10-01) caps PRO at 20/day, so the early
+      // return is GONE; and ai-media-proxy's PRO media rows share channel 'app'
+      // with a real model label, so only the `pending` reservation may consume.
       final block = blocks['enforce_chat_app_daily_limit']!;
-      final proReturn = block.indexOf('IF is_pro THEN');
+      expect(block.contains('IF is_pro THEN'), isFalse,
+          reason: 'the PRO early return is back — PRO would be uncapped again');
+      // The WHOLE guard is pinned (channel <> app OR model_used <> pending): the OR is
+      // the load-bearing connective, an AND would let a PRO media row consume a unit.
+      final reservationGuard = block.indexOf(
+          RegExp(r"NEW\.channel\s+IS\s+DISTINCT\s+FROM\s+'app'\s+OR\s+NEW\.model_used\s+IS\s+DISTINCT\s+FROM\s+'pending'"));
       final consume = block.indexOf('consume_quota');
-      expect(proReturn, greaterThanOrEqualTo(0));
-      expect(consume, greaterThan(proReturn),
-          reason: 'PRO must return before consuming — a PRO user has no cap '
-              'and must not burn a ledger unit');
+      expect(reservationGuard, greaterThanOrEqualTo(0),
+          reason: 'no model_used = pending guard: PRO media rows would burn chat units');
+      expect(consume, greaterThan(reservationGuard),
+          reason: 'consume_quota runs before the reservation-only guard');
     });
 
     test('the current IST window is backfilled before the triggers switch', () {

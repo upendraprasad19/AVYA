@@ -15,13 +15,13 @@ Personalised fitness and nutrition platform for young professionals (22-35) in I
 - Cart Auditor (grocery screenshot health audit) — 15 scans/day
 - Weight, body measurements, streak, water tracking
 - Steps + sleep sync via Google Fit / Health Connect / Samsung Health
-- AI Coach — 10 messages/day forever (no time-limited trial — see CLAUDE.md §3 OQ-1)
+- AI Coach — 7 messages/day forever (no time-limited trial — see CLAUDE.md §3 OQ-1)
 - Workout Receipt PNG shareable card after every completed workout
 - Weekly nutrition report — first report free
 
 ### PRO
 - Auto-generate new plans after Week 4 (phases 2–12)
-- Unlimited AI Coach (same Gemini 3.1 Flash Lite backend, server-side `isPro` gate removes daily cap)
+- Dedicated AI coaching with higher daily limits (same Gemini 3.1 Flash Lite backend; 20 messages/day, server-side `isPro` gate)
 - Reasoning tab — deeper coaching via the thinking-on weekly report
 - Scan meal — 50 scans/day; Cart Auditor — 50 scans/day
 - Progress photos (full timeline)
@@ -42,7 +42,7 @@ Personalised fitness and nutrition platform for young professionals (22-35) in I
 | Auth | Supabase Auth (Email + Google OAuth + Phone OTP) |
 | Database | Supabase Postgres (**46 tables** — see [`docs/architecture/database.md`](docs/architecture/database.md) for the canonical schema) |
 | Storage | Supabase Storage (exercise images, progress photos PRO) |
-| AI (all tiers) | Single Edge Function `ai-proxy` → Google Gemini 3.1 Flash Lite. Server-side PRO gate (no daily cap for PRO; 10/day chat for free). |
+| AI (all tiers) | Single Edge Function `ai-proxy` → Google Gemini 3.1 Flash Lite. Server-side PRO gate (chat 20/day for PRO; 7/day for free). |
 | Food AI | Gemini 3.1 Flash Lite (text analysis, scan meal, cart auditor) |
 | Weekly AI Report | Gemini 3.1 Flash Lite, thinking on (PRO-only) |
 | Plan Generator | Local Dart engine (queries Hive `exerciseBox`, zero API cost) |

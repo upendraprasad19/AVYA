@@ -15,6 +15,7 @@ import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
+import '../copy/coach_replies.dart';
 import '../repositories/ai_coach_repository.dart';
 import '../repositories/coach_interaction_repository.dart';
 import 'pending_tool_intents_provider.dart';
@@ -549,9 +550,9 @@ class MessageLimitNotifier extends Notifier<int> {
   /// class's own `_locks` doc comment) that this specific same-device
   /// interleaving is structurally impossible under Dart's single-threaded
   /// event loop + Hive's synchronous-in-memory `Box.put()` — kept as
-  /// defense-in-depth, not a reproducible-bug fix. Chat's real 10/day
-  /// free-tier cap is enforced server-side regardless, by
-  /// `trg_chat_app_rate_limit` (migration 111).
+  /// defense-in-depth, not a reproducible-bug fix. Chat's real daily
+  /// cap (free 7 / PRO 20) is enforced server-side regardless, by
+  /// `trg_chat_app_rate_limit` (migration 153).
   Completer<void>? _lock;
 
   @override
@@ -643,7 +644,6 @@ class SendMessageNotifier extends Notifier<bool> {
     if (state) return; // Already sending
 
     final chatNotifier = ref.read(chatHistoryProvider.notifier);
-    final limitNotifier = ref.read(messageLimitProvider.notifier);
     final repo = AiCoachRepository.instance;
     final captionForLog = message.isEmpty ? 'Analyse this photo' : message;
 
@@ -708,6 +708,7 @@ class SendMessageNotifier extends Notifier<bool> {
         aiResponse: aiResponse.reply,
         modelUsed: aiResponse.modelUsed,
         hadHardFailure: aiResponse.hadHardFailure,
+        refunded: aiResponse.refunded,
       );
 
       // Unit 8 — analysis just completed; flip the LIVE user photo bubble
@@ -724,7 +725,9 @@ class SendMessageNotifier extends Notifier<bool> {
 
       await repo.extractCoachingNotes();
       ref.invalidate(coachInsightProvider);
-      limitNotifier.increment();
+      // Part B: a media turn runs through ai-media-proxy, which spends no CHAT
+      // unit (free: the 5-lifetime image meter; PRO: the media caps), so it must
+      // not tick the local chat tally either (no message-limit notifier here).
 
       if (aiResponse.actions.isNotEmpty) {
         ref.read(pendingLogActionsProvider.notifier).addActions(
@@ -934,8 +937,8 @@ class SendMessageNotifier extends Notifier<bool> {
       final context = repo.enrichContextForQuery(message, baseContext);
 
       // Single Gemini-backed endpoint (ai-proxy) handles both free + PRO
-      // 2026-04-18 onward. Free/PRO differentiation is the 10/day server-side
-      // cap (FREE_DAILY_LIMIT, no trial) — the client no longer picks a backend.
+      // 2026-04-18 onward. Free/PRO differentiation is the server-side daily
+      // cap (free 7 / PRO 20, `_shared/ai_limits.ts`; no trial) — the client no longer picks a backend.
       final aiResponse = await ref
           .read(aiServiceProvider)
           .chat(message, context, history: coachHistory);
@@ -959,13 +962,16 @@ class SendMessageNotifier extends Notifier<bool> {
         aiResponse: aiResponse.reply,
         modelUsed: aiResponse.modelUsed,
         hadHardFailure: aiResponse.hadHardFailure,
+        refunded: aiResponse.refunded,
       );
 
       // Extract coaching notes after every AI response
       await repo.extractCoachingNotes();
       ref.invalidate(coachInsightProvider);
 
-      limitNotifier.increment();
+      // Part B: tick unless the SERVER refunded this turn (`refunded`, not
+      // `hadHardFailure`: a content-blocked apology DID spend the unit).
+      if (!aiResponse.refunded) limitNotifier.increment();
 
       // Dispatch any structured log actions from AI response
       if (aiResponse.actions.isNotEmpty) {
@@ -1034,10 +1040,11 @@ class SendMessageNotifier extends Notifier<bool> {
             aiResponse: retryResponse.reply,
             modelUsed: retryResponse.modelUsed,
             hadHardFailure: retryResponse.hadHardFailure,
+            refunded: retryResponse.refunded,
           );
           await repo.extractCoachingNotes();
           ref.invalidate(coachInsightProvider);
-          limitNotifier.increment();
+          if (!retryResponse.refunded) limitNotifier.increment();
           if (retryResponse.actions.isNotEmpty) {
             ref.read(pendingLogActionsProvider.notifier).addActions(
                   retryResponse.actions,
@@ -1076,7 +1083,9 @@ class SendMessageNotifier extends Notifier<bool> {
       } else if (errStr.contains('User not found') || errStr.contains('status 404')) {
         errorMsg = 'Account not synced with server. Please sign out and sign in again to fix this.';
       } else if (errStr.contains('RATE_LIMITED')) {
-        errorMsg = 'Daily message limit reached (${AppConstants.freeAiMessagesPerDay}/day on free plan). Try again tomorrow or upgrade to PRO.';
+        // Part B: tier-aware. The 429 body carries `tier` + `limit` (ai-proxy);
+        // free gets the upgrade nudge, PRO gets the plain reset time.
+        errorMsg = CoachReplies.chatRateLimitedFromError(errStr, isPro: isPro);
       } else if (errStr.contains('Message too long')) {
         errorMsg = 'Your message is too long (max 5000 chars). Please shorten it and try again.';
       } else if (errStr.contains('Snapshot too large')) {

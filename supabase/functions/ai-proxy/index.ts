@@ -6,7 +6,7 @@
  *   OpenRouter Gemma cascade + Gemini vision fallback) down to a
  *   single Google Gemini provider. Also merged the separate
  *   `ai-proxy-pro` endpoint into this one — the PRO branch used to
- *   require a distinct function for unlimited chat, but since both
+ *   require a distinct function for higher-limit chat, but since both
  *   paths now target the same provider, a single function with an
  *   `isPro` gate is simpler.
  *
@@ -14,16 +14,16 @@
  *   (Model = MODEL_FLASH / MODEL_FLASH_LITE in _shared/gemini.ts — gemini-3.1-flash-lite
  *    for every tier since 2026-10-01; second attempt MODEL_FALLBACK gemini-3.5-flash-lite.)
  *   food_text_analysis  → MODEL_FLASH, JSON mode, 10/day free · 200/day PRO
- *   scan_meal           → MODEL_FLASH_LITE (vision), JSON mode, 20/day server cap (combined w/ cart_auditor)
- *   cart_auditor        → MODEL_FLASH_LITE (vision), JSON mode, 20/day server cap (combined w/ scan_meal)
+ *   scan_meal           → MODEL_FLASH_LITE (vision), JSON mode, free 4 / PRO 20 per day (combined w/ cart_auditor)
+ *   cart_auditor        → MODEL_FLASH_LITE (vision), JSON mode, free 4 / PRO 20 per day (combined w/ scan_meal)
  *   prediction          → MODEL_FLASH, JSON mode, 3/day per user (usage_counters
  *                         key prediction_daily; _shared/prediction_handler.ts)
- *   (default)           → MODEL_FLASH, chat — 10/day free forever, PRO unlimited
+ *   (default)           → MODEL_FLASH, chat — free 7/day forever, PRO 20/day (_shared/ai_limits.ts)
  *
  * Gating (server-side, never trust client):
  *   isPro = SELECT 1 FROM subscriptions WHERE user_id AND status='active' AND end_date > now()
- *   Free-tier chat: 10/day in `ai_coach_interactions` (channel='app') — forever, no trial
- *   PRO: no daily cap
+ *   Chat cap: free 7/day forever (no trial), PRO 20/day — `trg_chat_app_rate_limit`
+ *   (migration 153) counts only this function's `pending` reservation rows
  *
  * Auth: verify_jwt is DISABLED on this function's gateway config because
  * of the Supabase middleware bug that 401's valid JWTs. We validate the
@@ -43,6 +43,10 @@ import {
   MODEL_FLASH,
   MODEL_FLASH_LITE,
 } from "../_shared/gemini.ts";
+import {
+  refundableGeminiChatFailure,
+  refundReservation,
+} from "../_shared/quota_refund.ts";
 import { rowModelLabel } from "../_shared/row_model_label.ts";
 import {
   fetchCoachMemory,
@@ -65,6 +69,12 @@ import { reportGeminiExhaustion } from "../_shared/gemini_failure_alert.ts";
 import { validateAiProxyInput } from "../_shared/ai_proxy_input_limits.ts";
 import { dedupDecision } from "../_shared/chat_dedup.ts";
 import {
+  type AiTier,
+  chatCapFor,
+  FREE_VISION_DAILY_CAP,
+  PRO_VISION_DAILY_CAP,
+} from "../_shared/ai_limits.ts";
+import {
   consumePredictionQuota,
   handlePrediction,
 } from "../_shared/prediction_handler.ts";
@@ -79,9 +89,10 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-// OQ-1 decision: free users get 10 messages/day forever (no time-limited trial).
-// Captain Manual reflects this. Never re-introduce a trial window without an OQ change.
-const FREE_DAILY_LIMIT = 10;
+// OQ-1 decision: free users get a daily chat cap forever (no time-limited trial).
+// The number lives in _shared/ai_limits.ts (FREE_CHAT_DAILY_CAP = 7, PRO 20) and is
+// pinned to the trigger literals + AppConstants by test/contracts/ai_message_limit_parity_test.dart.
+// Captain Manual reflects it. Never re-introduce a trial window without an OQ change.
 
 // Food-text analysis daily caps — DISPLAY ONLY. The Postgres trigger
 // `enforce_food_text_daily_limit` is the enforcement; these exist purely to
@@ -92,8 +103,8 @@ const FREE_DAILY_LIMIT = 10;
 // live trigger. It was an inline `isProUser ? 200 : 50` literal until b8f4c2 —
 // which kept reporting 50 after migration 127 lowered the real cap to 10.
 // Named + pinned by test/contracts/food_text_analysis_daily_cap_writer_to_reader_test.dart
-// so the three can no longer drift apart silently, the way FREE_DAILY_LIMIT
-// above is pinned by ai_message_limit_parity_test.dart (f1a70c).
+// so the three can no longer drift apart silently, the way the chat caps
+// in _shared/ai_limits.ts are pinned by ai_message_limit_parity_test.dart (f1a70c).
 const FOOD_TEXT_FREE_DAILY_CAP = 10;
 const FOOD_TEXT_PRO_DAILY_CAP = 200;
 
@@ -121,7 +132,7 @@ export const MODEL_USED_LOOP_THREW_SENTINEL = "failed";
 /**
  * Check if a user holds an active PRO subscription. Returns false on any
  * error (fail closed — cheaper to incorrectly gate a PRO user than to
- * leak unlimited chat to a free user).
+ * leak PRO-only features to a free user).
  */
 // audit-2026-09-02 CODE-6 — two defects fixed below, NEITHER of which changes
 // the deliberate fail-closed contract documented above:
@@ -276,12 +287,20 @@ serve(async (req: Request) => {
   }
   if (req.method !== "POST") return err(405, "Method not allowed");
 
+  // Part B: the reservation this request holds, hoisted so the OUTER catch can
+  // give the unit back when something throws between the reserve and the
+  // resolve (the refund_quota latch makes a call on an already-resolved row a
+  // no-op). `outerSb` is the same service-role client, hoisted for that catch.
+  let outerSb: SupabaseClient | undefined;
+  let openReservation: { id: string; tag: string } | undefined;
+
   try {
     // ── JWT ──
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) return err(401, "Missing authorization header");
 
     const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    outerSb = supabaseClient;
     const token = authHeader.replace("Bearer ", "");
     const { data: { user: authUser }, error: authError } =
       await supabaseClient.auth.getUser(token);
@@ -369,6 +388,10 @@ serve(async (req: Request) => {
 
       let reservation: { id: string } | null = null;
       let insertErr: { message?: string } | null = null;
+      // A dedup hit reuses ANOTHER request's pending row: this request consumed no
+      // unit of its own, so it must never refund one (the first request owns the
+      // row's unit and its latch; a second refund would hand out a free reply).
+      let reservationReused = false;
 
       if (existingPending?.id) {
         // Refresh the slot's created_at so the next call's dedup window
@@ -383,6 +406,7 @@ serve(async (req: Request) => {
         reservation = refreshed.data;
         insertErr = refreshed.error as { message?: string } | null;
         if (!insertErr) {
+          reservationReused = true;
           console.log(
             `[ai-proxy.food] dedup hit — reusing pending row ${existingPending.id} for user ${userId}`,
           );
@@ -421,6 +445,7 @@ serve(async (req: Request) => {
       }
 
       const reservationId = reservation?.id as string | undefined;
+      if (reservationId && !reservationReused) openReservation = { id: reservationId, tag: "food" };
 
       // OI-47: `text` was interpolated RAW inside double quotes. Two levers,
       // not one -- a newline breaks the line, and a plain `"` closes the quoted
@@ -444,7 +469,7 @@ Analyse this as a meal and return ONLY a JSON object (no markdown, no code block
 Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the exact quantity mentioned. One item per distinct food. All values (protein, carbs, fat, fiber) are in grams — numbers only, no "g" suffix. Fiber must reflect actual dietary fiber content. If quantity is unclear, assume a typical single serving for an Indian adult. Return ONLY the JSON object, nothing else.`;
 
       // Step 2 — call Gemini on the valid reservation.
-      const { content, modelUsed, tokensUsed, lastError, attemptStatuses } = await geminiChat({
+      const { content, modelUsed, tokensUsed, lastError, attemptStatuses, deterministicFailure, blockSeen } = await geminiChat({
         model: MODEL_FLASH,
         systemPrompt: "You are a nutritionist. Return ONLY valid JSON, no markdown.",
         userPrompt: asAuthoredPrompt(prompt),
@@ -493,7 +518,12 @@ Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the ex
       };
 
       if (!content) {
-        // Gemini failed — close the placeholder so it doesn't orphan.
+        // Gemini failed — close the placeholder so it doesn't orphan. A
+        // transport-class failure gives the unit back FIRST (the refund latch
+        // needs the row still pending); a SAFETY-style block does not.
+        if (!reservationReused && refundableGeminiChatFailure({ lastError, deterministicFailure, blockSeen })) {
+          await refundReservation(supabaseClient, reservationId, "failed_gemini", "food");
+        }
         await resolvePlaceholder(
           "failed_gemini",
           JSON.stringify({ error: "Gemini returned no content" }),
@@ -534,7 +564,7 @@ Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the ex
       }
     }
 
-    // ── Vision abuse cap (scan_meal + cart_auditor: 20/day per user) ─────
+    // ── Vision abuse cap (scan_meal + cart_auditor: free 4 / PRO 20 per day, shared) ─────
     //
     // OI-46 (2026-07-29) — was a check-then-insert TOCTOU: the SELECT
     // count() below ran, then Gemini was called, then the interaction
@@ -599,13 +629,25 @@ Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the ex
       if (visionReserved.error) {
         const msg = String((visionReserved.error as { message?: string })?.message ?? "");
         if (msg.includes("vision_analysis_daily_limit_reached")) {
-          return err(429, "Daily vision analysis limit reached. Try again tomorrow.");
+          // Tier from the SAME evaluation that refused (`pro=true|false`, tolerant of the
+          // Postgres bool short form `t`); a message without either re-reads the tier.
+          const visionPro = /pro=(true|t)\b/.test(msg)
+            ? true
+            : /pro=(false|f)\b/.test(msg)
+            ? false
+            : await checkPro(supabaseClient, userId);
+          return err(429, "Daily vision analysis limit reached. Try again tomorrow.", {
+            code: "RATE_LIMITED",
+            tier: visionPro ? "pro" : "free",
+            limit: visionPro ? PRO_VISION_DAILY_CAP : FREE_VISION_DAILY_CAP,
+          });
         }
         console.error("[ai-proxy.vision] reservation insert failed:", visionReserved.error);
         return err(500, "Vision analysis unavailable");
       }
 
       visionReservationId = visionReserved.data?.id as string | undefined;
+      if (visionReservationId) openReservation = { id: visionReservationId, tag: "vision" };
     }
 
     // OI-46 round-1 review — mirrors food_text_analysis's resolvePlaceholder
@@ -645,7 +687,7 @@ Rules: Use ACCURATE nutrition values based on standard USDA/ICMR data for the ex
 {"meal_name":"short name describing the meal","items":[{"name":"food item name","quantity":"estimated quantity e.g. 1 bowl, 2 rotis, 100g","calories":120,"protein":25,"carbs":3,"fat":2,"fiber":4}]}
 Rules: identify every distinct food item, estimate realistic portion sizes for an Indian adult, use ACCURATE USDA/ICMR nutrition values, all macro values are numbers in grams no g suffix, fiber must reflect actual dietary fiber never return 0 for high-fiber foods, return ONLY the JSON object nothing else`;
 
-      const { content, modelUsed, tokensUsed, lastError, attemptStatuses } = await geminiChat({
+      const { content, modelUsed, tokensUsed, lastError, attemptStatuses, deterministicFailure, blockSeen } = await geminiChat({
         model: MODEL_FLASH_LITE,
         systemPrompt: "You are a nutritionist. Return ONLY valid JSON, no markdown.",
         userPrompt: asAuthoredPrompt(scanPrompt),
@@ -659,6 +701,9 @@ Rules: identify every distinct food item, estimate realistic portion sizes for a
       });
 
       if (!content) {
+        if (refundableGeminiChatFailure({ lastError, deterministicFailure, blockSeen })) {
+          await refundReservation(supabaseClient, visionReservationId, "failed_gemini", "vision");
+        }
         await resolveVisionPlaceholder("failed_gemini", JSON.stringify({ error: "Gemini returned no content" }), 0);
         await reportGeminiExhaustion(supabaseClient, "ai_proxy_gemini_exhausted", lastError ?? null, "scan_meal", undefined, attemptStatuses);
         return err(502, "Image analysis failed");
@@ -688,7 +733,7 @@ Rules: identify every distinct food item, estimate realistic portion sizes for a
 {"items":[{"name":"product name","category":"e.g. dairy, snack, staple, beverage, protein","quantity":"e.g. 1 pack, 500g, 1L","calories_per_serving":120,"protein_per_serving":5,"carbs_per_serving":20,"fat_per_serving":3,"is_healthy":true,"concern":"brief note if unhealthy e.g. high sugar, ultra-processed"}],"summary":{"total_items":5,"healthy_count":3,"unhealthy_count":2,"total_estimated_calories":1500,"total_estimated_protein":45,"health_score":65,"top_suggestion":"Replace Maggi with whole wheat pasta for more fiber and protein"}}
 Rules: identify every distinct food product, use ACCURATE nutrition values from standard USDA/FSSAI data, is_healthy=false for ultra-processed/high-sugar/high-sodium items, health_score is 0-100, provide actionable suggestions for healthier alternatives, return ONLY the JSON object nothing else`;
 
-      const { content, modelUsed, tokensUsed, lastError, attemptStatuses } = await geminiChat({
+      const { content, modelUsed, tokensUsed, lastError, attemptStatuses, deterministicFailure, blockSeen } = await geminiChat({
         model: MODEL_FLASH_LITE,
         systemPrompt: "You are a nutrition expert. Return ONLY valid JSON, no markdown.",
         userPrompt: asAuthoredPrompt(cartPrompt),
@@ -702,6 +747,9 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
       });
 
       if (!content) {
+        if (refundableGeminiChatFailure({ lastError, deterministicFailure, blockSeen })) {
+          await refundReservation(supabaseClient, visionReservationId, "failed_gemini", "vision");
+        }
         await resolveVisionPlaceholder("failed_gemini", JSON.stringify({ error: "Gemini returned no content" }), 0);
         await reportGeminiExhaustion(supabaseClient, "ai_proxy_gemini_exhausted", lastError ?? null, "cart_auditor", undefined, attemptStatuses);
         return err(502, "Cart analysis failed");
@@ -756,7 +804,7 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
     }
     // message (5000) and snapshot_json (10000) sizes: validateAiProxyInput above.
 
-    // ── isPro gate: PRO → no daily cap. Free → 10 msg/day forever (OQ-1). ──
+    // ── isPro gate: chat cap is tier-aware (free 7 / PRO 20), enforced by the trigger. ──
     const isProUser = await checkPro(supabaseClient, userId);
 
     // ── Deduplication: return cached response for same user+message in last 30s ──
@@ -842,15 +890,28 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
     if (chatReservation.error) {
       const msg = String((chatReservation.error as { message?: string })?.message ?? "");
       if (msg.includes("chat_app_daily_limit_reached")) {
+        // The trigger's message carries `pro=true|false` (migration 153): read the
+        // tier from the SAME evaluation that refused, falling back to the tier
+        // this request already resolved. `limit` is the cap for that tier; the
+        // client words PRO (no upsell, resets midnight IST) and free (upgrade) copy from it.
+        const refusedTier: AiTier = /pro=(true|t)\b/.test(msg)
+          ? "pro"
+          : /pro=(false|f)\b/.test(msg)
+          ? "free"
+          : isProUser
+          ? "pro"
+          : "free";
         return err(429, "Daily message limit reached", {
           code: "RATE_LIMITED",
-          limit: FREE_DAILY_LIMIT,
+          tier: refusedTier,
+          limit: chatCapFor(refusedTier),
         });
       }
       console.error("[ai-proxy.chat] reservation insert failed:", chatReservation.error);
       return err(500, "Failed to check rate limit");
     }
     const chatReservationId = chatReservation.data?.id as string | undefined;
+    if (chatReservationId) openReservation = { id: chatReservationId, tag: "chat" };
 
     // ── Fetch coach_memory for identity-mirroring (chat path only) ──
     // Block [3] of the 7-block context layout. Helper returns "" when
@@ -1129,8 +1190,16 @@ yet" — never make up a number.
       // fault) doesn't leave a permanently 'pending' row — it wouldn't
       // burn a real cap slot forever (created_at is today, so it only
       // affects today's count), but it would still count against today's
-      // 10/day for a message that never actually got a reply.
+      // daily cap for a message that never actually got a reply.
       if (chatReservationId) {
+        // Part B: the loop itself crashed (our fault, not the user's) — give the
+        // unit back before the stamp below (the latch needs the row pending).
+        await refundReservation(
+          supabaseClient,
+          chatReservationId,
+          MODEL_USED_LOOP_THREW_SENTINEL,
+          "chat",
+        );
         // OI-46 round-2 review — destructure `.error`, don't bare try/catch:
         // supabase-js resolves {data, error} on a PostgREST-level failure
         // rather than rejecting (feedback_postgrest_builder_no_catch.md).
@@ -1186,6 +1255,22 @@ yet" — never make up a number.
     // Resolve the reservation (store clean reply without tags) + tool-call
     // telemetry. UPDATE, not INSERT — the row already exists from the
     // reservation above the tool loop.
+    // Part B: a hard failure caused by a TRANSPORT-class Gemini failure gives the
+    // unit back FIRST (refund_quota latches the row out of pending and stamps the
+    // same sentinel the UPDATE below writes). Deterministic blocks and
+    // rounds-exhausted turns keep the unit spent.
+    // `turnRefunded` rides the 200 body so the client mirrors the SERVER's decision
+    // (a refund the budget or latch refused leaves the unit spent, so the local
+    // tally must still tick).
+    let turnRefunded = false;
+    if (chatReservationId && loop.hadHardFailure && loop.failureKind === "transport") {
+      turnRefunded = (await refundReservation(
+        supabaseClient,
+        chatReservationId,
+        MODEL_USED_LOOP_THREW_SENTINEL,
+        "chat",
+      )) >= 0;
+    }
     if (chatReservationId) {
       const { error: resolveErr } = await supabaseClient
         .from("ai_coach_interactions")
@@ -1261,6 +1346,8 @@ yet" — never make up a number.
         // apology, not real model output. Client excludes this turn from
         // coach chat history replay so it can't self-perpetuate.
         had_hard_failure: loop.hadHardFailure,
+        // Part B: true only when refund_quota actually gave the unit back.
+        refunded: turnRefunded,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
@@ -1268,6 +1355,16 @@ yet" — never make up a number.
     // Sanitised 5xx: never leak raw exception / upstream provider text.
     const requestId = crypto.randomUUID().split("-")[0];
     console.error(`[ai-proxy] request_id=${requestId}`, err_);
+    // Part B: an unexpected throw between reserve and resolve is not the user's
+    // fault — give the unit back (a no-op when the row already resolved).
+    if (outerSb && openReservation) {
+      await refundReservation(
+        outerSb,
+        openReservation.id,
+        MODEL_USED_LOOP_THREW_SENTINEL,
+        openReservation.tag,
+      );
+    }
     return err(500, "Internal server error", { request_id: requestId });
   }
 });

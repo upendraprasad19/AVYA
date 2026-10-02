@@ -12,7 +12,7 @@
  *
  * A failed row now replays the FAILURE, not a reply. Re-running the message
  * instead would reserve a new row, and each reservation spends a unit of the
- * free tier's 10/day chat cap on the ledger, so the client's three retries
+ * daily chat cap (free 7 / PRO 20) on the ledger, so the client's three retries
  * could spend three more units on one message. A pending reservation
  * (`ai_response` still "") is processed as before.
  */

@@ -129,7 +129,7 @@ extension _InputBar on _AiCoachScreenState {
                           ? GestureDetector(
                               behavior: HitTestBehavior.opaque,
                               onTap: () => showPaywallSheet(context,
-                                  feature: 'Unlimited AI Coach'),
+                                  feature: 'Higher daily AI coach limit'),
                               child: composerField,
                             )
                           : composerField,
@@ -222,7 +222,7 @@ extension _InputBar on _AiCoachScreenState {
                   const SizedBox(width: 6),
                   GestureDetector(
                     onTap: () => showPaywallSheet(context,
-                        feature: 'Unlimited AI Coach'),
+                        feature: 'Higher daily AI coach limit'),
                     child: Text(
                       'GO PRO',
                       style: AppTypography.monoXs.copyWith(

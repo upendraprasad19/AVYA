@@ -66,7 +66,7 @@ Token auto-resolves from `supabase/.supabase/supabase access token.txt` (gitigno
 | Auth | Supabase Auth (Email + Google OAuth + Phone OTP) |
 | Database | Supabase Postgres (47 tables — backup + AI + community) |
 | Storage | Supabase Storage (exercise images, progress photos PRO) |
-| AI Coach (all tiers) | Edge Function `ai-proxy` → Gemini 3.1 Flash Lite (`gemini-3.1-flash-lite`; fallback `gemini-3.5-flash-lite`). Free: 10 msg/day FOREVER (OQ-1). PRO: unlimited. Server-side gate. |
+| AI Coach (all tiers) | Edge Function `ai-proxy` → Gemini 3.1 Flash Lite (`gemini-3.1-flash-lite`; fallback `gemini-3.5-flash-lite`). Free: 7 msg/day FOREVER (OQ-1). PRO: 20 msg/day (dedicated coaching, higher limits; NOT unlimited). Server-side gate. Caps: `_shared/ai_limits.ts`. |
 | Food AI / Weekly report | Gemini 3.1 Flash Lite for text, scan meal and cart auditor; the PRO-only weekly report runs the same model with thinking on. One constant per tier in `supabase/functions/_shared/gemini.ts` (revert = one line) |
 | Plan Generator | Dart (local, queries Hive exercise_library, zero API cost) |
 | Payments | Razorpay (WebView checkout → webhook → Supabase → poll → Hive) |

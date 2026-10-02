@@ -148,14 +148,14 @@ Deno.test("totals, distinct users and at-cap use `used >= cap`", () => {
   const text = buildDigestText(input({
     windowed: {
       rows: [
-        row(U1, "pro_image_daily", 50), // at cap
-        row(U2, "pro_image_daily", 49), // one under — NOT at cap
-        row(U1, "pro_video_daily", 11), // over cap still counts as at cap
+        row(U1, "pro_image_daily", 10), // at cap
+        row(U2, "pro_image_daily", 9), // one under — NOT at cap
+        row(U1, "pro_video_daily", 6), // over cap still counts as at cap
       ],
     },
   }));
-  assertStringIncludes(text, "PRO image reads: 99 (2 users) · at cap 50: 1");
-  assertStringIncludes(text, "PRO video reads: 11 (1 user) · at cap 10: 1");
+  assertStringIncludes(text, "PRO image reads: 19 (2 users) · at cap 10: 1");
+  assertStringIncludes(text, "PRO video reads: 6 (1 user) · at cap 5: 1");
 });
 
 Deno.test("keys without a single cap (food_text, sub-day buckets) are totals-only on the Also line", () => {
@@ -170,7 +170,12 @@ Deno.test("keys without a single cap (food_text, sub-day buckets) are totals-onl
       ],
     },
   }));
-  assertStringIncludes(text, "Also: Food text 207 · delete-account 3 · verify-payment 3");
+  // Part B: chat + vision are tier-mixed (no single ceiling) so they ride the
+  // Also line too, in DIGEST_KEYS order, ahead of food_text.
+  assertStringIncludes(
+    text,
+    "Also: Chat (free 7 / PRO 20) 0 · Vision (scan/cart; free 4 / PRO 20) 0 · Food text 207 · delete-account 3 · verify-payment 3",
+  );
   assertNotIncludes(text, "Food text:");
   assertNotIncludes(text, "at cap 200");
 });
@@ -1228,4 +1233,63 @@ Deno.test("gatherDigestInput reports prediction_daily as unmetered while DISABLE
     if (prior === undefined) Deno.env.delete("DISABLE_PREDICTION_QUOTA");
     else Deno.env.set("DISABLE_PREDICTION_QUOTA", prior);
   }
+});
+
+// ---------------------------------------------------------------------------
+// Part B (gemini3-limits-caching): refund budget, zero rows, heavy-chat line.
+// ---------------------------------------------------------------------------
+
+Deno.test("Part B: refund_budget is a daily key capped at 3; a user AT 3 is counted at cap", () => {
+  const text = buildDigestText(input({
+    windowed: { rows: [row(U1, "refund_budget", 3), row(U2, "refund_budget", 1)] },
+  }));
+  assertStringIncludes(text, "Refunds (3/day): 4 (2 users) · at cap 3: 1");
+  assertNotIncludes(text, "unlisted keys");
+});
+
+Deno.test("Part B: a refunded-back-to-zero ledger row is NOT a user (used > 0 filter)", () => {
+  const text = buildDigestText(input({
+    windowed: {
+      rows: [
+        row(U1, "pro_image_daily", 0), // refund_quota decrements to 0, never deletes
+        row(U2, "pro_image_daily", 4),
+      ],
+    },
+  }));
+  assertStringIncludes(text, "PRO image reads: 4 (1 user) · at cap 10: 0");
+});
+
+Deno.test("Part B: the read-only heavy-chat line counts users strictly above 15 msgs/day", () => {
+  const none = buildDigestText(input({
+    windowed: { rows: [row(U1, "chat_app", 15), row(U2, "chat_app", 7)] },
+  }));
+  assertStringIncludes(none, "Heavy chat (>15 msgs/day): none");
+  const some = buildDigestText(input({
+    windowed: { rows: [row(U1, "chat_app", 16), row(U2, "chat_app", 20), row("u3", "chat_app", 3)] },
+  }));
+  assertStringIncludes(some, "Heavy chat (>15 msgs/day): 2 users");
+  const one = buildDigestText(input({ windowed: { rows: [row(U1, "chat_app", 18)] } }));
+  assertStringIncludes(one, "Heavy chat (>15 msgs/day): 1 user");
+  assertNotIncludes(one, "1 users");
+});
+
+Deno.test("Part B: refund_budget is bookkeeping, not activity — it never inflates the Top users ranking", () => {
+  // U1 chatted 5 times and was refunded 3 times; U2 chatted 6 times. Without the exclusion
+  // U1 ranks first with 8; with it U2 (6) leads U1 (5).
+  const text = buildDigestText(input({
+    windowed: {
+      rows: [
+        row(U1, "chat_app", 5),
+        row(U1, "refund_budget", 3),
+        row(U2, "chat_app", 6),
+      ],
+    },
+  }));
+  const top = text.split("\n").find((l) => l.includes("Top users")) ?? "";
+  assertStringIncludes(top, `${idPrefix(U2)} ×6`);
+  assertStringIncludes(top, `${idPrefix(U1)} ×5`);
+  assertNotIncludes(top, "×8");
+  assert(top.indexOf(`${idPrefix(U2)} ×6`) < top.indexOf(`${idPrefix(U1)} ×5`), top);
+  // The refund count itself is still reported on its own line.
+  assertStringIncludes(text, "Refunds (3/day): 3 (1 user) · at cap 3: 1");
 });

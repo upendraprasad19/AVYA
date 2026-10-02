@@ -218,6 +218,11 @@ class CoachInteractionRepository {
     // turn, which echoes it back as if it were a normal continuation —
     // turning one transient outage into a self-perpetuating "stuck" chat.
     bool hadHardFailure = false,
+    // Part B — the server's `refunded` flag (refund_quota gave the unit back).
+    // Stored so the local daily tally mirrors the SERVER's ledger: a hard failure
+    // that was refunded does not count, one that was not (a content block, the
+    // refund budget spent) still does. See [getTodayUserMessageCount].
+    bool refunded = false,
   }) async {
     // gate16-exempt: in-place mutation + write-back. Map is not surfaced
     // to a List consumer; the key is held by the caller.
@@ -229,6 +234,7 @@ class CoachInteractionRepository {
     entry['pending'] = false;
     entry['failed'] = false;
     entry['had_hard_failure'] = hadHardFailure;
+    entry['refunded'] = refunded;
     entry.remove('error_text');
     await _hive.coachBox.put(key, entry);
   }
@@ -262,6 +268,18 @@ class CoachInteractionRepository {
       final interaction = Map<String, dynamic>.from(raw);
       final createdAt = interaction['created_at'] as String? ?? '';
       final hasUserMsg = interaction['user_message'] as String?;
+      // Part B: the tally mirrors the server's chat ledger.
+      //  - a client-failed turn (`failed`) never produced a unit of its own;
+      //  - a hard-failure apology counts ONLY when the server did not refund it
+      //    (`refunded` absent/false: a content block, or the 3/day budget spent);
+      //  - a media turn (`mode: media`) goes through ai-media-proxy, which spends
+      //    no chat unit (free: lifetime image meter; PRO: the media caps).
+      if (interaction['failed'] == true ||
+          interaction['mode'] == 'media' ||
+          (interaction['had_hard_failure'] == true &&
+              interaction['refunded'] == true)) {
+        continue;
+      }
       if (createdAt.startsWith(todayStr) &&
           hasUserMsg != null &&
           hasUserMsg.isNotEmpty) {

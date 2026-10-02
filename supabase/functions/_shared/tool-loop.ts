@@ -63,6 +63,7 @@ import {
   type GeminiPart,
   geminiChatWithTools,
   type GeminiToolsResult,
+  refundableFailure,
 } from "./gemini.ts";
 import { type AttemptStatusLike, reportGeminiExhaustion } from "./gemini_failure_alert.ts";
 
@@ -162,6 +163,15 @@ export interface ToolLoopResult {
    * "stuck" conversation that outlives the outage itself.
    */
   hadHardFailure: boolean;
+  /**
+   * Why a hard failure happened, for the quota refund decision (Part B):
+   * `transport` = the Gemini call failed in a way the user cannot cause
+   * (refundableFailure: 5xx / 429 / 404 / timeout / empty); `deterministic` =
+   * a content block (SAFETY etc.) or a non-refundable 4xx; `rounds_exhausted` =
+   * the model kept calling tools. `none` when `hadHardFailure` is false. Only
+   * `transport` earns the unit back.
+   */
+  failureKind: "none" | "transport" | "deterministic" | "rounds_exhausted";
 }
 
 /**
@@ -283,6 +293,7 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
   let finalText = "";
   let roundsExecuted = 0;
   let hadHardFailure = false;
+  let failureKind: ToolLoopResult["failureKind"] = "none";
 
   // Tier-filtered tool list passed to the model. Pre-converted once
   // (registry is small; conversion is cheap; doing it once avoids
@@ -352,6 +363,17 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
       if (!finalText && !hadQueuedIntent) {
         finalText = HARD_FAILURE_APOLOGY_GEMINI_CALL_FAILED;
         hadHardFailure = true;
+        failureKind = refundableFailure({
+            status: (e as { status?: number | null } | null)?.status ?? null,
+            message: (e as { geminiMessage?: string; message?: string } | null)?.geminiMessage ??
+              (e as { message?: string } | null)?.message ?? null,
+            deterministicFailure:
+              (e as { deterministicFailure?: boolean } | null)?.deterministicFailure ??
+                false,
+            blockSeen: (e as { blockSeen?: boolean } | null)?.blockSeen ?? false,
+          })
+          ? "transport"
+          : "deterministic";
       }
       break;
     }
@@ -624,6 +646,7 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
     } else {
       console.log(`[tool-loop] max rounds (${maxRounds}) exhausted without terminal response`);
       finalText = HARD_FAILURE_APOLOGY_ROUNDS_EXHAUSTED;
+      failureKind = "rounds_exhausted";
       // APK +43 obs 2 (B-pass finding, diagnose a1c6b9) — this is the OTHER
       // hardcoded non-model apology in this file (the catch block above sets
       // the first one). It has the exact same self-perpetuation shape: if
@@ -645,6 +668,7 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
     modelUsed,
     roundsExecuted,
     hadHardFailure,
+    failureKind,
   };
 }
 

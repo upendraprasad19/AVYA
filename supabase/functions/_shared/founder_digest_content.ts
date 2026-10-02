@@ -42,6 +42,13 @@ import {
   PREDICTION_QUOTA_KILL_SWITCH_ENV,
 } from "./prediction_quota_switch.ts";
 
+/**
+ * A user above this many chat messages in one IST day is surfaced on a read-only
+ * digest line (Part B: it informs the later PRO 20 -> 25 and free-tier cost
+ * decisions, OI-277). Decides nothing, blocks nothing.
+ */
+export const HEAVY_CHAT_MESSAGES = 15;
+
 /** The lifetime sentinel `'epoch'::timestamptz`, as PostgREST renders it. */
 export const LIFETIME_WINDOW = "1970-01-01T00:00:00+00:00";
 
@@ -78,15 +85,24 @@ export interface DigestKey {
  * TS2339 under CI's `deno check`.
  */
 export const DIGEST_KEYS: readonly DigestKey[] = [
-  { key: "pro_image_daily", label: "PRO image reads", kind: "daily", cap: 50 },
-  { key: "pro_video_daily", label: "PRO video reads", kind: "daily", cap: 10 },
-  { key: "chat_app", label: "Chat (free, 10/day)", kind: "daily", cap: 10 },
-  { key: "vision_analysis", label: "Vision (scan/cart)", kind: "daily", cap: 20 },
+  { key: "pro_image_daily", label: "PRO image reads", kind: "daily", cap: 10 },
+  { key: "pro_video_daily", label: "PRO video reads", kind: "daily", cap: 5 },
+  // Part B: chat (7 free / 20 PRO) and vision (4 free / 20 PRO) are tier-mixed
+  // since migration 153, so no single "at cap" ceiling (same treatment as
+  // food_text); they report totals in the "Also:" line. Heavy chat users are
+  // surfaced by the read-only line in buildDigestText (HEAVY_CHAT_MESSAGES).
+  { key: "chat_app", label: "Chat (free 7 / PRO 20)", kind: "daily" },
+  { key: "vision_analysis", label: "Vision (scan/cart; free 4 / PRO 20)", kind: "daily" },
   // 10 free / 200 PRO — tier-dependent, so no single "at cap" ceiling.
   { key: "food_text", label: "Food text", kind: "daily" },
   // ai-proxy `type: "prediction"` — _shared/prediction_handler.ts (single-owner
   // audit 2026-09-26, P0 #5: was unmetered). Counts attempts, not results.
   { key: "prediction_daily", label: "Prediction (3/day)", kind: "daily", cap: 3 },
+  // Part B: refund_quota's per-user budget (migration 153; ai_limits.ts
+  // REFUND_DAILY_BUDGET). A user AT 3 is hitting repeated provider failures.
+  // Caps are LITERALS here (founder_digest_caps_mirror_test.dart reads them as
+  // numbers); that test also ties 10 / 5 / 3 to _shared/ai_limits.ts.
+  { key: "refund_budget", label: "Refunds (3/day)", kind: "daily", cap: 3 },
   // Hourly buckets, totals only. ⚠ Known ≤30-min/day slop (B-pass 2026-09-13
   // finding 3): delete-account floors its bucket to the UTC hour, and IST
   // midnight is 18:30Z, so the 18:00Z-19:00Z bucket straddles the day
@@ -250,6 +266,15 @@ export function computeNewMrr(
   }
   return { rupees: Math.round(rupeesExact), unknownPlanCount };
 }
+
+/**
+ * Ledger keys that are BOOKKEEPING, not user activity: `refund_budget` counts how many
+ * failed turns were refunded to a user, so it must not inflate that user's "Top users"
+ * total (a user an outage refunded 3 times is not a heavier user). It stays a DIGEST_KEYS
+ * line (the founder wants the refund count) and out of the per-user ranking only. Kept
+ * beside DIGEST_KEYS: the entries' literal shape is pinned by founder_digest_caps_mirror_test.dart.
+ */
+export const NON_ACTIVITY_KEYS: ReadonlySet<string> = new Set(["refund_budget"]);
 
 /**
  * Quota keys whose metering has a kill switch, with the switch's env name.
@@ -447,7 +472,10 @@ export function buildDigestText(input: DigestInput): string {
   if ("unreadable" in input.windowed) {
     lines.push(unreadableLine("usage ledger", input.windowed.unreadable));
   } else {
-    const rows = input.windowed.rows;
+    // `used > 0` only: refund_quota decrements a ledger row back to 0 (it never
+    // deletes it), and a zero row is "no usage" -- counting it as a user would
+    // overstate every per-key user count after a refunded failure.
+    const rows = input.windowed.rows.filter((r) => (r.used ?? 0) > 0);
     const alsoParts: string[] = [];
     for (const k of DIGEST_KEYS) {
       // A weekly key's window_start can fall inside THIS window on the one
@@ -475,6 +503,14 @@ export function buildDigestText(input: DigestInput): string {
       );
     }
     lines.push(`Also: ${alsoParts.join(" · ")}`);
+    const heavyChat = rows.filter((r) =>
+      r.quota_key === "chat_app" && r.used > HEAVY_CHAT_MESSAGES
+    ).length;
+    lines.push(
+      heavyChat === 0
+        ? `Heavy chat (>${HEAVY_CHAT_MESSAGES} msgs/day): none`
+        : `Heavy chat (>${HEAVY_CHAT_MESSAGES} msgs/day): ${heavyChat} user${heavyChat === 1 ? "" : "s"}`,
+    );
     // Every windowed row counts toward the per-user ranking — unlisted keys
     // included, since they are real usage the key table simply lacks —
     // EXCEPT a weekly key's row, which can leak into this window on the one
@@ -488,7 +524,7 @@ export function buildDigestText(input: DigestInput): string {
       DIGEST_KEYS.filter((k) => k.kind === "weekly").map((k) => k.key),
     );
     for (const r of rows) {
-      if (weeklyKeys.has(r.quota_key)) continue;
+      if (weeklyKeys.has(r.quota_key) || NON_ACTIVITY_KEYS.has(r.quota_key)) continue;
       perUser.set(r.user_id, (perUser.get(r.user_id) ?? 0) + (r.used ?? 0));
     }
     const unlisted = unlistedTotals(rows, "windowed");

@@ -376,7 +376,7 @@ node .claude/deploy_via_api.js dedsavbjuwgarrhphgnl <fn> .claude/_payload_<fn>.j
 | Auth | Supabase Auth (Email + Google OAuth + Phone OTP) |
 | Database | Supabase Postgres (47 tables — backup + AI + community) |
 | Storage | Supabase Storage (exercise images, progress photos PRO) |
-| AI Coach (all tiers) | Single Edge Function `ai-proxy` → Gemini 3.1 Flash Lite. Free: 10 msg/day FOREVER (no trial — OQ-1). PRO: unlimited. Server-side gate. |
+| AI Coach (all tiers) | Single Edge Function `ai-proxy` → Gemini 3.1 Flash Lite. Free: 7 msg/day FOREVER (no trial — OQ-1). PRO: 20 msg/day (not unlimited). Server-side gate. |
 | Food AI | Gemini 3.1 Flash Lite (text analysis, scan meal, cart auditor) |
 | Weekly AI Report | Gemini 3.1 Flash Lite, thinking on (PRO-only) |
 | Plan Generator | Dart (local, queries Hive exercise_library, zero API cost) |

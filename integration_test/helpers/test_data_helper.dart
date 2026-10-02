@@ -26,7 +26,7 @@ class TestDataHelper {
 
   // ── AI Trial (removed 2026-06-07 — F1) ───────────────────────────
   // The client-only 30-day AI trial was deleted: the server enforces a
-  // flat 10/day forever with no trial. These helpers are retained as
+  // flat daily cap forever (free 7, PRO 20) with no trial. These helpers are retained as
   // no-ops so existing flow callsites keep compiling; trial state no
   // longer exists, so they seed nothing. Gate the AI coach via
   // [setMessageCountAtDailyLimit] instead.
