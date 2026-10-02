@@ -128,10 +128,18 @@ String? _resolveToken(_Args args) {
   if (envFitness != null && envFitness.trim().isNotEmpty) {
     return envFitness.trim();
   }
-  // Default repo file — gitignored via supabase/.gitignore.
-  final defaultFile = File('supabase/.supabase/supabase access token.txt');
-  if (defaultFile.existsSync()) {
-    return defaultFile.readAsStringSync().trim();
+  // Default repo files, WORKING one first: the repo-root `.supabase/` token works, the
+  // old `supabase/.supabase/` one returned 401 on 2026-10-02 (CLAUDE.md section 0). A
+  // linked worktree has neither (both gitignored), so the primary worktree is tried too.
+  for (final path in const [
+    '.supabase/supabase access token.txt',
+    '../../../.supabase/supabase access token.txt', // primary, from .claude/worktrees/<slug>
+    'supabase/.supabase/supabase access token.txt', // DEAD (401): last resort
+  ]) {
+    final candidate = File(path);
+    if (candidate.existsSync()) {
+      return candidate.readAsStringSync().trim();
+    }
   }
   final envFallback = Platform.environment['SUPABASE_ACCESS_TOKEN'];
   if (envFallback != null && envFallback.trim().isNotEmpty) {

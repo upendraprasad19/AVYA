@@ -18,7 +18,7 @@
 | `.env.prod` | Production runtime defines — must use `rzp_live_*` Razorpay key | Password manager → `icanbefitter-secrets > env-prod`. **GATE:** `scripts/check_razorpay_key_flavor.dart` asserts `rzp_live_` prefix. |
 | `android/key.properties` | Android signing — stores keystore path + password | Password manager → `icanbefitter-secrets > android-keystore`. Plaintext password is fine on a single-machine setup; just NEVER commit. Gate: `scripts/check_secrets_gitignored.dart`. |
 | `android/app/release.jks` | Android signing certificate (binary) | Password manager → `icanbefitter-secrets > android-keystore-jks` (binary attachment). Losing this = lose ability to publish updates → must publish under a new package name → lose all installed users. **Make TWO offsite backups.** |
-| `supabase/.supabase/supabase access token.txt` | Supabase Management API Personal Access Token (account `myfitnessjourney1988@gmail.com`, org `hwwukmntixflgbxkwavm`) | Supabase Dashboard → top-right avatar → Account → Access Tokens → "Generate new token". Save to password manager `icanbefitter-secrets > supabase-pat`. |
+| `.supabase/supabase access token.txt` (repo root; the older `supabase/.supabase/` copy is DEAD, HTTP 401, 2026-10-02: do not use) | Supabase Management API Personal Access Token (account `myfitnessjourney1988@gmail.com`, org `hwwukmntixflgbxkwavm`) | Supabase Dashboard → top-right avatar → Account → Access Tokens → "Generate new token". Save to password manager `icanbefitter-secrets > supabase-pat`. |
 
 ## Edge Function secrets (set in Supabase Dashboard, NOT on disk)
 
@@ -60,7 +60,7 @@ through this in order:
 3. `npm install` at repo root (deploy scripts in `.claude/` use these deps)
 4. Restore `.env`, `.env.dev`, `.env.prod` from password manager
 5. Restore `android/key.properties` and `android/app/release.jks` from password manager
-6. Restore `supabase/.supabase/supabase access token.txt` from password manager
+6. Restore `.supabase/supabase access token.txt` (repo root) from password manager
 7. `flutter pub get`
 8. `flutter run --dart-define-from-file=.env --flavor dev -t lib/main.dart` — smoke test
 9. Confirm Supabase MCP works: deploy a no-op test (use `--dry-run` flag in `.claude/deploy_via_api.js`)

@@ -250,9 +250,18 @@ if (rollback) {
 }
 
 // --- Token resolution ----------------------------------------------------
-const DEFAULT_TOKEN_FILE = path.resolve(
-  __dirname, '..', 'supabase', '.supabase', 'supabase access token.txt',
-);
+// See .claude/token_path.js: the repo-root `.supabase/` token WORKS, the old
+// `supabase/.supabase/` one is DEAD (401, 2026-10-02). The resolver prefers the working one
+// and finds it from a linked worktree through the primary worktree.
+const { resolveTokenFile, candidateTokenFiles } = require('./token_path');
+const _resolvedToken = resolveTokenFile(path.resolve(__dirname, '..'));
+const DEFAULT_TOKEN_FILE = _resolvedToken
+  ? _resolvedToken.path
+  : candidateTokenFiles(path.resolve(__dirname, '..'))[0];
+if (_resolvedToken && _resolvedToken.legacy) {
+  console.warn('[deploy] WARN: using the legacy supabase/.supabase token file, which returned 401 on 2026-10-02. ' +
+    'Prefer <repo>/.supabase/supabase access token.txt (see CLAUDE.md section 0).');
+}
 const LEGACY_TOKEN_FILE = path.join(os.homedir(), '.supabase', 'fitness-app-token');
 
 function readTokenFile(p) {

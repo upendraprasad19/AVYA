@@ -23,7 +23,12 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 
-const TOKEN_PATH = path.join(__dirname, '..', 'supabase', '.supabase', 'supabase access token.txt');
+// See .claude/token_path.js: repo-root `.supabase/` WORKS, `supabase/.supabase/` is DEAD (401).
+const { resolveTokenFile, candidateTokenFiles } = require('./token_path');
+const _resolvedToken = resolveTokenFile(path.join(__dirname, '..'));
+const TOKEN_PATH = _resolvedToken
+  ? _resolvedToken.path
+  : candidateTokenFiles(path.join(__dirname, '..'))[0];
 
 function resolveToken() {
   if (process.env.SUPABASE_ACCESS_TOKEN_FITNESS) {
