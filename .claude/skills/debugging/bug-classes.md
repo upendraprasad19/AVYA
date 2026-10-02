@@ -1443,3 +1443,19 @@ added, false of the flip being performed.
 - **Fix pattern:** derive and drop. A dependency scan for the drop must cover ALL schemas (`pg_proc` across every schema, not `public` only — the schema-scoped query missed `private.founder_metrics()`), because `DROP COLUMN` succeeds silently on a function body and breaks at call time. Rewrite the reader first, in the same transaction; deploy every writer BEFORE the drop (the webhook 500s on a failed `users.update`).
 - **Test discipline:** a helper that returns "nothing" on error must return `null`, not an empty collection, when zero would read as good news; and pin the error MESSAGE — a bare `assertRejects` is satisfied by the `TypeError` from iterating `null` (mutation B10 reddened nothing until the message was pinned). A positive control satisfied by `any(pattern)` proves one pattern, not three (B18).
 - **Regression test:** `test/contracts/subscription_columns_dropped_test.dart`, `supabase/functions/_shared/subscription_test.ts`. Diagnose `c7e3b9`.
+
+### 2.80 A rule "X never refunds / never does Y" is enforced from the LAST attempt's flag and the one response shape the author pictured (NEW 2026-10-02)
+
+- **Telltale:** a decision such as `refundableFailure(...)` reads a per-attempt flag (`deterministicFailure`) that every retry or fallback attempt OVERWRITES, and its test feeds the same body to every attempt. A user-caused block (SAFETY, `promptFeedback.blockReason`, `IMAGE_SAFETY`, `MAX_TOKENS`) then looks transport-class the moment the fallback model returns a 404/503, or whenever Gemini answers HTTP 200 with NO `candidates` at all.
+- **Root-cause shape:** last-writer-wins state in a loop, plus an enumerated allowlist of "bad" values that the real provider extends. Same family as the e7c4b2 recurrence (a counted set wider than the budget it meters).
+- **Fix pattern:** classify EVERY no-reply body in one pure function (`classifyNoReply`), make the block flag STICKY (`blockSeen ||= ...`) across attempts, passes and loops, and default unknown shapes to the SAFE side for the money-like action (no refund).
+- **Test discipline:** test SEQUENCES (A then B and B then A) end to end through the real function with a mocked `fetch`, and name each response shape (200 no candidates, empty parts, empty text). A test that pins "unknown empty candidate is refundable" encodes the hole as intended: re-read such a pin before trusting it. Mutate the flag to last-only: it must redden something.
+- **Regression test:** `supabase/functions/_shared/quota_refund_test.ts`, `gemini_chat_block_seen_test.ts`, `tool-loop_failure_kind_test.ts`. Diagnose `c4e9b2`.
+
+### 2.81 A Postgres boolean interpolated into `RAISE` / `format('%s')` prints `t` / `f`, so a reader that regex-matches `true` / `false` never fires (NEW 2026-10-02)
+
+- **Telltale:** a trigger raises `... (cap=%, pro=%)` with a `bool` argument and a reader (`ai-proxy`) parses `/pro=true/`. The reader's fallback hides it in one path (chat falls back to `isProUser`) and shows it in another (vision had none: a PRO user at the cap was told `tier:"free", limit:4`). Older food-text triggers emitted `pro=%` for years because nothing parsed it.
+- **Fix pattern:** pass explicit text, `CASE WHEN is_pro THEN 'true' ELSE 'false' END`, and make the reader tolerant (`/pro=(true|t)\b/`) with a tier fallback for every site.
+- **Test discipline:** the live SQL assertion `LIKE '%pro=true%'` is what catches it; unit tests over migration TEXT never will. Verify with `select format('pro=%s', true)` (read-only) before writing the parser.
+- **Regression test:** `test/sql/gemini3_limits_refund_live_verify.sql` R7/R8 (run live 2026-10-02, ok). Diagnose `c4e9b2`.
+
