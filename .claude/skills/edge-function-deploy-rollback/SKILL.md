@@ -324,3 +324,10 @@ If deploy is part of a multi-fn batch (e.g. test #15.4 fixed pr-detection + morn
 Append a new bug-class section under §6 the SAME commit that introduces the fix. Cite: bug ID + trigger phrase + regression test path. New skills under `.claude/skills/<related>/SKILL.md` when 3+ batches share a non-deploy pattern.
 
 Last evolved: B5 D1 of tech-debt audit 2026-05-20 (initial creation; codifies host-shell flow shipped Phase C.5).
+
+### 6.11 HTTP 401 from `api.supabase.com` on a host-shell deploy = you are holding the DEAD token file (NEW 2026-10-02)
+**Telltale:** `[deploy] Snapshot HTTP 401 (non-fatal)` then `HTTP 401 ... {"message":"Unauthorized"}` on the deploy POST, with `Token preview: sbp_edec07...`.
+**Root cause:** two token files on the VPS, only `<primary repo>/.supabase/supabase access token.txt` works; `supabase/.supabase/supabase access token.txt` returns 401 and was the tools' default. A linked worktree has neither file (both gitignored).
+**Fix:** use `--token-file "<primary repo>/.supabase/supabase access token.txt"` (or the resolver in `.claude/token_path.js` once merged). Check with one `curl -s -o /dev/null -w '%{http_code}'` against `GET /v1/projects/dedsavbjuwgarrhphgnl/functions`. Never print a token. Also note: a 401 from the FUNCTION itself on an unauthenticated smoke is a booted function, not this bug.
+**Prior:** Gemini 3 deploy 2026-10-02 (lost a round trip); CLAUDE.md §0 now names the dead file.
+
