@@ -66,7 +66,7 @@ Environment variables are injected at **build time** via `--dart-define-from-fil
 Required only if you'll be deploying Edge Functions from this checkout. Token path:
 
 ```
-.supabase/supabase access token.txt        # repo ROOT (works). NOT supabase/.supabase/ (that file went dead, HTTP 401, 2026-10-02)
+.supabase/supabase access token.txt        # repo ROOT: read first by the deploy tools (the older supabase/.supabase/ path is a last resort; on the VPS its token was revoked, HTTP 401, 2026-10-02)
 ```
 
 Gitignored. Source + which Supabase account it authenticates against: [`docs/operations/SECRET_INVENTORY.md`](../operations/SECRET_INVENTORY.md). The `.claude/deploy_via_api.js` script auto-discovers this file.

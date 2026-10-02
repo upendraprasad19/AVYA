@@ -64,6 +64,7 @@ ORDER BY MAX(created_at) DESC LIMIT 20;
 
 Edge Function deploy status:
 ```bash
+# the tools read the repo-root .supabase\ copy first; either path works if it holds an unrevoked token
 $token = (Get-Content -Raw -Path 'supabase\.supabase\supabase access token.txt').Trim()
 $headers = @{ Authorization = "Bearer $token" }
 Invoke-RestMethod -Method Get -Uri 'https://api.supabase.com/v1/projects/<project>/functions' -Headers $headers |

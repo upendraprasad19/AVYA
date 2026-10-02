@@ -350,7 +350,7 @@ node .claude/emit_payload.js <fn> --auto --functions-dir <worktree>/supabase/fun
 node .claude/deploy_via_api.js dedsavbjuwgarrhphgnl <fn> .claude/_payload_<fn>.json <verify_jwt>
 ```
 
-- **Token:** auto-resolved by `.claude/token_path.js` to `<primary repo>/.supabase/supabase access token.txt` (gitignored; WORKS, HTTP 200, 2026-10-02). `supabase/.supabase/supabase access token.txt` (generated 2026-04-20 / dated 2026-08-08) is DEAD: HTTP 401, never use it.
+- **Token:** auto-resolved by `.claude/token_path.js` to `<primary repo>/.supabase/supabase access token.txt` (gitignored; WORKS, HTTP 200, 2026-10-02). `supabase/.supabase/supabase access token.txt` (generated 2026-04-20 / file dated 2026-08-08) holds a REVOKED token on the VPS: HTTP 401, do not use it there.
 - **Byte-identical to git** (no MCP path-mangling, no hand-trim risk). First used Phase C.5 → ai-proxy v43; now standard for all redeploys.
 - **Path scheme:** all shared imports MUST use `from "../_shared/..."` (parent dir), NOT `from "./_shared/..."`. The OLD MCP `deploy_edge_function` tool silently mangled the wrong path; the new flow doesn't.
 

@@ -68,7 +68,7 @@ After `git clone`, every fresh checkout needs the following one-time setup. The 
    ```bash
    sh scripts/setup-hooks.sh
    ```
-4. **Drop the Supabase Personal Access Token** at `.supabase/supabase access token.txt` at the repo ROOT (gitignored; NOT `supabase/.supabase/`, that older path went dead with HTTP 401 on 2026-10-02). Used by `.claude/deploy_via_api.js` for host-shell Edge Function deploys. Token source + scope: see [`docs/operations/SECRET_INVENTORY.md`](docs/operations/SECRET_INVENTORY.md).
+4. **Drop the Supabase Personal Access Token** at `.supabase/supabase access token.txt` at the repo ROOT (gitignored; the tools read it FIRST. The older `supabase/.supabase/` path is still read as a last resort, but on the VPS its token was revoked, HTTP 401, 2026-10-02). Used by `.claude/deploy_via_api.js` for host-shell Edge Function deploys. Token source + scope: see [`docs/operations/SECRET_INVENTORY.md`](docs/operations/SECRET_INVENTORY.md).
 5. **Flutter packages:**
    ```bash
    flutter pub get

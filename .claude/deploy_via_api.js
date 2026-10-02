@@ -39,7 +39,8 @@
  * Token lookup priority (first match wins):
  *   1. CLI flag:       --token <value>  OR  --token-file <path>
  *   2. Env var:        SUPABASE_ACCESS_TOKEN_FITNESS  (preferred — specific to fitness-app account)
- *   3. Default file:   <repo>/supabase/.supabase/supabase access token.txt
+ *   3. Default file:   first existing of <repo>/.supabase/, <main worktree>/.supabase/, then the legacy
+ *                      <repo>/supabase/.supabase/ (revoked on the VPS) — see .claude/token_path.js
  *   4. Fallback env:   SUPABASE_ACCESS_TOKEN          (warns — might be the wrong account)
  *
  * Flags:
@@ -250,18 +251,15 @@ if (rollback) {
 }
 
 // --- Token resolution ----------------------------------------------------
-// See .claude/token_path.js: the repo-root `.supabase/` token WORKS, the old
-// `supabase/.supabase/` one is DEAD (401, 2026-10-02). The resolver prefers the working one
-// and finds it from a linked worktree through the primary worktree.
+// See .claude/token_path.js: the repo-root `.supabase/` token WORKS on the VPS, the older
+// `supabase/.supabase/` one is REVOKED there (401, 2026-10-02). The resolver prefers the working
+// one and finds it from a linked worktree through the main worktree.
 const { resolveTokenFile, candidateTokenFiles } = require('./token_path');
-const _resolvedToken = resolveTokenFile(path.resolve(__dirname, '..'));
+const _repoRoot = path.resolve(__dirname, '..');
+const _resolvedToken = resolveTokenFile(_repoRoot);
 const DEFAULT_TOKEN_FILE = _resolvedToken
   ? _resolvedToken.path
-  : candidateTokenFiles(path.resolve(__dirname, '..'))[0];
-if (_resolvedToken && _resolvedToken.legacy) {
-  console.warn('[deploy] WARN: using the legacy supabase/.supabase token file, which returned 401 on 2026-10-02. ' +
-    'Prefer <repo>/.supabase/supabase access token.txt (see CLAUDE.md section 0).');
-}
+  : candidateTokenFiles(_repoRoot)[0];
 const LEGACY_TOKEN_FILE = path.join(os.homedir(), '.supabase', 'fitness-app-token');
 
 function readTokenFile(p) {
@@ -286,6 +284,16 @@ function resolveToken() {
     };
   }
   if (fs.existsSync(DEFAULT_TOKEN_FILE)) {
+    // Warn HERE (not at module load): only when the legacy file is actually the token source,
+    // never for --token / --token-file / env runs, --help or --dry-run.
+    if (_resolvedToken && _resolvedToken.legacy) {
+      console.warn('[deploy] WARN: using a legacy supabase/.supabase token file; on the VPS that file holds a ' +
+        'revoked token (401, 2026-10-02). Prefer <repo>/.supabase/supabase access token.txt (CLAUDE.md section 0).');
+    }
+    if (_resolvedToken && _resolvedToken.primaryError) {
+      console.warn('[deploy] WARN: could not locate the primary worktree from this linked worktree (' +
+        _resolvedToken.primaryError + '); the token file may be the wrong one. Pass --token-file.');
+    }
     return {
       token: readTokenFile(DEFAULT_TOKEN_FILE),
       source: `default file ${DEFAULT_TOKEN_FILE}`,
@@ -320,7 +328,8 @@ if (!dryRun) {
     console.error('    1. --token <sbp_xxx>             (CLI flag)');
     console.error('       --token-file <path>           (CLI flag, reads from file)');
     console.error('    2. SUPABASE_ACCESS_TOKEN_FITNESS env var   (preferred)');
-    console.error(`    3. File at ${DEFAULT_TOKEN_FILE}   (one line, just the token)`);
+    console.error('    3. A token file, first existing of (one line, just the token):');
+    for (const c of candidateTokenFiles(_repoRoot)) console.error(`         ${c}`);
     console.error('    4. SUPABASE_ACCESS_TOKEN env var           (fallback — may be wrong account)');
     process.exit(1);
   }

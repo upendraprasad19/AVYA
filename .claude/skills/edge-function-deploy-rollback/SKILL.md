@@ -39,7 +39,7 @@ The deploy ships whatever is in `supabase/functions/<fn>/` on disk. Uncommitted 
 ### 1.3 Confirm token presence
 TWO token files exist on the VPS and ONE works (verified 2026-10-02, after a deploy session lost its time to a 401):
 - **WORKS (HTTP 200):** `<primary repo>/.supabase/supabase access token.txt`, dated 2026-09-23. `.claude/token_path.js` resolves it by default, including from a linked worktree (which has neither file, both are gitignored).
-- **DEAD (HTTP 401):** `<primary repo>/supabase/.supabase/supabase access token.txt`, dated 2026-08-08. Never use it, never debug it.
+- **REVOKED (HTTP 401):** `<primary repo>/supabase/.supabase/supabase access token.txt`, dated 2026-08-08: the token in it was revoked. On the VPS never use it, never debug it (the Windows clone's copy is unverified).
 ```bash
 # one-shot check of whichever file the tools would use (prints only the HTTP code)
 curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $(cat '<token file>')" \

@@ -2880,31 +2880,6 @@ Do NOT re-propose v1. Verified clean by round 2: sending `''` to `user_profile.c
 - **Related**: diagnose `e7c4b2`, `test/edge_functions/ai_proxy_test.dart`
   (`chatBodyOrAssertCapped`), root CLAUDE.md §4.9 enforcement-repair row.
 
-## OI-165 — `check_onconflict_live_arbiter.dart` 403s, so every `test/sql/` live harness is un-runnable by its documented command (P2)
-
-- **Status**: OPEN
-- **Blocked on**: identifying which token the runner needs (Management API vs service-role)
-- **Verified**: 2026-09-26 — new root-cause HYPOTHESIS (not yet run): the default token file is CWD-relative (`check_onconflict_live_arbiter.dart:132`, `supabase/.supabase/…`), which exists only in the PRIMARY worktree; §4.13 puts every session in a linked worktree, where it is absent, so the resolver falls to the `SUPABASE_ACCESS_TOKEN` env fallback (`:136`) — a different account's token ⇒ 403.
-  PRIOR (kept verbatim): 2026-09-05 — ran it; and the harness header records the same failure 2026-07-30
-- **Symptom**: `dart run scripts/check_onconflict_live_arbiter.dart --sql <file>` →
-  `FATAL — Management API HTTP 403 — "Your account does not have the necessary privileges to
-  access this endpoint."` It resolves a token (44 bytes) and warns it is using the
-  `SUPABASE_ACCESS_TOKEN` env fallback.
-- ⚠ **Not new, and that is the point.** `test/sql/oi46_daily_cap_triggers_live_verify.sql`'s own
-  header records the identical 403 on **2026-07-30**, worked around the same way. Five weeks
-  un-fixed because the workaround is invisible: whoever hits it hand-pastes the SQL through MCP
-  `execute_sql` and moves on, exactly as I did on 2026-09-05 for the slice-2 assertions.
-- **Why it matters more than a broken script**: these harnesses are the ONLY behavioural proof
-  for Postgres trigger/constraint logic — rule 21 says a source-grep proves presence only. A test
-  that cannot be run by its documented command decays; it is not in the gate loop (deliberately,
-  `pre-commit.sh` + `test.yml` both case-skip it), so nothing else notices.
-- **What is NOT the fix**: deleting the runner and documenting the MCP paste. That makes the
-  harness un-runnable by anyone without this MCP, including CI.
-- **Related**: `test/sql/onconflict_live_arbiter.sql`, `oi46_daily_cap_triggers_live_verify.sql`,
-  rule 21, `docs/operations/SECRET_INVENTORY.md`.
-
-**UPDATE 2026-09-26 (backlog triage + `ci-green-batch-a`):** Candidate fix: resolve the default file from `--git-common-dir/..` (the `batch_close_lib.dart` `primaryRootFrom` pattern) and fail CLOSED instead of using the env fallback. Also note (2026-09-26): this VPS holds TWO different Management-API tokens — see diagnose `c6f2a8`.
-
 ## OI-166 — regeneration RESTARTS the periodization wave instead of continuing it, so the wave index and the week counter disagree (P2)
 
 - **Status**: OPEN
@@ -5623,3 +5598,12 @@ recurring concern again before this lands.
 **What:** when the bot is re-enabled, its chat cap and its model path must match the app's (free 7 / PRO 20, 3.1 Flash-Lite, shared `usage_counters` key or an explicit separate budget).
 
 **Acceptance:** re-enable checklist run (cap source located, model constants, quota key, copy); business-rules line corrected; reopen_when: the founder re-enables the bot.
+
+## OI-283 — Live-DB SQL harness runners (check_onconflict_live_arbiter, check_two_user_cross_account) have no automated runner: CI holds no Management API token
+
+- **Status**: OPEN
+- **Blocked on**: founder decision: provision a CI secret holding a Management API token for the fitness project (OI-165, now closed, fixed the LOCAL token resolution; CI is a separate matter)
+- **Verified**: 2026-10-02: both runners work by hand (probe via `check_onconflict_live_arbiter.dart` returned OK from a linked worktree); neither has a runner in `pre-commit.sh` or `test.yml`
+- **Identified**: 2026-10-02 · filed via mint_oi.sh from branch `deploy-token-path`
+- **Why**: `scripts/check_gate_scripts_wired.dart` allowlists both scripts as `manual:` runners; the allowlist needs an OPEN OI. They are the only behavioural proof for Postgres trigger logic (rule 21), and run only when a human remembers.
+- **Options**: (a) a CI job with a read-only-scoped Management API secret running the rollback-only SQL files; (b) keep them manual and document the runbook line. Either way this OI names which.

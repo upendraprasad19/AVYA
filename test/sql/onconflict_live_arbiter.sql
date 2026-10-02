@@ -51,7 +51,8 @@
 -- The companion script `scripts/check_onconflict_live_arbiter.dart` reads
 -- this file, sends it to the Supabase Management API
 -- (`/v1/projects/{ref}/database/query`) using the service-role PAT from
--- `supabase/.supabase/supabase access token.txt`, and parses the
+-- the Management-API token resolved by scripts/supabase_token_path_lib.dart
+-- (repo-root `.supabase/` first; the legacy `supabase/.supabase/` file is revoked on the VPS), and parses the
 -- returned `_v_results` rows.
 --
 -- The whole block is wrapped in BEGIN ... ROLLBACK so the writes never

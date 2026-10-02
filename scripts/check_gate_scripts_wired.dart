@@ -91,12 +91,12 @@ const _allowList = <String, List<GateRunner>>{
   // re-checks that status on every commit. Until 2026-09-19 these entries
   // read "runs in /build-apk skill" — build-apk.md never invoked any of them.
   'check_onconflict_live_arbiter.dart': [
-    GateRunner.manual('OI-165',
-        'Live rollback-txn SQL via the Management API; 403s with the current PAT. No automated runner until OI-165 names the token.'),
+    GateRunner.manual('OI-283',
+        'Live rollback-txn SQL via the Management API. Runs by hand (the token now resolves from any worktree, OI-165); no automated runner until OI-283 decides on a CI secret.'),
   ],
   'check_two_user_cross_account.dart': [
-    GateRunner.manual('OI-165',
-        'Wrapper over check_onconflict_live_arbiter.dart; inherits its 403. Documented by-hand runner: docs/runbooks/restore-drill.md:71.'),
+    GateRunner.manual('OI-283',
+        'Wrapper over check_onconflict_live_arbiter.dart; inherits its lack of a CI runner. Documented by-hand runner: docs/runbooks/restore-drill.md:71.'),
   ],
   'check_regression_catalog.dart': [
     GateRunner.file('scripts/pre-commit.sh',
