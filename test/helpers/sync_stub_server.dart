@@ -44,6 +44,14 @@ class StubRequest {
   }
 }
 
+/// A canned answer for a table's GETs (status + body). A String body is sent
+/// verbatim (a Cloudflare-style plain-text 521); anything else is JSON-encoded.
+class StubReadReply {
+  const StubReadReply(this.status, this.body);
+  final int status;
+  final Object? body;
+}
+
 /// Filtering is NOT applied here: a GET answers whatever its table's
 /// `getResponders` closure returns, whatever the `select=` / `eq.` query.
 /// A test whose assertion depends on filtering must filter inside its
@@ -77,6 +85,12 @@ class SyncStubServer {
 
   /// GET responders per table; a table without one answers `[]`.
   final Map<String, Object? Function(StubRequest)> getResponders = {};
+
+  /// A table listed here answers EVERY GET with the given status + body (an
+  /// outage / auth-rejection simulation). Checked before [getResponders]. Note
+  /// the SDK retries a GET answered 503/520 three more times unless the query
+  /// opts out — use 500/504 for a "one failing request" assertion.
+  final Map<String, StubReadReply> readReplies = {};
 
   Future<void> start() async {
     HttpOverrides.global = null;
@@ -158,6 +172,13 @@ class SyncStubServer {
         ..statusCode = 500
         ..write(jsonEncode(failBodies[r.table] ??
             {'message': 'stub failure', 'code': 'XX000'}));
+    } else if (r.method == 'GET' &&
+        r.table != null &&
+        readReplies.containsKey(r.table)) {
+      final reply = readReplies[r.table]!;
+      res
+        ..statusCode = reply.status
+        ..write(reply.body is String ? reply.body : jsonEncode(reply.body));
     } else if (r.method == 'GET' && r.table != null) {
       res
         ..statusCode = 200

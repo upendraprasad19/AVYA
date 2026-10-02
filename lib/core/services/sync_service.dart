@@ -37,6 +37,10 @@ import 'package:icanbefitter/core/services/nutrition_write_service.dart';
 import 'package:icanbefitter/core/services/pending_exlog_deletes.dart';
 import 'package:icanbefitter/core/services/pending_template_deletes.dart';
 import 'package:icanbefitter/core/services/sync_queue.dart';
+import 'package:icanbefitter/core/services/backend_probe.dart';
+import 'package:icanbefitter/core/services/serial_slot.dart';
+import 'package:icanbefitter/core/services/sync_retry_controller.dart';
+import 'package:icanbefitter/core/services/restore_telemetry_policy.dart';
 import 'package:icanbefitter/core/services/template_identity.dart';
 import 'package:icanbefitter/core/services/template_identity_migrator.dart';
 import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
@@ -59,6 +63,7 @@ part 'sync/sync_nutrition.dart';
 part 'sync/sync_profile.dart';
 part 'sync/sync_realtime.dart';
 part 'sync/sync_restore_completeness.dart';
+part 'sync/sync_resilience.dart';
 part 'sync/sync_workout.dart';
 
 /// Result of a [SyncService.restoreFromCloudForUser] call.
@@ -164,6 +169,13 @@ class SyncService {
   /// to a new user. Public API unchanged — callers do not move.
   void _registerLifecycle() {
     SingletonLifecycleRegistry.register('SyncService', _onUserChanged);
+    // closes-diagnose e5b2a9 — bind the retry controller. The sweep is
+    // `weeklyFullSync`: every domain through SyncSkipIndex, so it re-sends only
+    // rows still unsent (plus ~6 unconditional requests, D2).
+    SyncRetryController.instance.bind(
+      probe: probeBackendReachable,
+      sweep: weeklyFullSync,
+    );
   }
 
   /// A7 — invoked from [SingletonLifecycleRegistry.notifyUserChanged].
@@ -221,6 +233,10 @@ class SyncService {
     // coach_memory into the new owner's coachBox (auth_hive_owner_agreement
     // cross-account leak — strictly worse than the cost problem).
     _snapshotCoalescer = SyncCoalescer();
+    // closes-diagnose e5b2a9 — a pending retry / paused flag / queued sweep
+    // belongs to the PREVIOUS owner.
+    SyncRetryController.instance.reset();
+    _weeklyFullSyncSlot.reset();
   }
 
   final HiveService _hive = HiveService.instance;
@@ -241,6 +257,39 @@ class SyncService {
   /// the new owner's `coachBox` (cross-account leak). Kill-switch
   /// `disable_snapshot_debounce` bypasses it.
   SyncCoalescer _snapshotCoalescer = SyncCoalescer();
+
+  /// closes-diagnose e5b2a9 — a retry sweep and a launch sweep run ONE AFTER THE
+  /// OTHER instead of overlapping (`SerialSlot`, fakeAsync-tested). Serialised,
+  /// not joined: a retry that joined an older in-flight sweep would report
+  /// "swept after recovery" about a sweep that started BEFORE the server came
+  /// back. Bypassed when the `disable_sync_retry_sweep` kill-switch is on (§4.6:
+  /// the old path, verbatim).
+  final SerialSlot _weeklyFullSyncSlot = SerialSlot();
+
+  /// closes-diagnose e5b2a9 (B-pass F1) — DURABLE "a sweep is owed" flag (sync box,
+  /// so user-scoped like `last_full_sync`). Set when the retry controller accepts
+  /// an outage-shaped push failure; cleared only by a CLEAN `weeklyFullSync`.
+  /// `checkAndSync` runs the launch sweep when it is set, so a web reload or the
+  /// retry cap does not leave a row unsent until tomorrow's launch.
+  static const String _sweepOwedKey = 'sync_sweep_owed';
+
+  bool get _sweepOwed {
+    try {
+      return _hive.syncBox.get(_sweepOwedKey) == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _setSweepOwed(bool owed) async {
+    try {
+      if (owed) {
+        await _hive.syncBox.put(_sweepOwedKey, true);
+      } else if (_hive.syncBox.containsKey(_sweepOwedKey)) {
+        await _hive.syncBox.delete(_sweepOwedKey);
+      }
+    } catch (_) {}
+  }
 
   /// Defensive reads: a test may exercise a sync path without
   /// `HiveService.init()`; a missing configBox defaults each kill-switch to
@@ -1006,8 +1055,12 @@ class SyncService {
 
       // Check if a weekly full sync is needed.
       final lastFull = _getTimestamp(_lastFullSyncKey);
-      if (lastFull == null ||
-          DateTime.now().difference(lastFull) >= _fullSyncInterval) {
+      if (shouldRunFullSweep(
+        lastFullSync: lastFull,
+        now: DateTime.now(),
+        interval: _fullSyncInterval,
+        owed: _sweepOwed,
+      )) {
         await weeklyFullSync();
       }
 
@@ -1268,6 +1321,16 @@ class SyncService {
   ///
   /// Triggered on app launch if >1 day since last full sync.
   Future<void> weeklyFullSync() async {
+    // closes-diagnose e5b2a9 — run AFTER any in-flight sweep (a retry sweep and
+    // a launch sweep must not overlap, and neither may inherit the other's
+    // failures). The ticket is released in `finally`; the failure baseline is
+    // read AFTER the wait. Kill-switch on => no ticket (the old path, verbatim).
+    final ticket = SyncRetryController.instance.disabled
+        ? null
+        : _weeklyFullSyncSlot.enter();
+    if (ticket != null) await ticket.turn;
+    final retryableFailuresBefore =
+        SyncRetryController.instance.retryableFailureSeq;
     try {
       final userId = _supabase.currentUser?.id;
       if (userId == null) return;
@@ -1307,7 +1370,16 @@ class SyncService {
         eagerError: false,
       );
 
-      await _setTimestamp(_lastFullSyncKey);
+      // closes-diagnose e5b2a9 — stamp the 1-day sweep as done ONLY if no
+      // outage-shaped push failure occurred during it. Pre-fix a sweep in which
+      // every op failed was stamped "done" and the next launch skipped it.
+      // (A deterministic failure never moves the counter, so it cannot force a
+      // re-sweep on every launch.)
+      if (SyncRetryController.instance.retryableFailureSeq ==
+          retryableFailuresBefore) {
+        await _setTimestamp(_lastFullSyncKey);
+        await _setSweepOwed(false);
+      }
     } catch (e, st) {
       // Partial sync failure — next launch will retry.
       debugPrint('[SyncService.weeklyFullSync] $e');
@@ -1319,6 +1391,9 @@ class SyncService {
       try {
         await _reportSyncFailure(opType: 'weekly_full_sync', error: e);
       } catch (_) {}
+    }
+    finally {
+      ticket?.release();
     }
   }
 
@@ -2515,6 +2590,14 @@ class SyncService {
     }
   }
 
+  bool get _restoreOpDoneFilterDisabled {
+    try {
+      return _hive.configBox.get('disable_restore_op_done_filter') == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Applies the [restoreOpTimeout] ceiling to a single restore step.
   ///
   /// Extracted so the ceiling is unit-testable under `fakeAsync` without a
@@ -2564,10 +2647,15 @@ class SyncService {
     try {
       await applyRestoreCeiling(task, enabled: _restoreOpTimeoutEnabled);
       sw.stop();
-      unawaited(ErrorTelemetry.logEvent(
-        'restore_op_done',
-        message: 'op=$label ms=${sw.elapsedMilliseconds}',
-      ));
+      // closes-diagnose e5b2a9 — only SLOW ops earn a row (kill-switch
+      // `disable_restore_op_done_filter` restores log-everything).
+      if (shouldLogRestoreOpDone(sw.elapsed,
+          alwaysLog: _restoreOpDoneFilterDisabled)) {
+        unawaited(ErrorTelemetry.logEvent(
+          'restore_op_done',
+          message: 'op=$label ms=${sw.elapsedMilliseconds}',
+        ));
+      }
     } catch (e, st) {
       sw.stop();
       // A timeout is reported under its own reason. It is NOT the same event as
@@ -2659,6 +2747,16 @@ class SyncService {
     required Object error,
     int retryCount = 0,
   }) async {
+    // closes-diagnose e5b2a9 — single funnel for every push AND restore
+    // failure. Tell the retry controller, which accepts only outage-shaped
+    // PUSH failures.
+    final acceptedBefore = SyncRetryController.instance.retryableFailureSeq;
+    try {
+      SyncRetryController.instance.noteFailure(error, opType: opType);
+    } catch (_) {}
+    if (SyncRetryController.instance.retryableFailureSeq != acceptedBefore) {
+      await _setSweepOwed(true);
+    }
     // Crashlytics ONLY here (diagnose — see docs/diagnoses/, B2a-2b).
     // Pre-fix this ALSO posted its own separate log-client-error row via
     // recordNonFatal's server leg, so every sync failure inserted TWO

@@ -2093,7 +2093,7 @@ concepts:
           investigation, not folded into this fix).
     readers:
       - file: lib/core/services/auth_session_bootstrapper.dart
-        line_range: 287-579
+        line_range: 758-1088
         method: hydrateFromCloud
         semantic: cloud-projection + restore
         notes: |
@@ -2674,6 +2674,150 @@ concepts:
       CONVERGED (leak surface SOUND; A→B leak + JWT-as-apikey = false alarms). EF
       deploy + the C1 index-drop migration are founder-gated (each its own go).
 
+  - concept: restoring_destination_read_timeout
+    domain: cross_domain
+    behavioral_test_path: test/contracts/restoring_destination_timeout_test.dart
+    description: |
+      The post-auth routing read (AuthSessionBootstrapper.resolveDestination)
+      has a hard 8 s ceiling so a hung backend (521/504, 10-36 s per request)
+      cannot hold RestoringScreen before its local-evidence branch can run
+      (diagnose e5b2a9, the 2026-10-01 Supabase API outage). A timeout is
+      DestinationUnknown('read_ceiling') - never StartMissionBrief (c2e9f4) -
+      and a device with NO local evidence keeps awaiting the original read so a
+      late answer still routes. A device that ALREADY holds local evidence of
+      onboarding does not wait at all (evidence-first routing): resolveBounded
+      returns GoHome straight away and the read settles in the background
+      (applyLateAnswer: the self-heal stamp / the c2e9f4 override signal), behind
+      a Supabase-uid + Hive-owner session guard.
+    writers:
+      - file: lib/core/services/auth_session_bootstrapper.dart
+        line_range: 1-9999
+        method: AuthSessionBootstrapper.boundDestination + resolveBounded + resolveDestinationBounded + resolveDestinationBoundedOnce + settleLateAnswer + applyLateAnswer + liveSessionOwnedBy + sessionOwnedBy + stampOnboardingCompletedAt + ExclusiveRun
+        notes: |
+          All of the ceiling / local-evidence / evidence-first / late-answer /
+          in-flight-guard / kill-switch logic lives here because
+          restoring_screen.dart's head file was exactly on Gate 43's 800-line
+          cap at plan time (part files are not counted, so the cap does not
+          force this - the logic lives here by choice, testable without a
+          widget; the screen edit is net -6 lines). settleLateAnswer is the background chain's
+          error sink (a rejecting read, a throwing stamp or guard all end in
+          one evidence_first_late_answer_failed event; it has NO ceiling);
+          liveSessionOwnedBy feeds sessionOwnedBy from the LIVE Supabase uid and
+          the LIVE Hive owner. ensureTermsConsentFallback now refreshes the token
+          first because _goHome calls it at t~0 (no longer after the routing
+          read did). Kill-switches (configBox):
+          'disable_resolve_destination_timeout' restores the unbounded await and
+          also turns evidence-first off; 'disable_evidence_first_routing' turns
+          only evidence-first off (the old await-then-ceiling path, verbatim);
+          the screen's 'disable_local_onboarded_evidence' makes the evidence
+          callback return false, so evidence-first is inert too.
+          stampOnboardingCompletedAt is the ONE writer of the Plan A self-heal
+          stamp (the screen's _stampOnboardingCompletedAt delegates to it). It is
+          self-protecting: it writes and pushes only while the session still
+          belongs to the user (checked at entry AND before the push), keeps an
+          existing real stamp (and still pushes it), and replaces a blank one.
+    reader_manifest_complete: true
+    readers:
+      - file: lib/features/auth/screens/restoring_screen.dart
+        line_range: 96-125
+        method: _kickoffRestore
+        semantic: awaits-bounded-destination
+        fields_read: [PostSignInDestination]
+        notes: |
+          Awaits resolveDestinationBounded(user.id, _hasLocalOnboardedEvidence).
+          With local evidence that returns GoHome immediately (evidence-first);
+          without it the pre-existing branches run. The evidence callback opens
+          the Hive session before it reads (until then the raw user-scoped box
+          getter throws, which the callback turns into "no evidence", so
+          evidence-first would silently never fire).
+      - file: lib/features/auth/screens/restoring_screen.dart
+        line_range: 578-640
+        method: _onContinueAnyway
+        semantic: awaits-bounded-guarded-retry
+        fields_read: [PostSignInDestination]
+        notes: |
+          The CONTINUE retry uses resolveDestinationBoundedOnce (bounded and
+          guarded by ExclusiveRun so a second tap cannot stack another read
+          behind the per-user lock).
+    regression_test: test/contracts/restoring_destination_timeout_test.dart
+    telemetry:
+      success_op_types: []
+      failure_op_types: []
+    class_constraints: |
+      A routing read that did not answer is its own state: never StartMissionBrief.
+      The no-local-evidence path must keep awaiting the ORIGINAL read, not
+      discard a late answer. No inserted comment may contain a slash-star pair
+      (several contract tests strip comments with a naive block-comment regex).
+
+  - concept: sync_failure_retry_sweep
+    domain: cross_domain
+    behavioral_test_path: test/contracts/sync_retry_controller_test.dart
+    description: |
+      An OUTAGE-SHAPED PUSH failure (socket/DNS, TLS, Load failed, 5xx/Cloudflare
+      52x, 408/429, PGRST000-003, 57014/53xxx/08xxx/40001/40P01, TimeoutException)
+      of an op type the sweep re-sends arms a reachability-probed re-run of
+      weeklyFullSync on 30 s / 2 m / 10 m, capped at 6 failed runs; recovery clears
+      the paused flag; weeklyFullSync stamps last_full_sync only if no retryable
+      failure occurred, and the durable syncBox flag sync_sweep_owed (set by the
+      funnel, cleared by a clean sweep, honoured by checkAndSync) survives a
+      reload or the retry cap (diagnose e5b2a9).
+    writers:
+      - file: lib/core/services/sync_service.dart
+        line_range: 1-9999
+        method: _reportSyncFailure + weeklyFullSync
+        notes: |
+          _reportSyncFailure is the single failure funnel: it tells
+          SyncRetryController.noteFailure about every failure and writes
+          sync_sweep_owed when one was accepted; weeklyFullSync runs serialised
+          behind an in-flight sweep (SerialSlot) and stamps last_full_sync and
+          clears sync_sweep_owed only on a clean sweep; checkAndSync runs the
+          launch sweep when shouldRunFullSweep (interval / no stamp / owed) says so.
+      - file: lib/core/services/sync_retry_controller.dart
+        line_range: 1-9999
+        method: SyncRetryController.noteFailure + _fire
+        notes: |
+          Accepts only outage-shaped failures (classified from the error text
+          before ", details:") on swept push opTypes (upsert_*, sync_*,
+          restore_sync_*, weekly_full_sync, minus kNotSweptOpTypes); a String
+          error is a telemetry replay and is ignored. Kill-switch configBox
+          'disable_sync_retry_sweep'.
+      - file: lib/core/services/serial_slot.dart
+        line_range: 1-9999
+        method: SerialSlot.enter + SerialTicket.turn / release / reset
+        notes: |
+          Serialises weeklyFullSync (not joins it); release in a finally;
+          reset on account switch.
+      - file: lib/core/services/sync/sync_resilience.dart
+        line_range: 1-9999
+        method: probeBackendReachable
+        notes: |
+          Session guard + 8 s ceiling around the probe.
+      - file: lib/core/services/backend_probe.dart
+        line_range: 1-9999
+        method: probeBackendWithClient
+        notes: |
+          ONE request per probe: the SDK retries a GET that is answered 503/520
+          (or that throws) three more times, so the probe opts out with
+          .retry(enabled: false). A server that answers "no" is reachable.
+    reader_manifest_complete: true
+    readers:
+      - file: lib/shared/providers/sync_state_provider.dart
+        line_range: 100-160
+        method: SyncStateNotifier._stateFor
+        semantic: paused-outranks-queue
+        fields_read: [SyncRetryController.paused]
+        notes: |
+          SyncPaused is checked FIRST; the banner (sync_banner.dart _PausedBanner)
+          renders it and a tap calls retryPausedSync.
+    regression_test: test/contracts/sync_retry_controller_test.dart
+    telemetry:
+      success_op_types: []
+      failure_op_types: [weekly_full_sync]
+    class_constraints: |
+      Never widen the retry predicate to SyncError.isTransient (UnknownError and
+      AuthError are transient - an infinite loop). A deterministic failure (4xx,
+      PG 23xxx/42703) must never arm a retry. The cycle is capped.
+
   - concept: restore_completeness
     domain: cross_domain
     behavioral_test_path: test/contracts/restore_completeness_writes_test.dart
@@ -3056,7 +3200,7 @@ concepts:
         semantic: flag-check
         fields_read: [onboarding_completed]
       - file: lib/core/services/auth_session_bootstrapper.dart
-        line_range: 145-450
+        line_range: 503-1088
         method: AuthSessionBootstrapper.hydrateFromCloud + resolveDestination
         semantic: flag-check
         fields_read: [onboarding_completed, onboarding_completed_at]
@@ -4806,13 +4950,32 @@ concepts:
         line_range: 637-639
         method: setOnboarded
       - file: lib/core/services/auth_session_bootstrapper.dart
-        line_range: 1-450
+        line_range: 758-1088
         method: AuthSessionBootstrapper.hydrateFromCloud
         notes: |
           Audit 2026-05-20 / A1 — owns the post-sign-in user_profile
           read + Hive-merge + onboarding_completed flag write. Replaces
           the inline block at auth_provider._ensureLocalUser (was
           lines 477-770).
+      - file: lib/core/services/auth_session_bootstrapper.dart
+        line_range: 431-449
+        method: stampOnboardingCompletedAt
+        notes: |
+          e5b2a9 (evidence-first routing) - the ONE writer of the Plan A
+          self-heal stamp (it used to live in RestoringScreen; the screen's
+          _stampOnboardingCompletedAt now delegates here, so two copies cannot
+          drift). Writes the CURRENT UTC instant into userBox['profile'] and
+          pushes via syncProfileNow, but only while the session still belongs to
+          the user (checked at entry AND before the push: the push sends the
+          WHOLE profile under that user id), keeps an existing real stamp
+          (and still pushes it), and replaces a blank one. Callers: the screen's
+          ResumeOnboarding arm (gated on all 9 migration-112 fields, OI-46) and,
+          when the user is already home, applyLateAnswer behind
+          liveSessionOwnedBy. Deliberately not routed through
+          ProfileWriteService.patchProfile (its mutex adds an await between the
+          ownership check and the write). Behavioral:
+          test/contracts/evidence_first_routing_test.dart (value, push, both
+          guards, live default, kept / blank stamp).
       - file: lib/features/auth/screens/restoring_screen.dart
         line_range: 200-252
         method: _goHome (both branches — bg-restore fast path at 242-244 +
@@ -4871,7 +5034,7 @@ concepts:
           Hive routes to resume-onboarding. NOT NULL routes to /home
           (15s timeout safety).
       - file: lib/core/services/auth_session_bootstrapper.dart
-        line_range: 150-208
+        line_range: 503-561
         method: AuthSessionBootstrapper.resolveDestination
         semantic: flag-check
         fields_read: [user_id, onboarding_completed_at, date_of_birth, primary_goal, current_weight_kg, fitness_experience]
@@ -4915,10 +5078,11 @@ concepts:
           ⚠ CALLER PRECONDITION: both inputs must be read AFTER
           HiveUserSession.ensureOpenedForCurrentSession(). Under
           authenticated-but-owner-null, wrapUserScopedBox serves
-          GuardedBox.empty (guarded_box.dart:333) — every read returns null,
-          so the predicate answers "no evidence" while the evidence sits on
-          disk, SILENTLY (the loud StateError at :335 fires only when
-          UNAUTHENTICATED). The pre-fix code relied on the parallel
+          GuardedBox.empty (guarded_box.dart:333): a guarded .get returns null
+          and the raw HiveService.userBox getter the screen reads THROWS a
+          StateError that the screen's catch turns into "no evidence" - either
+          way the caller concludes "no evidence" while the evidence sits on
+          disk (the loud StateError at :335 fires only when UNAUTHENTICATED). The pre-fix code relied on the parallel
           restoreFromCloudForUser having opened the session, but that call
           (restoring_screen.dart:113-114, started in parallel with resolveDestination and not awaited before it; this read sync_service.dart:454, a doc comment, until 2026-09-28) is a race.
           Kill-switch disable_local_onboarded_evidence.
@@ -10597,7 +10761,7 @@ concepts:
           Never throws: an escape here would kill the user's ENTIRE daily
           snapshot via compileDailySnapshot -> pushSnapshotNow, not just prefs.
       - file: lib/core/services/sync_service.dart
-        line_range: 1052-1110
+        line_range: 1133-1190
         method: compileDailySnapshot
         semantic: pass-through
         notes: >
@@ -10896,7 +11060,7 @@ concepts:
           (→913) despite the gate not flagging it, found by grepping the
           symbol directly rather than trusting the gate's silence on it.
       - file: lib/core/services/sync_service.dart
-        line_range: 2507-2507
+        line_range: 2582-2582
         method: restoreOpTimeout
         semantic: per-op-ceiling
         notes: day-swapper + sync-load Task 20 fix1 (diagnose a9d3f6) shifted
@@ -10907,7 +11071,7 @@ concepts:
           an N-M line_range — but left stale it would misdirect a future
           reader by the same +14).
       - file: lib/core/services/sync_service.dart
-        line_range: 2526-2530
+        line_range: 2609-2613
         method: applyRestoreCeiling
         semantic: apply-ceiling
         notes: day-swapper + sync-load Task 20 shifted this range (+148 lines,
@@ -10917,7 +11081,7 @@ concepts:
           blocks on a citation you shifted). Shifted again by task-20-fix1
           (diagnose a9d3f6, +14 lines, same method) for the same reason.
       - file: lib/core/services/sync_service.dart
-        line_range: 2538-2540
+        line_range: 2621-2623
         method: restoreFailureReason
         semantic: telemetry-reason-split
         notes: same shift as applyRestoreCeiling directly above, both times; all three re-derived +3 by the Hermes sync_epoch_seen doc comment (2026-09-28), then +1 (with _safeRestoreOp) by the plan_engine_flags import the merge-review F4 fix added (a3e7d9).
@@ -10932,7 +11096,7 @@ concepts:
         method: _authRedirect
         semantic: delegates-to-pure-fn
       - file: lib/core/services/sync_service.dart
-        line_range: 2559-2587
+        line_range: 2614-2656
         method: _safeRestoreOp
         semantic: bounded-await
     hive:

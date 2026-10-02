@@ -1,0 +1,218 @@
+# Closure ledger - resilient-client-phase1 (diagnose e5b2a9)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no `deferred:` key.
+# `<branch>@branch` is the in-branch commit form (the SHA does not exist until the commit).
+
+batch: resilient-client-phase1
+plan_review_record: docs/plan-reviews/claude-resilient-client-phase1.md
+bpass_review: docs/reviews/resilient-client-phase1-bpass.md
+diagnose_docs:
+  - docs/diagnoses/2026-10-01-supabase-api-outage-client-resilience-e5b2a9.md
+
+findings:
+  - id: UNIT-A
+    title: "Unit A: bounded post-auth routing read (8 s ceiling; a timeout is never StartMissionBrief; CONTINUE retry guarded)"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "test/contracts/restoring_destination_timeout_test.dart"
+  - id: UNIT-A-EF
+    title: "Unit A extension: evidence-first routing (a device with local evidence goes home without awaiting the cloud read)"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "test/contracts/evidence_first_routing_test.dart (51 tests; 150-mutation re-proof in the diagnose doc)"
+  - id: UNIT-B
+    title: "Unit B: capped, probe-gated retry of failed pushes (SyncRetryController, SerialSlot, backend probe, durable sync_sweep_owed)"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "test/contracts/sync_retry_controller_test.dart, test/contracts/serial_slot_test.dart, test/sync/probe_backend_reachable_test.dart"
+  - id: UNIT-D
+    title: "Unit D: 'Sync paused' banner state"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "test/contracts/sync_paused_state_test.dart"
+  - id: UNIT-E
+    title: "Unit E: restore_op_done logged only for ops >= 2 s"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "test/contracts/restore_op_done_filter_test.dart"
+  - id: OI-151
+    title: "OI-151 telemetry outweighs user data; restore_op_done was 57% of client_errors"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "test/contracts/restore_op_done_filter_test.dart; moved to docs/audit/closed_issues.md in this commit"
+  - id: BP-F1
+    title: "B-pass F1 (P2): owed-sweep state was memory-only - a reload or the 6-run cap left a failed row unsent until tomorrow"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "durable syncBox sync_sweep_owed flag + shouldRunFullSweep; test/contracts/sync_retry_controller_test.dart (mutations OW-1..OW-6)"
+  - id: BP-F2
+    title: "B-pass F2 (P2): weeklyFullSync serialisation was a source-grepped raw future no test could exercise"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "SerialSlot extracted; test/contracts/serial_slot_test.dart (SL-1,2,4,5,6 red; SL-3 documented equivalent)"
+  - id: BP-F3
+    title: "B-pass F3 (P2): the registry cited a probe test that did not exist"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "backend_probe.dart + test/sync/probe_backend_reachable_test.dart (PR-1..PR-5 red)"
+  - id: BP-F4
+    title: "B-pass F4 (P2): op types the sweep never re-sends armed the paused banner"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "kNotSweptOpTypes + a forcing-function test enumerating every opType literal; test/contracts/sync_retry_controller_test.dart"
+  - id: BP-F5
+    title: "B-pass F5 (P3): the classifier scanned Postgres' echo of the user's own row"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "_classifiableText cuts at ', details:'; table-driven false-positive / false-negative tests (CL-1..CL-9; CL-7 documented equivalent)"
+  - id: BP-F6
+    title: "B-pass F6 (P3): untested pure edges (connectivity kick, catch-path attempt count, kill-switch literals)"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "shouldKickRetryOnConnectivity extracted; schedule-step and literal pins; mutations PV-1, CT-1, X-1..X-3 red"
+  - id: BP-F7
+    title: "B-pass F7 (P3): kill-switch off must not serialise weeklyFullSync"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "wiring test + mutation SW-4; stated in the diagnose limits"
+  - id: BP-F8
+    title: "B-pass F8 (P3): docs/blast_radius.yaml classifies only sync/** as platform, so sync_service / sync_retry_controller / sync_queue compute account"
+    terminal_state: blocked_on_user
+    reason: "founder policy call on the blast-radius tier policy; filed as OI-282 (docs/audit/open_issues.md)"
+  - id: BP-F9
+    title: "B-pass F9 (P3): staged docs asserted OI-board state that did not exist, an OI-N placeholder, a stale telemetry-test reason string"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "OIs OI-279..OI-282 minted and the placeholders substituted in this commit; reason string and bug-class 2.82 wording fixed"
+  - id: BP-F10
+    title: "B-pass F10 (P3): banner tap fanned an un-throttled drain into SyncQueue; the copy could wrap; probe rate while paused"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "retryPausedSync returns inside the cooldown and drains only a non-empty queue; copy shortened to one line; probe rate bounded by the 10 s cooldown (accepted, in the diagnose limits)"
+  - id: EF-B1
+    title: "Review B1 (P2): the late-answer error sink protected only by substring greps"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "settleLateAnswer extracted; behavioural tests: rejecting read, throwing stamp / guard / sink, no ceiling (mutations M22, M23b, M23c red) in test/contracts/evidence_first_routing_test.dart"
+  - id: EF-B2
+    title: "Review B2 (P3): the handed-over read unobserved while the evidence check runs"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "read.ignore() + a runZonedGuarded test (M07 red)"
+  - id: EF-B3
+    title: "Review B3 (P3): the stamp pushed the whole profile with no re-check after the put"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "stampOnboardingCompletedAt re-checks the session at entry and before the push (M26, M27, M28, M30 red)"
+  - id: EF-B4
+    title: "Review B4 (P3): the stamp overwrote an existing real onboarding_completed_at"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "an existing real stamp is kept and still pushed; blank / non-string replaced (M25, M31, M31b red)"
+  - id: EF-B5
+    title: "Review B5 (P3): the stamp bypasses ProfileWriteService (mutex, updated_at)"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "accepted with the reason written into the stamp's doc comment (the mutex adds an await between the ownership check and the write; a lost stamp self-heals at the next cold start)"
+  - id: EF-B6
+    title: "Review B6 (P3): the session guard stays true for the tail of a sign-out teardown"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "second line of defence documented at _sessionStillMine (shouldStamp all-9-fields gate; a closed guarded box throws into the sink)"
+  - id: EF-B7
+    title: "Review B7 (P3): no registry writer entry for the stamp; stale hydrateFromCloud range"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "docs/sot_registry.yaml: stamp writer entry added, ranges re-derived; check_sot_registry_parity PASS"
+  - id: EF-A1
+    title: "Review A1 (P2): evidence read after the session open pinned only by a whole-source contains"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "ordering pin inside _hasLocalOnboardedEvidence (S2, S3 red) in test/contracts/evidence_first_routing_test.dart"
+  - id: EF-A2
+    title: "Review A2 (P2): the premise evidence => _goHome unpinned for the ResumeOnboarding and GoHome arms"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "per-arm source-slice pin + predicate-input equality (S1, S5 red)"
+  - id: EF-A3
+    title: "Review A3 (P3): docs said an owner-null box serves EMPTY; the raw getter throws"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "reworded in the bootstrapper, screen, local_onboarding_evidence.dart, auth CLAUDE.md, registry, diagnose, bug-class 2.81"
+  - id: EF-A4
+    title: "Review A4 (P3): the 8 s ceiling window starts after the evidence await"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "read.ignore(); limit (11) in the diagnose doc"
+  - id: EF-A5
+    title: "Review A5 (P3, low confidence): ensureTermsConsentFallback now runs at t~0 before the token refresh"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "ensureFreshToken() first, failure recorded; pinned by order and reason literal (M32, M33 red)"
+  - id: EF-C1
+    title: "Review C1 (P2): check_sot_registry_parity exited 1 (6 stale ranges)"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "ranges re-derived against the final source; parity gate PASS"
+  - id: EF-C2
+    title: "Review C2 (P2): _hasLocalOnboardedEvidence kill-switch and session-open guards unpinned"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "same ordering pin as EF-A1"
+  - id: EF-C3
+    title: "Review C3 (P2): evidenceFirstDisabled not run behaviourally; the wiring regex matched as a prefix"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "real-configBox tests (absent / true / sibling-key mirror / unreadable box / literal-true-only) + an anchored regex forbidding && (M08, M09, M35, M36, M37 red)"
+  - id: EF-C4
+    title: "Review C4 (P2): the guard feed into sessionOwnedBy pinned by substrings"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "liveSessionOwnedBy with injectable live readers + a behavioural truth table (M17, M17b red)"
+  - id: EF-C5
+    title: "Review C5 (P2): error sink / awaiting asserted only by substrings"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "same as EF-B1"
+  - id: EF-C6
+    title: "Review C6 (P2): case GoHome (the warm-start main path) not pinned"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "same per-arm pin as EF-A2 (S1 red)"
+  - id: EF-C7
+    title: "Review C7 (P2): the stamp test asserted only isA<String> / isUtc"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "value within 5 s of now, push once with the user id, kept / blank stamp, both guards, live default (M21, M28, M29 red)"
+  - id: EF-C8
+    title: "Review C8 (P3): diagnose mutation log and Gate 25 INDEX predated the extension"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "mutation log rebuilt from the run logs; build_bug_index.dart run, INDEX.md staged; Gate 25 PASS"
+  - id: EF-C9
+    title: "Review C9 (P3): four doc overclaims (cap sentence, net-zero, stale line, writers column)"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "all four reworded / re-derived (auth CLAUDE.md, services CLAUDE.md, registry, diagnose, plan)"
+  - id: EF-C10
+    title: "Review C10 (P3): vacuous tests (the ONCE test; two OR-chain source-greps)"
+    terminal_state: closed_in_commit
+    commit: claude/resilient-client-phase1@branch
+    verification: "renamed as a double-call guard; both OR-chain tests tightened by ADDING assertions, nothing loosened"
+  - id: OI-279
+    title: "Phase 1b: pull-on-resume - a backgrounded device refreshes itself"
+    terminal_state: blocked_on_user
+    reason: "founder go on the Phase 1b plan after its own two context-blind review rounds (CLAUDE.md 4.12.1); OI-279 filed with the requirements the Phase 1 reviews established"
+  - id: OI-280
+    title: "Phase 2 multi-device delta sync, cursor-based cold-start restore, the fixed 3 s splash floor"
+    terminal_state: blocked_on_user
+    reason: "founder go on the delta-sync design and per-action authorization for each live migration apply (updated_at / deleted_at columns); OI-280 filed"
+  - id: OI-281
+    title: "Meal deletes never reach the cloud; the restore resurrects deleted meals at cold start"
+    terminal_state: blocked_on_user
+    reason: "founder go on the design and per-action authorization for the live migration apply (a cloud tombstone on nutrition_logs); OI-281 filed"
+  - id: LIMIT-FLAGONLY
+    title: "A device whose only evidence is the onboarding flag (no primary_goal locally) still awaits the full restore in _goHome"
+    terminal_state: verified_clean
+    notes: "Not a defect of this batch: the fast path is deliberately gated on a populated local profile (restoring_screen.dart _goHome). Founder decision 2026-10-02: leave as is (option 1); stated as limit (9) in the diagnose doc. Cohort size not measured."
+
+closed_count: 42

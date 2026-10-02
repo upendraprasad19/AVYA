@@ -26,6 +26,7 @@ class SyncBanner extends ConsumerWidget {
       SyncIdle() => const SizedBox.shrink(),
       SyncQueued(:final pendingCount) =>
         _QueuedBanner(count: pendingCount),
+      SyncPaused() => const _PausedBanner(),
     };
   }
 }
@@ -72,6 +73,57 @@ class _QueuedBanner extends ConsumerWidget {
                 ),
               ),
               const Text(
+                'Retry',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                  color: AppColors.accent,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PausedBanner extends ConsumerWidget {
+  const _PausedBanner();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Material(
+      color: AppColors.accentTint,
+      child: InkWell(
+        onTap: () => ref.read(syncStateProvider.notifier).retryPausedSync(),
+        child: Container(
+          height: 32,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          alignment: Alignment.centerLeft,
+          decoration: const BoxDecoration(
+            border: Border(
+              bottom: BorderSide(color: AppColors.border, width: 1),
+            ),
+          ),
+          child: const Row(
+            children: [
+              Icon(Icons.cloud_off_rounded, size: 16, color: AppColors.accent),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Sync paused — your data is safe',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.accent,
+                  ),
+                ),
+              ),
+              Text(
                 'Retry',
                 style: TextStyle(
                   fontSize: 11,

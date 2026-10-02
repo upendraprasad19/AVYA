@@ -14,6 +14,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/services/hive_service.dart';
 import '../../core/services/sync_queue.dart';
+import '../../core/services/sync_retry_controller.dart';
 
 /// How often the periodic auto-drain sweeps the queue while this provider is
 /// alive (i.e. for the app's lifetime — `syncStateProvider` is never
@@ -48,6 +49,13 @@ const Duration syncBannerDisplayRefreshInterval = Duration(minutes: 1);
 /// non-`none` result), the condition that should trigger a drain.
 bool shouldDrainOnConnectivityChange(List<ConnectivityResult> results) =>
     results.any((r) => r != ConnectivityResult.none);
+
+/// e5b2a9 (B-pass F6) — pure so the `&&` is testable: a connectivity change
+/// kicks the push retry controller only when something is actually PAUSED and
+/// connectivity returned (never on every flap with nothing owed).
+bool shouldKickRetryOnConnectivity(List<ConnectivityResult> results,
+    {required bool paused}) =>
+    paused && shouldDrainOnConnectivityChange(results);
 
 /// §4.6 kill-switch predicate for the two auto-drain triggers below, kept as
 /// a pure function over the raw `configBox` value so it's testable without a
@@ -97,6 +105,13 @@ class SyncQueued extends SyncState {
   const SyncQueued(this.pendingCount);
 }
 
+/// The backend stopped answering (outage-shaped push failure) and a retry is
+/// pending — closes-diagnose e5b2a9. Distinct from [SyncQueued]: that is "N ops
+/// are waiting"; this is "the server is not reachable right now".
+class SyncPaused extends SyncState {
+  const SyncPaused();
+}
+
 class SyncStateNotifier extends Notifier<SyncState> {
   StreamSubscription<int>? _sub;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
@@ -142,6 +157,7 @@ class SyncStateNotifier extends Notifier<SyncState> {
   /// show); the displayed count applies the grace policy unless its
   /// kill-switch is on.
   SyncState _stateFor(int rawCount) {
+    if (SyncRetryController.instance.paused.value) return const SyncPaused();
     if (rawCount == 0) return const SyncIdle();
     if (_bannerGraceDisabled) return SyncQueued(rawCount);
     final displayable =
@@ -166,6 +182,12 @@ class SyncStateNotifier extends Notifier<SyncState> {
       if (_autoDrainDisabled) return;
       if (shouldDrainOnConnectivityChange(results)) {
         unawaited(SyncQueue.instance.drain());
+      }
+      // e5b2a9 — connectivity came back while pushes are paused: retry now
+      // instead of waiting out a 10-minute backoff step (offline case).
+      if (shouldKickRetryOnConnectivity(results,
+          paused: SyncRetryController.instance.paused.value)) {
+        unawaited(SyncRetryController.instance.retryNow());
       }
     });
 
@@ -196,6 +218,9 @@ class SyncStateNotifier extends Notifier<SyncState> {
       state = _stateFor(raw);
     });
 
+    // closes-diagnose e5b2a9 — surface the retry controller's paused flag.
+    SyncRetryController.instance.paused.addListener(_onPausedChanged);
+
     ref.onDispose(() {
       _sub?.cancel();
       _sub = null;
@@ -205,6 +230,7 @@ class SyncStateNotifier extends Notifier<SyncState> {
       _drainTimer = null;
       _displayTimer?.cancel();
       _displayTimer = null;
+      SyncRetryController.instance.paused.removeListener(_onPausedChanged);
     });
 
     return _stateFor(SyncQueue.instance.pendingCountSync);
@@ -212,6 +238,10 @@ class SyncStateNotifier extends Notifier<SyncState> {
 
   void _onCount(int count) {
     state = _stateFor(count);
+  }
+
+  void _onPausedChanged() {
+    state = _stateFor(SyncQueue.instance.pendingCountSync);
   }
 
   /// User tapped "Retry now" on the banner — kick off a drain immediately,
@@ -225,6 +255,17 @@ class SyncStateNotifier extends Notifier<SyncState> {
       return;
     }
     await SyncQueue.instance.drain(force: true);
+  }
+
+  /// Banner tap while paused: kick the push retry controller, and — only if the
+  /// queue actually holds work — the queue drain. A tap inside the controller's
+  /// cooldown is ignored ENTIRELY: a forced drain bypasses the queue's own
+  /// backoff and bumps every op's retry count (7 passes dead-letters an op), so
+  /// an un-throttled drain would let a frustrated user burn a queued op (B-pass F10).
+  Future<void> retryPausedSync() async {
+    if (!SyncRetryController.instance.manualRetryAllowed) return;
+    unawaited(SyncRetryController.instance.retryNow());
+    if (SyncQueue.instance.pendingCountSync > 0) await retryNow();
   }
 }
 

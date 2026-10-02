@@ -67,6 +67,23 @@ void main() {
               'to decide three-way branch (home / resume / new-user)');
     });
 
+    test('reader RestoringScreen still routes through the stamp helper and the bootstrapper writer (tightened, e5b2a9)', () {
+      // The assertion above passes on ANY mention (a comment would do). Pin the
+      // real reader chain, comment-stripped: the screen calls its stamp helper,
+      // the helper delegates to the bootstrapper's single writer, and no second
+      // copy of the stamp body exists in the screen.
+      final stripped = restoringSrc
+          .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '')
+          .replaceAll(RegExp(r'//[^\n]*'), '');
+      expect(stripped.contains('_stampOnboardingCompletedAt(user.id)'), isTrue);
+      expect(
+          RegExp(r'AuthSessionBootstrapper\.stampOnboardingCompletedAt\(userId\)')
+              .hasMatch(stripped),
+          isTrue);
+      expect(stripped.contains("merged['onboarding_completed_at']"), isFalse,
+          reason: 'a second copy of the stamp body in the screen would drift');
+    });
+
     test('reader _authRedirect in app_router checks onboarding state', () {
       expect(routerSrc.contains('_authRedirect'), isTrue,
           reason: 'app_router must define _authRedirect');

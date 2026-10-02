@@ -106,10 +106,11 @@ void main() {
     test('mid-onboarding branch invokes the bootstrapper', () {
       // restoring_screen.dart must call AuthSessionBootstrapper.resolveDestination
       // (the canonical entry point) — not query Supabase directly.
+      // e5b2a9 — the screen now calls the BOUNDED variants (resolveDestinationBounded /
+      // resolveDestinationBoundedOnce), which wrap resolveDestination.
       expect(
-        restoringSrc.contains('AuthSessionBootstrapper.instance.resolveDestination') ||
-            restoringSrc.contains('AuthSessionBootstrapper().resolveDestination') ||
-            restoringSrc.contains('.resolveDestination('),
+        RegExp(r'\.resolveDestination(Bounded|BoundedOnce)?\(')
+            .hasMatch(restoringSrc),
         isTrue,
         reason:
             'RestoringScreen must call AuthSessionBootstrapper.resolveDestination '
@@ -131,6 +132,23 @@ void main() {
           reason:
               'Self-heal helper must exist somewhere in the auth-stack to '
               'recover the orphan-completed-but-no-timestamp state.');
+
+      // Tightened (e5b2a9, evidence-first review): the OR-chain above is met by
+      // ANY mention of onboarding_completed_at (its last term is true for the
+      // bootstrapper whatever it does). Pin the real wiring too, comment-stripped:
+      // the screen still CALLS the stamp helper and the bootstrapper still DEFINES
+      // the one writer that helper delegates to.
+      String strip(String s) => s
+          .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '')
+          .replaceAll(RegExp(r'//[^\n]*'), '');
+      expect(strip(restoringSrc).contains('_stampOnboardingCompletedAt(user.id)'),
+          isTrue,
+          reason: 'the ResumeOnboarding arm must still fire the Plan A stamp');
+      expect(
+          strip(bootstrapperSrc)
+              .contains('static Future<void> stampOnboardingCompletedAt('),
+          isTrue,
+          reason: 'the ONE stamp writer lives in the bootstrapper');
 
       // current_weight_kg heuristic — the trigger condition for self-heal.
       final hasWeightHeuristic =

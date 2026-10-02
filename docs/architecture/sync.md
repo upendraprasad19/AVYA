@@ -73,6 +73,13 @@ manual **Retry** tap issues a FORCED drain (`drain(force: true)`,
 backoff window, so the tap can never be a silent no-op; auto drains
 (app-launch, connectivity, 5-min timer) stay unforced.
 
+**`SyncPaused` (e5b2a9, 2026-10-01):** the same `_stateFor` funnel checks
+`SyncRetryController.instance.paused` FIRST — while a push retry is pending after an
+outage-shaped failure the banner reads "Sync paused — your data is safe" (one line)
+and outranks the queue states; its tap calls `retryPausedSync()` (retry controller; the
+queue drain only when the queue holds work, and nothing at all inside the 10 s cooldown).
+See "Outage resilience" below.
+
 #### workoutBox Key Patterns
 | Key Pattern | Value |
 |-------------|-------|
@@ -392,6 +399,55 @@ overwrite a present local row (`if (box.get(key) != null) continue;`).
   soft-delete-via-rename trigger on a natural-keyed table must fire on INSERT too, not
   just UPDATE** — an UPSERT from the client is a real INSERT whenever no conflicting row
   exists yet.
+
+### Outage resilience (Phase 1 — e5b2a9, 2026-10-01)
+
+Trigger: the 2026-10-01 Supabase API-gateway outage (521/522/504, PGRST002; the database
+stayed healthy). Three client defects, four units (no migration, no Edge Function change):
+
+- **Bounded routing read.** `AuthSessionBootstrapper.resolveBounded` puts an 8 s ceiling on
+  `resolveDestination`. A device with local evidence of onboarding goes home on
+  `DestinationUnknown('read_ceiling')`; a device with none keeps awaiting the original read.
+  A timeout is never `StartMissionBrief`. The CONTINUE retry is bounded and guarded
+  (`ExclusiveRun`). Kill-switch `disable_resolve_destination_timeout`.
+  **Evidence-first:** a device that already holds local evidence of onboarding does not wait for
+  the read at all — `resolveBounded(evidenceFirst: true)` returns `GoHome()` immediately (with
+  evidence every `RestoringScreen` branch ends in `_goHome`, so the read cannot change where the
+  user lands) and the read settles in the background (`applyLateAnswer`: the Plan A
+  `onboarding_completed_at` stamp for `ResumeOnboarding`, the c2e9f4 override signal for
+  `StartMissionBrief`), only while the Supabase uid AND the open Hive owner still name the user
+  (`liveSessionOwnedBy`). `settleLateAnswer` is its error sink and has no ceiling (the user is
+  already home); the stamp itself re-checks the session at entry and again before its profile push,
+  and keeps an existing real stamp. It does NOT shorten the 3 s splash floor or the cold-start full-history restore
+  (`restoreFromCloudForUser`, `since='2020-01-01'`), and a device whose only evidence is the
+  onboarding flag (no `primary_goal` in the local profile) still awaits that restore in
+  `_goHome`. Kill-switch `disable_evidence_first_routing`.
+- **Push retry.** Every domain push already goes through `SyncSkipIndex.pushIfChanged`, so a
+  re-run of `weeklyFullSync` re-sends only rows still unsent. `SyncRetryController` supplies
+  the missing trigger: an OUTAGE-SHAPED failure (socket/DNS, TLS/handshake, `Load failed`,
+  5xx/Cloudflare 52x, 408/429, PGRST000-003, 57014/53xxx/08xxx/40001/40P01,
+  `TimeoutException`) on a PUSH opType the sweep actually re-sends arms a reachability-probed
+  sweep on 30 s → 2 m → 10 m, capped at 6 failed runs. Op types the sweep does NOT re-send
+  (`kNotSweptOpTypes`: the `sync_fitness_summary` / `sync_community_items` READS and pushes
+  only their own writer retries, e.g. `sync_custom_items`, `sync_freezes`) never arm it. The
+  classifier reads the status/code only up to `, details:` — Postgres echoes the user's own
+  row into `details`/`hint`. The probe (`backend_probe.dart`) is ONE request
+  (`.retry(enabled: false)` — the SDK otherwise retries a GET answered 503/520, or one that
+  throws, three more times); a server that answers "no" (401/RLS) is REACHABLE. A banner tap
+  is limited to one run per 10 s; a sweep not back in 5 min is abandoned as a failed run.
+  `weeklyFullSync` runs serialised behind an in-flight sweep (`SerialSlot`) and stamps
+  `last_full_sync` only when no retryable failure occurred during it. The controller's own
+  state is memory-only, so an accepted failure also sets the DURABLE `syncBox['sync_sweep_owed']`
+  flag; a clean sweep clears it and `checkAndSync` runs the launch sweep when it is set (so a
+  web reload or the retry cap does not leave a row unsent until tomorrow). Kill-switch
+  `disable_sync_retry_sweep` (also bypasses the serialisation). The predicate is deliberately
+  NOT `SyncError.isTransient` (`UnknownError` is transient — an infinite loop).
+- **Telemetry volume.** `restore_op_done` is logged only for ops ≥ 2 s (it had become 57% of
+  `client_errors`; closes OI-151). Kill-switch `disable_restore_op_done_filter`.
+
+Not in Phase 1: pull-on-resume (a second device refreshing itself without a cold start) is
+Phase 1b (OI-279); per-row `updated_at`/tombstones, water entries and a cursor-based cold-start
+restore are Phase 2 (OI-280); meal deletes that never reach the cloud are OI-281. All are on the OI board.
 
 ### Restore Pagination
 - All restore queries use paginated fetch (1,000 rows per page, offset-based).

@@ -201,6 +201,9 @@ Per CLAUDE.md rules 21 + 22:
 | 2.76 | A real-time test whose synthetic-clock anchor precedes setup that e... | a test that drives a REAL Timer against a synthetic clock ("start N ms before midnight,... | test/contracts/day_rollover_midnight_timer_test.dart |
 | 2.77 | A source-grep test survives not just the dead branch it guards, but... | a guard's literal conditional text (if (x == 'completed' && y == 'planned' && z != null... | test/contracts/sync_schedule_completion_payload_hash_index_writer_to_reader_test.dart |
 | 2.79 | A denormalized "cache" column outlives the fix that stopped trusting it; its last readers are the founder's dashboards | a docstring says "the column stays as a cache" / "writing it is fine, reading it as truth ... | test/contracts/subscription_columns_dropped_test.dart |
+| 2.80 | A retry mechanism with no trigger for the failure mode that actually occurs (a connectivity trigger cannot fire in a backend-only outage) | data logged during a 521/504 outage never reaches the cloud; `weeklyFullSync` stamped done after a fully-failed sweep | test/contracts/sync_retry_controller_test.dart, test/contracts/serial_slot_test.dart |
+| 2.81 | Awaiting an unbounded network read before a local-evidence fallback (and waiting at all when the device already holds the answer) | splash sits on a 504/521 backend, or waits seconds on a cold start, although Hive is fully onboarded | test/contracts/restoring_destination_timeout_test.dart, test/contracts/evidence_first_routing_test.dart |
+| 2.82 | An SDK-level automatic retry multiplies a "one tiny request" probe (postgrest retries a GET answered 503/520, or that throws, 3x) | a probe or a "one failing request" assertion sees 4 requests against a 503 server | test/sync/probe_backend_reachable_test.dart |
 
 ---
 

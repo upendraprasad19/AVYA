@@ -7,6 +7,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
+import 'package:icanbefitter/core/services/local_onboarding_evidence.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
@@ -134,6 +136,332 @@ class AuthSessionBootstrapper {
     if (hiveIso == null) return now;
     return DateTime.tryParse(hiveIso) ?? now;
   }
+
+  /// Hard ceiling on how long the post-auth routing read may hold the splash.
+  ///
+  /// closes-diagnose e5b2a9 — during the 2026-10-01 Supabase API outage the auth
+  /// endpoint and the REST endpoints answered 504/521 for ~25 minutes and each
+  /// hung request held a connection 10-36 s (same shape as d7b1f8).
+  /// [resolveDestination] (token refresh + SELECT + hard-refresh retry +
+  /// SELECT) had NO ceiling, so `RestoringScreen._kickoffRestore`'s
+  /// `await destinationFuture` never reached its local-evidence branch and the
+  /// user sat on "Getting you ready…" until they found the 30 s CONTINUE button.
+  static const Duration kDestinationReadLimit = Duration(seconds: 8);
+
+  /// `DestinationUnknown.reason` stamped by the ceiling. Distinct from every
+  /// reason [resolveDestination] itself produces, so [resolveBounded] can tell
+  /// "the ceiling fired" from "the read answered unknown".
+  static const String kDestinationTimeoutReason = 'read_ceiling';
+
+  /// §4.6 kill-switch: `configBox[...] == true` restores the unbounded await.
+  static const String kDisableDestinationTimeoutKey =
+      'disable_resolve_destination_timeout';
+
+  /// Defensive read — a missing/unopened configBox means the fix stays ACTIVE.
+  static bool get destinationTimeoutDisabled {
+    try {
+      return HiveService.instance.configBox
+              .get(kDisableDestinationTimeoutKey) ==
+          true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// §4.6 kill-switch: `configBox[...] == true` restores the await-the-read path
+  /// verbatim (evidence is consulted only AFTER the ceiling fires).
+  static const String kDisableEvidenceFirstKey =
+      'disable_evidence_first_routing';
+
+  /// Defensive read — a missing/unopened configBox means the change stays ACTIVE.
+  static bool get evidenceFirstDisabled {
+    try {
+      return HiveService.instance.configBox.get(kDisableEvidenceFirstKey) ==
+          true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Bounds [read] so an unanswered routing read becomes
+  /// [DestinationUnknown]([kDestinationTimeoutReason]) — NEVER
+  /// [StartMissionBrief]. "The read did not answer" is its own state (c2e9f4).
+  ///
+  /// The abandoned read keeps running inside [resolveDestination]'s per-user
+  /// lock. A second [resolveDestination] call therefore queues behind it, which
+  /// is why the CONTINUE retry is bounded (and guarded) too.
+  static Future<PostSignInDestination> boundDestination(
+    Future<PostSignInDestination> read, {
+    Duration limit = kDestinationReadLimit,
+    bool disabled = false,
+  }) {
+    if (disabled) return read;
+    return read.timeout(
+      limit,
+      onTimeout: () => const DestinationUnknown(kDestinationTimeoutReason),
+    );
+  }
+
+  /// The routing policy `RestoringScreen._kickoffRestore` runs.
+  ///
+  ///  * [evidenceFirst] AND the device already holds local evidence of
+  ///    onboarding → [GoHome] immediately, without waiting for the cloud. With
+  ///    evidence EVERY branch of the screen ends in `_goHome`
+  ///    (StartMissionBrief is overridden by the evidence, Unknown goes home on
+  ///    it, ResumeOnboarding self-heals and goes home), so the read cannot
+  ///    change where the user lands; [onEvidenceFirst] receives the ORIGINAL
+  ///    [read] so the one side effect worth keeping (the self-heal stamp, the
+  ///    c2e9f4 override signal) still happens when it answers;
+  ///  * answered within [limit] → that answer, untouched;
+  ///  * ceiling fired AND the device holds local evidence of onboarding → the
+  ///    ceiling's [DestinationUnknown] (the screen's existing unknown branch
+  ///    then goes home on that evidence);
+  ///  * ceiling fired and there is NO local evidence (fresh device / reinstall —
+  ///    nothing to fall back to) → keep awaiting the ORIGINAL [read], so a late
+  ///    answer still routes instead of being thrown away.
+  ///
+  /// No evidence ⇒ the evidence-first leg falls straight through to the
+  /// pre-existing policy: "the read did not answer" is never [StartMissionBrief]
+  /// (c2e9f4) and a fresh device keeps awaiting the original read.
+  /// [disabled] (the `disable_resolve_destination_timeout` kill-switch) also
+  /// turns [evidenceFirst] off, so that switch still restores the old path whole.
+  static Future<PostSignInDestination> resolveBounded(
+    Future<PostSignInDestination> read, {
+    required Future<bool> Function() hasLocalEvidence,
+    Duration limit = kDestinationReadLimit,
+    bool disabled = false,
+    bool evidenceFirst = false,
+    void Function(Future<PostSignInDestination> read)? onEvidenceFirst,
+  }) async {
+    if (evidenceFirst && !disabled) {
+      // Observe `read`'s outcome NOW: nothing listens to it until the evidence
+      // check below returns (and, on the evidence path, until the background
+      // settle attaches), so an error completing in that gap would otherwise be
+      // reported as an uncaught zone error. A later `await read` still sees it.
+      read.ignore();
+      var evidenceNow = false;
+      try {
+        evidenceNow = await hasLocalEvidence();
+      } catch (_) {
+        evidenceNow = false;
+      }
+      if (evidenceNow) {
+        try {
+          onEvidenceFirst?.call(read);
+        } catch (_) {}
+        return const GoHome();
+      }
+    }
+    final bounded =
+        await boundDestination(read, limit: limit, disabled: disabled);
+    final ceilingFired = bounded is DestinationUnknown &&
+        bounded.reason == kDestinationTimeoutReason;
+    if (!ceilingFired) return bounded;
+    var evidence = false;
+    try {
+      evidence = await hasLocalEvidence();
+    } catch (_) {
+      evidence = false;
+    }
+    if (evidence) return bounded;
+    return read;
+  }
+
+  /// [resolveDestination] + [resolveBounded] + the kill-switches, for the screen.
+  ///
+  /// [hasLocalEvidence] MUST open the user-scoped Hive session before it reads
+  /// (the screen's `_hasLocalOnboardedEvidence` does). Until the session is open
+  /// the raw user-scoped box is unreadable (an owner-null or owner-mismatch
+  /// session serves the guarded empty stub and the raw getter throws), which the
+  /// screen's callback turns into "no evidence" — evidence-first would then
+  /// silently never fire. The callback also honours
+  /// `disable_local_onboarded_evidence`, so that switch turns the evidence-first
+  /// leg inert too.
+  Future<PostSignInDestination> resolveDestinationBounded(
+    String userId,
+    Future<bool> Function() hasLocalEvidence,
+  ) =>
+      resolveBounded(
+        resolveDestination(userId),
+        hasLocalEvidence: hasLocalEvidence,
+        disabled: destinationTimeoutDisabled,
+        evidenceFirst: !evidenceFirstDisabled,
+        onEvidenceFirst: (read) => _settleLateAnswer(userId, read),
+      );
+
+  /// The user is already home; the read is still running inside
+  /// [resolveDestination]'s per-user lock. Apply its answer when it lands
+  /// ([settleLateAnswer] owns the error sink: nothing here may become an
+  /// unhandled async error).
+  void _settleLateAnswer(String userId, Future<PostSignInDestination> read) {
+    unawaited(settleLateAnswer(
+      read,
+      sessionStillMine: () => _sessionStillMine(userId),
+      shouldStamp: () =>
+          hasAllRequiredProfileFields(_hive.userBox.get('profile')),
+      stamp: () => stampOnboardingCompletedAt(userId),
+      logOverride: () => unawaited(ErrorTelemetry.logEvent(
+          'restoring_missionbrief_overridden_by_local_evidence',
+          message: 'userId=${_shortId(userId)} (evidence-first)')),
+      onError: (e, st) => unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'evidence_first_late_answer_failed',
+          extra: {'user_id': userId})),
+    ));
+  }
+
+  /// Waits for the original routing read — NO ceiling: it may take minutes in an
+  /// outage and the user is already home — then applies it. Never throws: a
+  /// rejecting read, a throwing stamp or a throwing guard all end in [onError].
+  @visibleForTesting
+  static Future<void> settleLateAnswer(
+    Future<PostSignInDestination> read, {
+    required bool Function() sessionStillMine,
+    required bool Function() shouldStamp,
+    required Future<void> Function() stamp,
+    required void Function() logOverride,
+    required void Function(Object error, StackTrace st) onError,
+  }) async {
+    try {
+      final answer = await read;
+      await applyLateAnswer(
+        answer,
+        sessionStillMine: sessionStillMine,
+        shouldStamp: shouldStamp,
+        stamp: stamp,
+        logOverride: logOverride,
+      );
+    } catch (e, st) {
+      try {
+        onError(e, st);
+      } catch (_) {}
+    }
+  }
+
+  /// The late answer may land after a sign-out or an account switch (an
+  /// outage-slow read can take 30 s+). It may only touch Hive while BOTH the
+  /// Supabase session and the open user-scoped boxes still belong to [userId] —
+  /// otherwise the stamp would write into the next user's profile.
+  ///
+  /// During the TAIL of a sign-out teardown both readers can still name the user
+  /// (`clearAllData` and the box deletion run before Supabase `signOut`, and the
+  /// Hive owner is nulled only after the boxes close). That window is covered by
+  /// the second line: `shouldStamp`'s all-9-fields gate reads the cleared
+  /// profile, and a closed guarded box throws into the settle's error sink — at
+  /// worst one `evidence_first_late_answer_failed` event, never a cross-account
+  /// write.
+  bool _sessionStillMine(String userId) => liveSessionOwnedBy(userId);
+
+  /// [sessionOwnedBy] fed by the LIVE Supabase uid and the LIVE Hive owner. The
+  /// two readers are injectable so the feed itself (not only the truth table) is
+  /// behaviourally testable.
+  @visibleForTesting
+  static bool liveSessionOwnedBy(
+    String userId, {
+    String? Function()? supabaseUid,
+    String? Function()? hiveOwner,
+  }) =>
+      sessionOwnedBy(
+        userId,
+        supabaseUid: (supabaseUid ?? _liveSupabaseUid)(),
+        hiveOwner: (hiveOwner ?? _liveHiveOwner)(),
+      );
+
+  static String? _liveSupabaseUid() => SupabaseService.instance.currentUser?.id;
+
+  static String? _liveHiveOwner() => HiveUserSession.currentOwnerFullId;
+
+  /// Pure so the cross-account rule is testable: BOTH must name [userId].
+  @visibleForTesting
+  static bool sessionOwnedBy(
+    String userId, {
+    required String? supabaseUid,
+    required String? hiveOwner,
+  }) =>
+      supabaseUid == userId && hiveOwner == userId;
+
+  /// What `RestoringScreen._kickoffRestore`'s per-branch work did with the
+  /// answer before evidence-first routing — now run AFTER the user is home.
+  /// Pure (every effect is injected) so each branch is behaviourally testable.
+  ///
+  ///  * [StartMissionBrief] with local evidence → only the c2e9f4 override
+  ///    signal (cloud says "no row", Hive says onboarded — a stale-token RLS
+  ///    filter looks exactly like this); nothing is routed or written;
+  ///  * [ResumeOnboarding] → the Plan A self-heal stamp, only when the profile
+  ///    carries all 9 migration-112 fields ([shouldStamp]; OI-46 — a
+  ///    flag-only legacy user must not retry a write the server rejects);
+  ///  * [GoHome] / [DestinationUnknown] → nothing.
+  @visibleForTesting
+  static Future<void> applyLateAnswer(
+    PostSignInDestination answer, {
+    required bool Function() sessionStillMine,
+    required bool Function() shouldStamp,
+    required Future<void> Function() stamp,
+    required void Function() logOverride,
+  }) async {
+    if (!sessionStillMine()) return;
+    switch (answer) {
+      case StartMissionBrief():
+        logOverride();
+      case ResumeOnboarding():
+        if (shouldStamp()) await stamp();
+      case GoHome() || DestinationUnknown():
+        break;
+    }
+  }
+
+  /// Plan A self-heal — stamps `onboarding_completed_at` on both Hive and
+  /// Supabase so the populated-but-NULL state can't recur. The ONE writer:
+  /// `RestoringScreen._stampOnboardingCompletedAt` delegates here (it used to
+  /// hold this body; two copies would drift). Ref-free on purpose — the screen
+  /// is disposed by the time a late answer lands.
+  ///
+  /// Self-protecting for every caller: nothing is written, and nothing is pushed,
+  /// unless the session still belongs to [userId] ([sessionStillMine] defaults to
+  /// the LIVE check) — checked at entry AND again after the Hive write, because
+  /// `syncProfileNow` pushes the WHOLE current profile under [userId]. An
+  /// existing real stamp is KEPT (a device that finished onboarding but never
+  /// got the push must send the true time, not "now") and is simply pushed.
+  /// [push] is injectable for tests.
+  ///
+  /// Deliberately not routed through `ProfileWriteService.patchProfile`: its
+  /// mutex adds an `await` between the ownership check and the write, whereas
+  /// this read-modify-write is atomic with the check. A stamp lost to a rare
+  /// concurrent full-replace writer is self-healing — the cloud stays NULL, so
+  /// the next cold start re-stamps.
+  static Future<void> stampOnboardingCompletedAt(
+    String userId, {
+    bool Function()? sessionStillMine,
+    Future<void> Function(String userId)? push,
+  }) async {
+    final mine = sessionStillMine ?? () => liveSessionOwnedBy(userId);
+    if (!mine()) return;
+    final profileBox = HiveService.instance.userBox;
+    final existing = (profileBox.get('profile') as Map?) ?? <dynamic, dynamic>{};
+    final merged = Map<String, dynamic>.from(existing.cast<String, dynamic>());
+    final prior = merged['onboarding_completed_at'];
+    final hasRealStamp = prior is String && prior.trim().isNotEmpty;
+    if (!hasRealStamp) {
+      merged['onboarding_completed_at'] = DateTime.now().toUtc().toIso8601String();
+      await profileBox.put('profile', merged);
+    }
+    if (!mine()) return;
+    unawaited((push ?? SyncService.instance.syncProfileNow)(userId));
+  }
+
+  /// The CONTINUE button's retry: bounded, and a second tap while one is in
+  /// flight gets an "unknown" (the screen's existing "tap again" branch) instead
+  /// of queueing another abandoned read behind the per-user lock.
+  final ExclusiveRun _continueRetry = ExclusiveRun();
+
+  Future<PostSignInDestination> resolveDestinationBoundedOnce(String userId) =>
+      _continueRetry.run<PostSignInDestination>(
+        () => boundDestination(
+          resolveDestination(userId),
+          disabled: destinationTimeoutDisabled,
+        ),
+        whenBusy: const DestinationUnknown('retry_in_flight'),
+      );
+
 
   /// Per-user mutex. Concurrent calls for the same user (RestoringScreen
   /// + token-refresh listener + manual retry) queue rather than racing.
@@ -356,6 +684,19 @@ class AuthSessionBootstrapper {
         // Primary path (email/OTP Hive write, or a prior run of this same
         // fallback) already has a value — nothing to do.
         return;
+      }
+      // e5b2a9 (evidence-first routing): `_goHome` now calls this at t~0, no
+      // longer AFTER `resolveDestination` has refreshed the token. A stale token
+      // can come back as HTTP 200 with ZERO rows (RLS-filtered, c2e9f4) — which
+      // would read as "no consent in cloud" and stamp `now()` instead of
+      // `created_at`. Refresh first, the same precaution `resolveDestination`
+      // takes (§4.4 rule 9). Only legacy users with no local stamp reach here.
+      try {
+        await _supabase.ensureFreshToken();
+      } catch (e, st) {
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'terms_fallback_token_refresh_failed',
+            extra: {'user_id': userId}));
       }
       final row = await _supabase.client
           .from('users')
@@ -897,6 +1238,22 @@ class AuthSessionBootstrapper {
     } finally {
       _locks.remove(userId);
       if (!c.isCompleted) c.complete();
+    }
+  }
+}
+
+/// Runs one async job at a time: a call made while another is in flight returns
+/// [whenBusy] without starting, and the slot is released even if the job throws.
+class ExclusiveRun {
+  bool _busy = false;
+
+  Future<T> run<T>(Future<T> Function() start, {required T whenBusy}) async {
+    if (_busy) return whenBusy;
+    _busy = true;
+    try {
+      return await start();
+    } finally {
+      _busy = false;
     }
   }
 }

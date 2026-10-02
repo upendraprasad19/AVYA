@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### sync_failure_retry_sweep (1 bugs)
+- 2026-10-01 e5b2a9 — During the 2026-10-01 05:50-06:30 UTC Supabase API outage (Cloudflare 521/522/504 and PGRST002; the database itself stayed ACTIVE_HEALTHY) the web app sat on "Getting you ready…" for ~15 minutes, a…
+
 ### The test's `setUp()` correctly copies the 5 "grandfathered" migration files (057/069/070/108/123) from the real `supabase/migrations/` directory into a fresh temp directory, using `f.uri.pathSegments.last.startsWith('${id}_')` to match filenames — a URI-based check that is path-separator-agnostic and works identically on Windows and Linux. All 5 copies succeed (verified directly: `copied: 5`).
 The test body then tries to locate that copied 057 file with a DIFFERENT, inconsistent check: `f.path.contains('/057_')` — `File.path` on Windows returns a BACKSLASH-separated path (`C:\...\supabase\migrations\057_...sql`), so a literal forward-slash substring can never match. `Iterable.firstWhere` with no match and no `orElse` throws `Bad state: No element`. On Linux (GitHub Actions), `.path` returns forward slashes, so the identical line has always passed there — this defect was invisible to CI from the moment the test was written and would remain so indefinitely on that platform.
 This is the exact shape OI-268 already named for a different mechanism: a Windows/Linux divergence in a test's OWN plumbing, not in the code under test, surfacing only on a local Windows dev machine's full-suite run. (1 bugs)
@@ -1490,6 +1493,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-10-01 | e5b2a9 | During the 2026-10-01 05:50-06:30 UTC Supabase API outage (Cloudflare 521/522/504 and PGRST002; the database itself stayed ACTIVE_HEALTHY) the web app sat on "Getting you ready…" for ~15 minutes, a… | sync_failure_retry_sweep | test/contracts/restoring_destination_timeout_test.dart |
 | 2026-09-30 | d4e7c2 | `sh scripts/safe_push.sh origin claude/sync-aab-build-check-408772` failed twice with `Some tests failed` / `error: failed to push some refs`, despite the exact same push having succeeded through… | The test's `setUp()` correctly copies the 5 "grandfathered" migration files (057/069/070/108/123) from the real `supabase/migrations/` directory into a fresh temp directory, using `f.uri.pathSegments.last.startsWith('${id}_')` to match filenames — a URI-based check that is path-separator-agnostic and works identically on Windows and Linux. All 5 copies succeed (verified directly: `copied: 5`).
 The test body then tries to locate that copied 057 file with a DIFFERENT, inconsistent check: `f.path.contains('/057_')` — `File.path` on Windows returns a BACKSLASH-separated path (`C:\...\supabase\migrations\057_...sql`), so a literal forward-slash substring can never match. `Iterable.firstWhere` with no match and no `orElse` throws `Bad state: No element`. On Linux (GitHub Actions), `.path` returns forward slashes, so the identical line has always passed there — this defect was invisible to CI from the moment the test was written and would remain so indefinitely on that platform.
 This is the exact shape OI-268 already named for a different mechanism: a Windows/Linux divergence in a test's OWN plumbing, not in the code under test, surfacing only on a local Windows dev machine's full-suite run. | test/scripts/check_applied_migrations_ledger_e2e_test.dart |
