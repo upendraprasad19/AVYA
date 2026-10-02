@@ -144,7 +144,7 @@ verified it via another channel), pass `--no-smoke`. Discouraged.
 | `ROLLBACK ERROR: could not resolve revspec` | SHA doesn't exist (typo or unfetched) | `git fetch && git log -- supabase/functions/<fn>/` to find the right SHA. |
 | `dep <path> missing at SHA` warning | A shared dep was added AFTER the rollback target | Acceptable IF the missing dep wasn't imported at that SHA. Otherwise pick a later SHA. |
 | Smoke check timeout | Function cold-starting | Re-run smoke manually: `curl -X POST https://<ref>.supabase.co/functions/v1/<fn> -d '{"smoke":true}'`. |
-| HTTP 401 on the Management API POST | Token expired or wrong account | See `docs/operations/SECRET_INVENTORY.md` for rotation; default token at `supabase/.supabase/supabase access token.txt`. |
+| HTTP 401 on the Management API POST | Token expired or wrong account | See `docs/operations/SECRET_INVENTORY.md` for rotation; default token at `.supabase/supabase access token.txt` (repo root, resolved by `.claude/token_path.js`; the older `supabase/.supabase/` file on the VPS holds a REVOKED token, HTTP 401, 2026-10-02: do not use it there). |
 | Archive prune deleted something you wanted | The archive is the LAST 3 deploys; older ones are git-regenerable | Re-emit from git: `git show <old-sha>:supabase/functions/<fn>/index.ts`. |
 
 ## Audit trail

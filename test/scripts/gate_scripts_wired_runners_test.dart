@@ -36,7 +36,7 @@ Run check_prose.dart before every release.   <- prose naming a gate is not a run
 ''';
 
 const _statuses = <String, String>{
-  'OI-165': 'OPEN',
+  'OI-88': 'OPEN',
   'OI-77': 'IN_PROGRESS',
   'OI-9': 'CLOSED',
 };
@@ -146,7 +146,7 @@ void main() {
       expect(violations, isNotEmpty);
     });
     test('manual runner satisfied by an OPEN OI', () {
-      expect(check('check_live.dart', GateRunner.manual('OI-165', 'x')), isEmpty);
+      expect(check('check_live.dart', GateRunner.manual('OI-88', 'x')), isEmpty);
     });
     test(
         'manual runner satisfied by an IN_PROGRESS OI (the session about to fix '
@@ -165,7 +165,7 @@ void main() {
     });
     test('RED PATH: manual runner with an unreadable board fails CLOSED', () {
       final violations =
-          check('check_live.dart', GateRunner.manual('OI-165', 'x'), statuses: null);
+          check('check_live.dart', GateRunner.manual('OI-88', 'x'), statuses: null);
       expect(violations, isNotEmpty);
       expect(violations.single, contains('unreadable'));
     });

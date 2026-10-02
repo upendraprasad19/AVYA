@@ -26,8 +26,9 @@
 //     1. `--token <value>` CLI flag
 //     2. `--token-file <path>` CLI flag
 //     3. `SUPABASE_ACCESS_TOKEN_FITNESS` env var (preferred)
-//     4. Default file: `supabase/.supabase/supabase access token.txt`
-//        (gitignored, present in repo since 2026-04-20)
+//     4. Default file, first existing of: this tree's `.supabase/`, the MAIN worktree's
+//        `.supabase/`, then the legacy `supabase/.supabase/` paths (gitignored; see
+//        scripts/supabase_token_path_lib.dart — the legacy file holds a revoked token on the VPS)
 //     5. `SUPABASE_ACCESS_TOKEN` env var (fallback; may be wrong account)
 //
 // API call
@@ -51,6 +52,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
+import 'supabase_token_path_lib.dart';
 
 const _defaultProjectRef = 'dedsavbjuwgarrhphgnl';
 const _defaultSqlPath = 'test/sql/onconflict_live_arbiter.sql';
@@ -128,10 +131,20 @@ String? _resolveToken(_Args args) {
   if (envFitness != null && envFitness.trim().isNotEmpty) {
     return envFitness.trim();
   }
-  // Default repo file — gitignored via supabase/.gitignore.
-  final defaultFile = File('supabase/.supabase/supabase access token.txt');
-  if (defaultFile.existsSync()) {
-    return defaultFile.readAsStringSync().trim();
+  // Default token files via the shared resolver (scripts/supabase_token_path_lib.dart, the Dart twin
+  // of .claude/token_path.js): this tree's `.supabase/`, the MAIN worktree's, then the legacy
+  // `supabase/.supabase/` paths. From ANY cwd inside the repo and from a linked worktree.
+  final found = resolveTokenFile(repoRootFrom(Directory.current.path));
+  if (found != null) {
+    if (found.legacy) {
+      stderr.writeln('[warn] using a legacy supabase/.supabase token file; on the VPS that file holds a '
+          'revoked token (401, 2026-10-02). Prefer <repo>/.supabase/supabase access token.txt.');
+    }
+    if (found.primaryError != null) {
+      stderr.writeln('[warn] could not locate the primary worktree from this linked worktree '
+          '(${found.primaryError}); the token file may be the wrong one. Pass --token-file.');
+    }
+    return File(found.path).readAsStringSync().trim();
   }
   final envFallback = Platform.environment['SUPABASE_ACCESS_TOKEN'];
   if (envFallback != null && envFallback.trim().isNotEmpty) {
@@ -203,7 +216,7 @@ Future<int> _main(List<String> argv) async {
     stderr.writeln('No Supabase Management API token resolved.');
     stderr.writeln('Provide one via --token, --token-file, '
         'SUPABASE_ACCESS_TOKEN_FITNESS, or '
-        'supabase/.supabase/supabase access token.txt');
+        'one of: ${candidateTokenFiles(repoRootFrom(Directory.current.path)).join(' | ')}');
     return 2;
   }
 

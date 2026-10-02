@@ -5251,3 +5251,31 @@ Writer: `sync_coach.dart:261` (restore). Reader: `coach_interaction_repository.d
 - **Identified**: 2026-09-26 · filed via mint_oi.sh from branch `ci-green-batch-a` (backlog triage)
 
 Needs a tombstone or cloud-side delete; restore-completeness class (docs/architecture/sync.md).
+
+## OI-165 — `check_onconflict_live_arbiter.dart` 403s, so every `test/sql/` live harness is un-runnable by its documented command (P2)
+
+- **Status**: CLOSED · 2026-10-02 · branch `deploy-token-path` · commit `33048976` (resolver + closure), review fixes in the commit that follows it
+- **Blocked on**: — (resolved)
+- **Verified**: 2026-09-26 — new root-cause HYPOTHESIS (not yet run): the default token file is CWD-relative (`check_onconflict_live_arbiter.dart:132`, `supabase/.supabase/…`), which exists only in the PRIMARY worktree; §4.13 puts every session in a linked worktree, where it is absent, so the resolver falls to the `SUPABASE_ACCESS_TOKEN` env fallback (`:136`) — a different account's token ⇒ 403.
+  PRIOR (kept verbatim): 2026-09-05 — ran it; and the harness header records the same failure 2026-07-30
+- **Symptom**: `dart run scripts/check_onconflict_live_arbiter.dart --sql <file>` →
+  `FATAL — Management API HTTP 403 — "Your account does not have the necessary privileges to
+  access this endpoint."` It resolves a token (44 bytes) and warns it is using the
+  `SUPABASE_ACCESS_TOKEN` env fallback.
+- ⚠ **Not new, and that is the point.** `test/sql/oi46_daily_cap_triggers_live_verify.sql`'s own
+  header records the identical 403 on **2026-07-30**, worked around the same way. Five weeks
+  un-fixed because the workaround is invisible: whoever hits it hand-pastes the SQL through MCP
+  `execute_sql` and moves on, exactly as I did on 2026-09-05 for the slice-2 assertions.
+- **Why it matters more than a broken script**: these harnesses are the ONLY behavioural proof
+  for Postgres trigger/constraint logic — rule 21 says a source-grep proves presence only. A test
+  that cannot be run by its documented command decays; it is not in the gate loop (deliberately,
+  `pre-commit.sh` + `test.yml` both case-skip it), so nothing else notices.
+- **What is NOT the fix**: deleting the runner and documenting the MCP paste. That makes the
+  harness un-runnable by anyone without this MCP, including CI.
+- **Related**: `test/sql/onconflict_live_arbiter.sql`, `oi46_daily_cap_triggers_live_verify.sql`,
+  rule 21, `docs/operations/SECRET_INVENTORY.md`.
+
+**UPDATE 2026-09-26 (backlog triage + `ci-green-batch-a`):** Candidate fix: resolve the default file from `--git-common-dir/..` (the `batch_close_lib.dart` `primaryRootFrom` pattern) and fail CLOSED instead of using the env fallback. Also note (2026-09-26): this VPS holds TWO different Management-API tokens — see diagnose `c6f2a8`.
+
+**CLOSED 2026-10-02 (`deploy-token-path`):** the 2026-09-26 hypothesis was CONFIRMED. The default token file was CWD-relative, present only in the PRIMARY; a linked worktree fell to the `SUPABASE_ACCESS_TOKEN` env fallback (a different account) ⇒ 403. Fix: `.claude/token_path.js` + its Dart twin `scripts/supabase_token_path_lib.dart` resolve candidates via `git worktree list --porcelain` (this tree `.supabase/`, primary `.supabase/`, then the legacy `supabase/.supabase/` copies), warn on a legacy hit or an unresolvable primary, and list every candidate in the error. Verified live: from this linked worktree with `env -u SUPABASE_ACCESS_TOKEN`, `dart run scripts/check_onconflict_live_arbiter.dart --sql <read-only select 1>` printed `token source resolved (44 bytes)` and `OK`. Regression: `test/scripts/token_path_resolver_test.dart` (13 tests, mutation-proven). Also superseded: diagnose `c6f2a8` note that the VPS holds two tokens: the one in `supabase/.supabase/` is REVOKED (401), the root `.supabase/` one works.
+

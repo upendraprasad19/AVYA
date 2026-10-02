@@ -23,20 +23,35 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 
-const TOKEN_PATH = path.join(__dirname, '..', 'supabase', '.supabase', 'supabase access token.txt');
+// See .claude/token_path.js: repo-root `.supabase/` WORKS on the VPS, the older `supabase/.supabase/`
+// token is revoked there (401, 2026-10-02).
+const { resolveTokenFile, candidateTokenFiles } = require('./token_path');
+const _repoRoot = path.join(__dirname, '..');
+const _resolvedToken = resolveTokenFile(_repoRoot);
+const TOKEN_PATH = _resolvedToken
+  ? _resolvedToken.path
+  : candidateTokenFiles(_repoRoot)[0];
 
 function resolveToken() {
   if (process.env.SUPABASE_ACCESS_TOKEN_FITNESS) {
     return process.env.SUPABASE_ACCESS_TOKEN_FITNESS.trim();
   }
   if (fs.existsSync(TOKEN_PATH)) {
+    if (_resolvedToken && _resolvedToken.legacy) {
+      console.warn('[warn] using a legacy supabase/.supabase token file; on the VPS that file holds a revoked ' +
+        'token (401, 2026-10-02). Prefer <repo>/.supabase/supabase access token.txt.');
+    }
+    if (_resolvedToken && _resolvedToken.primaryError) {
+      console.warn('[warn] could not locate the primary worktree from this linked worktree (' +
+        _resolvedToken.primaryError + '); the token file may be the wrong one.');
+    }
     return fs.readFileSync(TOKEN_PATH, 'utf-8').trim();
   }
   if (process.env.SUPABASE_ACCESS_TOKEN) {
     console.warn('[warn] using SUPABASE_ACCESS_TOKEN — verify it is the fitness-app account.');
     return process.env.SUPABASE_ACCESS_TOKEN.trim();
   }
-  throw new Error('No access token. Set SUPABASE_ACCESS_TOKEN_FITNESS or populate ' + TOKEN_PATH);
+  throw new Error('No access token. Set SUPABASE_ACCESS_TOKEN_FITNESS or populate one of: ' + candidateTokenFiles(_repoRoot).join(' | '));
 }
 
 function postJson(host, p, token, body) {

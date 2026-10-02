@@ -69,7 +69,7 @@ node .claude/emit_payload.js <fn> --auto --functions-dir <worktree>/supabase/fun
 node .claude/deploy_via_api.js dedsavbjuwgarrhphgnl <fn> .claude/_payload_<fn>.json <verify_jwt>
 ```
 
-- **Token:** auto-resolved from `supabase/.supabase/supabase access token.txt` (gitignored).
+- **Token:** `<primary repo>/.supabase/supabase access token.txt` WORKS and is what `.claude/token_path.js` resolves (from any worktree). `supabase/.supabase/supabase access token.txt` on the VPS holds a REVOKED token (HTTP 401, verified 2026-10-02): do not use it there (Windows clone unverified). Both gitignored.
 - **Byte-identical:** no MCP path-mangling. First used Phase C.5 → `ai-proxy` v43.
 - **Path scheme:** all `_shared/` imports MUST use `from "../_shared/..."` (parent dir).
   The legacy MCP `deploy_edge_function` tool silently mangled `./_shared/` imports.
