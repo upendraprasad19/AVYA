@@ -25,19 +25,23 @@ final _sep = Platform.pathSeparator;
 String _join(List<String> p) => p.join(_sep);
 
 class _Answer {
-  _Answer(this.path, this.legacy);
+  _Answer(this.path, this.legacy, [this.primaryError]);
   final String path;
   final bool legacy;
+  final String? primaryError;
 }
 
-_Answer? _viaNode(String repoRoot, {Map<String, String>? env}) {
+/// A git executable that does not exist: proves the git-failed branch of both resolvers.
+const _noGit = '/nonexistent/git-for-token-path-test';
+
+_Answer? _viaNode(String repoRoot, {Map<String, String>? env, String? git}) {
   final script = File('.claude/token_path.js').absolute.path;
   final r = Process.runSync(
     'node',
     [
       '-e',
       'const t=require(${jsonEncode(script)});'
-          'const r=t.resolveTokenFile(${jsonEncode(repoRoot)});'
+          'const r=t.resolveTokenFile(${jsonEncode(repoRoot)}${git == null ? '' : ',{git:${jsonEncode(git)}}'});'
           'console.log(JSON.stringify(r));',
     ],
     environment: env,
@@ -46,12 +50,14 @@ _Answer? _viaNode(String repoRoot, {Map<String, String>? env}) {
   final out = (r.stdout as String).trim();
   if (out == 'null') return null;
   final m = jsonDecode(out) as Map<String, dynamic>;
-  return _Answer(m['path'] as String, m['legacy'] as bool);
+  return _Answer(m['path'] as String, m['legacy'] as bool, m['primaryError'] as String?);
 }
 
-_Answer? _viaDart(String repoRoot) {
-  final r = dart_resolver.resolveTokenFile(repoRoot);
-  return r == null ? null : _Answer(r.path, r.legacy);
+_Answer? _viaDart(String repoRoot, {String? git}) {
+  final r = git == null
+      ? dart_resolver.resolveTokenFile(repoRoot)
+      : dart_resolver.resolveTokenFile(repoRoot, git: git);
+  return r == null ? null : _Answer(r.path, r.legacy, r.primaryError);
 }
 
 String _real(String p) => File(p).resolveSymbolicLinksSync();
@@ -86,7 +92,11 @@ void main() {
 
   final resolvers = <String, _Answer? Function(String)>{
     'node resolver': (root) => _viaNode(root),
-    'dart resolver': _viaDart,
+    'dart resolver': (root) => _viaDart(root),
+  };
+  final gitless = <String, _Answer? Function(String)>{
+    'node resolver': (root) => _viaNode(root, git: _noGit),
+    'dart resolver': (root) => _viaDart(root, git: _noGit),
   };
 
   for (final entry in resolvers.entries) {
@@ -112,6 +122,20 @@ void main() {
         expect(resolve(tmp.path), isNull);
       });
 
+      test('a DIRECTORY named like the token file is not a token (both twins agree)', () {
+        Directory(_join([tmp.path, '.supabase', _name])).createSync(recursive: true);
+        expect(resolve(tmp.path), isNull);
+      });
+
+      test('a repo whose own directory is named `supabase`: its root token is NOT legacy', () {
+        final root = _join([tmp.path, 'supabase']);
+        Directory(root).createSync();
+        _write(root, ['.supabase']);
+        final r = resolve(root)!;
+        expect(_real(r.path), _real(_join([root, '.supabase', _name])));
+        expect(r.legacy, isFalse);
+      });
+
       test('VPS shape: linked worktree has nothing, primary has BOTH: the primary ROOT token wins', () {
         final w = _repoWithLinkedWorktree(tmp);
         _write(w.primary, ['.supabase']);
@@ -135,6 +159,29 @@ void main() {
         _write(w.linked, ['.supabase']);
         final r = resolve(w.linked)!;
         expect(_real(r.path), _real(_join([w.linked, '.supabase', _name])));
+      });
+    });
+  }
+
+  for (final entry in gitless.entries) {
+    group('${entry.key} with git unavailable', () {
+      final resolve = entry.value;
+
+      test('linked-worktree-shaped path: falls to the legacy file AND reports primaryError', () {
+        final tree = _join([tmp.path, '.claude', 'worktrees', 'lnk']);
+        Directory(tree).createSync(recursive: true);
+        _write(tree, ['supabase', '.supabase']);
+        final r = resolve(tree)!;
+        expect(r.legacy, isTrue);
+        expect(r.primaryError, isNotNull, reason: 'the silent fall-through to legacy must be reported');
+        expect(r.primaryError, isNotEmpty);
+      });
+
+      test('a plain (non-linked) path with git unavailable reports no primaryError', () {
+        _write(tmp.path, ['.supabase']);
+        final r = resolve(tmp.path)!;
+        expect(r.legacy, isFalse);
+        expect(r.primaryError, isNull);
       });
     });
   }

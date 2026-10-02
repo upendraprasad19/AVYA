@@ -5254,7 +5254,7 @@ Needs a tombstone or cloud-side delete; restore-completeness class (docs/archite
 
 ## OI-165 — `check_onconflict_live_arbiter.dart` 403s, so every `test/sql/` live harness is un-runnable by its documented command (P2)
 
-- **Status**: CLOSED · 2026-10-02 · branch `deploy-token-path` · commit `<pending>`
+- **Status**: CLOSED · 2026-10-02 · branch `deploy-token-path` · commit `33048976` (resolver + closure), review fixes in the commit that follows it
 - **Blocked on**: — (resolved)
 - **Verified**: 2026-09-26 — new root-cause HYPOTHESIS (not yet run): the default token file is CWD-relative (`check_onconflict_live_arbiter.dart:132`, `supabase/.supabase/…`), which exists only in the PRIMARY worktree; §4.13 puts every session in a linked worktree, where it is absent, so the resolver falls to the `SUPABASE_ACCESS_TOKEN` env fallback (`:136`) — a different account's token ⇒ 403.
   PRIOR (kept verbatim): 2026-09-05 — ran it; and the harness header records the same failure 2026-07-30

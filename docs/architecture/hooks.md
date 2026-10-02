@@ -34,8 +34,7 @@ runs the same gates). See §4 process invariants for the no-deferred-failures po
   live line, a `loop` runner must not case-skip it, a `manual` runner must name an OPEN or
   IN_PROGRESS OI on the merged boards (CLOSED / absent / unreadable board ⇒ FAIL), and an
   allowlist key with no script on disk is itself a violation. Three gates are `manual:` today and
-  run NOWHERE by construction — `onconflict_live_arbiter` + `two_user_cross_account` (OI-165,
-  403), and `test_runtime_budget` (OI-101). (A fourth, `migrations_live`, was `manual(OI-223)`
+  run NOWHERE by construction — `onconflict_live_arbiter` + `two_user_cross_account` (OI-283: no CI runner), and `test_runtime_budget` (OI-101). (A fourth, `migrations_live`, was `manual(OI-223)`
   for the same reason — cannot pass, 125/139 migrations applied raw and never registered live —
   and was RETIRED in the same batch: OI-223 closed, the script deleted, Gate 14
   `check_migrations_applied.dart` already owning "applied live".) Closing any of those OIs turns Gate 33 red until the gate

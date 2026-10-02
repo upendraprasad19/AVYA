@@ -38,9 +38,9 @@ function scrubbedGitEnv() {
  * linked worktrees, `--separate-git-dir` repos and submodule checkouts, unlike
  * dirname(git-common-dir). Returns `{ root, error }`; `error` explains a null root.
  */
-function primaryRoot(repoRoot) {
+function primaryRoot(repoRoot, gitBin = 'git') {
   try {
-    const out = execFileSync('git', ['worktree', 'list', '--porcelain'], {
+    const out = execFileSync(gitBin, ['worktree', 'list', '--porcelain'], {
       cwd: repoRoot,
       env: scrubbedGitEnv(),
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -54,35 +54,53 @@ function primaryRoot(repoRoot) {
   }
 }
 
-/** Ordered candidate token files (existing or not). The last ones are the LEGACY paths. */
-function candidateTokenFiles(repoRoot) {
+/**
+ * Ordered candidates (existing or not) as `{ path, legacy }`; the legacy `supabase/.supabase`
+ * entries come last. `legacy` is decided HERE, from which slot the path was built for, never by
+ * parsing the path back (a repo whose own directory is named `supabase` would fool that).
+ * `opts.git` overrides the git executable (tests use it to prove the git-failed branch).
+ */
+function candidateEntries(repoRoot, opts = {}) {
   const root = path.resolve(repoRoot);
-  const { root: primary } = primaryRoot(root);
+  const { root: primary } = primaryRoot(root, opts.git || 'git');
   const hasOther = primary && path.resolve(primary) !== root;
-  const list = [path.join(root, '.supabase', TOKEN_NAME)];
-  if (hasOther) list.push(path.join(path.resolve(primary), '.supabase', TOKEN_NAME));
-  list.push(path.join(root, 'supabase', '.supabase', TOKEN_NAME)); // legacy (401 on the VPS)
-  if (hasOther) list.push(path.join(path.resolve(primary), 'supabase', '.supabase', TOKEN_NAME));
+  const list = [{ path: path.join(root, '.supabase', TOKEN_NAME), legacy: false }];
+  if (hasOther) list.push({ path: path.join(path.resolve(primary), '.supabase', TOKEN_NAME), legacy: false });
+  list.push({ path: path.join(root, 'supabase', '.supabase', TOKEN_NAME), legacy: true }); // 401 on the VPS
+  if (hasOther) {
+    list.push({ path: path.join(path.resolve(primary), 'supabase', '.supabase', TOKEN_NAME), legacy: true });
+  }
   return list;
 }
 
-function isLegacy(p) {
-  return p.split(path.sep).slice(-3, -1).join('/') === 'supabase/.supabase';
+/** Ordered candidate token file paths (existing or not). The last ones are the LEGACY paths. */
+function candidateTokenFiles(repoRoot, opts = {}) {
+  return candidateEntries(repoRoot, opts).map((e) => e.path);
+}
+
+// A directory (or anything not a regular file) named like the token file is NOT a token: the
+// Dart twin uses File().existsSync(), so both must agree.
+function isRegularFile(p) {
+  try {
+    return fs.statSync(p).isFile();
+  } catch (_) {
+    return false;
+  }
 }
 
 /**
- * First candidate that exists, or null. `legacy` is true for a `supabase/.supabase` path.
- * `primaryError` is set when the primary worktree could not be located AND the tree looks like
- * a linked worktree (`.claude/worktrees/` in its path): the caller should say so, because the
- * silent fall-through is exactly how a deploy ends up on the legacy file.
+ * First candidate that is a regular file, or null. `legacy` is true for a `supabase/.supabase`
+ * path. `primaryError` is set when the primary worktree could not be located AND the tree looks
+ * like a linked worktree (`.claude/worktrees/` in its path): the caller should say so, because
+ * the silent fall-through is exactly how a deploy ends up on the legacy file.
  */
-function resolveTokenFile(repoRoot) {
+function resolveTokenFile(repoRoot, opts = {}) {
   const root = path.resolve(repoRoot);
-  const { error } = primaryRoot(root);
+  const { error } = primaryRoot(root, opts.git || 'git');
   const looksLinked = root.split(path.sep).join('/').includes('/.claude/worktrees/');
-  for (const p of candidateTokenFiles(root)) {
-    if (fs.existsSync(p)) {
-      return { path: p, legacy: isLegacy(p), primaryError: looksLinked ? error : null };
+  for (const e of candidateEntries(root, opts)) {
+    if (isRegularFile(e.path)) {
+      return { path: e.path, legacy: e.legacy, primaryError: looksLinked ? error : null };
     }
   }
   return null;

@@ -45,7 +45,7 @@ TWO token files exist on the VPS and ONE works (verified 2026-10-02, after a dep
 curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $(cat '<token file>')" \
   https://api.supabase.com/v1/projects/dedsavbjuwgarrhphgnl/functions
 ```
-Anything but 200 ⇒ try the other file once, then pass `--token-file`; if neither works, regenerate via the dashboard logged in as `myfitnessjourney1988@gmail.com` (NOT the personal account) and write it to the repo-root path.
+A 401 on the root file means that token expired or belongs to the wrong account: do NOT fall back to the revoked `supabase/.supabase/` file on the VPS. Regenerate via the dashboard logged in as `myfitnessjourney1988@gmail.com` (NOT the personal account), write it to the repo-root path (or pass `--token-file` for a one-off).
 
 ### 1.4 Check secrets required by the function
 Every Edge Function reads from Vault via `Deno.env.get()`. If you're deploying a NEW function or one that references a NEW secret:

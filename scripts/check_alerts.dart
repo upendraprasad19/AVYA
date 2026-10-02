@@ -17,8 +17,9 @@
 // env var overrides it (CI / alternate machines).
 //
 // (We tried the Supabase Management API token at
-// `supabase/.supabase/supabase access token.txt` first — it is deploy-scoped
-// and returns HTTP 403 on `/database/query`, so it can't read table data.)
+// `supabase/.supabase/supabase access token.txt` first — an older token there returned HTTP 403
+// on `/database/query`, and on the VPS that file's token has since been REVOKED (HTTP 401,
+// 2026-10-02). The working Management API token is the repo-root `.supabase/` one.)
 //
 // SUPABASE_URL is NOT secret and is read from `.env` as before.
 //

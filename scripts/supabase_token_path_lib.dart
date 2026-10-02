@@ -46,9 +46,9 @@ String repoRootFrom(String fromDir) {
 }
 
 /// The MAIN worktree root, or null with [error] explaining why.
-({String? root, String? error}) primaryRoot(String repoRoot) {
+({String? root, String? error}) primaryRoot(String repoRoot, {String git = 'git'}) {
   try {
-    final r = Process.runSync('git', ['worktree', 'list', '--porcelain'],
+    final r = Process.runSync(git, ['worktree', 'list', '--porcelain'],
         workingDirectory: repoRoot, environment: _scrubbedGitEnv(), includeParentEnvironment: false);
     if (r.exitCode != 0) {
       final msg = (r.stderr as String).trim().split('\n').first;
@@ -65,33 +65,35 @@ String repoRootFrom(String fromDir) {
   }
 }
 
-/// Ordered candidate token files (existing or not); the last ones are the LEGACY paths.
-List<String> candidateTokenFiles(String repoRoot) {
+/// Ordered candidates (existing or not); the LEGACY `supabase/.supabase` entries come last.
+/// `legacy` is decided from the slot a path was built for, never by parsing it back (a repo
+/// whose own directory is named `supabase` would fool that). [git] overrides the git executable
+/// (tests use it to prove the git-failed branch).
+List<({String path, bool legacy})> candidateEntries(String repoRoot, {String git = 'git'}) {
   final root = Directory(repoRoot).absolute.path;
-  final primary = primaryRoot(root).root;
+  final primary = primaryRoot(root, git: git).root;
   final hasOther = primary != null && Directory(primary).absolute.path != root;
   final p = hasOther ? Directory(primary).absolute.path : null;
   return [
-    _join([root, '.supabase', tokenFileName]),
-    if (p != null) _join([p, '.supabase', tokenFileName]),
-    _join([root, 'supabase', '.supabase', tokenFileName]),
-    if (p != null) _join([p, 'supabase', '.supabase', tokenFileName]),
+    (path: _join([root, '.supabase', tokenFileName]), legacy: false),
+    if (p != null) (path: _join([p, '.supabase', tokenFileName]), legacy: false),
+    (path: _join([root, 'supabase', '.supabase', tokenFileName]), legacy: true),
+    if (p != null) (path: _join([p, 'supabase', '.supabase', tokenFileName]), legacy: true),
   ];
 }
 
-bool _isLegacy(String path) {
-  final parts = path.split(RegExp(r'[\\/]'));
-  return parts.length >= 3 && '${parts[parts.length - 3]}/${parts[parts.length - 2]}' == 'supabase/.supabase';
-}
+/// Ordered candidate token file paths (existing or not); the last ones are the LEGACY paths.
+List<String> candidateTokenFiles(String repoRoot, {String git = 'git'}) =>
+    [for (final e in candidateEntries(repoRoot, git: git)) e.path];
 
-/// First existing candidate, or null.
-TokenFile? resolveTokenFile(String repoRoot) {
+/// First candidate that is a regular file, or null.
+TokenFile? resolveTokenFile(String repoRoot, {String git = 'git'}) {
   final root = Directory(repoRoot).absolute.path;
-  final err = primaryRoot(root).error;
+  final err = primaryRoot(root, git: git).error;
   final linked = root.replaceAll(r'\', '/').contains('/.claude/worktrees/');
-  for (final c in candidateTokenFiles(root)) {
-    if (File(c).existsSync()) {  // file-only: a token file, never a directory
-      return TokenFile(c, legacy: _isLegacy(c), primaryError: linked ? err : null);
+  for (final e in candidateEntries(root, git: git)) {
+    if (File(e.path).existsSync()) {  // file-only: a token file, never a directory
+      return TokenFile(e.path, legacy: e.legacy, primaryError: linked ? err : null);
     }
   }
   return null;

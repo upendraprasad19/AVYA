@@ -401,6 +401,14 @@ paths:
   - { glob: "test/**", tier: feature }
   - { glob: "integration_test/**", tier: feature }
   - { glob: "assets/**", tier: feature }
+  # The host-shell deploy tools choose WHICH prod credential they use and push code to prod Edge
+  # Functions / the prod schema: a wrong resolution deploys with the wrong account or fails closed
+  # mid-deploy. account tier (B-pass + plan-review record), not the `.claude/**` feature default
+  # (round-2 review of deploy-token-path, 2026-10-02).
+  - { glob: ".claude/deploy_via_api.js", tier: account }
+  - { glob: ".claude/apply_migration_via_api.js", tier: account }
+  - { glob: ".claude/emit_payload.js", tier: account }
+  - { glob: ".claude/token_path.js", tier: account }
   - { glob: ".claude/**", tier: feature }
   - { glob: ".github/**", tier: feature }
   - { glob: "backups/**", tier: feature }

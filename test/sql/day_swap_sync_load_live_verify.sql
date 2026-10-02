@@ -12,7 +12,8 @@
 -- end -- same harness pattern as test/sql/oi46_daily_cap_triggers_live_verify.sql.
 --
 -- How to run: paste through MCP execute_sql. The documented runner,
--- scripts/check_onconflict_live_arbiter.dart, returns HTTP 403 (OI-165).
+-- scripts/check_onconflict_live_arbiter.dart, also runs it (the token resolves from any worktree,
+-- OI-165 closed 2026-10-02; no CI runner: OI-283).
 -- execute_sql may not return the final SELECT's rows before ROLLBACK, so
 -- swap the last two statements for the RAISE EXCEPTION 'VERDICT %' block
 -- in plan Task 7's apply-time section; its error text lists every
