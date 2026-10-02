@@ -5539,6 +5539,39 @@ recurring concern again before this lands.
 
 **Reopen when**: n/a — open until A–D are each closed with a commit.
 
+## OI-276 — Chat video analysis feature: nothing in the client uploads video (no picker, no compression package); design it (on-device key-frame extraction first, then re-encode or Files API) and align the PRO video cap/docs
+
+- **Status**: OPEN
+- **Blocked on**: founder prioritisation (`blocked_on_user`) — founder decision 2026-10-01 scheduled video analysis after the limits batch. **reopen_when**: the founder picks it up (no data dependency). This entry is the work item.
+- **Verified**: 2026-10-01 — `grep -rn pickVideo lib/` is empty; `lib/features/ai_coach/screens/ai_coach/media_picker.dart` only calls `pickImage` (maxWidth 1920, imageQuality 85, `flutter_image_compress`); `pubspec.yaml` has no video/ffmpeg/compress-video package; the server path `supabase/functions/ai-media-proxy/index.ts` accepts video but applies the shared 5 MB `MAX_IMAGE_BYTES` (a 15 s iPhone 1080p clip is ~15 MB, 4K ~40 MB) so no real video could pass. The stale "client cap pickVideo maxDuration 30s" comment (F15 TODO, index.ts ~672) described a client that does not exist.
+- **Identified**: 2026-10-01 · filed via mint_oi.sh from branch `gemini3-limits-caching`
+
+**What:** video analysis is advertised only in internal docs (`business-rules.md` "photo / video analysis"); no client can produce it. Design it as a real feature. Options in order of recommendation: (1) on-device key-frame extraction (6–8 frames sent as compressed photos through the existing image path — no new infra, enough for exercise-form checks); (2) on-device re-encode to ~720p / 1–2 Mbps (new package, APK size gate L19); (3) server-side Gemini Files API upload (large files, Edge memory risk, 48 h retention).
+
+**Acceptance:** a chosen design + plan-review record; the client path exists end to end (pick → reduce → upload → analyse → show); the PRO video cap (5/day after the limits batch) and the 5 MB byte rule are re-derived from the real payload; docs/paywall copy claim video only once it ships.
+
+## OI-277 — Free-tier chat cost exposure after the Gemini 3.1 Flash-Lite move: re-measure real per-message cost and free 7/day worst case once cached-token data exists; revisit the free cap and prompt size
+
+- **Status**: OPEN
+- **Blocked on**: no real PRO/volume data yet — PRO only starts consuming `chat_app` ledger units when the gemini3-limits-caching migration is applied. **reopen_when**: 14 days after that migration apply (PRO ledger rows exist) OR sustained > 46 chat messages/day (the measured always-on explicit-cache break-even), whichever comes first. (Cached-token telemetry will read ≈0: the 5.8K prompt is below 3.1-flash-lite's implicit-cache minimum.)
+- **Verified**: 2026-10-01 — inputs: measured avg chat `tokens_used` 13,610 over 12 rows (small sample, ~30% of Gemini rows log tokens, mixes primary + Lite-fallback rows); live `system_prompt_size` 24,338–24,420 chars in 13 of 14 recent log lines (~20.3K chars is the static Captain manual); 3.1 Flash-Lite paid price $0.25 in / $1.50 out per 1M (cached $0.025) from Google's pricing page via a summarizing fetch — re-verify. Coordinator arithmetic at ₹86/USD, 13.3K in / 300 out per message: ₹0.325/msg uncached, free 7/day worst case ₹68/user/month, PRO 20/day worst case ₹195.
+- **Identified**: 2026-10-01 · filed via mint_oi.sh from branch `gemini3-limits-caching`
+
+**What:** the founder's out-of-scope item (2): free-tier chat cost exposure. Once the free 7/day cap of the gemini3-limits-caching batch is live (Part B), it is bounded (≈₹2,200/month if all 33 free users maxed), but the per-message figure rests on a 12-row sample and an unmeasured cache hit-rate.
+
+**Acceptance:** re-measure per-message cost from ≥ 2 weeks of logged cached/total tokens; state free worst case with a denominator; decide keep/lower the free cap and whether a prompt-size cut is warranted; close with the numbers.
+
+## OI-278 — Telegram bot chat cap parity: bot is disabled; when re-enabled its cap (business-rules says 10/day) must follow the new free 7 / PRO 20 chat caps
+
+- **Status**: OPEN
+- **Blocked on**: the Telegram bot (separate OpenClaw VPS project, not in this repo) is DISABLED as of 2026-10-01 per the founder; this is `upstream_blocked` until it is re-enabled. **reopen_when**: the founder re-enables the bot.
+- **Verified**: 2026-10-01 — `docs/architecture/business-rules.md:26` says the bot has "the same 10/day forever cap"; `enforce_chat_app_daily_limit` (live) counts only `channel='app'`, so a Telegram cap, if any, lives outside this repo.
+- **Identified**: 2026-10-01 · filed via mint_oi.sh from branch `gemini3-limits-caching`
+
+**What:** when the bot is re-enabled, its chat cap and its model path must match the app's (free 7 / PRO 20, 3.1 Flash-Lite, shared `usage_counters` key or an explicit separate budget).
+
+**Acceptance:** re-enable checklist run (cap source located, model constants, quota key, copy); business-rules line corrected; reopen_when: the founder re-enables the bot.
+
 ## OI-279 — Phase 1b: pull-on-resume - a backgrounded device refreshes itself (7-day window, pull-before-reckon ordering, pending-delete-aware exercise-log restore, per-set fetch must fail the pull, own refresh signal) - split out of resilient-client Phase 1 by 4.12.1
 
 - **Status**: OPEN

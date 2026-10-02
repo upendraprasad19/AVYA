@@ -92,8 +92,8 @@ void main() {
 
   group('OI-153 — both caps consume the ledger, once, atomically', () {
     test('constants and keys carry the founder-decided values', () {
-      expect(RegExp(r'PRO_IMAGE_DAILY_CAP\s*=\s*50;').hasMatch(src), isTrue);
-      expect(RegExp(r'PRO_VIDEO_DAILY_CAP\s*=\s*10;').hasMatch(src), isTrue);
+      expect(RegExp(r'PRO_IMAGE_DAILY_CAP\s*=\s*10;').hasMatch(src), isTrue);
+      expect(RegExp(r'PRO_VIDEO_DAILY_CAP\s*=\s*5;').hasMatch(src), isTrue);
       expect(
           RegExp(r'PRO_IMAGE_QUOTA_KEY\s*=\s*"pro_image_daily";').hasMatch(src),
           isTrue);
@@ -116,7 +116,7 @@ void main() {
         RegExp(r'proCap\s*=\s*isVideo\s*\?\s*PRO_VIDEO_DAILY_CAP\s*:\s*PRO_IMAGE_DAILY_CAP')
             .hasMatch(src),
         isTrue,
-        reason: 'video must select the 10 cap, image the 50 cap',
+        reason: 'video must select the 5 cap, image the 10 cap',
       );
     });
 

@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { encode as base64Encode } from "https://deno.land/std@0.177.0/encoding/base64.ts";
-import { geminiChat, MODEL_FLASH_LITE } from "../_shared/gemini.ts";
+import { geminiChat, labelForModel, MODEL_FLASH_LITE } from "../_shared/gemini.ts";
 import { reportGeminiExhaustion } from "../_shared/gemini_failure_alert.ts";
 import { COACH_REPLIES } from "../_shared/coach_replies.ts";
 import { istDayStartIso } from "../_shared/ist_date.ts";
@@ -38,9 +38,13 @@ const LIFETIME_WINDOW = "1970-01-01T00:00:00+00:00";
 
 // H-23 (audit-2026-05-11) — PRO daily image-chat cap. Pre-fix PRO
 // image-chat had NO rate limit, so a compromised PRO token = unlimited
-// Gemini-vision fanout. Picked at a level no legitimate PRO user would hit
-// (50/day = ~2 photos/hour over a 24-hour window) while a stolen token can't
-// drain Gemini quota in minutes.
+// Gemini-vision fanout.
+//
+// Part B (gemini3-limits-caching, founder 2026-10-01) — lowered from 50/10 to
+// 10 images / 5 videos per IST day (`_shared/ai_limits.ts` mirrors both; pinned by
+// pro_media_daily_caps_writer_to_reader_test.dart). The old 50 was sized as a
+// stolen-token guard; the founder's cost model now treats media as a real cost
+// line. Heaviest legitimate PRO day on record was well under 10.
 //
 // OI-153 (2026-09-12) — the cap now lives on `usage_counters` via
 // `consume_quota`, keyed per IST day. The previous gate counted
@@ -49,15 +53,15 @@ const LIFETIME_WINDOW = "1970-01-01T00:00:00+00:00";
 // uncapped. The check-and-increment is ATOMIC and runs BEFORE the Gemini
 // call, so N concurrent requests cannot each read "under the cap" and all
 // reach Gemini — an advisory read cannot bound spend, which is the one
-// thing this cap exists to do. Founder decision 2026-09-12: 50 images /
-// 10 videos per IST day, reset at midnight IST, an in-app coach reply
-// (not the paywall) when reached.
+// thing this cap exists to do. Founder decision 2026-09-12 (re-set by Part B to
+// 10 images / 5 videos): per IST day, reset at midnight IST, an in-app coach
+// reply (not the paywall) when reached.
 //
 // ⚠ ONE quota_key => ONE call site => ONE limit (sot_registry
 // `usage_quota_ledger`), same as the free key above. Both keys have exactly
 // one call site, below.
-const PRO_IMAGE_DAILY_CAP = 50;
-const PRO_VIDEO_DAILY_CAP = 10;
+const PRO_IMAGE_DAILY_CAP = 10;
+const PRO_VIDEO_DAILY_CAP = 5;
 const PRO_IMAGE_QUOTA_KEY = "pro_image_daily";
 const PRO_VIDEO_QUOTA_KEY = "pro_video_daily";
 const ONE_DAY_MS = 24 * 60 * 60 * 1000; // IST has no DST; an IST day is always 24h
@@ -156,9 +160,11 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-// 2026-04-18 · Migrated off OpenRouter Gemma cascade. Now Flash-Lite only
-// via the shared _shared/gemini.ts helper.
-const MODEL_LABEL = "Gemini 2.5 Flash Lite (Vision)";
+// 2026-10-01 · Vision runs on MODEL_FLASH_LITE through the shared
+// _shared/gemini.ts helper. The persisted label is built from the slug that
+// ACTUALLY answered (`labelForModel(modelUsed) + MODEL_LABEL_SUFFIX`), because
+// the attempt list is now [primary, MODEL_FALLBACK].
+const MODEL_LABEL_SUFFIX = " (Vision)";
 
 /**
  * Extract structured log actions from AI response.
@@ -669,11 +675,11 @@ export async function handleRequest(req: Request): Promise<Response> {
       );
     }
 
-    // F15 · TODO server-side video duration validation deferred — client cap
-    // (pickVideo maxDuration: Duration(seconds: 30)) is primary enforcement
-    // on this batch. Deno on Supabase Edge Runtime has no clean ffprobe binding;
-    // probing duration would require shipping an ffmpeg WASM build (~10 MB) or
-    // round-tripping to an external service. Revisit if abuse pattern emerges.
+    // F15 · server-side video duration validation is NOT built: the client cap
+    // (pickVideo maxDuration: Duration(seconds: 30)) is the only length bound and
+    // the PRO_VIDEO_DAILY_CAP (5/day) bounds the count. Deno on Supabase Edge
+    // Runtime has no clean ffprobe binding. Tracked as OI-276 (video later,
+    // founder 2026-10-01), not an intention.
 
     // B-pass F2 (2026-09-13) — the video paywall used to run HERE, pre-fetch,
     // gated on the CLIENT's claim. That was the asymmetric half of the same
@@ -790,7 +796,7 @@ export async function handleRequest(req: Request): Promise<Response> {
     // Hermes L23 F2 (2026-09-13) — the cap key, the cap and the free-tier
     // video paywall were selected by the CLIENT's `media_type`, while the
     // bytes are typed by Storage's content-type: the `mimeType` Gemini is
-    // told. A PRO caller labelling a video "image" drew from the 50/day
+    // told. A PRO caller labelling a video "image" drew from the per-day
     // image bucket; a free caller did the same to walk a video past the
     // PRO-only paywall for one lifetime image unit. From here the server's
     // type wins — the cap is derived from the same MIME the model receives,
@@ -912,14 +918,15 @@ export async function handleRequest(req: Request): Promise<Response> {
       }
     }
 
-    // Single Gemini call (Flash Lite is the vision SKU). No fallback —
-    // already on the cheapest Gemini SKU; falling back to the same model
-    // wouldn't add resilience.
+    // Single Gemini call (MODEL_FLASH_LITE is the vision SKU). The fallback
+    // (MODEL_FALLBACK, probe-proven for vision) is ON: the old "already the
+    // cheapest SKU" reasoning was a property of the 2.5 matrix, and a retired
+    // primary (404) is now survivable.
     //
     // `geminiChat` swallows timeouts / 5xx / safety-filter blocks and
     // returns `{content: null}` rather than throwing. We map that to a
     // 502 below (upstream, retry-eligible) — not a 500.
-    const { content: rawReply, tokensUsed, lastError } = await geminiChat({
+    const { content: rawReply, modelUsed, tokensUsed, lastError, attemptStatuses } = await geminiChat({
       model: MODEL_FLASH_LITE,
       systemPrompt,
       userPrompt: asPrincipalMessage(message),
@@ -928,10 +935,9 @@ export async function handleRequest(req: Request): Promise<Response> {
       maxTokens: 2048,
       temperature: 0.7,
       timeoutMs: 25_000,
-      fallbackToLite: false,
       retries: 2, // f7a2c9 — no other retry on this path
     });
-    const modelLabel = MODEL_LABEL;
+    const modelLabel = `${labelForModel(modelUsed)}${MODEL_LABEL_SUFFIX}`;
 
     if (!rawReply) {
       // OI-238 (sibling of A5/OI-226): same shared dedup source as
@@ -943,6 +949,8 @@ export async function handleRequest(req: Request): Promise<Response> {
         "ai_proxy_gemini_exhausted",
         lastError ?? null,
         "ai_media_proxy",
+        undefined,
+        attemptStatuses,
       );
       // Bug 2026-05-16 photo-analysis-500 — was already 502 here, but
       // adding `error_type` so the client can recognise an upstream

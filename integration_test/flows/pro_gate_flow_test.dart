@@ -176,7 +176,7 @@ void main() {
     await tester.pumpAndSettle(const Duration(seconds: 3));
 
     // Trial removed 2026-06-07 (F1): the AI coach is gated ONLY by the
-    // per-day message count (10/day forever). A free user under the cap
+    // per-day message count (7/day free, forever). A free user under the cap
     // must be able to send — the old client-only 30-day trial used to
     // block here even with messages remaining.
     TestDataHelper.setFreeUser();

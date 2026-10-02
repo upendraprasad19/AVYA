@@ -33,6 +33,13 @@
 -- ONLY nested BEGIN/EXCEPTION/END, matching onconflict_live_arbiter.sql's
 -- real (not its comment's shorthand) pattern.
 --
+-- ⚠ UPDATED for Part B / migration 153 (2026-10-01): free chat 7, PRO chat 20
+-- (PRO now consumes; only 'pending' reservation rows count), free vision 4 /
+-- PRO 20. Cases 1-3 and the slice2 chat/PRO/vision blocks below assert THOSE
+-- numbers; the refund contract is in gemini3_limits_refund_live_verify.sql.
+-- The 'Status' paragraph that follows is the historical record of the earlier
+-- caps (10 / 20) and is NOT current.
+--
 -- Status: RUN LIVE 2026-07-29 against migrations 111/112/113 immediately
 -- after they were applied — all 7 cases returned status='ok'. Case 3 (vision
 -- combined cap) was UPDATED the same day, in the usage-counter-race batch,
@@ -85,55 +92,65 @@ BEGIN
   END;
 
   -- =====================================================================
-  -- Case 1 — chat_app_daily_limit: 10 free-tier 'app' rows succeed, 11th fails.
+  -- Case 1 — chat_app_daily_limit (migration 153): 7 free-tier RESERVATION rows
+  -- (model_used='pending') succeed, 8th fails. Was 10/11th before Part B.
   BEGIN
-    FOR i IN 1..10 LOOP
+    FOR i IN 1..7 LOOP
       INSERT INTO ai_coach_interactions (user_id, channel, user_message, ai_response, model_used, tokens_used)
         VALUES (v_free_chat_user, 'app', 'msg ' || i, '', 'pending', 0);
     END LOOP;
-    -- 11th must raise P0001 chat_app_daily_limit_reached
+    -- 8th must raise P0001 chat_app_daily_limit_reached (cap=7, pro=false)
     BEGIN
       INSERT INTO ai_coach_interactions (user_id, channel, user_message, ai_response, model_used, tokens_used)
-        VALUES (v_free_chat_user, 'app', 'msg 11', '', 'pending', 0);
+        VALUES (v_free_chat_user, 'app', 'msg 8', '', 'pending', 0);
       -- If we get here, the trigger did NOT reject — that's a failure.
-      INSERT INTO _v_results VALUES ('chat_app_daily_limit_11th_row_rejected', 'fail', NULL,
-        'trigger did not raise on the 11th free-tier app row');
+      INSERT INTO _v_results VALUES ('chat_app_daily_limit_8th_row_rejected', 'fail', NULL,
+        'trigger did not raise on the 8th free-tier app row');
     EXCEPTION WHEN SQLSTATE 'P0001' THEN
-      IF SQLERRM LIKE '%chat_app_daily_limit_reached%' THEN
-        INSERT INTO _v_results VALUES ('chat_app_daily_limit_11th_row_rejected', 'ok', 'P0001', SQLERRM);
+      IF SQLERRM LIKE '%chat_app_daily_limit_reached%' AND SQLERRM LIKE '%cap=7%' AND SQLERRM LIKE '%pro=false%' THEN
+        INSERT INTO _v_results VALUES ('chat_app_daily_limit_8th_row_rejected', 'ok', 'P0001', SQLERRM);
       ELSE
-        INSERT INTO _v_results VALUES ('chat_app_daily_limit_11th_row_rejected', 'fail', 'P0001',
+        INSERT INTO _v_results VALUES ('chat_app_daily_limit_8th_row_rejected', 'fail', 'P0001',
           'raised P0001 but wrong message: ' || SQLERRM);
       END IF;
     END;
   EXCEPTION WHEN OTHERS THEN
-    INSERT INTO _v_results VALUES ('chat_app_daily_limit_11th_row_rejected', 'fail', SQLSTATE, SQLERRM);
+    INSERT INTO _v_results VALUES ('chat_app_daily_limit_8th_row_rejected', 'fail', SQLSTATE, SQLERRM);
   END;
 
   -- =====================================================================
-  -- Case 2 — PRO exemption: 11 'app' rows for a PRO user all succeed.
+  -- Case 2 — PRO now CONSUMES (migration 153 removed 129's exemption): 20
+  -- reservation rows succeed, the 21st is refused with pro=true.
   BEGIN
     INSERT INTO subscriptions (user_id, plan, status, start_date, end_date)
       VALUES (v_pro_chat_user, 'yearly', 'active', v_now, v_now + interval '300 days');
-    FOR i IN 1..11 LOOP
+    FOR i IN 1..20 LOOP
       INSERT INTO ai_coach_interactions (user_id, channel, user_message, ai_response, model_used, tokens_used)
         VALUES (v_pro_chat_user, 'app', 'pro msg ' || i, '', 'pending', 0);
     END LOOP;
-    INSERT INTO _v_results VALUES ('chat_app_pro_exemption_11_rows_ok', 'ok', NULL, '11 rows inserted, no cap');
+    BEGIN
+      INSERT INTO ai_coach_interactions (user_id, channel, user_message, ai_response, model_used, tokens_used)
+        VALUES (v_pro_chat_user, 'app', 'pro msg 21', '', 'pending', 0);
+      INSERT INTO _v_results VALUES ('chat_app_pro_cap_21st_row_rejected', 'fail', NULL,
+        'trigger did not raise on the 21st PRO app row');
+    EXCEPTION WHEN SQLSTATE 'P0001' THEN
+      IF SQLERRM LIKE '%chat_app_daily_limit_reached%' AND SQLERRM LIKE '%cap=20%' AND SQLERRM LIKE '%pro=true%' THEN
+        INSERT INTO _v_results VALUES ('chat_app_pro_cap_21st_row_rejected', 'ok', 'P0001', SQLERRM);
+      ELSE
+        INSERT INTO _v_results VALUES ('chat_app_pro_cap_21st_row_rejected', 'fail', 'P0001',
+          'raised P0001 but wrong message: ' || SQLERRM);
+      END IF;
+    END;
   EXCEPTION WHEN OTHERS THEN
-    INSERT INTO _v_results VALUES ('chat_app_pro_exemption_11_rows_ok', 'fail', SQLSTATE, SQLERRM);
+    INSERT INTO _v_results VALUES ('chat_app_pro_cap_21st_row_rejected', 'fail', SQLSTATE, SQLERRM);
   END;
 
   -- =====================================================================
-  -- Case 3 — vision_analysis_daily_limit: 20 combined scan_meal/cart_auditor
-  -- rows succeed, 21st (either channel) fails. Raised from 15/16th via
-  -- migration 114 (usage-counter-race batch, 2026-07-29, same day as
-  -- migration 111 that this case originally verified) — round-1 review of
-  -- that batch caught this file still hardcoding the superseded 15/16
-  -- values, which would have silently false-failed the moment migration 114
-  -- went live while this file didn't change with it.
+  -- Case 3 — vision_analysis_daily_limit (migration 153): a FREE user gets 4
+  -- combined scan_meal/cart_auditor rows, the 5th (either channel) fails. Was a
+  -- flat 20 / 21st before Part B; PRO is 20 (covered by gemini3_limits_refund_live_verify.sql).
   BEGIN
-    FOR i IN 1..20 LOOP
+    FOR i IN 1..4 LOOP
       INSERT INTO ai_coach_interactions (user_id, channel, user_message, ai_response, model_used, tokens_used)
         VALUES (
           v_vision_user,
@@ -143,19 +160,19 @@ BEGIN
     END LOOP;
     BEGIN
       INSERT INTO ai_coach_interactions (user_id, channel, user_message, ai_response, model_used, tokens_used)
-        VALUES (v_vision_user, 'scan_meal', 'vision 21', '', 'pending', 0);
-      INSERT INTO _v_results VALUES ('vision_combined_cap_21st_row_rejected', 'fail', NULL,
-        'trigger did not raise on the 21st combined vision row');
+        VALUES (v_vision_user, 'scan_meal', 'vision 5', '', 'pending', 0);
+      INSERT INTO _v_results VALUES ('vision_combined_cap_5th_row_rejected', 'fail', NULL,
+        'trigger did not raise on the 5th combined free vision row');
     EXCEPTION WHEN SQLSTATE 'P0001' THEN
-      IF SQLERRM LIKE '%vision_analysis_daily_limit_reached%' THEN
-        INSERT INTO _v_results VALUES ('vision_combined_cap_21st_row_rejected', 'ok', 'P0001', SQLERRM);
+      IF SQLERRM LIKE '%vision_analysis_daily_limit_reached%' AND SQLERRM LIKE '%cap=4%' AND SQLERRM LIKE '%pro=false%' THEN
+        INSERT INTO _v_results VALUES ('vision_combined_cap_5th_row_rejected', 'ok', 'P0001', SQLERRM);
       ELSE
-        INSERT INTO _v_results VALUES ('vision_combined_cap_21st_row_rejected', 'fail', 'P0001',
+        INSERT INTO _v_results VALUES ('vision_combined_cap_5th_row_rejected', 'fail', 'P0001',
           'raised P0001 but wrong message: ' || SQLERRM);
       END IF;
     END;
   EXCEPTION WHEN OTHERS THEN
-    INSERT INTO _v_results VALUES ('vision_combined_cap_21st_row_rejected', 'fail', SQLSTATE, SQLERRM);
+    INSERT INTO _v_results VALUES ('vision_combined_cap_5th_row_rejected', 'fail', SQLSTATE, SQLERRM);
   END;
 
   -- =====================================================================
@@ -265,15 +282,16 @@ $outer$;
 -- experiment. The split, stated so nobody mistakes one kind for the other:
 --
 --   DISCRIMINATING (fail pre-129, because no ledger row exists at all):
---     slice2_chat_ledger_counts_to_10, slice2_vision_shares_one_key,
+--     slice2_chat_ledger_counts_to_7, slice2_vision_shares_one_key,
 --     slice2_food_text_free_10 -- these read `used` and require a number.
---     slice2_pro_consumes_nothing and slice2_aborted_row_refunds_unit were NOT
+--     slice2_pro_consumes_reservations_only (was slice2_pro_consumes_nothing;
+--     PRO consumes since migration 153) and slice2_aborted_row_refunds_unit were NOT
 --     in this group and now are: each gained a guard requiring a REAL ledger
 --     row to exist first (see the notes at each). Without those guards both
 --     compared NULL to NULL and reported "ok" against pre-129.
 --
 --   BEHAVIOUR-INVARIANTS (pass pre-129 BY DESIGN, and should):
---     slice2_chat_11th_refused, slice2_vision_21st_refused,
+--     slice2_chat_8th_refused, slice2_vision_5th_refused,
 --     slice2_ungated_channel_untouched. The cap firing with the right P0001
 --     identifier, and an ungated channel being left alone, must hold under ANY
 --     implementation. They are regression tests for the contract, not proof of
@@ -335,131 +353,110 @@ BEGIN
       'the trigger will see is_pro=' || v_is_pro);
   END;
 
-  -- 1. The ledger is the source: 10 chat inserts leave used=10 under the
-  --    'chat_app' key at the IST window start.
+  -- 1. The ledger is the source: 7 chat RESERVATION inserts (model_used =
+  --    'pending', as ai-proxy writes them) leave used=7 under the 'chat_app'
+  --    key at the IST window start. (Migration 153: free cap 7, was 10.)
   BEGIN
-    FOR i IN 1..10 LOOP
-      INSERT INTO public.ai_coach_interactions (user_id, channel, user_message)
-      VALUES (v_free_user, 'app', 'oi162 slice2 chat ' || i);
+    FOR i IN 1..7 LOOP
+      INSERT INTO public.ai_coach_interactions (user_id, channel, user_message, model_used)
+      VALUES (v_free_user, 'app', 'oi162 slice2 chat ' || i, 'pending');
     END LOOP;
 
     SELECT used INTO v_used FROM public.usage_counters
      WHERE user_id = v_free_user AND quota_key = 'chat_app'
        AND window_start = v_window;
 
-    IF v_used IS DISTINCT FROM 10 THEN
-      INSERT INTO _v_results VALUES ('slice2_chat_ledger_counts_to_10', 'fail', NULL,
-        'expected used=10 under chat_app at the IST window, got ' || coalesce(v_used::text, 'NO ROW'));
+    IF v_used IS DISTINCT FROM 7 THEN
+      INSERT INTO _v_results VALUES ('slice2_chat_ledger_counts_to_7', 'fail', NULL,
+        'expected used=7 under chat_app at the IST window, got ' || coalesce(v_used::text, 'NO ROW'));
     ELSE
-      INSERT INTO _v_results VALUES ('slice2_chat_ledger_counts_to_10', 'ok', NULL,
-        'usage_counters.used = 10 for quota_key=chat_app');
+      INSERT INTO _v_results VALUES ('slice2_chat_ledger_counts_to_7', 'ok', NULL,
+        'usage_counters.used = 7 for quota_key=chat_app');
     END IF;
   EXCEPTION WHEN OTHERS THEN
-    INSERT INTO _v_results VALUES ('slice2_chat_ledger_counts_to_10', 'fail', SQLSTATE, SQLERRM);
+    INSERT INTO _v_results VALUES ('slice2_chat_ledger_counts_to_7', 'fail', SQLSTATE, SQLERRM);
   END;
 
-  -- 1b. The 11th is refused, with the identifier ai-proxy greps.
+  -- 1b. The 8th is refused, with the identifier ai-proxy greps.
   BEGIN
-    INSERT INTO public.ai_coach_interactions (user_id, channel, user_message)
-    VALUES (v_free_user, 'app', 'oi162 slice2 chat 11 must fail');
-    INSERT INTO _v_results VALUES ('slice2_chat_11th_refused', 'fail', NULL,
-      'the 11th chat insert SUCCEEDED; the cap did not fire');
+    INSERT INTO public.ai_coach_interactions (user_id, channel, user_message, model_used)
+    VALUES (v_free_user, 'app', 'oi162 slice2 chat 8 must fail', 'pending');
+    INSERT INTO _v_results VALUES ('slice2_chat_8th_refused', 'fail', NULL,
+      'the 8th chat insert SUCCEEDED; the cap did not fire');
   EXCEPTION
     WHEN sqlstate 'P0001' THEN
       IF SQLERRM LIKE '%chat_app_daily_limit_reached%' THEN
-        INSERT INTO _v_results VALUES ('slice2_chat_11th_refused', 'ok', 'P0001', SQLERRM);
+        INSERT INTO _v_results VALUES ('slice2_chat_8th_refused', 'ok', 'P0001', SQLERRM);
       ELSE
-        INSERT INTO _v_results VALUES ('slice2_chat_11th_refused', 'fail', 'P0001',
+        INSERT INTO _v_results VALUES ('slice2_chat_8th_refused', 'fail', 'P0001',
           'P0001 raised but the ai-proxy identifier is missing: ' || SQLERRM);
       END IF;
     WHEN OTHERS THEN
-      INSERT INTO _v_results VALUES ('slice2_chat_11th_refused', 'fail', SQLSTATE, SQLERRM);
+      INSERT INTO _v_results VALUES ('slice2_chat_8th_refused', 'fail', SQLSTATE, SQLERRM);
   END;
 
-  -- 2. PRO bypasses the chat cap AND consumes no unit.
+  -- 2. PRO CONSUMES one unit per reservation row (migration 153; 129 exempted
+  --    PRO entirely), and a channel-'app' row that is NOT a reservation (a PRO
+  --    media row from ai-media-proxy: real model label, not 'pending') consumes
+  --    NOTHING. 12 reservations + 3 media rows must leave used=12.
   BEGIN
     FOR i IN 1..12 LOOP
-      INSERT INTO public.ai_coach_interactions (user_id, channel, user_message)
-      VALUES (v_pro_user, 'app', 'oi162 slice2 pro ' || i);
+      INSERT INTO public.ai_coach_interactions (user_id, channel, user_message, model_used)
+      VALUES (v_pro_user, 'app', 'oi162 slice2 pro ' || i, 'pending');
+    END LOOP;
+    FOR i IN 1..3 LOOP
+      INSERT INTO public.ai_coach_interactions (user_id, channel, user_message, model_used)
+      VALUES (v_pro_user, 'app', 'oi162 slice2 pro media ' || i, 'Gemini 3.1 Flash Lite (Vision)');
     END LOOP;
 
     SELECT used INTO v_used FROM public.usage_counters
      WHERE user_id = v_pro_user AND quota_key = 'chat_app'
        AND window_start = v_window;
-    SELECT used INTO v_before FROM public.usage_counters
-     WHERE user_id = v_free_user AND quota_key = 'chat_app'
-       AND window_start = v_window;
 
-    -- ⚠ PAIRED WITH THE FREE USER DELIBERATELY. "PRO has no counter row" is
-    -- ALSO true of the pre-129 count(*) triggers, which write no rows for
-    -- anyone — so on its own this assertion passes against the code it is
-    -- meant to prove replaced (measured 2026-09-05). Requiring the FREE user's
-    -- row to exist in the SAME transaction is what makes it discriminate: the
-    -- ledger is demonstrably live, and PRO is absent from it by exemption
-    -- rather than by nothing working.
-    IF v_before IS NULL THEN
-      INSERT INTO _v_results VALUES ('slice2_pro_consumes_nothing', 'fail', NULL,
-        'VACUOUS: the free user has no chat_app row either, so "PRO consumed '
-        || 'nothing" proves nothing — the ledger is not being written at all.');
-    ELSIF v_used IS NOT NULL THEN
-      INSERT INTO _v_results VALUES ('slice2_pro_consumes_nothing', 'fail', NULL,
-        'PRO wrote a chat_app counter row (used=' || v_used || '); the exemption must precede consume_quota');
+    IF v_used IS DISTINCT FROM 12 THEN
+      INSERT INTO _v_results VALUES ('slice2_pro_consumes_reservations_only', 'fail', NULL,
+        'expected used=12 (12 reservations, 3 media rows uncounted), got '
+        || coalesce(v_used::text, 'NO ROW'));
     ELSE
-      INSERT INTO _v_results VALUES ('slice2_pro_consumes_nothing', 'ok', NULL,
-        '12 PRO chat rows and NO counter row, while the free user in the same '
-        || 'transaction holds used=' || v_before::text);
+      INSERT INTO _v_results VALUES ('slice2_pro_consumes_reservations_only', 'ok', NULL,
+        '12 PRO reservations counted, 3 PRO media rows (non-pending) burned no chat unit');
     END IF;
   EXCEPTION WHEN OTHERS THEN
-    INSERT INTO _v_results VALUES ('slice2_pro_consumes_nothing', 'fail', SQLSTATE, SQLERRM);
+    INSERT INTO _v_results VALUES ('slice2_pro_consumes_reservations_only', 'fail', SQLSTATE, SQLERRM);
   END;
 
-  -- 3. Vision: ONE shared 20/day budget across both channels. Split 11/9
+  -- 3. Vision: ONE shared budget across both channels (free 4). Split 2/1
   --    deliberately -- a per-channel implementation would let both through.
+  --    Stops at 3 so the abort probe below (step 4) has a unit to consume and
+  --    roll back; the 4th and the refused 5th follow it.
   BEGIN
-    FOR i IN 1..11 LOOP
-      INSERT INTO public.ai_coach_interactions (user_id, channel, user_message)
-      VALUES (v_vis_user, 'scan_meal', 'oi162 slice2 scan ' || i);
+    FOR i IN 1..2 LOOP
+      INSERT INTO public.ai_coach_interactions (user_id, channel, user_message, model_used)
+      VALUES (v_vis_user, 'scan_meal', 'oi162 slice2 scan ' || i, 'pending');
     END LOOP;
-    FOR i IN 1..9 LOOP
-      INSERT INTO public.ai_coach_interactions (user_id, channel, user_message)
-      VALUES (v_vis_user, 'cart_auditor', 'oi162 slice2 cart ' || i);
-    END LOOP;
+    INSERT INTO public.ai_coach_interactions (user_id, channel, user_message, model_used)
+    VALUES (v_vis_user, 'cart_auditor', 'oi162 slice2 cart 1', 'pending');
 
     SELECT used INTO v_used FROM public.usage_counters
      WHERE user_id = v_vis_user AND quota_key = 'vision_analysis'
        AND window_start = v_window;
 
-    IF v_used IS DISTINCT FROM 20 THEN
+    IF v_used IS DISTINCT FROM 3 THEN
       INSERT INTO _v_results VALUES ('slice2_vision_shares_one_key', 'fail', NULL,
-        'expected used=20 on the shared vision_analysis key, got ' || coalesce(v_used::text, 'NO ROW'));
+        'expected used=3 on the shared vision_analysis key, got ' || coalesce(v_used::text, 'NO ROW'));
     ELSE
       INSERT INTO _v_results VALUES ('slice2_vision_shares_one_key', 'ok', NULL,
-        '11 scan_meal + 9 cart_auditor = 20 on ONE quota_key');
+        '2 scan_meal + 1 cart_auditor = 3 on ONE quota_key');
     END IF;
   EXCEPTION WHEN OTHERS THEN
     INSERT INTO _v_results VALUES ('slice2_vision_shares_one_key', 'fail', SQLSTATE, SQLERRM);
   END;
 
-  BEGIN
-    INSERT INTO public.ai_coach_interactions (user_id, channel, user_message)
-    VALUES (v_vis_user, 'cart_auditor', 'oi162 slice2 vision 21 must fail');
-    INSERT INTO _v_results VALUES ('slice2_vision_21st_refused', 'fail', NULL,
-      'the 21st combined vision insert SUCCEEDED; the shared cap did not fire');
-  EXCEPTION
-    WHEN sqlstate 'P0001' THEN
-      IF SQLERRM LIKE '%vision_analysis_daily_limit_reached%' THEN
-        INSERT INTO _v_results VALUES ('slice2_vision_21st_refused', 'ok', 'P0001', SQLERRM);
-      ELSE
-        INSERT INTO _v_results VALUES ('slice2_vision_21st_refused', 'fail', 'P0001',
-          'P0001 raised but the ai-proxy identifier is missing: ' || SQLERRM);
-      END IF;
-    WHEN OTHERS THEN
-      INSERT INTO _v_results VALUES ('slice2_vision_21st_refused', 'fail', SQLSTATE, SQLERRM);
-  END;
-
   -- 4. An ABORTED row must not leak a consumed unit. The trigger runs inside the
   --    INSERT's transaction, so rolling the row back must roll the unit back --
-  --    otherwise a failing downstream constraint silently burns quota.
+  --    otherwise a failing downstream constraint silently burns quota. (Runs at
+  --    used=3 of 4 so the insert is ACCEPTED, consumes the 4th unit, and is then
+  --    rolled back; at the cap the insert would be refused and prove nothing.)
   BEGIN
     SELECT used INTO v_before FROM public.usage_counters
      WHERE user_id = v_vis_user AND quota_key = 'vision_analysis'
@@ -468,12 +465,10 @@ BEGIN
     -- A PL/pgSQL BEGIN...EXCEPTION block IS an implicit savepoint: raising
     -- inside it rolls back everything the block did, including the trigger's
     -- consumed unit. Explicit SAVEPOINT / ROLLBACK TO is a syntax error in
-    -- PL/pgSQL (42601) — caught by the first live run of this block, and
-    -- invisible to the source-grep contract test, which is the argument for
-    -- having both layers.
+    -- PL/pgSQL (42601).
     BEGIN
-      INSERT INTO public.ai_coach_interactions (user_id, channel, user_message)
-      VALUES (v_vis_user, 'scan_meal', 'oi162 slice2 aborted row');
+      INSERT INTO public.ai_coach_interactions (user_id, channel, user_message, model_used)
+      VALUES (v_vis_user, 'scan_meal', 'oi162 slice2 aborted row', 'pending');
       RAISE EXCEPTION 'oi162 deliberate abort';
     EXCEPTION WHEN OTHERS THEN
       NULL;
@@ -483,13 +478,9 @@ BEGIN
      WHERE user_id = v_vis_user AND quota_key = 'vision_analysis'
        AND window_start = v_window;
 
-    -- ⚠ THE NULL GUARD IS THE WHOLE ASSERTION. Without it this test is
-    -- VACUOUS: against the pre-129 count(*) triggers no ledger row exists at
-    -- all, so v_before and v_used are both NULL, NULL IS NOT DISTINCT FROM
-    -- NULL, and it reports "ok" while proving nothing. Measured 2026-09-05 by
-    -- running these assertions against restored pre-129 bodies in a rolled-back
-    -- transaction: this one returned "before=NULL after=NULL" and PASSED.
-    -- A refund can only be observed against a unit that was actually consumed.
+    -- ⚠ THE NULL GUARD IS THE WHOLE ASSERTION (vacuous against pre-129 code:
+    -- both NULL). A refund can only be observed against a unit that was
+    -- actually consumed.
     IF v_before IS NULL THEN
       INSERT INTO _v_results VALUES ('slice2_aborted_row_refunds_unit', 'fail', NULL,
         'VACUOUS: no ledger row existed before the abort, so there was no '
@@ -505,6 +496,30 @@ BEGIN
     END IF;
   EXCEPTION WHEN OTHERS THEN
     INSERT INTO _v_results VALUES ('slice2_aborted_row_refunds_unit', 'fail', SQLSTATE, SQLERRM);
+  END;
+
+  -- 4b. The 4th combined vision insert is accepted, the 5th refused.
+  BEGIN
+    INSERT INTO public.ai_coach_interactions (user_id, channel, user_message, model_used)
+    VALUES (v_vis_user, 'cart_auditor', 'oi162 slice2 cart 2', 'pending');
+  EXCEPTION WHEN OTHERS THEN
+    INSERT INTO _v_results VALUES ('slice2_vision_4th_accepted', 'fail', SQLSTATE, SQLERRM);
+  END;
+  BEGIN
+    INSERT INTO public.ai_coach_interactions (user_id, channel, user_message, model_used)
+    VALUES (v_vis_user, 'cart_auditor', 'oi162 slice2 vision 5 must fail', 'pending');
+    INSERT INTO _v_results VALUES ('slice2_vision_5th_refused', 'fail', NULL,
+      'the 5th combined free vision insert SUCCEEDED; the shared cap did not fire');
+  EXCEPTION
+    WHEN sqlstate 'P0001' THEN
+      IF SQLERRM LIKE '%vision_analysis_daily_limit_reached%' THEN
+        INSERT INTO _v_results VALUES ('slice2_vision_5th_refused', 'ok', 'P0001', SQLERRM);
+      ELSE
+        INSERT INTO _v_results VALUES ('slice2_vision_5th_refused', 'fail', 'P0001',
+          'P0001 raised but the ai-proxy identifier is missing: ' || SQLERRM);
+      END IF;
+    WHEN OTHERS THEN
+      INSERT INTO _v_results VALUES ('slice2_vision_5th_refused', 'fail', SQLSTATE, SQLERRM);
   END;
 
   -- 5. food_text free tier: 10 on its own key, then refused.

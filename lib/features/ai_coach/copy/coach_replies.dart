@@ -5,9 +5,11 @@
 // pre-formatted counter line, or for client-side toasts.
 //
 // OI-153 (2026-09-12) — no copy here may promise "unlimited": PRO media reads
-// have a visible daily ceiling (50 images / 10 videos per IST day). Pinned by
+// have a visible daily ceiling (10 images / 5 videos per IST day). Pinned by
 // test/contracts/coach_replies_test.dart, which also pins EVERY server key
 // byte-identical to its twin here.
+import 'package:icanbefitter/core/constants/app_constants.dart';
+
 class CoachReplies {
   CoachReplies._();
 
@@ -52,6 +54,41 @@ class CoachReplies {
       'Video received. Bridge cannot reach the quota log right now, '
       'so it is standing down rather than guessing. '
       'Try again in a moment — this is not a limit.';
+
+  /// Part B (gemini3-limits-caching) — the daily CHAT cap, reached. Client-only
+  /// copy (the server's 429 carries `tier` + `limit`, not text). PRO: no
+  /// upsell and no rank (they already pay), says WHEN it resets. Free: names
+  /// the cap and what PRO adds, in modest terms — no "unlimited", no number
+  /// for PRO, no implication of a human coach.
+  static String chatDailyLimitReached({required bool isPro, required int limit}) {
+    if (isPro) {
+      return 'That is $limit messages today — your daily limit. '
+          'Bridge resets the count at midnight IST.';
+    }
+    return 'That is $limit messages today, Recruit — the free daily limit. '
+        'Bridge resets the count at midnight IST. '
+        'PRO adds dedicated coaching and higher limits.';
+  }
+
+  /// Builds [chatDailyLimitReached] from a thrown error's text. The ai-proxy
+  /// 429 body is `{error, code: RATE_LIMITED, tier, limit}`; a FunctionException
+  /// prints it as a Dart map (`tier: pro`) or JSON (`"tier":"pro"`), so both
+  /// shapes parse. A body without them (an older server) falls back to the
+  /// caller's own tier and the matching AppConstants cap.
+  static String chatRateLimitedFromError(String errStr, {required bool isPro}) {
+    final tier = RegExp(r'tier["' "'" r']?\s*:\s*["' "'" r']?(free|pro)\b',
+            caseSensitive: false)
+        .firstMatch(errStr);
+    final limit = RegExp(r'\blimit["' "'" r']?\s*:\s*["' "'" r']?(\d+)',
+            caseSensitive: false)
+        .firstMatch(errStr);
+    final pro = tier == null ? isPro : tier.group(1)!.toLowerCase() == 'pro';
+    // `int.tryParse`: a 30-digit "limit" would throw out of the error handler.
+    final parsed = limit == null ? null : int.tryParse(limit.group(1)!);
+    final cap = parsed ??
+        (pro ? AppConstants.proAiMessagesPerDay : AppConstants.freeAiMessagesPerDay);
+    return chatDailyLimitReached(isPro: pro, limit: cap);
+  }
 
   /// OI-153 — the PRO daily ceiling, reached. Mirrors the server FUNCTIONS
   /// `proImageDailyCapReached(cap)` / `proVideoDailyCapReached(cap)`; the

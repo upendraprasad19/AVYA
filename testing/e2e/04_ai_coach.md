@@ -53,22 +53,25 @@ LIMIT 1;
 
 ---
 
-## E19: Daily Limit Check (10 messages/day, free tier — forever, no trial)
+## E19: Daily Limit Check (7 messages/day free, 20/day PRO — forever, no trial)
 
-**NOTE:** This test requires sending 10 messages. Run selectively.
+**NOTE:** This test requires sending 7 messages (free). Run selectively.
 
-The cap is enforced server-side by the `enforce_chat_app_daily_limit` trigger,
-which counts `ai_coach_interactions` rows with `channel='app'` since **IST**
-midnight and raises at `>= 10`. PRO is exempt. `ai-proxy` inserts the row
-BEFORE calling Gemini, so a failed generation still consumes one.
+The cap is enforced server-side by the `enforce_chat_app_daily_limit` trigger
+(live definition: migration 153), which spends a unit on `usage_counters`
+(`chat_app`) for each `channel='app'` `model_used='pending'` RESERVATION row and
+raises at the tier cap: free 7, PRO 20 (neither tier is unlimited). `ai-proxy`
+inserts the row BEFORE calling Gemini, so a failed generation consumes one UNLESS
+the failure was transport-class: then `refund_quota` gives the unit back (at most
+3 times per user per IST day) and the 200 body says `refunded: true`.
 
 **Frontend:**
-1. Send 9 more quick messages ("hi" x9), for 10 total
-2. After the 10th, send one more
+1. Send 6 more quick messages ("hi" x6), for 7 total
+2. After the 7th, send one more
 3. `preview_snapshot`
 
-- **PASS:** PaywallSheet or "daily limit reached" message appears on the 11th
-- **FAIL:** the 11th message goes through without a limit
+- **PASS:** PaywallSheet or the "That is 7 messages today, Recruit" copy appears on the 8th
+- **FAIL:** the 8th message goes through without a limit
 
 ---
 

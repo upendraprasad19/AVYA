@@ -595,7 +595,7 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
       await _userRepo.setOnboarded();
 
       // Note: the AI coach has no trial (removed 2026-06-07 / F1) — it's a
-      // flat 10/day forever, server-enforced. No trial-start key is written
+      // flat 7/day forever (PRO 20/day), server-enforced. No trial-start key is written
       // here. The dead 'ai_chat_started_at' local key was removed too.
 
       // Sync onboarding flag + profile to Supabase.

@@ -2,7 +2,7 @@
 // Mirrored on the client at lib/features/ai_coach/copy/coach_replies.dart.
 //
 // OI-153 (2026-09-12) — no copy in this file may promise "unlimited": PRO
-// media reads have a visible daily ceiling (50 images / 10 videos per IST
+// media reads have a visible daily ceiling (10 images / 5 videos per IST
 // day), so the word is false the day the cap fires. Pinned by
 // test/contracts/coach_replies_test.dart, which also pins EVERY key here
 // byte-identical to its client twin.

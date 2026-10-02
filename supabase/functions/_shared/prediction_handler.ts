@@ -31,7 +31,7 @@
  */
 
 import type { GeminiOptions, GeminiResult } from "./gemini.ts";
-import { MODEL_FLASH, MODEL_FLASH_LITE } from "./gemini.ts";
+import { type GeminiAttemptStatus, labelForModel, MODEL_FLASH } from "./gemini.ts";
 import { asPrincipalMessage } from "./sanitize_for_prompt.ts";
 import { istDayStartIso } from "./ist_date.ts";
 import { predictionQuotaDisabled } from "./prediction_quota_switch.ts";
@@ -48,8 +48,6 @@ export const PREDICTION_DAILY_CAP = 3;
 export const PREDICTION_SYSTEM_PROMPT =
   "You are a sports science expert making evidence-based fitness predictions. Be specific with numbers but realistic.";
 
-const LABEL_FLASH = "Gemini 2.5 Flash";
-const LABEL_FLASH_LITE = "Gemini 2.5 Flash Lite";
 
 /** Result of one consume attempt: the new count, -1 when the cap is reached, or an error. */
 export interface ConsumeOutcome {
@@ -84,7 +82,10 @@ export interface PredictionDeps {
   /** Defaults to [predictionQuotaDisabled]; injectable for tests. */
   quotaDisabled?: () => boolean;
   geminiChat: (options: GeminiOptions) => Promise<GeminiResult>;
-  reportExhaustion: (lastError: GeminiResult["lastError"]) => Promise<void>;
+  reportExhaustion: (
+    lastError: GeminiResult["lastError"],
+    attemptStatuses?: GeminiAttemptStatus[],
+  ) => Promise<void>;
 }
 
 export interface HandlerResult {
@@ -126,7 +127,7 @@ export async function handlePrediction(
     }
   }
 
-  const { content, modelUsed, tokensUsed, lastError } = await deps.geminiChat({
+  const { content, modelUsed, tokensUsed, lastError, attemptStatuses } = await deps.geminiChat({
     model: MODEL_FLASH,
     systemPrompt: PREDICTION_SYSTEM_PROMPT,
     userPrompt: asPrincipalMessage(message),
@@ -140,7 +141,7 @@ export async function handlePrediction(
   if (!content) {
     // A5/OI-226 (f7a2c9): report exhaustion, same source as the 3 nutrition
     // sites, distinct endpoint. 500, not 502 — see the header.
-    await deps.reportExhaustion(lastError ?? null);
+    await deps.reportExhaustion(lastError ?? null, attemptStatuses);
     return { status: 500, body: { error: "AI temporarily unavailable" } };
   }
 
@@ -148,7 +149,7 @@ export async function handlePrediction(
     status: 200,
     body: {
       reply: content,
-      model_used: modelUsed === MODEL_FLASH_LITE ? LABEL_FLASH_LITE : LABEL_FLASH,
+      model_used: labelForModel(modelUsed),
       tokens_used: tokensUsed,
       actions: [],
     },

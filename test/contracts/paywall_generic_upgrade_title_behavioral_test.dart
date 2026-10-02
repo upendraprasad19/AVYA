@@ -91,7 +91,7 @@ void main() {
       const gated = <String>[
         'Progress Photos',
         'Phases 2-12',
-        'Unlimited AI Coach',
+        'Higher daily AI coach limit',
         'Weekly AI Report',
         'Photo Analysis',
         'Protein Alerts',

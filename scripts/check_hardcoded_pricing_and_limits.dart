@@ -6,7 +6,7 @@
 // AppConstants (monthlyPriceInr / yearlyPriceInr); the AI daily cap lives in the
 // ai_limits SoT (pinned to the server FREE_DAILY_LIMIT). Hardcoded copies drift —
 // the 2026-06-07 audit found the client declaring 15/day + a 30-day trial while
-// the server enforces 10/day forever (OQ-1).
+// the server enforced 10/day forever (OQ-1; now 7/day free, 20/day PRO, migration 153).
 //
 // Comments are stripped (newline-preserving) before matching
 // (feedback_source_grep_strip_comments_first): a price in a doc comment is

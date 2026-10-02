@@ -33,7 +33,7 @@ class _PaywallSheetPhaseBody extends StatelessWidget {
 
   static const _bullets = [
     'Auto-generate Phases II–XII as you complete each block',
-    'Unlimited AI coach (no daily cap)',
+    'Dedicated AI coaching with higher daily limits',
     'Weekly AI report powered by Gemini Pro reasoning',
     'Adaptive plans from your biometrics',
     'Photo transformation timeline',

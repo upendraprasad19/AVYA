@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**154 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**157 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -158,7 +158,10 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-273 | Branch sweep for merged branches that never had a worktree here… | none — this unit's exclusion from its… | 2026-09-29 — every constraint below was… | [:5455](open_issues.md#L5455) |
 | OI-274 | Vercel Flutter SDK re-clone on every build wastes ~1/3 of build time (no… | none — fixable any time; needs… | 2026-09-30 — confirmed live via Vercel's… | [:5475](open_issues.md#L5475) |
 | OI-275 | Cut release-cycle wall-clock: a version-only bump runs the full suite 3x… | none — founder directive 2026-10-01 is… | 2026-10-01 — timings below are from the… | [:5520](open_issues.md#L5520) |
-| OI-279 | Phase 1b: pull-on-resume - a backgrounded device refreshes itself (7-day… | Phase 1 (e5b2a9) merged to `main`; needs… | 2026-10-02 - read on the branch: the… | [:5542](open_issues.md#L5542) |
-| OI-280 | Phase 2 multi-device delta sync: updated_at+deleted_at on every synced… | Phase 1b (OI-279) merged; needs the… | 2026-10-02 - read… | [:5561](open_issues.md#L5561) |
-| OI-281 | Meal deletes never reach the cloud: NutritionWriteService.deleteLog is… | needs a cloud tombstone (`deleted_at`)… | 2026-10-02 - code read, NOT reproduced… | [:5576](open_issues.md#L5576) |
-| OI-282 | blast_radius.yaml classifies only lib/core/services/sync/** as platform:… | founder policy call - changing the… | 2026-10-02 - `docs/blast_radius.yaml:63`… | [:5587](open_issues.md#L5587) |
+| OI-276 | Chat video analysis feature: nothing in the client uploads video (no… | founder prioritisation… | 2026-10-01 — `grep -rn pickVideo lib/`… | [:5542](open_issues.md#L5542) |
+| OI-277 | Free-tier chat cost exposure after the Gemini 3.1 Flash-Lite move:… | no real PRO/volume data yet — PRO only… | 2026-10-01 — inputs: measured avg chat… | [:5553](open_issues.md#L5553) |
+| OI-278 | Telegram bot chat cap parity: bot is disabled; when re-enabled its cap… | the Telegram bot (separate OpenClaw VPS… | 2026-10-01 —… | [:5564](open_issues.md#L5564) |
+| OI-279 | Phase 1b: pull-on-resume - a backgrounded device refreshes itself (7-day… | Phase 1 (e5b2a9) merged to `main`; needs… | 2026-10-02 - read on the branch: the… | [:5575](open_issues.md#L5575) |
+| OI-280 | Phase 2 multi-device delta sync: updated_at+deleted_at on every synced… | Phase 1b (OI-279) merged; needs the… | 2026-10-02 - read… | [:5594](open_issues.md#L5594) |
+| OI-281 | Meal deletes never reach the cloud: NutritionWriteService.deleteLog is… | needs a cloud tombstone (`deleted_at`)… | 2026-10-02 - code read, NOT reproduced… | [:5609](open_issues.md#L5609) |
+| OI-282 | blast_radius.yaml classifies only lib/core/services/sync/** as platform:… | founder policy call - changing the… | 2026-10-02 - `docs/blast_radius.yaml:63`… | [:5620](open_issues.md#L5620) |

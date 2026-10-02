@@ -216,7 +216,31 @@ List<_Site> _triggerSites() {
     final rel = file.path.replaceAll('\\', '/');
     sites.add(_Site(rel, key!.group(1)!, readSingleCeiling(file, fn), 'daily'));
   }
+  sites.add(_refundBudgetSite());
   return sites;
+}
+
+/// Part B (migration 153): `refund_quota` spends the per-user `refund_budget`
+/// through `consume_quota(v_user, 'refund_budget', v_window, <n>)`, with
+/// `v_window` the IST day of the reservation row. It is a fourth SQL-side
+/// caller of the ledger, so it joins the trigger sites here.
+_Site _refundBudgetSite() {
+  final file = latestMigrationDefining('refund_quota');
+  expect(file, isNotNull, reason: 'no migration defines refund_quota');
+  final block = functionBlock(file!.readAsStringSync(), 'refund_quota');
+  expect(block, isNotNull, reason: 'refund_quota block unreadable in ${file.path}');
+  final call = RegExp(
+    r"consume_quota\s*\(\s*v_user\s*,\s*'(\w+)'\s*,\s*v_window\s*,\s*(\d+)\s*\)",
+  ).firstMatch(block!);
+  expect(call, isNotNull,
+      reason: "refund_quota: no consume_quota(v_user, '<key>', v_window, <n>) call");
+  expect(
+    RegExp(r"v_window\s*:=[^;]*'Asia/Kolkata'").hasMatch(block),
+    isTrue,
+    reason: 'refund_quota: v_window must be the IST day of the reservation row',
+  );
+  return _Site(file.path.replaceAll('\\', '/'), call!.group(1)!,
+      int.parse(call.group(2)!), 'daily');
 }
 
 class _DigestKey {
@@ -272,7 +296,7 @@ void main() {
 
     test('positive control — every trigger resolves to a key and 129+ file', () {
       expect(triggers.map((s) => s.key).toSet(),
-          {'chat_app', 'vision_analysis', 'food_text'});
+          {'chat_app', 'vision_analysis', 'food_text', 'refund_budget'});
       for (final t in triggers) {
         final n = migrationNumber(t.file.split('/').last);
         expect(n, greaterThanOrEqualTo(129),
@@ -329,12 +353,25 @@ void main() {
 
     test('pinned literals — the caps the founder decided', () {
       final byKey = {for (final d in digest) d.key: d};
-      expect(byKey['pro_image_daily']!.cap, 50);
-      expect(byKey['pro_video_daily']!.cap, 10);
+      // Part B (migration 153 / ai_limits.ts): PRO media 10 images / 5 videos,
+      // refund budget 3/day. Chat and vision are TIER-MIXED now (free 7 / PRO 20
+      // and free 4 / PRO 20), so the digest carries no single ceiling for them,
+      // same treatment as food_text.
+      final limitsTs = File('supabase/functions/_shared/ai_limits.ts').readAsStringSync();
+      int limit(String n) => int.parse(
+          RegExp('export const $n\\s*=\\s*(\\d+);').firstMatch(limitsTs)!.group(1)!);
+      expect(byKey['pro_image_daily']!.cap, 10);
+      expect(byKey['pro_image_daily']!.cap, limit('PRO_IMAGE_DAILY_CAP'));
+      expect(byKey['pro_video_daily']!.cap, 5);
+      expect(byKey['pro_video_daily']!.cap, limit('PRO_VIDEO_DAILY_CAP'));
+      expect(byKey['refund_budget']!.cap, 3);
+      expect(byKey['refund_budget']!.cap, limit('REFUND_DAILY_BUDGET'));
       expect(byKey['free_image_analysis']!.cap, 5);
       expect(byKey['weekly_report_free']!.cap, 1);
-      expect(byKey['chat_app']!.cap, 10);
-      expect(byKey['vision_analysis']!.cap, 20);
+      expect(byKey['chat_app']!.cap, isNull,
+          reason: 'chat is tier-mixed (7 free / 20 PRO) since migration 153');
+      expect(byKey['vision_analysis']!.cap, isNull,
+          reason: 'vision is tier-mixed (4 free / 20 PRO) since migration 153');
       expect(byKey['food_text']!.cap, isNull);
       expect(byKey['prediction_daily']!.cap, 3);
       expect(byKey['delete_account']!.cap, isNull);

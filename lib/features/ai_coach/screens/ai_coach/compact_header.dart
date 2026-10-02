@@ -140,7 +140,7 @@ extension _CompactHeader on _AiCoachScreenState {
                               break;
                             case 'upgrade':
                               showPaywallSheet(context,
-                                  feature: 'Unlimited AI Coach');
+                                  feature: 'Higher daily AI coach limit');
                               break;
                           }
                         },

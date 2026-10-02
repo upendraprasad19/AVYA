@@ -43,13 +43,13 @@ Source: `lib/shared/widgets/paywall_sheet.dart`.
    - **Social proof MISSING (Cialdini/halo)** — nothing "people like you" anywhere near the ₹2,999 decision. For a Tier-1 IT desk worker, one honest peer signal lowers risk most.
    - **Benefit list is a flat 9-item wall (:61–71)** — peak-end says order matters; 9 undifferentiated bullets dilute and add Hick's load. The bullet matching `widget.feature` (the reason they're here) should lead.
    - **Generic default subtitle (brand-soul ✗)** — `default: 'Upgrade to PRO and unlock your full potential.'` (:101) is exactly the "generic wellness SaaS" drift the brand-soul gate bans.
-   - **Benefit copy is feature-listy, not identity-framed (Hero/Guide)** — "Unlimited AI Coach with deep personalised coaching" states a feature, not "…so you can…".
+   - **Benefit copy is feature-listy, not identity-framed (Hero/Guide)** — "Dedicated AI coaching with higher daily limits" (was "Unlimited AI Coach…" until Part B, 2026-10-01) states a feature, not "…so you can…".
 
 3. **Concrete fixes**
    - Add ONE honest peer line above the CTA, e.g. a real count or a one-sentence recruit quote (only if true — see ethics). Place after the benefits, before `UPGRADE TO PRO`.
    - Reorder `_proBenefits` so the gating feature's benefit renders first (pass `widget.feature` into the list build).
    - Reword the default subtitle in Wardroom voice: *"Phase 1 was your enlistment. PRO is the commission — the rest of the climb to Lieutenant."*
-   - Reframe 2–3 top benefits "…so you can…": "Unlimited AI Coach — *so you never train a session unsure of your next move.*"
+   - Reframe 2–3 top benefits "…so you can…": "Dedicated AI coaching with higher daily limits — *so you never train a session unsure of your next move.*"
 
 4. **Brand-soul + ethics check** — voice ⚠ (default subtitle + benefit copy drift generic; fixable). Dark pattern: **none** (honest live-computed pricing, neutral dismiss, real savings math).
 

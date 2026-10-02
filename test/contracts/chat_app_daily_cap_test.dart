@@ -1,4 +1,6 @@
-// Source-grep contract for the chat 'app' channel 10/day free-tier cap.
+// Source-grep contract for the chat 'app' channel daily-cap trigger (created by 111;
+// the live free 7 / PRO 20 definition is migration 153, pinned by
+// ai_message_limit_parity_test.dart).
 //
 // OI-46 (2026-07-29) — was a check-then-insert TOCTOU (SELECT count() then
 // insert unconditionally at the end of the handler with no re-check). Fixed
@@ -15,7 +17,7 @@ import 'package:flutter_test/flutter_test.dart';
 String _src(String relPath) => File(relPath).readAsStringSync();
 
 void main() {
-  group('OI-46 chat app 10/day free-tier cap', () {
+  group('OI-46 chat app daily-cap trigger (111; live caps in 153)', () {
     test('migration 111 (chat_vision_daily_cap_triggers) exists', () {
       expect(
         File('supabase/migrations/111_chat_vision_daily_cap_triggers.sql')
