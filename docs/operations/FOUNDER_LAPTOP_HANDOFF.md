@@ -93,7 +93,7 @@ first (schema `public` has zero `%hold%` columns and no `workout_schedule` table
 
 `deploy_via_api.js` needs a Management API token. Every source it accepts is absent there:
 `SUPABASE_ACCESS_TOKEN_FITNESS` and `SUPABASE_ACCESS_TOKEN` are unset, `~/.supabase/fitness-app-token`
-does not exist, and `supabase/.supabase/` is gitignored so it never came with the clone.
+does not exist, and `supabase/.supabase/` is gitignored so it never came with the clone (the tools now also read the repo-root `.supabase/` first; see `.claude/token_path.js`).
 
 The MCP `deploy_edge_function` fallback was **considered and rejected, not attempted**. Root
 CLAUDE.md §0 records that path silently mangling nested `../_shared/...` imports, and both

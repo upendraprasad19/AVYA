@@ -34,8 +34,7 @@ runs the same gates). See §4 process invariants for the no-deferred-failures po
   live line, a `loop` runner must not case-skip it, a `manual` runner must name an OPEN or
   IN_PROGRESS OI on the merged boards (CLOSED / absent / unreadable board ⇒ FAIL), and an
   allowlist key with no script on disk is itself a violation. Three gates are `manual:` today and
-  run NOWHERE by construction — `onconflict_live_arbiter` + `two_user_cross_account` (OI-165,
-  403), and `test_runtime_budget` (OI-101). (A fourth, `migrations_live`, was `manual(OI-223)`
+  run NOWHERE by construction — `onconflict_live_arbiter` + `two_user_cross_account` (OI-283: no CI runner), and `test_runtime_budget` (OI-101). (A fourth, `migrations_live`, was `manual(OI-223)`
   for the same reason — cannot pass, 125/139 migrations applied raw and never registered live —
   and was RETIRED in the same batch: OI-223 closed, the script deleted, Gate 14
   `check_migrations_applied.dart` already owning "applied live".) Closing any of those OIs turns Gate 33 red until the gate
@@ -350,7 +349,7 @@ node .claude/emit_payload.js <fn> --auto --functions-dir <worktree>/supabase/fun
 node .claude/deploy_via_api.js dedsavbjuwgarrhphgnl <fn> .claude/_payload_<fn>.json <verify_jwt>
 ```
 
-- **Token:** auto-resolved from `supabase/.supabase/supabase access token.txt` (gitignored). Generated 2026-04-20 against fitness-app account.
+- **Token:** auto-resolved by `.claude/token_path.js` to `<primary repo>/.supabase/supabase access token.txt` (gitignored; WORKS, HTTP 200, 2026-10-02). `supabase/.supabase/supabase access token.txt` (generated 2026-04-20 / file dated 2026-08-08) holds a REVOKED token on the VPS: HTTP 401, do not use it there.
 - **Byte-identical to git** (no MCP path-mangling, no hand-trim risk). First used Phase C.5 → ai-proxy v43; now standard for all redeploys.
 - **Path scheme:** all shared imports MUST use `from "../_shared/..."` (parent dir), NOT `from "./_shared/..."`. The OLD MCP `deploy_edge_function` tool silently mangled the wrong path; the new flow doesn't.
 

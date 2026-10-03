@@ -46,7 +46,7 @@ Install once per clone: `sh scripts/setup-hooks.sh`. All hooks resolve Dart via 
 node .claude/emit_payload.js <fn> --auto --functions-dir <worktree>/supabase/functions
 node .claude/deploy_via_api.js dedsavbjuwgarrhphgnl <fn> .claude/_payload_<fn>.json <verify_jwt>
 ```
-Token auto-resolves from `supabase/.supabase/supabase access token.txt` (gitignored). Shared imports MUST be `from "../_shared/..."`, NOT `./_shared/`. Legacy MCP `deploy_edge_function` is unsafe for the AI coach bundle; never use the `supabase` CLI (wrong account, §2a). Protocol: `.claude/skills/edge-function-deploy-rollback/SKILL.md`.
+**Token — TWO files on the VPS, ONE works (verified 2026-10-02):** `<primary repo>/.supabase/supabase access token.txt` WORKS (HTTP 200); `<primary repo>/supabase/.supabase/supabase access token.txt` holds a **REVOKED token (HTTP 401) — on the VPS never use that file, never debug it** (the founder's Windows clone is unverified). `.claude/token_path.js` picks the working one by default (also from a linked worktree, which has neither file). A 401 on the root file = that token expired or is wrong-account: regenerate it (dashboard, myfitnessjourney1988@gmail.com) into the root `.supabase/` path or pass `--token-file`; never fall back to the revoked file. Shared imports MUST be `from "../_shared/..."`, NOT `./_shared/`. Legacy MCP `deploy_edge_function` is unsafe for the AI coach bundle; never use the `supabase` CLI (wrong account, §2a). Protocol: `.claude/skills/edge-function-deploy-rollback/SKILL.md`.
 
 ---
 

@@ -10,14 +10,14 @@ import 'package:flutter_test/flutter_test.dart';
 /// records that it validates the bearer token itself via `auth.getUser(token)`
 /// "because of the Supabase middleware bug that 401's valid JWTs".
 ///
-/// `.claude/deploy_via_api.js:337` is `verifyJwt = verifyJwtArg != 'false'` and
-/// `:817` ships that value as live function metadata — so running the documented
+/// `.claude/deploy_via_api.js:355` is `verifyJwt = verifyJwtArg != 'false'` and
+/// `:852` ships that value as live function metadata — so running the documented
 /// line would have flipped the gateway ON and 401'd every valid token BEFORE the
 /// module loads, taking down the AI coach and all food AI for every user.
 ///
-/// It would have failed SILENTLY: `deploy_via_api.js:669` tolerates 401 for
+/// It would have failed SILENTLY: `deploy_via_api.js:704` tolerates 401 for
 /// `ai-proxy` in its smoke step, so the deploy prints healthy over a dead
-/// function. The only other guard is the human-read confirm box at `:853`.
+/// function. The only other guard is the human-read confirm box at `:880`.
 ///
 /// Corroboration that `false` is correct: across the whole repo, runnable
 /// `ai-proxy` invocations read `false` **11 times** and `true` exactly once —

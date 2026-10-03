@@ -37,10 +37,15 @@ git status
 The deploy ships whatever is in `supabase/functions/<fn>/` on disk. Uncommitted local changes WILL ship if you proceed. If unsure: `git stash` or commit first.
 
 ### 1.3 Confirm token presence
+TWO token files exist on the VPS and ONE works (verified 2026-10-02, after a deploy session lost its time to a 401):
+- **WORKS (HTTP 200):** `<primary repo>/.supabase/supabase access token.txt`, dated 2026-09-23. `.claude/token_path.js` resolves it by default, including from a linked worktree (which has neither file, both are gitignored).
+- **REVOKED (HTTP 401):** `<primary repo>/supabase/.supabase/supabase access token.txt`, dated 2026-08-08: the token in it was revoked. On the VPS never use it, never debug it (the Windows clone's copy is unverified).
 ```bash
-ls -l "supabase/.supabase/supabase access token.txt"
+# one-shot check of whichever file the tools would use (prints only the HTTP code)
+curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $(cat '<token file>')" \
+  https://api.supabase.com/v1/projects/dedsavbjuwgarrhphgnl/functions
 ```
-Generated 2026-04-20 against fitness-app account (org `hwwukmntixflgbxkwavm`). Gitignored. If missing, regenerate via Supabase dashboard logged in as `myfitnessjourney1988@gmail.com` (NOT the personal account).
+A 401 on the root file means that token expired or belongs to the wrong account: do NOT fall back to the revoked `supabase/.supabase/` file on the VPS. Regenerate via the dashboard logged in as `myfitnessjourney1988@gmail.com` (NOT the personal account), write it to the repo-root path (or pass `--token-file` for a one-off).
 
 ### 1.4 Check secrets required by the function
 Every Edge Function reads from Vault via `Deno.env.get()`. If you're deploying a NEW function or one that references a NEW secret:
