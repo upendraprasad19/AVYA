@@ -904,6 +904,14 @@ added, false of the flip being performed.
   hypothesis, not a fact (see `feedback_audit_findings_require_live_verification.md`).
   Tests `test/contracts/day_rollover_provider_invalidation_behavioral_test.dart`
   (Test D/E).
+  **6th incident (2026-10-03, diagnose `c7e3a9`) — the insight derived from a
+  `ref.read`, so a day swap refreshed the Today card but not the insight
+  sentence on the same screen.** 21 writers invalidate `todayWorkoutProvider`;
+  only 7 files also invalidate `aiInsightProvider`. Fixed by DERIVING
+  (`ref.watch(todayWorkoutProvider)`), not by adding a list entry. Red flag:
+  a `Notifier.build` that `ref.read`s a row some OTHER provider already
+  exposes is a forgotten-list bug waiting for its next writer. Test
+  `test/contracts/ai_insight_follows_today_row_test.dart`.
 
 ### 2.59 A gating read discards its `error`, so the FAILURE path grants access instead of denying it (NEW 2026-09-03)
 
