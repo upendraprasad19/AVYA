@@ -1,0 +1,169 @@
+# Closure ledger — merge-governance: keystone-gate branch recovery + platform
+# tiering + CI de-duplication.
+#
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no
+# `deferred:` key. Branch: ci-governance. Diagnose d3f8a2.
+#
+# Review round 1 returned NOT CONVERGED with four P0s and REFUTED two planned
+# units outright (G9, G10 below). Those carry `upstream_blocked` — not because
+# they are unfinished, but because an external constraint makes the designed
+# remedy impossible; each records its blocker and the condition that would
+# reopen it. Per §4.12.1 the unit was then split and only the converged piece
+# shipped.
+
+batch: ci-governance
+diagnose: docs/diagnoses/2026-07-26-keystone-gate-branch-recovery-defects-d3f8a2.md
+plan_review_record: docs/plan-reviews/ci-governance.md
+bpass_review: docs/reviews/ci-governance-bpass.md
+total_findings: 14
+closed_count: 14
+
+_commit: &wip "ci-governance (uncommitted at authoring)"
+_libtest: &libtest test/scripts/plan_review_record_lib_test.dart
+
+findings:
+  - id: G1
+    title: "GitHub PR-merge subject ('Merge pull request #N from owner/X') did not match the gate's regex → die() → red main on a valid merge"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *libtest
+    notes: "Not hypothetical: 7c973ee3 carries exactly this subject and IS an ancestor of main (verified via git merge-base --is-ancestor). Accepted only when the owner prefix matches this repo — the repo is public, so a fork branch whose short name collides with an approved record must never be trusted."
+
+  - id: G2
+    title: "`.split('/').last` truncated slashed branch names — dependabot/pub/build_runner-2.15.0 resolved to build_runner-2.15.0.md"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *libtest
+    notes: "recordSlug() strips a leading origin/ (the split-last's original intent) then maps remaining / to -."
+
+  - id: G3
+    title: "Record-path collision: feat/foo and fix/foo both resolved to foo.md, so one branch's approved record satisfied another branch's gate"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *libtest
+    notes: "Closed in two layers: the slug no longer truncates (G2), AND the record must name its branch (G4) — because the slug map is still not injective."
+
+  - id: G4
+    title: "Residual non-injective slug (a/b → a-b) let a branch ride an unrelated record; record's own `branch:` field now cross-checked"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *libtest
+    notes: "hold/mechanic slugs onto the EXISTING converged + bpass-accepted hold-mechanic.md. 68 of the 69 TRACKED records already carry `branch:` (an earlier draft said 69 of 70 — it counted an untracked leftover, docs/plan-reviews/opt-a-rls-initplan.md, present in the shared main folder but not in git; B-pass caught it); the exception (free-tier-hold-findings.md) is a findings doc no branch resolves to, so nothing existing is invalidated."
+
+  - id: G5
+    title: "`git pull` on main produced \"Merge branch 'main' of <url>\", which matched the regex, yielded branch=main and demanded plan-reviews/main.md — a self-inflicted red for merely syncing"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *libtest
+    notes: "Found by review round 1 (F4); was not in the original plan. Classified as remoteSyncMerge and passed — the incoming commits were gated when originally pushed."
+
+  - id: G6
+    title: "Dependabot bumps could never satisfy the gate (pubspec is platform tier); exemption added, content-verified rather than name-trusted"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *libtest
+    notes: "Founder decision 2026-07-26 (chose the content-verified option). Earned twice: every commit on the merged side must be authored by Dependabot AND the diff must touch only pubspec.yaml/lock. .github/workflows/** deliberately NOT exempt — review round 1 (F6b) showed exempting it would contradict G7 in the same batch, since actions/checkout supplies fetch-depth:0 to the keystone job itself. Action bumps still require a record."
+
+  - id: G7
+    title: "A change to the review gate itself cleared no review gate — .github/** and scripts/** are feature tier via catch-alls"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "docs/blast_radius.yaml (promotions block); dart run scripts/check_blast_radius_coverage.dart PASS"
+    notes: "Live smoking gun: merge 904e6961 changed .github/workflows/test.yml — the file defining the keystone gate's own CI job, whose cancel-in-progress bug was silently SKIPPING that gate — and required no record. Scope widened per review round 1 (F8) to include the tier-DECIDING machinery (blast_radius.yaml, the classifier, check_gate_scripts_wired.dart, pre-commit.sh), since a commit that downgrades a tier would otherwise clear nothing either."
+
+  - id: G8
+    title: "The keystone gate had ZERO test coverage — nothing pinned the branch-recovery logic the whole gate depends on"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *libtest
+    notes: "25 cases driving pure helpers directly. Deliberately does NOT spawn a git repo: such a test, run inside pre-commit, inherits GIT_DIR/GIT_WORK_TREE which override both workingDirectory: and -C <path> (feedback_mistake_git_hook_env_leak)."
+
+  - id: G11
+    title: "SELF-INFLICTED (round-2 P0): the hardened branch regex was end-anchored, rejecting this repo's own dominant merge convention"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "test/scripts/plan_review_record_gate_e2e_test.dart (real gate, real merge commits) + 4 verbatim-history REGRESSION cases in test/scripts/plan_review_record_lib_test.dart"
+    notes: >-
+      The fix for G1 anchored the local-merge shape with `$`, tolerating only
+      ` into Y`. That rejects `Merge branch 'X' — <description>` — 49 of the 174
+      merges on main, including 904e6961, the merge immediately before this
+      batch — so the gate would have reddened main on the very next merge,
+      including this one. All 25 pure-helper tests passed against it; only
+      executing the real gate surfaced it. Exactly the defect class §4.12.1
+      says round 2 exists to catch: "the corrections themselves can introduce
+      new defects".
+
+  - id: G12
+    title: "SELF-INFLICTED (round-2 P1): the new remote-sync PASS exited 0 before blast-radius was computed — any subject ending \"' of x'\" bypassed the gate"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "test/scripts/plan_review_record_gate_e2e_test.dart — 'a crafted \"' of x'\" suffix cannot bypass the gate' asserts exit 1"
+    notes: >-
+      Introduced by the G5 fix. Now restricted to ms.branch == 'main' (a
+      same-branch sync); `git pull origin <feature>` while on main falls through
+      to the normal record requirement.
+
+  - id: G13
+    title: "dependabotDiffIsManifestOnly was dead code — the gate used a parallel inline implementation, so its 5 tests certified a function production never ran"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *libtest
+    notes: >-
+      Round-2 P2-4. The gate now calls the tested function for the decision
+      (keeping a separate `offending` list only for the error message), so the
+      tests certify the code path that actually executes. Same class as
+      feedback_source_grep_false_confidence.md.
+
+  - id: G14
+    title: "B-pass P0 (accidental half): git permits a single quote IN a branch name, so an ordinary merge subject truncated onto another branch's record"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *libtest
+    notes: >-
+      `git check-ref-format --branch "short-name'z-x"` succeeds, so an ORDINARY
+      `--no-ff` merge of such a branch produces git's own subject
+      `Merge branch 'short-name'z-x'`, and `'([^']+)'` stopped at the embedded
+      quote — silently resolving to the record for `short-name`. Same accidental
+      class as G3, and NOT closed by G3/G4's slug work. Fixed with a `(?=\s|$)`
+      lookahead so the closing quote must be followed by whitespace or
+      end-of-string; an ambiguous subject is now `unrecognized` and fails loud
+      instead of mis-resolving.
+      SCOPE, stated precisely because the ledger previously overclaimed: this
+      closes the ACCIDENTAL half only. B-pass also proved that a DELIBERATELY
+      crafted `-m "Merge branch 'other-branch'"` still resolves to that branch's
+      record on a genuine two-parent merge. That is unfixable by parsing — the
+      subject is author-asserted input — and shares a root cause and a fix with
+      the known-open single-parent bypass (key on github.event.before..after
+      instead of the subject). Both are recorded in the diagnose-doc's
+      impact_analysis as explicitly NOT closed here.
+
+  - id: G9
+    title: "REFUTED — a CI gate asserting allow_squash_merge/allow_rebase_merge stay false cannot read those fields"
+    terminal_state: upstream_blocked
+    blocker: "GitHub's permission model. Merge-related settings on GET /repos/{owner}/{repo} require contents:read AND contents:write; this repo's default_workflow_permissions is \"read\" (verified live), and `administration` is not a grantable GITHUB_TOKEN scope at all. Verified empirically: an anonymous request for a repo without push access omits allow_squash_merge entirely. Fork PRs additionally cannot escalate, so a fail-closed gate in a pull_request-triggered job would redden every fork PR of a public repo — and a red Test & Analyze blocks /build-apk Gate 3.5."
+    reopen_when: "The gate is relocated into the push-to-main-only plan-review-record job with an explicit `permissions: contents: write` block, AND a throwaway workflow_dispatch probe confirms the token can actually read the field. Until then the setting is unwatched: allow_squash_merge/allow_rebase_merge were set false in this batch (before-state recorded: both true, allow_merge_commit true) but nothing detects them drifting back."
+
+  - id: G10
+    title: "Duplicate test work: the contract-tests job re-ran 431 of the 626 files the unit job already runs"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "test/contracts/ci_workflow_concurrency_test.dart (5/5 still green after the job deletion); repo-wide grep shows every remaining `contract-tests` reference is comment-only; check_ci_flutter_version.dart PASS"
+    notes: >-
+      CLOSED by deleting the job outright — 432 of the 627 `*_test.dart` files
+      under test/ live in test/contracts/, a strict subdirectory already covered
+      by `flutter test test/ --exclude-tags golden`, with no tag divergence.
+      (An earlier draft of this entry said 431/626 — the pre-batch count, stale
+      by the test file the ci-speed batch added. B-pass caught the mismatch
+      against test.yml's own comment.) 4-way sharding was the
+      PLANNED remedy and was refuted before implementation, so it is a rejected
+      option rather than outstanding work: test_core's lib/src/runner.dart
+      `_shardSuite` (line ~492-502; verified identical in the 0.6.15 and 0.6.16
+      copies in the local pub cache, so this is not version-specific) slices
+      WITHIN each suite after load, so every shard compiles every file —
+      measured 365s for 642 tests (shard 0 of 4) against 689s for all 2404.
+      Total compute for 4 shards is therefore 4 x 365s = 1460s against 689s for
+      one full run, i.e. ~2.1x. Also corrects this batch's own premise: the job was never on
+      the critical path (ended 04:55:58 against a run ending 04:58:29 on run
+      30188423209), so removal saves ~5 min of duplicate runner-minutes and
+      0 wall-clock. The APK job is the critical path; that is where any future
+      wall-clock work belongs.
