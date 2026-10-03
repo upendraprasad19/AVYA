@@ -67,6 +67,10 @@ void main() {
   late Directory tmp;
   late String repo;
 
+  /// stdout + stderr of the most recent [mergeAndRunGate] run, so a test can
+  /// assert WHY the gate answered as it did and not only that it did.
+  var lastGateOut = '';
+
   /// Repo root of the code under test (the test's own working directory).
   final srcRoot = Directory.current.path;
 
@@ -118,13 +122,26 @@ void main() {
     } catch (_) {/* best effort on Windows file locks */}
   });
 
-  /// Builds `branchName` off main touching a PLATFORM-tier path, merges it back
-  /// with `subject`, and returns the gate's exit code.
+  /// Builds `branchName` off main touching ONE path, merges it back with
+  /// `subject`, and returns the gate's exit code.
+  ///
+  /// [touchPath] defaults to pubspec.yaml, a PLATFORM-tier path
+  /// (docs/blast_radius.yaml). [withBpass] false writes a record that is otherwise
+  /// valid but carries no `bpass:` — which only a platform-or-above change needs.
   int mergeAndRunGate(String branchName, String subject,
-      {bool withRecord = true, String? recordBranchField}) {
+      {bool withRecord = true,
+      String? recordBranchField,
+      String touchPath = 'pubspec.yaml',
+      bool withBpass = true}) {
     _run('git', ['checkout', '-q', '-B', branchName, 'main'], repo);
-    // pubspec.yaml is platform tier (docs/blast_radius.yaml).
-    File('$repo/pubspec.yaml').writeAsStringSync('name: probe\n# $branchName\n');
+    if (touchPath == 'pubspec.yaml') {
+      File('$repo/pubspec.yaml')
+          .writeAsStringSync('name: probe\n# $branchName\n');
+    } else {
+      File('$repo/$touchPath')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('// probe $branchName\n');
+    }
     _run('git', ['add', '-A'], repo);
     _run('git', ['commit', '-qm', 'change on $branchName'], repo);
 
@@ -140,9 +157,7 @@ blast_radius: platform
 review_rounds: 2
 ground_truth_verified: true
 verdict: converged
-bpass: accepted
-bpass_review: docs/reviews/probe.md
----
+${withBpass ? 'bpass: accepted\nbpass_review: docs/reviews/probe.md\n' : ''}---
 ''');
       Directory('$repo/docs/reviews').createSync(recursive: true);
       File('$repo/docs/reviews/probe.md')
@@ -162,6 +177,7 @@ bpass_review: docs/reviews/probe.md
           'GITHUB_REF': 'refs/heads/main',
           'GITHUB_REPOSITORY_OWNER': 'upendraprasad19',
         });
+    lastGateOut = '${r.stdout}\n${r.stderr}';
     return r.exitCode;
   }
 
@@ -205,6 +221,102 @@ bpass_review: docs/reviews/probe.md
         recordBranchField: 'some-other-branch');
     expect(code, 1,
         reason: 'the record must vouch for the branch actually being merged');
+  });
+
+  // OI-282 (diagnose f2c8a5). The keystone must treat a change to ONLY a
+  // sync-engine file as platform, i.e. demand `bpass: accepted`, which an
+  // account-tier change does not need. Arms over one record shape, so the ONLY
+  // variable is the tier the real registry (copied into the throwaway repo)
+  // assigns the touched file: an engine file without bpass is rejected FOR THAT
+  // REASON, the same engine file with bpass passes, and an account-tier file
+  // without bpass passes. The rejection arms cover each KIND of rule the batch
+  // added, because the keystone has its own copy of the glob engine: an exact
+  // path, a nested exact path, the `sync_domains/**` directory glob, and an exact
+  // path outside the services layer that must beat the `lib/shared/repositories/**`
+  // account rule below it.
+  //
+  // The control is a file under lib/features/ai_coach/**, which the registry
+  // classifies account by a directory rule of its own. It is deliberately NOT an
+  // engine import (workout_write_service.dart was the first choice, and it is
+  // one: by its own words it could count under the boundary and stays account
+  // only on a cost cap, so revising the cap would have turned this arm red for a
+  // reason that has nothing to do with the keystone).
+  group('OI-282 — a sync-engine-only change is judged platform', () {
+    test('an engine-file-only merge whose record lacks bpass: accepted is '
+        'REJECTED, because of the tier', () {
+      final code = mergeAndRunGate(
+          'engine-no-bpass', "Merge branch 'engine-no-bpass' — probe",
+          touchPath: 'lib/core/services/sync_queue.dart', withBpass: false);
+      expect(code, 1,
+          reason: 'sync_queue.dart is platform in docs/blast_radius.yaml, so '
+              'the record must carry bpass: accepted. Exit 0 means the keystone '
+              'computed account — the OI-282 hole.');
+      expect(lastGateOut, contains('blast-radius=platform requires bpass: accepted'),
+          reason: 'rejected, but not for the tier: a different failure (a record '
+              'shape error, a missing field) would make this test pass without '
+              'proving anything about the engine file. Gate said:\n$lastGateOut');
+    });
+
+    test('a nested engine file (day_swap/day_swap_rules.dart) is judged '
+        'platform too', () {
+      final code = mergeAndRunGate(
+          'engine-nested-no-bpass', "Merge branch 'engine-nested-no-bpass' — probe",
+          touchPath: 'lib/core/services/day_swap/day_swap_rules.dart',
+          withBpass: false);
+      expect(code, 1);
+      expect(lastGateOut, contains('blast-radius=platform requires bpass: accepted'),
+          reason: 'the keystone has its own copy of the glob engine; an exact '
+              'path inside a subdirectory must resolve there too. Gate said:\n'
+              '$lastGateOut');
+    });
+
+    test('a file under the sync_domains/** directory glob is judged platform '
+        'too', () {
+      final code = mergeAndRunGate('engine-domain-no-bpass',
+          "Merge branch 'engine-domain-no-bpass' — probe",
+          touchPath: 'lib/core/services/sync_domains/coach_sync_domain.dart',
+          withBpass: false);
+      expect(code, 1);
+      expect(lastGateOut, contains('blast-radius=platform requires bpass: accepted'),
+          reason: 'sync_domains/** is the one WILDCARD rule this batch added: '
+              'prove the keystone\'s own copy of the glob engine resolves it. '
+              'Gate said:\n$lastGateOut');
+    });
+
+    test('a promoted merge hosted OUTSIDE the services layer is judged platform '
+        'too', () {
+      final code = mergeAndRunGate('engine-repo-no-bpass',
+          "Merge branch 'engine-repo-no-bpass' — probe",
+          touchPath: 'lib/shared/repositories/user_repository.dart',
+          withBpass: false);
+      expect(code, 1);
+      expect(lastGateOut, contains('blast-radius=platform requires bpass: accepted'),
+          reason: 'user_repository.dart (mergeCloudProgress) must beat the '
+              'lib/shared/repositories/** account rule that sits below its own '
+              'rule in the registry. Gate said:\n$lastGateOut');
+    });
+
+    test('the same engine-only merge WITH bpass: accepted PASSES', () {
+      final code = mergeAndRunGate(
+          'engine-with-bpass', "Merge branch 'engine-with-bpass' — probe",
+          touchPath: 'lib/core/services/sync_queue.dart');
+      expect(code, 0,
+          reason: 'the record is valid and carries bpass: accepted. If this '
+              'fails, the REJECTED test above was failing for a reason other '
+              'than the missing bpass. Gate said:\n$lastGateOut');
+    });
+
+    test('control: the same record shape on an account-tier file with no engine '
+        'edge PASSES', () {
+      final code = mergeAndRunGate(
+          'account-no-bpass', "Merge branch 'account-no-bpass' — probe",
+          touchPath: 'lib/features/ai_coach/zz_keystone_control.dart',
+          withBpass: false);
+      expect(code, 0,
+          reason: 'account tier needs a record but not bpass: accepted. If this '
+              'fails, the REJECTED test above proves nothing about the tier. '
+              'Gate said:\n$lastGateOut');
+    });
   });
 
   group('Unit 3b — one-record-one-landing (advisory NOTE)', () {

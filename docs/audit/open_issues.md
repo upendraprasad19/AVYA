@@ -5592,15 +5592,6 @@ A meal the user deleted can come back at the next cold start, because the delete
 
 Fix shape: a cloud tombstone (or a cloud delete) written by `deleteLog`, and `_restoreNutritionLogs` skipping tombstoned rows. Needs a migration, so it is also part of the OI-280 tombstone work if that lands first.
 
-## OI-282 — blast_radius.yaml classifies only lib/core/services/sync/** as platform: sync_service.dart, sync_retry_controller.dart and sync_queue.dart compute account, so sync-engine changes skip the platform review tier
-
-- **Status**: OPEN
-- **Blocked on**: founder policy call - changing the blast-radius tier policy is not a side effect of a feature batch.
-- **Verified**: 2026-10-02 - `docs/blast_radius.yaml:63` classifies only `lib/core/services/sync/**` as `platform`; the e5b2a9 B-pass (`docs/reviews/resilient-client-phase1-bpass.md`, Finding 8) ran `blast_radius_from_diff.dart` and found `sync_service.dart`, `sync_retry_controller.dart` and `sync_queue.dart` compute `account`. The resilient-client batch was handled at platform tier by hand because `sync/sync_resilience.dart` happened to be in the diff.
-- **Identified**: 2026-10-02 · filed via mint_oi.sh from branch `claude/resilient-client-phase1`
-
-The sync engine's core files sit outside the `sync/**` glob, so a change that only touches them skips the platform review tier (the plan-review record's `bpass: accepted` requirement at platform and above). Candidate fix: add globs for `lib/core/services/sync_service.dart`, `sync_retry_controller.dart`, `sync_queue.dart` (and the new `serial_slot.dart`, `backend_probe.dart`) as `platform` in `docs/blast_radius.yaml`. Policy call: it makes every future sync-engine change pay the platform review, which is the point but also a cost.
-
 ## OI-283 — Live-DB SQL harness runners (check_onconflict_live_arbiter, check_two_user_cross_account) have no automated runner: CI holds no Management API token
 
 - **Status**: OPEN
@@ -5686,3 +5677,12 @@ The sync engine's core files sit outside the `sync/**` glob, so a change that on
 - **Blocked on**: an audit of every ref-less schedule writer (which can touch TODAY's row, and when they run) and a choice of signal (a ref-free invalidation hook vs `restoreCompletedTick`-style notifier); overlaps OI-294.
 - **Verified**: 2026-10-03 - code read, not reproduced: `lib/core/services/deload_evaluator.dart:223` calls `WorkoutWriteService.instance.upsertScheduled(...)` with no `ref`; `upsertScheduled` invalidates only `if (ref != null && onInvalidate != null)` (`lib/core/services/workout_write_service.dart:661`); lazy writes in `lib/core/services/workout_schedule_read_service.dart:~278-577` (round-6 review of swap-cross-device-reconcile v6). The Home insight is now exactly as stale as the Today card in these cases (it watches `todayWorkoutProvider`).
 - **Identified**: 2026-10-03 · filed via mint_oi.sh from branch `swap-cross-device-reconcile`
+
+## OI-301 — No gate stops a stray file at the repo root: existsSync (14 bytes of junk) and build_log.txt (a Gradle console capture) were both committed and sat on main
+
+- **Status**: OPEN
+- **Blocked on**: its own plan + review (a new `scripts/check_*.dart` gate is platform tier: two plan-review rounds, and CLAUDE.md §4.4 rule 24's mutation-proven test, `docs/audit/gate_test_ledger.yaml` entry and wiring); the plan must first settle what is legitimate at the root, see below. Kept out of the OI-282 batch because adding it there would restart that batch's review (§4.12.1).
+- **Verified**: 2026-10-03 - `git ls-files` at the repo root listed both: `existsSync` (14 bytes, content `M1 js isFile-`, added by `987ce09b` / PR #68; the content matches a mutation-log line in `docs/reviews/deploy-token-path-bpass.md`, so most likely an unquoted `->` in an echo) and `build_log.txt` (143 bytes, a `flutter build apk` console capture added by `0b609654` on 2026-03-31, referenced nowhere). A search of `scripts/check_*.dart`, `scripts/pre-commit.sh`, `scripts/pre-push.sh` and `.github/workflows/test.yml` for any root-file check found none (a grep, not an exhaustive proof). Both files are removed by the OI-282 batch (branch `oi282-blast-radius-globs`).
+- **Identified**: 2026-10-03 · filed via mint_oi.sh from branch `oi282-blast-radius-globs`
+
+The repo root has no allowlist, so a command that writes a file there (a stray shell redirect, a build log) is committed by the next `git add -A` and nothing objects. Fix shape: a `check_repo_root_allowlist.dart` pre-commit and CI gate that fails when a tracked root-level path is not in a short allowlist, run warn-only first (§4.11). The root FILES are easy (21 today: everything `git ls-files | grep -v /` lists except those two). The open question is the root DIRECTORIES: HEAD tracks 21 (`.claude`, `.github`, `.opencode`, `.preview`, `alerts`, `android`, `assets`, `backups`, `docs`, `integration_test`, `lib`, `memory`, `node_modules` (142 tracked files), `remotion`, `screenshots`, `scripts`, `supabase`, `telegram-bot`, `test`, `testing`, `web`), and whether `node_modules/`, `remotion/`, `screenshots/`, `testing/`, `.preview/` and `.opencode/` belong at the root is a repo-policy question the plan has to answer before an allowlist can name them or exclude them.

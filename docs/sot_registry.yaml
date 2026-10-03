@@ -10650,41 +10650,78 @@ concepts:
   - concept: blast_radius_registry_coverage
     domain: cross_domain
     behavioral_test_path: test/contracts/blast_radius_content_rule_wired_all_scripts_test.dart
+    behavioral_test_path_sync_engine: test/contracts/blast_radius_sync_engine_platform_test.dart
+    behavioral_test_path_sync_engine_keystone: test/scripts/plan_review_record_gate_e2e_test.dart
     description: |
       docs/blast_radius.yaml is the SINGLE writer of every file's review tier.
       Four independent engines read it (the classifier, both review gates, and
       the coverage gate), each re-implementing the same first-match-wins glob
       resolution — so the registry is a genuine one-writer/many-reader contract.
 
-      The recurring defect is COVERAGE, not correctness: a file that enforces
-      the discipline system falls through the `scripts/** -> feature` catch-all
-      and can then be edited with no review at all. Three instances: the
-      2026-07-19 sweep (missed the keystone-gate family), c9f1d3 (missed
-      check_code_review_pass_exists.dart — the review-acceptance gate itself),
-      and a3d7b1 (missed scripts/commit-msg.sh plus the whole rule-22 chain,
-      while promoting the parallel no-deferrals chain in full).
+      The recurring defect is COVERAGE, not correctness: a file that carries
+      more risk than its tier admits falls through a catch-all
+      (`scripts/** -> feature`, `lib/core/services/** -> account`) and can then
+      be edited with a thinner gate than its role needs, or none. Four
+      instances: the 2026-07-19 sweep (missed the keystone-gate family),
+      c9f1d3 (missed check_code_review_pass_exists.dart — the review-acceptance
+      gate itself), a3d7b1 (missed scripts/commit-msg.sh plus the whole rule-22
+      chain, while promoting the parallel no-deferrals chain in full), and
+      f2c8a5 (OI-282: the sync engine's own core, one directory above the one
+      `sync/**` glob, sat at account; the same inquiry found an account rule
+      that had never fired because it named a path that never existed).
 
       Each time the cause was the same: a hand-typed list. a3d7b1 therefore
       DERIVES the git-hook half of the set from scripts/setup-hooks.sh — every
       hook source it installs must be >= platform, or be named in an explicit
       declined-with-reason set. Adding a fifth hook fails the test until its
-      tier is decided.
+      tier is decided. f2c8a5 derives the engine set the same way: every lib/
+      file that an engine file imports, exports or declares as a part (the listed
+      exact paths, sync_domains/**, sync/**, read with a directive reader that
+      sees double-quoted, conditional, export, part and part-of forms, a keyword
+      with no space before its quote and two directives on one line) and every
+      sync_*.dart on disk must be platform or declined by name with the
+      engine-called function. "Decided" means platform or declined, never "some
+      rule claims it" (an explicit account rule written for another reason is not
+      a recorded decision), and a declined entry the engine no longer reaches
+      fails the test. It adds a rot check (an exact-path rule that names a
+      missing file fails the test) and an exactness check (an engine path is
+      claimed by its own rule, never a wildcard, and no platform wildcard besides
+      sync/** and sync_domains/** claims a services file). The boundary the list
+      follows is written once, in the registry block's header comment: engine
+      machinery, cross-account isolation the engine registers with, or a shared
+      file whose own words say it merges the cloud copy with the local one,
+      supplies a push's identity, gates a push or is a rule the restore merge
+      delegates to, the last at no more than one newly-platform commit per 60
+      days. Two restore merges hosted outside the services layer
+      (lib/shared/repositories/user_repository.dart and
+      lib/features/profile/services/notification_prefs_repository.dart) are
+      platform by that boundary and sit near the top of the registry, above the
+      repository and profile rules they must beat. The derivation follows what
+      the engine reaches and cannot see what CALLS it, so the two known callers
+      (lib/core/services/auth_session_bootstrapper.dart, a second restore
+      writer, and lib/shared/providers/sync_state_provider.dart, the retry
+      scheduler) are decided by name in the test's _callers map: an entry fails
+      when its file is promoted, becomes reached by the engine, or stops making
+      the call it is pinned for.
 
-      Known residual (B-pass P2-4, pre-existing since d947743d): both engines
-      read the registry from the MERGED tree, so a commit that deletes its own
-      protecting rule is classified by the post-change registry. Closing that
-      means classifying a merge using the registry as of HEAD^1 — not done here,
-      recorded in docs/audit/open_issues.md.
+      Known residual: the local classifier (scripts/blast_radius_from_diff.dart)
+      and the catastrophic review-acceptance gate (check_code_review_pass_exists.dart)
+      read only the working-tree registry, so locally a commit that deletes its
+      own protecting rule is classified by the post-change registry. The merge
+      keystone, which is what enforces bpass, takes the max over the range base
+      and HEAD since OI-70 (2026-07-27), so a deleted rule does not lower the tier
+      enforced at merge.
     writers:
       - file: docs/blast_radius.yaml
-        line_range: 39-160
+        line_range: 39-495
         method: paths list (declaration order, first match wins)
         notes: |
           THE canonical writer. Exact-path rules must be declared ABOVE the
-          `scripts/**` and `docs/**` catch-alls or they never fire. Exact paths
-          are deliberate over globs: a glob auto-promotes future files with
-          nobody deciding, and this repo already reverted promoting a data file
-          (open_issues.md) as self-defeating.
+          `scripts/**`, `docs/**`, `lib/core/services/**`,
+          `lib/shared/repositories/**` and `lib/features/profile/**` catch-alls
+          or they never fire. Exact paths are deliberate over globs: a glob
+          auto-promotes future files with nobody deciding, and this repo already
+          reverted promoting a data file (open_issues.md) as self-defeating.
     reader_manifest_complete: true
     readers:
       - file: scripts/blast_radius_from_diff.dart
