@@ -5252,6 +5252,58 @@ Writer: `sync_coach.dart:261` (restore). Reader: `coach_interaction_repository.d
 
 Needs a tombstone or cloud-side delete; restore-completeness class (docs/architecture/sync.md).
 
+## OI-151 — telemetry outweighs user data 1.7:1; `restore_op_done` is 64% of it and scales to ~240k rows/day at 10k DAU (P3)
+
+- **Status**: CLOSED · 2026-10-01 · diagnose `e5b2a9` (`docs/diagnoses/2026-10-01-supabase-api-outage-client-resilience-e5b2a9.md`) · branch `claude/resilient-client-phase1` (find the commit with `git log --grep="closes-oi: OI-151"`) — `restore_op_done` is now logged only for ops ≥ 2 s (`shouldLogRestoreOpDone`, `kRestoreOpDoneSlowThreshold`); kill-switch `disable_restore_op_done_filter`. Expect `client_errors_7d` to step down ~57% on the founder digest / admin dashboards — that is the filter working. Client-only: it reaches users with the next APK build. The 2 s threshold (the "breadcrumb granularity worth paying for" call this OI asked for) was PROPOSED in the plan; the founder ratifies it by approving the batch, and it is changed by editing the constant in the next build (the kill-switch is a device-local configBox key, not a remote lever).
+- **Blocked on**: nothing technical. It is a PRE-LAUNCH tuning decision, not a defect — the
+  volume is bounded today and harmless at current scale. It wants a call on what breadcrumb
+  granularity is worth paying for once there are real users.
+- **Verified**: 2026-08-30 — measured live on `dedsavbjuwgarrhphgnl`, not estimated. Row counts
+  are whole-history across all 17 accounts.
+- **Identified**: 2026-08-30, during the OI-150 write-durability research (founder asked how many
+  cloud writes the app actually makes per day).
+- **Risk class**: cost / operational scaling. NOT a correctness issue.
+
+**The measurement.** Every row in the database, all users, ~4 months:
+
+| table | rows | per active day |
+|---|---|---|
+| `client_errors` | **1905** | **100.3** |
+| `scheduled_workouts` | 607 | 28.9 (bursty — 28 rows per plan generation, not a rate) |
+| `workout_log_exercises` | 153 | 7.3 |
+| `user_daily_snapshots` | 131 | 1.9 |
+| `ai_coach_interactions` | 121 | 3.8 |
+| `workout_logs` | 41 | 1.5 |
+| `weight_logs` | 35 | 1.1 |
+| `nutrition_logs` | 32 | 1.5 |
+| `water_logs` | 27 | 1.0 |
+
+**1905 telemetry rows vs ~1147 rows of ALL real user data combined.** Actual user-generated
+writes are ~5–10 per user per active day — genuinely trivial.
+
+`restore_op_done` alone is **1221 rows = 64% of all telemetry**, at ~24 per user per day
+(1221 events / 5 users / 10 active days).
+
+**Why it is bounded today, and where the ceiling actually is.** `restore_op_done` is NOT in
+`log-client-error`'s `HIGH_PRIORITY_OP_TYPES` bypass list, so it shares the
+`DAILY_RATE_LIMIT = 2000` events/user/24h budget (raised 100 → 2000 in APK Test #16.1 / Theme D).
+At 24/user/day we sit at ~1.2% of cap. So this is not a runaway.
+
+⚠ **The scaling arithmetic, which is the actual point:** 24/user/day × 10,000 DAU =
+**~240,000 rows/day ≈ 7.2M/month** of observability exhaust. The 2000/user/day cap would permit
+20M/day. Neither number is a crisis; both are worth choosing deliberately rather than inheriting.
+
+**Fix shape (not attempted, and deliberately not bundled into the OI-150 batch):** decide a
+breadcrumb granularity — e.g. `restore_op_done` becomes one summary row per restore rather than
+one per operation, or moves to a sampled lane. Any change must keep the ops that a real incident
+needs; `feedback_backend_collapse_blinds_telemetry` records that a telemetry GAP during an
+incident is itself a signal, so thinning this is not free.
+
+**Blast-radius estimate**: `account` (touches `log-client-error` + the client emitter).
+
+**Related:** §2.13 (telemetry sink silently drops past rate limit, `9d12af`), diagnose `c4f8d2`
+(the un-debounced fan-out that made this lane hot), OI-150 (the batch that surfaced it).
+
 ## OI-165 — `check_onconflict_live_arbiter.dart` 403s, so every `test/sql/` live harness is un-runnable by its documented command (P2)
 
 - **Status**: CLOSED · 2026-10-02 · branch `deploy-token-path` · commit `33048976` (resolver + closure), review fixes in the commit that follows it
@@ -5278,4 +5330,3 @@ Needs a tombstone or cloud-side delete; restore-completeness class (docs/archite
 **UPDATE 2026-09-26 (backlog triage + `ci-green-batch-a`):** Candidate fix: resolve the default file from `--git-common-dir/..` (the `batch_close_lib.dart` `primaryRootFrom` pattern) and fail CLOSED instead of using the env fallback. Also note (2026-09-26): this VPS holds TWO different Management-API tokens — see diagnose `c6f2a8`.
 
 **CLOSED 2026-10-02 (`deploy-token-path`):** the 2026-09-26 hypothesis was CONFIRMED. The default token file was CWD-relative, present only in the PRIMARY; a linked worktree fell to the `SUPABASE_ACCESS_TOKEN` env fallback (a different account) ⇒ 403. Fix: `.claude/token_path.js` + its Dart twin `scripts/supabase_token_path_lib.dart` resolve candidates via `git worktree list --porcelain` (this tree `.supabase/`, primary `.supabase/`, then the legacy `supabase/.supabase/` copies), warn on a legacy hit or an unresolvable primary, and list every candidate in the error. Verified live: from this linked worktree with `env -u SUPABASE_ACCESS_TOKEN`, `dart run scripts/check_onconflict_live_arbiter.dart --sql <read-only select 1>` printed `token source resolved (44 bytes)` and `OK`. Regression: `test/scripts/token_path_resolver_test.dart` (13 tests, mutation-proven). Also superseded: diagnose `c6f2a8` note that the VPS holds two tokens: the one in `supabase/.supabase/` is REVOKED (401), the root `.supabase/` one works.
-

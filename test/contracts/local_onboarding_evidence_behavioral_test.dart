@@ -406,7 +406,7 @@ void main() {
               'treating the wall-clock timer as proof that /home is safe');
       expect(guard, lessThan(navigate),
           reason: 'the re-resolve must GATE the navigation, not follow it');
-      expect(continueBody.contains('resolveDestination(userId)'), isTrue,
+      expect(continueBody.contains('resolveDestinationBoundedOnce(userId)'), isTrue,
           reason: 'it must actually re-ask, not guess');
     });
 

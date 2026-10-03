@@ -91,8 +91,10 @@ void main() {
       expect(
         stripped.contains("'restore_op_done'"),
         isTrue,
-        reason: '_safeRestoreOp must emit restore_op_done {op, ms} on success '
-            'so we can identify the long-pole op behind a slow RestoringScreen.',
+        reason: '_safeRestoreOp must emit restore_op_done {op, ms} on SLOW success '
+            '(>= 2 s since e5b2a9 / OI-151; kill-switch disable_restore_op_done_filter '
+            'restores every op) so we can identify the long-pole op behind a slow '
+            'RestoringScreen.',
       );
     });
 

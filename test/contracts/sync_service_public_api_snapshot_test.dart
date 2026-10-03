@@ -28,6 +28,7 @@ void main() {
         'initQueue',
         'pullRecentCrossChannelLogs',
         'pushSnapshot',
+        'probeBackendReachable', // e5b2a9 retry-controller probe
         // H1b Part B1 (Unit H, 2026-06-27) — non-coalesced variant for the
         // eager/durable callers (onboarding first-context, checkAndSync backstop).
         'pushSnapshotNow',

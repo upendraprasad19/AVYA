@@ -2527,58 +2527,6 @@ exercises simply show no BREATHING section.
 than left to the guards. The fix is 136 lines of coaching copy.
 
 
-## OI-151 — telemetry outweighs user data 1.7:1; `restore_op_done` is 64% of it and scales to ~240k rows/day at 10k DAU (P3)
-
-- **Status**: OPEN
-- **Blocked on**: nothing technical. It is a PRE-LAUNCH tuning decision, not a defect — the
-  volume is bounded today and harmless at current scale. It wants a call on what breadcrumb
-  granularity is worth paying for once there are real users.
-- **Verified**: 2026-08-30 — measured live on `dedsavbjuwgarrhphgnl`, not estimated. Row counts
-  are whole-history across all 17 accounts.
-- **Identified**: 2026-08-30, during the OI-150 write-durability research (founder asked how many
-  cloud writes the app actually makes per day).
-- **Risk class**: cost / operational scaling. NOT a correctness issue.
-
-**The measurement.** Every row in the database, all users, ~4 months:
-
-| table | rows | per active day |
-|---|---|---|
-| `client_errors` | **1905** | **100.3** |
-| `scheduled_workouts` | 607 | 28.9 (bursty — 28 rows per plan generation, not a rate) |
-| `workout_log_exercises` | 153 | 7.3 |
-| `user_daily_snapshots` | 131 | 1.9 |
-| `ai_coach_interactions` | 121 | 3.8 |
-| `workout_logs` | 41 | 1.5 |
-| `weight_logs` | 35 | 1.1 |
-| `nutrition_logs` | 32 | 1.5 |
-| `water_logs` | 27 | 1.0 |
-
-**1905 telemetry rows vs ~1147 rows of ALL real user data combined.** Actual user-generated
-writes are ~5–10 per user per active day — genuinely trivial.
-
-`restore_op_done` alone is **1221 rows = 64% of all telemetry**, at ~24 per user per day
-(1221 events / 5 users / 10 active days).
-
-**Why it is bounded today, and where the ceiling actually is.** `restore_op_done` is NOT in
-`log-client-error`'s `HIGH_PRIORITY_OP_TYPES` bypass list, so it shares the
-`DAILY_RATE_LIMIT = 2000` events/user/24h budget (raised 100 → 2000 in APK Test #16.1 / Theme D).
-At 24/user/day we sit at ~1.2% of cap. So this is not a runaway.
-
-⚠ **The scaling arithmetic, which is the actual point:** 24/user/day × 10,000 DAU =
-**~240,000 rows/day ≈ 7.2M/month** of observability exhaust. The 2000/user/day cap would permit
-20M/day. Neither number is a crisis; both are worth choosing deliberately rather than inheriting.
-
-**Fix shape (not attempted, and deliberately not bundled into the OI-150 batch):** decide a
-breadcrumb granularity — e.g. `restore_op_done` becomes one summary row per restore rather than
-one per operation, or moves to a sampled lane. Any change must keep the ops that a real incident
-needs; `feedback_backend_collapse_blinds_telemetry` records that a telemetry GAP during an
-incident is itself a signal, so thinning this is not free.
-
-**Blast-radius estimate**: `account` (touches `log-client-error` + the client emitter).
-
-**Related:** §2.13 (telemetry sink silently drops past rate limit, `9d12af`), diagnose `c4f8d2`
-(the un-debounced fan-out that made this lane hot), OI-150 (the batch that surfaced it).
-
 ## OI-152 — six-plus call sites fire `syncX()` and `pushSnapshot()` back to back, doubling round-trips per user action (P3)
 
 - **Status**: OPEN
@@ -5598,6 +5546,60 @@ recurring concern again before this lands.
 **What:** when the bot is re-enabled, its chat cap and its model path must match the app's (free 7 / PRO 20, 3.1 Flash-Lite, shared `usage_counters` key or an explicit separate budget).
 
 **Acceptance:** re-enable checklist run (cap source located, model constants, quota key, copy); business-rules line corrected; reopen_when: the founder re-enables the bot.
+
+## OI-279 — Phase 1b: pull-on-resume - a backgrounded device refreshes itself (7-day window, pull-before-reckon ordering, pending-delete-aware exercise-log restore, per-set fetch must fail the pull, own refresh signal) - split out of resilient-client Phase 1 by 4.12.1
+
+- **Status**: OPEN
+- **Blocked on**: Phase 1 (e5b2a9) merged to `main`; needs its own plan and two context-blind review rounds before any code (CLAUDE.md 4.12.1: Unit C failed two plan-review rounds on DESIGN, so it was split out instead of patched a third time).
+- **Verified**: 2026-10-02 - read on the branch: the draft `docs/superpowers/plans/2026-10-01-resilient-client-phase1b-resume-pull-DRAFT.md`; `day_rollover_service.dart:174-177` (the streak-decay reckon runs on local data, gated on `restoreCompletedTick > 0`); `sync_workout.dart:861` (`_restoreExerciseLogs`) with the per-set fetch failure swallowed at `:890-895`; `pending_exlog_deletes.dart:22`; `sync_service.dart:1838-1841` (`restoreCompletedTick`, `bumpRestoreCompleted`). Not run on a device.
+- **Identified**: 2026-10-02 · filed via mint_oi.sh from branch `claude/resilient-client-phase1`
+
+After Phase 1 a failed push reaches the cloud on its own, but a SECOND device (an Android phone that is backgrounded, not closed) still only picks up another device's changes at its next cold start. Phase 1b is the resume-time pull that closes that gap.
+
+Requirements the Phase 1 plan reviews established (all carried in the draft file):
+1. Pull BEFORE the streak-decay reckon: `reckonStreakDecayAndPersist` (`workout_repository.dart:242`, called from `day_rollover_service.dart:177`) runs on stale local data today; a pull started after it does not help.
+2. Skip rows whose delete is still queued in `PendingExlogDeletes`: a local-wins pull otherwise RESURRECTS an exercise log the user deleted while the backend was down.
+3. A failed per-set fetch must FAIL the pull, not write a set-less exercise log that local-wins then never heals (`sync_workout.dart:890-895` swallows it today).
+4. Its own refresh signal: `restoreCompletedTick` is bumped only by the background-restore heal and gates the streak-decay reckon, so it cannot double as "the pull wrote something".
+5. A failure counter so a failed op aborts the pull, sharing the Phase 1 backoff / paused state.
+6. Scope: a recent window (7 days in the draft) via direct RLS queries, no migration, no edit to the catastrophic-tier `restore-user-snapshot` EF; never meals (OI-281) and never the scheduled-workout overlay (it can wipe an unpushed swap).
+
+Items 2 and 3 live in the SHARED writer `_restoreExerciseLogs`, so the cold-start restore has the same exposure: Phase 1b VERIFIES that and fixes it at the writer, not only in the pull. Water and a stale device's overwrite stay with OI-280.
+
+## OI-280 — Phase 2 multi-device delta sync: updated_at+deleted_at on every synced table, per-table cursor, conditional push, water as per-drink entries, cold-start restore replaced by a cursor delta (the since=2020-01-01 full-history restore re-runs on every swipe-away); also the fixed 3 s splash floor
+
+- **Status**: OPEN
+- **Blocked on**: Phase 1b (OI-279) merged; needs the founder's go on the delta-sync design and per-action authorization for each live migration apply (the `updated_at` / `deleted_at` columns).
+- **Verified**: 2026-10-02 - read `backups/live_schema_columns.json` (live-schema snapshot): `water_logs` has `created_at` + `updated_at`; `weight_logs`, `scheduled_workouts`, `streaks`, `nutrition_logs` and `workout_logs` have only `created_at`; none has `deleted_at`. `sync_service.dart:1776` and `:1902` hard-code `since = '2020-01-01T00:00:00Z'` for the cold-start restore; `splash_screen.dart:111-112` waits a fixed 3000 ms. Not measured on a device.
+- **Identified**: 2026-10-02 · filed via mint_oi.sh from branch `claude/resilient-client-phase1`
+
+Design (founder-locked 2026-10-01): a server-set `updated_at` + `deleted_at` (tombstones) on every synced table; a per-table cursor and per-row base version on the client; a CONDITIONAL push (`where updated_at = base`) so a stale device's later write cannot silently win - a timestamp alone does NOT fix that; on conflict pull + merge + retry. Water becomes per-drink ENTRIES (summed), not a per-day `total_ml` (an increment cannot be told from an absolute set). Merge rules: add-only entries = union; a per-key value = newer wins; forward-only state (schedule status, rank, phase) keeps its existing field rules; settings = field-level newer wins.
+
+Also owned here, found while building Phase 1 and NOT changed by it:
+- The cold-start restore is a full-history restore (`since = '2020-01-01T00:00:00Z'`, `sync_service.dart:1776` and `:1902`) and re-runs on EVERY swipe-away (a swipe-away is a cold start). The fix is a per-table cursor delta; a cold-start cooldown is only safe once Phase 1b's resume-pull exists, otherwise a cooled-down device would never refresh.
+- The fixed 3 s splash floor (`splash_screen.dart:112`): Phase 1 evidence-first routing skips the routing-read wait but not this floor.
+
+Out of scope by founder decision: a standby database; backups wait for the Supabase Pro upgrade.
+
+## OI-281 — Meal deletes never reach the cloud: NutritionWriteService.deleteLog is local-only, so _restoreNutritionLogs resurrects deleted meals at cold start
+
+- **Status**: OPEN
+- **Blocked on**: needs a cloud tombstone (`deleted_at`) on `nutrition_logs`, or a cloud delete from `deleteLog`, plus a reader filter - a migration, which needs the founder's per-action apply authorization.
+- **Verified**: 2026-10-02 - code read, NOT reproduced on a device: `NutritionWriteService.deleteLog` (`nutrition_write_service.dart:493`) removes the Hive key and fires `syncNutritionData()` / `pushSnapshot()`; the only cloud `.delete()` in `sync_nutrition.dart` is the `nutrition_log_items` vacuum for item indexes past a log's current count (`:403-406`), so a deleted LOG never leaves the cloud; `_restoreNutritionLogs` (`:609`) writes back a cloud row whose local key is absent (legacy path `:768-771`).
+- **Identified**: 2026-10-02 · filed via mint_oi.sh from branch `claude/resilient-client-phase1`
+
+A meal the user deleted can come back at the next cold start, because the delete is local-only and the full-history restore re-adds every cloud row it does not find locally. Same restore-completeness class as the exercise-log delete. Phase 1b deliberately does NOT pull meals for this reason (a resume pull would resurrect them faster).
+
+Fix shape: a cloud tombstone (or a cloud delete) written by `deleteLog`, and `_restoreNutritionLogs` skipping tombstoned rows. Needs a migration, so it is also part of the OI-280 tombstone work if that lands first.
+
+## OI-282 — blast_radius.yaml classifies only lib/core/services/sync/** as platform: sync_service.dart, sync_retry_controller.dart and sync_queue.dart compute account, so sync-engine changes skip the platform review tier
+
+- **Status**: OPEN
+- **Blocked on**: founder policy call - changing the blast-radius tier policy is not a side effect of a feature batch.
+- **Verified**: 2026-10-02 - `docs/blast_radius.yaml:63` classifies only `lib/core/services/sync/**` as `platform`; the e5b2a9 B-pass (`docs/reviews/resilient-client-phase1-bpass.md`, Finding 8) ran `blast_radius_from_diff.dart` and found `sync_service.dart`, `sync_retry_controller.dart` and `sync_queue.dart` compute `account`. The resilient-client batch was handled at platform tier by hand because `sync/sync_resilience.dart` happened to be in the diff.
+- **Identified**: 2026-10-02 · filed via mint_oi.sh from branch `claude/resilient-client-phase1`
+
+The sync engine's core files sit outside the `sync/**` glob, so a change that only touches them skips the platform review tier (the plan-review record's `bpass: accepted` requirement at platform and above). Candidate fix: add globs for `lib/core/services/sync_service.dart`, `sync_retry_controller.dart`, `sync_queue.dart` (and the new `serial_slot.dart`, `backend_probe.dart`) as `platform` in `docs/blast_radius.yaml`. Policy call: it makes every future sync-engine change pay the platform review, which is the point but also a cost.
 
 ## OI-283 — Live-DB SQL harness runners (check_onconflict_live_arbiter, check_two_user_cross_account) have no automated runner: CI holds no Management API token
 

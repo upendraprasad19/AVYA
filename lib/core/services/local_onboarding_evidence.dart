@@ -41,9 +41,11 @@ library;
 ///
 /// ⚠ CALLER PRECONDITION: read both inputs only AFTER the user-scoped Hive
 /// session is open. Under authenticated-but-owner-null, `wrapUserScopedBox`
-/// serves `GuardedBox.empty` (guarded_box.dart:333) — every read returns
-/// null, so this predicate returns false and the caller silently concludes
-/// "no evidence" when the evidence exists on disk. That is precisely how the
+/// serves `GuardedBox.empty` (guarded_box.dart:333): a guarded `.get` returns
+/// null, and the raw `HiveService.userBox` getter (what the screen reads)
+/// THROWS a `StateError`, which the screen's catch turns into "no evidence".
+/// Either way the caller concludes "no evidence" when the evidence exists on
+/// disk (e5b2a9 evidence-first routing then silently never fires). That is precisely how the
 /// pre-c2e9f4 `ResumeOnboarding` self-heal managed to be intermittently inert
 /// on cold start. `HiveUserSession.ensureOpenedForCurrentSession()` is the
 /// call that makes this safe; it is NOT enough to rely on the parallel

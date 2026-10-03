@@ -107,8 +107,8 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
     }
 
     // Parallel: destination resolution + start restore in background.
-    final destinationFuture =
-        AuthSessionBootstrapper.instance.resolveDestination(user.id);
+    final destinationFuture = AuthSessionBootstrapper.instance
+        .resolveDestinationBounded(user.id, _hasLocalOnboardedEvidence);
     // A7 / B5 D9-D10 — canonical provider path.
     final restoreFuture =
         ref.read(syncServiceProvider).restoreFromCloudForUser();
@@ -234,12 +234,12 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
   }
 
   /// Opens the user-scoped Hive session so a local-evidence read cannot be
-  /// silently served an empty box.
+  /// silently starved of the user's data.
   ///
   /// closes-diagnose: c2e9f4. Under authenticated-but-owner-null
-  /// `wrapUserScopedBox` serves `GuardedBox.empty` (guarded_box.dart:333) —
-  /// every read yields null and the evidence check concludes "no evidence",
-  /// SILENTLY (the loud `StateError` at :335 fires only when UNAUTHENTICATED).
+  /// `wrapUserScopedBox` serves `GuardedBox.empty` (guarded_box.dart:333): a
+  /// guarded read yields null, the raw `userBox` getter throws; either way the
+  /// evidence check says "no evidence" (:335's loud throw is UNAUTH only).
   /// The pre-fix code relied on `restoreFromCloudForUser` having opened the
   /// session, but that call (sync_service.dart:454) is fire-and-forget, so it
   /// was a RACE — likely why a3f6d9's self-heal passed tests and still let this
@@ -572,17 +572,11 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
         AuthSessionBootstrapper.instance.ensureTermsConsentFallback(sessionUserId));
   }
 
-  /// Plan A self-heal — stamps `onboarding_completed_at = NOW()` on both
-  /// Hive and Supabase so the populated-but-NULL state can't recur.
-  Future<void> _stampOnboardingCompletedAt(String userId) async {
-    final stampedAt = DateTime.now().toUtc().toIso8601String();
-    final profileBox = HiveService.instance.userBox;
-    final existing = (profileBox.get('profile') as Map?) ?? <dynamic, dynamic>{};
-    final merged = Map<String, dynamic>.from(existing.cast<String, dynamic>());
-    merged['onboarding_completed_at'] = stampedAt;
-    await profileBox.put('profile', merged);
-    unawaited(SyncService.instance.syncProfileNow(userId));
-  }
+  /// Plan A self-heal stamp. The one writer is
+  /// `AuthSessionBootstrapper.stampOnboardingCompletedAt` (shared with the
+  /// evidence-first late-answer path, e5b2a9).
+  Future<void> _stampOnboardingCompletedAt(String userId) =>
+      AuthSessionBootstrapper.stampOnboardingCompletedAt(userId);
 
   Future<void> _onContinueAnyway() async {
     _softHintTimer?.cancel();
@@ -620,8 +614,8 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
       if (await _hasLocalOnboardedEvidence()) {
         _committedToGoHome = true;
       } else {
-        final retry =
-            await AuthSessionBootstrapper.instance.resolveDestination(userId);
+        final retry = await AuthSessionBootstrapper.instance
+            .resolveDestinationBoundedOnce(userId);
         switch (retry) {
           case GoHome():
             _committedToGoHome = true;
