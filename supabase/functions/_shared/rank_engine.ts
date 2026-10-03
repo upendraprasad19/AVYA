@@ -1,0 +1,258 @@
+// Mirror of `lib/core/services/rank_ladder_data.dart`. Update both
+// files in lockstep when migration 039/045 ladder rows change.
+//
+// APK Test #6 Plan G (G-8): adds Lt at ordinal 7, rebalances sailor
+// gates, switches officer track to completionRateMinimum primary,
+// MCPO becomes the transition rank with completion rate + maxGapDays.
+
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+
+export interface RankLadderEntry {
+  code: string;
+  displayName: string;
+  shortName: string;
+  ordinal: number;
+  minWeeks: number;
+  category: 'sailor' | 'officer';
+  isTerminal: boolean;
+}
+
+export interface RankGate {
+  streakAtLeast?: number;
+  totalWorkoutsAtLeast?: number;
+  deploymentsCompleteAtLeast?: number;
+  minWeeksSinceSignup?: number;
+  maxGapDays?: number;
+  completionRateMinimum?: number;
+  completionRateWindowWeeks?: number;
+}
+
+// 11-rung ladder, ordinal 0..10. Mirrors lib/core/services/rank_ladder_data.dart.
+export const kRankLadder: RankLadderEntry[] = [
+  { code: 'SD2',   displayName: 'Seaman 2nd Class',          shortName: 'SEAMAN 2',       ordinal: 0,  minWeeks: 0,   category: 'sailor',  isTerminal: false },
+  { code: 'SD1',   displayName: 'Seaman 1st Class',          shortName: 'SEAMAN 1',       ordinal: 1,  minWeeks: 1,   category: 'sailor',  isTerminal: false },
+  { code: 'LS',    displayName: 'Leading Seaman',            shortName: 'LEADING SEAMAN', ordinal: 2,  minWeeks: 4,   category: 'sailor',  isTerminal: false },
+  { code: 'PO',    displayName: 'Petty Officer',             shortName: 'PETTY OFFICER',  ordinal: 3,  minWeeks: 12,  category: 'sailor',  isTerminal: false },
+  { code: 'CPO',   displayName: 'Chief Petty Officer',       shortName: 'CHIEF PO',       ordinal: 4,  minWeeks: 26,  category: 'sailor',  isTerminal: false },
+  { code: 'MCPO',  displayName: 'Master Chief Petty Officer',shortName: 'MASTER CHIEF',   ordinal: 5,  minWeeks: 52,  category: 'sailor',  isTerminal: false },
+  { code: 'SubLt', displayName: 'Sub Lieutenant',            shortName: 'SUB LT',         ordinal: 6,  minWeeks: 104, category: 'officer', isTerminal: false },
+  { code: 'Lt',    displayName: 'Lieutenant',                shortName: 'LIEUTENANT',     ordinal: 7,  minWeeks: 130, category: 'officer', isTerminal: false },
+  { code: 'LtCdr', displayName: 'Lieutenant Commander',      shortName: 'LT CDR',         ordinal: 8,  minWeeks: 156, category: 'officer', isTerminal: false },
+  { code: 'Cdr',   displayName: 'Commander',                 shortName: 'CDR',            ordinal: 9,  minWeeks: 208, category: 'officer', isTerminal: false },
+  { code: 'Capt',  displayName: 'Captain',                   shortName: 'CAPTAIN',        ordinal: 10, minWeeks: 260, category: 'officer', isTerminal: true  },
+];
+
+export const kRankGates: Record<string, RankGate> = {
+  'SD2':   {},
+  'SD1':   { streakAtLeast: 7,  minWeeksSinceSignup: 1 },
+  'LS':    { streakAtLeast: 14, minWeeksSinceSignup: 4 },
+  'PO':    { streakAtLeast: 30, minWeeksSinceSignup: 12, deploymentsCompleteAtLeast: 2 },
+  'CPO':   { streakAtLeast: 50, minWeeksSinceSignup: 26, deploymentsCompleteAtLeast: 3 },
+  'MCPO':  { minWeeksSinceSignup: 52,  completionRateMinimum: 0.80, completionRateWindowWeeks: 12,  maxGapDays: 14 },
+  'SubLt': { minWeeksSinceSignup: 104, completionRateMinimum: 0.80, completionRateWindowWeeks: 26  },
+  'Lt':    { minWeeksSinceSignup: 130, completionRateMinimum: 0.80, completionRateWindowWeeks: 26  },
+  'LtCdr': { minWeeksSinceSignup: 156, completionRateMinimum: 0.80, completionRateWindowWeeks: 52  },
+  'Cdr':   { minWeeksSinceSignup: 208, completionRateMinimum: 0.80, completionRateWindowWeeks: 52  },
+  'Capt':  { minWeeksSinceSignup: 260, completionRateMinimum: 0.85, completionRateWindowWeeks: 104 },
+};
+
+// Legacy aliases retained so existing callers (highestQualified / ranksUpTo /
+// callers that imported `LADDER` / `GATES`) keep compiling without churn.
+export const LADDER = kRankLadder;
+export const GATES = kRankGates;
+
+export interface EvalState {
+  streak: number;
+  totalWorkouts: number;
+  weeksSinceSignup: number;
+  deploymentsComplete: number;
+  lastWorkoutDaysAgo: number | null;
+  completionRateProvider: (windowWeeks: number) => Promise<number> | number;
+}
+
+export async function qualifies(code: string, s: EvalState): Promise<boolean> {
+  const gate = kRankGates[code];
+  if (!gate) return false;
+  const entry = kRankLadder.find((r) => r.code === code);
+  if (!entry) return false;
+  // Ladder-level minWeeks gate (always required).
+  if (s.weeksSinceSignup < entry.minWeeks) return false;
+  if (gate.streakAtLeast !== undefined && s.streak < gate.streakAtLeast) return false;
+  if (gate.totalWorkoutsAtLeast !== undefined && s.totalWorkouts < gate.totalWorkoutsAtLeast) return false;
+  if (gate.deploymentsCompleteAtLeast !== undefined && s.deploymentsComplete < gate.deploymentsCompleteAtLeast) return false;
+  if (gate.minWeeksSinceSignup !== undefined && s.weeksSinceSignup < gate.minWeeksSinceSignup) return false;
+  if (gate.maxGapDays !== undefined && s.lastWorkoutDaysAgo !== null && s.lastWorkoutDaysAgo > gate.maxGapDays) return false;
+  if (gate.completionRateMinimum !== undefined) {
+    const window = gate.completionRateWindowWeeks ?? 26;
+    const rate = await Promise.resolve(s.completionRateProvider(window));
+    if (rate < gate.completionRateMinimum) return false;
+  }
+  return true;
+}
+
+// Highest rung EARNED, evaluated SEQUENTIALLY — no skipping. Mirror of the
+// client `RankService._qualifiedRankCode` (2026-05-31, diagnose b9f4d2, ADR
+// rank-sequential). Walk from the bottom; advance only while each successive
+// rung's gate passes; STOP at the first failure. The deployment-gated PO/CPO
+// rungs cannot be leap-frogged by an officer-track completion-rate qualifier.
+// (Pre-fix this picked the highest INDEPENDENTLY-qualifying rung.)
+export async function highestQualified(s: EvalState): Promise<RankLadderEntry> {
+  let winner = kRankLadder[0]; // SD2 — ordinal 0, empty gate
+  for (let i = 1; i < kRankLadder.length; i++) {
+    const r = kRankLadder[i];
+    if (await qualifies(r.code, s)) {
+      winner = r;
+    } else {
+      break; // sequential: a failed gate blocks every rung above it
+    }
+  }
+  return winner;
+}
+
+export function ranksUpTo(code: string): RankLadderEntry[] {
+  const target = kRankLadder.find((r) => r.code === code);
+  if (!target) return [kRankLadder[0]];
+  return kRankLadder.filter((r) => r.ordinal <= target.ordinal);
+}
+
+/// SQL-backed completion-rate computation used by the cron caller —
+/// scans `scheduled_workouts` rows for the user / window. Rest days,
+/// PAUSED/MOVED/DROPPED rows (the client's
+/// `invisibleScheduleStatuses` parity — see the loop below) and
+/// pre-onboarding rows are excluded from both numerator and
+/// denominator so the rate matches the client's
+/// `WorkoutRepository.completionRateOverWindow` semantics.
+/// Raw-UTC calendar-date cutoff, `windowWeeks` back from now — the SAME
+/// date-key convention `completionRateOverWindow` uses internally for its
+/// own `scheduled_workouts` window query (deliberately NOT IST-shifted; see
+/// that function's own query below). Exported so a caller that needs to
+/// agree with `completionRateOverWindow`'s notion of "the same window" (e.g.
+/// future-prediction's schedule-existence probe) reuses this single source
+/// of truth instead of re-deriving the cutoff independently — a
+/// re-derivation that used `istDateStr()` instead of this raw-UTC form once
+/// silently disagreed with this function by up to a day around the
+/// 18:30-24:00 UTC / IST-already-rolled-over boundary (diagnose e5c9b2).
+export function windowSinceDateUtc(windowWeeks: number): string {
+  return new Date(Date.now() - windowWeeks * 7 * 24 * 3600 * 1000)
+    .toISOString()
+    .split('T')[0];
+}
+
+export async function completionRateOverWindow(
+  supabase: SupabaseClient,
+  userId: string,
+  windowWeeks: number,
+): Promise<number> {
+  if (windowWeeks <= 0) return 0.0;
+  const sinceDate = windowSinceDateUtc(windowWeeks);
+  // ⚠ ADDING A RANK: a window > 142 weeks (≈1000 days) breaks the waiver
+  // below. `completionRateOverWindow` would then sum a denominator clipped at
+  // 1000, return an inflated completion rate, and promote a user who did not
+  // qualify — silently, HTTP 200, with the gate still green because the waiver
+  // suppresses it. Route this read through paged_fetch at that point.
+  //
+  // The numbers: largest window actually shipped is `'Capt':
+  // completionRateWindowWeeks: 104` (RANK_GATES, :56) = 728 days, so worst
+  // case is 728 rows against the 1000-row cap — real headroom 1.37x, NOT the
+  // 2.7x an earlier version of this waiver implied by citing "max ~52" weeks /
+  // "~365 rows". Corrected 2026-08-01 (round-1 review): the numbers were
+  // wrong, the conclusion survives. The 1-row-per-user-per-day premise is
+  // evidence, not assumption — live UNIQUE index
+  // `uq_scheduled_workouts_user_date` on (user_id, scheduled_date), confirmed
+  // via pg_index on dedsavbjuwgarrhphgnl.
+  //
+  // oi79-ok: per-user window read, bounded to 728 rows worst case (see above);
+  // paging a read that cannot reach the cap would add a round-trip to the
+  // hottest loop in the rank cron for no correctness gain.
+  const { data, error } = await supabase
+    .from('scheduled_workouts')
+    .select('status, scheduled_date')
+    .eq('user_id', userId)
+    .gte('scheduled_date', sinceDate);
+  if (error) {
+    // Unit C (§2.24) — return a -1.0 SENTINEL (not 0.0) on a transient query error.
+    // The only consumer is the gate `if (rate < gate.completionRateMinimum) return
+    // false` (qualifies, :88): -1.0 < any minimum → the completion-rate gate FAILS →
+    // `highestQualified` breaks at this rung and KEEPS every lower rank the user
+    // already earned. Pre-fix `return 0.0` did the same for THIS gate, but 0.0 is a
+    // legitimate value that a `>=` refactor / an averaging consumer would silently
+    // mistake for "0% completion"; -1.0 is an unambiguous can't-compute marker and
+    // keeps the return a `number`. NB: the `windowWeeks <= 0` guard above stays 0.0
+    // (an invalid window is a caller bug, not a DB failure — do NOT unify them).
+    console.error('[rank_engine] completionRate query failed', error);
+    return -1.0;
+  }
+  let scheduled = 0;
+  let completed = 0;
+  for (const row of data ?? []) {
+    // e8f4a3 B-pass P1 — mirror the client's canonical
+    // `WorkoutScheduleReadService.invisibleScheduleStatuses` set
+    // (lib/core/services/workout_schedule_read_service.dart:889 =
+    // {paused, moved, dropped}; the streak walk + client
+    // completionRateOverWindow both skip it). This batch made terminal
+    // moved/dropped rows PERSIST and PUSH to cloud (pre-batch they were
+    // raw-deleted and never reached cloud), so without this skip every
+    // reschedule move/drop permanently deflates the server-side rate behind
+    // the completionRateMinimum promotion gate while the client rank UI
+    // excludes them. Pinned by rank_engine_terminal_status_test.ts.
+    if (
+      row.status === 'rest' || row.status === 'paused' ||
+      row.status === 'moved' || row.status === 'dropped'
+    ) continue;
+    // Cloud `scheduled_workouts` has NO `reason` column — it only ever existed
+    // in the client's local Hive model. Pre-onboarding placeholder days are
+    // written with status='rest' (workout_schedule_read_service.dart:303-309),
+    // so the status check above ALREADY excludes them. Selecting `reason` here
+    // 42703'd → completionRate silently returned 0.0 for everyone since
+    // 2026-05-01. closes-diagnose: d7c3f1.
+    scheduled++;
+    if (row.status === 'completed') completed++;
+  }
+  return scheduled === 0 ? 0.0 : completed / scheduled;
+}
+
+// OPT-E — pure grouping helpers for evaluate-rank-promotions' batch pre-fetch
+// (one .in("user_id", allIds) call per table instead of one query per user per
+// cron tick). Kept here rather than in index.ts so they're importable in a Deno
+// test without triggering index.ts's module-level `serve()` (which binds a port
+// on import). Each takes the raw rows from a `.in()` select and groups them by
+// user_id — the actual `.in()` fetch + its error handling stays in index.ts
+// (batch-read-in-a-whole-batch-cron → throw, per Unit C §2.24 precedent).
+
+/** user_progress rows keyed by user_id. UNIQUE(user_id) at the DB level
+ *  (migration 001) guarantees at most one row per key — no last-write-wins risk. */
+export function buildUserProgressMap(
+  rows: Array<Record<string, unknown>>,
+): Map<string, Record<string, unknown>> {
+  const map = new Map<string, Record<string, unknown>>();
+  for (const row of rows) {
+    map.set(row.user_id as string, row);
+  }
+  return map;
+}
+
+/** Already-earned rank codes per user, from rank_promotions (one row per
+ *  earned (user_id, rank_code) pair — UNIQUE(user_id, rank_code), migration 039). */
+export function buildRankPromotionsMap(
+  rows: Array<Record<string, unknown>>,
+): Map<string, Set<string>> {
+  const map = new Map<string, Set<string>>();
+  for (const row of rows) {
+    const uid = row.user_id as string;
+    if (!map.has(uid)) map.set(uid, new Set());
+    map.get(uid)!.add(row.rank_code as string);
+  }
+  return map;
+}
+
+/** user_profile.current_rank_code per user. UNIQUE(user_id) (migration 001)
+ *  guarantees at most one row per key. */
+export function buildCurrentRankMap(
+  rows: Array<Record<string, unknown>>,
+): Map<string, string | null> {
+  const map = new Map<string, string | null>();
+  for (const row of rows) {
+    map.set(row.user_id as string, (row.current_rank_code as string | null) ?? null);
+  }
+  return map;
+}
