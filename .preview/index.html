@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reverted tabs — full screens</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&family=Fraunces:ital,wght@0,400;0,500;0,700;1,500&family=DM+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #02070F;
+    --bg-deep: #01040A;
+    --bg-raise: #04111E;
+    --header: #0A1020;
+    --card: #06101F;
+    --card-hi: #0A1828;
+    --input: #0E1E30;
+    --border: #1A2C40;
+    --line2: rgba(255, 250, 232, 0.08);
+    --accent: #D4B270;
+    --accent-soft: rgba(212, 178, 112, 0.10);
+    --accent-30: rgba(212, 178, 112, 0.30);
+    --text-primary: #F2EDE4;
+    --text-dim: #8A9BAA;
+    --text-mute: #4D6070;
+    --text-ghost: #2A3848;
+    --ok: #7FB4A2;
+    --warn: #F0B23E;
+    --bad: #D7604E;
+    --info: #6FA2C9;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #050811;
+    color: var(--text-primary);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    padding: 28px 28px 60px;
+  }
+  h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 30px;
+    margin-bottom: 4px;
+    color: var(--accent);
+  }
+  .lead {
+    color: var(--text-dim);
+    font-size: 14px;
+    margin-bottom: 18px;
+    max-width: 880px; line-height: 1.5;
+  }
+  .nav {
+    display: flex; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 26px; padding: 12px 14px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .nav a {
+    color: var(--accent); text-decoration: none;
+    font-family: 'DM Mono', monospace; font-size: 11px;
+    letter-spacing: 1.4px; font-weight: 700;
+    padding: 6px 12px;
+    border: 1px solid var(--accent-30);
+    border-radius: 100px;
+  }
+  .nav a:hover { background: var(--accent-soft); }
+
+  .row {
+    display: flex;
+    gap: 32px;
+    overflow-x: auto;
+    padding-bottom: 24px;
+    scroll-snap-type: x mandatory;
+  }
+  /* Phone frame */
+  .phone {
+    flex: 0 0 auto;
+    width: 380px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    overflow: hidden;
+    scroll-snap-align: start;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+  .phone-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px; letter-spacing: 1.6px; font-weight: 700;
+    color: var(--text-dim); padding: 8px 14px;
+    background: var(--header); border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between;
+  }
+  .phone-label .tag {
+    color: var(--ok);
+    font-size: 9px;
+    background: rgba(127, 180, 162, 0.10);
+    padding: 1px 6px; border-radius: 100px;
+  }
+  .phone-body {
+    height: 720px;
+    overflow-y: auto;
+    background: var(--bg);
+  }
+
+  /* Wardroom primitives */
+  .mono { font-family: 'DM Mono', monospace; font-weight: 700; letter-spacing: 1.6px; text-transform: uppercase; }
+  .serif { font-family: 'Fraunces', serif; }
+
+  /* Avatar */
+  .avatar {
+    background: var(--card);
+    border: 1.2px solid var(--accent);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--accent);
+    font-family: 'DM Mono', monospace; font-weight: 800; flex-shrink: 0;
+  }
+  .avatar-44 { width: 44px; height: 44px; font-size: 18px; }
+
+  /* Streak badge (OLD) */
+  .streak-badge-old {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 12px;
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-30);
+    border-radius: 100px;
+    font-family: 'DM Mono', monospace;
+    font-weight: 800; font-size: 11px; color: var(--accent);
+  }
+  /* Rank chip — compact pill */
+  .rank-chip {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 12px;
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-30);
+    border-radius: 100px;
+    font-family: 'DM Mono', monospace;
+    font-weight: 700; font-size: 10px; letter-spacing: 1.4px;
+    color: var(--accent);
+  }
+  .rank-chip .countdown { color: var(--text-dim); font-weight: 500; margin-left: 4px; }
+
+  /* Letterhead */
+  .letterhead {
+    padding: 18px 22px 14px;
+  }
+  .letterhead .eyebrow {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px; font-weight: 700; letter-spacing: 1.8px;
+    color: var(--text-dim); margin-bottom: 6px;
+  }
+  .letterhead .title-row {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  }
+  .letterhead .title {
+    font-family: 'Fraunces', serif;
+    font-weight: 500; font-size: 28px; line-height: 1.05;
+    color: var(--text-primary);
+  }
+  .letterhead .trailing-pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 8px;
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-30);
+    border-radius: 4px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px; font-weight: 700; letter-spacing: 1.2px;
+    color: var(--accent);
+  }
+  .letterhead .gold-rule { height: 1px; background: var(--accent); margin-top: 12px; width: 60px; }
+
+  /* Welcome row (Home) */
+  .welcome-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 16px 10px;
+  }
+  .welcome-row .text { flex: 1; }
+  .welcome-row .eyebrow {
+    font-family: 'DM Mono', monospace; font-size: 10px;
+    font-weight: 700; letter-spacing: 2px;
+    color: var(--text-dim); margin-bottom: 2px;
+  }
+  .welcome-row .name {
+    font-size: 18px; font-weight: 800; color: var(--text-primary); line-height: 1.1;
+  }
+
+  /* WardCard */
+  .ward-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+  }
+  .ward-card.active { border-color: var(--accent-30); background: var(--card-hi); }
+
+  .section { padding: 14px 16px 0; }
+
+  /* Date display */
+  .date-display { padding: 4px 16px 14px; display: flex; gap: 12px; align-items: baseline; }
+  .date-display .day { font-family: 'Fraunces', serif; font-size: 38px; font-weight: 500; color: var(--accent); line-height: 1; }
+  .date-display .month-year { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); letter-spacing: 1.4px; }
+  .date-display .wk-suffix { color: var(--accent); }
+
+  /* Calendar strip */
+  .cal-strip {
+    display: flex; gap: 6px; padding: 0 16px 14px;
+    justify-content: space-between;
+  }
+  .cal-day {
+    flex: 1;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 8px 4px;
+    border-radius: 8px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    font-family: 'DM Mono', monospace;
+    font-size: 9px; letter-spacing: 0.5px;
+    color: var(--text-dim);
+  }
+  .cal-day.today { border-color: var(--accent); background: var(--card-hi); color: var(--accent); }
+  .cal-day .num { font-size: 14px; font-weight: 800; color: var(--text-primary); font-family: 'Fraunces', serif; }
+  .cal-day.today .num { color: var(--accent); }
+  .cal-day .dot { width: 4px; height: 4px; border-radius: 50%; background: var(--text-mute); }
+  .cal-day.completed .dot { background: var(--ok); }
+  .cal-day.today.completed .dot { background: var(--accent); }
+
+  /* Quick actions */
+  .quick-actions {
+    display: grid; grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 8px; padding: 0 16px 14px;
+  }
+  .qa-btn {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 4px;
+    text-align: center;
+    font-family: 'DM Mono', monospace;
+    font-size: 9px; letter-spacing: 1px; font-weight: 700;
+    color: var(--text-dim);
+  }
+  .qa-btn .ico { font-size: 16px; margin-bottom: 4px; }
+  .qa-btn .lbl { font-size: 8px; }
+
+  /* Today workout card */
+  .today-card {
+    margin: 0 16px 14px;
+    padding: 16px;
+    background: var(--card-hi);
+    border: 1px solid var(--accent-30);
+    border-radius: 12px;
+  }
+  .today-card .eyebrow {
+    font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 1.4px;
+    color: var(--text-dim); margin-bottom: 8px; font-weight: 700;
+  }
+  .today-card .title {
+    font-family: 'Fraunces', serif; font-size: 22px; font-weight: 500;
+    margin-bottom: 6px;
+  }
+  .today-card .meta { font-size: 12px; color: var(--text-dim); margin-bottom: 12px; }
+  .today-card .cta {
+    background: var(--accent); color: #000;
+    font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 800;
+    letter-spacing: 1.4px; text-align: center;
+    padding: 10px; border-radius: 100px;
+  }
+
+  /* AI Insight */
+  .ai-insight {
+    margin: 0 16px 14px;
+    padding: 14px;
+    background: var(--card);
+    border-left: 2px solid var(--accent);
+    border-radius: 4px;
+    font-size: 13px; color: var(--text-primary);
+    line-height: 1.5;
+  }
+  .ai-insight .label {
+    font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 1.4px;
+    color: var(--accent); font-weight: 700; margin-bottom: 6px;
+  }
+
+  /* Nutrition snapshot */
+  .macro-row {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px; padding: 0 16px 14px;
+  }
+  .macro-tile {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 12px;
+  }
+  .macro-tile .lbl { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 1.4px; color: var(--text-dim); font-weight: 700; }
+  .macro-tile .val { font-family: 'Fraunces', serif; font-size: 18px; margin-top: 4px; }
+  .macro-tile .bar { margin-top: 6px; height: 4px; background: var(--input); border-radius: 2px; overflow: hidden; }
+  .macro-tile .fill { height: 100%; background: var(--accent); }
+
+  /* Weight sparkline */
+  .weight-card {
+    margin: 0 16px 14px; padding: 14px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  }
+  .weight-card .row {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 12px; margin-bottom: 8px;
+  }
+  .weight-card .lbl {
+    font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 1.4px;
+    color: var(--text-dim); font-weight: 700;
+  }
+  .weight-card .val { font-family: 'Fraunces', serif; font-size: 22px; }
+  .weight-card svg { display: block; }
+
+  /* Bottom nav */
+  .bottom-nav {
+    display: flex; justify-content: space-around;
+    background: var(--header); border-top: 1px solid var(--border);
+    padding: 10px 0 14px; position: sticky; bottom: 0;
+  }
+  .nav-item {
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    font-family: 'DM Mono', monospace;
+    font-size: 9px; letter-spacing: 1px; font-weight: 700; color: var(--text-mute);
+  }
+  .nav-item.active { color: var(--accent); }
+  .nav-item .ico { font-size: 16px; }
+
+  /* Train screen */
+  .plan-header {
+    margin: 14px 16px 0;
+    padding: 14px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+  .plan-header .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .plan-header .phase { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 1.4px; color: var(--text-dim); font-weight: 700; }
+  .plan-header .title { font-family: 'Fraunces', serif; font-size: 18px; }
+  .plan-header .progress-bar { height: 4px; background: var(--input); border-radius: 2px; overflow: hidden; }
+  .plan-header .progress-fill { height: 100%; width: 33%; background: var(--accent); }
+
+  .week-chips {
+    display: flex; gap: 6px; padding: 14px 16px;
+    overflow-x: auto;
+  }
+  .week-chip {
+    flex: 0 0 auto;
+    padding: 8px 14px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 100px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px; letter-spacing: 1.2px; font-weight: 700;
+    color: var(--text-dim);
+  }
+  .week-chip.active { background: var(--accent); color: #000; border-color: var(--accent); }
+  .week-chip.locked { color: var(--text-mute); }
+  .week-chip.locked::after { content: ' 🔒'; font-size: 9px; }
+
+  .train-hero {
+    margin: 0 16px 14px;
+    padding: 16px;
+    background: var(--card-hi); border: 1px solid var(--accent-30);
+    border-radius: 12px;
+  }
+  .train-hero .eyebrow { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 1.4px; color: var(--accent); font-weight: 700; }
+  .train-hero .title { font-family: 'Fraunces', serif; font-size: 22px; font-weight: 500; margin: 4px 0; }
+  .train-hero .meta { font-size: 12px; color: var(--text-dim); margin-bottom: 10px; }
+  .train-hero .cta {
+    background: var(--accent); color: #000;
+    font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 800;
+    letter-spacing: 1.4px; text-align: center; padding: 10px; border-radius: 100px;
+  }
+
+  .section-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 0 16px 8px; margin-top: 8px;
+  }
+  .section-head .ttl { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 1.6px; font-weight: 700; color: var(--text-primary); }
+  .section-head .add {
+    font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 700;
+    color: var(--accent); letter-spacing: 1.4px;
+  }
+
+  .empty-hint {
+    padding: 6px 16px 14px;
+    font-size: 12px; color: var(--text-dim);
+    font-style: italic;
+  }
+
+  /* Nutrition */
+  .calorie-ring-card {
+    margin: 0 16px 14px; padding: 18px 16px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    display: flex; gap: 16px; align-items: center;
+  }
+  .ring-svg { flex: 0 0 auto; }
+  .ring-info { flex: 1; }
+  .ring-info .lbl { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 1.4px; color: var(--text-dim); font-weight: 700; }
+  .ring-info .val { font-family: 'Fraunces', serif; font-size: 26px; margin: 2px 0; }
+  .ring-info .sub { font-size: 11px; color: var(--text-dim); }
+
+  .meal-slot {
+    margin: 0 16px 10px;
+    padding: 12px 14px;
+    background: var(--card); border: 1px dashed var(--border); border-radius: 10px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .meal-slot.logged { border-style: solid; border-color: var(--ok); background: rgba(127,180,162,0.05); }
+  .meal-slot .meal-info { display: flex; flex-direction: column; gap: 3px; }
+  .meal-slot .meal-name { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: 1.4px; color: var(--text-dim); }
+  .meal-slot.logged .meal-name { color: var(--ok); }
+  .meal-slot .meal-detail { font-size: 13px; color: var(--text-primary); }
+  .meal-slot.empty .meal-detail { color: var(--text-mute); font-style: italic; }
+  .meal-slot .meal-cta { color: var(--accent); font-size: 18px; font-weight: 800; }
+
+  .hydration-card {
+    margin: 14px 16px;
+    padding: 14px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  }
+  .glass-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; margin-top: 10px; }
+  .glass {
+    aspect-ratio: 1;
+    background: var(--input); border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+  .glass.filled { background: var(--info); border-color: var(--info); }
+
+  /* AI Coach */
+  .coach-status {
+    text-align: center; padding: 6px 0 12px;
+    font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 1.4px;
+    color: var(--text-dim);
+  }
+  .msg-row { padding: 0 16px 12px; display: flex; }
+  .msg-row.user { justify-content: flex-end; }
+  .msg-row.coach { justify-content: flex-start; }
+  .msg-bubble { max-width: 78%; padding: 10px 14px; border-radius: 12px; font-size: 13px; line-height: 1.4; }
+  .msg-bubble.user { background: var(--accent); color: #000; border-bottom-right-radius: 4px; }
+  .msg-bubble.coach { background: var(--card); border: 1px solid var(--border); color: var(--text-primary); border-bottom-left-radius: 4px; }
+  .msg-time { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--text-dim); margin-top: 4px; }
+
+  .coach-input {
+    display: flex; gap: 8px; padding: 10px 14px;
+    background: var(--header); border-top: 1px solid var(--border);
+  }
+  .coach-input .icon-btn {
+    width: 38px; height: 38px;
+    background: var(--card); border: 1px solid var(--accent-30); border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--accent);
+  }
+  .coach-input .text-input {
+    flex: 1; background: var(--input); border-radius: 100px;
+    padding: 10px 14px; color: var(--text-mute); font-size: 13px;
+    border: 1px solid var(--border);
+  }
+  .coach-input .send-btn {
+    width: 38px; height: 38px;
+    background: var(--accent); border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    color: #000; font-weight: 800;
+  }
+
+  /* Profile */
+  .service-record {
+    margin: 0 16px 14px;
+    padding: 14px;
+    background: var(--card); border: 1px solid var(--accent-30); border-radius: 12px;
+  }
+  .service-record .top { display: flex; gap: 14px; align-items: center; margin-bottom: 10px; }
+  .service-record .ribbon {
+    width: 44px; height: 44px;
+    background: var(--accent); color: #000;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 6px;
+    font-family: 'DM Mono', monospace; font-weight: 800;
+  }
+  .service-record .info .lbl {
+    font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 1.4px;
+    color: var(--text-dim); font-weight: 700;
+  }
+  .service-record .info .name {
+    font-family: 'Fraunces', serif; font-size: 18px; margin: 2px 0;
+  }
+  .service-record .info .countdown { font-size: 11px; color: var(--accent); font-family: 'DM Mono', monospace; letter-spacing: 1.2px; }
+
+  .completeness-card {
+    margin: 0 16px 14px;
+    padding: 14px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  }
+  .completeness-card .top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+  .completeness-card .ttl { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 1.4px; color: var(--text-primary); font-weight: 700; }
+  .completeness-card .pct { font-family: 'Fraunces', serif; font-size: 16px; color: var(--accent); }
+  .completeness-card .bar { height: 4px; background: var(--input); border-radius: 2px; overflow: hidden; }
+  .completeness-card .fill { height: 100%; width: 72%; background: var(--accent); }
+
+  .settings-row {
+    display: flex; align-items: center; padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--text-primary);
+  }
+  .settings-row .ico { width: 28px; color: var(--text-dim); }
+  .settings-row .arrow { margin-left: auto; color: var(--text-mute); }
+
+  /* Annotation panel */
+  .anno {
+    background: rgba(212, 178, 112, 0.06);
+    border-left: 2px solid var(--accent);
+    padding: 12px 16px; margin: 6px 0 14px;
+    border-radius: 4px;
+    font-size: 12px; color: var(--text-dim); line-height: 1.55;
+  }
+  .anno b { color: var(--accent); }
+
+  .ask {
+    margin: 50px auto 20px;
+    max-width: 980px;
+    padding: 22px 28px;
+    background: var(--bg-raise);
+    border: 1px solid var(--accent-30);
+    border-radius: 10px;
+  }
+  .ask h2 {
+    font-family: 'Fraunces', serif; font-weight: 500; font-size: 22px;
+    color: var(--accent); margin-bottom: 10px;
+  }
+  .ask p { font-size: 14px; color: var(--text-dim); margin-bottom: 8px; line-height: 1.55; }
+</style>
+</head>
+<body>
+
+<h1>Reverted tabs — full screens (pre-U7 personality restored)</h1>
+<p class="lead">
+  All 5 tabs as they looked BEFORE the U7 unification. Each tab has its own letterhead style:
+  Home gets the personalised welcome row, Train gets a plan header, Nutrition / AI Coach / Profile
+  get Fraunces serif "letterhead" titles. Rank chip placement varies per tab. Streak/freeze
+  treatment varies. Gold rules and spacing rhythm are inconsistent — those are the things you'll
+  decide to standardize.
+</p>
+
+<div class="nav">
+  <a href="#home">🏠 Home</a>
+  <a href="#train">🏋️ Train</a>
+  <a href="#nutrition">🥗 Nutrition</a>
+  <a href="#coach">💬 AI Coach</a>
+  <a href="#profile">👤 Profile</a>
+</div>
+
+<div class="row">
+
+  <!-- ================= HOME ================= -->
+  <div class="phone" id="home">
+    <div class="phone-label">
+      <span>🏠 HOME · OLD (reverted)</span>
+      <span class="tag">PRE-U7</span>
+    </div>
+    <div class="phone-body">
+      <!-- Welcome row -->
+      <div class="welcome-row">
+        <div class="avatar avatar-44">U</div>
+        <div class="text">
+          <div class="eyebrow">WELCOME BACK,</div>
+          <div class="name">Upendra 👋</div>
+        </div>
+        <div class="streak-badge-old">🔥 12 D</div>
+      </div>
+      <!-- Rank chip below welcome -->
+      <div style="padding: 0 16px 14px;">
+        <div class="rank-chip">
+          <span>▮</span>
+          <span>SD2 · RECRUIT</span>
+          <span class="countdown">· NEXT IN 12 DAYS</span>
+        </div>
+      </div>
+      <!-- Date display -->
+      <div class="date-display">
+        <span class="day">28</span>
+        <span class="month-year">TUE · APR · <span class="wk-suffix">WK 17 · PHASE I</span></span>
+      </div>
+      <!-- Calendar strip -->
+      <div class="cal-strip">
+        <div class="cal-day completed"><span>MON</span><span class="num">27</span><span class="dot"></span></div>
+        <div class="cal-day today"><span>TUE</span><span class="num">28</span><span class="dot"></span></div>
+        <div class="cal-day"><span>WED</span><span class="num">29</span><span class="dot"></span></div>
+        <div class="cal-day"><span>THU</span><span class="num">30</span><span class="dot"></span></div>
+        <div class="cal-day"><span>FRI</span><span class="num">01</span><span class="dot"></span></div>
+        <div class="cal-day"><span>SAT</span><span class="num">02</span><span class="dot"></span></div>
+        <div class="cal-day"><span>SUN</span><span class="num">03</span><span class="dot"></span></div>
+      </div>
+      <!-- Quick actions -->
+      <div class="quick-actions">
+        <div class="qa-btn"><div class="ico">💪</div><div class="lbl">WORKOUT</div></div>
+        <div class="qa-btn"><div class="ico">🍽</div><div class="lbl">MEAL</div></div>
+        <div class="qa-btn"><div class="ico">💧</div><div class="lbl">WATER</div></div>
+        <div class="qa-btn"><div class="ico">😴</div><div class="lbl">SLEEP</div></div>
+      </div>
+      <!-- Today's workout -->
+      <div class="today-card">
+        <div class="eyebrow">TODAY · TUE 28 APR</div>
+        <div class="title serif">Push (chest, shoulders, triceps)</div>
+        <div class="meta">8 exercises · ~75 min</div>
+        <div class="cta">START WORKOUT →</div>
+      </div>
+      <!-- AI Insight -->
+      <div class="ai-insight">
+        <div class="label">CAPTAIN'S INSIGHT</div>
+        Solid Monday. Push day today — chest is fresh, lead with bench. Hit 138 g protein target by dinner.
+      </div>
+      <!-- Macros -->
+      <div class="macro-row">
+        <div class="macro-tile">
+          <div class="lbl">CALS</div>
+          <div class="val">1820/2956</div>
+          <div class="bar"><div class="fill" style="width:62%;"></div></div>
+        </div>
+        <div class="macro-tile">
+          <div class="lbl">PROTEIN</div>
+          <div class="val">82/138</div>
+          <div class="bar"><div class="fill" style="width:60%;"></div></div>
+        </div>
+        <div class="macro-tile">
+          <div class="lbl">STEPS</div>
+          <div class="val">4.2k</div>
+          <div class="bar"><div class="fill" style="width:53%;"></div></div>
+        </div>
+      </div>
+      <!-- Weight sparkline -->
+      <div class="weight-card">
+        <div class="row">
+          <span class="lbl">WEIGHT TREND · 7D</span>
+          <span class="val">76.9 kg</span>
+        </div>
+        <svg width="100%" height="40" viewBox="0 0 320 40" preserveAspectRatio="none">
+          <polyline points="0,28 50,26 100,30 150,24 200,22 250,20 320,18"
+                    fill="none" stroke="#D4B270" stroke-width="2"/>
+        </svg>
+      </div>
+      <div style="height: 60px;"></div>
+      <!-- Bottom nav -->
+      <div class="bottom-nav">
+        <div class="nav-item active"><div class="ico">🏠</div><div>DAILY</div></div>
+        <div class="nav-item"><div class="ico">🏋</div><div>TRAIN</div></div>
+        <div class="nav-item"><div class="ico">🍽</div><div>FUEL</div></div>
+        <div class="nav-item"><div class="ico">💬</div><div>COACH</div></div>
+        <div class="nav-item"><div class="ico">👤</div><div>YOU</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= TRAIN ================= -->
+  <div class="phone" id="train">
+    <div class="phone-label">
+      <span>🏋️ TRAIN · OLD (reverted)</span>
+      <span class="tag">PRE-U7</span>
+    </div>
+    <div class="phone-body">
+      <!-- Rank chip top -->
+      <div style="padding: 14px 16px 0;">
+        <div class="rank-chip">
+          <span>▮</span>
+          <span>SD2 · RECRUIT</span>
+          <span class="countdown">· NEXT IN 12 DAYS</span>
+        </div>
+      </div>
+      <!-- Plan header -->
+      <div class="plan-header">
+        <div class="top">
+          <div>
+            <div class="phase">PHASE I · WEEK 2 OF 4</div>
+            <div class="title serif">Foundation</div>
+          </div>
+          <div class="streak-badge-old" style="font-size:10px;">🔥 12 D</div>
+        </div>
+        <div class="progress-bar"><div class="progress-fill"></div></div>
+      </div>
+      <!-- Week chips -->
+      <div class="week-chips">
+        <div class="week-chip">W1</div>
+        <div class="week-chip active">W2</div>
+        <div class="week-chip">W3</div>
+        <div class="week-chip">W4</div>
+        <div class="week-chip locked">W5</div>
+        <div class="week-chip locked">W6</div>
+        <div class="week-chip locked">W7</div>
+        <div class="week-chip locked">W8</div>
+        <div class="week-chip locked">W9</div>
+      </div>
+      <!-- Today hero -->
+      <div class="train-hero">
+        <div class="eyebrow">TODAY · DAY 2 OF 6</div>
+        <div class="title serif">Push (chest, shoulders, triceps)</div>
+        <div class="meta">8 exercises · ~75 min · Full Gym</div>
+        <div class="cta">START WORKOUT →</div>
+      </div>
+      <!-- Templates section -->
+      <div class="section-head">
+        <span class="ttl">MY TEMPLATES</span>
+        <span class="add">+ CREATE</span>
+      </div>
+      <div class="empty-hint">No templates yet — tap <span style="color:var(--accent); font-family:'DM Mono',monospace;font-weight:700;">+ CREATE</span> to build one.</div>
+      <!-- Custom exercises -->
+      <div class="section-head">
+        <span class="ttl">YOUR EXERCISES</span>
+        <span class="add">+ CREATE</span>
+      </div>
+      <div class="empty-hint">No custom exercises yet — tap <span style="color:var(--accent); font-family:'DM Mono',monospace;font-weight:700;">+ CREATE</span> to add one.</div>
+      <div style="height: 60px;"></div>
+      <div class="bottom-nav">
+        <div class="nav-item"><div class="ico">🏠</div><div>DAILY</div></div>
+        <div class="nav-item active"><div class="ico">🏋</div><div>TRAIN</div></div>
+        <div class="nav-item"><div class="ico">🍽</div><div>FUEL</div></div>
+        <div class="nav-item"><div class="ico">💬</div><div>COACH</div></div>
+        <div class="nav-item"><div class="ico">👤</div><div>YOU</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= NUTRITION ================= -->
+  <div class="phone" id="nutrition">
+    <div class="phone-label">
+      <span>🥗 NUTRITION · OLD (reverted)</span>
+      <span class="tag">PRE-U7</span>
+    </div>
+    <div class="phone-body">
+      <!-- Letterhead -->
+      <div class="letterhead">
+        <div class="eyebrow">GALLEY · TUE 28 APR</div>
+        <div class="title-row">
+          <div class="title serif">Fueling the plan</div>
+          <span class="trailing-pill">🍽 DIET PLAN</span>
+        </div>
+        <div class="gold-rule"></div>
+      </div>
+      <!-- Calorie ring -->
+      <div class="calorie-ring-card">
+        <svg class="ring-svg" width="70" height="70" viewBox="0 0 70 70">
+          <circle cx="35" cy="35" r="30" stroke="#0E1E30" stroke-width="6" fill="none"/>
+          <circle cx="35" cy="35" r="30" stroke="#D4B270" stroke-width="6" fill="none"
+                  stroke-dasharray="188" stroke-dashoffset="71"
+                  transform="rotate(-90 35 35)" stroke-linecap="round"/>
+          <text x="35" y="40" text-anchor="middle" font-family="Fraunces" font-size="14" fill="#F2EDE4">62%</text>
+        </svg>
+        <div class="ring-info">
+          <div class="lbl">CALORIES</div>
+          <div class="val">1820 / 2956</div>
+          <div class="sub">1136 kcal remaining</div>
+        </div>
+      </div>
+      <!-- Macros -->
+      <div class="macro-row">
+        <div class="macro-tile">
+          <div class="lbl">PROTEIN</div>
+          <div class="val">82/138g</div>
+          <div class="bar"><div class="fill" style="width:60%;"></div></div>
+        </div>
+        <div class="macro-tile">
+          <div class="lbl">CARBS</div>
+          <div class="val">186/320g</div>
+          <div class="bar"><div class="fill" style="width:58%;"></div></div>
+        </div>
+        <div class="macro-tile">
+          <div class="lbl">FAT</div>
+          <div class="val">62/95g</div>
+          <div class="bar"><div class="fill" style="width:65%;"></div></div>
+        </div>
+      </div>
+      <!-- Today's meals -->
+      <div class="section-head">
+        <span class="ttl">TODAY'S MEALS</span>
+      </div>
+      <div class="meal-slot logged">
+        <div class="meal-info">
+          <span class="meal-name">BREAKFAST · 09:30</span>
+          <span class="meal-detail">3 eggs + oats + banana — 460 kcal</span>
+        </div>
+        <span class="meal-cta">→</span>
+      </div>
+      <div class="meal-slot logged">
+        <div class="meal-info">
+          <span class="meal-name">LUNCH · 13:45</span>
+          <span class="meal-detail">Chicken curry + brown rice — 720 kcal</span>
+        </div>
+        <span class="meal-cta">→</span>
+      </div>
+      <div class="meal-slot empty">
+        <div class="meal-info">
+          <span class="meal-name">SNACK</span>
+          <span class="meal-detail">From your diet plan: Greek yogurt + almonds</span>
+        </div>
+        <span class="meal-cta">+</span>
+      </div>
+      <div class="meal-slot empty">
+        <div class="meal-info">
+          <span class="meal-name">DINNER</span>
+          <span class="meal-detail">Tap to log dinner</span>
+        </div>
+        <span class="meal-cta">+</span>
+      </div>
+      <!-- Hydration -->
+      <div class="hydration-card">
+        <div style="display:flex; justify-content:space-between; align-items:baseline;">
+          <span class="lbl mono" style="font-size:10px;color:var(--text-dim);">HYDRATION · 5/8 GLASSES</span>
+          <span style="font-family:'Fraunces',serif;font-size:14px;color:var(--info);">1.25 L</span>
+        </div>
+        <div class="glass-grid">
+          <div class="glass filled"></div>
+          <div class="glass filled"></div>
+          <div class="glass filled"></div>
+          <div class="glass filled"></div>
+          <div class="glass filled"></div>
+          <div class="glass"></div>
+          <div class="glass"></div>
+          <div class="glass"></div>
+        </div>
+      </div>
+      <div style="height: 60px;"></div>
+      <div class="bottom-nav">
+        <div class="nav-item"><div class="ico">🏠</div><div>DAILY</div></div>
+        <div class="nav-item"><div class="ico">🏋</div><div>TRAIN</div></div>
+        <div class="nav-item active"><div class="ico">🍽</div><div>FUEL</div></div>
+        <div class="nav-item"><div class="ico">💬</div><div>COACH</div></div>
+        <div class="nav-item"><div class="ico">👤</div><div>YOU</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= AI COACH ================= -->
+  <div class="phone" id="coach">
+    <div class="phone-label">
+      <span>💬 AI COACH · OLD (reverted)</span>
+      <span class="tag">PRE-U7</span>
+    </div>
+    <div class="phone-body">
+      <!-- Letterhead -->
+      <div class="letterhead">
+        <div class="eyebrow">DISPATCH · YOUR CAPTAIN · 24/7</div>
+        <div class="title-row">
+          <div class="title serif">Good afternoon, Upendra.</div>
+          <span class="trailing-pill">↑ UPGRADE</span>
+        </div>
+        <div class="gold-rule"></div>
+      </div>
+      <!-- Status -->
+      <div class="coach-status">7/15 MESSAGES TODAY · 8 LEFT · 30 DAYS REMAINING IN FREE TRIAL</div>
+      <!-- Chat -->
+      <div class="msg-row user">
+        <div class="msg-bubble user">
+          I want to change workout plan<br>
+          Mark today as rest day<br>
+          <span style="font-family:'DM Mono',monospace;font-size:9px;color:rgba(0,0,0,0.5);">15:07</span>
+        </div>
+      </div>
+      <div class="msg-row coach">
+        <div class="msg-bubble coach">
+          You want to change your workout plan. State your new plan requirements. Specify duration in weeks, days per week, equipment access, and primary goal.
+          <div class="msg-time">15:07</div>
+        </div>
+      </div>
+      <div class="msg-row coach">
+        <div class="msg-bubble coach" style="background: rgba(240,178,62,0.08); border-color: rgba(240,178,62,0.3);">
+          ⚠ <b style="color: var(--warn);">Review: Reshuffle week to 6 days</b>: Tue, Wed, Thu, Fri, Sat, Sun
+          <div style="margin-top:6px; font-size:11px; color:var(--text-dim);">Tap to review changes before applying →</div>
+        </div>
+      </div>
+      <div class="msg-row coach">
+        <div class="msg-bubble coach" style="background: rgba(240,178,62,0.08); border-color: rgba(240,178,62,0.3);">
+          ⚠ <b style="color: var(--warn);">Review: Pause 1 day from 2026-04-28</b>
+          <div style="margin-top:6px; font-size:11px; color:var(--text-dim);">User requested rest day →</div>
+        </div>
+      </div>
+      <div style="height: 80px;"></div>
+      <!-- Input -->
+      <div class="coach-input">
+        <div class="icon-btn">🎤</div>
+        <div class="icon-btn">📎</div>
+        <div class="text-input">Ask your coach...</div>
+        <div class="send-btn">↑</div>
+      </div>
+      <div class="bottom-nav">
+        <div class="nav-item"><div class="ico">🏠</div><div>DAILY</div></div>
+        <div class="nav-item"><div class="ico">🏋</div><div>TRAIN</div></div>
+        <div class="nav-item"><div class="ico">🍽</div><div>FUEL</div></div>
+        <div class="nav-item active"><div class="ico">💬</div><div>COACH</div></div>
+        <div class="nav-item"><div class="ico">👤</div><div>YOU</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= PROFILE ================= -->
+  <div class="phone" id="profile">
+    <div class="phone-label">
+      <span>👤 PROFILE · OLD (reverted)</span>
+      <span class="tag">PRE-U7</span>
+    </div>
+    <div class="phone-body">
+      <!-- Letterhead -->
+      <div class="letterhead">
+        <div class="eyebrow">OFFICER · DOSSIER</div>
+        <div class="title-row">
+          <div class="title serif">Upendra Prasad</div>
+        </div>
+        <div class="gold-rule"></div>
+      </div>
+      <!-- Service record -->
+      <div class="service-record">
+        <div class="top">
+          <div class="ribbon">SD2</div>
+          <div class="info">
+            <div class="lbl">CURRENT RANK</div>
+            <div class="name serif">Recruit · Seaman 2nd</div>
+            <div class="countdown">NEXT PROMOTION IN 12 DAYS →</div>
+          </div>
+        </div>
+        <div class="streak-badge-old" style="font-size:10px;">🔥 12 D STREAK · 2 ❄ FREEZES</div>
+      </div>
+      <!-- Completion -->
+      <div class="completeness-card">
+        <div class="top">
+          <span class="ttl">PROFILE COMPLETION</span>
+          <span class="pct">72%</span>
+        </div>
+        <div class="bar"><div class="fill"></div></div>
+      </div>
+      <!-- Stats / settings rows -->
+      <div class="section-head">
+        <span class="ttl">BIO STATS</span>
+      </div>
+      <div class="settings-row"><span class="ico">📐</span><span>Height</span><span style="margin-left:auto;color:var(--text-dim);">174 cm</span></div>
+      <div class="settings-row"><span class="ico">⚖</span><span>Weight</span><span style="margin-left:auto;color:var(--text-dim);">76.9 kg → 80 kg</span></div>
+      <div class="settings-row"><span class="ico">🎂</span><span>Date of birth</span><span style="margin-left:auto;color:var(--text-dim);">30 Jun 1988</span></div>
+      <div class="section-head">
+        <span class="ttl">PLAN</span>
+      </div>
+      <div class="settings-row"><span class="ico">🎯</span><span>Goal</span><span style="margin-left:auto;color:var(--text-dim);">Build muscle</span></div>
+      <div class="settings-row"><span class="ico">🏋</span><span>Experience</span><span style="margin-left:auto;color:var(--text-dim);">Advanced</span></div>
+      <div class="settings-row"><span class="ico">📅</span><span>Days / week</span><span style="margin-left:auto;color:var(--text-dim);">6</span></div>
+      <div class="section-head">
+        <span class="ttl">ACCOUNT</span>
+      </div>
+      <div class="settings-row"><span class="ico">📧</span><span>Email</span><span class="arrow">→</span></div>
+      <div class="settings-row"><span class="ico">↗</span><span>Invite friends</span><span class="arrow">→</span></div>
+      <div class="settings-row"><span class="ico">↩</span><span>Sign out</span><span class="arrow">→</span></div>
+      <div style="height: 60px;"></div>
+      <div class="bottom-nav">
+        <div class="nav-item"><div class="ico">🏠</div><div>DAILY</div></div>
+        <div class="nav-item"><div class="ico">🏋</div><div>TRAIN</div></div>
+        <div class="nav-item"><div class="ico">🍽</div><div>FUEL</div></div>
+        <div class="nav-item"><div class="ico">💬</div><div>COACH</div></div>
+        <div class="nav-item active"><div class="ico">👤</div><div>YOU</div></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="anno">
+  <b>What's inconsistent across these reverted screens (candidates for standardization):</b>
+  <ul style="margin-top:8px; padding-left:18px;">
+    <li><b>Rank chip placement</b> — Home: below welcome row. Train: top above plan header. Nutrition / Coach: not present. Profile: inside Service Record card. Different Y on every tab.</li>
+    <li><b>Streak / freeze chip placement</b> — Home: in welcome row right side. Train: inside plan header right side. Nutrition / Coach: missing. Profile: as a strip inside Service Record.</li>
+    <li><b>Header style</b> — Home: welcome row (avatar + greeting + 👋). Train: plan header card. Nutrition / Coach / Profile: Fraunces letterhead with eyebrow + serif title + gold rule.</li>
+    <li><b>Eyebrow vocabulary</b> — Home eyebrow says "WELCOME BACK,". Nutrition: "GALLEY · TUE 28 APR". Coach: "DISPATCH · YOUR CAPTAIN · 24/7". Profile: "OFFICER · DOSSIER". Train: no eyebrow, just plan info. Tone is consistent (military Wardroom) but format / structure differs.</li>
+    <li><b>Gold rule presence</b> — Home: no gold rule under header. Train: no gold rule. Nutrition / Coach / Profile: gold rule below title.</li>
+    <li><b>Avatar presence</b> — only on Home. Other tabs have no avatar.</li>
+    <li><b>Spacing rhythm</b> — Welcome row uses 14/10 vertical padding. Letterheads use 18/14. Plan header uses 14 internal. No shared "top zone height" rule.</li>
+  </ul>
+</div>
+
+<div class="ask">
+  <h2>Your turn</h2>
+  <p>Now that you can see all 5 reverted screens side-by-side, tell me what you want to standardize. Anything from the list above (rank chip Y, streak/freeze placement, eyebrow vocab, gold rule, spacing rhythm), all of it, or something else entirely.</p>
+  <p>You can also say "different mockup needed — show me X variant first" if you want to see another direction before deciding.</p>
+</div>
+
+</body>
+</html>
