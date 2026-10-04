@@ -472,10 +472,10 @@ concepts:
         semantic: pass-through
         fields_read: [via WorkoutScheduleService.getScheduleForDate(DateTime.now())]
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 575-580
+        line_range: 649-690
         method: aiInsightProvider (next-workout consistency hint)
         semantic: pass-through
-        fields_read: [via WorkoutScheduleService.getScheduleForDate(now)]
+        fields_read: [via ref.watch(todayWorkoutProvider) — derives from the Today card's row (c7e3a9, test/contracts/ai_insight_follows_today_row_test.dart)]
       - file: lib/features/home/widgets/weekly_calendar.dart
         line_range: 1-9999
         method: WeeklyCalendar 7-day fetch
@@ -616,7 +616,7 @@ concepts:
           Reads pre-delete log entry to stash audit row in
           'recent_deletes' bucket; falls back to legacy 'calories' key.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 740-782
+        line_range: 743-785
         method: RecentFoodLogsNotifier.build
         semantic: display-only
         fields_read: [total_calories, total_protein, total_carbs, total_fat, food_name, meal_name, name, date]
@@ -1853,7 +1853,7 @@ concepts:
         semantic: historical-series
         fields_read: [total_calories, total_protein, date, is_saved_meal]
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 740-782
+        line_range: 743-785
         method: RecentFoodLogsNotifier.build
         semantic: display-only
         fields_read: [total_calories, total_protein, total_carbs, total_fat, food_name, meal_name, name, date]
@@ -4137,11 +4137,11 @@ concepts:
         method: HealthWriteService.logWeight
         canonical: true
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 842-873
+        line_range: 874-905
         method: WeightLogNotifier.logWeight
         delegate: true
         notes: |
-          Pass-through to HealthWriteService.instance.logWeight (~line 861).
+          Pass-through to HealthWriteService.instance.logWeight (~line 893).
           Not the canonical writer — retained here because it is the Riverpod
           entry point UI callers fire, and it adds the companion
           ProfileWriteService current_weight_kg update.
@@ -5459,7 +5459,7 @@ concepts:
           Nightly walks of coachBox.values to extract facts +
           patterns into coaching_notes singleton + memory_embeddings.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 648-718
+        line_range: 648-721
         method: AiInsightNotifier._getLatestCoachTip
         semantic: latest
         fields_read: [ai_response, created_at]

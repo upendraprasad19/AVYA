@@ -652,8 +652,13 @@ class AiInsightNotifier extends Notifier<String?> {
     ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
     final now = DateTime.now();
 
-    // 1. Always compute insight from LOCAL schedule data (source of truth)
-    final insight = _computeScheduleInsight(now);
+    // 1. Always compute insight from LOCAL schedule data (source of truth).
+    // Diagnose c7e3a9 (recurrence of b3c9d4) — WATCH today's row instead of
+    // reading it: a ref.read here refreshed only when a writer ALSO
+    // remembered to invalidate aiInsightProvider, and the day-swap batch and
+    // ~15 other writers did not. Every writer already refreshes the Today
+    // card via todayWorkoutProvider, so the insight now follows it.
+    final insight = _computeScheduleInsight(ref.watch(todayWorkoutProvider));
 
     // 2. Optionally append a coach tip from today's latest AI interaction
     final coachTip = _getLatestCoachTip(now);
@@ -664,11 +669,9 @@ class AiInsightNotifier extends Notifier<String?> {
     return insight;
   }
 
-  /// Build insight from today's workout schedule in Hive.
-  String _computeScheduleInsight(DateTime now) {
-    // A7 / B5 D9-D10 — canonical provider path.
-    final schedule =
-        ref.read(workoutScheduleServiceProvider).getScheduleForDate(now);
+  /// Build insight from today's schedule row (as read by todayWorkoutProvider,
+  /// the A7 / B5 D9-D10 canonical provider path).
+  String _computeScheduleInsight(Map<String, dynamic>? schedule) {
     if (schedule != null) {
       final type = schedule['type'] as String? ?? 'rest';
       final status = schedule['status'] as String? ?? 'planned';

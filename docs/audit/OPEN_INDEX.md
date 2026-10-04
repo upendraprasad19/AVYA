@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**156 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**167 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -164,3 +164,14 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-281 | Meal deletes never reach the cloud: NutritionWriteService.deleteLog is… | needs a cloud tombstone (`deleted_at`)… | 2026-10-02 - code read, NOT reproduced… | [:5560](open_issues.md#L5560) |
 | OI-282 | blast_radius.yaml classifies only lib/core/services/sync/** as platform:… | founder policy call - changing the… | 2026-10-02 - `docs/blast_radius.yaml:63`… | [:5571](open_issues.md#L5571) |
 | OI-283 | Live-DB SQL harness runners (check_onconflict_live_arbiter,… | founder decision: provision a CI secret… | 2026-10-02: both runners work by hand… | [:5580](open_issues.md#L5580) |
+| OI-284 | Completed day-swap row keeps its pre-swap title after a cross-device… | its own plan + two context-blind review… | 2026-10-03 - live rows (user d7a67a37):… | [:5589](open_issues.md#L5589) |
+| OI-285 | mergeScheduleBundleIntoHive decides snapshot winners once before the loop… | its own plan + review; touches the… | 2026-10-03 - code read:… | [:5596](open_issues.md#L5596) |
+| OI-286 | Replaced-swap notice: a device whose local swap loses to a newer… | OI-285 (the notice needs the per-week… | 2026-10-03 - code read: L3… | [:5603](open_issues.md#L5603) |
+| OI-287 | Day-swap allowance is per-device: a swap on web leaves the phone showing… | founder go on the read path:… | 2026-10-03 - live: phone daily snapshot… | [:5610](open_issues.md#L5610) |
+| OI-288 | Discipline: accepted-residual wording in tests pinned a defect as correct… | its own L-tier branch (root CLAUDE.md +… | 2026-10-03 -… | [:5617](open_issues.md#L5617) |
+| OI-289 | Nutrition cross-device probe: verify meal add/edit/delete converge… | the founder running the two-device walk… | never - asked by the founder 2026-10-01… | [:5624](open_issues.md#L5624) |
+| OI-290 | DaySwapRules leaves week_number unclassified (travels as content); hygiene… | founder call - close as no-symptom… | 2026-10-03 - `day_swap_rules.dart:17-28`… | [:5631](open_issues.md#L5631) |
+| OI-292 | morning-alert push names a workout from YESTERDAY's snapshot: the 02:00… | a design decision on the date-correct… | 2026-10-03 -… | [:5638](open_issues.md#L5638) |
+| OI-293 | Restore outcomes are unobservable on a release Android device:… | its own plan: the outcome must… | 2026-10-03 -… | [:5645](open_issues.md#L5645) |
+| OI-294 | Launch-path restore never refreshes Home: checkAndSync ->… | its own plan: pick the signal (bump… | 2026-10-03 - code read, not reproduced… | [:5652](open_issues.md#L5652) |
+| OI-295 | Schedule writers that pass no WidgetRef (deload_evaluator lift via… | an audit of every ref-less schedule… | 2026-10-03 - code read, not reproduced:… | [:5659](open_issues.md#L5659) |

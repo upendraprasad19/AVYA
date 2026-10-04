@@ -5585,3 +5585,80 @@ The sync engine's core files sit outside the `sync/**` glob, so a change that on
 - **Identified**: 2026-10-02 · filed via mint_oi.sh from branch `deploy-token-path`
 - **Why**: `scripts/check_gate_scripts_wired.dart` allowlists both scripts as `manual:` runners; the allowlist needs an OPEN OI. They are the only behavioural proof for Postgres trigger logic (rule 21), and run only when a human remembers.
 - **Options**: (a) a CI job with a read-only-scoped Management API secret running the rollback-only SQL files; (b) keep them manual and document the runbook line. Either way this OI names which.
+
+## OI-284 — Completed day-swap row keeps its pre-swap title after a cross-device restore: completed-row merge freeze; title-follows-log repair needs wlog provenance, template-overlay precedence, lightweight + sync-domain hooks (split out of swap-cross-device-reconcile)
+
+- **Status**: OPEN
+- **Blocked on**: its own plan + two context-blind review rounds (CLAUDE.md 4.12.1: four plan-review rounds on swap-cross-device-reconcile found a new design defect in this repair each time). Design must settle (a) a provenance field written at the source on chat/coach wlogs (`conversational_log_handler.dart` marks completion as `completed_via='app'` with name 'Chat Workout' - indistinguishable today), (b) template-overlay precedence (`_restoreScheduledWorkouts` writes `hydratedWorkoutName` last over completed template rows, `sync_workout.dart:2589`), (c) hooks on `restoreLightweightAlways` and the sync-domain restore entry points, (d) restore writers are lockless. Also covers the cloud `workout_schedule_completions.workout_name`: `_syncScheduleCompletions` (`sync_workout.dart:685`) copies the ROW's name, so it is right once the row is; taking it from the wlog instead is WRONG because `conversational_log_handler.dart:263-265` writes wlog name 'Chat Workout' while the row keeps its real name (round-5 prep finding, 2026-10-03).
+- **Verified**: 2026-10-03 - live rows (user d7a67a37): phone row 2026-10-01 completed 'Push + Core' while `wlog_2026-10-01` = 'PULL + CORE'; writer `PlanIntegrityReconciler.mergeScheduleEntry` completed-row early return (`plan_integrity_reconciler.dart:104-106`). How the phone reached completed-before-merge order is unproven; capturing it needs OI-293 (restore outcomes observable on a release device).
+- **Identified**: 2026-10-03 · filed via mint_oi.sh from branch `swap-cross-device-reconcile`
+
+## OI-285 — mergeScheduleBundleIntoHive decides snapshot winners once before the loop and puts with no per-date lock: a swap or completion committed mid-restore can be overwritten by an older snapshot row
+
+- **Status**: OPEN
+- **Blocked on**: its own plan + review; touches the restore merge (platform tier).
+- **Verified**: 2026-10-03 - code read: `mergeScheduleBundleIntoHive` (`plan_integrity_reconciler.dart:~243-300`) computes `snapshotArrangementWinsKeys` once before the loop and awaits a `put` per key with no `_acquireLock(date)`; not reproduced on a device.
+- **Identified**: 2026-10-03 · filed via mint_oi.sh from branch `swap-cross-device-reconcile`
+
+## OI-286 — Replaced-swap notice: a device whose local swap loses to a newer cross-device arrangement gets no notice (Wardroom copy; dedupe per week+stamp)
+
+- **Status**: OPEN
+- **Blocked on**: OI-285 (the notice needs the per-week re-decide); Wardroom copy review.
+- **Verified**: 2026-10-03 - code read: L3 arrangement-wins replaces a local swap silently; no user-visible signal exists.
+- **Identified**: 2026-10-03 · filed via mint_oi.sh from branch `swap-cross-device-reconcile`
+
+## OI-287 — Day-swap allowance is per-device: a swap on web leaves the phone showing the full weekly allowance; usage_counters has no client read path (needs EF read mode or RLS policy)
+
+- **Status**: OPEN
+- **Blocked on**: founder go on the read path: `usage_counters` has no RLS policy, so the read needs a `consume-day-swap` read-only mode (EF deploy = its own prod go) or a migration adding an owner-SELECT policy (apply = its own go).
+- **Verified**: 2026-10-03 - live: phone daily snapshot `swaps_left`=3 after a web swap while `usage_counters` day_swap used=1; `DaySwapAllowance` (`day_swap_allowance.dart:47-62`) reads only the per-device userBox copy, corrected only by its own `consume-day-swap` reply.
+- **Identified**: 2026-10-03 · filed via mint_oi.sh from branch `swap-cross-device-reconcile`
+
+## OI-288 — Discipline: accepted-residual wording in tests pinned a defect as correct (restore_merge_invariants R2); narrow residual-text gate + lens L55 + two-device walk row in §5
+
+- **Status**: OPEN
+- **Blocked on**: its own L-tier branch (root CLAUDE.md + LENS_REGISTRY count spots); grandfather list decided in its plan.
+- **Verified**: 2026-10-03 - `test/sync/restore_merge_invariants_test.dart:539` pins the completed-row freeze as an accepted residual; spec day-swapper-design §5.7 calls it correct; the founder observed it as a bug 2026-10-01.
+- **Identified**: 2026-10-03 · filed via mint_oi.sh from branch `swap-cross-device-reconcile`
+
+## OI-289 — Nutrition cross-device probe: verify meal add/edit/delete converge web<->phone after restore (deletes tracked in OI-281); probe only
+
+- **Status**: OPEN
+- **Blocked on**: the founder running the two-device walk (web + phone, same account: add / edit / delete a meal on one, then launch the other) - the probe needs the founder's real devices; findings are filed as their own OIs; delete resurrection is already OI-281.
+- **Verified**: never - asked by the founder 2026-10-01 ('check nutrition from this perspective'); not yet probed.
+- **Identified**: 2026-10-03 · filed via mint_oi.sh from branch `swap-cross-device-reconcile`
+
+## OI-290 — DaySwapRules leaves week_number unclassified (travels as content); hygiene - no observed symptom, week is already identity
+
+- **Status**: OPEN
+- **Blocked on**: founder call - close as no-symptom hygiene, or fix with a non-vacuous test; low value: no reader of `week_number` in lib, push reads `entry['week'] ?? entry['week_number']` (`sync_workout.dart:2093`), restore mirrors it from `week` (`:2567-2568`).
+- **Verified**: 2026-10-03 - `day_swap_rules.dart:17-28` identity set contains 'week' but not 'week_number'; two round-4 plan reviewers found no observable symptom. A test must use DIFFERENT week/week_number values on the two rows or it passes vacuously.
+- **Identified**: 2026-10-03 · filed via mint_oi.sh from branch `swap-cross-device-reconcile`
+
+## OI-292 — morning-alert push names a workout from YESTERDAY's snapshot: the 02:00 IST generate reads user_daily_snapshots for yesterdayIST, whose today_workout_name was built on the upload day; today it is masked by the generic 'workout' fallback, a real name needs a date-correct source (week_lookahead[1] or a dated key)
+
+- **Status**: OPEN
+- **Blocked on**: a design decision on the date-correct source (client-side dated key vs `week_lookahead[1]` read in the EF); an EF change ⇒ deno check + its own prod deploy go.
+- **Verified**: 2026-10-03 - `supabase/functions/morning-alert/index.ts:236-243` selects `snapshot_date = yesterdayIST`; generate runs 02:00 IST (`docs/operations/CRON_REGISTRY.md` row 015); `supabase/functions/daily-snapshot/index.ts:631` stores under `getTodayIST()`; `ai_snapshot_builder.dart:1103-1114` builds `today_workout_name` for the upload day; `message.ts:19,31-74` interpolates it unsanitised. Coach is NOT affected: it reads `week_lookahead[0].name` (`ai_snapshot_builder.dart:~1307`, `DaySwapCopy.titleOf`). Any push-facing name must also filter status (travel/paused/moved rows keep a workout type, `swap_service.dart:697-698`) and match TS `sanitizeIdentifier` (`_shared/sanitize_for_prompt.ts:156-175`).
+- **Identified**: 2026-10-03 · filed via mint_oi.sh from branch `swap-cross-device-reconcile`
+
+## OI-293 — Restore outcomes are unobservable on a release Android device: _restoreWorkoutPlan returns void and swallows errors, a failed launch-path fetch returns [] (same as no data), and any local breadcrumb needs a reader (allowBackup=false, no diagnostics surface)
+
+- **Status**: OPEN
+- **Blocked on**: its own plan: the outcome must distinguish fetch failure (`_fetchUserProgressRowForRestore` returns `const []`, `sync_service.dart:1661-1677`) and the record must have a READER the founder can reach on a release build.
+- **Verified**: 2026-10-03 - `android/app/src/main/AndroidManifest.xml:25` allowBackup=false; `userBox` exports only `profile` (`export_data.dart:11`); `_deletedTemplateCloudIds` swallows to `const {}` (`sync_workout.dart:1785-1793`) so a template-lookup outcome is unreachable; a slow restore outlives `_safeRestoreOp`'s timeout (`sync_service.dart:~2648`) so any per-user write needs a userId guard. Round-5 review of swap-cross-device-reconcile v5 (U6 split out).
+- **Identified**: 2026-10-03 · filed via mint_oi.sh from branch `swap-cross-device-reconcile`
+
+## OI-294 — Launch-path restore never refreshes Home: checkAndSync -> restoreLightweightAlways rewrites today's schedule row but neither bumps restoreCompletedTick (only heal_after_restore.dart:74 does) nor has an onRestoreComplete listener, so Home's Today card and insight keep the pre-restore row until another invalidation
+
+- **Status**: OPEN
+- **Blocked on**: its own plan: pick the signal (bump `restoreCompletedTick` from `restoreLightweightAlways` when it changed a row, or an `onRestoreComplete` listener) and bound the invalidation cost on every launch; interacts with OI-279 resume pull.
+- **Verified**: 2026-10-03 - code read, not reproduced on device: `lib/features/auth/screens/splash_screen.dart:203` fires `checkAndSync()` unawaited; `restoreCompletedTick` is bumped only at `lib/features/auth/screens/restoring/heal_after_restore.dart:74`; no `onRestoreComplete` listener in `lib/`; Home's restore refresh lives in `HiveTabScaffoldMixin._onRestoreCompleted` (`lib/shared/mixins/hive_tab_scaffold.dart:207`). Candidate contributor to the founder's 2026-10-01 observation 2 (Home Today widget stale).
+- **Identified**: 2026-10-03 · filed via mint_oi.sh from branch `swap-cross-device-reconcile`
+
+## OI-295 — Schedule writers that pass no WidgetRef (deload_evaluator lift via upsertScheduled; lazy writes in workout_schedule_read_service) can change today's row without invalidating todayWorkoutProvider, leaving Home's Today card and insight stale until another invalidation
+
+- **Status**: OPEN
+- **Blocked on**: an audit of every ref-less schedule writer (which can touch TODAY's row, and when they run) and a choice of signal (a ref-free invalidation hook vs `restoreCompletedTick`-style notifier); overlaps OI-294.
+- **Verified**: 2026-10-03 - code read, not reproduced: `lib/core/services/deload_evaluator.dart:223` calls `WorkoutWriteService.instance.upsertScheduled(...)` with no `ref`; `upsertScheduled` invalidates only `if (ref != null && onInvalidate != null)` (`lib/core/services/workout_write_service.dart:661`); lazy writes in `lib/core/services/workout_schedule_read_service.dart:~278-577` (round-6 review of swap-cross-device-reconcile v6). The Home insight is now exactly as stale as the Today card in these cases (it watches `todayWorkoutProvider`).
+- **Identified**: 2026-10-03 · filed via mint_oi.sh from branch `swap-cross-device-reconcile`
