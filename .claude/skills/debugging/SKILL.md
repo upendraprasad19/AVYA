@@ -204,6 +204,8 @@ Per CLAUDE.md rules 21 + 22:
 | 2.82 | A retry mechanism with no trigger for the failure mode that actually occurs (a connectivity trigger cannot fire in a backend-only outage) | data logged during a 521/504 outage never reaches the cloud; `weeklyFullSync` stamped done after a fully-failed sweep | test/contracts/sync_retry_controller_test.dart, test/contracts/serial_slot_test.dart |
 | 2.83 | Awaiting an unbounded network read before a local-evidence fallback (and waiting at all when the device already holds the answer) | splash sits on a 504/521 backend, or waits seconds on a cold start, although Hive is fully onboarded | test/contracts/restoring_destination_timeout_test.dart, test/contracts/evidence_first_routing_test.dart |
 | 2.84 | An SDK-level automatic retry multiplies a "one tiny request" probe (postgrest retries a GET answered 503/520, or that throws, 3x) | a probe or a "one failing request" assertion sees 4 requests against a 503 server | test/sync/probe_backend_reachable_test.dart |
+| 2.85 | A hosted, dashboard-owned setting mirrored by a client literal that nothing reads back (a `maxLength` / `length != N` guard vs the project's `mailer_otp_length`) | one user cannot finish a flow and the server saw nothing: the client refused or silently truncated the input before any request; the docs said "6-digit", the live setting said 8 | test/contracts/password_recovery_code_length_behavioral_test.dart |
+| 2.86 | A modal sheet's async completion after the sheet is dismissed (`mounted` stays true through the exit animation, so `pop()` takes the page beneath; an early return skips a one-way hand-off; an unguarded `setState` throws) | `setState() called after dispose()`, a blank screen / "popped the last page" assertion when the answer lands mid-animation, or a user with a spent single-use code never reaching the next step | test/contracts/password_recovery_code_length_behavioral_test.dart |
 
 ---
 
@@ -293,6 +295,8 @@ Append-only by default. If you must REWRITE an existing entry (e.g. the fix patt
 ---
 
 ## Changelog
+
+- **2026-10-03 (auth-recovery-code-length, fa621a)** — Self-evolution. §2.85 NEW — a hosted, dashboard-owned setting mirrored by a client literal that nothing reads back (the reset-code field capped at 6 while the project emailed 8; no request ever reached GoTrue). Read the LIVE value before building on a vendor doc's number, make the client tolerant instead of re-pinning, and let the test separate truncation (field text) from rejection (request body). Closes-diagnose: `fa621a`. §2.86 NEW — a modal sheet's async completion after the sheet is dismissed (`mounted` stays true through the exit animation, so `pop()` takes the page beneath; an early return skips a one-way hand-off; an unguarded `setState` throws), found by the two-reviewer B-pass of this batch. Regression test: `test/contracts/password_recovery_code_length_behavioral_test.dart`, mutation-proven (73 runs, M1–M68 plus MA6a–MA6c; 69 red, 4 equivalent).
 
 - **2026-09-27 (day-swapper-sync-load)** — Self-evolution. §2.73 NEW — a widget test hanging straight through `--timeout` is unwrapped real I/O in the `testWidgets` body, not a synchronous product loop (3 hangs in one batch; one misdirected product-loop hunt before bisection found the bare `await box.put`).
 

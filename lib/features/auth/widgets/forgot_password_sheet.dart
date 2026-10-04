@@ -12,12 +12,13 @@ import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/core/utils/recovery_code_format.dart';
 import 'package:icanbefitter/features/auth/widgets/auth_header.dart';
 
 /// Forgot-password entry sheet. User enters their email, we call Supabase
-/// [GoTrueClient.resetPasswordForEmail] which sends a reset link to that
-/// email. On success, the sheet closes and shows a snackbar on the parent
-/// scaffold.
+/// [GoTrueClient.resetPasswordForEmail] which emails a recovery code to that
+/// address. On success the sheet advances in place to the code step (see
+/// [_Step]); a verified code takes the user to `/reset`.
 class ForgotPasswordSheet extends StatefulWidget {
   const ForgotPasswordSheet._();
 
@@ -35,7 +36,10 @@ class ForgotPasswordSheet extends StatefulWidget {
 }
 
 /// The sheet is a two-step flow in ONE surface: ask for the email, then ask
-/// for the 6-digit code that lands in the inbox.
+/// for the code that lands in the inbox. The code's length is the hosted
+/// project's `mailer_otp_length`, which this client does not own — it states no
+/// digit count and imposes no ceiling (diagnose fa621a; see
+/// [isPlausibleRecoveryCode]).
 ///
 /// Deliberately not a new route (diagnose c9e2b7). Keeping both steps inside
 /// the sheet means the whole recovery entry stays on `/sign-in`, which is
@@ -63,7 +67,21 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
     super.dispose();
   }
 
+  /// Ends an in-flight request with an error message. A no-op once the sheet is
+  /// gone: the user can dismiss it (drag, barrier tap) while a request is out,
+  /// and `setState` on a disposed State throws.
+  void _fail(String message) {
+    if (!mounted) return;
+    setState(() {
+      _sending = false;
+      _error = message;
+    });
+  }
+
   Future<void> _send() async {
+    // The button is disabled while a request is out, but only from the next
+    // rebuild: two taps inside one frame would still send two emails.
+    if (_sending) return;
     final email = _emailCtrl.text.trim();
     if (email.isEmpty || !email.contains('@')) {
       setState(() => _error = 'Enter a valid email.');
@@ -79,9 +97,9 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
         redirectTo: 'https://app.icanbefitter.com/reset',
       );
       if (!mounted) return;
-      // Advance in place rather than popping. The email now carries a 6-digit
-      // code, not a link — so the user finishes here, on the device they are
-      // already holding.
+      // Advance in place rather than popping. The email now carries a code, not
+      // a link — so the user finishes here, on the device they are already
+      // holding.
       setState(() {
         _sending = false;
         _sentTo = email;
@@ -89,30 +107,24 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
         _error = null;
       });
     } on AuthException catch (e) {
-      setState(() {
-        _sending = false;
-        _error = e.message;
-      });
+      _fail(e.message);
     } catch (e) {
       final errStr = e.toString();
       final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;
       unawaited(ErrorTelemetry.logEvent('auth_forgot_password_send_failed',
           message: clipped));
-      setState(() {
-        _sending = false;
-        // Rule 17: the real cause in debug, the generic line in release.
-        // Until b6e4f2 the generic line was ALL we ever got — the telemetry
-        // call above could not land a row (signed-out), so a founder-reported
-        // failure on 2026-08-06 left literally zero evidence of what threw.
-        // The pre-auth lane now records it; this only helps a debug build.
-        _error = kDebugMode
-            ? 'Could not send reset link: $clipped'
-            : 'Could not send reset link. Try again.';
-      });
+      // Rule 17: the real cause in debug, the generic line in release.
+      // Until b6e4f2 the generic line was ALL we ever got — the telemetry
+      // call above could not land a row (signed-out), so a founder-reported
+      // failure on 2026-08-06 left literally zero evidence of what threw.
+      // The pre-auth lane now records it; this only helps a debug build.
+      _fail(kDebugMode
+          ? 'Could not send the code: $clipped'
+          : 'Could not send the code. Try again.');
     }
   }
 
-  /// Exchanges the emailed 6-digit code for a real session.
+  /// Exchanges the emailed code for a real session.
   ///
   /// This is the whole point of the redesign (diagnose c9e2b7). The old flow
   /// emailed a PKCE link, and PKCE binds that code to the client that REQUESTED
@@ -125,11 +137,25 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
   /// includes the single most common real pattern, request on a laptop and open
   /// the mail on a phone.
   Future<void> _verifyCode() async {
-    final code = _codeCtrl.text.trim();
-    if (code.length != 6 || int.tryParse(code) == null) {
-      setState(() => _error = 'Enter the 6-digit code from your email.');
+    // See _send: the disabled button lags one rebuild behind a double tap, and a
+    // second verifyOTP would spend the single-use code twice.
+    if (_sending) return;
+    // Whitespace and invisible characters are stripped first (a pasted code can
+    // carry them); the shape check below is deliberately strict.
+    final code = normalizeRecoveryCode(_codeCtrl.text);
+    // Shape only (digits, at least GoTrue's floor of 6, NO ceiling): the length
+    // is a hosted setting this client cannot read. A hard-coded 6 here is what
+    // made an 8-digit code unenterable (fa621a).
+    if (!isPlausibleRecoveryCode(code)) {
+      setState(() => _error = 'Enter the code from your email.');
       return;
     }
+    // Captured BEFORE the await. The sheet can be dismissed (drag, barrier tap)
+    // while the request is in flight, and a defunct element cannot look any of
+    // these up afterwards.
+    final router = GoRouter.of(context);
+    final navigator = Navigator.of(context);
+    final sheetRoute = ModalRoute.of(context);
     setState(() {
       _sending = true;
       _error = null;
@@ -140,33 +166,37 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
         token: code,
         type: OtpType.recovery,
       );
-      if (!mounted) return;
-      // Capture the router BEFORE popping — this element is defunct after.
-      final router = GoRouter.of(context);
-      // `/reset`'s own guard reads this flag (reset_password_screen.dart:44).
-      AppRouter.isPasswordRecovery = true;
-      Navigator.of(context).pop();
-      router.go('/reset');
     } on AuthException catch (e) {
-      setState(() {
-        _sending = false;
-        // GoTrue's own wording is genuinely useful here — "Token has expired
-        // or is invalid" tells the user exactly what to do next.
-        _error = e.message;
-      });
+      // GoTrue's own wording is genuinely useful here — "Token has expired or
+      // is invalid" tells the user exactly what to do next.
+      _fail(e.message);
+      return;
     } catch (e) {
       final errStr = e.toString();
       final clipped = errStr.length > 500 ? errStr.substring(0, 500) : errStr;
       unawaited(ErrorTelemetry.logEvent(
           'auth_password_recovery_verify_failed',
           message: clipped));
-      setState(() {
-        _sending = false;
-        _error = kDebugMode
-            ? 'Could not verify that code: $clipped'
-            : 'Could not verify that code. Try again.';
-      });
+      _fail(kDebugMode
+          ? 'Could not verify that code: $clipped'
+          : 'Could not verify that code. Try again.');
+      return;
     }
+    // Outside the try on purpose: a navigation error must never be reported as a
+    // failed verification — the session exists and the code is spent.
+    //
+    // The code is single-use and verifyOTP has already created the session, so
+    // the hand-off to /reset happens even if the sheet was dismissed in the
+    // meantime; returning early would leave the user signed in on the sign-in
+    // screen and never asked for a new password.
+    // `/reset`'s own guard reads this flag (reset_password_screen.dart:44).
+    AppRouter.isPasswordRecovery = true;
+    // Pop only while the sheet's ROUTE is still ours. `mounted` is not that
+    // test: a dismissed sheet's State stays mounted through its whole exit
+    // animation, and pop() would then take the page underneath it — the only
+    // page — and leave a blank screen.
+    if (sheetRoute != null && sheetRoute.isActive) navigator.pop();
+    router.go('/reset');
   }
 
   @override
@@ -222,7 +252,7 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
             const SizedBox(height: 6),
             if (_step == _Step.code) ...[
               Text(
-                'We sent a 6-digit code to $_sentTo. Enter it here — it works '
+                'We sent a code to $_sentTo. Enter it here — it works '
                 'on this device even if you opened the email elsewhere.',
                 style: AppTypography.bodySm.copyWith(color: AppColors.textMute),
               ),
@@ -237,12 +267,6 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
               keyboardType: _step == _Step.email
                   ? TextInputType.emailAddress
                   : TextInputType.number,
-              maxLength: _step == _Step.email ? null : 6,
-              buildCounter: (_,
-                      {required int currentLength,
-                      required bool isFocused,
-                      int? maxLength}) =>
-                  null,
               autofocus: true,
               style: AppTypography.body.copyWith(
                 color: AppColors.textPrimary,
@@ -250,7 +274,9 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
               ),
               cursorColor: AppColors.accent,
               decoration: InputDecoration(
-                hintText: _step == _Step.email ? 'you@example.com' : '123456',
+                hintText: _step == _Step.email
+                    ? 'you@example.com'
+                    : 'Code from your email',
                 hintStyle: AppTypography.body.copyWith(
                   color: AppColors.textMute,
                   fontSize: 16,
