@@ -1,0 +1,127 @@
+# Alert thresholds — Phase 2 (client_errors_spike tuned 2026-06-06).
+#
+# Phase 1 (2026-05-28) shipped DELIBERATELY LOW placeholders so alerts fired
+# during the baseline week. Phase 2 re-tunes client_errors_spike from the
+# observed baseline (see docs/audit/2026-06-03-alert-baseline.md):
+#   - the count now EXCLUDES benign telemetry breadcrumbs (error_code 'event'/
+#     'info'), which were ~81.5% of client_errors rows and inflated every spike;
+#   - EXCEPT failure-shaped op_types (*_failed, widget_error_fallback, ...) which
+#     ARE re-included — logEvent stamps error_code='event' even for failures, so
+#     filtering on error_code alone would hide them (087, diagnose f0b9d3);
+#   - thresholds raised to the founder-chosen "Tolerant" tier (real-error
+#     baseline p95=127/hr, max=161) so a reinstall/restore burst (~150) lands
+#     at info, not critical.
+# edge_function_health + payment_flow_health stay on Phase-1 placeholders until
+# those subsystems have their own baseline.
+#
+# Owner: founder. Tuning is a deliberate scheduled action, not a
+# reactive twiddle.
+#
+# Source of truth: this file is documentation. The actual thresholds are
+# embedded in the SQL of the cron jobs — client_errors_spike is now defined by
+# supabase/migrations/147_alert_client_errors_spike_breadth.sql (076→086→087→147).
+# Any change here MUST be paired with a follow-up migration that re-schedules
+# the cron body (cron.unschedule + cron.schedule, OR cron.alter_job for a job
+# that keeps its jobid — see 147) in the same commit. The pair is pinned by
+# test/contracts/alert_thresholds_sync_test.dart.
+# See feedback_migration_apply_record_pair.md.
+
+phase: 2
+ships_date: 2026-05-28
+phase_2_date: 2026-06-06
+tuning_method: "p95 + 50% headroom from baseline week's data (breadcrumbs excluded)"
+
+thresholds:
+
+  client_errors_spike:
+    description: "REAL client_errors within a 1-hour window — DISTINCT (user, message-prefix, second) events, non-breadcrumb error_codes PLUS failure-shaped op_types, offline-caused errors excluded (147, recurrence of 087/f0b9d3's raw-row-count / no-offline-exclusion class)"
+    excludes_error_codes: [event, info]   # benign telemetry breadcrumbs (~81.5% of rows)
+    reincludes_failure_op_types: true     # logEvent stamps error_code='event' on genuine failures too, so failure-shaped op_types (*_failed, widget_error_fallback, *_returned_null) are re-included by regex (087, diagnose f0b9d3)
+    counts_distinct_events: true          # count(DISTINCT (user, left(message,200), second)) — not raw rows — so one client's retry storm can't inflate the count (147)
+    excludes_offline_noise: true          # regex signature; never-offline override for real HTTP status codes and PostgrestException/FunctionsHttpException/FunctionsRelayException/AuthApiException; offline-caused client TIMEOUTS still counted as real (deliberate) (147)
+    info_at:     40    # /hour, distinct events
+    warn_at:     100
+    critical_at: 200
+    breadth_warn_users: 3      # distinct users among EXCEPTION-SHAPED rows only (excludes the event-coded subscription_refresh_no_active_row breadcrumb, renamed from subscription_refresh_query_returned_null in B2a-2b/OI-254) — trips at least warn
+    breadth_critical_users: 5
+    server_warn_events: 3      # distinct server-shaped events (PGRST00x, 57014 statement-timeout, WORKER_RESOURCE_LIMIT, bare 5xx) — trips at least warn regardless of user breadth
+    server_critical_events: 10
+    window_minutes: 60
+    cron_cadence:   "*/30 * * * *"
+    dedup_window_hours: 1   # rank-based: an existing open alert of EQUAL-OR-HIGHER severity suppresses, so a lower severity never hides a higher one
+    tuned_from: docs/audit/2026-06-03-alert-baseline.md
+    defined_in_migration: "147_alert_client_errors_spike_breadth.sql"
+
+  edge_function_health:
+    description: "non-2xx response rate across cron_call_log over 30min"
+    info_at:     0.05  # 5%
+    warn_at:     0.10
+    critical_at: 0.20
+    window_minutes:    30
+    min_call_count:    5    # don't fire on a single-call denominator
+    cron_cadence:      "*/30 * * * *"
+    dedup_window_hours: 1
+
+  payment_flow_health:
+    description: "subscriptions success rate over 24h"
+    info_at:     0.99  # below this is info
+    warn_at:     0.99
+    critical_at: 0.95
+    window_hours:      24
+    min_attempt_count: 3
+    cron_cadence:      "7 * * * *"
+    dedup_window_hours: 6
+
+  cron_failures:
+    description: "cron_call_log rows with status='failed' in the last 1h, OR status='started' and currently stuck (started_at between 1h and 6h ago — bounded BOTH sides since migration 140). CORRECTED same day (B-pass review): the first draft used a 24h outer bound borrowed from private.founder_metrics_ops()'s cron_failures_24h DIGEST column, which is right for a once-a-day summary and wrong for a 15-min paging alert — paired with a 1h dedup window it would have re-paged hourly for up to 24h after an already-resolved single failure. failed_window_hours now matches dedup_window_hours (1:1, same ratio alert_client_errors_spike already uses) so a resolved failure self-quiets. CORRECTED AGAIN same day (Hermes pass, diagnose h1a2b3): the stuck branch's stated 'no upper bound' was already misfiring live — a job stuck 2.5 days kept paging roughly every 15 minutes indefinitely. Migration 140 added the 6-hour upper bound below so the stuck branch stops paging once a job is old enough to be treated as dead/abandoned rather than genuinely still running."
+    fire_at:            1   # any failure/stuck job pages — single-tier, no info/warn split
+    failed_window_hours: 1
+    stuck_started_after_hours: 1
+    stuck_window_upper_bound_hours: 6   # added by migration 140 (was unbounded — see corrected description above)
+    cron_cadence:        "*/30 * * * *"
+    dedup_window_hours:  1
+    phase: 1   # Phase-1 placeholder (B4, 2026-09-21) — 0 'failed' rows observed in the last 30 days as of this date, so no baseline exists yet to tune a higher floor
+    # defined_in_migration names the LATEST migration whose cron.schedule('alert_cron_failures', ...)
+    # call is what actually runs live today — NOT necessarily the migration that first introduced
+    # the bound. Migration 141 silently reverted 140's bound by re-scheduling the same job from an
+    # older branch snapshot that predated 140 (140's own file was never touched — migration
+    # immutability held — but the LIVE job it defined was superseded by 141's own unrelated
+    # cron.schedule call, invisible to any test reading only 140). Migration 143 restores the
+    # bound. Update this field EVERY TIME a migration re-schedules this job, or the sync test below
+    # goes green forever while checking a file the live database no longer runs.
+    defined_in_migration: "147_alert_client_errors_spike_breadth.sql"   # 147 copies the alert_cron_failures block VERBATIM from 143 (byte-identical) into the same combined ops_alerts_30min job body, so it is now the LAST migration containing the `'alert_cron_failures', 'critical',` emitter literal — see alert_cron_failures_sync_test.dart's "defined_in_migration names the LATEST migration" test, which fails loudly if this pointer and that scan ever disagree again
+
+  sql_job_failures:
+    description: "pg_cron runs with status='failed' in cron.job_run_details whose END time falls in the last 65 min (OI-178; end, not start, because a row reads failed only once the run ends). pure-SQL jobs write no cron_call_log row, so before this NOTHING saw them fail (db_maintenance_nightly 5/5 nights, diagnose d6b2f9). ONE aggregated alert per run. critical (pages via trigger 133) only if any failure is NOT a pg_cron capacity failure; capacity alone = warn (DB saturation, e8b4a1). Dedup: an open alert of the same severity within 23 h suppresses — for critical only if it already names every job now failing with a REAL error (context key sql_jobs), so a NEW real failure always pages and a nightly failure re-pages once a night. 30-day hourly replay: 5 criticals (all jobid 41, real, from night one) + 4 warns."
+    critical_when: "any failed run whose return_message does not match the capacity class"
+    warn_when:     "only capacity failures: job startup timeout | connection failed | remaining connection slots | server restarted | could not connect"
+    window_minutes: 65
+    cron_cadence:  "23 * * * *"
+    dedup_window_hours: 23   # per severity (+ job-set containment for critical); 23 not 24 — a nightly failure is checked ~24 h apart
+    acknowledge_sql: "UPDATE public.alerts SET acknowledged = true, acknowledged_at = now() WHERE id = <id>  -- re-arms the alert"
+    phase: 1
+    defined_in_migration: "145_alert_sql_job_failures.sql"
+
+  cron_job_silent:
+    description: "pg_cron jobs that STOPPED RUNNING or are switched off (OI-178 second half; 145 covers jobs that ran and failed). A deactivated job (cron.job.active = false, the kill switch) or one pg_cron stops launching writes no run row, so nothing else can see it. Expected gap comes from the job's SCHEDULE, checked in this order so it is never shorter than reality (month set 366 d, dow set 7 d, dom set 62 d, hour set 1 d, */N minutes N min, else 1 h, @macros mapped, other shapes not judged), because job_run_details retention keeps only each job's newest run past 14 d. SILENT (critical, pages): active, launched at least once, now - last launch > expected x 1.25 + 1 h. INACTIVE (warn): active = false. Replayed over all retained history (09-06 to 09-26): 2 flags, both real (alert_payment_flow_health + alert_cron_silence not launched for 5 h on 2026-09-21, DB saturation e8b4a1)."
+    critical_when: "any active job overdue by expected x overdue_factor + overdue_grace_hours"
+    warn_when:     "only deactivated jobs"
+    overdue_factor: 1.25
+    overdue_grace_hours: 1
+    cron_cadence:  "33 * * * *"
+    critical_dedup_window_hours: 23   # unacknowledged, and only if the open alert names every silent job
+    warn_dedup_window_days: 7         # acknowledged or not — a deliberately disabled job re-surfaces weekly
+    acknowledge_sql: "UPDATE public.alerts SET acknowledged = true, acknowledged_at = now() WHERE id = <id>  -- re-arms: a job still silent re-pages at the next :33"
+    phase: 1
+    defined_in_migration: "146_alert_cron_job_silent.sql"
+
+# Notes on suppression / acknowledgement
+# --------------------------------------
+# Every cron job dedup-checks for an unacknowledged alert from the same
+# source within `dedup_window_hours` before inserting. This prevents
+# alert storms.
+#
+# Founder acknowledges via natural-language triage on session start
+# (the SessionStart hook surfaces unacknowledged alerts). Agent
+# updates the row via service-role MCP call:
+#   UPDATE alerts SET acknowledged=true, acknowledged_at=now() WHERE id=...

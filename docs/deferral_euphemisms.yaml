@@ -1,0 +1,58 @@
+# docs/deferral_euphemisms.yaml
+#
+# The phrase list for scripts/check_no_deferral_euphemism.dart (Gate-DEU).
+#
+# WHY THIS IS A SEPARATE FILE (a3d7b1, 2026-07-27)
+# ------------------------------------------------
+# The gate script is `platform` tier — editing its MATCHING LOGIC needs a
+# plan-review record plus a B-pass, which is correct: how a hard-fail gate
+# decides is exactly the sort of thing that must not change unreviewed.
+#
+# But that weight applied to the phrase LIST too, and the list is data that
+# should grow freely. A one-line "add another banned phrase" costing two review
+# rounds plus a B-pass does not make the gate safer — it makes the gate
+# ossify, while §4.2 violations invent the next phrasing. That failure mode is
+# not hypothetical here: `check_skipped_discipline_budget.dart` has sat
+# --warn-only for weeks against a documented 24-hour window.
+#
+# So the list lives here, at `feature` tier via the docs/** catch-all. Adding a
+# phrase is a one-line edit. Changing how matching works stays gated.
+#
+# Same split this repo already uses for docs/blast_radius.yaml (platform
+# registry) versus the classifier code that reads it.
+#
+# CONTRACT
+# --------
+# - `phrases:` — a YAML list of lowercase strings, matched case-insensitively
+#   as substrings against STAGED ADDED lines in *.md files only.
+# - Keep entries DISTINCTIVE. Bare "defer"/"deferred" is deliberately excluded:
+#   it is too common in legitimate technical prose ("deferred to pre-push",
+#   "deferred initialisation"). A phrase that false-positives trains people to
+#   bypass the gate, which is worse than the phrase going uncaught.
+# - The gate FAILS CLOSED on a missing or unparseable file: it treats that as a
+#   configuration error and exits non-zero rather than silently matching
+#   nothing. Deleting this file cannot quietly disable the gate.
+
+phrases:
+  - 'dedicated batch'
+  - 'follow-up batch'
+  - 'followup batch'
+  - 'follow up batch'
+  - 'test-maintenance batch'
+  - 'test maintenance batch'
+  - 'cleanup batch'
+  - 'clean-up batch'
+  - 'next-batch baseline'
+  - 'baseline for next batch'
+  - 'documented baseline for next batch'
+  - 'its own careful batch'
+  - 'own careful batch'
+  - 'gradual population'
+  - 'can be folded into'
+  - 'folded into a future'
+  - 'fresh session pickup'
+  - 'responsible handoff'
+  - 'defer-friendly'
+  - 'minimum viable ship'
+  - 'responsible focus management'
+  - 'contingency to pull out'

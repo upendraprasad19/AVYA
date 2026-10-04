@@ -1,0 +1,281 @@
+_commit: &wip "claude/oi-pending-hold-weeks-1od97o (uncommitted)"
+batch: hermes-fob-remediation
+date: 2026-08-20
+branch: claude/oi-pending-hold-weeks-1od97o
+blast_radius: catastrophic
+source: docs/audit/2026-08-20-hermes-fob1-fob5.md
+context: >
+  Remediation of the Hermes pass over FOB-1 (week identity) + FOB-5 (hold
+  telemetry). Five context-blind agents, lens set L1/L2/L8/L9/L10/L13/L23/L40,
+  three reaching live prod and two running real mutation exercises. Zero P0,
+  seven P1, thirteen P2, four P3, nine false alarms.
+  The migration itself survived every attack — ACL, replay fidelity, IST
+  boundary, search_path, RLS, quota triggers all verified clean, several by
+  role assumption inside Postgres rather than by reading the catalog. What did
+  not survive were two of the batch's own load-bearing CLAIMS, and the test
+  suite's ability to see the defect class that actually shipped.
+findings:
+
+  - id: P1-A
+    title: "`4 + ordinal` reaches two user-facing week labels via the persisted row stamp"
+    terminal_state: closed_in_commit
+    commit: 665790f
+    verification: test/contracts/hold_week_identity_behavioral_test.dart
+    diagnose: d5b8f3
+    notes: >
+      holdWeek() stamps copy['week'] = 4 + n and home_screen.dart:781,801 plus
+      day_detail_sheet.dart:102,127 rendered it verbatim, so a holder would have
+      read "Week 5" ~40px below the eyebrow FOB-1 had just corrected to
+      "HOLDING · H1" — durable across reinstall via the week_number push.
+      Missed because the FOB-1 sweep enumerated consumers of
+      getCurrentWeekNumber()/getProgramWeek(); these two read the stamped field
+      and call neither. The evidence was already in hand:
+      fob1-week-identity.closure.yaml:138 says "hold rows sit at week 5+".
+      Fixed by routing both through formatters that take the ROW, never a week
+      int, so the projection is unreachable by construction. LATENT, not live —
+      the write path is flag-gated — so it blocked flip-on, not the merge.
+
+  - id: P1-B
+    title: "the identity->label wiring seam had no behavioural coverage"
+    terminal_state: closed_in_commit
+    commit: 665790f
+    verification: test/contracts/hold_week_identity_behavioral_test.dart
+    diagnose: d5b8f3
+    notes: >
+      Mutating profile_provider to pass holdOrdinal: null left the full
+      4757-test suite green; so did reverting the home eyebrow, the recap video
+      and the journey label together. The surface group self-labelled
+      PRESENCE-ONLY but understated it: its grep tokens
+      (weekIdentityProvider, journeyWeekLabel(, profileWeekSegment() all SURVIVE
+      the defect, because the defect is in the ARGUMENT, not the call. One
+      mutation kept `ref.read(weekIdentityProvider).holdOrdinal` literally
+      present while sending null, and passed. Now asserted through a real
+      ProviderContainer read plus a comment-stripped negative control.
+      The first remediation attempt STILL let both call-site reverts pass; only
+      re-running the mutations caught it.
+
+  - id: P1-C
+    title: "the a9d3f1 replay guard verified the revoke's presence, not its position or spelling"
+    terminal_state: closed_in_commit
+    commit: 665790f
+    verification: test/contracts/admin_metrics_functions_role_revoke_test.dart
+    diagnose: d5b8f3
+    notes: >
+      Three ACL-resetting mutations passed it — revoke hoisted above the
+      DROP+CREATE, parenless `drop function ... public.fn;`, and unqualified
+      `create or replace function fn()` — while a fourth, `from authenticated,
+      anon` (identical, safe SQL), falsely reddened. The `checked > 0` guard
+      could not help: migration 120 keeps the count above zero forever, so a
+      future migration written either way is silently unscanned. All four fixed
+      and re-mutated. fob5-hold-telemetry.closure.yaml's mutation-proof claim
+      corrected in place rather than left standing.
+
+  - id: P1-D
+    title: "the three new columns reached the Edge Function response, not the dashboard"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: test/contracts/admin_hold_telemetry_renders_behavioral_test.dart
+    notes: >
+      Found independently by two lenses. AdminCurrentMetrics.fromJson is a
+      NAMED-KEY parser and engagement_tab renders a FIXED tile list, so columns
+      with no Dart field were dropped at parse and painted nowhere. FOB-5 chose
+      to ride the existing RPC specifically to avoid OI-101's
+      "shipped but nothing calls it" — and reproduced it one layer up.
+      Three fields + three tiles added; the test PUMPS the widget rather than
+      asserting the parse, because a parse-only test would repeat the very error
+      the finding is about. Mutation-proven on three shapes.
+      Migration 120's header claim ("reach the dashboard") corrected in place.
+
+  - id: P1-E
+    title: "a nightly cron deletes the rows the new metrics count"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: test/contracts/rolling_context_excludes_app_event_test.dart
+    notes: >
+      rolling-context summarize-and-deleted from ai_coach_interactions with no
+      channel filter; 91 of 92 comparable rows were already gone when measured.
+      EVERY read now excludes channel='app_event' — the per-user fetch, both
+      fallback candidate queries, AND a re-count of the candidates returned by
+      the get_users_with_message_count RPC.
+      ⚠ That last one was MISSING in the first version, and the B-pass caught it
+      after this very entry had claimed "all three reads". rolling-context calls
+      the RPC first and reaches the manual branch only on error; the RPC has no
+      channel predicate and its `where summarized = false` never matches anything
+      because nothing writes summarized = true. So two of three filters were dead
+      code on the live path. Nothing was mis-deleted (the fetch filter runs
+      regardless), but the threshold stayed overcounted — and with app_event rows
+      now never deleted, that count grows without bound.
+      The test enumerates every query on the table rather than grepping for the
+      filter string: mutation B (a NEW unfiltered read added beside the filtered
+      ones) is the shape a grep misses, and it reddens.
+      The metric remains a LOWER BOUND for a second, independent reason — an
+      offline hold emits nothing because AppEventsService drops failed inserts
+      with no queue. Both the tile ("min, all-time") and the SoT entry say so
+      rather than implying a census.
+      DEPLOY IS SEPARATE — see P1-E-deploy.
+
+  - id: P1-E-deploy
+    title: "the rolling-context fix is inert until the function is redeployed"
+    terminal_state: blocked_on_user
+    reason: >
+      CORRECTED 2026-08-20: the founder DID authorize this redeploy when asked.
+      It is blocked on CREDENTIALS, not permission, and the distinction matters
+      for whoever picks it up.
+      The safe deploy path (§0 host-shell: emit_payload.js -> deploy_via_api.js)
+      needs a Supabase Management API token, and every source deploy_via_api.js
+      accepts is absent from this remote container: SUPABASE_ACCESS_TOKEN_FITNESS
+      and SUPABASE_ACCESS_TOKEN are unset, ~/.supabase/fitness-app-token does not
+      exist, and supabase/.supabase/ is gitignored so it did not come with the
+      clone.
+      The MCP deploy_edge_function fallback was considered and REJECTED rather
+      than attempted. rolling-context is not a single-file function: the live
+      deployment is 7 files (source/index.ts plus six siblings under _shared/,
+      which is what makes ../_shared/... resolve), and §0 records that the legacy
+      MCP path has silently mangled shared-import paths before. A mangled deploy
+      here does not fail loudly — it breaks a nightly cron that summarizes and
+      DELETES user conversation rows. Guessing on that is worse than not
+      deploying.
+      Until it deploys the repo and the running function disagree (OI-93's
+      class), and the P1-E/P1-F fixes have no production effect. Live version at
+      time of writing: 18. Tracked as OI-133.
+
+  - id: P1-F
+    title: "92 analytics rows are already inside the LLM's retrievable memory"
+    terminal_state: blocked_on_user
+    reason: >
+      The writer-side leak is closed by P1-E, but filtering a writer does not
+      unwrite history. 92 of 598 memory_embeddings rows (15.4%) are app_event
+      rows embedded as source_type='conversation', and ai-proxy concatenates
+      retrieval into the SYSTEM prompt. Removing them is a DELETE against a
+      production table that feeds the coach's memory, so it needs an explicit go
+      and a dry-run count first. Filed as OI-133 with the related unfiltered
+      consumers (restore render path, daily-snapshot fact extraction) named in
+      the same entry, because all five share one root cause.
+
+  - id: P1-G
+    title: "log_table_retention is live in prod with no file, and defeats Gate 31"
+    terminal_state: blocked_on_user
+    reason: >
+      PRE-EXISTING — applied 2026-08-15, five days before this branch was cut,
+      and entirely outside the FOB scope. Reconstructing the migration file,
+      manifest entry, diagnose-doc and cron registrations is mechanical, but the
+      half that matters is a scope decision on Gate 31: it enforces registry
+      parity by scanning migration FILES, so a migration with no file is
+      invisible to the gate built to catch exactly this, and no tightening of
+      the scan fixes that. Filed as OI-132 with the live cron rows, the full
+      live-vs-repo set difference, and the proposed live-enumeration fix.
+      Bundling a prod migration reconstruction into a hold-week batch would be
+      the scope creep §4.3 warns about.
+
+  - id: P2-sync-profile
+    title: "the cloud current_week clamp reaches two PRO Edge Functions — an UNDECLARED third omission"
+    terminal_state: blocked_on_user
+    reason: >
+      sync_profile.dart:287 writes the clamped 4 into user_progress.current_week;
+      weekly-recap-ready:78 then renders "Week 4 debrief ready. Stand to." to a
+      holder three Sundays running, and weekly-report:482 injects
+      "- Current week: 4" into the Gemini prompt. This is the SAME CLASS as the
+      ai_snapshot_builder omission FOB-1 declared and routed to FOB-3 — and it
+      was declared nowhere, which is the actual defect here.
+      It is now declared. It routes to FOB-3/FOB-4, whose redeploys are
+      authorized but not yet executed; fixing the writer without them would ship
+      a half-changed contract. PRO-gated, and the hold surface is free-tier
+      only, so it bites on a free->PRO upgrade mid-hold.
+
+  - id: P2-registry
+    title: "no SoT concept registered the hold-telemetry cross-language contract; admin_dashboard_metrics_snapshot went stale under reader_manifest_complete: true"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: docs/sot_registry.yaml
+    notes: >
+      New concept hold_week_telemetry (116 total) records the Dart writer, the
+      SQL reader, the two hops between them, the string-match coupling and why
+      it is safe, the rename hazard, the lower-bound caveat, and that the
+      channel is an accident boundary rather than a security one.
+      admin_dashboard_metrics_snapshot declared reader_manifest_complete: true
+      while migration 120 changed aiMessagesToday's MEANING under it (the 5.3x
+      overcount removal, 116 -> 22) and added three unlisted columns; both
+      corrected, with a note that any pre-2026-08-20 figure is a different
+      metric.
+
+  - id: P2-manifest
+    title: "migration 120b's recorded hash matched no artifact; 120's went stale on a comment edit"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: backups/applied_migrations.json
+    notes: >
+      Every sibling entry's hash is the sha256 of its .sql file, so a hash on
+      120b — which has no file by design — was meaningless by construction and a
+      future drift audit would have chased it. Replaced with an explicit
+      sentinel (the key is required by Gate 39, so it cannot be dropped) plus
+      the reason. 120's hash updated to match the corrected file, with the delta
+      recorded as comment-only and the executable statements byte-identical to
+      what was applied.
+
+  - id: P2-citations
+    title: "migration 120's writer citations were stale on arrival"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: supabase/migrations/120_engagement_metric_channel_filter_and_hold_telemetry.sql
+    notes: >
+      The header cited app_events_service.dart:28,44 and :39-52 while the SAME
+      commit added the 16-line debugCapture seam to that file, shifting both.
+      Line 44 is `if (capture != null) {`. Corrected to :28 and :55-70, with the
+      class named in place: a file:line citation written against the pre-edit
+      file and committed alongside an edit to that same file is stale on arrival.
+
+  - id: P2-process
+    title: "mutation-proving ran in the shared worktree while reviewers read it"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: docs/audit/open_issues.md OI-134
+    notes: >
+      Two reviewers independently watched tracked files change mid-review; one
+      states it would have filed a phantom P0 against clean code had it sampled
+      once and reported. Both landed on the same framing unprompted: this is the
+      §4.13 shared-index problem in a new costume. The dispatch was the author's.
+      Filed as OI-134 with the fix shape (a dedicated mutate-<slug> worktree)
+      and the silver lining recorded honestly — because the reviewers caught the
+      mutations in flight, rule 24's normally self-attested mutation claim was
+      independently corroborated for once.
+
+  - id: VC-security
+    title: "every security claim the batch made about migration 120"
+    terminal_state: verified_clean
+    evidence: >
+      Live ACL {postgres=X/postgres,service_role=X/postgres}, identical to both
+      siblings, proven by ROLE ASSUMPTION inside Postgres rather than by reading
+      the catalog: anon_DENIED / authenticated_DENIED / service_role_EXECUTED_ok.
+      The file replays safe from scratch against BOTH pg_default_acl grantor
+      entries (postgres AND supabase_admin), which the author had not checked.
+      search_path pinning sufficient — every table reference is schema-qualified
+      AND only pg_database_owner holds C on public, so there is no landing site.
+      Every public table has RLS; the definer bypass is aggregate-only. Both
+      sibling definer RPCs carry cross-account guards. Security advisor clean.
+      OI-78 confirmed still exactly 3 — no 4th instance was added.
+
+  - id: VC-ist
+    title: "the IST boundary arithmetic and the 7d window convention"
+    terminal_state: verified_clean
+    evidence: >
+      The double `at time zone` is the correct inverse pair, proven live with a
+      boundary table: at 23:59:59 IST yesterday the predicate returns false,
+      ground truth returns false, and the UTC-midnight variant returns true — it
+      avoids the exact bug shape it was suspected of having. Delta against
+      reference 00:00:00. holds_started_7d's rolling window is a verbatim match
+      to the 093/101 house convention, which carries the rationale comment.
+      Manifest pair-update, replay fidelity (live body byte-identical) and
+      migration-120 numbering all clean.
+
+  - id: VC-shipdark
+    title: "the ship-dark negative control"
+    terminal_state: verified_clean
+    evidence: >
+      Mutation 1 (activeHoldWeeks/activeHoldOrdinalFor ignore holdWeeksEnabled)
+      REDDENS, so the §4.12.4 byte-identical-when-OFF evidence is real rather
+      than assumed. Re-verified after the P1-A fix: userStatsProvider reports no
+      hold with the flag off even with real hold rows on disk.
+      Also clean under attack: Map.toString() key ordering and 500-char
+      truncation, coach-message poisoning (all 10 call sites pass static
+      literals), all three quota triggers, the TSX holdOrdinal seam and its
+      loose == null, and week_selector.dart:341.

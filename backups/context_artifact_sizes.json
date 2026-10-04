@@ -1,0 +1,54 @@
+{
+  ".claude/skills/code-review/SKILL.md": {
+    "bytes": 22693,
+    "recorded_at": "2026-10-01T17:47:33.393517Z"
+  },
+  ".claude/skills/debugging/SKILL.md": {
+    "bytes": 49688,
+    "recorded_at": "2026-10-01T17:47:33.393517Z"
+  },
+  "CLAUDE.md": {
+    "bytes": 42130,
+    "recorded_at": "2026-10-01T17:47:33.393517Z"
+  },
+  "docs/audit/OPEN_INDEX.md": {
+    "bytes": 28019,
+    "recorded_at": "2026-10-01T17:47:33.393517Z"
+  },
+  "docs/audit/open_issues.md": {
+    "bytes": 478488,
+    "recorded_at": "2026-10-01T17:47:33.393517Z"
+  },
+  "lib/core/services/CLAUDE.md": {
+    "bytes": 21408,
+    "recorded_at": "2026-10-01T17:47:33.393517Z"
+  },
+  "lib/features/ai_coach/CLAUDE.md": {
+    "bytes": 15229,
+    "recorded_at": "2026-10-01T17:47:33.393517Z"
+  },
+  "lib/features/auth/CLAUDE.md": {
+    "bytes": 18261,
+    "recorded_at": "2026-10-01T17:47:33.393517Z"
+  },
+  "lib/features/onboarding/CLAUDE.md": {
+    "bytes": 17384,
+    "recorded_at": "2026-10-01T17:47:33.393517Z"
+  },
+  "lib/features/train/CLAUDE.md": {
+    "bytes": 18036,
+    "recorded_at": "2026-10-01T17:47:33.393517Z"
+  },
+  "lib/shared/repositories/plan_engine/CLAUDE.md": {
+    "bytes": 16986,
+    "recorded_at": "2026-10-01T17:47:33.393517Z"
+  },
+  "supabase/functions/CLAUDE.md": {
+    "bytes": 24725,
+    "recorded_at": "2026-10-01T17:47:33.393517Z"
+  },
+  "supabase/migrations/CLAUDE.md": {
+    "bytes": 20853,
+    "recorded_at": "2026-10-01T17:47:33.393517Z"
+  }
+}

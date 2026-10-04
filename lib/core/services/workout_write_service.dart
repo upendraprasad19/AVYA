@@ -1,0 +1,1526 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:uuid/uuid.dart';
+
+import 'error_telemetry.dart';
+import 'hive_service.dart';
+import 'pending_exlog_deletes.dart';
+import 'pending_template_deletes.dart';
+import 'sync_service.dart';
+import 'template_identity.dart';
+import 'write_result.dart';
+
+/// The ONE writer for workout_logs / workout_log_exercises /
+/// workout_log_sets. All Hive `exlog_*`, `wlog_*`, and `schedule_<date>`
+/// mutations flow through this service.
+///
+/// Per-(date, exerciseName) mutex serializes concurrent writes — two
+/// simultaneous logExercise calls for the same exercise will merge
+/// their sets into a single Hive entry rather than racing.
+///
+/// Hive key scheme (post Plan A):
+/// - `exlog_<istDateStr>_<hash(name)>`  — deterministic; one row per
+///   (date, exerciseName).
+/// - `wlog_<istDateStr>`                — workout-level summary.
+/// - `schedule_<istDateStr>`            — schedule entry.
+///
+/// Cloud sync is 3-tier (writes 1 + 1 + N rows):
+/// - `workout_logs`             (1 per date)
+/// - `workout_log_exercises`    (1 per (date, exerciseName))
+/// - `workout_log_sets`         (N per (date, exerciseName) — one per
+///                               ExerciseSet)
+///
+/// Cloud sync fires fire-and-forget after the Hive write succeeds.
+
+/// What swapScheduledDays reads under its two-date lock (deep copies).
+typedef ScheduledDaySwapLive = ({
+  Map<String, dynamic>? rowA,
+  Map<String, dynamic>? rowB,
+  Map<String, dynamic>? displacedA,
+  Map<String, dynamic>? displacedB,
+});
+
+/// What the build function asks swapScheduledDays to write. A null
+/// displaced map deletes that date's `displaced_<date>` backup.
+typedef ScheduledDaySwapWrite = ({
+  Map<String, dynamic> rowA,
+  Map<String, dynamic> rowB,
+  Map<String, dynamic>? displacedA,
+  Map<String, dynamic>? displacedB,
+});
+
+class WorkoutWriteService {
+  WorkoutWriteService._();
+  static final WorkoutWriteService instance = WorkoutWriteService._();
+
+  /// Per-key mutex. Key format: `<istDateStr>::<exerciseName>` for
+  /// per-exercise methods, `<istDateStr>` for schedule-only methods.
+  final Map<String, Completer<void>> _locks = {};
+
+  /// 60-second dedup window for per-set duplicate detection.
+  static const int kDedupWindowMs = 60000;
+
+  /// Provider invalidation batch fired after every successful write.
+  /// Caller injects [ref] when running under Riverpod; pure-Hive
+  /// callers (tests, headless paths) pass null.
+  void Function(WidgetRef ref)? onInvalidate;
+
+  // ─────────────────────────────────────────────────────────────
+  //  Public API
+  // ─────────────────────────────────────────────────────────────
+
+  Future<WriteResult> logExercise({
+    required DateTime date,
+    required String exerciseName,
+    required List<ExerciseSet> sets,
+    String? notes,
+    required WriteSource source,
+    WidgetRef? ref,
+    /// APK Test #12 / Task A-2 — receipt scoping. Stamps the parent
+    /// workout session id on this exercise log row. Receipt query for
+    /// a date can then filter by `workout_log_id` to show only that
+    /// session's exercises (not all exercises logged on that IST date).
+    /// Defaults to `wlogKey(date)` (one workout per IST date) — for
+    /// users with multiple sessions per day, the caller should pass an
+    /// explicit id (e.g. `'wlog_<date>_<sequence>'`).
+    String? workoutLogId,
+    /// W3.3 (Batch 11-A): the library exercise id (forward-only). Written when
+    /// non-null + STICKY (a null-id re-log keeps a prior id). NEVER reaches the
+    /// cloud sync onConflict key (name-derived) — Hive-local id matching only.
+    String? exerciseId,
+  }) async {
+    // 1. Validate
+    if (exerciseName.trim().isEmpty) {
+      return WriteResult.fail('exerciseName must be non-empty');
+    }
+    if (sets.isEmpty) {
+      return WriteResult.fail('sets must be non-empty');
+    }
+    for (final s in sets) {
+      if (s.weightKg < 0) return WriteResult.fail('weightKg must be >= 0');
+      if (s.reps < 0) return WriteResult.fail('reps must be >= 0');
+    }
+
+    final dateStr = istDateStr(date);
+    final lockKey = '$dateStr::${exerciseName.toLowerCase().trim()}';
+    final c = await _acquireLock(lockKey);
+
+    try {
+      final box = HiveService.instance.workoutBox;
+      final key = exlogKey(date, exerciseName);
+      final existing = box.get(key);
+      // W3.3 (Batch 11-A): STICKY exercise_id — a null-id re-log (coach-conversational
+      // / legacy repo) keeps the id a prior schedule-log wrote for the same key.
+      final resolvedExerciseId = exerciseId ??
+          ((existing is Map) ? existing['exercise_id'] as String? : null);
+
+      // 2. Build merged sets[] list with 60s dedup
+      final List<ExerciseSet> mergedSets;
+      if (existing != null) {
+        final m = (existing as Map).cast<String, dynamic>();
+        final existingSets = (m['sets'] as List? ?? const [])
+            .cast<Map>()
+            .map((e) => ExerciseSet.fromMap(e))
+            .toList();
+
+        final List<ExerciseSet> additions = [];
+        for (final candidate in sets) {
+          // Stamp loggedAtMs if caller didn't.
+          final stamped = candidate.loggedAtMs == null
+              ? ExerciseSet(
+                  weightKg: candidate.weightKg,
+                  reps: candidate.reps,
+                  durationSec: candidate.durationSec,
+                  loggedAtMs: DateTime.now().millisecondsSinceEpoch,
+                )
+              : candidate;
+
+          // Dedup against existing sets (60s window).
+          final isDup = existingSets.any((existing) =>
+              stamped.isDuplicateWithin(existing, windowMs: kDedupWindowMs));
+          if (!isDup) additions.add(stamped);
+        }
+
+        mergedSets = [...existingSets, ...additions];
+      } else {
+        mergedSets = sets
+            .map((s) => s.loggedAtMs == null
+                ? ExerciseSet(
+                    weightKg: s.weightKg,
+                    reps: s.reps,
+                    durationSec: s.durationSec,
+                    loggedAtMs: DateTime.now().millisecondsSinceEpoch,
+                  )
+                : s)
+            .toList();
+      }
+
+      // APK Test #12.5 / Class 1a-1b — library-aware logging_type +
+      // phantom-durationSec stripping.
+      //
+      // Pre-fix `_inferLoggingType` was data-shape-only: it returned
+      // `'timed'` whenever any set had durationSec>0 AND no weight.
+      // The active workout UI's `_durationControllers` could be hot
+      // even for bodyweight slots (post-swap state retention or input
+      // bleed), stuffing durationSec onto Push Up / Hanging Leg Raise
+      // sets and wrongly stamping them as timed. Receipt then rendered
+      // "× 540 reps" / "0s" depending on the renderer.
+      //
+      // Fix: consult exerciseBox first. Library type wins for known
+      // exercises; data-shape fallback only for custom exercises.
+      // When resolved type ≠ 'timed', strip durationSec from per-set
+      // entries so downstream renderers and the cloud projection don't
+      // carry phantom values.
+      final resolvedType = _resolveLoggingType(exerciseName, mergedSets);
+      // a4c7d1: Normalize all sets to match the resolved logging type.
+      // When swapping exercises, in-flight logged sets may carry the OLD
+      // format; ensure they're cleared when persisted with a NEW type.
+      final normalizedSets = _normalizeSetsByLoggingType(mergedSets, resolvedType);
+      final cleanedSets = _stripPhantomFields(normalizedSets, resolvedType);
+
+      // 3. Recompute aggregates — from `cleanedSets` (POST-normalization),
+      // never `mergedSets`. Bug e8f95e: computing these from mergedSets let
+      // a phantom pre-normalization value leak into the top-level
+      // reps_completed/weight_kg/volume_kg fields even after cleanedSets had
+      // already zeroed/stripped it — e.g. a wrongly timed-resolved bodyweight
+      // exercise zeroes reps in cleanedSets (correct once resolvedType is
+      // fixed upstream) but this aggregate, read from mergedSets, would still
+      // report the pre-strip reps count. The three aggregate fields must
+      // always agree with what `sets[]` actually persists.
+      final totalReps = cleanedSets.fold<int>(0, (a, s) => a + s.reps);
+      final maxWeight = cleanedSets.fold<double>(
+          0.0, (a, s) => s.weightKg > a ? s.weightKg : a);
+      final volume = cleanedSets.fold<double>(
+          0.0, (a, s) => a + (s.weightKg * s.reps));
+
+      // APK Test #12 / Task A-2 — workout session id. Defaults to
+      // `wlog_<date>` (one workout per IST date). Multi-session days
+      // can pass an explicit id to keep receipts scoped per session.
+      // Pre-existing rows without this field still load via the
+      // legacy "all exercises on date" fallback in receipt code.
+      final wid = workoutLogId ?? wlogKey(date);
+
+      final entry = <String, dynamic>{
+        'exercise_name': exerciseName,
+        'exercise_id': ?resolvedExerciseId, // W3.3: omit entry when null
+        'date': dateStr,
+        'workout_log_id': wid,
+        'sets': cleanedSets.map((s) => s.toMap()).toList(),
+        'set_number': cleanedSets.length,
+        'reps_completed': totalReps,
+        'weight_kg': maxWeight,
+        'volume_kg': volume,
+        'logging_type': resolvedType,
+        'source': source.code,
+        'notes': ?notes,
+        'updated_at_ms': DateTime.now().millisecondsSinceEpoch,
+      };
+
+      // 4. PR rescan (chronological — strict > comparison; existing
+      // pattern from EditWorkoutLogSheet).
+      entry['is_pr'] = _rescanPrFor(box, exerciseName, dateStr, maxWeight);
+
+      // 5. Write Hive
+      await box.put(key, entry);
+
+      // 6. Update exercise_log_index_<date> — AWAITED so the index reaches disk
+      // before this method returns (and before the UI paints the log). A
+      // fire-and-forget put here meant the row persisted (awaited above) but the
+      // index did not flush before an app close → on reopen the reader, which
+      // finds logs via this index, showed the just-logged exercise as "gone"
+      // while the orphaned row survived on disk. closes-diagnose: e4a8b1.
+      await _appendToIndex(box, dateStr, key);
+
+      // 7. Fire-and-forget cloud sync
+      unawaited(SyncService.instance.syncWorkoutData());
+      unawaited(SyncService.instance.pushSnapshot());
+
+      // 8. Provider invalidation
+      if (ref != null && onInvalidate != null) {
+        try {
+          onInvalidate!(ref);
+        } catch (e, st) {
+          // audit-2026-05-11 H-42 — telemetry pair.
+          debugPrint('[WorkoutWriteService] invalidation failed: $e\n$st');
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'workout_write_service_log_exercise_invalidation'));
+        }
+      }
+
+      return WriteResult.ok(key);
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
+      debugPrint('[WorkoutWriteService.logExercise] $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'workout_write_service_log_exercise'));
+      return WriteResult.fail(e.toString());
+    } finally {
+      _releaseLock(lockKey, c);
+    }
+  }
+
+  /// APK Test #12.5 / Class 1a — library-aware logging_type resolver.
+  ///
+  /// Consults the bundled exercise library first. For known exercises
+  /// (Push Up, Hanging Leg Raise, Jump Rope, …) the library type wins
+  /// regardless of what the data shape suggests — the data may be
+  /// corrupt (swap-state retention, controller bleed) and the library
+  /// is the canonical truth.
+  ///
+  /// Custom exercises (not in the library) fall back to data-shape
+  /// inference — same logic the old `_inferLoggingType` used.
+  String _resolveLoggingType(String exerciseName, List<ExerciseSet> sets) {
+    // Library lookup. Tolerate missing/uninitialized exerciseBox —
+    // fall back to data inference rather than throw.
+    try {
+      final exb = HiveService.instance.exerciseBox;
+      final trimmed = exerciseName.trim();
+      for (final v in exb.values) {
+        if (v is! Map) continue;
+        final name = v['name'] as String?;
+        if (name == null) continue;
+        if (name.trim().toLowerCase() == trimmed.toLowerCase()) {
+          final lt = v['logging_type'] as String?;
+          if (lt != null && lt.isNotEmpty) return lt;
+          break;
+        }
+      }
+    } catch (_) {
+      // Box not open / not seeded — data-driven fallback.
+    }
+
+    // Data-shape inference (custom exercise path).
+    final hasDur = sets.any((s) => s.durationSec != null && s.durationSec! > 0);
+    final hasWeight = sets.any((s) => s.weightKg > 0);
+    if (hasDur && !hasWeight) return 'timed';
+    if (hasWeight) return 'weight_reps';
+    return 'bodyweight_reps';
+  }
+
+  /// a4c7d1: Normalize set values to match the exercise's logging type.
+  ///
+  /// When an exercise is swapped mid-workout (e.g., timed → weight/reps),
+  /// the in-session values may carry the OLD type's format. This method
+  /// clears incompatible fields before persistence:
+  /// - For timed: zero weight/reps
+  /// - For weight-based: zero durationSec
+  List<ExerciseSet> _normalizeSetsByLoggingType(
+    List<ExerciseSet> sets,
+    String loggingType,
+  ) {
+    if (loggingType == 'timed') {
+      return sets
+          .map((s) => ExerciseSet(
+                durationSec: s.durationSec,
+                loggedAtMs: s.loggedAtMs,
+                weightKg: 0.0,
+                reps: 0,
+              ))
+          .toList();
+    } else {
+      // weight_reps, bodyweight_reps, weighted_bodyweight, cardio, distance
+      return sets
+          .map((s) => ExerciseSet(
+                weightKg: s.weightKg,
+                reps: s.reps,
+                loggedAtMs: s.loggedAtMs,
+                durationSec: 0,
+              ))
+          .toList();
+    }
+  }
+
+  /// APK Test #12.5 / Class 1b — strip phantom fields when the
+  /// resolved logging_type doesn't accommodate them.
+  ///
+  /// Examples of phantoms we've observed in production:
+  /// - Push Up (`bodyweight_reps`) with `durationSec=18` from a stale
+  ///   `_durationControllers` text after a swap.
+  /// - Handstand Hold (`timed`) with `weightKg=1.0` (bogus 1kg).
+  ///
+  /// Per-set entries that would surface as "18 secs" for a bodyweight
+  /// chip get cleaned here before persistence so every reader (receipt,
+  /// train calendar, cloud projection) sees consistent data.
+  List<ExerciseSet> _stripPhantomFields(
+    List<ExerciseSet> sets,
+    String resolvedType,
+  ) {
+    switch (resolvedType) {
+      case 'bodyweight_reps':
+      case 'weight_reps':
+      case 'weighted_bodyweight':
+        // Duration doesn't apply.
+        return sets
+            .map((s) => ExerciseSet(
+                  weightKg: s.weightKg,
+                  reps: s.reps,
+                  durationSec: null,
+                  loggedAtMs: s.loggedAtMs,
+                ))
+            .toList();
+      case 'timed':
+        // Weight + reps don't apply for pure-timed.
+        return sets
+            .map((s) => ExerciseSet(
+                  weightKg: 0.0,
+                  reps: 0,
+                  durationSec: s.durationSec,
+                  loggedAtMs: s.loggedAtMs,
+                ))
+            .toList();
+      default:
+        return sets;
+    }
+  }
+
+  bool _rescanPrFor(
+    Box box,
+    String exerciseName,
+    String dateStr,
+    double maxWeight,
+  ) {
+    final lower = exerciseName.toLowerCase().trim();
+    double bestBefore = 0.0;
+    for (final k in box.keys) {
+      if (!k.toString().startsWith('exlog_')) continue;
+      final v = box.get(k);
+      if (v is! Map) continue;
+      final n = (v['exercise_name'] as String?)?.toLowerCase().trim();
+      if (n != lower) continue;
+      final d = v['date'] as String?;
+      if (d == null) continue;
+      if (d.compareTo(dateStr) >= 0) continue; // strict before
+      final w = (v['weight_kg'] as num?)?.toDouble() ?? 0.0;
+      if (w > bestBefore) bestBefore = w;
+    }
+    return maxWeight > bestBefore;
+  }
+
+  /// THE single union read-modify-write for `exercise_log_index_<date>`.
+  ///
+  /// Public so the cloud restore (`sync_workout._restoreExerciseLogs`) and
+  /// [logExercise]'s own append share ONE index-append implementation (DRY — no
+  /// writer/restore drift). Union semantics: only ever ADDS a key, never removes
+  /// one, so a restore and a concurrent log can't lose each other's entries. The
+  /// read→put has no `await` between them, so the update is atomic on the single
+  /// isolate (verified: concurrent unlocked appends lose nothing — Hive commits
+  /// in-memory before it yields for the disk flush). The put is AWAITED so the
+  /// index reaches disk before the caller returns. closes-diagnose: e4a8b1.
+  Future<void> addToExlogIndex(Box box, String dateStr, String key) async {
+    final indexKey = 'exercise_log_index_$dateStr';
+    final raw = box.get(indexKey);
+    final List<String> list =
+        (raw is List) ? raw.cast<String>().toList() : <String>[];
+    if (!list.contains(key)) {
+      list.add(key);
+      await box.put(indexKey, list);
+    }
+  }
+
+  /// Durably appends [key] to `exercise_log_index_<date>` via [addToExlogIndex].
+  /// The `box.put` is AWAITED (and the chain is async) so the index entry reaches
+  /// disk before the caller returns. Previously this was a `void` helper that
+  /// dropped the put Future — the row write was awaited but the index write was
+  /// not, so an app close before Hive flushed lost the index entry and the
+  /// just-logged exercise vanished from the reader (orphaned row left on disk).
+  /// closes-diagnose: e4a8b1.
+  Future<void> _appendToIndex(Box box, String dateStr, String key) =>
+      addToExlogIndex(box, dateStr, key);
+
+  /// Inverse of [addToExlogIndex] — removes [key] from
+  /// `exercise_log_index_<dateStr>` if present. PRIVATE and called ONLY from
+  /// [moveExerciseLogs] (a mutating writer): addToExlogIndex/reconcile are
+  /// deliberately UNION-only (add, never remove) so a restore and a
+  /// concurrent log can't lose each other's entries, but a MOVED row's old
+  /// key is genuinely stale on the source date's index — leaving it there
+  /// makes the reader resolve a dangling key (harmless on read) and breaks
+  /// the "index == truth" invariant the canonical read leans on. Idempotent
+  /// no-op when the key or the index is absent.
+  Future<void> _removeFromExlogIndex(
+      Box box, String dateStr, String key) async {
+    final indexKey = 'exercise_log_index_$dateStr';
+    final raw = box.get(indexKey);
+    if (raw is! List) return;
+    final list = raw.cast<String>().toList();
+    if (!list.remove(key)) return;
+    await box.put(indexKey, list);
+  }
+
+  /// Defense-in-depth: rebuilds every `exercise_log_index_<date>` as the UNION
+  /// of the actual `exlog_<date>_<hash>` keys present in the workout box (never
+  /// removes a present key). Run after a background restore so any index drift
+  /// (a lost index write — the e4a8b1 class — or a rogue writer) self-heals on
+  /// next sign-in, even for a row the additive restore left untouched.
+  /// [box] is injectable for tests; defaults to the live workout box.
+  /// closes-diagnose: e4a8b1.
+  Future<void> reconcileExlogIndexes([Box? box]) async {
+    final b = box ?? HiveService.instance.workoutBox;
+    final byDate = <String, List<String>>{};
+    for (final k in b.keys) {
+      if (k is! String || !k.startsWith('exlog_')) continue;
+      final rest = k.substring('exlog_'.length);
+      if (rest.length < 10) continue; // exlog_<YYYY-MM-DD>_<hash>
+      final dateStr = rest.substring(0, 10);
+      byDate.putIfAbsent(dateStr, () => <String>[]).add(k);
+    }
+    for (final entry in byDate.entries) {
+      final indexKey = 'exercise_log_index_${entry.key}';
+      final raw = b.get(indexKey);
+      final List<String> list =
+          (raw is List) ? raw.cast<String>().toList() : <String>[];
+      final seen = list.toSet();
+      var changed = false;
+      for (final k in entry.value) {
+        if (seen.add(k)) {
+          list.add(k);
+          changed = true;
+        }
+      }
+      if (changed) await b.put(indexKey, list);
+    }
+  }
+
+  /// [completedVia] records HOW this day was completed for completion
+  /// telemetry / coach-memory. Values: 'app' (UI finish button, default),
+  /// 'auto' (derived all-logged backstop after a coach logSet), 'tap' (the
+  /// coach completion-prompt card's [Complete workout] button). Stamped on
+  /// both the schedule row and the wlog row so downstream analytics can
+  /// attribute completions. Unit 1 (coach-completion-tap-card).
+  Future<WriteResult> markCompleted({
+    required DateTime date,
+    required String workoutName,
+    required int durationSec,
+    int? rpe,
+    String completedVia = 'app',
+    WidgetRef? ref,
+  }) async {
+    if (workoutName.trim().isEmpty) {
+      return WriteResult.fail('workoutName must be non-empty');
+    }
+    if (durationSec < 0) {
+      return WriteResult.fail('durationSec must be >= 0');
+    }
+
+    final dateStr = istDateStr(date);
+    final c = await _acquireLock(dateStr);
+    try {
+      final box = HiveService.instance.workoutBox;
+      final sKey = scheduleKey(date);
+      final wKey = wlogKey(date);
+
+      // NOTE (Unit 1 follow-up, 280c4d): markCompleted stays a pure idempotent
+      // WRITER — it UPSERTS the single wlog_<date> row (no duplicate) and UPDATES
+      // fields on a re-call (e.g. a re-finish with a longer duration — pinned by
+      // mark_completed_test 'second call updates'). Re-completion of an already-
+      // 'completed' day is filtered at the CALLERS (completeWorkoutFromPrompt +
+      // _maybeCompleteScheduledDay both skip a 'completed'/'rest' day), so no
+      // internal early-return is needed. An earlier draft added one to avoid a
+      // tap-vs-backstop double-stamp, but it over-reached and broke the update
+      // contract; the per-date lock + caller gates already make double-completion
+      // a benign rare race that simply re-stamps the same 'completed' state.
+
+      // 1. Update schedule entry status='completed' (preserve other fields)
+      final sched = box.get(sKey);
+      if (sched is Map) {
+        final m = Map<String, dynamic>.from(sched);
+        m['status'] = 'completed';
+        m['completed_at_ms'] = DateTime.now().millisecondsSinceEpoch;
+        m['completed_via'] = completedVia;
+        await box.put(sKey, m);
+      } else {
+        // No prior schedule (e.g. AI-coach-only logging) — synthesize one.
+        await box.put(sKey, {
+          'workout_name': workoutName,
+          'status': 'completed',
+          'type': 'logged',
+          'completed_at_ms': DateTime.now().millisecondsSinceEpoch,
+          'completed_via': completedVia,
+        });
+      }
+
+      // 2. Upsert wlog_<date>
+      // f1c8e4: stamp `type: 'workout_log'` + `completed_at` (ISO). EVERY
+      // count/history reader filters `type == 'workout_log'`
+      // (getWeeklyWorkoutCounts → reports "This Week" tile + frequency chart,
+      // getWorkoutLogs → history, BadgeService.totalWorkouts, AiSnapshotBuilder)
+      // and getRecentWorkoutCompletionHours reads the ISO `completed_at`. The
+      // replaced saveWorkoutLog + the restore path (_restoreWorkoutLogs) BOTH
+      // stamp these; the A-13 derive-only refactor dropped them when it routed
+      // live completion through markCompleted, so a live completion was invisible
+      // to those readers until a reinstall+restore re-tagged the row. Keep
+      // completed_at_ms too (the schedule-completion duration-join + epoch
+      // readers use it). One timestamp instant for both fields.
+      final completedAt = DateTime.now();
+      final wlog = <String, dynamic>{
+        'type': 'workout_log',
+        'workout_name': workoutName,
+        'date': dateStr,
+        'duration_seconds': durationSec,
+        if (rpe != null) 'rpe': rpe,
+        // audit-fixwave 2026-07-02 / F19 — stamp completed_at in UTC. Pre-fix
+        // this serialized device-local (IST) wall-clock into the timestamptz
+        // column (a +5:30 skew vs the exercises' UTC created_at). The `date`
+        // date-key stays IST (istDateStr, §4.5); only the audit timestamp is
+        // normalized. completed_at_ms is epoch (already UTC-based) — unchanged.
+        'completed_at': completedAt.toUtc().toIso8601String(),
+        'completed_at_ms': completedAt.millisecondsSinceEpoch,
+        'completed_via': completedVia,
+      };
+      await box.put(wKey, wlog);
+
+      // 3. Fire-and-forget cloud sync
+      unawaited(SyncService.instance.syncWorkoutData());
+      unawaited(SyncService.instance.pushSnapshot());
+
+      // 4. Provider invalidation
+      if (ref != null && onInvalidate != null) {
+        try {
+          onInvalidate!(ref);
+        } catch (e, st) {
+          // audit-2026-05-11 H-42 — telemetry pair.
+          debugPrint('[WorkoutWriteService.markCompleted] inv: $e\n$st');
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'workout_write_service_mark_completed_invalidation'));
+        }
+      }
+
+      return WriteResult.ok(wKey);
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
+      debugPrint('[WorkoutWriteService.markCompleted] $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'workout_write_service_mark_completed'));
+      return WriteResult.fail(e.toString());
+    } finally {
+      _releaseLock(dateStr, c);
+    }
+  }
+
+  Future<WriteResult> upsertScheduled({
+    required DateTime date,
+    required Map<String, dynamic> entry,
+    required WriteSource source,
+    WidgetRef? ref,
+  }) async {
+    final dateStr = istDateStr(date);
+    final c = await _acquireLock(dateStr);
+    try {
+      final box = HiveService.instance.workoutBox;
+      final key = scheduleKey(date);
+
+      // Theme H fix (diagnose <id>) — refuse to overwrite a completed day
+      // from planGenerator. Pre-fix: phase regeneration that normalize-to-
+      // Monday'd onto a date with an already-completed workout silently
+      // clobbered the completed entry (no `status`, no `completed_at`).
+      // Founder hit this 2026-05-21 — Phase 2 W1 generation overwrote
+      // Phase 1 W4 entries the founder had completed.
+      //
+      // Scope to planGenerator only — every other source has a legitimate
+      // reason to write to a completed day:
+      //   - activeWorkout / editSheet — user is editing or re-logging.
+      //   - aiCoach / manual — user explicitly invoked.
+      //   - schedSwap — reschedule keeps the completed status intact via
+      //     a separate path (swapScheduledDays, which refuses completed days).
+      //   - restore — cloud restore must be able to replay history.
+      final existingRaw = box.get(key);
+      final existingMap = existingRaw is Map
+          ? Map<String, dynamic>.from(existingRaw)
+          : null;
+      if (existingMap != null &&
+          existingMap['status'] == 'completed' &&
+          source == WriteSource.planGenerator) {
+        unawaited(ErrorTelemetry.logEvent(
+            'upsert_scheduled_skipped_completed_day',
+            message: 'date=$dateStr source=${source.code} key=$key'));
+        return WriteResult.fail(
+            'refusing to overwrite completed day from planGenerator');
+      }
+
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+      final stamped = <String, dynamic>{
+        ...entry,
+        'date': dateStr,
+        'source': source.code,
+        'updated_at_ms': nowMs,
+      };
+      // Spec §5.7 carry-forward: rewriting an arranged (day-swapped) date is
+      // itself a newer arrangement, so an older swap arriving from another
+      // device (restore merge L3) cannot overwrite this write.
+      if (carriesArrangement(existing: existingMap, entry: entry, source: source)) {
+        stamped['arranged_at_ms'] = nowMs;
+      }
+      await box.put(key, stamped);
+
+      unawaited(SyncService.instance.syncWorkoutData());
+      unawaited(SyncService.instance.pushSnapshot());
+
+      if (ref != null && onInvalidate != null) {
+        try {
+          onInvalidate!(ref);
+        } catch (e, st) {
+          // audit-2026-05-11 H-42 — telemetry pair.
+          debugPrint('[WorkoutWriteService.upsertScheduled] inv: $e\n$st');
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'workout_write_service_upsert_scheduled_invalidation'));
+        }
+      }
+
+      return WriteResult.ok(key);
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
+      debugPrint('[WorkoutWriteService.upsertScheduled] $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'workout_write_service_upsert_scheduled'));
+      return WriteResult.fail(e.toString());
+    } finally {
+      _releaseLock(dateStr, c);
+    }
+  }
+
+  /// Spec §5.7 carry-forward. `daySwap` sets the stamp itself; `restore`
+  /// copies the source row's. Pure; extracted for behavioural coverage.
+  @visibleForTesting
+  static bool carriesArrangement({
+    required Map<String, dynamic>? existing,
+    required Map<String, dynamic> entry,
+    required WriteSource source,
+  }) {
+    if (source == WriteSource.daySwap || source == WriteSource.restore) {
+      return false;
+    }
+    if (entry.containsKey('arranged_at_ms')) return false;
+    return existing != null && existing['arranged_at_ms'] != null;
+  }
+
+  /// Written as [WriteResult.errorMessage] when [swapScheduledDays]'s build
+  /// function refuses (the caller's rules said no), so a refusal is never
+  /// mistaken for a write failure.
+  static const String daySwapRefusedMessage = 'day_swap_refused';
+
+  static const String _displacedPrefix = 'displaced_';
+
+  /// Exchanges the schedule rows of two dates — the day-swap engine's one
+  /// write (spec §5.4). Takes the two-date lock in sorted order, reads both
+  /// rows and both `displaced_<date>` backups as deep copies, and hands them
+  /// to [build], which returns the new rows and backups, or null to refuse.
+  /// Writes all four keys or none: if a write throws, every key already
+  /// written is restored to its previous value and the failure is returned.
+  /// A completed day is never moved, whatever [build] returns. Fans out ONE
+  /// sync pass and ONE snapshot push.
+  Future<WriteResult> swapScheduledDays({
+    required DateTime dateA,
+    required DateTime dateB,
+    required ScheduledDaySwapWrite? Function(ScheduledDaySwapLive live) build,
+    WidgetRef? ref,
+  }) async {
+    final aStr = istDateStr(dateA);
+    final bStr = istDateStr(dateB);
+    if (aStr == bStr) {
+      return WriteResult.fail('dateA and dateB are the same');
+    }
+    final keys = [aStr, bStr]..sort();
+    final c1 = await _acquireLock(keys[0]);
+    final c2 = await _acquireLock(keys[1]);
+    try {
+      final box = HiveService.instance.workoutBox;
+      final keyA = scheduleKey(dateA);
+      final keyB = scheduleKey(dateB);
+      final dispA = '$_displacedPrefix$aStr';
+      final dispB = '$_displacedPrefix$bStr';
+      Map<String, dynamic>? read(String k) {
+        final raw = box.get(k);
+        return raw is Map ? _swapDeepCopyMap(raw) : null;
+      }
+
+      final live = (
+        rowA: read(keyA),
+        rowB: read(keyB),
+        displacedA: read(dispA),
+        displacedB: read(dispB),
+      );
+      final plan = build(live);
+      if (plan == null) {
+        return WriteResult.fail(daySwapRefusedMessage);
+      }
+      if (live.rowA?['status'] == 'completed' ||
+          live.rowB?['status'] == 'completed') {
+        unawaited(ErrorTelemetry.logEvent('day_swap_completed_guard',
+            message: 'a=$aStr b=$bStr'));
+        return WriteResult.fail(daySwapRefusedMessage);
+      }
+
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+      Map<String, dynamic> stamp(Map<String, dynamic> row, String date) => {
+            ...row,
+            'date': date,
+            'source': WriteSource.daySwap.code,
+            'updated_at_ms': nowMs,
+          };
+      final writes = <String, Map<String, dynamic>?>{
+        keyA: stamp(plan.rowA, aStr),
+        keyB: stamp(plan.rowB, bStr),
+        dispA: plan.displacedA,
+        dispB: plan.displacedB,
+      };
+      final previous = <String, Object?>{
+        for (final k in writes.keys) k: box.get(k),
+      };
+      final written = <String>[];
+      try {
+        for (final e in writes.entries) {
+          if (e.value == null) {
+            if (box.containsKey(e.key)) {
+              await box.delete(e.key);
+              written.add(e.key);
+            }
+          } else {
+            await box.put(e.key, e.value);
+            written.add(e.key);
+          }
+        }
+      } catch (_) {
+        for (final k in written.reversed) {
+          try {
+            final prev = previous[k];
+            if (prev == null) {
+              await box.delete(k);
+            } else {
+              await box.put(k, prev);
+            }
+          } catch (e, st) {
+            unawaited(ErrorTelemetry.recordNonFatal(e, st,
+                reason: 'workout_write_service_swap_rollback'));
+          }
+        }
+        rethrow;
+      }
+
+      unawaited(SyncService.instance.syncWorkoutData());
+      unawaited(SyncService.instance.pushSnapshot());
+
+      if (ref != null && onInvalidate != null) {
+        try {
+          onInvalidate!(ref);
+        } catch (e, st) {
+          debugPrint('[WorkoutWriteService.swapScheduledDays] inv: $e\n$st');
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'workout_write_service_swap_scheduled_days_invalidation'));
+        }
+      }
+      return WriteResult.ok(keyA);
+    } catch (e, st) {
+      debugPrint('[WorkoutWriteService.swapScheduledDays] $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'workout_write_service_swap_scheduled_days'));
+      return WriteResult.fail(e.toString());
+    } finally {
+      _releaseLock(keys[1], c2);
+      _releaseLock(keys[0], c1);
+    }
+  }
+
+  static Map<String, dynamic> _swapDeepCopyMap(Map raw) => <String, dynamic>{
+        for (final e in raw.entries) e.key.toString(): _swapDeepCopy(e.value),
+      };
+
+  static Object? _swapDeepCopy(Object? v) {
+    if (v is Map) return _swapDeepCopyMap(v);
+    if (v is List) return v.map(_swapDeepCopy).toList();
+    return v;
+  }
+
+  /// C2 (e8f4a3) — re-keys partial `exlog_<fromDate>_*` rows onto `<toDate>`
+  /// so a moved day keeps its logged exercises (the all-logged completion
+  /// backstop and the AI snapshot's recent_logs both read these keys by date).
+  ///
+  /// Keys are NEVER hand-built: destination keys go through the canonical
+  /// [exlogKey] (UUID-v5 name hash, H-16); source rows are matched on their
+  /// own `date` field, which every canonical writer emits.
+  ///
+  /// Review round 1 (e8f4a3) additions, all inside THIS writer (CQRS — the
+  /// read helpers must never mutate):
+  ///   • INDEX MAINTENANCE — the re-key previously wrote raw `box.put` and
+  ///     never touched `exercise_log_index_<date>`. The canonical read
+  ///     `WorkoutReadService.exerciseLogsForIstDate` is INDEX-FIRST and
+  ///     early-returns on a resolvable non-empty destination index, so moved
+  ///     rows were invisible on any date that already had logs, and the
+  ///     source date's index kept dangling keys. Now: new key appended to
+  ///     `exercise_log_index_<toDate>` (via [addToExlogIndex]) and the old
+  ///     key removed from `exercise_log_index_<fromDate>` (via
+  ///     [_removeFromExlogIndex]).
+  ///   • DESTINATION COLLISION — an existing destination row for the same
+  ///     exercise name is MERGED (moved row's `sets[]` appended; the existing
+  ///     row's `workout_log_id` and identity kept) instead of overwritten.
+  ///     The set-derived aggregates (`set_number`/`reps_completed`/
+  ///     `weight_kg`/`volume_kg`) are recomputed from the merged list to the
+  ///     same derived-fields contract [logExercise] stamps — stale aggregates
+  ///     beside a longer `sets[]` would be the writer/reader drift class.
+  ///     Review round 2 (e8f4a3 B1): preserve-don't-shrink — a side with NO
+  ///     `sets[]` but top-level aggregates (the restore-shaped row
+  ///     sync_workout.dart writes when the workout_log_sets join is empty)
+  ///     contributes its own aggregates instead of being recomputed from an
+  ///     empty sets list, so a collision can only GROW the totals.
+  ///   • WLOG RE-STAMP — `workout_log_id` is re-keyed to `wlog_<toDate>` so
+  ///     the destination receipt (scoped by workoutLogId) includes the moved
+  ///     rows. Only when the row CARRIES an id (restore-shaped legacy rows
+  ///     may not).
+  ///
+  /// LOCAL-ONLY by design: the cloud `exercise_logs` rows for the moved-out
+  /// date are not tombstoned here — no cloud exlog tombstone protocol exists,
+  /// so moved-out-date rows linger in cloud and a restore can resurrect the
+  /// from-date logs. Residual tracked in the e8f4a3 B-pass addendum at
+  /// docs/diagnoses/2026-09-18-reschedule-terminal-rows-e8f4a3.md (NOT OI-174 —
+  /// that is plan_end pruning; an earlier draft of this comment miscited it).
+  Future<void> moveExerciseLogs({
+    required String fromDate,
+    required String toDate,
+  }) async {
+    if (fromDate == toDate) return; // nothing to move (dispatcher also guards)
+    final c = await _acquireLock('exlog_move_$fromDate');
+    try {
+      final box = HiveService.instance.workoutBox;
+      final keys = box.keys
+          .whereType<String>()
+          .where((k) => k.startsWith('exlog_'))
+          .toList();
+      final p = toDate.split('-');
+      final toDateTime = p.length == 3
+          ? DateTime.utc(int.parse(p[0]), int.parse(p[1]), int.parse(p[2]))
+          : DateTime.now().toUtc();
+      for (final oldKey in keys) {
+        final raw = box.get(oldKey);
+        if (raw is! Map) continue;
+        if (raw['date']?.toString() != fromDate) continue;
+        final row = Map<String, dynamic>.from(raw);
+        final name = row['exercise_name']?.toString();
+        if (name == null || name.isEmpty) continue;
+        final newKey = exlogKey(toDateTime, name);
+        final existing = box.get(newKey);
+        if (existing is Map) {
+          // Collision merge — see the doc comment above.
+          final existingSets = (existing['sets'] as List? ?? const [])
+              .cast<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+          final movedSets = (row['sets'] as List? ?? const [])
+              .cast<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+          final mergedSets = [...existingSets, ...movedSets];
+
+          // Review round 2 (e8f4a3 B1) — preserve-don't-shrink. The restore
+          // writer (sync_workout.dart _restoreExerciseLogs) emits exlog rows
+          // with TOP-LEVEL aggregates and NO `sets[]` when the
+          // workout_log_sets join is empty. Recomputing from `mergedSets`
+          // alone shrank such a row on a collision (set_number 3→1, reps
+          // 30→8 …): silent data loss on real user rows. Each side
+          // therefore contributes its sets-derived totals when it CARRIES
+          // `sets[]`, and its OWN top-level aggregates otherwise. When both
+          // sides carry `sets[]` this is numerically identical to the
+          // round-1 recompute from the merged list (logExercise's
+          // derived-fields contract — pinned by the round-1 collision test).
+          int sideSetCount(Map r, List<Map<String, dynamic>> s) =>
+              s.isNotEmpty
+                  ? s.length
+                  : ((r['set_number'] as num?)?.toInt() ?? 0);
+          int sideReps(Map r, List<Map<String, dynamic>> s) {
+            if (s.isNotEmpty) {
+              var total = 0;
+              for (final s2 in s) {
+                total += (s2['reps'] as num?)?.toInt() ?? 0;
+              }
+              return total;
+            }
+            return (r['reps_completed'] as num?)?.toInt() ?? 0;
+          }
+
+          double sideMaxWeight(Map r, List<Map<String, dynamic>> s) {
+            if (s.isNotEmpty) {
+              var maxW = 0.0;
+              for (final s2 in s) {
+                final w = (s2['weight_kg'] as num?)?.toDouble() ?? 0.0;
+                if (w > maxW) maxW = w;
+              }
+              return maxW;
+            }
+            return (r['weight_kg'] as num?)?.toDouble() ?? 0.0;
+          }
+
+          double sideVolume(Map r, List<Map<String, dynamic>> s) {
+            if (s.isNotEmpty) {
+              var v = 0.0;
+              for (final s2 in s) {
+                final w = (s2['weight_kg'] as num?)?.toDouble() ?? 0.0;
+                final reps = (s2['reps'] as num?)?.toInt() ?? 0;
+                v += w * reps;
+              }
+              return v;
+            }
+            return (r['volume_kg'] as num?)?.toDouble() ?? 0.0;
+          }
+
+          final existingMaxWeight = sideMaxWeight(existing, existingSets);
+          final movedMaxWeight = sideMaxWeight(row, movedSets);
+          final merged = Map<String, dynamic>.from(existing);
+          // Only stamp `sets[]` when the merge actually carries per-set
+          // detail — a both-sides-restore-shaped merge must not grow an
+          // empty `sets[]` onto the surviving row.
+          if (mergedSets.isNotEmpty) {
+            merged['sets'] = mergedSets;
+          }
+          merged['set_number'] =
+              sideSetCount(existing, existingSets) +
+                  sideSetCount(row, movedSets);
+          merged['reps_completed'] =
+              sideReps(existing, existingSets) + sideReps(row, movedSets);
+          merged['weight_kg'] =
+              movedMaxWeight > existingMaxWeight ? movedMaxWeight : existingMaxWeight;
+          merged['volume_kg'] =
+              sideVolume(existing, existingSets) + sideVolume(row, movedSets);
+          merged['updated_at_ms'] = DateTime.now().millisecondsSinceEpoch;
+          // Keep the existing row's workout_log_id — its session owns the
+          // destination day (the moved row's source id is stale here).
+          await box.put(newKey, merged);
+        } else {
+          row['date'] = toDate;
+          // Re-stamp the session id to the destination's canonical wlog key
+          // so receipt scoping (workout_log_id == wlog_<date>) includes the
+          // moved rows. Restore-shaped rows may not carry one — leave those.
+          if (row['workout_log_id'] != null) {
+            row['workout_log_id'] = wlogKey(toDateTime);
+          }
+          await box.put(newKey, row);
+        }
+        await box.delete(oldKey);
+        // Index maintenance (Finding 1) — the canonical read is INDEX-FIRST.
+        await addToExlogIndex(box, toDate, newKey);
+        await _removeFromExlogIndex(box, fromDate, oldKey);
+      }
+    } finally {
+      _releaseLock('exlog_move_$fromDate', c);
+    }
+  }
+
+  Future<WriteResult> regenerateWeek({
+    required DateTime fromDate,
+    required Map<String, dynamic> params,
+    required WriteSource source,
+    WidgetRef? ref,
+  }) async {
+    final workouts = (params['workouts'] as List?)?.cast<Map>() ?? const [];
+    if (workouts.isEmpty) {
+      return WriteResult.fail('params.workouts must be non-empty');
+    }
+
+    final dateStr = istDateStr(fromDate);
+    final c = await _acquireLock('week_$dateStr');
+    try {
+      final box = HiveService.instance.workoutBox;
+
+      for (var i = 0; i < workouts.length; i++) {
+        final d = fromDate.add(Duration(days: i));
+        final m = Map<String, dynamic>.from(workouts[i]);
+        await box.put(scheduleKey(d), {
+          ...m,
+          'date': istDateStr(d),
+          'source': source.code,
+          'updated_at_ms': DateTime.now().millisecondsSinceEpoch,
+        });
+      }
+
+      unawaited(SyncService.instance.syncWorkoutData());
+      unawaited(SyncService.instance.pushSnapshot());
+
+      if (ref != null && onInvalidate != null) {
+        try {
+          onInvalidate!(ref);
+        } catch (e, st) {
+          // audit-2026-05-11 H-42 — telemetry pair.
+          debugPrint('[WorkoutWriteService.regenerateWeek] inv: $e\n$st');
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'workout_write_service_regenerate_week_invalidation'));
+        }
+      }
+
+      return WriteResult.ok('week_$dateStr');
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
+      debugPrint('[WorkoutWriteService.regenerateWeek] $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'workout_write_service_regenerate_week'));
+      return WriteResult.fail(e.toString());
+    } finally {
+      _releaseLock('week_$dateStr', c);
+    }
+  }
+
+  Future<WriteResult> editLog({
+    required String logKey,
+    required Map<String, dynamic> updates,
+    required WriteSource source,
+    WidgetRef? ref,
+  }) async {
+    final box = HiveService.instance.workoutBox;
+    final existing = box.get(logKey);
+    if (existing is! Map) {
+      return WriteResult.fail('logKey not found: $logKey');
+    }
+
+    final m = existing.cast<String, dynamic>();
+    final exerciseName = m['exercise_name'] as String?;
+    final dateStr = m['date'] as String?;
+    if (exerciseName == null || dateStr == null) {
+      return WriteResult.fail('log missing exercise_name or date');
+    }
+
+    final lockKey = '$dateStr::${exerciseName.toLowerCase().trim()}';
+    final c = await _acquireLock(lockKey);
+    try {
+      // APK Test #12.1 — legacy field-name normalization for callers
+      // that still write the pre-Test-#6 names. EditWorkoutLogSheet
+      // writes `sets_completed` + `sets_detail` (legacy names); the
+      // canonical readers (receipt, Train expanded view, AI snapshot)
+      // prefer `set_number` + `sets`. Without this normalization, a
+      // user who completed a workout with set_number=0 (no checked
+      // sets) and then edited via the sheet to add weight+reps would
+      // see `set_number=0, sets_completed=N` — readers report 0 sets.
+      // Promote legacy fields to canonical names BEFORE merging so
+      // the receipt and Train view see consistent data. Founder
+      // observation 2026-05-06: "0 sets · 26 reps · 85 kg".
+      final normalizedUpdates = Map<String, dynamic>.from(updates);
+      if (normalizedUpdates.containsKey('sets_completed') &&
+          !normalizedUpdates.containsKey('set_number')) {
+        normalizedUpdates['set_number'] = normalizedUpdates['sets_completed'];
+      }
+      if (normalizedUpdates.containsKey('sets_detail') &&
+          !normalizedUpdates.containsKey('sets')) {
+        // sets_detail uses `duration_seconds`; sets[] uses `duration_sec`.
+        // Translate field-by-field so ExerciseSet.fromMap works.
+        final raw = normalizedUpdates['sets_detail'];
+        if (raw is List) {
+          normalizedUpdates['sets'] = raw.map((entry) {
+            if (entry is! Map) return <String, dynamic>{};
+            final m = Map<String, dynamic>.from(entry);
+            if (m.containsKey('duration_seconds') &&
+                !m.containsKey('duration_sec')) {
+              m['duration_sec'] = m['duration_seconds'];
+            }
+            return m;
+          }).toList();
+        }
+      }
+
+      // Apply updates
+      final updated = <String, dynamic>{...m, ...normalizedUpdates};
+
+      // If sets[] was updated, recompute aggregates
+      if (normalizedUpdates.containsKey('sets')) {
+        final newSets = (normalizedUpdates['sets'] as List).cast<Map>().map((e) {
+          return ExerciseSet.fromMap(e);
+        }).toList();
+        updated['sets'] = newSets.map((s) => s.toMap()).toList();
+        updated['set_number'] = newSets.length;
+        updated['reps_completed'] =
+            newSets.fold<int>(0, (a, s) => a + s.reps);
+        updated['weight_kg'] = newSets.fold<double>(
+            0, (a, s) => s.weightKg > a ? s.weightKg : a);
+        updated['volume_kg'] = newSets.fold<double>(
+            0.0, (a, s) => a + (s.weightKg * s.reps));
+      }
+
+      updated['source'] = source.code;
+      updated['updated_at_ms'] = DateTime.now().millisecondsSinceEpoch;
+
+      // Pre-write the updated entry so PR rescan sees the new weight
+      await box.put(logKey, updated);
+
+      // Chronologically rescan PR for ALL logs of this exercise
+      await _rescanAllPrsFor(box, exerciseName);
+
+      unawaited(SyncService.instance.syncWorkoutData());
+      unawaited(SyncService.instance.pushSnapshot());
+
+      if (ref != null && onInvalidate != null) {
+        try {
+          onInvalidate!(ref);
+        } catch (e, st) {
+          // audit-2026-05-11 H-42 — telemetry pair.
+          debugPrint('[WorkoutWriteService.editLog] inv: $e\n$st');
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'workout_write_service_edit_log_invalidation'));
+        }
+      }
+
+      return WriteResult.ok(logKey);
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
+      debugPrint('[WorkoutWriteService.editLog] $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'workout_write_service_edit_log'));
+      return WriteResult.fail(e.toString());
+    } finally {
+      _releaseLock(lockKey, c);
+    }
+  }
+
+  /// Walk all logs of [exerciseName] in date-ascending order, mark
+  /// is_pr=true for each weight that strictly exceeds the prior best.
+  /// Async + awaited puts: the is_pr writes must reach disk before the caller
+  /// returns, else an app close before Hive flushes loses the PR-flag updates
+  /// (same fire-and-forget durability class as the exlog index, e4a8b1).
+  Future<void> _rescanAllPrsFor(Box box, String exerciseName) async {
+    final lower = exerciseName.toLowerCase().trim();
+    final logs = <MapEntry<String, Map<String, dynamic>>>[];
+    for (final k in box.keys) {
+      final ks = k.toString();
+      if (!ks.startsWith('exlog_')) continue;
+      final v = box.get(k);
+      if (v is! Map) continue;
+      final m = v.cast<String, dynamic>();
+      final n = (m['exercise_name'] as String?)?.toLowerCase().trim();
+      if (n != lower) continue;
+      logs.add(MapEntry(ks, m));
+    }
+    logs.sort((a, b) {
+      final ad = a.value['date'] as String? ?? '';
+      final bd = b.value['date'] as String? ?? '';
+      return ad.compareTo(bd);
+    });
+
+    double best = 0.0;
+    for (final entry in logs) {
+      final w = (entry.value['weight_kg'] as num?)?.toDouble() ?? 0.0;
+      final isPr = w > best;
+      if (isPr) best = w;
+      final mut = <String, dynamic>{...entry.value, 'is_pr': isPr};
+      await box.put(entry.key, mut);
+    }
+  }
+
+  Future<WriteResult> deleteLog({
+    required String logKey,
+    bool allowUndo = true,
+    required WriteSource source,
+    WidgetRef? ref,
+  }) async {
+    final box = HiveService.instance.workoutBox;
+    final existing = box.get(logKey);
+    if (existing is! Map) {
+      return WriteResult.fail('logKey not found: $logKey');
+    }
+    final m = existing.cast<String, dynamic>();
+    final exerciseName = m['exercise_name'] as String?;
+    final dateStr = m['date'] as String?;
+    if (exerciseName == null || dateStr == null) {
+      return WriteResult.fail('log missing exercise_name or date');
+    }
+
+    final lockKey = '$dateStr::${exerciseName.toLowerCase().trim()}';
+    final c = await _acquireLock(lockKey);
+    try {
+      // Stash for undo (1-hour TTL)
+      if (allowUndo) {
+        await box.put('undo_$logKey', {
+          'data': jsonEncode(m),
+          'expires_at_ms': DateTime.now()
+              .add(const Duration(hours: 1))
+              .millisecondsSinceEpoch,
+        });
+      }
+
+      // OI-246 — queue the cloud tombstone BEFORE deleting locally, using
+      // the exact natural key (workout_log_id, exercise_id, set_number) the
+      // last push computed for this row, so `_drainPendingExlogDeletes`
+      // targets the SAME `workout_log_exercises` row via
+      // `uniq_wle_user_wlog_ex_set`. Local Hive delete alone never reached
+      // the cloud row — restore then resurrected it (writer:
+      // deleteLog/reader: SyncService._restoreExerciseLogs).
+      await PendingExlogDeletes.add(
+        workoutLogId: SyncService.workoutLogIdForDate(dateStr),
+        exerciseId: exerciseName, // stable identity, mirrors sync_workout.dart:224
+        setNumber: resolveSummarySetCount(m),
+      );
+
+      await box.delete(logKey);
+
+      // Drop from exercise_log_index_<date>
+      final indexKey = 'exercise_log_index_$dateStr';
+      final idx = (box.get(indexKey) as List?)?.cast<String>().toList() ?? [];
+      idx.remove(logKey);
+      if (idx.isEmpty) {
+        await box.delete(indexKey);
+      } else {
+        await box.put(indexKey, idx);
+      }
+
+      // PR rescan (a deleted PR may promote a prior log)
+      await _rescanAllPrsFor(box, exerciseName);
+
+      unawaited(SyncService.instance.syncWorkoutData());
+      unawaited(SyncService.instance.pushSnapshot());
+
+      if (ref != null && onInvalidate != null) {
+        try {
+          onInvalidate!(ref);
+        } catch (e, st) {
+          // audit-2026-05-11 H-42 — telemetry pair.
+          debugPrint('[WorkoutWriteService.deleteLog] inv: $e\n$st');
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'workout_write_service_delete_log_invalidation'));
+        }
+      }
+
+      return WriteResult.ok(logKey);
+    } catch (e, st) {
+      // audit-2026-05-11 H-42 — telemetry pair.
+      debugPrint('[WorkoutWriteService.deleteLog] $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'workout_write_service_delete_log'));
+      return WriteResult.fail(e.toString());
+    } finally {
+      _releaseLock(lockKey, c);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //  Template + custom-exercise writers (audit 2026-05-20 / A3)
+  // ─────────────────────────────────────────────────────────────
+  //
+  // Previously written directly via `hive.workoutBox.put(id, ...)` or
+  // `customBox.put(key, ...)` from train_provider.dart + workout_repository
+  // .dart. Each direct put bypassed canonical sync-fanout + telemetry-pair
+  // discipline. Recurring writer/reader drift class — see
+  // `feedback_writer_reader_field_drift_recurring.md`.
+
+  /// OI-252 (stable ID rework) — the ONE way to mint a new template's
+  /// identity. Every create path (manual builder, the notifier's own
+  /// fallback, the AI coach's `createCustomTemplate`) calls this instead of
+  /// stamping a `tmpl_<ms>` key directly — the legacy timestamp-key shape
+  /// is what made a template's identity ambiguous between devices in the
+  /// first place. See `lib/core/services/template_identity.dart` and
+  /// `docs/superpowers/plans/2026-09-26-template-stable-identity.md`.
+  String newTemplateKey() => templateKeyFor(const Uuid().v4());
+
+  /// Upsert a workout template at workoutBox key `<templateId>`.
+  /// Stamps `updated_at` IST timestamp; triggers sync fan-out.
+  Future<WriteResult> upsertTemplate({
+    required String templateId,
+    required Map<String, dynamic> template,
+    required WriteSource source,
+    WidgetRef? ref,
+  }) async {
+    final c = await _acquireLock('template::$templateId');
+    try {
+      final box = HiveService.instance.workoutBox;
+      final stamped = <String, dynamic>{
+        ...template,
+        'id': templateId,
+        'type': 'template',
+        'source': source.code,
+        'updated_at': DateTime.now().toUtc().add(const Duration(hours: 5, minutes: 30)).toIso8601String(),
+      };
+      // Preserve created_at on update; only stamp on insert.
+      if (!stamped.containsKey('created_at')) {
+        stamped['created_at'] = stamped['updated_at'];
+      }
+      await box.put(templateId, stamped);
+
+      // C-11 (audit-2026-05-11) — template is part of workout-domain fan-out.
+      unawaited(SyncService.instance.syncWorkoutData());
+      unawaited(SyncService.instance.pushSnapshot());
+
+      if (ref != null && onInvalidate != null) {
+        try {
+          onInvalidate!(ref);
+        } catch (e, st) {
+          debugPrint('[WorkoutWriteService.upsertTemplate] inv: $e\n$st');
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'workout_write_service_upsert_template_invalidation'));
+        }
+      }
+      return WriteResult.ok(templateId);
+    } catch (e, st) {
+      debugPrint('[WorkoutWriteService.upsertTemplate] $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'workout_write_service_upsert_template'));
+      return WriteResult.fail(e.toString());
+    } finally {
+      _releaseLock('template::$templateId', c);
+    }
+  }
+
+  /// OI-252 (stable ID rework) — the ONE writer for a template delete.
+  /// Local Hive delete + queue a cloud tombstone (drained on the next
+  /// template push, which UPSERTs it so the delete wins regardless of a
+  /// racing creating push — see `SyncService._drainPendingTemplateDeletes`).
+  ///
+  /// Does NOT clean up the template's scheduled days — callers must call
+  /// `WorkoutScheduleService.cleanSyncTemplateSchedule(templateId)`
+  /// themselves BEFORE this, same as before this rework (this service
+  /// intentionally does not depend on `TemplateService`/
+  /// `WorkoutScheduleService`, which both depend on IT — importing either
+  /// here would be circular).
+  Future<WriteResult> deleteTemplate(String templateId) async {
+    final c = await _acquireLock('template::$templateId');
+    try {
+      final box = HiveService.instance.workoutBox;
+      final raw = box.get(templateId);
+      final name = (raw is Map ? raw['name'] as String? : null) ?? '';
+      await box.delete(templateId);
+
+      // `cloudIdFromKey` is null for a template still on a legacy
+      // (pre-migration) key -- `PendingTemplateDeletes` accepts a null
+      // id for exactly that case; the drain resolves it by name (see
+      // that class's doc for why the resolution can't happen here).
+      await PendingTemplateDeletes.add(
+        id: cloudIdFromKey(templateId),
+        name: name,
+      );
+
+      unawaited(SyncService.instance.syncWorkoutData());
+      unawaited(SyncService.instance.pushSnapshot());
+      return WriteResult.ok(templateId);
+    } catch (e, st) {
+      debugPrint('[WorkoutWriteService.deleteTemplate] $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'workout_write_service_delete_template'));
+      return WriteResult.fail(e.toString());
+    } finally {
+      _releaseLock('template::$templateId', c);
+    }
+  }
+
+  /// Upsert a user-created custom exercise at customBox key.
+  /// Triggers `syncCustomItemsNow` + snapshot push.
+  Future<WriteResult> upsertCustomExercise({
+    required String key,
+    required Map<String, dynamic> exercise,
+    required WriteSource source,
+    WidgetRef? ref,
+  }) async {
+    final c = await _acquireLock('custom_exercise::$key');
+    try {
+      final customBox = HiveService.instance.customBox;
+      final stamped = <String, dynamic>{
+        ...exercise,
+        'source': source.code,
+        'updated_at': DateTime.now().toUtc().add(const Duration(hours: 5, minutes: 30)).toIso8601String(),
+      };
+      if (!stamped.containsKey('created_at')) {
+        stamped['created_at'] = stamped['updated_at'];
+      }
+      await customBox.put(key, stamped);
+
+      unawaited(SyncService.instance.syncCustomItemsNow());
+      unawaited(SyncService.instance.pushSnapshot());
+
+      if (ref != null && onInvalidate != null) {
+        try {
+          onInvalidate!(ref);
+        } catch (e, st) {
+          debugPrint('[WorkoutWriteService.upsertCustomExercise] inv: $e\n$st');
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'workout_write_service_upsert_custom_exercise_invalidation'));
+        }
+      }
+      return WriteResult.ok(key);
+    } catch (e, st) {
+      debugPrint('[WorkoutWriteService.upsertCustomExercise] $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'workout_write_service_upsert_custom_exercise'));
+      return WriteResult.fail(e.toString());
+    } finally {
+      _releaseLock('custom_exercise::$key', c);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //  Helpers (used by methods implemented in later tasks)
+  // ─────────────────────────────────────────────────────────────
+
+  /// IST-derived YYYY-MM-DD string. Public for callers that already
+  /// have an IST-aware DateTime and need the same hashing rule.
+  static String istDateStr(DateTime dt) {
+    // Convert to IST regardless of input zone.
+    final ist = dt.toUtc().add(const Duration(hours: 5, minutes: 30));
+    final y = ist.year.toString().padLeft(4, '0');
+    final m = ist.month.toString().padLeft(2, '0');
+    final d = ist.day.toString().padLeft(2, '0');
+    return '$y-$m-$d';
+  }
+
+  /// Namespace + UUID generator for the deterministic exlog key tag.
+  /// Shared cross-device — must NEVER change without a migration.
+  static const _exlogUuidGen = Uuid();
+  static const _exlogNamespace = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
+
+  /// Deterministic Hive key for an exercise log.
+  ///
+  /// H-16 (audit-2026-05-11) — was `exerciseName.hashCode` which is
+  /// not stable across Dart VM versions / isolates / platforms.
+  /// Restore on a different device could produce a different `_<h>`
+  /// suffix → duplicate logical entries in Hive. Switched to UUID
+  /// v5 (stable cross-platform); take the first 8 hex chars to
+  /// match the previous shape.
+  static String exlogKey(DateTime date, String exerciseName) {
+    final d = istDateStr(date);
+    final h = _exlogUuidGen
+        .v5(_exlogNamespace, exerciseName.toLowerCase().trim())
+        .replaceAll('-', '')
+        .substring(0, 8);
+    return 'exlog_${d}_$h';
+  }
+
+  /// Deterministic Hive key for a workout-level summary.
+  static String wlogKey(DateTime date) => 'wlog_${istDateStr(date)}';
+
+  /// Pure natural-key set-count resolver, mirroring
+  /// `SyncService._resolvePerSetList` + the `summarySetCount` fallback chain
+  /// `_syncExerciseLogs` uses to compute the cloud
+  /// `workout_log_exercises.set_number` column -- part of the
+  /// `(user_id, workout_log_id, exercise_id, set_number)` natural key
+  /// (`uniq_wle_user_wlog_ex_set`, migration 082). `deleteLog`'s OI-246
+  /// tombstone queue calls this so the natural key it targets is
+  /// BYTE-IDENTICAL to what the push last computed for this row — never
+  /// re-derive the count independently, the recurring writer/reader-drift
+  /// bug class this repo tracks.
+  static int resolveSummarySetCount(Map<String, dynamic> log) {
+    final detail = log['sets_detail'];
+    if (detail is List) {
+      final n = detail.whereType<Map>().length;
+      if (n > 0) return n;
+    }
+    final sets = log['sets'];
+    if (sets is List) {
+      final n = sets.whereType<Map>().length;
+      if (n > 0) return n;
+    }
+    return (log['sets_completed'] as num?)?.toInt() ??
+        (log['set_number'] as num?)?.toInt() ??
+        1;
+  }
+
+  /// Deterministic Hive key for a schedule entry.
+  static String scheduleKey(DateTime date) =>
+      'schedule_${istDateStr(date)}';
+
+  /// Acquire mutex for the given key. Returns the completer the
+  /// caller MUST `complete()` in a finally block.
+  Future<Completer<void>> _acquireLock(String key) async {
+    while (_locks.containsKey(key)) {
+      await _locks[key]!.future;
+    }
+    final c = Completer<void>();
+    _locks[key] = c;
+    return c;
+  }
+
+  void _releaseLock(String key, Completer<void> c) {
+    _locks.remove(key);
+    if (!c.isCompleted) c.complete();
+  }
+}
