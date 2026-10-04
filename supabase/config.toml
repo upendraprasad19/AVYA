@@ -147,6 +147,10 @@ max_indexes = 5
 # Vector Buckets is available to Supabase Pro plan.
 # [storage.vector.buckets.documents-openai]
 
+# NOTE (diagnose fa621a): this [auth] block configures LOCAL `supabase start` only.
+# The HOSTED project's auth settings live in the dashboard and can DIVERGE from it
+# (site_url and the email templates do; the OTP length did, fa621a). See
+# docs/operations/AUTH_HOSTED_SETTINGS.md.
 [auth]
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used

@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### password_recovery_code_length (1 bugs)
+- 2026-10-03 fa621a — A real user (Google-only account, no password) chose Forgot password on the web app. The sheet told her a 6-digit code was on its way and its code field accepted at most 6 characters; the hosted…
+
 ### usage_quota_ledger (4 bugs)
 - 2026-10-01 d7a1f5 — Caught in plan review round 1, BEFORE it shipped. Migration 129's chat trigger consumes a unit for EVERY `ai_coach_interactions` insert on channel `app`. That was harmless while PRO was exempt (the…
 - 2026-10-01 c4e9b2 — A turn that failed because Gemini failed (HTTP 5xx / 429 / 404 / timeout / transient empty reply) still spent one of the user's daily units. Every limit here is an insert-first reservation: the…
@@ -1499,6 +1502,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-10-03 | fa621a | A real user (Google-only account, no password) chose Forgot password on the web app. The sheet told her a 6-digit code was on its way and its code field accepted at most 6 characters; the hosted… | password_recovery_code_length | test/contracts/password_recovery_code_length_behavioral_test.dart |
 | 2026-10-01 | d7a1f5 | Caught in plan review round 1, BEFORE it shipped. Migration 129's chat trigger consumes a unit for EVERY `ai_coach_interactions` insert on channel `app`. That was harmless while PRO was exempt (the… | usage_quota_ledger | test/contracts/ai_message_limit_parity_test.dart |
 | 2026-10-01 | c4e9b2 | A turn that failed because Gemini failed (HTTP 5xx / 429 / 404 / timeout / transient empty reply) still spent one of the user's daily units. Every limit here is an insert-first reservation: the… | usage_quota_ledger | test/contracts/quota_refund_wiring_test.dart |
 | 2026-10-01 | f3a8d1 | The new GEMINI_API_KEY returns HTTP 404 "no longer available to new users" for the retired gemini-2.5-* slugs (gemini-2.5-flash-lite was probed; 2.5-flash and 2.5-pro were reported 404 by the founder,… | gemini_flash_reliability | supabase/functions/_shared/gemini3_migration_test.ts |
