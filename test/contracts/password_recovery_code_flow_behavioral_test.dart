@@ -14,10 +14,15 @@
 // form at all. Asserting only the with-session case would pass against the
 // original buggy screen, which rendered the form unconditionally.
 //
-// Supabase.initialize runs INSIDE the test body, not setUpAll — see the note in
-// password_reset_redirect_flow_test.dart:272-279: setUpAll runs in a different
-// zone than the one TestWidgetsFlutterBinding wraps the body in, so a GoTrue
-// timer started during init lands outside the zone pump() advances.
+// HARNESS: Supabase.initialize runs in a per-case setUp and is disposed in the
+// matching tearDown, with persistSession: false — so every case gets a FRESH
+// client with no session, whatever order the runner picks (fa621a F11: with the
+// old one-shot singleton the WITH-session case leaked its session into the
+// NO-session case under `flutter test --test-randomize-ordering-seed=1`).
+// It is not in setUpAll (password_reset_redirect_flow_test.dart:272-279: that
+// runs in a different zone than the one the body is wrapped in) and not in the
+// body (Supabase dispose() never completes inside the FakeAsync zone).
+// autoRefreshToken: false keeps GoTrue's refresh timer out of every zone.
 
 import 'dart:convert';
 
@@ -53,6 +58,10 @@ Future<void> _initSupabase() async {
     authOptions: const FlutterAuthClientOptions(
       autoRefreshToken: false,
       detectSessionInUri: false,
+      // Nothing may outlive a case: a persisted session is restored by the
+      // NEXT case's initialize (shared_preferences keeps its cache for the
+      // whole isolate), which is the leak this file used to have.
+      persistSession: false,
     ),
   );
 }
@@ -74,12 +83,24 @@ Widget _harness() {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  // See the HARNESS note in the header. Signing out is NOT an alternative: a
+  // sign-out issued from a LATER case never returns, because GoTrue's async
+  // storage belongs to the first case's zone (measured: a 20 s test timeout).
+  setUp(() async {
+    _mockPrefsChannel();
+    AppRouter.isPasswordRecovery = false;
+    await _initSupabase();
+  });
+
+  tearDown(() async {
+    AppRouter.isPasswordRecovery = false;
+    await Supabase.instance.dispose();
+  });
+
   group('/reset requires a real session, not just a recovery-shaped URL '
       '(c9e2b7)', () {
     testWidgets('NO session -> refuses the form and offers a new code',
         (tester) async {
-      _mockPrefsChannel();
-      await _initSupabase();
       // The flag the OLD guard trusted is deliberately TRUE here: this test
       // must fail for the right reason. Before the fix, this exact state
       // rendered a fully functional-looking password form.
@@ -102,17 +123,35 @@ void main() {
         reason: 'the user needs an action, not an internal error string',
       );
       expect(
-        find.textContaining('different device'),
+        find.text('This reset session has expired or is no longer valid.'),
         findsOneWidget,
-        reason: 'names the ACTUAL variable — which device requested the reset '
-            '— instead of leaving the user to guess',
+        reason: 'says what happened and nothing false about why',
+      );
+      expect(
+        find.textContaining('link'),
+        findsNothing,
+        reason: 'the recovery email carries a typed code, not a link (c9e2b7); '
+            'copy that mentions one tells the user about an email they never '
+            'received (fa621a, B-pass finding A6)',
+      );
+      expect(
+        find.textContaining('different device'),
+        findsNothing,
+        reason: 'a typed code works from any device (c9e2b7), so which device '
+            'asked for the reset is no longer a cause worth naming',
+      );
+      expect(
+        find.textContaining('digit'),
+        findsNothing,
+        reason: 'the code length is a hosted setting this client cannot read '
+            '(fa621a): the hosted project emailed 8 digits while this copy and '
+            'the sheet said 6. password_recovery_code_length_behavioral_test '
+            'covers the sheet; this is the reset-screen half.',
       );
     });
 
     testWidgets('WITH a session -> shows the form and names the account',
         (tester) async {
-      _mockPrefsChannel();
-      await _initSupabase();
       AppRouter.isPasswordRecovery = true;
 
       // Same shape password_reset_redirect_flow_test feeds setInitialSession —
