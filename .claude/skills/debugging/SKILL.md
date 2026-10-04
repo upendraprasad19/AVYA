@@ -204,6 +204,7 @@ Per CLAUDE.md rules 21 + 22:
 | 2.82 | A retry mechanism with no trigger for the failure mode that actually occurs (a connectivity trigger cannot fire in a backend-only outage) | data logged during a 521/504 outage never reaches the cloud; `weeklyFullSync` stamped done after a fully-failed sweep | test/contracts/sync_retry_controller_test.dart, test/contracts/serial_slot_test.dart |
 | 2.83 | Awaiting an unbounded network read before a local-evidence fallback (and waiting at all when the device already holds the answer) | splash sits on a 504/521 backend, or waits seconds on a cold start, although Hive is fully onboarded | test/contracts/restoring_destination_timeout_test.dart, test/contracts/evidence_first_routing_test.dart |
 | 2.84 | An SDK-level automatic retry multiplies a "one tiny request" probe (postgrest retries a GET answered 503/520, or that throws, 3x) | a probe or a "one failing request" assertion sees 4 requests against a 503 server | test/sync/probe_backend_reachable_test.dart |
+| 2.85 | A "completed is sacred" guard freezes the whole row, but the row's TITLE has a different source of truth than its status | the completed card (reads the log) is right while the Train row / Home Today widget (read the schedule row) show the pre-swap title after a cross-device swap | test/contracts/completed_title_follows_log_test.dart |
 
 ---
 
@@ -236,6 +237,7 @@ Borrowing from `superpowers:using-superpowers`, `superpowers:systematic-debuggin
 - **"The last fix to this file was nearly right — I'll just widen it."** If this is the second or later fix to one file for one class, the heuristic IS the bug. Ask what signal the code already emits. See §2.53.
 - **"It passed 5/5 under load, the fix works."** Did you run the NEUTERED arm? If that also passes, your experiment is blind and the 5/5 means nothing. See §2.54.
 - **"The suite is running, I'll just check one thing with `dart run`."** That is load — the dart wrapper serializes on the SDK lock. See §2.55.
+- **"I'll bump `restoreCompletedTick` so the UI refreshes after my restore change."** STOP — it also gates streak decay (`workout_repository.dart:244-248`). Grep every reader of a tick before reusing it for a new purpose. See §2.85.
 - **"This bug class is novel — I don't need to update the catalog."** Wrong. §5 self-evolution rule below applies.
 
 ---

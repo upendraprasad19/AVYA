@@ -53,6 +53,22 @@ typedef ScheduledDaySwapWrite = ({
   Map<String, dynamic>? displacedB,
 });
 
+/// The name `conversational_log_handler.dart` gives a workout the user logged
+/// by chatting with the coach. Shared (not a private literal) so the writer and
+/// [kPlaceholderWorkoutNames] — the set the OI-284 heal refuses to rename a
+/// completed row to — cannot drift.
+const String kChatWorkoutName = 'Chat Workout';
+
+/// Normalised (trim + lower-case) workout names that are PLACEHOLDERS, not the
+/// name of a performed workout: the chat handler's [kChatWorkoutName] and the
+/// `?? 'Workout'` fallbacks (`tool_dispatcher`, `ai_coach_provider`,
+/// `train_provider`, `simulation_service`, `_restoreWorkoutLogs`).
+/// `CompletedTitleHealer` never copies one of these onto a schedule row
+/// (OI-284). A NEW fallback name must join this set —
+/// `test/contracts/completed_title_follows_log_test.dart` scans the
+/// `markCompleted` call sites.
+const Set<String> kPlaceholderWorkoutNames = {'workout', 'chat workout'};
+
 class WorkoutWriteService {
   WorkoutWriteService._();
   static final WorkoutWriteService instance = WorkoutWriteService._();

@@ -54,11 +54,11 @@ concepts:
       workout_log_id filter scopes a multi-session day.
     writers:
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1-260
+        line_range: 1-276
         method: logExercise
         notes: stamps workout_log_id on every exlog row (Test #12 / Task A-3)
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1102-1185
+        line_range: 1118-1201
         method: deleteLog (queues PendingExlogDeletes)
         notes: |
           OI-246 (2026-09-28). deleteLog queues the row's exact natural key
@@ -78,7 +78,7 @@ concepts:
           log resurrecting on the next full restore, and (151) a re-log after
           such a delete being silently dropped.
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1491-1505
+        line_range: 1507-1521
         method: resolveSummarySetCount
         notes: |
           OI-246 (2026-09-28, round-2 review finding P3 — split from deleteLog's
@@ -346,11 +346,11 @@ concepts:
       Falls back to a once-built date-keyed map for legacy rows.
     writers:
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1-260
+        line_range: 1-276
         method: logExercise
         notes: appends to exercise_log_index_YYYY-MM-DD on every write
       - file: lib/core/services/workout_write_service.dart
-        line_range: 867-995
+        line_range: 883-1011
         method: moveExerciseLogs
         notes: |
           C2 (e8f4a3) — re-keys partial exlog_<fromDate>_* rows onto the
@@ -408,7 +408,7 @@ concepts:
       key_formula: "'exercise_log_index_${istDateStr(date)}'"
     ist_sites:
       - { file: lib/core/utils/date_utils.dart, line: 27, fn: formatDateKey }
-      - { file: lib/core/services/workout_write_service.dart, line: 1479, fn: wlogKey }
+      - { file: lib/core/services/workout_write_service.dart, line: 1495, fn: wlogKey }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\\.keys.*manually.*date", reason: "O(n) scan — use the index key instead" }
       - { pattern: "DateTime\\.now\\(\\)\\.toIso8601String\\(\\)\\.substring\\(0,\\s*10\\)", reason: "UTC date, disagrees with IST-keyed reader; use istDateStr(DateTime.now())" }
@@ -511,7 +511,7 @@ concepts:
     restore_methods: [_restoreScheduledWorkouts, _restoreScheduleCompletions]
     provider_invalidation_set: [currentPlanProvider, calendarWeekProvider, todayWorkoutProvider]
     ist_sites:
-      - { file: lib/core/services/workout_write_service.dart, line: 1508, fn: scheduleKey }
+      - { file: lib/core/services/workout_write_service.dart, line: 1524, fn: scheduleKey }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\.put\('schedule_", reason: "Never write schedule keys directly from a widget — use WorkoutScheduleService" }
     class_constraints: |
@@ -875,7 +875,7 @@ concepts:
           Rebuilds the context via buildAiContext() between retry
           rounds so the snapshot reflects post-mutation Hive state.
       - file: lib/core/services/sync_service.dart
-        line_range: 800-845
+        line_range: 801-846
         method: pushSnapshot (coalesced) -> pushSnapshotNow (body)
         semantic: pass-through
         fields_read: [<full context map>]
@@ -1382,7 +1382,7 @@ concepts:
       Consumed only by WeeklyReportCard.
     writers:
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1-260
+        line_range: 1-276
         method: logExercise (workout series)
       - file: lib/core/services/nutrition_write_service.dart
         line_range: 53-140
@@ -1542,7 +1542,7 @@ concepts:
       + add/update round-trip test.
     writers:
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1-260
+        line_range: 1-276
         method: logExercise
     reader_manifest_complete: true
     readers:
@@ -2258,7 +2258,7 @@ concepts:
         line_range: 1-9999
         method: _syncScheduledWorkouts (confirmed :1778; constructs a SyncSkipIndex(domain: SyncSkipDomain.sched) and drives the FK-resilient upsert through its pushIfChanged closure -- the helper stores index[scheduled_date]=fp ON CONFIRMED ONLY; commit(liveKeys:) prunes to live schedule_ dates + persists after the loop)
       - file: lib/core/services/sync_service.dart
-        line_range: 288-321
+        line_range: 289-322
         method: schedPayloadFingerprint (pure static, byte-identical) + _schedHashSkipDisabled kill-switch getter
       - file: lib/features/dev/simulation_service.dart
         line_range: 103-183
@@ -2470,7 +2470,7 @@ concepts:
         line_range: 201-432
         method: _syncNutritionLogs (constructs a SyncSkipIndex(domain: SyncSkipDomain.nlog) and drives the parent + item + vacuum writes through its pushIfChanged closure -- stores index[slotId]=nlogFp ON CONFIRMED FULL-BUNDLE SUCCESS ONLY; commit(liveKeys:) prunes to live slots + persists after the loop, or CLEARS the index entirely when disabled)
       - file: lib/core/services/sync_service.dart
-        line_range: 358-418
+        line_range: 359-419
         method: nlogPayloadFingerprint / nlogHashSkipDisabledFor (pure statics, byte-identical -- plan D4) + _hashSkipKillSwitchOn(SyncSkipDomain) (generic kill-switch reader shared with exlog, replaces the deleted _nlogHashSkipDisabled getter)
       - file: lib/features/dev/simulation_service.dart
         line_range: 103-183
@@ -2859,6 +2859,16 @@ concepts:
           SubscriptionService.verifyFromServer(force: true) as final
           step. Uses _safeRestoreOp wrapper to keep one surface's
           failure from aborting the rest.
+      - file: lib/core/services/sync_service.dart
+        line_range: 1882-2089
+        method: _restoreFromCloudForUserCore
+        semantic: aggregated
+        fields_read: [<the body of restoreFromCloudForUser, moved verbatim by OI-284>]
+        notes: |
+          OI-284: `restoreFromCloudForUser` is now a thin public wrapper that
+          awaits this core and then, only for a SUCCEEDED result with the kill
+          switch open, runs CompletedTitleHealer. Every restore return passes
+          through the wrapper; nothing in the core changed.
       - file: lib/features/auth/screens/restoring_screen.dart
         line_range: 60-150
         method: RestoringScreen._init / _ensureOwnershipBeforeHome
@@ -2869,7 +2879,7 @@ concepts:
           routing to /home (15s timeout safety). Cancels in-flight
           restore when user_profile is null (brand-new user).
       - file: lib/core/services/sync_service.dart
-        line_range: 681-690
+        line_range: 682-691
         method: restoreFromCloud (legacy entry point)
         semantic: pass-through
         fields_read: []
@@ -3429,7 +3439,7 @@ concepts:
       pending a founder decision on removal — not fixed in this batch.
     writers:
       - file: lib/core/services/workout_write_service.dart
-        line_range: 492-593
+        line_range: 508-609
         method: markCompleted
         notes: |
           The canonical LIVE completion writer (there is no `completeWorkout`
@@ -3480,6 +3490,29 @@ concepts:
           protects the "cloud already completed" direction; it does nothing
           for the "local completed, cloud stale" direction, which is
           _restoreScheduledWorkouts's own job (row above).
+      - file: lib/core/services/completed_title_healer.dart
+        line_range: 1-122
+        method: CompletedTitleHealer.run
+        notes: |
+          OI-284 (2026-10-04): the ONLY writer that changes the TITLE
+          (`workout_name`) of a row that is already `completed`. A completed
+          non-template row keeps the content it had when it completed
+          (`mergeScheduleEntry` returns it unchanged, plan_integrity_reconciler.dart:105-107;
+          the status overlay spreads `...existingMap`), so a cross-device day
+          swap could leave its title stale while the completed card, receipt
+          and calendar (which read `wlog_<date>`) were right. This pass makes
+          the row's title follow its own performed log: local Hive only, no
+          network, `workout_name` ONLY, never status/markers/exercises. Runs
+          after a SUCCEEDED `restoreFromCloudForUser` and at the tail of
+          `restoreFromCloud` (SyncService.healCompletedTitlesAfterRestore).
+          Guards: completed, no template_id, type != logged, wlog is a real
+          `workout_log` whose source != cloud_restore_completion, name not in
+          kPlaceholderWorkoutNames, differs from the row's ignoring case.
+          Kill switch `disable_completed_title_heal`. Does NOT touch
+          `restoreCompletedTick` (it gates streak decay). Test
+          test/contracts/completed_title_follows_log_test.dart (13 mutations
+          proven). A date completed twice keeps the OLDEST cloud log in its
+          one local slot (OI-302) and the heal follows that slot.
     reader_manifest_complete: true
     readers:
       - file: lib/features/home/providers/home_provider.dart
@@ -3642,7 +3675,7 @@ concepts:
         line_range: 1-9999
         method: createCustomTemplate tool
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1277-1332
+        line_range: 1293-1348
         method: newTemplateKey / upsertTemplate
         notes: |
           Canonical writer scaffolded 2026-05-21 / audit A3. Routes
@@ -3654,7 +3687,7 @@ concepts:
           (train_provider.saveTemplate, template_builder_screen,
           workout_repository's AI multi-day loop) routes through it.
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1334-1373
+        line_range: 1350-1389
         method: deleteTemplate
         notes: |
           OI-252 — the canonical delete writer. Hive-only (layering:
@@ -3803,7 +3836,7 @@ concepts:
       allExercisePRsProvider is the single read path for UI display.
     writers:
       - file: lib/core/services/workout_write_service.dart
-        line_range: 379-400
+        line_range: 395-416
         method: _rescanPrFor
         notes: called inside logExercise after every set commit
       - file: lib/features/train/widgets/edit_workout_log_sheet.dart
@@ -5546,7 +5579,7 @@ concepts:
           partial → _writeCompletionPrompt. KEEPS the method + markCompleted
           call + rest-guard so derive_only_tool_surface_test stays green.
       - file: lib/core/services/workout_write_service.dart
-        line_range: 399-509
+        line_range: 415-525
         method: markCompleted
         notes: |
           Canonical completion writer. Unit 1 added completedVia (default 'app';
@@ -5828,7 +5861,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync_service.dart
-        line_range: 2540-2605
+        line_range: 2579-2644
         method: _reportSyncFailure (funnel — all sync failures route through here)
         semantic: pass-through
         fields_read: []
@@ -5980,7 +6013,7 @@ concepts:
         method: deleteAllFilesForCurrentUser
         notes: hard-wipes all Hive boxes for current user on account deletion
       - file: lib/core/services/workout_write_service.dart
-        line_range: 602-681
+        line_range: 618-697
         method: upsertScheduled
         notes: |
           upserts a scheduled workout entry to workoutBox under schedule_
@@ -5989,7 +6022,7 @@ concepts:
           line count further; caught by check_sot_registry_parity.dart
           and fixed opportunistically while touching this file.
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1193-1263
+        line_range: 1209-1279
         method: deleteLog
         notes: removes an exlog_* entry + updates exercise_log_index; fires cloud delete
       - file: lib/core/services/nutrition_write_service.dart
@@ -6846,7 +6879,7 @@ concepts:
           ("8-12" ranges). Judges the write by the stored row
           (customExerciseRowLanded), throwing write_failed only when absent.
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1375-1417
+        line_range: 1391-1433
         method: upsertCustomExercise
         notes: |
           Canonical writer (audit 2026-05-21 / A3). Locks per-key,
@@ -10590,7 +10623,7 @@ concepts:
           would compute, so it never disagrees with the canonical writer. Also
           at :786. NOT routed through the projection (no need).
       - file: lib/core/services/sync_service.dart
-        line_range: 1083-1087
+        line_range: 1084-1088
         method: _replayPendingOnboardingSync (NO LONGER writes current_week)
         notes: |
           B-pass F1: this boot-replay used to pass the frozen Hive current_week
@@ -10781,7 +10814,7 @@ concepts:
           Never throws: an escape here would kill the user's ENTIRE daily
           snapshot via compileDailySnapshot -> pushSnapshotNow, not just prefs.
       - file: lib/core/services/sync_service.dart
-        line_range: 1133-1190
+        line_range: 1134-1191
         method: compileDailySnapshot
         semantic: pass-through
         notes: >
@@ -11080,7 +11113,7 @@ concepts:
           (→913) despite the gate not flagging it, found by grepping the
           symbol directly rather than trusting the gate's silence on it.
       - file: lib/core/services/sync_service.dart
-        line_range: 2582-2582
+        line_range: 2621-2621
         method: restoreOpTimeout
         semantic: per-op-ceiling
         notes: day-swapper + sync-load Task 20 fix1 (diagnose a9d3f6) shifted
@@ -11091,7 +11124,7 @@ concepts:
           an N-M line_range — but left stale it would misdirect a future
           reader by the same +14).
       - file: lib/core/services/sync_service.dart
-        line_range: 2609-2613
+        line_range: 2648-2652
         method: applyRestoreCeiling
         semantic: apply-ceiling
         notes: day-swapper + sync-load Task 20 shifted this range (+148 lines,
@@ -11101,7 +11134,7 @@ concepts:
           blocks on a citation you shifted). Shifted again by task-20-fix1
           (diagnose a9d3f6, +14 lines, same method) for the same reason.
       - file: lib/core/services/sync_service.dart
-        line_range: 2621-2623
+        line_range: 2660-2662
         method: restoreFailureReason
         semantic: telemetry-reason-split
         notes: same shift as applyRestoreCeiling directly above, both times; all three re-derived +3 by the Hermes sync_epoch_seen doc comment (2026-09-28), then +1 (with _safeRestoreOp) by the plan_engine_flags import the merge-review F4 fix added (a3e7d9).
@@ -11116,7 +11149,7 @@ concepts:
         method: _authRedirect
         semantic: delegates-to-pure-fn
       - file: lib/core/services/sync_service.dart
-        line_range: 2614-2656
+        line_range: 2653-2695
         method: _safeRestoreOp
         semantic: bounded-await
     hive:
@@ -12596,7 +12629,7 @@ concepts:
           890/900/908 are refreshFromSupabase's no-row / null-response branches
           — the most likely real-world lapse path.
       - file: lib/core/services/sync_service.dart
-        line_range: 166-216
+        line_range: 167-217
         method: _onUserChanged
         semantic: account-swap-teardown
         notes: >-
@@ -12616,7 +12649,7 @@ concepts:
           is also the free-to-PRO recovery path: a newly-PRO user attaches on
           the next resume.
       - file: lib/core/services/sync_service.dart
-        line_range: 1021-1154
+        line_range: 1022-1155
         method: checkAndSync
         semantic: flag-check
     hive:
@@ -12785,7 +12818,7 @@ concepts:
       is ON (default OFF, ship-dark, OI-126).
     writers:
       - file: lib/core/services/workout_write_service.dart
-        line_range: 505-515
+        line_range: 521-531
         method: markCompleted (no-prior-schedule branch)
         notes: stamps type:'logged' for AI-coach-only logging with no prior scheduled day
       - file: lib/core/services/sync/sync_workout.dart

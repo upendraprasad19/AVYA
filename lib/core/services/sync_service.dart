@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' show FunctionResponse;
 import 'package:uuid/uuid.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
+import 'package:icanbefitter/core/services/completed_title_healer.dart';
 import 'package:icanbefitter/core/services/health_sync_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
@@ -1808,6 +1809,11 @@ class SyncService {
         ],
         eagerError: false,
       );
+      // OI-284 — logs + scheduled-workouts overlay have landed; make a
+      // completed non-template row's title follow its log. No UI refresh is
+      // needed here: this path runs only when the device holds no local logs
+      // (a reinstall), before the tabs have read anything.
+      await healCompletedTitlesAfterRestore();
     } catch (e, st) {
       // Partial restore is fine — app works offline with whatever we got.
       debugPrint('[SyncService.restoreFromCloud] $e');
@@ -1840,7 +1846,40 @@ class SyncService {
   /// Bump [restoreCompletedTick] — call after a background restore + heals.
   void bumpRestoreCompleted() => restoreCompletedTick.value++;
 
+  /// OI-284 — the public entry every production caller uses
+  /// (`restoring_screen.dart` ×2). After a SUCCEEDED full restore the logs and
+  /// the scheduled-workouts overlay have landed, so a completed non-template
+  /// row's title is made to follow its own `wlog_<date>`
+  /// ([CompletedTitleHealer]); this runs BEFORE the restoring screen's
+  /// `_healAfterRestoreInBackground` bump, which then refreshes the UI. A
+  /// failed or cancelled restore does not heal (the pass is pure/idempotent
+  /// and runs at the next success). `restoreCompletedTick` is NOT touched:
+  /// it also gates streak decay (`workout_repository.dart:244-248`).
   Future<RestoreResult> restoreFromCloudForUser() async {
+    final result = await _restoreFromCloudForUserCore();
+    if (shouldHealAfterRestore(result)) {
+      await healCompletedTitlesAfterRestore();
+    }
+    return result;
+  }
+
+  /// OI-284 — heal only a restore that succeeded and only while the kill
+  /// switch (`disable_completed_title_heal`) is open.
+  @visibleForTesting
+  static bool shouldHealAfterRestore(RestoreResult result) =>
+      result.succeeded && SyncFlags.completedTitleHealEnabled;
+
+  /// OI-284 — run [CompletedTitleHealer] unless the kill switch is closed.
+  /// Never throws (the pass swallows account-switch errors). Returns how many
+  /// rows changed.
+  static Future<int> healCompletedTitlesAfterRestore() async {
+    if (!SyncFlags.completedTitleHealEnabled) return 0;
+    return CompletedTitleHealer.run();
+  }
+
+  /// The body of [restoreFromCloudForUser], moved here verbatim (OI-284) so
+  /// every one of its many returns passes through the single heal above.
+  Future<RestoreResult> _restoreFromCloudForUserCore() async {
     _restoreCancelled = false;
     final userId = _supabase.currentUser?.id;
     if (userId == null) {
