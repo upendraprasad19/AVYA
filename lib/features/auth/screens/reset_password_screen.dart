@@ -296,8 +296,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
               children: [
                 _buildHeader(),
                 Text(
-                  'This reset session has expired, or the link was opened on a '
-                  'different device from the one that requested it.',
+                  'This reset session has expired or is no longer valid.',
                   textAlign: TextAlign.center,
                   style: AppTypography.body.copyWith(
                     color: AppColors.textDim,
@@ -305,7 +304,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                 ),
                 const SizedBox(height: AppSpacing.stackM),
                 Text(
-                  'Start again and we will email you a 6-digit code you can '
+                  'Start again and we will email you a code you can '
                   'enter right here.',
                   textAlign: TextAlign.center,
                   style: AppTypography.bodySm.copyWith(

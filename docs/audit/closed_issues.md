@@ -5331,6 +5331,32 @@ incident is itself a signal, so thinning this is not free.
 
 **CLOSED 2026-10-02 (`deploy-token-path`):** the 2026-09-26 hypothesis was CONFIRMED. The default token file was CWD-relative, present only in the PRIMARY; a linked worktree fell to the `SUPABASE_ACCESS_TOKEN` env fallback (a different account) ⇒ 403. Fix: `.claude/token_path.js` + its Dart twin `scripts/supabase_token_path_lib.dart` resolve candidates via `git worktree list --porcelain` (this tree `.supabase/`, primary `.supabase/`, then the legacy `supabase/.supabase/` copies), warn on a legacy hit or an unresolvable primary, and list every candidate in the error. Verified live: from this linked worktree with `env -u SUPABASE_ACCESS_TOKEN`, `dart run scripts/check_onconflict_live_arbiter.dart --sql <read-only select 1>` printed `token source resolved (44 bytes)` and `OK`. Regression: `test/scripts/token_path_resolver_test.dart` (13 tests, mutation-proven). Also superseded: diagnose `c6f2a8` note that the VPS holds two tokens: the one in `supabase/.supabase/` is REVOKED (401), the root `.supabase/` one works.
 
+## OI-109 — ForgotPasswordSheet's two-step code flow has no test
+
+- **Status**: CLOSED · 2026-10-03 · diagnose `fa621a` (`docs/diagnoses/2026-10-03-password-reset-otp-length-mismatch-fa621a.md`) · branch `auth-recovery-code-length` · commit: the fix commit of that branch (uncommitted at the time of writing)
+- **Blocked on**: nothing — bounded work
+- **Verified**: 2026-08-07 (`grep -rln "ForgotPasswordSheet" test/` → no matches)
+- **Filed by**: round-1 review of `post38-auth-fixes`. The c9e2b7 diagnose-doc originally
+  DESCRIBED two sheet test cases that had never been written; correcting the doc without
+  tracking the gap would just move the untruth. Filed so the gap is owed, not implied away.
+- **What is covered today**: `test/contracts/password_recovery_code_flow_behavioral_test.dart`
+  covers the RESET SCREEN's session gate (2 cases, first mutation-proven).
+- **What is NOT covered**: the headline Unit-2 change — `ForgotPasswordSheet`'s step machine
+  (email → code), its client-side code validation (`length != 6 || int.tryParse == null`
+  rejects before any network call), and its `verifyOTP(type: OtpType.recovery)` call plus the
+  `AppRouter.isPasswordRecovery = true` + `router.go('/reset')` sequence on success.
+- **Fix shape**: a widget test using the same MockClient + inline `Supabase.initialize` harness
+  as `password_reset_redirect_flow_test.dart` (note its `:272-279` comment — init must happen
+  INSIDE the testWidgets body, not setUpAll, or a GoTrue timer lands outside the zone `pump()`
+  advances). Assert: send success advances the step and shows the target address; a bad code is
+  rejected with NO request issued; a good code sets the recovery flag and navigates to `/reset`.
+- **Why it matters**: this is the flow a locked-out user depends on, and it is the part of the
+  batch with the largest behaviour change (link → typed code). The screen it hands off to is
+  tested; the handoff itself is not.
+- **Blast radius estimate**: `platform`.
+
+**CLOSED 2026-10-03 (`auth-recovery-code-length`, diagnose `fa621a`):** `test/contracts/password_recovery_code_length_behavioral_test.dart` (99 tests) now covers what this entry said was missing: the step machine (send, exactly one `POST /recover`, then the code step naming the address), the client-side validation (invalid shapes reach no `/verify` and show a plain message), and the `verifyOTP(type: recovery)` call with the `AppRouter.isPasswordRecovery = true` + `router.go('/reset')` sequence. Two deviations from the "Fix shape" above: (1) it does NOT use `Supabase.initialize` — that is a one-shot singleton, so every case after the first would silently reuse the first case's client; each case builds a recording `SupabaseClient` in `setUp` and injects it through `SupabaseService.clientOverrideForTest` (built outside the `testWidgets` body, because constructing it inside the FakeAsync zone makes `dispose()` hang). (2) The `length != 6 || int.tryParse == null` validation this entry names turned out to BE the defect (the hosted project emailed 8-digit codes); it is replaced by `isPlausibleRecoveryCode` (digits only, floor 6, no ceiling). Mutation-proven: 73 mutation runs, 69 red and 4 equivalent mutants with their reasons recorded (table in the diagnose). The two-reviewer B-pass then added the dismissal-mid-animation, re-entrancy, back / re-send, failure-branch, field and paste-normalization cases that are in those 99.
+
 ## OI-282 — blast_radius.yaml classifies only lib/core/services/sync/** as platform: sync_service.dart, sync_retry_controller.dart and sync_queue.dart compute account, so sync-engine changes skip the platform review tier
 
 - **Status**: CLOSED · 2026-10-03 · branch `oi282-blast-radius-globs` · the `fix(governance)` commit carrying `closes-oi: OI-282` (`git log --grep='closes-oi: OI-282'`)

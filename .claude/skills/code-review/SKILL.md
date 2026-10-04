@@ -226,6 +226,7 @@ When invoked, this skill should:
    - The 6 lens prompts
    - Explicit instruction: "find bugs, do not validate; if you find nothing, list what you specifically checked and why each lens returned clean"
    - Output schema (the markdown above)
+   - An EXHAUSTIVE list of the commands the reviewer may run (read-only `git`, file reads, the named `flutter test` file(s), `flutter analyze lib/`), stated as exhaustive, plus an explicit ban on `dart run scripts/*`, `scripts/*.sh` and every network tool and database statement (§6: a class such as "gates that only read" is not enforceable by its reader). A lens-6 reviewer that must mutate files also gets the exact files it may touch and the backup / restore / sha256 protocol; run it AFTER the fixes from any earlier reviewer, on the post-fix tree.
 5. Subagent returns findings — write to `docs/reviews/<staging-hash>-review.md`, then
    **`git add` it**. An unstaged review no longer satisfies the catastrophic gate: it
    never enters history, so nothing in the commit records that a review happened.
@@ -250,6 +251,7 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 - Default to "no findings found" when uncertain — force structure ("I checked X with grep Y, returned 0 hits").
 - Skip the `verification:` field. Every finding must have a one-line verification command.
 - Bundle this with `/hermes-pass`. That's a different skill (per-batch, all 53 lenses, Opus, slower).
+- Tell a reviewer it may "run the gates that only read". `scripts/check_*.dart` includes gates that POST SQL to the LIVE project (`check_onconflict_live_arbiter.dart`). Name the exact commands a reviewer may run, and say "no writing statement, even inside BEGIN…ROLLBACK". 2026-10-03: a reviewer swept the glob and the live arbiter ran (rolled back, 0 residue rows).
 
 ## 7. Tuning history
 

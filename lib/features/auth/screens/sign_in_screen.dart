@@ -1280,7 +1280,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           const SizedBox(height: 20),
           _buildTextField(
             controller: _otpController,
-            hintText: '6-digit OTP',
+            hintText: 'Code from your SMS',
             keyboardType: TextInputType.number,
             prefixIcon: Icons.pin_outlined,
           ),

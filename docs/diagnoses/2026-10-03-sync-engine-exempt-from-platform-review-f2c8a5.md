@@ -394,7 +394,7 @@ the backup and compares the bytes.
   the four files that stayed account through explicit rules are recorded with their reasons and
   their cost, and `_declined` may hold them (P2); the derivation covers all of `lib/`, which turned
   up two restore merges outside the services layer, now platform (P2); the bug-class index row
-  for 2.85 is in the debugging skill, with the two rows (2.80, 2.81) that earlier sessions left out;
+  for 2.87 is in the debugging skill, with the two rows (2.80, 2.81) that earlier sessions left out;
   the surviving mutations are closed (a keyword with no space, two directives on a line, a stale
   declined entry, a platform wildcard); the declined reasons name the function the engine calls; the
   e2e control is a file with no engine edge and the keystone has an arm for the directory glob and
@@ -418,13 +418,20 @@ the backup and compares the bytes.
   WHEN the engine retries, was disclosed in prose and pinned by no test, so it joins `_callers`; the
   cost totals did not reproduce (717 / 286, not 716 / 285: a date-only `--since` takes the current
   time of day; the decision figures were identical); the registry quoted two of its own line numbers
-  that the first round's two new rules had moved by five; bug class 2.85 called `sync_service.dart`
+  that the first round's two new rules had moved by five; bug class 2.87 called `sync_service.dart`
   "ten `part` files" (a library of ten files, nine `part` directives); the plan cited the keystone
   validator's range one line-pair short (788-868); the S-tier and `bpass` consequence for
   `notification_prefs_repository.dart` was unstated; and `sync_domain` / `sync_error` / `sync_flags`
   were listed without the boundary saying why (prong 1 now names the contract, error taxonomy and
   path flags). While folding, the test header's count of cap-held declines (two) was corrected to
   three.
+- **Merge with main, 2026-10-04.** PR #71 (`fa621a`) merged to `main` while this PR was open and took
+  bug classes 2.85 and 2.86, so this batch's class is numbered **2.87** (it was 2.85 when the
+  reviews above ran). Every cite of it in this doc, the plan, the plan-review record and the
+  B-pass review was repointed in the merge commit; nothing else in them changed. Six files
+  conflicted textually (the two skill files that carry the class and its index row, the tuning
+  history, the closed-issues board and the two generated indexes); both sides were kept, and the
+  indexes were regenerated from their sources rather than hand-merged.
 
 ## Known residuals — stated, not hidden
 

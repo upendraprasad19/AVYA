@@ -105,6 +105,11 @@ regression_test_planned: >
   test/` returns nothing. The session gate is covered; the SHEET's two-step
   machine and its verifyOTP call are NOT, and OI-100 tracks writing them rather
   than this doc implying coverage it does not have.
+  ⚠ CORRECTED 2026-10-03 (diagnose fa621a): OI-100 was renumbered OI-109 by
+  babea1a4 (b7e3d1), so the number above is stale, not wrong. The sheet's
+  two-step machine and its verifyOTP call are now covered by
+  test/contracts/password_recovery_code_length_behavioral_test.dart, which
+  closes OI-109.
 touched_layers_checked:
   - { tier: 1, name: client_code, status: fixed_in_this_batch, evidence: "flutter analyze lib/ -> 0 errors, 0 warnings; verifyOTP + OtpType.recovery confirmed present in gotrue 2.27.1 at gotrue_client.dart:661-683" }
   - { tier: 2, name: hive_local_state, status: not_applicable, evidence: "no app Hive box in this path; the PKCE verifier lived in gotrue's own storage adapter and the fix stops depending on it" }
@@ -138,6 +143,12 @@ impact_analysis: >
   Chosen knowingly — an emailed link is a bearer credential, and link-prefetching
   mail scanners silently consume one-time links, which is an unfixable failure
   mode we now do not have.
+  ⚠ CORRECTED 2026-10-03 (diagnose fa621a): "six digits" was taken from
+  Supabase's documentation and never checked against the hosted project. The
+  project's mailer_otp_length was 8, so the sheet this diagnose built could not
+  accept the code it had just been emailed. The length is a hosted setting the
+  client cannot read, so the client now states no digit count and imposes no
+  ceiling — see docs/operations/AUTH_HOSTED_SETTINGS.md.
 related_bugs: e9f2a4, 9f5c41, b7d4e2, c8f1d3
 recurrence: >
   Fifth password-reset diagnose, and the first to change the CHANNEL rather than
@@ -169,3 +180,8 @@ form rendered, accepted a password, and failed at the last possible moment.
 | PKCE link (before) | ✗ | ✗ | — |
 | Implicit-flow link | ✓ | ✗ **yes — anyone with the inbox** | ✓ risks OAuth |
 | **6-digit code (chosen)** | ✓ | ✓ safe | ✗ none |
+
+> ⚠ CORRECTED 2026-10-03 (diagnose `fa621a`): the chosen option is a typed
+> CODE. Its length is the hosted `mailer_otp_length` (6–10, GoTrue clamps), not
+> 6 by definition; "6-digit" in this table and in the batch title is the
+> premise that failed.
