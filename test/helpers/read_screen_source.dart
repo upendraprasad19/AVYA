@@ -124,3 +124,9 @@ String readRestoringScreenSource() =>
 /// OI-232/`a4bcd634b7a7`-review Finding 1) for the screen in question.
 String readScreenSourceStripped(String screenName) =>
     _stripComments(readScreenSource(screenName));
+
+/// One source file with comments stripped (see [_stripComments]): the
+/// single-file counterpart of [readScreenSourceStripped], for a screen that is
+/// not one of the split folders above (e.g. the Photos hub, the router).
+String readSourceFileStripped(String path) =>
+    _stripComments(File(path).readAsStringSync());

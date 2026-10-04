@@ -11,7 +11,8 @@ import '../repositories/progress_photo_repository.dart';
 
 /// Full-screen progress photos gallery (F19).
 ///
-/// PRO-gated at the entry point (see `ProgressPhotosCard` + profile menu).
+/// PRO-gated at the entry point: the Progress row in the Photos hub
+/// (`user_photos_screen.dart`, reached from the Profile "Photos" row).
 /// Reads/writes via `ProgressPhotoRepository` which in turn handles:
 ///   - Supabase Storage upload + signed-URL read (`progress-photos` bucket)
 ///   - `progress_photos` metadata row (migration 022)

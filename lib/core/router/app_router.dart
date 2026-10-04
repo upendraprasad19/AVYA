@@ -40,6 +40,7 @@ import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/features/profile/screens/progress_comparison_screen.dart';
 import 'package:icanbefitter/features/profile/screens/progress_photos_screen.dart';
 import 'package:icanbefitter/features/profile/screens/saved_coach_photos_screen.dart';
+import 'package:icanbefitter/features/profile/screens/user_photos_screen.dart';
 import 'package:icanbefitter/features/profile/screens/reports_screen.dart';
 import 'package:icanbefitter/features/profile/screens/settings_screen.dart';
 import 'package:icanbefitter/features/profile/screens/notifications_screen.dart';
@@ -520,6 +521,13 @@ class AppRouter {
                     path: 'reports',
                     name: 'reports',
                     builder: (context, state) => const ReportsScreen(),
+                  ),
+                  // Hub behind the single Profile "Photos" row; pushes to
+                  // progress-photos / saved-coach-photos below.
+                  GoRoute(
+                    path: 'photos',
+                    name: 'userPhotos',
+                    builder: (context, state) => const UserPhotosScreen(),
                   ),
                   GoRoute(
                     path: 'progress-photos',

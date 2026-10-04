@@ -557,32 +557,6 @@ final biometricProvider =
     NotifierProvider<BiometricNotifier, BiometricData>(
         BiometricNotifier.new);
 
-// ── Progress Photos ──────────────────────────────────────────────
-
-class ProgressPhotosData {
-  final int photoCount;
-  final List<String> recentPhotoUrls;
-
-  const ProgressPhotosData({
-    this.photoCount = 0,
-    this.recentPhotoUrls = const [],
-  });
-}
-
-class ProgressPhotosNotifier extends Notifier<ProgressPhotosData> {
-  @override
-  ProgressPhotosData build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
-    final count =
-        MigratedKey.readWithDefault<int>('progress_photo_count', 0);
-    return ProgressPhotosData(photoCount: count);
-  }
-}
-
-final progressPhotosProvider =
-    NotifierProvider<ProgressPhotosNotifier, ProgressPhotosData>(
-        ProgressPhotosNotifier.new);
-
 // ── Usage Weeks (for weekly report) ──────────────────────────────
 
 class UsageWeeksNotifier extends Notifier<int> {
