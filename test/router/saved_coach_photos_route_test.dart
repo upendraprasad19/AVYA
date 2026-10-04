@@ -11,7 +11,8 @@ void main() {
 
   setUpAll(() {
     routerSrc = File('lib/core/router/app_router.dart').readAsStringSync();
-    profileSrc = readScreenSource('profile');
+    // Comment-stripped: the Photos row must be live code, not a commented-out one.
+    profileSrc = readScreenSourceStripped('profile');
   });
 
   test('/profile/saved-coach-photos route exists in router', () {
@@ -39,11 +40,16 @@ void main() {
             'list as progress-photos and delete-account, not top-level');
   });
 
-  test('Profile REPORTS card has a Saved Photos row navigating to the route',
-      () {
-    expect(profileSrc.contains("'Saved Photos'"), isTrue,
-        reason: 'Profile must show a Saved Photos nav row');
-    expect(profileSrc.contains("'/profile/saved-coach-photos'"), isTrue,
-        reason: 'Saved Photos row must navigate to /profile/saved-coach-photos');
+  test('Profile has ONE Photos row to the hub; the hub routes to Saved', () {
+    // The Saved Photos row moved off the Profile tab into UserPhotosScreen
+    // (one "Photos" row on Profile -> hub -> Progress | Saved).
+    expect(profileSrc.contains("title: 'Photos'"), isTrue,
+        reason: 'Profile must show the single Photos hub row');
+    expect(profileSrc.contains("'/profile/photos'"), isTrue,
+        reason: 'Photos row must navigate to /profile/photos');
+    final hubSrc = File('lib/features/profile/screens/user_photos_screen.dart')
+        .readAsStringSync();
+    expect(hubSrc.contains("'/profile/saved-coach-photos'"), isTrue,
+        reason: 'Hub Saved row must navigate to /profile/saved-coach-photos');
   });
 }

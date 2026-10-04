@@ -16,11 +16,12 @@ status: active
 `lib/features/profile/` owns the 👤 Profile tab and the suite of settings
 screens hanging off it. Screens:
 
-- `profile_screen.dart` — top-of-tab rank pill + bio stats + goal card + targets + ladder + edit / progress photos / reports / submissions / subscription / referrals / settings / logout.
+- `profile_screen.dart` — top-of-tab rank pill + bio stats + goal card + targets + ladder + edit / photos (one row, opens the hub) / reports / settings / AVYA / share & grow (referrals, submissions, rate) / subscription / logout.
 - `edit_profile_screen.dart` — full editor for the user_profile fields (name, DOB, sex, goal, weight, height, body fat, activity level, lifestyle activity, diet preference, injuries, equipment access, days/week, fitness experience, pace preference, target weight).
 - `settings_screen.dart` — notifications toggle, health-sync toggle, theme (locked dark), DPDP delete account, sign out, build info.
 - `reports_screen.dart` — Weekly Report (PRO) — sparklines + protein/calorie/workout trend.
 - `progress_photos_screen.dart` + `progress_comparison_screen.dart` — PRO daily-cap'd photo log + comparison sheet.
+- `user_photos_screen.dart` — hub behind the ONE Profile "Photos" row (`/profile/photos`); routes (push) to Progress (PRO-gated via `gateAndVerify`) and Saved (`saved_coach_photos_screen.dart`, coach-media consent). Routes only; each destination keeps its own bucket and delete behaviour. ⚠ The hub's Progress row is the ONLY PRO gate on the way to `ProgressPhotosScreen`, which does not check the subscription itself, so any second way in (a shortcut, a named-route push, another tab) skips the gate unless it calls `gateAndVerify` too; the tests below fail on one. Saved is ungated by design.
 - `rank_ladder_screen.dart` — Indian Navy 11-rung lifetime ladder + promotion celebrations.
 - `notifications_screen.dart` + `notification_settings_screen.dart` — inbox via `NotificationInboxService`.
 - `invite_friends_sheet.dart` + `apply_referral_sheet.dart` — 7-day PRO referral promo (APK Test #2).
@@ -63,6 +64,7 @@ Service layer: `lib/features/profile/services/profile_write_service.dart` and
 - `test/contracts/delete_account_safety_contract_test.dart`
 - `test/contracts/usage_weeks_signup_date_test.dart` (commit `00c36cc`)
 - `test/contracts/progress_photo_quota_test.dart`
+- `test/profile/user_photos_hub_test.dart` (the Photos hub: rows, PRO hint, back stack inside a shell branch; source pins on comment-stripped source: gate → onPro → onFree order, the Progress screen named once under any spelling, each gate callback opens with the mounted check, and an allow-list scan of `lib/` for who may name the Progress screen) + `test/profile/user_photos_gate_behavioral_test.dart` (the Progress gate through the hub against the real `SubscriptionService`: FREE → paywall, PRO → screen, a FREE sweep over every tappable widget never builds Progress, leaving the hub inside the server verify drops the push quietly) + `test/router/photos_hub_route_resolution_test.dart` (the REAL route table: all three locations resolve under `/profile` inside the shell and build the right screens) + `test/profile/profile_share_grow_order_test.dart` (section order, each header once, the one Photos row, no direct route to a destination)
 - `test/contracts/coach_extraction_locked_fields_writer_to_reader_test.dart` + `test/profile/edit_profile_coach_extraction_lock_test.dart` (a2b-2, 2026-09-27 — see `lib/features/ai_coach/CLAUDE.md` for the full concept)
 
 ## See also

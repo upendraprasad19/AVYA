@@ -1144,11 +1144,16 @@ concepts:
         method: "SwapConfirmSheet build (day-swapper + sync-load Task 24, confirmed :184 -- ref.read(subscriptionInfoProvider).isPro)"
         semantic: flag-check
         fields_read: [isPro]
+      - file: lib/features/profile/screens/user_photos_screen.dart
+        line_range: 1-9999
+        method: "UserPhotosScreen build (profile-share-grow-order, 2026-10-04 -- ref.watch(subscriptionInfoProvider).isPro, DISPLAY-ONLY: picks the Progress row subtitle so a free user keeps the 'PRO -- visual progress timeline' hint the old Profile row showed. The GATE is SubscriptionService.instance.gateAndVerify(AppConstants.featureProgressPhotos) in the same file, and it is the ONLY PRO check on the way to ProgressPhotosScreen (the screen does not check the subscription itself); both branches, a FREE sweep over every tappable widget on the hub, and the leave-the-hub-inside-the-verify case are pinned by test/profile/user_photos_gate_behavioral_test.dart)"
+        semantic: display-only
+        fields_read: [isPro]
     regression_test: test/subscription/payment_grace_window_test.dart
     hive:
       box: configBox
-      key_prefix: "is_pro"
-      key_formula: "MigratedKey.read<bool>('is_pro')"
+      key_prefix: "isPro"
+      key_formula: "MigratedKey.readWithDefault<bool>('isPro', false)"
     cloud:
       table: subscriptions
       columns: [user_id, plan, status, end_date, razorpay_payment_id, razorpay_subscription_id]
@@ -6302,7 +6307,7 @@ concepts:
           auth_redirect_session_open_guard_test.dart.
       - file: lib/features/profile/providers/profile_provider.dart
         line_range: 1-9999
-        method: 8+ user-scoped providers (userProfile / biometric / subscriptionInfo / etc.)
+        method: 6 user-scoped providers (userProfile / userStats / subscriptionInfo / biometric / usageWeeks / firstReportViewed)
         semantic: flag-check
         fields_read: []
         notes: First line of every build() body — `ref.watch(authUserIdTokenProvider)`.
@@ -7740,7 +7745,6 @@ concepts:
       - { file: lib/features/profile/widgets/baseline_grid.dart, reason: "post-codemod reader" }
       - { file: lib/features/profile/widgets/menu_item.dart, reason: "post-codemod reader" }
       - { file: lib/features/profile/widgets/profile_banner.dart, reason: "post-codemod reader" }
-      - { file: lib/features/profile/widgets/progress_photos_card.dart, reason: "post-codemod reader" }
       - { file: lib/features/profile/widgets/stat_card.dart, reason: "post-codemod reader" }
       - { file: lib/features/profile/widgets/subscription_card.dart, reason: "post-codemod reader" }
       - { file: lib/features/train/widgets/challenge_card.dart, reason: "post-codemod reader" }
@@ -11107,10 +11111,10 @@ concepts:
         notes: same shift as applyRestoreCeiling directly above, both times; all three re-derived +3 by the Hermes sync_epoch_seen doc comment (2026-09-28), then +1 (with _safeRestoreOp) by the plan_engine_flags import the merge-review F4 fix added (a3e7d9).
     readers:
       - file: lib/core/router/app_router.dart
-        line_range: 800-811
+        line_range: 808-819
         method: postSessionRedirect
         semantic: branch-order-is-the-fix
-        notes: signOutInProgress MUST be tested BEFORE the onboarding read.
+        notes: signOutInProgress MUST be tested BEFORE the onboarding read. Shifted +8 by profile-share-grow-order (the `photos` GoRoute inserted above, in the Profile branch) — repointed per the parity gate's minimum-fix convention.
       - file: lib/core/router/app_router.dart
         line_range: 610-719
         method: _authRedirect

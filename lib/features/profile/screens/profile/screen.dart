@@ -114,7 +114,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     ref.invalidate(userStatsProvider);
     ref.invalidate(subscriptionInfoProvider);
     ref.invalidate(biometricProvider);
-    ref.invalidate(progressPhotosProvider);
     ref.invalidate(usageWeeksProvider);
     ref.invalidate(firstReportViewedProvider);
   }
