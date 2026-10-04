@@ -218,9 +218,10 @@ The hosted value and a real email. That is the founder's device check: request a
 
 ## Open items, owned by the founder (terminal state `blocked_on_user`)
 
-- **Device check** and the web deploy that carries the fix (the shipped web build and every shipped APK stay 6-only until replaced).
-- **Scope decision** for the separate observation (a client holding a valid session was shown the sign-in screen): join this batch, or its own OI and its own §4.1 diagnosis (recommended: its own).
+- **Device check**: request a code, expect 6 digits, enter it, set a password, sign in. The web build that carries the fix shipped 2026-10-04 (PR #71, Vercel production deploy READY); every shipped APK stays 6-only until replaced, and the next APK is founder-initiated.
 - **Re-confirm** "leave the Google-only hint": the original premise ("people can use Google or reset") was found incomplete — the user was shown the email path with no hint she had signed up with Google, and the reset path then failed.
 - **§4.6 disposition**: this is an auth change shipped without a feature flag, recorded as exempt in the plan-review record (the old path was the bug; the hosted value is the kill-switch). The founder may overrule and ask for a flag.
 - **Unread hosted keys**: `password_min_length` and `password_required_characters` (needs a live read; the inventory row says "not read").
 - **The date the hosted value became 8** is unknown; only the founder can know whether and when they changed it.
+
+**Decided 2026-10-04 (founder):** the separate observation (a client holding a valid session was shown the sign-in screen) gets no action: a log-off, a second window or a stale tab explain it as well as a routing defect, and one user once is not enough to chase. No OI was filed (ledger row U15).
