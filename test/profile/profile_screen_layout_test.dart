@@ -135,7 +135,7 @@ void main() {
           reason:
               'WeeklyReportCard must appear BEFORE Predictions row inside REPORTS '
               '(APK Test #7 ordering: Weekly Report card → 3-row card [Predictions / '
-              'Progress Comparison / Progress Photos])');
+              'Progress Comparison / Photos])');
     });
   });
 }

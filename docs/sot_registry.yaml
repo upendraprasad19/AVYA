@@ -1144,11 +1144,16 @@ concepts:
         method: "SwapConfirmSheet build (day-swapper + sync-load Task 24, confirmed :184 -- ref.read(subscriptionInfoProvider).isPro)"
         semantic: flag-check
         fields_read: [isPro]
+      - file: lib/features/profile/screens/user_photos_screen.dart
+        line_range: 1-9999
+        method: "UserPhotosScreen build (profile-share-grow-order, 2026-10-04 -- ref.watch(subscriptionInfoProvider).isPro, DISPLAY-ONLY: picks the Progress row subtitle so a free user keeps the 'PRO -- visual progress timeline' hint the old Profile row showed. The GATE is SubscriptionService.instance.gateAndVerify(AppConstants.featureProgressPhotos) in the same file, and it is the ONLY PRO check on the way to ProgressPhotosScreen (the screen does not check the subscription itself); both branches, a FREE sweep over every tappable widget on the hub, and the leave-the-hub-inside-the-verify case are pinned by test/profile/user_photos_gate_behavioral_test.dart)"
+        semantic: display-only
+        fields_read: [isPro]
     regression_test: test/subscription/payment_grace_window_test.dart
     hive:
       box: configBox
-      key_prefix: "is_pro"
-      key_formula: "MigratedKey.read<bool>('is_pro')"
+      key_prefix: "isPro"
+      key_formula: "MigratedKey.readWithDefault<bool>('isPro', false)"
     cloud:
       table: subscriptions
       columns: [user_id, plan, status, end_date, razorpay_payment_id, razorpay_subscription_id]
@@ -6335,7 +6340,7 @@ concepts:
           auth_redirect_session_open_guard_test.dart.
       - file: lib/features/profile/providers/profile_provider.dart
         line_range: 1-9999
-        method: 8+ user-scoped providers (userProfile / biometric / subscriptionInfo / etc.)
+        method: 6 user-scoped providers (userProfile / userStats / subscriptionInfo / biometric / usageWeeks / firstReportViewed)
         semantic: flag-check
         fields_read: []
         notes: First line of every build() body — `ref.watch(authUserIdTokenProvider)`.
@@ -7773,7 +7778,6 @@ concepts:
       - { file: lib/features/profile/widgets/baseline_grid.dart, reason: "post-codemod reader" }
       - { file: lib/features/profile/widgets/menu_item.dart, reason: "post-codemod reader" }
       - { file: lib/features/profile/widgets/profile_banner.dart, reason: "post-codemod reader" }
-      - { file: lib/features/profile/widgets/progress_photos_card.dart, reason: "post-codemod reader" }
       - { file: lib/features/profile/widgets/stat_card.dart, reason: "post-codemod reader" }
       - { file: lib/features/profile/widgets/subscription_card.dart, reason: "post-codemod reader" }
       - { file: lib/features/train/widgets/challenge_card.dart, reason: "post-codemod reader" }
@@ -11140,10 +11144,10 @@ concepts:
         notes: same shift as applyRestoreCeiling directly above, both times; all three re-derived +3 by the Hermes sync_epoch_seen doc comment (2026-09-28), then +1 (with _safeRestoreOp) by the plan_engine_flags import the merge-review F4 fix added (a3e7d9).
     readers:
       - file: lib/core/router/app_router.dart
-        line_range: 800-811
+        line_range: 808-819
         method: postSessionRedirect
         semantic: branch-order-is-the-fix
-        notes: signOutInProgress MUST be tested BEFORE the onboarding read.
+        notes: signOutInProgress MUST be tested BEFORE the onboarding read. Shifted +8 by profile-share-grow-order (the `photos` GoRoute inserted above, in the Profile branch) — repointed per the parity gate's minimum-fix convention.
       - file: lib/core/router/app_router.dart
         line_range: 610-719
         method: _authRedirect
@@ -11527,6 +11531,92 @@ concepts:
     class_constraints: |
       Re-verify BOTH the implicit-fragment and PKCE query shapes against a
       live link after any supabase_flutter upgrade.
+
+      The emailed code's LENGTH is a hosted setting (mailer_otp_length) this
+      client cannot read, so nothing in this flow may state or enforce a digit
+      count. That contract is the sibling concept
+      password_recovery_code_length (diagnose fa621a).
+
+  - concept: password_recovery_code_length
+    domain: auth_profile
+    behavioral_test_path: test/contracts/password_recovery_code_length_behavioral_test.dart
+    description: |
+      diagnose fa621a — the LENGTH of the emailed recovery code is the hosted
+      project's `mailer_otp_length`, a Supabase dashboard setting that lives
+      outside this repository (GoTrue clamps it to 6-10 and zero-pads the
+      code). It was 8 while the client hard-coded 6 (`maxLength: 6` plus a
+      `length != 6` guard, written by c9e2b7), so a real user could not enter
+      the code she had just been emailed, and no request ever reached GoTrue.
+
+      The WRITER of this concept is therefore EXTERNAL: the hosted setting,
+      inventoried in docs/operations/AUTH_HOSTED_SETTINGS.md (live value, date
+      verified, how to read it). The in-repo writer listed below only triggers
+      the email. There is no precedent for a non-file writer in this registry;
+      the external one is named here and in class_constraints instead.
+
+      Sibling of password_recovery_session (WHERE the user lands after a
+      verified code) — same surface, different contract: this one is WHAT the
+      user may type. Same class as e9f2a4 (the hosted Site URL overriding a
+      client value) and bug class 2.85 in the debugging skill.
+    writers:
+      - file: lib/features/auth/widgets/forgot_password_sheet.dart
+        line_range: 1-9999
+        method: _send
+        semantic: triggers-the-email-whose-code-length-the-hosted-project-decides
+    readers:
+      - file: lib/features/auth/widgets/forgot_password_sheet.dart
+        line_range: 1-9999
+        method: _verifyCode
+        semantic: accepts-any-plausible-code-and-passes-it-to-verifyOTP-unchanged
+      - file: lib/core/utils/recovery_code_format.dart
+        line_range: 1-9999
+        method: isPlausibleRecoveryCode
+        semantic: digits-only-floor-6-no-ceiling
+      - file: lib/core/utils/recovery_code_format.dart
+        line_range: 1-9999
+        method: normalizeRecoveryCode
+        semantic: strips-every-separator-control-and-format-character-anywhere-visible-junk-is-kept-so-it-is-refused
+      - file: lib/features/auth/screens/reset_password_screen.dart
+        line_range: 1-9999
+        method: _buildNoSessionState
+        semantic: states-no-digit-count-and-names-no-link-or-device
+    hive:
+      box: null
+      key: null
+      shape: "Not applicable — transient auth exchange."
+    cloud:
+      table: null
+      columns: []
+    class_constraints: |
+      The client accepts every code GoTrue can issue: ASCII digits only, at
+      least 6 long (the floor GoTrue itself enforces), NO ceiling, and the
+      code field carries no `maxLength` — a silent drop of digits 7-8 was the
+      failure mode. No user-facing string states a digit count for the
+      recovery code. (The phone-OTP hint in sign_in_screen.dart is held to the
+      same rule, but only by a source pin in the behavioral test; it is not a
+      reader of this concept.) The reset screen's no-session copy
+      (`_buildNoSessionState`) also names no link and no device: the email
+      carries a typed code that works from any device (c9e2b7), so a sentence
+      about a link or a different device describes an email nobody received.
+
+      The typed text goes through normalizeRecoveryCode BEFORE the shape check:
+      every separator (Z*), control (Cc) and format (Cf) character is removed
+      ANYWHERE in it, not only at the ends (`trim()` is not enough: a pasted
+      code can carry a zero-width space or a group separator the user cannot
+      see). VISIBLE junk is kept so the shape check refuses it — stripping
+      every non-digit would send a different, valid-looking code.
+
+      The sheet is a single-use exchange, so: both handlers return early while
+      `_sending` (the disabled button only goes inert on the NEXT build, so two
+      taps in one frame would otherwise spend the code twice), and the hand-off
+      to /reset pops only while the sheet's ROUTE is still active
+      (`ModalRoute.isActive`) — `mounted` stays true through the exit animation
+      and a pop() then takes the page underneath it.
+
+      The hosted value stays 6 until a minimum-version / force-update
+      mechanism exists (there is none): every build older than fa621a is
+      6-only, so raising it strands them. Detail and read-only recipe:
+      docs/operations/AUTH_HOSTED_SETTINGS.md.
 
   - concept: confirm_link_token_hash_recovery
     domain: auth_profile

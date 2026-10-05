@@ -1331,30 +1331,6 @@ cloud sessions; **this file is the cross-session backlog.**
   lines, so the sweep cannot silently regress (§4.11 gates-before-refactor).
 - **Blast radius estimate**: `platform`.
 
-## OI-109 — ForgotPasswordSheet's two-step code flow has no test
-
-- **Status**: OPEN
-- **Blocked on**: nothing — bounded work
-- **Verified**: 2026-08-07 (`grep -rln "ForgotPasswordSheet" test/` → no matches)
-- **Filed by**: round-1 review of `post38-auth-fixes`. The c9e2b7 diagnose-doc originally
-  DESCRIBED two sheet test cases that had never been written; correcting the doc without
-  tracking the gap would just move the untruth. Filed so the gap is owed, not implied away.
-- **What is covered today**: `test/contracts/password_recovery_code_flow_behavioral_test.dart`
-  covers the RESET SCREEN's session gate (2 cases, first mutation-proven).
-- **What is NOT covered**: the headline Unit-2 change — `ForgotPasswordSheet`'s step machine
-  (email → code), its client-side code validation (`length != 6 || int.tryParse == null`
-  rejects before any network call), and its `verifyOTP(type: OtpType.recovery)` call plus the
-  `AppRouter.isPasswordRecovery = true` + `router.go('/reset')` sequence on success.
-- **Fix shape**: a widget test using the same MockClient + inline `Supabase.initialize` harness
-  as `password_reset_redirect_flow_test.dart` (note its `:272-279` comment — init must happen
-  INSIDE the testWidgets body, not setUpAll, or a GoTrue timer lands outside the zone `pump()`
-  advances). Assert: send success advances the step and shows the target address; a bad code is
-  rejected with NO request issued; a good code sets the recovery flag and navigates to `/reset`.
-- **Why it matters**: this is the flow a locked-out user depends on, and it is the part of the
-  batch with the largest behaviour change (link → typed code). The screen it hands off to is
-  tested; the handoff itself is not.
-- **Blast radius estimate**: `platform`.
-
 ## OI-110 — ~90 diagnose-docs cite a `sot_registry_entry:` concept that does not exist
 
 - **Status**: OPEN
@@ -3663,7 +3639,7 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
   `intent-filter`/`android:host`/`android:path`/`autoVerify` — the only
   `app.icanbefitter.com` App Link in the file is the brand-new one this
   batch adds, scoped to `/confirm` exactly); per diagnose `c9e2b7`, password
-  reset was redesigned in 2026-08 to an in-app 6-digit code, so a `/reset`
+  reset was redesigned in 2026-08 to an in-app emailed code, so a `/reset`
   LINK, on the rare occasion one exists at all, only ever opens in a
   **browser** on Android — a separate Flutter-web instance, structurally
   unable to touch the native app's live session. `/confirm`, by contrast,

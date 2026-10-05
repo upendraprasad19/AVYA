@@ -25,6 +25,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 - 2026-05-12 8f3d22 — `WorkoutScheduleService.assignTemplateToDate` silently returns `void` when the target date's schedule entry has `status == 'completed'`. The caller in `train_screen._scheduleTemplate` iterates over…
 - 2026-05-12 9e2c1a — Founder on +22 fresh install (Hive wiped, restored from cloud) sees Monday 2026-05-11 day card header rendering the original plan-generator name "PUSH A" instead of the assigned template name "Leg Day…
 
+### password_recovery_code_length (1 bugs)
+- 2026-10-03 fa621a — A real user (Google-only account, no password) chose Forgot password on the web app. The sheet told her a 6-digit code was on its way and its code field accepted at most 6 characters; the hosted…
+
 ### usage_quota_ledger (4 bugs)
 - 2026-10-01 d7a1f5 — Caught in plan review round 1, BEFORE it shipped. Migration 129's chat trigger consumes a unit for EVERY `ai_coach_interactions` insert on channel `app`. That was harmless while PRO was exempt (the…
 - 2026-10-01 c4e9b2 — A turn that failed because Gemini failed (HTTP 5xx / 429 / 404 / timeout / transient empty reply) still spent one of the user's daily units. Every limit here is an insert-first reservation: the…
@@ -1503,6 +1506,7 @@ rather than a Hive box. (1 bugs)
 |---|---|---|---|---|
 | 2026-10-04 | d4a7e1 | Founder-reported (2026-10-01, day-swap report): after swapping Oct 1 and Oct 2 on the web and completing the swapped workout there (log "PULL + CORE"), the Android phone's Train row title for Oct 1… | workout_completion_status | test/contracts/completed_title_follows_log_test.dart |
 | 2026-10-03 | c7e3a9 | Founder-reported (2026-10-01, observation 2 of the day-swap report): after swapping today's workout with tomorrow's, Home's AI-coach insight sentence kept naming the pre-swap workout while the rest of… | scheduled_workouts_mutations | test/contracts/ai_insight_follows_today_row_test.dart |
+| 2026-10-03 | fa621a | A real user (Google-only account, no password) chose Forgot password on the web app. The sheet told her a 6-digit code was on its way and its code field accepted at most 6 characters; the hosted… | password_recovery_code_length | test/contracts/password_recovery_code_length_behavioral_test.dart |
 | 2026-10-01 | d7a1f5 | Caught in plan review round 1, BEFORE it shipped. Migration 129's chat trigger consumes a unit for EVERY `ai_coach_interactions` insert on channel `app`. That was harmless while PRO was exempt (the… | usage_quota_ledger | test/contracts/ai_message_limit_parity_test.dart |
 | 2026-10-01 | c4e9b2 | A turn that failed because Gemini failed (HTTP 5xx / 429 / 404 / timeout / transient empty reply) still spent one of the user's daily units. Every limit here is an insert-first reservation: the… | usage_quota_ledger | test/contracts/quota_refund_wiring_test.dart |
 | 2026-10-01 | f3a8d1 | The new GEMINI_API_KEY returns HTTP 404 "no longer available to new users" for the retired gemini-2.5-* slugs (gemini-2.5-flash-lite was probed; 2.5-flash and 2.5-pro were reported 404 by the founder,… | gemini_flash_reliability | supabase/functions/_shared/gemini3_migration_test.ts |
