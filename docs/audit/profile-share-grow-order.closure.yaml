@@ -155,9 +155,17 @@ findings:
 
   - id: R1-04
     title: "P2 (process) — the Progress screen has no gate of its own and is reachable by URL on web without the row's gate"
-    terminal_state: blocked_on_user
-    reason: >
-      A product decision with a user-visible effect, pre-existing and unchanged by this batch. Facts from the repo
+    terminal_state: closed_in_commit
+    commit: progress-screen-pro-gate batch commit (git log --diff-filter=A --format=%h -- docs/audit/progress-screen-pro-gate.closure.yaml)
+    verification: >
+      Founder decision 2026-10-05 ("Explain and yes"): the Progress screen enforces PRO itself. Closed by the
+      progress-screen-pro-gate batch (docs/audit/progress-screen-pro-gate.closure.yaml, diagnose b7c1e4): the screen gates
+      its entry and its Add button, and test/contracts/progress_photos_screen_gate_test.dart proves FREE -> locked card and
+      PRO -> gallery against the real SubscriptionService. What stays open from this row's facts is the SERVER side (no PRO
+      rule on the progress_photos RLS or the bucket), which is row C5 of that ledger, blocked_on_user.
+    history: >
+      Until 2026-10-05 this row was blocked_on_user, with this reason. A product decision with a user-visible effect,
+      pre-existing and unchanged by this batch. Facts from the repo
       (not a live read): progress_photos_screen.dart has no gate, only quota handling; ProgressPhotoRepository caps
       free users at 2 photos/day and PRO at 5/day (progress_photo_repository.dart:45-46) and its quota message
       offers "Upgrade to PRO" to a free user; the progress_photos table RLS policies (migration 022, hardened by 055

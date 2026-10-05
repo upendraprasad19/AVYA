@@ -1113,7 +1113,7 @@ concepts:
         semantic: flag-check
         fields_read: [isPro]
       - file: lib/features/profile/repositories/progress_photo_repository.dart
-        line_range: 70-80
+        line_range: 81-91
         method: ProgressPhotoRepository.capture quota tier
         semantic: flag-check
         fields_read: [isPro]
@@ -1146,8 +1146,13 @@ concepts:
         fields_read: [isPro]
       - file: lib/features/profile/screens/user_photos_screen.dart
         line_range: 1-9999
-        method: "UserPhotosScreen build (profile-share-grow-order, 2026-10-04 -- ref.watch(subscriptionInfoProvider).isPro, DISPLAY-ONLY: picks the Progress row subtitle so a free user keeps the 'PRO -- visual progress timeline' hint the old Profile row showed. The GATE is SubscriptionService.instance.gateAndVerify(AppConstants.featureProgressPhotos) in the same file, and it is the ONLY PRO check on the way to ProgressPhotosScreen (the screen does not check the subscription itself); both branches, a FREE sweep over every tappable widget on the hub, and the leave-the-hub-inside-the-verify case are pinned by test/profile/user_photos_gate_behavioral_test.dart)"
+        method: "UserPhotosScreen build (profile-share-grow-order, 2026-10-04 -- ref.watch(subscriptionInfoProvider).isPro, DISPLAY-ONLY: picks the Progress row subtitle so a free user keeps the 'PRO -- visual progress timeline' hint the old Profile row showed. The GATE is SubscriptionService.instance.gateAndVerify(AppConstants.featureProgressPhotos) in the same file, the first of TWO PRO locks on the way to ProgressPhotosScreen (since 2026-10-05 the screen runs the same gate itself, on entry and on its Add button: progress_photos_screen.dart _enter / _onAddPhoto, pinned by test/contracts/progress_photos_screen_gate_test.dart); both branches, a FREE sweep over every tappable widget on the hub, and the leave-the-hub-inside-the-verify case are pinned by test/profile/user_photos_gate_behavioral_test.dart)"
         semantic: display-only
+        fields_read: [isPro]
+      - file: lib/features/profile/screens/progress_photos_screen.dart
+        line_range: 1-9999
+        method: "ProgressPhotosScreen _enter / _onAddPhoto (progress-screen-pro-gate, 2026-10-05, closes R1-04 -- the screen's OWN PRO gate: SubscriptionService.instance.gateAndVerify(AppConstants.featureProgressPhotos) on entry and again on the Add button, the server-verified branch for a high-value feature; a refused user sees ProLockedOverlay and, after upgrading, the gate re-runs from a ref.listen on subscriptionInfoProvider; behavioural proof against the real SubscriptionService in test/contracts/progress_photos_screen_gate_test.dart)"
+        semantic: flag-check
         fields_read: [isPro]
     regression_test: test/subscription/payment_grace_window_test.dart
     hive:
