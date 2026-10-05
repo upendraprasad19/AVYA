@@ -15,6 +15,26 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../scripts/sot_citation_lib.dart';
+import '../helpers/read_screen_source.dart';
+
+/// What one gate-subprocess run said, for the log of a test that FAILED: [why]
+/// plus the exit code, stdout and stderr.
+///
+/// CI run 37203140849 (2026-10-04) failed one subprocess case here with
+/// `Expected: <0> Actual: <254>` and nothing else. `dart run` exits 254 when the
+/// Dart VM cannot compile or load the script, and the reason is on stderr, but
+/// that assertion printed only stdout (empty), so the one failure we have seen
+/// could not be explained from the log. `runGateOn` now hands EVERY run's result
+/// to its `report` function, which is `printOnFailure` unless a test passes
+/// another one: `printOnFailure` prints under the failing test, and only under a
+/// failing test, whichever assertion fails and whatever a future test calls its
+/// result variable. (The per-assertion alternative, a `reason:` on each
+/// exit-code check, was tried first and dropped: it needs every author to
+/// remember it, and a source pin cannot see a result variable named anything
+/// but the one it greps for.) The `report` parameter exists so that a test can
+/// SEE what would be printed: two cases below run the real gate and read it.
+String gateDiag(ProcessResult r, String why) =>
+    '$why\nexit=${r.exitCode}\nstdout=${r.stdout}\nstderr=${r.stderr}';
 
 void main() {
   group('parseConcepts', () {
@@ -198,6 +218,7 @@ concepts:
       required String docBody,
       bool writeRegistry = true,
       List<String> args = const [],
+      void Function(String report) report = printOnFailure,
     }) {
       final tmp = Directory.systemTemp.createTempSync('gate44_');
       // Scrub the ENTIRE GIT_* namespace, not a hand-picked few.
@@ -235,7 +256,7 @@ concepts:
       // runInShell: on Windows the launcher is `dart.bat`, which Process cannot
       // exec directly — without this every case dies with a bare
       // "The system cannot find the file specified" that looks like a gate bug.
-      return Process.runSync(
+      final r = Process.runSync(
         'dart',
         ['run', scriptPath, ...args],
         workingDirectory: tmp.path,
@@ -243,6 +264,16 @@ concepts:
         includeParentEnvironment: false,
         runInShell: true,
       );
+      // Reported under THIS test's failure and only then (see [gateDiag]); the
+      // first line of the doc names which spawn it was when a test makes several.
+      report(gateDiag(
+          r,
+          [
+            'check_sot_registry_citations.dart',
+            ...args,
+            'on $docName: ${docBody.trim().split('\n').first}',
+          ].join(' ')));
+      return r;
     }
 
     const goodRegistry = 'concepts:\n\n  - concept: real_concept\n    domain: x\n';
@@ -334,6 +365,87 @@ concepts:
       );
       expect(r.exitCode, 0, reason: 'stdout=${r.stdout} stderr=${r.stderr}');
     });
+
+    test('a REAL failing gate run is reported in full: which spawn, the exit code, '
+        'stdout and the gate\'s own stderr', () {
+      final reports = <String>[];
+      final r = runGateOn(
+        registryYaml: goodRegistry,
+        docName: '2026-08-09-thing-abc123.md',
+        docBody: 'sot_registry_entry: no_such_concept\n',
+        report: reports.add,
+      );
+      expect(r.exitCode, 1);
+      expect('${r.stderr}', contains('[sot-citations] FAIL'),
+          reason: 'precondition: this run must have written to stderr, or the '
+              'assertions below would prove nothing');
+      expect(reports, hasLength(1), reason: 'one spawn, one report');
+      expect(
+          reports.single,
+          startsWith('check_sot_registry_citations.dart on '
+              '2026-08-09-thing-abc123.md: sot_registry_entry: no_such_concept\n'
+              'exit=1\nstdout='),
+          reason: 'which spawn it was, then the exit code, then stdout');
+      expect(reports.single, contains('stdout=${r.stdout}\nstderr='));
+      expect(reports.single, endsWith('stderr=${r.stderr}'),
+          reason: 'the gate\'s own stderr, last and whole');
+    });
+
+    test('a REAL passing gate run is reported too (printOnFailure, not '
+        'runGateOn, decides what is shown)', () {
+      final reports = <String>[];
+      final r = runGateOn(
+        registryYaml: goodRegistry,
+        docName: '2026-08-09-thing-abc123.md',
+        docBody: 'sot_registry_entry: real_concept\n',
+        report: reports.add,
+      );
+      expect(r.exitCode, 0);
+      expect('${r.stdout}', contains('PASS'),
+          reason: 'precondition: a passing run says so on stdout');
+      expect(reports, hasLength(1));
+      expect(reports.single, contains('exit=0'));
+      expect(reports.single, contains('stdout=${r.stdout}'));
+    });
+
+    test('runGateOn reports the dart run it has just made, and nothing else '
+        'spawns', () {
+      // PRESENCE and ORDER of the wiring, read from runGateOn's own body: a
+      // whole-file search would be satisfied by this test's own text. The effect
+      // is the two cases above (a real run, read through `report`) and the
+      // measured runs in docs/plans/sot-gate-test-stderr.md (the text lands under
+      // a failing test and not under a passing one; a gate script that cannot
+      // compile). Comments are stripped, so the doc comments cannot count.
+      final src = readSourceFileStripped(
+          'test/contracts/sot_registry_citations_test.dart');
+      final start = src.indexOf('ProcessResult runGateOn({');
+      final end = src.indexOf('const goodRegistry');
+      expect(start, greaterThan(-1), reason: 'runGateOn must still exist');
+      expect(end, greaterThan(start),
+          reason: 'goodRegistry must still follow runGateOn');
+      final body = src.substring(start, end);
+      // The spawn, then, with NOTHING between, the report of that very result,
+      // then the return and the end of the function: no condition around the
+      // report, no early return before it, no other `r` (the git loop's is scoped
+      // inside its own for body).
+      expect(
+          RegExp(r"final r = Process\.runSync\(\s*'dart',[^;]*;\s*"
+                  r'report\(\s*gateDiag\(\s*r,[^;]*;\s*return r;\s*\}')
+              .hasMatch(body),
+          isTrue,
+          reason: 'runGateOn must report the dart run right after making it: '
+              'without that a failure shows only the exit code (the 2026-10-04 '
+              '254)');
+      // The default reporter is the real one.
+      expect(
+          RegExp(r'void Function\(String \w+\) report = printOnFailure,')
+              .hasMatch(body),
+          isTrue,
+          reason: 'the default `report` must be printOnFailure');
+      // A new spawn must be added HERE on purpose and routed through runGateOn.
+      expect(RegExp(r'Process\.(runSync|run|start)\(').allMatches(src).length, 2,
+          reason: 'the git setup loop and the dart run, both inside runGateOn');
+    });
   });
 
   group('end-to-end pipeline', () {
@@ -357,6 +469,33 @@ status: fixed
       expect(tokens, ['log_client_error_payload']);
       expect(classifyCitation(tokens.single, {'log_client_error_payload'}),
           CitationVerdict.resolved);
+    });
+  });
+
+  group('gateDiag (the failure report of a spawned gate)', () {
+    test('names the caller\'s why, the exit code, stdout AND stderr (the '
+        '2026-10-04 exit-254 failure hid stderr)', () {
+      final msg = gateDiag(
+          ProcessResult(1, 254, 'out-text', 'Error: boom from stderr'),
+          'why-text');
+      expect(msg, contains('why-text'));
+      expect(msg, contains('exit=254'));
+      expect(msg, contains('stdout=out-text'));
+      expect(msg, contains('stderr=Error: boom from stderr'));
+    });
+
+    test('carries a long multi-line stderr in full (a compile error is many '
+        'lines)', () {
+      final long = [
+        for (var i = 1; i <= 60; i++)
+          'lib/x.dart:$i:1: Error: line $i of a compile error, long enough to '
+              'matter',
+      ].join('\n');
+      expect(long.length, greaterThan(1000));
+      final msg = gateDiag(ProcessResult(1, 254, '', long), 'why');
+      expect(msg, contains('stderr=lib/x.dart:1:1: Error: line 1 of'));
+      expect(msg.endsWith(long), isTrue,
+          reason: 'nothing may be cut off the end of stderr');
     });
   });
 }
