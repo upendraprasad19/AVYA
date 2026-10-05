@@ -134,6 +134,16 @@ const _engine = <String>[
 /// list classified below platform under the registry at 4259d0ed.
 const _declined = <String, String>{
   // --- lib/core/services/ ---
+  '${_services}completed_title_healer.dart':
+      'a computation applied to the winners AFTER the restore merge (OI-284): '
+      'SyncService.healCompletedTitlesAfterRestore calls CompletedTitleHealer.'
+      'run() once a restore SUCCEEDED; it reads only local Hive, never the cloud '
+      'copy, so it decides nothing about which copy wins, what is pushed or '
+      'which key a push uses, and it sets only workout_name on a completed '
+      'non-template row from that row\'s own wlog. Declined by the boundary '
+      'above ("a computation applied to the winners after a merge"); one commit '
+      'so far. If it ever reads cloud data or touches status it stops being '
+      'declined-eligible',
   '${_services}day_swap/day_swap_result.dart':
       'the day-swap engine\'s value types (refusal reasons, origin), pure with no '
       'I/O: day_swap_rules.dart imports them, as do the Train, Home and coach '

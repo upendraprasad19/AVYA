@@ -194,6 +194,22 @@ class SyncFlags {
     }
   }
 
+  /// Kill switch for the OI-284 completed-row title heal
+  /// (`CompletedTitleHealer`, run after a SUCCEEDED full restore). Opt-OUT
+  /// polarity, same shape as [restoreWriteIfChangedEnabled]:
+  /// `configBox['disable_completed_title_heal'] = true` makes the heal a
+  /// no-op, which is byte-identical to the pre-fix restore. Plan
+  /// docs/plans/swap-title-and-launch-refresh.md section 5.
+  static bool get completedTitleHealEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('disable_completed_title_heal') !=
+          true;
+    } catch (_) {
+      return true;
+    }
+  }
+
   /// Test-only setter. Production callers MUST NOT toggle flags in
   /// code — they flip via `configBox.put` from a one-shot migration
   /// or remote-config write only.

@@ -262,7 +262,7 @@ Future<void> submitWorkoutDraft(WorkoutDraft draft, WidgetRef ref) async {
   // and flips today's schedule status if present.
   await WorkoutWriteService.instance.markCompleted(
     date: now,
-    workoutName: 'Chat Workout',
+    workoutName: kChatWorkoutName,
     durationSec: totalDurationSec,
     ref: ref,
   );

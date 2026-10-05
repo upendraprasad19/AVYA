@@ -250,6 +250,9 @@ void main() {
       const restoreOnlyAllowlist = <String>{
         'IfNeeded',
         'FromCloudForUser',
+        // OI-284: the verbatim body of FromCloudForUser, split out so its
+        // public wrapper can run the completed-title heal once on success.
+        'FromCloudForUserCore',
         'CoachMemory',
         'CustomExercises',
         'CustomFoods',
