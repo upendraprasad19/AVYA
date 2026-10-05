@@ -125,7 +125,7 @@
 | 6.2 | Edit Profile | All fields editable | 3 |
 | 6.3 | Subscription card — free | Shows upgrade options (₹349/mo + ₹2999/yr) | 3 |
 | 6.4 | Badges grid | Shows earned badges, no crash on 0 badges | 3 |
-| 6.5 | Progress photos (free) | Locked with PaywallSheet | 3 |
+| 6.5 | Progress photos (free): Profile → Photos → Progress | Locked with PaywallSheet | 3 |
 | 6.6 | Reports | Weekly report generates | 1 |
 | 6.7 | Logout | Returns to sign-in, auth cleared | 1 |
 

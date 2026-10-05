@@ -13,6 +13,24 @@ import '../helpers/auth_helper.dart';
 import '../helpers/navigation_helper.dart';
 import '../helpers/test_data_helper.dart';
 
+/// Scrolls the Profile list until [text] is on screen.
+///
+/// The Profile body is a lazy `ListView`, not a `SingleChildScrollView`: the old
+/// `find.byType(SingleChildScrollView)` + drag in these tests found nothing to
+/// drag, so no scroll ever happened, and a row far down the page is not even
+/// built until it is scrolled near. SHARE & GROW now sits below the AVYA block,
+/// which made that matter for T11 / T15; T10 and T12-T14 (SETTINGS rows and the
+/// DANGER ZONE) had the same dead step and use this too. The first Scrollable on
+/// the Profile tab is that list.
+Future<void> scrollProfileTo(WidgetTester tester, String text) async {
+  await tester.scrollUntilVisible(
+    find.text(text),
+    300,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.pumpAndSettle();
+}
+
 /// Flow 6: Profile tab — bio stats, subscription status, edit flow.
 ///
 /// Tests:
@@ -246,12 +264,8 @@ void main() {
     await signInWithTestUser(tester);
     await navigateToProfile(tester);
 
-    // Scroll to find health sync section.
-    final scrollable = find.byType(SingleChildScrollView);
-    if (scrollable.evaluate().isNotEmpty) {
-      await tester.drag(scrollable.first, const Offset(0, -200));
-      await tester.pumpAndSettle();
-    }
+    // Scroll to the Health Sync row (SETTINGS).
+    await scrollProfileTo(tester, 'Health Sync');
 
     final hasHealthSync = anyTextVisible(
         ['Health', 'Sync', 'Google Fit', 'Health Connect', 'Steps', 'Connect']);
@@ -268,12 +282,8 @@ void main() {
     await signInWithTestUser(tester);
     await navigateToProfile(tester);
 
-    // Scroll down to find the Invite Friends row
-    final scrollable = find.byType(SingleChildScrollView);
-    if (scrollable.evaluate().isNotEmpty) {
-      await tester.drag(scrollable.first, const Offset(0, -300));
-      await tester.pumpAndSettle();
-    }
+    // Scroll down to the Invite Friends row (SHARE & GROW, below the AVYA block)
+    await scrollProfileTo(tester, 'Invite Friends');
 
     final hasInvite = anyTextVisible(
         ['Invite', 'invite', 'Refer', 'refer', 'Share', 'Friends']);
@@ -290,12 +300,8 @@ void main() {
     await signInWithTestUser(tester);
     await navigateToProfile(tester);
 
-    // Scroll down to find the Privacy Policy row
-    final scrollable = find.byType(SingleChildScrollView);
-    if (scrollable.evaluate().isNotEmpty) {
-      await tester.drag(scrollable.first, const Offset(0, -400));
-      await tester.pumpAndSettle();
-    }
+    // Scroll down to the Privacy & Permissions row (SETTINGS)
+    await scrollProfileTo(tester, 'Privacy & Permissions');
 
     final hasPrivacy = anyTextVisible(
         ['Privacy', 'privacy', 'Policy', 'GDPR', 'Data']);
@@ -312,12 +318,8 @@ void main() {
     await signInWithTestUser(tester);
     await navigateToProfile(tester);
 
-    // Scroll down to find the Export Data row
-    final scrollable = find.byType(SingleChildScrollView);
-    if (scrollable.evaluate().isNotEmpty) {
-      await tester.drag(scrollable.first, const Offset(0, -400));
-      await tester.pumpAndSettle();
-    }
+    // Scroll down to the Export My Data row (SETTINGS)
+    await scrollProfileTo(tester, 'Export My Data');
 
     final hasExport = anyTextVisible(
         ['Export', 'export', 'Download', 'Data']);
@@ -334,12 +336,11 @@ void main() {
     await signInWithTestUser(tester);
     await navigateToProfile(tester);
 
-    // Scroll all the way down to find Delete Account
-    final scrollable = find.byType(SingleChildScrollView);
-    if (scrollable.evaluate().isNotEmpty) {
-      await tester.drag(scrollable.first, const Offset(0, -600));
-      await tester.pumpAndSettle();
-    }
+    // Scroll all the way down to the DANGER ZONE, which is a collapsed
+    // ExpansionTile: its children (Delete Account) are not built until it opens.
+    await scrollProfileTo(tester, 'DANGER ZONE');
+    await tester.tap(find.text('DANGER ZONE'));
+    await tester.pumpAndSettle();
 
     final hasDelete = anyTextVisible(
         ['Delete', 'delete', 'Remove Account', 'Delete Account']);
@@ -356,12 +357,8 @@ void main() {
     await signInWithTestUser(tester);
     await navigateToProfile(tester);
 
-    // Scroll to find the Community Review row
-    final scrollable = find.byType(SingleChildScrollView);
-    if (scrollable.evaluate().isNotEmpty) {
-      await tester.drag(scrollable.first, const Offset(0, -300));
-      await tester.pumpAndSettle();
-    }
+    // Scroll to the Submissions row (SHARE & GROW, below the AVYA block)
+    await scrollProfileTo(tester, 'Submissions');
 
     // Look for community review option
     final hasCommunity = anyTextVisible(

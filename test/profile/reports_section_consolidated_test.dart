@@ -5,30 +5,34 @@ void main() {
   late String src;
 
   setUpAll(() {
-    src = readScreenSource('profile');
+    // Comment-stripped: a row commented out instead of deleted must not count.
+    src = readScreenSourceStripped('profile');
   });
 
-  test('Predictions, Progress Comparison, Progress Photos share one _buildCard', () {
+  test('Predictions, Progress Comparison, Photos share one _buildCard', () {
     final predictionsIdx = src.indexOf("title: 'Predictions'");
     final comparisonIdx = src.indexOf("title: 'Progress Comparison'");
-    final photosIdx = src.indexOf("title: 'Progress Photos'");
+    final photosIdx = src.indexOf("title: 'Photos'");
 
     // All three rows must exist
     expect(predictionsIdx, isNot(-1), reason: 'Predictions row missing');
     expect(comparisonIdx, isNot(-1), reason: 'Progress Comparison row missing');
-    expect(photosIdx, isNot(-1), reason: 'Progress Photos row missing');
+    expect(photosIdx, isNot(-1), reason: 'Photos hub row missing');
 
     // They must appear in order
     expect(predictionsIdx < comparisonIdx, isTrue,
         reason: 'Predictions must come before Progress Comparison');
     expect(comparisonIdx < photosIdx, isTrue,
-        reason: 'Progress Comparison must come before Progress Photos');
+        reason: 'Progress Comparison must come before the Photos row');
 
-    // There must be only one _buildCard call between Predictions and Photos
+    // The segment starts at the Predictions TITLE, which is already inside the
+    // card's own `_buildCard([`, so a segment that shares the card has NO
+    // `_buildCard` in it; one is a second card (Photos split into its own).
     final segment = src.substring(predictionsIdx, photosIdx);
     final buildCardCount = '_buildCard'.allMatches(segment).length;
-    expect(buildCardCount, lessThanOrEqualTo(1),
-        reason: 'All 3 rows must share a single _buildCard (got $buildCardCount in segment)');
+    expect(buildCardCount, 0,
+        reason: 'All 3 rows must share a single _buildCard (got $buildCardCount '
+            'in the Predictions..Photos segment)');
   });
 
   test('WeeklyReportCard appears before the 3-row card in REPORTS', () {

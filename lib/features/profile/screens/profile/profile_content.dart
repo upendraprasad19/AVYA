@@ -292,14 +292,16 @@ extension _ProfileContent on _ProfileScreenState {
                 ),
               const SizedBox(height: 8),
 
-              // Reports now hosts BOTH the weekly AI report AND progress
-              // photos (moved here from SHARE & GROW per 2026-04-18 user
-              // feedback). Progress Photos is still PRO-gated at tap.
+              // Reports hosts the weekly AI report AND the photos entry (photos
+              // moved here from SHARE & GROW per 2026-04-18 user feedback; the
+              // two photo rows became ONE "Photos" hub row on 2026-10-04). The
+              // Progress PRO gate lives in the hub (`user_photos_screen.dart`),
+              // not on this row.
               //
               // Plan D D-10: Predictions moved into REPORTS as the first
               // REPORTS \u2014 WeeklyReportCard on top, then a single card for
-              // the 3 list rows (Predictions / Progress Comparison / Progress
-              // Photos). Consolidating from 3 separate _buildCard calls
+              // the 3 list rows (Predictions / Progress Comparison / Photos).
+              // Consolidating from 3 separate _buildCard calls
               // removes the triple gap and matches the SETTINGS / SHARE &
               // GROW single-card pattern.
               const SectionHeader('REPORTS'),
@@ -342,137 +344,19 @@ extension _ProfileContent on _ProfileScreenState {
                     showBorder: true,
                     onTap: () => context.go('/profile/progress-comparison'),
                   ),
+                  // One row for both photo surfaces. The hub
+                  // (UserPhotosScreen) routes to Progress (PRO-gated there)
+                  // and Saved (coach-media consent, Unit 8 / OI-25).
                   ProfileRow(
                     icon: Icons.photo_library_outlined,
-                    title: 'Progress Photos',
-                    subtitle: subInfo.isPro
-                        ? 'Track your transformation visually'
-                        : 'PRO \u2014 visual progress timeline',
-                    trailing: const ProfileRowChevron(),
-                    showBorder: true,
-                    onTap: () => SubscriptionService.instance.gateAndVerify(
-                      AppConstants.featureProgressPhotos,
-                      onPro: () => context.go('/profile/progress-photos'),
-                      onFree: () =>
-                          showPaywallSheet(context, feature: 'Progress Photos'),
-                    ),
-                  ),
-                  // Unit 8 (coach-media-consent, OI-25) \u2014 photos the user
-                  // chose to save from AI Coach chat. Not PRO-gated at this
-                  // row: only PRO users can send chat photos in the first
-                  // place (featurePhotoAnalysis gates that upstream), so a
-                  // free user just sees an empty screen, which is harmless.
-                  ProfileRow(
-                    icon: Icons.bookmark_border,
-                    title: 'Saved Photos',
-                    subtitle: 'Photos you saved from AI Coach chat',
+                    title: 'Photos',
+                    subtitle: 'Progress timeline and photos saved from AI Coach',
                     trailing: const ProfileRowChevron(),
                     showBorder: false,
-                    onTap: () => context.go('/profile/saved-coach-photos'),
+                    onTap: () => context.go('/profile/photos'),
                   ),
                 ]);
               }),
-              const SizedBox(height: 8),
-
-              // #4b Invite Friends (referral)
-              //
-              // Progress Photos moved up to REPORTS. Health Sync row added
-              // into SETTINGS (see below) — its standalone section was
-              // removed.
-              const SectionHeader('SHARE & GROW'),
-              _buildCard([
-                // Q4: Apply Referral Code — visible only within 7-day signup
-                // window AND when the user hasn't redeemed a referral yet.
-                // Tap opens ApplyReferralSheet; on success the provider is
-                // invalidated so the tile disappears automatically.
-                ...ref.watch(referralEligibilityProvider).when(
-                  data: (state) {
-                    if (!state.isEligible) return const <Widget>[];
-                    return <Widget>[
-                      ProfileRow(
-                        icon: Icons.card_giftcard_outlined,
-                        iconBgColor: AppColors.accentSoft,
-                        iconColor: AppColors.accent,
-                        title: 'Apply Referral Code',
-                        subtitle: '7 days of PRO when you apply a code',
-                        titleSuffix: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: AppColors.accentSoft,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            '${state.daysRemaining}D LEFT',
-                            style: AppTypography.monoXs.copyWith(
-                              letterSpacing: 0.8,
-                              color: AppColors.accent,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                        trailing: const ProfileRowChevron(),
-                        onTap: () async {
-                          final ok = await ApplyReferralSheet.show(context);
-                          if (ok == true && context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  '7 days of PRO unlocked!',
-                                  style: AppTypography.body.copyWith(
-                                    color: AppColors.textPrimary,
-                                  ),
-                                ),
-                                backgroundColor: AppColors.card,
-                                behavior: SnackBarBehavior.floating,
-                                duration: const Duration(seconds: 3),
-                              ),
-                            );
-                            ref.invalidate(referralEligibilityProvider);
-                          }
-                        },
-                      ),
-                    ];
-                  },
-                  loading: () => const <Widget>[],
-                  error: (e, st) => const <Widget>[],
-                ),
-                ProfileRow(
-                  icon: Icons.card_giftcard,
-                  title: 'Invite Friends',
-                  subtitle: 'Both get 7 days PRO free',
-                  trailing: const ProfileRowChevron(),
-                  onTap: () => InviteFriendsSheet.show(context),
-                ),
-                // S1 (2026-04-24) — the pre-APK-1-batch split of
-                // "Review Community Items" (bottom sheet) and
-                // "My Submissions" (screen) confused testers who kept
-                // tapping one expecting the other. Collapsed into a
-                // single Submissions row that opens a tabbed screen
-                // with both views.
-                ProfileRow(
-                  icon: Icons.workspace_premium_outlined,
-                  title: 'Submissions',
-                  subtitle: 'Your submissions + vote on community items',
-                  trailing: const ProfileRowChevron(),
-                  onTap: () => context.go('/profile/submissions'),
-                ),
-                // AH.7 — Rate App tile completes the SHARE & GROW block
-                // (JSX spec lines 331–338 + user ask for explicit Rate App
-                // row). Launches the Play Store listing via externalApplication
-                // so the Play Store app intercepts on-device; users without
-                // it land on the web listing.
-                ProfileRow(
-                  icon: Icons.star_outline,
-                  title: 'Rate App',
-                  subtitle: 'Tell the Play Store what you think',
-                  trailing: const ProfileRowChevron(),
-                  showBorder: false,
-                  onTap: () => _launchUrl(
-                    'https://play.google.com/store/apps/details?id=com.icanbefitter.icanbefitter',
-                  ),
-                ),
-              ]),
               const SizedBox(height: 8),
 
               // #5 Notifications (consolidated — just a row linking to settings screen)
@@ -606,6 +490,108 @@ extension _ProfileContent on _ProfileScreenState {
                 ),
               ]),
               const SizedBox(height: 12),
+
+              // #4b Invite Friends (referral)
+              //
+              // Photos moved up to REPORTS (the one Photos hub row). The
+              // Health Sync row lives in SETTINGS, above — its standalone
+              // section was removed. This block sits BELOW the AVYA block
+              // (founder request, 2026-10-03).
+              const SectionHeader('SHARE & GROW'),
+              _buildCard([
+                // Q4: Apply Referral Code — visible only within 7-day signup
+                // window AND when the user hasn't redeemed a referral yet.
+                // Tap opens ApplyReferralSheet; on success the provider is
+                // invalidated so the tile disappears automatically.
+                ...ref.watch(referralEligibilityProvider).when(
+                  data: (state) {
+                    if (!state.isEligible) return const <Widget>[];
+                    return <Widget>[
+                      ProfileRow(
+                        icon: Icons.card_giftcard_outlined,
+                        iconBgColor: AppColors.accentSoft,
+                        iconColor: AppColors.accent,
+                        title: 'Apply Referral Code',
+                        subtitle: '7 days of PRO when you apply a code',
+                        titleSuffix: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppColors.accentSoft,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '${state.daysRemaining}D LEFT',
+                            style: AppTypography.monoXs.copyWith(
+                              letterSpacing: 0.8,
+                              color: AppColors.accent,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        trailing: const ProfileRowChevron(),
+                        onTap: () async {
+                          final ok = await ApplyReferralSheet.show(context);
+                          if (ok == true && context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  '7 days of PRO unlocked!',
+                                  style: AppTypography.body.copyWith(
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                                backgroundColor: AppColors.card,
+                                behavior: SnackBarBehavior.floating,
+                                duration: const Duration(seconds: 3),
+                              ),
+                            );
+                            ref.invalidate(referralEligibilityProvider);
+                          }
+                        },
+                      ),
+                    ];
+                  },
+                  loading: () => const <Widget>[],
+                  error: (e, st) => const <Widget>[],
+                ),
+                ProfileRow(
+                  icon: Icons.card_giftcard,
+                  title: 'Invite Friends',
+                  subtitle: 'Both get 7 days PRO free',
+                  trailing: const ProfileRowChevron(),
+                  onTap: () => InviteFriendsSheet.show(context),
+                ),
+                // S1 (2026-04-24) — the pre-APK-1-batch split of
+                // "Review Community Items" (bottom sheet) and
+                // "My Submissions" (screen) confused testers who kept
+                // tapping one expecting the other. Collapsed into a
+                // single Submissions row that opens a tabbed screen
+                // with both views.
+                ProfileRow(
+                  icon: Icons.workspace_premium_outlined,
+                  title: 'Submissions',
+                  subtitle: 'Your submissions + vote on community items',
+                  trailing: const ProfileRowChevron(),
+                  onTap: () => context.go('/profile/submissions'),
+                ),
+                // AH.7 — Rate App tile completes the SHARE & GROW block
+                // (JSX spec lines 331–338 + user ask for explicit Rate App
+                // row). Launches the Play Store listing via externalApplication
+                // so the Play Store app intercepts on-device; users without
+                // it land on the web listing.
+                ProfileRow(
+                  icon: Icons.star_outline,
+                  title: 'Rate App',
+                  subtitle: 'Tell the Play Store what you think',
+                  trailing: const ProfileRowChevron(),
+                  showBorder: false,
+                  onTap: () => _launchUrl(
+                    'https://play.google.com/store/apps/details?id=com.icanbefitter.icanbefitter',
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 8),
 
               // Bug #14 — Subscription moved to the bottom (full upsell banner
               // in the closing-pitch position). Premium pill at the top is the
