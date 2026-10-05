@@ -22,13 +22,14 @@ import '../widgets/profile_row.dart';
 /// own data source and delete behaviour. Both are pushed (not `go`) so back
 /// returns here.
 ///
-/// The PRO check is NOT in the destinations. The Progress row below is the ONLY
-/// gate on the way to `ProgressPhotosScreen`, which does not check the
-/// subscription itself (its one paywall is the daily-cap one), and Saved is
-/// ungated by design. So any second way into the Progress screen (a shortcut
-/// button, a named-route push, a link from another tab) skips the PRO gate
-/// unless it goes through `gateAndVerify` too; `user_photos_hub_test.dart` and
-/// `user_photos_gate_behavioral_test.dart` fail on one.
+/// Progress has TWO PRO locks. The row below gives a free user the paywall
+/// without ever opening `ProgressPhotosScreen`; the screen also runs the same
+/// `gateAndVerify` on entry (`progress_photos_screen_gate_test.dart`), so a way
+/// in that never touches this hub (the web address `#/profile/progress-photos`,
+/// a shortcut, a named-route push) is stopped there and shows a locked card.
+/// Saved is ungated by design. `user_photos_hub_test.dart` and
+/// `user_photos_gate_behavioral_test.dart` still fail on a second ungated door
+/// from this hub, because a free user should get the paywall, not the card.
 ///
 /// The ONLY subscription read in the build is display-only: the Progress
 /// subtitle keeps the "PRO — visual progress timeline" hint the old Profile row
@@ -98,7 +99,8 @@ class UserPhotosScreen extends ConsumerWidget {
                       ? 'Track your transformation visually'
                       : 'PRO — visual progress timeline',
                   trailing: const ProfileRowChevron(),
-                  // The ONLY PRO check on the way to ProgressPhotosScreen.
+                  // The first of two PRO locks on the way to
+                  // ProgressPhotosScreen (the screen gates itself too).
                   onTap: () => SubscriptionService.instance.gateAndVerify(
                     AppConstants.featureProgressPhotos,
                     onPro: () {

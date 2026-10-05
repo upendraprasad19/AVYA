@@ -41,9 +41,20 @@ class ProgressPhotoRepository {
 
   /// Daily upload caps — enforced at capture time.
   /// Free: 2/day. PRO: 5/day.
+  /// Since 2026-10-05 `ProgressPhotosScreen` is PRO-only (it gates its entry and
+  /// its Add button), so the free branch is a BACKSTOP: it runs only if the
+  /// subscription lapses between the Add button's gate and `capture`'s own read
+  /// of `isPro()`. It is kept, not deleted, until the founder decides
+  /// (docs/plans/progress-screen-pro-gate.md, row C6).
   /// (Lifetime cap is deferred; revisit at 10K users.)
   static const int _freeDailyCap = 2;
   static const int _proDailyCap = 5;
+
+  /// Test seam, called at the start of every [list]: it lets a test prove that a
+  /// screen which must not read photos (a user the PRO gate refused) did not,
+  /// and that a granted one read exactly once. Null in production.
+  @visibleForTesting
+  static void Function()? debugOnListForTests;
 
   SupabaseService get _s => SupabaseService.instance;
 
@@ -142,6 +153,7 @@ class ProgressPhotoRepository {
   /// Returns `[{id, storage_path, body_area, taken_at, weight_kg_at_time,
   /// signed_url}, ...]`.
   Future<List<Map<String, dynamic>>> list({int limit = 200}) async {
+    debugOnListForTests?.call();
     final userId = _s.currentUser?.id;
     if (userId == null) return const [];
 

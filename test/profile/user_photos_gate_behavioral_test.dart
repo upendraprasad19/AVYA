@@ -20,8 +20,10 @@
 // `SubscriptionService._highValueFeatures` (root CLAUDE.md §4.4 rule 19) turns
 // the PRO case red (the gate would take the `local_pro` branch instead).
 //
-// Two more cases exist because the Progress SCREEN has no PRO check of its own
-// (the hub row is the only gate on the way in):
+// Two more cases exist so that a free user gets the PAYWALL from the hub and
+// never the Progress screen's locked card (the screen gates itself since
+// 2026-10-05, `progress_photos_screen_gate_test.dart`, but the hub is where the
+// paywall belongs):
 //   * a FREE sweep taps EVERY tappable widget on the hub, each on a fresh app,
 //     and asserts the Progress screen is never built — so a second, ungated way
 //     in (a shortcut button, a push by route name) turns it red;
@@ -247,8 +249,8 @@ void main() {
       }
 
       expect(visited, isNot(contains('progress')),
-          reason: 'the Progress screen has no PRO check of its own, so a FREE '
-              'user must not be able to reach it from ANY widget on the hub');
+          reason: 'a FREE user gets the paywall from the hub, never the Progress '
+              'screen (and its locked card), from ANY widget on the hub');
       expect(visited, contains('saved'),
           reason: 'the sweep did tap the ungated Saved row, so it taps real '
               'rows (a sweep that taps nothing would pass vacuously)');

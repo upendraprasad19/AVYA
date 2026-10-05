@@ -65,6 +65,11 @@ paths:
   - { glob: "lib/core/services/guarded_box.dart", tier: platform }   # cross-account isolation primitive (Layer A) — failure = cross-account leak
   - { glob: "lib/core/services/hive_service.dart", tier: platform }
   - { glob: "lib/shared/repositories/plan_engine/**", tier: platform }
+  # OI-282 (f2c8a5): restore merges hosted OUTSIDE lib/core/services/. They must sit up here, above
+  # lib/shared/repositories/** (account) and lib/features/profile/** (feature), because first match wins. Same boundary
+  # as the sync-engine block below (prong 3): the file's own words say it MERGES the cloud copy with the local one.
+  - { glob: "lib/shared/repositories/user_repository.dart", tier: platform }   # mergeCloudProgress: the restore merge of the progress map (OI-83); lib/shared/repositories/** below still covers every other repository
+  - { glob: "lib/features/profile/services/notification_prefs_repository.dart", tier: platform }   # adoptFromCloud + mergeCloudNotificationPrefs: the restore leg for notification preferences (OI-98)
   - { glob: "CLAUDE.md", tier: platform }
   # context-lean batch 2026-09-29: the FULL text of the binding rules (§4.3/4.4/
   # 4.10/4.12/4.13) moved out of root CLAUDE.md into process-invariants-detail.md,
@@ -271,7 +276,7 @@ paths:
   # future edit gutting the lock alone falls through to the scripts/**
   # feature-tier catch-all below and clears no review gate, the exact "fell
   # through scripts/** to feature tier" mistake this file's own comments above
-  # (lines 84, 93) already record happening twice. safe_merge.sh is the third
+  # (the 2026-07-19 note and the merge 904e6961 note) already record happening twice. safe_merge.sh is the third
   # sanctioned git wrapper (merge-into-main), promoted alongside its siblings
   # for the same reason.
   - { glob: "scripts/_git_lock.sh", tier: platform }
@@ -306,7 +311,7 @@ paths:
   - { glob: "lib/core/services/health_write_service.dart", tier: account }
   - { glob: "lib/core/services/nutrition_write_service.dart", tier: account }
   - { glob: "lib/core/services/workout_write_service.dart", tier: account }
-  - { glob: "lib/core/services/profile_write_service.dart", tier: account }
+  - { glob: "lib/features/profile/services/profile_write_service.dart", tier: account }   # f2c8a5: this named lib/core/services/profile_write_service.dart, a path that never existed, so the rule never fired
   - { glob: "lib/core/services/workout_schedule_service.dart", tier: account }
   - { glob: "lib/core/services/subscription_service.dart", tier: account }
   - { glob: "lib/core/services/error_telemetry.dart", tier: account }
@@ -412,6 +417,64 @@ paths:
   - { glob: ".claude/**", tier: feature }
   - { glob: ".github/**", tier: feature }
   - { glob: "backups/**", tier: feature }
+
+  # ----- platform: the sync engine OUTSIDE lib/core/services/sync/** (OI-282, diagnose f2c8a5) -----
+  # sync/** was the only part of the engine classified platform. Its core sits one directory up and fell
+  # through to the lib/core/services/** account catch-all below, so a diff touching ONLY those files skipped
+  # the platform gate (`bpass: accepted` in the plan-review record). Exact paths, not a sync_*.dart glob: a glob
+  # would auto-promote future files with nobody deciding (docs/sot_registry.yaml, blast_radius_registry_coverage).
+  # THE BOUNDARY, one rule for every lib/ file that an engine file imports, exports or declares as a part. A file is
+  # platform when ANY of these holds:
+  #   1. engine machinery: the code that itself pushes, queues, retries, serialises, probes, pages, or runs a restore
+  #      merge, plus the contract, error taxonomy and per-domain path flags those parts are built on (sync_domain,
+  #      sync_error, sync_flags). Listed whatever its churn (sync_queue and plan_integrity_reconciler each add commits
+  #      that were not platform before: that is the review this change exists for);
+  #   2. cross-account isolation the engine registers with: the tier definition above names "cross-account", and
+  #      hive_user_session.dart and guarded_box.dart are the same class;
+  #   3. shared with other code, but its own words say a function in it MERGES the cloud copy with the local one,
+  #      supplies the identity a push keys on, gates a push, or is a rule the restore merge itself delegates to, AND
+  #      promoting it alone adds at most one newly-platform commit per 60 days, measured against the base registry
+  #      (so a file that other features touch constantly stays account).
+  # A file the engine only consults (a type, an accessor, a utility, telemetry, transport, ingest, a domain read, a
+  # payload builder, a computation applied to the winners after a merge, a writer) stays below platform and is named
+  # in the `_declined` map of test/contracts/blast_radius_sync_engine_platform_test.dart, with the function the engine
+  # calls (or, for a type, what the engine uses it for). That test DERIVES the set from the sources: every lib/ file
+  # imported, exported or declared as a part by an engine file (the paths listed here, sync_domains/**, sync/**) or
+  # named sync_*.dart on disk must be platform or declined with a reason, so a new engine file, or a new import,
+  # fails the test until its tier is decided. Callers of the engine are out of scope: no engine file imports them, so
+  # the derivation cannot reach them; the two known ones (auth_session_bootstrapper, sync_state_provider) are decided
+  # and pinned by name in the test's `_callers` map, each with its reason and the call that proves it is one.
+  # Declared above the catch-alls (first match wins). The two merges hosted outside the services layer sit with the
+  # other lib/ platform rules near the top of this file, above the repository and profile rules they must beat.
+  - { glob: "lib/core/services/sync_service.dart", tier: platform }   # push + restore orchestrator
+  - { glob: "lib/core/services/sync_queue.dart", tier: platform }   # persistent retry queue for failed writes
+  - { glob: "lib/core/services/sync_retry_controller.dart", tier: platform }   # capped, probe-gated push retry (e5b2a9)
+  - { glob: "lib/core/services/sync_coalescer.dart", tier: platform }   # collapses a burst of triggers into 1-2 passes
+  - { glob: "lib/core/services/sync_domain.dart", tier: platform }   # the SyncDomain contract
+  - { glob: "lib/core/services/sync_error.dart", tier: platform }   # typed sync failure classification
+  - { glob: "lib/core/services/sync_flags.dart", tier: platform }   # per-domain SyncDomain migration flags
+  - { glob: "lib/core/services/serial_slot.dart", tier: platform }   # serialises weeklyFullSync
+  - { glob: "lib/core/services/backend_probe.dart", tier: platform }   # the reachability probe behind the retry
+  - { glob: "lib/core/services/paginate_all.dart", tier: platform }   # restore paginator: a row past 1000 was silently dropped
+  - { glob: "lib/core/services/pending_exlog_deletes.dart", tier: platform }   # cloud-delete queue: a dropped entry lets a deleted log reappear on restore (OI-246)
+  - { glob: "lib/core/services/pending_template_deletes.dart", tier: platform }   # cloud-delete queue for templates (OI-252)
+  - { glob: "lib/core/services/sync_domains/**", tier: platform }   # the per-domain SyncDomain wrappers: a whole directory, like sync/**
+  # Prong 1, the schedule restore MERGE the engine itself runs: it decides which copy of the user's data wins on a
+  # cross-device conflict, and OI-285 already calls the schedule merge platform tier.
+  - { glob: "lib/core/services/plan_integrity_reconciler.dart", tier: platform }   # restore merge: completed-day-preserving, arrangement-wins
+  - { glob: "lib/core/services/plan_window_reanchor.dart", tier: platform }   # restore merge: the plan-window re-anchor both restore writers share
+  # Prong 3, shared files that host one decision each. streak_progress_service.dart hosts the freeze counterpart of
+  # the merge (the engine calls its mergeFreezeProgress on restore); day_swap/day_swap_rules.dart is shared with the
+  # schedule merge, which delegates its hybrid-rest predicate and its week bounds there so the two cannot disagree.
+  - { glob: "lib/core/services/streak_progress_service.dart", tier: platform }   # restore freeze merge (mergeFreezeProgress); also the streak-freeze writer
+  - { glob: "lib/core/services/day_swap/day_swap_rules.dart", tier: platform }   # rules the schedule merge delegates to; writes the arranged_at_ms stamp it compares
+  # The identity a template push keys on: restore rebuilds Hive keys from the cloud id, and the migrator rewrites
+  # legacy keys before any push (OI-252).
+  - { glob: "lib/core/services/template_identity.dart", tier: platform }   # the cloud primary key a template push uses (cloudIdFromKey / templateKeyFor)
+  - { glob: "lib/core/services/template_identity_migrator.dart", tier: platform }   # the gate on the template push: rewrites legacy ids, `if (!migrated) return`
+  # Prong 2, cross-account isolation: the engine registers its reset with it, and a broken registry leaves a
+  # singleton holding the previous account's state (13 call sites register, the engine is one).
+  - { glob: "lib/core/services/singleton_lifecycle_registry.dart", tier: platform }   # cross-account reset hook
 
   # ----- catch-all fallbacks (lowest specificity; declared last) -----
   # Any other service file under lib/core/services/ is account-tier by default.

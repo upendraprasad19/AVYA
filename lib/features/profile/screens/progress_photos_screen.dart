@@ -2,17 +2,32 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
+import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/shared/widgets/pro_locked_overlay.dart';
+
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../shared/widgets/error_state.dart';
 import '../../../shared/widgets/paywall_sheet.dart';
+import '../providers/profile_provider.dart';
 import '../repositories/progress_photo_repository.dart';
 
 /// Full-screen progress photos gallery (F19).
 ///
-/// PRO-gated at the entry point: the Progress row in the Photos hub
-/// (`user_photos_screen.dart`, reached from the Profile "Photos" row).
+/// PRO-only, and the screen enforces that ITSELF (founder decision 2026-10-05,
+/// closing R1-04): `_enter` runs the same `gateAndVerify` the Photos hub row
+/// runs, so the web address `#/profile/progress-photos`, edited into an app that
+/// is already open (a fresh load goes through `/restoring` and lands on Home),
+/// cannot skip it. Two locks, on purpose: the hub row (`user_photos_screen.dart`)
+/// gives a free user the paywall without ever opening this screen; this screen's
+/// own gate catches every other way in. The write action (`_onAddPhoto`) runs the
+/// gate again, because a subscription can lapse while the screen stays open and
+/// a Storage write is the reason `progress_photos` is server-verified (rule 19).
+/// A user the gate refused who then upgrades gets the gate re-run (`build`
+/// listens to `subscriptionInfoProvider`), so the locked card gives way to the
+/// gallery without leaving the screen.
 /// Reads/writes via `ProgressPhotoRepository` which in turn handles:
 ///   - Supabase Storage upload + signed-URL read (`progress-photos` bucket)
 ///   - `progress_photos` metadata row (migration 022)
@@ -27,16 +42,48 @@ class ProgressPhotosScreen extends ConsumerStatefulWidget {
       _ProgressPhotosScreenState();
 }
 
+/// Where this screen's own PRO check stands.
+enum _Access { checking, granted, denied }
+
 class _ProgressPhotosScreenState extends ConsumerState<ProgressPhotosScreen> {
   final _repo = ProgressPhotoRepository.instance;
   List<Map<String, dynamic>>? _photos;
   String? _error;
   bool _uploading = false;
 
+  /// The Add button's own gate (`_onAddPhoto`) is in flight. A stale verify
+  /// cache plus a slow network makes it wait up to 10 s, and a second tap in that
+  /// window would run a second gate and open a second Camera / Gallery sheet.
+  bool _gating = false;
+  _Access _access = _Access.checking;
+
   @override
   void initState() {
     super.initState();
-    _load();
+    _enter();
+  }
+
+  /// The screen's own PRO check. `gateAndVerify` answers a locally-free user
+  /// synchronously (so a free user's first build already shows the locked card,
+  /// with no spinner flash) and, for a locally-PRO user, awaits a server verify
+  /// (cached 5 minutes, 10 s timeout), so the screen can be gone by the time a
+  /// callback runs: both callbacks check `mounted` first. `_load()` runs only
+  /// for a verified PRO user, so a free user triggers no photo read. Its two
+  /// callers (`initState` and the upgrade listener in `build`) are mounted by
+  /// construction, so it needs no guard of its own before the await.
+  Future<void> _enter() async {
+    await SubscriptionService.instance.gateAndVerify(
+      AppConstants.featureProgressPhotos,
+      onPro: () {
+        if (!mounted) return;
+        setState(() => _access = _Access.granted);
+        _load();
+      },
+      onFree: () {
+        if (!mounted) return;
+        setState(() => _access = _Access.denied);
+      },
+    );
   }
 
   Future<void> _load() async {
@@ -148,6 +195,16 @@ class _ProgressPhotosScreenState extends ConsumerState<ProgressPhotosScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // The locked card's Upgrade button opens the paywall, which cannot be awaited
+    // (`showPaywallSheet` returns void). A completed purchase flips this provider
+    // (`onStateChanged`, app.dart), so a user the gate refused who has just become
+    // PRO gets the gate re-run: server-verified, same as on entry.
+    ref.listen<SubscriptionInfoData>(subscriptionInfoProvider, (previous, next) {
+      if (_access == _Access.denied && next.isPro) {
+        setState(() => _access = _Access.checking);
+        _enter();
+      }
+    });
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
@@ -170,58 +227,116 @@ class _ProgressPhotosScreenState extends ConsumerState<ProgressPhotosScreen> {
           ],
         ),
       ),
-      floatingActionButton: _uploading
-          ? const FloatingActionButton(
-              onPressed: null,
-              backgroundColor: AppColors.accent,
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child:
-                    CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
-              ),
-            )
-          : FloatingActionButton.extended(
-              onPressed: () async {
-                final src = await showModalBottomSheet<ImageSource>(
-                  context: context,
-                  backgroundColor: AppColors.card,
-                  builder: (_) => SafeArea(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        ListTile(
-                          leading: const Icon(Icons.camera_alt,
-                              color: AppColors.accent),
-                          title: const Text('Camera',
-                              style: TextStyle(color: AppColors.textPrimary)),
-                          onTap: () =>
-                              Navigator.of(context).pop(ImageSource.camera),
-                        ),
-                        ListTile(
-                          leading: const Icon(Icons.photo_library,
-                              color: AppColors.accent),
-                          title: const Text('Gallery',
-                              style: TextStyle(color: AppColors.textPrimary)),
-                          onTap: () =>
-                              Navigator.of(context).pop(ImageSource.gallery),
-                        ),
-                      ],
-                    ),
+      // No button until this screen has verified PRO: a free user must not be
+      // offered a Storage write (rule 19).
+      floatingActionButton: _access != _Access.granted
+          ? null
+          : (_uploading || _gating)
+              ? const FloatingActionButton(
+                  onPressed: null,
+                  backgroundColor: AppColors.accent,
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.black),
                   ),
-                );
-                if (src != null) await _capture(src);
-              },
-              backgroundColor: AppColors.accent,
-              icon: const Icon(Icons.add_a_photo, color: Colors.black),
-              label: const Text('Add photo',
-                  style: TextStyle(color: Colors.black, fontWeight: FontWeight.w800)),
-            ),
+                )
+              : FloatingActionButton.extended(
+                  onPressed: _onAddPhoto,
+                  backgroundColor: AppColors.accent,
+                  icon: const Icon(Icons.add_a_photo, color: Colors.black),
+                  label: const Text('Add photo',
+                      style: TextStyle(
+                          color: Colors.black, fontWeight: FontWeight.w800)),
+                ),
       body: _buildBody(),
     );
   }
 
+  /// The write action runs the gate again (see the class doc): a subscription
+  /// that lapses while this screen stays open would otherwise reach `capture`,
+  /// which falls back to the free daily cap. The verify is cached for 5 minutes
+  /// AFTER a 200 answer only (`verifyFromServer` stamps the cache nowhere else), so
+  /// a tap can wait on the server for up to 10 s: the button shows the busy
+  /// spinner meanwhile and a second tap does nothing (`_gating`). A user the gate
+  /// refuses goes to the locked state and gets the paywall.
+  Future<void> _onAddPhoto() async {
+    if (_gating) return;
+    setState(() => _gating = true);
+    try {
+      await SubscriptionService.instance.gateAndVerify(
+        AppConstants.featureProgressPhotos,
+        onPro: () {
+          if (!mounted) return;
+          _pickAndCapture();
+        },
+        onFree: () {
+          if (!mounted) return;
+          setState(() => _access = _Access.denied);
+          showPaywallSheet(context, feature: 'Progress Photos');
+        },
+      );
+    } finally {
+      if (mounted) setState(() => _gating = false);
+    }
+  }
+
+  Future<void> _pickAndCapture() async {
+    final src = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: AppColors.card,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt, color: AppColors.accent),
+              title: const Text('Camera',
+                  style: TextStyle(color: AppColors.textPrimary)),
+              onTap: () => Navigator.of(context).pop(ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library, color: AppColors.accent),
+              title: const Text('Gallery',
+                  style: TextStyle(color: AppColors.textPrimary)),
+              onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (src != null) await _capture(src);
+  }
+
+  /// What a user the gate refused sees (only the typed web address or a mid-
+  /// session lapse gets here: the hub row shows a free user the paywall without
+  /// opening this screen). The design system's PRO locked card, with nothing
+  /// real behind it: no photo is read or shown.
+  Widget _buildLocked() {
+    return Padding(
+      padding: const EdgeInsets.all(AppSpacing.screenPadding),
+      child: ProLockedOverlay(
+        featureLabel: 'Progress Photos',
+        description: 'Track your transformation visually',
+        minHeight: 240,
+        onUpgradeTap: () =>
+            showPaywallSheet(context, feature: 'Progress Photos'),
+        child: const ColoredBox(color: AppColors.card),
+      ),
+    );
+  }
+
   Widget _buildBody() {
+    switch (_access) {
+      case _Access.checking:
+        return const Center(
+            child: CircularProgressIndicator(color: AppColors.accent));
+      case _Access.denied:
+        return _buildLocked();
+      case _Access.granted:
+        break;
+    }
     if (_error != null) {
       return ErrorState(
         title: 'Couldn\'t load photos',

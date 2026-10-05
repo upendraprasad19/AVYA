@@ -1,7 +1,9 @@
 // Profile "Photos" hub: one row on the Profile tab opens UserPhotosScreen,
 // which routes to Progress (PRO-gated) and Saved (coach-media). The hub only
-// routes; the PRO check is the Progress row's own `gateAndVerify` call, and the
-// Progress screen does not check the subscription itself.
+// routes; the Progress row runs `gateAndVerify` and gives a free user the
+// paywall. The Progress screen gates itself too, since 2026-10-05
+// (`progress_photos_screen_gate_test.dart`), but a free user should still get
+// the paywall from here, never the screen's locked card.
 //
 // WHAT IS BEHAVIORAL HERE and what is only a source pin:
 //   behavioral — the hub shows exactly two rows; the Progress subtitle keeps the
@@ -318,7 +320,9 @@ void main() {
       expect('showPaywallSheet('.allMatches(hub).length, 1);
       expect(_progressDestination.allMatches(hub).length, 1,
           reason: 'a second way into the Progress screen beside the gate would '
-              'bypass it (the screen does not check the subscription itself)');
+              'hand a free user the screen\'s locked card instead of the '
+              'paywall (the screen gates itself, the hub is where the paywall '
+              'belongs)');
       expect("context.push('/profile/progress-photos')".allMatches(hub).length, 1);
       expect(
           RegExp(r'gateAndVerify\(\s*AppConstants\.featureProgressPhotos,')
@@ -357,10 +361,12 @@ void main() {
 
   group('who may name the Progress screen (source scan of lib/)', () {
     test('only the router, the hub and the screen itself do', () {
-      // The Progress screen has no PRO check of its own; the hub row is the
-      // only gate on the way in (founder decision pending: ledger row R1-04).
-      // So a new entry point anywhere in lib/ (a Home shortcut, a notification
-      // route, a deep link) must be added HERE on purpose, and be gated.
+      // The Progress screen gates itself since 2026-10-05 (ledger row R1-04,
+      // progress_photos_screen_gate_test.dart), so a stray door no longer hands a
+      // free user a working screen; but it would hand them the locked card instead
+      // of the paywall. A new entry point anywhere in lib/ (a Home shortcut, a
+      // notification route, a deep link) must be added HERE on purpose, and be
+      // gated like the hub row.
       final hits = <String>[];
       for (final f in Directory('lib')
           .listSync(recursive: true)
