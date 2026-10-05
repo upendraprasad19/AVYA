@@ -53,14 +53,21 @@ void main() {
   }
 
   group('blast_radius.yaml — progress-map writer paths are >= account', () {
-    test('lib/shared/repositories/user_repository.dart is account', () {
+    test(
+        'lib/shared/repositories/user_repository.dart is platform '
+        '(account until OI-282, which raised it: it hosts the progress-map '
+        'restore merge)', () {
       expect(
         tierFor('lib/shared/repositories/user_repository.dart'),
-        'account',
+        'platform',
         reason: 'user_repository.dart owns the progress/profile Hive map '
             'writer contracts (Repository pattern, lib/CLAUDE.md) — a diff '
-            'touching only this file must clear the account-tier gate '
-            '(code_review_b_pass), not silently classify as feature.',
+            'touching only this file must clear AT LEAST the account-tier '
+            'gate (code_review_b_pass), never silently classify as feature. '
+            'OI-282 raised it to platform: mergeCloudProgress, the restore '
+            'merge of the progress map, lives here, a sync-engine merge '
+            'hosted outside lib/core/services/sync/** (the exact-path rule '
+            'above lib/shared/repositories/** in docs/blast_radius.yaml).',
       );
     });
 

@@ -153,7 +153,7 @@ related_bugs:
 recurrence: |
   Recurrence of the completed-row / restore-merge family (a7d3f1/d9b2c5
   restore overwrite, b6e1c8 hybrid rows, debugging classes 2.30, 2.51,
-  2.74). New class 2.87: a "completed is sacred" guard freezes the whole row
+  2.74). New class 2.88: a "completed is sacred" guard freezes the whole row
   though the row's TITLE has a different source of truth (the log) than its
   status. Companion lesson recorded: restoreCompletedTick also gates streak
   decay - a "refresh the UI" bump on it was rejected by plan review.
