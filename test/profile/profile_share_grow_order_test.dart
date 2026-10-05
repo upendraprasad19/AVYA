@@ -91,8 +91,9 @@ void main() {
     expect(src.contains("title: 'Progress Photos'"), isFalse);
     expect(src.contains("title: 'Saved Photos'"), isFalse);
     // Not one literal but every spelling: a `goNamed('progressPhotos')` row
-    // would hand a FREE user the Progress screen, which has no PRO check of its
-    // own (the hub row is the only gate).
+    // would hand a FREE user the Progress screen's locked card instead of the
+    // hub's paywall (the screen gates itself since 2026-10-05, but the hub is
+    // where the paywall belongs).
     expect(_destination.hasMatch(src), isFalse,
         reason: 'only the hub routes to the destinations now');
   });
