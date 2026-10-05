@@ -664,6 +664,11 @@ check_sot_registry_citations.dart:
     The mapping shape is the exact mistake that produced a bogus "299 broken
     docs" reading while this gate was being designed: it parses to an EMPTY
     concept set, which makes every citation look dangling.
+    Re-measured 2026-10-05 (sot-gate-test-stderr), same mutation, file now 33
+    tests: 9 red = the 3 parseConcepts cases + 6 subprocess cases (the 5 above
+    plus the new case that runs a real passing gate and reads its report). The
+    remark above that the 8 are all subprocess cases was already imprecise at the
+    base: 5 subprocess + 3 parseConcepts.
 
 check_sot_registry_completeness.dart:
   grandfathered: 2026-08-10
