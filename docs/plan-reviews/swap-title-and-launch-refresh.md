@@ -1,7 +1,9 @@
 ---
 branch: swap-title-and-launch-refresh
 date: 2026-10-04
-blast_radius: account
+blast_radius: platform
+bpass: accepted
+bpass_review: docs/reviews/swap-title-heal-bpass.md
 review_rounds: 2
 ground_truth_verified: true
 verdict: converged
@@ -44,8 +46,10 @@ Every reviewer claim the plan relied on was re-read by the coordinator before us
 
 ## Execution evidence
 
-Test file written first and watched RED (compile failure — the code did not exist), then the heal + hooks; 23 tests
+Test file written first and watched RED (compile failure — the code did not exist), then the heal + hooks; 26 tests
 green; 22 mutations (13 + 5 after the first code review + 4 after a second, ACCEPTED fresh-context review) each applied once and each reddened ≥1 test (files restored and byte-compared); 154 related
-existing tests across 18 files pass. Measured blast radius `account` (round 2 predicted the same), so no `bpass`
-record is required; a `/code-review` still runs before the merge (§4.3). OI-284 stays OPEN until the founder's
+existing tests across 18 files pass. Blast radius was measured `account` on the pre-merge tree; after main's PR #70 promoted `sync_service.dart` and
+`sync_flags.dart` to platform the merge-to-main gate graded it `platform` and required `bpass: accepted`. The
+two real code-review passes (pass 1 CHANGES REQUIRED, all fixed; pass 2 ACCEPTED) are recorded in
+`docs/reviews/swap-title-heal-bpass.md`; the record was corrected here after the merge turned CI red. OI-284 stays OPEN until the founder's
 device check (the phone's wlog source is unproven).
