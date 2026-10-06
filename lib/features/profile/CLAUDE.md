@@ -1,0 +1,77 @@
+---
+scope: profile
+parent: ../../../CLAUDE.md
+created: 2026-05-18
+updated: 2026-05-21
+status: active
+---
+
+# Profile — Local Rules
+
+> This file is auto-loaded by Claude Code when working under `lib/features/profile/`.
+> Root CLAUDE.md (../../../CLAUDE.md) contains process invariants and a pointer index.
+
+## What lives here
+
+`lib/features/profile/` owns the 👤 Profile tab and the suite of settings
+screens hanging off it. Screens:
+
+- `profile_screen.dart` — top-of-tab rank pill + bio stats + goal card + targets + ladder + edit / photos (one row, opens the hub) / reports / settings / AVYA / share & grow (referrals, submissions, rate) / subscription / logout.
+- `edit_profile_screen.dart` — full editor for the user_profile fields (name, DOB, sex, goal, weight, height, body fat, activity level, lifestyle activity, diet preference, injuries, equipment access, days/week, fitness experience, pace preference, target weight).
+- `settings_screen.dart` — notifications toggle, health-sync toggle, theme (locked dark), DPDP delete account, sign out, build info.
+- `reports_screen.dart` — Weekly Report (PRO) — sparklines + protein/calorie/workout trend.
+- `progress_photos_screen.dart` — PRO-only (the screen gates itself): the daily-cap'd progress photo log.
+- `progress_comparison_screen.dart` — "Progress Comparison" (a Profile row of its own, `/profile/progress-comparison`): FREE, no gate, and it does not read progress photos; it lists the `user_stat_snapshots` rows and the then-vs-now diff.
+- `user_photos_screen.dart` — hub behind the ONE Profile "Photos" row (`/profile/photos`); routes (push) to Progress (PRO-gated via `gateAndVerify`) and Saved (`saved_coach_photos_screen.dart`, coach-media consent). Routes only; each destination keeps its own bucket and delete behaviour. ⚠ Progress has TWO PRO locks: the hub's Progress row (the paywall, without ever opening the screen) and `ProgressPhotosScreen`'s own entry gate (`_enter`, plus a second gate on its Add button), which stops the web address `#/profile/progress-photos` and any other way in that never touches the hub; a free user who gets past the hub sees a locked card (`ProLockedOverlay`). A PRO-only screen must gate ITSELF: a gate on the door alone is bypassed by a web address edited into an already-open tab (a fresh load goes through `/restoring` and lands on Home). A user the gate refused who then upgrades gets the gate re-run (`ref.listen` on `subscriptionInfoProvider`). Saved is ungated by design.
+- `rank_ladder_screen.dart` — Indian Navy 11-rung lifetime ladder + promotion celebrations.
+- `notifications_screen.dart` + `notification_settings_screen.dart` — inbox via `NotificationInboxService`.
+- `invite_friends_sheet.dart` + `apply_referral_sheet.dart` — 7-day PRO referral promo (APK Test #2).
+- `delete_account_screen.dart` — DPDP §17 hard-delete.
+- `submissions_screen.dart` — user-contributed exercise / food submissions.
+- `promotion_celebration_screen.dart` — rank-up modal.
+
+Service layer: `lib/features/profile/services/profile_write_service.dart` and
+`notification_inbox_service.dart`. Models in `models/`, providers in `providers/`.
+
+## Single-source-of-truth contracts
+
+| Concept | Writer | Reader |
+|---|---|---|
+| user_profile fields (goal, weight, height, body fat, etc.) | `profile_write_service.dart` updates `userBox['profile']` map then fires `unawaited(syncService.syncOnboarding())` | `userProfileProvider` reads `userBox['profile']`. Every screen reads via the provider, never raw Hive. |
+| `weight_logs` | `health_write_service.dart` (via Profile → Edit Weight or chat) | `weeklyReportDataProvider` (forward-fill), home `WeightTrendChart`. ⚠ **Bug b1bfea (2026-09-28):** `weeklyReportDataProvider` had ZERO invalidation anywhere before this date — fixed for the day-rollover leg only (`DayRolloverObserver._doRolloverWithRef`); the write-time leg (a new weight/meal/workout log should refresh the sparkline same-day) is still open, filed as **OI-267**. |
+| `rank_promotion_log` | server-side `evaluate-rank-promotions` cron → writes `rank_promotion_log` rows | `rank_ladder_screen.dart` + `promotion_celebration_screen.dart`. |
+| Progress photos (PRO) | `ProgressPhotoRepository.capture` enforces daily cap BEFORE pick (2/day free, 5/day PRO) + uploads to Supabase Storage `progress_photos` bucket. Image quality tier-gated: 2048/85 free, 3000/95 PRO. Since 2026-10-05 `ProgressPhotosScreen` gates its entry and its Add button with `gateAndVerify(featureProgressPhotos)`, so the free branch (2/day, 2048/85) is a backstop, reachable only if PRO lapses between the Add button's gate and `capture`'s own read of `isPro()`, kept until the founder decides. Server side there is NO PRO rule yet (RLS is own-row only; the bucket policies are not in the repo): the client gate stops honest users and the typed address, not a direct API call. | `progress_photos_screen.dart`. |
+| `notification_preferences` | `NotificationPrefsRepository.write` → Hive `userBox`, then `_syncUserPreferences` → the `merge_notification_preferences` RPC (per-key additive). ⚠ NOT a plain upsert of the jsonb column — see `lib/core/services/CLAUDE.md`. | `NotificationPrefsRepository.read` locally; server-side the ten push jobs via `_shared/notification_prefs.ts`, which reads `user_preferences.notification_preferences` first and only falls back to the legacy `snapshot_json` key for users the column does not answer for (that fallback retires with APK +39 — **OI-141**). Restored by `_restoreUserPreferences` → `adoptFromCloud`, per-key LOCAL-wins. OI-98 / `e4a1b7`. |
+| `equipment_access` / `equipment_exclusions` / `equipment_owned` | `edit_profile_screen._save` writes all three into `userBox['profile']`; `sync_profile.dart:196-205` mirrors them to `user_profile` as CONDITIONAL entries, so a profile that never answered cannot overwrite a cloud value with `[]`. Migration 104 added exclusions, **124** added owned. | ⑦ **OI-89.** Nothing reads these three raw — they are combined into ONE derived set, `effective = EquipmentVocab.tierItems[tier] ∪ owned − exclusions` (`EquipmentVocab.effectiveItems`), and every consumer keys on `equipment_needed` via `EquipmentCapability.canPerform`. **NEVER on `equipment_tier`**, which is a curation hint. ⑧ **OI-144:** both producers (`resolveCapabilityFromProfile`, `effectiveEquipmentForSnapshot`) answer at EVERY tier and must AGREE — they differ only in return shape, and a policy divergence is a bug. They deliberately disagreed under OI-89, which is precisely what made this picker collect-but-ignore: a `home_dumbbells` user could tick "pull-up bar", be prompted to reschedule, and get a byte-identical plan. Restore is free — `_restoreUserProfile` merges every non-null cloud key. `equipment_access` ABSENT resolves to `bodyweight` via `equipmentAccessOf` (`lib/core/constants/equipment_defaults.dart`), never per-site: 14 sites once disagreed across four values, and because the floor is bodyweight-scoped a wrong default turned it OFF. Diagnoses `f7b2c4` / `d3a8f5`. |
+| `coach_extraction_locked_fields` (a2b-2, 2026-09-27) | `edit_profile_screen._save` (any of `diet_preference`/`lifestyle_activity`/`injuries` that actually changed) + onboarding's `syncOnboardingToSupabase` (a real injuries selection) call `UserRepository.lockCoachExtractionFields` → `lock_coach_extraction_fields` RPC (migration 148, additive UNION into `user_profile.coach_extraction_locked_fields`) | `daily-snapshot`'s AI-coach extraction (see `lib/features/ai_coach/CLAUDE.md`) — skips a locked field instead of overwriting it. |
+| `referral_redemption` | `apply_referral_sheet` → server-side validate-referral edge function | `subscription_service.isPro()` (7-day PRO grant). ⚠ **Bug 4018b3 (2026-09-28):** the SEPARATE `referralEligibilityProvider` (the "N DAYS LEFT" CTA countdown, `referral_eligibility_provider.dart`) had a working write-time invalidation (on redemption) but no day-rollover invalidation — fixed; `presence_only: true` regression coverage (no Hive-mutable proxy to simulate staleness with — it derives from `SupabaseService.instance.currentUser.createdAt`). |
+| `submissions` | `submissionsRepository` (custom exercise + custom food submission queue) | `submissions_screen.dart`. |
+
+## Common pitfalls
+
+| Pitfall | How to avoid | Source |
+|---|---|---|
+| Progress-photo upload fails with PhotoQuotaException | Daily cap exceeded. Free: 2/day, PRO: 5/day. Enforced at `ProgressPhotoRepository.capture` by counting today's `progress_photos` rows for the user BEFORE pick. UI should catch `PhotoQuotaException`, surface the paywall for free users (`feature: 'Progress Photos'`, the DISPLAY string: the paywall letterhead reads `'$feature is a PRO feature'`, so the id `progress_photos` would show as "progress_photos is a PRO feature") or a "come back tomorrow" snackbar for PRO (since 2026-10-05 a free user reaches that branch only if PRO lapses between the Add button's gate and `capture`, so the paywall branch is a backstop). Image quality differs by tier too: 2048/85% free, 3000/95% PRO. | (relocated 2026-05-18 — see docs/diagnoses/INDEX.md) |
+| Weekly Report sparkline dips to 0 between weigh-ins | By design only for calories/protein/workouts (zero-fill = genuinely no activity). Weight series is **forward-filled** from last known — if you see it dropping to zero on un-weighed days, `weeklyReportDataProvider` has regressed. | (relocated 2026-05-18 — see docs/diagnoses/INDEX.md) |
+| Edit Profile saves but home doesn't refresh | `ProfileWriteService` must invalidate the same provider set as the onboarding completion path: `userProfileProvider`, `homeProvider`, `dietPlanProvider` (when goal/weight changes), `nutritionTargetsProvider`. Missing any one = stale UI. | `user_full_name` SoT |
+| Profile screen `usageWeeks` counter reads dead Hive key | Fixed 2026-05-20 (commit `00c36cc`). `usageWeeks` now reads `users.created_at` from Supabase, NOT the dead `configBox['signup_at']` key. Don't reintroduce a Hive-side counter — Supabase signup date is canonical. | `feedback_writer_reader_field_drift_recurring.md` |
+| `usageWeeksProvider`'s only invalidation was a user retry-tap/background-restore, never the week boundary itself | Bug ff3131 (2026-09-28) — fixed via `DayRolloverObserver._doRolloverWithRef`. Same `presence_only: true` shape as bug 4018b3 (referralEligibilityProvider) — derives from `SupabaseService.instance.currentUser.createdAt`, no Hive-mutable proxy to test staleness with. | `docs/diagnoses/2026-09-28-usage-weeks-provider-invalidation-ff3131.md` |
+| Edit Profile silently recomputes calories from a fabricated body-fat | `recalculateTargets` reads `body_fat_percent` and feeds it into `BmrCalculator.calculateTargets` via **Katch-McArdle** on EVERY edit. It is the CONSUMING reader of onboarding's body-fat. Pre-Unit-4, onboarding SAVED a fabricated `18.0` for skip-users (their own calc ignored it) → the first profile edit recomputed from a made-up 18% lean mass. Fixed (c3f2d8, 2026-06-14): onboarding saves `null` on skip; `BodyFatDefaultHealer` (boot) clears legacy 18.0. Never reintroduce a body-fat default — null → Mifflin is correct. | SoT `onboarding_bodyfat_calc_input`; diagnose c3f2d8 |
+| Delete account leaves orphan rows | `delete_account_screen` → `delete-account` Edge Function executes the DPDP §17 hard-delete + pseudonymization. Migration 049 set ON DELETE SET NULL on `user_custom_exercises`, `user_custom_foods`, `community_reviews.reviewer_id`, `food_corrections`, `promo_code_uses`. **Read consumers MUST tolerate `user_id = NULL`** ("deleted user" preserved for community signal). | `supabase/migrations/CLAUDE.md` |
+
+## Tests pinning the rules here
+
+- `test/contracts/full_name_backfill_test.dart`
+- `test/contracts/delete_account_safety_contract_test.dart`
+- `test/contracts/usage_weeks_signup_date_test.dart` (commit `00c36cc`)
+- `test/contracts/audit_2026_06_07_batch5_regression_test.dart` (F40: the Progress screen's source handles `PhotoQuotaException` and shows the paywall: two TEXT checks only; no test exercises the repository's daily caps (2 / 5) or its image-quality tiers, and a `test/contracts/progress_photo_quota_test.dart` that older docs cited was never written)
+- `test/contracts/progress_photos_screen_gate_test.dart` (the Progress screen's OWN PRO gate, pumped alone against the real `SubscriptionService`, as the typed web address builds it: FREE → locked card already on the first frame, no photo read (`ProgressPhotoRepository.debugOnListForTests` counts `list()` calls), no Add button, Upgrade opens the paywall by tap and by keyboard (Tab reaches it), tapping EVERY tappable widget on the locked screen reads no photo and opens no picker, the card is announced as a button, centred, with a pill that hugs its label, and fits a short window and 2x text; FREE then upgrading → the gate re-runs and the card gives way to the gallery; PRO → spinner first frame, then gallery state + button through the server-verified branch; a lapse while open → the Add button shows the paywall, never the picker; two quick Add taps open ONE sheet (busy spinner while the gate waits); leaving inside either verify drops the callback; through the hub a PRO user passes both locks; a subscription write while the entry gate is still pending starts no second gate; source pins on the gate wiring and on every Storage-touching method having one caller, counted as REFERENCES so a tear-off such as `onPressed: _load` counts too)
+- `test/profile/user_photos_hub_test.dart` (the Photos hub: rows, PRO hint, back stack inside a shell branch; source pins on comment-stripped source: gate → onPro → onFree order, the Progress screen named once under any spelling, each gate callback opens with the mounted check, and an allow-list scan of `lib/` for who may name the Progress screen) + `test/profile/user_photos_gate_behavioral_test.dart` (the Progress gate through the hub against the real `SubscriptionService`: FREE → paywall, PRO → screen, a FREE sweep over every tappable widget never builds Progress, leaving the hub inside the server verify drops the push quietly) + `test/router/photos_hub_route_resolution_test.dart` (the REAL route table: all three locations resolve under `/profile` inside the shell and build the right screens) + `test/profile/profile_share_grow_order_test.dart` (section order, each header once, the one Photos row, no direct route to a destination)
+- `test/contracts/coach_extraction_locked_fields_writer_to_reader_test.dart` + `test/profile/edit_profile_coach_extraction_lock_test.dart` (a2b-2, 2026-09-27 — see `lib/features/ai_coach/CLAUDE.md` for the full concept)
+
+## See also
+
+- `lib/features/auth/CLAUDE.md` — sign-out + cross-account guard.
+- `lib/features/onboarding/CLAUDE.md` — initial profile capture.
+- `docs/architecture/subscription.md` — PRO gate pattern.
+- `docs/architecture/payment.md` — Razorpay + delete-account DPDP flow.
