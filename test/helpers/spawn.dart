@@ -244,24 +244,40 @@ void reportSpawn(
 /// lock and shells out to git on EVERY call) and falls back to `dart`.
 String dartBin() {
   final override = Platform.environment['DART_BIN_OVERRIDE'];
-  if (override != null && File(override).existsSync()) return override;
   final which = runSpawn(
     Platform.isWindows ? 'where' : 'which',
     ['dart'],
     why: 'dartBin: locate dart',
     stdoutEncoding: utf8,
   );
-  if (which.exitCode == 0) {
-    final first = (which.stdout as String)
-        .split('\n')
-        .map((l) => l.trim())
-        .firstWhere((l) => l.isNotEmpty, orElse: () => '');
-    if (first.isNotEmpty) {
-      final dir = File(first).parent.path.replaceAll(r'\', '/');
-      for (final c in ['$dir/cache/dart-sdk/bin/dart.exe', '$dir/cache/dart-sdk/bin/dart']) {
-        if (File(c).existsSync()) return c;
-      }
-    }
+  return dartBinFrom(
+    override: override,
+    whichStdout: which.exitCode == 0 ? which.stdout as String : '',
+    fileExists: (path) => File(path).existsSync(),
+  );
+}
+
+/// The decision inside [dartBin], pure so a test can feed it the layouts that differ between
+/// machines. [whichStdout] is what `which dart` / `where dart` printed ('' when it failed).
+///
+/// Order: an existing [override]; the real SDK exe beside the Flutter wrapper `which` found;
+/// the ABSOLUTE path `which` found; a bare `dart`. The third step is the CI fix (PR 1 of batch
+/// spawn-tests-env-and-stderr, run 37431225458): where the SDK cache is not beside the wrapper
+/// the old code returned a bare `dart`, which a child spawned with a minimal environment (no
+/// PATH) cannot resolve ("ProcessException: No such file or directory"), while on the
+/// developer's machine `dart` happened to sit on the default path and hid it.
+String dartBinFrom({
+  required String? override,
+  required String whichStdout,
+  required bool Function(String path) fileExists,
+}) {
+  if (override != null && fileExists(override)) return override;
+  final first = whichStdout.split('\n').map((l) => l.trim()).firstWhere((l) => l.isNotEmpty, orElse: () => '');
+  if (first.isEmpty) return 'dart';
+  final dir = first.replaceAll(r'\', '/');
+  final bin = dir.contains('/') ? dir.substring(0, dir.lastIndexOf('/')) : '.';
+  for (final c in ['$bin/cache/dart-sdk/bin/dart.exe', '$bin/cache/dart-sdk/bin/dart']) {
+    if (fileExists(c)) return c;
   }
-  return 'dart';
+  return first;
 }

@@ -213,7 +213,7 @@ void main() {
       expect(reports.single, 'a started child\nexit=5\nstdout=OUT-LINE\nstderr=ERR-LINE');
       // and the environment of a STARTED child is the hermetic one too
       final dump = await startSpawn(dart, [envDump],
-          parentEnvironment: {'CONTRACT_SWEEP_NESTED': '1', 'KEEP_ME': '1'});
+          parentEnvironment: {'CONTRACT_SWEEP_NESTED': '1', 'KEEP_ME': '1', 'PATH': Platform.environment['PATH'] ?? ''});
       final text = await dump.stdout.transform(utf8.decoder).join();
       await dump.exitCode;
       final child = (jsonDecode(text) as Map).cast<String, String>();
@@ -229,6 +229,10 @@ void main() {
       final r = runSpawn(dart, [envDump],
           why: 'env dump',
           parentEnvironment: {
+            // PATH is part of the synthetic parent: a child with no PATH cannot resolve a bare `dart` on a
+            // machine where dart is not on the default path (CI), which is a fact about the machine, not
+            // about the helper (the absolute-path case is pinned by the dartBinFrom group below).
+            'PATH': Platform.environment['PATH'] ?? '',
             'SYNTH_ONLY_IN_PARENT': 'p',
             'KEEP_ME': 'k',
             'GIT_DIR': '/leak',
@@ -247,7 +251,7 @@ void main() {
         for (final e in child.entries)
           if (!wrapperAdds.contains(e.key.toUpperCase())) e.key.toUpperCase(): e.value,
       };
-      expect(seen, {'SYNTH_ONLY_IN_PARENT': 'p', 'KEEP_ME': 'k', 'FROM_EXTRA': 'e'},
+      expect(seen, {'PATH': Platform.environment['PATH'] ?? '', 'SYNTH_ONLY_IN_PARENT': 'p', 'KEEP_ME': 'k', 'FROM_EXTRA': 'e'},
           reason: 'exactly the parent minus the control variables (and DART_BIN_OVERRIDE), plus extra');
     });
 
@@ -270,7 +274,8 @@ void main() {
 
     test('encoding defaults equal Process.runSync\'s, and an explicit null returns bytes from BOTH entry points', () async {
       final viaHelper = runSpawn(dart, [outErr, '0'], why: 'defaults', report: (_) {});
-      final viaProcess = Process.runSync(dart, [outErr, '0'], includeParentEnvironment: false, environment: {});
+      final viaProcess = Process.runSync(dart, [outErr, '0'],
+          includeParentEnvironment: false, environment: {'PATH': Platform.environment['PATH'] ?? ''});
       expect(viaHelper.stdout.runtimeType, viaProcess.stdout.runtimeType);
       expect(viaHelper.stdout, isA<String>());
 
@@ -282,6 +287,52 @@ void main() {
       expect(async.stdout, [0xff, 0x41]);
       expect(reports, everyElement(contains('stdout=2 bytes ')),
           reason: 'the reporter must not crash on a List<int> stdout');
+    });
+  });
+
+  group('dartBinFrom: the choice of dart executable (the CI fix, run 37431225458)', () {
+    test('an existing override wins; a missing one is ignored', () {
+      expect(dartBinFrom(override: '/o/dart', whichStdout: '/w/bin/dart\n', fileExists: (p) => p == '/o/dart'), '/o/dart');
+      expect(dartBinFrom(override: '/o/dart', whichStdout: '/w/bin/dart\n', fileExists: (_) => false), '/w/bin/dart');
+    });
+
+    test('the real SDK exe beside the Flutter wrapper is preferred (.exe before the bare name)', () {
+      expect(dartBinFrom(override: null, whichStdout: '/w/bin/dart\n', fileExists: (p) => p == '/w/bin/cache/dart-sdk/bin/dart'),
+          '/w/bin/cache/dart-sdk/bin/dart');
+      expect(
+          dartBinFrom(
+              override: null,
+              whichStdout: 'C:\\flutter\\bin\\dart.bat\r\nC:\\other\\dart.exe\r\n',
+              fileExists: (p) => p == 'C:/flutter/bin/cache/dart-sdk/bin/dart.exe'),
+          'C:/flutter/bin/cache/dart-sdk/bin/dart.exe');
+    });
+
+    test('with no SDK beside the wrapper the ABSOLUTE path `which` found is returned, never a bare `dart` (the CI failure)', () {
+      final r = dartBinFrom(override: null, whichStdout: '\n  /opt/flutter/bin/dart  \n/usr/bin/dart\n', fileExists: (_) => false);
+      expect(r, '/opt/flutter/bin/dart');
+      expect(r, startsWith('/'), reason: 'a child with a minimal environment has no PATH to resolve a bare name with');
+    });
+
+    test('nothing found at all falls back to the bare name', () {
+      expect(dartBinFrom(override: null, whichStdout: '', fileExists: (_) => false), 'dart');
+      expect(dartBinFrom(override: null, whichStdout: '\n \n', fileExists: (_) => false), 'dart');
+    });
+
+    test('a child spawned with NO PATH runs a dart given by absolute path (and the bare name is what failed on CI)', () {
+      if (Platform.isWindows) return; // a symlink to dart is a POSIX arrangement; the pure tests above cover the rule
+      final real = dartBin();
+      if (!real.contains('/')) return; // no absolute dart is resolvable on this machine: nothing to prove
+      final dir = Directory.systemTemp.createTempSync('dart_no_path_');
+      try {
+        final script = File('${dir.path}/ok.dart')..writeAsStringSync("void main() { print('ran'); }\n");
+        final chosen = dartBinFrom(override: null, whichStdout: '$real\n', fileExists: (_) => false);
+        expect(chosen, real);
+        final r = runSpawn(chosen, [script.path], why: 'no PATH child', parentEnvironment: const <String, String>{}, report: (_) {});
+        expect(r.exitCode, 0, reason: 'stdout=${r.stdout} stderr=${r.stderr}');
+        expect((r.stdout as String).trim(), 'ran');
+      } finally {
+        dir.deleteSync(recursive: true);
+      }
     });
   });
 

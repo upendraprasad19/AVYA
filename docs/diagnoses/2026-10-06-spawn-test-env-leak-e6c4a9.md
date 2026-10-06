@@ -189,3 +189,19 @@ rejected). The three structural choices:
 `docs/diagnoses/INDEX.md` and `bug-classes.md` were grepped for the symptom, the concept and the files: 4f2a9e, c3f8e1, d81f3c and
 d9e4b1 are the recurrence (cited in `related_bugs:`); a7f3d1 and the `sot-gate-test-stderr` ledger (class 2.90) are the reporting half;
 the exit-254 flake itself is NOT explained here (OI-311).
+
+## CI follow-up: PR 1's first CI run failed three tests of its own helper test (run 37431225458, 2026-10-06)
+
+**Symptom.** `Unit Tests` red on PR #81: `test/contracts/spawn_helper_test.dart`, group "real child processes (Dart scripts through dartBin())", three tests (`startSpawn + reportSpawn`, "the child environment is EXACTLY the declared one", "encoding defaults equal Process.runSync's"), each `ProcessException: No such file or directory  Command: dart /tmp/spawn_helper_*/...`. Everything else in the 3,900-test run passed. The local full suite (7796 / 9 / 0) had been green.
+
+**Writer and reader.** Writer: `test/helpers/spawn.dart` `dartBin()` fell back to the BARE name `dart` whenever the real SDK executable was not found beside the `which dart` result. Readers: the three tests above (`spawn_helper_test.dart:215`, `:229`, `:273`) spawn that name with a synthetic parent environment that has no `PATH`, so the child cannot resolve a bare name unless `dart` sits on the default path (`/usr/bin:/bin`).
+
+**Why local did not see it.** On this machine `which dart` is Flutter's wrapper and the SDK executable sits beside it, so `dartBin()` returned an ABSOLUTE path and the bare-name branch never ran. CI's layout differs; the branch ran there. The failure is a fact about the machine that the code did not defend against.
+
+**Reproduction (before the fix).** `env -i HOME=$HOME PATH=<dir whose only `dart` is a symlink>:/usr/bin:/bin flutter test test/contracts/spawn_helper_test.dart`: the same three failures, with the same message.
+
+**Fix.** `dartBin()` now delegates to the pure `dartBinFrom(override, whichStdout, fileExists)`: an existing override; the SDK exe beside the wrapper; otherwise the ABSOLUTE path `which` printed; a bare `dart` only when nothing was found. The three tests also carry `PATH` in their synthetic parent (`EXACTLY the declared one` now expects `PATH` among the declared keys), so they do not depend on where `dart` sits.
+
+**Regression tests.** The new `dartBinFrom` group in `test/contracts/spawn_helper_test.dart` (5 tests, one of which runs a real child with an EMPTY environment through an absolute `dart`). Mutation: 7 mutants, all RED, edits confirmed applied (6 of `dartBinFrom`: the bare-name fallback instead of the absolute path, the empty-output fallback, the SDK-beside loop, the override branch, the parent-directory computation, the backslash normalisation; and 1 of the manifest, which now classifies `PATH` as a kept name because the tests READ it and the derived scan reports every name read: deleting that classification reddens `found ⊆ classified`). 32 of 32 pass in the normal environment AND in the CI-like one above.
+
+**What this says about the process, candidly.** The local gate loop was complete and green, and CI still found a defect: a green local run proves the tests on THIS machine's layout. The class is "a test passes where the environment hides a missing precondition"; the cheap local check is to rerun the file with a PATH that holds `dart` only through a symlink. Ledger row CI1.

@@ -17,8 +17,8 @@ batch: spawn-tests-env-and-stderr
 plan_review_record: docs/plan-reviews/spawn-tests-env-and-stderr.md
 diagnose_docs:
   - docs/diagnoses/2026-10-06-spawn-test-env-leak-e6c4a9.md
-total_findings: 49
-closed_count: 49
+total_findings: 50
+closed_count: 50
 
 findings:
   - id: C1
@@ -311,3 +311,9 @@ findings:
     title: "mutant E1 stayed GREEN"
     terminal_state: verified_clean
     evidence: "ST4 EQUIVALENT on this host: removing `runInShell: true` from a call whose command is a plain executable changes nothing on Linux; the Windows effect cannot be run here and is stated as unverified in the PR body."
+
+  - id: CI1
+    title: "PR 1's own CI run (37431225458) failed 3 tests of spawn_helper_test.dart: a child spawned with no PATH could not resolve the bare `dart` that dartBin() fell back to"
+    terminal_state: closed_in_commit
+    commit: the CI-fix commit on this branch (find it with `git log --format=%h -S dartBinFrom -- test/helpers/spawn.dart`)
+    verification: "reproduced locally first (PATH holding only a directory whose `dart` is a symlink, so no SDK cache sits beside it): the same 3 failures, `ProcessException: No such file or directory  Command: dart /tmp/spawn_helper_*/env_dump.dart`. Fix: dartBin() is now a thin wrapper over the pure dartBinFrom(), which returns the ABSOLUTE path `which` found when no SDK exe sits beside it (a bare `dart` only when nothing was found), and the three tests carry PATH in their synthetic parent. Tests: the new dartBinFrom group (5 tests, one of them a real child with NO PATH) in test/contracts/spawn_helper_test.dart, 32 of 32 in both the normal and the CI-like environment. Mutation: 7 mutants, all RED with the edit confirmed applied (6 of dartBinFrom: absolute path replaced by the bare name, the empty fallback, the SDK-beside loop, the override branch, the parent-directory computation, the backslash normalisation; 1 of the manifest: PATH is now a classified kept name because the tests read it, and the derived scan reports every name read)."

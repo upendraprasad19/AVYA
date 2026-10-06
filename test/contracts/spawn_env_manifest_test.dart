@@ -59,8 +59,10 @@ const _externalReader = <String>{'EMAIL'};
 /// The child needs these. HOME and USERPROFILE are also BEHAVIOUR inputs
 /// (`batch_close_hook.dart:98`, `discipline_hook.dart:190` choose which memory files are
 /// read); they are kept because git, dart and the toolchain need them, and a scenario
-/// that must pin them uses `remove` / `extra`.
-const _kept = <String>{'HOME', 'USERPROFILE', 'LOCALAPPDATA', 'ANDROID_HOME', 'ANDROID_SDK_ROOT', 'JAVA_HOME'};
+/// that must pin them uses `remove` / `extra`. PATH is kept for the same reason (the toolchain
+/// needs it); the spawn tests READ it from their own environment to give a synthetic child one
+/// (test/contracts/spawn_helper_test.dart), which is why the derived scan now sees the name.
+const _kept = <String>{'HOME', 'USERPROFILE', 'LOCALAPPDATA', 'ANDROID_HOME', 'ANDROID_SDK_ROOT', 'JAVA_HOME', 'PATH'};
 
 /// A LOCATOR, not a control switch (`scripts/_dart_bin.sh:85`): the canonical scrub KEEPS
 /// it, the helper REMOVES it from every spawned child (the two-level rule).
