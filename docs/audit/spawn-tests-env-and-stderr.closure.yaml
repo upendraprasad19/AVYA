@@ -1,0 +1,313 @@
+# Closure ledger — spawn-tests-env-and-stderr (PR 1 of 2)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no `deferred:` key. closed_count == total_findings.
+#
+# WHAT PRODUCED THESE: a founder decision (2026-10-06: fix the sweep test, put the 254 on the board, make the other spawn tests
+# print stderr; scope answer "Shared helper, 2 PRs"), two context-blind plan-review rounds (docs/plan-reviews/spawn-tests-env-and-stderr.md,
+# 27 findings, none rejected), the implementation checkpoint, 108 first-round mutants (plus the re-runs of 3 not-applied ones and of the 4 survivors) in sandbox copies (docs/diagnoses/2026-10-06-spawn-test-env-leak-e6c4a9.md
+# lists them), and the local gate loop.
+#
+# THE BATCH IS NOT CLOSED BY THIS LEDGER: row U1 (PR 2) is the second unit. `blocked_on_user` is a terminal state for Gate 40; it is
+# not a deferral: PR 2 has a named plan scope, a guard design and a reopen condition, and the founder's scope answer made it the batch's second unit.
+#
+# `commit:` on a closed_in_commit row names the batch's single commit: the commit that ADDS this file. A commit cannot name its own SHA; find it with
+#   git log --diff-filter=A --format=%h -- docs/audit/spawn-tests-env-and-stderr.closure.yaml
+# (the merge to main is a --no-ff merge commit; the code commit is its second parent's tip).
+
+batch: spawn-tests-env-and-stderr
+plan_review_record: docs/plan-reviews/spawn-tests-env-and-stderr.md
+diagnose_docs:
+  - docs/diagnoses/2026-10-06-spawn-test-env-leak-e6c4a9.md
+total_findings: 49
+closed_count: 49
+
+findings:
+  - id: C1
+    title: "the shared spawn helper test/helpers/spawn.dart: hermeticEnvironment, runSpawn / runSpawnAsync, startSpawn + reportSpawn, spawnDiag, defaultSpawnReport, dartBin, with test/contracts/spawn_helper_test.dart"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "27 tests: literal strip list, kept list with PATH, the DART_BIN_OVERRIDE two-level rule, remove/extra order, the allowControl guard, the parent seam, spawnDiag format (a 60-line stderr whole, a List<int> stdout), REAL child processes (a Dart script through dartBin()) for runSpawn failing and passing, runSpawnAsync, startSpawn + reportSpawn, an exact child-environment equality check against a MINIMAL synthetic parent, workingDirectory and runInShell forwarded (a shell builtin), encoding defaults and raw bytes from BOTH entry points, the default reporter in the two zones (a null #test.invoker zone: silent on success, prints on failure; inside a passing test: prints nothing), and source pins of the helper's own body (spawn, THEN report, then return; encodings as defaulted parameters)."
+
+  - id: C2
+    title: "scripts/regression_catalog_lib.dart: the canonical scrub extended from three families to every control variable the repo's scripts read (8 prefixes, 13 exact names, EMAIL), exported as constants plus isChildControlVariable, with unit tests"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "test/scripts/regression_catalog_lib_test.dart gains a literal 40-name list tested in two letter cases, the observed-bug case, and a kept list (PATH, HOME, DART_BIN_OVERRIDE, look-alikes such as SUPABASE_PROJECT_REF and ANDROID_SERIAL); every removal of one prefix or name from the lib was mutated (see M-L rows in the mutation summary)."
+
+  - id: C3
+    title: "the DERIVED two-way manifest: test/helpers/spawn_env_scan.dart (seven arms) + test/contracts/spawn_env_manifest_test.dart"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "found ⊆ classified, classified ⊆ found, the STRIPPED set equals what the scrub removes, floors, one anchor per arm, alias and computed-read allow-lists (both directions), shell builtins seen == the classified set, the recursion-guard pin with a specified detector, and one synthetic source per scan arm. The scan reproduces the plan's 10 alias sites, 2 computed reads and the builtin PWD exactly, and finds 56 names (the plan's 55 plus USDA_API_KEY, row C10)."
+
+  - id: C4
+    title: "contract_sweep_e2e_test.dart migrated onto the helper, with the poisoned-parent regression (closes the observed bug)"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "9 tests (7 existing + the poisoned-parent regression for CONTRACT_SWEEP_NESTED and CONTRACT_SWEEP_SKIP with PRECONDITIONS + a seam pin). With CONTRACT_SWEEP_NESTED=1 EXPORTED in the shell the file is 9 of 9 (it was 2 passed / 5 failed). Mutants SW1-SW3 and the M2 prefix mutants redden it."
+
+  - id: C5
+    title: "sot_registry_citations_test.dart onto the helper, with every changed assertion of plan D5 at least as strict as before"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "31 tests. (i) the report parameter and its default pin are the helper's; (ii) gateDiag's group is spawnDiag in spawn_helper_test.dart (exact-string equality, the 60-line stderr whole); (iii) the order pin is the helper's own body pin, re-mutated; (iv) the gate's report is found BY LABEL, the git setup spawns report under their own label, and the TOTAL and per-label counts are asserted (stricter than before); (v) Process. count is 0 and helper entry points are exactly 2. Mutants ST1-ST3 redden it; ST4 (runInShell removed) is equivalent on a non-Windows host (row E1)."
+
+  - id: C6
+    title: "gate_e2e_env_hermetic_test.dart repointed: migrated files assert they route through the helper and contain no direct Process. call; the 10 others keep their token assertions until PR 2"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "13 tests (10 token files + 2 migrated + the premise test). Mutants R7 and R7b (a direct Process spawn added to a migrated file) redden it."
+
+  - id: C7
+    title: "the issue-board entry for the exit-254 flake: OI-311, minted with scripts/mint_oi.sh (founder decision 2026-10-06, item 2)"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "OI-311 in docs/audit/open_issues.md (reservation ref oi/311); the cause is UNESTABLISHED and the entry carries the reopen condition. Answers row C4 of docs/audit/sot-gate-test-stderr.closure.yaml."
+
+  - id: C8
+    title: "records: FULL diagnose-doc e6c4a9 (class 2.56 with d9e4b1 in related_bugs/recurrence, concept: not_applicable, the bounded claim, the explicit merge-walk result), debugging skill (2.56 fifth instance and structural lesson; 2.90 update; SKILL.md changelog), glossary rows, plan-review record, memory notes"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "docs/diagnoses/2026-10-06-spawn-test-env-leak-e6c4a9.md validated by scripts/validate_diagnose_doc.dart; docs/plan-reviews/spawn-tests-env-and-stderr.md; docs/naming_conventions.md rows spawn helper, control variable, env manifest."
+
+  - id: C9
+    title: "a stale duplicate row removed from docs/naming_conventions.md found while adding the glossary rows: two 'Photos hub' rows, the older one still saying the hub's Progress row is the ONLY PRO gate (the opposite of shipped behaviour since PR #75)"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "git grep for the stale sentence found it only in that row and in a historical plan; one row remains, the one that describes both locks."
+
+  - id: C10
+    title: "a name the plan missed, found by the real run of the scan: USDA_API_KEY (.claude/build_food_db_v2.js:419), classified STRIPPED and added to the canonical scrub"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "git grep printed that file only as 'Binary file ... matches', so the plan's reading of `git grep -n process.env -- .claude/*.js` saw only the two Supabase tokens; the scan reads files itself. No test spawns that script; stripping a credential is harmless and consistent with the SUPABASE_* secrets."
+
+  - id: V1
+    title: "no spawn test is inverted by ALLOW_MAIN_COMMIT today (a new name in the canonical scrub)"
+    terminal_state: verified_clean
+    evidence: "its only test, test/contracts/check_commit_from_worktree_test.dart, is a pure function over worktree_guard_lib.dart with no spawn (git grep for ALLOW_MAIN_COMMIT under test/)."
+
+  - id: U1
+    title: "PR 2: migrate the other 50 spawn test files onto the helper and add the strict site guards (no direct Process.run|runSync|start outside the helper; no Platform.environment inside an extra:/extraEnv: argument; delete the token list in gate_e2e_env_hermetic_test.dart)"
+    terminal_state: blocked_on_user
+    reason: >
+      Needs its OWN plan and two independent plan reviews (CLAUDE.md 4.12.1; subagent-driven in waves of at most 4, one worktree per
+      unit), and a durable tracker on the issue board: scripts/mint_oi.sh pushes a reservation ref to GitHub, which needs the
+      founder's explicit go (this repo's own precedent, sot-gate-test-stderr row C4). The founder's go of 2026-10-06 covers only OI-311.
+      The founder's scope answer was 'Shared helper, 2 PRs': THE BATCH CLOSES ONLY WHEN PR 2 MERGES. Until the tracker exists this row is
+      the tracker.
+
+  - id: U2
+    title: "rows C4, C5 and C7 of docs/audit/sot-gate-test-stderr.closure.yaml (the same one call in the OTHER spawn tests; the sweep test that inherits CONTRACT_SWEEP_NESTED)"
+    terminal_state: upstream_blocked
+    blocker: >
+      Answered here for the two migrated files (C4 by OI-311, C7's sweep test by the poisoned-parent regression) and for every spawn
+      routed through the helper; the other 50 files are PR 2 (row U1). That ledger is merged and is not edited by this batch.
+    reopen_when: "PR 2 merges (its commit closes the remainder of C5)."
+
+  - id: U3
+    title: "the cause of the 2026-10-04 exit 254 (second sighting after a7f3d1)"
+    terminal_state: upstream_blocked
+    blocker: "Not reproducible (200 of 200 concurrent local spawns exit 0; the re-run was green; no later sighting). Tracked by OI-311, not explained by this batch: the helper only guarantees that the NEXT sighting carries the child's stderr."
+    reopen_when: "any test whose spawned `dart` exits 254 fails again (OI-311)."
+
+  - id: R1-01
+    title: "P1 helper cannot remove a kept variable"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "re-verified against the code before folding: `dart_bin_resolver_test.dart:51`, `discipline_hook_main_sync_e2e_test.dart:45-47`, `_dart_bin.sh:85`. Landed: D1 `remove`; D2 two-level `DART_BIN_OVERRIDE` rule"
+
+  - id: R1-02
+    title: "P2 `env_readers.py` is a lookup"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "re-verified against the code before folding: `check_alerts.dart:41-45,114`; `pre-merge-commit.sh:131`; `prepare-commit-msg.sh:65`. Landed: 1.5 from the derived scan"
+
+  - id: R1-03
+    title: "P2 derived test vacuous / holes"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "re-verified against the code before folding: confirmed. Landed: D4"
+
+  - id: R1-04
+    title: "P2 absorbed mutants"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "re-verified against the code before folding: read from the plan text. Landed: section 3"
+
+  - id: R1-05
+    title: "P2 default reporter throws outside a test"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "re-verified against the code before folding: `test_api` `utils.dart:49-54`; nine load-time files. Landed: D1 `defaultSpawnReport`, 1.8, R6"
+
+  - id: R1-06
+    title: "P2 d9e4b1 missing"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "re-verified against the code before folding: the diagnose-doc exists. Landed: 1.2, D8, `EMAIL`"
+
+  - id: R1-07
+    title: "P2 NESTED strip vs the recursion guard"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "re-verified against the code before folding: `contract_sweep.dart:14-16`; `pre_push_analyze_always_e2e_test.dart:65-69`. Landed: D2 recursion guard"
+
+  - id: R1-08
+    title: "P2 merge walk may never run"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "re-verified against the code before folding: `pre-commit.sh:400-405`; `test.yml:244`. Landed: D3"
+
+  - id: R1-09
+    title: "P2 nothing durable carries PR 2"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "re-verified against the code before folding: §4.6 step 4. Landed: D7"
+
+  - id: R1-10
+    title: "P3 raw-bytes site"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "re-verified against the code before folding: `review_gate_staged_content_not_working_tree_test.dart:289`. Landed: D1 encodings, M16"
+
+  - id: R1-11
+    title: "P3 start sites cannot be forced to report"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "re-verified against the code before folding: read. Landed: D1; 1.6"
+
+  - id: R1-12
+    title: "P3 number drift"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "re-verified against the code before folding: re-derived by lexer. Landed: 1.6, throughout"
+
+  - id: R1-13
+    title: "P3 `SUPABASE_` not repo-owned"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "re-verified against the code before folding: class 2.56's rule. Landed: D2"
+
+  - id: R1-14
+    title: "P3 two assertions change"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "re-verified against the code before folding: `sot_registry_citations_test.dart:382,446`. Landed: D5"
+
+  - id: R2-01
+    title: "P1 `ANDROID_DEVICE_ID` missed; echo text fools the assignment regex"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "re-verified against the code before folding: `run-device-tests.sh:28,35`; neither scan output held the name. Landed: 1.5 v3 scan, D4 arm 4, M5"
+
+  - id: R2-02
+    title: "P2 four more holes (alias receivers and quotes, wrapper callers, shell computed reads, hidden builtin list)"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "re-verified against the code before folding: `git grep` lists 10 alias sites; `pre-commit.sh:165`, `vercel_build.sh:21`; the 25-name exemption read in the prototype. Landed: D4 arms 1-5, `shellBuiltin`, M5, M20, M21"
+
+  - id: R2-03
+    title: "P2 census undercounts PR 2"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "re-verified against the code before folding: lexer census reproduces 126 / 52 / 50 / 13 / 64 / 10 files exactly. Landed: 1.6, 1.7, header"
+
+  - id: R2-04
+    title: "P2 D5 names 2 changed assertions, at least 5 change"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "re-verified against the code before folding: `grep` of `sot_registry_citations_test.dart`. Landed: D5 (i)-(v)"
+
+  - id: R2-05
+    title: "P2 fallback prints on every load-time spawn"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "re-verified against the code before folding: `remote_listener.dart:62-67`. Landed: D1: print only on non-zero exit; two behavioural tests"
+
+  - id: R2-06
+    title: "P2 `extraEnv` can re-inject the whole parent"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "re-verified against the code before folding: `token_path_resolver_test.dart:196`. Landed: D1 `allowControl` guard, M18; PR 2 static rule in D6"
+
+  - id: R2-07
+    title: "P2 `DART_BIN_OVERRIDE` removal stays hand-remembered"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "re-verified against the code before folding: `pre_commit_lean_path_e2e_test.dart` has no removal. Landed: D2: the helper removes it by default; manifest pin; M19"
+
+  - id: R2-08
+    title: "P2 Windows `env` binary"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "re-verified against the code before folding: MSYS `env.exe` reasoning. Landed: section 3: a Dart child prints its environment"
+
+  - id: R2-09
+    title: "P2 second OI mint needs a go"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "re-verified against the code before folding: `sot-gate-test-stderr.closure.yaml` C4. Landed: D7"
+
+  - id: R2-10
+    title: "P3 recursion pin detector unspecified"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "re-verified against the code before folding: `git grep` over `test/`. Landed: D2 specified detector"
+
+  - id: R2-11
+    title: "P3 more mutants"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "re-verified against the code before folding: read. Landed: section 3 (M3, M9, M16, M18, M19, `PATH` in the literal list)"
+
+  - id: R2-12
+    title: "P3 start-site facts"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "re-verified against the code before folding: lexer: 20 sites, 10 files, `:708`. Landed: 1.6"
+
+  - id: R2-13
+    title: "P3 citation drift"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 1 batch commit (see header)
+    verification: "re-verified against the code before folding: `pubspec.lock` `test_api 0.7.10`; `token_path.js` spawned by a test; 7 `_sh` calls + 5 direct; `PRE_COMMIT_HOME`; `HOME`/`USERPROFILE` behaviour inputs. Landed: 1.5, 1.8, R2"
+
+  - id: M-ctlci
+    title: "mutant M-ctlci stayed GREEN"
+    terminal_state: verified_clean
+    evidence: "REAL survivor: the allowControl comparison made case-sensitive (`allowed.contains(k)` instead of `k.toUpperCase()`): no test declared a lower-case control name. Closed by a new case-insensitive allowControl test in test/contracts/spawn_helper_test.dart; the mutant was re-run and reddened."
+
+  - id: D5
+    title: "mutant D5 stayed GREEN"
+    terminal_state: verified_clean
+    evidence: "REAL survivor: the manifest's external-reader set emptied (`{'EMAIL'}` -> `{}`): nothing pinned it. Closed by the EMAIL pin tests in test/contracts/spawn_env_manifest_test.dart; the mutant was re-run and reddened (L-email, L-email2 too)."
+
+  - id: S18b
+    title: "mutant S18b stayed GREEN"
+    terminal_state: verified_clean
+    evidence: "REAL survivor: the shell scan arm's comment-line skip removed: no synthetic source fed a commented shell read. Closed by two synthetic per-arm tests (a commented assignment, a commented containsKey) in test/contracts/spawn_env_manifest_test.dart; re-run RED."
+
+  - id: S7b
+    title: "mutant S7b stayed GREEN"
+    terminal_state: verified_clean
+    evidence: "REAL survivor: the Dart scan's `live()` comment mask removed on one arm: no synthetic source carried a commented Dart read. Closed by a synthetic per-arm test; re-run RED."
+
+  - id: M1b
+    title: "mutant M1b stayed GREEN"
+    terminal_state: verified_clean
+    evidence: "intended CONTROL, GREEN by design: a no-op rewrite of the scrub line (`removeWhere(... && false)`) must not redden anything; it confirms the harness does not report spurious reds."
+
+  - id: R8-newspawn
+    title: "mutant R8-newspawn stayed GREEN"
+    terminal_state: verified_clean
+    evidence: "intended CONTROL, GREEN by design: an extra test that spawns THROUGH the helper in a migrated file must not redden the route-through-the-helper pin."
+
+  - id: D9
+    title: "mutant D9 stayed GREEN"
+    terminal_state: verified_clean
+    evidence: "intended CONTROL: a count FLOOR lowered to 0. A floor is a human-set bound and editing it is a visible diff; the per-arm anchors, the two-way equality and the other floors still bind below it."
+
+  - id: E1
+    title: "mutant E1 stayed GREEN"
+    terminal_state: verified_clean
+    evidence: "ST4 EQUIVALENT on this host: removing `runInShell: true` from a call whose command is a plain executable changes nothing on Linux; the Windows effect cannot be run here and is stated as unverified in the PR body."
