@@ -2683,6 +2683,80 @@ concepts:
       Hermes 2026-06-30: block_ship → 2 P0 + 5 P1 + 5 P2 folded → focused re-verify
       CONVERGED (leak surface SOUND; A→B leak + JWT-as-apikey = false alarms). EF
       deploy + the C1 index-drop migration are founder-gated (each its own go).
+      Since e4c1d7 (2026-10-06) the thirteen bulk reads and the coach window live in
+      supabase/functions/restore-user-snapshot/paged_reads.ts: see the concept
+      restore_user_snapshot_paged_reads.
+
+  - concept: restore_user_snapshot_paged_reads
+    domain: cross_domain
+    behavioral_test_path: supabase/functions/restore-user-snapshot/paged_reads_test.ts
+    description: |
+      e4c1d7 — restore-user-snapshot returns EVERY row, scoped to the caller on
+      every read. PostgREST clamps every response to db-max-rows (1000) with HTTP
+      200 and error null, so the old single .range(0, 49999) reads (and two bare
+      selects, and a coach read that kept the OLDEST 1000) silently truncated a
+      long-history account's bundle. The thirteen bulk reads now page through
+      _shared/paged_fetch.ts (offset advances by rows received, stops only on an
+      EMPTY page) with a manifest of legacy select strings, window filters and
+      primary sorts plus created_at / id tie keys, each order term with an explicit
+      direction. service_role bypasses RLS, so readPaged and readCoachNewest apply
+      .eq(user_id, vUid) THEMSELVES, first, on every page (never manifest data);
+      the scheduled_workouts.template embed is owner-scoped (scopeEmbed, Hermes C13);
+      one per-request page budget (TOTAL_PAGE_BUDGET = 120) bounds the work a user
+      can force. Any throw becomes the function's 500, which the client answers with
+      its verbatim legacy restore (fail-closed). The live function is unchanged
+      until the deploy go (CLAUDE.md 4.3).
+    writers:
+      - file: supabase/functions/restore-user-snapshot/paged_reads.ts
+        line_range: 1-9999
+        method: readPaged / readCoachNewest / scopeEmbed / PAGED_READS / createPageBudget
+        notes: |
+          The ONLY place the paged reads are built. The user scope, the explicit order
+          directions, the 51-page per-table ceiling and the shared budget live here.
+      - file: supabase/functions/restore-user-snapshot/index.ts
+        line_range: 100-290
+        method: serve handler
+        notes: |
+          Creates ONE budget per request (inside the handler), assigns each bundle key
+          from readPaged(db, vUid, "<same name>", budget), and logs table names + row
+          counts only. The wiring test pins every one of these.
+    reader_manifest_complete: false
+    readers:
+      - file: lib/core/services/sync_service.dart
+        line_range: 2215-2420
+        method: _attemptSingleCallRestore
+        semantic: aggregated
+        fields_read: [schema_version, tables]
+        notes: |
+          Fail-closed: a non-200 (including a budget or page-limit throw) returns null
+          before any Hive write and the legacy fan-out runs.
+      - file: lib/core/services/sync/sync_workout.dart
+        line_range: 2310-2640
+        method: _restoreScheduledWorkouts
+        semantic: pass-through
+        fields_read: [template]
+        notes: |
+          Reads deleted_at / name / workout_type / template_exercises of the embed; a
+          null embed (a foreign or deleted template) is handled.
+    additional_tests:
+      - test/contracts/restore_user_snapshot_paged_reads_wiring_test.dart  # presence-only: index.ts routes every key through readPaged with vUid and the one per-request budget
+      - test/sync/restore_single_call_bundle_validation_test.dart  # fail-closed bundle contract, unchanged
+    cloud:
+      table: workout_logs
+      columns: [user_id, created_at, completed_at, scheduled_date, date, id]
+    restore_methods: [_attemptSingleCallRestore]
+    class_constraints: |
+      1. A read in restore-user-snapshot that can return more than 1000 rows goes
+         through readPaged; a bare .range(0, N) with N >= 1000 is the defect.
+      2. Every table read in index.ts mentions vUid; the paged ones get it from
+         readPaged itself.
+      3. createPageBudget() is called once per request, inside the handler.
+      4. Every .order() term has an explicit direction (supabase-js defaults to
+         ascending, the Dart client to descending).
+      5. The tie order among rows that share a sort key is NOT a preservation claim.
+    notes: |
+      Deploy owed (founder go). Rollback: deploy_via_api.js --rollback
+      restore-user-snapshot <parent sha>.
 
   - concept: restoring_destination_read_timeout
     domain: cross_domain
@@ -6025,7 +6099,7 @@ concepts:
     reader_manifest_complete: false
     readers:
       - { file: lib/core/services/sync/sync_profile.dart, line_range: 971-1033, method: _restoreUserPreferences, semantic: pass-through, notes: "Generic .select() on user_preferences pulls the whole row, incl. coaching_notes, into Hive on restore. The client never writes this key back (see class_constraints below) — reader_manifest_complete is false because nothing in lib/ currently parses this JSON's individual keys client-side; it round-trips opaquely." }
-      - { file: supabase/functions/restore-user-snapshot/index.ts, line: 158, method: "serve handler", semantic: pass-through, notes: "Server-side restore endpoint selects user_preferences.* (incl. coaching_notes) back to a fresh install / reinstall." }
+      - { file: supabase/functions/restore-user-snapshot/index.ts, line: 167, method: "serve handler", semantic: pass-through, notes: "Server-side restore endpoint selects user_preferences.* (incl. coaching_notes) back to a fresh install / reinstall." }
     cloud:
       table: user_preferences
       columns: [user_id, coaching_notes]

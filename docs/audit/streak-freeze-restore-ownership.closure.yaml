@@ -25,6 +25,7 @@ bpass_review: docs/reviews/streak-freeze-restore-ownership-bpass.md
 diagnose_docs:
   - docs/diagnoses/2026-10-06-streak-decay-persist-restore-settled-b4e7a1.md
   - docs/diagnoses/2026-10-06-progress-restore-clobbers-freeze-state-c9d2f6.md
+  - docs/diagnoses/2026-10-06-restore-user-snapshot-returns-every-row-e4c1d7.md
 
 findings:
   # ── Unit 1 (diagnose b4e7a1): the decay persist is gated on THIS account's restore having settled ──
@@ -169,8 +170,9 @@ findings:
   # ── Needs the founder ──
   - id: RESIDUAL-EF-CAPS
     title: "restore-user-snapshot silently caps scheduled_workouts at .range(0, 999) (ascending) and has no limit on workout_schedule_completions, so a long-history account's single-call restore can be incomplete with nothing reported"
-    terminal_state: blocked_on_user
-    reason: "Founder GO 2026-10-06 (chat): lift the caps. The scope grew once the single-call function was read in full: eleven reads were clamped to 1000 rows by PostgREST (not only these two), and the scheduled_workouts template embed was found readable across users under service_role (Hermes C13). The code (paged reads, a per-request page budget, owner-scoped embed) is Slice B1 of docs/plans/streak-freeze-restore-ownership-addendum-a.md and lands in a later commit of this batch; the live deploy still needs its own per-action go (CLAUDE.md 4.3) and the EF-deploy-from-a-branch-behind-main check. Closes as closed_in_commit when B1 lands."
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: e4c1d7' (Slice B1 commit)"
+    verification: "diagnose e4c1d7 (the scope grew once the function was read in full: eleven reads were clamped to 1000 rows by PostgREST, plus two bare selects and a coach read that kept the OLDEST 1000). supabase/functions/restore-user-snapshot/paged_reads_test.ts (104 Deno tests; 2,500 rows with 700 tied across the page seam come back exactly once for every table; exactly 50,000 rows pass and 50,001 throw; a failed page rejects) and 32 mutations all red; the real fetchAllPages through supabase-js 2.39.3 returned all 1431 food_database rows exactly once against live PostgREST (a single .range(0,49999) returned 1000, error null). THE REPO CODE closes here; the LIVE function is unchanged until B1-EF-DEPLOY."
 
   - id: F8
     title: "A freeze is consumed even when the streak breaks anyway, and the multi-freeze notice reads 'Streak Freeze used! 0 remaining this week.'"
@@ -187,5 +189,57 @@ findings:
     terminal_state: blocked_on_user
     reason: "Founder GO 2026-10-06 on the migration. Counter half = Slice C1 (GREATEST in update_user_progress_snapshot, body-only). Marker half (last_streak_week to the cloud) = Slice C2, only after the weekly-stamp fix (Slice D; founder D5 = yes, 2026-10-06, found because train_provider.dart stamps the marker on EVERY completion so a second session in a week is never counted) and its own plan-review round. Neither half is introduced by this batch: the re-count after a reinstall happens identically with the pre-fix cloud-wins restore, and max-wins only stops a restore from LOWERING the count. Recorded in lib/core/services/CLAUDE.md next to the monotonic-merge row. Each live apply needs the founder's per-action go (CLAUDE.md 4.3)."
 
-total_findings: 27
-closed_count: 27
+  # ── Slice B1 (diagnose e4c1d7): restore-user-snapshot returns every row, scoped on every read ──
+  - id: B1-EF-DEPLOY
+    title: "The paged-read fix to restore-user-snapshot is not live until the Edge Function is deployed"
+    terminal_state: blocked_on_user
+    reason: "A live Edge Function deploy needs the founder's explicit per-action go (CLAUDE.md 4.3) even though the plan was approved. Protocol (addendum plan section 3): committed tree only; live bundle fetched as multipart and hashed against the parent blob; git fetch origin main and a diff of supabase/functions (an EF deploy from a branch behind main rolls back main's live _shared code); deno check --node-modules-dir=none; host-shell deploy (emit_payload.js + deploy_via_api.js); anon-key boot check; the expected Smoke FAIL 401 for a verify_jwt=true function; then the per-request rows line is read from the function logs and compared with a live count(*) for the founder's account after the phone restores. Rollback: deploy_via_api.js --rollback restore-user-snapshot <parent sha>."
+
+  - id: HERMES-C13-TEMPLATE-EMBED
+    title: "scheduled_workouts.template embed is scoped only by a caller-writable foreign key; workout_templates is not filtered by user, so a schedule row pointing at ANOTHER user's template returns that template's name and exercises under service_role (Hermes C13, open since 2026-07-30 and on no board)"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: e4c1d7' (Slice B1 commit)"
+    verification: "paged_reads.ts scopeEmbed (the embed selects the template user_id; a foreign, array, primitive or owner-less embed becomes null; an owned one loses user_id; owner compare case-insensitive); paged_reads_test.ts 'a foreign template embed comes back null', the hostile-shapes test and the case-insensitivity test; mutations M7, M8, M23, M24 red. Live exposure was 0 of 22 scheduled rows before the fix. Closes in the repo; live with B1-EF-DEPLOY."
+
+  - id: B1-BPASS-A
+    title: "B-pass round 1, seat A (correctness / fidelity / test adequacy): 1 P2 + 4 P3 (tests did not assert the select and window filter actually SENT; date-primary tables could not tell [date, id] from [id]; custom-item order; uppercase uuid vs strict embed compare; comment and registry drift)"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: e4c1d7' (Slice B1 commit)"
+    verification: "docs/reviews/restore-user-snapshot-paged-reads-bpass.md findings A1-A5 each FIXED with a test that goes red under a mutation (M16 33 red, M17 7, M18, M19 77, M20, M27, M28, M24, W14, W16); every claim was re-read against the file before being accepted."
+
+  - id: B1-BPASS-B
+    title: "B-pass round 1, seat B (cross-user security under service_role): 1 P2 + 3 P3 (one request could fan out to 663 sequential queries; scopeEmbed passed a primitive embed through; case mismatch nulled owned embeds; header and test coverage of the non-paged reads)"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: e4c1d7' (Slice B1 commit)"
+    verification: "docs/reviews/restore-user-snapshot-paged-reads-bpass.md findings B1-B4: a per-request page budget (TOTAL_PAGE_BUDGET = 120, required argument, charged in a finally; M6, M6b, M22, M26, M29, M31 red), scopeEmbed hardening (M23 red), case-insensitive compare (M24 red after the first vacuous test was fixed), and a wiring test that EVERY tables[...] assignment in index.ts mentions vUid (W12 red). Seat B found no P0 or P1 and confirmed the user scope on all ~30 reads."
+
+  - id: B1-BPASS-C
+    title: "B-pass round 2, seat C (delta re-review): 1 P2 + 4 P3 (the wiring test let the page budget be hoisted above serve(), one budget for the whole isolate; budget comment arithmetic; a budget trip worded as a sort-key problem; no all-thirteen-under-one-budget test; docblock overstatement)"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: e4c1d7' (Slice B1 commit)"
+    verification: "docs/reviews/restore-user-snapshot-paged-reads-bpass.md findings C1-C5: the wiring test requires createPageBudget() inside the handler (W17 red); the trip is rethrown as 'page budget exhausted at <name>' (M30 red); a 0/400/1200/3000-rows-per-table test pins 13/26/39/52 requests (M31 red). No P0 or P1 in either round."
+
+  - id: B1-TIE-ORDER-NOT-PRESERVED
+    title: "The new tie order among rows sharing a sort key does not keep today's (undefined, physical) winner for first-wins readers"
+    terminal_state: verified_clean
+    evidence: "A RECORDED DECISION, not 'no defect': for the founder's 44 multi-row workout_log_exercises groups the new order [completed_at, created_at, id] picks the same first row as the physical order (completed_at, ctid) in 28 of 44 and the same as [completed_at, id] in 24 of 44 (read-only, 2026-10-06). The reader that keeps the FIRST row per natural key is _restoreExerciseLogs (sync_workout.dart). The previous order was not defined either, so no guarantee is lost; created_at is a fair insertion-order proxy and id only guarantees page-seam stability. Stated in the diagnose doc so it is not read as a preservation claim."
+
+  - id: RESTORE-PATH-ORDER-DIRECTION-DIFFERS
+    title: "The two restore paths already pick OPPOSITE rows in first-wins readers (the legacy client reads descending by default, the Edge Function ascending)"
+    terminal_state: upstream_blocked
+    blocker: "Pre-existing and not made worse by B1: deciding which tied summary row is canonical belongs to OI-307 (a second live workout_log_exercises summary row when a log's set count changes after sync: 44 groups / 99 rows live for one user), reserved on branch coach-progress-review and not on this tree's board."
+    reopen_when: "OI-307 is filed on this tree's board, or the canonical-row decision is made."
+
+  - id: B1-VERIFIED-CLEAN-CAPS
+    title: "The reads that stay on q() in restore-user-snapshot cannot be silently clamped"
+    terminal_state: verified_clean
+    evidence: "Each remaining read has a natural bound at or below 1000: limit 1 (user_profile, user_progress, user_preferences, workout_plan), maybeSingle (users, coach_memory, freezes, saved_diet_plan), limit 500 (workout_templates live max 5; user_saved_meals), limit 200 (notifications_inbox), limit 52 (streaks), limit 50 (referral_redemptions; max 3 rows per user live, 2026-10-06; it has no user_id column and keeps its dual-FK .or scope), limit 20 (rank_promotions), limit 1 maybeSingle (referral_codes). These are product caps the legacy client mirrors."
+
+  - id: B1-EF-MEMORY-LIMIT
+    title: "The page budget bounds REQUESTS, not bytes: 120 pages of wide rows plus JSON.stringify could exceed the Edge runtime memory limit"
+    terminal_state: upstream_blocked
+    blocker: "The Edge Function memory and CPU limits are platform facts not readable from the repository or from a read-only database session. A worker killed for memory answers non-200, which the client already treats as the legacy-restore fallback, so the failure is safe, not bounded."
+    reopen_when: "The limit is read from the Supabase dashboard, or query_logs / the function logs show a restore-user-snapshot worker killed for memory."
+
+total_findings: 36
+closed_count: 36
