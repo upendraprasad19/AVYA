@@ -3101,14 +3101,19 @@ concepts:
       - file: lib/core/services/sync_service.dart
         line_range: 1-9999
         method: bumpRestoreCompleted (restoreCompletedTick ValueNotifier<int>)
-        notes: single-writer monotonic tick; bumped after the bg heal completes.
+        notes: |
+          single-writer monotonic tick; bumped LAST by
+          DayRolloverObserver.reckonAndNotifyAfterRestore after the bg heal
+          completes (b4e7a1). It is a UI-refresh tick; it gates streak decay
+          ONLY under the kill switch `disable_streak_reckon_user_gate`
+          (concept streak_decay_restore_settled_marker).
       - file: lib/core/services/supabase_service.dart
         line_range: 1-9999
         method: warmConnection (best-effort user_profile probe, un-flagged)
     readers:
       - file: lib/features/home/screens/home_screen.dart
         line_range: 1-9999
-        method: restoreCompletedTick listener → invalidateOnRetry(ref)
+        method: restoreCompletedTick listener → invalidateOnBackgroundRestore (invalidateOnRetry + _checkStreakFreezeUsed, b4e7a1)
         semantic: pass-through
         notes: listener added in initState, removed in dispose.
       - file: lib/features/auth/screens/restoring_screen.dart
@@ -3205,7 +3210,7 @@ concepts:
         semantic: pass-through
         fields_read: [is_pro, expires_at, plan, paymentInFlightOrder]
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 632-634
+        line_range: 868-870
         method: isOnboarded
         semantic: flag-check
         fields_read: [onboarding_completed]
@@ -3519,7 +3524,9 @@ concepts:
           `workout_log` whose source != cloud_restore_completion, name not in
           kPlaceholderWorkoutNames, differs from the row's ignoring case.
           Kill switch `disable_completed_title_heal`. Does NOT touch
-          `restoreCompletedTick` (it gates streak decay). Test
+          `restoreCompletedTick` (the tick is bumped by the bg heal's
+          reckonAndNotifyAfterRestore; streak decay is gated per user by
+          SyncService.restoreSettledForCurrentUser, b4e7a1). Test
           test/contracts/completed_title_follows_log_test.dart (13 mutations
           proven). A date completed twice keeps the OLDEST cloud log in its
           one local slot (OI-302) and the heal follows that slot.
@@ -4311,7 +4318,7 @@ concepts:
         method: calculateCurrentStreak (consumes freeze)
       - file: lib/features/train/repositories/workout_repository.dart
         line_range: 1-9999
-        method: reckonStreakDecayAndPersist (D2 f9d2e7 — single gated consume site; rollover + completeWorkout; restoreCompletedTick + non-empty-schedule gated)
+        method: reckonStreakDecayAndPersist (D2 f9d2e7 — single gated consume site; rollover + completeWorkout + the post-restore reckon; gated on SyncService.restoreSettledForCurrentUser (per-account marker, b4e7a1) + non-empty-schedule)
       - file: lib/features/home/providers/home_provider.dart
         line_range: 273-309
         method: StreakFreezeNotifier._refillIfNewWeek
@@ -4376,7 +4383,9 @@ concepts:
       - test/contracts/streak_freeze_refill_race_test.dart
       - test/contracts/streak_progress_service_concurrency_test.dart
       - test/contracts/streak_frozen_day_persists_protection_test.dart  # 5e8a1c: a spent freeze protects its day on every recompute (was: walk broke at the frozen day → streak collapse → rank stuck at SD2)
-      - test/contracts/streak_decay_reckon_permanent_ledger_test.dart  # f9d2e7: D1 permanent ledger (commitRefill prune-not-clear; a frozen day survives a refill) + D2 gated reckon (rollover persists; tick==0 / empty-schedule do NOT decay)
+      - test/contracts/streak_decay_reckon_permanent_ledger_test.dart  # f9d2e7: D1 permanent ledger (commitRefill prune-not-clear; a frozen day survives a refill) + D2 gated reckon (rollover persists; marker unset / empty-schedule do NOT decay; b4e7a1 repointed the gate from the tick to the per-account marker)
+      - test/contracts/streak_reckon_restore_settled_behavioral_test.dart  # b4e7a1: per-account restore-settled marker, failure collector, post-restore reckon + notice
+      - test/contracts/progress_restore_freeze_merge_behavioral_test.dart  # c9d2f6: a whole-row restore merges the freeze family by the one rule instead of overwriting it
       - test/contracts/hold_week_streak_identity_behavioral_test.dart  # a3f8d1: the weekly streak advances once per HOLD week (unclamped date-week identity, correct across a late-return gap) and each hold gets its OWN streaks row instead of overwriting week 4's; PLUS one shared training-day predicate on both sides of the adherence ratio, so an all-custom_template week no longer scores planned==0 and blanks both the streak and the cloud row. FIRST coverage this block has ever had; 5 mutations run, each reddening only its intended cases.
     reader_allow_files:
       # Debug-only year-simulation harness (kDebugMode-gated; release-inert).
@@ -4436,7 +4445,10 @@ concepts:
       mergeFreezeProgress therefore ALWAYS unions used_dates on every branch (the
       weekly BUDGET available/last_refill still follows the newer refill). D2: the
       SINGLE decay/consume site is WorkoutRepository.reckonStreakDecayAndPersist
-      (rollover + completeWorkout), gated on restoreCompletedTick > 0 AND a
+      (rollover + completeWorkout + the post-restore reckon), gated on the
+      per-account restore-settled marker (SyncService.restoreSettledForCurrentUser,
+      b4e7a1; it replaced `restoreCompletedTick > 0`, which was bumped only after
+      the cold-start rollover and never reset on an account swap) AND a
       non-empty schedule so a pre-restore / cold-start-empty device never
       spuriously decays; it persists via commitConsume and returns a read-only
       count when gated off. The grant denominator + first-PRO grant live in the
@@ -4559,6 +4571,230 @@ concepts:
       writeSubscriptionState captures oldIsPro BEFORE the MigratedKey
       write so a renewal (PRO→PRO) is correctly classified as NOT a
       transition and does not call grantFirstProFreezes().
+
+  - concept: streak_decay_restore_settled_marker
+    domain: workout
+    description: |
+      b4e7a1 — WHICH account's restore has settled, and therefore whether the
+      D2 streak-decay reckon may PERSIST a freeze debit. Replaces the
+      process-wide `restoreCompletedTick > 0` gate, which (F1) was bumped only
+      AFTER the cold-start rollover ran, so an idle-day debit never persisted on
+      a cold start, and (F2) was never reset on an account swap, so a stale tick
+      let the reckon debit the NEW account from its PRE-restore rows (the
+      2026-09-17 spurious debit). The marker is `SyncService._restoreSettledUserId`,
+      in memory only, set by the `restoreFromCloudForUser()` wrapper iff the
+      restore succeeded AND no streak-critical op REPORTED a failure
+      (`RestoreFailureCollector`, a zone-scoped sink fed by the first statement of
+      `_reportSyncFailure`; exact allowlist `kStreakCriticalRestoreOpTypes`) AND
+      the captured uid is still the live uid AND the open Hive owner. Cleared by
+      `_onUserChanged`. "Settled" means no critical op REPORTED a failure, NOT
+      that every row was fetched (empty-answer blind spots, the edge function's
+      row caps and an A->B->A swap inside one restore step are disclosed in the
+      plan, OI board). Kill switch `disable_streak_reckon_user_gate` restores the
+      tick gate verbatim. B-pass additions: (1) the plan reconciler's ghost-day
+      lookup is tri-state (`null` = could not answer) and `reconcile` skips
+      template days on `null`; (2) `healAfterRestoreWhenSucceeded` gives the
+      CONTINUE escape the same post-restore heal + reckon; (3) `_onUserChanged`
+      clears the marker FIRST; (4) a single-call fault clears the failure sink
+      before the legacy fan-out re-runs the ops.
+    writers:
+      - file: lib/core/services/sync_service.dart
+        line_range: 1913-1930
+        method: _settleRestoreMarker
+        notes: |
+          The ONE marker writer; the decision is the pure
+          `shouldSettleRestoreMarker` (result.succeeded, no streak-critical
+          failure, uid non-null, live uid == uid, Hive owner == uid).
+      - file: lib/core/services/sync_service.dart
+        line_range: 1944-1954
+        method: restoreFromCloudForUser
+        notes: |
+          Wrapper shape pinned by completed_title_follows_log_test.dart: runs the
+          core inside `RestoreFailureCollector.run`, heals titles, THEN settles.
+      - file: lib/core/services/sync_service.dart
+        line_range: 188-251
+        method: _onUserChanged
+        notes: clears `_restoreSettledUserId` and the withheld reason on an account swap, as its FIRST statement (every later step can throw; B-pass F3).
+      - file: lib/core/services/sync/sync_restore_failure_collector.dart
+        line_range: 53-63
+        method: note
+        notes: |
+          Records an allowlisted op type into the zone's sink; total (never
+          throws); a no-op outside a restore zone.
+      - file: lib/core/services/sync/sync_restore_failure_collector.dart
+        line_range: 72-77
+        method: clear
+        notes: |
+          Empties the ACTIVE zone's sink only. The restore calls it when the
+          single-call attempt FAULTED and the legacy fan-out re-runs every op, so
+          a stale failure from the aborted attempt cannot hold the marker closed
+          (B-pass reviewer B F4).
+      - file: lib/core/services/sync_service.dart
+        line_range: 2873-2946
+        method: _reportSyncFailure
+        notes: first statement calls `RestoreFailureCollector.note(opType)`; the single failure funnel.
+      - file: lib/core/services/day_rollover_service.dart
+        line_range: 161-179
+        method: reckonAndNotifyAfterRestore
+        notes: |
+          Post-restore: reckon + persist (gated by the marker), ONE best-effort LOW
+          `streak_reckon_withheld` event, then bump `restoreCompletedTick` LAST so
+          every tick listener repaints from the already-debited ledger.
+      - file: lib/features/auth/screens/restoring/heal_after_restore.dart
+        line_range: 93-101
+        method: healAfterRestoreWhenSucceeded
+        notes: |
+          Attaches the post-restore heal + reckon to an in-flight restore for the
+          CONTINUE escape (`_onContinueAnyway` leaves while the restore runs and
+          `_goHome` returns early once the screen is gone). A failed or cancelled
+          restore never heals (B-pass reviewer C F1).
+      - file: lib/core/services/plan_integrity_reconciler.dart
+        line_range: 335-367
+        method: filterGhostScheduleEntries
+        notes: |
+          The reconciler writes `schedule_*` rows AFTER the marker settled and
+          outside any collector, so its ghost-day filter must not treat "the
+          lookup could not answer" (null) as "none deleted": it skips every
+          `tmpl_<uuid>` day then (B-pass reviewer B F1).
+      - file: lib/core/services/sync/sync_workout.dart
+        line_range: 1827-1828
+        method: deletedTemplateCloudIdsForUser
+        notes: |
+          Public forwarder of `_deletedTemplateCloudIdsOrNull`: `null` = could not
+          answer, `{}` = answered "none deleted". The restore-side
+          `_deletedTemplateCloudIds` keeps the fail-EMPTY wrapper.
+    reader_manifest_complete: false
+    readers:
+      - file: lib/features/train/repositories/workout_repository.dart
+        line_range: 252-273
+        method: reckonStreakDecayAndPersist
+        semantic: flag-check
+        fields_read: [restoreSettledForCurrentUser]
+        notes: |
+          The ONE persist gate: marker == live uid == Hive owner AND a non-empty
+          schedule. Gated off => a read-only count.
+      - file: lib/features/home/screens/home_screen.dart
+        line_range: 186-189
+        method: invalidateOnBackgroundRestore
+        semantic: pass-through
+        notes: |
+          A debit can now land on a MOUNTED Home (background restore), so the
+          freeze notice is checked here as well as from initTab.
+    behavioral_test_path: test/contracts/streak_reckon_restore_settled_behavioral_test.dart
+    additional_tests:
+      - test/contracts/streak_decay_reckon_permanent_ledger_test.dart  # f9d2e7 ledger + D2 reckon, repointed to the marker gate
+      - test/contracts/background_restore_test.dart  # the bg heal calls reckonAndNotifyAfterRestore, never a bare bump
+      - test/contracts/streak_decay_restore_settled_marker_writer_to_reader_test.dart  # presence-only manifest: who may write / read the marker (Gate 9 name; behavior lives in the behavioral test)
+    hive:
+      box: userBox
+      key_prefix: "progress"
+      key_formula: "none - the marker is in memory (SyncService._restoreSettledUserId); the debit it opens lands in userBox['progress'] and the workoutBox schedule_* rows"
+    cloud:
+      table: user_progress
+      columns: [streak_freezes_available, streak_freezes_used_dates, current_streak_days]
+    sync_methods: [syncFreezes]
+    restore_methods: [restoreFromCloudForUser]
+    telemetry:
+      failure_op_types: [streak_reckon_withheld, bg_heal_streak_reckon]
+    class_constraints: |
+      1. A NEW streak-critical restore op (one whose rows feed the streak walk)
+         MUST be added to `kStreakCriticalRestoreOpTypes`; T8 in the behavioral
+         test enumerates every `_safeRestoreOp` label and fails otherwise.
+      2. The allowlist is EXACT, never a `restore_` prefix: `weeklyFullSync`
+         pushes through `_safeRestoreOp('sync_*')` and those say nothing about
+         the walk.
+      3. `restoreSettledForCurrentUser` is a PURE getter (the CQRS gate scans
+         every getter): no write, no telemetry.
+      4. No comment between the wrapper and the core may spell
+         `_restoreFromCloudForUserCore(` or `_safeRestoreOp(` (source-grep
+         hazard tests: completed_title_follows_log_test, restore_after_session_open_test).
+
+  - concept: progress_restore_freeze_merge
+    domain: workout
+    description: |
+      c9d2f6 — a whole-row restore of `user_progress` no longer OVERWRITES the
+      streak-freeze family with a stale cloud row. `UserRepository.mergeCloudProgress`
+      was cloud-non-null-wins for `streak_freezes_available`,
+      `streak_freezes_last_refill`, `streak_freezes_first_pro_grant_done`; in
+      production `_restoreUserProgress` runs BEFORE `_restoreFreezes`, so the
+      clobber was unrepairable, and `restoreLightweightAlways` (every cold start)
+      and the sign-in hydrate never run `_restoreFreezes` at all (F3, live on
+      2026-10-06: refill stamped last_refill 06:46:25, back at the stale cloud
+      value 1.6 s later). A post-pass (`_mergeFreezeFamily`) now merges the family
+      with the ONE existing mutation-proven rule,
+      `StreakProgressService.mergeFreezeProgress`, plus an ASYMMETRIC first-PRO
+      grant carry (cloud flag true, local not => take the cloud count MINUS any
+      local consume the cloud ledger has not seen, and adopt the cloud's OLDER
+      refill stamp so the next `refillIfNewWeek` still tops the week up) and a
+      flag write-back of `local || cloud` — except for an EATEN local grant
+      (local flag true, cloud not, merged count below the local one), whose flag
+      stays at the cloud's false so `grantFirstProFreezes` re-grants (B-pass
+      reviewer A F1/F2). It schedules a cloud push
+      (`ProgressMergeResult.scheduleFreezeSyncUp`) when the merged state differs
+      from the ORIGINAL cloud row. `user_id`, `plan_json`, `sync_epoch` are
+      control-plane keys the merge now ignores (F7: the sign-in hydrate used to
+      spread the raw `plan_json` blob into `userBox['progress']`). Kill switch
+      `disable_progress_freeze_merge`; the OI-83 switch
+      `disable_progress_restore_monotonic_merge` remains the wider rollback.
+      Index assignment only in `user_repository.dart` (the sole-writer contract
+      `streak_progress_service_concurrency_test.dart` greps raw source).
+    writers:
+      - file: lib/shared/repositories/user_repository.dart
+        line_range: 474-647
+        method: mergeCloudProgress
+        notes: skips the freeze family and the control-plane keys in the cloud-copy loop when the freeze merge is on.
+      - file: lib/shared/repositories/user_repository.dart
+        line_range: 663-776
+        method: _mergeFreezeFamily
+        notes: the post-pass; delegates to StreakProgressService.mergeFreezeProgress.
+      - file: lib/core/services/sync/sync_profile.dart
+        line_range: 926-1023
+        method: _restoreUserProgress
+        notes: owner guard before the put, then `unawaited(syncFreezes())` when the merge scheduled a push.
+      - file: lib/core/services/auth_session_bootstrapper.dart
+        line_range: 1-9999
+        method: hydrateFromCloud
+        notes: the sign-in hydrate; same merge, same push (behavioral: Group C `SIGN-IN HYDRATE` tests drive the real method under SyncHarness; the Group D pin is presence-only).
+    reader_manifest_complete: false
+    readers:
+      - file: lib/core/services/sync/sync_restore_completeness.dart
+        line_range: 34-119
+        method: syncFreezes
+        semantic: pass-through
+        fields_read: [streak_freezes_available, streak_freeze_used_dates, streak_freezes_last_refill, streak_freezes_first_pro_grant_done, streak_progress_version]
+        notes: |
+          The push that converges the cloud after a merge that kept local ahead.
+          Reads `_liveUserId` (byte-identical to `_supabase.currentUser?.id` in
+          production) so the push is observable under SyncHarness.
+    behavioral_test_path: test/contracts/progress_restore_freeze_merge_behavioral_test.dart
+    additional_tests:
+      - test/contracts/progress_restore_monotonic_behavioral_test.dart  # OI-83 monotonic merge; since 2026-10-06 also the current_streak_weeks group (founder decision A)
+      - test/contracts/restore_progress_uses_shared_merge_test.dart  # both whole-row writers use the shared merge
+      - test/contracts/streak_progress_service_concurrency_test.dart  # sole-writer contract the post-pass must respect
+      - test/contracts/progress_restore_freeze_merge_writer_to_reader_test.dart  # presence-only spelling pins (singular local ledger vs plural cloud column; both writers push); Gate 9 name
+    hive:
+      box: userBox
+      key_prefix: "progress"
+      key_formula: "userBox['progress'][streak_freezes_available | streak_freeze_used_dates | streak_freezes_last_refill | streak_freezes_first_pro_grant_done]"
+    cloud:
+      table: user_progress
+      columns: [streak_freezes_available, streak_freezes_used_dates, streak_freezes_last_refill, streak_freezes_first_pro_grant_done, streak_progress_version]
+    sync_methods: [syncFreezes]
+    restore_methods: [_restoreUserProgress, _restoreFreezes]
+    telemetry:
+      failure_op_types: [progress_restore_freeze_merge_engaged]
+    class_constraints: |
+      1. The freeze family has ONE merge rule (`mergeFreezeProgress`); a second
+         rule over the same keys is how writer/reader drift starts.
+      2. `streak_progress_version` stays cloud-always-wins (server-owned
+         optimistic-lock counter).
+      3. There is deliberately NO symmetric grant carry: `_restoreFreezes` and the
+         conflict retry merge with the plain rule and would undo it. The local
+         grant the cloud has not seen is therefore either KEPT by the rule (count
+         survives, flag claimed, pushed) or EATEN (count lost, flag NOT claimed, no
+         push) — never "count lost, flag true".
+      4. `scheduleFreezeSyncUp` compares against the ORIGINAL cloud values and
+         compares `used_dates` AS A SET, so a steady state never pushes.
 
   - concept: sleep_logs
     domain: health
@@ -4990,7 +5226,7 @@ concepts:
           stayed NULL -> forced re-onboard on a new device. Now carries the
           column (guarded SyncService._hasValue, never clobbers with null).
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 637-639
+        line_range: 873-875
         method: setOnboarded
       - file: lib/core/services/auth_session_bootstrapper.dart
         line_range: 758-1088
@@ -8369,16 +8605,20 @@ concepts:
         notes: >
           Unit A / d1f6b3 (2026-08-03), closes OI-83. The five writers above are all
           ADVANCE-side; this is the RESTORE side, and until now it had no guard at all.
-          Pure local-max-wins over exactly 3 monotonic fields (current_phase,
-          deployments_complete, total_workouts_done); every other key
+          Pure local-max-wins over exactly 4 monotonic fields (current_phase,
+          deployments_complete, total_workouts_done and, since 2026-10-06
+          (founder decision A, c9d2f6), current_streak_weeks); every other key
           keeps the prior cloud-non-null-wins semantics. §4.6 kill-switch
           `disable_progress_restore_monotonic_merge` (platform tier requires a
           feature_flag, blast_radius.yaml:25). Deliberately EXCLUDES `longest_gap_days`
           — INVERTED (higher is worse, gates a rank at rank_service.dart:506, no client
           writer, already GREATESTed server-side by migration 115), so max-wins there
           could only refuse a server correction; removed by round-1 review. Also the streak
-          counters (a streak legitimately resets to 0), the freeze family (already merged
-          by StreakProgressService.mergeFreezeProgress) and streak_progress_version
+          counter current_streak_days (a streak legitimately resets to 0; current_streak_weeks is IN the set since 2026-10-06), the freeze family (merged by the
+          post-pass _mergeFreezeFamily, which delegates to
+          StreakProgressService.mergeFreezeProgress — c9d2f6; before that this
+          comment claimed it was "already merged" while the loop below still
+          overwrote it) and streak_progress_version
           (server-owned optimistic-lock counter — cloud always wins, Unit 3b e6b9c4).
           Refusals are emitted by the shared reportProgressDemotionsDeclined as
           progress_restore_demotion_declined, one event per field.
@@ -8435,7 +8675,7 @@ concepts:
       - file: test/contracts/progress_restore_monotonic_behavioral_test.dart
         method_or_widget: the RESTORE merge path (d1f6b3 / OI-83)
         semantic: >
-          pure merge refuses a lower cloud value on all 3 monotonic fields while a HIGHER
+          pure merge refuses a lower cloud value on all 4 monotonic fields (weeks added 2026-10-06) while a HIGHER
           one still wins · longest_gap_days is NOT guarded (a server correction downward
           must land) · non-monotonic fields still take cloud INCLUDING a genuine 0 · an
           empty-local reinstall adopts cloud verbatim, and an ABSENT local value is not
@@ -10908,7 +11148,7 @@ concepts:
           a corrupted or half-written value cannot silently darken a
           notification. Swallows storage errors and returns {} (=> all-enabled).
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 949-1019
+        line_range: 963-1033
         method: _restoreUserPreferences
         semantic: latest
         fields_read: [enabled]
@@ -11159,7 +11399,7 @@ concepts:
           (→913) despite the gate not flagging it, found by grepping the
           symbol directly rather than trusting the gate's silence on it.
       - file: lib/core/services/sync_service.dart
-        line_range: 2621-2621
+        line_range: 2719-2719
         method: restoreOpTimeout
         semantic: per-op-ceiling
         notes: day-swapper + sync-load Task 20 fix1 (diagnose a9d3f6) shifted
@@ -11170,7 +11410,7 @@ concepts:
           an N-M line_range — but left stale it would misdirect a future
           reader by the same +14).
       - file: lib/core/services/sync_service.dart
-        line_range: 2648-2652
+        line_range: 2746-2750
         method: applyRestoreCeiling
         semantic: apply-ceiling
         notes: day-swapper + sync-load Task 20 shifted this range (+148 lines,
@@ -11180,7 +11420,7 @@ concepts:
           blocks on a citation you shifted). Shifted again by task-20-fix1
           (diagnose a9d3f6, +14 lines, same method) for the same reason.
       - file: lib/core/services/sync_service.dart
-        line_range: 2660-2662
+        line_range: 2758-2760
         method: restoreFailureReason
         semantic: telemetry-reason-split
         notes: same shift as applyRestoreCeiling directly above, both times; all three re-derived +3 by the Hermes sync_epoch_seen doc comment (2026-09-28), then +1 (with _safeRestoreOp) by the plan_engine_flags import the merge-review F4 fix added (a3e7d9).
@@ -11195,7 +11435,7 @@ concepts:
         method: _authRedirect
         semantic: delegates-to-pure-fn
       - file: lib/core/services/sync_service.dart
-        line_range: 2653-2695
+        line_range: 2742-2784
         method: _safeRestoreOp
         semantic: bounded-await
     hive:
@@ -12994,7 +13234,7 @@ concepts:
         semantic: flag-check
         fields_read: [type]
       - file: lib/core/services/plan_integrity_reconciler.dart
-        line_range: 318-329
+        line_range: 373-384
         method: needsHeal
         semantic: flag-check
         fields_read: [type]
@@ -14047,7 +14287,7 @@ concepts:
     reader_manifest_complete: false
     readers:
       - file: lib/core/services/plan_integrity_reconciler.dart
-        line_range: 318-329
+        line_range: 373-384
         method: needsHeal
         semantic: flag-check
         fields_read: [schedule_<date>.type, schedule_<date>.status, schedule_<date>.exercises]
@@ -14132,7 +14372,7 @@ concepts:
           without this, the very next extraction pass would silently
           overwrite every pre-existing user's genuine profile values.
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 953-972
+        line_range: 1189-1209
         method: lockCoachExtractionFields
         notes: |
           Client call site: `.rpc('lock_coach_extraction_fields', params: {'p_fields': fields})`.

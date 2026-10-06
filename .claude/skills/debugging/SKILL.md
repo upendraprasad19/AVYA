@@ -212,6 +212,7 @@ Per CLAUDE.md rules 21 + 22:
 | 2.88 | A "completed is sacred" guard freezes the whole row, but the row's TITLE has a different source of truth than its status | the completed card (reads the log) is right while the Train row / Home Today widget (read the schedule row) show the pre-swap title after a cross-device swap | test/contracts/completed_title_follows_log_test.dart |
 | 2.89 | A PRO-only screen whose gate sits on its DOOR only (a row or button holds `gateAndVerify`; the screen reads and writes the protected data with no check, so a typed web address, a deep link or a second button skips it) | a free user uses a "PRO" feature; docs say "each destination keeps its own gate"; source pins pin the door and stay green while a second door exists | test/contracts/progress_photos_screen_gate_test.dart |
 | 2.90 | A spawned-process test asserts only the exit code, so the one stream that holds the cause is never printed (`dart run` exits 254 on a compile or load error with the reason on stderr, 255 on an uncaught exception) | one CI test fails with `Expected: <0> Actual: <254>` and nothing else, and the re-run is green | test/contracts/sot_registry_citations_test.dart |
+| 2.91 | A process-wide "restore finished" counter used as a per-ACCOUNT gate (`restoreCompletedTick > 0`): it opens after the one rollover that needed it and is never reset on an account swap | Home streak holds only through SIMULATED freezes while the chip shows the unspent count (the debit never persisted on a cold start); or a freeze is debited against the NEW account's pre-restore rows right after a swap | test/contracts/streak_reckon_restore_settled_behavioral_test.dart |
 
 ---
 
@@ -244,7 +245,7 @@ Borrowing from `superpowers:using-superpowers`, `superpowers:systematic-debuggin
 - **"The last fix to this file was nearly right — I'll just widen it."** If this is the second or later fix to one file for one class, the heuristic IS the bug. Ask what signal the code already emits. See §2.53.
 - **"It passed 5/5 under load, the fix works."** Did you run the NEUTERED arm? If that also passes, your experiment is blind and the 5/5 means nothing. See §2.54.
 - **"The suite is running, I'll just check one thing with `dart run`."** That is load — the dart wrapper serializes on the SDK lock. See §2.55.
-- **"I'll bump `restoreCompletedTick` so the UI refreshes after my restore change."** STOP — it also gates streak decay (`workout_repository.dart:244-248`). Grep every reader of a tick before reusing it for a new purpose. See §2.88.
+- **"I'll bump `restoreCompletedTick` so the UI refreshes after my restore change."** STOP — until b4e7a1 it also gated streak decay; that gate is now the per-account `SyncService.restoreSettledForCurrentUser`. Grep every reader of a tick before reusing it, and never use a process-wide counter as an "this account is ready" gate. See §2.88, §2.91.
 - **"This bug class is novel — I don't need to update the catalog."** Wrong. §5 self-evolution rule below applies.
 
 ---

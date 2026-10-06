@@ -6,6 +6,12 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### progress_restore_freeze_merge (1 bugs)
+- 2026-10-06 c9d2f6 — The founder's Home screen showed streak 16 with 2 freezes. The persisted count was wrong: the streak only holds at 16 because two missed days (2026-10-03 and 2026-10-05) are SIMULATED as covered by…
+
+### streak_decay_restore_settled_marker (1 bugs)
+- 2026-10-06 b4e7a1 — Founder (account upendra), 2026-10-06 06:45 IST, phone: Home shows streak 16 with 2 streak freezes. Truth is streak 16 with ZERO freezes in reserve. The Home streak number is a read-only walk…
+
 ### subscription_state (8 bugs)
 - 2026-10-05 b7c1e4 — A free user could reach and USE the Progress Photos screen by editing the address of an already-open web tab to `#/profile/progress-photos`. The screen had no PRO check of its own: the only gate was…
 - 2026-07-26 a7d2e9 — morning-alert sends Gemini-generated PRO-tier copy to users whose subscription lapsed. Live at discovery: zero users were genuinely PRO, yet six were being treated as PRO and receiving paid-tier…
@@ -1506,6 +1512,8 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-10-06 | c9d2f6 | The founder's Home screen showed streak 16 with 2 freezes. The persisted count was wrong: the streak only holds at 16 because two missed days (2026-10-03 and 2026-10-05) are SIMULATED as covered by… | progress_restore_freeze_merge | test/contracts/progress_restore_freeze_merge_behavioral_test.dart |
+| 2026-10-06 | b4e7a1 | Founder (account upendra), 2026-10-06 06:45 IST, phone: Home shows streak 16 with 2 streak freezes. Truth is streak 16 with ZERO freezes in reserve. The Home streak number is a read-only walk… | streak_decay_restore_settled_marker | test/contracts/streak_reckon_restore_settled_behavioral_test.dart |
 | 2026-10-05 | b7c1e4 | A free user could reach and USE the Progress Photos screen by editing the address of an already-open web tab to `#/profile/progress-photos`. The screen had no PRO check of its own: the only gate was… | subscription_state | test/contracts/progress_photos_screen_gate_test.dart |
 | 2026-10-04 | d4a7e1 | Founder-reported (2026-10-01, day-swap report): after swapping Oct 1 and Oct 2 on the web and completing the swapped workout there (log "PULL + CORE"), the Android phone's Train row title for Oct 1… | workout_completion_status | test/contracts/completed_title_follows_log_test.dart |
 | 2026-10-03 | c7e3a9 | Founder-reported (2026-10-01, observation 2 of the day-swap report): after swapping today's workout with tomorrow's, Home's AI-coach insight sentence kept naming the pre-swap workout while the rest of… | scheduled_workouts_mutations | test/contracts/ai_insight_follows_today_row_test.dart |

@@ -18,6 +18,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/template_identity.dart';
 
@@ -75,9 +76,15 @@ void main() {
   setUp(() async {
     tempDir = await setUpHiveForTests();
     SyncService.pausedForSimulation = true;
+    // diagnose c9d2f6: `_restoreUserProgress` now guards its write with
+    // `ownerChangedSince(userId)` (the e5c2d1 sink-side guard). A truthful
+    // fixture says WHO the live account is — the id these tests restore as —
+    // instead of leaving the live id null, which compares "changed".
+    HiveUserSession.debugCurrentUidResolverForTests = () => kTestUserId;
   });
 
   tearDown(() async {
+    HiveUserSession.debugCurrentUidResolverForTests = null;
     SyncService.pausedForSimulation = false;
     await tearDownHiveForTests(tempDir);
   });

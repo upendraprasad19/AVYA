@@ -311,6 +311,61 @@ class PlanIntegrityReconciler {
     );
   }
 
+  /// OI-252 ghost-day filter for a `plan_json.schedules` bundle, extracted from
+  /// [reconcile] so its three outcomes are testable without a signed-in client.
+  ///
+  /// [lookupDeletedTemplateIds] resolves the deleted-template set ONCE, lazily,
+  /// and only for an entry whose `template_id` is a `tmpl_<uuid>` key (one that
+  /// resolves to a cloud id) — the common case (a rest/plan day with no
+  /// template) never pays a live query it has no use for, and a legacy-shaped
+  /// key, which can never be a ghost under ANY answer, is kept without one.
+  /// Its three answers are NOT interchangeable (b4e7a1, B-pass):
+  ///  - a set containing the entry's template → the day is a ghost, dropped;
+  ///  - a set without it (including `{}`) → the day is live, kept;
+  ///  - `null` (the lookup could not answer) → the day is UNVETTABLE and is
+  ///    SKIPPED, counted in `unvettedSkipped`. Treating "unknown" as "none
+  ///    deleted" wrote a deleted template's day back as a past `planned` row,
+  ///    and this runs AFTER a restore settled — outside any failure collector —
+  ///    so the streak reckon then debited a freeze for it, permanently. A
+  ///    skipped day costs nothing: the symptom that triggered this heal is still
+  ///    there, so the next pass retries.
+  /// Entries WITHOUT a resolvable template are never affected by the lookup.
+  @visibleForTesting
+  static Future<({Map<String, dynamic> live, int unvettedSkipped})>
+      filterGhostScheduleEntries(
+    Map schedules,
+    Future<Set<String>?> Function() lookupDeletedTemplateIds,
+  ) async {
+    Set<String>? deleted;
+    var resolved = false;
+    final live = <String, dynamic>{};
+    var unvettedSkipped = 0;
+    for (final entry in schedules.entries) {
+      final incoming = entry.value;
+      final templateKey = incoming is Map ? incoming['template_id'] : null;
+      // Only a `tmpl_<uuid>` key resolves to a cloud id; a legacy-shaped key can
+      // never be a ghost under ANY answer ([isGhostScheduleEntry]), so it needs
+      // no lookup and is kept exactly as before.
+      if (incoming is Map &&
+          templateKey is String &&
+          cloudIdFromKey(templateKey) != null) {
+        if (!resolved) {
+          deleted = await lookupDeletedTemplateIds();
+          resolved = true;
+        }
+        if (deleted == null) {
+          unvettedSkipped++;
+          continue;
+        }
+        if (isGhostScheduleEntry(Map<String, dynamic>.from(incoming), deleted)) {
+          continue;
+        }
+      }
+      live[entry.key.toString()] = incoming;
+    }
+    return (live: live, unvettedSkipped: unvettedSkipped);
+  }
+
   /// PURE (visible for testing): does any entry describe a PLANNED workout day
   /// that lost its exercises — the restore-skip symptom? A genuine rest day
   /// (`type != workout`) and a completed day are both fine.
@@ -513,31 +568,21 @@ class PlanIntegrityReconciler {
 
       final schedules = bundle['schedules'];
       var healed = 0;
+      var unvettedSkipped = 0;
       if (schedules is Map) {
         // OI-252 (merged from main) — same ghost-day filter as
         // `_restoreWorkoutPlan`: this frozen `plan_json` snapshot can carry a
         // day scheduled against a template deleted since the snapshot was
         // taken. Healing it back in would resurrect exactly the reference the
-        // delete removed. Filtered out BEFORE the L1/L3 bundle merge. The
-        // deleted-template set is resolved once, lazily, and only for an entry
-        // that carries a template_id — the common case (a rest/plan day with
-        // no template) never pays a live query it has no use for.
-        Set<String>? deletedTemplateIdsCache;
-        Future<Set<String>> deletedTemplateIds() async =>
-            deletedTemplateIdsCache ??=
-                await SyncService.instance.deletedTemplateCloudIdsForUser(userId);
-        final live = <String, dynamic>{};
-        for (final entry in schedules.entries) {
-          final incoming = entry.value;
-          if (incoming is Map &&
-              incoming['template_id'] != null &&
-              isGhostScheduleEntry(Map<String, dynamic>.from(incoming),
-                  await deletedTemplateIds())) {
-            continue;
-          }
-          live[entry.key.toString()] = incoming;
-        }
-        final result = await mergeScheduleBundleIntoHive(live);
+        // delete removed. Filtered out BEFORE the L1/L3 bundle merge — see
+        // [filterGhostScheduleEntries] (b4e7a1: a lookup that cannot ANSWER
+        // skips the template-bearing days instead of letting them in).
+        final filtered = await filterGhostScheduleEntries(
+          schedules,
+          () => SyncService.instance.deletedTemplateCloudIdsForUser(userId),
+        );
+        unvettedSkipped = filtered.unvettedSkipped;
+        final result = await mergeScheduleBundleIntoHive(filtered.live);
         healed = result.processedCount;
         if (result.discardedLocalArrangement) {
           unawaited(ErrorTelemetry.logEvent('swap_merge_conflict',
@@ -547,7 +592,8 @@ class PlanIntegrityReconciler {
 
       unawaited(ErrorTelemetry.logEvent(
         'plan_integrity_reconciled',
-        message: 'healed=$healed planStart=$pjStart',
+        message: 'healed=$healed planStart=$pjStart'
+            '${unvettedSkipped > 0 ? ' unvettedSkipped=$unvettedSkipped' : ''}',
       ));
       return PlanReconcileOutcome.healed(healed);
     } catch (e, st) {

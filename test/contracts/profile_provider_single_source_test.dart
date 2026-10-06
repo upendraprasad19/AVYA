@@ -192,7 +192,8 @@ void main() {
 
       expect(refreshes, 0, reason: 'Nothing has happened yet.');
 
-      // What heal_after_restore.dart:74 does when the restore lands.
+      // What heal_after_restore.dart's final step does when the restore lands
+      // (via DayRolloverObserver.reckonAndNotifyAfterRestore, which bumps LAST).
       SyncService.instance.bumpRestoreCompleted();
       await tester.pump();
 

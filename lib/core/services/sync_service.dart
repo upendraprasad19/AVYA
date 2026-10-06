@@ -64,6 +64,7 @@ part 'sync/sync_nutrition.dart';
 part 'sync/sync_profile.dart';
 part 'sync/sync_realtime.dart';
 part 'sync/sync_restore_completeness.dart';
+part 'sync/sync_restore_failure_collector.dart';
 part 'sync/sync_resilience.dart';
 part 'sync/sync_workout.dart';
 
@@ -185,6 +186,15 @@ class SyncService {
   /// `syncBox` (shared) so they are intentionally NOT reset here —
   /// the namespacing already scopes them by ownership at read time.
   void _onUserChanged() {
+    // diagnose b4e7a1 — "the restore for THIS account settled" does not carry
+    // across an account swap. FIRST statement on purpose (B-pass F3): this is the
+    // only line here that gates a PERMANENT write (the streak decay persist), and
+    // every step below can throw; a throw must not leave account A's marker open
+    // for an A -> B -> A return. (`restoreCompletedTick` never reset — that was
+    // the 2026-09-17 spurious debit.)
+    _restoreSettledUserId = null;
+    _lastRestoreWithheldReason = null;
+
     // Drop realtime subscription so the next user does not receive
     // the previous user's broadcast events.
     //
@@ -1846,6 +1856,79 @@ class SyncService {
   /// Bump [restoreCompletedTick] — call after a background restore + heals.
   void bumpRestoreCompleted() => restoreCompletedTick.value++;
 
+  // ── diagnose b4e7a1 — "the restore for THIS account settled" ─────────────
+  //
+  // The streak decay persist used to be gated on `restoreCompletedTick > 0`: a
+  // PROCESS-lifetime counter, never reset on an account swap and bumped only
+  // by the background heal AFTER the cold-start rollover had already run. So a
+  // cold start never persisted the idle-day freeze debit, and an inherited
+  // tick persisted a debit against the NEW account's pre-restore rows (the
+  // 2026-09-17 spurious debit). The gate is now this marker: the id of the
+  // account whose full restore finished with no streak-critical op reporting a
+  // failure. Plan docs/plans/streak-freeze-restore-ownership.md §3 (Unit 1).
+
+  /// The account whose restore settled; null until one does. In-memory only.
+  String? _restoreSettledUserId;
+
+  /// Why the last [restoreFromCloudForUser] did NOT settle the marker (null when
+  /// it did, or before any call). Diagnostic — read by the post-restore reckon
+  /// for its one best-effort telemetry event.
+  String? _lastRestoreWithheldReason;
+
+  /// True iff the restore for the CURRENT account settled: the marker is set
+  /// AND equals the live account AND equals the account the Hive session is
+  /// open for. PURE (no write, no telemetry): the CQRS gate scans every getter.
+  bool get restoreSettledForCurrentUser {
+    final marker = _restoreSettledUserId;
+    if (marker == null) return false;
+    return marker == _liveUserId && marker == HiveUserSession.currentOwnerFullId;
+  }
+
+  /// See [_lastRestoreWithheldReason].
+  String? get lastRestoreWithheldReason => _lastRestoreWithheldReason;
+
+  /// Test seam: set / clear the marker directly.
+  @visibleForTesting
+  void debugSetRestoreSettledUserIdForTest(String? uid) =>
+      _restoreSettledUserId = uid;
+
+  /// The settle decision, pure so every clause is unit-testable and
+  /// mutation-killable (an end-to-end swap becomes `cancelled` first, so the two
+  /// uid clauses are reachable only from a swap landing inside the awaited title
+  /// heal). Mirrors [shouldHealAfterRestore].
+  @visibleForTesting
+  static bool shouldSettleRestoreMarker({
+    required String? uid,
+    required String? liveUid,
+    required String? ownerUid,
+    required RestoreResult result,
+    required Set<String> failures,
+  }) =>
+      result.succeeded &&
+      restoreSettlesStreak(failures) &&
+      uid != null &&
+      liveUid == uid &&
+      ownerUid == uid;
+
+  void _settleRestoreMarker(
+      String? uid, RestoreResult result, Set<String> failures) {
+    if (shouldSettleRestoreMarker(
+      uid: uid,
+      liveUid: _liveUserId,
+      ownerUid: HiveUserSession.currentOwnerFullId,
+      result: result,
+      failures: failures,
+    )) {
+      _restoreSettledUserId = uid;
+      _lastRestoreWithheldReason = null;
+      return;
+    }
+    // A failed restore never clears an earlier success for the same account.
+    _lastRestoreWithheldReason = 'succeeded=${result.succeeded} '
+        'cancelled=${result.cancelled} failed=${failures.toList()..sort()} '
+        'uidMatch=${uid != null && uid == _liveUserId}';
+  }
+
   /// OI-284 — the public entry every production caller uses
   /// (`restoring_screen.dart` ×2). After a SUCCEEDED full restore the logs and
   /// the scheduled-workouts overlay have landed, so a completed non-template
@@ -1853,13 +1936,20 @@ class SyncService {
   /// ([CompletedTitleHealer]); this runs BEFORE the restoring screen's
   /// `_healAfterRestoreInBackground` bump, which then refreshes the UI. A
   /// failed or cancelled restore does not heal (the pass is pure/idempotent
-  /// and runs at the next success). `restoreCompletedTick` is NOT touched:
-  /// it also gates streak decay (`workout_repository.dart:244-248`).
+  /// and runs at the next success). `restoreCompletedTick` is NOT touched
+  /// here. After the heal, a restore that succeeded with NO streak-critical op
+  /// reporting a failure settles the per-account marker that opens the streak
+  /// decay persist (b4e7a1). The uid is captured BEFORE awaiting; the failure
+  /// sink is a zone value so a concurrent lightweight restore cannot pollute it.
   Future<RestoreResult> restoreFromCloudForUser() async {
-    final result = await _restoreFromCloudForUserCore();
+    final uid = _liveUserId;
+    final failures = <String>{};
+    final result = await RestoreFailureCollector.run(
+        failures, () => _restoreFromCloudForUserCore());
     if (shouldHealAfterRestore(result)) {
       await healCompletedTitlesAfterRestore();
     }
+    _settleRestoreMarker(uid, result, failures);
     return result;
   }
 
@@ -1881,7 +1971,10 @@ class SyncService {
   /// every one of its many returns passes through the single heal above.
   Future<RestoreResult> _restoreFromCloudForUserCore() async {
     _restoreCancelled = false;
-    final userId = _supabase.currentUser?.id;
+    // `_liveUserId` is exactly `_supabase.currentUser?.id` in production (the
+    // test resolver is null there); b4e7a1 reads it here so the whole wrapper
+    // — marker included — runs under `SyncHarness`.
+    final userId = _liveUserId;
     if (userId == null) {
       return RestoreResult.failed('No authenticated user');
     }
@@ -1958,6 +2051,11 @@ class SyncService {
         }
         // null → single-call FAULT; restorePath stays 'legacy_fallback' and we
         // fall through to the legacy fan-out below (heals any clobber).
+        // b4e7a1 (B-pass F4): the aborted attempt may already have reported a
+        // failure for an op the legacy fan-out below re-runs and restores fine —
+        // that stale entry must not hold the streak marker closed. The legacy
+        // ops report their own failures into the same sink.
+        RestoreFailureCollector.clear();
       }
 
       // Step A — profile + lightweight data
@@ -2137,7 +2235,7 @@ class SyncService {
       // A StartMissionBrief/ResumeOnboarding cancel, or a fast account-switch
       // mid-call, must not write user A's bundle into user B's boxes.
       if (restoreAbortedFor(userId)) return RestoreResult.cancelled();
-      if (_supabase.currentUser?.id != userId) {
+      if (_liveUserId != userId) {
         debugPrint('[SyncService._attemptSingleCallRestore] '
             'owner changed mid-call → cancel (no write)');
         return RestoreResult.cancelled();
@@ -2786,6 +2884,9 @@ class SyncService {
     required Object error,
     int retryCount = 0,
   }) async {
+    // b4e7a1 — FIRST, before any await: the restore failure collector (a no-op
+    // outside a `restoreFromCloudForUser` zone; total, never throws).
+    RestoreFailureCollector.note(opType);
     // closes-diagnose e5b2a9 — single funnel for every push AND restore
     // failure. Tell the retry controller, which accepts only outage-shaped
     // PUSH failures.

@@ -83,6 +83,7 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
   // a3f6d9 — true once _goHome is about to run; the CTA timer above is
   // wall-clock, independent of classification, so timing alone can't infer this.
   bool _committedToGoHome = false;
+  Future<RestoreResult>? _restoreFuture;
 
   @override
   void initState() {
@@ -112,6 +113,7 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
     // A7 / B5 D9-D10 — canonical provider path.
     final restoreFuture =
         ref.read(syncServiceProvider).restoreFromCloudForUser();
+    _restoreFuture = restoreFuture;
 
     final destination = await destinationFuture;
 
@@ -652,6 +654,7 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
     if (mounted) {
       context.go(RestoringScreen.resolveRestoreDestination(widget.next));
     }
+    if (ownershipOpen) healAfterRestoreWhenSucceeded(_restoreFuture);
   }
 
   @override

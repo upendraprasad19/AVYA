@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
+import 'package:icanbefitter/core/services/streak_progress_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
@@ -68,11 +69,21 @@ class ProgressMergeResult {
   /// by `PhaseProgressReconciler`, which is a correct and routine operation.
   final List<String> refusedPhaseDeltaFields;
 
+  /// True when the merged freeze state is AHEAD of (or differs from) the cloud
+  /// row the merge read, so the caller must push it with `syncFreezes()` AFTER
+  /// it has written [merged] (diagnose c9d2f6). A separate field — not
+  /// [declinedFields], whose length and event count are asserted by the OI-83
+  /// tests. Computed against the ORIGINAL cloud values, never a carry-adjusted
+  /// one, so identical local and cloud state is always `false` (the only
+  /// anti-push-storm protection).
+  final bool scheduleFreezeSyncUp;
+
   const ProgressMergeResult({
     required this.merged,
     required this.declinedFields,
     this.malformedFields = const <String>[],
     this.refusedPhaseDeltaFields = const <String>[],
+    this.scheduleFreezeSyncUp = false,
   });
 
   bool get hasDeclined => declinedFields.isNotEmpty;
@@ -112,7 +123,24 @@ void reportProgressDemotionsDeclined(
       message: 'source=$source field=$f',
     ));
   }
+  // diagnose c9d2f6: the freeze merge kept local ahead of a stale cloud row.
+  // LOW priority and best-effort — a LOW event is dropped under the client
+  // cooldown, so its ABSENCE proves nothing; the push itself is the observable.
+  // Per-process latch so a lightweight restore on every cold start cannot flood.
+  if (result.scheduleFreezeSyncUp && !_freezeMergeEngagedReported) {
+    _freezeMergeEngagedReported = true;
+    unawaited(ErrorTelemetry.logEvent(
+      'progress_restore_freeze_merge_engaged',
+      message: 'source=$source',
+    ));
+  }
 }
+
+bool _freezeMergeEngagedReported = false;
+
+/// Test seam for the per-process latch above.
+@visibleForTesting
+void resetFreezeMergeEngagedLatchForTest() => _freezeMergeEngagedReported = false;
 
 /// User CRUD operations via Hive userBox (offline-first).
 ///
@@ -241,15 +269,31 @@ class UserRepository {
   /// the phase index — where a cloud→Hive restore must never lower the local
   /// value. Founder decision 2026-08-03: **local-max-wins**, with telemetry.
   ///
+  /// IN this set since 2026-10-06 (founder decision "A now", after the streak
+  /// review): `current_streak_weeks`. Its only production writer
+  /// (`train_provider.dart` `completeWorkout`) only INCREMENTS it (+1 per week
+  /// that reaches 80% of the planned sessions) and nothing ever resets it, so it
+  /// is a lifetime count of good weeks, and a stale cloud row must not lower it
+  /// (badges, the coach's streak-risk nudge and the streak-guardian push all
+  /// read it). ⚠ If a "reset the weeks when the daily streak breaks" feature is
+  /// ever built, REMOVE it from this list in the same change: a local reset to 0
+  /// followed by a restore from an older, higher cloud row would otherwise bring
+  /// the old number back.
+  ///
   /// Deliberately NOT in this set, each for a reason:
-  ///   - `current_streak_days` / `current_streak_weeks` — a streak legitimately
-  ///     RESETS to 0. Max-wins would make a genuinely broken streak
+  ///   - `current_streak_days` — a streak legitimately RESETS to 0 (the live
+  ///     daily walk re-stamps it). Max-wins would make a genuinely broken streak
   ///     un-resettable from the cloud, which is a worse bug than the one this
   ///     list fixes.
-  ///   - the `streak_freezes_*` family — already merged by the dedicated
-  ///     `StreakProgressService.mergeFreezeProgress`
-  ///     (`sync_restore_completeness.dart:225`). Two merge rules over one field
-  ///     is how writer/reader drift starts.
+  ///   - the `streak_freezes_*` family — merged by the ONE dedicated rule,
+  ///     `StreakProgressService.mergeFreezeProgress`, which
+  ///     [mergeCloudProgress] now runs as a post-pass (diagnose c9d2f6; it used
+  ///     to be cloud-non-null-wins here, so a stale cloud row overwrote a
+  ///     fresher local freeze count and `_restoreFreezes`, which runs AFTER
+  ///     `_restoreUserProgress`, could not repair it —
+  ///     `_restoreFreezes` and `_retrySyncFreezesOnceAfterConflict` in
+  ///     `sync_restore_completeness.dart` are the other callers).
+  ///     Two merge rules over one field is how writer/reader drift starts.
   ///   - `streak_progress_version` — cloud-ALWAYS-wins is deliberate (Unit 3b,
   ///     `e6b9c4`): it is a server-owned optimistic-lock counter the client
   ///     only ever adopts, and adopting a stale-but-higher local value would
@@ -271,6 +315,7 @@ class UserRepository {
     'current_phase',
     'deployments_complete',
     'total_workouts_done',
+    'current_streak_weeks',
   ];
 
   /// The three fields `commitPhaseAdvance` writes ATOMICALLY alongside
@@ -349,6 +394,50 @@ class UserRepository {
     }
   }
 
+  /// §4.6 kill-switch for the freeze-family post-pass and the control-plane
+  /// key skip (diagnose c9d2f6). INDEPENDENT of
+  /// [kDisableProgressRestoreMonotonicMergeKey], which stays the WIDER
+  /// rollback: when EITHER is set, [mergeCloudProgress] takes the pre-fix
+  /// cloud-non-null-wins branch for those keys verbatim.
+  @visibleForTesting
+  static const String kDisableProgressFreezeMergeKey =
+      'disable_progress_freeze_merge';
+
+  /// Fails CLOSED (the new behaviour stays ACTIVE) when the box is not open —
+  /// the same shape as [_monotonicMergeDisabled].
+  static bool get _freezeMergeDisabled {
+    try {
+      return HiveService.instance.configBox
+              .get(kDisableProgressFreezeMergeKey) ==
+          true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// The freeze family that [mergeCloudProgress] merges by the ONE rule
+  /// (`StreakProgressService.mergeFreezeProgress`) instead of copying from
+  /// cloud. The cloud's plural `used_dates` column is read here and written to
+  /// the singular local key by the post-pass; it is never copied under its own
+  /// name.
+  static const Set<String> _freezeFamilyKeys = <String>{
+    'streak_freezes_available',
+    'streak_freezes_last_refill',
+    'streak_freezes_first_pro_grant_done',
+    'streak_freezes_used_dates',
+  };
+
+  /// Control-plane columns that have no place in the progress SEMANTIC key set
+  /// (`sync_profile.dart`'s own pre-strip, day-swapper Task 20). The
+  /// sign-in-hydrate caller (`auth_session_bootstrapper.dart`) passes the RAW
+  /// cloud row, so without this it spread the whole `plan_json` blob into
+  /// `userBox['progress']`.
+  static const Set<String> _controlPlaneKeys = <String>{
+    'user_id',
+    'plan_json',
+    'sync_epoch',
+  };
+
   /// PURE merge for a cloud→Hive `progress` restore (OI-83). No Hive, no
   /// telemetry, no clock — the callers fire the telemetry from [declinedFields]
   /// so this stays testable, mirroring `phaseAdvanceTarget` /
@@ -408,6 +497,10 @@ class UserRepository {
     // that rolling the NEW one leaves OI-83 intact; the reverse is not true
     // and must not be, because the older switch is the wider rollback.
     final guardOff = _monotonicMergeDisabled;
+    // diagnose c9d2f6: the freeze family and the control-plane keys leave the
+    // cloud-copy loop below and are handled by the post-pass. Either switch
+    // restores the pre-fix copy for them verbatim.
+    final freezeMergeOn = !guardOff && !_freezeMergeDisabled;
     var phaseKeptLocal = !guardOff &&
         local['current_phase'] != null &&
         !cloud.containsKey('current_phase');
@@ -422,6 +515,11 @@ class UserRepository {
           phaseKeptLocal = true;
         }
         continue; // unchanged: cloud null never wins
+      }
+      if (freezeMergeOn &&
+          (_freezeFamilyKeys.contains(entry.key) ||
+              _controlPlaneKeys.contains(entry.key))) {
+        continue; // merged by the post-pass / never copied
       }
       if (guardOff || !monotonicProgressFields.contains(entry.key)) {
         merged[entry.key] = entry.value;
@@ -531,12 +629,150 @@ class UserRepository {
       }
     }
 
+    // ── diagnose c9d2f6: the freeze family is merged by the ONE rule ────────
+    //
+    // A POST-PASS for the same reason as the OI-150 pass above: PostgREST's key
+    // order is not ours, and the rule needs `available`, `last_refill`,
+    // `used_dates` and the grant flag TOGETHER.
+    final scheduleFreezeSyncUp =
+        freezeMergeOn && _mergeFreezeFamily(local, cloud, merged);
+
     return ProgressMergeResult(
       merged: merged,
       declinedFields: declined,
       malformedFields: malformed,
       refusedPhaseDeltaFields: refusedPhaseDelta,
+      scheduleFreezeSyncUp: scheduleFreezeSyncUp,
     );
+  }
+
+  /// The freeze-family post-pass of [mergeCloudProgress]. Writes the merged
+  /// freeze state into [merged] BY INDEX ASSIGNMENT only — the sole-writer
+  /// contract (`streak_progress_service_concurrency_test.dart`) greps raw
+  /// source for a map-literal key, and this file is not on its allowlist.
+  ///
+  /// Returns whether the merged state must be pushed to the cloud
+  /// (see [ProgressMergeResult.scheduleFreezeSyncUp]).
+  ///
+  /// Inputs are built with `is` tests, never the throwing `as num?` cast (the
+  /// `is num` TEST comment in [mergeCloudProgress] records that bug). A cloud
+  /// row whose `streak_freezes_available` is absent or non-numeric (the column
+  /// is `INTEGER NOT NULL`, so this is defensive) skips the whole post-pass and
+  /// leaves LOCAL verbatim — stricter than the pre-fix copy and safe against
+  /// the hard `as int?` readers in `workout_repository.dart`.
+  static bool _mergeFreezeFamily(
+    Map<String, dynamic> local,
+    Map<String, dynamic> cloud,
+    Map<String, dynamic> merged,
+  ) {
+    final cloudAvailableRaw = cloud['streak_freezes_available'];
+    if (cloudAvailableRaw is! num) return false;
+    final cloudAvailable = cloudAvailableRaw.toInt();
+
+    final localAvailableRaw = local['streak_freezes_available'];
+    var localAvailable =
+        localAvailableRaw is num ? localAvailableRaw.toInt() : cloudAvailable;
+    final localAvailableBeforeCarry = localAvailable;
+
+    final cloudGrantRaw = cloud['streak_freezes_first_pro_grant_done'];
+    final cloudGrant = cloudGrantRaw == true;
+    final localGrant = local['streak_freezes_first_pro_grant_done'] == true;
+
+    final localLastRefillRaw = local['streak_freezes_last_refill'];
+    var localLastRefill =
+        localLastRefillRaw is String ? localLastRefillRaw : null;
+    final cloudLastRefillRaw = cloud['streak_freezes_last_refill'];
+    // Postgres `date` arrives as `YYYY-MM-DD`, as `_restoreFreezes` reads it.
+    final cloudLastRefill = cloudLastRefillRaw?.toString();
+
+    final localUsedRaw = local['streak_freeze_used_dates'];
+    final localUsed = localUsedRaw is List
+        ? localUsedRaw.map((e) => e.toString()).toList()
+        : const <String>[];
+    // The cloud COLUMN is plural; the local key is singular.
+    final cloudUsedRaw = cloud['streak_freezes_used_dates'];
+    final cloudUsed = cloudUsedRaw is List
+        ? cloudUsedRaw.map((e) => e.toString()).toList()
+        : const <String>[];
+
+    // Grant carry (ASYMMETRIC only). The cloud already recorded the one-shot
+    // first-PRO grant (3) and this device has not: without the carry the
+    // same-week LOWER rule would clamp a free-cap local count (1) onto the
+    // granted 3 and the flag would then block a re-grant. Two refinements
+    // (B-pass, reviewer A F2):
+    //  - a consume this device made that the cloud ledger has not seen comes OFF
+    //    the carried count, so the carry never refunds one ({0,W,flag F} against
+    //    cloud {3,W,flag T} with one unseen local used date is 2, not 3);
+    //  - a local week stamp NEWER than the cloud's was seeded by a pre-restore
+    //    refill under the FREE cap, so the cloud's older stamp is adopted and
+    //    the next `refillIfNewWeek` (which runs after the restore, under the
+    //    real cap) tops the week up — exactly what the pre-fix whole-row copy
+    //    did. Keeping the newer stamp would silently drop that week's +1.
+    // There is deliberately NO symmetric carry (local flag true, cloud not):
+    // `_restoreFreezes` and the conflict retry merge with the plain rule and
+    // would undo it; the local grant is handled below instead.
+    if (cloudGrant && !localGrant && cloudAvailable > localAvailable) {
+      final unseenLocalConsumes =
+          localUsed.toSet().difference(cloudUsed.toSet()).length;
+      final carried = cloudAvailable - unseenLocalConsumes;
+      if (carried > localAvailable) localAvailable = carried;
+      if (cloudLastRefill != null &&
+          localLastRefill != null &&
+          cloudLastRefill.compareTo(localLastRefill) < 0) {
+        localLastRefill = cloudLastRefill;
+      }
+    }
+
+    final result = StreakProgressService.mergeFreezeProgress(
+      localAvailable: localAvailable,
+      localUsed: localUsed,
+      localLastRefill: localLastRefill,
+      cloudAvailable: cloudAvailable,
+      cloudUsed: cloudUsed,
+      cloudLastRefill: cloudLastRefill,
+    );
+
+    merged['streak_freezes_available'] = result.available;
+    // Do not invent an empty ledger on a side that never had one.
+    if (result.usedDates.isNotEmpty || localUsedRaw is List) {
+      merged['streak_freeze_used_dates'] = result.usedDates;
+    }
+    if (result.lastRefill != null) {
+      merged['streak_freezes_last_refill'] = result.lastRefill;
+    }
+    // The local grant is AHEAD of the cloud row when this device granted (flag
+    // true) and the cloud has not seen it (flag false) — its push is in flight
+    // or failed, so the cloud's lower count is the PRE-grant state. The plain
+    // rule then clamps the granted 3 onto that count ("EATEN"). An eaten grant
+    // must NOT be claimed: writing the flag true next to the lost count blocks
+    // `grantFirstProFreezes` for good, while leaving the flag at the cloud's
+    // false is the pre-fix outcome in this race and self-heals (that method
+    // runs on every PRO boot and re-grants while the flag is unset). A grant
+    // that survived the merge is claimed and pushed as before. (B-pass,
+    // reviewer A F1.)
+    final localGrantAhead = localGrant && !cloudGrant;
+    final grantEaten =
+        localGrantAhead && result.available < localAvailableBeforeCarry;
+    // `local || cloud`: matches `_restoreFreezes`'s own documented intent
+    // ("never regress a local true back to cloud false"), except for an eaten
+    // grant above. Written when the cloud carried a bool (pre-fix copied it) or
+    // local already held true.
+    if (cloudGrantRaw is bool || localGrant) {
+      merged['streak_freezes_first_pro_grant_done'] =
+          grantEaten ? cloudGrant : (localGrant || cloudGrant);
+    }
+
+    // Push when the merged state is AHEAD of / differs from the ORIGINAL cloud
+    // row (not the carry-adjusted one). `used_dates` is compared as a SET.
+    final cloudUsedSet = cloudUsed.toSet();
+    final mergedUsedSet = result.usedDates.toSet();
+    final usedDiffers = mergedUsedSet.length != cloudUsedSet.length ||
+        !mergedUsedSet.containsAll(cloudUsedSet);
+    return result.scheduleSyncUp ||
+        result.available != cloudAvailable ||
+        (result.lastRefill != null && result.lastRefill != cloudLastRefill) ||
+        usedDiffers ||
+        (localGrantAhead && !grantEaten);
   }
 
   // ── Pending Promotion (Theme B, diagnose 2026-05-22 9aa2c1) ────

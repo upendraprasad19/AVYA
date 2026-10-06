@@ -1765,6 +1765,26 @@ extension SyncServiceWorkout on SyncService {
   Future<Set<String>> _deletedTemplateCloudIds(
     String userId, {
     List? preFetchedTemplateRows,
+  }) async =>
+      // Fail EMPTY, never fail closed-as-"everything deleted" — an empty set
+      // means every downstream filter that uses it is a no-op this pass, which
+      // is the safe direction for a RESTORE (nothing the user did not delete is
+      // ever removed by an uncertain answer here). A writer that must NOT let a
+      // ghost day in on an uncertain answer asks [_deletedTemplateCloudIdsOrNull].
+      await _deletedTemplateCloudIdsOrNull(userId,
+          preFetchedTemplateRows: preFetchedTemplateRows) ??
+      const <String>{};
+
+  /// [_deletedTemplateCloudIds] that tells "the lookup answered with an empty
+  /// set" (`{}`) from "the lookup could not answer" (`null`) — the two must not
+  /// collapse (bug-class "bad news vs no news"). b4e7a1 (B-pass): the plan
+  /// reconciler writes `schedule_*` rows AFTER a restore settled, outside any
+  /// restore zone, so a fail-empty answer there resurrects a deleted template's
+  /// day as a past `planned` row — which the streak reckon then debits, for
+  /// good. It takes the `null` and refuses to write what it cannot vet.
+  Future<Set<String>?> _deletedTemplateCloudIdsOrNull(
+    String userId, {
+    List? preFetchedTemplateRows,
   }) async {
     try {
       final rows = preFetchedTemplateRows ??
@@ -1786,21 +1806,26 @@ extension SyncServiceWorkout on SyncService {
       debugPrint('[SyncService._deletedTemplateCloudIds] $e');
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
           reason: 'sync_deleted_template_cloud_ids'));
-      // Fail EMPTY, never fail closed-as-"everything deleted" — an
-      // empty set means every downstream filter that uses it is a
-      // no-op this pass, which is the safe direction (nothing the user
-      // did not delete is ever removed by an uncertain answer here).
-      return const {};
+      // b4e7a1 — fail-empty is right for this method's deletion filters, but
+      // inside a "successful" plan / scheduled-workouts restore it lets ghost
+      // days back in as past `planned` rows (a spurious, PERMANENT freeze
+      // debit once the streak persist is open). Tell the restore failure
+      // collector; a no-op outside a restore zone (the boot-time forwarder).
+      RestoreFailureCollector.note('restore_deleted_template_ids');
+      return null;
     }
   }
 
-  /// Public forwarder for [_deletedTemplateCloudIds] — the boot-time
-  /// [PlanIntegrityReconciler] lives in a separate file/library (it is not
-  /// `part of` this one) and needs the same deleted-templates set for its
-  /// own `plan_json.schedules` ghost-day filter, so it cannot reach the
-  /// private method directly.
-  Future<Set<String>> deletedTemplateCloudIdsForUser(String userId) =>
-      _deletedTemplateCloudIds(userId);
+  /// Public forwarder for [_deletedTemplateCloudIdsOrNull] — the
+  /// [PlanIntegrityReconciler] (boot, foreground restore and background heal)
+  /// lives in a separate file/library (it is not `part of` this one) and needs
+  /// the same deleted-templates set for its own `plan_json.schedules` ghost-day
+  /// filter, so it cannot reach the private method directly. Returns `null`
+  /// when the lookup could not answer (b4e7a1 B-pass): the reconciler then
+  /// skips every template-bearing entry instead of treating "unknown" as "none
+  /// deleted".
+  Future<Set<String>?> deletedTemplateCloudIdsForUser(String userId) =>
+      _deletedTemplateCloudIdsOrNull(userId);
 
   /// Restores workout templates (with exercises) from Supabase.
   /// [preFetched] (C3 single-call): injected `workout_templates` rows, each

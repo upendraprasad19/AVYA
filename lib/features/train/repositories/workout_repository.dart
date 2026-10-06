@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/streak_progress_service.dart';
+import 'package:icanbefitter/core/services/sync_flags.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_read_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_read_service.dart'
@@ -228,10 +229,19 @@ class WorkoutRepository {
   ///   - `train_provider.completeWorkout` (the canonical mutation surface).
   ///
   /// GATES (both must hold to PERSIST; otherwise returns a read-only count):
-  ///   1. `restoreCompletedTick > 0` — never decay before the cloud restore has
-  ///      confirmed the real completion history. A returning user's cold start
-  ///      restores `schedule_*` rows whose `status` may lag; reckoning first
-  ///      would read completed days as missed → spurious consume / streak break.
+  ///   1. the full restore for THIS account settled (`SyncService.
+  ///      restoreSettledForCurrentUser`, b4e7a1) — never decay before the cloud
+  ///      restore has confirmed the real completion history. A returning user's
+  ///      cold start restores `schedule_*` rows whose `status` may lag;
+  ///      reckoning first would read completed days as missed → spurious
+  ///      consume / streak break. PER ACCOUNT, not per process: the old
+  ///      `restoreCompletedTick > 0` gate was never reset on an account swap
+  ///      (the 2026-09-17 spurious debit) and was bumped only AFTER the
+  ///      cold-start rollover had already run (the idle-day debit never
+  ///      persisted on a cold start). A returning user's cold-start rollover is
+  ///      still gated off; `DayRolloverObserver.reckonAndNotifyAfterRestore`
+  ///      reckons once the restore settles. Kill switch
+  ///      `disable_streak_reckon_user_gate` restores the tick gate verbatim.
   ///   2. non-empty schedule — a cold-start-empty device has nothing to decay
   ///      (the anchor already bounds the walk; this is belt-and-braces so a
   ///      pre-restore empty box never decays).
@@ -243,8 +253,9 @@ class WorkoutRepository {
     if (_reckonInFlight) return currentStreak(); // reentrancy guard
     _reckonInFlight = true;
     try {
-      final restoreSettled =
-          SyncService.instance.restoreCompletedTick.value > 0;
+      final restoreSettled = SyncFlags.streakReckonUserGateEnabled
+          ? SyncService.instance.restoreSettledForCurrentUser
+          : SyncService.instance.restoreCompletedTick.value > 0;
       if (restoreSettled && _hasAnyScheduleRow()) {
         final streak = consumeMissedDayIfFreezeAvailable(); // persist freezes + count
         _persistCurrentStreakDays(streak); // OBS-8b: keep cloud count fresh on decay

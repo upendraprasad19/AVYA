@@ -210,6 +210,22 @@ class SyncFlags {
     }
   }
 
+  /// Kill switch for the per-account streak-decay gate (diagnose b4e7a1).
+  /// Opt-OUT polarity: `configBox['disable_streak_reckon_user_gate'] = true`
+  /// makes `WorkoutRepository.reckonStreakDecayAndPersist` use the pre-fix
+  /// `restoreCompletedTick > 0` gate verbatim, and
+  /// `DayRolloverObserver.reckonAndNotifyAfterRestore` only bump the tick.
+  /// With the box not open the fix stays ON.
+  static bool get streakReckonUserGateEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('disable_streak_reckon_user_gate') !=
+          true;
+    } catch (_) {
+      return true;
+    }
+  }
+
   /// Test-only setter. Production callers MUST NOT toggle flags in
   /// code — they flip via `configBox.put` from a one-shot migration
   /// or remote-config write only.

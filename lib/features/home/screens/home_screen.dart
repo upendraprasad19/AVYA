@@ -174,6 +174,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     ref.invalidate(todayStepsProvider);
   }
 
+  /// b4e7a1 — a background restore can now PERSIST an idle-day freeze debit
+  /// while Home is already mounted (`DayRolloverObserver.
+  /// reckonAndNotifyAfterRestore`, run by the restoring screen's background
+  /// heal). `_checkStreakFreezeUsed` otherwise runs only from [initTab] (first
+  /// mount), so the notice for that debit would sit in
+  /// `streak_freeze_just_used` until the next cold start. The check clears the
+  /// flag before it schedules the snackbar, so [initTab] plus this listener can
+  /// never double-fire.
+  @override
+  void invalidateOnBackgroundRestore(WidgetRef ref) {
+    invalidateOnRetry(ref);
+    _checkStreakFreezeUsed();
+  }
+
   // Bug #14 — Prediction polling moved to ProfileScreen alongside the
   // Future Prediction card. Home no longer renders the prediction.
 

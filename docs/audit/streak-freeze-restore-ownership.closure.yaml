@@ -1,0 +1,191 @@
+# Closure ledger — streak-freeze-restore-ownership batch
+# Gate 40 (validate_audit_closure.dart). One terminal_state per item; no `deferred:` key.
+# Source of the item list: docs/plans/streak-freeze-restore-ownership.md section 3 "Terminal states"
+# (founder report 2026-10-06: Home shows streak 16 with 2 freezes on account upendra), plus every
+# finding of the ≥platform B-pass (three context-blind reviewers: Unit 1 code, Unit 2 code, docs/claims),
+# each verified against the code before it was entered here.
+#
+# `commit:` values are a SHA-free recipe (`git log --grep`) because a commit cannot name its own SHA; both
+# units landed in ONE commit (Slice A: they share six files, the B-pass reviewed them together, and the
+# mutation proofs ran against the combined tree). OI-318 and OI-319 were minted at that commit. No push,
+# build or live production write has been made; every item that needs one is blocked_on_user or says so.
+# The four founder-owed items (RESIDUAL-EF-CAPS, F8, LAST-WORKOUT-DATE, WEEKS-PUSH-RPC) were DECIDED by the
+# founder on 2026-10-06; their code lands in LATER commits of this same batch (slices B1, U6, C1, C2 of
+# docs/plans/streak-freeze-restore-ownership-addendum-a.md) and each is closed_in_commit when its slice lands.
+# Until then they stay blocked_on_user because each still waits on a per-action founder go (a live apply or
+# deploy, CLAUDE.md 4.3) or on the founder approving exact copy.
+#
+# bpass_review points at the staged B-pass review. plan_review_record is NOT cited here: the record lands in its own
+# later commit (docs/plan-reviews/ is not hash-excluded), and pointing at a file before it exists is the anti-pattern
+# docs/audit/unitb-deload-reason.closure.yaml finding B3 warns against.
+
+batch: streak-freeze-restore-ownership
+plan: docs/plans/streak-freeze-restore-ownership.md
+bpass_review: docs/reviews/streak-freeze-restore-ownership-bpass.md
+diagnose_docs:
+  - docs/diagnoses/2026-10-06-streak-decay-persist-restore-settled-b4e7a1.md
+  - docs/diagnoses/2026-10-06-progress-restore-clobbers-freeze-state-c9d2f6.md
+
+findings:
+  # ── Unit 1 (diagnose b4e7a1): the decay persist is gated on THIS account's restore having settled ──
+  - id: F1
+    title: "A cold start never persists the idle-day freeze debit (the reckon gate opens after the only rollover that matters)"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: b4e7a1' (Slice A commit)"
+    verification: "diagnose b4e7a1; test/contracts/streak_reckon_restore_settled_behavioral_test.dart T2, T3c and T7e (end to end, a settled restore persists the debit); mutations N1 (marker never set) 4 red, N5 (gate back to the tick) 4 red. The CONTINUE-escape cohort (the marker could settle with no heal attached) is closed by B1-CONTINUE-COHORT below, not left as an unchanged remainder."
+
+  - id: F2
+    title: "The decay gate is a process-wide counter never reset on an account swap (the 2026-09-17 spurious debit)"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: b4e7a1' (Slice A commit)"
+    verification: "diagnose b4e7a1; T3 (marker = A, live uid = B, tick above 0, no persist) and T3b (_onUserChanged clears the marker); mutation N4 (no clear on swap) 1 red, N6a/N6b/N6c/N6d/N6e (each of the FIVE settle conjuncts dropped) 1/1/4/2/1 red."
+
+  - id: F5
+    title: "A debit landed by the background restore shows no notice on an already-mounted Home"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: b4e7a1' (Slice A commit)"
+    verification: "diagnose b4e7a1; home_screen.dart overrides invalidateOnBackgroundRestore and calls _checkStreakFreezeUsed; reckonAndNotifyAfterRestore reckons first and bumps last (T4, mutation N3 bump-first 4 red). HONEST LIMIT: the Home override itself is protected by a source-grep PIN only (T9, presence); the mounted-Home snackbar is a device check owed by the founder (CLAUDE.md section 5, runtime verification), not a behavioral test."
+
+  - id: CURRENT-STREAK-DAYS
+    title: "current_streak_days is overwritten by the whole-row restore (SELECT star)"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: b4e7a1' (Slice A commit)"
+    notes: "Repaired by Unit 1's post-restore reckon, which re-stamps the count through _persistCurrentStreakDays in the same call. CONDITIONAL ON THE MARKER SETTLING: that persist sits inside the same gate as the debit (workout_repository.dart reckonStreakDecayAndPersist), so on a withheld restore the clobbered count stays until the next settled restore. Same batch and never shipped without Unit 1, so there is no window where the clobbered value stays visible once the restore settles."
+
+  - id: LIVENESS
+    title: "Any streak-critical op that REPORTED a failure withholds the persist for the whole process (the founder's original symptom recurs on a bad-backend morning)"
+    terminal_state: verified_clean
+    notes: "A DESIGNED, DISCLOSED trade-off, not a closed defect, so it is not filed as closed_in_commit: persisting a debit against possibly incomplete schedule rows is the bug this batch removes, and the plan disclosed the liveness cost up front (plan header, 'Liveness, stated up front'). Pinned (T7b a 500 on scheduled_workouts withholds, T4b withheld still bumps the tick) and made diagnosable (the failing op is named in client_errors by _reportSyncFailure; one best-effort LOW streak_reckon_withheld event carries the reason). The state verified_clean is used here as a recorded decision with evidence, not as 'no defect'."
+
+  - id: B1-GHOST-LOOKUP
+    title: "B-pass reviewer B F1 (P2): PlanIntegrityReconciler.reconcile writes schedule_* rows AFTER the marker settled and outside any collector, through a ghost-day lookup that failed EMPTY, so a failed lookup resurrected a deleted template's day as a past planned row that the next reckon debited for good (boot, foreground and background-heal callers alike)"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: b4e7a1' (Slice A commit)"
+    verification: "diagnose b4e7a1 proposed_fix 6; the lookup is tri-state (_deletedTemplateCloudIdsOrNull, null = could not answer) and reconcile routes its bundle through filterGhostScheduleEntries, which skips every tmpl_<uuid> day on null; test/contracts/streak_reckon_restore_settled_behavioral_test.dart T5 (null on a 500, {} / the id on an answered read, the restore-side wrapper still fails empty) and T11 (null skips template days and keeps the plain one, {} keeps all, an answered set drops exactly the ghost, one lookup and none for a legacy key, reconcile routes through it); mutations MB1 (null treated as empty) 1 red, MB2 (forwarder back to fail-empty) 1 red."
+
+  - id: B1-CONTINUE-COHORT
+    title: "B-pass reviewer C F1 (P2): the CONTINUE escape leaves the restoring screen while the restore runs and _goHome returns early once the screen is gone, so that cohort could settle the marker and never reckon the idle-day debit until a later trigger"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: b4e7a1' (Slice A commit)"
+    verification: "diagnose b4e7a1 proposed_fix 7; healAfterRestoreWhenSucceeded (heal_after_restore.dart) is attached by _onContinueAnyway after navigating, only with the Hive session open; T12 (success heals once, failed / cancelled / null / throwing never heal, a pending future waits, attach-after-go presence pin); mutations MB6 (attach removed) 1 red, MB7 (heal ignores the result) 1 red."
+
+  - id: B1-WRAPPER-COVERAGE
+    title: "B-pass reviewer B F2 (P3): only scheduled_workouts and weight_logs were driven through the real restoreFromCloudForUser wrapper; the completion ledger, the log summaries and user_progress each feed the walk"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: b4e7a1' (Slice A commit)"
+    verification: "T7 (b-workout_logs, b-workout_schedule_completions, b-user_progress): each table answering 500 withholds the marker and the reason names its op; mutations MB3a/MB3b/MB3c (each op dropped from the allowlist) 2/1/3 red."
+
+  - id: B1-CLEAR-FIRST
+    title: "B-pass reviewer B F3 (P3): the marker clear sat at the END of _onUserChanged, so a throw in any earlier step left account A's marker open for an A -> B -> A return"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: b4e7a1' (Slice A commit)"
+    verification: "_onUserChanged clears _restoreSettledUserId and the withheld reason as its FIRST statement; T3b (behavioral: the swap clears the marker) and a T9 ordering pin (presence); mutation MB4 (a throwable step placed before the clear) 1 red."
+
+  - id: B1-SINK-CLEAR
+    title: "B-pass reviewer B F4 (P3): a single-call attempt that faulted left its recorded failures in the sink while the legacy fan-out re-ran and restored the same ops, holding the marker closed needlessly"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: b4e7a1' (Slice A commit)"
+    verification: "RestoreFailureCollector.clear() empties the active zone sink only; the restore calls it on the single-call fault branch before the legacy Step A; T1 (clear() empties only its own zone and is a no-op outside one) and a T9 presence pin; mutations MB5a (call removed) 1 red, MB5b (clear neutered) 1 red. A behavioral drive of a faulting single-call apply is not reachable under SyncHarness (no session), so the call-site ordering is a presence pin and the effect is a unit test."
+
+  # ── Unit 2 (diagnose c9d2f6): a stale cloud row stops overwriting freeze state ──
+  - id: F3
+    title: "A whole-row restore overwrites local freeze state (available, last_refill, first-PRO flag) with a stale cloud row"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: c9d2f6' (Slice A commit)"
+    verification: "diagnose c9d2f6; test/contracts/progress_restore_freeze_merge_behavioral_test.dart Group A (stale-cloud row fails pre-fix) and Group C (production order progress-then-freezes through the real writers, exactly one RPC); mutations M1 (post-pass off) 12 red, M2 (carry removed) 4 red, M3 1, M4 2, M5 1, M6 1, M7 2."
+
+  - id: F7
+    title: "The sign-in hydrate hands the RAW cloud row (user_id, plan_json, sync_epoch) to the progress merge"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: c9d2f6' (Slice A commit)"
+    verification: "diagnose c9d2f6; mergeCloudProgress ignores the control-plane keys under the freeze-merge switch; test F7 in Group A (control-plane columns are never copied into the progress map) reddened by mutation M1."
+
+  - id: B2-EATEN-GRANT
+    title: "B-pass reviewer A F1 (P2): a local first-PRO grant {3,W,flag T} meeting a stale cloud {1,W,flag F} was clamped to 1 by the plain same-week rule while the flag was written TRUE, blocking grantFirstProFreezes for good and pushing the lost count over a cloud that might already hold the landed grant"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: c9d2f6' (Slice A commit)"
+    verification: "diagnose c9d2f6 proposed_fix 2; an EATEN grant (local flag true, cloud not, merged count below the local one) leaves the flag at the cloud's false and schedules no push for it (the pre-fix outcome, self-healing at the next PRO boot); a surviving grant is claimed and pushed. Group A 'a LOCAL grant the cloud has not seen' (eaten with the pre-fix control, eaten with a local-only used date, surviving, local-newer, phantom) ; mutations MC1 (flag claimed) 2 red, MC2 (push scheduled) 1 red."
+
+  - id: B2-CARRY-REFINEMENTS
+    title: "B-pass reviewer A F2 (P3): the asymmetric grant carry kept the local NEWER refill stamp (dropping that week's +1) and could refund a local consume the cloud ledger had not seen"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: c9d2f6' (Slice A commit)"
+    verification: "diagnose c9d2f6 proposed_fix 2; the carried count is the cloud's minus every local used date the cloud ledger has not seen, and the cloud's OLDER stamp is adopted so refillIfNewWeek still tops the week up; Group A carry rows ({1,W,F}x{3,P,T} -> {3,P} no push, {1,W,F}x{2,P,T} -> {2,P}, the unseen-consume rows, the already-seen mirror, the no-evidence row equal to pre-fix); mutations MC3 (no subtraction) 2 red, MC4 (stamp not adopted) 3 red."
+
+  - id: B2-SOLE-WRITER-REGEX
+    title: "B-pass reviewer A F3 (P3): the sole-writer contract for streak_freezes_available matched only a map-literal key, so index-assignment writers (including this unit's post-pass) were invisible to it"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: c9d2f6' (Slice A commit)"
+    verification: "streak_progress_service_concurrency_test.dart now also flags INDEX assignment; user_repository.dart (restore projection) and streak_freeze_clamp_migrator.dart (one-shot repair) are allowlisted by name with reasons; mutation MC6 (a second index writer added to an unrelated lib file) 1 red."
+
+  - id: B2-HYDRATE-TEST
+    title: "B-pass reviewer A F6 (P3): the sign-in hydrate push (the one freeze-merge writer no restore test reaches) had presence-only coverage"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: c9d2f6' (Slice A commit)"
+    verification: "Group C 'SIGN-IN HYDRATE' drives AuthSessionBootstrapper.hydrateFromCloud through SyncHarness: a stale cloud row leaves local {2,P} and sends exactly the merged update_streak_progress RPC; an equal row sends nothing; mutation MC5 (push removed) 2 red (the behavioral test and the Group D pin)."
+
+  - id: CURRENT-STREAK-WEEKS
+    title: "current_streak_weeks is overwritten by the whole-row restore (a stale cloud row lowers the weeks counter)"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: c9d2f6' (Slice A commit)"
+    verification: "diagnose c9d2f6 item 8; founder decision A on 2026-10-06 (lifetime counter, a restore never lowers it); test/contracts/progress_restore_monotonic_behavioral_test.dart new group (7 tests, the pre-fix control reproduces the demotion) and the every-field test now carries weeks; mutation K1 (field removed from monotonicProgressFields) 4 red of 50. Not part of this item: a reset of the weeks when the daily streak breaks is a new feature, filed on the open-issues board as OI-319, and would have to remove the field from the monotonic list again."
+
+  # ── Verified clean / recorded decision ──
+  - id: F4
+    title: "2026-09-26 first-PRO grant 0 to 3 then before=1 at the 18:42 consume (earlier 'lost grant' hypothesis)"
+    terminal_state: verified_clean
+    evidence: "Retracted as a defect hypothesis. 6 subscriptions rows since 2026-05-05; migration 095 (applied 2026-06-18 15:35 IST, backups/applied_migrations.json) backfills the flag for every user with any subscription row; the 09-14 23:08:32 subscription_state_written isPro=true produced no grant event; the 09-26 grant fired mid account swap with an empty local progress box. WHICH merge undid the 3 is UNVERIFIED (the plan says so too); the 3 to 1 outcome is consistent with the by-design same-week LOWER rule, pinned by a mirror row in Group A (phantom local {3, flag true} against cloud {1, flag true} gives 1)."
+
+  - id: FOUNDER-LEDGER-ONE-SHORT
+    title: "The founder's own freeze ledger is one freeze short (the 2026-09-17 spurious debit)"
+    terminal_state: verified_clean
+    notes: "A RECORDED FOUNDER DECISION, not 'no defect': the ledger IS one freeze short (re-derived against the schedule: without the 09-16 spurious debit the account would hold 3 at the 10-06 refill and 1 after the two debits, not 0). Founder decision 2026-10-06 in chat after the repair (a production UPDATE needing a cloud-row AND phone-local write) was explained: no issues, leave it like that. No production write was made or is owed; the weekly +1 refill (the 10-06 log shows before=1 after=2) is the only thing that closes the gap. Recorded here so the shortfall is a decision, not an omission."
+
+  # ── Blocked on an external cause ──
+  - id: F6
+    title: "A 127 s restore on the morning of 2026-10-06 (restore_completed total_ms=127281; per-op restore_op_done 9-41 s, two 45 s ceilings)"
+    terminal_state: upstream_blocked
+    blocker: "Network-or-backend latency in that window, EXTERNAL to this repo and not separable from it: the evidence is device-measured per-op durations from client_errors, the phone's network and Supabase cannot be told apart afterwards, and get_advisors reports current state, not 06:45 IST. The same restore's single-call data ops took 0-355 ms. Tracked as OI-318 (OI-279 is pull-on-resume, not latency)."
+    reopen_when: "A restore longer than 60 s recurs AND query_logs / get_advisors evidence is taken inside that window (OI-318)."
+
+  - id: RESIDUAL-EMPTY-ANSWER
+    title: "The marker means 'no streak-critical op REPORTED a failure', not 'every row was fetched': an empty read that returns nothing is silent"
+    terminal_state: upstream_blocked
+    blocker: "Empty reads that return nothing are silent (user_progress rows.isEmpty, user_profile, workout_plan, freezes rawRes == null); on the legacy fan-out path an RLS-filtered stale-token empty answer is indistinguishable from an empty table (the default single-call path is service-role and fail-closed). Telling 'empty' from 'unanswered' needs a restore-outcome record, which is OI-293 (restore outcomes observable); that is its own design with its own plan review, not a patch to this marker."
+    reopen_when: "OI-293 (restore outcomes observable) lands."
+
+  - id: RESIDUAL-ABA-SWAP
+    title: "An A to B to A account swap inside ONE restore step can write A's rows into B's box with nothing reported"
+    terminal_state: upstream_blocked
+    blocker: "The pre-existing e5c2d1 class: restoreAbortedFor runs only between restore steps (sync_service.dart), unchanged by this batch. The marker adds no exposure beyond the restore's own."
+    reopen_when: "The restore step checkpoint design changes (a per-write ownership check inside a step)."
+
+  - id: RESIDUAL-FRESHNESS
+    title: "The marker is process-lifetime and not freshness-bounded: a resume days later can reckon against rows another device completed in between"
+    terminal_state: upstream_blocked
+    blocker: "Exactly as the replaced tick was. Bounding it by IST date would disable the midnight-resume reckon and regress today's behaviour; the real fix is pull-on-resume (OI-279)."
+    reopen_when: "OI-279 (pull on resume) lands."
+
+  # ── Needs the founder ──
+  - id: RESIDUAL-EF-CAPS
+    title: "restore-user-snapshot silently caps scheduled_workouts at .range(0, 999) (ascending) and has no limit on workout_schedule_completions, so a long-history account's single-call restore can be incomplete with nothing reported"
+    terminal_state: blocked_on_user
+    reason: "Founder GO 2026-10-06 (chat): lift the caps. The scope grew once the single-call function was read in full: eleven reads were clamped to 1000 rows by PostgREST (not only these two), and the scheduled_workouts template embed was found readable across users under service_role (Hermes C13). The code (paged reads, a per-request page budget, owner-scoped embed) is Slice B1 of docs/plans/streak-freeze-restore-ownership-addendum-a.md and lands in a later commit of this batch; the live deploy still needs its own per-action go (CLAUDE.md 4.3) and the EF-deploy-from-a-branch-behind-main check. Closes as closed_in_commit when B1 lands."
+
+  - id: F8
+    title: "A freeze is consumed even when the streak breaks anyway, and the multi-freeze notice reads 'Streak Freeze used! 0 remaining this week.'"
+    terminal_state: blocked_on_user
+    reason: "Founder decision 2026-10-06: KEEP the rule (a freeze is still consumed when the streak breaks anyway) and fix the notice wording only. The copy is Slice U6 of docs/plans/streak-freeze-restore-ownership-addendum-a.md (a new lib/core/copy/streak_freeze_copy.dart, the live count at show time). Waiting on the founder approving the exact strings; closes as closed_in_commit when U6 lands."
+
+  - id: LAST-WORKOUT-DATE
+    title: "last_workout_date is overwritten by the whole-row restore (cloud-non-null-wins); a phone with a newer unpushed date is regressed by a stale cloud row and the regressed value is pushed back"
+    terminal_state: blocked_on_user
+    reason: "B-pass reviewer C F2 corrected this entry (it was verified_clean on a wrong premise). Writers: train_provider.dart completeWorkout (every completion) and the dev simulation; the LOCAL value is only read as the push payload (sync_profile.dart), migration 115 sets it with COALESCE(p_last_workout_date, last_workout_date) (no GREATEST), and the only reader is the rank-promotion gap gate (evaluate-rank-promotions/index.ts). So a stale restore can regress it and the push writes the regression back; it self-heals at the next completion. Founder decision 2026-10-06: widen this batch. Slice C1 of docs/plans/streak-freeze-restore-ownership-addendum-a.md (a body-only migration, date latest-wins with a future clamp, plus a client date-max restore). Needs Hermes review (SECURITY DEFINER content rule) and the founder's per-action go for the live apply; closes as closed_in_commit when C1 lands."
+
+  - id: WEEKS-PUSH-RPC
+    title: "B-pass reviewer A F5 (P3): the client now treats current_streak_weeks as monotonic on RESTORE, but the push RPC (migration 115) is a bare COALESCE for it (GREATEST for its siblings) and last_streak_week is local-only, so a reinstall re-counts the current week once"
+    terminal_state: blocked_on_user
+    reason: "Founder GO 2026-10-06 on the migration. Counter half = Slice C1 (GREATEST in update_user_progress_snapshot, body-only). Marker half (last_streak_week to the cloud) = Slice C2, only after the weekly-stamp fix (Slice D; founder D5 = yes, 2026-10-06, found because train_provider.dart stamps the marker on EVERY completion so a second session in a week is never counted) and its own plan-review round. Neither half is introduced by this batch: the re-count after a reinstall happens identically with the pre-fix cloud-wins restore, and max-wins only stops a restore from LOWERING the count. Recorded in lib/core/services/CLAUDE.md next to the monotonic-merge row. Each live apply needs the founder's per-action go (CLAUDE.md 4.3)."
+
+total_findings: 27
+closed_count: 27
