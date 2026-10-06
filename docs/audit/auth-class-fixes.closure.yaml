@@ -1,0 +1,238 @@
+# Closure ledger — auth-class-fixes (crash-recovery batch, 2026-08-16/17).
+#
+# Counted mechanically by id prefix, the only number that cannot drift:
+#     3  FIX-*   the three auth defects of one class (a9c4e2 / d7b1f8 / e5c2d1)
+#     6  BP-*    B-pass findings on ab1886b7 (3 P0, 1 P1, 2 P2), zero false alarms
+#     5  REC-*   preservation sweep — worktrees rescued from the app crashes
+#     4  DOC-*   registry / citation / ledger integrity work
+#    ---
+#    18  = total_findings = closed_count
+#
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no
+# `deferred:` key.
+#
+# ORIGIN. The founder's Windows Claude app crashed repeatedly across several
+# concurrent sessions, each in its own worktree. This batch is the recovery:
+# first preserve everything unrecoverable, then land the class of bug the
+# preserved work was about.
+#
+# ⚠ THE FINDING THAT SHAPED THE BATCH. `git log --all -S "ownerAtStart"` returns
+# EMPTY — the e5c2d1 fix had never existed in any commit, on any branch, despite
+# its diagnose-doc reading `status: fixed` and a closure entry describing it as
+# "written, NOT yet in any commit". It was not lost in the crashes; it was never
+# written. That is the `B1` failure mode of the post38 ledger recurring one level
+# up ("a closure ledger describes GIT, not intent"), which is why every entry
+# below names a commit or an executed verification, and why the 28 post38
+# `blocked_on_user` entries were flipped only after checking each one's code had
+# actually landed.
+
+batch: auth-class-fixes
+date: 2026-08-17
+blast_radius: platform
+plan_review_record: docs/plan-reviews/auth-class-fixes.md
+bpass_review: docs/reviews/auth-class-fixes-bpass.md
+related_diagnoses: >
+  docs/diagnoses/2026-08-13-signin-no-timeout-infinite-spinner-a9c4e2.md,
+  docs/diagnoses/2026-08-13-auth-refresh-no-inflight-join-d7b1f8.md,
+  docs/diagnoses/2026-08-06-account-swap-inflight-writes-e5c2d1.md,
+  docs/diagnoses/2026-08-06-google-signin-never-navigates-d3a7c9.md,
+  docs/diagnoses/2026-08-06-reset-link-device-bound-pkce-c9e2b7.md,
+  docs/diagnoses/2026-08-06-notifications-inbox-nonuuid-id-a4f1c8.md
+total_findings: 18
+closed_count: 18
+
+_c1: &c1 "auth-class-fixes ab1886b7 — client half rebased onto main + a9c4e2/d7b1f8 fixes + 5 SoT concepts"
+_c2: &c2 "auth-class-fixes — e5c2d1 sink guards + B-pass finding fixes"
+
+findings:
+  # ---- The three defects of one class ----
+  - id: FIX-a9c4e2
+    title: "Email sign-in had no deadline anywhere; a degraded backend produced an unbounded spinner with no error path and no escape"
+    terminal_state: closed_in_commit
+    commit: *c1
+    verification: test/contracts/sign_in_timeout_behavioral_test.dart
+    notes: >
+      Ceiling (signInTimeout 40s) via boundSignIn at signInWithEmail's single
+      call site. Mutation-proven: neutering boundSignIn makes the test HANG and
+      fail on the 30s harness timeout, which IS the bug. Deliberately does NOT
+      sign out on timeout — the session usually exists by then.
+
+  - id: FIX-d7b1f8
+    title: "ensureFreshToken held no in-flight future; N concurrent callers fired N refreshSession() calls into a starved backend"
+    terminal_state: closed_in_commit
+    commit: *c1
+    verification: test/contracts/token_refresh_join_behavioral_test.dart
+    notes: >
+      Join inside the expiry branch only, so the still-fresh fast path stays
+      lock-free. Mutation-proven: 'Expected: <1> / Actual: <15>' — the exact
+      prod signature (~15 GET /auth/v1/user completing inside one 400ms window).
+
+  - id: FIX-e5c2d1
+    title: "Account swap left the outgoing user's restore and write fan-out running against the incoming user's session"
+    terminal_state: closed_in_commit
+    commit: *c2
+    verification: test/contracts/session_owner_inflight_guard_behavioral_test.dart
+    notes: >
+      restoreAbortedFor(ownerId) as a PARAMETER (a field cleared in
+      _onUserChanged disarms the guard exactly when needed — recorded in the
+      doc as the first attempt, which was wrong). ownerChangedSince at all FIVE
+      nutrition write sinks, each sibling guarded independently because a
+      `return` in one does not stop the others under Future.wait.
+
+  # ---- B-pass findings (docs/reviews/auth-class-fixes-bpass.md) ----
+  - id: BP-1
+    title: "P0 — _inFlightRefresh had no identity affinity: a different session joined the in-flight refresh and received the other identity's token"
+    terminal_state: closed_in_commit
+    commit: *c2
+    verification: "test/contracts/token_refresh_join_behavioral_test.dart — group 'cross-account (B-pass finding 1)'"
+    notes: >
+      The batch fixed 'an identity captured before an await is a snapshot' for
+      e5c2d1 and reproduced it raw in its own new auth code. Proven by the
+      reviewer through EXECUTION, not argument: refresherBRan=false,
+      resultB=token-for-USER-A. Fixed with an owner tag on the in-flight future
+      plus a sink-side re-check on resolve. Mutation-proven.
+
+  - id: BP-2
+    title: "P0 — the disableRefreshJoin kill-switch was decorative: nothing in the repo ever read the flag it documented"
+    terminal_state: closed_in_commit
+    commit: *c2
+    verification: "grep -rn 'disable_token_refresh_join' lib/ now resolves to a live Hive read, not just a doc comment"
+    notes: >
+      Platform tier's `requires: [feature_flag]` was met in appearance only. The
+      two kill-switches shipped in one commit were asymmetric — the sign-in one
+      read Hive and worked. Now a lazy Hive read mirroring its sibling.
+
+  - id: BP-3
+    title: "P0 — ab1886b7 claimed closes-diagnose: e5c2d1 while the guard code existed only in the working tree"
+    terminal_state: closed_in_commit
+    commit: *c2
+    verification: "git show <c2>:lib/core/services/sync_service.dart | grep restoreAbortedFor"
+    notes: >
+      Found independently from both directions within minutes of each other.
+      The code now lands with the claim.
+
+  - id: BP-4
+    title: "P1 — SoT entry cited an untouched line as the fix, AND the OneSignal id fallback carried the same non-uuid defect a4f1c8 fixed"
+    terminal_state: closed_in_commit
+    commit: *c2
+    verification: "notification_inbox_service.dart:136-148 now routes the empty-id fallback through newLocalNotificationId()"
+    notes: >
+      The compounding half is the real one: 'os-<microseconds>' is not
+      uuid-shaped and reaches a uuid column, so it can only ever 22P02. The
+      diagnose doc had already written the rule this violated.
+
+  - id: BP-5
+    title: "P2 — an unbounded refreshSession() under a join is STRICTLY worse than without one: every later caller joins the stuck future forever"
+    terminal_state: closed_in_commit
+    commit: *c2
+    verification: "SupabaseService.refreshTimeout + the ceiling assertion in token_refresh_join_behavioral_test.dart"
+    notes: >
+      The sharpest form of the mirror question — not 'is the guard right' but
+      'is the new code worse than what it replaced for the other case'.
+
+  - id: BP-6
+    title: "P2 — a non-bool configBox value at disable_sign_in_timeout is untested (behaviour is already the safe direction)"
+    terminal_state: verified_clean
+    verification: "`... == true` yields false for any non-bool, so the timeout stays applied"
+    notes: >
+      No code change. The real Hive line is uncoverable in unit tests because
+      configBox is not open there — which is precisely why the ...ForTest
+      override exists.
+
+  # ---- Preservation sweep ----
+  - id: REC-post38
+    title: "589 insertions + 7 untracked files (4 diagnose-docs, 3 behavioral tests) uncommitted in the post38 worktree since 2026-08-06"
+    terminal_state: closed_in_commit
+    commit: "rescue/post38-auth-inflight 7abb01d7 (pushed) — snapshot; the landing path is *c1"
+    verification: "git cat-file -e rescue/post38-auth-inflight:docs/diagnoses/2026-08-06-google-signin-never-navigates-d3a7c9.md"
+    notes: >
+      retire_worktree refused it correctly, but ONLY via its hardcoded
+      _protected set — and `KEEP [protected]` prints identically to a healthy
+      worktree, so nothing surfaced it.
+
+  - id: REC-held
+    title: "Two fully-researched diagnose-docs (a9c4e2, d7b1f8) untracked in docs/diagnoses/_held/, referenced nowhere on main"
+    terminal_state: closed_in_commit
+    commit: *c1
+    verification: "docs/diagnoses/INDEX.md contains a9c4e2 and d7b1f8"
+    notes: >
+      _held/ is read by NEITHER build_bug_index.dart:25 NOR
+      check_bugfix_commits_have_diagnose.dart:122 — both non-recursive
+      listSync. Committing them in place would have kept them invisible and
+      broken Gate 10 for any later closes-diagnose. Moved out first.
+
+  - id: REC-worktrees
+    title: "Uncommitted work in four further worktrees (persona-sweep, qualification-exam-plans, admin-dashboard, memory-consolidation-log)"
+    terminal_state: closed_in_commit
+    commit: "rescue/persona-sweep-e2e, rescue/qualification-exam-plans, rescue/admin-dashboard, rescue/memory-consolidation-log"
+    verification: "git ls-remote --heads origin 'refs/heads/rescue/*'"
+    notes: >
+      Founder decision 2026-08-16 was to sweep every worktree. Several trees
+      predate safe_commit.sh / _git_lock.sh / check_closes_oi_cited.dart
+      entirely, so the sanctioned commit path did not exist inside the worktree
+      §4.13 requires the work to happen in — tooling was copied in from main so
+      the real wrappers and gates RAN, then removed. Filed as OI.
+
+  - id: REC-slice0
+    title: "14 staged-but-uncommitted files in slice0-integration"
+    terminal_state: verified_clean
+    verification: "git hash-object per file vs `git rev-parse main:<path>` — 7 byte-identical, 7 where MAIN is ahead"
+    notes: >
+      Nothing unique. Deliberately NOT committed: the tree is stale enough that
+      its pre-commit hook regenerated OPEN_INDEX.md at 38 open issues against
+      main's real 58, and its copy of a gate still claims a Gate 44 number main
+      has since renamed off. Left exactly as found.
+
+  - id: REC-tooling-gap
+    title: "Stale worktrees cannot use the sanctioned commit path — safe_commit.sh and its gates postdate them"
+    terminal_state: blocked_on_user
+    reason: "needs a founder call on the fix shape (bootstrap-from-main vs. version the hooks); the finding itself is closed and filed"
+    verification: "admin-dashboard (2026-07-13) is missing safe_commit.sh, safe_push.sh, _git_lock.sh AND check_closes_oi_cited.dart"
+    notes: >
+      §4.13 mandates working in a worktree and §4.3 mandates safe_commit.sh;
+      for an old-enough worktree those two rules are jointly unsatisfiable
+      without copying tooling in by hand. Not hypothetical — hit four times in
+      this batch.
+
+  # ---- Documentation / ledger integrity ----
+  - id: DOC-sot5
+    title: "Five diagnose-docs cited SoT concepts that did not resolve; the citation gate names three of them as the false-green it was written to catch"
+    terminal_state: closed_in_commit
+    commit: *c1
+    verification: "dart run scripts/check_sot_registry_citations.dart → 0 unresolved dated >= 2026-08-01"
+    notes: >
+      Registered with REAL behavioral_test_path values. presence_only was
+      deliberately not used — it is the hatch for static/Deno-EF concepts, and
+      writing the fixes is what made the honest path available. Gate 42: 114
+      concepts, all covered.
+
+  - id: DOC-stale-lines
+    title: "Two SoT line ranges went stale when the sign-in ceiling shifted the file (signOutInProgress, signOut)"
+    terminal_state: closed_in_commit
+    commit: *c1
+    verification: "dart run scripts/check_sot_registry_parity.dart → 0 errors"
+    notes: >
+      Re-derived by READING the methods, not by a blanket offset —
+      signInWithEmail was split in two, so different parts of the file moved by
+      different amounts.
+
+  - id: DOC-r2n7-n8
+    title: "e5c2d1 carried a wrong :185 citation in its body table and a PHANTOM method (_replayPendingNutritionSync) invented while correcting an earlier fabrication"
+    terminal_state: closed_in_commit
+    commit: *c2
+    verification: "grep -rn '_replayPendingNutritionSync' lib/ → empty; all three real callers re-derived by grep"
+    notes: >
+      A fabricated citation introduced by the act of fixing a fabricated
+      citation. Both corrected against read code.
+
+  - id: DOC-post38-ledger
+    title: "28 post38 entries sat blocked_on_user awaiting the founder go their reason: named"
+    terminal_state: closed_in_commit
+    commit: *c2
+    verification: "dart run scripts/validate_audit_closure.dart docs/audit/post38-auth-fixes.closure.yaml → PASS; 0 blocked_on_user remain"
+    notes: >
+      Flipped 18 → *c1 and 9 → *c2 only after verifying each entry's code had
+      landed. R2-N12 → verified_clean on live evidence: log-client-error v13
+      was read via the Management API and carries all SIX PRE_AUTH_OP_TYPES
+      entries, so the redeploy it was blocked on had already happened on
+      2026-08-10. No deploy was performed.

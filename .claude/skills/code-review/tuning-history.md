@@ -1,0 +1,3654 @@
+# Code-review skill - Tuning history
+
+Append new dated entries to THIS file (not `SKILL.md`), under the heading below, in the same
+bullet shape as before: `- **YYYY-MM-DD** - blast-radius ...` (optionally `**YYYY-MM-DD (b)**`
+for a second same-day review). The entry's block must name the review file's basename.
+`scripts/check_skill_tuning_history.dart` gates this file (CLAUDE.md section 5.1). Moved verbatim
+out of `SKILL.md` section 7 by the context-lean batch (2026-09-29).
+
+## 7. Tuning history
+
+- **2026-09-30 (c)** — blast-radius **catastrophic** (gate-forced) — merge commit hash
+  `e64a2b47cba6`, branch `claude/sync-aab-build-check-408772` merging in `origin/main`.
+  `check_code_review_pass_exists.dart` escalated this merge to catastrophic because the staged
+  diff includes `supabase/migrations/152_drop_users_subscription_mirror.sql` (`SECURITY DEFINER`
+  content rule) — a file authored, reviewed (`docs/reviews/f0facb0c2183-review.md`, verdict
+  accepted) and merged entirely on `origin/main` (`oi-182-202-subscription-state`, PRs #57/#60),
+  not new content from this branch. **0 findings; review documents provenance only** — this
+  branch's own commits were already independently reviewed at `platform` tier
+  (`docs/reviews/sync-aab-build-check-408772-bpass.md`). Review:
+  `docs/reviews/e64a2b47cba6-review.md`. **No new lens.** Confirms
+  `docs/plan-reviews/review-gate-tier-gap.md`'s 2026-07-27 finding is PARTIALLY STALE: that
+  record says an unstaged review file at the working-tree path satisfies the gate without
+  moving the hash; as of this run the gate explicitly requires the file be STAGED (its own error
+  message states this plainly and confirms staging does not move the hash, since `docs/reviews/`
+  is hash-excluded). The gate was hardened sometime after that finding was written — re-verify
+  gate behaviour against the live script rather than a dated plan-review record's prose.
+
+- **2026-09-30** — blast-radius **platform** — branch `claude/sync-aab-build-check-408772`
+  (live Razorpay order-tagging + Vercel preview-build-skip fix + OI-274 filing; 3 commits, all
+  `docs:`/`feat:`/`chore:` — no diagnose-doc required). Whole-branch review (nothing staged, all
+  commits already landed), reviewed against `main...HEAD` per the whole-branch/no-staged-diff
+  convention (branch-named review file, not staging-hash-named): `docs/reviews/sync-aab-build-check-408772-bpass.md`.
+  **4 findings (0 P0, 1 P1, 1 P2, 2 P4); 0 false_alarm** — the P1 (branch had no
+  `docs/plan-reviews/` record — required at `platform` tier per §4.12.3) and the P2 (a live
+  Razorpay credential handoff file, `.claude/.razorpay_live.env`, still populated on disk one day
+  past its own stated "delete after pushed to Supabase + Vercel" purpose — both destinations were
+  in fact already done) were both fixed in the same batch immediately after the review landed; the
+  2 P4s (Razorpay `notes` object has headroom under the Orders API's 15-key cap; the new
+  `ignoreCommand`'s catch-all `*) exit 0` arm would silently skip a hypothetical Deploy-Hook/CLI
+  deploy with no resolvable git ref — no such trigger exists in this repo today) accepted with no
+  code change. **No new lens — recorded because this is the first review to surface the P1 shape
+  from the *reviewer's own side*: a B-pass finding whose fix is "write the very artifact this
+  review's acceptance feeds into" (the plan-review record cites this review file as `bpass_review`,
+  and this review was written specifically to satisfy that citation) — a small but real
+  ordering dependency worth naming for the next whole-branch, nothing-staged, platform-tier case:
+  write the plan-review record and its `bpass_review` citation together, right after the B-pass
+  lands, rather than assuming an already-committed branch has one.**
+  False-alarm rate 0/4 → no lens removed; no lens change needed.
+
+- **2026-09-30 (b)** - blast-radius **catastrophic** - branch `oi-182-202-subscription-state`, Commit 2 (migration 152 drop of the `users` subscription mirror, ledger, snapshot, board move). One fresh read-only B-pass reviewer after the live dry-run and apply; 5 findings (1 P2, 4 P3), 0 false alarms, 4 fixed in the test and 1 verified_clean (`docs/reviews/f0facb0c2183-review.md`). **Pattern worth keeping:** a migration-TEXT contract written after the apply is weakest exactly where the assertion is a bare `contains()` on a security-relevant statement. The GRANT check passed on `TO service_role, authenticated`, and the reviewer proved it by replicating the test's normalizer in Python rather than by reading. Ask of every privilege assertion: *does it pin the whole statement and the complete grantee list?* Also: comment-stripping that handles only `--` lets a `/* */` block hide a DROP from the order tests. Findings 2-4 are the same family (a pin that is looser than the thing it guards). All five mutations were re-run against the final file and the applied SQL restored with `cp` plus a re-hash. False-alarm rate 0/5, no lens removed.
+
+- **2026-09-29 (second entry today)** - blast-radius **catastrophic** - branch `oi-182-202-subscription-state` (OI-182 grace window derived from the retry schedule; OI-202 drop of the `users` subscription mirror columns, Commit 1, no migration file). Two independent B-pass reviewers (Flutter half, EF/SQL half), 11 findings, 0 false alarms, all fixed in-batch (`docs/reviews/8c18c99a0443-review.md`). **Pattern worth keeping:** the strongest findings were guards that lived in an untested closure (the retry's session compare, only-this-order clear and latch sat inline in the service, so deleting any reddened nothing) and mutation survivors at boundary flags (five survived until boundary fixtures existed). Extracting the closures into a function with an injected scheduler, then mutating each guard once, is what made them provable. A later Hermes pass changed the diff after review; those deltas are named in the review file and covered by its hash. Nothing tuned in the lens set.
+- **2026-09-29 (b)** — blast-radius **platform** — branch `migration-ledger-integrity` (OI-135 /
+  OI-137 / OI-263: Gate 39 recomputes ledger hashes, a `refs/heads/mig/N` number allocator copied
+  from `mint_oi.sh`, a reservation gate, and a paired-gate grammar fix; 29 files, +3200). Two
+  context-blind agents split by lens (A read-only lenses 1-5/7/10 + hash/SHA/mint semantics; B
+  lenses 6+8 as ~70 live mutations in an isolated worktree from the exported staged patch),
+  dispatched AFTER three plan-review rounds and a green gate loop / analyze / full suite (7182).
+  **18 findings (5 P2, 13 P3); 0 false alarms — 14 fixed with a regression test and a mutation, 4
+  accepted with a stated limit written into the docs.** Review:
+  `docs/reviews/migration-ledger-integrity-bpass.md`. Both reports reproduced the batch's core claims
+  exactly (hash core, real-ledger counts, all 159 ids resolving), so the value was in the edges.
+  **Tuning 1 — lens 6: a test can be NAMED for a guard, sit right next to it, and never reach it.**
+  The mint's "--stub refuses to overwrite" test ended by re-reserving an already-taken number, which
+  exits 3 at the CAS before `write_stub` is ever called; deleting the no-clobber guard reddened 0 of
+  23. The author's own comment said the guard was tested. Ask of every "refuses/does not clobber/skips"
+  test: *which exit does this actually take, and does it run the guard's line?* — answered in one
+  step by mutating the guard to `if false`, never by reading the assertion.
+  **Tuning 2 — lens 6: a guard applied at N call sites is N mutation targets.** `--no-renames` sat on
+  BOTH the staged diff and the committed-range diff; only the staged half had a test (a `git mv`
+  never committed), so a committed renumber — the exact 145→147→148→149 shape that motivated the
+  batch — would have dodged the CI/PR check. Same shape for the three-dot range. Grep the flag and
+  mutate each occurrence separately.
+  **Tuning 3 — lens 10 (self_attesting_artifact) gains: every "ADOPTED" row in a plan-review
+  disposition table is a claim that an edit landed — grep the diff for it.** Round 1's F4 said
+  `new-worktree.sh`'s fetch line "gains `+refs/heads/mig/*`"; it never did, through two further
+  plan-review rounds and a green gate loop, and it took a code reviewer reading that one script to
+  see it. Nothing gates it. The same review also caught the batch's own closure text citing a
+  "lease sentence in the gate ledger" that did not exist and a count (21) that was really 20 — and my
+  first correction of those counts was itself wrong, so every count was re-derived by running the file.
+  **Tuning 4 — a fixture must break ONLY the edge under test; read the failure, do not tweak until
+  green.** The mid-retry test first broke the FETCH url to fail `sync_refs`; that also broke the
+  existence probe that decides "lost race", so the script correctly took a different exit-2 path and
+  the test asserted the wrong message. Reading the actual stderr showed why; the working fixture
+  drops a `.lock` on the one tracking ref the fetch must update (and advances `main` so it must).
+  Likewise a mutation whose failure mode is an infinite loop (dropping the 10-attempt give-up) needs a
+  BOUNDED hook, or it hangs the run instead of failing an assertion.
+  **Process notes worth keeping.** (i) Reviewer A ran `mint_migration.sh --next` once against the
+  REAL repo, not knowing it does a `git fetch --prune`; it disclosed it, and it only moved shared
+  tracking refs. A brief for a script with a network-touching read mode should say so up front.
+  (ii) Reviewer B could not write its findings file and returned the report inline — plan for the
+  inline path. (iii) The git-safety hook pattern-matches Bash command TEXT, including the body of a
+  heredoc or python one-liner that merely *contains* `git push` / the hook-bypass flag as test
+  fixture or doc prose; write such edits with the Write tool and run the file.
+  False-alarm rate 0/18 → no lens removed; lens 6 extended per Tunings 1-2, lens 10 per Tuning 3.
+
+- **2026-09-29 (c)** — blast-radius **platform** — branch `branch-lifecycle-cleanup` (OI-138:
+  `retire_worktree.dart` now deletes the retired worktree's own merged local branch with
+  `git branch -d`, behind protected-name, ancestor-of-main and `-d` guards). One context-blind
+  Sonnet reviewer in an isolated worktree, dispatched after two plan-review rounds, a green
+  full suite (7071) and clean analyze. **5 findings (2 P2, 2 P3, 1 P4); 0 false alarms, all
+  fixed in-batch, 2 by new mutation-proven tests** (`0f5002adfd8c-review.md`, renamed twice from
+  `223280051c51` after the fixes and the hook's regenerated indexes moved the hash).
+  **Tuning 1 — "not e2e-testable" is a claim to be attacked, not a limitation to be recorded
+  (lens 6/8).** The author's own mutation of the ancestry re-check reddened ZERO tests, and the
+  diagnose-doc, a code comment and the board entry all explained it as
+  "a race, cannot be reproduced". The reviewer reproduced it in about 20 lines: a
+  `reference-transaction` git hook fires inside `git branch -d` and commits on the next
+  candidate, making the window deterministic. It also showed the premise behind "defense in
+  depth" was false, because `git branch -d` accepts a branch merged into its UPSTREAM, so the
+  re-check is the only guard. **When a mutation reddens nothing and the explanation offered is
+  "timing", ask which git hook, env var or stub gives a deterministic seam before accepting it.**
+  Sibling of the 2026-09-06 zero-red rule (something absorbed it), here the absorber was the
+  author's assumption.
+  **Tuning 2 — a claim that a tool "refuses X" is checked against the EXISTING tests for the
+  opposite behaviour.** The diagnose-doc said bare `--execute` was still refused; a pre-existing
+  e2e test runs it bare and expects exit 0. One `grep "retire(\['--execute'\])"` settles it.
+  (The founder then chose to make the tool enforce it: a bare `--execute` is now refused and
+  `--all` is the explicit sweep.)
+  **Tuning 3 — when a diff rewords a tool's own output, the prose that tells a reader which
+  output to wait for is a second reader.** §4.13.8 named `[merged + clean + pushed]` as the go
+  signal while the reworded string is what the tool now prints in the case the batch exists for.
+  **A negative result worth keeping:** the reviewer re-ran the case-insensitive-protection
+  mutation (3 red) and reported which mutations it had NOT re-derived rather than implying it
+  had. Full detail: `docs/reviews/0f5002adfd8c-review.md`.
+  **Round 2 (same day, delta only — the founder chose to make the tool refuse a bare
+  `--execute`): 6 findings (5 P3, 1 P4), 0 false alarms, all closed.** The useful one:
+  **a tool that PRINTS a command is a reader of its own CLI contract.** Tightening the flag made
+  the dry-run footer (`re-run with --execute`) and `worktree_status.dart`'s printed command
+  point at forms that no longer worked — and the second had been wrong before the change (it
+  printed the BRANCH, the tool matches the DIRECTORY), so the delta merely made it the only
+  ready-made command. When a diff narrows what a CLI accepts, `git grep` every place that
+  PRINTS an invocation, not only every place that runs one. Also: "enforced by the tool" was an
+  overclaim — the tool forces a sweep to be named but cannot know whose slug is "own"; state
+  which half moved from prose to code. **Process lesson: a killed mutation run (exit 137) left
+  `retire_worktree_lib.dart` mutated in the worktree;** caught only because I compared each
+  script against its pre-mutation backup with `cmp` before trusting anything. Run mutations from
+  a script that restores on `EXIT`, and after ANY killed or resumed session diff the scripts
+  against the backups before reading a single test result.
+
+- **2026-09-29** — blast-radius **platform** — branch `worktree-retirement-autonomy` (docs-only:
+  new CLAUDE.md §4.13 point 8 + a §4.9 pitfall row, codifying autonomous worktree retirement on
+  batch close). Per §4.3's docs/process-only ≥account carve-out, this was a **self-consistency**
+  pass (`lens_set: [self_consistency, accuracy_verification, scope_clarity, format_consistency]`),
+  not the standard 8-lens adversarial set. 1 finding (P3), 0 false alarms, folded in before commit
+  (`858880296599-review.md`). Nothing tuned in the standard lens set — this entry exists because
+  the gate requires one per review regardless. **Worth recording as a pattern, not a defect:** the
+  reviewer, unprompted, went one step past the self-consistency brief and independently re-verified
+  the branch's single highest-risk factual claim (whether `retire_worktree.dart` checks local
+  `main` or `origin/main`) by reading the real script end-to-end, AND checked a tool-boundary quote
+  (`ExitWorktree`'s "do NOT call this proactively") against the tool's actual live schema via
+  `ToolSearch` rather than trusting the brief's framing of it as unverifiable. Both independently
+  confirmed the author's own ground-truth checks. **For a future self-consistency pass: if the
+  brief cites a claim as "treat as asserted," a reviewer with an available means to check it
+  anyway should still check** — this one did, at negligible extra cost, and it is what let this
+  review return a *stronger* convergence signal than a same-conclusion re-read would have.
+
+- **2026-09-29** — blast-radius **platform** — branch `oi-245-246-restore-fixes` (OI-245:
+  restored PRO photo-coach turns replayed to Gemini as plain text; OI-246: deleted exercise
+  logs reappearing after a cloud restore, migrations 150+151 already live). This is the
+  self-triggered B-pass round 3, dispatched AFTER two independent adversarial plan-review
+  rounds and a corrected full-suite re-run had already converged the diff — per CLAUDE.md
+  §4.3, the B-pass is a SEPARATE, mandatory step from the ×2 plan-review rounds, not covered
+  by them. Two agents, split lens set (A: 1,2,3,4,5,7; B: 6,8 with live mutation testing).
+  Staged-diff review, `docs/reviews/82620b20f504-review.md`. **2 findings, 0 false alarms,
+  both fixed in-batch.** Reviewer B: 0 findings (independently re-ran every mutation-proof
+  claim already in both diagnose-docs and every one reproduced exactly — a clean pass with
+  real verification behind it, not a rubber stamp). F1 (P2, writer_reader_drift) caught that
+  the batch's own round-2 finding (and the OI-269 board entry it produced) mischaracterized
+  ALL 5 un-patched `workout_log_exercises` readers as "not newly broken, unchanged" — true
+  for 4, **false for `pr-detection`**: its `composeMessage` renders `exercise_id` directly
+  with no `exercise_name` fallback (unlike the sibling `i-see-you-callout`, which prefers the
+  name), so the batch's own exercise_id-suffix design would leak an internal id fragment into
+  a real push notification for any PR deleted within the ~20-minute cron window — the exact
+  regression class already recognized and fixed for weekly-recalc one finding earlier in the
+  same doc, mischaracterized here as out-of-scope. Fixed by mirroring the identical
+  `excludeDeletedLogs`/`live_log_filter.ts` pattern for pr-detection
+  (`live_pr_filter.ts`/`excludeDeletedPrs`), mutation-proven (1 of 11 tests reddens on
+  revert). OI-269 corrected to move `pr-detection` from "5 remain" to "fixed"; the other 4
+  readers were each individually re-verified (not assumed from the blanket claim) to be
+  genuinely safe. F2 (P2, blast_radius_mismatch) caught platform tier's unenforced
+  `feature_flag` requirement going undiscussed for 3 new sync-domain code paths — resolved
+  by DOCUMENTING the exemption rather than adding a switch, after confirming the established
+  sibling mechanism this batch's own code explicitly mirrors (`_drainPendingTemplateDeletes`,
+  OI-252, already shipped and live for weeks) has the identical gap with no kill-switch: a
+  switch here would let someone silently re-open the exact data-corruption bug this batch
+  exists to close, purely to satisfy a checklist item.
+  **Tuning — a batch's own "N of these readers are unchanged, only fixing M" scoping claim
+  is exactly as checkable as any other citation, and it takes a SECOND finding of the SAME
+  class (found by an earlier round in the SAME batch) to catch it.** The round-2 finding this
+  batch's own diagnose-doc already contains found and fixed this exact defect shape for
+  weekly-recalc; the blanket "5 remain, unchanged" sentence describing the OTHER 5 readers
+  was written in the same breath and never re-derived per-reader. **When a finding says "N
+  other call sites share this shape but are out of scope because they're unaffected", verify
+  EACH one individually rather than accepting the count** — this is the direct sibling of the
+  2026-09-17 entry's "sibling-seam sweep" lesson (verify a guard-narrowing's full call-site
+  set) and the 2026-09-20(a) entry's "same finding can recur identically across independent
+  files" lesson, here applied to a batch's own scoping decision about which siblings are safe
+  to leave alone. **Tuning — an unmet platform-tier `feature_flag` requirement does not
+  always mean "add a switch"; it can mean "verify the established precedent already accepts
+  this shape, and say so."** Reflexively adding a kill-switch to a fix that exists specifically
+  to close a data-corruption bug can itself be the wrong move (this file's own 2026-08-25 P0
+  entry already warns: a switch that re-enables corruption to satisfy a checklist is worse
+  than no switch) — the correct response here was investigating whether this batch's own
+  "mirrors an existing pattern" claim extends to the missing kill-switch too, and it does.
+  False-alarm rate 0/2 → no lens removed; both tunings above are general-method notes, not
+  lens-prompt edits (the existing lenses already caught both findings correctly).
+
+- **2026-09-28 (f)** — blast-radius **platform** — branch `day-swapper-sync-load`, third merge
+  of origin/main (PR #48). 1 finding (P2), 0 false alarms, fixed pre-commit
+  (`330f5d0c27fc-review.md`). **Lesson: when a finding names a stale string, grep the WHOLE file
+  for that string before fixing only the cited copy** — the reviewer cited 4 stale free-text line
+  numbers in one registry entry; the same text was duplicated into two sibling entries (11
+  occurrences). Also recorded: two branches can mint the same numbered bug class in a skill
+  (`2.73` twice); resolve by keeping whichever number something already CITES and renumbering the
+  other, after grepping for citations of both.
+
+- **2026-09-28 (e)** — blast-radius **platform** — branch `day-swapper-sync-load`, second merge
+  of origin/main (b7239acf, single-owner-a2b) before the Task 34 EF deploys. 1 finding (P2), 0
+  false alarms, fixed pre-commit (`6e4819de87d7-review.md`). **Lesson for merge reviews: the
+  dangerous hunk is the one git did NOT flag.** Both sides appended one entry to the same array
+  in different places, so the auto-merge was textually clean while the doc comment counting that
+  array ("7 of 11") went stale — each side had correctly updated the count for its own addition.
+  **Reviewer prompt addition:** for every file BOTH parents changed (not just conflicted files),
+  re-derive any count, list or "N of M" prose against the merged content. Also: the reviewer
+  flagged, and the coordinator confirmed, that `sot_registry.yaml` has never been valid YAML
+  (35 errors) — worth knowing before anyone reaches for a YAML parser on it.
+
+- **2026-09-28 (d)** — blast-radius **catastrophic** — branch `day-swapper-sync-load`, Task 34:
+  the already-applied migration 149 lands with its ledger entry and a 148→149 renumber. 2
+  findings (1 P1, 1 P2), 0 false alarms, both fixed before commit (`992f2cf23c2a-review.md`).
+  **New lesson, both findings the same shape:** a commit that records a STATE CHANGE (here: a
+  live apply) leaves every prose sentence describing the OLD state as drift — a closure
+  `reason:` still saying "awaiting the founder's go" and a registry note still saying "NOT yet
+  applied live", both inside files the commit was already editing for the renumber. A mechanical
+  rename sweep (148→149) touches the line and reads as reviewed, while the claim on that line goes
+  stale. **Reviewer prompt addition for apply/deploy/flip commits:** grep the whole diff's files
+  for the pre-change status words (`NOT yet`, `pending`, `awaiting`, `blocked_on_user`,
+  `uncommitted`, `drafted`) and check each against the new state.
+
+- **2026-09-28 (c)** — blast-radius **catastrophic** — branch `day-swapper-sync-load`, the
+  MERGE of origin/main 7cb4eb78 (OI-252 stable template ids + B2a-2b telemetry dedup) into the
+  branch. One context-blind Sonnet reviewer read the staged resolution against both parents.
+  **4 findings (1 P1, 2 P2, 1 P3), 0 false_alarm, all fixed** (F1 in the merge commit, F2-F4 in
+  the next, diagnose `a3e7d9`). Review: `docs/reviews/33fb1d332932-review.md`.
+  **Tuning 1 — a merge review asks where the two sides MEET, not whether each hunk is right.**
+  All four findings were semantics that neither parent had wrong on its own. A branch guard
+  written for pre-OI-252 identity (Case 2's "no local template ⇒ omit") became wrong once main
+  put the id in the key. A branch skip ("every bundled key present") was never satisfiable
+  once main filtered ghost days out of the write. Brief a merge reviewer with each side's
+  INVARIANTS (not just its diffs), and ask of every branch guard: does the other side's new
+  invariant make this guard's premise false?
+  **Tuning 2 — a sweep test's window IS its input set (lens 8).** H-42's pairing test matched
+  within 300 characters, and one real pair sat 583 characters apart behind a comment. The test
+  was green on a live defect. A fixed character window is a claim that no comment is ever long;
+  scope the pairing by syntax (the enclosing block) instead. On widening, re-derive the count
+  (70 → 75) and treat every newly visible site as a finding to check, not as noise.
+  **Tuning 3 — test STUBS encode old semantics too.** After the merge, a branch test's SELECT
+  stub answered one id for every template name. Harmless before OI-252; afterwards main's
+  migrator folded two templates into one key and the test failed for a reason that had nothing
+  to do with its subject. When a merge changes HOW the code learns a fact (here, SELECT → key),
+  grep the tests for stubs that answer the old question.
+  False-alarm rate 0/4 → no lens removed.
+
+- **2026-09-28** — blast-radius **catastrophic** — branch `day-swapper-sync-load` (one
+  day-swap engine for Train/Home/coach + the OI-237 sync-load fix; 198 files). Whole-branch
+  review split across FOUR context-blind Sonnet reviewers, each in its own isolated worktree
+  (sync core + migration / swap engine + UI / EFs + AI routing / gates + docs). **12 findings
+  (0 P0, 4 P1, 5 P2, 3 P3); 0 false_alarm — 10 fixed in `2675345b` + a ledger re-measure,
+  2 verified_clean.** Review: `docs/reviews/day-swapper-sync-load-bpass.md`.
+  **Tuning 1 — a recovery path that must bypass a cache should bypass it for ONE KEY, never by
+  switching the cache off.** R1-F1: the scheduled_workouts FK self-heal re-ran the template sync,
+  which a new skip index then skipped (the index still said "confirmed"), so the self-heal was a
+  silent no-op and the row retried the dead end every pass. The obvious fix — pass
+  `disabled: true` — was wrong in a way only the cache's own code shows: a disabled index
+  DELETES itself at commit, so a persistent orphan would have re-pushed every template on every
+  pass. Add to lens 6: when a diff adds a cache/skip layer in front of a function, list every
+  caller that re-invokes that function to REPAIR something, and ask whether the cache now
+  answers "already done" to the repair.
+  **Tuning 2 — lens 10 gains diagnose-doc FRONTMATTER as an input set.** Four diagnose docs
+  carried `contract_test_path: "must add: <file>"` for plan-time filenames that were never
+  created; the contracts existed under other names. `validate_diagnose_doc.dart` checks the
+  field is present, not that its path resolves, and the reviewer sweeping "every cited path"
+  covered the ledger and the registry but not this field. One regex + `Test-Path` over every
+  `test/**_test.dart` string in the new docs found all of them. Run it on every batch that
+  adds diagnose docs.
+  **Tuning 3 — a correct finding with a wrong mechanism (third recorded instance, cf.
+  2026-09-10).** R2-F2 said the allowance counter loses an increment in a read-modify-write
+  race; Hive's in-memory put is synchronous and `recordSwap` has no await before it, so that
+  cannot happen. The defect was real anyway — check-then-act across awaits under a lock keyed
+  by the wrong thing (two dates, not the week) — and a deterministic test (a seam that holds
+  swap 1 between its check and its count) reproduced it. Verify the mechanism before writing
+  the fix: the reviewer's mechanism would have led to a lock around `recordSwap`, which fixes
+  nothing.
+  **Tuning 4 — a source-grep gate's "token anywhere in the block" check is the same bug class
+  as a missing guard.** R4-F2: G1 accepted `catch (e) { if (false) { rethrow; } }`. The fix
+  reads the LAST top-level statement; it still is a text scan, and says so. Paired with R4-F1
+  (`??=` slipping past `\?\?\s*`), both hard-fail gates of this batch were defeated by the
+  reviewer on the first realistic re-entry it tried — lens 6's standing "assume a grep is
+  defeatable" rule, confirmed twice more.
+  False-alarm rate 0/12 → no lens removed; lenses 6 and 10 extended per above.
+
+- **2026-09-28** — blast-radius **catastrophic** — branch `day-swapper-sync-load` (OI-237: day-swap
+  engine rebuild + 21-push-step sync write-amplification fix; subagent-driven, ~30 tasks across 3
+  waves). Three new red flags surfaced across the wave-1/wave-2 review rounds, none previously named
+  in this skill; recorded here per Task 31's self-evolution carry (bpass review itself is Task 33's,
+  `bpass_review: pending (Task 33)` in `docs/audit/day-swapper-sync-load.closure.yaml`).
+  - **Red flag: a swallow-and-report helper whose return value is a success COUNT.** A count cannot
+    distinguish "N failed" from "nothing to do" — the caller that only checks `count > 0` or ignores
+    the return entirely treats both as success. Instance: Task 20's `SyncSkipIndex.clearAll` stored
+    `sync_epoch_seen` even when the clear partially failed, permanently losing the repair lever's
+    retry (fixed same-day, `a53f3305`; diagnose `docs/diagnoses/2026-09-26-sync-write-amplification-a9d3f6.md`).
+    Same family as `feedback_bad_news_vs_no_news.md` #7 — prefer a typed result (e.g.
+    `ClearAllResult.allSucceeded`) over a bare int/bool whenever a caller's next action depends on
+    which failure mode occurred.
+  - **Red flag: a duplicate helper justified by "the other unit has not landed yet" expires at
+    integration — the integrator must delete it, not just note it.** Parallel subagent-driven work
+    legitimately duplicates a helper when the canonical one is still in flight on another branch; the
+    duplicate's justification is time-bound and silently stops being true the moment both land.
+    Instance: Task 21's `_mondayOfIsoWeek` duplicated `DaySwapRules.mondayOf` (which landed later in
+    the same batch); the review caught it as a Minor, and the integrator re-pointed the duplicate to
+    delegate to the canonical helper and deleted the now-unjustified file-wide gate allowlist entry it
+    required (`5c0c00ff`). **Check:** at integration, grep for any helper whose only doc-comment
+    justification is "X hasn't landed yet" and verify X has, in fact, now landed.
+  - **Red flag: a skip/cache keyed on ONE side's state must also check the OTHER side, or a deletion
+    on the unchecked side is invisible to the equality check.** A cloud-fingerprint-unchanged skip
+    (or any cache keyed on a single source's version/hash) implicitly assumes the OTHER side is
+    unchanged too; it is not, whenever something on that side was DELETED — deletion is exactly the
+    case an equality/presence check on the checked side cannot see. Instance: Task 22's L2 plan-bundle
+    merge skip (fingerprint match against the downloaded bundle) missed a LOCALLY deleted
+    `schedule_<date>` row, since the cloud side's fingerprint had not changed; `PlanIntegrityReconciler
+    .needsHeal`'s own `getWeek()`-style reader omits absent keys, so no self-heal could compensate
+    either. Fixed by requiring every bundled key present locally, not just a fingerprint match
+    (`18183762`; memory `feedback_mistake_guard_without_its_mirror.md` #37). **Check:** for any skip
+    keyed on a hash/fingerprint/version of side A, ask whether side B can independently regress
+    (deletion, corruption, manual edit) without side A's fingerprint changing — if so, the skip is
+    unsafe without an explicit side-B presence/consistency check.
+  Review: pending (Task 33).
+
+- **2026-09-28** — blast-radius **account** — branch `reps-secs-invalidation-fixes` (4 confirmed
+  fixes + 1 `feat` in the same batch: duration-controller-seeding leak e8f95e, aggregate
+  pre-normalization in the same fix, missing streakFreezeProvider invalidation 9c8958, missing
+  weeklyNutritionProvider invalidation bae4dd, foreground midnight-timer backstop). Staged-diff
+  review, `docs/reviews/b6f1837bf486-review.md`. **3 findings, 0 false alarms, all 3 addressed
+  (2 fixed, 1 no-change-needed).** F1 (P1, deferred_work_tracking) caught that the e8f95e
+  diagnose-doc claimed two residuals (a boot-time healer for pre-existing corrupted rows; the
+  `_resolveLoggingType` customBox-lookup gap) were "tracked via `sh scripts/mint_oi.sh`" when
+  neither had an actual OI entry anywhere — `check_no_deferral_euphemism.dart` passed cleanly
+  because the *phrasing* was sanctioned, which is exactly the gap an adversarial read exists to
+  catch (a script can verify wording, not whether a claimed action actually happened). Fixed by
+  minting OI-265/OI-266 for real and correcting both citations. F2 (P2, asserted_fixture_value)
+  caught that Test D's ground-truth computation hardcoded its clamp ceiling to `1` rather than
+  deriving it from `subscriptionInfoProvider.isPro` the way the real provider does — safe today
+  only because the test never grants PRO; fixed by deriving it the same way. F3 (P2) — two
+  non-blocking observations (dead code in a defensive while-loop; a pre-existing,
+  already-mitigated TOCTOU race the new Timer joins) — no code change, per the review's own
+  "non-blocking" framing. **Lesson:** a diagnose-doc's claim that something was "filed" or
+  "tracked" is itself a checkable fact, not just checkable phrasing — verify the board, not just
+  the words, exactly the same distinction `feedback_claimed_fixed_not_actually_landed.md` already
+  makes for "fixed" claims, now extended to "tracked" claims. A second, independent plan-review
+  round (context-blind, run in parallel with this B-pass) separately surfaced a real, confirmed
+  4th bug of the SAME class this batch was already fixing (`weeklyReportDataProvider` had NO
+  invalidation anywhere at all) while also raising and then ruling out a false-positive about
+  `UserStatsNotifier` — see `docs/diagnoses/2026-09-28-weekly-report-data-provider-invalidation-b1bfea.md`
+  for the full transitive-watch-chain verification that closed the false positive.
+
+- **2026-09-27** — blast-radius **platform** — branch `single-owner-a2` (a2a: daily-snapshot's
+  coaching-notes extraction gains a test seam, kill switch, and a private-mode-before-any-read
+  gate; diagnose `c3f8e6`). Staged-diff review, `docs/reviews/aa943309c727-review.md`.
+  **2 findings, 0 false alarms, both fixed/accepted in the same commit.** F1 (P2,
+  blast_radius_mismatch) caught that the already-converged plan's own dependent list
+  (`docs/plans/2026-09-26-single-owner-batch-a.md:262`) named 3 test-header repoints + a new SoT
+  concept + a guard note that the first diff had simply skipped — a real gap between what the
+  plan committed to and what shipped, not a plan error. F2 (P3, asserted_fixture_value /
+  guard_without_its_mirror) flagged that the 4 new source-grep tests never behaviorally invoke
+  the seam they pin — accepted as a disclosed, codebase-wide limitation (module-scope
+  `Deno.env.get(...)!` reads block dynamic import) rather than fixed, since the mutation-proof
+  table is this repo's documented substitute for exactly this case. **Lesson:** a plan's own
+  "dependents" list for a converged sub-piece is load-bearing scope, not decoration — a B-pass
+  against the diff alone, without re-reading the plan's dependents line, would have missed F1
+  entirely (it is invisible from the code; only visible by re-reading the plan).
+
+- **2026-09-26** — blast-radius **account** — branch `reuse-audit-fixes` (B1 saved-meal
+  times_used owner, C sign-up referral via auth metadata, D custom-exercise sheet through the
+  one create path). Staged-diff review, branch-named file. **3 findings: 1 false_alarm (33%),
+  2 fixed.** F1 (P1) claimed the onboarding referral redeem could hit an FK violation because
+  the users upsert might not have landed — reasoned from the client code alone; a live
+  `pg_trigger` query showed `on_auth_user_created` creates `public.users` at sign-up (0/36
+  missing). **Lesson for lens 6:** when a finding's mechanism is "row X may not exist yet",
+  check for a DB trigger that creates it before crediting the client-side ordering. F2 (P2) was
+  a real guard-without-its-mirror: a duplicate check read BEFORE an awaited write whose lock
+  keys on a different value than the check — mirror case "two concurrent callers". Fixed by
+  serializing the check-then-write; proven with a `Future.wait` test.
+  Review: `docs/reviews/reuse-audit-fixes-bpass.md`.
+
+- **2026-09-26** — blast-radius **platform** — branch `ops-alerting-b2a`
+  (OI-178: two new pg_cron alerts — migration 145 for a SQL job that ran and
+  failed, migration 146 for one that stopped being launched or was switched
+  off — plus their contract tests, a shared test-body-reading helper, yaml/
+  registry/doc updates, and two new OI board entries). Staged-diff review
+  (`docs/reviews/1c2e14c715da-review.md`), dispatched after 3 independent
+  plan-review rounds had already converged on the same diff (145 after 4
+  rounds, 146 after 3). **4 findings (1 P1, 2 P2, 1 P3); 0 false_alarm — all 4
+  fixed same batch.** The P1 is the interesting one: `guard_without_its_mirror`
+  caught a dedup `NOT EXISTS` whose two severity-branches were each pinned as
+  their OWN `contains()` substring, so an `OR`→`AND` mutation on the connective
+  BETWEEN them left both substrings intact and both target assertions green —
+  disabling dedup for both severities (a page-storm) with the mutation run
+  showing 7/7 pass. Three prior independent review rounds (context-blind, live
+  DB access, one of them explicitly mutation-testing 3 *other* survivors in
+  this same dedup block) all missed this exact one, because each one that
+  looked at the dedup mutated a BRANCH's content, never the token connecting
+  two already-individually-verified branches. The two P2s were a citation
+  drift (a diagnose doc's `line:` fields onto the migration's OWN header,
+  which had grown across those same 3 rounds — CLAUDE.md §4.9's own
+  documented recurring class) and a factual error in a migration's about-to-
+  be-immutable header comment ("14 jobs failed within 7 hours" — live query
+  independently re-run by both the reviewer and the coordinator: actual span
+  14h44m). **Tuning: widen `guard_without_its_mirror`'s method note.** The
+  existing method already says "mutate it and run it" and "follow the return
+  value to its call site" — add: *when a compound boolean condition has
+  multiple sub-clauses individually pinned by separate `contains()`
+  assertions, the CONNECTIVE ITSELF (the token joining two already-verified
+  operands) is a distinct mutation target that is invisible to per-clause
+  literal-substring assertions, because both operands survive verbatim in the
+  body regardless of what joins them.* The one-`contains()`-per-block pattern
+  reads as *more* thorough than a single sprawling assertion — it is not; a
+  single assertion spanning both blocks including their connective (145's own
+  sibling dedup does exactly this, and WAS caught) is strictly stronger here.
+- **2026-09-26** — blast-radius **catastrophic** — branch `single-owner-a` (single-owner
+  audit unit a1: ai-proxy `prediction` metered 3/day on the ledger with a server-owned
+  prompt, request-size limits in one validator, delete-account purging every user-owned
+  bucket through one list). Two context-blind reviewers: A read-only (lenses 1-5, 7, 9,
+  10 + rebase/decision/tool-side-effect), B mutation lenses 6 + 8 in an isolated
+  worktree with the staged patch applied, so no tree was ever mutated under A.
+  **7 findings (4 P1, 1 P2, 2 P3); 0 false_alarm — all fixed in-batch, each re-proven
+  by mutation.** Review: `docs/reviews/d65b986f910b-review.md` (dispatched at
+  c5d659f52986; renamed after the fixes moved the hash).
+  **Tuning 1 — lens 2 gains the SERVER-ADDS-A-STATUS question.** When a diff gives an
+  existing client caller a NEW status (here a 429 daily cap), follow it into the client:
+  `functions.invoke` THROWS on every non-2xx, so an `if (response.status != 200)` inside
+  the `try` is dead code and the status survives only if an `on FunctionException`
+  clause keeps `e.status`. Without one, the cap reached the user as "try again later".
+  The server half was correct and fully tested; the defect lived entirely in a file the
+  server change never needed to touch.
+  **Tuning 2 — lens 6: a test NAMED for an attack must ATTEMPT it.** "The system prompt
+  is the server's" called the handler with no `context` at all, so it proved only the
+  default path; the reviewer restored the exact pre-fix shape (fall back to
+  `context.system_prompt` when present) and 15 of 15 tests stayed green. The author's own
+  mutation had used a more detectable shape (`systemPrompt: String(message)`) and
+  reddened 1 — a mutation chosen for convenience certified a test against the one
+  regression it could not see. Mutate to the defect's real historical shape.
+  **Tuning 3 — lens 6 on discovery greps: resolve by VALUE and fail closed.** A contract
+  test finding client Storage buckets matched constants by NAME (`…Bucket =`); a const
+  named `_exportsLocation` was invisible, and the "every bucket is purged" check passed
+  vacuously. The fix resolves every bucket argument through same-file constants, treats
+  anything unreadable (a call, a qualified name, an aliased `.storage` handle) as a
+  failure, and keeps the one legitimate pass-through as an enumerated allowlist that must
+  stay in use — the OI-162 slice-2 precedent (resolve, then fail closed) applied to a new
+  surface.
+  **Process note:** `git apply --index` of the staged patch into the reviewer's isolated
+  worktree failed on one hunk of an auto-generated index that main had regenerated since
+  the base; `--exclude` on that file was the right call and the reviewer disclosed it.
+  Both reviewers were told "no writing statement, not even inside BEGIN…ROLLBACK"; both
+  used SELECT only.
+  False-alarm rate 0/7 → no lens removed; lenses 2 and 6 extended per above.
+
+- **2026-09-26 (b)** — blast-radius **catastrophic** — branch `single-owner-a`
+  (single-owner audit unit a1, ROUND 2: a fresh two-reviewer B-pass dispatched
+  against the delta on top of the round-1-reviewed state — the Hermes-pass
+  remediation itself, specifically the new `PredictionAttemptGate` and the
+  L37-F2 sanitized-length snapshot fix). **2 findings (1 P1, 1 P2); 0
+  false_alarm — both fixed in-batch, each re-proven by mutation.** Review:
+  `docs/reviews/a7fae1c65d95-review.md` (dispatched at the round-1-reviewed
+  hash; renamed twice after the fixes, then two purely mechanical
+  documentation trailers, each moved the hash — see the file's own header
+  for the full chain back to `d65b986f910b`).
+  **Tuning 4 — lens 6's mirror question extends to a whole SINGLETON
+  FAMILY, not just the one guard being added.** `PredictionService` was the
+  one of eight `SingletonLifecycleRegistry`-eligible services never
+  registered — the mirror of "does this NEW guard have a gap" is "does
+  every sibling of this class of state ALREADY have the guard this class
+  needs", and the registry's own SoT concept (`docs/sot_registry.yaml`)
+  made the omission a one-`grep` finding once asked. The fix registers it,
+  clears its in-flight gate on account switch, and separately guards the
+  write itself against the account changing while the network call was in
+  flight — two independent defects the same singleton-omission created.
+  **Tuning 5 — lens 8 (asserted_fixture_value) applies to a CLIENT/SERVER
+  measurement pair, not just one side's literal.** The client measured a
+  snapshot's plain `json.encode(...).length`; the server (this same batch's
+  own L37-F2 fix) measures it AFTER `sanitizeJsonForPrompt` re-escapes rare
+  separator characters. Neither side's number was wrong in isolation — the
+  finding is that the two measurements of the SAME bytes can disagree, and
+  the only way to see it is to compute both from a real fixture (a
+  throwaway probe script, not an estimate) and check they diverge across
+  the ceiling, which the fixture the fix landed with does.
+  False-alarm rate 0/2 → no lens removed; lenses 6 and 8 extended per above.
+
+- **2026-09-25** — blast-radius **platform** — branch `oi126-training-day-predicate`
+  (OI-126: unifies the training-day predicate so a `type: 'logged'` schedule row
+  agrees between the weekly streak and phase-completion/PRO-advance-gate/rest-day-banner
+  purposes — a new `PlanEngineFlags.isRestDayConsideringLogged` wrapper, wired onto 12
+  call sites, behind a kill-switch default OFF). Whole-branch review (nothing staged —
+  all 13 commits already landed), reviewed against `main...HEAD` per the merge-review
+  shape this file's history already uses for whole-branch/no-staged-diff cases (branch-
+  named review file, not staging-hash-named). **2 findings (0 P0/P1/P2, 2 P3); 0
+  false_alarm — 1 fixed same session (stale prose count), 1 verified_clean
+  (informational, accurately-disclosed scope boundary).** Review:
+  `docs/reviews/oi126-training-day-predicate-bpass.md`.
+  **No new lens — this entry is worth recording for what a CLEAN pass with real
+  verification work looks like, per this file's own "record the confirmation, not
+  just the catch" convention.** The reviewer independently re-derived, rather than
+  trusted, three separate claims the diagnose-doc made: (1) re-ran a from-scratch
+  `lib/`-wide grep for the predicate's two literal phrasings and confirmed no 13th
+  missed call site exists (the 9 other hits found are semantically distinct, narrower
+  checks) — this is the SAME class of check that found the branch's own 12th site
+  (missed by 7 task-scoped reviews) a few commits earlier, run again independently
+  rather than assumed satisfied because the addendum said so; (2) LIVE-mutated
+  `PlanEngineFlags.isRestDayConsideringLogged` to ignore the flag entirely and
+  re-ran the suite, reproducing the diagnose-doc's "exactly 3 tests redden" claim
+  exactly, then reverted and confirmed `git status` clean — not a re-read of the
+  mutation-proof prose; (3) hand-verified De Morgan equivalence between the pre-fix
+  inline ternary and the wrapper's negation at all 12 sites for the flag-OFF
+  byte-identity claim central to the platform-tier `requires: feature_flag`
+  obligation (lens 3), rather than accepting a doc-comment's assertion of it.
+  **The one real finding (P3) was a stale count surviving inside a diagnose-doc's
+  OWN structured frontmatter fields** (`forbidden_patterns_checked`,
+  `regression_test_planned` said "11"/"8 of 11" after a later commit in the SAME
+  branch wired a 12th site and correctly updated the doc's prose BODY and the SoT
+  registry to "12" — but not these two frontmatter blocks). Same class as this
+  file's own repeated "a citation copied/left behind when the file it's inside gets
+  edited elsewhere" lesson, here recurring inside a single doc's own internal
+  cross-references rather than across two files.
+  False-alarm rate 0/2 → no lens removed; no lens change needed.
+
+- **2026-09-24** — blast-radius **platform** — branch `main-sync-warning`
+  (a SessionStart hook warning for multi-machine `main`-vs-`origin/main`
+  drift, motivated by a VPS clone silently falling 300 commits behind with
+  no warning). Reviewed post-commit (`git diff HEAD~1 HEAD`, nothing staged
+  — same pattern as the 2026-09-23 `claude/oi-242-flaky-test-filing` entry
+  below). **5 findings (0 P0, 1 P1, 2 P2, 1 P3, 1 P4); 0 false_alarm — 2
+  fixed in-batch (mutation-proven), 1 resolved as a side effect of the
+  first fix, 2 accepted with no code change (recorded in the diagnose-doc's
+  `residual` field per §4.2).** Review: `docs/reviews/1db54e4f4634-review.md`.
+  **Tuning — lens 6 (`guard_without_its_mirror`)'s existing "mutate it and
+  run it" instruction found a defect WORSE than its own description
+  predicted, and the mutation's FAILURE SHAPE is what proved it.** The
+  finding was `Process.run(...).timeout(...)` not killing the underlying OS
+  process on timeout — read correctly by the reviewer as "an orphaned
+  process may linger". Reproducing it live (a fake `git` whose `fetch`
+  execs into a long sleep) showed the real defect was structural: the Dart
+  runtime keeps a process alive while a stream listener on an open child
+  pipe is pending, so the timeout's `TimeoutException` never actually
+  bounded anything — the WHOLE hook hung for the fake fetch's full
+  duration, not the advertised ~4s. The regression test built to catch this
+  asserts wall-clock time AND that the killed process's pid is confirmed
+  dead afterward; mutating back to the pre-fix pattern reddened it with
+  `Actual: 0:05:00` against an expected `<0:00:20`, not a quick assertion
+  failure — the mutation's OWN timing is additional evidence for the
+  severity, beyond the boolean pass/fail. **Add to lens 6's method: when a
+  `.timeout()` claim is under review, don't just ask "does the process get
+  killed" — ask "does the calling function's own Future actually settle
+  when it expects to", since dart:io keeps unread pipes alive across the
+  isolate's exit path in a way that can silently defeat a timeout's whole
+  purpose.**
+  **Second — a NEW general note, not a lens tuning: a platform-tier gate's
+  self-triggered B-pass (CLAUDE.md §4.3) found a real defect in code from
+  the SAME conversation/session that had already been unit-and-e2e tested
+  (11 tests, all green) before dispatch.** None of those tests could have
+  caught this class — they all assert BEHAVIOR under a working fetch or a
+  fast-failing one; nothing in the original suite simulated a HANG. Worth
+  recording because it's a clean instance of this skill's own stated
+  purpose: a context-blind reviewer asking "what's the mirror case" found
+  a gap a same-author test suite, however thorough on the paths it did
+  cover, structurally could not see.
+  False-alarm rate 0/5 → no lens removed; lens 6 extended per above.
+
+- **2026-09-23 (c)** — blast-radius **account** — branch `confirm-email-init-race`
+  (diagnose 42a98d: `AuthNotifier.confirmEmail` gains the `ensureSupabaseReady()`
+  guard its siblings `signInWithEmail`/`checkEmailRegistered` already had, closing
+  the second of OI-244's two identified web-path root causes — a cold `/confirm`
+  load bypasses `/splash`, the only place `Supabase.initialize()` runs, so the
+  auto-fired confirmation call raced an uninitialized `Supabase.instance` and
+  threw `LateInitializationError` before any network request was attempted).
+  **3 findings (1 P1, 1 P2, 1 P3); 0 false_alarm.** Review:
+  `docs/reviews/cac1e4ee9414-review.md`.
+  **Tuning 1 — a NEW sub-shape for lens 6 (`guard_without_its_mirror`): inserting
+  a readiness/initialization guard AFTER an existing state-dependent guard can
+  retroactively invalidate what the EARLIER guard already decided, because the
+  initialization guard's own side effects change the very state the earlier
+  guard read.** Finding 1 (P1): the pre-existing OI-205 "already authenticated"
+  guard (`confirmEmailAuthGuardState`, `auth_provider.dart:721-728`) reads
+  `_supabase.isAuthenticated`, which unconditionally returns `false` while
+  Supabase is uninitialized (`supabase_service.dart:97-100`) — true regardless
+  of whether a real, persisted session exists in local storage. The new
+  `ensureSupabaseReady()` guard, placed AFTER that read (`:743`), then
+  synchronously RESTORES any persisted session as part of its own awaited
+  `Supabase.initialize()` chain (confirmed directly in the pub-cache source,
+  `supabase_flutter-2.17.1/lib/src/supabase_auth.dart:107-125`,
+  `setInitialSession`) — but `confirmEmailAuthGuardState` is never re-checked
+  afterward. Net effect: a device with an existing signed-in session, cold-
+  loading `/confirm` (the now-documented NORMAL case, not an edge case),
+  silently gets switched to whatever account the confirmation link belongs to,
+  with none of OI-205's intended refusal message ever shown — reopening,
+  specifically for the cold-load path this diff newly makes reachable, exactly
+  the class of bug OI-205 was shipped one week earlier to close. Neither the
+  OI-205 guard's own pure-function test (hand-supplied bool, no real Supabase
+  timing) nor the new diff's own regression test (its "real `ensureSupabaseReady`"
+  case hits the empty-`.env` `StateError` branch before `Supabase.initialize()`
+  is ever called, so it structurally cannot reach the session-restoration
+  branch either) can see this. **General method addition: when a diff adds a
+  readiness/init guard anywhere AFTER an existing guard that reads live
+  singleton state, ask whether the readiness guard's own initialization can
+  change the answer the earlier guard already used — not just whether the two
+  guards' conditions individually make sense.** This is a distinct question
+  from the lens's existing "does the new guard change behaviour for the mirror
+  case" framing — here both guards are individually correct in isolation, and
+  the bug is purely in their ORDER relative to a side effect neither guard's
+  own code shows.
+  **Tuning 2 — the task brief's own item 1 named this exact interaction
+  ("does it interact badly with the OI-205 guard's own ordering assumptions")
+  before dispatch, and it still took reading the actual `supabase_flutter`
+  pub-cache source (not just this repo's code) to confirm it was real** — the
+  OI-205 guard's own doc comment already flagged its `isAuthenticated` read as
+  untestable ("requires `SupabaseService.instance.initialize()` to have run")
+  without drawing the further conclusion that a LATER-added initialize() call
+  in the same function could make that pre-condition fire mid-method. Worth
+  recording because the brief essentially pre-identified the right question
+  and independent verification was still required to turn it into a confirmed
+  finding rather than a plausible-sounding hunch — reinforces this skill's own
+  standing instruction (§3.0/§6) to verify every claim against code and live
+  state rather than accept a plausible story, including one the reviewer's own
+  dispatch brief half-suggests.
+  **Tuning 3 — re-confirms the `blast_radius_from_diff.dart` bare-`-`-stdin
+  trap this file's own memory already tracks (`feedback_mistake_blast_radius_positional_mode.md`,
+  5 prior instances): piping full diff CONTENT instead of a name-only path
+  list into `-` silently returns a plausible-looking but wrong tier
+  (`feature` instead of the correct `account`) rather than erroring — caught
+  by re-reading the script's own usage comment before trusting the first
+  result, not by the tool complaining.** 6th instance of this exact trap,
+  self-caught before it reached the report.
+  False-alarm rate 0/3 → no lens removed; lens 6 gains the initialization-
+  guard-invalidates-earlier-guard method note above.
+
+- **2026-09-23** — blast-radius **account** — branch `claude/oi-242-flaky-test-filing`
+  (commit f0580c14: `ConfirmLinkDetector` fixes a live production bug where Vercel's
+  `/confirm` redirect puts the forwarded `token_hash` before the `#` instead of
+  inside it, invisible to this app's HashUrlStrategy-only GoRouter; plus a
+  self-service "resend confirmation email" affordance on the sign-in screen).
+  Reviewed post-commit (the diff was already committed; the review targeted
+  `git diff HEAD~1 HEAD` rather than the staged index, since nothing remained
+  staged). **3 findings (0 P0/P1, 3 P2); 0 false_alarm — all 3 fixed in-batch.**
+  Review: `docs/reviews/3aa28693fb6f-review.md`.
+  **Tuning 1 — lens 6 (`guard_without_its_mirror`) found a doc comment's own
+  stated invariant contradicted by the code one screen below it, and the
+  contradiction was invisible to every existing test because both existing
+  tests only ever drove the SUCCESS resend path.** The affordance's doc
+  comment said it stays visible "so the user can resend again if the fresh
+  email also goes astray" — true only for `AuthStatus.info` (the success
+  case). `resendConfirmationEmail`'s own FAILURE paths (rate-limited
+  `AuthException`, generic catch) set a new `errorMessage` that doesn't match
+  `isEmailNotConfirmedMessage`, so the listener's per-error recompute hid the
+  link at exactly the moment — a failed resend — the user most needs to
+  retry. Reproduced live with a throwaway widget test simulating the real
+  `AuthException` arm before reporting it. Fixed by making the flag
+  sticky-once-shown (an `error` outcome only ever turns it ON; only the
+  explicit "change email" path turns it off) rather than recomputed from
+  every error message — the general shape: **a flag recomputed from "does
+  THIS error match" is wrong the moment more than one code path can produce
+  an error while the flag should stay true; sticky-until-explicitly-cleared
+  is the safer default for a recovery affordance.**
+  **Tuning 2 — asserted_fixture_value (lens 8) caught a wrong mutation COUNT
+  in a diagnose-doc that the AUTHOR had actually run, not fabricated — worth
+  recording because it shows the lens catching an off-by-one in real
+  evidence, not just an invented claim.** The doc's `mutation_proven` block
+  claimed "2 of 6 tests reddened" after neutering `ConfirmLinkDetector`'s
+  `fromQuery` fallback; reproducing the exact same mutation gave 1 of 6 — the
+  "prefers fragment when both present" test's URL resolves entirely via the
+  FIRST branch (the fragment segment has its own `?`, so the fragment
+  extraction short-circuits before ever reaching `uri.queryParameters`),
+  so removing the `fromQuery` branch cannot touch it. The underlying fix
+  was still correctly covered by the one test that DOES exercise the
+  removed branch — this was a documentation-accuracy slip, not a coverage
+  gap. **Re-running a mutation-proof claim costs one command and catches
+  exactly this — an author re-deriving "N of M reddened" by eye after
+  watching a scrollback of test output is exactly the kind of arithmetic
+  this repo's own §0 and CLAUDE.md history repeatedly show slipping.**
+  **Tuning 3 — writer_reader_drift extended to catch a missing SoT
+  registration, not just a field-name drift.** The commit's own message and
+  code comments explicitly say the new mechanism "mirrors an existing,
+  already-shipped pattern" (`PasswordRecoveryDetector` / `password_recovery_session`,
+  a REGISTERED SoT concept) — but the new `ConfirmLinkDetector`/
+  `pendingConfirmTokenHash` pair got no equivalent registry entry, and
+  nothing mechanically enforces this (`lib/CLAUDE.md`'s own corrected note:
+  the registration rule is enforced by review, not a gate). **When a diff's
+  own prose claims "this mirrors concept X" and X is a registered SoT
+  concept, check whether the new code got its OWN entry — a self-declared
+  mirror is a self-declared registration obligation that nothing catches if
+  skipped.**
+  False-alarm rate 0/3 → no lens removed; lenses 6, 8 extended per above,
+  and lens 1 (writer_reader_drift) gains the SoT-registration-parity check.
+
+- **2026-09-23 (merge-integration)** — blast-radius **platform** (self-corrected — see below) —
+  branch `claude/next-aab-decision-d1227b`, a SECOND merge-integration review on the same branch:
+  merge commit `15d43fd9`, bringing 25 further `origin/main` commits (OI-batching A/B/C,
+  Discipline v3, AAB +46) into a branch that had already absorbed an EARLIER `origin/main`
+  snapshot one merge prior (`ad3fed06`, reviewed the same day, entry below). **1 finding (P3,
+  informational, explicitly NOT caused by this merge); 0 false_alarm.** Review:
+  `docs/reviews/15d43fd9-merge-review.md`.
+  **Tuning 1 — a negative result is not "nothing to check": the reviewer's first job on a SECOND
+  merge-integration review of the same branch is confirming the FIRST one's fix actually
+  survived the newer commits, not re-discovering it.** The brief primed the reviewer to hunt for
+  the exact two regressions the earlier same-day merge review had already found and fixed
+  (migration 141 reverting 140's alert_cron_failures bound; BOM/mojibake in the version files).
+  The reviewer correctly identified that `ad3fed06` was itself a nested merge commit predating
+  `15d43fd9`, isolated the actually-new diff range (`e7733cb8..1c791f72`, the 25 commits added
+  AFTER that nested merge), and confirmed neither regression reopened — rather than re-running
+  the same checks against the whole combined history and reporting them clean by coincidence.
+  **Tuning 2 — the review's OWN self-declared `blast_radius: catastrophic` was wrong, caught only
+  by re-running the classifier rather than trusting the frontmatter.** Corrected to `platform`
+  post-dispatch: two independent re-derivations (`git diff <old-HEAD> <merge>` and
+  `git diff <merge>^1 <merge>^2`, both piped through `blast_radius_from_diff.dart -`) returned
+  `account`; a full-repo grep for `SECURITY DEFINER` across every migration in the merge's diff
+  returned zero hits (the one content-rule that forces `catastrophic`); and the value that
+  actually gated the real commit was `platform`, per `pre-commit.sh`'s own live NOTE at commit
+  time. The reviewer likely inherited "catastrophic" from the PRIOR same-day merge-integration
+  entry's tier (which WAS catastrophic, for a genuinely different reason — SECURITY DEFINER
+  migrations that entry's own diff did carry) without recomputing it fresh for this second,
+  narrower diff. **Sibling of this file's own repeated "a review's self-declared tier is a
+  checkable claim, not scene-setting" lesson (lens 3) — here the claim being carried forward
+  was the REVIEWER's own, not the diff's.**
+  **A negative result worth keeping, per this file's own convention:** every one of the 6
+  requested check areas (migration/schema overlap, Edge Function interaction, OI board
+  consistency, SKILL.md citation consistency, version-file corruption, generated-index
+  freshness) was independently verified with a stated command, not accepted from the diff's
+  shape alone — including re-running both index generators against the live merged tree and
+  confirming zero diff, and tracing the one flagged stale citation (a DIFFERENT, unrelated
+  dead reference at line 2532, predating this branch's fork by a month) all the way to
+  confirming its absence at the merge-base itself before ruling it out-of-scope rather than
+  either fixing it inline (scope creep) or silently dropping it (per the brief's explicit ask).
+  Spun off as `task_f7062a7e` rather than either extreme.
+  False-alarm rate 0/1 → no lens removed; no new lens needed, existing set covered it.
+
+- **2026-09-22 (merge-integration)** — blast-radius **catastrophic** (inherited — merging
+  `origin/main`'s SECURITY DEFINER migrations into `claude/next-aab-decision-d1227b`) — a
+  merge-integration review scoped per this file's own 2026-09-22 precedent (line ~295 below) to
+  "did combining these two changesets break something neither branch's own review could see."
+  **3 findings (2 P1, 1 P3); 0 false_alarm.** Finding 1 (P1, `writer_reader_drift` +
+  `asserted_fixture_value`): migration 141 (this branch, disk-IO cleanup) consolidated
+  `alert_cron_failures` into a new `ops_alerts_30min` job using migration 139's ORIGINAL,
+  pre-140-fix logic — silently reverting migration 140's (from `origin/main`) live `[1h, 6h)`
+  stuck-job bound, because 141 was authored from a branch snapshot predating 140's existence.
+  Confirmed live via `execute_sql` against `cron.job` (jobid 42 running the unbounded form
+  byte-for-byte). Neither branch's own prior review could see this: 140's review only ever
+  read 140; 141's own review only ever read 141. Fixed same-day with migration
+  `143_restore_alert_cron_failures_stuck_job_bound.sql` — restores the bound to
+  `ops_alerts_30min`'s `alert_cron_failures` sub-block only, live-apply pending separate
+  founder authorization per §4.3. The existing regression test
+  (`alert_cron_failures_sync_test.dart`) was ALSO widened: it previously read only the ONE
+  migration file named by `alerts/_thresholds.yaml`, which stayed green forever because that
+  file never changed even as the live job diverged from it — a new test now scans every
+  migration for the alert-emitting literal and requires the YAML to name the numerically LAST
+  one, mutation-proven. Finding 2 (P1, `missing_input`): `lib/core/constants/app_constants.dart`
+  and `pubspec.yaml`, both inherited from `origin/main`, carried a UTF-8 BOM plus mojibake
+  corruption (em-dashes/arrows double-encoded) — silently merged through because both branches
+  bumped the version to the identical value, producing zero line-level conflict for git to flag.
+  Fixed by restoring both files from last-known-clean content with the version bump re-applied
+  as the only intended diff. Finding 3 (P3, `blast_radius_mismatch`, informational): both
+  branches independently bumped the same version number for unrelated reasons — no action
+  needed now, flagged for the next `/build-apk`.
+  **Tuning — a merge-integration review's highest-value findings are exactly the ones keyed on
+  TWO files each independently correct in isolation.** Both P1s here span a file this branch
+  touched and a file `origin/main` touched, verified by a query or diff neither single-branch
+  review would have run. No lens changes; the existing `writer_reader_drift`/`asserted_fixture_value`/
+  `missing_input` lenses already covered both once pointed at the overlap set — reinforces
+  keeping the "9-file intersection" scoping note (this file's dispatch protocol) rather than
+  re-auditing all ~115 files either branch touched. Review: `docs/reviews/ecd90fce917e-review.md`.
+
+- **2026-09-22** — blast-radius **platform** — branch `claude/next-aab-decision-d1227b`
+  (disk-io-audit-cleanup: pg_cron bookkeeping WAL diagnosis, ivfflat retune, RLS
+  auth-initplan fix, dead-index cleanup, 9→3 cron consolidation). **8 findings
+  (1 P1, 2 P2, 3 P3, 2 P4); 0 false_alarm — 6 fixed in-batch, 1 mitigated where the
+  migration-immutability rule allows (documented as a lesson, not fixable in place),
+  1 a documented judgment call.** Review: `docs/reviews/571c997e56b5-review.md`
+  (renamed from its original hash `e100478657c7` after the fix round moved the
+  staging hash — see the file's own header for the record→fix→rename-to-final-hash
+  flow this entry confirms working end-to-end).
+  **Tuning 1 — `idx_scan=0` is a query-access signal only; it says nothing about
+  FK-constraint-check coverage, which Postgres uses on the REFERENCED table's side
+  regardless of whether any SELECT ever touched the index.** Finding 1 (P1): the
+  diagnose-doc dropped `idx_nutrition_log_items_food_id` as "verified-dead" on
+  `idx_scan=0` alone; it was the sole index backing `nutrition_log_items_food_id_fkey`.
+  Live `get_advisors` confirmed a new `unindexed_foreign_keys` finding that did not
+  exist before the drop — a regression on the exact axis (DB resource pressure) the
+  batch existed to fix, self-introduced. Added to lens 7 (`missing_input`)'s method:
+  before accepting an `idx_scan=0` drop, check `pg_constraint` for a foreign key on
+  the same column(s) — a plain "this index has never been scanned" claim is checking
+  only one of the two things an index does.
+  **Tuning 2 — a review's own numeric claim can be WRONG in the same way it accuses
+  the diff of being wrong, and only a SECOND independent re-derivation (not
+  re-reading the first) settles which one is right.** Finding 8 flagged OI-235's
+  "~93s/~116s avg" figures as "unverifiable" based on a `cron.job_run_details` query
+  that returned a bimodal ~0.1s/~25-30min pattern instead. A fix-round requery with
+  corrected join/filter conditions reproduced the original figures EXACTLY, and a
+  THIRD, fully independent round-2 requery (different agent, own query text)
+  reproduced them a third time — settling that the reviewer's own query, not the
+  original OI, was the one with the defect. Both the bimodal detail AND the average
+  are real and non-contradictory (15 fast runs + 1 slow outlier averages to ~100s).
+  **A finding that says a number is wrong is itself a claim, not a verdict — it gets
+  re-verified with the same rigor as the thing it's correcting, not accepted because
+  it arrived wearing the reviewer's authority.**
+  **Tuning 3 — round 2 (the post-fix scoped re-review this repo's §4.12.1 requires)
+  earns its cost even when round 1's substance was entirely correct**, by catching
+  staleness the FIX round itself created: a dead cross-reference (the diagnose-doc
+  cited the review file by its pre-rename name after the rename), and a ledger note
+  that still said "9/9 passing" for a migration whose own true apply-time count was
+  8/8 (the 9th test, added during the fix round, covers a DIFFERENT, later,
+  not-yet-applied migration). Neither existed when round 1 ran; both are exactly the
+  class of thing a fresh, context-blind re-reader catches and the fix's own author
+  cannot, because the author is reading their own edit as intentional.
+  False-alarm rate 0/8 → no lens removed; lens 7 extended per Tuning 1 above.
+
+- **2026-09-22 (Batch C)** — blast-radius **platform** — branch
+  `oi-batching-strategy-e5e359`, Batch C (OI-238: wiring `reportGeminiExhaustion`
+  into 5 Gemini-calling Edge Functions — `weekly-report`, `ai-media-proxy`,
+  `assess-body-composition`, `daily-snapshot`, `rolling-context` — that had none;
+  a direct sibling of OI-226's earlier ai-proxy-only fix). **0 findings; 0
+  false_alarm.** Review: `docs/reviews/50ef49a5910c-review.md`. **No new lens —
+  the reviewer verified rather than trusted throughout**: independently ran
+  `deno check` + `deno test` (44/44, matching the diagnose-doc's own claimed
+  counts) rather than accepting them from prose, hand-traced every
+  `geminiChat()` return path in `gemini.ts` to prove `lastError` is always
+  populated whenever content is null (closing the obvious guard_without_its_mirror
+  question for this shape of fix before it could be a finding), grepped the
+  WHOLE repo (not just the touched file) for other callers of
+  `rolling-context`'s newly-2-arg `summarizeMessages`, and hand-walked each of
+  the 5 new source-grep tests' brace-boundary computations against the live
+  file text to rule out an early-nested-`}` false match — the exact fragile-match
+  failure mode this skill's lens 8 warns about. Attempted a live mutation
+  spot-check of the diagnose-doc's own mutation-proof claim but the harness's
+  auto-mode classifier blocked re-running `deno test` on a mutated tree
+  ("Irreversible Local Destruction"); reverted immediately via `git checkout --`
+  and substituted a hand-trace of the affected test's boundary logic instead.
+  Worth recording precisely because it is a clean run with real verification
+  work behind it, not a rubber stamp — the alternative (a reviewer that reads
+  the diff, finds it plausible, and reports 0 findings without running
+  anything) would be indistinguishable in the output file alone.
+
+- **2026-09-22** — blast-radius **catastrophic** (inherited — migration 138's
+  `SECURITY DEFINER` trigger, arriving via `main`) — a MERGE-INTEGRATION review,
+  not a normal feature-commit review: `claude/food-logging-observations-126ab3`
+  (own review `b87e8a1f3f2a`, accepted) merging `origin/main`, which by then
+  already contained `claude/strange-merkle-c2d0b9` / PR #32 (own review
+  `f81f7ae899e1`, accepted). **1 finding (P2, writer_reader_drift); 0
+  false_alarm — fixed in-batch.** Review: `docs/reviews/be0c54291fcc-review.md`
+  (renamed once from `ee6c346ffd80` — see Tuning 2 below).
+  **Tuning 1 — a merge of two independently-reviewed branches needs its OWN
+  review, scoped to the interaction surface, not a re-review of either half.**
+  `check_code_review_pass_exists.dart` correctly computed the merge's own
+  staging hash as catastrophic (migration 138 forces the tier regardless of
+  which branch introduced it) and found no matching review — neither branch's
+  own accepted review satisfies a gate keyed to a DIFFERENT diff (the combined
+  one). The dispatch brief for this pass explicitly scoped the reviewer to
+  "did combining these two changesets break something neither branch's own
+  review could see" rather than re-auditing internal correctness already
+  covered — the one real finding (citation drift: a 1-line insertion from
+  Branch B shifted 4 line-number citations Branch A had authored, in
+  `docs/sot_registry.yaml` and a diagnose-doc, both pointing into
+  `supabase/functions/daily-snapshot/index.ts`) is exactly the class this
+  narrower scope is *for*: invisible to either individual review because
+  the citations were verified correct in each branch's own isolated HEAD,
+  and only became wrong once combined.
+  **Tuning 2 — fixing a merge-review's own finding can move the SAME merge's
+  staging hash, a second time, in the SAME commit.** Fixing Finding 1 required
+  editing `docs/sot_registry.yaml` and the diagnose-doc — neither excluded
+  from the hash (only `docs/reviews/` and this file are) — so the fix moved
+  `ee6c346ffd80` → `be0c54291fcc` and the review had to be renamed again before
+  the gate would accept it. This is the same hash-fixed-point class documented
+  repeatedly below (2026-09-21, 2026-09-14, 2026-09-11 entries) — worth a
+  second entry here specifically because a MERGE commit makes it more likely,
+  not less: any citation fix inside a merge review necessarily touches files
+  from one of the two merged branches, which are almost never review-excluded.
+  Checked whether a gate could catch the citation drift itself going forward:
+  `check_sot_registry_parity.dart` validates the structured `line_range:`
+  field is in-bounds and that a named symbol exists somewhere in the file —
+  it does not parse free-text `:NNN` sub-references inside prose `notes:`/
+  `method:` strings, so this class lands silently unless a review (or the
+  author) catches it by hand. Not proposed as a new gate here — scope
+  decision, not an oversight; filed as awareness for whoever next touches
+  that validator.
+
+- **2026-09-22** — blast-radius **account** — branch `oi-batching-strategy-e5e359`,
+  Batch A (3 independent AI-coach bug fixes: OI-230 rank/ETA binding-constraint
+  fix, OI-232 channel-switch scroll fix, OI-228 Bug A log-workout-sheet
+  completed-day copy fix — plus a Gate 19 false-positive suppression fix and
+  supporting OI-board/SoT-registry updates). **3 findings (0 P0, 1 P1, 1 P2,
+  1 P3); 0 false_alarm — all 3 fixed in-batch.** Review:
+  `docs/reviews/d2ce94ab0a72-review.md` (renamed twice: first from
+  `a4bcd634b7a7-review.md` to `5ebf78e29706-review.md` after the fixes below
+  were staged — the standard hash-fixed-point rename, `docs/reviews/` being
+  hash-excluded made the rename itself free — then again to this filename
+  after a mid-batch rebase onto a moved `origin/main`. This entry originally
+  cited the intermediate `5ebf78e29706` name and went stale the moment the
+  second rename landed without a matching update here — caught independently
+  by `check_skill_tuning_history.dart` failing on two separate merges that
+  brought this branch together with other work, since that gate requires the
+  review's CURRENT on-disk filename to appear in its own dated block.
+  Corrected as part of those merges, 2026-09-23.). Run as one agent
+  (16 files, but the real code diff is 6 files — the rest is diagnose-doc/
+  OI-board prose).
+  **No new lens — all 3 findings are confirmed recurrences of already-documented
+  patterns, worth recording as data points rather than tuning.** Finding 1
+  (P1, guard_without_its_mirror) reproduced the lens's own standing
+  "if the guard is a SOURCE GREP, assume it is defeatable" method exactly:
+  the reviewer mutated the OI-232 fix by commenting it out (not deleting it —
+  the realistic re-entry the method note calls for) and the sole regression
+  test, a raw source-presence check with no comment-stripping, stayed green.
+  Fixed by adding a `readScreenSourceStripped()` helper (wrapping the
+  existing private `_stripComments`, previously only used by
+  `readLibrarySource`) and switching the file's shared `setUpAll` to it —
+  re-mutated post-fix, now reddens exactly the intended test. Finding 2 (P2)
+  is another `self_attesting_artifact` instance (lens minted 2026-08-25):
+  two closure-board entries cited `docs/diagnoses/<pending>.md` for
+  diagnose-docs this SAME diff already created with fully-known names —
+  unlike the repo's legitimate `commit <pending>` convention (genuinely
+  unknowable pre-commit), a diagnose-doc's identity was already fixed on
+  disk. Finding 3 (P3) is another "a citation lives in a field a gate reads,
+  but the gate's parser cannot actually read this value" instance
+  (2026-09-03 entry's class): a two-method `method: A / B` field failed the
+  registry-parity gate's bare-identifier regex, so a stale `line_range` (off
+  by 6 lines — missing exactly the `remaining`/`binding_constraint` fields
+  this batch is about) passed silently. All three were independently
+  re-verified by the implementing session before being trusted (the mutation
+  re-run live, the diagnose-doc filenames confirmed via `ls`, the real method
+  span re-read directly) rather than accepted from the review's prose alone.
+  False-alarm rate 0/3 → no lens removed; recorded as a third data point for
+  lens 6's comment-defeat sub-shape and a further recurrence for the
+  self-attesting-artifact and gate-blind-citation classes, neither of which
+  needs a new lens to keep finding real instances.
+
+- **2026-09-21** — blast-radius **catastrophic** (migration 138's
+  `SECURITY DEFINER` trigger forced the tier up from a path-glob-computed
+  `platform`) — branch `observation-batch-and-digest-redesign` (Part A: 8
+  independent bug fixes; Part B: founder-digest redesign — 3 new metrics
+  RPCs, a privacy-respecting name lookup, MRR/cancelled/lapsed computation;
+  2 new migrations). **3 findings (1 P0, 2 P1); 0 false_alarm — all 3 fixed
+  in-batch, each with its own mutation-proof confirming the NEW regression
+  test(s) specifically catch the defect found.** Review:
+  `docs/reviews/f81f7ae899e1-review.md` (renamed FIVE times — first from
+  `6f688776ce48` to `7aff4322b5ac` after the 3 findings were fixed in place,
+  then to `f52dbb8ddc2b` after staging the migration-apply ledger updates
+  changed the staged diff's hash again post-acceptance (no reviewed code
+  changed between the second rename and the first), then to `d37b5f18b623`
+  after a Round 2 B-pass (below) fixed 6 more findings, then twice more
+  same-day to `86195c3cc274` then `f81f7ae899e1` — both the hash-fixed-point
+  trap this file's own 2026-09-11 entries document, here from TWO sources
+  at once: `pre-commit.sh` regenerating `INDEX.md`/`OPEN_INDEX.md`/
+  `GATE_INDEX.md`, and `docs/plan-reviews/` (unlike `docs/reviews/` and this
+  skill's own `SKILL.md`) NOT being excluded from the hash, so citing this
+  file's name from the plan-review record moved the hash every time the
+  citation was corrected. Resolved by moving the plan-review record to its
+  own separate, later commit rather than staging it alongside this diff —
+  see the review file's own header note and "Founder triage notes"/
+  "Round 2" sections for the full trail).
+  **Tuning 1 — lens 6 (guard_without_its_mirror) found the SAME shape twice
+  in one pass, at two very different scales, and the smaller one is the more
+  instructive.** Finding 1 (P0): a render-path filter reused a sibling
+  reader's allowlist verbatim and silently dropped 3 real, live proactive
+  channels — the fix-round's own verification grep then found an 8TH
+  affected channel (`image_paywall`/`video_paywall`) the review itself had
+  missed, confirming the review's own suggested-fix option (b) — "widen the
+  allowlist" — would likely have missed a channel too; a denylist of the
+  small, closed, actually-bad set was chosen instead. Finding 2 (P1): the
+  MECHANICAL GATE this same batch shipped to prevent regressions had the
+  exact defeatable-by-comment shape lens 6 already knows to distrust in
+  hand-written guards — a `.contains()` check run against raw,
+  comment-inclusive extracted text. **The lesson: a gate is a guard like any
+  other and needs the same "assume it is defeatable" scrutiny lens 6 already
+  applies to application code** — this batch's OWN diagnose-doc had already
+  named the identical class (a comment satisfying a presence/absence check)
+  in a TEST's mutation methodology hours earlier and had not yet generalized
+  that lesson to the gate the same commit was shipping.
+  **Tuning 2 — a "pick better numbers" suggested-fix can be a trap; hand-trace
+  the timing before accepting it.** Finding 3 (P1, blast_radius_mismatch)
+  correctly identified a 24h-lookback vs 1h-dedup ratio as an alert-storm
+  risk and suggested shrinking the lookback OR widening the dedup — both
+  framed as picking different numbers for the SAME shared-bound query shape.
+  Hand-tracing the fix before applying it found that shrinking the shared
+  bound to anything ≥ the stuck-job threshold makes an actually-still-stuck
+  job permanently invisible once its age exceeds that bound — trading the
+  reported bug for a worse, silent one. The real fix was structural (split
+  one shared time bound into two independently-bounded branches matching
+  each status's own semantics — a discrete past event vs. an ongoing
+  condition), not a number change. When a suggested-fix is framed as
+  "adjust the constant," check whether the two things being balanced
+  actually have the same shape before trusting that framing.
+  **Round 2 (same branch, dispatched after a self-triggered Hermes pass
+  landed 11 more fixes on the SAME batch that Round 1 never saw): 6
+  findings (1 P1, 2 P2, 3 P3); 0 false_alarm — 5 fixed in-batch, 1 (an
+  applied-migrations.json citation to a since-renamed review file)
+  correctly accepted with no code fix.**
+  **Tuning 3 — the headline finding of Round 2, and it is exactly the
+  scenario this skill's own dispatch brief warned about: code the AUTHOR
+  had already mutation-tested is not the same as code an INDEPENDENT
+  reviewer has tested.** Every one of the 5 fixed findings sat in code from
+  the Hermes-pass remediation round — `redactSecrets`'s own completeness,
+  `gemini.ts`'s response-body redaction ordering, a migration's own
+  live-verify coverage — all of which the author had personally
+  mutation-proven before this B-pass ran. Two were real gaps a
+  self-authored test structurally could not see: (a) a redact-BEFORE-slice
+  vs slice-BEFORE-redact ordering bug, invisible to a test asserting only
+  "the full key literal is absent" (a truncated fragment isn't the full
+  literal); (b) a per-attempt log line one call deep from the message
+  actually asserted on, protected only by an inner call the author had
+  proven correct in isolation but never traced forward to every consumer —
+  reverting that inner call left the log line leaking while **all 22
+  pre-existing tests, including two the author had written specifically to
+  prove no leak, stayed green.** Both gaps were about COMPLETENESS
+  (does the fix reach every site) not correctness (is the fix's own logic
+  right), and completeness gaps are exactly what a fresh reader checking
+  "does this cover every point" finds and a mutation-proof scoped to the
+  ONE site the author was thinking about does not.
+  **Tuning 4 — lens 6's "follow the return value to its call site" method
+  note (2026-08-17) has a log-line-shaped instance, not just a
+  caller-collapses-a-bool shape.** Finding 5's defect was structurally the
+  SAME lesson as the 2026-08-17 entry below — a value redacted at its
+  SOURCE was trusted by a CONSUMER one hop away without re-verifying the
+  trust still holds if the source's own protection is ever touched. The
+  fix (redact again, defense-in-depth, at the consumer) is the same answer
+  this repo already reaches for elsewhere (`redactSecrets` itself is named
+  and commented as applying "at every point," which is precisely the
+  standard this log line failed to meet). Add to lens 6's checklist: when a
+  value is redacted/sanitized ONCE at its source and consumed at multiple
+  sinks, check whether EACH sink is independently safe if the source's
+  protection were ever reverted — a shared upstream fix is not the same
+  guarantee as N independent ones.
+
+- **2026-09-21 (b)** — blast-radius **platform** — branch
+  `claude/food-logging-observations-126ab3` (diagnose d8a2f6: daily-snapshot's
+  merge-safe upsert fix + the Telegram-connect UI removal, OI-227). **6
+  findings (0 P0, 2 P1, 3 P2, 1 P4); 0 false_alarm — all 6 fixed in-batch,**
+  the two mutation-sensitive fixes independently reproduced red-then-green.
+  Review: `docs/reviews/b87e8a1f3f2a-review.md`.
+  **Tuning 1 — lens 1 (`writer_reader_drift`) needs a specific sub-question for
+  ANY fix that closes a server-side clobber: does the CLIENT also round-trip a
+  copy of the same field back up, through a DIFFERENT code path than the one
+  just fixed?** Finding 1 was the headline: the diagnose-doc's own fix made
+  `daily-snapshot`'s merge safe against everything the client's payload does
+  NOT mention — and `fitness_summary` was cron-owned exactly like the
+  originally-reported `morning_alert`, but the client DOES carry a stale local
+  mirror of it (for an unrelated, legitimate reason — the same builder feeds
+  the live chat request body too), so the merge-safety fix could not protect
+  it: `incoming` always wins on a key it carries, merge-safe or not. **The
+  general shape: a server-side merge/idempotency fix is not sufficient by
+  itself when the SAME data flows back through the client under a shared
+  builder function serving two different consumers with different
+  correctness requirements** — one consumer (live chat) legitimately wants
+  the client's current view; the other (a durable server row multiple crons
+  own pieces of) must never receive it. Ask, for every field the fix's own
+  mechanism does NOT touch: does anything else make that field reach the
+  write path anyway?
+  **Tuning 2 — fixing a code-review finding can re-break the SAME registry
+  citation the review didn't even look at, and the gate is what has to catch
+  it, not re-reading.** Fixing Finding 1 inserted ~18 lines into
+  `sync_service.dart` above two UNRELATED, pre-existing SoT registry
+  citations (`applyRestoreCeiling`, `restoreFailureReason`) — `pre-commit`'s
+  `check_sot_registry_parity.dart` caught both as stale, not a second review
+  pass. This is the SAME class Finding 5 itself was (a stale citation from an
+  earlier edit), recurring a SECOND time WHILE FIXING Finding 5 — because
+  Finding 5's own remediation (the kill-switch addition) shifted
+  `daily-snapshot/index.ts`'s citation AGAIN after the review had already
+  named it once. **When a fix-round's remediation touches a file that ALSO
+  carries citations FROM OTHER, unrelated SoT concepts, re-run the parity
+  gate after every edit to that file, not once at the end** — a review
+  dispatched against one staged diff cannot see citation drift its OWN
+  remediation introduces afterward.
+  False-alarm rate 0/6 → no lens removed; lens 1 extended per above.
+
+- **2026-09-20** — blast-radius **account** — branch
+  `web-app-bugs-onboarding-a5a020` (onboarding picker text-wrap/unresponsive
+  fix + muster/induction drift-and-reorder, e2b8a4 + d6f1b8). **5 findings
+  (0 P0, 2 P1, 1 P2, 1 P3, 1 P4); 0 false_alarm — 4 fixed in-batch, 1 (P4)
+  accepted as a documented low-priority residual.** Review:
+  `docs/reviews/8a61d526f062-review.md`.
+  **Tuning 1 — a diagnose-doc's own mutation-testing self-attestation must be
+  independently RE-VERIFIED, never trusted.** Finding 3 challenged the
+  diagnose-doc's claim that `ward_phase_block_test.dart` was "mutation-proven
+  against both [title and weeksLabel]". Rather than accepting either the
+  diagnose-doc's claim or the B-pass report's counter-claim at face value,
+  the fix-round independently live-mutated the widget (removed weeksLabel's
+  `maxLines`/`overflow`, kept `Flexible`) and confirmed the ORIGINAL test
+  really did stay green — the diagnose-doc's self-attestation was genuinely
+  false. A prior-batch mutation claim is a claim about a moment in time, not
+  a durable proof; re-run it before citing it, exactly as this repo's
+  `feedback_audit_findings_require_live_verification.md` already says for
+  live-system claims — this extends the same discipline to a doc's own
+  mutation-testing prose.
+  **Tuning 2 — when a finding names TWO sibling call sites, verify BOTH were
+  actually fixed before marking the finding resolved, not just the one the
+  fix-round happened to touch first.** Finding 1 named `muster_screen.dart`'s
+  `_onSubmit()` AND flagged `induction_screen.dart`'s `_onCommit()` as
+  carrying "the identical unmirrored shape ... not a new pattern there, but
+  newly more exposed by this diff's own addition." The fix-round initially
+  drafted a review-status update claiming both sites were handled on the
+  strength of the first fix alone ("see follow-up note below") — caught
+  before writing it, by actually re-reading `induction_screen.dart` first.
+  It was untouched, and its failure mode was WORSE than the first site (a
+  throw there left `_stage` stuck at 7, which unconditionally renders
+  "Contract sealed." — a false success message — rather than merely a
+  disabled button). Fixed with the identical try/catch pattern + a new
+  mutation-proven source-grep test
+  (`test/contracts/induction_screen_commit_error_reset_test.dart`). A
+  finding's "same class, other site" clause is a second, separate fix
+  obligation — not satisfied by fixing only the site named first.
+- **2026-09-20 (a)** — blast-radius **platform** — branch
+  `claude/food-logging-observations-126ab3` (food-logging-observations: 10-task
+  whole-branch diff, split across 2 parallel reviewers for lenses 1-5 / 6-8).
+  **6 findings (0 P0, 2 P1, 2 P2, 2 P3); 0 false_alarm — all 6 fixed in-batch,
+  mutation-proven individually.** Review:
+  `docs/reviews/food-logging-observations-bpass.md`.
+  **Tuning — a platform-tier finding can recur IDENTICALLY across two
+  independent files in the same batch.** Both `hive_user_session.dart` (a
+  perf refactor) and `ai-proxy`/`_shared/gemini_failure_alert.ts` (a new
+  alert feature) were platform-tier per `blast_radius.yaml` and shipped with
+  no `feature_flag`, even though each task's own review had separately
+  assessed the change as low-risk on functional-correctness grounds. The
+  lens (`blast_radius_mismatch`) does not need the reviewer to disagree with
+  that risk assessment — it only needs to check whether the STRUCTURAL
+  requirement (§4.6, keyed on the file's blast-radius tier, not the
+  reviewer's confidence) was satisfied. Confirming this lens on EVERY
+  platform/catastrophic-tier file touched, independently of how safe any
+  single task's own review judged its own change, catches exactly this
+  class — worth keeping as a checklist item rather than a judgment call.
+- **2026-09-19 (c)** — blast-radius **platform** — branch `oi204-delta-sync`
+  (OI-204: extends the proven `_syncScheduledWorkouts` fingerprint-skip
+  pattern to `_syncExerciseLogs`/`_syncNutritionLogs`, plus the
+  gate-before-refactor atomicity checker CLAUDE.md §4.11 required before the
+  first refactor commit). **4 findings (1 P1, 1 P2, 2 P3); 0 false_alarm —
+  all 4 accepted and closed in-batch** (3 fixed in code/docs, 1 verified
+  already correctly — if under-emphasized — disclosed, wording strengthened).
+  Review: `docs/reviews/oi204-delta-sync-bpass.md`. Two fresh reviewers,
+  lenses 1-5 / 6-8, against the three-dot `main...HEAD` diff (23 files; the
+  naive two-dot form is a live trap on any branch whose base independently
+  gained commits after the fork — confirmed here, since `main` picked up 8
+  unrelated gates from a sibling branch mid-session).
+  **Tuning — lens 6 (`guard_without_its_mirror`) gains a specific sub-shape
+  for gates that scan SOURCE TEXT in two passes at different granularities:
+  a whole-text existence check and a per-line follow-up scan can silently
+  disagree, and the disagreement IS the defeat.** Finding 1 (P1): the
+  atomicity gate's `hasStore` matched a store statement against the WHOLE
+  file (tolerating `\s*` spanning a newline, which Dart's `\s` always does),
+  then separately re-ran the SAME regex per INDIVIDUAL LINE to locate which
+  line(s) to guard-scan from. A store wrapped across two lines — a plausible
+  `dart format` output past 80 columns, not a contrived shape — matched the
+  first pass and matched NEITHER half of the second, so the guard-scan list
+  came back empty and an unguarded multi-line store silently passed. Reviewer
+  B reproduced this live against the real gate with a positive control
+  (single-line form correctly failed) before reporting it. **Add to lens 6's
+  method: when a gate computes the same property twice at different
+  granularities (whole-file vs per-line, whole-statement vs per-token), ask
+  whether both passes are guaranteed to agree — a regex whose match spans
+  newlines but whose re-application is scoped per-line is exactly this
+  shape, and it generalizes past this one gate.**
+  **Second — a lens-6 finding whose correct triage was "verify the existing
+  disclosure, then strengthen wording" rather than "write new code."**
+  Finding 2 (P2) reproduced a second, DIFFERENT blind spot in the same gate
+  (a new swallowing catch that forgets to flip its flag false leaves an
+  aggregate COUNT check unchanged) — and this one was ALREADY disclosed
+  accurately in `docs/architecture/sync.md`, confirmed by reading the cited
+  section directly rather than trusting the citation. The finding's real
+  value was that the disclosure's WORDING undersold the severity ("the gate
+  can't distinguish X from Y" reads as benign ambiguity; the actual
+  consequence is a false-skip, the dangerous direction the whole mechanism
+  exists to prevent). **Not every accepted finding needs a code fix — some
+  need the existing accurate-but-underselling prose corrected to name the
+  real consequence, and that's a legitimate, cheaper terminal state than the
+  heavier structural fix the finding's own author correctly declined to
+  demand.**
+  False-alarm rate 0/4 → no lens removed; lens 6 extended per above.
+
+- **2026-09-19 (b)** — blast-radius **platform** — branch `gate-integrity`
+  (OI-220 pre-push contract sweep · OI-155 Gate 33 typed allowlist · OI-195
+  Gate 42 path resolution · OI-181 safe_merge absent-record precheck; four
+  forks in isolated worktrees, coordinator-integrated). **2 findings (0 P0,
+  0 P1, 1 P2, 1 P3); 0 false_alarm — both fixed in-batch** (`e993a345`).
+  Review: `docs/reviews/gate-integrity-bpass.md`. The reviewer ran in its OWN
+  worktree (`isolation: worktree` + `git reset --hard <sha>`) so its mutation
+  probes could not collide with the coordinator's concurrent
+  `flutter test test/scripts/` run — do this whenever a review and a test run
+  overlap in time; it is the same lesson as "serialise review rounds" without
+  paying the serialisation.
+  **Tuning 1 — lens 6 gains a sub-shape: "the hardening one function ABOVE
+  did not travel."** `extractCaseSkips` had been hardened against
+  comment-restated names; `invokesGate`, directly below it in the same file
+  and backing every `file()` runner, shipped as a bare `contains()` and read
+  heredoc bodies and invoker-less prose as invocations. When a file contains
+  a documented past hardening, ask which SIBLING predicates in that file make
+  the same class of decision and whether the hardening reached them.
+  **Tuning 2 — lens 7 (missing_input) for CHECK SCRIPTS: a non-`check_*`
+  runner is invisible to every gate that enumerates `check_*`.** The sweep is
+  deliberately `contract_sweep.dart` (both loops enumerate `check_*`; the
+  rule-24 ledger rejects non-`check_*` keys), so its wiring needs its OWN pin
+  (`test/contracts/contract_sweep_wired_test.dart` + a behavioural assertion
+  that the real hook reaches the line). Reviewer question: "what enumerates
+  this, and if nothing does, what pins it?"
+  **Tuning 3 — lens 8 (asserted_fixture_value) for REGEXES written into a
+  plan: `grep -c` the regex against the REAL file before believing any
+  selection it drives.** The v1 registry arm matched `^\s+file:` — zero hits
+  against 896 `- file:` items and 176 `{ file: }` maps — and would have
+  shipped inert; caught by plan-review round 1, not by reading.
+  **Tuning 4 — Windows-specific red flag for anything that spawns `flutter`
+  from Dart under a test that stubs `flutter` on PATH:** `Process.runSync(
+  'flutter', …, runInShell: true)` goes through cmd.exe, which cannot execute
+  an extensionless POSIX stub and finds the REAL flutter — a recursion the
+  file-level `@Timeout` cannot interrupt (`runSync` blocks the isolate).
+  Guard with an env sentinel set on the spawn (`CONTRACT_SWEEP_NESTED=1`) and
+  a kill switch the e2e sets; probe `flutter --version` from Dart to see which
+  binary answers.
+  **Tuning 5 — L25 adjacency greps miss LINE-WRAPPED citations.** Finding 2's
+  three wrong dates were found with a `0768a0ce.{0,3}2026-09-18` adjacency
+  grep, which missed the closure YAML's instance because YAML `>` folding put
+  the date on the next line; `git grep <sha> | grep <date>` (two passes, no
+  adjacency) is the widest form. Same family as the analyzer `^\s+` trap.
+
+- **2026-09-19** — blast-radius **feature** (record commit; the underlying
+  bump commit `a4eb42ab` self-declared **platform**) — branch
+  `plan-review-record-versionbump44`, filling in a plan-review record the
+  `aab-versioncode-bump-44` merge (`0768a0ce`) needed but never got: the
+  version-bump exemption in `check_plan_review_record_exists.dart` only
+  covers single-parent direct-to-main commits, never a `--no-ff` merge, so
+  the standard §4.13 worktree+`safe_merge.sh` flow (unlike every prior
+  versionCode bump) failed CI's plan-review-record gate. **0 findings; 0
+  false_alarm.** Review: `docs/reviews/aab-versioncode-bump-44-bpass.md`
+  (two independent zero-finding passes — self + a fresh context-blind
+  subagent — both confirmed the diff touches only the two version literals).
+  **Tuning — none.** Nothing new surfaced; recorded here only because §5.1's
+  gate requires an entry for any `docs/reviews/**.md` addition, and this one
+  genuinely has no lesson beyond the process gap already named in the plan-
+  review record itself (`mechanical_only: true` per CLAUDE.md §4.12.6 has no
+  effect in the gate script — confirmed by grep, zero hits).
+- **2026-09-19 (c)** — blast-radius **feature** — branch
+  `discipline-gates-tier12` (8 new mechanically-gateable `check_*.dart`
+  gates derived from the repo's 2 highest-recurrence `feedback_*.md` files —
+  `feedback_green_check_input_set_width.md` and
+  `feedback_mistake_guard_without_its_mirror.md`). **4 findings (0 P0, 0 P1,
+  0 P2, 4 P3 — all low); 0 false_alarm — all 4 fixed in-batch.** Review:
+  `docs/reviews/ab9c36f14353-review.md`. All 4 were documentation-only: 2
+  arithmetic errors in `docs/audit/gate_test_ledger.yaml`'s own
+  `evidence:` prose (test totals that didn't sum after the coordinating
+  session's own manual mutation re-runs — the reviewer independently re-ran
+  all 8 gates' mutations rather than trusting the ledger text, and found the
+  2 gates nobody had personally re-verified were exactly the 2 with wrong
+  arithmetic), and 2 wording-precision issues in
+  `gate_existssync_file_vs_dir_lib.dart`'s header comment (a stale,
+  self-referential calibration count; and a past-tense framing of a
+  caught-in-review spec defect that could misread as a confirmed live
+  incident against the cited OI's actual "0 missing, not a live breach"
+  status). No functional defect in any of the 8 gates' detection logic.
+  **Tuning — a new sub-instance of the ledger's own trust model, not a new
+  lesson:** rule 21/24's `mutation_proven:` and `evidence:` fields are
+  self-attested by design (CLAUDE.md §4.4 rule 21 says so explicitly), and
+  this review is a concrete case of that self-attestation drifting on
+  exactly the arithmetic a human proofreader tends to skim past — the
+  fresh-agent B-pass is doing real work here, not rubber-stamping. No skill
+  change warranted; the existing "mutate it and run it, personally" discipline
+  is what caught this, both in the coordinating session (6 of 8 gates,
+  independently) and in this B-pass (the remaining 2).
+- **2026-09-18 (b)** — blast-radius **platform** — branch `discipline-v2`
+  (S/M/L fix tiering + batch telemetry + hook wiring). **6 findings (0 P0, 0 P1,
+  6 P2); 0 false_alarm — all 6 fixed in-batch** (`7de94167`). Review:
+  `docs/reviews/discipline-v2-bpass.md`. ⚠ **Process lesson (the 5th instance of
+  `feedback_gates_unsatisfiable_at_merge`): the B-pass REPORT must be written to
+  `docs/reviews/<x>.md` with a line-anchored `verdict: accepted` BEFORE the merge,
+  and the plan-review record's `bpass_review:` field must point at it — `bpass:
+  accepted` alone hard-fails the CI record gate at the merge commit, unfixable
+  after.** The controller folded the B-pass findings into the record's prose and
+  skipped the pointer file; CI caught it post-push.
+  **Tuning 1 — the "hook pinned, dependencies not" class has a THIRD member: the
+  hook's output CONTRACT.** The telemetry CLI's stdout is embedded into the Stop
+  hook's harness-visible `reason` payload, yet both telemetry scripts fell through
+  the `scripts/**` feature catch-all — a telemetry-only commit would have cleared
+  no review gate while changing what the harness parses at batch close. When a
+  helper's OUTPUT is consumed by a pinned gate/hook, pin the helper too.
+  **Tuning 2 — null-valued enum fields need a no-news state, not a default.**
+  `top_gate` rendered `none` (a clean answer) beside `gate_failures_7d=unknown`
+  (no answer) — the pair contradicted itself. When one field signals "unknown",
+  every sibling field on the same line must say `unknown` too.
+- **2026-09-18 (a)** — blast-radius **account** — branch `sync-banner-force-retry`
+  (sync queue: force-retry on manual Retry, SyncBanner display grace, enqueueFresh
+  count heal). **6 findings (0 P0, 0 P1, 1 P2, 5 P3); 0 false_alarm — all 6
+  accepted and fixed in the same session.** Review:
+  `docs/reviews/efcfe7745ebe-review.md`. Run as one agent (8 files; the reviewer
+  re-derived interleavings, window arithmetic, and mutation outcomes by trace
+  rather than trusting the tests' own comments).
+  **Tuning 1 — lens 6: a per-CALL flag can still be AMBIENT WITHIN one
+  coalesced invocation.** The force flag was correctly per-call at the trigger
+  sites, but `passForce` is declared OUTSIDE the do-while and only ever raised —
+  so a PLAIN caller coalesced into an in-flight forced pass rides that pass and
+  is served forced. Three docs asserted "force is per-call, never ambient" and
+  all three were true only at the call-site level. **When a new per-call flag
+  interacts with an existing coalescing/in-flight mechanism, trace
+  cross-caller contamination INSIDE one invocation, not just across calls —
+  and make the doc say which level the guarantee holds at.**
+  **Tuning 2 — a gate-parked behavioral test must GUARANTEE the parked pass
+  drains on premise failure.** The sticky-rerun scenario parked the queue's
+  executor on a Completer; if the premise assertion failed first, the gate was
+  never completed, `_draining` stayed true for the rest of the FILE, and
+  subsequent tests failed with confusing no-op symptoms (setUp cleared Hive but
+  not the singleton's in-flight flag). Fixed with a try/finally that always
+  completes the gate and swallows the secondary await. **Any test that parks a
+  singleton's in-flight state on a future owes its own finally an unconditional
+  release — the same hygiene rule as teardown-never-throws, one level earlier.**
+  **Tuning 3 — lens 10 generalized: when a doc carries the SAME fact in TWO
+  places (frontmatter evidence field + prose narration), diff them against
+  each other.** The diagnose doc's frontmatter correctly recorded m2's real
+  discriminator (mixed-ages test; the "just under" test self-adjusts with the
+  constant) while its prose paragraph still claimed the parameterized test
+  reddened — a future mutation runner could not tell which record was true
+  without re-running. The same pass found the prose test-count split (9+34)
+  contradicted the file reality (6+37) while the total (43) was right.
+  **Count claims that appear twice in one document get checked twice, once
+  against each other.**
+  **Tuning 4 (remediation-side, author lesson) — a SYNCHRONOUSLY-throwing
+  executor cannot be interleaved against: it unwinds on MICROTASKS, so the
+  test's next statement runs AFTER the pass has fully unwound (finally
+  included) and a mid-pass force request never hits the in-flight guard. The
+  gate-park pattern (executor returns a pending Completer future; test
+  completes it with the throw) is the only reliable way to position a request
+  mid-pass.** Costs one silent test rewrite during F5 remediation; caught by
+  reading the failure trace, not by the diff.
+  False-alarm rate 0/6 → no lens removed; lens 6 and the general method extended
+  per above.
+
+- **2026-09-17 (c)** — blast-radius **platform** — branch `diet-plan-quality`
+  (diet plan generator meal-quality constraints + tagged food DB v3).
+  **6 findings (1 blocker, 2 majors, 3 minors); 0 false_alarm — all
+  remediated in-batch.** Review: `docs/reviews/diet-plan-quality-bpass.md`.
+  **Tuning — DATA-append commits need the SAME duplicate/name/source
+  contract checks the code gets: the B-pass caught 4 appended food-DB rows
+  duplicating existing NAMES (append script checked ids only), plus a
+  `source` tag that inflated a pinned count 93->103 — 2 RED assertions that
+  would have shipped on main. When a batch appends rows to a curated data
+  asset, run the asset's own contract tests (required-fields, duplicate
+  names, pinned counts) BEFORE the append is believed, and give appended
+  rows a DISTINCT source tag. Second lesson: the fixture suite and the
+  real-data suite disagree in BOTH directions — a fixture-only green hid 4
+  real-data defects (vegan name-blocklist leak, thin anchor pool), and the
+  B-pass's veg-preference finding showed the same class on a second
+  preference. Any filter built against a curated fixture must be re-proven
+  against the full production dataset in the same batch.**
+- **2026-09-18** — blast-radius **platform** — branch `ai-coach-ux-tool-integrity`
+  (paused/moved/dropped schedule-status semantics: streak/rank invisibility,
+  terminal rows replacing reschedule raw-deletes, exlog re-key + index
+  maintenance, restore-merge terminal arm, Compass capture sheets, Captain
+  chat suffix). **9 findings (0 P0, 1 P1, 2 P2, 4 P3, 2 P4); 0 false_alarm —
+  all fixed or documented as accepted deviations in the same session.**
+  Review: `docs/reviews/2026-09-18-ai-coach-ux-tool-integrity-bpass.md`.
+  **Tuning 1 — when a batch redefines the semantics of a stored VALUE
+  (a status/enum/kind), the server mirror is a separate reader: the client
+  fixed its rate math (rank/streak) but `rank_engine.ts` (the
+  evaluate-rank-promotions cron's own aggregation) still counted the new
+  terminal rows — permanent server-side gate deflation that BOTH plan
+  reviews missed and only the B-pass cross-seam lens caught. Add to the
+  general method: a value-semantics change requires grepping the SERVER
+  tree (supabase/functions/) for the same value, not just lib/.**
+  **Tuning 2 — a new persisted state must teach every READER class, not
+  just its writer: terminal rows needed (a) an index-maintenance arm in
+  `moveExerciseLogs` (the exlog index is a second writer-side structure the
+  re-key must carry along), (b) a restore-merge arm (cloud planned vs local
+  terminal), (c) overwrite guards in EVERY writer that skips only
+  `completed` today (pauseRange was the one the batch missed). Checklist
+  for any new row-status: writer, index/derived structures, restore merge,
+  all `completed`-skipping guards, server mirrors, then tests that seed the
+  state the REAL writer produces (the round-1 fixture seeded no index entry
+  and was blind to the exact bug it existed to catch).**
+- **2026-09-17 (b)** — blast-radius **account** — branch `web-razorpay-checkout`
+  (web Razorpay checkout: checkout.js bridge via dart:js_interop, shared
+  handlePaymentConfirmed extraction, kill-switch). **8 findings (0 P0, 0 P1,
+  4 P2, 4 P3); 0 false_alarm — all 8 accepted and fixed in the same session.**
+  Review: `docs/reviews/7446a3c8a418-review.md`. Run as one agent (15 files).
+  **Tuning 1 — a fix can be silently UNDONE by the author's own later
+  `git checkout -- <file>` during mutation-proofing: the file carried
+  UNCOMMITTED lint fixes when the restore ran, and the reviewer's fresh
+  analyze caught the reverted lint (Finding 8) that the author believed was
+  already shipped. Add to the general fix-application method: after ANY
+  mutation-restore cycle, re-verify that every earlier uncommitted edit in
+  the same file still exists — mutation restores and pending fixes share one
+  working tree, and "I fixed that" is only true if the fix is still there
+  (or committed). Commit lint fixes BEFORE starting mutation cycles.**
+  **Tuning 2 — a mid-batch SoT `line_range:` update rotted within the SAME
+  batch: correct at its own commit, stale 3 commits later (Finding 4),
+  invisible to the parity gate (gate keys on the class name). This is
+  2026-09-16(d) Tuning 4's "re-derive citations LAST" applied to the batch
+  scale rather than the finding scale: not just later FIXES shift lines —
+  the batch's own ordinary follow-on commits do too, so the registry
+  re-derivation must be scheduled as the FINAL code touch of the batch, not
+  bundled into the commit that renames the method.**
+  **Tuning 3 — a comment's negative capability claim ("checkout.js has NO
+  failure callback") was false per the vendor's own docs and was doing
+  load-bearing work: it justified an unwired error path. Lens 6 found it by
+  checking the claim against the SDK's documented API instead of the diff's
+  internal consistency. Add to lens 6's method: a comment that explains why
+  something is NOT wired is a checkable claim — verify against the
+  dependency's actual API surface, because "impossible" claims create blind
+  spots that survive every other lens.**
+  False-alarm rate 0/8 → no lens removed; lenses 6 and 8 extended per above.
+
+- **2026-09-17** — blast-radius **platform** — branch `custom-picker-fix`
+  (custom exercises invisible in all 3 pickers: OI-89 fail-closed
+  capability filter vs the creation sheet's hardcoded empty
+  `equipment_needed`; diagnose `e7b2d4`. Reader-side picker exemption +
+  muscle capture + edit mode; Option B filed as OI-211). **6 findings (1
+  P1, 3 P2, 2 P3); 1 false_alarm — 5 accepted and fixed in-batch, 1
+  resolved by writing this artifact.** Review:
+  `docs/reviews/5e1a43da8881-review.md`. Run as one agent over the staged
+  diff; the reviewer independently re-derived all 5 mutation-proof claims
+  (all reproduced exactly).
+  **Tuning 1 — lens 6 (`guard_without_its_mirror`), sibling-seam sweep:
+  when a batch narrows a guard for one POPULATION, grep for every OTHER
+  call site applying the un-narrowed guard to that same population — not
+  just within the touched files.** `git grep -n "canPerform(" lib/` after
+  the picker exemption found `swap_service.dart:256` (OI-89 seam 9, the
+  AI-driven swap executor) still refusing the exact population the UI
+  swap sheet had just started offering — an asymmetry the batch CREATED
+  (the picker previously refused it too), so the diff hunk itself could
+  never show it. The fix site's own seam inventory (`exercise_seam_lib`)
+  knew about seam 9 but nothing tied its capability policy to the new
+  predicate. **Generalized: a guard-narrowing batch owes a full grep of
+  the narrowed predicate's call sites, not a review of the diff's own
+  sites.**
+  **Tuning 2 — writer_reader_drift extended to TWIN-NAME fields: a batch
+  that adds an EDIT path to a row family must sweep the field set for
+  cloud-vs-Hive name twins, because the EDIT (not the restore) is what
+  forks a row carrying both.** `default_duration_secs` (cloud column,
+  kept verbatim by restore) vs `default_duration_seconds` (Hive-canonical,
+  written by both UI and AI writers) coexisted harmlessly while rows were
+  write-once; the first edit that preserved unknowns while adding the
+  canonical key forked them, and the two readers (`train_provider.dart`'s
+  parser read only the cloud name; `exercise_selector.dart`'s L2 read
+  only the Hive name) then disagreed per reader. The reviewer's suggested
+  fix (drop the twin on edit) plus the main-thread extension (the parser
+  must read BOTH keys — a pre-existing drift the fork fix alone would
+  have left) together closed it; pinned behaviorally by
+  `custom_duration_key_convergence_test.dart`.
+  **Tuning 3 — the anti-fabrication check for `bpass: accepted` is now
+  experienced as the EXPECTED first finding, not a process failure: a
+  plan-review record authored before the B-pass runs will always
+  initially lack `bpass_review:`.** Writing the record with
+  `bpass: accepted` before the pass runs is the failure; the flow that
+  worked here is record → B-pass → fix findings → write review artifact
+  with the FINAL staging hash → add `bpass_review:` → stage (the review
+  file is hash-excluded, so staging it does not move its own name).
+  False-alarm rate 1/6 (16%) → no lens removed; lens 6's sibling-seam
+  sweep and writer_reader_drift's twin-name sweep added per above.
+
+- **2026-09-16 (a)** — blast-radius **platform** — worktree `apk43-obs-fixes`
+  (not yet a merged branch), APK 1.0.0+43 observation batch, Obs 1 (nutrition
+  save-meal silent-catch telemetry, diagnose `d8e2f4`) + Obs 2 (AI coach
+  history-poisoning `hadHardFailure` flag, diagnose `a1c6b9`). **3 findings
+  (1 P1, 0 P2, 2 P3); 0 false_alarm — all 3 accepted and fixed in the same
+  session.** Review: `docs/reviews/6f1e4db85459-review.md`. Run as one agent.
+  **Tuning 1 — lens 6 (`guard_without_its_mirror`) found the batch's own
+  fix incomplete by grepping the file for a SECOND instance of the exact
+  string shape the fix was written around, not by re-reading the diff.**
+  `tool-loop.ts` has TWO hardcoded, non-model apology texts (a documented,
+  pre-existing pair — one for "the Gemini call itself threw", one for "the
+  loop exhausted without ever producing text or a queued intent"). The
+  diff added a `hadHardFailure` flag and wired it through the ENTIRE
+  history-replay + memory-embed pipeline correctly for the FIRST apology,
+  and simply never checked whether the second one needed the same
+  treatment — its own diagnose-doc's root-cause section only named the one
+  code path it was written against. `grep -n "I had trouble"
+  supabase/functions/_shared/tool-loop.ts` — one command — surfaces the
+  second site immediately; the diff's own author had run that exact
+  investigation for the FIRST site (a live Supabase log query) and had no
+  reason to suspect a sibling existed elsewhere in the same file. **Add to
+  lens 6's method: when a fix's mechanism is "mark case X so it can't
+  reach sink Y", grep the whole touched file (not just the diff hunk) for
+  every OTHER value that also reaches sink Y unconditionally — a new flag
+  is a new mirror-case surface, and the diff hunk itself will never show
+  you a sibling it didn't touch.**
+  **Tuning 2 — the fastest way to find an untested vacuous negative
+  control is still lens 8's own "would this pass if the feature did
+  nothing at all?" question, but it has to be asked about the SPECIFIC
+  code path claimed, not the test's name.** Finding 3's test was literally
+  titled "negative control" and its docstring said "no exception is
+  thrown" — both true, both describing a path (the `state == null` early
+  return) that sits BEFORE the code under test. A reader trusting the
+  title would credit it with proving something it structurally cannot.
+  The check that catches this is mechanical and cheap: read the function
+  body, find every `return` that precedes the code the fix touches, and
+  ask which of them the "negative control" actually exercises.
+  **Tuning 3 — a diagnose-doc's own `cloud_columns:` frontmatter claim is
+  exactly as citable-and-wrong as a line-number citation (2026-09-14
+  Tuning 2's class), just for a schema shape instead of a file position.**
+  `failed` was invented as a plausible-sounding cloud column because the
+  SAME name is real on the Hive side one paragraph earlier in the same
+  doc — the author's own correct Hive fact bled into an adjacent,
+  unverified cloud claim. `backups/live_schema_columns.json` settles it in
+  one read; the SoT registry entry itself (unlike the diagnose-doc) never
+  made the same mistake, which is worth noting as a MODEL for how the
+  doc's own frontmatter should have been written.
+
+- **2026-09-16 (b)** — blast-radius **platform** — branch `oi53-batch1-flip` (OI-53 batch 1: flip
+  `exerciseIdHistoryEnabled` + `injurySubstitutePreferenceEnabled` + `crossPhaseVarietyEnabled`
+  from ship-dark default-OFF to default-ON-with-kill-switch — the full ×2-review flip-on tier per
+  §4.12.4, not the lighter ship-dark build tier). **3 findings (0 P0, 0 P1, 1 P2, 2 P3); 0
+  false_alarm — all 3 accepted, 2 fixed in-batch, 1 accepted with no code fix (substance already
+  tracked by an existing, wider OI).** Review: `docs/reviews/1cadbcd1d01f-review.md`. Run as one
+  agent (10 files: 1 flag-definitions file, 4 behavioral test files, 1 nested CLAUDE.md, 1
+  SoT-registry, 2 OI-board files, 1 plan-review record).
+  **Tuning — `modelled_on_is_a_checkable_claim` gains: verify a claimed "established convention"
+  against the CONTENT of the cited commits, not just their existence in `git log`.** The diff's own
+  plan-review record justified leaving `docs/ship_dark_pending_review.yaml` untouched (these 3
+  flags stay under `pending:` pending a follow-up records commit) by calling that a "established
+  split-commit convention" for this file, citing two real prior commit pairs. Reading the actual
+  diffs of the other 3 prior OI-53-family flips (not just checking they existed) found 2 of them
+  had written a literal placeholder string `flip_commit: pending` into the WRONG list
+  (`pending:`, not `resolved:`) and the 3rd hadn't touched the ledger at all — all 3 sat wrong for
+  27/5/1 days until a dedicated cleanup commit (whose own message calls it a bug fix, not a
+  workflow) corrected them. The convention was real for the 2 MOST RECENT flips only; citing "5
+  prior commits" without opening what each one actually wrote let a 2-real/3-broken precedent read
+  as an established pattern. **The general form: when a citation claims a REPEATED pattern across
+  N prior instances, open all N, not just enough to find one clean example** — sibling of this same
+  file's existing "verify the precedent's CURRENT form" rule (2026-09-14), one level earlier: here
+  the precedent's frequency was the unchecked claim, not its content.
+  **A negative result worth keeping.** Every other lens returned clean, and each "verified clean"
+  claim in the reviewer's own report (mutation-test results, the OI-53 board arithmetic, the
+  dev-panel absence grep, the blast-radius `requires:` list) was independently re-run by the
+  orchestrating session before being trusted, rather than accepted on the subagent's prose — the
+  OI-53 "6 remain" figure in particular was re-confirmed a THIRD independent time this way (having
+  already been corrected once from a subagent's stale arithmetic earlier in the same session,
+  per this record's own plan-review "Remediation" section) and held exactly.
+  False-alarm rate 0/3 → no lens removed; `modelled_on_is_a_checkable_claim` extended per above.
+
+- **2026-09-16 (email-confirm-ux OI-51 follow-up)** — blast-radius **account**
+  — branch `email-confirm-ux`, a second, later B-pass on the SAME branch: the
+  OI-51 device-identity-release fix on `confirm_email_screen.dart` (diagnose
+  `d4a8f6`) discovered and fixed while pushing the branch — distinct from the
+  earlier same-day `email-confirm-ux` entry below, which reviewed the whole
+  feature batch before this fix existed. **5 findings (0 P0, 0 P1, 2 P2,
+  3 P3); 0 false_alarm — all 5 accepted**, 4 fixed via doc corrections, 1
+  filed as OI-208 rather than fixed inline. Review:
+  `docs/reviews/a558ff1b978b-review.md` (renamed from the dispatch-time
+  hash `22569be9cd62` after the doc corrections below moved the staging
+  hash — see that file's own header note). Run as one agent (3 files, one a
+  12-line code diff).
+  **Tuning 1 — a diagnose-doc's claimed FAILURE MECHANISM is a checkable
+  claim, the same way lens 3 already re-derives a claimed blast-radius tier
+  and lens 9 re-derives a claimed "modelled on X".** The doc's `symptom:`
+  field said the bug was reachable via "any step in `_teardown()` throwing" —
+  plausible-reading prose, and false: every step in `_teardown()` already
+  swallows its own throw in its own try/catch, and the caller's try/catch
+  around the whole call also does not rethrow, so an internal step throwing
+  structurally cannot escape `signOut()`. The fix itself was still correct
+  (it matches an already-shipped precedent for the identical call shape) —
+  only the AUTHOR's own explanation of why was wrong, caught by reading the
+  actual code path rather than accepting the doc's narrative. Add to the
+  lens set's general method: when a diagnose-doc states WHY a bug is
+  reachable, trace the claimed code path yourself before accepting it,
+  exactly as already done for WHERE a claim points (asserted_fixture_value)
+  and WHAT a claim's value is (blast_radius_mismatch).
+  **Tuning 2 — mutating the same code path a step further, past what the fix
+  addresses, found a real but correctly out-of-scope gap — and the right
+  move was filing an OI, not fixing it and not dropping it.** The same
+  swallow-without-rethrow shape that made Finding 1's claimed mechanism
+  impossible ALSO means a genuine `_teardown()` TIMEOUT (not a throw) leaves
+  `signOut()` returning normally to every caller — so none of the three
+  call sites' try/catch guards (this fix and its two precedents) can ever
+  fire for that case, because nothing throws. Real, pre-existing, identical
+  across all three sites, not introduced by any of their guards. Filed as
+  OI-208 rather than redesigning `_teardown()`'s signal contract inline —
+  the established "distinguish 'the doc is wrong, fix now' from 'the system
+  has a gap, file it'" split (see the 2026-09-14 (c) entry below) applied a
+  further time, here between two findings from the SAME trace rather than
+  two findings from different files.
+  **Tuning 3 — two of the five findings were confirmable by pure arithmetic,
+  with no test execution needed, and are worth a specific callout as the
+  cheapest possible form of asserted_fixture_value.** A mutation-proof
+  citing "line 211" for a REVERTED state that removes exactly one line above
+  it is checkable by counting, not running: removing one line shifts
+  everything below it up by exactly one, so the reverted state's line is
+  necessarily 210. Likewise a claimed "8 of 10 pass when 1 fails" is
+  arithmetically wrong on its own terms (10 − 1 = 9) without needing to know
+  anything about the test file at all — confirmed by `grep -c` against the
+  real file only as a second check, not the first. **Before re-running
+  anything to verify a numeric mutation claim, check whether the claim is
+  already self-contradictory or off by a checkable arithmetic step.**
+  False-alarm rate 0/5 → no lens removed; general method note added per
+  Tuning 1.
+
+- **2026-09-16 (c)** — blast-radius **platform** — branch `oi53-batch2-flip` (OI-53 batch 2: flip
+  `gradedProgressionEnabled` + `sessionDetrainingCutEnabled` + `physiqueFocusBringupEnabled` +
+  `adherenceGateEnabled` from ship-dark default-OFF to default-ON-with-kill-switch, same pattern
+  as batch 1 above). **2 findings (0 P0, 0 P1, 1 P2, 1 P3); 0 false_alarm — both pending
+  founder triage at write time.** Review: `docs/reviews/c22fa39a1cbf-review.md`. Run as one
+  agent (22 files: 1 flag-definitions file, 4 call-site comment updates, 7 behavioral test
+  files, 2 nested CLAUDE.md, 1 SoT registry, 2 OI-board files).
+  **Tuning — lens 6 (`guard_without_its_mirror`) found the batch's own "redundant defense-in-depth"
+  claim was TRUE for only one of the two call sites it was written to describe, and the batch's
+  own more-precise sibling docs already knew the narrower truth.** `adherenceGateEnabled` gates
+  a repeat-pin decision computed at two call sites — `pro_phase_advance.dart`'s automatic
+  low-adherence repeat (3-a2) and `graduation_screen.dart`'s explicit choice sheet (3-b). The
+  flags file's doc comment, a new `docs/audit/open_issues.md` bullet, and a nested CLAUDE.md all
+  described the flag as re-checked a second, redundant, mutation-confirmed time "immediately
+  before `_buildRepeatPins`" for the mechanism as a whole. Tracing the actual call graph found
+  that re-check exists ONLY on the 3-a2 path (`workout_schedule_read_service.dart:659`,
+  reachable with zero `await`s from the first read — genuinely un-raceable); the 3-b
+  (graduation) path calls `buildRepeatPinsForAdvance` → `_buildRepeatPins` directly, which
+  contains no flag reference at all, and its ONE flag read sits before a real human-time
+  `await showAdvanceChoiceSheet(context)` with nothing re-verifying it after. Two files already
+  had the narrower, correct phrasing — `docs/sot_registry.yaml`'s own concept entry ("checked
+  TWICE on the 3-a2 path") and the new test's own comment ("checked TWICE on this path") — which
+  is what made the broader claim in the other three files checkable as wrong rather than merely
+  ambiguous. **Add to lens 6's method: when a diff describes a guard as covering "N call sites"
+  collectively, find the one sibling doc (if any) that scopes the claim to a SINGLE site, and
+  treat any wider phrasing elsewhere as the thing to verify, not confirm.** Coverage gap
+  confirmed structurally: `grep -rln "runGraduationPhaseAdvance" test/` found no test that
+  touches `PlanEngineFlags.adherenceGateEnabled` while driving that function, so nothing catches
+  a future regression on the unprotected path. Rated P2, not higher, because none of the OI-53
+  flags has a release-build toggle (dev-panel only, no RemoteConfig, per OI-95) — the race
+  window is real but reachable only in a debug/QA session today.
+  **Tuning 2 — lens 8 extended to a PROSE count, not just a test literal, and caught a
+  same-diff self-inconsistency.** A freshly-filed OI's own "how found" bullet said "4 more
+  stale citations" and then named five; cross-checked against the `sot_registry.yaml` diff,
+  which does show exactly five method-level `line_range:` corrections for the named methods.
+  All five corrected ranges, and separately the new OI's own cited line numbers for the
+  DIFFERENT (deliberately out-of-scope, pre-existing) stale citations it was filed to track,
+  were independently re-read against the live file and are byte-exact — the miscount is
+  isolated to the one summary number, not to any of the corrections themselves. **Lens 8's
+  "compute it, don't read it" method applies equally to a hand-counted list inside a doc as to
+  a test's expected literal — count the enumeration, don't trust the numeral next to it.**
+  False-alarm rate 0/2 → no lens removed; lens 6 and lens 8 extended per above.
+
+- **2026-09-16 (d)** — blast-radius **platform** — branch `obs-batch-2026-09-16` (a 5-fix
+  founder-observation batch: quote-picker category collision, sync-queue auto-drain never
+  wired, Train phase-lock empty state, signup-confirm toast color, and the `/confirm` web
+  redirect — none individually account/platform-worthy, but `pubspec.yaml`/`pubspec.lock`
+  adding `connectivity_plus` for the sync fix classified the WHOLE batch platform-tier).
+  **7 findings (0 P1, 2 P2, 5 P3); 0 false_alarm — all 7 accepted and fixed in the same
+  session.** Review: `docs/reviews/08821dc5a27b-review.md`. Run as one agent (26 files, but
+  ~1,050 of the 1,699 inserted lines were diagnose-doc/test prose — modest real code diff for
+  5 independent, small, well-scoped fixes).
+  **Tuning 1 — lens 3 (`blast_radius_mismatch`) caught a diagnose-doc under-declaring its OWN
+  fix's tier, not just the batch's.** Finding 2: `lib/core/utils/hold_week_labels.dart` falls
+  under the `lib/core/** -> account` catch-all in `docs/blast_radius.yaml`, which the author
+  missed because the OTHER two files touched by that same fix (`screen.dart`,
+  `empty_states.dart`) are feature-tier — a diagnose-doc's self-declared tier needs the
+  classifier run on ALL of ITS OWN touched files, not just the ones that feel representative.
+  Cross-checking all 5 of this batch's diagnose-docs the same way found the other 4 exactly
+  matched the classifier; only the one spanning `lib/core/` under-declared.
+  **Tuning 2 — lens 6 (`guard_without_its_mirror`) applied to §4.6 itself, not just to a guard
+  in the diff: a fix that establishes a NEW dependency triggering a stricter blast-radius tier
+  inherits that tier's `requires:` obligations, and nobody re-checked them.** Finding 3: adding
+  `connectivity_plus` pushed the whole batch to `platform`, which `docs/blast_radius.yaml`
+  gates on `feature_flag`, and CLAUDE.md §4.6 independently mandates a kill-switch for any
+  sync-touching change — the new always-on connectivity listener + periodic timer shipped with
+  zero `configBox`/`kDebugMode` gating. **Add to lens 3/6's shared method: when a batch's
+  overall tier is driven by ONE file (here, a pubspec dependency bump for an unrelated-looking
+  fix), check that tier's `requires:` list against the WHOLE batch, not just the file that
+  triggered it** — the obligation attaches to the tier, not to the triggering file.
+  **Tuning 3 — lens 6, a second instance in the same pass: a doc comment's safety claim
+  attributed protection to the WRONG mechanism, and two new auto-drain triggers turned a
+  previously-rare race into a routine one.** Finding 4: a comment claimed `drain()`'s
+  `_isDue` backoff check made overlapping calls "a cheap no-op" — `_isDue` is purely
+  time-based and has zero concurrency semantics; the actual (pre-existing) safety is that both
+  registered executors are independently idempotent. Harmless today, but the batch that just
+  added a SECOND auto-drain trigger (making overlap routine instead of requiring a user
+  double-tap) is exactly the batch that should have re-examined this claim instead of
+  copy-pasting it forward. **Add to lens 6: when a diff adds a NEW trigger for an existing
+  code path, re-verify any comment near that path asserting concurrency safety — a claim
+  written when the path had one caller does not automatically hold with two.**
+  **Tuning 4 — self_attesting_artifact (lens 10) found citation drift that then had to be
+  re-derived a SECOND time, because fixing Findings 3+4 shifted the very lines Finding 6 named.**
+  The reviewer's suggested corrected line numbers for Finding 6 were accurate when written and
+  stale by the time they were applied, since Findings 3/4's own remediation (a new getter + two
+  guard clauses) landed ABOVE the connectivity listener in the same file. **Add to the general
+  fix-application method: when triage fixes findings in a batch where an EARLIER finding's fix
+  could shift an EARLIER-computed line citation, re-derive citations LAST, after all other
+  fixes in the pass have landed — not from the review's suggested numbers.**
+  **A negative result worth keeping.** Two mutation-proof claims in the diagnose-docs
+  (quote-picker's 1-of-9, train-phase-lock's 2-of-39) were independently reproduced exactly by
+  the reviewer, and the sync-queue mutation the reviewer ran as a bonus check (to investigate
+  Finding 7) was independently re-run a SECOND time by the author post-remediation, against the
+  grown 18-test file (up from 11), reddening the same 3 assertions — confirming the fix's
+  protection survived the batch's own additional changes rather than assuming it did.
+  False-alarm rate 0/7 → no lens removed; lenses 3, 6, 10 extended per above.
+
+- **2026-09-14 (e)** — blast-radius **platform** — branch `telegram-admin-bot`, Task 13 Step 8
+  push-gate fix (migration 137: re-asserts the anon/authenticated revoke on
+  `founder_metrics_ops()` that migrations 135/136 each omitted — caught by the FIRST full
+  `flutter test` run on this branch, at pre-push, since neither review round nor the Hermes
+  pass ran it locally). **3 findings (0 P0, 0 P1, 2 Medium, 1 Low); 0 false_alarm — all 3
+  accepted and fixed in-batch.** Review: `docs/reviews/9765a1fbaf00-review.md`. Run as one agent
+  (4 small files: a migration, a test-file diff, a diagnose-doc, a JSON ledger entry).
+  **Tuning 1 — a diagnose-doc's SELF-DECLARED `blast_radius:` frontmatter field is not read by
+  any gate and can silently drift from the classifier's actual computed tier — check it
+  explicitly, every time, the same way lens 3 already checks a diff's OWN blast-radius
+  claim.** The doc claimed `catastrophic`; `blast_radius_from_diff.dart` computed `platform`
+  (migration 137 is a bare `revoke`, carrying none of the `SECURITY DEFINER` text its siblings
+  135/136 do). Overstated rather than understated — no review round was skipped as a result —
+  but it directly contradicted the SAME doc's own `impact_analysis` section ("no live exposure
+  at any point"). **Add to lens 3's method: a diagnose-doc's `blast_radius:` field is a claim
+  like any other citation — recompute it, don't read it.**
+  **Tuning 2 — a line-number citation copied from a SIBLING file (not from thin air) is the
+  quietest version of the stale-citation class, because the two files are similar enough that
+  the copy usually happens to be right.** Migration 136's correct `CREATE OR REPLACE
+  FUNCTION` line (27) was reused for migration 135's identical-shaped citation — wrong only
+  because 135's header comment is 3 lines shorter (line 24 is the real one). A citation that
+  is "close enough to plausible" between near-duplicate files is exactly the shape a reader
+  skims past; `grep -n` on each file independently is the only check that catches it.
+  **Tuning 3 — lens 6 (`guard_without_its_mirror`) found a real gap in a guard the SAME BATCH
+  had just written to satisfy lens 6's own prior instance:** the new test exemption (for two
+  already-applied, immutable migrations) skipped at the FILE level, before the scanner
+  extracted which function(s) the file touches — so a future (improper, immutability-violating)
+  edit adding a SECOND function-touch to either exempted file would have silently inherited the
+  exemption too. Fixed by re-scoping the exemption to `(file, function)` pairs, checked only
+  after the function set is computed. **When a fix adds an exemption/allowlist keyed on one
+  dimension (here: filename) while the underlying scan operates on a FINER dimension (here:
+  per-function within a file), the exemption inherits everything the finer dimension could ever
+  match — check whether the exemption's own key matches the scan's actual unit of work.**
+  **A negative result worth keeping, per this file's own convention:** the reviewer independently
+  re-ran both of the author's mutation-proof claims (mutating migration 137's revoke line; the
+  exemption's skip line) rather than trusting the diagnose-doc's assertion, and both reproduced
+  exactly as claimed. It also attempted a live `has_function_privilege` re-check via Supabase MCP,
+  hit a transient connection timeout on both tries, and correctly flagged the claim as
+  UNVERIFIED-BY-IT rather than either asserting a defect or silently passing it — closed during
+  triage by a third, successful live re-check (unchanged: anon=false, authenticated=false,
+  service_role=true).
+  False-alarm rate 0/3 → no lens removed; lens 3 and lens 6 extended per above.
+
+- **2026-09-14 (d)** — blast-radius **catastrophic** — branch `telegram-admin-bot`, Task 6
+  third follow-up (migration 136: `founder_metrics_ops()` extends the (c) entry's fix — adds
+  `error_code is distinct from 'info'` to the `client_errors_7d` subquery, the sibling
+  migration 135 already applied to `client_errors_today`; already applied live with explicit
+  founder authorization). **0 findings across all 8 lenses.** Review:
+  `docs/reviews/57b11b5c90cb-review.md`. Run as one agent (3 small files: a migration, a JSON
+  metadata record, a manual SQL verify script).
+  **Every lens's "clean" was backed by a live check or a real cross-reference, not a read of
+  the migration's own prose** — `pg_get_functiondef` pulled live and diffed against the staged
+  body (byte-identical modulo Postgres's canonical type spelling); `has_function_privilege`
+  re-queried for all three roles rather than trusted from the header; `list_migrations`
+  cross-checked against `applied_migrations.json`'s `cloud_version`; and the migration's two
+  citations (086/087's exclusion pattern, 135 as the verbatim base) were each opened and
+  confirmed to say what the header claims, not accepted as scene-setting.
+  **Lens 6 (`guard_without_its_mirror`) — this migration is itself a mirror-fix, so the
+  question was whether a THIRD site shares the same `error_code='info'` inflation bug that
+  neither 135 nor 136 catches.** Found one genuinely separate counting site —
+  `telegram-admin-bot/index.ts:481`'s `cmdErrors` (`/errors` command), a direct
+  `.from("client_errors")` query independent of `founder_metrics_ops()` — and, per the
+  in-file `R2-02` comment, it was ALREADY fixed in an earlier round of this same branch's
+  review, and more completely than the migration under review (it excludes both `'info'` and
+  non-failure-shaped `'event'`, where `founder_metrics_ops()` still only excludes `'info'`).
+  That asymmetry is not new: it's the SAME gap the (c) entry below already recorded as
+  pre-existing/P2 for 135, now equally true of 136 by inheritance — not a fresh regression,
+  and correctly left unfixed by this migration's narrower, deliberately-scoped intent.
+  `admin_metrics_daily`'s snapshot columns and `compute-admin-metrics-daily`'s persistence
+  were confirmed to read `founder_metrics_ops()`'s own return values rather than
+  re-implementing the count, so they inherit the fix rather than constituting a second miss.
+  **Lens 8 (`asserted_fixture_value`) on the new SQL verify file** — the INSERT column list
+  was checked against `backups/live_schema_columns.json`'s real `client_errors` columns
+  (avoiding the exact 073/078 fabricated-column trap CLAUDE.md §4.9 documents), and the
+  `user_id`-omission was checked against the CURRENT schema (nullable since migration 119),
+  not the table's original NOT NULL definition — reading only `018_client_errors.sql` would
+  have wrongly flagged this as a constraint violation. One informational discrepancy noted but
+  NOT filed as a finding: 135's live-verify file recorded `baseline_7d=143` about an hour
+  before 136's recorded `baseline_7d=140` on the same rolling 7-day window — a plausible
+  natural consequence of rows aging out of the window (`client_errors` has no ad hoc deletes,
+  only a 30-day retention cron far outside this window), not falsifiable after the fact, and
+  not something either migration's correctness depends on. Recorded so the reasoning is
+  visible rather than left as an unexamined number mismatch.
+  False-alarm rate: 0/0 (no findings raised) → no lens removed; no lens changed. Third
+  consecutive zero/near-zero-finding pass on this branch's tail of small, well-scoped,
+  already-Hermes-corroborated follow-up migrations (this entry, plus (b) and (c) below) —
+  consistent with, not contradicting, §4.12's "successive reviews keep surfacing new material
+  issues ⇒ split" signal: these are genuinely small, independently-converged units, not a
+  large unit being re-reviewed past diminishing returns.
+
+- **2026-09-14 (c)** — blast-radius **catastrophic** — branch `telegram-admin-bot`, Task 6
+  second follow-up (migration 135: `founder_metrics_ops()` excludes `error_code='info'` from
+  `client_errors_today`, fixing round-2 finding R2-10 of the branch's whole-branch review;
+  already applied live with explicit founder authorization). **2 findings (0 P0, 0 P1, 1 P2,
+  1 P3); 0 false_alarm — both accepted, neither fixed in-batch** (the P2 is cosmetic/informational
+  on a founder-only ops metric and pre-existing, not a regression; the P3 is a duplicate-sentence
+  nit in a manual, non-gated verification script). Review: `docs/reviews/c0ea56c3d0e5-review.md`.
+  **Tuning 2 — §3 step 3's hash-generation code block was stale for 3 years
+  worth of gate history and cost this exact batch 3 needless renames.** It
+  showed only the `docs/reviews` exclusion; the real gate
+  (`check_code_review_pass_exists.dart`, per its own OI-162 slice 4 comment)
+  has excluded `.claude/skills/code-review/SKILL.md` from the hash since
+  2026-09-11. A session correcting a P2 finding kept "fixing" SKILL.md's own
+  citation of the review filename to match a hash it believed SKILL.md's
+  edits moved — chasing a fixed point that does not exist in the real gate.
+  §3's code block now includes the third pathspec exclusion so this cannot
+  recur; see this review file's own preamble for the full chronology.
+  Run as one agent (3 small files: a migration, a JSON metadata record, a manual SQL verify
+  script).
+  **Tuning — lens 3's "verify the precedent citation, not just its existence" extension
+  (established 2026-09-14 for a repo-precedent-by-name citation) generalizes to a
+  precedent-by-NUMBER-RANGE citation too, and caught a real gap the diff's own author had not
+  noticed.** The migration's header claims it "mirrors the exclusion pattern migrations
+  086/087 already established" — true only for HALF of that pattern. 086/087 exclude both
+  `error_code='event'` AND `'info'` (087 additionally re-includes failure-shaped `'event'` rows
+  via an `op_type` regex, because `ErrorTelemetry.logEvent` hardcodes `error_code='event'` for a
+  huge mix of benign breadcrumbs and real failures alike). This migration excludes only `'info'`.
+  Reading the citation as a checkable claim rather than scene-setting prose, and then measuring
+  it against LIVE data rather than reasoning from the SQL alone, is what surfaced it: `select
+  error_code, count(*) from client_errors where <today> group by error_code` returned
+  `{event: 4, info: 2}` at review time — `client_errors_today` reads **4** right now, on a day
+  with **zero real errors**, because the `'event'` breadcrumbs are still counted. Not a
+  regression (the diff doesn't add this problem, it just doesn't finish removing it), so P2 not
+  P1 — but a citation that names a fix as "mirroring" a broader precedent while shipping a
+  narrower one is exactly the shape lens 3's method exists to catch, and it would have read as
+  clean from the SQL text alone; only running the live count against `error_telemetry.dart`'s
+  hardcoded `'event'` code made it visible.
+  **A second, smaller confirmation — the byte-identical-deploy claim was independently
+  re-derived rather than trusted from the migration's own header/applied_migrations.json note,
+  per the 2026-09-14(b) entry's standing method.** `pg_get_functiondef('public.
+  founder_metrics_ops()'::regprocedure)` was pulled live and diffed against the staged file
+  (identical apart from formatting); `has_function_privilege` was re-queried for all three roles
+  (anon/authenticated/service_role) rather than accepting the note's stated values; and
+  `list_migrations` was cross-checked against the `applied_migrations.json` entry's
+  `cloud_version` field. All three held.
+  False-alarm rate 0/2 → no lens removed; lens 3's citation-verification method now explicitly
+  covers precedent-by-number-range, not just precedent-by-name.
+
+- **2026-09-14 (b)** — blast-radius **catastrophic** — branch `telegram-admin-bot`, Task 6
+  follow-up (migration 134: `client_errors` telemetry + a `COMMENT ON TRIGGER`, fixing 2 of the
+  prior same-day review's 5 findings). **2 findings (0 P0, 0 P1, 0 P2, 2 P3); 0 false_alarm — both
+  accepted and parked** (a `||`-NULL-propagation diagnostic-quality gap on a doubly-unlikely path,
+  and a migration-header enum mismatch the repo's own convention already documents as unenforced).
+  Review: `docs/reviews/297bae7db41c-review.md`. Run as one agent (3 small files, one a two-line
+  comment fix).
+  **Tuning — the reviewer independently RE-DERIVED the prior review's central safety claim against
+  LIVE state rather than trusting the migration's own header prose, and that is what makes this
+  entry worth recording despite finding nothing above P3.** The header claims the failure-path
+  telemetry insert is "nested... so a telemetry-insert failure can never itself abort the parent
+  alerts INSERT" — exactly the property 078 exists to guarantee for this trigger family. Rather
+  than accept the claim from the comment, the reviewer traced PL/pgSQL exception SCOPING precisely
+  for all three `client_errors` INSERT call sites, THEN cross-checked the traced structure against
+  the LIVE deployed function body (`pg_get_functiondef` via MCP, confirmed byte-identical to the
+  staged file) — closing the exact gap the 2026-09-04(b) entry's "a tier computed before the file
+  exists is not a computed tier" lesson describes for blast-radius, applied here to a STRUCTURAL
+  safety claim instead of a tier number: a claim about live behaviour is only checked once it is
+  checked against what is actually LIVE, not against the file that describes it.
+  **Second, smaller — a genuine confirmation that a prior review's ACCEPTED rationale, reused
+  verbatim in a follow-up migration's header, does not need re-litigating from scratch, but DOES
+  need checking that it was not silently weakened.** Lens 3 (`blast_radius_mismatch`) explicitly
+  cross-referenced the PRIOR review's Finding 2 (the `feature_flag` rationale) rather than raising
+  it fresh, verified 134 reuses it in substance without contradiction, and correctly left the
+  PRIOR review's still-open Finding 1 (the whole-branch plan-review record) alone as genuinely out
+  of scope for this diff. Add to lens 3's method: when a diff's header cites a PRIOR finding by
+  number, verify the citation is accurate and that the rationale it points to still holds for the
+  NEW diff — don't treat "already discussed" as a reason to skip the check entirely.
+  False-alarm rate 0/2 → no lens removed; lens 3 extended per above.
+
+- **2026-09-14** — blast-radius **catastrophic** — branch `telegram-admin-bot`, Task 6 (migration
+  133: a SECURITY DEFINER trigger dispatching an immediate Telegram push on a critical alert).
+  **5 findings (0 P0, 2 P1, 1 P2, 2 P3); 0 false_alarm — all 5 accepted, 4 fixed in-batch (in a
+  follow-up migration + a direct EF comment fix, both separate commits to preserve the
+  hash-pinned review identity), 1 correctly deferred to the branch's still-pending final
+  whole-branch review.** Review: `docs/reviews/28213f7956e2-review.md`. Run as one agent (3
+  small files).
+  **Tuning — the reviewer's OWN suggested-fix for the P2 finding cited the wrong
+  `client_errors` columns, and they were not an arbitrary wrong guess: they were the EXACT
+  columns that caused a real prod P0 in `073_proactive_coach_promotion_trigger.sql`, later fixed
+  by `078_fix_dispatch_proactive_coach_promotion_columns.sql`.** The reviewer correctly cited 073
+  as the precedent this migration's header claims to follow, but wrote its suggested-fix as
+  `client_errors(user_id, op_type, message, severity)` — columns that table has never had (real:
+  `error_code`, `error_message`, `client_version` NOT NULL, `platform` NOT NULL). Had that
+  suggested-fix been applied verbatim, it would have reintroduced 078's exact bug: because a
+  `plpgsql` trigger body is never validated against real schema until it actually RUNS, the
+  broken INSERT would ship silently and only fail live — and because 073's original `WHEN OTHERS`
+  handler used the SAME bad columns for its own telemetry insert, the re-raised exception would
+  have escaped the trigger and aborted the parent `alerts` INSERT, the identical failure mode
+  078's diagnose-doc (`f4b2c9`) documents for `rank_promotions`. Caught only because the fix was
+  independently re-verified against LIVE `information_schema.columns` before being applied, rather
+  than trusted from the review's prose. **Add to lens 3/7's method: when a review's suggested-fix
+  cites a REPO PRECEDENT BY NAME (here, "mirroring 073"), verify the precedent's CURRENT, possibly
+  since-corrected form — not its original commit — before using the suggested-fix verbatim. A
+  precedent that itself needed a follow-up fix (078) is evidence the ORIGINAL version is exactly
+  the wrong thing to copy, and a reviewer citing it by its introducing commit rather than its
+  latest form inherits the bug the follow-up exists to have fixed.** Sibling of this file's own
+  2026-09-04 `latestMigrationDefining` lesson (CLAUDE.md §4.9's "last `CREATE OR REPLACE` wins")
+  applied to a REVIEWER's citation rather than an author's.
+  **Second, smaller — a genuine instance of the hash-fixed-point class this file's 2026-09-11
+  entries already document, worth one more data point because the mitigation held cleanly this
+  time.** Triaging 4 of 5 findings required staging NEW content (a follow-up migration, an EF
+  comment fix) — doing so in the SAME commit as the reviewed diff would have moved the
+  `git hash-object` value the gate keys on, invalidating `28213f7956e2-review.md`'s own filename.
+  Resolved by committing the EXACTLY-as-reviewed diff first (re-verifying the hash matched before
+  committing), then landing the fixes as a separate follow-up commit/review. `docs/reviews/` stays
+  excluded from the hash by design, so the review file's OWN triage edits (marking findings
+  accepted/fixed, setting `verdict: accepted`) could be made freely without this problem — only
+  the code side of the fix needed the split.
+  False-alarm rate 0/5 → no lens removed; lenses 3, 7 extended per above.
+
+- **2026-09-13** — blast-radius **platform** — branch `oi153-pro-media-caps` (OI-153: the
+  ai-media-proxy PRO caps moved onto the ledger + the new `founder-digest` cron EF; diagnose
+  `a9d4e7`). **6 findings (0 P0, 2 P1, 2 P2, 2 P3); 0 false_alarm — all accepted, 5 fixed
+  in-batch, 1 resolved by an existing pin with the refactor declined and the reason recorded.**
+  Review: `docs/reviews/88cfc8594fcc-review.md`. Run as TWO context-blind agents (1-5+9/10 and
+  6-8) per the 2026-09-08 split rule — 28 files.
+  **Tuning 1 — lens 6's method gains a REACHABILITY question, and it produced the pass's only
+  mechanism finding.** Mutation (n) — the founder-digest lifetime read filtered by
+  `window_start` instead of `updated_at`, a filter that can never match, so a section renders
+  "none" forever with no error — reddened **0 of 19** tests. Not because the assertion was
+  wrong: because the reads sat inside the handler behind `createClient(...)` and NO test could
+  reach them at all. Before mutating a guard, ask *what test can even see this line?* — if the
+  answer is "none", the mutation result is known in advance and the finding is structural: pull
+  the code out to where a fake can drive it. The fix here (an exported `readDigestSections`
+  driven by a recording fake client) then exposed a SECOND gap in its own first version: the
+  alerts read's error path was swallowed (`if (error) return []`) and only usage_counters had ever
+  been failed in the test — the mirror of the fixture, not of the code. ⚠ Corollary for the
+  extraction: keep every `.from("<table>")` chain literal and inline. `check_schema_column_refs`
+  validates columns only inside a `.from(...)` statement window, so extracting the FILTERS into
+  table-less helpers would have moved them out of that gate's input set while looking like a
+  pure improvement (`feedback_green_check_input_set_width`, yet again).
+  **Tuning 2 — lens 10 (`self_attesting_artifact`): the deploy-state claim in a diagnose-doc's
+  `touched_layers_checked` is the highest-yield line to check live, and it should be checked
+  with the Management API, not the file.** Both P1s were this shape: tier 6 said ai-media-proxy
+  was "deployed, byte-identity verified" while live was v23, the PRE-fix bundle (verified by
+  `list_edge_functions` + a source grep of `get_edge_function`); and three files cited a
+  `test/sql/…live_verify.sql` that existed nowhere. Neither was a lie about code — both were
+  template prose written before the event. **Add to lens 10's method:** for every
+  `touched_layers_checked` row with `status: fixed_in_this_batch` on tiers 5/6/7 (migrations,
+  EF deploy, cron), pull the live version/migration list and compare; for every path a
+  `presence_only:` comment or a test header cites, `test -f` it. Gate 42 checks that
+  `behavioral_test_path:` is non-empty text and never that the file exists — filed as its own
+  OI in this batch's close-out (134 of 134 cited paths exist today, so it is a gap, not a live
+  violation).
+  **Tuning 3 — lens 6 (mutation a) — an "anchor not found" red is not a guard assertion.** The
+  pre-fix shape `if (isPro && !isVideo)` reddened the T1 file only because a `_span` anchor
+  vanished. The repair reads the condition of the nearest `if (` above the RPC and pins it —
+  and its second mutation (a nested `if (isVideo)` inside the block, which leaves every anchor
+  intact) is the one to keep running: it reddens ONLY the new assertion.
+  **A negative result worth keeping.** Every literal in the new Deno test file and the mirror
+  test was recomputed by hand (the author's own first draft had asserted 2026-09-11 was a
+  Thursday — it is a Friday — and had already corrected it before dispatch); the Telegram
+  send's error containment was traced to the outer `catch` and confirmed unreachable by a
+  URL-bearing error; live ACL on `consume_quota` re-queried. 0/6 false alarms → no lens removed.
+
+- **2026-09-13 (second entry today)** — blast-radius **catastrophic** — branch
+  `oi153-pro-media-caps`, the SAME apply commit as the entry above, one deploy cycle later (v25 →
+  v26/v3). **5 findings (0 P0, 2 P1, 2 P2, 1 P3); 0 false_alarm — 4 fixed in-batch, 1
+  verified_clean.** Review: `docs/reviews/1214f9bbb700-review.md`. Run as two agents on the
+  same 1-5+10 / 6-8 split.
+  **Tuning 1 — lens 6 (`guard_without_its_mirror`) on a fix landed EARLIER THE SAME DAY, by
+  THIS SAME batch, still found a real asymmetry.** Finding 1 (P1): the served-MIME
+  reconciliation the entry above had JUST added closed one direction of a mislabel (video served
+  as image); the pre-fetch video paywall, unchanged by that fix, still ran on the raw claim and
+  paywalled a free user whose real VIDEO was mislabelled "image" — denying a legitimate free
+  analysis, and making the naive fix (delete that paywall) a WORSE bug (a free-cap bypass via
+  mislabel, since the sibling free-image-cap check shares the same claim gate). **The lesson: a
+  same-day fix for one direction of an asymmetry is not evidence the mirror was checked — it is
+  often evidence it was NOT, because the fix's own diff draws attention away from the branch it
+  didn't touch.** Ask "what did NOT change in this diff that the thing which DID change assumes
+  is still true?"
+  **Tuning 2 — lens 2 (`function_exception_swallow`'s sibling, staged-vs-working drift) belongs
+  in the standard set, not just as an ad hoc catch.** Finding 2 (P1): an on-disk gate-literal fix
+  (`.limit(MAX_ALERT_LINES)` → `.limit(10)`, required because `check_unbounded_cron_reads.dart`
+  reads only literals) was made and never re-staged — the INDEX still carried the defect the gate
+  exists to catch. `git diff --cached <file>` catches this in one command; add it to lens 6's
+  checklist as a zero-cost first step on any file the diff claims to have "already fixed".
+  **Tuning 3 — a review dispatched on a batch that JUST passed its own prior B-pass still found
+  2 P1s, both real.** Neither Hermes (19 findings, same day) nor the first B-pass (6 findings,
+  same day, same branch) had surfaced either — both fixes they DID land (F2's reconciliation, the
+  digest's own literal fix) were the exact site each new finding sits beside. **Corroborates
+  §4.12's "successive reviews keep surfacing NEW material issues" signal, but for one commit
+  across two consecutive B-passes rather than across plan-review rounds** — worth watching for a
+  third recurrence before concluding the unit needs splitting; one instance is not yet the
+  pattern.
+  Finding 5 (P3, `unlistedTotals`'s sibling call sites, verified_clean): independently re-traced
+  all 6 other call sites of the same count-fallback pattern and confirmed each is windowed, not
+  lifetime — not a recurrence of Finding 3's bug. 0/5 false alarms → no lens removed.
+  **Self-reference note, worth recording once rather than re-discovering it:** `docs/reviews/
+  bc593ef17136-review.md` is a byte-identical copy of the file above, named after the STAGED
+  hash as it stood after the plan-review record's own citation of this review was added — citing
+  a review's filename inside the plan-review record changes the very diff the hash is computed
+  over, so the name that satisfies `check_code_review_pass_exists.dart`'s exact-match rule at
+  commit time cannot, in general, be the same name `bpass_review:` settled on earlier without
+  solving a hash fixed-point. `bpass_review:` (checked only for EXISTENCE + `verdict: accepted`
+  by `check_plan_review_record_exists.dart`) points at `1214f9bbb700-review.md`; the duplicate
+  exists solely to satisfy the exact-hash gate. Two files, one review.
+
+- **2026-09-13** — blast-radius **platform** — branch `oi-allocator` (the OI-number
+  allocator: `scripts/mint_oi.sh` reserving `refs/heads/oi/N` as a remote CAS, Check
+  B′/C in `check_oi_numbering_unique.dart`, the SessionStart next-free line; diagnose
+  `f3a9c1`, closes OI-176). **4 findings (0 P0, 0 P1, 2 P2, 2 P3); 0 false_alarm — all
+  four accepted and fixed in-batch, each with a regression test and a mutation.**
+  Review: `docs/reviews/oi-allocator-bpass.md` (branch-named — the plan-review record
+  is the one pointer, per the 2026-09-11 (second) entry's fixed-point lesson).
+  **Tuning 1 — lens 8 gains a CARDINALITY question, and it is this batch's headline
+  even though the B-pass did not find it: a per-element subprocess loop measured
+  against a FIXTURE is not measured at all.** The sibling-branch exclusion ran one
+  `git show` per local branch per board. Every e2e fixture has 1–2 branches; 17/17
+  green, four mutations reddening exactly the named tests, two context-blind
+  plan-review rounds read the loop and passed it. The real repo has **205** local
+  branches: **15.7 s** per SessionStart, **24.6 s** per `--next`, against the spec's own
+  2 s rule. Found by the author running the shipped hook in the primary worktree BEFORE
+  dispatch (§4.12.5's "run the cheap checks first"), rewritten as one `git grep` per
+  150-ref chunk (1.3 s / 4.1 s), `050e70ab`. **Add to lens 8: for any loop over a
+  repo-derived set (refs, files, rows), ask `| wc -l` on the REAL repo and multiply by
+  the per-iteration spawn cost; a fixture's n is never the repo's n.** Sibling of the
+  input-set-width family (`feedback_green_check_input_set_width` #45).
+  **Tuning 2 — lens 6 gains: "the file exists" and "the ref resolves" are DIFFERENT
+  predicates, and a dispatch keyed on the second silently falls through on the first.**
+  F3: `MERGE_HEAD` present but unparseable ⇒ `rev-parse --verify` null ⇒ the mid-merge
+  arm never fired ⇒ the NEW working-tree arm pronounced on a tree holding both sides.
+  Fixing it exposed a pre-existing blind spot on the same line: the octopus count read
+  the literal `.git/MERGE_HEAD`, which does not exist in a LINKED WORKTREE (`.git` is a
+  one-line file there) — so it had read 0 in every §4.13 session since 2026-08-17.
+  `git rev-parse --git-path` is the answer, and the mutation that restores the literal
+  path reddens exactly the worktree test. **Any gate that opens a path under `.git/`
+  by name is wrong in a worktree; grep the repo's scripts for `'.git/` before trusting
+  one.**
+  **Tuning 3 — lens 6e: a "taken" classifier over `git push` stderr must be confirmed
+  by the ref's EXISTENCE, not widened.** F4: `*"rejected"*` also matches a pre-receive
+  hook or branch-protection refusal, which would have been retried as N+1 ten times
+  and reported as "gave up after 10 lost races" with the real reason never shown. The
+  fix is not a narrower substring — it is `git ls-remote --exit-code` on the ref, which
+  IS the definition of a lost race; pinned by a fixture whose bare remote carries a
+  refusing `pre-receive` hook and asserts the hook's line appears exactly ONCE. Same
+  lesson as the 2026-08-11 entry (tightening a matcher never converges).
+  **A NEGATIVE result worth keeping:** the reviewer verified the Vercel `ignoreCommand`
+  exit-code contract against Vercel's live documentation rather than the diff's comment,
+  confirmed `ls-remote` exits 0 on an empty-but-reachable namespace against a real bare
+  remote, and captured REAL DNS-failure stderr for both HTTPS and SSH to prove the
+  offline path does not collide with the "taken" shapes — three claims the author had
+  reasoned about and not measured. It also attributed one verified claim to the wrong
+  document (a spec sentence credited to CLAUDE.md) and cited a symbol name the author
+  first took for an invention until `grep` found it at `oi_numbering_lib.dart:85` —
+  **verify a reviewer's ATTRIBUTIONS as well as its numerics, in both directions.**
+  ⚠ Process: a first dispatch of the identical brief was killed by a Sonnet
+  session-limit (HTTP 429) mid-run — worktree verified clean, re-dispatched after the
+  reset. The second run disclosed a stray `git push -u origin main` from a scratch
+  script's variable-persistence bug, killed during the pre-push analyze; the author
+  verified local `main` = `origin/main` = remote (`39111d1e`, nothing to push) and zero
+  `oi/*` refs on origin. Third recorded instance of a reviewer's own shell slip
+  (2026-08-25, 2026-08-30); the disclosure is the behaviour to keep, and a review
+  subagent should hold no push-capable escape hatch at all.
+  False-alarm rate 0/4 → no lens removed; lenses 6 and 8 extended per above.
+
+- **2026-09-11** — blast-radius **catastrophic** — branch
+  `oi162-slice4-windowed-counters`, OI-162 slice 4 (diagnose `f2c8d5`).
+  **4 findings (0 P0, 1 P1, 1 P2, 2 P3); 0 false_alarm — all 4 triaged
+  accepted and fixed.** Review, as of THIS episode:
+  `docs/reviews/1486254681fb-review.md` (renamed from `12408db06b47-review.md`
+  — the batch grew after dispatch; see that file's own "Post-dispatch
+  remediation" section). ⚠ Renamed twice more after the second entry below —
+  its FINAL location is `docs/reviews/3cd1891ee7eb-review.md`; this bullet is
+  left naming the intermediate hash deliberately, as an accurate record of
+  what THIS episode produced, not a live pointer.
+  **The P1 is the SAME shape this file already recorded for slice 1 of this
+  exact series six days earlier, and it recurred anyway.** The 2026-09-05
+  `oi162-delete-account-counter` entry below says outright: "the keystone
+  plan-review record for the branch simply did not exist yet." Slice 4 hit
+  the identical gap — no `docs/plan-reviews/oi162-slice4-windowed-counters.md`
+  exists, staged or committed, despite two real review rounds having run
+  (`docs/audit/oi162-slice4-plan.md`, `oi162-slice4-review-continuity.md`,
+  neither of which opens with the `---` frontmatter the gate parses) — and,
+  being catastrophic this time (slice 1 was platform), it is missing not
+  just `bpass: accepted` but `hermes: accepted` too, with zero evidence a
+  Hermes pass was ever run against this branch. **Recording a lesson in this
+  file does not, by itself, stop the SAME multi-slice project from repeating
+  it a few slices later** — the fix that would is structural (a check keyed
+  on branch name, run the moment a diagnose-doc citing that branch is
+  staged), not another sentence here.
+  **Second — a new nuance for the self-attesting-artifact family: a batch
+  can file SOME of its own tangential discoveries as OIs and not others, and
+  the asymmetry itself is the tell.** This batch's review round 2 surfaced
+  two out-of-scope defects — a payment-grace-window mismatch and a dormant
+  NULL-channel guard gap in an untouched trigger (`enforce_vision_analysis_
+  daily_limit`'s `NOT IN` is not NULL-safe, unlike its two siblings' `IS
+  DISTINCT FROM`). The first got a full `OI-182` entry with every required
+  field; the second lives only in prose inside
+  `docs/audit/oi162-slice4-channel-enumeration.md` with no board entry at
+  all, despite the same document explicitly labelling it a
+  `guard_without_its_mirror`-class defect. Nothing about the second was less
+  real or less findable — it was simply the SECOND finding of the same kind
+  in the same round, and the batch's own filing discipline visibly ran out
+  between the two. Ask, of any batch that files ONE out-of-scope discovery
+  as an OI: did it find others, and did they all get the same treatment?
+  **A negative result worth keeping.** The two new contract tests were run
+  live (13/13 green), and the diagnose-doc's own 6-mutation proof table was
+  spot-checked byte-for-byte against the real files (4 line citations, all
+  exact) rather than trusted, then independently extended with a 5th
+  mutation not in their table (`RATE_LIMIT_MAX` 5→6), which reddened exactly
+  the one expected assertion. The fail-open-vs-fail-closed asymmetry the
+  dispatch prompt asked to confirm was traced in both files' actual control
+  flow and matches the claim exactly.
+  False-alarm rate 0/4 → no change to lenses 1-8.
+
+- **2026-09-11 (second entry today)** — blast-radius **catastrophic** — same
+  branch `oi162-slice4-windowed-counters`, OI-162 slice 4, second remediation
+  round. Review file renamed a SECOND time (`1486254681fb-review.md` →
+  `016af81ca391-review.md`), a THIRD (→ `42ed72d24303`), and a FOURTH (→
+  final `docs/reviews/3cd1891ee7eb-review.md`) — not a new dispatch, but the
+  `/hermes-pass` remediation this same review's own Finding 1 demanded moved
+  the staged-diff hash again, and `check_code_review_pass_exists.dart`
+  correctly re-blocked the commit on the STALE filename until the rename
+  landed. **Tuning — the self-attesting-artifact family (this file's own
+  `2026-09-08`/`2026-09-05` entries) has a THIRD member: a review file's
+  identity is pinned to a MOVING TARGET (the staged-diff hash), and any
+  substantive work landing after `verdict: accepted` — even work the review
+  itself explicitly called for — re-opens that pin.** This is not a defect
+  in the gate; re-blocking on a stale hash is exactly what stops an accepted
+  review from silently certifying content it never saw.
+  **The sharper half, learned by hitting it: a PROSE CITATION of the
+  review's hash-named path, in any file the hash covers, can never be made
+  correct — fixing the citation moves the hash the citation names.** Three
+  such citations (the OI-183 board entry, the diagnose-doc, the migrations
+  CLAUDE.md pitfall row) each cost one rename cycle before this was seen
+  for what it is: a fixed-point problem on a cryptographic hash, with no
+  solution. The fix is structural, and it is what every catastrophic
+  batch since OI-72 has done, checked against `git log` on
+  `docs/plan-reviews/*.md` (six of the last seven landed the record in a
+  SEPARATE docs-tier commit): prose cites the plan-review record — keyed
+  on the BRANCH NAME, stable — whose `bpass_review:` field is the one
+  authoritative, gate-validated pointer; and that record lands in its own
+  follow-on commit, where the blast radius is `feature` and the hash gate
+  does not fire. **And the FOURTH rename had a different cause worth its
+  own sentence: a direct `dart run check_code_review_pass_exists.dart`
+  reports the hash of the index AS IT IS, but `pre-commit.sh` first
+  REGENERATES and re-stages `OPEN_INDEX.md` / `INDEX.md` / `GATE_INDEX.md`
+  from the board and diagnose-docs — so an `open_issues.md` edit moves the
+  hash a SECOND time, only when the hook runs.** Read the expected hash
+  from the hook's own failure output (or run the hook once, THEN the
+  direct gate), never from a direct run on a stale index.
+  `check_skill_tuning_history.dart` also fired on the
+  renamed file as if newly added (it is, from git's perspective, unless the
+  rename is staged as a pure rename with zero content change — this one
+  carried a substantive addendum, so it is not) — a second same-day bullet
+  was required here for exactly that reason; a bullet is owed per LANDED
+  review file, not per calendar day or per distinct review episode.
+  16 further findings from the Hermes pass (3 P1, 4 P2, 5 P3, 4
+  verified_clean/false_alarm) — full detail in
+  `docs/audit/2026-09-11-hermes-oi162-slice4-windowed-counters.md`, not
+  duplicated here. All 16 reached a terminal state in this same batch.
+
+- **2026-09-10 (second entry today)** — blast-radius **platform** — branch
+  `realtime-pro-gate` (the e4a7c9 realtime PRO gate, cherry-picked onto a main 25
+  days newer). **6 findings (0 P0, 2 P1, 3 P2, 1 P3); 0 false_alarm.** Review:
+  `docs/reviews/4f6eb6532418-review.md`. **No functional defect in the code** — the
+  agent ran the suite and its own mutation and confirmed the logic survived intact.
+  Every finding was documentation, and one was hard-blocking.
+  **Tuning 1 — NEW LENS: `rebase_semantic_drift`, for any diff whose code is old
+  and whose BASE is new.** A cherry-pick or long-lived branch carries a review that
+  is a statement about a DIFFERENT tree. Git auto-merging every file means
+  textually compatible, not semantically correct. Brief the agent with the exact
+  list of commits that touched the same files since the merge-base and make it
+  answer, per commit: does this invalidate an assumption the original design made?
+  Here that framing produced both P1s. **Its highest-value output was not a code
+  bug at all** — it was that a pre-commit gate now FAILS on two citations the diff
+  never touches, because the diff's own insertions shifted the methods below them.
+  **Tuning 2 — a count-based source-grep assertion is absorbed by the file's own
+  COMMENTS about the thing it counts.** From the sibling batch the same day:
+  `expect('SECURITY DEFINER'.allMatches(flat).length, greaterThanOrEqualTo(2))`
+  passed after a real function was demoted to INVOKER, because the file says the
+  phrase FOUR times — twice in declarations, twice in prose about a past incident.
+  **Zero of nine tests reddened.** This repo writes deliberately comment-heavy
+  migrations, so any `allMatches(...).length` assertion over a documented file has
+  the same hole. Add to lens 8: **assert the declaration, never the census.**
+  **Tuning 3 — a `false_alarm` verdict records a MEASUREMENT, not a permanent
+  truth.** The 2026-08-16 Hermes pass listed "migration-number collision" among 11
+  false alarms on the then-correct evidence that "main added zero migrations since
+  merge-base; highest is 119". Main now has 120-129, and that dismissed collision
+  is exactly what this batch hit. **Re-verify a false alarm before relying on it to
+  skip a check** — and prefer recording the EVIDENCE with it, which that pass did,
+  and which is the only reason the staleness was detectable.
+  **A NEGATIVE result worth keeping.** The agent's stated CAUSE for its blocking P1
+  was wrong — it blamed four commits on main; clean main passes. The finding was
+  real and the mechanism was not. It also got every line number right, which is the
+  reverse of this history's usual warning. **Verify a subagent's MECHANISM as
+  carefully as its numerics**; a correct finding with a wrong cause teaches the
+  wrong lesson to whoever reads the review next.
+  False-alarm rate 0/6 -> no change to lenses 1-7.
+
+- **2026-09-10** — blast-radius **platform** — branch `oi172-push-result-file`
+  (OI-172: a terminal push-result record for `safe_push.sh`, plus the §4.9
+  verification-width row). **7 findings (0 P0, 1 P1, 4 P2, 2 P3); 0 false_alarm.**
+  All accepted, all fixed in-batch. Review: `docs/reviews/08e601e60f35-review.md`.
+  **NO functional defect was found in the shipped logic** — and that is the entry's
+  point, because the pass still earned its keep four times over.
+  **Tuning 1 — lens 10 (`self_attesting_artifact`) should run against the OI BOARD
+  and any closure prose, not only ledgers and diagnose-docs.** The P1 was a
+  citation in `docs/audit/open_issues.md` to
+  `docs/plan-reviews/<branch>.md` — the keystone record — written *before* the file
+  existed. It would have failed `check_plan_review_record_exists.dart` at the merge
+  commit in CI, where the repair is a `git reset --hard` unwind. The author knew the
+  record was still owed and cited it anyway while closing the board entry, which is
+  the shape to hunt: **a resolution block is written at the moment of maximum
+  optimism about what else got done.** Sibling of the 2026-09-05 entry, one
+  document over.
+  **Tuning 2 — lens 8 gains: a mutation count measured against a NARROWER run than
+  the suite can only UNDERCOUNT, and therefore never looks alarming.** The reviewer
+  re-ran 6 of 13 claimed legs against the full three-file suite and found 3
+  undercounted by exactly one, because the author had measured each leg against the
+  single file it obviously touched. **The error direction is what makes it
+  survivable:** an undercount reads as a slightly weaker proof, not as a red flag,
+  so nobody re-checks it — whereas an overcount would be caught immediately. Ask of
+  any per-leg mutation count: *against which files was this measured, and is that
+  the same set the claim is about?* Fourth instance of the input-set-width class in
+  two sessions, and this one shipped **inside the batch adding the CLAUDE.md row
+  about it**.
+  **Tuning 3 — when a lens says "follow the precedent", check whether the precedent
+  carries a defect you would be importing.** F4 (platform tier's unenforced
+  `requires: feature_flag`) was fixed with a kill switch modelled on
+  `.claude/.reconcile_ci.disabled`. Copying its LOCATION would have been wrong:
+  **neither existing `.claude/` kill switch is listed in `retire_worktree_lib.dart`'s
+  `regenerableIgnoredPaths`**, so a worktree where someone flipped one is
+  unretirable until they remember to delete it. The switch shipped beside the record
+  inside `.git` instead. Extends lens 9
+  (`modelled_on_is_a_checkable_claim`): the claim "modelled on X" is checkable in two
+  directions — does it match X, and *should* it, given what X gets wrong.
+  **A NEGATIVE result worth keeping, per this history's convention.** The reviewer
+  was asked to re-verify both PREDICTED-GREEN mutation legs, and both reproduced at
+  exactly 0 red with the stated explanations holding. It also flagged that
+  `git cat-file -t <staging-hash>` fails — correctly noting the discrepancy rather
+  than silently substituting a commit sha, which is what the 2026-08-30 entry
+  records a previous reviewer doing. The hash is unresolvable **by design**
+  (`git hash-object --stdin` without `-w` writes no object, and the gate never
+  resolves it either). **Worth adding to the dispatch protocol's step 3: say so in
+  the brief, so each reviewer does not have to rediscover it.**
+  False-alarm rate 0/7 → no change to lenses 1-7.
+
+- **2026-09-09** — blast-radius **platform** — branch `oi162-slice3b-media-meter`, OI-162 slice 3b
+  (diagnose `c4f9e2`). **3 findings (0 P0, 0 P1, 1 P2, 2 P3); 0 false_alarm.** All fixed in-batch.
+  Review: `docs/reviews/4b31af31a792-review.md`.
+  **Tuning — lens 10 (`stale_or_wrong_citation`) gains the VERIFICATION-WIDTH question, and it is
+  the highest-value thing this pass produced.** Two of the three findings were stale citations, and
+  the P3 is the instructive one: the author HAD run a post-rename sweep and it reported "none". The
+  sweep was `grep -rn --include=*.md --include=*.yaml`, and the surviving stale reference was in a
+  `.sql` file. **A verification narrower than the thing being verified returns zero and is
+  indistinguishable from a clean result.** Add to lens 10: *when a finding is "I already checked
+  that", ask what the CHECK's input set was, in its widest form, and re-run it without the filter.*
+  In this one session that shape fired **four** times — a `lib/`-scoped grep presented as
+  repo-wide; a `^\s+`-anchored warning count that missed a real warning because the line had no
+  leading space; a blast-radius run whose answer was deleted by a `grep -v` filter (the build-hooks
+  banner shares the result's line); and this one. Sibling of `feedback_green_check_input_set_width`.
+  **Second tuning — lens 10 should also flag a citation the SAME COMMIT invalidates.** The P2 cited
+  a line that was correct when written and wrong when shipped, because the diff inserted ~83 lines
+  above it. That is OI-167's class, recurring here. Cheap rule, now applied: **in prose that ships
+  alongside the code it cites, name the SYMBOL, not the line** — the repo's own CLAUDE.md §0 already
+  warns that no gate validates numeric-line prose.
+  **A NEGATIVE result worth keeping, per this history's convention:** the reviewer EXECUTED the
+  test suite (16/16) and re-queried every live-data claim in the diagnose-doc rather than trusting
+  it — including independently confirming `ai-media-proxy` is live at v21 and that
+  `'epoch'::timestamptz` really equals the TS literal. It also traced all four requested mirror
+  cases in source and reported them clean rather than manufacturing a finding. 0/3 false alarms →
+  no change to lenses 1-9.
+
+- **2026-09-11 (third entry today)** — blast-radius **account** — branch `regen-wave-unit2` (OI-166
+  Unit 2: the AI-coach regen path never wrote `current_plan`, so the phase-arc
+  strip rendered stale content past week 4). **6 findings (1 P0, 2 P1, 1 P2,
+  2 P3); 0 false_alarm.** All fixed/disclosed in-batch. Review:
+  `docs/reviews/9c7cbabe4d3d-review.md`. Run as ONE fresh agent (12 files, the
+  batch's own guideline threshold for the two-agent split).
+  **Tuning 1 — a NEW question for lens 10 (`self_attesting_artifact`), and this
+  pass's headline finding: a claim that code was FIXED must be checked against
+  the STAGED BLOB, never the working tree, even when the working tree is what
+  every other tool in the session (`Read`, `flutter test`) was reading all
+  along.** The author had genuinely fixed a real bug, mutation-proven it, and
+  written a diagnose-doc describing the fix in detail — and never `git add`ed
+  either the fix or its test. Every `Read` call, every `flutter test` run, and
+  every plain-English description of "the staged diff" in the same session
+  reflected the working tree, which happened to agree with the working tree's
+  own edits and therefore never surfaced the gap. The reviewer caught it only
+  by explicitly resetting to `git show :<path>` content before testing — the
+  session's own default read path (`Read`, disk-backed test runs) cannot see
+  this class at all, because both sides of the comparison it needs to make
+  collapse to the same value from inside that path. **Add to lens 10's method:**
+  for any diagnose-doc / commit-message / review-response CLAIM that a specific
+  bug was fixed in a specific file, diff `git show :<path>` against the
+  described fix — not the file on disk. Sibling of the existing "does the
+  referenced artifact exist" check, one level deeper: does the referenced FIX
+  match what would actually be committed.
+  **Tuning 2 — lens 6 (`guard_without_its_mirror`) gains a SAME-DIFF sibling-writer
+  form, distinct from its usual old-code-vs-new-code framing.** Finding 3: two
+  writers performing the SAME kind of `current_plan` write, BOTH introduced or
+  touched in this one diff, and only one of them inherited the zero-rows guard
+  the other one exists specifically to demonstrate is necessary (the diff's own
+  diagnose-doc names the guarded writer's omission as a closed P0). When a diff
+  adds two writers of the same shape, diff them against EACH OTHER, not just
+  each against history — a guard present in one and absent in its twin is
+  invisible to a review that reads forward through the diff file-by-file rather
+  than comparing siblings directly.
+  **Tuning 3 — small, folded into lens 7's existing habit rather than a new
+  lens: a file's OWN established defensive posture is evidence a sibling
+  write-path should share it.** Finding 4: three new write-side casts threw on
+  malformed input while the SAME file's pre-existing read-side reader for the
+  SAME blob was explicitly documented as crash-safe. Not a new check — the
+  existing "does this diff match an established pattern" instinct just needs to
+  include READER-SIDE precedent as a source of the pattern, not only prior
+  writer-side code.
+  **A NEGATIVE result worth keeping, per this history's convention:** the
+  reviewer explicitly declined to extend its own P0 finding into a claim that
+  the diagnose-doc's OTHER mutation-proof claims (against a file it had not
+  touched) were also false — it flagged them as merely UNVERIFIED-BY-IT rather
+  than asserting a defect, and named the exact budget reason it stopped there.
+  That distinction was preserved rather than collapsed: the two flagged
+  mutations were independently re-run post-fix (by the author, per Finding 1's
+  updated status) and reproduced cleanly — the reviewer's restraint was
+  correct, not merely cautious.
+  False-alarm rate 0/6 → no lens removed; lenses 6, 7, 10 extended per above.
+
+- **2026-09-08** — blast-radius **platform** — branch `regen-wave-alignment`
+  (OI-166 Unit 1: the schedule-row gate + `rawWeekNumber` extraction + the hotel
+  planner's stamps, plus OI-170/171 folded in). **5 findings (2 P0, 1 P1, 2 P2);
+  0 false_alarm.** Review: `docs/reviews/df96a61cf598-bpass.md`. Run as TWO
+  context-blind agents with the lens set split 1-5 / 6-8.
+  **Tuning 1 — SPLIT THE LENS SET ACROSS TWO AGENTS ON A LARGE DIFF, and give
+  the deep lenses their own agent.** 23 files / ~2,590 insertions went to two
+  agents rather than one. The 6-8 agent spent its whole budget on mutation work
+  and produced both P2s by RUNNING things — it defeated the new gate on its
+  first attempt with a four-line fixture, and it deleted the OI-171 line and
+  watched 60 tests stay green. The 1-5 agent, freed of that, found the P0 board
+  collision and the tier mismatch. Neither would plausibly have done the other's
+  work inside one budget: lens 6 alone consumed 55 tool calls. The split is
+  cheap and the skill should default to it above roughly 15 files.
+  **Tuning 2 — lens 3 (`blast_radius_mismatch`) must READ THE `requires:` LIST,
+  not just compare the tier.** The finding here was not "the tier is wrong" but
+  "the tier is right and its `requires:` list was never satisfied":
+  `docs/blast_radius.yaml:25` demands `feature_flag` at `platform`, and
+  **nothing enforces it** — `check_blast_radius_coverage.dart` does not read the
+  list (grep: 0 hits). So a platform-tier change to the sync restore path passed
+  the entire gate loop green with no kill-switch. Lens 3's prompt should now
+  say: resolve the tier, open `blast_radius.yaml`, and check each entry of that
+  tier's `requires:` against the diff INDIVIDUALLY. A declarative requirement
+  with no gate is exactly what a reviewer is for, and it is invisible to every
+  other check.
+  **Tuning 3 — a stale plan document is a finding, and the tell is a
+  self-refuting justification.** The plan header claimed `account` and defended
+  it with *"positive control `sync_workout.dart` → `platform`, so the classifier
+  discriminates"* — a control valid only while that file is OUT of the diff.
+  The batch later folded it IN, so the sentence proving the tier became the
+  sentence refuting it, and nobody re-derived the number. Generalised: when a
+  document justifies a value by naming what is excluded, check whether that
+  thing is still excluded. Same family as the `part`-file analyze row in §4.9 —
+  the measurement was right when taken and its input set moved underneath it.
+
+- **2026-09-06** — blast-radius **platform** — branch `unitb-deload-reason`
+  (Unit B: fix the stale deload reason, then flip `enable_deload_reason_line`).
+  **10 B-pass findings (1 P0, 1 P1, 3 P2, 5 P3); 0 false_alarm.** Review:
+  `docs/reviews/06d7bc7f5e28-bpass.md`. Two independent plan-review rounds ran
+  alongside; between them the batch took **22 findings**, of which the author
+  accepted 21.
+  **Tuning 1 — lens 6 gains a MUTATION-RESULT reading rule, and it is the
+  inverse of the one rule 21 already has.** CLAUDE.md warns that a mutation
+  reddening for a COMPILE error proves nothing. This batch found the mirror: a
+  mutation reddening **NOTHING** also proves nothing. Deleting three separate
+  guards each reddened ZERO of twelve assertions, because the guards sat inside
+  a method whose `catch (_) { return null; }` turned the resulting RangeError /
+  NoSuchMethodError into the SAME null the tests asserted. Four assertions were
+  testing the exception handler. **When a mutation reddens 0, do not record
+  "already covered" — ask what absorbed it.** The structural fix is to extract
+  the guarded logic into a pure function with no `catch` above it, so every
+  returned value has one source; that turned 0 red into 1 red with no test
+  changed. Added to rule 21 in CLAUDE.md as the third named mutation trap.
+  **Tuning 2 — a new lens, `decision_boolean_as_explanation`, for any diff that
+  renders COPY derived from control flow.** Round 2's only P1 was not in the
+  batch's code at all: the flip made five pre-existing copy branches
+  user-visible, and one of them read a decision flag (`notBackstop`) whose false
+  case covers BOTH "a deload is overdue" and "none has ever been recorded". The
+  wording was written for the first, so a user in block ONE was told they were
+  "two blocks in". **For every user-facing string chosen by a boolean, enumerate
+  what ELSE makes that boolean take that value.** A flag computed to make a safe
+  DECISION is routinely false for several unrelated reasons; the decision is
+  identical for all of them and the sentence is not.
+  **Tuning 3 — a flip commit must review the copy it makes reachable, and the
+  diagnose-doc sentence that prevented it is worth naming.** The doc asserted
+  "no new copy reaches a user" one line after "the line becomes visible for the
+  first time". True of the guard, false of the flip — and it exempted all five
+  copy branches from a B-pass and a full round-1 review. **On any ship-dark
+  flip, treat every string the flag makes reachable as new code, because for
+  every user it is.**
+  ⚠ **Process note for whoever dispatches these: do NOT run two reviewers
+  against one worktree concurrently.** Both were told they may mutate to verify;
+  they did, saw each other's edits mid-run, and each had to discount results and
+  re-derive. Serialise them, or give each its own worktree.
+
+- **2026-09-05** — blast-radius **platform** — branch `phase-arc-flip`
+  (flip `enable_phase_arc` live; new ship-dark `enable_deload_reason_line`).
+  **5 findings (1 P0, 2 P2, 2 P3); 0 false_alarm.** Review:
+  `docs/reviews/phase-arc-flip-bpass.md`.
+  **The P0 is a lens this skill did not have: TRACKING DOCS THAT ATTEST TO
+  THEMSELVES.** The batch's closure ledger listed `plan_review_record:` and
+  `bpass_review:` as existing artifacts, and one entry asserted in the PAST
+  TENSE that a tuning entry "was appended … in this commit". None of the three
+  existed or were staged. Every code lens passed; the batch would still have
+  failed `check_plan_review_record_exists.dart` in CI **at the merge commit**,
+  where the repair is a `git reset --hard` unwind.
+  **Tuning made — a new lens, `self_attesting_artifact`:** for every path a
+  staged doc CLAIMS exists — `plan_review_record:`, `bpass_review:`,
+  `hermes_report:`, `behavioral_test_path:`, `flip_review_record:`,
+  `contract_test_path:`, any `docs/…` pointer in a ledger — run
+  `git cat-file -e :<path>` (the STAGED blob, not the working tree) and report
+  every one that resolves to nothing. Also flag past-tense claims about the
+  commit's own contents ("was added in this commit") whose subject is absent
+  from `git diff --cached --name-only`. This is cheap, fully mechanical, and
+  catches the class the code lenses structurally cannot: a diff can be perfect
+  and still be un-mergeable because a doc lied about a sibling file.
+  **Second, smaller tuning — lens 6 gains a UI-reachability question.** F4:
+  a new debug kill-switch called `setState` in the dev panel, which rebuilds the
+  DEV screen and not the screen under test, while the provider read the flag
+  non-reactively. The guard was correct and unobservable. Every sibling toggle
+  in that file forces invalidation via `runRolloverNow(ref)`; this one forced
+  nothing. Ask of any added toggle: **what re-runs the thing it toggles?**
+  A false-alarm note worth keeping: the reviewer's own P3 correctly identified
+  this as a PRE-EXISTING pattern (`phaseArcProvider` has always read its flag
+  non-reactively) and still flagged it, because the new toggle is what makes it
+  reachable. Distinguishing "pre-existing" from "newly reachable" is the right
+  call and the review made it explicitly.
+  False-alarm rate 0/5 → no change to lenses 1-5, 7, 8.
+
+> Append after each invocation: invocation date, blast-radius, findings count, false-alarm count, tuning made.
+
+- **2026-09-05** — blast-radius **platform** — branch `oi162-slice2-triggers`, OI-162 slice 2
+  (diagnose `e7c4b2`). **8 findings (0 P0, 2 P1, 4 P2, 2 P3); 0 false_alarm.** All 8 fixed
+  in-batch. Review: `docs/reviews/004af467034f-review.md`.
+  **Tuning — lens 6 (`guard_without_its_mirror`) gains INDIRECTION AS A FIRST-CLASS CASE, not a
+  footnote.** The lens already says "if the guard is a SOURCE GREP, assume it is defeatable and
+  try indirection". Two findings this pass were exactly that, and both were in guards written
+  BY THIS BATCH to be careful:
+  (a) a landmine guard matching `channel: '<literal>'` was blind to
+  `'channel': _channel` — a `static const` 35 lines up — **live, today, in one of the guard's own
+  two positive-control files**. Fixed by resolving same-file consts and, crucially, FAILING
+  CLOSED on any channel value it cannot statically resolve. A guard that cannot read a value must
+  refuse to pass it, not skip it.
+  (b) a per-STATEMENT SQL exemption was defeated three ways in one sitting (data-modifying CTE,
+  unstripped `/* */` comment, and a false POSITIVE on legitimate CTE-first ordering).
+  **Add to lens 6: when the fix for a defeated grep is "tighten the pattern", that is the signal
+  the pattern is the wrong mechanism.** Prefer an enumerated, grep-auditable allowlist (the repo's
+  `deu-quote` / `grandfathered:` precedent) or a runtime test. Tightening never converges; a named
+  list converges by construction, because a new entry forces a human to look exactly once.
+  **Second tuning — a NEW question for lens 7 (`inert check`): "would this assertion pass against
+  the code it replaces?"** Not "would it pass if the feature did nothing" (already covered) — the
+  sharper, cheaper form for a MIGRATION: restore the old implementation inside a rolled-back
+  transaction and re-run. Done here after the first B-pass attempt died mid-run having proposed
+  exactly that: **5 of 7 new behavioural assertions passed against the pre-migration triggers.**
+  Two were vacuous (NULL compared to NULL) and were fixed; three were legitimate
+  behaviour-invariants and are now LABELLED as such in the harness header, so nobody cites a
+  contract regression test as evidence that a migration landed.
+  ⚠ Process note: both P1s were the author's own **false verification claims** — one asserting a
+  four-tag migration header that has only two tags, the other claiming "zero stale citations
+  remain" after running a NARROWER grep than the one the same document tells everyone to run.
+  Neither is a code defect; both are the `feedback_mistake_unverified_done_claims` class, and a
+  context-blind reviewer re-running the PUBLISHED command is what caught them.
+  False-alarm rate 0/8 → no lens removed.
+
+- **2026-09-05** — blast-radius **platform** — branch `oi162-delete-account-counter` @
+  `303c57af` (OI-162 slice 1: migration 128, the usage_counters ledger, applied to prod).
+  **7 findings (0 P0, 1 P1, 3 P2, 3 P3); 0 false_alarm.** 4 fixed, 3 recorded as named
+  invariants. Review: `docs/reviews/303c57af-review.md`.
+  **The P1 would have failed CI at the merge commit** — the keystone plan-review record for
+  the branch simply did not exist yet. Worth noting because the batch had run three plan-review
+  rounds and produced two review documents; neither is the artifact
+  `check_plan_review_record_exists.dart` reads, which is branch-keyed with `---` frontmatter.
+  **Producing review artifacts is not the same as producing THE artifact the gate reads.**
+  **Tuning — a TENTH lens, `tool_action_side_effects`.** Finding 6 is the one no lens asked
+  for and no amount of reading the diff would surface: `git checkout -- <file>` — the obvious
+  way to undo a test mutation — silently converts an applied migration's CRLF to LF via
+  `.gitattributes` `eol=lf`, **invalidating the ledger's recorded sha256 while `git status`
+  and `git diff` both read CLEAN**, because git compares normalized content and the ledger
+  hashes bytes. The reviewer hit it by doing the natural thing, then checked the hash anyway.
+  Ask: **does the tool I am using to VERIFY or RESTORE have side effects on the artifact being
+  measured?** Sibling of "a green check is only as wide as its input set", pointed at the
+  instrument rather than the sample. Now recorded in `supabase/migrations/CLAUDE.md`.
+  **Second tuning — lens 8 gains COMPLETENESS, not just correctness.** Finding 7's fix was
+  itself defeated: an assertion `contains("RAISE EXCEPTION 'consume_quota:")` stayed GREEN
+  when one of the TWO such guards was converted to `RETURN -1`, because the other still
+  matched. A `contains` over a pattern that occurs N times cannot detect one of them
+  disappearing. Ask of any absent/present assertion: **how many times does this pattern occur,
+  and would the test notice if exactly one went away?** Same family as 2026-09-04's
+  membership-is-not-association, one step further.
+  ⚠ Also: two of the seven were defects in this batch's OWN corrections (line citations
+  captured before a later edit to the same file; the test written to close a finding). That
+  ratio keeps recurring and is the argument for the B-pass running AFTER remediation, not
+  alongside it.
+  False-alarm rate 0/7 → no change to lenses 1-9.
+
+- **2026-09-04 (b)** — blast-radius **platform** — branch `oi162-delete-account-counter`,
+  PLAN-STAGE (no code). Two context-blind rounds on a migration spec: round 1 **2 BLOCKING**,
+  round 2 **0 blocking / 2 major / 2 minor**. **Tuning only — no review file produced**, logged
+  here because §5.1 asks for a new bug-class in ANY skill, and both are reusable lenses.
+  **Lens 3 (`blast_radius_mismatch`) gains an INPUT-EXISTS check.** The plan claimed
+  `platform` and said "computed not estimated" — having run
+  `blast_radius_from_diff.dart` against **a path that did not exist on disk**. The classifier
+  has a CONTENT rule (`SECURITY DEFINER` in a migration ⇒ catastrophic) that can only fire on
+  a file it can READ, so a missing file silently yields the path-glob tier. **A tier computed
+  before the file exists is not a computed tier.** Ask of any blast-radius claim: did the
+  classifier have CONTENT to read? The cost is not cosmetic — catastrophic requires
+  `hermes: accepted`, so the wrong tier drops a mandatory review round.
+  **Lens 7 (`missing_input`) gains: a test that needs credentials must LIVE where the
+  credentialed job looks.** The plan specified a behavioural test "runs in CI against live
+  prod" without naming a directory. CI's `supabase-tests` job — the only one with live
+  secrets — runs exactly `test/supabase/` and `test/edge_functions/` (`test.yml:441,465`).
+  Placed in `test/contracts/`, where its source-grep sibling correctly belongs, it would have
+  landed in the credential-less unit job, hit the repo-standard `hasCredentials` guard, and
+  **skipped forever while reading green** — the section's central claim false, with a passing
+  suite. **For any test asserting live behaviour, verify the DIRECTORY is in the runner's
+  path list before believing the claim.** Sibling of the "green check is only as wide as its
+  input set" family, applied to CI job scoping rather than to a grep.
+  **A negative result worth keeping:** round 2 was told the DEFINER→INVOKER correction might
+  have swapped one false premise for another, and tested it rather than reasoning — reading
+  every `createClient` call in the five EFs, and checking `prosecdef` on all three live cap
+  triggers. It came back clean and said so. Asking a reviewer to attack the CORRECTION, by
+  name, is what round 2 is for.
+
+- **2026-09-04** — blast-radius **platform** — branch `food-text-limit-parity` @ `9b3e688d`
+  (diagnose `b8f4c2`: the free food-text cap was 10 in the client and in
+  business-rules, 50 in the Postgres trigger that enforces it). **8 findings
+  (0 P0, 2 P1, 2 P2, 4 P3); 1 false_alarm (12.5%).** 7 fixed in-batch, 1
+  informational. Review: `docs/reviews/9b3e688d-review.md`.
+  **All four mutation claims and the live-prod state reproduced EXACTLY — and the
+  pass still found eight things, every one the same shape.** The fix had been
+  applied where the cap is ENFORCED and nowhere it is REPORTED. `ai-proxy`
+  rendered its 429 body from an inline `isProUser ? 200 : 50`, so the one message
+  a capped caller actually reads kept saying "50/day" — misinforming precisely
+  the direct-API population the cap exists to constrain.
+  **Tuning — lens 1 (`writer_reader_drift`) gains a DISPLAY-READER question, and it
+  is not the same as the data-reader question the lens already asks.** When a diff
+  changes a VALUE (a cap, a threshold, a price, a limit), enumerate everywhere that
+  value is *reported* — error bodies, user-facing copy, log lines, docs — not only
+  where it is *enforced*. A display reader has no functional coupling to the writer,
+  so nothing breaks when it drifts; it just starts lying, silently, to the only
+  audience that asked.
+  **Second tuning, and it is new to this history: AUTO-LOADED CONTEXT FILES ARE A
+  PROPAGATION TARGET.** Two nested `CLAUDE.md` files (`supabase/functions/`,
+  `lib/features/nutrition/`) still documented 50/day. Those load automatically into
+  every future session working in those subtrees, so a stale number there is fed
+  back to the next agent as authoritative context and will be reasoned from. The
+  reviewer noticed because they were injected into its OWN context mid-review. Add
+  to lens 5: when a diff changes a documented constant, `grep` the nested
+  `CLAUDE.md` set specifically — they are the highest-leverage stale docs in the
+  repo and the easiest to forget, because nobody opens them deliberately.
+  **Third — the author's grep was the bug, again.** The pre-commit check was
+  `grep -rn "50/day" test/ scripts/` on a repo-wide constant: zero hits, read as
+  proof of absence. Fourth instance in one session of
+  `feedback_green_check_input_set_width`, and it happened *inside the fix for a bug
+  whose cause was exactly that*. Worth stating in this history because it is the
+  argument for the B-pass existing at all — the author cannot audit their own input
+  set, since the too-narrow scope feels complete from inside it.
+  ⚠ **Also, a NEGATIVE claim the reviewer was asked to check and did:** the commit
+  asserted that removing comment-stripping from `latestMigrationDefining` reddens
+  ZERO tests (recorded as defensive-only rather than claimed as proven). The
+  reviewer reproduced the zero. **Asking a reviewer to verify a negative result is
+  cheap and worth doing** — an unearned mutation-proof is invisible by construction,
+  and "0 red" is the easiest number to omit rather than report.
+  False-alarm rate 1/8 → no change to lenses 2-4, 6-9.
+  **Addendum, same day, from the full-suite pre-push run:** lens 6 should ask, of any diff
+  that adds a FILE-LEVEL annotation or default, whether a PER-ITEM override survives it. The
+  push went red on `batch_close_hook_e2e_test.dart` — a file `0a99a0b7` had already fixed for
+  full-suite contention by adding `@Timeout(Duration(minutes: 6))`. One test in it carried its
+  own `timeout: const Timeout(Duration(seconds: 60))`, and **a per-test `timeout:` takes
+  precedence over the file annotation**, so the fix never reached the one test that needed it.
+  Green targeted (7/7) and green across all of `test/scripts/` (555/555); red only in the
+  ~5300-test suite. Generalises past timeouts: a file-level default plus a surviving local
+  override is a guard whose mirror is the override, and the override is invisible from the
+  diff that adds the default.
+
+- **2026-09-07 (b)** — blast-radius **platform** — branch `live-test-budget-docs`, a
+  DOCS-ONLY diff (CLAUDE.md 4.9 row, debugging SKILL.md, OI-167). **6 findings (0 P0, 2 P1,
+  3 P2, 1 P3); 0 false_alarm**, all fixed in-batch. Review:
+  `docs/reviews/0acbed4f3155-review.md`.
+  **Tuning — lens 8 gains the counting rule, because both P1s were miscounts inside a
+  `Verified:` field: A FILTER NARROWER THAN THE THING BEING COUNTED RETURNS ZERO AND LOOKS
+  LIKE PROOF.** The author's census for "which bug-class numbers are cited elsewhere"
+  filtered to lines also containing `bug.?class|debugging skill`. Real citations mostly do
+  not say that — one reads `2.36 (FunctionException not unpacked → masked errors)` and
+  matches no keyword — so the census returned zero for five numbers and the entry declared
+  them "mechanically safe to renumber". Unfiltered, **all nine were cited**. The zero was
+  produced by the filter, not by the world. ⚠ **Ask what the filter EXCLUDES before citing
+  its output**, and sanity-check any zero against one case you have read with your own eyes.
+  Sibling of the empty-input-set rule: a command that returns nothing has two explanations.
+  **Second, and this one no gate can catch — A CITATION DERIVED AGAINST THE PRE-EDIT FILE IS
+  INVALIDATED BY THE EDIT THAT SHIPS IT.** The diff cited exact line numbers in the same file
+  it was modifying; its own inserted block pushed every one of them down 17 lines, so they
+  were correct when derived and wrong the moment the commit existed. **When a diff cites line
+  numbers in a file the diff also changes, re-derive them AFTER staging — or cite the section,
+  not the line.** Fixed here by dropping the line numbers entirely.
+  Third, smaller: a `114-115` citation was copied forward from CLAUDE.md 7 rather than
+  re-derived (real line: 110) — the 2026-09-02 entry's "a citation copied from another
+  document is not a verified citation" rule, recurring, and the CLAUDE.md occurrence is still
+  stale.
+  False-alarm rate 0/6 -> no change to lenses 1-7, 9-10.
+
+- **2026-09-07** — blast-radius **platform** — branch `oi162-slice3-lifetime-meters`, OI-162
+  slice 3a (diagnose `f4a2d8`). **6 findings (0 P0, 3 P1, 2 P2, 1 P3); 0 false_alarm**, all fixed
+  in-batch. Review: `docs/reviews/4d7054d4aa51-review.md`.
+  **Tuning — lens 6 gains a rule about the REMEDIATION, not the finding: when a finding arrives
+  carrying a mutation that defeated the old code, RE-RUN THAT MUTATION against the fix before
+  calling it fixed.** A finding of the form *"this assertion is inert, proven by mutation M"*
+  hands the author a free acceptance test, and the author's natural instinct is to reason about
+  whether the new assertion is stronger rather than to execute M. Measured here: of two inert-test
+  findings, the first fix reddened on re-run and **the second did not**. F2's remediation replaced
+  "the guard appears somewhere above the call" with "the guard is within 200 chars of the call" —
+  which reads as a real tightening and is worthless against this specific mutation, because a
+  decoy guard is planted *adjacent* to the real call by construction. Proximity is not
+  containment. The working form asserts that no other `if (` sits between the guard and the call.
+  ⚠ **The general shape: a remediation written from the finding's PROSE inherits the finding's
+  blind spot the same way a test written by the fix's author inherits the code's.** The mutation
+  is the only part of a review finding that cannot be reasoned around, and it is already written
+  down. Cost of ignoring it here would have been shipping a "fixed" inert test with a review
+  citation attesting that it was checked — strictly worse than the original, which at least did
+  not claim to have been verified.
+  **Second, for lens 7 (`missing_input`), a documentation instance worth naming:** F3 was a test
+  file's own SCOPE header citing a companion live-verification artifact (`slice3a_*` labels in a
+  named `.sql` file) that contained **zero** occurrences of the string. One `grep -c` settles it.
+  The lens is written for paths the CODE reads; a header that tells a future reader "the
+  behavioural half lives over there" is the same failure with a longer fuse, because nothing
+  executes it and the reader who trusts it never runs the check. **Resolved by making the claim
+  true, not by deleting it** — and the new header states explicitly what those assertions do NOT
+  cover, since they verify the ledger and would pass unchanged against the pre-fix Edge Function.
+  False-alarm rate 0/6 → no change to lenses 1-5, 8-10.
+
+- **2026-09-03** — blast-radius **platform** — branch `techdebt-audit-sep02`, Slice A of the
+  2026-09-02 tech-debt audit (diagnoses `e4d1b7`, `f2b9d4`). **3 findings (0 P0, 1 P1, 1 P2,
+  1 P3); 0 false_alarm.** 1 fixed in-batch, 1 answered in the plan-review record, 1 tracked as
+  OI-161. Review: `docs/reviews/db5584050b6b-review.md`.
+  **Tuning — lens 10 (`stale_or_wrong_citation`) gains a question about the GATE, not the
+  citation.** The P1 was a `writers:` entry, in both a SoT registry concept and its diagnose-doc,
+  naming `migrations/052:82-85` — a **comment block** in a file containing no `INSERT` at all. The
+  real writers were two Edge Functions one grep away. What makes it worth recording is *why it
+  survived*: `check_sot_registry_parity.dart` verifies a `method:` field ONLY when it parses as a
+  bare identifier or dotted path. `"subscriptions table — payment path inserts rows"` is prose, so
+  the gate **silently skipped the symbol check** and verified only file-exists + line-in-bounds —
+  both trivially true of a comment. So the citation was "gated" in the sense that a gate ran over
+  it and said PASS, and unchecked in every sense that matters.
+  **Add to lens 10: when a citation lives in a field a gate reads, check whether the gate's parser
+  could actually READ THIS VALUE — prose in a structured field converts a checked claim into an
+  unchecked one, and the PASS is indistinguishable either way.** Generalises past this gate: any
+  validator with a "skip what I cannot parse" branch has the same shape, and free-text is the
+  easiest thing in the world to write into a field meant for a symbol. Sibling of OI-100
+  (`prior_art_checked:` must reference a verified artifact, not free text) and of INFRA-11 in this
+  same audit (Gate 33's allowlist reasons are unparsed prose).
+  **Second, a NEGATIVE result worth keeping, per this history's own convention:** the reviewer
+  mutated **to the real pre-fix `HEAD` content** of both files rather than to a convenient
+  synthetic edit, and reported 7-of-9 assertions reddening with the 2 green ones correctly pinning
+  invariants the diff never touched. That is the mutate-the-way-a-real-regression-re-enters rule
+  applied without being asked, and it is the strongest form of the check — it also independently
+  reproduced the author's own three isolated mutation runs.
+  ⚠ Process note: the author's `blast_radius: account` claim in both diagnose-docs was wrong — the
+  two EF files ALONE classify **platform**. Caught not by review but by the pre-commit loop's own
+  printed tier line. **A tier you estimated and a tier the classifier computed are different
+  claims**, and only the second one gates the review requirement.
+  False-alarm rate 0/3 → no change to lenses 1-9.
+
+- **2026-09-02 (b)** — blast-radius **platform** — branch `profile-stale-restore`
+  (diagnose b3c9d4, Profile tab serving a pre-restore profile map). **8 findings
+  (0 P0, 1 P1, 3 P2, 4 P3); 0 false_alarm — 7 fixed in-batch, 1 DECLINED with
+  evidence.** Review: `docs/reviews/d8f51f77c896-review.md` (that file also
+  carries the two context-blind plan-review rounds, 7 + 3 findings, same
+  0 false alarms).
+  **The result worth recording: the P1 was a regression the FIX ITSELF
+  introduced, and it was invisible from reading the diff.** The batch moved a
+  `restoreCompletedTick` listener into the shared tab mixin so all 4 tabs
+  refresh after a background restore. Correct in isolation — but Nutrition's
+  `invalidateOnRetry` includes `aiBreakdownProvider`, and
+  `ai_mode_body.dart:41` reads that provider's non-null→null transition as
+  "the user committed or cancelled" and pops the Log Food sheet. So a restore
+  completing while someone reviewed an AI food analysis would have closed the
+  sheet and discarded it, silently. The diff's own diagnose-doc asserted the
+  opposite in writing ("no provider is being invalidated that was not already
+  designed to be").
+  **Tuning made — lens 6 gains a TRIGGER-PROVENANCE question.** Its existing
+  method asks for the mirror case, the ordering, and the caller. Add: **when a
+  change causes an existing call to fire from a NEW trigger, re-audit that
+  call's whole target set against the new trigger's provenance.** "Safe when a
+  user taps retry" and "safe when a background event fires" are different
+  claims, and a set assembled under the first is not validated for the second.
+  The tell is a diff that changes WHO calls something rather than WHAT it does
+  — the call site looks untouched, so it reads as out of scope.
+  **Second tuning — lens 3 (stale_or_wrong_citation) earns a mechanical note.**
+  Two of the three P2s were citation errors, and one was inherited: the doc
+  copied `sync_profile.dart:648` forward from the PRIOR diagnose-doc for the
+  same concept without re-deriving it (the real line is 764). A citation
+  copied from another document is not a verified citation. Cheap rule: any
+  file:line lifted from an existing doc gets re-grepped, because the file it
+  points into has moved since that doc was written — by definition, or the doc
+  would not be old enough to copy from.
+  ⚠ Process note worth keeping: the DECLINED finding (remove Home's now-
+  "redundant" Train-provider invalidation) was refuted by checking
+  `app_router.dart:359` — `StatefulShellRoute.indexedStack` with no `preload`,
+  so an unvisited Train tab has no State and no listener, making those lines
+  load-bearing. A reviewer's "this is now redundant" is a hypothesis about
+  runtime lifetime, and lifetime is exactly what static reading cannot see.
+  False-alarm rate 0/8 → no change to lenses 1-5, 7, 8.
+
+- **2026-09-02** — blast-radius **platform** — branch `readiness-flip` @ `9e4c5681`
+  (OI-53 flags 1+2: readiness + triggered deload flipped live, Health Connect
+  sleep). **5 findings (0 P0, 1 P1, 2 P2, 2 P3); 0 false_alarm.** All fixed
+  in-batch. Review: `docs/reviews/9e4c5681-review.md`.
+  **Tuning — lens 6 gains a PERMISSION-SCOPE question, and lens 7 gains the
+  layer BELOW the API.** Both come from the same batch getting Android wrong
+  three times in three rounds, each time in a way NO `flutter test` could see.
+  1. **Lens 7 (`missing_input`) must descend to the PLATFORM MANIFEST, not stop
+     at the API.** Plan review round 1 caught that `SLEEP_ASLEEP` was the wrong
+     data type (the plugin returns a whole session only for `SLEEP_SESSION`;
+     every other sleep type matches individual STAGES, so a stageless or
+     granular-tracker session yields zero points). Round 2 then found the layer
+     underneath: `android.permission.health.READ_SLEEP` was declared in **no
+     manifest**, so the permission could never be granted and the feature was a
+     permanent no-op *regardless* of the data type. **A correct API call against
+     an undeclared permission is indistinguishable from a correct feature until
+     it runs on a device.** Ask: for every new platform capability, is it
+     declared where the OS reads declarations — and did anyone check, or did the
+     enum's existence stand in for it?
+  2. **Lens 6 gains: when a user action requests permission X, does its code path
+     also request Y?** The B-pass P1: the sheet's "sync your sleep" nudge called
+     the shared `syncToHive()`, which falls through to the steps/weight
+     permission request — so a user tapping about SLEEP would get a
+     STEPS+WEIGHT consent dialog and unrequested step/weight writes. The file's
+     own comment promised "sleep must fail soft, both ways" and only one
+     direction was guarded. **A shared entry point inherits the union of every
+     caller's side effects; a narrow user action must not reach a wide one.**
+  3. **A NEGATIVE result worth recording, per this history's own convention:**
+     the reviewer independently re-ran Mutation B (kill-switch polarity flip) and
+     measured 22 failures, matching the commit's claim exactly — then reverted and
+     verified the tree clean before reporting. Confirming a mutation count costs
+     one run and is the only thing that makes the claim mean anything.
+  ⚠ Also, third instance in this batch of the stale-self-citation class: a
+  comment the batch ADDED cited `volume_titration.dart:56` while its own
+  insertion had shifted the guard to `:60`. **Capture line citations LAST.**
+  False-alarm rate 0/5 → no change to lenses 1-5, 8, 9.
+
+- **2026-08-30 (c)** — blast-radius **platform** — branch `oi150-phase-merge`
+  (OI-150 progress + profile write durability). **4 findings (0 P0, 2 P1, 1 P2,
+  1 P3); 0 false_alarm — all four real, all fixed in-batch.** Review:
+  `docs/reviews/375e3a351e7b-review.md`.
+  **The result worth recording: BOTH P1s were defects the batch's own earlier
+  remediation created**, in a batch that had already survived three review
+  rounds on a withdrawn design, one on the plan, and two on the implementation.
+  P1-1: a fix for a missed coupling path (the "key-absent seed") was inserted
+  ABOVE the line that reads the older kill-switch, so rolling
+  `disable_progress_restore_monotonic_merge` — documented as restoring
+  "verbatim pre-OI-83" behaviour — left the new coupling still firing. P1-2: an
+  N10-class fix ("a drain must not delete a marker for a push that never
+  happened") was applied to two call frames and not to the third, where three
+  early `return`s let a drain report `Result.ok` and delete the marker.
+  **Tuning made — lens 6 gains an ORDERING question, which is new.** Its
+  existing method says mutate-and-run and follow-the-return-value-to-its-caller.
+  Add: **when a fix INSERTS a statement near an existing guard, check where it
+  lands relative to that guard's own predicate.** P1-1 was not a wrong
+  condition — the condition was right and simply ran three lines too early, and
+  no amount of reading the guard reveals that. The reviewer found it by setting
+  the older switch and running, which is the only thing that does. Sibling
+  formulation: *a guard added ABOVE the switch that is supposed to disable it is
+  not disabled by that switch.*
+  **Second tuning — a NEGATIVE result on lens 8 worth keeping.** The reviewer
+  re-derived this batch's "~2.1% of birthdays, 232 of 10,958" prose claim by
+  brute-force sweeping every DOB 1980-2009 and got 232/10,958 = 2.117% — an
+  exact match. Recording the confirmation matters as much as recording a
+  refutation: the lens's value is that the number gets CHECKED, and a history
+  that only logs catches would imply the checks are free.
+  ⚠ Process note: the reviewer ran two probe tests and one mutation against the
+  live tree, then reverted all three and verified clean against the staged index
+  before reporting. That disclosure is the behaviour to keep.
+  False-alarm rate 0/4 → no change to lenses 1-5, 7, 8.
+
+- **2026-08-30 (b)** — blast-radius **platform** — branch `process-hardening` (the
+  batch that closes defect classes found in `profile-phase-fixes`). **3 findings
+  (1 P0, 1 P1, 1 P2); 0 false_alarm — all three real, all fixed in-batch.**
+  Review: `docs/reviews/2ef6e60d897d-review.md`.
+  **The result worth recording: two of the three findings were the batch
+  committing the exact classes it was written to close.** A new `safe_merge.sh`
+  precheck — built because a silent no-op had cost a merge unwind — read the
+  WORKING TREE on `main` for a record that lives on the FEATURE BRANCH, so it
+  matched nothing on every real invocation: a no-op guard against no-op guards.
+  And a new `case "$0"` execution guard, built because `sh _dart_bin.sh` had
+  silently done nothing, was forward-slash-only, so `sh 'scripts\_dart_bin.sh'`
+  — the dominant path spelling in this Windows environment — sailed past it and
+  did silently nothing. Neither was visible from reading; both needed the
+  reviewer to RUN the thing against reality.
+  **Tuning made — lens 8 (`asserted_fixture_value`) gains its sharpest form
+  yet, and it is a level above "is this literal right".** The P0's three tests
+  were green, and green *because* their fixture committed the record onto
+  `main`, a shape the real workflow never produces. So the question to add is
+  not only *would this pass if the feature did nothing* but **does the fixture
+  reproduce a state the real workflow actually produces?** Check the fixture
+  against real history (`git cat-file -e <merge>^1:<path>` settled it here in
+  one command), not against the code under test. A mutation run on top of a
+  fictional fixture proves nothing — which is precisely why the P0 survived a
+  mutation-proof claim made in good faith hours earlier.
+  ⚠ Also: the reviewer accidentally landed a real commit on the worktree
+  mid-review (a silently-failed `cd`), caught and reset it, and **said so**.
+  That disclosure is the behaviour to keep; the review was verified against
+  HEAD + staged-hash afterward and was clean.
+  **Round-2 addendum (same batch, verdict `converged`).** Two more lessons,
+  both about the REVIEWER's own output rather than the code. First, the
+  cheapest real findings round 2 produced were **stale numeric claims in prose
+  written earlier in the same batch** — a §7 row said a test group had 4 tests
+  when it had 5, and "reddens exactly one test" when it reddens two, because a
+  test was added during remediation and the sentence was never re-derived. Add
+  to lens 8's habit: **re-run any count a diff ASSERTS, including counts the
+  same diff introduced hours earlier** — the batch's own prose is the highest-
+  yield place to look, not the lowest. Second, three "declared defense, zero
+  test" gaps were found only by reintroducing each bug and watching the suite
+  stay green; reading the code would never have surfaced them, because the code
+  was correct and the comment describing it was accurate. **A correct defense
+  with no test is invisible to review-by-reading, and that is the shape to hunt
+  once the obvious defects are gone.**
+
+- **2026-08-30** — blast-radius **platform** — branch `profile-phase-fixes` (11 files, a
+  full-name restore-race fix + a phase-2 tripwire + a DEPLOYMENT-label fix). **6 findings
+  (0 P0, 2 P1, 1 P2, 3 P3 incl. 1 informational); 0 false_alarm — all 6 were real and all
+  fixed/resolved in-batch.** Review: `docs/reviews/56e7d3cf49d0-review.md`. Dispatched as a
+  fresh context-blind subagent with live Supabase MCP access; it ran the actual test suite,
+  gates, and live SQL rather than reasoning from the diff alone.
+  **No new lens — the existing 8 caught everything cleanly, including two genuine code gaps
+  (guard_without_its_mirror ×2: a retry fix unreachable on the primary C3 restore path; a
+  hard-refresh call with no catch of its own, unlike the precedent it claimed to mirror) and
+  a factual error in the AUTHOR's own prior live-data investigation (asserted_fixture_value:
+  a diagnose-doc misattributed a telemetry account to the wrong email — the reviewer's live
+  Postgres re-query caught it, and it was independently re-verified before accepting the
+  correction).**
+  **One process lesson worth recording: a reviewing subagent can misdiagnose its OWN
+  tooling.** Given a `git hash-object --stdin` value (correct — that call deliberately never
+  writes the blob), the subagent ran `git cat-file -t <hash>`, saw it fail, concluded the
+  hash was wrong, and silently substituted the HEAD commit sha into its own report instead of
+  asking or flagging the discrepancy. The substitution was caught by recomputing the hash
+  independently before trusting it — the same "verify a subagent's own claims, don't just
+  verify the claims about the code" discipline this skill's dispatch protocol already assumes
+  for the DIFF, extended here to the reviewer's incidental tooling claims too.
+  **Tuning made:** none to the 8 lenses. Confirms the lens set generalizes past its two prior
+  outings without needing a 9th.
+
+- **2026-08-30** — blast-radius **platform** — branch `board-budget` @ `6ad3920e`
+  (board token reclaim + a new context-artifact budget gate). **5 findings (1 P0, 2 P1,
+  2 P2); 0 false_alarm.** All fixed in-batch. Review: `docs/reviews/board-budget-bpass.md`.
+  **This pass ran THIRD, after two context-blind plan-review rounds, and its best finding is
+  one both of them read past.** Rounds 1 and 2 each opened
+  `check_context_artifact_budget.dart` and neither noticed `--record` executed BEFORE the
+  report — so re-baselining blessed whatever was on disk with no comparison and no trace,
+  and the FAIL path printed `--record` as its own escape hatch. The B-pass found it by
+  opening the gate whose name the docstring invokes (`check_apk_size_within_bounds.dart`)
+  and diffing the two: Gate 13's `exit(1)` sits ABOVE its record step, making that branch
+  unreachable on a breach, and this gate had inverted exactly that ordering.
+  **Tuning — a NINTH lens, `modelled_on_is_a_checkable_claim`:** when a diff says it
+  mirrors, follows, or is modelled on an existing component, OPEN THAT COMPONENT AND DIFF
+  THE TWO. "Same shape as X" is an assertion with a truth value; it is cheap to test and
+  easy to skip, because the phrase reads as provenance and reviewers grant it. Here the
+  docstring was sincere and the code contradicted it on the single ordering that mattered.
+  Generalises past code — it applies to any claim of the form "this follows the existing
+  pattern".
+  **Second tuning, for lens 6 — ask for the mirror MESSAGE, not only the mirror CASE.**
+  Round 1 made the bands two-sided; round 2 found the report still hardcoding the growth
+  thresholds and the verb "grew", so the very fixture round 1 built printed *"grew past the
+  50% hard band"* for a file that shrank 100%. A classifier fixed without its report is
+  still wrong where the operator reads it. Lens 6 asks whether the mirror case is guarded;
+  it should also ask whether everything that DESCRIBES the classification still describes
+  it correctly.
+  **Third — a number-hygiene rule the whole batch argues for.** 4 of the 10 findings across
+  the three rounds were stale numeric or line claims that SURVIVED a deliberate correction:
+  a citation fixed twice and still wrong (captured by grep, then invalidated by a later edit
+  to the same file in the same commit), and a retracted figure still live in a second
+  document nobody revisited. **After correcting any number, grep the repo for the OLD value;
+  and capture line citations LAST, or re-derive them immediately before commit.**
+  False-alarm rate 0/5.
+
+- **2026-08-29** — blast-radius **platform** — branch `exercise-plates` (25 commits, the
+  exercise plate feature). **3 findings (0 P0, 1 P1, 1 P2, 1 P3); 0 false_alarm, but ONE
+  finding was half-wrong in a way that mattered.** All fixed in-batch. Review:
+  `docs/reviews/exercise-plates-bpass.md`. Dispatched as a fresh context-blind subagent,
+  unlike the 2026-08-28 inline pass.
+  **The lesson is about a REJECTED causal claim, and it is new to this history.** Finding 1
+  was right that platform tier's `requires: feature_flag` was unmet — and wrong about why
+  the branch is platform, asserting it was *"solely because it edits `CLAUDE.md`"* and
+  recommending the doc rows be split out to drop the tier. Classifying each path ALONE
+  refuted it in one command: `pubspec.yaml` → platform (`blast_radius.yaml:324`) and
+  `CLAUDE.md` → platform (`:68`) are independently sufficient, so the proposed split would
+  have produced a second commit and the same unmet requirement. **Generalisable: when a
+  finding explains WHY a classifier returned a value, re-run the classifier per-path
+  rather than reading the registry — a tier is a max over globs, and "which edit caused
+  it" is not a question the registry answers.** Had the recommendation been taken on
+  trust, the batch would have shipped with the real gap intact and a spurious commit split
+  on top.
+  **What the pass was worth, and it is the arc math.** Lens 6 was pointed at the SVG crop
+  with an explicit "is the bbox ever too SMALL?" — a defect no test in the batch could see,
+  since they check counts, viewBox equality and tintability, never ink coverage. The
+  reviewer re-implemented the arc geometry with an ANALYTIC extrema solver, ran it over all
+  292 shipped assets, found 7 whose ink pokes outside the canvas, then re-ran the
+  pipeline's own sampler at 24/240/2400/24000 samples and got byte-identical results —
+  proving the difference was not sampling error but ink the source `viewBox` had already
+  clipped. **Asking a lens for a specific falsifiable property ("too small", not "correct")
+  is what made an independent re-derivation possible.**
+  **Second, smaller: an evidence claim wider than the check behind it.** Finding 2 was not
+  really "a generator still emits dead fields" — it was that the closure ledger claimed the
+  fields were *"pinned absent across lib/ and test/"* when the pinning test scans `.dart`
+  files only and structurally could not see the `.py` generator. The overstatement is the
+  dangerous half; a claim wider than its check reads as coverage. Same family as this
+  repo's phantom-citation rule.
+  **Tuning made:** none to lenses 1-8. Add to lens 3's habit: a blast-radius finding must
+  classify per-path before asserting which edit drives the tier.
+
+- **2026-08-29 (d)** — branch `exercise-plates`, during round 3, from running the plan against
+  real data for the first time. **Sharpened lens 7** rather than adding a ninth: a guard that
+  hard-fails on an input class assumed rare is only correct if someone counted, and "shape" in
+  that lens has to mean the value DISTRIBUTION as well as the schema. The pipeline refused SVG
+  `A`/`S`/`T`; all 292 shipping files use them and `s` appears 20,917 times, so it would have
+  produced nothing while looking like a careful tool. Neither of the two context-blind rounds
+  could have caught it — the upstream catalogue had never been cloned, which is lens 7's own
+  territory and the reason it now says to fetch the corpus and measure.
+
+- **2026-08-29 (c)** — branch `exercise-plates`, after review round 2 (5 BLOCKER / 11 MAJOR /
+  17 MINOR, verdict `not converged`; **four of five blockers sat inside round 1's own fixes**).
+  **No new lens.** The one genuinely new shape — a check that names what it forbids and then scans
+  itself — is a class this repo had ALREADY solved, with the `deu-quote` exemption marker
+  (`check_no_deferral_euphemism.dart:105-109`, three live sites in CLAUDE.md). Recorded as a
+  sibling note under lens 8 pointing at that convention instead of minting a parallel one. Logged
+  here because "considered and declined, for this reason" is the answer §5.1 asks for, and a lens
+  set that only ever grows stops being run.
+
+- **2026-08-29 (b)** — branch `exercise-plates`, after review round 1 of the implementation plan
+  (7 BLOCKER / 15 MAJOR / 16 MINOR; all 7 blockers verified real against the files).
+  **Widened lens 7 `out_of_repo_dependency` -> `missing_input`** on its third instance in one
+  batch — the worst case was an IN-repo path (`docs/plans/<x>.json`) that existed in no branch and
+  that six of ten tasks consumed, which the out-of-repo framing would have missed entirely.
+  **Added lens 8 `asserted_fixture_value`** after two test expectations in the same plan asserted
+  literals that the real data contradicts (`CCL` where the function returns `CSC`; a numeric-cue
+  suppression test naming a row whose cue is prose). Both were written by reasoning forward from
+  the implementation rather than computing from the data.
+
+- **2026-08-29 (a)** — blast-radius **platform** — branch `exercise-plates` (plan-stage, no code yet).
+  **Tuning only; no invocation.** Added lens 7 `out_of_repo_dependency` after a plan self-review
+  found a build script reading `frame-N.png` from a vendored catalogue that (a) was not in the repo
+  at all and (b) ships SVG exclusively — 906 of 906 frames `"format": "svg"`. Neither failure is
+  visible by reading the code; both fall out of one `find`. Logged here rather than waiting for the
+  B-pass because the existing six lenses all look INSIDE the diff, and this class is the one that
+  lives outside it — no lens would have asked the question.
+
+- **2026-08-28** — blast-radius **platform** — branch `oi89-bodyweight-floor` @ `1f817e2f` (11 commits, OI-89 equipment capability floor). **3 findings (0 P0, 2 P1, 1 P2); 0 false_alarm.** 2 fixed in-batch, 1 recorded as residual. Review: `docs/reviews/oi89-bodyweight-floor-bpass.md`.
+  ⚠ **Method deviation, and it must be read alongside the findings:** the pass was run
+  INLINE BY THE AUTHOR, not by a fresh context-blind subagent, because this session
+  carried a standing instruction not to call the Agent tool unasked. That is weaker
+  by construction and the record says so — `verdict: accepted` feeds the merge gate,
+  and the gate cannot tell the two apart.
+  **Both P1s were lens-6-family and both were self-inflicted hours earlier**, which is
+  the useful part: an author CAN catch their own guard-mirror defects if the lens is
+  run as a checklist against the diff rather than as a memory of intent.
+  **P1-1 is the sharpest instance of "the comment claims the opposite of the code" yet
+  recorded.** The commit message asserted *"the strong entries stay FIRST … reordering
+  would hand them a floor move over a real one"*, and the diff reordered two pools the
+  other way — promoting `Dip (Parallel Bars)` to the head of `elbow_extension`. Because
+  attempt-5 does not check `equipment_tier` and capability is null ABOVE bodyweight,
+  position in that pool IS the prescription for gym-tier users, so a `home_dumbbells`
+  user would have been handed a dip station where the old order gave a Diamond Push Up.
+  **Generalisable: when a diff's own comment states an invariant, CHECK THE DIFF AGAINST
+  IT rather than reading the comment as evidence.** A comment asserting "I did not
+  reorder" is the cheapest possible place for a reorder to hide.
+  **P1-2 extends the seventh lens (`same_class_in_the_fix`) with a scope question.** The
+  batch's independent evidence that `equipment_needed` is trustworthy is a prose-scanning
+  gate — which scanned BODYWEIGHT-TIER ROWS ONLY. That is exactly the wrong scope for the
+  defect it must catch: a row over-tagged in `equipment_needed` rather than in
+  `equipment_tier` is not bodyweight-tier to begin with, so the narrow scan could never
+  reach one. Widening to all tiers surfaced 18 findings, 17 comparison prose and one real
+  (E260 Incline Dumbbell Press: first cue *"Set bench to 30-45 degree incline"*, row
+  claimed dumbbells only, tier `home_dumbbells` grants no bench). **Ask of any gate the
+  batch relies on: is its INPUT SET the set where the defect can live?** The batch had
+  already hit this hole once — two rows surfaced from a tier re-derive rather than from
+  the gate — and treated it as two rows instead of as a scope bug.
+  **Tuning made:** none to lenses 1-7. Add to lens 3's habit instead — when a batch adds
+  or leans on a gate, verify the gate's scope covers the defect class, not just the
+  instance that motivated it. False-alarm rate 0/3.
+
+- **2026-08-26** — blast-radius **platform** — branch `oi98-notification-prefs` @ `885ebd47f4c0`.
+  **6 findings (1 P0, 2 P1, 2 P2, 1 P3); 0 false_alarm.** All fixed in-batch.
+  Review: `docs/reviews/885ebd47f4c0-review.md`.
+  **The P0 was the batch's own bug class, surviving into its own fix.** OI-98 was
+  "authoritative data living in a wholesale-replaced document". The fix moved it to a
+  dedicated jsonb column — and a jsonb COLUMN is also replaced wholesale by an upsert, so
+  a device holding a sparse map deleted every key it had not personally seen. Per-key merge
+  had been written on the RESTORE side and wholesale replace left on the WRITE side.
+  **Tuning made — a seventh lens, `same_class_in_the_fix`:** when the batch under review
+  fixes a named bug CLASS, ask explicitly whether the replacement re-creates that class in
+  its new shape, and check the mirror side of any per-key/merge/guard semantics the fix
+  introduces. The existing `guard_without_its_mirror` lens found it, but only because the
+  reviewer generalised on its own; the prompt did not ask. Note also that the same lens
+  fired on the fix's OWN new guard (Finding 3 — the owner re-check protected the new call
+  and not its sibling two lines above), which is evidence the lens is worth its cost on any
+  batch that adds a guard.
+  **Second tuning — assert the WRITE payload, not just the read path.** Finding 6 named why
+  the P0 survived a suite that was already mutation-proven: every test exercised restore and
+  emission, and none asserted the SHAPE of what the client sends. When a batch changes a
+  cloud write, require a pure extracted payload builder and a test over it; a round-trip
+  test that never inspects the outgoing payload is blind in exactly the direction that
+  matters.
+
+- **2026-08-25** — blast-radius **platform** — branch `discipline-enforcement` @ `fbbea768`.
+  **4 findings (2 P0, 2 P1); 0 false_alarm.** All fixed in-batch.
+  Review: `docs/reviews/discipline-enforcement-bpass.md`.
+  **This pass reviewed the batch that BUILT this gate, and found the gate would have
+  silently passed its own first real use.** `hasTuningEntryFor` matched any bullet carrying
+  the review's date — and `SKILL.md` already held a 2026-08-25 entry for an unrelated batch,
+  so THIS review would have been reported satisfied by somebody else's entry. Date is not
+  identity, and two reviews on one calendar date is ordinary here, not exotic. Fixed with a
+  block scan that requires the dated entry to NAME the review.
+  **The second P0 is the same shape one layer out:** the Stop hook measured its batch with
+  `origin/main..HEAD` while local `main` sat 7 commits ahead of origin — so three derived
+  rows reported green on three unrelated batches' evidence (another batch's review file
+  satisfied the skill-tuning row; another batch's `fix(...)` subjects set the feedback row;
+  the retrospective check anchored to an unrelated commit's date). `new-worktree.sh:65-91`
+  had solved that exact range-selection problem already and the fix was not carried across.
+  **Generalisable, and it is why this pass earned its keep after TWO ×2 rounds found nothing
+  of the kind:** when a batch builds a checker, point the checker at ITSELF and at the
+  repo's real state, not at a fixture. Both P0s were invisible to 52 passing tests and to
+  two context-blind rounds, and both fell out immediately from running the thing against the
+  live tree. A fixture encodes the author's model of the world; the working tree does not.
+  ⚠ Process: the reviewer's own failed `cd` left it in the target worktree and an
+  `ALLOW_RAW_GIT=1 git commit` landed a stray commit there. Self-caught and fully reverted
+  (author verified independently). Two lessons recorded in the review: chain `cd <dir> && …`,
+  and a review subagent should not hold a raw-git escape hatch at all.
+  False-alarm rate 0/4 → no tuning to lenses 1-6.
+
+- **2026-08-25** — blast-radius **account** (self-declared platform) — branch `oi60-client-blockers` @ `2e9503eb` (OI-60 FOB-7a/7b). **4 findings (0 P0, 1 P1, 3 P2); 0 false_alarm.** All fixed in-batch. Review: `docs/reviews/2e9503eb-review.md`.
+  **NEW OBSERVATION, and it is the reason this entry matters: all four findings were defects in the EVIDENCE, none in the CODE.** Every prior entry in this history records the pass catching a code or guard defect. Here the ×2 plan review had already caught the design defects — including a P0 it prevented — and the code shipped correct. What the B-pass found was that the ARTIFACTS DESCRIBING the code were false:
+  (1) **P1 — a past-tense claim for work never done.** The plan-review record AND the closure YAML both stated the three wrong OI-127 board citations had been "corrected on the board in this batch". They were corrected in the plan document only; `git log <base>..HEAD -- docs/audit/open_issues.md` returned ZERO commits and the board still showed all three verbatim. The batch existing partly to stop the board misdirecting the next session was about to merge leaving it misdirecting, while asserting the opposite.
+  (2) **P2 — `docs/sot_registry.yaml` described superseded behaviour** in two entries, one of which (`still clamped`) the same commit's own new code comment directly contradicted.
+  (3) **P2 — the diagnose `bug_id` COLLIDED** with an unrelated doc, making `closes-diagnose:` ambiguous forever (git history cannot be rewritten to repair it). No detector exists: `validate_diagnose_doc.dart` takes ONE path and never scans the corpus, though the OI-number version of this identical bug shipped six times and earned its own gate. Filed OI-140.
+  (4) **P2 — a stale mutation count** (claimed 4-of-7 red, actual 5-of-7). Measured when the file had SIX tests, never re-measured after a seventh was added, then copied into two documents.
+  **Generalisable, and worth adding to how this skill is USED rather than to a lens:** the ×2 plan review reads the DESIGN; the B-pass reads the ARTIFACTS. Neither pass would have found the other's findings, and a batch can be entirely correct while shipping documents that lie about it. When the code is clean, do not conclude the pass found nothing — turn the lenses on the commit's own claims: does every past-tense assertion have a diff behind it, does every cited count come from a run against the file as it now stands, and is every id unique in its space.
+  **Second, mechanical lesson (feeds the new Gate `check_skill_tuning_history.dart` added the same day):** this very entry was NOT written until founder asked whether discipline had been followed. §5.1 mandates it and nothing enforced it, so the skill's own self-evolution loop was the thing decaying. It is now gated: a commit adding `docs/reviews/<sha>-review.md` must also add a same-dated entry here.
+  False-alarm rate 0/4 → no tuning to lenses 1-6.
+
+- **2026-08-25** — blast-radius **catastrophic** ×2 — branch `launch-blockers-1` then its split `launch-blockers-1a`. **Pass 1: 3 findings (0 P0, 1 P1, 2 P2). Pass 2 (post-split): 6 findings (0 P0, 1 P1, 2 P3+). 0 false_alarm across both.** Reviews: `docs/reviews/eb37932a4218-review.md`, `docs/reviews/a51a2ba9de14-review.md`.
+  **The headline is what happened BETWEEN the two passes, and it is an argument for Hermes rather than for this skill.** Pass 1 was clean and its findings were real — the sharpest being a restore leg wired into one of four entry points, certified by a test asserting a COUNT that two branches of one function satisfied. But a five-lens Hermes pass on the post-B-pass code then found **two P0s that broke BOTH of the batch's headline fixes**: a bodyweight guard keyed on `equipment_tier`, a field `docs/sot_registry.yaml` itself declares *"over-tags tolerated"* (so Chin Up — one of the three exercises the bug reported — still shipped); and a restore leg reading the newest snapshot row that the device's own `splash_screen:189` push overwrites first, confirmed against live prod (126 rows, 14 with prefs, all all-enabled). Per §4.12.1 the unit was SPLIT.
+  **Lens-6 lesson, new sub-shape — THE ORACLE COPIED THE CODE'S BLIND SPOT.** The B-pass ran lens 6 on the bodyweight guard, mutated both sites, watched 3 and 2 tests redden, and passed it. That was all true and all beside the point: the test's oracle read the same `equipment_tier` field as the code, so the mutation proved the guard guards what the test measures, not what the user suffers. **Mutating a guard cannot detect an oracle derived from the same expression as the guard.** Lens 6 should now also ask: *what field does the ORACLE read, and is it the field the HARM lives in?* If the oracle cannot be stated without reusing the production predicate, it is a mirror, not a test.
+  **Second sub-shape — a hard floor on a field documented as imprecise.** §4.1/§4.5 already say read the SoT entry for a field before keying on it. Neither the author nor the B-pass did; Hermes did, and it was decisive. Cheap to add to lens 1: for any NEW guard, open the SoT entry of the field it keys on and quote its invariant.
+  **Also: 3 of the 6 pass-2 findings were false file:line citations in the batch's own diagnose-docs** — including one conflating `writeSubscriptionState` (an activation write) with `_downgradeLocally` (a downgrade wipe), inside the doc written to demonstrate file:line discipline. Worth keeping lens 1 pointed at the DOCS, not only the code.
+  False-alarm rate 0/9 → no tuning to lenses 1-5. The seventh lens used in pass 2, `split_self_consistency` (grep the staged docs for references to work NOT in the diff), is worth reaching for on any split batch — it returned clean and independently re-verified the checklist's STILL-OPEN claim against live data.
+- **2026-08-25** — blast-radius **platform** — branch `e2e-timeout-convention` (a ONE-LINE root-CLAUDE.md pitfalls row). **5 findings (0 P0, 3 P2, 2 P3); 0 false_alarm.** 3 fixed, 2 recorded with reasons. Review: `docs/reviews/e2e-timeout-convention-bpass.md`.
+  **First recorded use of the §4.3 docs/process-only review MODE**, and it is worth distinguishing from the other entries here: §4.3 says a docs-only ≥account change *"takes a self-consistency review of the wording instead of an adversarial bug-hunt."* The pass was therefore a wording review plus a ground-truth audit of every factual claim — and the audit is what found everything. Lenses 1-6 as written barely apply to a one-line table row; do not force them, and do not let "the lens set returned clean" read as "the change is fine" on a docs change.
+  **The finding that justifies running it at all: the row's CENTRAL CLAIM was false.** It asserted *"EVERY e2e under `test/scripts/` already has one"*; `pre_merge_commit_e2e_test.dart` had none — and that file executes the REAL pre-merge-commit hook in a real throwaway repo, i.e. it was the archetype of the hazard the row documents. A reviewer who read the row for plausibility rather than enumerating all 11 files would have passed it.
+  **Generalisable rule this adds: on a docs change, every UNIVERSAL claim ("every", "all", "none", "always") is a finding until enumerated.** Two of the five findings were exactly that shape — the "EVERY e2e" claim, and a Source column citing `common-pitfalls.md` when that file had ZERO coverage of the topic (a phantom citation, which this repo already calls *worse than citing none, because it reads as coverage*).
+  **Also generalisable: check whether the documented fix is the WEAKEST available one.** The row prescribes a per-file annotation held only by memory; the class has recurred 4× (`aac52fb6` alone records three consecutive failed merge attempts), and `dart_test.yaml` — which exists, configuring only the `golden` tag — would close it repo-wide in one line. Recorded rather than done, because changing the global test timeout touches every test and both CI jobs.
+  False-alarm rate 0/5 → no tuning to lenses 1-6.
+
+- **2026-08-28** — blast-radius **platform** — branch `apk39-claudemd-jdk` (one §4.9 pitfalls row: the APK build's undocumented JDK dependency). **3 findings (0 P0, 1 P1, 2 P3); 0 false_alarm.** Docs/process-only, so per §4.3 this was a self-consistency + ground-truth pass, labelled as such rather than dressed up as a bug-hunt. Review: `docs/reviews/apk39-claudemd-jdk-bpass.md`.
+  **The finding worth keeping is about EVIDENCE WIDTH, not code.** The row claimed *"every APK +35→+38 used Android Studio's bundled JetBrains Runtime"*. I had read the `javaHome=` line from exactly ONE log and inferred the other three from **mtimes matching ship dates** — which establishes *when* a daemon ran, not *which JVM it used*. Two different claims, and the second does not follow from the first. Auditing properly meant enumerating all **111** logs; the claim held, and held wider than stated (every build 2026-03-30→2026-08-06, with today's the first non-JBR one ever recorded). **Generalisable: when a claim is "all N of X did Y", the audit is enumerating N, not checking one and finding a correlate that plausibly covers the rest.** Sibling of `feedback_green_check_input_set_width` — the input set here was one log wearing the costume of four.
+  **Second, a process finding this pass exists because of:** the content first landed as `acd6c818`, a DIRECT commit to main at platform tier, on my assertion that the keystone gate keys on `HEAD^1..HEAD^2` and so cannot see single-parent commits. That was true before 2026-07-27 and is false now — the gate's own error text names `be3b4baf` and `8c38c855` as the account-tier auth commits that slipped through when it *"exited before looking"*. The preceding versionCode commit passed via the **version-bump exemption**, not because direct commits are exempt; I generalised from one passing case whose reason I never checked. Caught by `git-safety`'s advisory precheck seconds before the push. **A gate that passed for a neighbouring commit is not evidence it will pass for yours — read WHY it passed.**
+  False-alarm rate 0/3 → no tuning to lenses 1-6.
+
+- **2026-08-20** — blast-radius **account** — branch `claude/oi-pending-hold-weeks-1od97o` (FOB-1 week identity, OI-60). **2 findings (0 P0, 1 P1, 1 P2); 0 false_alarm.** Both fixed in-batch. Review: `docs/reviews/fob1-week-identity-bpass.md`.
+  **Lens 6 found the P1 by asking its question one level OUT — not "is this guard correct?" but "is the value it produces REACTIVE where it is consumed?"** The seam, the provider and four of six surfaces were all correct. The defect: `UserStatsNotifier.build()` read the identity through a plain singleton call, so `userStatsProvider` had NO dependency-graph edge to the hold write. The five tabs sit under `StatefulShellRoute.indexedStack`, so an already-mounted Profile tab never rebuilds on tab-switch — Profile would have kept printing `WEEK 4 OF 4` while Home and Train said `HOLDING · H1`, **reintroducing the exact cross-tab contradiction the batch existed to close, on two of its own six surfaces.** This is the 2026-08-17 "follow the return value to its CALL SITE" note generalising once more: the tell was again structural — a `build()` that watches nothing it derives from.
+  **The P2 is the second consecutive batch where `test_can_actually_fail` beat a mutation-proven change, and the sharper lesson is new.** The batch shipped TWO mutation proofs on the service seam and cited both in its commit message — while the LABEL layer, which is what a user actually reads, had zero behavioral coverage: the only assertion was `body.contains('stats.isHolding')` against raw source. The reviewer inverted that ternary (a real defect printing "Holding · Hnull" to every non-holding user) and **all 16 tests still passed**. Fixed by extracting the five label ternaries to pure functions with a table-driven test; the same inversion now reddens 4. **Generalisable: mutation-proving a SEAM does not mutation-prove the SURFACES that consume it.** A source-grep over a widget is presence, not behaviour — when the logic is a ternary in a `build()`, extract it to a pure function so it can be asserted at all.
+  False-alarm rate 0/2 → no tuning to lenses 1-5.
+
+- **2026-08-17** — blast-radius **platform** — branch `cycle-time-and-board-gaps` @ `3c7cb9d2`. **5 findings (1 P0, 3 P1, 1 P2); 0 false_alarm.** All fixed in-batch. Review: `docs/reviews/cycle-time-and-board-gaps-bpass.md`.
+  **The P0 is the clearest case yet for running the B-pass even after a ×2 plan review passed, and lens 6 found it.** The batch had already had TWO independent context-blind rounds (8 and 10 findings). Round 1 fixed an escape hatch that a mere MENTION could grant; round 2 fixed it again for mentions inside heredocs and multi-line commit messages. Both fixes were correct. The B-pass found generation THREE: the hatch was bound correctly to a statement, and then the **caller** collapsed that binding into one command-wide boolean, so `ALLOW_RAW_GIT=1 git status; git push --force` exempted the push. Reproduced against the real hook with controls in both directions.
+  **The generalisable lesson, and it is a new one for this lens:** rounds 1 and 2 both reviewed the PREDICATE and neither reviewed the CALL SITE. A guard can be perfectly correct and still be defeated by the code that consumes it — so lens 6 must follow the guard's return value to where it is USED, not stop at where it is computed. The tell was structural and visible without any cleverness: the predicate returned a `bool`, which is exactly the shape that cannot carry the binding it just established. The fix returns the offending STATEMENTS.
+  **Second observation, worth keeping:** 4 of 5 findings were lens 6, and the other (`blast_radius_mismatch`) was the FOURTH recurrence of "the hook got pinned, its dependencies did not". Both are the same failure family — the fix covers the thing you were looking at and not the thing one step away. No new lens; lens 3 and lens 6 already cover it, and adding a seventh would split attention rather than add reach.
+  False-alarm rate 0/5 → no tuning to lenses 1-5.
+
+- **2026-08-13** — blast-radius **platform** — branch `post38-auth-fixes` @ `04e29b25` (PR #22 merge resolution: OI-id renumber + a new duplicate-id detector). **5 findings (0 P0, 0 P1, 5 P2); 0 false_alarm.** All fixed in `79a313d6`. Review: `docs/reviews/04e29b25-review.md`.
+  **The finding that justifies the pass: a test that could not fail for the property it asserted.** The new "reports every duplicated id, in numeric order" test used a fixture of `OI-100..105` — six ids of **identical digit width**, where lexical and numeric sort produce the same output. Its `reason:` string claimed *"lexical would put OI-100 last"*, false for its own data. The reviewer substituted a lexical `.sort()` and **all 25 tests still passed**. Fixed with `[9, 10, 100, 105]` (lexical differs at BOTH ends), re-proven by execution: clean 26/26, lexical mutation 25/1.
+  **Why this is worth recording rather than filing as routine:** the commit under review shipped TWO deliberate mutation proofs and cited both in its message — and still contained a third assertion that could not discriminate. Mutation-proving the code does not mutation-prove the *fixtures*. This is the `test_can_actually_fail` lens finding a gap that rule 24's ledger cannot see, because the ledger checks that a red-path assertion EXISTS, not that its data makes the wrong implementation visible.
+  **NO new lens.** This is `test_can_actually_fail` (already in the brief) working as intended, not a blind spot. The other four were documentation-integrity: two bare-number citations a `sed 's/OI-<n>\b/…/'` structurally could not see, a board-vs-diagnose-doc ordinal contradiction, an unexplained empty `related_bugs:`, and a plan-review record whose narrative was frozen at an earlier slice. False-alarm rate 0/5 → no tuning to lenses 1-6.
+
+- **2026-08-11** — blast-radius **platform** — batch `commit-merge-push-process` (ADR-0018, the pre-commit cost split). **2 findings (0 P0, 1 P1, 1 P2); 0 false_alarm.** Both fixed in-batch. Review: `docs/reviews/commit-merge-push-process-bpass.md`.
+  **Lens 6 earned its place again, and taught the sharper version of its own rule.** The P1: the batch's pre-commit guard was a SOURCE GREP, and the B-pass defeated it with an indirect invocation — `_sub="ana""lyze"; flutter "$_sub"` — which runs `flutter analyze` on every commit with the suite fully GREEN. That was the **third** escape found in that one guard across three passes: the ×2 plan review's round 1 restored the calls into the `else` body (the first version's asserted range *contained* the else branch), round 2 beat the fix with `flutter  analyze` (one extra space), and the B-pass beat *that* with indirection. Each fix was defeated by the next reviewer.
+  **The generalisable lesson, now added to lens 6's method note:** tightening a matcher is a losing game — a source-grep guard is bounded by what its author can imagine writing. The fix was a RUNTIME test (`test/scripts/pre_commit_lean_path_e2e_test.dart`) that executes the hook with a stub `flutter` on PATH and observes actual invocation, so it holds against any spelling. It had been skipped on a cost assumption (~22s to run the whole hook) that collapsed once the abort trick was found: stub `dart` to exit 1 and the script dies at its first gate, which sits *below* the code under test — 2s per scenario. **Reach for the behavioural test FIRST; fall back to a grep only when execution genuinely cannot be observed, and say so in the test header.**
+  The P2 (`blast_radius_mismatch`): platform tier's `requires:` lists `feature_flag`, which nothing in the diff addressed and which **no gate enforces** — `check_plan_review_record_exists.dart` never reads it, so it can pass CI while unmet. Resolved as a written, founder-ratified deviation in ADR-0018 rather than a compliance claim. Worth noting the lens caught a requirement that is registry-level-only; that is exactly the gap a human-run lens exists for.
+  False-alarm rate 0/2 → no tuning to lenses 1-5.
+
+- **2026-08-10** — blast-radius **platform** ×2 — batches `gate-registry` (merge `f909cf35`) and `ci-speedup` (merge `9a5ecd82`). **3 findings (0 P0, 0 P1, 3 P2); 0 false_alarm.** gate-registry: a generator emitting a bare "." as the purpose for 2 of 87 index rows, and a comment citing a gate number the same batch's own rule forbids. ci-speedup: an asymmetric existence guard in `new-worktree.sh` that made the script CRASH under `set -e` in a case the pre-fix code handled fine. All fixed in-batch with regression tests; two carry mutation proofs.
+  **NEW LENS — `guard_without_its_mirror` (lens 6).** The ci-speedup finding was the **fourth** instance in one session of one shape: `isRegenerableIgnored` went none→prefix→basename→exact across three consecutive P0s; the gate-registry hard-fail went vacuous→over-firing→correct; the worktree guard covered `origin/main` but not local `main`; and a `_settle()` fix took a per-call-site predicate derived from only the FIRST of three following assertions, turning a flaky test into a deterministically failing one. **Each fix created the next round's finding.**
+  Why a LENS and not just a memory file: the ×2 plan review caught **none** of the four, and the B-pass caught only the last. A plan review reads prose; this class only shows against code. The memory file naming the pattern already existed when the fourth instance was committed — writing the rule down did not prevent applying it wrong, so it needed a checkpoint that runs over the diff.
+  False-alarm rate 0/3 → no tuning to lenses 1-5. Reviews: `docs/reviews/gate-registry-bpass.md`, `docs/reviews/ci-speedup-bpass.md`.
+
+- **2026-06-08** — blast-radius **platform** — commit `b7c8040` (ai-proxy recompose server-enum). **3 findings (1 P1, 2 P2); 1 false_alarm.** 1 P1 (diagnose `blast_radius` account→platform) + 1 P2 (`_executeRegeneratePlanBlock` missing `FitnessGoals.isKnown` guard, asymmetric with `_executeSwitchGoal`) fixed in-batch; Finding 3 (`_humanGoal` default-case for recompose) = intentional/SoT-covered → false_alarm. False-alarm rate 1/3 ≈ 33% nominally > the 30% threshold, but **n=3 is too small to act on** and the false_alarm was lens 1's (writer_reader_drift) soft defense-in-depth sub-note, not a distinct noisy lens → **NO lens tuning**. The pass also independently re-verified the gate regex + token-parse + `describe()` text (zero false-greens) and caught a real P1 + a real P2 the 0 prior reviews missed → net valuable on a prod-bound platform change. Review: `docs/reviews/b7c8040-review.md`.
+
+- **2026-08-15** — blast-radius **platform** — branch
+  `claude/debugging-stuck-issue-89b2e9` (e4a7c9, the realtime PRO gate).
+  **1 finding (1 P0, 0 P1, 0 P2); 0 false_alarm.** Fixed in-batch. Review:
+  `docs/reviews/realtime-pro-gate-bpass.md`.
+  ⚠ **BACKFILLED 2026-09-10.** This entry was owed on 2026-08-15 and never
+  written; the review file sat on an unmerged branch for 25 days, so
+  `check_skill_tuning_history.dart` — which fires on a review file being ADDED —
+  had nothing to fire on until the cherry-pick. That is the gate working exactly
+  as designed and also the proof of its one blind spot: **a review that never
+  merges is a review whose lesson never enters the skill.** The entry is dated to
+  the review, not to the backfill, because the gate matches on `reviewed_at`.
+  **The tuning — lens 6 (`guard_without_its_mirror`) gains its sharpest instance
+  yet: the ANTI-FLOOD MECHANISM RE-CREATED THE FLOOD.** The fix added a latch so
+  a free user logs `realtime_subscribe_skipped_free_tier` once per transition
+  rather than once per resume. The latch was reset inside `unsubscribeRealtime()`
+  — and `day_rollover_service` calls that on EVERY `AppLifecycleState.paused`. So
+  the latch re-armed on every background/foreground cycle and the event re-fired
+  on every resume: an Edge Function invocation plus a `client_errors` row, across
+  essentially the whole free population. **Bug-class 2.13 reintroduced by the
+  very mechanism written to prevent it, inside the fix whose own diagnose-doc
+  names 2.13 as the thing to avoid.**
+  **Why the shipped test could not see it, which is the transferable part:** the
+  case named "the skip is logged ONCE" called `subscribeToRealtimeSync()` three
+  times **with no pause between them**. That is not the production call pattern.
+  The test was written from the same mental model as the code and exercised the
+  same half — precisely what lens 6 says never to accept as evidence. The
+  reviewer reproduced the defect with a throwaway probe first
+  (`Expected: <1> Actual: <5>`), then re-measured it as a mutation.
+  **Rule to carry forward: when a fix adds a latch, a cache, a debounce or a
+  once-flag, find every RESET of it and name the lifecycle event that triggers
+  that reset.** A latch is only as correct as its clear condition, and the clear
+  condition is usually written somewhere the diff does not touch. The repair here
+  moved the reset out of `unsubscribeRealtime()` into `_onUserChanged` alone: the
+  latch means "I have already reported that THIS user is unentitled", so the only
+  thing that may clear it is the user changing.
+  False-alarm rate 0/1 → no change to the lens set.
+
+- **2026-09-13** — blast-radius **platform** — branch `oi189-plan-end-bound` (OI-189: every
+  phase-layout writer stops at `plan_end`, every regen sweeps rows already past it, every window
+  move pushes `plan_json` immediately; diagnose `b9e4d1`). **11 findings (1 P1, 6 P2, 4 P3); 1
+  false_alarm (9%).** 7 fixed in-batch (3 mutation-proven: M20/M21/M22), 2 correctly scoped OUT as
+  already-tracked residuals (OI-190, a new OI-174 bullet), 1 escalated to the founder (unresolved
+  as of this entry), 1 false_alarm (informational, no defect). Review:
+  `docs/reviews/oi189-plan-end-bound-bpass.md`. Run as TWO agents — reviewer A the 8 read-only
+  lenses, reviewer B the 2 mutation lenses (6, 8) dispatched only AFTER A returned, so no mutating
+  tree was ever shared between them (this skill's own dispatch-protocol step 0 concern, applied to
+  the REVIEWERS this time rather than to author/reviewer handoff).
+  **Tuning 1 — lens 8 (`asserted_fixture_value`) gains: a census that "gets a smaller number" on
+  independent reproduction is not automatically the ORIGINAL claim being wrong.** Reviewer B
+  reproduced the diagnose-doc's "92 files, 849 tests" census with its OWN best-effort basename
+  guess (the 8 touched `lib/` files + the test file = 9 terms) and got 87/784 — smaller, still
+  green, and reported as a discrepancy. The original 92 was in fact CORRECT; the missing tenth
+  basename was `workout_schedule_service.dart`, the FACADE the batch deliberately does NOT edit
+  **A "smaller but still
+  green" reproduction of a census claim is not proof the claim was inflated — it can just as
+  easily mean the reproducer's input set was narrower than the original's.** Same family as this
+  history's repeated input-set-width lessons, one direction further: here it was not the ORIGINAL
+  claim that undercounted, it was the VERIFICATION attempting to check it. Fix: name every
+  basename a census claim used, in the claim itself, not just the resulting numbers.
+  **Tuning 2 — lens 6 (`guard_without_its_mirror`) gains: a guard's own justifying COMMENT is a
+  checkable claim, and "the mirror is out of scope" is not the same as "the mirror doesn't
+  exist."** Two separate P2 findings in this pass (B-1, B-2) were guards whose own doc-comment
+  asserted safety for a case the guard's author had not actually traced: `pausedForSimulation`'s
+  comment claimed "cloud catches up at the next weeklyFullSync, as before" for a code path
+  (`simulation_service.dart`'s year-sim) that NEVER calls `weeklyFullSync` at all — the comment
+  was true for the app's real users and silently false for the one caller class this unit's own
+  guard was written to protect. **When a guard's comment names WHY the mirror case is safe, verify
+  that reasoning against the mirror caller specifically — a comment can be accurate for the common
+  case and false for an edge case the guard itself newly created.**
+  **Tuning 3 — a NEW instance for the "extract to a pure function" pattern this history has used
+  before (2026-08-20's label-ternary entry): TWO widgets carrying a BYTE-IDENTICAL private method
+  is itself the tell that neither was ever testable, and it is cheap to check BEFORE trusting
+  "the diff duplicates X, but both copies are correct" as a clean lens-9 result.** Reviewer A's
+  lens 9 check (`diff <(...) <(...)` on both widgets' `_phaseNote`/`_dayLabel`) correctly found
+  them identical and reported it as CLEAN — technically accurate, but it stopped one question
+  short: identical AND untestable is worse than either alone, since a future edit to one copy and
+  not the other would drift silently with nothing to catch it. Lens 9's method note now adds: when
+  a "modelled on X" check finds true byte-identity between two PRIVATE, per-class copies, that is
+  itself a finding (extract + test), not merely a clean result.
+  **A NEGATIVE result worth keeping, per this history's convention:** reviewer A independently
+  re-derived the plan's "review_rounds: 5" claim by counting the dated round headers in the Review
+  log itself, rather than trusting the plan-review record's frontmatter number — and it matched.
+  Both prod censuses were also re-run live, read-only, and matched exactly. Recording a confirmed
+  claim is as much the lens's job as catching a wrong one.
+  False-alarm rate 1/11 ≈ 9% → well under the 30% threshold; no lens removed. Lenses 6, 8, 9
+  extended per above.
+
+- **2026-09-14 (c)** — blast-radius **catastrophic** — branch `telegram-admin-bot`, the F2-F13
+  fix-response commit for a separate whole-branch review's findings (touches
+  `_shared/cron_auth.ts`, catastrophic by path in `docs/blast_radius.yaml`, even though the
+  change to it — exporting a previously-private `timingSafeEqual` — is behavior-preserving for
+  its existing callers). **1 P2, 1 P3; 0 false_alarm; both accepted and fixed in the same
+  commit.** Review: `docs/reviews/014866ecac87-review.md`.
+  **Tuning — lens 8 (`asserted_fixture_value`) caught a review-writer's OWN comment repeating an
+  unverified claim, not just a test's asserted value.** The fix-diff's code comment justifying
+  the `/cron` 7-day-window fix claimed a cleanup function "ALWAYS SPARES each function's most
+  recent row" — plausible-sounding, written by the same author who wrote the fix, and false: the
+  live function body spares exactly ONE row globally, not one per function. This is the same
+  class this history has flagged before (a review's own suggested-fix repeating a stale claim,
+  2026-09-14 (b)'s entry) but one level earlier — here it was the FIX's own justification, not a
+  reviewer's suggestion, and it survived because nobody had re-read the cited function's live
+  body since writing the sentence. **Any comment citing a named function/migration's behavior as
+  the reason a fix is safe is itself a claim in asserted_fixture_value's scope — verify it
+  against the live body, not just the test's literal values.** The deeper defect (the cleanup
+  function itself only sparing one row, not per-function) was correctly NOT fixed in the same
+  diff — filed as OI-199, since it is separate pre-existing infrastructure (migration 109
+  predates the branch) with its own blast radius and testing needs. Distinguishing "the comment
+  is wrong" (fix now) from "the underlying system has a gap" (file it) kept the diff from scope-
+  creeping into an unrelated migration under review-response pressure.
+
+- **2026-09-16** — blast-radius **account** — branch `email-confirm-ux`, the B-pass on the
+  signup-confirmation-link feature (new `/confirm` screen + Android App Links). **7 findings (2
+  P1, 2 P2, 3 P3); 0 false_alarm — all 7 accepted** (5 fixed in code, 1 resolved via
+  documentation + a filed OI rather than an unscoped UX redesign, 1 recorded as pre-existing
+  architecture needing no action). Review: `docs/reviews/email-confirm-ux-bpass.md`.
+  **Tuning — verifying a framework-internals claim means reading the installed PACKAGE'S OWN
+  SOURCE, not reasoning from how the library is generally believed to behave.** Finding 1's whole
+  severity rested on whether go_router's `pageKey` includes the query string — the reviewer read
+  `go_router-17.2.3/lib/src/match.dart:227-292` directly and confirmed
+  `pageKey: ValueKey<String>(newMatchedPath)` never touches `uri.query`, and independently
+  confirmed `AndroidManifest.xml`'s pre-existing `launchMode="singleTop"` rather than assuming it.
+  Lens 6 (`guard_without_its_mirror`) already asks to "verify every claim against code + live
+  state", but this pass is worth citing because the claim being verified was about a THIRD-PARTY
+  DEPENDENCY's internals, not this repo's own code — the temptation to reason from memory of "how
+  go_router generally works" is exactly the shape a subagent hallucinates most fluently
+  (debugging skill bug-class 2.9). The author independently re-verified the same two claims
+  post-review (both confirmed) before trusting the fix's design on them.
+  **A second pattern worth keeping, not tuning:** the review ran the mutation test ITSELF
+  end-to-end (baseline green → neuter the guard → confirm exactly the two expected tests redden
+  for a genuine assertion failure, not a compile error → revert → confirm byte-identical) rather
+  than trusting the dispatch brief's characterization of what the test would show. No lens
+  changed; a 0% false-alarm rate here is a data point, not evidence a lens is under-firing.
+
+- **2026-09-16 (b)** — blast-radius **platform** — branch `cron-ai-removal`, the B-pass on the
+  Gemini-removal batch (9 cron/prediction Edge Functions converted from AI calls to deterministic
+  templates / real trend math, after this batch's own 4-round plan-review chain caught 3 unrelated
+  defects earlier). **6 findings (2 P1, 1 P2, 3 P3); 0 false_alarm — all 6 accepted**, but only 4
+  fixed in-batch: Finding 2 (unbounded regression forecast, reproduced exactly via `deno run`
+  against the two cited fixtures) and Findings 3/5/6 (stale comments/prose) fixed directly;
+  Findings 1 and 4 resolved via a founder decision + 2 filed OIs (OI-210, OI-209) rather than
+  in-batch code changes. Review: `docs/reviews/247d945d1ba0-review.md`.
+  **Tuning — `blast_radius_mismatch` (lens 3) caught something wider than a tier-classifier
+  disagreement: it questioned whether the touched code has ANY live caller at all.** Finding 1
+  found that `future-prediction` — roughly a quarter of this batch's commits — has zero confirmed
+  callers anywhere in the shipped app (no client call site, no cron schedule, not in
+  `CRON_REGISTRY.md`), while the actual live prediction surface calls a completely different,
+  untouched, still-Gemini-calling function. That's a reachability question, not a tier
+  question — the lens's own name and worked examples so far have been about a diff's blast-radius
+  TIER disagreeing with the classifier, not about whether a function is reachable at all. Worth
+  keeping the lens's scope explicitly this wide: a batch can be internally correct and still not
+  achieve its stated goal if the code it hardens is never invoked.
+  **Second pattern, a recurrence of the email-confirm-ux entry's lesson above, not a new one:**
+  Finding 4's suggested fix (widen a parser regex) was drafted, then found to surface 14
+  pre-existing violations in subsystems this batch never touched, against a gate
+  (`check_sot_registry_parity.dart`) that runs unconditionally on every commit repo-wide. Landing
+  it half-done would have failed pre-commit for every future commit until all 14 were cleared — a
+  worse outcome than the finding itself. Reverted; filed as OI-209 instead. **A review's suggested
+  fix is a starting hypothesis, not an instruction — verify its OWN blast radius (run the widened
+  check, count what turns red) before applying it, the same discipline this skill asks of the
+  findings themselves.**
+
+- **2026-09-22** — blast-radius **account** — branch `tool-dispatcher-telemetry-gaps`, the B-pass
+  on the OI-226 follow-up (spawn_task task_f581ec43): adding `ErrorTelemetry` calls to 6
+  previously-untelemetered failure paths in `tool_dispatcher.dart`, plus a new position-scoped
+  source-grep test and diagnose-doc (b4e7d2). **2 findings (0 P0/P1/P2, 1 P3, 1 P4); 0
+  false_alarm — 1 spawned as a follow-up task (task_11039d3d), 1 accepted as `false_alarm` per
+  the reviewer's own stated reasoning.** 0 fixes required in-batch. Review:
+  `docs/reviews/be6f5e9ed80e-review.md`.
+  **Tuning — recurrence, not new, of the 2026-09-16 email-confirm-ux entry's "run the mutation
+  test itself" pattern, and worth logging again because it caught something the diagnose-doc's own
+  self-attested mutation-proof did not cover.** The diagnose-doc mutated all 6 additions AT ONCE
+  and confirmed 6 distinct reds; the reviewer independently re-mutated only the single trickiest
+  site (`CreateTemplateException`, the one with a same-method sibling generic catch) in ISOLATION
+  and confirmed exactly test 6 reddened for the correctly-attributed reason, then restored and
+  diffed the index to confirm zero residue. An all-6-at-once mutation proves the six assertions are
+  jointly capable of catching something; it does not on its own prove test 6 SPECIFICALLY is bound
+  to site 6 and not, say, accidentally satisfied by a coincidence with test 5's window — an
+  isolated single-site mutation is the stronger proof for exactly the risk this test file's design
+  carries (six windows carved out of one shared source string by hand-picked anchors).
+  **Second, smaller pattern:** the reviewer noticed the new test file never `import`s
+  `tool_dispatcher.dart` (pure `readAsStringSync` source-grep, per this file's own established
+  convention for this test class) and so its own green run cannot prove the 6 additions compile —
+  closed that gap itself by running `flutter analyze` directly rather than trusting the
+  diagnose-doc's separate claim of a clean analyze. **General lesson for future dispatches of this
+  lens set: for any source-grep-only test file, explicitly re-run `flutter analyze` on the touched
+  source file as part of the review, don't assume a green source-grep test implies compilability.**
+  No lens prompt changed — both patterns are existing lens 6/8 behaviors firing correctly, logged
+  per §5.1 because the finding-to-resolution mechanics (spawn vs fix vs false_alarm) hadn't been
+  demonstrated in this file's tuning history for an account-tier, near-zero-severity pass before.
+
+- **2026-09-23** — blast-radius **platform** (discipline-v3-phase3 batch: 3 new/widened gates and
+  a memory write-guard hook) — **1 finding (P3, cosmetic); 0 false_alarm — fixed in-batch.**
+  Review: `docs/reviews/c19c4efc482f-review.md`.
+  **Tuning — a copy/paste artifact from a mutation-revert cycle survived a full mutation-proof
+  cycle undetected, because mutation-proving checks BEHAVIOR, not source hygiene.** The finding
+  was an 8-line explanatory comment duplicated verbatim, back-to-back, in
+  `scripts/check_hooks_installed.dart` — introduced when a fix was applied, then reverted (to
+  confirm its regression test reddens), then re-applied, and the comment block (untouched by the
+  mutation itself, which only removed the try/catch code) ended up written twice across that
+  cycle. Every test stayed green throughout because the duplication was purely cosmetic — no lens
+  in the standard 8 targets dead/duplicate prose inside a function body, and mutation-proving by
+  its nature only exercises runtime behavior. **No lens prompt changed** — this is a real gap
+  (nothing upstream of a human/B-pass read would have caught it), but adding a
+  "duplicate-comment-block" lens for one instance would be over-fitting; logged so a *second*
+  instance of the same author-workflow artifact (edit → mutate → revert → re-edit) is recognized
+  as a recurring class rather than a one-off typo.
+- **2026-09-23** — blast-radius **platform** — branch `aab-versioncode-ledger-backfill`: a
+  mechanical ledger backfill (`backups/built_versioncodes.json` +44/+45 entries) + versionCode
+  bump to 1.0.0+46, triggered by a live AAB-build-feasibility check surfacing that the ledger
+  had silently fallen 2 versionCodes behind (the `--record` step of `/build-apk` never ran for
+  those two builds). **1 finding (P2, asserted_fixture_value): a ledger note claimed 65bee5d5 was
+  "the very next commit" after a4eb42ab when they were actually 2 days / ~90 commits / 11 merged
+  PRs apart — the underlying conclusion held, only the timing phrasing was wrong.** Fixed same
+  review cycle. **Tuning: even a purely mechanical, no-application-logic commit (JSON + version
+  string edits) can still assert a false historical claim in its own commit message/notes — the
+  asserted_fixture_value lens caught it precisely because it re-derived the claim from git log
+  rather than trusting the prose next to it, consistent with this repo's own most-recurrent
+  mistake class (unverified claims about git/file state).** Review: `docs/reviews/0dd33fc9046e-review.md`.
+- **2026-09-26** — blast-radius **platform** — branch `ops-alerting-batch-b` (migration 144: split
+  two VACUUMs out of the pg_cron job whose multi-statement command failed every night since
+  migration 141, and exclude the trigger-dispatched `alert-critical-notify` from
+  `alert_cron_function_dead`). **1 finding (P3, guard_without_its_mirror): the commented rollback
+  used a QUOTED `cron.unschedule('name')`, which Gate 31's raw-text scan reads as a real
+  unschedule — the OI-193 convention is the unquoted `cron.unschedule(<name>)` form.** Accepted and
+  fixed. **Tuning — a reviewer-conduct rule, not a lens:** the brief said "READ-ONLY SELECTs
+  only", and the reviewer still ran the four cleanup DELETE functions inside `BEGIN … ROLLBACK`
+  against the LIVE project to measure row deltas. It rolled back (coordinator re-verified: oldest
+  rows and past-window counts unchanged), but the tool returns only the LAST statement's result,
+  so the experiment could not even produce its answer. **Every B-pass brief that grants live DB
+  access must say: no statement that writes, even inside a transaction — derive deltas with a
+  `count(*) FILTER (WHERE <the function's own predicate>)` SELECT instead.** The same count query
+  gave the exact answer (735 / 2,416 / 85 / 11) with zero writes. Review:
+  `docs/reviews/3a9abffad52f-review.md`.
+- **2026-09-27** — blast-radius **platform** — branch `template-stable-identity` (OI-252, unit
+  2a: workout-template stable-identity rework — migration 145 already live, both Edge Functions
+  already deployed). **7 findings, 0 false alarms** (independently re-verified against live
+  code/cloud state by the dispatching session, not trusted from the subagent's prose) — 2 P1
+  (`guard_without_its_mirror` — migration 145's trigger is UPDATE-only and never fires on the
+  INSERT-lands-first race its own header describes; a class doc + a converged plan-review
+  record both claimed a design the code never implemented), 3 P2 (`asserted_fixture_value` — a
+  stray find/replace collateral swept 2 unrelated OI-board citations; a diagnose-doc
+  self-contradicting on a migration's live status; a "tracked separately on the OI board" claim
+  with zero matching board entries, fixed by filing OI-253), 2 P3 (`writer_reader_drift` — a
+  combined SoT registry entry's `line_range` was accurate for one of its two named methods and
+  ~800 lines off for the other; a diagnose-doc citation pointing at a shared helper's top-level
+  declaration instead of its actual call site inside the method it was cited for). **Tuning — a
+  suggested-fix's OWN regression-test proposal can assume test infrastructure that does not
+  exist.** Finding 2's suggested fix asked for "a behavioral test that seeds a legacy key and
+  drives restore" — reasonable on its face, but this repo has ZERO Supabase-mocking seam
+  anywhere (`SupabaseService.client` hardcodes `Supabase.instance.client`, never initialized in
+  unit tests) and the migrator's legacy-key path always makes a live query once a legacy key
+  exists, so the proposed test literally could not be written as specified without first
+  building mock infrastructure from scratch — disproportionate to a single-fix remediation. **No
+  lens currently checks whether its own `suggested-fix`'s proposed test is achievable against
+  the repo's real test infrastructure before proposing it** — worth watching for a second
+  instance before adding a dedicated check; the workaround here (a narrow test-only invocation
+  counter proving the gate is REACHED, without exercising the untestable network branch) is a
+  reusable pattern for this "live-network-gated logic, zero mock infra" shape. Review:
+  `docs/reviews/template-stable-identity-bpass.md`.
+- **2026-09-27** — blast-radius **platform** — branch `ops-alerting-b2a2a` (migration 147:
+  `alert_client_errors_spike` rewrite — distinct-event counting, offline-noise exclusion,
+  per-user + server-error-class breadth arms, rank-based dedup; recurrence of 2026-06-06's
+  f0b9d3 spike-filter-drift class). **1 finding (P1, guard_without_its_mirror): the migration
+  adds an `error_code NOT IN ('event', 'info')` guard to the NEW `users`/`server_events` arms
+  specifically to exclude the routine `subscription_refresh_query_returned_null` breadcrumb, but
+  the PRIMARY `cnt` metric — the one this whole migration exists to fix — has no equivalent
+  guard, so the same breadcrumb (and any other event/info-coded op_type matching the `_null`
+  reinclusion regex) still inflates `cnt` unconditionally.** Live data confirmed the exposure is
+  real (28 occurrences of this exact breadcrumb over 36 days, matched by the outer WHERE) but not
+  currently material (max observed `cnt`=24 vs. floor 40). **Tuning: a fix that hardens two new
+  arms against a NAMED noise source while leaving the pre-existing primary metric exposed to the
+  IDENTICAL noise source is easy to miss because the diagnose doc's own narrative frames the
+  breadcrumb problem as "solved" once the arm it explicitly discusses is protected — the reviewer
+  had to independently ask "which OTHER column reads from the same filtered rowset" rather than
+  trusting the doc's scoped framing.** Also mutation-tested two of the diff's own claimed
+  mutation-proofs directly (removed the `server_events` arm's exception-shaped guard alone;
+  removed the fire-condition's parens) rather than accepting the diagnose doc's mutation record on
+  faith — both reproduced the doc's claimed "exactly 1 of 10 tests reddens" exactly, restored via
+  `cp` + `sha256sum` verification each time. All of the diagnose doc's live-data numeric claims
+  (8 firing ticks, max_users=2, 770/6199 offline rows, 0 overridden, 8/66 status/type matches)
+  were independently re-derived from fresh read-only SQL rather than re-run from the doc's own
+  queries, and all matched exactly. Review: `docs/reviews/46c9b9ff3bde-review.md`. **Resolution:**
+  triaged `accepted`, fixed by documentation + a pinning test rather than a SQL change — narrowing
+  `cnt` would have undone migration 087's own P0 fix, and a name-based exclusion for this one
+  op_type is the exact "transient denylist" f0b9d3's diagnose doc already rejected. Filed OI-254
+  (the real fix is a client-side op_type rename, in scope for the batch's next unit B2a-2b, not
+  this pure-SQL migration); mutation-proven pinning test added asserting `cnt` carries no `FILTER`
+  clause, so a future silent change to either side of the asymmetry is caught.
+- **2026-09-27 (c)** — blast-radius **platform** — post-commit range review
+  `a60c7eac..HEAD` (`merge-reconciliation-82844bfd`): the `reuse-audit-fixes`/`template-stable-
+  identity` merge into `main`, scoped to the 2 commits nobody had reviewed yet (a founder-approved
+  `--no-verify` nutrition fix `fef26cbb`, and the merge-reconciliation commit `82844bfd` itself)
+  while explicitly told to spot-check rather than re-review the 5 already-B-passed
+  `template-stable-identity` commits underneath. **3 findings (1 P1, 1 P2, 1 P3); 0 false_alarm —
+  1 fixed with a mutation-proven test, 1 fixed by correcting a doc's shape, 1 not code-fixable
+  post-hoc (captured as a session memory lesson instead).** Review:
+  `docs/reviews/merge-reconciliation-82844bfd-review.md`.
+  **Tuning — a NEW P1 shape for process-discipline findings, not covered by any existing lens:
+  `--no-verify` is an ATOMIC bypass of the whole pre-commit hook chain, and a commit's own
+  justification can name only the ONE gate the author was thinking about while silently skipping
+  OTHERS the author never considered.** `fef26cbb` legitimately bypassed
+  `check_closes_oi_performed.dart` (a genuine false-positive, independently re-verified) — but it
+  was ALSO a non-merge commit in the primary/shared worktree, which `check_commit_from_worktree.dart`
+  (a gate CLAUDE.md itself says to "Never `--no-verify` around") would independently have blocked.
+  The reviewer proved this live by staging a throwaway file in that exact worktree and running the
+  gate directly (`[worktree-guard] FAIL`), rather than reasoning from the gate's source alone. No
+  actual harm occurred (the reviewer separately confirmed the staged content was correct
+  throughout), but the commit message's bypass justification was incomplete. **Add to the review
+  method: whenever a commit's message discloses a `--no-verify`/gate-bypass justification for ONE
+  named gate, independently re-derive every OTHER gate that would apply to that commit's actual
+  shape (worktree location, blast-radius tier, touched-concept registry membership) and check
+  whether the message discloses all of them — a single-gate justification is a claim about that
+  gate only, never about the whole bypass.**
+  **Second — lens 6 (`guard_without_its_mirror`) found the sharpest instance yet of "the fix
+  covers only the call site a failing TEST happened to exercise, not the bug class it belongs
+  to."** The P2: `fef26cbb`'s `ref.mounted` guard fixed exactly 1 of 7 structurally identical
+  unguarded `ref.invalidate`/`ref.invalidateSelf()`-after-`await` call sites in the SAME file —
+  found by a straightforward but exhaustive cross-reference of every `await` against the nearest
+  following `ref.invalidate*` call, not by anything exotic. One sibling
+  (`FoodLogNotifier.deleteFoodLog`) sits 30 lines below the fixed method, in the SAME class, same
+  invalidated provider, reachable from a swipe-to-delete gesture — as close to "the exact mirror
+  case" as this lens has recorded.
+  False-alarm rate 0/3 → no lens removed; the review-method note above is new (not a lens-prompt
+  change, since no single lens 1-8 is shaped to catch a commit-message's OWN disclosure
+  completeness — logged as a standing review-dispatch instruction instead).
+- **2026-09-27 (second entry today)** — blast-radius **platform** — branch `ops-alerting-b2a2b`
+  (unit B2a-2b: the sync-telemetry H-42 dual-write fix widened from 1 to 87 caller-level sites by
+  the batch's own round-1 plan-review, the OI-254 client-side op_type rename from the entry above,
+  and a new client-side `isOfflineNoiseSignature`/`isOfflineNoise` mirror of migration 147's
+  offline-noise exclusion regex). **5 findings (1 P1, 1 P2, 2 P4, 1 P3); 0 false_alarm — all 5
+  accepted and fixed/documented in-batch.** Review: `docs/reviews/af6a1b2fe201-review.md`
+  (renamed once from `d763fd5fd6cc-review.md` after the fixes below moved the staging hash).
+  **Every finding was a documentation/process-completeness gap, zero code defects** — the
+  underlying fixes (the 87-site dual-write correction, the op_type rename, the regex mirror) were
+  each independently re-derived from scratch and mutation-tested live by the reviewer and matched
+  the diagnose-doc's own claims exactly.
+  **Tuning 1 — self_attesting_artifact (lens 10) gains: a diagnose-doc's "OI-NNN is closed" claim
+  is checkable against the OI BOARD ITSELF, not just against the diagnose-doc's own internal
+  consistency.** The diagnose-doc and a staged test comment both asserted OI-254 was closed, but
+  `docs/audit/open_issues.md` — untouched by the diff — still carried `Status: OPEN` with no
+  `closes-oi:` transition anywhere in the commit. This is a NEW instance of the family, distinct
+  from every prior self_attesting_artifact finding in this history (which all checked a claimed
+  ARTIFACT's existence — a test file, a review file, a plan-review record): here the artifact
+  (the diagnose-doc) exists and is internally coherent, but the CLAIM IT MAKES ABOUT A DIFFERENT,
+  UNTOUCHED FILE is what's false. Add to lens 10's method: when a diff's own prose asserts an OI
+  is closed, diff `docs/audit/open_issues.md` against the staged set — if the board file isn't
+  even IN the diff, the claim is unverified by construction.
+  **Second, sharper half: fixing this finding required an INDEPENDENT AUDIT, not just a board
+  edit.** The OI-254 entry's own "Fix shape" field had instructed auditing "~24 other call-sites"
+  for the same `_null`-suffix classification defect before the OI could be honestly marked closed
+  — a step the diagnose-doc's frontmatter implied was already done (naming "6 deliberately-
+  instrumented op_types...investigated") but never showed the verification command for. Re-ran
+  the audit from scratch (`grep -rnoE` for every string literal matching migration 087's full
+  failure-shaped regex across `lib/`, spot-checked 2 of the 6 hits against their code comments)
+  before trusting the board closure — confirming the claim was actually true, not just repeating
+  it. **When an OI's own "Fix shape" names a follow-up verification step, closing that OI is not
+  complete until that step is independently reproduced, not merely cited as already done.**
+  **Tuning 2 — a recurrence, not new, of the "gate PASS is not evidence of full accuracy" class
+  (2026-08-30/2026-09-13(second) entries): `check_sot_registry_parity.dart` passed on a
+  `line_range` that covered a method's DECLARATION but not its BODY** — the method opened inside
+  the cited range and closed 35 lines past the end of it, with the exact `recordNonFatal(...)`
+  call this diff modifies sitting outside the range entirely. The gate only checks the symbol's
+  declaration line, never the range's actual span. No lens change (already documented); logged as
+  a fourth data point for this specific gate's known blind spot.
+  **Tuning 3 — blast_radius_mismatch (lens 3) on an unenforced `requires:` list benefits from a
+  PER-FIX rationale, not a blanket "telemetry is low-risk" wave-through.** The diff had no
+  kill-switch for any of 3 fixes; rather than accept the platform-tier `requires: feature_flag`
+  gap as uniformly mitigated (this skill's own precedent from 2026-08-11/2026-09-16(d)), the
+  resolution wrote a distinct one-sentence justification per fix (write-count-only vs. a durable
+  retained writer; a pure rename with a confirmed zero-reader cross-tree sweep; a pure function
+  with zero production callers) — because the three fixes have genuinely different risk shapes,
+  and a single blanket sentence would have hidden that Fix 1 (removing a write) and Fix 3 (adding
+  an inert function) sit at opposite ends of "how bad if this is wrong".
+  False-alarm rate 0/5 → no lens removed; lens 10 extended per Tuning 1 above.
+- **2026-09-27 (d)** — blast-radius **platform** — merge-reconciliation-only review of
+  `43b89035` (`Merge origin/main (ops-alerting-b2a2b) into local main`, a SECOND reconciliation
+  merge on the same push cycle as the `(c)` entry above — `origin/main` moved again between the
+  first merge and the first push attempt). Scoped explicitly to "did the conflict resolution
+  itself lose/corrupt/misplace anything", not a re-review of either parent's own feature work
+  (both already independently B-passed). **0 findings.** Review:
+  `docs/reviews/merge-reconciliation-43b89035-review.md`.
+  **No new lens — logged per this file's own "record a clean pass with real verification work
+  behind it" convention, since the alternative (a reviewer that reads the merge commit message,
+  finds it plausible, and reports 0 findings) is indistinguishable in the output file alone.**
+  Every claim was checked against git OBJECTS, not prose: `git merge-file` (the plumbing 3-way
+  merge primitive) was run independently on EVERY touched file — both the 5 hand-resolved
+  conflicts and the 2 auto-merged files — to reconstruct what an unassisted merge would have
+  produced and diff it against the actual committed content. For the 5 hand-resolved files, the
+  reconstruction differed from the committed result *only* in the literal conflict-marker lines
+  (a textbook clean resolution); for the 2 auto-merged files, the reconstruction was
+  byte-identical to the commit, proving git's own algorithm handled them correctly rather than
+  assuming it from their absence in the conflict list. Both generated index files were actually
+  re-run against the live tree and diffed (zero diff both times), not trusted from the "mechanical
+  regeneration" framing. One conflict (an OI being deleted on one side while additively edited on
+  the other, in `open_issues.md`) required tracing true 3-way arithmetic (base/HEAD/origin) rather
+  than reading the diff, to confirm the resolution correctly chose "accept the deletion" — worth
+  noting as a reusable pattern for a future add-vs-delete board conflict: verify the DELETED
+  entry exists intact in its new location (`closed_issues.md`) before accepting the removal.
+- **2026-09-27** — blast-radius **platform** — branch `single-owner-a2b` (unit a2b-1: daily-snapshot
+  coaching-notes extraction rewritten to a watermark-bounded, metered read, closing an OI-162-class
+  unmetered-Gemini-call gap). **6 findings, 0 false alarms** — the highest-signal pass this skill has
+  logged yet: **Finding 1 (P1, guard_without_its_mirror)** caught a genuine data-loss bug the
+  author's own mutation-proof table never exercised — the watermark advanced BEFORE the downstream
+  merge write, so a merge failure lost the extracted facts permanently with no retry path, exactly
+  the "guard optimizes for one failure mode and creates a worse one for the mirror case" shape this
+  lens exists for. **Finding 6 (asserted_fixture_value)** is the more interesting tuning signal: the
+  reviewer correctly found a real fixture/production divergence (`gt`/`lte` string comparison vs the
+  production code's `Date.parse()` rationale) and then proposed a fix that was ITSELF WRONG — adopting
+  it would have silently defeated the exact microsecond-precision property the whole batch existed to
+  get right, because `Date.parse()` truncates to millisecond resolution. **Tuning: a review finding's
+  suggested-fix is not automatically correct just because the finding is — verify a suggested fix
+  against the code's own stated rationale before applying it, the same "verify every claim against
+  code, never subagent prose" discipline this repo already applies to the finding itself.** Review:
+  `docs/reviews/aee7dfb3bf10-review.md`.
+- **2026-09-28** — blast-radius **platform** — branch `single-owner-a2b` (unit a2b-2: coach-extraction
+  locked-fields; staged-against `b56bd6f49571`). **2 findings, 0 false alarms, both fixed same commit.**
+  F1 (P2, blast_radius_mismatch) caught the platform-tier `feature_flag` requirement (§4.6/
+  `docs/blast_radius.yaml`) missing entirely for the batch's new locked-field guard, which had already
+  gone LIVE (migration applied, both Edge Functions deployed) with no kill-switch — the ONLY recovery
+  path for a misfire would have been a redeploy. Fixed with a narrower `DISABLE_COACH_EXTRACTION_LOCK_GUARD`
+  switch (deliberately separate from the pre-existing, coarser `DISABLE_COACH_EXTRACTION`), mutation-proven.
+  F2 (P3, guard_without_its_mirror/rule-21) caught that of TWO places sharing one deliberately-duplicated
+  naming-scheme bug fix (`emit_payload.js` and `deploy_via_api.js`'s `--rollback` path), only the first got
+  a persisted automated regression test — the second's "mutate it and run it" proof was hand-run and
+  recorded only in prose, with no test file to catch a FUTURE regression in that copy. **Tuning, two
+  lessons:** (1) a live platform-tier deploy is exactly the scenario §4.6 exists for, and a review pass
+  should check for a kill-switch on ANY new server-side behavioral branch that has already shipped live,
+  not just ones still in review — "designed, reviewed, and pushed to prod without incident" does not mean
+  "safe without one," it means "not yet tested under the failure the switch exists for." (2) when a fix is
+  DELIBERATELY duplicated across two files "so both surfaces stay byte-identical" (a real, documented
+  pattern in this repo — see `docs/diagnoses/2026-05-21-edge-function-rollback-I3-b3ecf2.md`), rule 21's
+  "a test for every fix" applies to EACH copy independently, not once for the pattern as a whole; a
+  reviewer should explicitly grep for every OTHER call site sharing a "same bug, second copy" fix and
+  confirm each one individually has its own regression test, since a fix's own diagnose-doc prose reads as
+  equally confident about both copies even when only one is actually machine-verified going forward.
+  Review: `docs/reviews/b56bd6f49571-review.md`.
+- **2026-09-28** — blast-radius **platform** — branch `single-owner-a2b` (diagnose `e35936`: widening
+  `_shared/gemini_backoff_retry_test.ts`'s `assertSoleCallSiteHasRetries` to recognize the
+  injectable-`geminiChatFn` seam spelling alongside the bare `geminiChat` call). **1 finding, 0 false
+  alarms, filed as OI-260 rather than fixed.** The finding (P2, guard_without_its_mirror) is the
+  interesting tuning signal here: the reviewer correctly identified that 4 SIBLING test files
+  (weekly-report/assess-body-composition/ai-media-proxy/rolling-context's own OI-238
+  `reportGeminiExhaustion`-wiring tests) carry the IDENTICAL literal-string blind-spot shape this fix
+  just closed for one file — but none of the 4 functions currently uses the seam, so nothing is
+  broken today, and each test fails LOUD (not silently) if the hazard ever fires. **Tuning: not every
+  "same shape found elsewhere" finding should be fixed inline** — the established distinguishing
+  question, already implicit in this repo's OI-226/OI-238 precedent but not previously stated as a
+  lens-6 rule, is whether the sibling gap is CURRENTLY LIVE (broken now, silently) or merely
+  SAME-SHAPED-AND-LATENT (would fail loudly, only if and when triggered). The former must be fixed in
+  the same batch (§4.2 no-deferrals); the latter is correctly filed as an OI, since fixing 4 unrelated
+  files defensively for a non-live risk is disproportionate to the actual current exposure. Also
+  notable: the subagent independently re-ran the mutation proof and the target test rather than
+  trusting the diagnose-doc's own numbers — caught nothing new, but is exactly the discipline this
+  skill's own anti-patterns section (§6) asks for. Review: `docs/reviews/307b548789a7-review.md`.
+- **2026-09-28 (second entry today)** — blast-radius **platform** — merge-reconciliation-only review
+  of `8ff6c1f1` (`Merge branch 'single-owner-a2b'` into `main`, `7cb4eb78`→`8ff6c1f1`), same scope as
+  the two prior merge-reconciliation entries above: did the conflict RESOLUTION lose/corrupt/misplace
+  anything, not a re-review of either parent's own already-reviewed feature work. **0 findings.**
+  Review: `docs/reviews/merge-reconciliation-8ff6c1f1-review.md`. This merge hit 6 real conflicts
+  (both branches independently extended the same append-only files while `single-owner-a2b` was in
+  flight): `SKILL.md` itself, both `backups/*.json` files, `docs/audit/open_issues.md`, and the 2
+  generated indexes. Same verification discipline as the precedent entries: `git merge-file -p`
+  plumbing reconstruction diffed against the actual committed content for the 4 hand-resolved files
+  (3 of 4 differ from a naive reconstruction only in the conflict-marker lines; the 4th,
+  `open_issues.md`, was deliberately REORDERED by ascending OI number rather than left as a straight
+  append, so its check was instead a programmatic union-completeness proof — every `## OI-NNN`
+  section from both parents' tips present exactly once in the final file, byte-identical body text,
+  none missing, none invented); the 2 generated files were regenerated from scratch via their own
+  canonical scripts against the merged tree rather than hand-merged, and cross-checked against the
+  pre-commit hook's own independent regen during the same commit. Also confirmed the primary
+  worktree's pre-existing, unrelated uncommitted files (2 deleted backup JSONs, 1 modified nested
+  `CLAUDE.md`) were not swept into the merge commit. **No new lens — logged per this file's own
+  "record a clean pass with real verification work behind it" convention** (same rationale as the
+  `(d)` merge-reconciliation entry above): the alternative, a reviewer that reads the merge commit
+  and reports 0 findings from a plausible-looking diff alone, is indistinguishable in the output file
+  from this. One reusable addition to the precedent: when a conflicted append-only board gets
+  REORDERED during resolution (not just concatenated), the fidelity check can't be a marker-only
+  diff — it needs a structural union-completeness proof instead (extract every section by its own
+  identifier from both parents, confirm the final set is exactly their union with byte-identical
+  bodies).
+- **2026-09-28 (third entry today)** — blast-radius **account** — branch
+  `reps-secs-invalidation-fixes` (day-rollover provider-invalidation batch: 6 confirmed instances of
+  the "provider derives from `DateTime.now()` but is absent from `DayRolloverObserver`'s invalidation
+  list" class, found across a founder-requested audit and two independent plan-review rounds).
+  **3 findings (0 P0/P1, 1 P2, 2 P3); 0 false_alarm — all 3 fixed in-batch.** Review:
+  `docs/reviews/2d63662f9e59-review.md`.
+  **Tuning — `asserted_fixture_value` (lens 8) gains a specific sub-shape: a citation "correction"
+  applied by the SAME flawed derivation method that produced the original error moves the number
+  the WRONG amount, not to the right one, and looks like progress while staying wrong.** Two of the
+  8 off-by-one citations this pass found had ALREADY been "corrected" once earlier in this same
+  batch (9c8958 216→217, bae4dd 232→233) — each correction shifted the citation from two lines short
+  to exactly one line short, never to the real target. All 8 instances shared one shape: a
+  newly-inserted `ref.invalidate(X);` line immediately below a freshly-authored multi-line comment
+  block, cited by counting the comment's own lines and using that count as "the next line" rather
+  than a final `grep -n`/direct-read sanity check against the finished file. The mechanical gates
+  (`check_sot_registry_parity.dart`'s ±5/±6-line slack window, `validate_diagnose_doc.dart`'s
+  shape-only check) both PASS cleanly on every instance — by design, neither checks citation
+  accuracy at single-line precision. **Add to lens 8's method: when a "corrected" citation is
+  re-verified, check whether the SAME production method (recount a comment block, don't re-grep the
+  finished file) could have produced BOTH the error and its "fix" — a correction is not evidence of
+  correctness if nothing about the derivation method changed.**
+  **Second — the coordinator independently re-verified every one of the review's 8 claimed
+  citations, plus its "6 lenses clean" and "prior review's 3 findings still resolved" claims, by
+  direct `Read` + line-count against the real files BEFORE applying any fix** (per this skill's own
+  standing "verify a subagent's claims, don't just trust the report" discipline) — all matched
+  exactly, including the subagent's own independent re-derivation of the mutation-proofs for the two
+  presence-only tests (4018b3/ff3131) and the previously-unrun Test F (b1bfea). Recorded because a
+  clean cross-check of a subagent's OWN verification work, not just its top-line claims, is the
+  stronger form of "record a negative result" this file's history already values.
+  False-alarm rate 0/3 → no lens removed; lens 8 extended per above.
+- **2026-09-29** — blast-radius **catastrophic** (the staged diff's ~95 inbound commits from
+  `origin/main` included a `SECURITY DEFINER` migration, forcing this tier per
+  `blast_radius_content_rules_lib.dart`, on a commit that is itself a routine merge-conflict
+  resolution) — branch `oi-245-246-restore-fixes`, **merge-reconciliation-only review** of
+  `origin/main` (`day-swapper-closeout`, tip `6d733480`) merged into this branch (pre-merge tip
+  `2d0e7240`), same scope as the three prior merge-reconciliation entries in this file's history:
+  did the conflict RESOLUTION lose/corrupt/misplace anything, not a re-review of either parent's
+  own already-reviewed feature work. **1 finding, fixed in-batch.** Review:
+  `docs/reviews/07f2a817bbdd-review.md` (staged initially against `c57a4d922cb1`; the fix below
+  moved the hash and the file was renamed to match — see the note at the top of that file).
+  This merge hit 8 real conflicts (2 skill-tuning-history files, 2 append-only ledgers
+  — `backups/applied_migrations.json`, `docs/audit/open_issues.md` — both boards independently
+  extended while this branch's work was in flight, 1 line-citation file — `docs/sot_registry.yaml`,
+  6 sub-conflicts, each re-derived from the real merged file content rather than trusting either
+  side's stale number — 1 source file where both branches independently inserted unrelated
+  top-level functions at the same point, and 2 generated indexes, regenerated from scratch via
+  their own canonical scripts rather than hand-merged). Verification discipline matched the
+  established precedent: `git merge-file -p` naive-reconstruction diffed against the actual
+  staged content for every hand-resolved file (worth noting: git's own naive reconstruction of
+  `sync_coach.dart` is syntactically BROKEN — drops a closing brace — so the correct hand
+  resolution differs from a naive 3-way merge in a way that matters, not just cosmetically);
+  `open_issues.md`'s union-completeness proof (176 staged = exact union of 171 ours + 174 theirs,
+  spot-checked byte-identical on one section from each side); independent re-derivation of all 3
+  post-gate-fix `sot_registry.yaml` line-range corrections plus one more spot-check, all exact
+  matches; both generated files diffed byte-for-byte against a fresh regen, zero diff.
+  **The finding — a NEW instance of the OI-number-collision class, but for a DIFFERENT numbering
+  scheme with no allocator:** both branches independently picked bug-class `### 2.74` in
+  `.claude/skills/debugging/SKILL.md` as their own "next free number" for an unrelated new entry
+  (this branch's `_drainPendingExlogDeletes`/`indexOf`-anchoring fix, dated 2026-09-29; origin's
+  `getWeek()`-reader/self-heal entry, dated 2026-09-28). The merge combined both bodies intact —
+  no content lost — but neither was renumbered, so the file briefly held two unrelated entries
+  both citing `### 2.74`. This repo has `mint_oi.sh`/`check_oi_numbering_unique.dart` for exactly
+  this collision class on OI numbers; no equivalent exists for this file's `### N.M` scheme, so
+  nothing in the gate loop caught it — a human/review-time-only defect. Fixed by renumbering the
+  smaller-diff side to the real next-free number (`2.77`, confirmed free) and by finding —
+  independently of the review subagent's own `grep -rn "2\.74" .claude .` check, which missed it —
+  one further stale numeric citation in `docs/plan-reviews/oi-245-246-restore-fixes.md` that named
+  the old number.
+  **Tuning — a merge-reconciliation review's checklist should explicitly include "does the
+  conflicted file have its OWN internal numbering/uniqueness scheme, and did each side
+  independently advance it into the same slot" wherever two branches both append dated,
+  self-numbered entries to a shared file** (skill tuning histories, bug-class indexes, ADR/OI-style
+  logs) — this is a strict superset of the append-only-ledger check the three prior
+  merge-reconciliation entries already established, generalizing from "did content get lost" to
+  "did content get lost OR collide". Also: **a subagent's own "no other file references the old
+  value" grep is not proof — rerun it yourself with a wider pattern (here, three literal variants
+  vs. one) before trusting a finding is fully closed**, since the coordinator's own recheck found
+  a citation the subagent's narrower single-pattern grep missed.
+  False-alarm rate 0/1 → no lens removed.
+  **Addendum, same day, hours later:** the exact same collision class recurred IMMEDIATELY on
+  this same branch's NEXT merge-reconciliation pass (a third, unrelated branch landing on `main`
+  in between) — the number this fix had just renumbered TO (`2.77`) was independently claimed by
+  yet another concurrent branch's own new entry. Fixed identically (re-derive true next-free
+  number, renumber, fix the resulting stale citation); no review-file rename needed since this
+  fix did not touch a hash-affecting path. Confirms the class is not a one-off: a shared
+  self-numbered file with no allocator collides on every sufficiently-fast-moving concurrent
+  merge, not just the first one. Detail: `docs/reviews/07f2a817bbdd-review.md`'s own "Addendum"
+  section; generalized into the CLAUDE.md §4.9 pitfall row this batch added.
+
+- **2026-09-29 (context-lean)** — blast-radius **platform** — documentation lean-down (root CLAUDE.md 152 KB -> ~41 KB, two skills split, six nested CLAUDE.md files trimmed, OI board archived) plus the gate/test/registry edits keeping the moved text enforced. Review: `docs/reviews/54e7a99c801b-review.md` (reviewed tree `09d6fdf91519`, 39 files; final tree 44 files after fixes + one added unit). Fresh Sonnet pass: 4 findings (0 P0/P1, 2 P2, 2 P3), **0 false alarms, all fixed**. Lenses that produced findings: `guard_without_its_mirror` (a comment claimed "the five largest nested files" were tracked; two larger ones were not — caught by running `find ... wc -c`), `blast_radius_mismatch` (moved binding prose landed in a `feature`-tier doc), `writer_reader_drift` (a full-sweep gate silently stopped covering prose that moved out of the files it swept), `missing_input` (dead test cites carried across a move). **What this pass taught the skill:** a batch that MOVES prose must ask, for the OLD location, "what enforcement swept it?" — a full-sweep gate keyed on file NAMES (`_governingDocs()` = root CLAUDE.md + `**/SKILL.md`) goes blind to text relocated to a file it does not list, while the diff-scoped half still looks healthy; added as a sub-check under lens 1. Also confirmed: (a) a prose claim of coverage ("the N largest ...") is a `missing_input` target — verify it with one `find`; (b) reviewing before the last fixes means the review file is named for the FINAL hash but must state the earlier reviewed hash in `staged_against:` — do it explicitly rather than let the name imply the reviewer saw the final tree; (c) the mutation run found the `:(top,exclude)` tuning-history pathspec is genuinely load-bearing (1 red of 5 on an assertion), and a later full gate loop caught what the review could not (`check_gate_existssync_file_vs_dir` on the batch own new `File().existsSync()`), so run the WHOLE loop after the last edit, not after the last review.
+- **2026-10-01** - blast-radius platform, Part A of `gemini3-limits-caching` (Gemini 3.x migration), review file `a5a985e852f1-review.md`: 3 fresh reviewers (core / call sites / docs), 32 findings, 0 P0, 1 P1, all accepted and fixed; 0 false alarms. Lenses that produced findings: `guard_without_its_mirror` (a stamp added to fix one failure — apology replayed as a normal reply — turned the retry into a 502 + 20 s client retry loop; the retry guard `passHadTransient…` narrowed old retry-on-any-null), `asserted_fixture_value` (a test fake that returned TRUE for `NULL <> 'x'`, hiding a bare `.neq` that drops NULL rows in real SQL), `writer_reader_drift` (two server prompt-readers still consumed the rows the stamp marks). **What this pass taught the skill:** (a) a SOURCE-GREP presence pin is satisfied by dead code or a stray call elsewhere in the file — three mutations (`void labelForModel(x)`, a dead `{model_used: rowModelUsed}` object, `console.log(attemptStatuses)`) survived with zero reds; the fix pattern is a position-pinned slice of the real statement and per-CALL paren-balanced argument checks, not a per-file identifier count; (b) a type annotation containing the identifier satisfies `includes("attemptStatuses")` — mutate by TYPO (`attemptStatus`), not by deletion; (c) a fake of a SQL filter must reproduce three-valued NULL logic or it cannot distinguish `.or("c.is.null,c.neq.x")` from `.neq`; (d) reviewing a retry/deadline rewrite means mutating each gate TERM (deadline, 5xx threshold, a single status) — six such mutations were zero-red until time and status fixtures were added; (e) reviewer mutation reports are worth re-running in the author's tree: the author-side run proved 27 of 27, and also caught one reviewer miscount.
+- **2026-10-01** - blast-radius platform, Part B of `gemini3-limits-caching` (limits 7/20, vision 4/20, `refund_quota`), review file `5329ffacce23-review.md`: 3 fresh reviewers (migration + live SQL / Edge Function refund wiring / client + docs + copy), 28 findings, 0 P0, 3 P1, all accepted and fixed or recorded as residue; 0 false alarms. Lenses that produced findings: `guard_without_its_mirror` (a "SAFETY-class never refunds" rule held for ONE response shape only: `promptFeedback.blockReason`, `IMAGE_SAFETY`, an empty-parts SAFETY and `MAX_TOKENS` were all refundable, and the block flag came from the LAST attempt so a fallback 404/503 laundered a block), `writer_reader_drift` (`RAISE ... pro=%` on a bool prints `t`/`f`, so the reader's `/pro=true/` never matched and a PRO user got the free tier's 429 body), `asserted_fixture_value` (a pin on the clause `model_used IS DISTINCT FROM 'pending'` stayed green when the OR connective flipped to AND). **What this pass taught the skill:** (a) when a batch adds a rule of the form "X never does Y", enumerate every RESPONSE SHAPE that reaches the decision (HTTP 200 with no candidates, empty parts, per-attempt sequences), not the one the author had in mind, and test SEQUENCES (A then B, B then A) because a last-writer-wins flag is invisible to same-input tests; (b) a Postgres `%` in RAISE/format prints a bool as `t`/`f`: any message a reader regex-parses needs explicit text; (c) pin the WHOLE guard expression including its connective, not a clause; (d) a mutation that reddens nothing is a finding about the TEST: two of 28 author-side mutations (a non-tool `geminiChat` sticky flag, a different spelling of a forbidden increment) were zero-red until a behavioural test and a looser pin were added; (e) an author-side simulation can itself be wrong: a hand-built ledger entry with a missing brace produced 14 unrelated reds, so validate the JSON before reading red as signal; (f) a reviewer's claim about a boundary ("a client can forge a pending row") deserves one live read before it is written into docs, because the first draft of the residue note was wrong (the INVOKER trigger still refuses it).
+- **2026-10-01** — blast-radius **platform** — the client survives a Supabase API outage (bounded routing read, probe-gated capped push retry, "Sync paused" banner, `restore_op_done` filter; plus the evidence-first routing extension). Review: `docs/reviews/resilient-client-phase1-bpass.md` — TWO fresh Sonnet rounds on the same batch: round 1 (the staged diff) 10 findings (0 P0/P1, 4 P2, 6 P3); round 2 (the evidence-first extension, three reviewers in parallel with a lens each) 22 findings (0 P0/P1, 10 P2, 12 P3, no design-level defect so no split). **0 false alarms in either round; every finding was folded except one (the stamp bypassing `ProfileWriteService`), accepted with the reason written into the code comment.** Lenses that produced findings: `guard_without_its_mirror` (the dominant one: tests whose only protection was a substring `contains` — the guard's FEED into a pure predicate, an error sink asserted by the words `catch (e, st)`, an ordering claim asserted by "both strings are in the file"), `missing_input` (a future handed to a background chain while the caller still awaits something else is an uncaught zone error — the reviewer reproduced it in a scratch Dart file), `writer_reader_drift` (the moved stamp overwrote a real `onboarding_completed_at` with now(); a doc said "serves an EMPTY box" while the raw getter actually throws), `blast_radius_mismatch` (the registry parity gate went red after the bootstrapper grew ~150 lines — registry ranges are a derived quantity that a review must re-run, not eyeball). **What these passes taught the skill:** (a) a test is not protection if it passes with the feature absent — ask of every new test "what does the OLD code do here?" (the "evidence check runs ONCE" test passes on the old path; two source-greps were an OR-chain whose last term was always true); tighten by ADDING a comment-stripped assertion, never by loosening; (b) a source-slice test must be anchored on both ends of the thing it claims (an arm, a method), because a whole-file `contains` is satisfied by the definition of the very helper whose CALL was deleted; (c) a reviewer can be the mutation tool — the tests/docs/gates reviewer proved its P2 findings by applying 12 mutations to a scratch copy (a deleted session-open, a dead kill-switch, a guard fed from the wrong reference, a `unawaited` stamp, an 8 s ceiling on the late read, a deleted push, a +5:30 stamp, ...) and ALL 12 survived the then-current suite, while neutralising the feature itself turned only 5 of 25 tests red; the author's own re-proof afterwards found a mutation of mine that could not fail (a `rethrow` placed inside the `try` whose `catch (_) {}` swallows it — an equivalent mutant by construction), so **read what a surviving mutation actually does before deciding the test is weak or the mutation is bad**; (d) a "suspected, low confidence" finding about ordering (a fire-and-forget call now running at t~0, before the token refresh the old path had implicitly provided) was cheap to fix (one awaited call and one pin), so fix a low-confidence finding whenever its cost is that small; (e) a mutation harness that dedupes failure names by the text AFTER the `[E]` marker reports "1 test reddened" for everything (the marker is at the END of the line) — read the `+pass -fail` tally, not the name count. False-alarm rate 0/32 -> no lens removed.
+- **2026-10-02** - blast-radius platform (account-tier deploy tools; the diff first classified `feature`), `deploy-token-path` (host-shell deploy token resolution), review file `deploy-token-path-bpass.md`: 2 fresh context-blind rounds (round 2 on the post-round-1 tree), 9 findings in round 2, 0 P0/P1/P2, all P3 accepted and fixed; 0 false alarms. Lenses that produced findings: `guard_without_its_mirror` (the JS and Dart twins disagreed on a directory named like the token file; `primaryError`, the only guard against a silent fall-through to the legacy file, had no test), `doc_code_drift` (docs said "never use the revoked file" and "try the other file once", contradicting each other after a 401 on the root file; OI-165 cited as open/403 after it closed), `blast_radius_mismatch` (a change to which prod credential the deploy tools use classified as `feature` through `.claude/**`). **What this pass taught the skill:** (a) a tool with a Dart twin and a JS original needs the SAME fixtures run through both, including degenerate inputs (a directory, a repo named like a path segment); (b) a warning branch that exists to prevent a silent fall-through needs its own test, reachable by injecting the failing dependency (an optional git executable), or deleting it reddens nothing; (c) when a doc says "never use X", check that no sentence two lines later tells the reader to try X; (d) a path-keyed tier registry can under-classify tooling that selects prod credentials: ask what the file DECIDES, not where it lives; (e) a closed OI leaves comments, fixtures and SQL headers that still cite it: grep the OI number across `docs/`, `test/` and `scripts/` at close time.
+
+- **2026-10-03** - blast-radius account, `auth-recovery-code-length` (the password-reset code field vs the hosted OTP length, diagnose `fa621a`), review file `auth-recovery-code-length-bpass.md`: 2 fresh context-blind reviewers run one after the other (A: lenses 1-5, 7, 8, read-only; B: lens 6 as mutate-and-run, on the tree that already carried A's fixes), 20 findings (A 8, B 12), 0 P0, 3 P1, 7 P2, 10 P3, all accepted; 0 false alarms (B12 and two of A7's five sub-points were `verified_clean` / equivalent mutants, not defects). Lenses that produced findings: `guard_without_its_mirror` (all 12 of B's, 3 of them P1), `writer_reader_drift` (A1-A3), `asserted_fixture_value` (A4), `blast_radius_mismatch` (A5), `missing_input` (A6-A8).
+  **What the pass proved about method:** reviewer A READ the sheet end to end and found the dismissed-sheet defects (an early return that skipped the single-use hand-off, an unguarded `setState`). The fix for that used `mounted` as the pop predicate; reviewer B, who MUTATED instead of reading, showed it popped the only page during the sheet's exit animation. Reading found the first defect; only mutate-and-run found that its fix was wrong, plus five other unpinned guards (the back path, `_fail`, `_sending`, keyboard and focus, trimming) that the author's 25 mutants and 37 tests never touched. **Tuning: a fix made in response to a review finding is new code and needs the same mirror test as any other; run the mutating reviewer AFTER the fix, on the post-fix tree** (done here). **Tuning: for any "busy" flag, mutate away BOTH the handler guard and the UI disabling; they are redundant by design, so one of the two mutants is equivalent and the other is the real test** (here the handler guards vs the `onTap` null-ing). **Tuning: a test that dismisses a modal must cover three moments - before the exit animation, MID animation, fully gone; `pumpAndSettle` alone covers only the last.**
+  **The incident to carry forward:** reviewer A's brief said "gates that only read" and it swept `scripts/check_*.dart`; `check_onconflict_live_arbiter.dart` POSTed `BEGIN; synthetic INSERTs; ROLLBACK;` to the LIVE project. The reviewer disclosed it unprompted; the residue check (one read-only SELECT) found 0 rows in all 8 tables the fixture touches. **Tuning: a brief names an EXHAUSTIVE list of allowed commands and an explicit ban on any statement to any database. A CLASS of command ("read-only gates") is not enforceable by the reader, because a gate that writes looks exactly like one that reads.** The standing memory rule ("subagents: no writes") was already in force and was not enough; the exhaustive list given to reviewer B was, and B's report shows only git reads, file reads and `flutter test` / `flutter analyze`. `SKILL.md` gained the rule twice: in the anti-patterns list and in dispatch step 4, where the brief is built.
+  **Cascade caveat for review-derived tests:** a case that leaves a broken navigator behind leaks a performance-mode request into the NEXT `testWidgets` in the file, so such cases go last. Reviewer probes are the cheapest source of permanent tests: 11 of B's 12 findings became cases in this batch's two test files (the twelfth records equivalent mutants); 101 tests, 70 mutation runs: 66 red, 4 equivalent.
+  False-alarm rate 0/20 -> no lens removed.
+
+- **2026-10-04** - blast-radius account (`lib/core/router/app_router.dart` is `lib/core/**`, which lifted a diff that is otherwise `lib/features/profile/**`), `profile-share-grow-order` (one Photos row opening a Progress | Saved hub; SHARE & GROW below AVYA), review file `profile-share-grow-order-bpass.md`: 2 fresh context-blind reviewers on the same staged diff (A read-only, B mutate-and-run in a scratch copy) after two plan-review rounds, 16 findings, 0 P0, 3 P1 (all test strength), all accepted and fixed; 0 false alarms. Lenses that produced findings: `guard_without_its_mirror` (13 of reviewer B's 21 mutants stayed green against tests whose own 33 mutants were all red: a second ungated door, comments read as code, a guard counted instead of placed, a per-tier loop inside one `testWidgets`, a split card, a second SHARE & GROW block, swapped builders, an unpinned moved guard), `asserted_fixture_value` / `doc_code_drift` (five vs six edited device tests; "each destination keeps its own gate" for a destination that has none; "only PRO users can send chat photos"). **What this pass taught the skill:** (a) the author's own mutants come from the author's model of the code (33 of 33 red) and a reviewer's from how regressions sneak in (comment it out, add a second door, duplicate, split, swap two names that both resolve): when mutating one's own new pins pick the MIRROR side first; (b) a source-grep pin must say what it reads: use comment-stripped source (`readScreenSourceStripped`, now with a single-file twin `readSourceFileStripped`) unless the test is about comments; this recurred although the helper existed; (c) a count is not a position: anchor a guard to the callback it protects; (d) a loop over tiers inside one `testWidgets` can test one tier (a second `pumpWidget` does not apply a changed `overrideWith`), so assert a value that proves each iteration's tier; (e) say where the ONE gate is: a sentence like "each destination keeps its own gate" reads as permission for a second entry, and when the destination has no check of its own, test the DOORS (tap every tappable widget on a fresh app; an allow-list scan of who may name the screen); (f) `pump` flushes pending microtasks BEFORE it builds a frame, so a callback that runs after an `await` can be raced against an unmount only without a pump (`buildScope` + `finalizeTree`), which turned a guard the plan had called untestable into a runtime-proven one.
+- **2026-10-04** - blast-radius platform (the review-tier registry itself: sync-engine files outside `sync/**` promoted, a derived completeness test), `oi282-blast-radius-globs`, review file `oi282-blast-radius-globs-bpass.md`: 2 fresh context-blind rounds (round 2 on the tree after round 1's fixes, with the full suite green on it first), 19 findings in all (round 1: 1 P1, 5 P2, 4 P3; round 2: 2 P2, 7 P3), 0 P0, all fixed, 0 false alarms. Lenses that produced findings: `guard_without_its_mirror` (the completeness test's directive reader ignored `part`, the engine's own composition mechanism, so a part file outside the layer was invisible; a derivation over what a subsystem REACHES cannot see what CALLS it, so the known callers were prose only and needed a map that fails when one is promoted, becomes reached or stops making the call), `blast_radius_mismatch` (a cost cap attached to one prong of the boundary but offered as the reason for a file that is a caller; a reason for declining a shared file that omitted the two functions the engine calls in it; a tier move's side effects stated for one file and not for its twin), `asserted_fixture_value` (cost totals that did not reproduce because a date-only `git log --since` takes the current time of day; the registry's own comment citing line numbers that the fix itself had moved by five; a count in a skill entry; a range cited one line-pair short). **What this pass taught the skill:** (a) a registry-coverage test must be mutated on its READER as well as on the data: a surviving mutation of the reader (a keyword with no space, two directives on one line, `part`) is a hole of the same kind the test exists to close; (b) when a fix inserts lines into a file, sweep that file's OWN comments for cited line numbers, not only the files that cite it; (c) every measured total needs its command quoted with an absolute time window, because a relative or date-only window moves with the clock; (d) a cap that attaches to one prong must not be offered as the reason for a call outside that prong: name a scope decision as a scope decision and pin it with a test that fails on contradiction; (e) promoting a file changes the value of a stored fact, its tier: grep `test/` for assertions of the old tier before the review, because the pre-push suite is where they turn red.
