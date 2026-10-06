@@ -1,0 +1,60 @@
+# Closure ledger — migration-ledger-integrity (OI-135, OI-137, OI-263 + the paired-gate fix)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no `deferred:` key.
+# `<branch>@branch` is the in-branch commit form (precedent: unitb-deload-reason.closure.yaml).
+#
+# OI-272 (live prod vs ledger reconciliation) is NOT an entry here: it is its own OI, filed by
+# scripts/mint_oi.sh, carved out of OI-263 by a founder decision at plan time after THREE plan-review
+# rounds each found new defects in the apply-time preflight (CLAUDE.md §4.12.1 split-and-ship). It is
+# open on the board, not a finding of this batch.
+
+batch: migration-ledger-integrity
+plan_review_record: docs/plan-reviews/migration-ledger-integrity.md
+
+findings:
+  - id: OI-135
+    title: "60 of 125 (recomputed: 61 of the 157 real hashes; 159 entries incl. 2 sentinels) migration-ledger hashes match no file and nothing recomputes them"
+    terminal_state: closed_in_commit
+    commit: migration-ledger-integrity@branch
+    verification: >
+      Gate 39 now verifies every hash under its LF or CRLF form: 56 CRLF-hashed entries verify with
+      ZERO ledger edits; the 5 genuine drifts (057, 069, 070, 108, 123) are grandfathered by name
+      with a pinned sha. Recomputed independently by the author and by two plan-review rounds
+      (96 raw / 56 CRLF-only / 5 neither). 9 mutations run, none red for a compile error; see
+      docs/audit/gate_test_ledger.yaml. Tests: test/scripts/migration_ledger_hash_lib_test.dart,
+      test/scripts/check_applied_migrations_ledger_e2e_test.dart.
+
+  - id: OI-137
+    title: "Gate 39 checked that `hash:` EXISTS, never that it is a hash; a literal `sha256:%s` passed"
+    terminal_state: closed_in_commit
+    commit: migration-ledger-integrity@branch
+    verification: >
+      Shape is now `sha256:<64 hex>` or an `unverifiable:<reason>` sentinel legal only without a
+      .sql artifact. The literal `sha256:%s` is asserted to FAIL in both the lib test and the gate
+      e2e; a sentinel beside an existing file is asserted to FAIL. Mutation: shape regex loosened to
+      `sha256:.+` reddens 7 tests.
+
+  - id: OI-263
+    title: "No allocator for migration numbers; 148 applied live from an unmerged branch forced 145->147->148->149"
+    terminal_state: closed_in_commit
+    commit: migration-ledger-integrity@branch
+    verification: >
+      scripts/mint_migration.sh (34 e2e tests against a real bare origin + clones, incl. the race,
+      give-up, mid-retry, offline, API transport, --release/--prune/--next, a remote-only branch,
+      and a letter-suffix follow-up that must not prune its base) +
+      scripts/check_migration_number_reserved.dart (17 e2e + 21 lib tests) + a parity test (7)
+      pinning the copied CAS core. 38 mutations run across the batch (5 on the mint, 10 + 1 on the
+      gate, 4 in B-pass round 1, 19 in B-pass round 2); counts and reds are in the plan record's
+      "Mutation evidence" section. The one the behavioural tests cannot see is dropping the
+      empty-expect lease (a non-fast-forward reject is also classified as taken): only the parity
+      test reddens for it, said plainly in that section. SCOPE: the apply-time preflight half is
+      OI-272, not closed here; the reservation proves existence, not ownership.
+
+  - id: PAIRED-1
+    title: "check_migration_ledger_paired.dart read 041_chunks/041_00_alter.sql as migration 041, never matched a letter-suffix file, and had no test"
+    terminal_state: closed_in_commit
+    commit: migration-ledger-integrity@branch
+    verification: >
+      Found by plan-review rounds 2 and 3 (regex `(\d{3,})_.*\.sql$`, `.*` matches `/`). Anchored to a
+      top-level `\d{3,}[a-z]?_[^/]*\.sql`; the ledger-side extractor uses the same grammar; timestamp
+      scheme adds still require an entry. New scratch-git-repo e2e (7 tests); 3 mutations each redden
+      exactly 1 test.
