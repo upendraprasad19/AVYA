@@ -453,7 +453,9 @@ void main() {
       'lib/features/train/screens/phase_roadmap_screen.dart':
           'weekIdentityProvider',
       'lib/core/utils/hold_week_labels.dart': 'journeyPhaseOneMilestone',
-      'lib/features/profile/screens/reports_screen.dart': 'weekIdentityProvider',
+      // reports_screen.dart left this list on 2026-10-07 (issue #78): its only
+      // reader was the Share-as-Video row, removed because video-status is a
+      // 410 stub.
     };
 
     for (final entry in surfaces.entries) {

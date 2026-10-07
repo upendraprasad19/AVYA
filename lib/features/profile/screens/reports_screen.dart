@@ -16,6 +16,8 @@ import 'package:icanbefitter/features/train/repositories/workout_repository.dart
 import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/health_read_service.dart';
+import 'package:icanbefitter/core/copy/wardroom_copy.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/utils/readiness.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
@@ -24,10 +26,8 @@ import 'package:icanbefitter/shared/widgets/pro_badge.dart';
 import 'package:icanbefitter/shared/widgets/screen_loading_skeleton.dart';
 import 'package:icanbefitter/shared/widgets/error_state.dart';
 import 'package:icanbefitter/shared/widgets/empty_state.dart';
-import 'package:icanbefitter/shared/widgets/video_share_button.dart';
-import 'package:icanbefitter/features/train/providers/video_render_provider.dart';
-import 'package:icanbefitter/features/train/providers/train_provider.dart';
 import '../providers/profile_provider.dart';
+import '../services/weekly_report_refresh_policy.dart';
 
 class ReportsScreen extends ConsumerStatefulWidget {
   const ReportsScreen({super.key});
@@ -62,8 +62,29 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     // the cache rather than blanking it. Cheap — the PRO report is opened
     // infrequently, and the cloud now has correct data (sync-ID fixes 082).
     Future.microtask(() {
-      if (mounted) _generateReport(silent: true);
+      if (mounted) _refreshOnOpen();
     });
+  }
+
+  /// Issue #78: the open-time refresh is PRO-only and at most once per IST day.
+  /// A free user's one lifetime report is spent only by the explicit Generate
+  /// tap (never silently on open); PRO is capped because every refresh is one
+  /// thinking-on Gemini call and the server has no PRO per-day cap.
+  void _refreshOnOpen() {
+    SubscriptionService.instance.gateAndVerify(
+      AppConstants.featureWeeklyAiReport,
+      onPro: () {
+        if (!mounted) return;
+        final configBox = HiveService.instance.configBox;
+        final due = shouldSilentRefreshWeeklyReport(
+          cachedJson: configBox.get(_reportCacheKey) as String?,
+          cachedDateIso: configBox.get(_reportCacheDateKey) as String?,
+          now: nowWall(),
+        );
+        if (due) _generateReport(silent: true);
+      },
+      onFree: () {},
+    );
   }
 
   /// Load cached report from Hive configBox if it exists and is from this week.
@@ -220,9 +241,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                       ),
                       const Spacer(),
                       // F41 \u2014 the gold "SHARE" header label was a dead
-                      // affordance (styled like a button but had no onTap;
-                      // the real share is the weekly-video row below). Removed
-                      // the tappable-looking text. An invisible mirror of the
+                      // affordance (styled like a button but had no onTap).
+                      // Removed the tappable-looking text. An invisible mirror of the
                       // BACK label keeps the seal optically centred between
                       // the two Spacers.
                       Visibility(
@@ -955,17 +975,28 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               const Icon(Icons.auto_awesome,
                   color: AppColors.proGold, size: 18),
               const SizedBox(width: 8),
-              Text('AI Weekly Report', style: AppTypography.titleS),
+              Text(WardroomCopy.reportCardTitle, style: AppTypography.titleS),
               const SizedBox(width: 8),
               const ProBadge(scale: 0.8),
             ],
           ),
           const SizedBox(height: 10),
           Text(
-            'Get a personalised AI-generated weekly report with insights and recommendations.',
+            WardroomCopy.reportCardBlurb,
             style:
                 AppTypography.bodyM.copyWith(color: AppColors.textSecondary),
           ),
+          if (!ref.watch(subscriptionInfoProvider).isPro &&
+              HiveService.instance.configBox
+                      .get('first_report_generated', defaultValue: false) !=
+                  true) ...[
+            const SizedBox(height: 6),
+            Text(
+              WardroomCopy.reportFirstFreeLine,
+              style: AppTypography.bodyM.copyWith(
+                  color: AppColors.proGold, fontWeight: FontWeight.w800),
+            ),
+          ],
           if (_reportError != null) ...[
             const SizedBox(height: 10),
             Container(
@@ -1008,7 +1039,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                   ) as bool;
                           if (alreadyGenerated) {
                             showPaywallSheet(context,
-                                feature: 'AI Weekly Report');
+                                feature: WardroomCopy.reportCardTitle);
                           } else {
                             _generateReport();
                           }
@@ -1107,7 +1138,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child:
-                        Text('AI Weekly Report', style: AppTypography.titleS),
+                        Text(WardroomCopy.reportCardTitle, style: AppTypography.titleS),
                   ),
                   const ProBadge(scale: 0.8),
                 ],
@@ -1299,27 +1330,12 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           ),
         const SizedBox(height: AppSpacing.sectionGap),
 
-        // Share as Video — Remotion weekly recap render
-        _buildWeeklyVideoShareRow(report),
-        const SizedBox(height: AppSpacing.inlineGap),
-
-        // Regenerate button
+        // Issue #78: no video (its backend is a 410 stub) and no manual
+        // regenerate (refresh-on-open is PRO + once per IST day) — back only.
         SizedBox(
           width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: _isGeneratingReport ? null : () => _generateReport(),
-            icon: _isGeneratingReport
-                ? const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: AppColors.accent),
-                  )
-                : const Icon(Icons.refresh, size: 16),
-            label: Text(
-              _isGeneratingReport ? 'Regenerating...' : 'Regenerate Report',
-              style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.accent),
-            ),
+          child: OutlinedButton(
+            onPressed: () => context.go('/profile'),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.accent,
               side: BorderSide(
@@ -1330,65 +1346,16 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 borderRadius: BorderRadius.circular(AppRadius.pill),
               ),
             ),
+            child: Text(
+              WardroomCopy.reportBackToProfileCta,
+              style: AppTypography.body.copyWith(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.accent),
+            ),
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildWeeklyVideoShareRow(Map<String, dynamic> report) {
-    final renderState = ref.watch(videoRenderNotifierProvider);
-
-    if (renderState.isLoading ||
-        renderState.status == VideoRenderStatus.ready ||
-        renderState.status == VideoRenderStatus.failed) {
-      return SizedBox(
-          width: double.infinity,
-          child: Center(child: VideoShareButton()));
-    }
-
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton.icon(
-        onPressed: () {
-          final userName =
-              UserRepository.instance.getProfile()?['full_name'] as String? ??
-                  'Athlete';
-          final workoutSummary =
-              report['workout_summary'] as Map<String, dynamic>? ?? {};
-          ref.read(videoRenderNotifierProvider.notifier).triggerWorkoutVideo(
-            compositionId: 'WeeklyRecap',
-            inputProps: {
-              'userName': userName,
-              // FOB-1 (OI-60): getCurrentWeekNumber() clamps to [1,4] and a
-              // hold starts at plan_start+28, so the recap card stamped
-              // "WEEK 4 RECAP" for every hold at every ordinal. `holdOrdinal`
-              // supersedes the counter in the composition when present; it is
-              // null for every user while `enable_hold_weeks` is OFF, so the
-              // rendered video is byte-identical until the flip.
-              'weekNumber': WorkoutRepository.instance.getCurrentWeekNumber(),
-              'holdOrdinal': ref.read(weekIdentityProvider).holdOrdinal,
-              'totalVolume': workoutSummary['total_volume_kg'] ?? 0,
-              'totalWorkouts': workoutSummary['workouts_completed'] ?? 0,
-              'totalPrs': workoutSummary['prs_hit'] ?? 0,
-              'aiTagline': report['summary'] ?? '',
-            },
-          );
-        },
-        icon: const Icon(Icons.video_library_rounded, size: 16),
-        label: Text(
-          'Share as Video',
-          style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.textDim),
-        ),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.textSecondary,
-          side: const BorderSide(color: AppColors.border),
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-          ),
-        ),
-      ),
     );
   }
 

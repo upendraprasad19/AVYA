@@ -8106,10 +8106,6 @@ concepts:
           Behavioral: test/contracts/hold_week_labels_test.dart
           (deploymentEyebrowLabel group — exact-string assertions for
           phase 1 / phase 2 / phase 12 zero-pad boundary / holding).
-      - file: lib/features/profile/screens/reports_screen.dart
-        method: share-as-video inputProps.holdOrdinal → Remotion renders "HOLD Hn RECAP"
-        semantic: latest
-        fields_read: [WeekIdentity.holdOrdinal]
     class_constraints: |
       WeekIdentity MUST NOT gain a projected week getter. The hold arm asserts
       weekInPhase is NULL precisely so a projection cannot be reintroduced.
