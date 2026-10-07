@@ -14684,9 +14684,19 @@ concepts:
         semantic: flag-check
         fields_read: [streak_freeze_just_used]
         notes: Cold-start clear of a notice a previous session never showed (calls the one clearer).
+      - file: lib/features/profile/widgets/rank_service_record_sheet.dart
+        line_range: 200-232
+        method: _statusTilesRow
+        semantic: display-only
+        fields_read: [streak_freezes_available]
+        notes: |
+          The Profile tile "FREEZES LEFT  n / max  IN RESERVE" (the unit line is the founder's choice,
+          2026-10-07). n is the live streak_freezes_available; max is the same isPro ? 3 : 1 the
+          weekly refill uses (the caps pin counts it). A rendered test reads the tile off the real sheet.
     additional_tests:
       - test/contracts/streak_freeze_notice_copy_test.dart  # pure copy table, real progress maps incl. the stale snapshot, the explainer sheet RENDERED; PLUS a presence-only wiring group
       - test/contracts/streak_freeze_refill_race_test.dart  # source-grep: the cold-start clear still runs after the flag read (repointed to the helper call)
+      - test/contracts/streak_freeze_tile_rendered_test.dart  # the REAL Profile sheet rendered against real Hive: the tile reads n / max IN RESERVE
     class_constraints: |
       1. The number of freezes left shown by the notice is the LIVE streak_freezes_available
          at show time, never the debit-time snapshot (bug class 2.28: a captured snapshot

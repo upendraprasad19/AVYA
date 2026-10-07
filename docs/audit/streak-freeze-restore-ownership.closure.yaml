@@ -299,9 +299,10 @@ findings:
     verification: "docs/reviews/streak-freeze-notice-bpass.md, findings B1-B8. Each recomputed by hand before it was accepted; all FIXED except the one wording call ledgered as U6-PROFILE-TILE-COPY: the read-and-clear moved into StreakProgressService.takeFreezeNotice, driven by a real-Hive test (mutants S10-S12 red), the clearer returns early on an absent map and a test asserts progress stays null (R05 red), a repo-wide lib/ scan pins the one flag-false writer (H04 red), the wiring group reads the restoring screen with its part files, the caps are pinned. Home's call to takeFreezeNotice and Text(notice, stay presence-only (the SnackBar is not pumped); stated in the diagnose Limits."
 
   - id: U6-PROFILE-TILE-COPY
-    title: "The Profile service-record tile still reads 'FREEZES LEFT n / max THIS WEEK' (rank_service_record_sheet.dart:225-227), the weekly-allowance wording the snackbar and the explainer no longer use"
-    terminal_state: blocked_on_user
-    reason: "The tile's wording is not in the copy the founder approved on 2026-10-07 ('copy ok'), so changing it is a product call, not a silent edit. Needs the founder's wording for the unit line, e.g. 'IN RESERVE' in place of 'THIS WEEK' (the number shown is the live stock and its cap, which is what the new snackbar says). One-line change plus its test once the word is given; the screens show the tile and the new sentences on different surfaces (Profile versus Home), never together."
+    title: "The Profile service-record tile read 'FREEZES LEFT n / max THIS WEEK' (rank_service_record_sheet.dart), the weekly-allowance wording the snackbar and the explainer no longer use"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: a5e3c7' (Slice U6 tile commit)"
+    verification: "The wording was not in the copy approved on 2026-10-07 ('copy ok'), so it went to the founder as a product call; he chose the unit line 'IN RESERVE' the same day. rank_service_record_sheet.dart _statusTilesRow now reads 'FREEZES LEFT  n / max  IN RESERVE' (one literal plus its stale comment, one product file). test/contracts/streak_freeze_tile_rendered_test.dart builds the REAL sheet against real Hive and reads the tile off the screen (free 1 / 1, PRO 2 / 3, none left 0 / 1, no THIS WEEK or PER WEEK anywhere on the sheet); the mutants are in the diagnose mutation_proof. The tile (Profile) and the new sentences (Home, the explainer) are on different screens, so no screen shows both wordings."
 
   - id: U6-BPASS-C
     title: "B-pass round 2, seat C (the changes made for round 1): 0 P0, 0 P1, 1 P2, 5 P3"
