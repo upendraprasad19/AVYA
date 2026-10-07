@@ -52,10 +52,12 @@ was masking.**
   `feedback_section5_closeout_is_discipline.md`, debugging bug class 2.94).
 - Never verified on a device. Founder to check the Weekly Report screen on the next build.
 
-## Open items (not fixed here; each needs a decision, none is deferred silently)
+## Open items — filed on the board 2026-10-08 (none deferred silently)
 
-- `weekly-report` has no PRO per-day cap server-side; the client cap is bypassable by a direct API call and by a
-  second device. A server rule (`consume_quota` for PRO) is a founder decision (cost vs "PRO is not unlimited").
-- `callFunction` has no timeout of its own for any Edge Function; only this screen now bounds its call.
-- `profile_content.dart:322` still labels the Profile card "Weekly AI Report" (the old voice); the Profile row title in
-  `wardroom_copy.dart:271` is "Weekly Report". Founder to pick the name.
+- **OI-323** — `weekly-report` has no PRO per-day cap server-side; the client cap is bypassable by a direct API call and
+  by a second device. Founder decision: the number.
+- **OI-324** — `callFunction` has no timeout of its own for any Edge Function; only this screen now bounds its call.
+- **OI-325** — Profile still says "Weekly AI Report" (`profile_content.dart:322`) / "Weekly Report"
+  (`wardroom_copy.dart:271`) while the screen is "Coach's Weekly Dispatch". This one should have been fixed or put to the
+  founder inside the batch (§4.2): I judged the Profile row a navigation label and left it, and the round-2 reviewer's
+  separate hit on `profile_content.dart:322` was classed as "a different feature label" without asking.
