@@ -16,34 +16,11 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-String _dartBin() {
-  final override = Platform.environment['DART_BIN_OVERRIDE'];
-  if (override != null && File(override).existsSync()) return override;
-  final which = Process.runSync(Platform.isWindows ? 'where' : 'which', ['dart'], stdoutEncoding: utf8);
-  if (which.exitCode == 0) {
-    final first =
-        (which.stdout as String).split('\n').map((l) => l.trim()).firstWhere((l) => l.isNotEmpty, orElse: () => '');
-    if (first.isNotEmpty) {
-      final dir = File(first).parent.path.replaceAll(r'\', '/');
-      for (final c in ['$dir/cache/dart-sdk/bin/dart.exe', '$dir/cache/dart-sdk/bin/dart']) {
-        if (File(c).existsSync()) return c;
-      }
-    }
-  }
-  return 'dart';
-}
+import '../helpers/spawn.dart';
 
-Map<String, String> _cleanEnv() {
-  final env = Map<String, String>.from(Platform.environment);
-  // A surrounding git hook exports GIT_DIR / GIT_WORK_TREE, which override workingDirectory.
-  env.removeWhere((k, _) => k.toUpperCase().startsWith('GIT_'));
-  return env;
-}
-
-ProcessResult _run(String exe, List<String> args, String cwd) => Process.runSync(exe, args,
+ProcessResult _run(String exe, List<String> args, String cwd) => runSpawn(exe, args,
+    why: '$exe ${args.join(' ')} (scratch clone of a scratch bare origin)',
     workingDirectory: cwd,
-    environment: _cleanEnv(),
-    includeParentEnvironment: false,
     stdoutEncoding: utf8,
     stderrEncoding: utf8);
 
@@ -54,7 +31,7 @@ void main() {
   late String remote;
   late String work;
   final repoRoot = Directory.current.path;
-  final dart = _dartBin();
+  final dart = dartBin();
 
   ProcessResult git(List<String> args, {String? cwd}) => _run('git', args, cwd ?? work);
 

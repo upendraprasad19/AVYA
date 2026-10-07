@@ -1,0 +1,154 @@
+# Closure ledger — spawn-tests-env-and-stderr PR 2 (OI-317)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no `deferred:` key. closed_count == total_findings.
+#
+# WHAT PRODUCED THESE: PR 1's census (50 files / 120 sites left), five plan-review rounds (docs/plan-reviews/spawn-tests-pr2.md),
+# six implementer units (Sonnet, waves of at most 4), measured poisoned-parent runs on both arms, coordinator re-runs of one mutation per unit.
+#
+# `commit:` on a closed_in_commit row names the batch's commit that ADDS this file; find it with
+#   git log --diff-filter=A --format=%h -- docs/audit/spawn-tests-env-and-stderr-pr2.closure.yaml
+
+batch: spawn-tests-env-and-stderr-pr2
+plan_review_record: docs/plan-reviews/spawn-tests-pr2.md
+diagnose_docs:
+  - docs/diagnoses/2026-10-06-spawn-test-env-leak-e6c4a9.md
+total_findings: 24
+closed_count: 24
+
+findings:
+  - id: H1
+    title: "the helper runSpawnWithInput (String or raw-bytes stdin, concurrent drain, one report) in test/helpers/spawn.dart, with 4 tests in spawn_helper_test.dart"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 2 batch commit (see header)
+    verification: "payload (String and 0x00/0xFF/0x80 bytes), failing-child report once, a 300000-byte flood on BOTH pipes before stdin is read (no deadlock), guard + bad type + poisoned parent. Mutants: stderr drained after exit, bytes via String decode, type check removed, report removed: 4 of 4 red."
+
+  - id: S1
+    title: "test/helpers/spawn_sites_scan.dart + test/contracts/spawn_sites_guard_test.dart: G1 (no raw spawn / alias / ProcessStartMode, also in interpolation bodies), G2 (no whole-parent Platform.environment in a spawn-using file; seam/helper/scan reasons), G3 (ordered start-report matching), G4 (no local dart locator), G5 (12 former gate e2e files), the quote-marker rule"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 2 batch commit (see header)
+    verification: "Committed in REPORT mode first (4.11(1)); the report matched the independent census (50 raw-spawn files, 11 locator files); flipped strict by the last commit; 15 tests; scan mutants (no interpolation bodies, plain count, whole-map lookahead dropped, marker honoured everywhere, alias dropped, resolvedExecutable dropped): 6 of 6 red; real-file mutants M1, M3b, M4 red, M3c (indexed read) green."
+
+  - id: U1
+    title: "unit U1 (git-hook family): 6 files, 25 sites onto the helper"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 2 batch commit (see header)
+    verification: "No assertion changed. Normal, poisoned-parent and CI-like (symlinked dart + node) runs green on the migrated arm; base arm measured where it is observable (see F rows); coordinator re-ran M8 (original form under poison) per unit; flutter analyze clean on touched files. Detail in docs/diagnoses/2026-10-06-spawn-test-env-leak-e6c4a9.md (PR 2 section)."
+
+  - id: U2
+    title: "unit U2 (hook and worktree e2e): 9 files, 27 sites onto the helper"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 2 batch commit (see header)
+    verification: "No assertion changed. Normal, poisoned-parent and CI-like (symlinked dart + node) runs green on the migrated arm; base arm measured where it is observable (see F rows); coordinator re-ran M8 (original form under poison) per unit; flutter analyze clean on touched files. Detail in docs/diagnoses/2026-10-06-spawn-test-env-leak-e6c4a9.md (PR 2 section)."
+
+  - id: U3
+    title: "unit U3 (migration and ledger gates): 8 files, 19 sites onto the helper"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 2 batch commit (see header)
+    verification: "No assertion changed. Normal, poisoned-parent and CI-like (symlinked dart + node) runs green on the migrated arm; base arm measured where it is observable (see F rows); coordinator re-ran M8 (original form under poison) per unit; flutter analyze clean on touched files. Detail in docs/diagnoses/2026-10-06-spawn-test-env-leak-e6c4a9.md (PR 2 section)."
+
+  - id: U4
+    title: "unit U4 (OI, discipline and memory): 7 files, 20 sites onto the helper"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 2 batch commit (see header)
+    verification: "No assertion changed. Normal, poisoned-parent and CI-like (symlinked dart + node) runs green on the migrated arm; base arm measured where it is observable (see F rows); coordinator re-ran M8 (original form under poison) per unit; flutter analyze clean on touched files. Detail in docs/diagnoses/2026-10-06-spawn-test-env-leak-e6c4a9.md (PR 2 section)."
+
+  - id: U5
+    title: "unit U5 (gates and resolvers): 12 files, 18 sites onto the helper"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 2 batch commit (see header)
+    verification: "No assertion changed. Normal, poisoned-parent and CI-like (symlinked dart + node) runs green on the migrated arm; base arm measured where it is observable (see F rows); coordinator re-ran M8 (original form under poison) per unit; flutter analyze clean on touched files. Detail in docs/diagnoses/2026-10-06-spawn-test-env-leak-e6c4a9.md (PR 2 section)."
+
+  - id: U6
+    title: "unit U6 (contracts remainder): 8 files, 11 sites onto the helper"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 2 batch commit (see header)
+    verification: "No assertion changed. Normal, poisoned-parent and CI-like (symlinked dart + node) runs green on the migrated arm; base arm measured where it is observable (see F rows); coordinator re-ran M8 (original form under poison) per unit; flutter analyze clean on touched files. Detail in docs/diagnoses/2026-10-06-spawn-test-env-leak-e6c4a9.md (PR 2 section)."
+
+  - id: G6
+    title: "gate_e2e_env_hermetic_test.dart: the hand-enumerated token list (_helpers, 10 files) and _migrated are deleted; the premise test stays; the 12 paths are pinned in the guard (G5)"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 2 batch commit (see header)
+    verification: "13 token tests removed on purpose: the strict guard is wider (every test file) and a former file that stops spawning through the helper fails G5."
+
+  - id: F1
+    title: "pre_merge_commit_e2e_test original form under the poisoned parent"
+    terminal_state: verified_clean
+    evidence: "measured by the implementer and re-measured by the coordinator: 0 of 3 passed (GIT_CONFIG_* injection outranks the repo gpgsign false; the old _cleanEnv removed five names); migrated 3 of 3."
+
+  - id: F2
+    title: "safe_merge_test original form under the poisoned parent"
+    terminal_state: verified_clean
+    evidence: "coordinator re-measure: 15 tests pass but override_present=yes 3 times (DART_BIN_OVERRIDE reached safe_merge.sh); migrated 0 leaks."
+
+  - id: F3
+    title: "mint_migration_e2e_test original form under the poisoned parent"
+    terminal_state: verified_clean
+    evidence: "4 of 34 passed (MINT_MIG_REMOTE=poison-remote reached mint_migration.sh; the old _cleanEnv removed three names); migrated 34 of 34."
+
+  - id: F4
+    title: "mint_oi_e2e_test and discipline_hook_main_sync_e2e_test original forms under the poisoned parent"
+    terminal_state: verified_clean
+    evidence: "mint_oi 2 of 15 (coordinator re-measure), main_sync 3 of 8 (implementer); both pass migrated."
+
+  - id: F5
+    title: "deferral_euphemism_gate_test original form under the poisoned parent"
+    terminal_state: verified_clean
+    evidence: "17 of 18 (coordinator re-measure): the fixture seed commit inherited commit.gpgsign=true; migrated 18 of 18."
+
+  - id: F6
+    title: "the 44 other files under the poisoned parent"
+    terminal_state: verified_clean
+    evidence: "clean in both forms, or the poison is vacuous (the base already stripped the names, or the child cannot observe it); each unit report says which; U5 original forms re-measured by the coordinator on 8 files: all pass."
+
+  - id: D1
+    title: "diagnose-doc e6c4a9 updated (PR 2 section: census, units, measured poison results, mutation record, candid note)"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 2 batch commit (see header)
+    verification: "docs/diagnoses/2026-10-06-spawn-test-env-leak-e6c4a9.md validated by scripts/validate_diagnose_doc.dart; closes-diagnose: e6c4a9."
+
+  - id: D2
+    title: "debugging skill: bug class 2.91 (body in bug-classes.md, index row in SKILL.md)"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 2 batch commit (see header)
+    verification: "grep -c \"2.91\" shows one body and one row; max class number was 90."
+
+  - id: O1
+    title: "OI-317 closed (moved to closed_issues.md)"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 2 batch commit (see header)
+    verification: "docs/audit/open_issues.md has no OI-317 entry; OPEN_INDEX regenerated."
+
+  - id: P1
+    title: "rows C4, C5 and C7 of docs/audit/sot-gate-test-stderr.closure.yaml and row U1 of docs/audit/spawn-tests-env-and-stderr.closure.yaml: answered for every spawn test"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 2 batch commit (see header)
+    verification: "every test file under test/ routes its spawns through the helper (G1 strict), so each failing spawn prints exit, stdout and stderr (class 2.90); those merged ledgers are not edited."
+
+  - id: PR-R1
+    title: "plan-review round R1: 14 findings (census, guard and poison holes)"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 2 batch commit (see header)
+    verification: "each re-derived against the code before folding; none rejected; every row and its landing place is in the top tables of docs/plans/spawn-tests-pr2-migrate-remaining.md; record docs/plan-reviews/spawn-tests-pr2.md."
+
+  - id: PR-R2
+    title: "plan-review round R2: 15 findings (3 P1 + 9 P2 + 3 P3)"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 2 batch commit (see header)
+    verification: "each re-derived against the code before folding; none rejected; every row and its landing place is in the top tables of docs/plans/spawn-tests-pr2-migrate-remaining.md; record docs/plan-reviews/spawn-tests-pr2.md."
+
+  - id: PR-R3
+    title: "plan-review round R3: 15 findings (2 P1 + 8 P2 + 3 P3)"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 2 batch commit (see header)
+    verification: "each re-derived against the code before folding; none rejected; every row and its landing place is in the top tables of docs/plans/spawn-tests-pr2-migrate-remaining.md; record docs/plan-reviews/spawn-tests-pr2.md."
+
+  - id: PR-R4
+    title: "plan-review round R4: 7 findings (5 P2 + 2 P3, none in the migration design)"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 2 batch commit (see header)
+    verification: "each re-derived against the code before folding; none rejected; every row and its landing place is in the top tables of docs/plans/spawn-tests-pr2-migrate-remaining.md; record docs/plan-reviews/spawn-tests-pr2.md."
+
+  - id: PR-R5
+    title: "plan-review round R5: 2 findings (confirmation round, converged; 2 wording points)"
+    terminal_state: closed_in_commit
+    commit: spawn-tests-env-and-stderr PR 2 batch commit (see header)
+    verification: "each re-derived against the code before folding; none rejected; every row and its landing place is in the top tables of docs/plans/spawn-tests-pr2-migrate-remaining.md; record docs/plan-reviews/spawn-tests-pr2.md."

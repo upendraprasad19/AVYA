@@ -25,6 +25,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/spawn.dart';
+
 /// Subprocess environment with git/CI leakage removed.
 ///
 ///   GIT_*      — git exports GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE into
@@ -36,24 +38,15 @@ import 'package:flutter_test/flutter_test.dart';
 ///                one hermetic contract so a future reader of CI env cannot
 ///                silently acquire the c3f8e1 failure mode.
 ///   PUSH_BEFORE — same rationale as GITHUB_*.
-Map<String, String> _cleanEnv() {
-  final env = Map<String, String>.from(Platform.environment);
-  env.removeWhere((k, _) {
-    final u = k.toUpperCase();
-    return u.startsWith('GIT_') || u.startsWith('GITHUB_') || u == 'PUSH_BEFORE';
-  });
-  return env;
-}
-
+/// (Now done by the shared spawn helper: `runSpawn` / `hermeticEnvironment`.)
 late final String _builder;
 
 ProcessResult _runBuilder(String cwd, {List<String> args = const []}) {
-  return Process.runSync(
-    'dart',
+  return runSpawn(
+    dartBin(),
     ['run', _builder, ...args],
+    why: 'build_gate_index.dart against a fixture tree',
     workingDirectory: cwd,
-    environment: _cleanEnv(),
-    includeParentEnvironment: false,
     runInShell: true,
   );
 }
@@ -82,7 +75,13 @@ void main() {
         reason: 'run from the repo root');
 
     // Fail loudly rather than silently testing the real repo.
-    final scrubbed = _cleanEnv();
+    final scrubbed = hermeticEnvironment(parent: {
+      'GIT_DIR': '/poison/.git',
+      'GIT_WORK_TREE': '/poison',
+      'GITHUB_REF': 'refs/heads/poison',
+      'PUSH_BEFORE': 'aaaa',
+      'PATH': Platform.environment['PATH'] ?? '',
+    });
     expect(scrubbed.keys.where((k) => k.toUpperCase().startsWith('GIT_')),
         isEmpty,
         reason: 'env scrub failed — the fixture would read the REAL repo');

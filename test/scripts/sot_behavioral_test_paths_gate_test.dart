@@ -28,46 +28,11 @@
 @Timeout(Duration(minutes: 3))
 library;
 
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-/// The Dart binary to spawn the gate with.
-///
-/// NOT `Platform.resolvedExecutable`: under `flutter test` that resolves to
-/// the flutter_tester binary, not dart, so the spawn never returns and the
-/// suite HANGS rather than failing. The repo already documents this trap at
-/// test/scripts/oi_numbering_lib_test.dart:284 after it cost that suite a
-/// >10-minute hang — and it cost this one another before the note was found.
-/// Prefer the SDK exe beside the Flutter wrapper (the wrapper takes the SDK
-/// update lock and shells out to git on EVERY call); fall back to `dart`.
-/// (Copied verbatim from test/scripts/cron_registry_snapshot_gate_test.dart.)
-String dartBinOf() {
-  final override = Platform.environment['DART_BIN_OVERRIDE'];
-  if (override != null && File(override).existsSync()) return override;
-  final which = Process.runSync(
-    Platform.isWindows ? 'where' : 'which',
-    ['dart'],
-    stdoutEncoding: utf8,
-  );
-  if (which.exitCode == 0) {
-    final first = (which.stdout as String)
-        .split('\n')
-        .map((l) => l.trim())
-        .firstWhere((l) => l.isNotEmpty, orElse: () => '');
-    if (first.isNotEmpty) {
-      final dir = File(first).parent.path.replaceAll(r'\', '/');
-      for (final c in [
-        '$dir/cache/dart-sdk/bin/dart.exe',
-        '$dir/cache/dart-sdk/bin/dart',
-      ]) {
-        if (File(c).existsSync()) return c;
-      }
-    }
-  }
-  return 'dart';
-}
+import '../helpers/spawn.dart';
 
 /// One concept whose `behavioral_test_path:` carries a trailing `# comment`
 /// exactly the way three real registry entries do (registry lines 3236, 6064,
@@ -87,7 +52,9 @@ $extra
 void main() {
   late String gate;
   late Directory fx;
-  final dartBin = dartBinOf();
+  // The shared `dartBin()` (never `Platform.resolvedExecutable`, which is
+  // flutter_tester under `flutter test` and HANGS the suite).
+  final dart = dartBin();
 
   setUpAll(() {
     gate =
@@ -117,9 +84,10 @@ void main() {
   // accepted red-path forms match the literal `exitCode,\s*1`; a field named
   // `code` would not count and the ledger promotion would be refused.
   ({int exitCode, String out}) run([List<String> extra = const []]) {
-    final r = Process.runSync(
-      dartBin,
+    final r = runSpawn(
+      dart,
       ['run', gate, ...extra],
+      why: 'Gate 42 SoT behavioral_test_path gate against a scratch fixture',
       workingDirectory: fx.path,
       runInShell: true,
     );

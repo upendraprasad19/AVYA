@@ -27,28 +27,17 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../scripts/oi_numbering_lib.dart';
+import '../helpers/spawn.dart';
 
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
 
-Map<String, String> _cleanEnv() {
-  final env = <String, String>{};
-  Platform.environment.forEach((k, v) {
-    final u = k.toUpperCase();
-    if (u.startsWith('GIT_')) return;
-    if (u == 'GITHUB_EVENT_PATH' || u == 'GITHUB_REF' || u == 'PUSH_BEFORE') return;
-    env[k] = v;
-  });
-  return env;
-}
-
-ProcessResult _run(String exe, List<String> args, String cwd) => Process.runSync(
+ProcessResult _run(String exe, List<String> args, String cwd) => runSpawn(
       exe,
       args,
+      why: '$exe ${args.join(' ')}',
       workingDirectory: cwd,
-      environment: _cleanEnv(),
-      includeParentEnvironment: false,
       stdoutEncoding: utf8,
       stderrEncoding: utf8,
     );
@@ -279,46 +268,20 @@ Some prose mentioning OI-5 — not a heading.
       return work;
     }
 
-    /// The Dart binary to spawn the gate with.
-    ///
-    /// NOT `Platform.resolvedExecutable`: under `flutter test` that resolves to
-    /// the flutter_tester binary, not dart, so `<tester> run script.dart` never
-    /// returns and the suite hangs instead of failing. Cost this suite one
-    /// >10-minute hang before it was caught.
-    ///
-    /// The rest of the repo's e2e suites spawn a plain `'dart'` (PATH), which
-    /// is the Flutter WRAPPER — ~4.0s of SDK-lock and git work per call, paid
-    /// 8 times here. Prefer the SDK exe beside it, exactly as
-    /// scripts/_dart_bin.sh does, and fall back to `'dart'` so a layout this
-    /// guess does not match still runs.
-    String _dartBin() {
-      final override = Platform.environment['DART_BIN_OVERRIDE'];
-      if (override != null && File(override).existsSync()) return override;
-      final which = Process.runSync(
-        Platform.isWindows ? 'where' : 'which',
-        ['dart'],
-        stdoutEncoding: utf8,
-      );
-      if (which.exitCode == 0) {
-        final first = (which.stdout as String)
-            .split('\n')
-            .map((l) => l.trim())
-            .firstWhere((l) => l.isNotEmpty, orElse: () => '');
-        if (first.isNotEmpty) {
-          final dir = File(first).parent.path.replaceAll(r'\', '/');
-          for (final c in [
-            '$dir/cache/dart-sdk/bin/dart.exe',
-            '$dir/cache/dart-sdk/bin/dart',
-          ]) {
-            if (File(c).existsSync()) return c;
-          }
-        }
-      }
-      return 'dart';
-    }
-
+    // The Dart binary to spawn the gate with is `dartBin()` (test/helpers/spawn.dart).
+    //
+    // NOT `Platform.resolvedExecutable`: under `flutter test` that resolves to
+    // the flutter_tester binary, not dart, so `<tester> run script.dart` never
+    // returns and the suite hangs instead of failing. Cost this suite one
+    // >10-minute hang before it was caught.
+    //
+    // The rest of the repo's e2e suites spawn a plain `'dart'` (PATH), which
+    // is the Flutter WRAPPER — ~4.0s of SDK-lock and git work per call, paid
+    // 8 times here. `dartBin()` prefers the SDK exe beside it, exactly as
+    // scripts/_dart_bin.sh does, and falls back to `'dart'` so a layout this
+    // guess does not match still runs.
     ProcessResult _runGate(String cwd) =>
-        _run(_dartBin(), ['run', 'scripts/check_oi_numbering_unique.dart'], cwd);
+        _run(dartBin(), ['run', 'scripts/check_oi_numbering_unique.dart'], cwd);
 
     test('FAILS on a real cross-branch collision', () {
       final work = _scenario(
@@ -437,7 +400,7 @@ Some prose mentioning OI-5 — not a heading.
         mainOpen: {1: 'one', 2: 'mainline two'},
         branchOpen: {1: 'one', 2: 'branch two'},
       );
-      final r = _run(_dartBin(),
+      final r = _run(dartBin(),
           ['run', 'scripts/check_oi_numbering_unique.dart', '--warn-only'], work);
       expect(r.exitCode, 0);
       expect(r.stderr, contains('OI-2'), reason: 'still REPORTS, just does not block');

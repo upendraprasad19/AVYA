@@ -43,18 +43,18 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/spawn.dart';
+
 const _lockScript = 'scripts/_git_lock.sh';
 
 void main() {
   late String repoRoot;
 
-  Map<String, String> scrubbedEnv() {
-    const leaky = {'git_dir', 'git_work_tree', 'git_index_file'};
-    return {
-      for (final e in Platform.environment.entries)
-        if (!leaky.contains(e.key.toLowerCase())) e.key: e.value,
-    };
-  }
+  // The hand-copied GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE filter that lived
+  // here is gone: every spawn below goes through test/helpers/spawn.dart, whose
+  // hermeticEnvironment applies the canonical scrub (a superset of those three).
+  // The five Process.start children stay startSpawn + reportSpawn: they are the
+  // CONCURRENT git-lock processes this file exists to race (plan D3 exemption).
 
   setUpAll(() {
     repoRoot = Directory.current.path;
@@ -68,10 +68,9 @@ void main() {
       if (repo.existsSync()) repo.deleteSync(recursive: true);
     });
 
-    ProcessResult git(List<String> args) => Process.runSync('git', args,
+    ProcessResult git(List<String> args) => runSpawn('git', args,
+        why: 'git ${args.join(' ')} in the lock scratch repo',
         workingDirectory: repo.path,
-        environment: scrubbedEnv(),
-        includeParentEnvironment: false,
         runInShell: true);
 
     expect(git(['init']).exitCode, 0, reason: 'temp repo init failed');
@@ -124,12 +123,15 @@ fi
       final s = buildScratchRepo();
       final marker = File('${s.repo.path}/ready.marker');
 
-      final holder = await Process.start('sh', [s.holderScript],
-          workingDirectory: s.repo.path,
-          environment: scrubbedEnv(),
-          includeParentEnvironment: false,
-          runInShell: true);
+      final holder = await startSpawn('sh', [s.holderScript],
+          workingDirectory: s.repo.path, runInShell: true);
       addTearDown(() => holder.kill());
+      final holderOut = StringBuffer();
+      final holderErr = StringBuffer();
+      final holderOutDone =
+          holder.stdout.transform(utf8.decoder).forEach(holderOut.write);
+      final holderErrDone =
+          holder.stderr.transform(utf8.decoder).forEach(holderErr.write);
 
       // Poll for the holder's readiness marker instead of a fixed sleep --
       // a fixed delay would either flake (too short) or waste wall-clock
@@ -144,10 +146,9 @@ fi
 
       // Contended attempt: holder is alive and sleeping. Must refuse, not
       // race ahead to a second concurrent mkdir/commit.
-      final contended = Process.runSync('sh', [s.proberScript],
+      final contended = runSpawn('sh', [s.proberScript],
+          why: 'prober while the holder is alive (must refuse)',
           workingDirectory: s.repo.path,
-          environment: scrubbedEnv(),
-          includeParentEnvironment: false,
           runInShell: true);
       final contendedOut = '${contended.stdout}${contended.stderr}';
       expect(contended.exitCode, 1,
@@ -158,6 +159,10 @@ fi
 
       // Let the holder finish naturally (releases via its own EXIT trap).
       final holderExit = await holder.exitCode;
+      await holderOutDone;
+      await holderErrDone;
+      reportSpawn(holderExit, holderOut.toString(), holderErr.toString(),
+          'lock holder script (sleeps 5s then releases)');
       expect(holderExit, 0, reason: 'holder script itself must exit cleanly');
 
       // The lock dir must be gone -- proves release actually ran, not just
@@ -168,10 +173,9 @@ fi
           reason: 'the lock dir must be removed on release');
 
       // Reuse: a fresh attempt after release must succeed.
-      final after = Process.runSync('sh', [s.proberScript],
+      final after = runSpawn('sh', [s.proberScript],
+          why: 'prober after the holder released (must acquire)',
           workingDirectory: s.repo.path,
-          environment: scrubbedEnv(),
-          includeParentEnvironment: false,
           runInShell: true);
       expect(after.exitCode, 0,
           reason: 'the lock must be acquirable again once freed.\n'
@@ -202,10 +206,13 @@ fi
       // PID, and wait for it to exit -- never a guessed/magic number, which
       // could coincidentally collide with a real running process.
       final deadProc =
-          await Process.start('sh', ['-c', 'echo \$\$'], runInShell: true);
-      final deadPid =
-          (await deadProc.stdout.transform(utf8.decoder).join()).trim();
-      await deadProc.exitCode;
+          await startSpawn('sh', ['-c', 'echo \$\$'], runInShell: true);
+      final deadErrF = deadProc.stderr.transform(utf8.decoder).join();
+      final deadOut = await deadProc.stdout.transform(utf8.decoder).join();
+      final deadPid = deadOut.trim();
+      final deadExit = await deadProc.exitCode;
+      reportSpawn(deadExit, deadOut, await deadErrF,
+          'short-lived sh that prints its own PID (the dead-holder PID)');
       expect(deadPid, isNotEmpty);
 
       // Simulate a crashed holder: hand-create the lock dir naming that
@@ -215,10 +222,9 @@ fi
       File('${lockDir.path}/holder').writeAsStringSync(
           'pid=$deadPid\nop=crashed-simulated\nstarted=2000-01-01T00:00:00Z\n');
 
-      final r = Process.runSync('sh', [s.proberScript],
+      final r = runSpawn('sh', [s.proberScript],
+          why: 'prober against a lock left by a dead PID (must refuse)',
           workingDirectory: s.repo.path,
-          environment: scrubbedEnv(),
-          includeParentEnvironment: false,
           runInShell: true);
       final out = '${r.stdout}${r.stderr}';
       expect(r.exitCode, isNot(0),
@@ -278,10 +284,9 @@ else
 fi
 ''');
 
-      final r = Process.runSync('sh', [scriptPath],
+      final r = runSpawn('sh', [scriptPath],
+          why: 'release_owner_check.sh (release must not remove a foreign lock)',
           workingDirectory: s.repo.path,
-          environment: scrubbedEnv(),
-          includeParentEnvironment: false,
           runInShell: true);
       final out = '${r.stdout}${r.stderr}';
       expect(out, contains('LOCK_DIR_SURVIVED'),
@@ -346,17 +351,23 @@ fi
 
       const contenders = 5;
       final procs = <Process>[];
+      final mvOuts = <Future<String>>[];
+      final mvErrs = <Future<String>>[];
       for (var i = 0; i < contenders; i++) {
         final candidate = Directory('${scratch.path}/cand_$i')..createSync();
         File('${candidate.path}/holder').writeAsStringSync('pid=CAND$i\n');
-        procs.add(await Process.start(
+        final p = await startSpawn(
             'mv', ['-T', candidate.path, targetDir.path],
-            workingDirectory: scratch.path,
-            environment: scrubbedEnv(),
-            includeParentEnvironment: false,
-            runInShell: true));
+            workingDirectory: scratch.path, runInShell: true);
+        mvOuts.add(p.stdout.transform(utf8.decoder).join());
+        mvErrs.add(p.stderr.transform(utf8.decoder).join());
+        procs.add(p);
       }
       final exitCodes = await Future.wait(procs.map((p) => p.exitCode));
+      for (var i = 0; i < contenders; i++) {
+        reportSpawn(exitCodes[i], await mvOuts[i], await mvErrs[i],
+            'mv -T contender $i racing for the same empty target');
+      }
 
       final winners = exitCodes.where((c) => c == 0).length;
       expect(winners, 1,
@@ -449,11 +460,8 @@ echo "B_FINAL_HOLDER: \$(cat "\$(git rev-parse --git-dir)/.safe_git_op.lock/hold
 ''');
 
       final aOut = StringBuffer();
-      final procA = await Process.start('sh', [procAPath],
-          workingDirectory: s.repo.path,
-          environment: scrubbedEnv(),
-          includeParentEnvironment: false,
-          runInShell: true);
+      final procA = await startSpawn('sh', [procAPath],
+          workingDirectory: s.repo.path, runInShell: true);
       procA.stdout.transform(utf8.decoder).listen(aOut.write);
       procA.stderr.transform(utf8.decoder).listen(aOut.write);
       addTearDown(() => procA.kill());
@@ -463,17 +471,20 @@ echo "B_FINAL_HOLDER: \$(cat "\$(git rev-parse --git-dir)/.safe_git_op.lock/hold
       await Future<void>.delayed(const Duration(milliseconds: 300));
 
       final bOut = StringBuffer();
-      final procB = await Process.start('sh', [procBPath],
-          workingDirectory: s.repo.path,
-          environment: scrubbedEnv(),
-          includeParentEnvironment: false,
-          runInShell: true);
+      final procB = await startSpawn('sh', [procBPath],
+          workingDirectory: s.repo.path, runInShell: true);
       procB.stdout.transform(utf8.decoder).listen(bOut.write);
       procB.stderr.transform(utf8.decoder).listen(bOut.write);
       addTearDown(() => procB.kill());
 
       final aExit = await procA.exitCode;
       final bExit = await procB.exitCode;
+      // Both streams of each child were merged into aOut / bOut by the listeners
+      // above, so the merged text is reported as stdout.
+      reportSpawn(aExit, aOut.toString(), '(stderr merged into stdout)',
+          'procA: delayed contender (sleeps 1.5s before its publish)');
+      reportSpawn(bExit, bOut.toString(), '(stderr merged into stdout)',
+          'procB: on-time contender');
 
       expect(bExit, 0,
           reason: 'the on-time contender must succeed.\n${bOut.toString()}');
@@ -542,10 +553,9 @@ wait \$HPID
 echo "HOLDER_EXIT=\$?"
 ''');
 
-      final r = Process.runSync('sh', ['${s.repo.path}/sig_driver.sh'],
+      final r = runSpawn('sh', ['${s.repo.path}/sig_driver.sh'],
+          why: 'sig_driver.sh: TERM a lock holder and report its exit',
           workingDirectory: s.repo.path,
-          environment: scrubbedEnv(),
-          includeParentEnvironment: false,
           runInShell: true);
       final out = '${r.stdout}${r.stderr}';
 
@@ -571,10 +581,9 @@ echo "HOLDER_EXIT=\$?"
               '$out');
 
       // And the lock is genuinely reusable afterwards.
-      final after = Process.runSync('sh', [s.proberScript],
+      final after = runSpawn('sh', [s.proberScript],
+          why: 'prober after a signalled holder released (must acquire)',
           workingDirectory: s.repo.path,
-          environment: scrubbedEnv(),
-          includeParentEnvironment: false,
           runInShell: true);
       expect(after.exitCode, 0,
           reason: 'a fresh acquire must succeed after a signalled holder '

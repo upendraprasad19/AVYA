@@ -61,6 +61,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/spawn.dart';
+
 void main() {
   const scriptPaths = [
     'scripts/blast_radius_from_diff.dart',
@@ -240,9 +242,10 @@ void main() {
     test('the real classifier agrees: promoted set is platform, control is not',
         () {
       String classify(List<String> paths) {
-        final r = Process.runSync(
+        final r = runSpawn(
           'dart',
           ['run', 'scripts/blast_radius_from_diff.dart', ...paths],
+          why: 'blast_radius_from_diff CLI on $paths',
           runInShell: true,
         );
         final m = RegExp(r'Blast-radius:\s*(\w+)')
@@ -340,13 +343,14 @@ void main() {
             'test proves nothing if the fixture drifted',
       );
 
-      final process = await Process.start(
+      final result = await runSpawnWithInput(
           'dart', ['run', 'scripts/blast_radius_from_diff.dart', '-'],
+          why: 'blast_radius_from_diff on stdin: a SECURITY DEFINER migration '
+              'with an innocuous filename',
+          stdin: '$fixturePath\n',
+          stdoutEncoding: utf8,
           runInShell: true);
-      process.stdin.write('$fixturePath\n');
-      await process.stdin.close();
-      final stdout = await process.stdout.transform(utf8.decoder).join();
-      await process.exitCode;
+      final stdout = result.stdout;
 
       expect(
         stdout,

@@ -39,21 +39,13 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/spawn.dart';
+
 const _gate = 'scripts/check_no_deferral_euphemism.dart';
 const _phrases = 'docs/deferral_euphemisms.yaml';
 
 void main() {
   late String repoRoot;
-
-  /// Parent environment minus the three variables git exports to its hooks.
-  /// Case-insensitive: Windows env keys are, a copied Map is not.
-  Map<String, String> scrubbedEnv() {
-    const leaky = {'git_dir', 'git_work_tree', 'git_index_file'};
-    return {
-      for (final e in Platform.environment.entries)
-        if (!leaky.contains(e.key.toLowerCase())) e.key: e.value,
-    };
-  }
 
   setUpAll(() {
     repoRoot = Directory.current.path;
@@ -75,10 +67,9 @@ void main() {
       if (repo.existsSync()) repo.deleteSync(recursive: true);
     });
 
-    ProcessResult git(List<String> args) => Process.runSync('git', args,
+    ProcessResult git(List<String> args) => runSpawn('git', args,
+        why: 'git ${args.join(' ')} in the throwaway deu_gate_ repo',
         workingDirectory: repo.path,
-        environment: scrubbedEnv(),
-        includeParentEnvironment: false,
         runInShell: true);
 
     expect(git(['init']).exitCode, 0, reason: 'temp repo init failed');
@@ -113,10 +104,9 @@ void main() {
       git(['add', 'doc.md']);
     }
 
-    final r = Process.runSync('dart', ['run', _gate],
+    final r = runSpawn('dart', ['run', _gate],
+        why: 'check_no_deferral_euphemism in the throwaway deu_gate_ repo',
         workingDirectory: repo.path,
-        environment: scrubbedEnv(),
-        includeParentEnvironment: false,
         runInShell: true);
     return (exitCode: r.exitCode, out: '${r.stdout}${r.stderr}');
   }
@@ -277,9 +267,8 @@ void main() {
       final repoRootClaude = File('CLAUDE.md');
       expect(repoRootClaude.existsSync(), isTrue,
           reason: 'this assertion is about the real repo run');
-      final r = Process.runSync('dart', ['run', _gate],
-          environment: scrubbedEnv(),
-          includeParentEnvironment: false,
+      final r = runSpawn('dart', ['run', _gate],
+          why: 'check_no_deferral_euphemism on the real repo',
           runInShell: true);
       final out = '${r.stdout}${r.stderr}';
       expect(r.exitCode, 0, reason: out);

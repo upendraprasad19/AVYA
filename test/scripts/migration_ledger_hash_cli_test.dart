@@ -17,30 +17,12 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../scripts/migration_ledger_hash_lib.dart';
-
-String _dartBin() {
-  final override = Platform.environment['DART_BIN_OVERRIDE'];
-  if (override != null && File(override).existsSync()) return override;
-  final which = Process.runSync(Platform.isWindows ? 'where' : 'which', ['dart'], stdoutEncoding: utf8);
-  if (which.exitCode == 0) {
-    final first =
-        (which.stdout as String).split('\n').map((l) => l.trim()).firstWhere((l) => l.isNotEmpty, orElse: () => '');
-    if (first.isNotEmpty) {
-      final dir = File(first).parent.path.replaceAll(r'\', '/');
-      for (final c in ['$dir/cache/dart-sdk/bin/dart.exe', '$dir/cache/dart-sdk/bin/dart']) {
-        if (File(c).existsSync()) return c;
-      }
-    }
-  }
-  return 'dart';
-}
+import '../helpers/spawn.dart';
 
 ProcessResult _cli(List<String> args) {
-  final env = Map<String, String>.from(Platform.environment)..removeWhere((k, _) => k.toUpperCase().startsWith('GIT_'));
-  return Process.runSync(_dartBin(), ['scripts/migration_ledger_hash.dart', ...args],
+  return runSpawn(dartBin(), ['scripts/migration_ledger_hash.dart', ...args],
+      why: 'migration_ledger_hash CLI ${args.join(' ')}',
       workingDirectory: Directory.current.path,
-      environment: env,
-      includeParentEnvironment: false,
       stdoutEncoding: utf8,
       stderrEncoding: utf8);
 }

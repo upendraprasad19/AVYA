@@ -5726,15 +5726,6 @@ Residuals (i) and (iii) of the B1 plan's D1: a PRO caller can upload an unbounde
 
 Residual (iv) of the B1 plan's D1, the OI-283 class: a dashboard edit of the progress-photos policies (a new permissive INSERT policy, a widened UPDATE policy) would silently reopen the door B1 closes. Propose a scheduled catalog snapshot compared with a committed expectation.
 
-## OI-317 — Spawn tests PR 2: migrate the other 48 test files (119 sites) onto test/helpers/spawn.dart and make the site guards strict
-
-- **Status**: OPEN
-- **Blocked on**: its own plan and two independent plan reviews (CLAUDE.md 4.12); PR 1 of the batch (`spawn-tests-env-and-stderr`, PR #81) must be merged first.
-- **Verified**: 2026-10-06 - the PR 1 census of `test/` found 48 spawn test files with 119 spawn sites still building their own child environment; PR 1 migrated two files and shipped the helper `test/helpers/spawn.dart` plus a derived manifest.
-- **Identified**: 2026-10-06 · filed via mint_oi.sh from branch `progress-photos-b0`
-
-Second unit of batch `spawn-tests-env-and-stderr` (founder decision 2026-10-06, items 1 and 3, scope answer "Shared helper, 2 PRs"). Migrates the other files onto the helper, makes the site guards strict, and prints a failing child's stdout and stderr in each. The batch closes only when this unit merges; the plan will be `docs/plans/spawn-tests-pr2-migrate-remaining.md`.
-
 ## OI-320 — redeem-referral has no per-referrer cap: each new referee (idempotent per referee only, index.ts:105-117) adds 7 days to the referrer's PRO, so throwaway accounts extend it without limit - product decision needed on a cap
 
 - **Status**: OPEN
