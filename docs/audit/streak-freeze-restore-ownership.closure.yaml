@@ -26,6 +26,7 @@ diagnose_docs:
   - docs/diagnoses/2026-10-06-streak-decay-persist-restore-settled-b4e7a1.md
   - docs/diagnoses/2026-10-06-progress-restore-clobbers-freeze-state-c9d2f6.md
   - docs/diagnoses/2026-10-06-restore-user-snapshot-returns-every-row-e4c1d7.md
+  - docs/diagnoses/2026-10-06-legacy-restore-reads-page-and-order-deterministically-c7e2a9.md
 
 findings:
   # ── Unit 1 (diagnose b4e7a1): the decay persist is gated on THIS account's restore having settled ──
@@ -241,5 +242,52 @@ findings:
     blocker: "The Edge Function memory and CPU limits are platform facts not readable from the repository or from a read-only database session. A worker killed for memory answers non-200, which the client already treats as the legacy-restore fallback, so the failure is safe, not bounded."
     reopen_when: "The limit is read from the Supabase dashboard, or query_logs / the function logs show a restore-user-snapshot worker killed for memory."
 
-total_findings: 36
-closed_count: 36
+  # ── Slice B2 (diagnose c7e2a9): the client's legacy restore reads page and order deterministically ──
+  - id: B2-LEGACY-RESTORE-PAGING
+    title: "The legacy per-table restore silently dropped rows past 1000 on three bare reads (workout_schedule_completions, user_custom_exercises, user_custom_foods), paged on a non-unique sort everywhere else, and only debugPrint-ed at its 50,000-row ceiling"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: c7e2a9' (Slice B2 commit)"
+    verification: "diagnose c7e2a9. test/sync/restore_legacy_paging_behavioral_test.dart (40 tests through the real SyncService against a stub that really pages: 2,500 completions land through three owner-scoped pages; tie groups straddling BOTH page seams are neither skipped nor served twice, with a NEGATIVE CONTROL showing the same stub does lose and double rows without the tie-break; 1,500 custom exercises and foods land; readiness_daily orders by date and never id; 2,500 nutrition logs page with id last; ten tables send their exact unique-last order string and the old string under the kill switch; every filter and order column SENT is a live column; the coach read is still one newest-1000 request; the 50,000-row ceiling emits one event naming the table, from _fetchAllRows and the nutrition loop). 46 production and helper mutants, all red in the end (41 as reviewed in round 1, 5 more for the round-2 additions, one of which first survived and produced the below-cap mirror test; the per-mutant results are in the diagnose mutation_proof). Kill switch disable_restore_paging_fix reverts every read verbatim and is itself tested (owner scope and since filter included). The coach read (already newest 1000) is untouched and pinned."
+
+  - id: B2-SHORT-PAGE-STOP
+    title: "_fetchAllRows (and the nutrition loop) stop on a SHORT page, which is right only while PostgREST's db-max-rows equals the page size (1000); a lowered cap would silently lose every row past the first page, and nothing in the client can detect that"
+    terminal_state: upstream_blocked
+    blocker: "db-max-rows is a platform setting (measured 1000 on 2026-10-06) that the client never reads, so no test can DETECT a lowered cap; the test only DOCUMENTS the assumption by modelling a lower cap in the stub. Stopping on an EMPTY page (as the Edge Function's paged_fetch.ts does) was weighed and not adopted: it costs one extra request on every read of the fallback path (about eleven) and would loop to the 50,000-row ceiling on any stub that answers a table with the same non-empty rows whatever the offset (no existing test does that to a _fetchAllRows table today). The pre-existing assumption is not introduced by this slice."
+    reopen_when: "The project's max-rows setting is lowered below 1000, or a restore_op_done / client_errors row shows a legacy-restore table whose row count equals a cap below 1000. The cap-independent alternative (Prefer: count=exact answers 206 with the total in Content-Range, documented in supabase/functions/_shared/paged_fetch.ts) needs no extra request."
+
+  - id: B2-TIE-ORDER-UNREACHABLE-ON-THREE-TABLES
+    title: "For the three newly paged tables a tie on the sort column cannot happen in production, so their id tie-break is belt and braces and the protection that matters is the paging (B-pass round 1 seat A, F4)"
+    terminal_state: verified_clean
+    evidence: "Read-only, 2026-10-06: pg_indexes / pg_constraint show a unique (user_id, scheduled_date) index and constraint on workout_schedule_completions (migration 009) and one unique (user_id, lower(name)) index on each of user_custom_exercises and user_custom_foods (migration 057); live row counts 46 completions, 14 custom exercises, 0 custom foods. The earlier claim that a duplicate lower-cased name would restore the NEWER row locally was wrong (unreachable) and is corrected in the diagnose impact analysis and the SoT registry. Where the sort column really is non-unique (created_at, date) the tie-break is load-bearing and is tested table by table."
+
+  - id: B2-COMMUNITY-PULL-PAGING
+    title: "syncCommunityItems (the community-catalogue pull) offset-pages 500 rows at a time ordered by created_at alone, and stamps last_community_sync, so a tied row skipped at a page seam is never refetched; its 10-page cap was silent (B-pass round 1 seat A F1, round 2 seat C F7)"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: c7e2a9' (Slice B2 commit)"
+    verification: "Both queries add .order('id', ascending: true) behind disable_restore_paging_fix (verbatim revert tested); 1,200 approved foods and exercises tied on created_at page 500 at a time with id last, each served once (reshuffleTies on); a pull that fills its 10 x 500-row cap emits restore_row_ceiling_hit with message community_pull:<table> (tested for both tables). Mutants N06, N07, N08 (id term removed from foods / exercises, kill switch ignored) and R01-R04 (cap event removed, wrong message, wrong page) all red. LIMIT, stated plainly: the 5,000-row cap itself is unchanged (raising it needs keyset paging, a separate design); 0 approved community items exist live (2026-10-06), so it is unreachable today and now observable if it is ever reached."
+
+  - id: B2-BPASS-A
+    title: "B-pass round 1, seat A (correctness, fidelity, kill-switch revert, source-grep ripples): 0 P0, 0 P1, 1 P2, 5 P3"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: c7e2a9' (Slice B2 commit)"
+    verification: "docs/reviews/restore-legacy-paging-bpass.md, findings A1-A6. Each verified against the code before it was accepted (the unique indexes live, the sibling loop, the order directions by grep); all FIXED: the community pull's tie-break and cap event, the nutrition loop's ceiling event, the 'every order term states ascending' overstatement scoped to NEW terms, the wrong duplicate-name consequence corrected, the placeholder filled, the stub's FormatException hang."
+
+  - id: B2-BPASS-B
+    title: "B-pass round 1, seat B (test adequacy): 0 P0, 0 P1, 4 P2, 3 P3"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: c7e2a9' (Slice B2 commit)"
+    verification: "docs/reviews/restore-legacy-paging-bpass.md, findings B1-B7: the kill-switch tests now pin the owner scope and since filter of the reverted reads (N01-N03 red); the short-page pin is worded as documents-not-detects (ledger B2-SHORT-PAGE-STOP); every filter and order column SENT is checked against the live schema in every test's tearDown (the first version, a hand-typed expected list, would have survived a consistent typo: R05 red only with the sent-column check); the nutrition loop has paging, tie and ceiling tests (N04, N05, N10 red); the seam geometry is derived and the dataset changed to 2,499 so BOTH seams straddle; the stub answers any model failure with a recorded 400; the box-closed fallback and the exactly-2,000-row boundary are tested (N09 red)."
+
+  - id: B2-BPASS-C
+    title: "B-pass round 2, seat C (the changes made for round 1): 0 P0, 0 P1, 0 P2, 7 P3"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: c7e2a9' (Slice B2 commit)"
+    verification: "docs/reviews/restore-legacy-paging-bpass.md, findings C1-C7: a wrong citation in the empty-page-stop rationale (the cited nutrition test is a PUSH test) removed and the reason restated; 834 vs 833 dates; line citations re-derived by grep; the review file and this ledger entry now exist; the naming row and docs/architecture/sync.md kill-switch list name the nutrition emitter and the new switch; the live-schema check widened to everything the code sent; the community pull's silent cap announced."
+
+  - id: RESTORE-TRANSPORT-NO-TIMEOUT
+    title: "The single-call restore has no client-side timeout and (with the paged Edge Function) makes about 13 more sequential requests; the legacy fallback has the same shape"
+    terminal_state: blocked_on_user
+    reason: "The per-request cost of the PAGED function can only be measured after the founder's deploy go (B1-EF-DEPLOY): read the per-request rows line and restore_step_done / restore_completed from client_errors before and after on the founder's account. Baseline read-only on 2026-10-06 (before any deploy): the last 8 single-call restores had total_ms 15,034 to 127,281 (restore_completed, 2026-10-04 to 2026-10-06) and the sampled step=B values 153 to 2,366 ms; the call is bounded today by the restoring screen's 15 s / 30 s hint and its CONTINUE escape. Closes as verified_clean with the measured cost once the deploy has run."
+
+total_findings: 44
+closed_count: 44

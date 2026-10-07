@@ -3044,6 +3044,32 @@ class SyncService {
   /// Fetches all rows from a Supabase table using offset-based pagination.
   /// Replaces hardcoded `.limit(5000)` to support full-history restore.
   /// Safety ceiling: 50,000 rows per table to prevent runaway fetches.
+  ///
+  /// [tieBreak] (diagnose c7e2a9, Slice B2): extra ORDER BY columns appended
+  /// after [orderBy], each with an explicit `ascending: false` (the primary
+  /// stays descending, the Dart client's own default, now written out). The
+  /// LAST column MUST be unique per row (`id`; `date` for `readiness_daily`,
+  /// whose primary key is `(user_id, date)`): with a non-unique sort key two
+  /// page requests can return tied rows in different orders and skip or
+  /// duplicate a row across the page seam. Empty (the default, and always
+  /// when `disable_restore_paging_fix` is set) is the pre-fix single-column
+  /// order.
+  ///
+  /// The loop still stops on a SHORT page, which is right only while the
+  /// server's `db-max-rows` equals [pageSize] (1000 on this project, measured
+  /// 2026-10-06; `_shared/paged_fetch.ts` documents the hazard of a lower
+  /// cap). `test/sync/restore_legacy_paging_behavioral_test.dart` DOCUMENTS the
+  /// assumption by showing what a lower cap does here (one page, the rest
+  /// lost); it cannot DETECT a lowered cap, because the cap is a platform
+  /// setting the client never reads. Stopping on an EMPTY page instead (as the
+  /// Edge Function's `paged_fetch.ts` does) was not adopted: it costs one extra
+  /// request on every read of the fallback path (about eleven), and it would
+  /// loop to the 50,000-row ceiling on any stub that answers a table with the
+  /// same non-empty rows whatever the offset (no existing test does that to a
+  /// `_fetchAllRows` table today). If the cap is ever lowered, change this loop
+  /// and that test together; `paged_fetch.ts` documents a cap-independent stop
+  /// that needs no extra request (`Prefer: count=exact` answers 206 with the
+  /// total in `Content-Range`).
   Future<List<Map<String, dynamic>>> _fetchAllRows(
     String table,
     String userId, {
@@ -3052,8 +3078,10 @@ class SyncService {
     String orderBy = 'created_at',
     int pageSize = 1000,
     String? selectColumns,
+    List<String> tieBreak = const <String>[],
   }) async {
     const maxRows = 50000;
+    final ties = SyncFlags.restorePagingFixEnabled ? tieBreak : const <String>[];
     final results = <Map<String, dynamic>>[];
     int offset = 0;
     while (true) {
@@ -3064,9 +3092,11 @@ class SyncService {
       if (dateColumn != null && since != null) {
         query = query.gte(dateColumn, since);
       }
-      final rows = await query
-          .order(orderBy)
-          .range(offset, offset + pageSize - 1);
+      var ordered = query.order(orderBy, ascending: false);
+      for (final column in ties) {
+        ordered = ordered.order(column, ascending: false);
+      }
+      final rows = await ordered.range(offset, offset + pageSize - 1);
       for (final row in rows) {
         results.add(Map<String, dynamic>.from(row as Map));
       }
@@ -3074,6 +3104,10 @@ class SyncService {
       offset += pageSize;
       if (results.length >= maxRows) {
         debugPrint('[SyncService._fetchAllRows] Hit $maxRows ceiling for $table');
+        // A restore that stopped at the ceiling is not a complete restore:
+        // say so where the founder can see it (LOW priority, table name only).
+        unawaited(ErrorTelemetry.logEvent('restore_row_ceiling_hit',
+            message: table));
         break;
       }
     }

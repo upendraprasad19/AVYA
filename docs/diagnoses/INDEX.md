@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### restore_legacy_paged_reads (1 bugs)
+- 2026-10-06 c7e2a9 — When the single-call restore is unavailable the client falls back to its legacy per-table restore, and that path lost or doubled rows silently for a long-history account. PostgREST clamps every…
+
 ### progress_restore_freeze_merge (1 bugs)
 - 2026-10-06 c9d2f6 — The founder's Home screen showed streak 16 with 2 freezes. The persisted count was wrong: the streak only holds at 16 because two missed days (2026-10-03 and 2026-10-05) are SIMULATED as covered by…
 
@@ -1515,6 +1518,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-10-06 | c7e2a9 | When the single-call restore is unavailable the client falls back to its legacy per-table restore, and that path lost or doubled rows silently for a long-history account. PostgREST clamps every… | restore_legacy_paged_reads | test/sync/restore_legacy_paging_behavioral_test.dart |
 | 2026-10-06 | c9d2f6 | The founder's Home screen showed streak 16 with 2 freezes. The persisted count was wrong: the streak only holds at 16 because two missed days (2026-10-03 and 2026-10-05) are SIMULATED as covered by… | progress_restore_freeze_merge | test/contracts/progress_restore_freeze_merge_behavioral_test.dart |
 | 2026-10-06 | e4c1d7 | The single-call restore (Edge Function restore-user-snapshot) silently returned at most 1000 rows per table. PostgREST clamps every response to db-max-rows (1000 on this project) with HTTP 200 and… | restore_user_snapshot_paged_reads | supabase/functions/restore-user-snapshot/paged_reads_test.ts |
 | 2026-10-06 | b4e7a1 | Founder (account upendra), 2026-10-06 06:45 IST, phone: Home shows streak 16 with 2 streak freezes. Truth is streak 16 with ZERO freezes in reserve. The Home streak number is a read-only walk… | streak_decay_restore_settled_marker | test/contracts/streak_reckon_restore_settled_behavioral_test.dart |

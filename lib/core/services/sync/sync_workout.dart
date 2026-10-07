@@ -801,6 +801,7 @@ extension SyncServiceWorkout on SyncService {
           ? await _fetchAllRows(
               'workout_logs', userId,
               dateColumn: 'created_at', since: since, orderBy: 'created_at',
+              tieBreak: const ['id'],
             )
           : (preFetched as List? ?? const []);
 
@@ -866,6 +867,7 @@ extension SyncServiceWorkout on SyncService {
           ? await _fetchAllRows(
               'workout_log_exercises', userId,
               dateColumn: 'completed_at', since: since, orderBy: 'completed_at',
+              tieBreak: const ['created_at', 'id'],
             )
           : (preFetchedExercises as List? ?? const []);
 
@@ -878,6 +880,7 @@ extension SyncServiceWorkout on SyncService {
             ? await _fetchAllRows(
                 'workout_log_sets', userId,
                 dateColumn: 'completed_at', since: since, orderBy: 'completed_at',
+                tieBreak: const ['created_at', 'id'],
               )
             : (preFetchedSets as List? ?? const []);
         for (final raw in setRows) {
@@ -1044,12 +1047,7 @@ extension SyncServiceWorkout on SyncService {
       {Object? preFetched = _kNoInject}) async {
     try {
       final rows = identical(preFetched, _kNoInject)
-          ? await _supabase.client
-              .from('workout_schedule_completions')
-              .select()
-              .eq('user_id', userId)
-              .gte('completed_at', since)
-              .order('scheduled_date')
+          ? await _readScheduleCompletionRows(userId, since)
           : (preFetched as List? ?? const []);
 
       for (final row in rows) {
@@ -1128,6 +1126,33 @@ extension SyncServiceWorkout on SyncService {
         await _reportSyncFailure(opType: 'restore_schedule_completions', error: e);
       } catch (_) {}
     }
+  }
+
+  /// The legacy-fallback read behind [_restoreScheduleCompletions] (diagnose
+  /// c7e2a9, Slice B2). PostgREST clamps a bare select to 1000 rows with an
+  /// HTTP 200, so the pre-fix read silently dropped every completion past the
+  /// 1000th. Fix ON: paged through [_fetchAllRows], newest `scheduled_date`
+  /// first with the unique `id` as the tie-break. Fix OFF
+  /// (`disable_restore_paging_fix`): the pre-fix single read, VERBATIM.
+  /// It lives HERE, after the method, and returns the rows rather than
+  /// `Future<void>`, so `orphan_completion_synthesizes_wlog_test.dart`'s
+  /// 4000-character window and `restore_field_canonical_test.dart`'s
+  /// `Future<void>` slicing keep their boundaries.
+  Future<List<Map<String, dynamic>>> _readScheduleCompletionRows(
+      String userId, String since) async {
+    if (!SyncFlags.restorePagingFixEnabled) {
+      return await _supabase.client
+          .from('workout_schedule_completions')
+          .select()
+          .eq('user_id', userId)
+          .gte('completed_at', since)
+          .order('scheduled_date');
+    }
+    return _fetchAllRows('workout_schedule_completions', userId,
+        dateColumn: 'completed_at',
+        since: since,
+        orderBy: 'scheduled_date',
+        tieBreak: const ['id']);
   }
 
   /// [preFetched] (C3 single-call): injected `streaks` rows; legacy callers

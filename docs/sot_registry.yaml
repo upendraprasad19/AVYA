@@ -2758,6 +2758,114 @@ concepts:
       Deploy owed (founder go). Rollback: deploy_via_api.js --rollback
       restore-user-snapshot <parent sha>.
 
+  - concept: restore_legacy_paged_reads
+    domain: cross_domain
+    behavioral_test_path: test/sync/restore_legacy_paging_behavioral_test.dart
+    description: |
+      c7e2a9 (addendum A, Slice B2) - the client's LEGACY per-table restore (the
+      fallback when the single-call restore is unavailable) pages and orders
+      deterministically. PostgREST clamps every response to db-max-rows (1000)
+      with HTTP 200 and error null, so three reads (workout_schedule_completions,
+      user_custom_exercises, user_custom_foods) silently dropped every row past
+      the 1000th, and the paged SyncService._fetchAllRows ordered by ONE column,
+      so rows tied on it could be skipped or served twice across a page seam.
+      Now those three reads page through _fetchAllRows, and every paged read adds
+      its own UNIQUE tie-break column to the order (id; created_at then id for the
+      two workout tables; date for readiness_daily, whose primary key is
+      (user_id, date) and which has NO id column), each term with an explicit
+      ascending: false. The 50,000-row ceiling now emits one restore_row_ceiling_hit
+      event (the table name only) from _fetchAllRows and from the nutrition loop.
+      The community-catalogue pull (syncCommunityItems, the same offset-paging
+      defect, not a restore) takes the same id term. Kill switch
+      disable_restore_paging_fix reverts every read to its pre-fix chain verbatim.
+      The loop still stops on a SHORT page, which is right only while
+      db-max-rows == pageSize (1000, measured 2026-10-06); the test DOCUMENTS that
+      assumption (it cannot detect a lowered production cap).
+    writers:
+      - file: lib/core/services/sync_service.dart
+        line_range: 3044-3115
+        method: _fetchAllRows
+        notes: |
+          The ONE paging loop: owner-scoped (.eq user_id) first, optional since filter,
+          primary order descending, then each tieBreak column descending, then
+          range(offset, offset + pageSize - 1) until a short page or the 50,000-row
+          ceiling. tieBreak is gated by SyncFlags.restorePagingFixEnabled.
+      - file: lib/core/services/sync/sync_workout.dart
+        line_range: 1131-1156
+        method: _readScheduleCompletionRows
+        notes: |
+          Kill switch off -> the pre-fix single un-paged read, verbatim; on ->
+          _fetchAllRows('workout_schedule_completions', since on completed_at,
+          orderBy scheduled_date, tieBreak id). Defined AFTER _restoreScheduleCompletions
+          on purpose (a 4000-character source-grep window and a Future<void> slice
+          boundary in two existing tests).
+      - file: lib/core/services/sync/sync_community.dart
+        line_range: 317-330
+        method: _readCustomRows
+        notes: |
+          Shared by _restoreCustomExercises and _restoreCustomFoods: kill switch off -> the
+          bare select().eq(user_id); on -> _fetchAllRows (no since, tieBreak id).
+      - file: lib/core/services/sync/sync_nutrition.dart
+        line_range: 609-646
+        method: _restoreNutritionLogs
+        notes: |
+          Its own paging loop (a nested embed read) gets the same explicit-direction id
+          term behind the same kill switch, and the same restore_row_ceiling_hit event.
+      - file: lib/core/services/sync/sync_community.dart
+        line_range: 451-557
+        method: syncCommunityItems
+        notes: |
+          The community-catalogue pull (500 per page, created_at ascending): an id tie
+          term on both queries behind the same kill switch. A skipped tied row would
+          never be refetched, because the pull stamps last_community_sync. A pull that
+          fills its 10 x 500-row cap emits restore_row_ceiling_hit (community_pull:<table>).
+      - file: lib/core/services/sync_flags.dart
+        line_range: 229-249
+        method: restorePagingFixEnabled
+        notes: Opt-out polarity; with the box not open the fix stays ON.
+    reader_manifest_complete: false
+    readers:
+      - file: lib/core/services/sync/sync_workout.dart
+        line_range: 1046-1129
+        method: _restoreScheduleCompletions
+        semantic: aggregated
+        fields_read: [scheduled_date, completed_at, duration_seconds, workout_name]
+        notes: |
+          Writes schedule_<date> (and an additive wlog_<date>) per row; order-independent
+          per date, so the fix changes WHICH rows arrive, not how they are applied.
+      - file: lib/core/services/sync/sync_community.dart
+        line_range: 334-445
+        method: _restoreCustomExercises / _restoreCustomFoods
+        semantic: aggregated
+        fields_read: [id, name]
+        notes: |
+          First row per lower-cased name wins. Live, a unique (user_id, lower(name)) index
+          (migration 057) makes a name collision unreachable, so the order is invisible.
+    additional_tests:
+      - test/contracts/orphan_completion_synthesizes_wlog_test.dart  # source-grep: the 4000-character window of _restoreScheduleCompletions
+      - test/sync/restore_field_canonical_test.dart  # source-grep: Future<void> slice boundaries
+    cloud:
+      table: workout_schedule_completions
+      columns: [id, user_id, scheduled_date, completed_at, created_at]
+    restore_methods: [_restoreScheduleCompletions, _restoreCustomExercises, _restoreCustomFoods, _restoreNutritionLogs]
+    class_constraints: |
+      1. A restore read that can exceed 1000 rows goes through _fetchAllRows; a bare
+         select with no .range is the defect.
+      2. A paged read orders by a column list whose LAST column is unique per row
+         (id; date for readiness_daily). Never id on a table without one.
+      3. Every NEW .order() term states its direction (supabase-js defaults to
+         ascending, the Dart client to descending); the older single-column terms the
+         slice leaves verbatim (nutrition loop, coach, scheduled_workouts) rely on the
+         Dart default, which is descending.
+      4. The short-page stop is right only while db-max-rows == pageSize; if the cap
+         is lowered, change the loop (to continue until an EMPTY page, or to the
+         cap-independent Prefer: count=exact stop _shared/paged_fetch.ts documents)
+         and update the test that documents the assumption.
+    notes: |
+      No server change: the Edge Function half of the same defect is
+      restore_user_snapshot_paged_reads (diagnose e4c1d7). Kill switch
+      disable_restore_paging_fix reverts every read verbatim.
+
   - concept: restoring_destination_read_timeout
     domain: cross_domain
     behavioral_test_path: test/contracts/restoring_destination_timeout_test.dart
@@ -4731,7 +4839,7 @@ concepts:
           lookup could not answer" (null) as "none deleted": it skips every
           `tmpl_<uuid>` day then (B-pass reviewer B F1).
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 1827-1828
+        line_range: 1852-1853
         method: deletedTemplateCloudIdsForUser
         notes: |
           Public forwarder of `_deletedTemplateCloudIdsOrNull`: `null` = could not
