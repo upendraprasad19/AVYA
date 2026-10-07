@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### not_applicable — test-fixture and test-support environment hermeticity; no Hive/cloud writer-reader contract and no entry of docs/sot_registry.yaml covers it (grep over the registry finds none, c3f8e1 recorded the same). (1 bugs)
+- 2026-10-06 e6c4a9 — `test/scripts/contract_sweep_e2e_test.dart` FAILED 5 of its 7 tests (`PathNotFoundException ... argv.txt`, `Expected: <1> Actual: <0>`) whenever the pre-push contract sweep selected it, and the sweep…
+
 ### subscription_state (8 bugs)
 - 2026-10-05 b7c1e4 — A free user could reach and USE the Progress Photos screen by editing the address of an already-open web tab to `#/profile/progress-photos`. The screen had no PRO check of its own: the only gate was…
 - 2026-07-26 a7d2e9 — morning-alert sends Gemini-generated PRO-tier copy to users whose subscription lapsed. Live at discovery: zero users were genuinely PRO, yet six were being treated as PRO and receiving paid-tier…
@@ -1506,6 +1509,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-10-06 | e6c4a9 | `test/scripts/contract_sweep_e2e_test.dart` FAILED 5 of its 7 tests (`PathNotFoundException ... argv.txt`, `Expected: <1> Actual: <0>`) whenever the pre-push contract sweep selected it, and the sweep… | not_applicable — test-fixture and test-support environment hermeticity; no Hive/cloud writer-reader contract and no entry of docs/sot_registry.yaml covers it (grep over the registry finds none, c3f8e1 recorded the same). | test/contracts/spawn_env_manifest_test.dart |
 | 2026-10-05 | b7c1e4 | A free user could reach and USE the Progress Photos screen by editing the address of an already-open web tab to `#/profile/progress-photos`. The screen had no PRO check of its own: the only gate was… | subscription_state | test/contracts/progress_photos_screen_gate_test.dart |
 | 2026-10-04 | d4a7e1 | Founder-reported (2026-10-01, day-swap report): after swapping Oct 1 and Oct 2 on the web and completing the swapped workout there (log "PULL + CORE"), the Android phone's Train row title for Oct 1… | workout_completion_status | test/contracts/completed_title_follows_log_test.dart |
 | 2026-10-03 | c7e3a9 | Founder-reported (2026-10-01, observation 2 of the day-swap report): after swapping today's workout with tomorrow's, Home's AI-coach insight sentence kept naming the pre-swap workout while the rest of… | scheduled_workouts_mutations | test/contracts/ai_insight_follows_today_row_test.dart |
