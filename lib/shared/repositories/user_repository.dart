@@ -843,6 +843,24 @@ class UserRepository {
     unawaited(SyncService.instance.syncProgressNow());
   }
 
+  /// Clears the session-scoped "a freeze was just spent" notice: the flag, the
+  /// count of freezes it covers and the `streak_freeze_remaining_after_use`
+  /// snapshot, in ONE delta write (never a whole-map replace, see
+  /// [updateProgress]). The ONE clearer: Home calls it as it shows the notice,
+  /// the cold-start path in `restoring_screen.dart` calls it for a flag a
+  /// previous session never showed. The three keys are local-only; the cleared
+  /// state reads as "no notice" and the next debit starts counting from one.
+  Future<void> clearStreakFreezeNotice() async {
+    // No progress map yet means no notice to clear; [updateProgress] would
+    // mint a default map just to hold three UI keys.
+    if (getProgress() == null) return;
+    await updateProgress({
+      'streak_freeze_just_used': false,
+      'streak_freeze_just_used_count': 0,
+      'streak_freeze_remaining_after_use': null,
+    });
+  }
+
   // ── Preferences ─────────────────────────────────────────────
 
   /// Returns the user preferences map.

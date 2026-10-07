@@ -27,6 +27,7 @@ diagnose_docs:
   - docs/diagnoses/2026-10-06-progress-restore-clobbers-freeze-state-c9d2f6.md
   - docs/diagnoses/2026-10-06-restore-user-snapshot-returns-every-row-e4c1d7.md
   - docs/diagnoses/2026-10-06-legacy-restore-reads-page-and-order-deterministically-c7e2a9.md
+  - docs/diagnoses/2026-10-07-streak-freeze-notice-says-weekly-allowance-and-a-stale-count-a5e3c7.md
 
 findings:
   # ── Unit 1 (diagnose b4e7a1): the decay persist is gated on THIS account's restore having settled ──
@@ -177,8 +178,9 @@ findings:
 
   - id: F8
     title: "A freeze is consumed even when the streak breaks anyway, and the multi-freeze notice reads 'Streak Freeze used! 0 remaining this week.'"
-    terminal_state: blocked_on_user
-    reason: "Founder decision 2026-10-06: KEEP the rule (a freeze is still consumed when the streak breaks anyway) and fix the notice wording only. The copy is Slice U6 of docs/plans/streak-freeze-restore-ownership-addendum-a.md (a new lib/core/copy/streak_freeze_copy.dart, the live count at show time). Waiting on the founder approving the exact strings; closes as closed_in_commit when U6 lands."
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: a5e3c7' (Slice U6 commit)"
+    verification: "Founder decision 2026-10-06: KEEP the rule (a freeze is still consumed when the streak breaks anyway) and fix the wording only; founder approved the exact strings on 2026-10-07 ('copy ok'). Diagnose a5e3c7. New lib/core/copy/streak_freeze_copy.dart: the snackbar reads 'Streak Freeze used on a missed day. {n} left.' (or 'None left. A new one arrives next Monday.', or the plural 'k Streak Freezes used on missed days.') where n is the LIVE streak_freezes_available at show time (the debit-time snapshot is only a fallback), and the explainer sheet's rules 3, 4 and the PRO note take their words from the same file. StreakProgressService.commitConsume now writes the local-only streak_freeze_just_used_count and accumulates it while the notice is unshown; StreakProgressService.takeFreezeNotice hands the text out once (Home's only entry; it clears in the same call); UserRepository.clearStreakFreezeNotice is the one clearer. Tests: test/contracts/streak_freeze_notice_behavioral_test.dart (real Hive; writer to reader; the stale-snapshot case end to end; the clearer is a delta) and test/contracts/streak_freeze_notice_copy_test.dart (every approved row; real progress maps; the explainer sheet RENDERED, free and PRO; plus a presence-only wiring group). 45 mutants (run on the post-review tree), all red, none a compile error, every file restored byte-identical (diagnose mutation_proof). The SnackBar widget itself is not pumped, so its wiring is presence-only; a device check is owed (CLAUDE.md section 5)."
 
   - id: LAST-WORKOUT-DATE
     title: "last_workout_date is overwritten by the whole-row restore (cloud-non-null-wins); a phone with a newer unpushed date is regressed by a stale cloud row and the regressed value is pushed back"
@@ -284,10 +286,33 @@ findings:
     commit: "git log --grep='closes-diagnose: c7e2a9' (Slice B2 commit)"
     verification: "docs/reviews/restore-legacy-paging-bpass.md, findings C1-C7: a wrong citation in the empty-page-stop rationale (the cited nutrition test is a PUSH test) removed and the reason restated; 834 vs 833 dates; line citations re-derived by grep; the review file and this ledger entry now exist; the naming row and docs/architecture/sync.md kill-switch list name the nutrition emitter and the new switch; the live-schema check widened to everything the code sent; the community pull's silent cap announced."
 
+  - id: U6-BPASS-A
+    title: "B-pass round 1, seat A (correctness, copy fidelity, writer/reader map): 0 P0, 0 P1, 1 P2, 4 P3"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: a5e3c7' (Slice U6 commit)"
+    verification: "docs/reviews/streak-freeze-notice-bpass.md, findings A1-A5. Each verified against the code before it was accepted (the throwing cast read at streak_progress_service.dart, mergeCloudProgress starting from {...local}, the shifted registry range by grep); all FIXED: the writer helper reads the stored count with raw is num && raw.isFinite (mutant S09 red, a string and a NaN count still let the debit land), two false sentences in the diagnose corrected, the stale integration test and its seed helper updated, the PRO note built from the sheet's caps, the shifted registry range repointed."
+
+  - id: U6-BPASS-B
+    title: "B-pass round 1, seat B (test adequacy): 0 P0, 0 P1, 2 P2, 6 P3"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: a5e3c7' (Slice U6 commit)"
+    verification: "docs/reviews/streak-freeze-notice-bpass.md, findings B1-B8. Each recomputed by hand before it was accepted; all FIXED except the one wording call ledgered as U6-PROFILE-TILE-COPY: the read-and-clear moved into StreakProgressService.takeFreezeNotice, driven by a real-Hive test (mutants S10-S12 red), the clearer returns early on an absent map and a test asserts progress stays null (R05 red), a repo-wide lib/ scan pins the one flag-false writer (H04 red), the wiring group reads the restoring screen with its part files, the caps are pinned. Home's call to takeFreezeNotice and Text(notice, stay presence-only (the SnackBar is not pumped); stated in the diagnose Limits."
+
+  - id: U6-PROFILE-TILE-COPY
+    title: "The Profile service-record tile still reads 'FREEZES LEFT n / max THIS WEEK' (rank_service_record_sheet.dart:225-227), the weekly-allowance wording the snackbar and the explainer no longer use"
+    terminal_state: blocked_on_user
+    reason: "The tile's wording is not in the copy the founder approved on 2026-10-07 ('copy ok'), so changing it is a product call, not a silent edit. Needs the founder's wording for the unit line, e.g. 'IN RESERVE' in place of 'THIS WEEK' (the number shown is the live stock and its cap, which is what the new snackbar says). One-line change plus its test once the word is given; the screens show the tile and the new sentences on different surfaces (Profile versus Home), never together."
+
+  - id: U6-BPASS-C
+    title: "B-pass round 2, seat C (the changes made for round 1): 0 P0, 0 P1, 1 P2, 5 P3"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: a5e3c7' (Slice U6 commit)"
+    verification: "docs/reviews/streak-freeze-notice-bpass.md, findings C1-C6, each verified by grep before it was accepted: the ledger ids the docs cited are now in this ledger (C1); the diagnose's prose line cites re-derived and Home's entry named (C2); F8 says 45 mutants (C3); the caps pin counts isPro ? 3 : 1 in the service, home_provider (twice) and the Profile tile, mutants N01-N04 red, and the diagnose names all five statements of the caps (C4); the repo-wide flag-write scan covers the literal and the indexed form and counts exactly one write inside user_repository.dart, mutants N05-N07 red (C5); registry constraint order, the clearer range 846-862, the idempotency range 258-265 and the restoring screen's comment (C6). Seat C agreed the Profile tile is outside this slice."
+
   - id: RESTORE-TRANSPORT-NO-TIMEOUT
     title: "The single-call restore has no client-side timeout and (with the paged Edge Function) makes about 13 more sequential requests; the legacy fallback has the same shape"
     terminal_state: blocked_on_user
     reason: "The paged function went live 2026-10-07 (v10, B1-EF-DEPLOY). Its per-request cost and row counts are measured only once the founder's phone restores against it (a fresh install or sign-in; I cannot trigger that): then read the per-request rows line from the function logs and compare each count with a live count(*) for the founder's user, and read restore_step_done / restore_completed from client_errors against the baseline. Baseline read-only on 2026-10-06 (before any deploy): the last 8 single-call restores had total_ms 15,034 to 127,281 (restore_completed, 2026-10-04 to 2026-10-06) and the sampled step=B values 153 to 2,366 ms; the call is bounded today by the restoring screen's 15 s / 30 s hint and its CONTINUE escape. Closes as verified_clean with the measured cost once a restore has run against v10."
 
-total_findings: 44
-closed_count: 44
+total_findings: 48
+closed_count: 48

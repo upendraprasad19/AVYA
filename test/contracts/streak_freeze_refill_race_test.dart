@@ -153,16 +153,26 @@ void main() {
     final src = readRestoringScreenSource();
     final stripped = _stripComments(src);
 
-    test('cold-start path writes streak_freeze_just_used: false', () {
+    test('cold-start path clears the stale notice through the ONE helper', () {
       // The clear is a defensive UI-flag reset. Relocated from splash to
       // restoring_screen 2026-05-22 / diagnose dc52a4 — must run AFTER
       // HiveUserSession.openForUser to avoid the pre-openForUser race that
       // killed the clear on every cold start.
+      //
+      // Slice U6 (a5e3c7) moved the literal `'streak_freeze_just_used': false`
+      // write into `UserRepository.clearStreakFreezeNotice` (it now also clears
+      // the count and the snapshot), so this PRESENCE pin looks for the helper
+      // call, still guarded by the flag read. What the helper DOES is pinned
+      // behaviourally in `streak_freeze_notice_behavioral_test.dart`
+      // ('clears the flag, the count and the snapshot').
       expect(
-        RegExp(r"'streak_freeze_just_used'\s*:\s*false").hasMatch(stripped),
+        RegExp(r"progress\['streak_freeze_just_used'\]\s*==\s*true[\s\S]{0,200}?"
+                r'clearStreakFreezeNotice\(\)')
+            .hasMatch(stripped),
         isTrue,
         reason: 'restoring_screen._ensureOwnershipBeforeHome must clear the '
-            'stale streak_freeze_just_used Hive flag after openForUser '
+            'stale streak_freeze_just_used notice (via '
+            'UserRepository.clearStreakFreezeNotice) after openForUser '
             'returns. Pre-fix this lived in splash and silently failed.',
       );
     });

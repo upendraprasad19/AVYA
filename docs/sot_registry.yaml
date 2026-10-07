@@ -3392,7 +3392,7 @@ concepts:
         semantic: pass-through
         fields_read: [is_pro, expires_at, plan, paymentInFlightOrder]
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 868-870
+        line_range: 886-888
         method: isOnboarded
         semantic: flag-check
         fields_read: [onboarding_completed]
@@ -4613,10 +4613,13 @@ concepts:
 
       streak_freeze_just_used is a session-scoped UI flag, not durable
       state — its writer is commitConsume and its sole consumer is
-      home_screen._checkStreakFreezeUsed which clears it after firing the
-      SnackBar. Splash cold-start (splash_screen._runDeferredInit) MUST
-      clear it on every launch to prevent leak from a prior session that
-      set the flag but never reached the home read.
+      home_screen._checkStreakFreezeUsed, which takes the notice through
+      StreakProgressService.takeFreezeNotice (read and clear in one call)
+      before it fires the SnackBar (concept [[streak_freeze_notice]], a5e3c7).
+      The cold start (restoring_screen._ensureOwnershipBeforeHome, relocated
+      from splash by dc52a4) MUST clear it on every launch, through
+      UserRepository.clearStreakFreezeNotice, to prevent leak from a prior
+      session that set the flag but never reached the home read.
 
       Phase 2 / diagnose f9d2e7 — PERMANENT freeze ledger + single decay site.
       D1: commitRefill NO LONGER clears streak_freeze_used_dates each week; it
@@ -4683,14 +4686,14 @@ concepts:
       re-purchase after lapse does not re-grant.
     writers:
       - file: lib/core/services/streak_progress_service.dart
-        line_range: 213-234
+        line_range: 258-279
         method: grantFirstProFreezes
         notes: |
           Reads flag from progress map; no-op if already true. Sets
           streak_freezes_available = max(current, 3) then flag = true.
           Fire-and-forget syncFreezes() + telemetry.
       - file: lib/core/services/streak_progress_service.dart
-        line_range: 245-268
+        line_range: 290-313
         method: resetToFreeCapOnLapse
         notes: |
           Clamps streak_freezes_available to 1 on lapse. Does NOT touch
@@ -4712,7 +4715,7 @@ concepts:
     reader_manifest_complete: false
     readers:
       - file: lib/core/services/streak_progress_service.dart
-        line_range: 172-179
+        line_range: 258-265
         method: grantFirstProFreezes (idempotency check)
         semantic: pass-through
         fields_read: [streak_freezes_first_pro_grant_done]
@@ -5408,7 +5411,7 @@ concepts:
           stayed NULL -> forced re-onboard on a new device. Now carries the
           column (guarded SyncService._hasValue, never clobbers with null).
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 873-875
+        line_range: 891-893
         method: setOnboarded
       - file: lib/core/services/auth_session_bootstrapper.dart
         line_range: 758-1088
@@ -14554,7 +14557,7 @@ concepts:
           without this, the very next extraction pass would silently
           overwrite every pre-existing user's genuine profile values.
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 1189-1209
+        line_range: 1207-1227
         method: lockCoachExtractionFields
         notes: |
           Client call site: `.rpc('lock_coach_extraction_fields', params: {'p_fields': fields})`.
@@ -14609,3 +14612,98 @@ concepts:
         notes: |
           Wholesale toJson() pass-through, subject to private_mode —
           reaches the AI's prompt context with no field-specific plumbing.
+
+  - concept: streak_freeze_notice
+    domain: workout
+    behavioral_test_path: test/contracts/streak_freeze_notice_behavioral_test.dart
+    description: |
+      a5e3c7 (addendum A, Slice U6; ledger F8) - the words Home shows when a Streak
+      Freeze is spent, and the explainer sheet's freeze rules. The RULE is kept
+      (founder 2026-10-06): a freeze is a KEPT stock (+1 each Monday, at most 1 free
+      / 3 PRO), spent automatically on a missed scheduled day, and still spent when
+      the streak breaks anyway. The words used to describe a weekly allowance
+      ("Streak Freeze used! N remaining this week.", "per week") and promise the
+      freeze would "keep your streak alive". Now: the text comes from
+      lib/core/copy/streak_freeze_copy.dart; the number left is the LIVE
+      streak_freezes_available read at show time (the streak_freeze_remaining_after_use
+      snapshot written at debit time goes stale after a Monday refill or a restore,
+      so it is only a fallback when the live key is absent); the number SPENT is the
+      new local-only streak_freeze_just_used_count, which commitConsume accumulates
+      while the previous notice is still unshown.
+    writers:
+      - file: lib/core/services/streak_progress_service.dart
+        line_range: 114-205
+        method: freezeNoticeCountAfterConsume / takeFreezeNotice / commitConsume
+        notes: |
+          takeFreezeNotice hands the notice out ONCE (reads it through
+          streakFreezeNoticeFromProgress and clears it in the same call). commitConsume writes streak_freeze_just_used, streak_freeze_just_used_count
+          (via the pure freezeNoticeCountAfterConsume: carries the count of a still
+          unshown notice over; absent or non-positive reads as 1; a debit naming no date
+          counts one), the streak_freeze_remaining_after_use snapshot and
+          streak_freezes_available. The three notice keys are local-only: every progress
+          payload builder names its keys (sync_profile.dart _buildUserProgressRpcParams).
+      - file: lib/shared/repositories/user_repository.dart
+        line_range: 846-862
+        method: clearStreakFreezeNotice
+        notes: |
+          The ONE clearer: the flag, the count and the snapshot in ONE updateProgress delta
+          (never a whole-map replace); with no progress map it writes nothing. takeFreezeNotice
+          calls it as it hands the notice out; the cold-start path in restoring_screen.dart
+          calls it for a notice a previous session never showed.
+    reader_manifest_complete: true
+    readers:
+      - file: lib/features/home/screens/home_screen.dart
+        line_range: 225-249
+        method: _checkStreakFreezeUsed
+        semantic: display-only
+        fields_read: []
+        notes: |
+          Takes the text from StreakProgressService.takeFreezeNotice (read-and-clear in one
+          call, so initTab plus the background-restore listener can never double-fire) and
+          shows exactly it; reads none of the notice keys itself.
+      - file: lib/core/copy/streak_freeze_copy.dart
+        line_range: 1-71
+        method: streakFreezeNoticeFromProgress
+        semantic: aggregated
+        fields_read: [streak_freeze_just_used, streak_freeze_just_used_count, streak_freezes_available, streak_freeze_remaining_after_use]
+        notes: |
+          Pure. The LIVE count wins over the snapshot; neither present -> the text claims
+          nothing about the rest. Also holds the explainer rule strings.
+      - file: lib/features/home/widgets/streak_explainer_sheet.dart
+        line_range: 40-124
+        method: build
+        semantic: display-only
+        fields_read: [streak_freezes_available]
+        notes: |
+          Rules 3 and 4 and the PRO note come from the copy module; the live count is passed
+          in by the caller. The sheet states ONE pair of caps (freeMax 1, proMax 3) for rule 4
+          and the PRO note; a test ties it to the refill's isPro ? 3 : 1.
+      - file: lib/features/auth/screens/restoring_screen.dart
+        line_range: 361-526
+        method: _ensureOwnershipBeforeHome
+        semantic: flag-check
+        fields_read: [streak_freeze_just_used]
+        notes: Cold-start clear of a notice a previous session never showed (calls the one clearer).
+    additional_tests:
+      - test/contracts/streak_freeze_notice_copy_test.dart  # pure copy table, real progress maps incl. the stale snapshot, the explainer sheet RENDERED; PLUS a presence-only wiring group
+      - test/contracts/streak_freeze_refill_race_test.dart  # source-grep: the cold-start clear still runs after the flag read (repointed to the helper call)
+    class_constraints: |
+      1. The number of freezes left shown by the notice is the LIVE streak_freezes_available
+         at show time, never the debit-time snapshot (bug class 2.28: a captured snapshot
+         rendered instead of the live state).
+      2. The notice keys are cleared ONLY through UserRepository.clearStreakFreezeNotice
+         (a test scans lib/ for the map-literal AND the indexed-assignment write of the flag
+         outside user_repository.dart, and counts exactly one write inside it), so the
+         flag, the count and the snapshot always change together. A count behind a FALSE flag
+         is ignored by the accumulator, so a stray clear could not inflate the next notice;
+         it would leave the snapshot and count stale.
+      3. The words never promise the streak is saved and never call the stock "this week's"
+         (the rule: a freeze is a kept stock and is still spent when the streak breaks anyway).
+      4. The count is read with an is-num test, never an as-num cast: it is read while the
+         freeze debit's write is being assembled, and a throw would drop the debit.
+    notes: |
+      The rule behind the words is the `streaks` concept (commitConsume/commitRefill,
+      the permanent used-dates ledger). This concept owns only the NOTICE. A cloud restore
+      KEEPS the notice keys: mergeCloudProgress starts from a copy of the local map and the
+      cloud row has no such columns, which is why a snapshot taken at debit time outlives a
+      restore and a refill (the stale count the live read removes).
