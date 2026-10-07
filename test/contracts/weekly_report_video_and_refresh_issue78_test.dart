@@ -98,6 +98,37 @@ void main() {
     });
   });
 
+  group('isLifetimeFreeReportSpent (BEHAVIORAL)', () {
+    test('403 with a NOT_PRO body (decoded map or JSON string) -> true', () {
+      expect(
+          isLifetimeFreeReportSpent(status: 403, details: {'code': 'NOT_PRO'}),
+          isTrue);
+      expect(
+          isLifetimeFreeReportSpent(
+              status: 403, details: '{"error":"x","code":"NOT_PRO"}'),
+          isTrue);
+    });
+
+    test('a 403 that is NOT the free-quota answer -> false', () {
+      expect(isLifetimeFreeReportSpent(status: 403, details: null), isFalse);
+      expect(
+          isLifetimeFreeReportSpent(
+              status: 403, details: {'error': 'Forbidden: user_id mismatch'}),
+          isFalse);
+      expect(isLifetimeFreeReportSpent(status: 403, details: 'Forbidden'),
+          isFalse);
+    });
+
+    test('NOT_PRO code on a non-403 status -> false', () {
+      expect(
+          isLifetimeFreeReportSpent(status: 500, details: {'code': 'NOT_PRO'}),
+          isFalse);
+      expect(
+          isLifetimeFreeReportSpent(status: null, details: {'code': 'NOT_PRO'}),
+          isFalse);
+    });
+  });
+
   group('reports_screen wiring (PRESENCE-ONLY source pins)', () {
     final screen = _strip(
         File('lib/features/profile/screens/reports_screen.dart')
@@ -125,53 +156,87 @@ void main() {
           reason: 'header BACK + the new bottom back button');
     });
 
+    String between(String start, String end) {
+      final i = screen.indexOf(start);
+      expect(i, greaterThanOrEqualTo(0), reason: '"$start" must exist');
+      final j = screen.indexOf(end, i);
+      expect(j, greaterThan(i), reason: '"$end" must follow "$start"');
+      return screen.substring(i, j);
+    }
+
     test('open-time refresh goes through the PRO gate; free does nothing', () {
-      final m = RegExp(r'void _refreshOnOpen\(\) \{(.*?)\n  \}\n', dotAll: true)
-          .firstMatch(screen);
-      expect(m, isNotNull, reason: '_refreshOnOpen must exist');
-      final body = m!.group(1)!;
+      final body = between('void _refreshOnOpen()', 'Future<void> _generateReport');
       expect(
           RegExp(r'gateAndVerify\(\s*AppConstants\.featureWeeklyAiReport')
               .hasMatch(body),
           isTrue);
-      expect(body.contains('shouldSilentRefreshWeeklyReport('), isTrue);
-      expect(body.contains('_generateReport(silent: true)'), isTrue);
+      expect(RegExp(r'final due = shouldSilentRefreshWeeklyReport\(')
+              .hasMatch(body),
+          isTrue);
+      expect(
+          RegExp(r'if\s*\(due\)\s*_generateReport\(\s*silent:\s*true\s*\)')
+              .hasMatch(body),
+          isTrue,
+          reason: 'the refresh must be conditional on the policy result');
       expect(RegExp(r'onFree:\s*\(\)\s*\{\s*\}').hasMatch(body), isTrue,
           reason: 'a free user must NOT silently spend the lifetime report');
-      // initState must call the gated wrapper, never the raw silent refresh.
-      final init = RegExp(r'void initState\(\) \{(.*?)\n  \}\n', dotAll: true)
-          .firstMatch(screen)!
-          .group(1)!;
+      final init = between('void initState()', 'void _refreshOnOpen()');
       expect(init.contains('_refreshOnOpen()'), isTrue);
       expect(init.contains('_generateReport('), isFalse);
+      expect(init.contains('ref.listen'), isFalse,
+          reason: 'ref.listen is only legal inside build');
+    });
+
+    test('_generateReport: one call at a time, across screen re-opens', () {
+      expect(screen.contains('static bool _inFlight = false;'), isTrue);
+      final g = between('Future<void> _generateReport', 'void _retry()');
+      final guard = g.indexOf('if (_inFlight) return;');
+      final set = g.indexOf('_inFlight = true;');
+      expect(guard, greaterThanOrEqualTo(0));
+      expect(set, greaterThan(guard), reason: 'check BEFORE set');
+      expect(RegExp(r'finally\s*\{\s*_inFlight = false;').hasMatch(g), isTrue,
+          reason: 'cleared in finally, or one failure wedges refresh forever');
+      expect(
+          RegExp(r'onPressed:\s*\(_isGeneratingReport \|\| _inFlight\)')
+              .hasMatch(screen),
+          isTrue,
+          reason: 'the Generate card is disabled while a silent call runs');
+    });
+
+    test('a spent-free-report 403 sets the flag and opens the paywall, '
+        'after the silent early-return', () {
+      final g = between('Future<void> _generateReport', 'void _retry()');
+      final silent = g.indexOf('if (silent) {');
+      final spent = g.indexOf('isLifetimeFreeReportSpent(');
+      expect(silent, greaterThanOrEqualTo(0));
+      expect(spent, greaterThan(silent),
+          reason: 'else the paywall opens on every screen open');
+      final branch = g.substring(spent);
+      expect(branch.contains("put('first_report_generated', true)"), isTrue,
+          reason: 'else the free-user line keeps promising a spent report');
+      expect(branch.contains('showPaywallSheet('), isTrue);
+    });
+
+    test('a free -> PRO transition while open re-runs the refresh', () {
+      final b = between('Widget build(BuildContext context)', 'return Scaffold(');
+      expect(
+          RegExp(r'ref\.listen\(\s*subscriptionInfoProvider')
+              .hasMatch(b),
+          isTrue);
+      expect(b.contains('prev != null && !prev.isPro && next.isPro'), isTrue);
+      expect(b.contains('_refreshOnOpen()'), isTrue);
     });
 
     test('the cache stamp uses the test-clock seam, same clock as the policy',
         () {
-      expect(screen.contains('_reportCacheDateKey, nowWall().toIso8601String()'),
-          isTrue);
-      expect(screen.contains('DateTime.now().toIso8601String()'), isFalse);
-    });
-
-    test('a 403 (lifetime free report spent) sets the flag and opens the paywall',
-        () {
-      final m = RegExp(
-              r'e is FunctionException && e\.status == 403\) \{(.*?)\n        return;\n      \}',
-              dotAll: true)
-          .firstMatch(screen);
-      expect(m, isNotNull, reason: '403 branch must exist in _generateReport');
-      final body = m!.group(1)!;
-      expect(body.contains("put('first_report_generated', true)"), isTrue,
-          reason: 'else the free-user line keeps promising a spent report');
-      expect(body.contains('showPaywallSheet('), isTrue);
-    });
-
-    test('a free -> PRO transition while open re-runs the refresh', () {
+      final g = between('Future<void> _generateReport', 'void _retry()');
       expect(
-          RegExp(r'ref\.listen\(subscriptionInfoProvider[\s\S]*?'
-                  r'!prev\.isPro && next\.isPro\) _refreshOnOpen\(\)')
-              .hasMatch(screen),
+          RegExp(r'_reportCacheDateKey,\s*nowWall\(\)\.toIso8601String\(\)')
+              .hasMatch(g),
           isTrue);
+      expect(g.contains('DateTime.now('), isFalse,
+          reason: 'any wall-clock read here diverges from the policy under '
+              'the dev-panel time seam');
     });
 
     test('card title, blurb and free-user line come from WardroomCopy', () {

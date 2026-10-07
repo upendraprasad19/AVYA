@@ -40,6 +40,11 @@ class ReportsScreen extends ConsumerStatefulWidget {
 class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   bool _isLoading = true;
   bool _isGeneratingReport = false;
+  // One weekly-report call at a time, across screen re-opens (static): the cache
+  // stamp is written only AFTER the slow Gemini call returns, so without this a
+  // re-open, the free->PRO listener or the Generate card during that window each
+  // read "no stamp, due" and fire another thinking-on call.
+  static bool _inFlight = false;
   Map<String, dynamic>? _aiReport;
   String? _reportError;
   String _weightFilter = '3M'; // All, 1Y, 6M, 3M, 1M, 1W
@@ -121,11 +126,15 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   /// network blip doesn't blank a usable cached report. The fresh result still
   /// replaces `_aiReport` + the cache on success. Fix 2026-06-02.
   Future<void> _generateReport({bool silent = false}) async {
+    if (_inFlight) return;
+    _inFlight = true;
     if (!silent) {
       setState(() {
         _isGeneratingReport = true;
         _reportError = null;
       });
+    } else if (mounted) {
+      setState(() {}); // disables the Generate card while the silent call runs
     }
 
     try {
@@ -189,7 +198,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       // `first_report_generated` flag is per-device and does not survive a
       // reinstall / second device, so learn it from the server's answer and
       // show the paywall instead of a raw error (and stop promising a free one).
-      if (e is FunctionException && e.status == 403) {
+      if (e is FunctionException &&
+          isLifetimeFreeReportSpent(status: e.status, details: e.details)) {
         await HiveService.instance.configBox.put('first_report_generated', true);
         if (!mounted) return;
         setState(() {
@@ -205,6 +215,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           _isGeneratingReport = false;
         });
       }
+    } finally {
+      _inFlight = false;
+      if (mounted) setState(() {});
     }
   }
 
@@ -1046,7 +1059,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: _isGeneratingReport
+              onPressed: (_isGeneratingReport || _inFlight)
                   ? null
                   : () {
                       SubscriptionService.instance.gateAndVerify(

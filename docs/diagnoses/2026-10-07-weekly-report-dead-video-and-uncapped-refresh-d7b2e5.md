@@ -58,6 +58,13 @@ review_followups: |
   radius account (3 product files, lib/core/copy is account tier); F4 stamp written
   with nowWall(); F5 ref.listen re-runs the refresh on a free -> PRO transition;
   F6 stale share-as-video prose in hold_week_identity_behavioral_test.dart fixed.
+  B-pass round 2 (docs/reviews/weekly-report-issue78-review.md), all three closed: R2-1 the
+  once-per-day cap read a stamp written only AFTER the slow Gemini call, so a re-open, the
+  free -> PRO listener or the Generate card could each fire a second call; fixed with a
+  static one-call-at-a-time guard (cleared in finally) that also disables the Generate card;
+  R2-2 the 403 branch keyed on status alone, now isLifetimeFreeReportSpent() requires the
+  NOT_PRO body code (behavioral test); R2-3 the four weak source pins were tightened
+  (body-scoped, order-checked, respell/move/decoy mutants), 9 mutants reddened.
 regression_test_planned:
   - test/contracts/weekly_report_video_and_refresh_issue78_test.dart
 impact_analysis: |
