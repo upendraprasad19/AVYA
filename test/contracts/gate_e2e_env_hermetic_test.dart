@@ -26,6 +26,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/spawn_env_scan.dart';
+
 // HAND-ENUMERATED, and that is this list's one weakness: a new gate e2e helper
 // is uncovered until someone remembers to add it here. Registering
 // worktree_config_integrity_e2e_test.dart (2026-08-09) was an explicit step in
@@ -61,11 +63,24 @@ const _helpers = <String>[
   // conflicted fixture, the precise "green check wider than its subject" shape.
   // Registered as an explicit step of its own batch, per the note above.
   'test/scripts/no_conflict_markers_test.dart',
-  // contract_sweep builds a throwaway clone and runs `git branch -D -r
-  // origin/main` in it to exercise the runner's fallback; a leaked GIT_DIR
-  // would aim that deletion at the REAL repo's remote-tracking ref. Registered
-  // as an explicit step of the gate-integrity batch (OI-220), per the note above.
+];
+
+/// Files MIGRATED onto test/helpers/spawn.dart (class 2.56, diagnose
+/// 2026-10-06-spawn-test-env-leak). They no longer carry a hand-written filter for the token
+/// assertions above to find; they must instead route EVERY spawn through the helper (the
+/// canonical control-variable-clean environment + the one failure report) and contain no
+/// direct `Process.` call. PR 2 of that batch migrates the rest of `_helpers` and deletes
+/// the token list in favour of a strict site guard.
+///
+/// - contract_sweep builds a throwaway clone and runs `git branch -D -r origin/main` in it
+///   to exercise the runner's fallback; a leaked GIT_DIR would aim that deletion at the REAL
+///   repo's remote-tracking ref (registered by the gate-integrity batch, OI-220), and the
+///   sweep's own CONTRACT_SWEEP_NESTED=1 made the runner under test skip (the observed bug).
+/// - sot_registry_citations spawns the SoT-citation gate in a fixture repo (the 2026-10-04
+///   exit-254 report).
+const _migrated = <String>[
   'test/scripts/contract_sweep_e2e_test.dart',
+  'test/contracts/sot_registry_citations_test.dart',
 ];
 
 String _strip(String src) => src
@@ -93,6 +108,24 @@ void main() {
         expect(src.contains("PUSH_BEFORE"), isTrue,
             reason: 'the explicit range base must come from the scenario via '
                 'extra:, never from whatever the surrounding job exported');
+      });
+    }
+
+    for (final path in _migrated) {
+      test('$path spawns only through test/helpers/spawn.dart', () {
+        final file = File(path);
+        expect(file.existsSync(), isTrue, reason: '$path must exist');
+        // The lexer-based stripper, not a regex: a glob such as `lib/**` inside a string
+        // must not open a fake block comment and hide real code.
+        final src = blankDart(file.readAsStringSync(), blankStrings: false);
+        expect(src.contains("import '../helpers/spawn.dart';"), isTrue,
+            reason: '$path must use the shared spawn helper');
+        expect(RegExp(r'\b(runSpawn|runSpawnAsync|startSpawn)\(').hasMatch(src), isTrue,
+            reason: '$path must spawn through the helper (a clean child environment and a '
+                'failure report under the failing test)');
+        expect(RegExp(r'Process\.(run|runSync|start)\(').hasMatch(src), isFalse,
+            reason: 'a direct Process spawn bypasses the helper: the child inherits the '
+                'parent environment (CONTRACT_SWEEP_NESTED, GIT_DIR, ...) and hides its stderr');
       });
     }
 
