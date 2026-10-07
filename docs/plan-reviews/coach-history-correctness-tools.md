@@ -5,7 +5,7 @@ blast_radius: platform
 review_rounds: 11
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
 ---
 
 # Plan-review record — L1b coach history tools and server readers (`coach-history-correctness-tools`)
@@ -36,3 +36,7 @@ Every round used fresh context-blind reviewers with an exhaustive read-only tool
 ## §4.6
 
 B8 ships a scoped WARN mode first and flips at least 24 h later; reader changes are behaviour fixes with behavioural Deno tests and mutations.
+
+## B-pass (2026-10-07, on commit 9e8b6d09)
+
+Two context-blind Sonnet reviewers (read-only, exhaustive command allow-list), no P0/P1. Fixed in the same commit: cross-tick double announce in pr-detection (winners announced only by the tick holding their own completed_at, keyed context read); `to` unbounded in getPRTimeline (defaults to IST today); `truncated` dropped by getProgressSummary / getNutritionHistory (surfaced) and getPromotionStatus (throws instead of shortening a streak); exercise key now case-insensitive; stale comments and doc wording; mutation driver committed. Live check: 226/226 workout_log_exercises ids are v5-versioned, 0 null. `git diff --stat` for `_shared/ist_date.ts` and `_shared/paged_fetch.ts`: unchanged (byte-identical). Scoped-WARN gate baseline at this commit: 0 WARN lines.
