@@ -16,22 +16,23 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/spawn.dart';
+
 late final String _hook;
 late final String _lib;
 
 Future<({int exitCode, String stdout})> _run(String cwd, Map<String, dynamic> input) async {
-  final p = await Process.start(
+  final r = await runSpawnWithInput(
     'dart',
     ['run', 'scripts/memory_write_guard_hook.dart'],
+    why: 'memory_write_guard_hook with ${input['tool_name']} input',
+    stdin: jsonEncode(input),
     workingDirectory: cwd,
     runInShell: true,
+    stdoutEncoding: utf8,
+    stderrEncoding: utf8,
   );
-  p.stdin.write(jsonEncode(input));
-  await p.stdin.close();
-  final out = await p.stdout.transform(utf8.decoder).join();
-  await p.stderr.transform(utf8.decoder).join();
-  final code = await p.exitCode;
-  return (exitCode: code, stdout: out);
+  return (exitCode: r.exitCode, stdout: r.stdout);
 }
 
 Directory _sandbox() {
@@ -176,14 +177,15 @@ void main() {
   test('malformed stdin never crashes the hook -- exits 0 silently', () async {
     final dir = _sandbox();
     try {
-      final p = await Process.start('dart', ['run', 'scripts/memory_write_guard_hook.dart'],
-          workingDirectory: dir.path, runInShell: true);
-      p.stdin.write('not json at all {{{');
-      await p.stdin.close();
-      final out = await p.stdout.transform(utf8.decoder).join();
-      final code = await p.exitCode;
-      expect(code, 0);
-      expect(out.trim(), isEmpty);
+      final r = await runSpawnWithInput('dart', ['run', 'scripts/memory_write_guard_hook.dart'],
+          why: 'memory_write_guard_hook with malformed stdin',
+          stdin: 'not json at all {{{',
+          workingDirectory: dir.path,
+          runInShell: true,
+          stdoutEncoding: utf8,
+          stderrEncoding: utf8);
+      expect(r.exitCode, 0);
+      expect(r.stdout.trim(), isEmpty);
     } finally {
       dir.deleteSync(recursive: true);
     }

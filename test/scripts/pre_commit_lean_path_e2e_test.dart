@@ -55,26 +55,21 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-/// Parent environment minus git-, CI-range- and hatch-related keys, so neither a
-/// surrounding git hook nor an ambient hatch var can steer the child.
-///
-///   GIT_*       — load-bearing: pre-commit.sh resolves its own repo root via
-///                 `git rev-parse --show-toplevel`, and GIT_DIR overrides both
-///                 `workingDirectory:` and `-C <path>`.
-///   GITHUB_*    — the family shares one hermetic contract so a future reader of
-///                 CI env cannot silently acquire the c3f8e1 failure mode.
-///   PUSH_BEFORE — same rationale as GITHUB_*.
-Map<String, String> _cleanEnv() {
-  final env = Map<String, String>.from(Platform.environment);
-  env.removeWhere((k, _) {
-    final u = k.toUpperCase();
-    return u.startsWith('GIT_') || u.startsWith('GITHUB_') || u == 'PUSH_BEFORE';
-  });
-  // Never inherit a real hatch: it would silently invert every expectation.
-  env.remove('PRE_COMMIT_FULL');
-  env.remove('PRE_COMMIT_LEGACY');
-  return env;
-}
+import '../helpers/spawn.dart';
+
+// The child environment is the shared helper's (test/helpers/spawn.dart): parent
+// minus git-, CI-range- and hatch-related keys, so neither a surrounding git hook
+// nor an ambient hatch var can steer the child.
+//
+//   GIT_*       — load-bearing: pre-commit.sh resolves its own repo root via
+//                 `git rev-parse --show-toplevel`, and GIT_DIR overrides both
+//                 `workingDirectory:` and `-C <path>`.
+//   GITHUB_*    — the family shares one hermetic contract so a future reader of
+//                 CI env cannot silently acquire the c3f8e1 failure mode.
+//   PUSH_BEFORE — same rationale as GITHUB_*.
+//   PRE_COMMIT_FULL / PRE_COMMIT_LEGACY — never inherit a real hatch: it would
+//                 silently invert every expectation. A scenario sets one on
+//                 purpose through `extra` below (declared in `allowControl`).
 
 /// `C:\a\b` / `C:/a/b` -> `/c/a/b`. Git Bash ignores Windows-form PATH entries.
 String _toPosixPath(String p) {
@@ -100,8 +95,8 @@ void main() {
     // Exits 1 so the hook aborts at its first gate — which is BELOW the hatch
     // chain. This is the whole speed trick; see the header.
     File('${tmp.path}${sep}dart').writeAsStringSync('#!/bin/sh\nexit 1\n');
-    Process.runSync('chmod', ['+x', '${tmp.path}${sep}flutter']);
-    Process.runSync('chmod', ['+x', '${tmp.path}${sep}dart']);
+    runSpawn('chmod', ['+x', '${tmp.path}${sep}flutter'], why: 'pre-commit lean path: chmod stub flutter');
+    runSpawn('chmod', ['+x', '${tmp.path}${sep}dart'], why: 'pre-commit lean path: chmod stub dart');
 
     log = File('${tmp.path}${sep}flutter_calls.log')..writeAsStringSync('');
     stubDirPosix = _toPosixPath(tmp.path);
@@ -114,17 +109,17 @@ void main() {
   /// Runs the real hook with the stubs first on PATH. PATH is assembled INSIDE
   /// sh so the POSIX form is what bash actually sees.
   ProcessResult runHook({Map<String, String> extra = const {}}) {
-    final env = _cleanEnv()..['STUB_LOG'] = _toPosixPath(log.path);
-    env.addAll(extra);
-    return Process.runSync(
+    return runSpawn(
       'sh',
       [
         '-c',
         'PATH="$stubDirPosix:\$PATH"; export PATH; exec sh scripts/pre-commit.sh',
       ],
+      why: 'REAL scripts/pre-commit.sh with stub flutter/dart first on PATH, extra=$extra',
       workingDirectory: Directory.current.path,
-      environment: env,
-      includeParentEnvironment: false,
+      extraEnv: {'STUB_LOG': _toPosixPath(log.path), ...extra},
+      // The hatch variables are set ON PURPOSE by the scenarios that pass them in `extra`.
+      allowControl: const {'PRE_COMMIT_FULL', 'PRE_COMMIT_LEGACY'},
     );
   }
 

@@ -7,16 +7,19 @@
 //     Monday refill the walk re-consumed that day or broke the streak — the
 //     founder's "streak 1 / freeze 1 after idle days" symptom).
 // D2: reckonStreakDecayAndPersist is the SINGLE consume site (rollover +
-//     completeWorkout). It PERSISTS missed-day freeze consumption ONLY when
-//     restoreCompletedTick > 0 AND a schedule exists — so a cold-start-empty /
+//     completeWorkout). It PERSISTS missed-day freeze consumption ONLY when the
+//     full restore for THIS account settled (`SyncService.
+//     restoreSettledForCurrentUser`, b4e7a1 — it was `restoreCompletedTick > 0`,
+//     a process-lifetime counter) AND a schedule exists — so a cold-start-empty /
 //     pre-restore device never spuriously decays. It always returns an accurate
 //     count (read-only when gated off).
 //
-// closes-diagnose: f9d2e7
+// closes-diagnose: f9d2e7, b4e7a1 (the gate)
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/streak_progress_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
@@ -37,14 +40,27 @@ void main() {
 
   setUp(() async {
     tempDir = await setUpHiveForTests();
-    // D2 reckon gates on this; default each test to "restore not yet done".
+    // D2 reckon gates on the per-account restore marker (b4e7a1); default each
+    // test to "restore not yet settled" and the legacy tick to 0.
     SyncService.instance.restoreCompletedTick.value = 0;
+    SyncService.instance.debugSetRestoreSettledUserIdForTest(null);
+    HiveUserSession.debugCurrentUidResolverForTests = null;
   });
 
   tearDown(() async {
     SyncService.instance.restoreCompletedTick.value = 0;
+    SyncService.instance.debugSetRestoreSettledUserIdForTest(null);
+    HiveUserSession.debugCurrentUidResolverForTests = null;
     await tearDownHiveForTests(tempDir);
   });
+
+  /// "The full restore for THIS account settled": the marker names the account
+  /// whose Hive session is open AND the live account. The tick is deliberately
+  /// left at 0 — the persist no longer depends on it (b4e7a1).
+  void openRestoreGate() {
+    HiveUserSession.debugCurrentUidResolverForTests = () => kTestUserId;
+    SyncService.instance.debugSetRestoreSettledUserIdForTest(kTestUserId);
+  }
 
   group('D1 — commitRefill keeps a PERMANENT used-dates ledger (f9d2e7)', () {
     test('commitRefill does NOT clear used_dates (recent dates survive)',
@@ -146,10 +162,13 @@ void main() {
       });
     }
 
-    test('restoreCompletedTick==0 → gated OFF: no persist (available unchanged)',
-        () async {
+    test('restore NOT settled (marker null) → gated OFF even with the tick > 0 '
+        '(the F1 cold-start repro; FAILS pre-fix)', () async {
       await seedMissedDay();
-      SyncService.instance.restoreCompletedTick.value = 0;
+      // Pre-b4e7a1 the gate was `tick > 0`: a returning user's tick was bumped
+      // by the background heal AFTER the cold-start rollover. The marker is
+      // what matters now, and it is null.
+      SyncService.instance.restoreCompletedTick.value = 1;
       WorkoutRepository.instance.reckonStreakDecayAndPersist();
       final p = UserRepository.instance.getProgress()!;
       expect(p['streak_freezes_available'], 1,
@@ -164,17 +183,17 @@ void main() {
         'streak_freezes_available': 1,
         'streak_freeze_used_dates': <String>[],
       });
-      SyncService.instance.restoreCompletedTick.value = 1; // restore done...
+      openRestoreGate(); // restore settled...
       WorkoutRepository.instance.reckonStreakDecayAndPersist();
       final p = UserRepository.instance.getProgress()!;
       expect(p['streak_freezes_available'], 1,
           reason: '...but empty schedule → nothing to decay → no persist');
     });
 
-    test('restoreCompletedTick>0 + schedule + missed day → PERSISTS the consume',
-        () async {
+    test('restore settled (marker, tick still 0) + schedule + missed day → '
+        'PERSISTS the consume', () async {
       await seedMissedDay();
-      SyncService.instance.restoreCompletedTick.value = 1;
+      openRestoreGate();
       final streak = WorkoutRepository.instance.reckonStreakDecayAndPersist();
       final p = UserRepository.instance.getProgress()!;
       expect(p['streak_freezes_available'], 0,
@@ -209,7 +228,7 @@ void main() {
         'streak_freeze_used_dates': <String>[],
         'current_streak_days': 1, // STALE — the founder's symptom
       });
-      SyncService.instance.restoreCompletedTick.value = 1;
+      openRestoreGate();
       final streak = WorkoutRepository.instance.reckonStreakDecayAndPersist();
       final p = UserRepository.instance.getProgress()!;
       expect(streak, 0, reason: 'day-1 missed, no freeze -> streak breaks to 0');
@@ -223,7 +242,7 @@ void main() {
       await seedMissedDay(); // 1 freeze, day-1 missed -> consumed -> streak 1
       await UserRepository.instance
           .updateProgress({'current_streak_days': 7}); // stale, merged in
-      SyncService.instance.restoreCompletedTick.value = 1;
+      openRestoreGate();
       final streak = WorkoutRepository.instance.reckonStreakDecayAndPersist();
       final p = UserRepository.instance.getProgress()!;
       expect(streak, 1);
@@ -235,7 +254,8 @@ void main() {
         () async {
       await seedMissedDay();
       await UserRepository.instance.updateProgress({'current_streak_days': 9});
-      SyncService.instance.restoreCompletedTick.value = 0; // gated off
+      // gated off: marker null (the tick is irrelevant now — set > 0 on purpose)
+      SyncService.instance.restoreCompletedTick.value = 1;
       WorkoutRepository.instance.reckonStreakDecayAndPersist();
       expect(UserRepository.instance.getProgress()!['current_streak_days'], 9,
           reason: 'pre-restore read-only path must not persist a spurious decay '

@@ -6,6 +6,7 @@ import 'package:icanbefitter/core/services/deload_evaluator.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/streak_progress_service.dart';
+import 'package:icanbefitter/core/services/sync_flags.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/usage_counter_service.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
@@ -138,6 +139,45 @@ class DayRolloverObserver with WidgetsBindingObserver {
     await _doRolloverWithRef(ref, today);
   }
 
+  /// b4e7a1 — the post-restore streak reckon for the BACKGROUND-restore branch.
+  ///
+  /// A returning user's cold start runs `runRolloverNow` BEFORE the background
+  /// restore finishes, so its decay reckon is (correctly) gated off and nothing
+  /// ever re-ran it: the idle-day freeze debit never persisted on a cold start
+  /// (the founder's "16 days / 2 freezes" on 2026-10-06). The restoring
+  /// screen's background heal calls this once the restore settles, ref-free
+  /// (singletons) so it survives the screen's disposal:
+  ///   (a) reckon + persist — gated inside on the restore having settled for
+  ///       THIS account, so a restore that reported a streak-critical failure
+  ///       still persists nothing;
+  ///   (b) ONE best-effort LOW event when the restore succeeded but did not
+  ///       settle (a LOW event can be dropped under client cooldown — its
+  ///       absence proves nothing; the failing op is already named in
+  ///       `client_errors` by the sync failure funnel);
+  ///   (c) bump `restoreCompletedTick` LAST, so every tick listener (Home,
+  ///       Train, Nutrition, AI Coach) repaints from the already-debited ledger.
+  /// Kill switch `disable_streak_reckon_user_gate`: only the bump (the pre-fix
+  /// heal), because the gate is then the tick this call is about to bump.
+  void reckonAndNotifyAfterRestore() {
+    if (SyncFlags.streakReckonUserGateEnabled) {
+      try {
+        WorkoutRepository.instance.reckonStreakDecayAndPersist();
+      } catch (e, st) {
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'bg_heal_streak_reckon'));
+      }
+      try {
+        final sync = SyncService.instance;
+        final why = sync.lastRestoreWithheldReason;
+        if (!sync.restoreSettledForCurrentUser && why != null) {
+          unawaited(ErrorTelemetry.logEvent('streak_reckon_withheld',
+              message: why));
+        }
+      } catch (_) {}
+    }
+    SyncService.instance.bumpRestoreCompleted();
+  }
+
   /// Resume-time rollover — uses the stored [_ref] (set by [init]).
   Future<void> _doRollover(String today) async {
     final ref = _ref;
@@ -171,8 +211,11 @@ class DayRolloverObserver with WidgetsBindingObserver {
     // budget) THEN reckon, so an idle user's missed days are consumed + PERSISTED
     // on app-open — not only on completeWorkout (pre-D2 the read-only streak
     // display and the persisted freeze count diverged). Gated inside reckon
-    // (restoreCompletedTick > 0 + non-empty schedule) so a pre-restore cold
-    // start can't spuriously decay.
+    // (the restore for THIS account settled + non-empty schedule — b4e7a1) so a
+    // pre-restore cold start can't spuriously decay. A returning user's cold
+    // start reaches here BEFORE the background restore finishes, so it is gated
+    // off; `reckonAndNotifyAfterRestore` runs the reckon once the restore
+    // settles.
     try {
       WorkoutRepository.instance.reckonStreakDecayAndPersist();
     } catch (e, st) {

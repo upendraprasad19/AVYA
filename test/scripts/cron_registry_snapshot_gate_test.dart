@@ -5,6 +5,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/spawn.dart';
+
 /// Rule 24 mutation proof for Gate 31's snapshot input (OI-132).
 ///
 /// Gate 31 originally enforced cron-registry parity by scanning
@@ -21,42 +23,9 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   late Directory tmp;
   final repoRoot = Directory.current.path;
-  /// The Dart binary to spawn the gate with.
-  ///
-  /// NOT `Platform.resolvedExecutable`: under `flutter test` that resolves to
-  /// the flutter_tester binary, not dart, so the spawn never returns and the
-  /// suite HANGS rather than failing. The repo already documents this trap at
-  /// test/scripts/oi_numbering_lib_test.dart:284 after it cost that suite a
-  /// >10-minute hang — and it cost this one another before the note was found.
-  /// Prefer the SDK exe beside the Flutter wrapper (the wrapper takes the SDK
-  /// update lock and shells out to git on EVERY call); fall back to `dart`.
-  String dartBinOf() {
-    final override = Platform.environment['DART_BIN_OVERRIDE'];
-    if (override != null && File(override).existsSync()) return override;
-    final which = Process.runSync(
-      Platform.isWindows ? 'where' : 'which',
-      ['dart'],
-      stdoutEncoding: utf8,
-    );
-    if (which.exitCode == 0) {
-      final first = (which.stdout as String)
-          .split('\n')
-          .map((l) => l.trim())
-          .firstWhere((l) => l.isNotEmpty, orElse: () => '');
-      if (first.isNotEmpty) {
-        final dir = File(first).parent.path.replaceAll(r'\', '/');
-        for (final c in [
-          '$dir/cache/dart-sdk/bin/dart.exe',
-          '$dir/cache/dart-sdk/bin/dart',
-        ]) {
-          if (File(c).existsSync()) return c;
-        }
-      }
-    }
-    return 'dart';
-  }
-
-  final dartBin = dartBinOf();
+  // The Dart binary to spawn the gate with: the shared `dartBin()` (never
+  // `Platform.resolvedExecutable`, which is flutter_tester under `flutter test` and HANGS).
+  final dart = dartBin();
 
   setUp(() {
     tmp = Directory.systemTemp.createTempSync('gate31_');
@@ -83,9 +52,10 @@ void main() {
         .writeAsStringSync('# Cron Job Registry\n\n${names.map((n) => '| x | `$n` |').join('\n')}\n');
   }
 
-  ProcessResult runGate() => Process.runSync(
-        dartBin,
+  ProcessResult runGate() => runSpawn(
+        dart,
         ['scripts/check_cron_registry.dart'],
+        why: 'Gate 31 cron registry gate against a scratch repo',
         workingDirectory: tmp.path,
       );
 

@@ -489,8 +489,8 @@ class SimulationService {
     final progress = UserRepository.instance.getProgress() ?? {};
     final totalDone = ((progress['total_workouts_done'] as int?) ?? 0) + 1;
     // Mutating variant. NOTE (Hermes L1, f9d2e7): this calls consume DIRECTLY,
-    // intentionally bypassing reckonStreakDecayAndPersist's restoreCompletedTick +
-    // non-empty-schedule gates — the sim drives its own clock seam and never waits
+    // intentionally bypassing reckonStreakDecayAndPersist's restore-settled marker
+    // (SyncService.restoreSettledForCurrentUser, b4e7a1) + non-empty-schedule gates — the sim drives its own clock seam and never waits
     // for a real restore tick. Dev-only (kDebugMode, release-inert); NOT a third
     // production consume site (reckon's "single site" docstring means prod).
     final streakDays = repo.consumeMissedDayIfFreezeAvailable(); // seam-aware (sim)

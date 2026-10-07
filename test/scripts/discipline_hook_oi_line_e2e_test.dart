@@ -8,64 +8,37 @@
 @Timeout(Duration(minutes: 6))
 library;
 
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-Map<String, String> _cleanEnv() {
-  final env = Map<String, String>.from(Platform.environment);
-  env.removeWhere((k, _) => k.toUpperCase().startsWith('GIT_'));
-  return env;
-}
+import '../helpers/spawn.dart';
 
-ProcessResult _git(List<String> args, String cwd) => Process.runSync('git', args,
+ProcessResult _git(List<String> args, String cwd) => runSpawn('git', args,
+    why: 'git ${args.join(' ')} (fixture)',
     workingDirectory: cwd,
-    environment: _cleanEnv(),
-    includeParentEnvironment: false,
     stdoutEncoding: utf8,
     stderrEncoding: utf8);
 
 String _fwd(String p) => p.replaceAll('\\', '/');
 
-String _dartBin() {
-  final override = Platform.environment['DART_BIN_OVERRIDE'];
-  if (override != null && File(override).existsSync()) return override;
-  final which = Process.runSync(Platform.isWindows ? 'where' : 'which', ['dart'],
-      stdoutEncoding: utf8);
-  if (which.exitCode == 0) {
-    final first = (which.stdout as String)
-        .split('\n')
-        .map((l) => l.trim())
-        .firstWhere((l) => l.isNotEmpty, orElse: () => '');
-    if (first.isNotEmpty) {
-      final dir = _fwd(File(first).parent.path);
-      for (final c in ['$dir/cache/dart-sdk/bin/dart.exe', '$dir/cache/dart-sdk/bin/dart']) {
-        if (File(c).existsSync()) return c;
-      }
-    }
-  }
-  return 'dart';
-}
-
 String _entry(int n, String t) =>
     '\n## OI-$n — $t\n\n- **Status**: OPEN\n- **Blocked on**: none\n- **Verified**: never\n';
 
 Future<String> _hookOutput(String dart, String src, String cwd, String stdinJson) async {
-  final p = await Process.start(dart, ['run', '$src/scripts/discipline_hook.dart'],
-      workingDirectory: cwd, environment: _cleanEnv(), includeParentEnvironment: false);
-  p.stdin.write(stdinJson);
-  await p.stdin.close();
-  final out = p.stdout.transform(utf8.decoder).join();
-  unawaited(p.stderr.drain<void>());
-  await p.exitCode;
-  return out;
+  final r = await runSpawnWithInput(dart, ['run', '$src/scripts/discipline_hook.dart'],
+      why: 'discipline_hook SessionStart in $cwd',
+      stdin: stdinJson,
+      workingDirectory: cwd,
+      stdoutEncoding: utf8,
+      stderrEncoding: utf8);
+  return r.stdout;
 }
 
 void main() {
   final src = Directory.current.path;
-  final dart = _dartBin();
+  final dart = dartBin();
   const startup = '{"hook_event_name":"SessionStart","source":"startup"}';
 
   late Directory tmp;

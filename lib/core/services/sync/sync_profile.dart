@@ -942,7 +942,7 @@ extension SyncServiceProfile on SyncService {
       // locally and has not yet pushed has state strictly newer than the row
       // this read returns. The premise justified the demotion, so it is
       // corrected here rather than left to re-justify it for the next reader.
-      // The three monotonic fields now go through
+      // The four monotonic fields (see UserRepository.monotonicProgressFields) now go through
       // UserRepository.mergeCloudProgress; everything else is unchanged.
       final rows = identical(preFetched, _kNoInject)
           ? await _supabase.client
@@ -975,7 +975,8 @@ extension SyncServiceProfile on SyncService {
       cloud.remove('sync_epoch');
 
       // F6 · Merge semantics (same as _restoreUserProfile), plus the OI-83
-      // monotonic guard on the 3 lifetime/phase fields.
+      // monotonic guard on the 4 lifetime/phase fields
+      // (`UserRepository.monotonicProgressFields`).
       final existing = _hive.userBox.get('progress');
       final existingMap = existing is Map
           ? Map<String, dynamic>.from(existing)
@@ -984,6 +985,13 @@ extension SyncServiceProfile on SyncService {
         local: existingMap,
         cloud: cloud,
       );
+      // closes-diagnose c9d2f6 (and the e5c2d1 class). `userId` was captured
+      // before the read above, and the freeze push below derives the live
+      // account and its box at call time, so an A -> B swap landing in between
+      // would push B's box — merged with A's row — to B's cloud row. Same
+      // sink-side guard `_restoreUserPreferences` uses, one statement before
+      // the write.
+      if (ownerChangedSince(userId)) return;
       // Hermes h7F2 (diagnose f1c6b4): EVERY launch — write only when the
       // merge changed something. The declined-demotion report still runs:
       // a refused demotion is news whether or not a write happened. Kill
@@ -996,6 +1004,13 @@ extension SyncServiceProfile on SyncService {
         await _hive.userBox.put('progress', result.merged);
       }
       reportProgressDemotionsDeclined(result, source: 'restore_user_progress');
+      // c9d2f6: the freeze merge kept local AHEAD of a stale cloud row (a
+      // consume or refill this device made that the row has not seen) — push
+      // it. Owed to the CLOUD, so it fires even when the local write above was
+      // skipped as unchanged. syncFreezes reads its version synchronously.
+      if (result.scheduleFreezeSyncUp) {
+        unawaited(SyncService.instance.syncFreezes());
+      }
     } catch (e, st) {
       debugPrint('[SyncService._restoreUserProgress] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
@@ -1141,6 +1156,18 @@ extension SyncServiceProfile on SyncService {
   }) =>
       _restoreUserProfile(userId,
           preFetched: preFetched, preFetchedUsers: preFetchedUsers);
+
+  /// diagnose c9d2f6 test seam — drives [_restoreFreezes] with an INJECTED
+  /// `freezes` object (the 5-column `user_progress` subset) so a test can run
+  /// the PRODUCTION order (`_restoreUserProgress` then `_restoreFreezes`).
+  /// [preFetched] must be passed (an injected `null` is honoured like the
+  /// network null) or this falls through to a live network call.
+  @visibleForTesting
+  Future<void> restoreFreezesForTest(
+    String userId, {
+    required Object? preFetched,
+  }) =>
+      _restoreFreezes(userId, preFetched: preFetched);
 }
 
 /// Builds the `user_preferences` upsert payload. PURE — no Hive, no network.

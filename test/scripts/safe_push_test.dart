@@ -20,7 +20,6 @@
 @Timeout(Duration(minutes: 14))
 library;
 
-import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -28,18 +27,12 @@ import 'package:flutter_test/flutter_test.dart';
 // The REAL reader, so the writer->reader test below cannot pass by agreeing
 // with a local helper that shares none of its code.
 import '../../scripts/push_result_lib.dart';
-
-Map<String, String> _cleanEnv() {
-  final env = Map<String, String>.from(Platform.environment);
-  env.removeWhere((k, _) => k.toUpperCase().startsWith('GIT_'));
-  return env;
-}
+import '../helpers/spawn.dart';
 
 ProcessResult _run(String exe, List<String> args, String cwd) {
-  return Process.runSync(exe, args,
+  return runSpawn(exe, args,
+      why: 'safe_push e2e: $exe ${args.join(' ')} (in $cwd)',
       workingDirectory: cwd,
-      environment: _cleanEnv(),
-      includeParentEnvironment: false,
       runInShell: true);
 }
 
@@ -335,7 +328,8 @@ exit 0
 ''');
     // Hooks must be executable; Git for Windows' Bash respects the file
     // mode bit even though NTFS itself has no exec permission concept.
-    Process.runSync('chmod', ['+x', hookPath], runInShell: true);
+    runSpawn('chmod', ['+x', hookPath],
+        why: 'safe_push e2e: chmod pre-receive hook', runInShell: true);
 
     const multiWordOption = 'ci message with several distinct words';
     final r = _run('sh',
@@ -494,8 +488,8 @@ exit 0
     // requires the push to SUCCEED and only the PROBE to fail, so `git` has to
     // be stubbed on PATH to fail `ls-remote` alone.
     final stubDir = Directory('${tmp.path}/stub')..createSync(recursive: true);
-    final realGit = (Process.runSync('sh', ['-c', 'command -v git'],
-            runInShell: true)
+    final realGit = (runSpawn('sh', ['-c', 'command -v git'],
+            why: 'safe_push e2e: locate the real git', runInShell: true)
         .stdout as String)
         .trim();
     expect(realGit, isNotEmpty, reason: 'could not locate the real git');
@@ -503,7 +497,8 @@ exit 0
     stub.writeAsStringSync('#!/bin/sh\n'
         'if [ "\$1" = "ls-remote" ]; then exit 128; fi\n'
         'exec "$realGit" "\$@"\n');
-    Process.runSync('chmod', ['+x', stub.path], runInShell: true);
+    runSpawn('chmod', ['+x', stub.path],
+        why: 'safe_push e2e: chmod stub git', runInShell: true);
 
     // The PATH entry MUST be POSIX-form. A Windows `C:/...` entry is not
     // searched by this MSYS shell, so the stub would be silently ignored, the
@@ -516,8 +511,8 @@ exit 0
     // needed; only the DERIVATION is platform-specific, never the guard.
     final String posixStub;
     if (Platform.isWindows) {
-      posixStub = (Process.runSync('cygpath', ['-u', stubDir.path],
-              runInShell: true)
+      posixStub = (runSpawn('cygpath', ['-u', stubDir.path],
+              why: 'safe_push e2e: cygpath of the stub dir', runInShell: true)
           .stdout as String)
           .trim();
     } else {
@@ -526,12 +521,10 @@ exit 0
     expect(posixStub, startsWith('/'),
         reason: 'the PATH entry must be POSIX-form or the stub is never found');
 
-    final env = _cleanEnv();
-    env['PATH'] = '$posixStub:${env['PATH']}';
-    final r = Process.runSync('sh', ['scripts/safe_push.sh', 'origin', 'main'],
+    final r = runSpawn('sh', ['scripts/safe_push.sh', 'origin', 'main'],
+        why: 'safe_push.sh with a git stub that fails ls-remote first on PATH (UNVERIFIED path)',
         workingDirectory: repo.primary,
-        environment: env,
-        includeParentEnvironment: false,
+        extraEnv: {'PATH': '$posixStub:${Platform.environment['PATH']}'},
         runInShell: true);
 
     expect(r.exitCode, 2,
@@ -703,21 +696,20 @@ exit 0
     // reddened HERE while this file passed 18/18 targeted. The deadline only
     // bounds how long we wait to SAMPLE; the loop still breaks at first sight.
     File(hookPath).writeAsStringSync('#!/usr/bin/env sh\nsleep 20\nexit 0\n');
-    Process.runSync('chmod', ['+x', hookPath], runInShell: true);
+    runSpawn('chmod', ['+x', hookPath],
+        why: 'safe_push e2e: chmod pre-receive hook', runInShell: true);
 
-    final proc = await Process.start(
+    final proc = await startSpawn(
         'sh', ['scripts/safe_push.sh', 'origin', 'main'],
         workingDirectory: repo.primary,
-        environment: _cleanEnv(),
-        includeParentEnvironment: false,
         runInShell: true);
     // Drain, or a full pipe buffer could block the child on Windows.
     // unawaited, NOT awaited: the point is that these keep draining while the
     // loop below samples the record mid-flight. A bare call is an
     // unawaited_futures WARNING, and --no-fatal-infos suppresses infos, not
     // warnings -- it aborted a real push (2026-09-10).
-    unawaited(proc.stdout.drain<void>());
-    unawaited(proc.stderr.drain<void>());
+    final procOut = proc.stdout.transform(systemEncoding.decoder).join();
+    final procErr = proc.stderr.transform(systemEncoding.decoder).join();
 
     Map<String, String> seen = <String, String>{};
     final deadline = DateTime.now().add(const Duration(seconds: 90));
@@ -745,13 +737,15 @@ exit 0
 
     // The pid must be a live process: that pairing is the whole point, since
     // STARTED alone cannot distinguish "running" from "interrupted".
-    final alive = Process.runSync('sh', ['-c', 'kill -0 ${seen['pid']}'],
-        runInShell: true);
+    final alive = runSpawn('sh', ['-c', 'kill -0 ${seen['pid']}'],
+        why: 'safe_push e2e: is the in-flight push pid alive', runInShell: true);
     expect(alive.exitCode, 0,
         reason: 'pid ${seen['pid']} should still be alive while the remote hook '
             'sleeps');
 
     final code = await proc.exitCode;
+    reportSpawn(code, await procOut, await procErr,
+        'safe_push.sh with a sleeping pre-receive hook (in-flight STARTED sampling)');
     expect(code, 0, reason: 'the push itself must still succeed');
     final finalRec = readRecord(repo.primary);
     expect(finalRec['result'], 'LANDED',

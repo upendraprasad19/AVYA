@@ -22,7 +22,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../scripts/regression_catalog_lib.dart' show scrubbedChildEnvironment;
+import '../helpers/spawn.dart';
 
 late final String _repoRoot;
 late final String _gate;
@@ -42,12 +42,11 @@ late final String _gate;
 /// four tests failed with empty output and exit 0 while the gate was working
 /// perfectly. `dart` still needs the shell for PATHEXT resolution (see
 /// [_runGate]); `git` does not.
-ProcessResult _git(List<String> args, String cwd) => Process.runSync(
+ProcessResult _git(List<String> args, String cwd) => runSpawn(
       'git',
       args,
+      why: 'git ${args.join(' ')} (fixture)',
       workingDirectory: cwd,
-      environment: scrubbedChildEnvironment(Platform.environment),
-      includeParentEnvironment: false,
       stdoutEncoding: utf8,
       stderrEncoding: utf8,
     );
@@ -116,12 +115,11 @@ String _mergedRepo({
 
 /// Invokes the REAL gate script with [cwd] as the repo under test.
 ProcessResult _runGate(String cwd, {List<String> args = const []}) =>
-    Process.runSync(
+    runSpawn(
       'dart',
       ['run', _gate, ...args],
+      why: 'check_closes_oi_performed gate in $cwd',
       workingDirectory: cwd,
-      environment: scrubbedChildEnvironment(Platform.environment),
-      includeParentEnvironment: false,
       stdoutEncoding: utf8,
       stderrEncoding: utf8,
       runInShell: true,

@@ -153,6 +153,8 @@ void main() {
     late String bytes;
     late String cwdDump;
     late String dart;
+    late String stdinHex;
+    late String flood;
 
     setUpAll(() {
       tmp = Directory.systemTemp.createTempSync('spawn_helper_');
@@ -172,6 +174,25 @@ void main() {
       cwdDump = '${tmp.path}/cwd_dump.dart';
       File(cwdDump).writeAsStringSync("import 'dart:io';\n"
           'void main() { stdout.write(Directory.current.path); }\n');
+      stdinHex = '${tmp.path}/stdin_hex.dart';
+      File(stdinHex).writeAsStringSync("import 'dart:io';\n"
+          'Future<void> main(List<String> a) async {\n'
+          '  final b = <int>[];\n'
+          '  await for (final c in stdin) { b.addAll(c); }\n'
+          "  stdout.write(b.map((x) => x.toRadixString(16).padLeft(2, '0')).join());\n"
+          "  stderr.write('ERR-FROM-STDIN-CHILD');\n"
+          '  exit(a.isEmpty ? 0 : int.parse(a.first));\n'
+          '}\n');
+      flood = '${tmp.path}/flood.dart';
+      File(flood).writeAsStringSync("import 'dart:io';\n"
+          'Future<void> main() async {\n'
+          "  final big = 'x' * 300000;\n"
+          '  stdout.write(big);\n'
+          '  stderr.write(big);\n'
+          '  await stdout.flush();\n'
+          '  await stderr.flush();\n'
+          '  await stdin.drain<void>();\n'
+          '}\n');
       dart = dartBin();
     });
     tearDownAll(() {
@@ -263,9 +284,11 @@ void main() {
     });
 
     test('runInShell is forwarded (a shell BUILTIN is only reachable through a shell)', () {
-      // `export` exists only as a POSIX shell builtin, `echo` only as a cmd.exe builtin:
+      // `export` exists only as a POSIX shell builtin, `ver` only as a cmd.exe builtin:
       // no executable of that name is on PATH, so without a shell the spawn throws.
-      final builtin = Platform.isWindows ? 'echo' : 'export';
+      // (Not `echo`: Git for Windows puts a real echo.exe on PATH, so a dev machine
+      // with Git's usr/bin on PATH could spawn it without a shell.)
+      final builtin = Platform.isWindows ? 'ver' : 'export';
       final r = runSpawn(builtin, const ['X=1'], why: 'shell builtin', runInShell: true);
       expect(r.exitCode, 0);
       expect(() => runSpawn(builtin, const ['X=1'], why: 'no shell'), throwsA(isA<ProcessException>()),
@@ -287,6 +310,52 @@ void main() {
       expect(async.stdout, [0xff, 0x41]);
       expect(reports, everyElement(contains('stdout=2 bytes ')),
           reason: 'the reporter must not crash on a List<int> stdout');
+    });
+
+    test('runSpawnWithInput: a String payload and raw bytes (0x00, 0xFF, a lone 0x80) reach the child unchanged', () async {
+      final reports = <String>[];
+      final text = await runSpawnWithInput(dart, [stdinHex], why: 'string stdin', stdin: 'héllo', report: reports.add);
+      expect(text.exitCode, 0, reason: reports.join('\n'));
+      expect(text.stdout, utf8.encode('héllo').map((b) => b.toRadixString(16).padLeft(2, '0')).join());
+      final raw = await runSpawnWithInput(dart, [stdinHex],
+          why: 'bytes stdin', stdin: <int>[0x00, 0xff, 0x80, 0x41], report: reports.add);
+      expect(raw.stdout, '00ff8041', reason: 'raw bytes must be ADDED, not decoded and re-encoded');
+    });
+
+    test('runSpawnWithInput: a failing child is reported whole, including its stderr, once', () async {
+      final reports = <String>[];
+      final r = await runSpawnWithInput(dart, [stdinHex, '7'], why: 'failing stdin child', stdin: 'x', report: reports.add);
+      expect(r.exitCode, 7);
+      expect(reports, hasLength(1));
+      expect(reports.single, 'failing stdin child\nexit=7\nstdout=78\nstderr=ERR-FROM-STDIN-CHILD');
+    });
+
+    test('runSpawnWithInput: a child that fills BOTH pipes before it reads stdin does not deadlock (M9: drain after exit)', () async {
+      final r = await runSpawnWithInput(dart, [flood], why: 'flood', stdin: 'go', report: (_) {})
+          .timeout(const Duration(seconds: 60));
+      expect(r.exitCode, 0);
+      expect(r.stdout.length, 300000);
+      expect(r.stderr.length, 300000);
+    });
+
+    test('runSpawnWithInput: the control-variable guard still throws, a bad stdin type throws, a poisoned parent does not reach the child', () async {
+      await expectLater(
+          runSpawnWithInput(dart, [stdinHex], why: 'guard', stdin: '', extraEnv: {'GIT_DIR': '/x'}, report: (_) {}),
+          throwsArgumentError);
+      await expectLater(runSpawnWithInput(dart, [stdinHex], why: 'type', stdin: 42, report: (_) {}), throwsArgumentError);
+      final r = await runSpawnWithInput(dart, [envDump],
+          why: 'poison',
+          stdin: '',
+          parentEnvironment: {
+            'PATH': Platform.environment['PATH'] ?? '',
+            'GIT_DIR': '/leak',
+            'CONTRACT_SWEEP_NESTED': '1',
+            'DART_BIN_OVERRIDE': '/leak'
+          },
+          report: (_) {});
+      expect(r.exitCode, 0);
+      final child = (jsonDecode(r.stdout) as Map).keys.map((k) => (k as String).toUpperCase()).toSet();
+      expect(child.intersection({'GIT_DIR', 'CONTRACT_SWEEP_NESTED', 'DART_BIN_OVERRIDE'}), isEmpty);
     });
   });
 
@@ -453,8 +522,9 @@ void main() {
 
     test('the encodings are defaulted parameters, not `?? systemEncoding` (an explicit null must survive)', () {
       expect(src, isNot(contains('?? systemEncoding')));
-      expect(RegExp(r'Encoding\? stdoutEncoding = systemEncoding,').allMatches(src).length, 2);
-      expect(RegExp(r'Encoding\? stderrEncoding = systemEncoding,').allMatches(src).length, 2);
+      // runSpawn, runSpawnAsync and runSpawnWithInput
+      expect(RegExp(r'Encoding\? stdoutEncoding = systemEncoding,').allMatches(src).length, 3);
+      expect(RegExp(r'Encoding\? stderrEncoding = systemEncoding,').allMatches(src).length, 3);
     });
   });
 }

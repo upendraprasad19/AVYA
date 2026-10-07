@@ -35,15 +35,18 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/spawn.dart';
+
 void main() {
   test('Gate 37 — no raw GoogleFonts.getFont(\'DM Sans\') outside typography.dart',
       () {
     // Windows requires `runInShell: true` (or `dart.bat`) because the
     // bare `dart` token is resolved by cmd.exe via PATHEXT, not directly
     // by CreateProcessW.
-    final result = Process.runSync(
+    final result = runSpawn(
       'dart',
       ['run', 'scripts/check_no_raw_google_fonts.dart'],
+      why: 'Gate 37 check_no_raw_google_fonts',
       workingDirectory: Directory.current.path,
       runInShell: true,
     );

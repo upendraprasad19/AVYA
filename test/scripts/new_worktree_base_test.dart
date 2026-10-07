@@ -26,34 +26,31 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-/// Subprocess environment with git/CI leakage removed.
-///
-///   GIT_*      — git exports GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE into
-///                every hook, and they override BOTH `workingDirectory:` and
-///                `git -C <path>`. This test shells out to git constantly, so a
-///                leak would drive the REAL repo — and this script CREATES
-///                WORKTREES, so that is destructive, not merely meaningless
-///                (feedback_mistake_git_hook_env_leak).
-///   GITHUB_*   — the family shares one hermetic contract so a future reader of
-///                CI env cannot silently acquire the c3f8e1 failure mode.
-///   PUSH_BEFORE — same rationale as GITHUB_*.
-Map<String, String> _cleanEnv() {
-  final env = Map<String, String>.from(Platform.environment);
-  env.removeWhere((k, _) {
-    final u = k.toUpperCase();
-    return u.startsWith('GIT_') || u.startsWith('GITHUB_') || u == 'PUSH_BEFORE';
-  });
-  return env;
-}
+import '../helpers/spawn.dart';
+
+/// The subprocess environment comes from the shared spawn helper
+/// (`hermeticEnvironment`, via `runSpawn`), which strips GIT_*, GITHUB_*,
+/// PUSH_BEFORE and the other control families (feedback_mistake_git_hook_env_leak:
+/// this test shells out to git constantly and the script CREATES WORKTREES, so a
+/// leaked GIT_DIR would be destructive, not merely meaningless).
+/// A synthetic parent carrying a name of every control family, for the isolation
+/// assertion in `setUpAll` (a clean shell would make that assertion vacuous).
+const Map<String, String> _poisonedParent = <String, String>{
+  'GIT_DIR': '/poisoned/.git',
+  'GIT_WORK_TREE': '/poisoned',
+  'GIT_INDEX_FILE': '/poisoned/.git/index',
+  'GITHUB_ACTIONS': 'true',
+  'PUSH_BEFORE': 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+  'PATH': '/usr/bin',
+};
 
 late final String _script;
 
-ProcessResult _run(String exe, List<String> args, String cwd) => Process.runSync(
+ProcessResult _run(String exe, List<String> args, String cwd) => runSpawn(
       exe,
       args,
+      why: 'new-worktree base: $exe ${args.join(' ')} (in $cwd)',
       workingDirectory: cwd,
-      environment: _cleanEnv(),
-      includeParentEnvironment: false,
       runInShell: true,
     );
 
@@ -105,7 +102,7 @@ void main() {
   setUpAll(() {
     _script = File('scripts/new-worktree.sh').absolute.path;
     expect(File(_script).existsSync(), isTrue, reason: 'run from the repo root');
-    expect(_cleanEnv().keys.where((k) => k.toUpperCase().startsWith('GIT_')),
+    expect(hermeticEnvironment(parent: _poisonedParent).keys.where((k) => k.toUpperCase().startsWith('GIT_')),
         isEmpty,
         reason: 'env scrub failed — this test creates worktrees, so a GIT_DIR '
             'leak would act on the REAL repo');

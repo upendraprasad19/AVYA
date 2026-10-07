@@ -38,11 +38,14 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/spawn.dart';
+
 void main() {
   String tierFor(String path) {
-    final process = Process.runSync(
+    final process = runSpawn(
       'dart',
       ['run', 'scripts/blast_radius_from_diff.dart', path],
+      why: 'blast_radius_from_diff CLI on $path',
       runInShell: true,
     );
     final m = RegExp(r'Blast-radius:\s*(\w+)')

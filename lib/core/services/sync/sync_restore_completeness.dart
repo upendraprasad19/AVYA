@@ -33,7 +33,11 @@ extension SyncServiceRestoreCompleteness on SyncService {
   /// nothing called it.
   Future<void> syncFreezes() async {
     try {
-      final userId = _supabase.currentUser?.id;
+      // `_liveUserId` is exactly `_supabase.currentUser?.id` in production (the
+      // test resolver is null there); it is what lets the freeze push run — and
+      // be observed — under `SyncHarness`, where `SupabaseService` has no
+      // session (diagnose c9d2f6, plan round-3 P1).
+      final userId = _liveUserId;
       if (userId == null) return;
       final progress = _hive.userBox.get('progress');
       if (progress == null) return;
