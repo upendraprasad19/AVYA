@@ -417,6 +417,50 @@ concepts:
       Date keys are IST-anchored via formatDateKey → istDateStr.
       Never iterate workoutBox.keys manually to find logs for a date.
 
+  - concept: wle_single_live_summary
+    domain: workout
+    behavioral_test_path: test/sql/workout_log_exercises_delete_final_rename_live_verify.sql  # bd79b1 — case 5: a drain at the live row's count tombstones THAT row (OI-312); case 6: the same-count rule
+    behavioral_test_path_live: test/sql/wle_single_live_summary_live_verify.sql  # 4b5c38/bd79b1 — N1-N11: one live summary per (user, workout_log_id, exercise_id), last push wins, per-set rows above the new count removed, per-key advisory lock (push AND drain), key isolation against bystanders incl. another user, cross-user drain refused
+    behavioral_test_path_dryrun: test/sql/wle_single_live_summary_dryrun_harness.sql  # bd79b1/4b5c38 — prod rolled-back dry-run: every case before and after the migration, OI-312 repair + cleanup cases R1-R8 (key isolation, PRECONDITION_B, ALREADY_APPLIED)
+    description: |
+      L1a-1 (docs/plans/coach-history-correctness-sync.md). Exactly one LIVE
+      workout_log_exercises summary row per (user_id, workout_log_id,
+      exercise_id). set_number (the set COUNT) stays in the natural key
+      uniq_wle_user_wlog_ex_set (migration 082), so the server enforces the
+      invariant: the BEFORE INSERT trigger workout_log_exercises_single_live
+      tombstones live siblings at another count (last push wins, founder rule
+      2026-10-06) and deletes workout_log_sets rows above the new count; the
+      delete trigger workout_log_exercises_delete_final_rename tombstones the
+      live row at the same count on a tombstone-shaped INSERT (OI-312) instead
+      of inserting a separate suffixed tombstone. Both take a per-key
+      pg_advisory_xact_lock.
+    writers:
+      - file: lib/core/services/sync/sync_workout.dart
+        line_range: 255-555
+        method: _syncExerciseLogs
+        notes: summary upsert on (user_id, workout_log_id, exercise_id, set_number), then the per-set upsert
+      - file: lib/core/services/sync/sync_workout.dart
+        line_range: 216-254
+        method: _drainPendingExlogDeletes
+        notes: tombstone-shaped upsert at the queued count (installed APKs)
+      - file: supabase/migrations/155_wle_single_live_summary.sql
+        line_range: 72-293
+        method: workout_log_exercises_single_live / workout_log_exercises_delete_final_rename
+        notes: server enforcement of one live summary per key (BEFORE INSERT triggers under a per-key advisory lock) + the one-time cleanup; applied 2026-10-07 as cloud version 20261007105911
+    reader_manifest_complete: false
+    readers:
+      - file: lib/core/services/sync/sync_workout.dart
+        line_range: 861-1042
+        method: _restoreExerciseLogs
+        semantic: live rows only (skips deleted_at)
+        fields_read: [workout_log_id, exercise_id, set_number, completed_at, deleted_at]
+        notes: put-if-absent; with one live row per key there is nothing to choose between
+      - file: supabase/functions/_shared/tools/progress/getExerciseHistory.ts
+        line_range: 1-9999
+        method: getExerciseHistory
+        semantic: aggregated
+        fields_read: [exercise_id, set_number, reps, weight_kg, completed_at]
+        notes: server readers dedupe on the same key on their own until the apply (L1b B1, docs/plans/coach-history-correctness-tools.md)
   - concept: scheduled_workouts_mutations
     domain: workout
     behavioral_test_path: test/contracts/scheduled_workouts_mutations_behavioral_test.dart

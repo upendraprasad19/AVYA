@@ -1172,5 +1172,15 @@
       "slug": "gemini3_limits_refund",
       "cloud_version": "20261002083656",
       "note": "Part B of gemini3-limits-caching. Chat cap free 7 / PRO 20 (PRO no longer exempt; the trigger counts ONLY the model_used='pending' reservation row so PRO media rows on channel app spend no chat unit); vision cap free 4 / PRO 20 on one shared key; adds refund_quota(uuid,text) SECURITY INVOKER, service_role only (REVOKE names PUBLIC, anon, authenticated): latch on model_used='pending', ledger row checked before the 3/IST-day refund_budget is spent, used-1 AND used>0. Trigger messages print pro=true|false. Applied via MCP apply_migration after the founder's explicit go 2026-10-02 (pre-apply live read: top 152, no refund_quota, 0 pending rows, nobody at the new caps). Live verified post-apply: version 20261002083656; anon/authenticated execute on refund_quota false, service_role true, prosecdef false; both trigger bodies carry the new caps; 3 cap triggers still bound. Diagnose-docs: c4e9b2, d7a1f5. Live behavioural script test/sql/gemini3_limits_refund_live_verify.sql NOT yet run."
+  },
+  {
+    "migration": "155",
+    "applied_at": "2026-10-07T16:29:11+05:30",
+    "hash": "sha256:62b945e429130399f28c0705a7c1d572562ca6218eca909aa45fe6cb72d226c1",
+    "applier": "claude-via-mcp-apply-migration",
+    "diagnose": "bd79b1",
+    "slug": "wle_single_live_summary",
+    "cloud_version": "20261007105911",
+    "note": "L1a-1 (OI-312 + OI-307 writer half; diagnose-docs bd79b1 and 4b5c38, plan docs/plans/coach-history-correctness-sync.md v10, plan-review record docs/plan-reviews/coach-history-correctness-sync.md, B-pass docs/reviews/coach-history-correctness-sync-bpass.md). One DO block: tombstones the 55 superseded exercise-log summary rows of 44 duplicate groups (one account, the founder's), repairs OI-312 pairs (0 existed), replaces workout_log_exercises_delete_final_rename so a tombstone-shaped INSERT tombstones the live row at the same natural key, adds BEFORE INSERT trigger workout_log_exercises_single_live; refuses a second run (ALREADY_APPLIED). Applied via MCP apply_migration after the founder's explicit go #2 (2026-10-07) and a prod rolled-back DO-block dry-run (go #1, 2026-10-06, DRYRUN_OK). Pre-apply snapshot backups/wle_single_live_cleanup_snapshot.json (taken 2026-10-07T10:56:32Z: 55 rows, 0 per-set rows). Post-apply verified read-only: the stored statement sha256 equals this file's; function md5s equal a local apply; 171 live / 55 tombstones / 0 duplicate groups / 559 per-set rows; the 55 tombstoned ids are exactly the snapshot's. Mint reserved mig/155 without --stub."
   }
 ]

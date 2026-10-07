@@ -38,6 +38,24 @@ see `docs/adr/0020-sync-sends-only-what-changed.md`'s "Rejected" section for
 why a periodic full resend was explicitly rejected as the safety net (it can
 undo another device's day-swap that landed between resends).
 
+### Multi-device users: a bump can lose newer exercise-log sets (L1a-1, 2026-10-06)
+
+After migration `NNN_wle_single_live_summary.sql` (plan
+`docs/plans/coach-history-correctness-sync.md` §5 R4), the server keeps ONE
+live exercise-log summary per (user, day, exercise) and the latest push wins.
+A bump makes every device of the user resend everything, so a second device
+still holding an OLDER set count (restore is put-if-absent, local wins)
+supersedes the newer row if it resends last. The newer summary survives only
+as a tombstone, the per-set rows above the stale count are deleted from the
+cloud, and the newer device's skip index then suppresses its own re-push —
+until that device edits the exercise again, the cloud (and a new-device
+restore) shows the stale count.
+
+**Do not bump `sync_epoch` for a user who is signed in on more than one
+device**, unless the incident's data loss is worse than this. If you must:
+ask the user to open the app on the device with the newest data LAST, after
+the others have finished their resend.
+
 ## How
 
 For one user:
