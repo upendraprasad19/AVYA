@@ -42,32 +42,28 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-/// Parent environment minus anything git- or CI-range-related, so a surrounding
-/// git hook cannot redirect the child at the real repository.
-///
-/// Scrubs the same three key families as the rest of the gate-e2e family:
-///   GIT_*       — load-bearing here: pre-push.sh resolves its own repo root via
-///                 `git rev-parse --show-toplevel`, and GIT_DIR overrides both
-///                 `workingDirectory:` and `-C <path>`.
-///   GITHUB_*    — this script reads no GITHUB_* var today, but the family
-///                 shares one hermetic contract so a future reader cannot
-///                 silently acquire the c3f8e1 failure mode.
-///   PUSH_BEFORE — same rationale as GITHUB_*.
-Map<String, String> _cleanEnv() {
-  final env = Map<String, String>.from(Platform.environment);
-  env.removeWhere((k, _) {
-    final u = k.toUpperCase();
-    return u.startsWith('GIT_') || u.startsWith('GITHUB_') || u == 'PUSH_BEFORE';
-  });
-  // Never inherit a real override of the very variable one scenario sets.
-  env.remove('PRE_PUSH_FULL');
-  // This test pins ANALYZE placement, not the OI-220 contract sweep the hook
-  // also runs. On Windows the sweep's Dart spawn resolves the REAL flutter
-  // (cmd.exe cannot run an extensionless PATH stub) and would select this very
-  // test -> recursion. The kill switch makes the sweep exit before any work.
-  env['CONTRACT_SWEEP_SKIP'] = '1';
-  return env;
-}
+import '../helpers/spawn.dart';
+
+// The child environment is the shared helper's (test/helpers/spawn.dart): parent
+// minus anything git- or CI-range-related, so a surrounding git hook cannot
+// redirect the child at the real repository.
+//
+//   GIT_*       — load-bearing here: pre-push.sh resolves its own repo root via
+//                 `git rev-parse --show-toplevel`, and GIT_DIR overrides both
+//                 `workingDirectory:` and `-C <path>`.
+//   GITHUB_*    — this script reads no GITHUB_* var today, but the family
+//                 shares one hermetic contract so a future reader cannot
+//                 silently acquire the c3f8e1 failure mode.
+//   PUSH_BEFORE — same rationale as GITHUB_*.
+//   PRE_PUSH_FULL — never inherit a real override of the very variable one
+//                 scenario sets (it sets it on purpose, below).
+//
+// This test pins ANALYZE placement, not the OI-220 contract sweep the hook
+// also runs. On Windows the sweep's Dart spawn resolves the REAL flutter
+// (cmd.exe cannot run an extensionless PATH stub) and would select this very
+// test -> recursion. The kill switch makes the sweep exit before any work, so
+// every hook run sets CONTRACT_SWEEP_SKIP=1 ON PURPOSE.
+const Set<String> _setOnPurpose = {'CONTRACT_SWEEP_SKIP', 'PRE_PUSH_FULL'};
 
 /// `C:\a\b` / `C:/a/b` -> `/c/a/b`. Git Bash ignores Windows-form PATH entries
 /// outright, which is the trap documented in this file's header.
@@ -93,7 +89,7 @@ void main() {
       'echo "\$1" >> "\$FLUTTER_STUB_LOG"\n'
       'exit 0\n',
     );
-    Process.runSync('chmod', ['+x', stub.path]);
+    runSpawn('chmod', ['+x', stub.path], why: 'pre-push analyze-always: chmod stub flutter');
 
     logFile = File('${tmp.path}${Platform.pathSeparator}flutter_calls.log');
     logFile.writeAsStringSync('');
@@ -109,20 +105,21 @@ void main() {
   /// Runs the real hook with the stub first on PATH. PATH is assembled INSIDE
   /// sh (not via the env map) so the POSIX form is the one bash actually sees.
   ProcessResult runHook({bool prePushFull = false}) {
-    final env = _cleanEnv();
-    env['FLUTTER_STUB_LOG'] = logPosix;
-    if (prePushFull) env['PRE_PUSH_FULL'] = '1';
-
-    return Process.runSync(
+    return runSpawn(
       'sh',
       [
         '-c',
         'PATH="$stubDirPosix:\$PATH"; export PATH; '
             'exec sh scripts/pre-push.sh < /dev/null',
       ],
+      why: 'REAL scripts/pre-push.sh with stub flutter first on PATH, prePushFull=$prePushFull',
       workingDirectory: Directory.current.path,
-      environment: env,
-      includeParentEnvironment: false,
+      extraEnv: {
+        'CONTRACT_SWEEP_SKIP': '1',
+        'FLUTTER_STUB_LOG': logPosix,
+        if (prePushFull) 'PRE_PUSH_FULL': '1',
+      },
+      allowControl: _setOnPurpose,
     );
   }
 
@@ -183,10 +180,11 @@ void main() {
     final repo = Directory.systemTemp.createTempSync('prepush_feature_');
     try {
       String git(List<String> args) {
-        final r = Process.runSync('git', args,
+        final r = runSpawn('git', args,
+            why: 'pre-push analyze-always fixture: git ${args.join(' ')}',
             workingDirectory: repo.path,
-            environment: _cleanEnv(),
-            includeParentEnvironment: false);
+            extraEnv: {'CONTRACT_SWEEP_SKIP': '1'},
+            allowControl: _setOnPurpose);
         expect(r.exitCode, 0, reason: 'git ${args.join(' ')}: ${r.stderr}');
         return (r.stdout as String).trim();
       }
@@ -223,23 +221,24 @@ void main() {
         '#!/bin/sh\ncat > /dev/null\n'
         'printf "Running build hooks...Blast-radius: feature\\n"\nexit 0\n',
       );
-      Process.runSync('chmod', ['+x', '${stub2.path}/flutter']);
-      Process.runSync('chmod', ['+x', '${stub2.path}/dart']);
+      runSpawn('chmod', ['+x', '${stub2.path}/flutter'], why: 'pre-push analyze-always: chmod stub2 flutter');
+      runSpawn('chmod', ['+x', '${stub2.path}/dart'], why: 'pre-push analyze-always: chmod stub2 dart');
 
       final log2 = File('${repo.path}/calls.log')..writeAsStringSync('');
-      final env = _cleanEnv();
-      env['FLUTTER_STUB_LOG'] = _toPosixPath(log2.path);
-
-      final r = Process.runSync(
+      final r = runSpawn(
         'sh',
         [
           '-c',
           'PATH="${_toPosixPath(stub2.path)}:\$PATH"; export PATH; '
               'exec sh scripts/pre-push.sh < /dev/null',
         ],
+        why: 'scripts/pre-push.sh copy in a feature-tier scratch repo, stub dart forces the tier',
         workingDirectory: repo.path,
-        environment: env,
-        includeParentEnvironment: false,
+        extraEnv: {
+          'CONTRACT_SWEEP_SKIP': '1',
+          'FLUTTER_STUB_LOG': _toPosixPath(log2.path),
+        },
+        allowControl: _setOnPurpose,
       );
 
       final calls = log2

@@ -13,45 +13,18 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-Map<String, String> _cleanEnv() {
-  final env = Map<String, String>.from(Platform.environment);
-  env.removeWhere((k, _) => k.toUpperCase().startsWith('GIT_'));
-  return env;
-}
+import '../helpers/spawn.dart';
 
-ProcessResult _run(String exe, List<String> args, String cwd) => Process.runSync(
+ProcessResult _run(String exe, List<String> args, String cwd) => runSpawn(
       exe, args,
+      why: '$exe ${args.join(' ')}',
       workingDirectory: cwd,
-      environment: _cleanEnv(),
-      includeParentEnvironment: false,
       stdoutEncoding: utf8,
       stderrEncoding: utf8,
     );
 
 String _fwd(String p) => p.replaceAll('\\', '/');
 String _fileUri(String p) => 'file:///${_fwd(p)}';
-
-/// See test/scripts/cron_registry_snapshot_gate_test.dart:26-58 for why this is
-/// NOT Platform.resolvedExecutable (flutter_tester => the suite hangs).
-String _dartBin() {
-  final override = Platform.environment['DART_BIN_OVERRIDE'];
-  if (override != null && File(override).existsSync()) return override;
-  final which = Process.runSync(Platform.isWindows ? 'where' : 'which', ['dart'],
-      stdoutEncoding: utf8);
-  if (which.exitCode == 0) {
-    final first = (which.stdout as String)
-        .split('\n')
-        .map((l) => l.trim())
-        .firstWhere((l) => l.isNotEmpty, orElse: () => '');
-    if (first.isNotEmpty) {
-      final dir = _fwd(File(first).parent.path);
-      for (final c in ['$dir/cache/dart-sdk/bin/dart.exe', '$dir/cache/dart-sdk/bin/dart']) {
-        if (File(c).existsSync()) return c;
-      }
-    }
-  }
-  return 'dart';
-}
 
 const _open = 'docs/audit/open_issues.md';
 const _closed = 'docs/audit/closed_issues.md';
@@ -67,7 +40,7 @@ class _Fx {
   final String session;     // a fresh session clone, zero commits
 
   static final _src = Directory.current.path;
-  static final _dart = _dartBin();
+  static final _dart = dartBin();
 
   static void _must(ProcessResult r, String what) {
     if (r.exitCode != 0) throw StateError('$what (${r.exitCode}):\n${r.stdout}\n${r.stderr}');

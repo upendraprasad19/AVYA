@@ -38,28 +38,16 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-/// Parent environment minus git/CI range state, so a surrounding hook run
-/// cannot steer a child. Mirrors the helper in the other gate e2e suites.
-Map<String, String> _cleanEnv() {
-  final env = <String, String>{};
-  Platform.environment.forEach((k, v) {
-    final u = k.toUpperCase();
-    if (u.startsWith('GIT_')) return;
-    if (u == 'GITHUB_EVENT_PATH' || u == 'GITHUB_REF' || u == 'PUSH_BEFORE') {
-      return;
-    }
-    if (u == 'DART_BIN_OVERRIDE') return;
-    env[k] = v;
-  });
-  return env;
-}
+import '../helpers/spawn.dart';
 
-ProcessResult _sh(String script, String cwd) => Process.runSync(
+// The child environment (git/CI range state and DART_BIN_OVERRIDE removed) is
+// the shared spawn helper's. Scenarios that need DART_BIN_OVERRIDE set it inside
+// their own driver script, so nothing is re-supplied through `extraEnv`.
+ProcessResult _sh(String script, String cwd) => runSpawn(
       'sh',
       [script],
+      why: 'resolver driver script $script',
       workingDirectory: cwd,
-      environment: _cleanEnv(),
-      includeParentEnvironment: false,
     );
 
 /// Writes [body] as a shell driver that sources the REAL resolver, runs
@@ -338,12 +326,11 @@ export PATH
   // worse than the silent no-op it replaces.
   group('execution guard', () {
     test('executing the resolver FAILS loudly instead of no-op-ing', () {
-      final r = Process.runSync(
+      final r = runSpawn(
         'sh',
         [resolver, 'run', 'scripts/whatever.dart'],
+        why: 'executing the resolver instead of sourcing it',
         workingDirectory: Directory.current.path,
-        environment: _cleanEnv(),
-        includeParentEnvironment: false,
       );
       expect(r.exitCode, 64,
           reason: 'must exit EX_USAGE(64), not 0 — an exit 0 here is the '
@@ -364,12 +351,11 @@ export PATH
       // shape. Same guard-without-its-mirror class the file header names, one
       // dimension over from the backslash case the B-pass closed.
       final scriptsDir = File(resolver).parent.path;
-      final r = Process.runSync(
+      final r = runSpawn(
         'sh',
         ['_dart_bin.sh', 'run', 'foo'],
+        why: 'executing the resolver by bare filename from scripts/',
         workingDirectory: scriptsDir,
-        environment: _cleanEnv(),
-        includeParentEnvironment: false,
       );
       expect(r.exitCode, 64,
           reason: 'invoked by bare filename from inside scripts/, the guard '
@@ -406,12 +392,11 @@ export PATH
       test('a WINDOWS-BACKSLASH path still fails: ${entry.value}', () {
         expect(File(entry.key).existsSync(), isTrue,
             reason: 'setup: ${entry.key} must exist');
-        final r = Process.runSync(
+        final r = runSpawn(
           'sh',
           [entry.value],
+          why: 'executing ${entry.value} by a Windows-backslash path',
           workingDirectory: Directory.current.path,
-          environment: _cleanEnv(),
-          includeParentEnvironment: false,
         );
         expect(r.exitCode, 64,
             reason: 'a backslash path is the DOMINANT spelling in this '
@@ -436,12 +421,11 @@ export PATH
       // All five hooks gate their `.` on `sh -n <resolver>`. If the guard made
       // the file unparseable, every hook would silently fall back to bare
       // `dart` and the measured 182s→98s win would evaporate with no error.
-      final r = Process.runSync(
+      final r = runSpawn(
         'sh',
         ['-n', resolver],
+        why: 'sh -n parse-check of the resolver',
         workingDirectory: Directory.current.path,
-        environment: _cleanEnv(),
-        includeParentEnvironment: false,
       );
       expect(r.exitCode, 0,
           reason: 'the guard must not break the hooks\' own parse-check');
@@ -454,12 +438,11 @@ export PATH
           File('scripts/_git_lock.sh').absolute.path.replaceAll(r'\', '/');
       expect(File(lock).existsSync(), isTrue);
 
-      final executed = Process.runSync(
+      final executed = runSpawn(
         'sh',
         [lock],
+        why: 'executing the git-lock helper instead of sourcing it',
         workingDirectory: Directory.current.path,
-        environment: _cleanEnv(),
-        includeParentEnvironment: false,
       );
       expect(executed.exitCode, 64,
           reason: 'executing the lock helper must fail, not silently no-op');

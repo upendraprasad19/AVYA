@@ -16,7 +16,7 @@ Scope: Unit 1 (diagnose `b4e7a1`): per-account restore-settled marker (`SyncServ
 `disable_streak_reckon_user_gate`. Unit 2 (diagnose `c9d2f6`): `UserRepository._mergeFreezeFamily` post-pass,
 `ProgressMergeResult.scheduleFreezeSyncUp`, the owner guard, `syncFreezes` reading `_liveUserId`, `current_streak_weeks` as a
 fourth monotonic field (founder decision A), kill switch `disable_progress_freeze_merge`. Plus the SoT registry, naming
-conventions, nested CLAUDE.md rows, bug class 2.91, the closure ledger and the plan. Self-attested (rule 21): the mutation
+conventions, nested CLAUDE.md rows, bug class 2.92, the closure ledger and the plan. Self-attested (rule 21): the mutation
 driver is a scratch script, not in the repo.
 
 Three reviewers, each context-blind, each told to find bugs rather than validate. The coordinator re-read every cited

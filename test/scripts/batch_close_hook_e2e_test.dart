@@ -29,49 +29,38 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-Map<String, String> _cleanEnv() {
-  final env = Map<String, String>.from(Platform.environment);
-  env.removeWhere((k, _) {
-    final u = k.toUpperCase();
-    return u.startsWith('GIT_') || u.startsWith('GITHUB_');
-  });
-  return env;
-}
+import '../helpers/spawn.dart';
 
 late final String _hook;
 late final String _lib;
 late final String _telemetryCli;
 late final String _telemetryLib;
 
-ProcessResult _git(String cwd, List<String> args) => Process.runSync(
+ProcessResult _git(String cwd, List<String> args) => runSpawn(
       'git',
       args,
+      why: 'batch_close_hook fixture: git ${args.join(' ')}',
       workingDirectory: cwd,
-      environment: _cleanEnv(),
-      includeParentEnvironment: false,
       runInShell: true,
     );
 
 /// Runs the real hook with [stdinJson] on stdin.
 ///
-/// Uses Process.start rather than runSync because the hook reads stdin, and
+/// Uses runSpawnWithInput rather than runSpawn because the hook reads stdin, and
 /// runSync cannot supply it. Cross-platform: no shell, no `cmd /c` pipe.
 Future<({int exitCode, String stdout})> _runHook(String cwd,
     {String stdinJson = '{}'}) async {
-  final p = await Process.start(
+  final r = await runSpawnWithInput(
     'dart',
     ['run', 'scripts/batch_close_hook.dart'],
+    why: 'batch_close_hook.dart (Stop hook) in a fixture repo, stdin=$stdinJson',
+    stdin: stdinJson,
     workingDirectory: cwd,
-    environment: _cleanEnv(),
-    includeParentEnvironment: false,
     runInShell: true,
+    stdoutEncoding: utf8,
+    stderrEncoding: utf8,
   );
-  p.stdin.write(stdinJson);
-  await p.stdin.close();
-  final out = await p.stdout.transform(utf8.decoder).join();
-  await p.stderr.transform(utf8.decoder).join();
-  final code = await p.exitCode;
-  return (exitCode: code, stdout: out);
+  return (exitCode: r.exitCode, stdout: r.stdout);
 }
 
 /// A repo with an `origin/main` that HEAD is ahead of.
@@ -232,12 +221,10 @@ void main() {
     final d = _repoWithUnpushed();
     addTearDown(() => _cleanup(d));
 
-    final p = await Process.start(
+    final p = await startSpawn(
       'dart',
       ['run', 'scripts/batch_close_hook.dart'],
       workingDirectory: d.path,
-      environment: _cleanEnv(),
-      includeParentEnvironment: false,
       runInShell: true,
     );
     // ⚠ DRAIN BOTH PIPES. Not optional, and getting it wrong cost a wrong
@@ -282,8 +269,10 @@ void main() {
     try {
       await p.stdin.close();
     } catch (_) {}
-    await outFuture;
-    await errFuture;
+    final outText = await outFuture;
+    final errText = await errFuture;
+    reportSpawn(code, outText, errText,
+        'batch_close_hook.dart with stdin held open (drain-then-timeout deadlock test)');
 
     expect(code, isNot(-1),
         reason: 'the hook must self-release on its stdin timeout rather than '

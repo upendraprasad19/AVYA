@@ -5691,3 +5691,78 @@ The repo root has no allowlist, so a command that writes a file there (a stray s
 - **Blocked on**: a founder product decision (not scheduled): today `current_streak_weeks` only ever goes up (`completeWorkout`, `lib/features/train/providers/train_provider.dart`, is its only runtime writer; a restore never lowers it since 2026-10-06, `monotonicProgressFields` in `lib/shared/repositories/user_repository.dart`). If a break in the daily streak should reset the weeks, that is a new rule with its own plan, and it must remove the field from `monotonicProgressFields` again.
 - **Verified**: 2026-10-06 - code read: no code path resets the field except the debug-only `simulation_service.dart` reset; badge readers (`badge_service.dart` 4/8/12-week badges) and the AI snapshot (`ai_snapshot_builder.dart`) read it as a lifetime count. Founder decision A, 2026-10-06 ("lifetime counter, restore never lowers it").
 - **Identified**: 2026-10-06 · filed via mint_oi.sh from branch `claude/avya-streak-data-check-b506de`
+
+## OI-309 — Merge-conflict treadmill: every >=account PR conflicts with main again and again (shared append-only + generated docs, max+1 numbering) while the 25-minute pre-push full suite re-runs on each docs-only merge; PR #73 needed 4 merge rounds in ~1 day, and its merge then turned main red on a stale plan-review tier
+
+- **Status**: OPEN
+- **Blocked on**: a plan (it changes hooks and the generated-file policy, so CLAUDE.md 4.12 plan review x2 applies) and a founder call on the options below. Interim, in force now: for a push whose new commits are only a merge of `origin/main` with docs-only conflict edits, the founder approved `FOUNDER_APPROVED_NO_VERIFY=1` (chat 2026-10-05, "Approved no verify if that helps"); CI still runs the full suite on the PR. Whether that approval is standing or per-push is the founder's to state.
+- **Verified**: 2026-10-05 - measured on PR #73 (OI-284): 4 merge-of-main rounds in about a day (plus a red main: the plan-review record's tier was measured before main's PR #70 promoted two files it touches to platform, so the merge-to-main gate wanted `bpass: accepted`; fixed by the record-correction PR); each round = hand-resolve + gate loop + a ~25-minute pre-push full suite, during which main moved again. Commits touching each file on `origin/main` in 3 days: `OPEN_INDEX.md` 8, `bug-classes.md` 8, `open_issues.md` 8, `sot_registry.yaml` 9, `diagnoses/INDEX.md` 6, `debugging/SKILL.md` 4, `naming_conventions.md` 3. Conflicts seen: bug-class number taken twice by max+1 (2.85 then 2.87), glossary rows appended at the same spot, two generated indexes, the OI board tail, plus one non-textual interaction (PR #70's new engine-completeness test flagged the new file).
+- **Root causes**: (1) every batch is REQUIRED to edit the same shared files, mostly by appending at one spot (bug classes, naming glossary, OI board, SoT registry, diagnose docs); (2) generated files (`OPEN_INDEX.md`, `diagnoses/INDEX.md`, `GATE_INDEX.md`) are committed and regenerated per commit, so they conflict on any overlap although they rebuild in seconds; (3) bug-class numbers are claimed by "max + 1" (OI numbers are not: `mint_oi.sh` reserves atomically; OI-167 already recommends keying classes on the title); (4) the pre-push full suite takes ~25 minutes and re-runs on a docs-only merge, a window in which another PR merges.
+- **Options to plan** (each independent): (a) stop tracking generated indexes (build in CI / on demand) or give them a regenerate merge driver installed by `setup-hooks.sh`; (b) one file per entry for bug classes, glossary terms and diagnose entries with a generated index, so two branches never edit the same lines; (c) an allocator or title-keyed ids for bug classes; (d) pre-push policy: when the new commits are a pure merge of `origin/main` (CI-green) the delta since the last green push is docs-only, verify the delta (gates + analyze) instead of the whole suite, CI stays the full-suite source of truth; (e) a GitHub merge queue (or auto-merge) so each PR is tested on top of current main serially; (f) `git rerere` and `merge=union` for pure-append files.
+- **Industry norm** (to cite in the plan): merge queues that test the merge RESULT (GitHub merge queue, Mergify, Graphite, bors in Rust, Kubernetes Tide, Zuul speculative merging, Chromium CQ); per-change fragment files with the aggregate generated at release (Changesets, Towncrier); generated artifacts not committed or rebuilt in CI; trunk-based, short-lived branches.
+- **Identified**: 2026-10-05 · filed via mint_oi.sh from branch `swap-title-and-launch-refresh`
+
+## OI-311 — A spawned `dart run` exited 254 in CI with no stderr in the log (run 37203140849, 2026-10-04; second sighting after a7f3d1): cause not established, not reproducible locally
+
+- **Status**: OPEN
+- **Blocked on**: a second sighting with output. Not reproducible (200 of 200 concurrent local spawns exit 0; the file passes under `CI=true`; the re-run was green; the last 30 failed CI runs hold no unit-test failure and no `Actual: <254>`). Reopen when ANY test whose spawned `dart` exits 254 fails again: `test/contracts/sot_registry_citations_test.dart` now prints the child's stderr under the failing test (PR #79) and, once this batch lands, so does every test that spawns through `test/helpers/spawn.dart` (PR 2 migrates the rest); read whatever that log offers and, if it offers nothing, say so before reasoning about the cause. Do NOT add a retry first: it would hide the evidence.
+- **Verified**: 2026-10-06 - read from `docs/audit/sot-gate-test-stderr.closure.yaml` row C3 and the 2026-10-04 CI log (run 37203140849, attempt 1: `Expected: <0> Actual: <254>` from the `dart run` of `scripts/check_sot_registry_citations.dart`, then green on re-run). `dart run` exits 254 when the Dart VM cannot compile or load the script (255 = an uncaught exception); the reason is on stderr, which that test did not print. Neighbouring causes excluded by reading: `4f2a9e` (a `GIT_*` leak), `c3f8e1` (the CI environment), `c3f9a7` (a timeout). Untested hypotheses: a concurrent implicit `pub get` / `.dart_tool` rewrite, and launcher races under load.
+- **Identified**: 2026-10-06 · filed via mint_oi.sh from branch `spawn-tests-env-and-stderr` (founder decision 2026-10-06, item 2: "Put the 254 on the issue board: yes"; the first sighting was `a7f3d1`, July 2026)
+
+The one failure was a single run on `main`; the cause is UNESTABLISHED. This entry exists so the board, not only a closure ledger, tracks it (answers row C4 of the `sot-gate-test-stderr` ledger).
+
+## OI-314 — Progress photos: a lapsed PRO user cannot view or delete their old photos in the app, and the repository's free-tier branch is still alive (founder decisions 5 and 6 of 2026-10-06)
+
+- **Status**: OPEN
+- **Blocked on**: unit B1 of batch `progress-photos-pro-server-rule` (the server-side PRO rule, migration 154 `progress_photos_pro_insert_rls_rule`) being applied live AND merged to `main`; B2 may not start before that.
+- **Verified**: 2026-10-06 - founder decisions recorded in chat the same day (decision 5: delete the repository's free-tier branch once the server rule exists; decision 6: a lapsed PRO user may VIEW and DELETE old photos, no new uploads). Code read: `lib/features/profile/repositories/progress_photo_repository.dart:85-86` (`isPro` picks `_proDailyCap` or `_freeDailyCap`), `:112-119` (free branch: 2048 px / 85 % quality), `:128-137` (the Storage upload and the row insert).
+- **Identified**: 2026-10-06 · filed via mint_oi.sh from branch `progress-photos-b0`
+
+Implementation is unit B2 (client): delete the free branch (the 2/day cap and the 2048/85 quality tier), let a lapsed PRO user open the Progress screen to view and delete existing photos while new uploads stay refused, and show a specific message when the server refuses an upload (a Storage 403 or `P0001 progress_photo_pro_required`), including the just-paid window while `isPaymentInFlight` is true. B2's commit closes this OI (`closes-oi:`) and flips rows C6 and C7 of `docs/audit/progress-screen-pro-gate.closure.yaml` to `closed_in_commit`.
+
+**Migration-number reservation: DO NOT RELEASE `mig/154` (slug `progress_photos_pro_insert_rls_rule`, branch `progress-photos-pro-server-rule`) while this OI is open.** The draft sits in `docs/drafts/` until the founder authorises the live apply, so `scripts/mint_migration.sh` reads the number as UNFILED and another session's `--release 154` would succeed and the next mint could hand 154 out again.
+
+## OI-315 — ProgressPhotoRepository.cleanupOrphanedStorage has zero callers, and the 5/day progress-photo cap is client-side only: a PRO caller can upload unlimited 8 MiB objects
+
+- **Status**: OPEN
+- **Blocked on**: a plan: a server-side per-day cap is a schema change (a BEFORE INSERT trigger like the AI-coach caps, or a Storage-side limit), and wiring or deleting the sweeper needs a decision on when it may run.
+- **Verified**: 2026-10-06 - `git grep -n cleanupOrphanedStorage -- lib test supabase` finds no caller in `lib/` or `supabase/` (the definition is `progress_photo_repository.dart:240`; the only other hits are source-grep assertions in `test/sync/closeout_maintenance_test.dart`); `capture()` uploads first (`:128`) and inserts the row second (`:137`), so an object whose row insert fails is an orphan that nothing removes. The 5/day cap is a client-side count before the pick (`:85-99`); no trigger or policy enforces it.
+- **Identified**: 2026-10-06 · filed via mint_oi.sh from branch `progress-photos-b0`
+
+Residuals (i) and (iii) of the B1 plan's D1: a PRO caller can upload an unbounded number of objects of up to 8 MiB each, and failed captures leave orphan objects. Found by the B1 plan review round 1 (finding 12).
+
+## OI-316 — The progress-photos bucket and its SELECT/DELETE/INSERT policies have no repo migration, and no recurring live check detects a dashboard edit of them (the OI-283 class)
+
+- **Status**: OPEN
+- **Blocked on**: a plan for a recurring catalog check (a catalog-snapshot test in CI or a nightly cron) and the founder's call on where it runs.
+- **Verified**: 2026-10-06 - the B1 live evidence (E10) lists nine INSERT policies on `storage.objects`, three of them duplicates per bucket, none created by a repo migration; the avatars, banners, chat-media and coach-media policies were also made in the dashboard. B1's live-verify file catches a wrong policy once, at apply time; nothing recurring does.
+- **Identified**: 2026-10-06 · filed via mint_oi.sh from branch `progress-photos-b0`
+
+Residual (iv) of the B1 plan's D1, the OI-283 class: a dashboard edit of the progress-photos policies (a new permissive INSERT policy, a widened UPDATE policy) would silently reopen the door B1 closes. Propose a scheduled catalog snapshot compared with a committed expectation.
+
+## OI-320 — redeem-referral has no per-referrer cap: each new referee (idempotent per referee only, index.ts:105-117) adds 7 days to the referrer's PRO, so throwaway accounts extend it without limit - product decision needed on a cap
+
+- **Status**: OPEN
+- **Blocked on**: a founder product decision: whether to cap referral credit per referrer (and at what number), or accept it; then a server-side check in `redeem_referral_atomic`.
+- **Verified**: 2026-10-07 - read `supabase/functions/redeem-referral/index.ts:105-117` (idempotency is per referee only) and found by the B1 Hermes pass (L2 F2, `docs/audit/2026-10-06-hermes-progress-photos-pro-server-rule.md`); the B1 rule inherits it, it does not create it.
+- **Identified**: 2026-10-07 · filed via mint_oi.sh from branch `pp-preexisting-ois`
+
+Pre-existing; surfaced while reviewing the progress-photo PRO rule. Throwaway accounts can chain 7-day credits onto a referrer's PRO, which the progress-photo rule then honours like a paid subscription.
+
+## OI-321 — clean-orphan-media rechecksIsPro uses .maybeSingle() (index.ts:120-129): a user with two unexpired active subscription rows gets an error, data null, and is treated as free - chat-media cleanup only
+
+- **Status**: OPEN
+- **Blocked on**: nothing: a small fix (read the active rows with a limit and test for any, instead of `.maybeSingle()`), with a regression test.
+- **Verified**: 2026-10-07 - read `supabase/functions/clean-orphan-media/index.ts:120-129`: `.maybeSingle()` errors on two matching rows, `data` is null, `!!data` is false, so the user is treated as free. Found by the B1 Hermes pass (L1 note).
+- **Identified**: 2026-10-07 · filed via mint_oi.sh from branch `pp-preexisting-ois`
+
+Impact is limited to chat-media orphan cleanup (a user with two unexpired active rows is cleaned as if free); no PRO gate depends on this function.
+
+## OI-322 — progress_photo_repository.capture sends takenAt.toIso8601String() (lib/features/profile/repositories/progress_photo_repository.dart:141), a local time with no offset, to a timestamptz column read under UTC: taken_at is stored 5.5 h late for IST users and the client daily-cap window (line 89, UTC start of local day) is mis-aligned
+
+- **Status**: OPEN
+- **Blocked on**: nothing: fix in unit B2 of batch `progress-photos-pro-server-rule` (the client unit already edits this file) or as its own change; send `takenAt.toUtc().toIso8601String()` and align the cap window.
+- **Verified**: 2026-10-07 - read `lib/features/profile/repositories/progress_photo_repository.dart:89` (cap window is the UTC start of the local day) and `:141` (`takenAt.toIso8601String()` has no offset); PostgREST session TimeZone is UTC (live read during the B1 review), so an IST user's `taken_at` is stored 5.5 h late. Found by the B1 Hermes pass (L22 F3).
+- **Identified**: 2026-10-07 · filed via mint_oi.sh from branch `pp-preexisting-ois`
+
+Writer: `capture` (line 141). Readers: the cap query (line 89-94) and the list ordering (line 165). Pre-existing and outside the B1 diff.

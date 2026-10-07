@@ -743,10 +743,38 @@ added, false of the flip being performed.
 - **Regression test shape:** spawn the real consumer with a synthetic parent env carrying
   the variable and assert the refusal still holds. A test that only passes when the
   variable is absent asserts nothing about the one machine state that matters.
-- Ref: diagnoses `d81f3c`, `4f2a9e`, `c3f8e1` (concept `git_hook_env_leak`);
+- **2026-10-06, fifth instance (`e6c4a9`) — the leaked variable was the repo's OWN recursion guard, set by its OWN tooling on the very
+  process that selected the test.** `scripts/contract_sweep.dart` sets `CONTRACT_SWEEP_NESTED=1` on the nested `flutter test` it
+  runs; the test it selects whenever a push touches `docs/sot_registry.yaml` runs the REAL sweep runner against a fixture, which took
+  the "nested" branch and skipped: 5 of 7 tests failed on every such push. **A guard variable is a control variable too: whatever a
+  tool sets to protect itself from recursion is inherited by every test the tool runs.** The earlier fixes each added names to ONE
+  hand-copied list; about 35 spawn tests still kept their own narrower copy of the canonical scrub, and about half of the 126 spawn
+  sites inherited the whole parent environment.
+- **The structural fix, and what the first attempt at it taught (transferable):** (1) ONE helper (`test/helpers/spawn.dart`) owns BOTH
+  halves of a spawn, the clean environment and the failure report (class 2.90), so a future test gets both by routing through it;
+  (2) completeness of the control-variable list is DERIVED from what the scripts READ, classified by hand and checked in both
+  directions (found ⊆ classified, classified ⊆ found, the STRIPPED set equals what the scrub removes), with floors, a per-arm anchor
+  and an allow-list for each read a scan cannot resolve (`test/contracts/spawn_env_manifest_test.dart`); (3) **run the prototype scan on
+  the real tree and read what it did NOT find**: the first prototype missed `ANDROID_DEVICE_ID` because an `echo "...; X=1"` line
+  looked like an assignment (fix: blank quoted text before matching assignments, treat every default-idiom read as a candidate), and
+  the real run of the finished scan found a name the plan had missed, `USDA_API_KEY`, in a Node helper that `git grep` prints only as
+  `Binary file .claude/build_food_db_v2.js matches` with no line content (the plan's author read past that line; use `git grep -a`
+  or read the file when a census must be complete); (4) the recursion guard moves from "inherited" to "declared" (a test that executes the real pre-push hook or spawns
+  the sweep runner must set `CONTRACT_SWEEP_SKIP` or pass `--flutter-bin`), pinned with a detector that requires a REAL declaration:
+  a `reason:` string that merely names the variable satisfied the first version, and deleting the real declaration left it green.
+- **Two absorbed-mutation shapes this batch measured:** a poisoned-parent regression passes VACUOUSLY if the seam that injects the poison
+  is dropped from the call (the poison is then never in the parent): give the test PRECONDITIONS (the poison survives the old filter, the
+  helper's environment for the same parent lacks it) and pin that the call passes the seam; and a helper whose `extra:` merge can carry
+  a whole-parent map puts every control variable back, so a control variable in `extra` throws unless the scenario names it
+  (`allowControl`).
+- **Honest limit:** the manifest covers what the repo's own code reads. Variables an external tool reads (git's `HOME` / `~/.gitconfig`,
+  `XDG_*`) are not derivable from the repo's sources; `EMAIL` is hand-listed, a scenario that needs the rest pins or removes them.
+- Ref: diagnoses `e6c4a9` (2026-10-06), `d81f3c`, `4f2a9e`, `c3f8e1`, `d9e4b1` (concept `git_hook_env_leak`);
   `feedback_mistake_guard_without_its_mirror` #20;
   `test/contracts/git_safety_hook_integration_test.dart`,
-  `test/scripts/regression_catalog_lib_test.dart`.
+  `test/scripts/regression_catalog_lib_test.dart`,
+  `test/contracts/spawn_helper_test.dart`, `test/contracts/spawn_env_manifest_test.dart`,
+  `test/scripts/contract_sweep_e2e_test.dart` (the poisoned-parent regression).
 
 ### 2.57 A citation is checked in ONE direction only — the claim is never verified against what actually happened (NEW 2026-08-30)
 
@@ -1551,7 +1579,7 @@ added, false of the flip being performed.
 - **Prior incidents:** `a7f3d1` (2026-07-27: an independent reviewer saw one non-reproducible run with 5 spawn-level failures, exit 254, not assertion failures); not a recurrence of `4f2a9e` (a `GIT_*` leak into a nested `flutter test`), `c3f8e1` (CI's `GITHUB_*` variables leaking into a spawned gate) or `c3f9a7` (subprocess test timeouts). First sighting of this class's REPORTING defect: CI run 37203140849 (2026-10-04); the re-run was green and the cause is still unexplained (ledger row C3). Same family, other defect, found 2026-10-05 and not fixed (ledger row C7): `contract_sweep_e2e_test.dart` inherits `CONTRACT_SWEEP_NESTED=1` when the pre-push sweep runs it.
 - **Regression test:** `test/contracts/sot_registry_citations_test.dart` (33 tests, 5 of them new: group "gateDiag (the failure report of a spawned gate)" has 2, and group "gate subprocess (main() wiring)" has a real failing run, a real passing run and the order-sensitive pin).
 
-### 2.91 A process-wide "restore finished" counter used as a per-ACCOUNT gate (NEW 2026-10-06)
+### 2.92 A process-wide "restore finished" counter used as a per-ACCOUNT gate (NEW 2026-10-06)
 
 - **Telltale:** the Home streak number and the freeze chip disagree. The streak is a read-only walk that SIMULATES freeze spending, so it keeps its value through missed days; the chip shows the PERSISTED count, which never dropped. Or the opposite after a sign-in swap: a freeze is debited a fraction of a second before `restore_started`, for a day the cloud shows as completed. A cloud row whose `streak_freezes_used_dates` and `available` did not move after a cold start is the evidence that no debit persisted (a missing consume event is NOT evidence: LOW-priority events drop under client cooldown).
 - **Root-cause shape:** the persist was gated on `restoreCompletedTick > 0`, a `ValueNotifier<int>` on the `SyncService` singleton whose real job is "repaint the tabs". As a GATE it is wrong twice: (1) it is bumped only by the background heal, which is attached AFTER the cold-start rollover has been awaited, so at the one rollover a once-a-day user gets the tick is 0 and nothing re-runs the reckon; (2) `_onUserChanged` never reset it, so after an account swap in the same process the new account inherits an open gate and the reckon persists against its PRE-restore rows.
@@ -1562,7 +1590,7 @@ added, false of the flip being performed.
 - **Prior incidents:** `f9d2e7`, `9c4a17`, `a8f3d1`, `e9d4b7`, `9c8958` (the "streak 1 / freeze 1 after idle days" family), 2.19, 2.44, 2.88. Open on the board: OI-293 (restore outcomes unobservable), OI-294, OI-279 (pull on resume).
 - **Regression tests:** `test/contracts/streak_reckon_restore_settled_behavioral_test.dart` (59 tests, 10 + 12 B-pass mutations), `test/contracts/progress_restore_freeze_merge_behavioral_test.dart` (41 tests, 7 + 5 B-pass mutations). Diagnoses `b4e7a1`, `c9d2f6`.
 
-### 2.92 PostgREST truncates every read to 1000 rows with a 200, and an offset pager on a non-unique sort skips and doubles rows (NEW 2026-10-07)
+### 2.93 PostgREST truncates every read to 1000 rows with a 200, and an offset pager on a non-unique sort skips and doubles rows (NEW 2026-10-07)
 
 - **Telltale:** after a reinstall the app holds fewer rows than the cloud (a lost `workout_schedule_completions` row is a lost completed day, which the streak walk reads as a missed day) and nothing reported an error; a table whose restored count is exactly 1000; or a paged restore that is missing some rows AND holds others twice, only where many rows share a timestamp (a batch insert's `now()`).
 - **Root-cause shape:** PostgREST clamps EVERY response to `db-max-rows` (1000 on this project) with HTTP 200 and `error === null`; no status, no total, no signal except the row count, which is ambiguous (end of data, or a cap below the page size). So (1) a bare `select()`, or a `.range(0, 49999)`, returns at most 1000 rows and looks like a small table; (2) a pager that orders by one column lets two page requests return tied rows in different orders, so a row on the seam is skipped and another is served twice; (3) the loop's STOP condition carries an assumption: a SHORT page ends the read only while the cap equals the page size, an EMPTY page is cap-independent but costs a request and can loop on a stub that ignores the offset.
@@ -1572,3 +1600,14 @@ added, false of the flip being performed.
 - **Test shape that can fail:** a stub that REALLY pages (filters, the comma-joined `order=` list, offset/limit, a 1000-row clamp, tied rows reversed on alternate requests) driving the real service, a NEGATIVE CONTROL that shows the same stub loses and doubles rows without the tie-break, a dataset where EVERY page seam straddles a tie group (2,499 = 833 x 3, not 2,500), and a check that every filter and order column the code SENT is a live column. A test of a modelled cap documents the assumption; it cannot detect the platform changing.
 - **Prior incidents:** OI-79 (`paged_fetch.ts` exists because of it), F37 (sleep history through `_fetchAllRows`), `e4c1d7` (the single-call restore Edge Function), `c7e2a9` (the legacy client reads, the nutrition loop, the community pull). Related: 2.30, 2.49.
 - **Regression tests:** `supabase/functions/restore-user-snapshot/paged_reads_test.ts`, `test/sync/restore_legacy_paging_behavioral_test.dart` (40 tests, 46 mutants). Diagnoses `e4c1d7`, `c7e2a9`.
+
+- **2026-10-06 update (`e6c4a9`, PR 1 of the spawn-test batch): the choke point moved into a SHARED helper.** `gateDiag` and the per-file `report = printOnFailure` parameter are gone: `test/helpers/spawn.dart` owns `spawnDiag` (the same format, whole, `List<int>` safe), `runSpawn` / `runSpawnAsync` (spawn, THEN report, then return; the order is pinned once, on the helper) and `startSpawn` + `reportSpawn` for the `Process.start` sites, and `defaultSpawnReport` handles the case the per-file version did not: a spawn made from `main()` at load time (nine test files run `which dart` there) has no current invoker, so `printOnFailure` throws `StateError`; the default prints only for a FAILED child there. The `sot_registry_citations_test.dart` assertions moved with it: its `gateDiag` group is `spawnDiag` in `test/contracts/spawn_helper_test.dart` (stricter: exact-string equality), its order pin is the helper's, its report-count assertions find the gate's report BY LABEL (the fixture's git setup spawns now report too). The other 50 spawn test files migrate in PR 2 (their per-site `reason:` text cannot be trusted; the strict site guard replaces the hand list in `gate_e2e_env_hermetic_test.dart`).
+
+### 2.91 A spawn test is green only because nothing in the ambient environment contradicts it (NEW 2026-10-07)
+
+- **Telltale:** a test that spawns a script keeps its own 3 to 5 name `_cleanEnv()` / `scrubbedEnv()` and passes everywhere you run it, and nobody can say what it would do under the operator's shell, a hook, or CI. The first time a variable it never stripped exists (`CONTRACT_SWEEP_NESTED`, `MINT_MIG_REMOTE`, `GIT_CONFIG_*`, `DART_BIN_OVERRIDE`) it fails, or worse, passes while a real tree is touched.
+- **Root-cause shape:** N copies of a hand-written filter drift (recurrence of 2.56: `4f2a9e`, `c3f8e1`, `d81f3c`, `d9e4b1`, `e6c4a9`). Green-in-both-arms says nothing about the filter; only a run with a POISONED parent, on the original form and on the fixed form, measures it. On 2026-10-07, 6 of 50 files failed or leaked in their original form under the poison and 44 were clean.
+- **Fix pattern:** one helper (`test/helpers/spawn.dart`) that scrubs by the repo's canonical list and reports from one place, plus a STRICT site guard (`test/contracts/spawn_sites_guard_test.dart`) so a new test cannot bring its own filter: no raw spawn, no whole-parent map, every `startSpawn` reported, no local dart locator, a pin on the former files.
+- **Class rule:** a spawn test goes through the helper; a change to the scrub list or to a migrated file is verified with a poisoned-parent run on BOTH arms, and a poison that nothing can observe is stated as vacuous, never counted as evidence. A guard is first run in report mode and compared with an independent census before it is allowed to fail.
+- **Traps:** (1) the PUSH_BEFORE poison `0000...` equals "unset" for `check_plan_review_record_exists.dart` and `GITHUB_EVENT_PATH` is read only when `PUSH_BEFORE` is empty, so each needs its own variant; (2) on the base arm every `dartBin()` locator returns the recording override, so `override_present=yes` there is intended and only a `yes` on the migrated arm is a leak; (3) a green local run describes this machine's layout (PR 1's CI failure): run with `dart` reachable only through a symlink directory.
+- **Regression test:** `test/contracts/spawn_sites_guard_test.dart` (15 tests; strict on the real tree; synthetic mutants for G1 to G5 and the marker rule), `test/contracts/spawn_helper_test.dart` (`runSpawnWithInput`: 4 tests).

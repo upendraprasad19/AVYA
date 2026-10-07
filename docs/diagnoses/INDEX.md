@@ -18,6 +18,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### restore_user_snapshot_paged_reads (1 bugs)
 - 2026-10-06 e4c1d7 — The single-call restore (Edge Function restore-user-snapshot) silently returned at most 1000 rows per table. PostgREST clamps every response to db-max-rows (1000 on this project) with HTTP 200 and…
 
+### not_applicable — test-fixture and test-support environment hermeticity; no Hive/cloud writer-reader contract and no entry of docs/sot_registry.yaml covers it (grep over the registry finds none, c3f8e1 recorded the same). (1 bugs)
+- 2026-10-06 e6c4a9 — `test/scripts/contract_sweep_e2e_test.dart` FAILED 5 of its 7 tests (`PathNotFoundException ... argv.txt`, `Expected: <1> Actual: <0>`) whenever the pre-push contract sweep selected it, and the sweep…
+
 ### streak_decay_restore_settled_marker (1 bugs)
 - 2026-10-06 b4e7a1 — Founder (account upendra), 2026-10-06 06:45 IST, phone: Home shows streak 16 with 2 streak freezes. Truth is streak 16 with ZERO freezes in reserve. The Home streak number is a read-only walk…
 
@@ -1525,6 +1528,7 @@ rather than a Hive box. (1 bugs)
 | 2026-10-06 | c7e2a9 | When the single-call restore is unavailable the client falls back to its legacy per-table restore, and that path lost or doubled rows silently for a long-history account. PostgREST clamps every… | restore_legacy_paged_reads | test/sync/restore_legacy_paging_behavioral_test.dart |
 | 2026-10-06 | c9d2f6 | The founder's Home screen showed streak 16 with 2 freezes. The persisted count was wrong: the streak only holds at 16 because two missed days (2026-10-03 and 2026-10-05) are SIMULATED as covered by… | progress_restore_freeze_merge | test/contracts/progress_restore_freeze_merge_behavioral_test.dart |
 | 2026-10-06 | e4c1d7 | The single-call restore (Edge Function restore-user-snapshot) silently returned at most 1000 rows per table. PostgREST clamps every response to db-max-rows (1000 on this project) with HTTP 200 and… | restore_user_snapshot_paged_reads | supabase/functions/restore-user-snapshot/paged_reads_test.ts |
+| 2026-10-06 | e6c4a9 | `test/scripts/contract_sweep_e2e_test.dart` FAILED 5 of its 7 tests (`PathNotFoundException ... argv.txt`, `Expected: <1> Actual: <0>`) whenever the pre-push contract sweep selected it, and the sweep… | not_applicable — test-fixture and test-support environment hermeticity; no Hive/cloud writer-reader contract and no entry of docs/sot_registry.yaml covers it (grep over the registry finds none, c3f8e1 recorded the same). | test/contracts/spawn_env_manifest_test.dart |
 | 2026-10-06 | b4e7a1 | Founder (account upendra), 2026-10-06 06:45 IST, phone: Home shows streak 16 with 2 streak freezes. Truth is streak 16 with ZERO freezes in reserve. The Home streak number is a read-only walk… | streak_decay_restore_settled_marker | test/contracts/streak_reckon_restore_settled_behavioral_test.dart |
 | 2026-10-05 | b7c1e4 | A free user could reach and USE the Progress Photos screen by editing the address of an already-open web tab to `#/profile/progress-photos`. The screen had no PRO check of its own: the only gate was… | subscription_state | test/contracts/progress_photos_screen_gate_test.dart |
 | 2026-10-04 | d4a7e1 | Founder-reported (2026-10-01, day-swap report): after swapping Oct 1 and Oct 2 on the web and completing the swapped workout there (log "PULL + CORE"), the Android phone's Train row title for Oct 1… | workout_completion_status | test/contracts/completed_title_follows_log_test.dart |

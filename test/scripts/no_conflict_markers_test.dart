@@ -32,6 +32,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../scripts/no_conflict_markers_lib.dart';
+import '../helpers/spawn.dart';
 
 /// Built at runtime so this source file contains no conflict marker of its own.
 final _open = '<' * 7;
@@ -48,22 +49,13 @@ final _close = '>' * 7;
 ///                 family shares one hermetic contract and a future reader of CI
 ///                 env cannot silently acquire the c3f8e1 failure mode.
 ///   PUSH_BEFORE — same rationale as GITHUB_*.
-Map<String, String> _cleanEnv() {
-  final env = Map<String, String>.from(Platform.environment);
-  env.removeWhere((k, _) {
-    final u = k.toUpperCase();
-    return u.startsWith('GIT_') || u.startsWith('GITHUB_') || u == 'PUSH_BEFORE';
-  });
-  return env;
-}
-
+/// (Now done by the shared spawn helper: `runSpawn` / `hermeticEnvironment`.)
 ProcessResult _run(String exe, List<String> args, String cwd) {
-  return Process.runSync(
-    exe,
+  return runSpawn(
+    exe == 'dart' ? dartBin() : exe,
     args,
+    why: 'no-conflict-markers e2e: $exe ${args.join(' ')}',
     workingDirectory: cwd,
-    environment: _cleanEnv(),
-    includeParentEnvironment: false,
     runInShell: true,
   );
 }

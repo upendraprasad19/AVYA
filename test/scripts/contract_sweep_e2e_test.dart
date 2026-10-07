@@ -12,71 +12,40 @@
 // recursion the CONTRACT_SWEEP_NESTED guard below exists for).
 //
 // ENV SCRUBBING: every subprocess here -- the fixture's git calls AND the
-// runner -- gets a filtered environment (GIT_*, GITHUB_*, PUSH_BEFORE removed,
-// includeParentEnvironment: false). Run inside a git hook, a leaked GIT_DIR
-// overrides `workingDirectory:` and would point the fixture's `git branch -D`
-// at the REAL repo (feedback_mistake_git_hook_env_leak). Registered in
-// test/contracts/gate_e2e_env_hermetic_test.dart.
+// runner -- is spawned through test/helpers/spawn.dart, which hands the child the
+// canonical control-variable-clean environment (scripts/regression_catalog_lib.dart:
+// GIT_*, GITHUB_*, CONTRACT_SWEEP_*, PRE_COMMIT_*, ... and DART_BIN_OVERRIDE) with
+// includeParentEnvironment: false, and reports each child's exit code, stdout and
+// stderr under a failing test. Run inside a git hook, a leaked GIT_DIR overrides
+// `workingDirectory:` and would point the fixture's `git branch -D` at the REAL repo
+// (feedback_mistake_git_hook_env_leak). The sweep (scripts/contract_sweep.dart:31)
+// sets CONTRACT_SWEEP_NESTED=1 on the `flutter test` it spawns and selects THIS file
+// whenever a push changes docs/sot_registry.yaml, so an unscrubbed child inherited the
+// recursion guard and the runner under test skipped: 5 of 7 tests failed (class 2.56,
+// diagnose 2026-10-06-spawn-test-env-leak). The poisoned-parent test at the bottom is
+// the regression for that.
+// Registered in test/contracts/gate_e2e_env_hermetic_test.dart.
 
 @Timeout(Duration(minutes: 6))
 library;
 
-import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 
-/// The Dart binary to spawn the runner with.
-///
-/// NOT `Platform.resolvedExecutable`: under `flutter test` that resolves to
-/// the flutter_tester binary, not dart, so the spawn never returns and the
-/// suite HANGS rather than failing. The repo already documents this trap at
-/// test/scripts/oi_numbering_lib_test.dart:284 after it cost that suite a
-/// >10-minute hang — and it cost this one another before the note was found.
-/// Prefer the SDK exe beside the Flutter wrapper (the wrapper takes the SDK
-/// update lock and shells out to git on EVERY call); fall back to `dart`.
-/// Copied verbatim from test/scripts/cron_registry_snapshot_gate_test.dart:33-57.
-String dartBinOf() {
-  final override = Platform.environment['DART_BIN_OVERRIDE'];
-  if (override != null && File(override).existsSync()) return override;
-  final which = Process.runSync(
-    Platform.isWindows ? 'where' : 'which',
-    ['dart'],
-    stdoutEncoding: utf8,
-  );
-  if (which.exitCode == 0) {
-    final first = (which.stdout as String)
-        .split('\n')
-        .map((l) => l.trim())
-        .firstWhere((l) => l.isNotEmpty, orElse: () => '');
-    if (first.isNotEmpty) {
-      final dir = File(first).parent.path.replaceAll(r'\', '/');
-      for (final c in [
-        '$dir/cache/dart-sdk/bin/dart.exe',
-        '$dir/cache/dart-sdk/bin/dart',
-      ]) {
-        if (File(c).existsSync()) return c;
-      }
-    }
-  }
-  return 'dart';
-}
+import '../helpers/read_screen_source.dart';
+import '../helpers/spawn.dart';
 
-/// Hermetic env for EVERY subprocess in this file (fixture git calls included):
-/// a leaked GIT_DIR would point a fixture's `git branch -D` at the REAL repo.
-Map<String, String> _env({String record = '', String stubExit = '0', Map<String, String> extra = const {}}) {
-  final env = Map<String, String>.from(Platform.environment)
-    ..removeWhere((k, _) {
-      final u = k.toUpperCase();
-      return u.startsWith('GIT_') || u.startsWith('GITHUB_') || u == 'PUSH_BEFORE';
-    });
-  env['SWEEP_RECORD'] = record;
-  env['SWEEP_STUB_EXIT'] = stubExit;
-  env.addAll(extra);
-  return env;
-}
+/// The two variables the stub `flutter` reads. Not control variables, so they pass the
+/// helper's `extra:` guard without a declaration.
+Map<String, String> _stubEnv({String record = '', String stubExit = '0'}) =>
+    {'SWEEP_RECORD': record, 'SWEEP_STUB_EXIT': stubExit};
 
-ProcessResult _git(List<String> args, String cwd) => Process.runSync('git', args, workingDirectory: cwd,
-    environment: _env(), includeParentEnvironment: false, runInShell: true);
+ProcessResult _git(List<String> args, String cwd) => runSpawn('git', args,
+    workingDirectory: cwd,
+    extraEnv: _stubEnv(),
+    runInShell: true,
+    why: 'sweep fixture: git ${args.join(' ')}');
 
 class _Repo {
   late String tmp;    // the temp root holding origin.git + work/ + the stub
@@ -100,14 +69,14 @@ String _writeStub(String dir) {
     ..writeAsStringSync('#!/bin/sh\n'
         'echo "\$@" > "\$SWEEP_RECORD"\n'
         'exit "\$SWEEP_STUB_EXIT"\n');
-  Process.runSync('chmod', ['+x', f.path]);
+  runSpawn('chmod', ['+x', f.path], why: 'sweep fixture: chmod +x the stub flutter');
   return f.path;
 }
 
 void main() {
   final repoRoot = Directory.current.path.replaceAll(r'\', '/');
   final runner = '$repoRoot/scripts/contract_sweep.dart';
-  final dartBin = dartBinOf();
+  final dart = dartBin();
   late _Repo r;
 
   void write(String rel, String content) {
@@ -176,10 +145,18 @@ concepts:
     } catch (_) {}
   });
 
-  ProcessResult run(List<String> extra, {String stubExit = '0', Map<String, String> env = const {}}) => Process.runSync(
-      dartBin, ['run', runner, '--flutter-bin', r.stub, ...extra],
-      workingDirectory: r.dir, environment: _env(record: r.record, stubExit: stubExit, extra: env),
-      includeParentEnvironment: false, runInShell: true);
+  /// Runs the REAL runner. [env] is what a scenario sets DELIBERATELY (the kill switch, the
+  /// recursion guard), so every key in it is declared to the helper's `extra:` guard.
+  /// [parent] is the helper's seam for a poisoned parent environment.
+  ProcessResult run(List<String> extra,
+          {String stubExit = '0', Map<String, String> env = const {}, Map<String, String>? parent}) =>
+      runSpawn(dart, ['run', runner, '--flutter-bin', r.stub, ...extra],
+          workingDirectory: r.dir,
+          extraEnv: {..._stubEnv(record: r.record, stubExit: stubExit), ...env},
+          allowControl: env.keys.toSet(),
+          parentEnvironment: parent,
+          runInShell: true,
+          why: 'contract_sweep.dart ${extra.join(' ')} (stub exit $stubExit)');
 
   test('selects the registry test AND the importing test; reports lonely.dart as unmapped; spawns flutter with them', () {
     final res = run([]);
@@ -223,5 +200,50 @@ concepts:
     expect(res.exitCode, 0);
     expect(res.stdout, contains('nested'));
     expect(File(r.record).existsSync(), isFalse);
+  });
+
+  // THE OBSERVED BUG (class 2.56, 2026-10-05). The sweep runs `flutter test` with
+  // CONTRACT_SWEEP_NESTED=1 and selects THIS file whenever a push changes
+  // docs/sot_registry.yaml; the old per-file filter removed GIT_*, GITHUB_* and
+  // PUSH_BEFORE only, so the runner under test inherited the flag and exited "nested"
+  // before spawning the stub: 5 of the 7 tests above failed on every registry-touching
+  // push. The parent environment is POISONED through the helper's seam (Dart cannot
+  // mutate its own environment) with each variable that makes the runner skip; the
+  // runner must still do its work.
+  test('a parent environment carrying CONTRACT_SWEEP_NESTED / CONTRACT_SWEEP_SKIP does NOT reach the runner under test', () {
+    for (final poison in const ['CONTRACT_SWEEP_NESTED', 'CONTRACT_SWEEP_SKIP']) {
+      if (File(r.record).existsSync()) File(r.record).deleteSync();
+      final parent = {...Platform.environment, poison: '1'};
+      // PRECONDITIONS, so this test cannot pass vacuously: the poison is in the parent, it
+      // SURVIVES the filter this file used to carry (GIT_*, GITHUB_*, PUSH_BEFORE only), and
+      // the helper's environment for that same parent does not contain it.
+      final legacy = Map<String, String>.from(parent)
+        ..removeWhere((k, _) {
+          final u = k.toUpperCase();
+          return u.startsWith('GIT_') || u.startsWith('GITHUB_') || u == 'PUSH_BEFORE';
+        });
+      expect(legacy.containsKey(poison), isTrue, reason: 'the old filter leaked $poison');
+      expect(hermeticEnvironment(parent: parent).containsKey(poison), isFalse);
+      final res = run([], parent: parent);
+      expect(res.exitCode, 0, reason: '$poison: ${res.stdout}${res.stderr}');
+      expect(File(r.record).existsSync(), isTrue,
+          reason: '$poison leaked into the child: the runner skipped before spawning the stub flutter');
+      expect(File(r.record).readAsStringSync(), contains('test/contracts/a_test.dart'));
+      expect('${res.stdout}', isNot(contains('nested')));
+      expect('${res.stdout}', isNot(contains('skipped')));
+    }
+  });
+
+  test('run() hands the poisoned parent to the helper through its seam (the test above would pass '
+      'vacuously if it did not)', () {
+    final src = readSourceFileStripped('test/scripts/contract_sweep_e2e_test.dart');
+    final start = src.indexOf('ProcessResult run(List<String> extra');
+    final end = src.indexOf("test('selects the registry test");
+    expect(start, greaterThan(-1));
+    expect(end, greaterThan(start));
+    final body = src.substring(start, end);
+    expect(body, contains('parentEnvironment: parent,'));
+    expect(body, contains('allowControl: env.keys.toSet(),'),
+        reason: 'the scenarios that set a control variable deliberately must declare it');
   });
 }

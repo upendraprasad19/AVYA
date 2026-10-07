@@ -38,7 +38,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../scripts/regression_catalog_lib.dart' show scrubbedChildEnvironment;
+import '../helpers/spawn.dart';
 
 void main() {
   late String repoRoot;
@@ -92,11 +92,13 @@ void main() {
   /// is the fix: two lists that must agree is the drift class, and these two
   /// had already drifted.
   ///
-  /// [parent] exists so a test can drive a synthetic environment — Dart cannot
-  /// mutate its own `Platform.environment`, so without it the leak is
-  /// unreachable from a test and could only ever be caught in production again.
-  Map<String, String> scrubbedEnv([Map<String, String>? parent]) =>
-      scrubbedChildEnvironment(parent ?? Platform.environment);
+  /// The scrub now lives in `test/helpers/spawn.dart` (`hermeticEnvironment`,
+  /// which delegates to the same canonical `scrubbedChildEnvironment`); every
+  /// spawn below goes through it. `runHook`'s `parentEnv` is handed to the
+  /// helper as `parentEnvironment:` so a test can drive a synthetic environment
+  /// — Dart cannot mutate its own `Platform.environment`, so without that seam
+  /// the leak is unreachable from a test and could only ever be caught in
+  /// production again.
 
   // A typed record instead of dart:io's ProcessResult -- that SDK class
   // types stdout/stderr as `dynamic` (it supports byte-list mode too),
@@ -114,23 +116,20 @@ void main() {
     /// otherwise untestable and could only be found in production (d81f3c).
     Map<String, String>? parentEnv,
   }) async {
-    final process = await Process.start(
+    return runSpawnWithInput(
       'dart',
       ['run', '--verbosity=error', 'scripts/git_safety_hook.dart'],
+      why: 'git_safety_hook.dart wire contract: ${payload['tool_input']}',
+      stdin: jsonEncode(payload),
       workingDirectory: repoRoot,
-      environment: scrubbedEnv(parentEnv),
-      includeParentEnvironment: false,
+      parentEnvironment: parentEnv,
       // runInShell: Windows' Process.start does not do PATHEXT resolution
       // the way a shell does -- without this, even a PATH-available `dart`
       // fails with "system cannot find the file specified" on Windows.
       runInShell: true,
+      stdoutEncoding: utf8,
+      stderrEncoding: utf8,
     );
-    process.stdin.write(jsonEncode(payload));
-    await process.stdin.close();
-    final stdout = await process.stdout.transform(utf8.decoder).join();
-    final stderr = await process.stderr.transform(utf8.decoder).join();
-    final exitCode = await process.exitCode;
-    return (exitCode: exitCode, stdout: stdout, stderr: stderr);
   }
 
   /// Defaults `cwd` to [neutralCwd], NOT the live repo — see its doc comment.
@@ -178,12 +177,11 @@ void main() {
 
       // Env must be scrubbed here too: run inside pre-commit, an inherited
       // GIT_DIR would point every one of these commands at the REAL repo.
-      ProcessResult git(List<String> args) => Process.runSync(
+      ProcessResult git(List<String> args) => runSpawn(
             'git',
             args,
+            why: 'git ${args.join(' ')} in the merging temp repo',
             workingDirectory: repo.path,
-            environment: scrubbedEnv(),
-            includeParentEnvironment: false,
             runInShell: true,
           );
 
@@ -279,35 +277,33 @@ void main() {
 
     test('a non-Bash tool is allowed (exit 0) — field-name contract check',
         () async {
-      final process = await Process.start(
+      final result = await runSpawnWithInput(
         'dart',
         ['run', '--verbosity=error', 'scripts/git_safety_hook.dart'],
+        why: 'git_safety_hook.dart given a non-Bash tool payload',
+        stdin: jsonEncode({
+          'hook_event_name': 'PreToolUse',
+          'tool_name': 'Read',
+          'cwd': repoRoot,
+          'tool_input': {'file_path': 'x'},
+        }),
         workingDirectory: repoRoot,
         runInShell: true,
       );
-      process.stdin.write(jsonEncode({
-        'hook_event_name': 'PreToolUse',
-        'tool_name': 'Read',
-        'cwd': repoRoot,
-        'tool_input': {'file_path': 'x'},
-      }));
-      await process.stdin.close();
-      final exitCode = await process.exitCode;
-      expect(exitCode, 0);
+      expect(result.exitCode, 0);
     }, timeout: const Timeout(Duration(minutes: 3)));
 
     test('malformed JSON on stdin fails open (exit 0, never crashes the call)',
         () async {
-      final process = await Process.start(
+      final result = await runSpawnWithInput(
         'dart',
         ['run', '--verbosity=error', 'scripts/git_safety_hook.dart'],
+        why: 'git_safety_hook.dart given malformed JSON on stdin',
+        stdin: '{not valid json',
         workingDirectory: repoRoot,
         runInShell: true,
       );
-      process.stdin.write('{not valid json');
-      await process.stdin.close();
-      final exitCode = await process.exitCode;
-      expect(exitCode, 0);
+      expect(result.exitCode, 0);
     }, timeout: const Timeout(Duration(minutes: 3)));
   });
 }

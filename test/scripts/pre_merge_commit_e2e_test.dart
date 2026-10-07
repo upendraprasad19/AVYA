@@ -36,6 +36,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/spawn.dart';
+
 // This file deliberately spawns NO dart process of its own, so it carries no
 // `_dartBin()` helper — its sibling test/scripts/oi_numbering_lib_test.dart
 // does, and explains the flutter_tester trap there. Everything here goes
@@ -50,7 +52,9 @@ import 'package:flutter_test/flutter_test.dart';
 // later" in a test — analyze is the one gate that runs on every push,
 // including the feature-tier ones that skip the suite.
 
-/// The parent environment with git's location variables REMOVED.
+/// Every spawn goes through test/helpers/spawn.dart, whose environment has git's
+/// location variables REMOVED (and the rest of the canonical control-variable
+/// scrub).
 ///
 /// A test that spawns its own git repo inherits GIT_DIR / GIT_WORK_TREE when it
 /// runs inside a git hook -- and the pre-commit gate loop runs exactly this
@@ -60,30 +64,16 @@ import 'package:flutter_test/flutter_test.dart';
 /// They must be UNSET, not set to ''. Dart merges `environment` over the parent
 /// rather than replacing it, so `{'GIT_DIR': ''}` leaves GIT_DIR defined-but-
 /// empty and git reports `fatal: not in a git directory` -- which is how the
-/// first version of this file failed.
-Map<String, String> _cleanEnv() {
-  final env = Map<String, String>.from(Platform.environment);
-  for (final k in const [
-    'GIT_DIR',
-    'GIT_WORK_TREE',
-    'GIT_INDEX_FILE',
-    'GIT_OBJECT_DIRECTORY',
-    'GIT_COMMON_DIR',
-  ]) {
-    env.remove(k);
-  }
-  return env;
-}
-
+/// first version of this file failed. (The helper passes
+/// `includeParentEnvironment: false` with a map that simply lacks them.)
 ProcessResult _run(String exe, List<String> args, String cwd) {
-  return Process.runSync(
+  return runSpawn(
     exe,
     args,
+    why: 'pre_merge_commit_e2e: $exe ${args.join(' ')}',
     workingDirectory: cwd,
     stdoutEncoding: utf8,
     stderrEncoding: utf8,
-    environment: _cleanEnv(),
-    includeParentEnvironment: false,
   );
 }
 

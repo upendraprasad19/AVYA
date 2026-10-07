@@ -231,6 +231,60 @@ void main() {
     });
   });
 
+  // 2026-10-06 (class 2.56, fifth instance): the scrub covers EVERY variable the
+  // repo's own scripts read as a control switch. The expectations below are a
+  // LITERAL list written independently of the exported constants, so deleting a
+  // constant cannot delete its own assertion (the derived two-way check against
+  // what the scripts actually read is test/contracts/spawn_env_manifest_test.dart).
+  group('scrubbedChildEnvironment: every repo control variable (class 2.56)', () {
+    const stripped = <String>[
+      'CONTRACT_SWEEP_NESTED', 'CONTRACT_SWEEP_SKIP',
+      'PRE_COMMIT_FULL', 'PRE_COMMIT_LEGACY', 'PRE_COMMIT_GATE_JOBS', 'PRE_PUSH_FULL',
+      'PRE_COMMIT_HOME', // the pre-commit.com framework's own name: the family prefix over-strips it, harmlessly, and that is pinned
+      'DISCIPLINE_HOOK_MEMORY_PATH', 'DISCIPLINE_HOOK_SYNC_SKIP',
+      'MINT_OI_TRANSPORT', 'MINT_OI_REMOTE', 'MINT_OI_OWNER_REPO', 'MINT_OI_GH_BIN',
+      'MINT_OI_TEST_HOOK_BEFORE_PUSH',
+      'MINT_MIG_TRANSPORT', 'MINT_MIG_REMOTE', 'MINT_MIG_OWNER_REPO', 'MINT_MIG_GH_BIN',
+      'MINT_MIG_TEST_HOOK_BEFORE_PUSH',
+      'ALLOW_MAIN_COMMIT', 'ALLOW_RAW_GIT', 'FOUNDER_APPROVED_NO_VERIFY', 'PUSH_BEFORE',
+      'SUPABASE_ACCESS_TOKEN', 'SUPABASE_ACCESS_TOKEN_FITNESS', 'SUPABASE_SERVICE_ROLE_KEY',
+      'SUPABASE_URL', 'SUPABASE_ANON_KEY', 'RAZORPAY_KEY_ID', 'USDA_API_KEY',
+      '_SKIP_RENDER_CHECK', 'ANDROID_DEVICE_ID',
+      'GIT_DIR', 'GIT_SSH_COMMAND', 'GITHUB_ACTIONS', 'GITHUB_EVENT_PATH', 'GITHUB_REF',
+      'GITHUB_REPOSITORY_OWNER',
+      'EMAIL', // git's author-identity fallback (d9e4b1): an external reader
+    ];
+
+    test('every one is removed, in any letter case', () {
+      for (final name in stripped) {
+        expect(scrubbedChildEnvironment({name: 'x', 'PATH': '/p'}).keys, ['PATH'],
+            reason: '$name must not reach a spawned test');
+        expect(scrubbedChildEnvironment({name.toLowerCase(): 'x', 'PATH': '/p'}).keys, ['PATH'],
+            reason: '${name.toLowerCase()} (Windows is case-insensitive)');
+      }
+    });
+
+    test('the sweep recursion guard is the observed case: CONTRACT_SWEEP_NESTED is gone', () {
+      // contract_sweep_e2e_test.dart inherited this from the sweep that ran it.
+      expect(scrubbedChildEnvironment({'CONTRACT_SWEEP_NESTED': '1'}), isEmpty);
+    });
+
+    test('kept: the variables the child needs, DART_BIN_OVERRIDE and non-owned look-alikes', () {
+      const kept = {
+        'PATH': '/usr/bin', 'HOME': '/home/u', 'USERPROFILE': 'C:/u', 'TZ': 'Asia/Kolkata',
+        'JAVA_HOME': '/jdk', 'ANDROID_HOME': '/a', 'ANDROID_SDK_ROOT': '/a', 'LOCALAPPDATA': 'C:/l',
+        'SystemRoot': 'C:/Windows', 'PATHEXT': '.EXE',
+        // the merge walk's flutter-test child contains tests that read this one to find dart
+        'DART_BIN_OVERRIDE': '/dart',
+        // prefixes are NOT widened beyond the repo-owned families (class 2.56): Supabase and
+        // the pre-commit framework own these namespaces, so only exact names are stripped
+        'SUPABASE_PROJECT_REF': 'keep', 'XPRE_COMMIT_X': 'keep', 'MY_CONTRACT_SWEEP_X': 'keep',
+        'ANDROID_SERIAL': 'keep',
+      };
+      expect(scrubbedChildEnvironment(kept), kept);
+    });
+  });
+
   group('the gate actually USES the scrub', () {
     // STRUCTURAL, and labelled as such. Driving check_regression_catalog.dart
     // end-to-end would mean standing up a throwaway Flutter project with its own
