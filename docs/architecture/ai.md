@@ -1,0 +1,235 @@
+---
+source: CLAUDE.md §11
+migrated: 2026-05-18
+status: scaffold
+---
+
+# AI Architecture — Reference
+
+> Cross-cutting concern. Fetch via Read when AI-related work is in scope.
+> Root CLAUDE.md contains pointers but not the full content.
+
+Single provider: **Google Gemini** (via `GEMINI_API_KEY`). Cerebras + OpenRouter were retired on 2026-04-18 — one key to rotate, one billing line, one source of truth.
+
+## Semantic retrieval (since ai-proxy v46, 2026-04-24) — Phase B live
+
+Every chat turn now embeds the user's message via `getEmbedding(text, "RETRIEVAL_QUERY")` and queries `match_memories(user_id, embedding, match_count=5, threshold=0.65)` for the top-5 most semantically similar past memories (source types: `conversation`, `daily_summary`, `coaching_note`, `pattern_insight`). Results are injected into the system prompt as a "Relevant context from earlier conversations" block between the snapshot and coaching_notes sections. `formatRetrievalBlock` caps each line at 200 chars (5 lines ≈ 1 KB prompt growth).
+
+**Helper:** `supabase/functions/_shared/memory_retrieval.ts` — `retrieveRelevantMemories(supabaseClient, userId, query, options?)`. Never throws; all failure modes return `{ memories: [], source: <code> }`. Options: `matchCount`, `threshold`, `embeddingTimeoutMs` (default 3000), `getEmbeddingFn` (test injection seam).
+
+**Fallback behavior:** when retrieval returns 0 matches, fails embedding, hits the 3s timeout, or errors on the RPC, the prompt falls back to the existing full-dump `coaching_notes` path. Zero regression risk. `[ai-proxy] memory_retrieval fallback: source=...` warnings are logged on any non-retrieval / non-empty outcome.
+
+**Gating:** all users (free + PRO). Per-turn cost ~$0.00001 via Gemini embedding API — PRO-gating added complexity without meaningful savings. Retrieval latency: ~150 ms p50, hard-bound at 3 s.
+
+**Phase A (accumulation)** has been running since 2026-03-31 (migration `20260331000001_add_pgvector_memory.sql`): `ai-proxy/index.ts:635` + `rolling-context/index.ts:210` embed every chat turn + nightly summary into `memory_embeddings`. No Phase B backfill needed — older coaching_notes reach the coach via the recent-N fallback. Retrieval hit rates become meaningful only after users accumulate ~10+ conversations.
+
+## Tool-calling (since ai-proxy v44, 2026-04-20) — 21 AI coach tools (derive-only surface)
+
+`ai-proxy` chat channel uses Gemini function-calling via `_shared/tool-loop.ts` (multi-round, max 3 rounds, validation feedback to model). 21 typed tools across 5 families, defined in `_shared/tools/<family>/<tool>.ts` and registered in `_shared/tools/registry.ts` (`ALL_TOOLS`, re-counted live 2026-09-28). Tier filtering: free users see 9 FREE tools; PRO sees 20 or 21 depending on the capability handshake below.
+
+**Derive-only prune (2026-05-31, ADR-0012):** the surface dropped 24→20 by removing 4 tools that let the AI assert a *derived* value or future state — a progression-gaming / data-integrity hole. Removed: `logPR` (PR derives from `logSet` via `_rescanPrFor`/`loadAllExercisePRs`), `markWorkoutComplete` (completion now derives — a coach `logSet` on a scheduled day auto-calls `markCompleted` via the dispatcher's `_maybeCompleteScheduledDay`), `adjustCaloricTarget` (target stays derived from the plan), `prelog` (no pre-logging — users log raw input daily as they eat). Principle: **the user logs raw input; the app computes the rest.** (Pre-2026-05-16 audit, this doc claimed 20 tools / 6 FREE / 20 PRO — drift from registry growth across Tests #12–#16, since pruned back to 20 with a different composition. Verified live against `_shared/tools/registry.ts` + `test/contracts/derive_only_tool_surface_test.dart`.)
+
+**Capability handshake (day-swapper + sync-load batch, 20→21):** `swapWorkoutDays` is the
+first tool to carry `requiresCapability` — `allTools(isPro, capabilities)`
+(`registry.ts`) includes it only when the client's declared `client_capabilities` set
+contains `'swap_workout_days'` (`client_capabilities.ts`: parsed from the request body,
+non-array → empty set, only the first 32 raw entries considered, each surviving entry
+must match `^[a-z_]{1,48}$` or is dropped — silently, never a 400, unlike an over-limit
+`message`/`snapshot_json` which DO 400). An absent/empty `capabilities` set (every
+caller before this field existed, and any client build that predates it) therefore sees
+exactly the 20 legacy tools; a client declaring the capability sees 21. See
+`supabase/functions/CLAUDE.md` `consume-day-swap` and
+`lib/features/ai_coach/CLAUDE.md` `coach_swap_workout_days` for the routing block
+(`day_swap_routing.ts`) and the execution-time `capability_blocked` re-check
+(`tool-loop.ts`) that defends against a model calling the tool by name without ever
+being offered it.
+
+| Family | Tools |
+|---|---|
+| Workout (8) | `swapExercise`, `logSet`, `shortenWorkout`, `createCustomExercise`, `modifyWorkoutForInjury`, `rescheduleWeek`, `swapWorkoutDays` (PRO + capability-gated), `generateHotelWorkout` |
+| Progress (4) | `getProgressSummary`, `getExerciseHistory`, `getPromotionStatus`, `getPRTimeline` |
+| Nutrition (3) | `logMealByText`, `suggestMeal`, `getNutritionHistory` |
+| Plan (5) | `regeneratePlanBlock`, `pausePlan`, `switchGoal`, `createCustomTemplate`, `scheduleTemplate` |
+| Exercise (1) | `getFormCues` |
+
+**Hive-first hybrid architecture:** READ tools (e.g. `getProgressSummary`, `getExerciseHistory`, `suggestMeal`) execute server-side and feed Gemini results in same turn. WRITE tools emit typed `ToolIntent` to client; client confirms via card/sheet, then writes Hive + fire-and-forget syncs (matching the existing CLAUDE.md §4.4 rule 1 mutation pattern).
+
+3 confirmation classes: trivial (5s auto-confirm card), reviewable (explicit inline card), destructive (bottom-sheet with diff preview). Per-intent dispatch in `lib/features/ai_coach/services/tool_dispatcher.dart`. 1-hour intent TTL + concurrent-edit guards on every dispatch.
+
+Telemetry: per-tool-call records written to `ai_coach_interactions.tool_calls` JSONB column (migration 029), surfaced via `coach_tool_invocations_v` view.
+
+## Proactive triggers (8 of 8 brainstorm §5 triggers, since 2026-04-20)
+
+All 8 cron-driven Edge Functions in prod. Each uses `_shared/proactive_dedup.ts` (`shouldSendProactive` + `markProactiveSent`) to prevent same-type push twice per IST day, writing `coach_memory.last_proactive_type` after successful send.
+
+| # | Trigger | Edge Function | Cron (UTC → IST) | Tier |
+|---|---|---|---|---|
+| 1 | Morning Brief | `morning-alert` | (existing 2-stage) → 7am IST | both |
+| 2 | Workout Window Closing | `workout-window-closing` | `30 15 * * *` → 21:00 IST | both |
+| 3 | Protein Gap Alert | `protein-gap-alert` | `30 14 * * *` → 20:00 IST | PRO |
+| 4 | Streak Protection | `streak-guardian` | (existing) → 20:00 IST | both |
+| 5 | PR Detection | `pr-detection` | `*/15 * * * *` → near-real-time | both |
+| 6 | Plateau Alert | `plateau-alert` | `30 13 * * *` → 19:00 IST | PRO |
+| 7 | Weekly Recap | `weekly-recap-ready` | (existing) → Sunday | both |
+| 8 | Re-engagement | `re-engagement` | `30 06 * * *` → 12:00 IST | both |
+
+**Plateau-alert** + **re-engagement** read scores from `coach_memory.{plateau_risk_score, dropout_risk_score}` (computed nightly by `compute-coach-signals` → `compute_coach_signals_for_user(user_id)` RPC). Re-engagement has a fallback path that scans `workout_logs/nutrition_logs/weight_logs` directly for users without `coach_memory` rows yet.
+
+Cron registrations live in `supabase/migrations/031_proactive_triggers_cron.sql`. Each uses `private.morning_alert_get_service_key()` for the Bearer token (consistent with `compute_coach_signals` cron pattern).
+
+## Model matrix
+
+⚠ **Corrected 2026-09-16 (`cron-ai-removal` batch,
+`docs/superpowers/specs/2026-09-16-proactive-cron-ai-removal-design.md`):**
+this table previously listed `morning-alert` and `future-prediction` as
+Gemini callers. Both had their Gemini call removed in that batch —
+`morning-alert` now composes its free/PRO-light alert copy from a
+deterministic template (`morning-alert/message.ts`), and
+`future-prediction` computes its 90-day forecast from real trend math over
+the user's own weight/lift/adherence history
+(`future-prediction/trend.ts`), falling back to the existing static
+per-field formulas when there isn't enough history. Neither row belongs
+in this table any more; see `supabase/functions/CLAUDE.md`'s AI
+Architecture section for the current, grep-derived list of every function
+that still calls an LLM (6, as of the same batch).
+
+| Edge Function | Model | Purpose |
+|---|---|---|
+| `ai-proxy` (chat + food text + prediction) | `gemini-3.1-flash-lite` | Free + PRO coach, food text analysis, prediction card |
+| `ai-proxy` (scan_meal, cart_auditor) | `gemini-3.1-flash-lite` | Vision: nutrition JSON from photos |
+| `ai-media-proxy` | `gemini-3.1-flash-lite` | Photo-upload chat — 5 free LIFETIME image reads (`usage_counters` key `free_image_analysis`), then PRO; PRO is capped **10 images / 5 videos per IST day** (lowered from 50/10 by Part B, 2026-10-01) (keys `pro_image_daily` / `pro_video_daily`, OI-153, 2026-09-12) via ONE atomic `consume_quota` after the Storage fetch and before Gemini; a reached cap is an HTTP 200 `gated: true` coach reply (`gate_reason: pro_image_daily_limit_reached` / `pro_video_daily_limit_reached`, `resets_at` = next IST midnight), never the paywall and never a 429. Fails CLOSED on a ledger error (`pro_quota_unavailable`) or a tier-read error (`tier_unavailable`). Video has no client picker today — the cap protects the API surface |
+| `assess-body-composition` | `gemini-3.1-flash-lite` | Body-fat % from photo |
+| `daily-snapshot` (coaching notes) | `gemini-3.1-flash-lite` | Extract facts from daily conversations |
+| `rolling-context` | `gemini-3.1-flash-lite` | Nightly conversation summary |
+| `weekly-report` | `gemini-3.1-flash-lite` (`thinking: "on"`, 4096 cap) | PRO-only weekly report |
+| `_shared/embeddings.ts` | `gemini-embedding-001` | Memory retrieval vectors |
+
+## Shared helper: `_shared/gemini.ts`
+`geminiChat({model, systemPrompt, userPrompt, maxTokens, temperature, imageBase64, jsonMode, fallbackToLite})` is the ONE interface for all Gemini calls. Handles:
+- Message translation from OpenAI-style `{system, user}` to Gemini's `{systemInstruction, contents}`.
+- Vision input via `inline_data` parts.
+- `responseMimeType: application/json` when `jsonMode=true`.
+- **Models (2026-10-01 Gemini 3.x migration):** one constant per tier in `_shared/gemini.ts` — `MODEL_FLASH`, `MODEL_FLASH_LITE`, `MODEL_PRO` are ALL `gemini-3.1-flash-lite` (a per-tier revert is one line), plus `MODEL_FALLBACK = gemini-3.5-flash-lite`. `gemini-2.5-flash-lite` was probed HTTP 404 on the new API key (`2.5-flash` and `2.5-pro` were reported 404 by the founder, not probed). Never infer a tier by comparing a model to one of these constants (they are the same string).
+- **Built-in fallback:** on 5xx / 429 / empty content / **404**, retries once on `MODEL_FALLBACK`. The guard is `model !== MODEL_FALLBACK`. `fallbackToLite: false` still opts out (the option name is kept: CI runs `deno test --no-check`). A 404 prunes that model for the rest of the call; retry classification is per attempt in both `geminiChat` and `geminiChatWithTools`.
+- **Thinking:** per-call `thinking: "off" | "on"` (default off), resolved per ATTEMPT through `THINKING_BY_MODEL` (`off` = `{thinkingLevel:"minimal"}`, `on` = `{thinkingLevel:"low"}`). `thinkingBudget: 0` is never sent — gemini-3.5-flash-lite rejects it with HTTP 400. Only `weekly-report` turns thinking on (`maxTokens` 4096: thought tokens count against the cap).
+- **Thought signatures (Gemini 3):** a `functionCall` part carries `thoughtSignature`; a replayed model turn without it is HTTP 400. `geminiChatWithTools` returns the RAW parts and `tool-loop.ts` stores them unchanged (`fillMissingThoughtSignature` adds the documented dummy only to the first call of a turn that has no signature at all; an attempt — primary or fallback — that 400s on a missing thought signature is retried once with a FORCED dummy fill, and that dummy history is then used for the rest of the call). Signatures never reach DB rows or the client.
+- **Failure classification:** `GeminiResult.attemptStatuses` / the thrown tools Error's `attemptStatuses` carry EVERY attempt's HTTP status; `reportGeminiExhaustion` classes the alert `model_unavailable` when any attempt was a 404, else `quota` / `auth` / `transient` (5xx, timeouts and unclassified are one class so one outage pages once; stored in `alerts.context_json.class`, part of the dedup key; suggested action for `model_unavailable` = change the constant).
+
+## Single AI coach endpoint — no client-side routing
+```
+Client (free + PRO) → ai-proxy (Gemini 3.1 Flash Lite)
+  JWT → auth.getUser(token)
+  isPro = SELECT 1 FROM subscriptions WHERE user_id AND active AND end_date > now()
+  Chat cap (both tiers) via the insert-first reservation row + trigger `enforce_chat_app_daily_limit`
+  (migration 153): free 7/day FOREVER (no trial; OQ-1), PRO 20/day. Numbers: _shared/ai_limits.ts.
+  A transport-failed turn calls refund_quota (3 refunds/IST day) and gets its unit back.
+  ← Response + model_used + tokens_used
+```
+The old separate `ai-proxy-pro` function returns **410 Gone** for any orphan clients still calling it.
+
+## Cost estimates (Gemini pricing at 2026-04-18 — the 2.5-era matrix, kept as history; the current 3.1-flash-lite measurement is in docs/audit/2026-10-01-gemini3-probe-summary.md)
+| Scale | Cost/month (coach + vision + weekly Pro) |
+|---|---|
+| 50 beta users | ~$3 |
+| 1,000 users | ~$70 |
+| 10,000 users | ~$700 |
+
+Input $0.075/M · output $0.30/M for Flash; $1.25/M · $10/M for Pro; Flash-Lite is the cheapest tier.
+
+## Input Validation (all AI Edge Functions)
+- **Message length:** Max 5,000 chars. Enforced server-side on `ai-proxy`, `ai-media-proxy`.
+- **Snapshot size:** Max 10,000 chars (stringified JSON). Enforced on `ai-proxy`.
+- **Image size:** Max 5MB. Enforced on `ai-media-proxy` via content-length + arrayBuffer check.
+- **SSRF protection:** `ai-media-proxy` only fetches from `${SUPABASE_URL}/storage/v1/object/` prefix. All other URLs rejected.
+
+## Client-Side Context Compaction (`AiService._compactContext`)
+- **Target:** <9,500 bytes (buffer under 10KB server limit for JSON overhead).
+- **Trim order** (least load-bearing first): `step_history_7d` → `weight_trend` → `nutrition_trend` → `exercise_history` → `personal_records` → `coach_notices` → truncate `coaching_notes` (1,500 char cap) → drop `fitness_summary`.
+- Applied on EVERY AI call (`chat`, `chatWithMedia`, `predict`, direct-HTTP fallbacks). Without this, historical queries that trigger `enrichContextForQuery` get rejected with a 400 from the server.
+
+## Client-Side Error Extraction (`AiService._extractError`)
+- Parses `{"error": "..."}` out of non-200 responses on all AI Edge Functions.
+- Replaces generic "status X" with actionable messages at the provider level (`ai_coach_provider.dart`):
+  - `Message too long` → "Your message is too long (max 5000 chars). Please shorten it and try again."
+  - `Snapshot too large` → "Your coaching context is unusually large. Please try a shorter question."
+  - `Image too large` → "That photo is too large (max 5 MB)."
+  - `Only Supabase Storage URLs are allowed` → "Upload failed — please try picking the photo again."
+  - `502`/`503`/`504` → "The AI model is temporarily unavailable. Please try again in a minute."
+- **Never use "restart the app" copy.** It doesn't fix any of these root causes.
+
+## Edge Function Auth
+- `ai-proxy`: `verify_jwt: false` (Supabase gateway bug). Manual JWT validation via `auth.getUser()` + server-side `isPro` check for the PRO chat cap (20/day vs free 7/day; `_shared/ai_limits.ts`).
+- `ai-media-proxy`: `verify_jwt: true` + manual JWT + PRO subscription check.
+- `validate-promo`: `verify_jwt: true` + manual JWT validation (prevents unauthenticated promo enumeration).
+- `future-prediction`: `verify_jwt: true` + manual JWT validation.
+
+## Vision Features (ai-proxy — Gemini 3.1 Flash Lite)
+- `food_text_analysis`: Text → nutrition JSON. **Rate limited: 10/day free, 200/day PRO** (client enforces 10 via `AppConstants.freeAiTextLogsPerDay`; the trigger is the authoritative backstop and must agree — b8f4c2). Counted via `ai_coach_interactions` rows with `channel='food_text_analysis'`.
+- `scan_meal`: Photo → nutrition JSON. Client: 3 free / 10 PRO per day. Server: shared `vision_analysis` cap, free 4 / PRO 20 per day (migration 153, 2026-10-01; flat 20 from 132 until then), combined with `cart_auditor`.
+- `cart_auditor`: Grocery screenshot → health audit JSON (items, health_score, suggestions). Client: 1 free / 10 PRO per day. Server: the same shared cap as scan_meal (free 4 / PRO 20 per day).
+- Server-side rate limit: scan_meal + cart_auditor combined counted via `ai_coach_interactions` rows with `channel IN ('scan_meal', 'cart_auditor')`. The trigger is tier-aware (free 4 / PRO 20); client-side per-feature limits (free 3+1, PRO 10+10) fit under it. A transport-failed turn gives its unit back through `refund_quota` (3/IST day).
+
+## Edge Function Error Sanitization (ALL functions)
+- **Never leak raw exceptions, stack traces, or database error strings to the client.** Every Edge Function catch block follows this shape:
+  ```ts
+  } catch (err) {
+    const requestId = crypto.randomUUID().split("-")[0];
+    console.error(`[function-name] request_id=${requestId}`, err);
+    return new Response(
+      JSON.stringify({ error: "Internal server error", request_id: requestId }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+  ```
+- Short request IDs (8 hex chars) are logged server-side AND returned to the client so support can grep logs for the exact failure. The client sees a generic message; the logs retain full detail.
+- **Validation errors** (400 responses like "Message too long", "Image too large", "PRO subscription required") ARE safe to return verbatim — they're user-actionable and don't leak internals.
+- Applies to all 18 live Edge Functions: `ai-proxy`, `ai-media-proxy`, `razorpay-webhook`, `verify-payment`, `verify-subscription`, `validate-promo`, `assess-body-composition`, `beat-my-coach`, `daily-snapshot`, `expiry-reminder`, `future-prediction`, `morning-alert`, `redeem-referral`, `rolling-context`, `streak-guardian`, `weekly-recalc`, `weekly-recap-ready`, `weekly-report`. (`ai-proxy-pro` is a 410-Gone stub — retired 2026-04-18 — excluded.)
+
+## Server-Side Workout Analytics
+- `weekly-recalc`: Reads exercise-level data from `workout_log_exercises` (NOT `workout_logs`). Derives date from `completed_at`. Groups exercises by `exercise_id` (= exercise_name) for weight progression tracking. `total_workouts_done` counts distinct dates, not exercise rows.
+- `weekly-report`: Two-query approach — exercise data from `workout_log_exercises`, workout metadata (duration, RPE) from `workout_logs`. `sets_completed` reads actual `set_number` from per-exercise summary (not hardcoded 1). RPE guarded against zero-denominator (returns "N/A" when no RPE data).
+
+## Exercise Log Cloud Contract (workout_log_exercises)
+Each row is a **per-exercise summary** (NOT per-set), matching the Hive exlog_* shape:
+- `exercise_id` = exercise_name (stable identity for cross-week grouping)
+- `workout_log_id` = deterministic ID from date (groups all exercises in same workout)
+- `set_number` = total completed sets for this exercise (NOT "which set number")
+- `reps` = cumulative reps across all sets
+- `weight_kg` = best (max) weight across sets
+- RPE: NOT stored per exercise. Workout-level RPE column exists in `workout_logs` but is currently never written by the Flutter app (no UI for it).
+
+## coaching_notes
+- Batch extraction, dispatched by the `daily-snapshot` cron (11PM IST with the snapshot)
+- **Watermark-bounded, not whole-day** (single-owner a2b-1, 2026-09-27): reads
+  conversations strictly after the stored `last_extraction_at` watermark (via
+  `coach_memory`), not "today's" rows — a whole-day window silently re-read and
+  re-billed the same early-morning conversations on every run once the old
+  `isStale` wall-clock guard (`>6h since last extraction`) had passed. Extract
+  facts → append to Hive/`coach_memory`.
+- **Metered**, not merely wall-clock-gated: `consume_quota('coach_extraction',
+  <6h bucket>, cap=1)` runs BEFORE the Gemini call (reservation pattern, closing
+  the OI-162 unmetered-Gemini-call recurrence class). A tri-state extraction
+  result (`{ok:true, facts}` incl. empty vs `{ok:false}`) decides whether the
+  watermark advances: a Gemini failure or malformed response never advances it
+  (so the same window is retried next run); a successful call — even with zero
+  new facts — does.
+- NOT per-message extraction (too expensive)
+- **Locked-field guard (a2b-2, single-owner batch, 2026-09-27):** three of the
+  extracted facts (`diet_preference`, `lifestyle_activity`, `injuries`) are
+  ALSO writable directly by the user (Edit Profile save; injuries additionally
+  at onboarding). Before writing any of them into `user_profile`, extraction
+  checks `user_profile.coach_extraction_locked_fields` (migration 148,
+  additive-only, written ONLY via `lock_coach_extraction_fields`) and skips a
+  locked field entirely — instead recording an attempted-value conflict
+  marker on `coach_memory.locked_field_conflicts`, which reaches this same
+  prompt context via `coach_memory`'s existing wholesale pass-through (see
+  `lib/features/ai_coach/CLAUDE.md`). See `docs/sot_registry.yaml`'s
+  `coach_extraction_locked_fields` concept for the full writer/reader map,
+  including the ground-truth correction (the design originally targeted
+  `user_preferences.coaching_notes`, which has zero readers) discovered
+  during implementation rather than by any of the plan's 5 review rounds.
+
+## Context Injection
+- System prompt receives `user_daily_snapshot` JSON (~300 tokens)
+- Contains: profile (incl. city), this week's workouts, today's nutrition (incl. urine status), weight, streak, PRs, detected experience, coaching_notes
+- One Hive read. Complete context. Zero additional queries.

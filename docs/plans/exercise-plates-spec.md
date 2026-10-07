@@ -1,0 +1,503 @@
+# Exercise plates — spec
+
+> **Status:** DESIGN CONVERGED, awaiting one input. Written 2026-08-29 on branch
+> `exercise-plates`, based on `main` @ `d5ca2917`.
+>
+> Every number below was measured against the working tree at that commit, or against the
+> upstream asset repo over the network. Where a claim is unverified it says so.
+>
+> ⚠ **The library is 292 rows, not 259.** An earlier pass of this design was built on a stale
+> working copy read before the OI-89 bodyweight work landed (`a7c2d194`, `7543a4df`,
+> 2026-08-28, +33 exercises). Re-read `assets/data/exercise_library.json` and check the row
+> count before trusting any figure here.
+
+---
+
+## Why this exists
+
+When a recruit starts a workout they see an exercise **name** and nothing else. A beginner —
+our wedge user, a 22–35 desk worker in their first months of lifting — cannot always tell what
+"Barbell Bent Over Row" looks like, and the cost of guessing is bad form or a skipped exercise.
+
+The text half of the answer already ships: `CoachingContentPanel`
+(`lib/features/train/screens/active_workout/coaching_content_panel.dart`) renders
+`coaching_cues`, `common_mistakes`, `breathing_cue` and `warmup_protocol` in a collapsed
+FORM & CUES panel, free to every tier. **The missing half is the picture.**
+
+The data model already anticipated it and is entirely dead:
+
+| field | rows populated | state |
+|---|---|---|
+| `image_start_url` | 249 / 292 | 112 real URLs, **all HTTP 404** (they use `free-exercise-db`'s pre-restructure path layout); the rest are the literal string `PENDING` |
+| `image_end_url` | 249 / 292 | same |
+| `gif_url` | 292 / 292 | 286 are `PENDING`; the other 6 point at **wger JSON API endpoints**, not images |
+
+Nothing renders them. The only reader in `lib/` is
+`lib/core/services/swap_service.dart:294-295`, which *copies* the fields through an exercise
+swap. Written, never read.
+
+---
+
+## Source
+
+**`github.com/bryllim/workout-guide`** — 302 exercises × 3 frames = 906 transparent 512×512
+SVGs, each a single path filled `#fff`. Artwork **CC BY-SA 4.0**, package code MIT,
+vector-traced from **Everkinetic** (also CC BY-SA 4.0). Raw URL shape:
+
+```
+https://raw.githubusercontent.com/bryllim/workout-guide/main/packages/workout-guide/assets/<slug>/frame-N.svg
+```
+
+The single-white-path property is why this works: one `colorFilter` tints every drawing to
+Campaign Gold `#D4B270`, so visual consistency is a property of the file format rather than a
+curation problem. `flutter_svg ^2.3.0` is already a dependency (`pubspec.yaml:84`). Verified on
+sampled files: exactly one `<path>`, one `fill` attribute, no `<style>`, gradients, masks,
+filters or embedded raster — nothing `flutter_svg` struggles with.
+
+**Rejected: `free-exercise-db`** (the source our dead URLs point at). The repo is Unlicense but
+its *images* have unanswered provenance — GitHub issues #2 (closed, no maintainer reply), #12
+and #13. Not defensible in a paid app.
+
+**Rejected: stock photo sites.** No per-exercise start/end taxonomy exists, consistency is
+structurally impossible across different models and lighting, and their licences grant photo
+rights but not likeness rights — a recognisable person in a commercial fitness app needs a
+model release the stock site does not provide.
+
+---
+
+## Asset treatment — three findings that shaped it
+
+### 1 · Frame 2 is an artifact, not a third position
+
+At 430 px, `push-up/frame-2` is the *same pose* as `frame-1` with every line double-stroked.
+Measured across 23 exercises, frame 2's ink coverage runs **0.65× to 2.69×** frame 1's (median
+1.46×). Any animation cycling all three frames pulses in thickness.
+
+**Only frames 1 and 3 are real poses.** Excluding frame 2 also drops the fattest files (mean
+43.6 KB vs 26.9 KB for frames 1 and 3).
+
+### 2 · Frame order is not start → end
+
+The upstream README calls them "three consistent frames" — it is an **animation loop**, and a
+loop has no canonical first frame. What frame 1 actually is, is *the pose that identifies the
+exercise*; frame 3 is the contrasting one. For Bench Press and Squat that coincides with
+start → end. For holds and stretches it does not: Wall Sit, Superman, Child's Pose and Dead Bug
+are all **reversed**, and for Standing Quad Stretch and Cross-Body Shoulder Stretch frame 3 is
+*a figure standing still doing nothing*.
+
+Resolved by the plate-shape rule below, at zero runtime cost.
+
+### 3 · Thickening the line makes it worse; cropping makes it better
+
+The median line is 3–4 units on a 512 canvas — **0.97 px** in a 165 px plate, which is what
+"blurry" looks like. Two fixes were tested at matched display size:
+
+- **Stroke thickening — REJECTED.** In this artwork the line and the gap between two lines are
+  the same size, so a stroke adds to the ink *and subtracts from the gap*. Measured on Wall
+  Sit: median interior gap falls 17 → 13 units at `stroke-width=4`, and **6 % of gaps close
+  completely**. That is detail deleted.
+- **Crop — ADOPTED.** A crop scales ink and gaps together, so nothing merges.
+
+⚠ **The crop must be the union of both frames of a pair, never per-frame.** Bench Press start
+is 390×444 and end is 431×397; cropping each to its own bounds makes the body visibly change
+size between START and END. The union (451×484 with 10 units of padding) keeps the figure
+locked. **Single-plate exercises use the frame's own bounds.**
+
+⚠ Judge nothing about sharpness at 1×. A phone runs at DPR 2.5–3, so a 44 px thumbnail is
+110–132 physical pixels. **Ship 44 px with the crop, then look on a handset** before deciding
+whether `fill-rule="nonzero"` (a one-attribute change that fills the enclosed regions) is
+needed. That decision is blocked on a device and cannot honestly be made from a desktop page.
+
+---
+
+## The plate-shape rule
+
+Driven by `logging_type`, which is already on every row and already decides which inputs the
+Active Workout screen shows (`lib/features/train/CLAUDE.md`, logging-types table).
+
+| `logging_type` | n | What frames 1 and 3 are | Plate |
+|---|---|---|---|
+| `weight_reps` | 115 | genuine top and bottom of the rep | **two images**, START + END |
+| `bodyweight_reps` | 102 | same | **two images**, START + END |
+| `timed` | 65 | frame 1 is the hold; frame 3 is entry, neutral, or nothing | **one image** |
+| `cardio` / `distance` | 10 | not a rep at all | **one image** |
+
+**217 two-image, 75 single-image.** Verified across 17 `timed` exercises; the pattern held
+every time.
+
+A hand-curated exception list covers dynamic-`timed` movements that genuinely do have two
+positions — Cat-Cow, Flutter Kick, Bear Crawl, Crab Walk, Jump Rope, Mountain Climber. **Superseded 2026-08-29 — it lives in the library JSON, as `demo_pair`.**
+The rule is read by BOTH the Dart renderer and the Python asset pipeline, which crops a pair to
+the union of both frames and a hold to frame 1's own bounds. A Dart-only constant left the
+pipeline unable to see the decision it had to act on, so it unioned every slug — which for a
+hold means cropping around a figure that is never rendered. One field in the data, read by both
+sides, with nothing to keep in sync.
+
+`Barbell Curl` also keeps its name and its `ez-bar-curl` drawing (founder, 2026-08-29):
+renaming would orphan `exlog_*` history, which hashes the exercise name.
+
+The failure modes are asymmetric and that is why `timed` defaults to one image: showing a pair
+when only one pose is meaningful looks broken; showing one when two would help is merely less
+informative.
+
+---
+
+## Data contract
+
+### New field: `demo_slug`
+
+One nullable string per exercise row in `assets/data/exercise_library.json`, naming the
+workout-guide slug. Absent or null ⇒ the monogram empty state.
+
+The slug — not a pair of URLs — because the file paths are derivable (`<slug>/frame-1`,
+`<slug>/frame-3`) and a single field cannot drift out of sync with itself. This also lets the
+dead `image_start_url` / `image_end_url` / `gif_url` fields be removed rather than leaving two
+competing sets of image columns.
+
+### Existing users get it with a one-line change
+
+`lib/core/services/seed_service.dart:95` holds `_exerciseLibraryVersion = 10` — the OI-89 re-seed already consumed 10. **Bump to 11.**
+
+⚠ Writing "bump to 10" would be a silent no-op: `seed_service.dart:128` re-seeds only when `storedExVersion < _exerciseLibraryVersion`, so an unchanged constant means no existing install ever picks up `demo_slug`. **Read the constant, do not assume its value.**
+On next launch every install re-seeds through an idempotent `putAll`
+(`_seedExercises`, the `putAll` + version stamp at `seed_service.dart:192`), so a new field reaches everyone. No migration, no data loss.
+
+### The second writer is already safe
+
+`lib/core/services/sync/sync_community.dart:502` guards its write with
+`exerciseBox.get(id) == null`, so it can only *add* rows — it cannot overwrite a seeded row and
+strip the new field. **This closes the writer/reader drift risk before it opens**, and is worth
+an explicit assertion in the contract test so a future relaxation of that guard fails loudly.
+
+### Postgres
+
+`supabase/migrations/074_seed_exercise_library.sql` also carries the library. If `demo_slug`
+is added there, `backups/live_schema_columns.json` is regenerated **in the same commit** (root
+CLAUDE.md §7 pointer row). If the field stays client-only, the migration is untouched and this
+paragraph is the record of that decision.
+
+---
+
+## Matching: use the upstream manifest, not exercise names
+
+`packages/workout-guide/manifest.json` (302 entries, 567 KB) carries per-exercise
+`equipment`, `exerciseType`, `primaryMuscle`, `secondaryMuscles`, `isStretch`, and **per-frame
+attribution including the exact Everkinetic source URL and licence**. Matching on names alone
+ignores all of it.
+
+**The gate that matters: reject any drawing that adds load-bearing kit the exercise does not
+use.** Load-bearing means `Barbell`, `Dumbbell`, `Kettlebell`, `Plate`, `Cable`, `Machine`,
+`Resistance Band`. It is deliberately one-directional — *ours having more* never rejects, and
+**their `Bodyweight` never rejects**, because their `Bodyweight` is a superset of ours: it
+covers Pull Up, Chin Up, Chest Dip, Hanging Leg Raise and Ab Wheel Rollout, which our data
+files under `pull-up bar`, `parallel bars` and `ab wheel`. A symmetric class-equality gate
+wrongly rejected all six; this one does not.
+
+**What it caught: 18 of 145 automatic matches carried the wrong equipment**, in the tier no
+human was going to review:
+
+| our exercise | `equipment_needed` | auto-matched drawing | drawing's equipment |
+|---|---|---|---|
+| Walking Lunge | `bodyweight` | `walking-lunge` | Dumbbell |
+| Split Squat | `bodyweight` | `split-squat` | Dumbbell |
+| Reverse Lunge | `bodyweight` | `reverse-lunge` | Dumbbell |
+| Deficit Reverse Lunge | `bodyweight` | `deficit-reverse-lunge` | Dumbbell |
+| Reverse Nordic Curl | `bodyweight` | `reverse-curl` | Barbell — **a different exercise** |
+| Egyptian Lateral Raise | `cables` | `lateral-raise` | Dumbbell |
+| Overhead Tricep Extension | `dumbbells` | `overhead-tricep-extension` | Cable |
+
+Muscle and type agreement are **tie-breakers only**, never promoters: weighting them at 0.20
+let `bodyweight-squat` outrank everything for *Bodyweight Good Morning* on shared-muscle alone,
+and pushed the review queue from 62 rows to 111. At 0.05 behind a name floor of 0.34 they
+order equals without inventing matches.
+
+**Consequence for the licence:** the manifest's per-frame `attribution` block gives the exact
+creator, licence URL and Everkinetic source for every asset, so the credit surface can be
+generated rather than hand-written.
+
+### ...and then stop scoring altogether
+
+The manifest gate fixed equipment. It could not fix **movement**, and no threshold can.
+`Towel Hammer Curl` (biceps) kept matching `towel-hamstring-curl` (legs) on the shared words
+*towel* and *curl*. `Cable Tricep Kickback` (triceps) matched `cable-kickback`, a glute
+exercise. Four rounds of tuning failed, each costing founder review time.
+
+WARNING: **the `muscle differs` signal is NOISE, and this measurement settles it.** It fired on
+**54 of 124** automatic matches - every one a perfect 1.00 name hit (`Chest Dip -> chest-dip`,
+`Deadlift -> deadlift`, `Burpee -> burpee`). Our `primary_muscles` and the catalogue's
+`primaryMuscle` are different taxonomies, so a hard muscle gate would have rejected 54 correct
+drawings. **Do not re-propose one.**
+
+**What replaced it.** Each of the 292 exercises was judged against the whole 302-drawing
+catalogue *by movement*, with the manifest as evidence, then every accepted match was attacked
+by an independent adversarial reviewer instructed to default to rejection. Scripts:
+`gen_adjudicate.js` -> `adjudicate.js`, run `wf_73877b1f-0fd`; and `gen_pass2.js` -> `pass2.js`,
+run `wf_7d3962a5-6cd`. 22 + 8 agents, 0 errors.
+
+Against the string matcher over the same 292: **21 wrong drawings it would have shipped, 20
+matches it missed, 10 where it picked a worse slug** - 51 corrections. It found
+`Dand (Hindu Pushup) -> hindu-push-up`, one of the Indian-traditional set that name matching had
+consigned to the shoot list. It caught `Reverse Wrist Curl -> reverse-curl`, *a biceps
+exercise*, and replaced it with `wrist-extension`.
+
+WARNING: **two token-economy rules, both founder-directed and both load-bearing.** Refute only
+`confidence !== 'high'` - attacking `bench-press -> bench-press` re-confirms a tautology and
+costs nothing but tokens. And do not fan every batch out at once: a stopped run's completed
+agents replay **free** via `resumeFromRunId`.
+
+### The split rule - founder, 2026-08-29
+
+When the catalogue depicts **the same movement with different equipment**, do not reject the
+drawing and do not rename our exercise. **Keep ours exactly as it is** - same name, same
+`equipment_needed`, same `exlog_*` history, and it joins the photograph list - and **add a new
+exercise named for the equipment shown**, which takes the drawing.
+
+`Sumo Squat` stays bodyweight and unillustrated; `Dumbbell Sumo Squat` is new and takes
+`dumbbell-sumo-squat`. Both tiers end up served.
+
+WARNING: **renaming the existing row instead would orphan history.** `schedule_*` rows store the
+exercise NAME and the `exlog_*` key hashes it (`lib/features/train/CLAUDE.md`,
+`exercise_logs_read_path`). The rule's "keep ours" half is not a preference - it is what makes
+the pattern safe.
+
+WARNING: **the rule has a cost that must be designed for.** The bodyweight rows are already
+tiered into `home_dumbbells` / `basic_gym` / `full_gym`, so a dumbbell user would see **both**
+rows of every split pair - the same movement twice in the selection pool, drawing double the
+slot probability of its neighbours. That is exactly OI-146's defect, reproduced deliberately 23
+times. **The 23 new rows must not ship until that is answered**, which is one more reason they
+belong to **OI-148** rather than here.
+
+⚠ **Corrected 2026-08-29: these are NOT OI-145.** That issue scopes *34 licence-clean
+drawings depicting bodyweight exercises the library does not have* — `clamshell`,
+`fire-hydrant`, `bird-dog` and so on. These 23 are equipment VARIANTS of rows that already
+exist, sharing none of those slugs. Naming a real-but-wrong OI reads as tracked and is worse
+than naming none.
+
+---
+
+## Placement
+
+**The number badge becomes the plate.** The badge carries almost nothing — position in a
+vertical list is already obvious and the active card is marked in gold — so replacing it costs
+**zero new elements**, keeping Hick's Law neutral on a header row that is already at five.
+
+⚠ **Tapping the exercise name is not available.** `exercise_card.dart:429-433` wraps the whole
+header row in a `GestureDetector` whose `onTap` is `widget.onFocus` (expand/collapse, Bug #15b)
+and whose `onLongPress` is `widget.onLongPressHeader` (superset grouping). Both are load-bearing.
+
+**Size: 44 px, not 38.** This also lifts the target to the minimum touch size — one change,
+two fixes.
+
+Three sites render a numbered badge, all near-identical `accentSoft` squares/circles holding
+`${index + 1}`:
+
+| surface | site | badge today |
+|---|---|---|
+| Active Workout card | `exercise_card.dart:447` | 24 px circle |
+| Train tab · day card | `expandable_day_card.dart:236` | 24 px square |
+| Home · day detail sheet | `day_detail_sheet.dart:256` | 28 px square |
+
+A second, quieter entry rides the existing FORM & CUES bar (`FORM & CUES · VIEW PLATE`), so
+each of the two moments of doubt — *"what is this movement?"* while scanning, and *"am I doing
+it right?"* at the rep — has a door, with no new chrome in either state.
+
+**The set-position number is not lost:** the expanded set table already prints 1, 2, 3 down its
+left edge. If it is wanted in the collapsed state, the meta line takes it as
+`EX 1 OF 6 · 4 SETS · 8-12 REPS`, which also adds a goal-gradient signal the card lacks today.
+
+### Performance constraints, both already learned in this file's neighbourhood
+
+- **Resolve the slug in `initState`, never in `build()`.** The Active Workout card rebuilds
+  roughly once a second off the workout timer; `coaching_content_panel.dart:40-58` documents
+  exactly this and resolves in `initState` / `didUpdateWidget`.
+- **Cache the parsed picture.** Six to eight thumbnails per screen. Parsed once, nothing;
+  parsed per frame, a jank source.
+
+---
+
+## The empty state
+
+**A monogram** — the exercise's initials in Wardroom mono, dim gold on a recessed ground inside
+the same plate frame, so the slot reads as *a plate not yet issued* rather than as a failure.
+
+Three populations need it, and they are not edge cases:
+
+1. **Custom exercises** the user creates — no library row at all.
+2. **Community exercises** pulled by `sync_community.dart:508` from `user_custom_exercises`.
+3. **The 85 library rows with no equivalent**, until they are shot.
+
+**Swapped exercises are not on this list** — a swap picks from the library, so it arrives with
+a plate.
+
+⚠ **The monogram does not identify and is not meant to.** Measured across the library, a
+three-letter code collides for 33 % of exercises and two letters for 62 % — `SC` is Skull
+Crusher, Suitcase Carry, Spider Curl *and* Sandbag Clean. The exercise name is printed
+alongside; the monogram's only job is to make the slot look deliberate. Rejected alternatives:
+falling back to the number (a column mixing engravings and bare numerals reads as *some of
+these are missing*), a category glyph (nine glyphs to design, and a triangle beside an
+engraving is two visual languages), and an empty frame (reads as a loading state that never
+resolves).
+
+---
+
+## Licence obligations
+
+Artwork is CC BY-SA 4.0. Attribution to **Everkinetic** and **Bryl Lim** is owed, and an
+indication that changes were made.
+
+The only edit is the `viewBox` crop. Whether a mechanical crop rises to *Adapted Material* and
+pulls in ShareAlike is arguable; cropping usually counts. **The cheap answer is to treat the
+processed set as adapted and publish it under CC BY-SA 4.0** rather than litigate the edge.
+This never reaches the app's own code — CC BY-SA has no copyleft effect on separately-licensed
+software that merely displays the work.
+
+Open: where the credit surface lives in the app, and whether the processed assets sit in their
+own public repo or beside this one. Flutter's `showLicensePage` / `LicenseRegistry` is the
+conventional mechanism; whether this app already uses one is **unverified**.
+
+---
+
+## Delivery
+
+**Bundled, not fetched.** Root CLAUDE.md coding rule 1 is Hive-first and never block UI on the
+network, and a gym basement with no signal must still show the plate.
+
+Measured across 60 real frame-1 and frame-3 files: median **18.1 KB**, mean **26.9 KB**,
+deflate ratio **0.41**.
+
+| set | exercises | plate files | raw | in-APK |
+|---|---|---|---|---|
+| **this batch ships** | **165** | **292** | 6.64 MB | **2.83 MB** |
+| at full coverage, all 292 | 292 | 508 | 13.3 MB | **5.5 MB** |
+
+The shipping set is **148 pair + 17 single exercises** over **153 distinct slugs**
+(139 pair + 14 single) = **292 files**. Measured, not estimated: generated against upstream
+`aac599224bb9780305239607ef98540b7e0ce389` on 2026-08-29.
+
+⚠ **A per-exercise count and a per-slug count are different numbers.** 12 drawings are
+referenced by two exercises each, so 165 exercises share 153 slugs. Conflating the two made
+every file count in the first implementation plan wrong. Of those 12, only four (`pull-up`,
+`hanging-leg-raise`, `cable-fly`, `prone-t-raise`) are genuine sharing; the other eight are the
+duplicate ROWS filed as OI-146.
+
+⚠ `pubspec.yaml:129` declares assets **per directory**, so `assets/exercise_plates/` needs a new
+entry — and `pubspec.yaml` is pinned `platform` in `docs/blast_radius.yaml:324`. **That single
+line sets the whole batch's blast radius**, and it is not worth gaming.
+
+---
+
+## What this batch removes
+
+`image_start_url`, `image_end_url` and `gif_url` from `assets/data/exercise_library.json`, plus
+the copy-through at `swap_service.dart:294-295`. They are 100 % dead — every populated URL
+404s — and leaving them beside `demo_slug` would ship two competing sets of image fields, which
+is the writer/reader drift shape this repo has hit repeatedly. Migration 074's column list is
+updated in the same commit if the columns exist server-side.
+
+---
+
+## Not in this batch, and why
+
+Both are separate work items with their own triggers, not parts of this one held back.
+
+- **`breathing_cue` holds a number on 136 of 292 rows.** A column shift in the original
+  spreadsheet import put `met_value` into `breathing_cue` — exactly 136 rows have a numeric
+  cue, exactly 136 have a null `met_value`, intersection 136, zero on either side.
+  `coaching_content_panel.dart:143` renders it verbatim, so a Plank shows `BREATHING / 5` in
+  the shipped app today. `met_value` is read nowhere in `lib/`, so no calorie maths is wrong,
+  and the repair is data-only. **Owner: its own OI board entry.** It touches this batch only
+  because the plate reuses the same text.
+- **`fill-rule="nonzero"` at thumbnail size.** Blocked on a real handset — it cannot be judged
+  at 1× and the page says so. One attribute when the answer is known.
+
+---
+
+## Verification
+
+| what | how |
+|---|---|
+| plate-shape rule | behavioral test: every `timed` / `cardio` / `distance` row renders one plate, every rep row renders two; the dynamic-`timed` exception list is asserted by name |
+| union crop | behavioral test: for a paired exercise, both frames resolve to the **same** viewBox — the assertion that catches a regression to per-frame cropping |
+| `demo_slug` reaches existing users | behavioral test over a seeded box at version 9 → re-seed → field present |
+| `sync_community` cannot strip the field | contract test asserting the `get(id) == null` guard, so relaxing it fails loudly |
+| empty state | behavioral test: null / absent `demo_slug` renders the monogram, never a broken image |
+| no dead URL fields remain | source-grep contract test over `lib/` **and** the JSON asset |
+
+SoT registry (`docs/sot_registry.yaml`) gains a concept for the plate read path with a real
+`behavioral_test_path:` — rule 21 is strict and a bare registry entry blocks the commit.
+
+---
+
+## Process weight
+
+**Blast radius: `platform`**, driven by `pubspec.yaml` (verified:
+`dart run scripts/blast_radius_from_diff.dart pubspec.yaml` → `Blast-radius: platform`).
+
+Consequently: a plan-review record at `docs/plan-reviews/exercise-plates.md` with
+`review_rounds: >= 2`, `ground_truth_verified: true`, `verdict: converged` **and
+`bpass: accepted`** (§4.12.3, required at ≥platform); a self-initiated `/code-review` B-pass
+before the `--no-ff` merge (§4.3); the full suite at pre-push; and the §5 checklist at batch
+end.
+
+This is **not** ship-dark tiering (§4.12.4) — the feature is visible the moment it ships, so
+the lighter single-round build tier does not apply.
+
+---
+
+## What is settled, and what is parked
+
+**Nothing is waiting on the founder.** The mapping is closed.
+
+| | |
+|---|---|
+| exercises shipping with a drawing | **165** |
+| exercises awaiting a founder photograph | **127** |
+| exercises still needing a human decision | **0** |
+| removed at founder request | **0 — split out to OI-147.** Donkey Calf Raise stays for now: removing one row turns out to touch the schema contract's 292-row assertion, the cloud seed-parity test, a newly-minted seed migration, the applied_migrations ledger, a live prod apply, and the frozen 606-persona generator baseline — which shows the generator picking that very row, and for which it is the library's ONLY bodyweight-tier calf isolation option. |
+
+**Founder decisions, in effect:**
+
+- `Barbell Curl` -> renamed **EZ Bar Curl**, takes `ez-bar-curl`. Our `equipment_needed` was
+  already `ez-bar`, so the NAME was the error and the drawing was right.
+- `Dumbbell Shoulder Press` -> takes `standing-dumbbell-press`; **Seated Dumbbell Shoulder
+  Press** is added for `seated-dumbbell-press`. Two drawings exist, so two exercises.
+- `Sumo Squat`, `Captain's Chair Leg Raise`, `Thoracic Rotation`, `Standing Toe Touch` and
+  `Kas Glute Bridge` all keep their names and join the photograph list.
+- `Thoracic Rotation` also yields **Weighted Russian Twist**, taking `weighted-russian-twist` -
+  a drawing the name matcher never surfaced because the two names share no words, and which
+  `torso-twist-stretch` (`isStretch: true`, unloaded) could never have depicted.
+
+**Parked, each with an owner - none of it blocks this batch:**
+
+- **127 photographs** - the founder's camera. The monogram covers them from day one and they
+  arrive later as a data change plus an `_exerciseLibraryVersion` bump, no code. Shooting
+  guidance: plain evenly-lit wall, a metre off it, high contrast, fitted clothing, side-on, and
+  **the phone must not move between the start and end shots** - the union crop depends on a
+  shared frame.
+- **23 new exercises**, each with its drawing already identified - **OI-148**. They need the
+  full metadata row, and the selection-skew question above must be answered first.
+- **Eight duplicate exercise pairs** - **OI-146**, widened 2026-08-29 from three.
+
+### What photographs can and cannot become
+
+Tested on a real upload, four treatments, rendered against a catalogue drawing at both sizes.
+
+- **Automatic tracing does not work, and a better photograph would not fix it.** The
+  information in these drawings is *interior* - where the hands are planted, that the arms are
+  locked, that the limbs are separate. A silhouette discards it; a handstand becomes a tapering
+  spike. Edge detection finds clothing seams, not anatomy.
+- **A gold-duotone photograph reads well at plate size and collapses at 44 px**, which is
+  exactly where the badge-becomes-plate placement puts it. Keep the background rather than
+  cutting out - the cut-out depends on a segmentation mask being right, and it was not.
+- **A generated line drawing is the most promising route** and enters the pipeline cleanly: the
+  gold-on-navy separates on a warmth-plus-luma test, no segmentation needed. Caveats: it is
+  raster not vector, its line is lighter than the catalogue's, and anything generated *from* a
+  photograph inherits that photograph's copyright. Generate from a text description of the
+  movement instead.
+
+### One implementation detail the tooling already learned
+
+Uploaded photographs must be keyed on the **exercise id**, never on a position in a list. Keyed
+positionally, a rebuild of the shoot list silently reattaches a photograph to whatever exercise
+now sits at that index - observed live when one upload moved from `n004` to `n015` between two
+rebuilds of the same page.

@@ -1,0 +1,523 @@
+---
+description: "Build a production-ready APK with all required pre-flight gates, pre-flight checks, and post-build verification."
+---
+
+# /build-apk — Build Release APK
+
+Build a production-ready APK with all required pre-flight gates, pre-flight checks, and post-build verification.
+
+**Source-of-truth rule (added 2026-05-03):** APKs are ALWAYS built from `main`, never from a feature branch. Before invoking this skill, the work must be committed AND merged to main. The skill verifies this in pre-flight and refuses to build otherwise — the user explicitly chose this discipline so the APK shipped on device is byte-identical to the merged history.
+
+**Emergency bypass:** Pass `--emergency-bypass` in `$ARGUMENTS` to skip optional gates in a P0 situation. See `--emergency-bypass` section below.
+
+---
+
+## Pre-build housekeeping (not gated — always runs)
+
+1. Kill zombie `java.exe` and `gradle.exe` processes that may hold memory from crashed builds:
+   ```bash
+   taskkill //F //IM "java.exe" 2>/dev/null; true
+   ```
+
+2. Remove stale Flutter lock file (prevents silent Flutter SDK hangs):
+   ```bash
+   # Find Flutter SDK path
+   FLUTTER_SDK=$(flutter --version 2>/dev/null | head -1 | grep -oP 'Flutter \K[0-9.]+' || true)
+   # Delete lockfile if it exists and no flutter is running
+   ls "$(which flutter | xargs dirname)/../bin/cache/lockfile" 2>/dev/null && \
+     rm -f "$(which flutter | xargs dirname)/../bin/cache/lockfile" || true
+   ```
+
+3. Check for JVM crash dumps from prior builds:
+   ```bash
+   ls android/hs_err_*.log 2>/dev/null && echo "JVM crash dump found — diagnose before building" || true
+   ```
+
+---
+
+## Gates (all must pass before build)
+
+All gates are Dart CLI scripts. Run with `dart run scripts/<name>.dart`. Each exits 0 on pass. Failures are printed to stderr. Gates run in order — first failure stops the build (unless `--emergency-bypass` is active).
+
+**Fast-path:** pass `--from-green` to skip *re-running* the redundant gates (4 analyze, 5 full `flutter test`, 7–17/23 dart gates) when building a commit already pushed **and CI-green** — pre-push + CI just ran them on this exact SHA. Gates 1/2/2.5/3 + the clean build + Gate 13 + Gate 48 (release-signed) ALWAYS still run. See the `--from-green` section below.
+
+### Gate 1 — On `main` with clean working tree (existing)
+
+```bash
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+if [ "$BRANCH" != "main" ]; then
+  echo "ERROR: Not on main branch (current: $BRANCH). Merge to main first."
+  exit 1
+fi
+STATUS=$(git status --porcelain)
+if [ -n "$STATUS" ]; then
+  echo "ERROR: Working tree is dirty. Commit or stash changes first."
+  git status --short
+  exit 1
+fi
+git log --oneline -1
+```
+
+### Gate 2 — versionCode bumped vs last shipped (existing)
+
+Read `version:` from `pubspec.yaml`. If the current versionCode (`+N`) was already shipped in a prior `chore: bump versionCode` commit, STOP and bump it.
+
+```bash
+CURRENT=$(grep "^version:" pubspec.yaml | sed -E 's/.*\+([0-9]+).*/\1/')
+LAST_BUMP=$(git log -1 --format=%H --grep="bump versionCode" -- pubspec.yaml)
+echo "Current versionCode: $CURRENT (last bump commit: $LAST_BUMP)"
+```
+
+If a bump is needed: `Edit pubspec.yaml → 1.0.0+N → 1.0.0+(N+1)` **AND**
+`Edit lib/core/constants/app_constants.dart → appVersion = '1.0.0+(N+1)'` in the SAME commit —
+`check_app_version_matches_pubspec.dart` (Gate 51, pre-commit) hard-fails a commit where the two
+drift, so both edits are required, not optional. Then commit via
+`sh scripts/safe_commit.sh "chore: bump versionCode 1.0.0+N → 1.0.0+(N+1) for APK Test #X"`
+(NOT a raw `git commit` — a PreToolUse hook blocks that; `safe_commit.sh` is the sanctioned path,
+see CLAUDE.md §4.3), then continue.
+
+**Why this matters:** Android silently rejects a same-versionCode reinstall as a no-op. Founder hit this on Tests #7, #8, #10, #11, #11.1, #12 — all originally built at `1.0.0+6`.
+
+### Gate 2.5 — versionCode not already built/uploaded by THIS pipeline (NEW — 2026-09-15)
+
+**Gate 2 is blind to a versionCode consumed OUTSIDE the bump-commit trail.** It only compares
+the current versionCode against past `chore: bump versionCode` commits — it cannot see an actual
+build/upload that happened without a later bump commit yet existing. This is exactly what
+happened on 2026-09-15: `1.0.0+42` was bumped-to by commit `64fc2893`, then built and uploaded to
+Play Console, but no bump-away commit existed yet when `/build-apk --bundle` was next invoked —
+Gate 2 read as a clean pass immediately before that mistake was nearly repeated. See
+`feedback_mistake_versioncode_gate2_blind_spot.md`.
+
+```bash
+dart run scripts/verify_versioncode_available.dart
+```
+
+If this FAILS: the current versionCode was already recorded as built by a prior `/build-apk` run
+(`backups/built_versioncodes.json`) or already shipped as an APK (`backups/apk_sizes.json`). Bump
+versionCode (Gate 2's edit, both files) before proceeding — do NOT override.
+
+If this PASSES: it means "not known to be already built **by this pipeline**" — it CANNOT see a
+manual/out-of-band Play Console upload. **Always ask the founder explicitly: "has
+`1.0.0+N` already been built or uploaded outside `/build-apk`?"** before proceeding, the same way
+Gate 3.5 asks about CI state. Never assume a Gate 2.5 PASS alone is sufficient — this incident's
+root cause was treating a mechanical pass as sufficient without asking that question.
+
+### Gate 3 — `.env` exists (existing)
+
+```bash
+if [ ! -f ".env" ]; then
+  echo "ERROR: .env not found. Copy from .env.example and fill in Supabase + Razorpay keys."
+  exit 1
+fi
+```
+
+### Gate 3.5 — Discipline-CI green on main (MANDATORY — P1.H/F1, 2026-06-18)
+
+**Applies to ALL build paths, including `--from-green` and `--emergency-bypass`.**
+
+Before building, verify that the latest CI run of "Test & Analyze" on `main` concluded
+`success` for the exact SHA being built. This gate catches the case where a
+`plan-review-record` failure or Gate-40 failure is silently live on `main` — releasing an APK
+from such a `main` ships code whose discipline contract is broken.
+
+```bash
+SHA=$(git rev-parse HEAD)
+echo "[Gate 3.5] Checking discipline-CI on main for SHA $SHA..."
+CI_RESULT=$(gh run list \
+  --branch main \
+  --workflow "Test & Analyze" \
+  --limit 1 \
+  --json conclusion,headSha \
+  --jq ".[0] | {conclusion: .conclusion, headSha: .headSha}" 2>/dev/null || true)
+
+CI_CONCLUSION=$(echo "$CI_RESULT" | jq -r '.conclusion // empty')
+CI_SHA=$(echo "$CI_RESULT" | jq -r '.headSha // empty')
+
+if [ -z "$CI_CONCLUSION" ]; then
+  # gh unavailable or no run found — warn and proceed (best-effort).
+  echo "[Gate 3.5] WARN: could not check CI conclusion (gh unavailable or no run). "
+  echo "  Proceeding on your explicit build request — ensure CI is green before distributing."
+elif [ "$CI_SHA" != "$SHA" ]; then
+  echo "[Gate 3.5] ABORT: latest CI run is for SHA $CI_SHA, not $SHA."
+  echo "  Push your changes and wait for CI to pass before building."
+  exit 1
+elif [ "$CI_CONCLUSION" != "success" ]; then
+  echo "[Gate 3.5] ABORT: discipline-CI is not green on main."
+  echo "  Latest CI conclusion: $CI_CONCLUSION (SHA $CI_SHA)"
+  echo "  The 'Test & Analyze' workflow (which includes the plan-review-record"
+  echo "  and Gate-40 jobs) must conclude 'success' before an APK can be released."
+  echo "  Fix the failing CI job, push, confirm green, then re-run /build-apk."
+  exit 1
+else
+  echo "[Gate 3.5] PASS: discipline-CI is green (SHA $CI_SHA, conclusion=success)."
+fi
+```
+
+**Why this gate is mandatory (not skippable):** The solo-founder workflow has no PR gate
+before release — APK = the release artifact. A `main` with a failing `plan-review-record`
+check means the batch shipped without the required ×2 context-blind reviews + ground-truth
+audit. An APK from such a `main` distributes un-reviewed code. Gate 3.5 is the last
+enforcement point before the artifact leaves the repo.
+
+### Gate 4 — `flutter analyze --no-fatal-infos` (existing)
+
+```bash
+flutter analyze --no-fatal-infos
+```
+
+Note: `--no-fatal-infos` retained for now — there are 20+ pre-existing info-level hints. Goal is `--fatal-infos` but not yet achieved. Do not silently downgrade this gate.
+
+### Gate 5 — `flutter test` full suite (existing)
+
+```bash
+flutter test
+```
+
+Full unit test suite. Must pass with 0 failures. Pre-commit hook enforces the same gate; this is the build-time confirmation.
+
+### Gate 6 — Integration tests (optional, `--integration` flag only)
+
+```bash
+# Only run when --integration flag is in $ARGUMENTS
+flutter test --dart-define-from-file=.env integration_test/ --flavor dev
+```
+
+Default: skip (requires connected Android device). Pass `--integration` to opt in.
+
+### Gate 7 — SoT registry completeness
+
+```bash
+dart run scripts/check_sot_registry_completeness.dart
+```
+
+Asserts every write-pattern method in `lib/core/services/*.dart` appears in `docs/sot_registry.yaml`. Warn-don't-fail when < 50 unmatched (registry still being built).
+
+### Gate 8 — Forbidden legacy patterns absent
+
+```bash
+dart run scripts/check_naming_audit.dart
+```
+
+Greps `lib/`, `supabase/functions/`, `test/`, `integration_test/` for patterns in `forbidden_legacy_patterns[]`. Warn-don't-fail when > 30 violations (T2.3 cleanup may still be in progress).
+
+### Gate 9 — WriteService contract tests present
+
+```bash
+dart run scripts/check_writeservice_contracts.dart
+```
+
+Every concept with a `hive.key_prefix` in the registry must have `test/contracts/<concept>_writer_to_reader_test.dart`. Warn-don't-fail when > 5 missing (T3.1 will add them).
+
+### Gate 10 — Bug-fix commits reference valid diagnose-docs
+
+```bash
+dart run scripts/check_bugfix_commits_have_diagnose.dart
+```
+
+Every `fix:` / `bug:` / `regression:` commit since last APK build must have either `closes-diagnose: <6+hex>` (referencing a real `docs/diagnoses/*-<id>.md`) or `regression-test-skipped: <reason>`.
+
+### Gate 11 — Sync fan-out completeness
+
+```bash
+dart run scripts/check_sync_fanout.dart
+```
+
+Every `sync_methods[]` / `restore_methods[]` entry in the registry must be declared as a `Future<...>` method in `lib/core/services/sync_service.dart`.
+
+### Gate 12 — Edge function payload contracts
+
+```bash
+dart run scripts/check_edge_function_payloads.dart
+```
+
+Flutter caller body keys ⊆ Edge Function server keys. No-op pass if no `edge_function_payloads` are defined in registry yet.
+
+### Gate 14 — Migrations applied to prod
+
+```bash
+dart run scripts/check_migrations_applied.dart
+```
+
+Local `supabase/migrations/*.sql` files must all appear in `backups/applied_migrations.json` snapshot. Exit 0 if snapshot is absent (first run). Update `backups/applied_migrations.json` after applying new migrations.
+
+### Gate 24 — Razorpay key prefix matches the build flavor
+
+```bash
+dart run scripts/check_razorpay_key_flavor.dart
+```
+
+`rzp_live_*` only in prod-flavor config, `rzp_test_*` only in dev. Shipping a
+prod APK carrying a test key silently fails every payment; the reverse hits the
+live ledger from a dev build. Reads `.env.prod`, which is gitignored user-only
+secret state — that is why it cannot run in pre-commit or CI, and why THIS is
+its home.
+
+**Wired here 2026-08-17.** It previously had zero invocation sites: skip-listed
+in `pre-commit.sh` and `test.yml` with the rationale "run via /build-apk skill,
+NOT pre-commit", while `/build-apk` had no section for it. `LENS_REGISTRY.md`
+L43 records the standing blocker — `.env.prod` currently carries an `rzp_test_`
+prefix — so expect this to FAIL until the founder installs the live key. That
+failure is the gate doing its job on a real, already-documented condition.
+
+### Gate 15 — Generic error catch blocks must emit telemetry
+
+```bash
+dart run scripts/check_generic_error_telemetry.dart
+```
+
+Every user-facing generic error message ("Sorry,", "Something went wrong", "temporarily unavailable", "Failed to ...", "Could not ...") inside a `catch (...)` block must be preceded within 30 lines by an `ErrorTelemetry.logEvent` / `recordNonFatal` / `_reportSyncFailure` call. Codifies APK Test #15.1 / Bug D — ai-media-proxy generic else-branch fell through silently with zero telemetry.
+
+Baseline file `backups/generic_error_telemetry_baseline.txt` grandfathers pre-existing violations. NEW violations hard-fail.
+
+### Gate 16 — Repository box.get(key) → Map must inject id
+
+```bash
+dart run scripts/check_id_injection_on_get.dart
+```
+
+In `lib/**/*_repository.dart`, every `box.get(key)` that returns a Map shape must inject the key as `id` on the returned map within 15 lines, OR carry an explicit `// gate16-exempt: <reason>` annotation. Codifies APK Test #15.1 / Bug F — Test #6 WriteService rewrite stopped writing `id` value fields (id IS the Hive key); consumer filters then silently stripped every row.
+
+Baseline file `backups/id_injection_on_get_baseline.txt` for grandfathered patterns. NEW violations hard-fail.
+
+### Gate 17 — `exlog_*` canonical writer enforcement
+
+```bash
+dart run scripts/check_exlog_key_canonical.dart
+```
+
+Source-grep fails the build if any file outside the canonical `WorkoutWriteService.exlogKey` (+ documented restore mirror + ExlogKeyMigrator allowlist) constructs an `exlog_*` Hive key directly. Codifies APK Test #16.1 / Theme A — three rogue writer formulas were silently producing non-canonical keys (`String.hashCode` non-determinism + per-call `ms` keys) → visible duplicates + receipt no-op. See `.claude/skills/debugging/SKILL.md` §2.12 "Rogue Hive key formula bypasses canonical writer".
+
+### Gate 53 — `nlog_*` canonical writer enforcement
+
+```bash
+dart run scripts/check_nlog_key_canonical.dart
+```
+
+Source-grep fails the build if any file outside the canonical `NutritionWriteService` (+ documented restore mirror + migration mirror) constructs an `nlog_*` Hive key directly. Mirrors Gate 17 (`check_exlog_key_canonical.dart`) for the nutrition domain. Shipped 2026-05-24 (drift-fix batch / F2) after audit found a Nutrition IST writer drift in the same writer/reader bug class.
+
+---
+
+## Build step
+
+After all gates pass, ask user for confirmation before the actual build command. Show:
+- Flavor: prod
+- Mode: release
+- Env file: .env
+- versionCode: current from pubspec.yaml
+- Estimated time: 15-20 minutes (clean build)
+
+### Clean build environment (skip if `--skip-clean` in `$ARGUMENTS`)
+
+```bash
+flutter clean
+flutter pub get
+```
+
+### Build APK
+
+```bash
+flutter build apk --dart-define-from-file=.env --flavor prod --release -t lib/main.dart
+```
+
+Run with 10-minute timeout. Long-running command.
+
+### Build App Bundle instead — `--bundle` in `$ARGUMENTS`
+
+**The Play Store cannot accept an APK.** A production or closed-testing track
+requires an `.aab`. Until 2026-08-24 this pipeline produced APK only — the
+appbundle command was documented in CLAUDE.md §0 and README but no script, skill
+or gate ever ran it, so the Play upload artifact had never once been built.
+
+When `--bundle` is present, replace the build command above with:
+
+```bash
+flutter build appbundle --dart-define-from-file=.env --flavor prod --release -t lib/main.dart
+```
+
+Everything else about the run is unchanged — **every pre-build gate still
+applies** (clean tree, on-main, versionCode bump, `.env` present, Razorpay key
+flavor, diagnose-doc, all of it). Only the artifact differs:
+
+| | APK (default) | `--bundle` |
+|---|---|---|
+| Artifact | `build/app/outputs/flutter-apk/app-prod-release.apk` | `build/app/outputs/bundle/prodRelease/app-prod-release.aab` |
+| Installable via adb | yes | **no** — an `.aab` is an upload format, not an install format |
+| Play Store accepts | no | yes |
+| Size gate 13 | applies as written | bounds are for the APK; an `.aab` is normally smaller, so record it separately rather than comparing to `apk_sizes.json` |
+| Signing gate 48 | applies as written | **still applies** — verify with `jarsigner -verify -verbose -certs <aab>` or `bundletool`, pinning the same `CN=ICANBEFITTER` |
+
+⚠ **Do not device-verify a release by installing the bundle** — you cannot.
+To smoke-test the exact artifact Play will serve, generate a universal APK from
+the bundle with `bundletool build-apks --mode=universal`, or keep building an
+APK for device testing and the `.aab` for upload. Verifying the APK and shipping
+the bundle assumes they are equivalent; they are built from the same code but
+are not the same artifact.
+
+⚠ **First upload only:** Play App Signing takes over signing after the first
+upload. Back up `android/app/release.jks` + `android/key.properties` offsite,
+twice, BEFORE the first upload — losing the upload key means publishing under a
+new package name and losing every installed user
+(`docs/operations/SECRET_INVENTORY.md`).
+
+---
+
+## Post-build verification and Gate 13
+
+### Verify APK exists
+
+```bash
+ls -lh build/app/outputs/flutter-apk/app-prod-release.apk
+```
+
+Report file size. Expected ~114 MB for current project state.
+
+### Check for JVM crash dumps
+
+```bash
+ls android/hs_err_*.log 2>/dev/null && echo "JVM crash dump found — see Error Recovery" || echo "No crash dumps"
+```
+
+If found: read the crash log, diagnose (likely Gradle OOM), suggest reducing `-Xmx` in `android/gradle.properties`.
+
+### Gate 13 — APK size within bounds (post-build)
+
+```bash
+dart run scripts/check_apk_size_within_bounds.dart --record
+```
+
+Reads `backups/apk_sizes.json`. Fails if APK size changed by > ±10% from last shipped. `--record` flag writes the current size + MD5 into the JSON.
+
+### Gate 48 — APK signed with the RELEASE certificate (post-build)
+
+```bash
+dart run scripts/check_apk_release_signed.dart --release
+```
+
+Verifies (via `apksigner`) that the built APK is signed with the pinned release cert
+(`CN=ICANBEFITTER`, SHA-256 pinned in the gate), NOT the Android **debug** key. Hard-fails a
+debug-signed or wrong-keystore APK. **Why (2026-06-05):** `android/app/build.gradle.kts:67-73`
+silently falls back to the debug key when `key.properties` is absent, and `key.properties` is
+gitignored (`android/.gitignore:12`) — so a worktree/clone build produces a debug-signed APK that
+**cannot update over the user's release-signed install** (Android shows "App not installed"),
+silently stranding them on the old version. This is the most likely reason APK +32 never reached
+the founder's phone (it stayed on +28). Needs `apksigner` (Android SDK build-tools) + a JDK
+(`JAVA_HOME` or Android Studio's bundled JBR is auto-detected). On a deliberate keystore rotation,
+update `kExpectedSha256` in the gate.
+
+### Gate 2.5 record — versionCode consumed (post-build, NEW — 2026-09-15)
+
+After Gate 48 passes (artifact is release-signed and real), record the versionCode as built by
+this pipeline so Gate 2.5 can catch a re-build attempt on a future invocation:
+
+```bash
+dart run scripts/verify_versioncode_available.dart --record apk   # default APK path
+dart run scripts/verify_versioncode_available.dart --record aab   # --bundle path
+```
+
+This is separate from Gate 13's `apk_sizes.json` (APK-only, size-focused) — `--record` here
+tracks versionCode consumption for BOTH artifact types, since an `.aab` has no size ledger yet.
+
+### Report results
+
+```
+APK built successfully
+Path: build/app/outputs/flutter-apk/app-prod-release.apk
+Size: <size> MB
+Flavor: prod | Mode: release
+versionCode: <N>
+MD5: <hash>
+```
+
+---
+
+## --from-green (CI-green fast-path)
+
+If `$ARGUMENTS` contains `--from-green`: the commit being built has already been pushed and
+verified green by CI, so the **redundant local re-run** of Gate 4 (analyze) + Gate 5 (full
+`flutter test`) + the dart gates (7–12, 14–17, 23) is skipped. Lean-workflow batch
+(2026-06-01): pre-push + CI just ran these on this exact SHA, and the `flutter clean` build
+below recompiles everything regardless — a second analyze/test pass is ~7–10 min of zero new
+signal.
+
+**ALWAYS still run (never skipped, even with `--from-green`):** Pre-build housekeeping, Gate 1
+(on `main` + clean tree), Gate 2 (versionCode), Gate 2.5 (versionCode not already built), Gate 3
+(.env), the clean build (`flutter clean`
+→ `build apk` — recompiles, catches compile/asset/Gradle errors), Gate 13 (size + record), and
+Gate 48 (release-signed — the signer cert is independent of the gates skipped above).
+
+**Pre-skip verification — fail TOWARD running the gates:**
+
+```bash
+SHA=$(git rev-parse HEAD)
+# 1. Built artifact must equal merged history (the source-of-truth rule).
+git fetch origin main --quiet 2>/dev/null || true
+if [ "$SHA" != "$(git rev-parse origin/main 2>/dev/null)" ]; then
+  echo "ERROR: --from-green requires HEAD == origin/main (push first). Falling back to the full gate run."
+  # -> run the normal gates; do NOT skip.
+fi
+# 2. Best-effort CI confirmation (authoritative when gh is available).
+CI=$(gh run list --branch main --json headSha,conclusion --limit 20 \
+       --jq "[.[] | select(.headSha==\"$SHA\")][0].conclusion" 2>/dev/null || true)
+```
+
+- `CI == success` → CI confirmed green → **skip** the redundant gates 4 / 5 / 7–17 / 23.
+- `CI == failure | cancelled | timed_out` → **ABORT**: do not build a red commit. Fix + re-push.
+- `CI` empty (pending / no run yet / `gh` absent or unauthenticated) → **WARN** and proceed on
+  your explicit `--from-green` assertion (it is opt-in; passing the flag asserts CI-green).
+
+Without `--from-green`, all gates run as normal — the safe default.
+
+## --emergency-bypass
+
+If `$ARGUMENTS` contains the literal string `--emergency-bypass`:
+
+1. Skip gates: 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 23
+2. Keep gates: 1 (must be on main), 2 (versionCode), 3 (.env), 4 (analyze), 5 (flutter test), 15 (telemetry), 16 (id injection)
+3. After build, rename APK:
+   ```bash
+   mv build/app/outputs/flutter-apk/app-prod-release.apk \
+      build/app/outputs/flutter-apk/app-prod-release-EMERGENCY.apk
+   ```
+4. Append to `docs/emergency-builds.md`:
+   ```markdown
+   ## <timestamp>
+   - **Reason:** <reason from next arg after --emergency-bypass, or "not provided">
+   - **versionCode:** <N>
+   - **Gates skipped:** 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 23
+   - **Post-mortem due by:** <today + 7 days>
+   - **APK:** app-prod-release-EMERGENCY.apk
+   ```
+
+**Emergency bypass should be used only for true P0 incidents** (production down, data-loss risk, security patch). The post-mortem is mandatory; update `docs/emergency-builds.md` when complete.
+
+---
+
+## Error Recovery
+
+If the build fails or hangs:
+
+1. Check `android/hs_err_*.log` — if present, it's a JVM OOM crash
+2. Check `android/gradle.properties` — `-Xmx` must be ≤4G on 16GB system
+3. Current safe Gradle config: `-Xmx4G -XX:MaxMetaspaceSize=2G -XX:ReservedCodeCacheSize=256m`
+4. Kill stale Gradle daemons: `taskkill //F //IM "java.exe"`
+5. Remove Flutter lock: delete `<flutter_sdk>/bin/cache/lockfile`
+6. Delete JVM crash dumps before retrying: `rm android/hs_err_*.log`
+7. Retry from the clean build environment step
+
+---
+
+## Rules
+
+- **ALWAYS** build from `main` with a clean working tree. Never from a feature branch. Never with uncommitted changes.
+- **ALWAYS** bump versionCode in BOTH `pubspec.yaml` AND `lib/core/constants/app_constants.dart` for every shipped APK/AAB. Same versionCode = Android silently rejects the install on update.
+- **ALWAYS** run Gate 2.5 (`verify_versioncode_available.dart`) and ask the founder whether the current versionCode was already built/uploaded outside `/build-apk` before proceeding — a mechanical PASS is not proof (it cannot see a manual Play Console upload).
+- **ALWAYS** use `--flavor prod --release` (never build dev APKs for distribution).
+- **ALWAYS** include `--dart-define-from-file=.env` (without it, SUPABASE_URL is empty and auth crashes).
+- **ALWAYS** run `flutter clean` before release builds unless `--skip-clean` is passed.
+- **ALWAYS** ask user for confirmation before the actual build command.
+- **ALWAYS** run Gate 13 after every build and record size to `backups/apk_sizes.json`.
+- **ALWAYS** run Gate 48 after every build — the APK MUST be release-signed (`CN=ICANBEFITTER`), never debug-signed, or it cannot update over the user's installed app.
+- **NEVER** modify `android/gradle.properties` `-Xmx` above 4G on this 16GB system.
+- **NEVER** ignore `hs_err_*.log` files — always diagnose and delete them before retrying.
+- Entry point is always `lib/main.dart` (single entry point, flavors handled by Gradle).
+- Gate scripts live at `scripts/check_*.dart`. Add new gates there; do not inline gate logic in this skill.

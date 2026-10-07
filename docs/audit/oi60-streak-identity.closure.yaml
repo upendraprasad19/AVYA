@@ -1,0 +1,120 @@
+# Closure ledger — OI-60 pieces 1+2 (hold-week streak identity + the
+# custom_template/logged day-count asymmetry + the two ai-proxy residuals).
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no
+# `deferred:` key. Branch: claude/open-issues-triage-976962.
+#
+# Provenance: a triage of OI-60's 7 flip-on blockers (FOB-1..FOB-7) produced a
+# 6-item plan that came back NOT CONVERGED on round 1 with structural redesigns
+# in FOUR items. Per §4.12.1 the unit was split into 7 pieces; the founder chose
+# pieces 1+2 to ship first, and chose to fix the custom_template asymmetry in
+# this batch (accepting the full ×2 review instead of keeping the batch
+# ship-dark). The remaining FOB items stay OPEN as hard flip-on preconditions in
+# docs/ship_dark_pending_review.yaml — that is a gate, not a deferral:
+# enable_hold_weeks cannot go live while any FOB is open, and OI-60 stays OPEN.
+#
+# The plan then took FOUR review rounds. Rounds 2 and 3 each found that the
+# PREVIOUS round's correction had introduced the next defect (R2 killed R1's
+# unclamped-index fix as a live regression; R3 showed R2's own refutation was
+# itself a misdiagnosis). On round 3 the §4.12.1 signal was applied a second
+# time: the paragraph that had churned across all three rounds was DELETED and
+# filed as its own OI rather than rewritten a fourth time. Round 4: CONVERGED.
+
+batch: oi60-streak-identity
+plan_review_record: docs/plan-reviews/claude-open-issues-triage-976962.md
+bpass_review: docs/reviews/oi60-streak-identity-bpass.md
+total_findings: 4
+closed_count: 4
+
+_commit: &wip "oi60-streak-identity (uncommitted)"
+_test: &t test/contracts/hold_week_streak_identity_behavioral_test.dart
+
+findings:
+  - id: FOB-2
+    title: "Weekly streak + streaks row were dead during a hold week"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *t
+    notes: >
+      getCurrentWeekNumber() clamps to [1,4] and a hold starts at
+      plan_start + 28, so the dedup gate was `4 != 4` — current_streak_weeks
+      froze for the whole hold — and the streaks row key was always week 4's
+      Monday, so every hold completion OVERWROTE that one row (cloud streaks is
+      UNIQUE(user_id, week_start)). Fixed by extracting resolveStreakWeekState()
+      with a hold arm that derives the identity BY DATE (unclamped date-week
+      index, always >= 5 at materialization) and keys the row on
+      normalizeToMonday(workoutDate).
+      Three rejected designs, each killed by a review round: `4 + hold_ordinal`
+      (the ordinal is a LABEL, not a date offset — a late return puts ordinal 1
+      at date-week 8); a synthetic index into getWeek() (a plan_start-offset
+      date walk, so it returns [] and zeroes `planned`, which the caller's
+      `planned > 0` gates then use to suppress BOTH the increment AND the row —
+      strictly worse than the freeze); and HoldWeekInfo.weekStart (the first
+      SURVIVING hold date, so a missing Monday row makes it a Tuesday).
+      Session counts come from a fresh holdWeekSessionProgress() read, NOT from
+      holdStatusProvider — that provider watches currentPlanProvider, which
+      completeWorkout does not invalidate until after this block, so its cached
+      counts predate the completion just written and would under-count by
+      exactly one session at the 80% threshold.
+      Mutation-proven: clamping the hold arm reddens 3 cases; `4 + ordinal`
+      reddens the late-return case; sourcing the row key from HoldWeekInfo
+      reddens the missing-Monday case.
+  - id: CUSTOM-TEMPLATE-BLACKOUT
+    title: "planned/completedCount filtered differently — an all-template week scored 0, killing the streak AND the cloud row"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *t
+    notes: >
+      Found while scoping FOB-2, and LIVE for all PRO users (not flag-gated).
+      `planned` took `type == 'workout'` while the numerator took no type filter
+      at all — the denominator excluded custom-template days, the numerator
+      counted them. Below 100% conversion that is over-credit (3 of 5 real
+      adherence could clear a threshold computed over 2 days); at 100%
+      conversion `planned == 0` and the caller gates BOTH the increment and the
+      row write on `planned > 0`, so a PRO user with a fully self-built week and
+      perfect adherence got zero streak credit and no cloud row.
+      Fixed with one shared predicate on BOTH sides: isTrainingDayType() in
+      lib/core/utils/phase_completion.dart. EXCLUSION-shaped
+      (`type != 'rest' && type != 'off'`) deliberately — round 1 caught that an
+      inclusion list would silently drop `type: 'logged'`, a real value written
+      by markCompleted's no-prior-schedule branch and by the restore synthesize
+      path, whose own comment states a logged row "counts as a workout day in
+      the streak walk". It also counts a type-less legacy row, matching
+      holdWeekSessionProgress's `(row['type'] ?? '').toString()` coercion — the
+      hold and non-hold day-sources for the same ratio must agree on null.
+      NOTE this TIGHTENS the gate: template-heavy PRO users who were accruing
+      streak on partial adherence will stop. Correct, but user-visible, and not
+      backfillable (past collapsed rows are unreconstructible).
+      Mutation-proven: restoring `type == 'workout'` reddens the blackout and
+      logged cases; dropping the numerator filter reddens the completed-rest
+      case.
+  - id: FOB-7d
+    title: "ai-proxy's size-envelope comment cited two wrong line numbers"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "supabase/functions/ai-proxy/index.ts (comment-only; no redeploy)"
+    notes: >
+      The filed issue named one stale citation ("snapshot_json input check at
+      line 412" — 412 is the Vision abuse cap; the real check is ~242 lines
+      later). A second was found in the same comment region ("the parser at line
+      101" — 101 is the JSDoc opener, not the parser). BOTH fixed, and fixed by
+      DE-NUMBERING rather than re-numbering: a line citation inside a
+      1000-line Edge Function re-rots on the next edit, and this finding is its
+      own proof. Comment-only, so no redeploy — but the deployed bundle is now
+      comment-drifted from source, so the next ai-proxy deploy's SHA delta is
+      expected (relevant only to the byte-identical deploy flow).
+  - id: FOB-7c
+    title: "ai-media-proxy snapshot cap + FC7 untrusted-data wrapper reported missing"
+    terminal_state: verified_clean
+    commit: *wip
+    verification: "supabase/functions/ai-media-proxy/index.ts:589 (10000-char cap) + :595 (fenceAsData nonce fence)"
+    notes: >
+      The FOB text is STALE on both counts — no code change needed. Both halves
+      are present and documented in that file's own comment block as a
+      two-stage closure: an escaping-only fix first, then a later B-pass
+      migration to the nonce fence. Independently confirmed by two review
+      rounds, both of which were specifically instructed to attack
+      "already-fixed" dismissals hardest, since a confident dismissal is where a
+      real bug would hide. Recorded here because
+      ship_dark_pending_review.yaml's flip_on_blockers has NO per-item status
+      field — FOB-7's four residuals are a single prose `why:` blob — so this
+      ledger is the only clean place to carry the terminal state.

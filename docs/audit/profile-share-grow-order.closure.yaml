@@ -1,0 +1,491 @@
+# Closure ledger — profile-share-grow-order
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no
+# `deferred:` key. closed_count == total_findings.
+#
+# WHAT PRODUCED THESE: two founder requests (Profile tab: one "Photos" row opening a
+# Progress | Saved hub instead of two rows; the SHARE & GROW block moved below the AVYA
+# block), two context-blind plan-review rounds (docs/plan-reviews/
+# profile-share-grow-order.md), two mutation rounds (33 mutants against the first tests, then 54 against the
+# strengthened ones), and a self-initiated two-reviewer B-pass (docs/reviews/profile-share-grow-order-bpass.md;
+# 16 findings, A1 ... A6 and B1 ... B10).
+#
+# `commit:` on a closed_in_commit row names the batch's single code commit — the commit
+# that ADDS this file. A commit cannot name its own SHA; find it with
+#   git log --diff-filter=A --format=%h -- docs/audit/profile-share-grow-order.closure.yaml
+# (the merge to main is a --no-ff merge commit; the code commit is its second parent's tip).
+
+batch: profile-share-grow-order
+plan_review_record: docs/plan-reviews/profile-share-grow-order.md
+bpass_review: docs/reviews/profile-share-grow-order-bpass.md
+diagnose_docs: []
+total_findings: 53
+closed_count: 53
+
+findings:
+  # ── The planned units ─────────────────────────────────────────────
+  - id: U1
+    title: "REPORTS card: the Progress Photos and Saved Photos rows become ONE Photos row (go to /profile/photos)"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: >
+      test/profile/profile_share_grow_order_test.dart (exactly one title: 'Photos' row to the hub; no
+      'Progress Photos' / 'Saved Photos' titles; no direct destination route strings left in the Profile
+      source) and test/profile/reports_section_consolidated_test.dart. Mutants P16 (row points at the
+      destination), P17 (a second Photos row), P18 (the old Saved Photos row restored), P19 (push instead
+      of go) and P20 (retitled) all red.
+
+  - id: U2
+    title: "hub screen lib/features/profile/screens/user_photos_screen.dart: two rows, the unchanged Progress gate (gateAndVerify, featureProgressPhotos), push to both destinations, display-only PRO hint, mounted guards"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: >
+      test/profile/user_photos_hub_test.dart (13 tests) and test/profile/user_photos_gate_behavioral_test.dart
+      (5 tests including the warmup, against the real SubscriptionService). Mutants P1-P12, P25-P28, P29 and P32 all red: Saved/Progress
+      push to go, the isPro ternary dropped or inverted, ref.watch to ref.read (red only through the
+      upgrade-with-the-hub-open test), the gate removed, the gate branches swapped, a different feature constant,
+      a row removed / duplicated / retitled, the eyebrow, the AppBar arrow, a second ungated push, the generic
+      paywall label, and progress_photos dropped from SubscriptionService._highValueFeatures (red only through
+      the PRO case's reason=verify_pro assertion).
+
+  - id: U3
+    title: "route registered: GoRoute photos / userPhotos as a sub-route of /profile in the shell branch (app_router.dart)"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: >
+      test/router/photos_hub_route_resolution_test.dart (new; resolves the REAL AppRouter.router table: the hub
+      and both destinations sit directly under the /profile route, inside the one StatefulShellRoute, with the
+      names userPhotos / progressPhotos / savedCoachPhotos, and each location's builder makes the screen it is named
+      for, through RouteMatch.buildState). Mutants P21 (unregistered), P22 (renamed), P23 (path changed), P24 and
+      B13 (builders swapped), P30 (nested one level too deep) and B22 (hoisted out of the shell) all red; B21 (the
+      route declared below its siblings) is green by design: declaration order has no runtime meaning.
+
+  - id: U4
+    title: "SHARE & GROW block moved below the AVYA block and above SUBSCRIPTION (the code is identical; its header comment is reworded, 3 lines to 4)"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: >
+      test/profile/profile_share_grow_order_test.dart (section order REPORTS, SETTINGS, AVYA, SHARE & GROW,
+      SUBSCRIPTION; the four rows and their call sites kept). Rounds 1 and 2 and the B-pass each diffed the base
+      block (lines 377-477 at c2bb0f75) against the moved block: only the header comment differs. Mutants P13
+      (swapped back), P14 (below SUBSCRIPTION) and P15 (a row retitled) red.
+
+  - id: U5
+    title: "tests: user_photos_hub_test (13), user_photos_gate_behavioral_test (5), photos_hub_route_resolution_test (4), profile_share_grow_order_test (3) new; reports_section_consolidated, saved_coach_photos_route, profile_screen_layout updated; read_screen_source.dart gains readSourceFileStripped"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: >
+      MUTATION EVIDENCE (the drivers lived in a scratch directory, so the result is recorded here and in plan
+      section 9). ROUND A, against the first tests: 33 mutants, each confirmed APPLIED by a marker count, none a
+      compile error, none an infrastructure retry; all 33 red (76 red assertions); every mutated file restored and
+      cmp-verified after each run and at the end. B-PASS REVIEWER B, against the same tests: 21 mutants, 13 SURVIVED
+      (see B1-B10). ROUND B, after the fold, against the strengthened tests: 54 mutants against the 38 covering tests, each confirmed APPLIED by a marker, none a compile error, each restored and `cmp`-verified (and once more at the end): 53 RED (121 red assertions in total) and 1 GREEN, B21, the behaviour-equivalent move of the route declaration (green by design: declaration order has no runtime meaning, and the pin that used to redden on it was removed). All 33 round-A mutants are red again, and all 13 mutants reviewer B left green against the first tests (B01, B02, B03, B04, B05, B07, B10, B11, B12, B13, B15, B16, B18) are now red.
+      Unique catches, from the round-B run: B05 red x2 (FREE: no tappable widget on the hub builds the Progress screen; Progress is built as gate -> feature -> onPro (one push) -> onFree (one paywall)); B11 red x2 (the Profile tab has ONE Photos row, to the hub; nothing else routes to a destination; only the router, the hub and the screen itself do); Q1 red x1 (only the router, the hub and the screen itself do); B13 red x2 (/profile/photos resolves to `userPhotos`, directly under /profile, inside the shell, and builds UserPhotosScreen; /profile/saved-coach-photos resolves to `savedCoachPhotos`, directly under /profile, inside the shell, and builds SavedCoachPhotosScreen);
+      B01 red x1 (each gate callback OPENS with the mounted check); B02 red x2 (PRO: leaving the hub inside the server verify drops the push without an error; each gate callback OPENS with the mounted check); P25 red x2 (PRO: leaving the hub inside the server verify drops the push without an error; each gate callback OPENS with the mounted check); P12 red x1 (the PRO hint goes away when the user upgrades with the hub open); P29 red x1 (PRO: Progress opens the screen, pushed, and no paywall).
+      The full suite and the whole gate loop were run on the final tree before the commit; the counts are in the
+      commit message.
+
+  - id: U6
+    title: "docs: profile CLAUDE.md, functionality-flow PROF-01 / PROF-09, ai-coach-detail test list, naming_conventions glossary row Photos hub, testing/web_test_plan.md 6.5, sot_registry (postSessionRedirect range 808-819, the hub's display-only reader row, the deleted card's allow-list line, the provider-count wording)"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: >
+      check_sot_registry_parity.dart, check_reader_manifest_complete.dart and the rest of the pre-commit gate
+      loop pass on the staged tree (the first loop failed on the stale postSessionRedirect range, repointed).
+
+  - id: U7
+    title: "process artifacts: plan v4, plan-review record, B-pass review, this ledger, the code-review tuning-history entry"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: >
+      docs/plans/profile-share-grow-order.md; docs/plan-reviews/profile-share-grow-order.md (review_rounds 2,
+      ground_truth_verified true, verdict converged, bpass accepted);
+      docs/reviews/profile-share-grow-order-bpass.md. check_plan_review_record_exists.dart and Gate 40 are the
+      enforcement.
+
+  - id: U8
+    title: "stale text the move left behind: REPORTS and SHARE & GROW comments in profile_content.dart, progress_photos_screen.dart header comment, profile_screen_layout_test reason string, hub imports as package:icanbefitter/"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: >
+      git grep of the old phrases ("still PRO-gated at tap", "see ProgressPhotosCard", "Health Sync ... see below")
+      across lib/ and test/ returns nothing; the Profile source pins pass.
+
+  - id: U9
+    title: "device tests integration_test/flows/profile_flow_test.dart T10-T15: the dead SingleChildScrollView drag replaced by scrollProfileTo (exact row titles); T14 opens the collapsed DANGER ZONE"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: >
+      flutter analyze of the whole repo is clean of errors and warnings (pre-push runs the same command). These
+      six edits are UNRUN: nothing in CI runs integration_test/ and there is no device on the VPS; the
+      flutter_test scrollUntilVisible / dragUntilVisible semantics were read in the installed SDK by round 2
+      (scroll until built, then Scrollable.ensureVisible). The device run is row F3.
+
+  - id: U10
+    title: "dead code deleted: widgets/progress_photos_card.dart (235 lines), ProgressPhotosData / ProgressPhotosNotifier / progressPhotosProvider, the one ref.invalidate of it in the Profile screen, the card's registry allow-list line"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: >
+      git grep of every deleted name returns only two dated historical records (a diagnose doc and a superpowers
+      plan, both left as written); analyze and
+      the full suite pass; the Hive key progress_photo_count (no writer anywhere) stays in the user-config
+      migrator's key list and its test, which this batch does not touch.
+
+  # ── Plan-review round 1 (fresh Sonnet) ─────────────────────────────
+  - id: R1-01
+    title: "P2 — the gate pin used first-occurrence indexOf and stayed green with a second ungated push; the plan said the gate cannot be run in a test"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: >
+      Pins tightened (one gate call, one push, one paywall, order, the constant as the first argument) and a
+      behavioral FREE/PRO test against the real SubscriptionService added. Mutants P4, P5, P6, P26, P29, P32 red.
+      The reviewer's claim that no widget test pumps PaywallSheet was wrong (swap_picker_sheet_test does); no
+      production seam was added.
+
+  - id: R1-02
+    title: "P2 — profile_content.dart comment said Progress Photos is still PRO-gated at tap"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: "Comment rewritten (the gate lives in the hub); round 2 quoted the staged lines."
+
+  - id: R1-03
+    title: "P3 — other stale text: plan-D comment, SHARE & GROW header comment, progress_photos_screen.dart header, profile_screen_layout_test reason string"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: "Reworded (U8); round 2 confirmed each landed."
+
+  - id: R1-04
+    title: "P2 (process) — the Progress screen has no gate of its own and is reachable by URL on web without the row's gate"
+    terminal_state: closed_in_commit
+    commit: progress-screen-pro-gate batch commit (git log --diff-filter=A --format=%h -- docs/audit/progress-screen-pro-gate.closure.yaml)
+    verification: >
+      Founder decision 2026-10-05 ("Explain and yes"): the Progress screen enforces PRO itself. Closed by the
+      progress-screen-pro-gate batch (docs/audit/progress-screen-pro-gate.closure.yaml, diagnose b7c1e4): the screen gates
+      its entry and its Add button, and test/contracts/progress_photos_screen_gate_test.dart proves FREE -> locked card and
+      PRO -> gallery against the real SubscriptionService. What stays open from this row's facts is the SERVER side (no PRO
+      rule on the progress_photos RLS or the bucket), which is row C5 of that ledger, blocked_on_user.
+    history: >
+      Until 2026-10-05 this row was blocked_on_user, with this reason. A product decision with a user-visible effect,
+      pre-existing and unchanged by this batch. Facts from the repo
+      (not a live read): progress_photos_screen.dart has no gate, only quota handling; ProgressPhotoRepository caps
+      free users at 2 photos/day and PRO at 5/day (progress_photo_repository.dart:45-46) and its quota message
+      offers "Upgrade to PRO" to a free user; the progress_photos table RLS policies (migration 022, hardened by 055
+      and 100) are own-row only with no PRO test; the progress-photos STORAGE bucket policies are not in the repo's
+      migrations (only its size cap, migration 070), so "a free web user who types #/profile/progress-photos
+      reaches a working screen" is proven for listing and inferred for upload. Decision needed from the founder:
+      is the free 2/day allowance intended free-tier behavior (then the Profile row's PRO gate is the odd one
+      out), or must the screen / route enforce PRO? Either answer is a real change; neither is a deferral.
+      B-pass reviewer B (B1) showed what this costs until it is answered: any second way into the screen skips
+      the PRO gate. Compensating controls are in this commit (plan D14): a FREE tap sweep, one mention of the
+      screen in the hub under any spelling, no spelling of either destination in the Profile source, and a
+      lib/ allow-list scan. They are not a substitute: if the screen or route enforces PRO itself none is needed.
+
+  - id: R1-05
+    title: "P3 — plan numbers and claims (router lines at base vs working tree, 'every other Profile row uses go', D8 omitted the registry repoint)"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: "Plan v2 corrected; round 2 found the replacement numbers wrong (R2-01) and v3 cites rows, not numbers."
+
+  - id: R1-06
+    title: "P3 — replica harness gaps: no bottom bar asserted, AppBar arrow only, weak route pin, exact-list visited check"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: >
+      A keyed shell bar is asserted on the hub and on a pushed destination, the system back path is tested
+      (binding.handlePopRoute), the route pin has a lower bound, visited uses contains. Mutant P27 (AppBar arrow
+      suppressed) red; the real-table test closes the remaining gap (R2-08).
+
+  - id: R1-07
+    title: "P3 — the hub imported core/ and shared/ by relative path (root rule 15)"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: "Imports are package:icanbefitter/...; lib/CLAUDE.md rule 7 and the neighbours agree."
+
+  - id: R1-08
+    title: "P3 — go to push side effects: callbacks run after an up-to-10 s verify with a captured BuildContext; a double tap stacks two pages"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: >
+      Both callbacks start with `if (!context.mounted) return;`. After the B-pass (A3, B3, B7): the count pin is
+      replaced by a position-aware pin on comment-stripped source (each callback OPENS with the guard) and, for
+      onPro, a runtime test that unmounts the hub inside the verify (mutants P25, B02 red through it; B01-B04 red
+      through the pin). onFree has no runtime proof: a locally-free user gets onFree synchronously and it runs late
+      only when the SERVER disagrees with the local PRO flag, which no unit test can produce. The double-tap
+      trade-off and the still-mounted-not-still-on-top trade-off are ACCEPTED and recorded in the hub's doc comment
+      and plan D9: the old row used go (idempotent) and its late go replaced the stack, every other push row in the
+      app behaves like this, both screens are read-only on open. No in-flight latch: production code a test could
+      not hold open, so it could not be mutation-proven.
+
+  - id: R1-09
+    title: "P3 — copy and visual: ambiguous row subtitle, duplicate icon, eyebrow repeating the title"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: "Subtitle, timeline_outlined icon and DOSSIER · ARCHIVE eyebrow landed (round 2 quoted the lines); mutants P10 and P28 red."
+
+  - id: R1-10
+    title: "P3 — device tests T11 / T15 depend on the position of SHARE & GROW"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: "Both use scrollProfileTo (U9). Unrun; device run is row F3."
+
+  - id: R1-11
+    title: "P3 (info) — the 7-day Apply Referral Code CTA is now lower; the gap before SUBSCRIPTION is 8 dp instead of 12"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: "Both are consequences of the requested move and are in the F1 device check (plan section 7)."
+
+  - id: R1-12
+    title: "P3 (pre-existing) — ProgressPhotosCard and progressPhotosProvider are unreferenced"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: "Deleted (U10 / D13) after round 2 independently showed it is mechanical."
+
+  # ── Plan-review round 2 (fresh Opus, a different reviewer) ─────────
+  - id: R2-01
+    title: "P3 — plan D1 / D4 / D6 cited push call sites and block ranges by wrong line numbers"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: "Plan v3 cites rows, not line numbers; the moved block's comment is 3 lines to 4."
+
+  - id: R2-02
+    title: "P3 — the gate test's header said the feature constant is not pinned (it is, via feature=); reason= was never asserted"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: >
+      Header corrected; reason=not_pro_local and reason=verify_pro asserted. Mutant P29 (progress_photos out of
+      _highValueFeatures) red ONLY through the PRO case.
+
+  - id: R2-03
+    title: "P3 — the gate test installed its telemetry hooks after Hive setup, so one non-fatal took the real telemetry path"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: "Hooks installed first, lists cleared after setup; the file passes 3/3."
+
+  - id: R2-04
+    title: "P3 — T10, T12, T13, T14 had the same dead scroll step; T14 could not pass (collapsed ExpansionTile)"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: "Fixed with scrollProfileTo and exact row titles, T14 opens DANGER ZONE (U9). Unrun; row F3."
+
+  - id: R2-05
+    title: "P3 — the hub is a new display-only reader of subscription_state and was not registered (root 4.5)"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: >
+      Reader row added to docs/sot_registry.yaml under subscription_state. The reader list there has been partial
+      for a long time (about a dozen unregistered display readers, profile_content.dart among them); completing it
+      is a registry audit, not part of this change.
+
+  - id: R2-06
+    title: "P3 — the double-tap trade-off was filed verified_clean; the mounted-guard comment was inaccurate for a locally-free user"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: "Hub doc comment corrected and the accepted trade-off recorded in code; this row is closed_in_commit, not verified_clean (see R1-08)."
+
+  - id: R2-07
+    title: "P3 — the R1-04 facts need the storage-bucket caveat"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: "Caveat added to the R1-04 reason in this ledger and to plan section 4b."
+
+  - id: R2-08
+    title: "P3 — nothing pinned the hub's nesting depth in the REAL route table"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: "test/router/photos_hub_route_resolution_test.dart (4 tests); mutant P30 red only through it."
+
+  - id: R2-09
+    title: "P3 — the dead card chain could be deleted mechanically instead of asking the founder"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: "Deleted (U10 / D13)."
+
+  - id: R2-10
+    title: "P3 — ledger hygiene: no double entries, mutation evidence must be durable, tuning-history entry"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: >
+      No unit is entered twice; the 33-mutant evidence is in U5 and plan section 9. The B-pass review file is
+      named -bpass.md, so check_skill_tuning_history.dart (which keys on -review.md) does not apply.
+
+  # ── B-pass, reviewer A (Sonnet, read-only): no P0/P1/P2, six P3 ──────
+  - id: A1
+    title: "P3 — the plan said five device tests were edited; the diff edits six (T10-T15)"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: >
+      D12, section 3, section 5, section 7 R5 and this ledger say six. `git grep -n -i five docs/plans/profile-share-grow-order.md`
+      now finds only 'five section headers'.
+
+  - id: A2
+    title: "P3 — the hub reader row in the registry said semantic flag-check; it is display-only"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: >
+      docs/sot_registry.yaml: semantic display-only, and the method text says the hub row is the only PRO gate. No script
+      consumes the field (A: git grep over scripts, test, lib).
+
+  - id: A3
+    title: "P3 — the mounted-guard pin counted == 2 instead of pinning position"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: >
+      Closed with B3: a position-aware pin on comment-stripped source plus a runtime unmount test for onPro.
+      B01 red x1 (each gate callback OPENS with the mounted check); B02 red x2 (PRO: leaving the hub inside the server verify drops the push without an error; each gate callback OPENS with the mounted check); B03 red x2 (PRO: leaving the hub inside the server verify drops the push without an error; each gate callback OPENS with the mounted check); B04 red x1 (each gate callback OPENS with the mounted check); P25 red x2 (PRO: leaving the hub inside the server verify drops the push without an error; each gate callback OPENS with the mounted check).
+
+  - id: A4
+    title: "P3 — profile CLAUDE.md, PROF-01 and PROF-09 omitted the real-route-table test"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: >
+      lib/features/profile/CLAUDE.md Tests-pinning bullet, functionality-flow PROF-01 Verify and the ai-coach-detail pointer
+      now name test/router/photos_hub_route_resolution_test.dart.
+
+  - id: A5
+    title: "P3 — stale or imprecise sentences: plan D3 line numbers, D13 record count, D9 verify-await scope, registry provider count"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: >
+      D3 cites the subscription_state concept by name; D13 names both dated records; D9 says the await applies to a user
+      who is PRO locally; the registry method text says 6 user-scoped providers (grep of authUserIdTokenProvider in
+      profile_provider.dart: six notifiers, six watches; seven at base).
+
+  - id: A6
+    title: "P3 — the Saved-row comment claimed only PRO users can send chat photos"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: >
+      COACH-12 (functionality-flow) gives a FREE user 5 lifetime image reads and a lapsed-PRO user keeps what was saved.
+      The hub comment and plan section 1 now say what is true: the screen lists only photos this user chose to keep.
+
+  # ── B-pass, reviewer B (Opus, mutate-and-run): 13 of 21 mutants survived the first tests ──
+  - id: B1
+    title: "P1 — a second, ungated way into the Progress screen passed every test (B05, B11); the screen has no PRO check of its own"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: >
+      Plan D14. Tests: the FREE tap sweep and the one-mention pin, the all-spellings Profile pin, the lib/ allow-list scan.
+      B05 red x2 (FREE: no tappable widget on the hub builds the Progress screen; Progress is built as gate -> feature -> onPro (one push) -> onFree (one paywall)); B11 red x2 (the Profile tab has ONE Photos row, to the hub; nothing else routes to a destination; only the router, the hub and the screen itself do); Q1 red x1 (only the router, the hub and the screen itself do).
+      The root question (should the screen or route enforce PRO itself) is row R1-04, a founder decision; these are
+      compensating controls, not a substitute.
+
+  - id: B2
+    title: "P1 — the Profile-source pins read comments, so the only Photos row or a SHARE & GROW row could be commented out (B10, B12)"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: >
+      profile_share_grow_order_test, reports_section_consolidated_test and saved_coach_photos_route_test read
+      readScreenSourceStripped('profile'). B10 red x3 (Predictions, Progress Comparison, Photos share one _buildCard; Profile has ONE Photos row to the hub; the hub routes to Saved; the Profile tab has ONE Photos row, to the hub; nothing else routes to a destination); B12 red x1 (SHARE & GROW kept every row through the move).
+
+  - id: B3
+    title: "P1 — the mounted-guard pin was a count (B01-B04 stayed green); the header said no test can unmount the hub inside the verify"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: >
+      Position-aware pin plus a runtime test that calls the row handler and unmounts the hub in the same synchronous
+      stretch (pump flushes microtasks before it builds a frame). onFree stays pin-only and the header says why.
+      B01 red x1 (each gate callback OPENS with the mounted check); B02 red x2 (PRO: leaving the hub inside the server verify drops the push without an error; each gate callback OPENS with the mounted check); B03 red x2 (PRO: leaving the hub inside the server verify drops the push without an error; each gate callback OPENS with the mounted check); B04 red x1 (each gate callback OPENS with the mounted check); P25 red x2 (PRO: leaving the hub inside the server verify drops the push without an error; each gate callback OPENS with the mounted check).
+
+  - id: B4
+    title: "P2 — the Saved-subtitle loop rendered FREE twice, so its PRO half could not fail (B07)"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: >
+      One test per tier, each asserting the Progress subtitle that proves the tier. B07 red x1 (Saved keeps its own subtitle for a PRO user).
+
+  - id: B5
+    title: "P2 — 'each destination keeps its own gate' in four places invites the second door"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: >
+      The hub doc comment, profile CLAUDE.md, the naming_conventions glossary row and plan D2 now say the hub row is the
+      only PRO gate, the Progress screen does not check the subscription itself, and Saved is ungated by design.
+      `git grep -n 'own gate'` over lib/ and docs/ finds no remaining claim.
+
+  - id: B6
+    title: "P2 — first-occurrence indexOf on section headers: a second SHARE & GROW block stayed green (B15)"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: >
+      Each of the five headers is counted exactly once. B15 red x1 (section order: REPORTS, SETTINGS, AVYA, SHARE & GROW, SUBSCRIPTION, each header exactly once).
+
+  - id: B7
+    title: "P3 — the mounted guard asks still-mounted, not still-on-top: Progress can land above Saved"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: >
+      Accepted trade-off, no worse than the base (the old row's late go replaced the stack), recorded in the hub's doc
+      comment and plan D9 together with the observation that a dropped push still logs exit=onPro. Closed_in_commit as
+      documented behavior, not verified_clean (same reasoning as R1-08).
+
+  - id: B8
+    title: "P3 — the REPORTS card test admitted a split card (B16)"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: >
+      The segment between the Predictions title and the Photos title must hold no _buildCard. B16 red x1 (Predictions, Progress Comparison, Photos share one _buildCard).
+
+  - id: B9
+    title: "P3 — the real-table test checked names, not builders (B13); the hub test pinned a route declaration order with no runtime meaning (B21)"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: >
+      Builder-type check through RouteMatch.buildState; the order pin and the whole source route-table pin removed.
+      B13 red x2 (/profile/photos resolves to `userPhotos`, directly under /profile, inside the shell, and builds UserPhotosScreen; /profile/saved-coach-photos resolves to `savedCoachPhotos`, directly under /profile, inside the shell, and builds SavedCoachPhotosScreen); B21 is the behaviour-equivalent move and is green by design.
+
+  - id: B10
+    title: "P3 — the Apply Referral success guard moved with the SHARE & GROW block and was pinned nowhere (B18)"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: >
+      Pinned in the SHARE & GROW test (`if (ok == true && context.mounted) {`). B18 red x1 (SHARE & GROW kept every row through the move).
+
+  # ── Found while registering the hub reader row; pre-existing, fixed in this commit ──
+  - id: S1
+    title: "the subscription_state registry concept declared Hive key is_pro; the code key is isPro (subscription_service.dart:110)"
+    terminal_state: closed_in_commit
+    commit: profile-share-grow-order batch commit (see header)
+    verification: >
+      Pre-existing drift, noticed while adding the hub's reader row (reviewer A noted it too), not introduced by this
+      batch. docs/sot_registry.yaml now says hive.key_prefix isPro and key_formula
+      MigratedKey.readWithDefault<bool>('isPro', false), matching the code constant (_isProKey,
+      subscription_service.dart:110), the glossary (naming_conventions.md: configBox['isPro']) and the concept's own
+      forbidden pattern. I first planned this as a founder row (an OI) because four gates consume key_prefix
+      (check_reader_manifest_complete, check_sot_registry_completeness, check_naming_conventions,
+      check_writeservice_contracts) and a corrected prefix could have made them scan for new files. It did not: all
+      four exit 0 with identical output before and after, run in a scratch copy of the staged tree (with backups/
+      synced; without it the completeness gate failed on a missing backups file both before and after, which is a
+      property of the copy, not of the change). The real pre-commit loop on the final tree is the re-check.
+
+  # ── Checks and founder-owned rows ──────────────────────────────────
+  - id: L7
+    title: "dead-code lens: the move leaves nothing NEWLY unreferenced"
+    terminal_state: verified_clean
+    evidence: >
+      git grep of every route path and name, the two titles, the section headers and every deleted symbol across
+      lib/, test/, integration_test/, supabase/functions/, web/, vercel.json and docs/ (rounds 1 and 2 and the
+      B-pass); the analyzer reports no unused import, element or declaration in the touched files.
+
+  - id: F1
+    title: "founder device check of the Profile tab and the Photos hub"
+    terminal_state: blocked_on_user
+    reason: >
+      Nothing here was run on a device or in a browser. Check (plan section 7): the REPORTS card ends with ONE Photos
+      row; tap it, see Progress and Saved under the eyebrow DOSSIER · ARCHIVE; as a FREE user Progress shows the PRO
+      hint and opens the paywall, as PRO it opens the timeline; Saved opens the saved photos; the bottom navigation
+      stays on all three screens; the back arrow AND Android system back return destination to hub to Profile;
+      SHARE & GROW sits below AVYA and above SUBSCRIPTION (spacing, and where you want the 7-day Apply Referral Code
+      CTA now that it is lower).
+
+  - id: F2
+    title: "the next APK is founder-initiated"
+    terminal_state: blocked_on_user
+    reason: >
+      The merge to main deploys the production WEB build on Vercel automatically; Android users see the change only
+      in the next APK, which the founder initiates (/build-apk from main).
+
+  - id: F3
+    title: "founder device run of integration_test/flows/profile_flow_test.dart"
+    terminal_state: blocked_on_user
+    reason: >
+      T10-T15 (six tests) were edited without being run (U9). Expected on a device: all of T1-T15 green. A red T10 / T12-T15 is
+      this batch's responsibility (a wrong row title or scroll bound), not pre-existing: they never scrolled before.
