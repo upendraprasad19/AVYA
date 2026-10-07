@@ -5,6 +5,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show FunctionException;
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -56,11 +57,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     });
     // Fix 2026-06-02 (stale-report zeros) — the report is cloud-sourced and the
     // cache was treated as valid for 7 DAYS, so the founder saw a multi-day-old
-    // report (0 workouts + a protein target computed at an old weight). Refresh
-    // on every open so it reflects current data. SILENT: the cached report (if
-    // any) stays on screen until the fresh one lands; a transient failure keeps
-    // the cache rather than blanking it. Cheap — the PRO report is opened
-    // infrequently, and the cloud now has correct data (sync-ID fixes 082).
+    // report (0 workouts + a protein target computed at an old weight). It then
+    // refreshed on EVERY open. Issue #78 (d7b2e5) narrowed that: PRO only and at
+    // most once per IST day (every refresh is a thinking-on Gemini call), and
+    // the manual Regenerate button is gone by founder decision, so a workout
+    // logged after today's refresh shows on the next IST day. SILENT: the
+    // cached report (if any) stays on screen until the fresh one lands; a
+    // transient failure keeps the cache rather than blanking it.
     Future.microtask(() {
       if (mounted) _refreshOnOpen();
     });
@@ -164,7 +167,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       final configBox = HiveService.instance.configBox;
       await configBox.put(_reportCacheKey, jsonEncode(report));
       await configBox.put(
-          _reportCacheDateKey, DateTime.now().toIso8601String());
+          _reportCacheDateKey, nowWall().toIso8601String());
 
       // Mark first report as generated (for free user gating).
       await configBox.put('first_report_generated', true);
@@ -180,6 +183,20 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       // an error banner just because a background refresh failed.
       if (silent) {
         debugPrint('[ReportsScreen._generateReport] silent refresh failed: $e');
+        return;
+      }
+      // The server's lifetime free report is spent (403 NOT_PRO): the local
+      // `first_report_generated` flag is per-device and does not survive a
+      // reinstall / second device, so learn it from the server's answer and
+      // show the paywall instead of a raw error (and stop promising a free one).
+      if (e is FunctionException && e.status == 403) {
+        await HiveService.instance.configBox.put('first_report_generated', true);
+        if (!mounted) return;
+        setState(() {
+          _reportError = null;
+          _isGeneratingReport = false;
+        });
+        showPaywallSheet(context, feature: WardroomCopy.reportCardTitle);
         return;
       }
       if (mounted) {
@@ -201,6 +218,11 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // A free user who upgrades (or whose entitlement finishes loading) while
+    // the screen is open gets the same open-time refresh a PRO open would.
+    ref.listen(subscriptionInfoProvider, (prev, next) {
+      if (prev != null && !prev.isPro && next.isPro) _refreshOnOpen();
+    });
     return Scaffold(
       backgroundColor: AppColors.bg,
       // Handoff dispatch-style header (`utility.jsx` ReportScreen lines

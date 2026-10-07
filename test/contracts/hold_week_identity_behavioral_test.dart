@@ -5,9 +5,10 @@
 //           (stamps `is_hold` / `hold_ordinal` on each schedule_* row)
 // Reader:   lib/core/services/workout_schedule_read_service.dart
 //           weekIdentity() / activeHoldWeeks() / activeHoldOrdinalFor()
-//           → weekIdentityProvider (train_provider) → the four surfaces that
+//           → weekIdentityProvider (train_provider) → the surfaces that
 //             print a week counter: home eyebrow, journey timeline,
-//             phase roadmap header, share-as-video stamp.
+//             phase roadmap header (the Weekly Report's share-as-video stamp
+//             was a fourth until issue #78 removed that row).
 //
 // THE RULE UNDER TEST: "a hold suppresses the week number; Hn is the identity."
 // getCurrentWeekNumber() clamps to [1,4] and a hold starts at plan_start+28, so
@@ -435,7 +436,7 @@ void main() {
 
   group('surface wiring (PRESENCE-ONLY — cannot catch a behavioural revert)',
       () {
-    // The four surfaces are thin ternaries over weekIdentity, so their VALUE
+    // The surfaces are thin ternaries over weekIdentity, so their VALUE
     // logic is covered above. These guard the wiring itself: a surface that
     // silently reverts to getCurrentWeekNumber() would print week 4 to a holder
     // again while every behavioural assertion above still passed.

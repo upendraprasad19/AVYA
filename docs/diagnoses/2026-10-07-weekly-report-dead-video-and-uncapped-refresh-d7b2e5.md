@@ -2,9 +2,9 @@
 bug_id: d7b2e5
 date: 2026-10-07
 batch: GitHub issue #78 (Weekly Report touchup)
-tier: s_fix
+tier: m_fix
 status: fixed
-blast_radius: feature
+blast_radius: account
 symptom: |
   Issue #78: on the Weekly Report screen "Share as Video" never produces a
   video. Root cause: the client polls an Edge Function that has been a 410 Gone
@@ -49,6 +49,15 @@ proposed_fix: |
   VideoShareButton, both Edge Functions, remotion/) is left in place so
   un-deferring video is a small revert. hold_week_identity test + sot_registry
   lose the reports_screen entry, since its only reader was the video row.
+review_followups: |
+  B-pass (docs/reviews/88ce1db-review.md), all six findings closed in this batch:
+  F1 403 NOT_PRO from an explicit Generate now sets first_report_generated and opens
+  the paywall (the flag is per-device, so the free-user line could promise a spent
+  report); F2 same-day staleness without Regenerate accepted as founder decision,
+  stale initState comment corrected; F3 this doc re-tiered s_fix -> m_fix, blast
+  radius account (3 product files, lib/core/copy is account tier); F4 stamp written
+  with nowWall(); F5 ref.listen re-runs the refresh on a free -> PRO transition;
+  F6 stale share-as-video prose in hold_week_identity_behavioral_test.dart fixed.
 regression_test_planned:
   - test/contracts/weekly_report_video_and_refresh_issue78_test.dart
 impact_analysis: |
@@ -59,7 +68,7 @@ impact_analysis: |
   deploy change.
 touched_layers_checked:
   - { tier: 1, name: "Client code", status: fixed_in_this_batch, evidence: "flutter analyze lib/ : zero warnings/errors, nothing reported in reports_screen.dart, weekly_report_refresh_policy.dart or wardroom_copy.dart; the new test file plus weekly_report_canonical_target, weekly_report_lifetime_meter, weekly_report_pro_gate_writer_to_reader, reports_this_week_count and hold_week_identity_behavioral tests pass." }
-  - { tier: 2, name: "Hive (local state)", status: verified, evidence: "Reads weekly_report_cache + weekly_report_cache_date written by _generateReport (reports_screen.dart); stamp is DateTime.now().toIso8601String(), parsed by DateTime.tryParse and compared by IST date; first_report_generated read unchanged." }
+  - { tier: 2, name: "Hive (local state)", status: verified, evidence: "Reads weekly_report_cache + weekly_report_cache_date written by _generateReport (reports_screen.dart); stamp is nowWall().toIso8601String() (test-clock seam, same clock as the policy), parsed by DateTime.tryParse and compared by IST date; first_report_generated read unchanged." }
   - { tier: 6, name: "Edge Function code vs deploy", status: verified, evidence: "Read supabase/functions/video-status/index.ts (410 stub) and weekly-report/index.ts (free gate before Gemini at :156, consume_quota only for !hasPro at :716). Not deployed or changed; no live deploy state queried." }
   - { tier: 12, name: "Client -> server contract", status: verified, evidence: "Traced video flow: trigger inserts video_renders row, poll hits video-status which always 410s, client treats non-200 as keep-polling, times out at 20 attempts. Free/PRO weekly-report contract unchanged." }
 mutation_proven:

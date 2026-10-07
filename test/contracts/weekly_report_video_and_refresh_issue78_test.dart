@@ -67,6 +67,27 @@ void main() {
           isTrue);
     });
 
+    test('the REAL stamp format (local ISO, no Z) is parsed by IST date', () {
+      // _generateReport writes nowWall().toIso8601String(): a LOCAL DateTime,
+      // so no trailing Z. Same instants as the Z-suffixed cases above.
+      final sameDay = DateTime.utc(2026, 10, 7, 18, 35).toLocal();
+      final prevDay = DateTime.utc(2026, 10, 7, 18, 20).toLocal();
+      expect(sameDay.toIso8601String().endsWith('Z'), isFalse,
+          reason: 'fixture must model the production stamp (local, no Z)');
+      expect(
+          shouldSilentRefreshWeeklyReport(
+              cachedJson: '{}',
+              cachedDateIso: sameDay.toIso8601String(),
+              now: now),
+          isFalse);
+      expect(
+          shouldSilentRefreshWeeklyReport(
+              cachedJson: '{}',
+              cachedDateIso: prevDay.toIso8601String(),
+              now: now),
+          isTrue);
+    });
+
     test('cached yesterday -> refresh', () {
       expect(
           shouldSilentRefreshWeeklyReport(
@@ -123,6 +144,34 @@ void main() {
           .group(1)!;
       expect(init.contains('_refreshOnOpen()'), isTrue);
       expect(init.contains('_generateReport('), isFalse);
+    });
+
+    test('the cache stamp uses the test-clock seam, same clock as the policy',
+        () {
+      expect(screen.contains('_reportCacheDateKey, nowWall().toIso8601String()'),
+          isTrue);
+      expect(screen.contains('DateTime.now().toIso8601String()'), isFalse);
+    });
+
+    test('a 403 (lifetime free report spent) sets the flag and opens the paywall',
+        () {
+      final m = RegExp(
+              r'e is FunctionException && e\.status == 403\) \{(.*?)\n        return;\n      \}',
+              dotAll: true)
+          .firstMatch(screen);
+      expect(m, isNotNull, reason: '403 branch must exist in _generateReport');
+      final body = m!.group(1)!;
+      expect(body.contains("put('first_report_generated', true)"), isTrue,
+          reason: 'else the free-user line keeps promising a spent report');
+      expect(body.contains('showPaywallSheet('), isTrue);
+    });
+
+    test('a free -> PRO transition while open re-runs the refresh', () {
+      expect(
+          RegExp(r'ref\.listen\(subscriptionInfoProvider[\s\S]*?'
+                  r'!prev\.isPro && next\.isPro\) _refreshOnOpen\(\)')
+              .hasMatch(screen),
+          isTrue);
     });
 
     test('card title, blurb and free-user line come from WardroomCopy', () {
