@@ -214,6 +214,64 @@ Future<Process> startSpawn(
   );
 }
 
+/// The "write stdin, close, drain both streams, wait, report" idiom (PR 2 of batch
+/// spawn-tests-env-and-stderr; 14 `Process.start` sites repeated it by hand).
+///
+/// [stdin] is a `String` (written) or a `List<int>` (ADDED as raw bytes: two review-gate
+/// tests feed `git hash-object --stdin` bytes that are not valid text); anything else
+/// throws [ArgumentError]. stdout and stderr are drained CONCURRENTLY, so a child that
+/// fills one pipe before reading its stdin cannot deadlock the test; the output is
+/// decoded with [stdoutEncoding] / [stderrEncoding] (`null` means UTF-8 with malformed
+/// bytes allowed). No `try/catch` around the stdin write: a site that tests a broken
+/// pipe or a kill keeps [startSpawn].
+Future<({int exitCode, String stdout, String stderr})> runSpawnWithInput(
+  String exe,
+  List<String> args, {
+  required String why,
+  required Object stdin,
+  String? workingDirectory,
+  Set<String> remove = const <String>{},
+  Map<String, String> extraEnv = const <String, String>{},
+  Set<String> allowControl = const <String>{},
+  bool runInShell = false,
+  Encoding? stdoutEncoding = systemEncoding,
+  Encoding? stderrEncoding = systemEncoding,
+  Map<String, String>? parentEnvironment,
+  void Function(String diag)? report,
+}) async {
+  if (stdin is! String && stdin is! List<int>) {
+    throw ArgumentError.value(stdin, 'stdin', 'runSpawnWithInput: stdin must be a String or a List<int>');
+  }
+  final process = await startSpawn(
+    exe,
+    args,
+    workingDirectory: workingDirectory,
+    remove: remove,
+    extraEnv: extraEnv,
+    allowControl: allowControl,
+    runInShell: runInShell,
+    parentEnvironment: parentEnvironment,
+  );
+  Future<List<int>> collect(Stream<List<int>> s) => s.fold<List<int>>(<int>[], (acc, chunk) => acc..addAll(chunk));
+  final outF = collect(process.stdout);
+  final errF = collect(process.stderr);
+  if (stdin is String) {
+    process.stdin.write(stdin);
+  } else {
+    process.stdin.add(stdin as List<int>);
+  }
+  await process.stdin.close();
+  final outBytes = await outF;
+  final errBytes = await errF;
+  final code = await process.exitCode;
+  String decode(Encoding? enc, List<int> bytes) =>
+      enc == null ? utf8.decode(bytes, allowMalformed: true) : enc.decode(bytes);
+  final out = decode(stdoutEncoding, outBytes);
+  final err = decode(stderrEncoding, errBytes);
+  reportSpawn(code, out, err, why, report: report);
+  return (exitCode: code, stdout: out, stderr: err);
+}
+
 /// Reports one finished child through [report] (default: [defaultSpawnReport]). Called
 /// by [runSpawn] / [runSpawnAsync] after the process ends, and by a `startSpawn` caller
 /// after it has collected the child's output.
