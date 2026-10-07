@@ -16,11 +16,12 @@
 @Timeout(Duration(minutes: 6))
 library;
 
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+
+import '../helpers/spawn.dart';
 
 /// A global git config holding ONLY `user.useConfigOnly = true`.
 ///
@@ -39,56 +40,35 @@ final String _hermeticGlobalConfig = () {
   return f.path;
 }();
 
-Map<String, String> _cleanEnv() {
-  final env = Map<String, String>.from(Platform.environment);
-  env.removeWhere((k, _) => k.toUpperCase().startsWith('GIT_'));
-  // git falls back to $EMAIL for the author identity; strip it too, or a
-  // machine that sets it passes a commit the CI runner would refuse.
-  env.remove('EMAIL');
-  // Set AFTER the GIT_* strip above, or the strip would remove them.
-  env['GIT_CONFIG_GLOBAL'] = _hermeticGlobalConfig;
-  env['GIT_CONFIG_NOSYSTEM'] = '1';
-  return env;
-}
+// The canonical scrub (spawn helper) strips the GIT_* family AND `EMAIL` (git falls
+// back to $EMAIL for the author identity; a machine that sets it would pass a commit
+// the CI runner refuses). The hermetic global config is set on purpose, AFTER the scrub.
+Map<String, String> _gitCfgEnv() => <String, String>{
+      'GIT_CONFIG_GLOBAL': _hermeticGlobalConfig,
+      'GIT_CONFIG_NOSYSTEM': '1',
+    };
+const Set<String> _gitCfgControl = <String>{'GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM'};
 
-ProcessResult _git(List<String> args, String cwd) => Process.runSync('git', args,
+ProcessResult _git(List<String> args, String cwd) => runSpawn('git', args,
+    why: 'git ${args.join(' ')} (fixture)',
     workingDirectory: cwd,
-    environment: _cleanEnv(),
-    includeParentEnvironment: false,
+    extraEnv: _gitCfgEnv(),
+    allowControl: _gitCfgControl,
     stdoutEncoding: utf8,
     stderrEncoding: utf8);
 
 String _fwd(String p) => p.replaceAll('\\', '/');
 
-String _dartBin() {
-  final override = Platform.environment['DART_BIN_OVERRIDE'];
-  if (override != null && File(override).existsSync()) return override;
-  final which = Process.runSync(Platform.isWindows ? 'where' : 'which', ['dart'],
-      stdoutEncoding: utf8);
-  if (which.exitCode == 0) {
-    final first = (which.stdout as String)
-        .split('\n')
-        .map((l) => l.trim())
-        .firstWhere((l) => l.isNotEmpty, orElse: () => '');
-    if (first.isNotEmpty) {
-      final dir = _fwd(File(first).parent.path);
-      for (final c in ['$dir/cache/dart-sdk/bin/dart.exe', '$dir/cache/dart-sdk/bin/dart']) {
-        if (File(c).existsSync()) return c;
-      }
-    }
-  }
-  return 'dart';
-}
-
 Future<String> _hookOutput(String dart, String src, String cwd, String stdinJson) async {
-  final p = await Process.start(dart, ['run', '$src/scripts/discipline_hook.dart'],
-      workingDirectory: cwd, environment: _cleanEnv(), includeParentEnvironment: false);
-  p.stdin.write(stdinJson);
-  await p.stdin.close();
-  final out = p.stdout.transform(utf8.decoder).join();
-  unawaited(p.stderr.drain<void>());
-  await p.exitCode;
-  return out;
+  final r = await runSpawnWithInput(dart, ['run', '$src/scripts/discipline_hook.dart'],
+      why: 'discipline_hook SessionStart in $cwd',
+      stdin: stdinJson,
+      workingDirectory: cwd,
+      extraEnv: _gitCfgEnv(),
+      allowControl: _gitCfgControl,
+      stdoutEncoding: utf8,
+      stderrEncoding: utf8);
+  return r.stdout;
 }
 
 void _commit(String cwd, String fileName, String content, String message) {
@@ -99,7 +79,7 @@ void _commit(String cwd, String fileName, String content, String message) {
 
 void main() {
   final src = Directory.current.path;
-  final dart = _dartBin();
+  final dart = dartBin();
   const startup = '{"hook_event_name":"SessionStart","source":"startup"}';
 
   late Directory tmp;
@@ -212,14 +192,15 @@ void main() {
     _commit(other, 'other.txt', 'from other\n', 'other pushes');
     expect(_git(['push', '-q', 'origin', 'main'], other).exitCode, 0);
 
-    final env = _cleanEnv()..['DISCIPLINE_HOOK_SYNC_SKIP'] = '1';
-    final p = await Process.start(dart, ['run', '$src/scripts/discipline_hook.dart'],
-        workingDirectory: clone, environment: env, includeParentEnvironment: false);
-    p.stdin.write(startup);
-    await p.stdin.close();
-    final out = await p.stdout.transform(utf8.decoder).join();
-    unawaited(p.stderr.drain<void>());
-    await p.exitCode;
+    final result = await runSpawnWithInput(dart, ['run', '$src/scripts/discipline_hook.dart'],
+        why: 'discipline_hook SessionStart with DISCIPLINE_HOOK_SYNC_SKIP=1',
+        stdin: startup,
+        workingDirectory: clone,
+        extraEnv: {..._gitCfgEnv(), 'DISCIPLINE_HOOK_SYNC_SKIP': '1'},
+        allowControl: {..._gitCfgControl, 'DISCIPLINE_HOOK_SYNC_SKIP'},
+        stdoutEncoding: utf8,
+        stderrEncoding: utf8);
+    final out = result.stdout;
 
     // Would be MAIN BEHIND without the kill switch -- proven by the sibling
     // "behind" test above using the identical fixture shape.
@@ -236,7 +217,7 @@ void main() {
       // A fake `git` on PATH: `fetch` execs into a long sleep (so killing the
       // wrapper's own pid kills the sleep directly, no grandchild to leak);
       // every other subcommand delegates to the real git unchanged.
-      final whichGit = Process.runSync('which', ['git'], stdoutEncoding: utf8);
+      final whichGit = runSpawn('which', ['git'], why: 'locate the real git for the fake-fetch wrapper', stdoutEncoding: utf8);
       expect(whichGit.exitCode, 0, reason: 'fixture requires a resolvable git on PATH');
       final realGit = (whichGit.stdout as String)
           .split('\n')
@@ -251,20 +232,28 @@ void main() {
           '  exec sleep 300\n'
           'fi\n'
           'exec "${_fwd(realGit)}" "\$@"\n');
-      Process.runSync('chmod', ['+x', wrapper.path]);
-
-      final env = _cleanEnv();
-      env['PATH'] = '${fakeBin.path}:${env['PATH']}';
+      runSpawn('chmod', ['+x', wrapper.path], why: 'make the fake git wrapper executable');
 
       final stopwatch = Stopwatch()..start();
-      final p = await Process.start(dart, ['run', '$src/scripts/discipline_hook.dart'],
-          workingDirectory: clone, environment: env, includeParentEnvironment: false);
+      // Stays startSpawn (plan D3 closed exemption): the subject is a hung child that
+      // must be killed on timeout, so the test owns the lifecycle. The stub-first PATH
+      // is a PREFIX of the parent's (indexed read).
+      final p = await startSpawn(dart, ['run', '$src/scripts/discipline_hook.dart'],
+          workingDirectory: clone,
+          extraEnv: {
+            ..._gitCfgEnv(),
+            'PATH': '${fakeBin.path}:${Platform.environment['PATH']}',
+          },
+          allowControl: _gitCfgControl);
+      final outF = p.stdout.transform(utf8.decoder).join();
+      final errF = p.stderr.transform(utf8.decoder).join();
       p.stdin.write(startup);
       await p.stdin.close();
-      unawaited(p.stdout.drain<void>());
-      unawaited(p.stderr.drain<void>());
-      await p.exitCode;
+      final hookOut = await outF;
+      final hookErr = await errF;
+      final hookExit = await p.exitCode;
       stopwatch.stop();
+      reportSpawn(hookExit, hookOut, hookErr, 'discipline_hook SessionStart against a hanging fake `git fetch`');
 
       // Bounded by the ~4s internal timeout, not by the 300s fake fetch --
       // generous margin for CI/VPS scheduling noise, still far below 300s.
@@ -280,7 +269,10 @@ void main() {
       // Future gave up waiting" (the pre-fix bug: the process lives on) from
       // "the process was killed" (the fix).
       await Future<void>.delayed(const Duration(seconds: 1));
-      final stillAlive = Process.runSync('kill', ['-0', '$fetchPid']).exitCode == 0;
+      final stillAlive =
+          runSpawn('kill', ['-0', '$fetchPid'], why: 'probe whether the fake fetch pid $fetchPid is still alive')
+                  .exitCode ==
+              0;
       expect(stillAlive, isFalse,
           reason: 'the hung git-fetch process (pid $fetchPid) must be killed on '
               'timeout, not orphaned');

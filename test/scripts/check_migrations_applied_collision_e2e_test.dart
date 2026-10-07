@@ -23,44 +23,15 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/spawn.dart';
+
 void main() {
   late Directory tmp;
   final repoRoot = Directory.current.path;
 
-  /// The Dart binary to spawn the gate with.
-  ///
-  /// NOT `Platform.resolvedExecutable`: under `flutter test` that resolves to
-  /// the flutter_tester binary, not dart, so the spawn never returns and the
-  /// suite HANGS rather than failing (test/scripts/oi_numbering_lib_test.dart
-  /// documents this trap after it cost a >10-minute hang; the same fallback
-  /// chain is reused verbatim from test/scripts/cron_registry_snapshot_gate_test.dart).
-  String dartBinOf() {
-    final override = Platform.environment['DART_BIN_OVERRIDE'];
-    if (override != null && File(override).existsSync()) return override;
-    final which = Process.runSync(
-      Platform.isWindows ? 'where' : 'which',
-      ['dart'],
-      stdoutEncoding: utf8,
-    );
-    if (which.exitCode == 0) {
-      final first = (which.stdout as String)
-          .split('\n')
-          .map((l) => l.trim())
-          .firstWhere((l) => l.isNotEmpty, orElse: () => '');
-      if (first.isNotEmpty) {
-        final dir = File(first).parent.path.replaceAll(r'\', '/');
-        for (final c in [
-          '$dir/cache/dart-sdk/bin/dart.exe',
-          '$dir/cache/dart-sdk/bin/dart',
-        ]) {
-          if (File(c).existsSync()) return c;
-        }
-      }
-    }
-    return 'dart';
-  }
-
-  final dartBin = dartBinOf();
+  // The Dart binary to spawn the gate with: the shared `dartBin()` (never
+  // `Platform.resolvedExecutable`, which is flutter_tester under `flutter test` and HANGS).
+  final dart = dartBin();
 
   setUp(() {
     tmp = Directory.systemTemp.createTempSync('gate14_collision_');
@@ -86,9 +57,10 @@ void main() {
     ]));
   }
 
-  ProcessResult runGate() => Process.runSync(
-        dartBin,
+  ProcessResult runGate() => runSpawn(
+        dart,
         ['scripts/check_migrations_applied.dart'],
+        why: 'Gate 14 applied-migrations gate against a scratch repo',
         workingDirectory: tmp.path,
       );
 

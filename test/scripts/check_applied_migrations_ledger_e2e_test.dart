@@ -12,32 +12,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-/// Dart binary to spawn the gate with — NOT `Platform.resolvedExecutable`, which under
-/// `flutter test` is flutter_tester and HANGS the suite instead of failing (same fallback
-/// chain as check_migrations_applied_collision_e2e_test.dart).
-String _dartBin() {
-  final override = Platform.environment['DART_BIN_OVERRIDE'];
-  if (override != null && File(override).existsSync()) return override;
-  final which = Process.runSync(Platform.isWindows ? 'where' : 'which', ['dart'], stdoutEncoding: utf8);
-  if (which.exitCode == 0) {
-    final first = (which.stdout as String).split('\n').map((l) => l.trim()).firstWhere((l) => l.isNotEmpty, orElse: () => '');
-    if (first.isNotEmpty) {
-      final dir = File(first).parent.path.replaceAll(r'\', '/');
-      for (final c in ['$dir/cache/dart-sdk/bin/dart.exe', '$dir/cache/dart-sdk/bin/dart']) {
-        if (File(c).existsSync()) return c;
-      }
-    }
-  }
-  return 'dart';
-}
-
-Map<String, String> _cleanEnv() {
-  final env = Map<String, String>.from(Platform.environment);
-  // A surrounding git hook exports GIT_DIR / GIT_WORK_TREE, which override workingDirectory
-  // and would point the child at the REAL repo (memory/feedback_mistake_git_hook_env_leak).
-  env.removeWhere((k, _) => k.toUpperCase().startsWith('GIT_'));
-  return env;
-}
+import '../helpers/spawn.dart';
 
 void main() {
   late Directory tmp;
@@ -48,7 +23,7 @@ void main() {
   late List<Map<String, Object?>> realGrandfatheredRows;
 
   final repoRoot = Directory.current.path;
-  final dart = _dartBin();
+  final dart = dartBin();
 
   setUp(() {
     tmp = Directory.systemTemp.createTempSync('gate39_hash_');
@@ -92,12 +67,11 @@ void main() {
         'slug': ?slug,
       };
 
-  ProcessResult run([List<String> extra = const []]) => Process.runSync(
+  ProcessResult run([List<String> extra = const []]) => runSpawn(
         dart,
         ['scripts/check_applied_migrations_ledger.dart', ...extra],
+        why: 'Gate 39 ledger gate against a scratch repo',
         workingDirectory: tmp.path,
-        environment: _cleanEnv(),
-        includeParentEnvironment: false,
       );
 
   final body = utf8.encode('select 1;\n');
@@ -169,8 +143,8 @@ void main() {
   });
 
   test('the REAL repo ledger passes the real gate (no drift on main)', () {
-    final r = Process.runSync(dart, ['scripts/check_applied_migrations_ledger.dart'],
-        workingDirectory: repoRoot, environment: _cleanEnv(), includeParentEnvironment: false);
+    final r = runSpawn(dart, ['scripts/check_applied_migrations_ledger.dart'],
+        why: 'Gate 39 ledger gate against the REAL repo ledger', workingDirectory: repoRoot);
     expect(r.exitCode, 0, reason: '${r.stdout}${r.stderr}');
   });
 }
@@ -181,7 +155,8 @@ String _sha(List<int> bytes) {
   final f = File('${Directory.systemTemp.path}/e2e_hash_${bytes.hashCode}_${DateTime.now().microsecondsSinceEpoch}.bin')
     ..writeAsBytesSync(bytes);
   try {
-    final r = Process.runSync('python3', ['-c', 'import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())', f.path]);
+    final r = runSpawn('python3', ['-c', 'import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())', f.path],
+        why: 'sha256 oracle via python3 hashlib');
     return (r.stdout as String).trim();
   } finally {
     f.deleteSync();

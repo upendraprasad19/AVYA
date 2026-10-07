@@ -19,6 +19,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../scripts/supabase_token_path_lib.dart' as dart_resolver;
+import '../helpers/spawn.dart';
 
 const _name = dart_resolver.tokenFileName;
 final _sep = Platform.pathSeparator;
@@ -34,9 +35,12 @@ class _Answer {
 /// A git executable that does not exist: proves the git-failed branch of both resolvers.
 const _noGit = '/nonexistent/git-for-token-path-test';
 
+/// [env] is the EXTRA environment the node child gets on top of the helper's scrubbed one
+/// (the only caller passes `GIT_DIR`, deliberately, so the file's one control variable is
+/// declared here as a closed literal set).
 _Answer? _viaNode(String repoRoot, {Map<String, String>? env, String? git}) {
   final script = File('.claude/token_path.js').absolute.path;
-  final r = Process.runSync(
+  final r = runSpawn(
     'node',
     [
       '-e',
@@ -44,7 +48,9 @@ _Answer? _viaNode(String repoRoot, {Map<String, String>? env, String? git}) {
           'const r=t.resolveTokenFile(${jsonEncode(repoRoot)}${git == null ? '' : ',{git:${jsonEncode(git)}}'});'
           'console.log(JSON.stringify(r));',
     ],
-    environment: env,
+    why: 'node .claude/token_path.js resolveTokenFile($repoRoot)',
+    extraEnv: env ?? const <String, String>{},
+    allowControl: {'GIT_DIR'},
   );
   expect(r.exitCode, 0, reason: '${r.stderr}');
   final out = (r.stdout as String).trim();
@@ -68,9 +74,9 @@ void _write(String root, List<String> rel) {
   f.writeAsStringSync('sbp_test\n');
 }
 
-ProcessResult _git(List<String> a, String dir) => Process.runSync('git', [
+ProcessResult _git(List<String> a, String dir) => runSpawn('git', [
       '-c', 'commit.gpgsign=false', '-c', 'user.email=t@t', '-c', 'user.name=t', ...a,
-    ], workingDirectory: dir);
+    ], why: 'git ${a.join(' ')} in $dir', workingDirectory: dir);
 
 /// A primary repo with one commit and a LINKED worktree of it. Neither token file exists yet.
 ({String primary, String linked}) _repoWithLinkedWorktree(Directory tmp) {
@@ -192,8 +198,7 @@ void main() {
     // A hook-style environment pointing at some OTHER repo's git dir.
     final other = Directory(_join([tmp.path, 'other']))..createSync();
     _git(['init', '-q'], other.path);
-    final r = _viaNode(w.linked,
-        env: {...Platform.environment, 'GIT_DIR': _join([other.path, '.git'])})!;
+    final r = _viaNode(w.linked, env: {'GIT_DIR': _join([other.path, '.git'])})!;
     expect(_real(r.path), _real(_join([w.primary, '.supabase', _name])));
   });
 }

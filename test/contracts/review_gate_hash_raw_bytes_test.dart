@@ -28,13 +28,14 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/spawn.dart';
+
 Future<String> _hashObjectStdin(List<int> bytes) async {
-  final p = await Process.start('git', ['hash-object', '--stdin']);
-  p.stdin.add(bytes);
-  await p.stdin.close();
-  final out = await p.stdout.transform(const SystemEncoding().decoder).join();
-  await p.exitCode;
-  return out.trim();
+  // RAW BYTES on stdin (a List<int> is added, not written as text): the subject
+  // of f4d1b7.
+  final r = await runSpawnWithInput('git', ['hash-object', '--stdin'],
+      why: 'git hash-object --stdin over ${bytes.length} raw bytes', stdin: bytes);
+  return r.stdout.trim();
 }
 
 void main() {
@@ -47,7 +48,8 @@ void main() {
     final f = File('${tmp.path}/d.txt');
     await f.writeAsBytes(utf8.encode(content));
 
-    final fileHash = (await Process.run('git', ['hash-object', f.path]))
+    final fileHash = (await runSpawnAsync('git', ['hash-object', f.path],
+            why: 'git hash-object of the non-ASCII file'))
         .stdout
         .toString()
         .trim();

@@ -30,12 +30,15 @@ library;
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/spawn.dart';
+
 void main() {
   test('audit 2026-05-20 closure YAML validates (Gate 40)', () async {
-    final result = await Process.run(
+    final result = await runSpawnAsync(
       'dart',
       ['run', 'scripts/validate_audit_closure.dart',
           'docs/audit/2026_05_20_audit_closures.yaml'],
+      why: 'Gate 40 validate_audit_closure on the 2026-05-20 closure YAML',
       runInShell: true,
     );
     expect(

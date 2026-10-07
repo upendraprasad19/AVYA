@@ -24,20 +24,14 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-Map<String, String> _cleanEnv() {
-  final env = Map<String, String>.from(Platform.environment);
-  env.removeWhere((k, _) => k.toUpperCase().startsWith('GIT_'));
-  return env;
-}
+import '../helpers/spawn.dart';
 
 ProcessResult _run(String exe, List<String> args, String cwd,
     {Map<String, String>? extra}) {
-  final env = _cleanEnv();
-  if (extra != null) env.addAll(extra);
-  return Process.runSync(exe, args,
+  return runSpawn(exe, args,
+      why: 'safe_merge e2e: $exe ${args.join(' ')} (in $cwd)',
       workingDirectory: cwd,
-      environment: env,
-      includeParentEnvironment: false,
+      extraEnv: extra ?? const <String, String>{},
       runInShell: true);
 }
 
