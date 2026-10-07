@@ -16,25 +16,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../../scripts/sot_citation_lib.dart';
 import '../helpers/read_screen_source.dart';
-
-/// What one gate-subprocess run said, for the log of a test that FAILED: [why]
-/// plus the exit code, stdout and stderr.
-///
-/// CI run 37203140849 (2026-10-04) failed one subprocess case here with
-/// `Expected: <0> Actual: <254>` and nothing else. `dart run` exits 254 when the
-/// Dart VM cannot compile or load the script, and the reason is on stderr, but
-/// that assertion printed only stdout (empty), so the one failure we have seen
-/// could not be explained from the log. `runGateOn` now hands EVERY run's result
-/// to its `report` function, which is `printOnFailure` unless a test passes
-/// another one: `printOnFailure` prints under the failing test, and only under a
-/// failing test, whichever assertion fails and whatever a future test calls its
-/// result variable. (The per-assertion alternative, a `reason:` on each
-/// exit-code check, was tried first and dropped: it needs every author to
-/// remember it, and a source pin cannot see a result variable named anything
-/// but the one it greps for.) The `report` parameter exists so that a test can
-/// SEE what would be printed: two cases below run the real gate and read it.
-String gateDiag(ProcessResult r, String why) =>
-    '$why\nexit=${r.exitCode}\nstdout=${r.stdout}\nstderr=${r.stderr}';
+import '../helpers/spawn.dart';
 
 void main() {
   group('parseConcepts', () {
@@ -193,12 +175,21 @@ concepts:
   // Each case builds a THROWAWAY git repo so the gate's `git ls-files` sees a
   // controlled corpus.
   //
-  // ⚠ The ENTIRE GIT_* namespace is scrubbed AND `includeParentEnvironment` is
-  // false — see runGateOn. Inside the pre-commit hook this test inherits git's
-  // exported vars, which override BOTH `workingDirectory:` AND `-C`, so the
-  // fixture would silently operate on the REAL repo
-  // (feedback_mistake_git_hook_env_leak). Naming three variables was not
-  // enough, and scrubbing without the flag did nothing at all.
+  // ⚠ Every spawn here goes through test/helpers/spawn.dart: the child gets the canonical
+  // control-variable-clean environment (the ENTIRE GIT_* namespace and every other variable a
+  // repo script reads as a switch, see scripts/regression_catalog_lib.dart) with
+  // `includeParentEnvironment: false`, and its exit code, stdout and stderr are reported under
+  // a failing test. Inside the pre-commit hook this test inherits git's exported vars, which
+  // override BOTH `workingDirectory:` AND `-C`, so the fixture would silently operate on the
+  // REAL repo (feedback_mistake_git_hook_env_leak). Naming three variables was not enough,
+  // and scrubbing without the flag did nothing at all.
+  //
+  // The failure report: CI run 37203140849 (2026-10-04) failed one subprocess case here with
+  // `Expected: <0> Actual: <254>` and nothing else (`dart run` exits 254 when the VM cannot
+  // compile or load the script, and the reason is on stderr, which no assertion printed).
+  // The report now comes from the helper's ONE choke point, so it reaches printOnFailure
+  // whichever assertion fails; the `report` parameter of runGateOn exists so that a test can
+  // SEE what would be printed (two cases below run the real gate and read it).
   // Regression-check both paths with:
   //   GIT_DIR=$(git rev-parse --git-dir) GIT_WORK_TREE=$(pwd) GIT_PREFIX= \
   //     flutter test test/contracts/sot_registry_citations_test.dart
@@ -211,28 +202,16 @@ concepts:
     });
 
     /// Builds a temp git repo, writes [registry] + one doc, returns the gate's
-    /// ProcessResult.
+    /// ProcessResult. [report] receives each spawn's diagnostic (default: the helper's).
     ProcessResult runGateOn({
       required String registryYaml,
       required String docName,
       required String docBody,
       bool writeRegistry = true,
       List<String> args = const [],
-      void Function(String report) report = printOnFailure,
+      void Function(String report)? report,
     }) {
       final tmp = Directory.systemTemp.createTempSync('gate44_');
-      // Scrub the ENTIRE GIT_* namespace, not a hand-picked few.
-      //
-      // A first version removed only GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE —
-      // the three named in feedback_mistake_git_hook_env_leak — and passed
-      // standalone but failed all 7 cases inside the pre-commit hook with
-      // "fatal: this operation must be run in a work tree". git exports more
-      // than those three (GIT_PREFIX, GIT_COMMON_DIR, GIT_OBJECT_DIRECTORY,
-      // GIT_ALTERNATE_OBJECT_DIRECTORIES, GIT_CONFIG*, …) and any one of them
-      // can re-point a child git at the REAL repo. Enumerating names is the bug;
-      // scrubbing the namespace is the fix.
-      final env = Map<String, String>.from(Platform.environment)
-        ..removeWhere((k, _) => k.toUpperCase().startsWith('GIT_'));
 
       Directory('${tmp.path}/docs/diagnoses').createSync(recursive: true);
       if (writeRegistry) {
@@ -246,34 +225,30 @@ concepts:
         ['config', 'user.name', 't'],
         ['add', '-A'],
       ]) {
-        final r = Process.runSync('git', cmd,
+        final r = runSpawn('git', cmd,
             workingDirectory: tmp.path,
-            environment: env,
-            includeParentEnvironment: false);
+            why: 'sot citation fixture: git ${cmd.first}',
+            report: report);
         expect(r.exitCode, 0, reason: 'git ${cmd.first} failed: ${r.stderr}');
       }
 
       // runInShell: on Windows the launcher is `dart.bat`, which Process cannot
       // exec directly — without this every case dies with a bare
       // "The system cannot find the file specified" that looks like a gate bug.
-      final r = Process.runSync(
+      // Reported under THIS test's failure and only then; the first line of the
+      // label names which spawn it was when a test makes several.
+      return runSpawn(
         'dart',
         ['run', scriptPath, ...args],
         workingDirectory: tmp.path,
-        environment: env,
-        includeParentEnvironment: false,
         runInShell: true,
+        why: [
+          'check_sot_registry_citations.dart',
+          ...args,
+          'on $docName: ${docBody.trim().split('\n').first}',
+        ].join(' '),
+        report: report,
       );
-      // Reported under THIS test's failure and only then (see [gateDiag]); the
-      // first line of the doc names which spawn it was when a test makes several.
-      report(gateDiag(
-          r,
-          [
-            'check_sot_registry_citations.dart',
-            ...args,
-            'on $docName: ${docBody.trim().split('\n').first}',
-          ].join(' ')));
-      return r;
     }
 
     const goodRegistry = 'concepts:\n\n  - concept: real_concept\n    domain: x\n';
@@ -366,6 +341,12 @@ concepts:
       expect(r.exitCode, 0, reason: 'stdout=${r.stdout} stderr=${r.stderr}');
     });
 
+    // The gate's report is found BY LABEL: the git setup spawns report too (under their own
+    // label), so a count of ALL reports is asserted separately and per label (D5 iv).
+    const gateLabel = 'check_sot_registry_citations.dart';
+    const setupLabel = 'sot citation fixture: git ';
+    const setupCommands = 4; // init, config user.email, config user.name, add
+
     test('a REAL failing gate run is reported in full: which spawn, the exit code, '
         'stdout and the gate\'s own stderr', () {
       final reports = <String>[];
@@ -379,16 +360,19 @@ concepts:
       expect('${r.stderr}', contains('[sot-citations] FAIL'),
           reason: 'precondition: this run must have written to stderr, or the '
               'assertions below would prove nothing');
-      expect(reports, hasLength(1), reason: 'one spawn, one report');
+      expect(reports.where((x) => x.startsWith(gateLabel)), hasLength(1), reason: 'one gate spawn, one report');
+      expect(reports.where((x) => x.startsWith(setupLabel)), hasLength(setupCommands),
+          reason: 'each fixture git command reports under its own label');
+      expect(reports, hasLength(1 + setupCommands), reason: 'nothing else spawns');
+      final gate = reports.singleWhere((x) => x.startsWith(gateLabel));
       expect(
-          reports.single,
+          gate,
           startsWith('check_sot_registry_citations.dart on '
               '2026-08-09-thing-abc123.md: sot_registry_entry: no_such_concept\n'
               'exit=1\nstdout='),
           reason: 'which spawn it was, then the exit code, then stdout');
-      expect(reports.single, contains('stdout=${r.stdout}\nstderr='));
-      expect(reports.single, endsWith('stderr=${r.stderr}'),
-          reason: 'the gate\'s own stderr, last and whole');
+      expect(gate, contains('stdout=${r.stdout}\nstderr='));
+      expect(gate, endsWith('stderr=${r.stderr}'), reason: 'the gate\'s own stderr, last and whole');
     });
 
     test('a REAL passing gate run is reported too (printOnFailure, not '
@@ -403,19 +387,19 @@ concepts:
       expect(r.exitCode, 0);
       expect('${r.stdout}', contains('PASS'),
           reason: 'precondition: a passing run says so on stdout');
-      expect(reports, hasLength(1));
-      expect(reports.single, contains('exit=0'));
-      expect(reports.single, contains('stdout=${r.stdout}'));
+      expect(reports.where((x) => x.startsWith(gateLabel)), hasLength(1));
+      expect(reports, hasLength(1 + setupCommands));
+      final gate = reports.singleWhere((x) => x.startsWith(gateLabel));
+      expect(gate, contains('exit=0'));
+      expect(gate, contains('stdout=${r.stdout}'));
     });
 
-    test('runGateOn reports the dart run it has just made, and nothing else '
-        'spawns', () {
-      // PRESENCE and ORDER of the wiring, read from runGateOn's own body: a
-      // whole-file search would be satisfied by this test's own text. The effect
-      // is the two cases above (a real run, read through `report`) and the
-      // measured runs in docs/plans/sot-gate-test-stderr.md (the text lands under
-      // a failing test and not under a passing one; a gate script that cannot
-      // compile). Comments are stripped, so the doc comments cannot count.
+    test('runGateOn routes every spawn through the helper, and nothing else spawns', () {
+      // PRESENCE and COUNT of the wiring, read from this file's own comment-stripped body: a
+      // whole-file search would be satisfied by this test's own text. The effect is the two
+      // cases above (a real run, read through `report`); the ORDER (spawn, then report, then
+      // return) is pinned once, on the helper itself, in spawn_helper_test.dart, where PR
+      // #79's mutants were re-run against it.
       final src = readSourceFileStripped(
           'test/contracts/sot_registry_citations_test.dart');
       final start = src.indexOf('ProcessResult runGateOn({');
@@ -424,27 +408,22 @@ concepts:
       expect(end, greaterThan(start),
           reason: 'goodRegistry must still follow runGateOn');
       final body = src.substring(start, end);
-      // The spawn, then, with NOTHING between, the report of that very result,
-      // then the return and the end of the function: no condition around the
-      // report, no early return before it, no other `r` (the git loop's is scoped
-      // inside its own for body).
+      // Both spawns hand the caller's `report` seam through.
       expect(
-          RegExp(r"final r = Process\.runSync\(\s*'dart',[^;]*;\s*"
-                  r'report\(\s*gateDiag\(\s*r,[^;]*;\s*return r;\s*\}')
-              .hasMatch(body),
-          isTrue,
-          reason: 'runGateOn must report the dart run right after making it: '
-              'without that a failure shows only the exit code (the 2026-10-04 '
-              '254)');
-      // The default reporter is the real one.
+          RegExp(r"runSpawn\(\s*'git',[^;]*report: report\s*,?\s*\);").hasMatch(body), isTrue,
+          reason: 'the git setup spawns must route through runSpawn and carry `report`');
       expect(
-          RegExp(r'void Function\(String \w+\) report = printOnFailure,')
-              .hasMatch(body),
-          isTrue,
-          reason: 'the default `report` must be printOnFailure');
-      // A new spawn must be added HERE on purpose and routed through runGateOn.
-      expect(RegExp(r'Process\.(runSync|run|start)\(').allMatches(src).length, 2,
+          RegExp(r"return runSpawn\(\s*'dart',[^;]*report: report,\s*\);\s*\}").hasMatch(body), isTrue,
+          reason: 'runGateOn must return the helper-reported dart run: without that a failure '
+              'shows only the exit code (the 2026-10-04 254)');
+      // No direct spawn anywhere in this file; exactly two helper entry points (the git loop
+      // and the dart run), both inside runGateOn. A new spawn must be added HERE on purpose.
+      expect(RegExp(r'Process\.(runSync|run|start)\(').hasMatch(src), isFalse,
+          reason: 'a direct Process spawn bypasses the helper\'s environment and report');
+      expect(RegExp(r'\b(runSpawn|runSpawnAsync|startSpawn)\(').allMatches(src).length, 2,
           reason: 'the git setup loop and the dart run, both inside runGateOn');
+      expect(RegExp(r'printOnFailure,').hasMatch(body), isFalse,
+          reason: 'the default report is the helper\'s, not a per-file copy');
     });
   });
 
@@ -469,33 +448,6 @@ status: fixed
       expect(tokens, ['log_client_error_payload']);
       expect(classifyCitation(tokens.single, {'log_client_error_payload'}),
           CitationVerdict.resolved);
-    });
-  });
-
-  group('gateDiag (the failure report of a spawned gate)', () {
-    test('names the caller\'s why, the exit code, stdout AND stderr (the '
-        '2026-10-04 exit-254 failure hid stderr)', () {
-      final msg = gateDiag(
-          ProcessResult(1, 254, 'out-text', 'Error: boom from stderr'),
-          'why-text');
-      expect(msg, contains('why-text'));
-      expect(msg, contains('exit=254'));
-      expect(msg, contains('stdout=out-text'));
-      expect(msg, contains('stderr=Error: boom from stderr'));
-    });
-
-    test('carries a long multi-line stderr in full (a compile error is many '
-        'lines)', () {
-      final long = [
-        for (var i = 1; i <= 60; i++)
-          'lib/x.dart:$i:1: Error: line $i of a compile error, long enough to '
-              'matter',
-      ].join('\n');
-      expect(long.length, greaterThan(1000));
-      final msg = gateDiag(ProcessResult(1, 254, '', long), 'why');
-      expect(msg, contains('stderr=lib/x.dart:1:1: Error: line 1 of'));
-      expect(msg.endsWith(long), isTrue,
-          reason: 'nothing may be cut off the end of stderr');
     });
   });
 }
