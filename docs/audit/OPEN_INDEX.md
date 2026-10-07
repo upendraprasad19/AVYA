@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**179 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**182 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -187,3 +187,6 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-320 | redeem-referral has no per-referrer cap: each new referee (idempotent per… | a founder product decision: whether to… | 2026-10-07 - read… | [:5743](open_issues.md#L5743) |
 | OI-321 | clean-orphan-media rechecksIsPro uses .maybeSingle() (index.ts:120-129): a… | nothing: a small fix (read the active… | 2026-10-07 - read… | [:5752](open_issues.md#L5752) |
 | OI-322 | progress_photo_repository.capture sends takenAt.toIso8601String()… | nothing: fix in unit B2 of batch… | 2026-10-07 - read… | [:5761](open_issues.md#L5761) |
+| OI-323 | weekly-report has no server-side per-day cap for PRO: consume_quota runs… | a FOUNDER product decision: cap PRO… | 2026-10-08 - read… | [:5770](open_issues.md#L5770) |
+| OI-324 | SupabaseService.callFunction has no timeout of its own… | none - an engineering choice (a default… | 2026-10-08 - read… | [:5779](open_issues.md#L5779) |
+| OI-325 | Profile weekly-report card still says 'Weekly AI Report'… | a FOUNDER copy decision: the one name… | 2026-10-08 - `grep -rn "Weekly AI… | [:5788](open_issues.md#L5788) |

@@ -5766,3 +5766,30 @@ Impact is limited to chat-media orphan cleanup (a user with two unexpired active
 - **Identified**: 2026-10-07 · filed via mint_oi.sh from branch `pp-preexisting-ois`
 
 Writer: `capture` (line 141). Readers: the cap query (line 89-94) and the list ordering (line 165). Pre-existing and outside the B1 diff.
+
+## OI-323 — weekly-report has no server-side per-day cap for PRO: consume_quota runs only for non-PRO (weekly-report/index.ts:716), so the client once-per-IST-day cap is bypassed by a direct API call or a second device and each call is a thinking-on Gemini call - product decision needed on a PRO cap
+
+- **Status**: OPEN
+- **Blocked on**: a FOUNDER product decision: cap PRO weekly reports per IST day (and at what number) or accept the client-only cap; PRO is "20 AI messages a day, NOT unlimited" elsewhere, so a server rule is consistent. Then a `consume_quota` call for PRO in `weekly-report/index.ts`.
+- **Verified**: 2026-10-08 - read `supabase/functions/weekly-report/index.ts`: the free gate (`!hasPro && !isFirstReport` -> 403) runs before Gemini and `consume_quota('weekly_report_free', 'epoch')` runs only for `!hasPro` (:716); a PRO caller has no ledger row at all. Found by the issue #78 batch (diagnose `d7b2e5`, review `docs/reviews/weekly-report-issue78-review.md`).
+- **Identified**: 2026-10-08 · filed via mint_oi.sh from branch `issue78-closeout`
+
+Issue #78 capped the SCREEN (PRO-only silent refresh, at most once per IST day, one call at a time), which is a client rule only: a direct `functions.invoke('weekly-report')`, a second device, or a reinstall each makes another `MODEL_PRO` thinking-on call with `maxTokens: 4096` and `retries: 2` (up to 3 Gemini attempts). Nothing server-side bounds a PRO user. Shape of a fix: `consume_quota('weekly_report_pro', <IST day window>, cap)` for `hasPro`, fail closed on a ledger error like the free meter, 429 with a coach-voice message, plus the client mapping; same pattern as `pro_media_daily_caps` in `supabase/functions/CLAUDE.md`. Owner decision first: the number.
+
+## OI-324 — SupabaseService.callFunction has no timeout of its own (supabase_service.dart:395-441; _invokeRaw is a bare functions.invoke and retryColdStart retries 502/503/504 three times): every Edge Function caller can hang for minutes, only the Weekly Report screen now bounds its call (120s)
+
+- **Status**: OPEN
+- **Blocked on**: none - an engineering choice (a default timeout inside `callFunction` / `_invokeRaw`, with a per-call override for the slow AI endpoints), then a behavioral test with a never-completing invoker.
+- **Verified**: 2026-10-08 - read `lib/core/services/supabase_service.dart:395-441` (`callFunction`), `:453-458` (`_invokeRaw`, a bare `client.functions.invoke`), `:507-560` (`retryColdStart`: 502/503/504 retried 3 times, 2s/6s/12s) and `functions_client-2.7.1/lib/src/functions_client.dart:118-270`; `grep -n timeout supabase_service.dart` shows timeouts only on the token refresh (20s). Found by the round-3 review of issue #78.
+- **Identified**: 2026-10-08 · filed via mint_oi.sh from branch `issue78-closeout`
+
+Every Edge Function call from the client can wait on a stalled socket or a gateway 504 for minutes (an estimate, assuming ~150s per attempt, was NOT measured). Issue #78 bounded only the Weekly Report call (`.timeout(WeeklyReportCallGate.callTimeout)`, 120s); the other callers (ai-proxy chat, food/scan, restore, payments) are unbounded and several hold a spinner or an in-flight flag while they wait. Fix shape: a default timeout in `callFunction` that the slow AI endpoints override, mapped to a friendly error, with the retry loop counted inside the bound. Care: `ai-proxy` has its own retry budget `[2000, 6000, 12000]` (diagnose `c01d57`) and a restore may legitimately run long, so the number is per endpoint, not global.
+
+## OI-325 — Profile weekly-report card still says 'Weekly AI Report' (profile_content.dart:322) and the Profile row title says 'Weekly Report' (wardroom_copy.dart:271) while the screen is now Coach's Weekly Dispatch - one agreed name needed across the Profile entry points, the paywall feature string and notification/inbox text
+
+- **Status**: OPEN
+- **Blocked on**: a FOUNDER copy decision: the one name for this feature across Profile, the paywall and notifications (the screen is now "Coach's Weekly Dispatch"; the Profile row says "Weekly Report"; the Profile card says "Weekly AI Report"). Then a `WardroomCopy` constant and a source-grep test.
+- **Verified**: 2026-10-08 - `grep -rn "Weekly AI Report\|Weekly Report" lib/` after the issue #78 merge: `profile_content.dart:322` ('Weekly AI Report'), `wardroom_copy.dart:271` (`profileReportsTitle = 'Weekly Report'`), `paywall_sheet.dart:151` (`case 'Weekly AI Report'` subtitle map, which the screen's old and new feature strings never matched). Not re-checked against notification/inbox copy.
+- **Identified**: 2026-10-08 · filed via mint_oi.sh from branch `issue78-closeout`
+
+Left out of issue #78 on purpose and then not surfaced: the batch renamed the SCREEN's card title and paywall feature string and I judged the Profile row a navigation label to leave alone; the round-2 reviewer found `profile_content.dart:322` separately and I classed it as "a separate feature label" without asking you. Under CLAUDE.md section 4.2 that should have been fixed in the batch or put to you at the time; it is filed now. Also check `lib/features/profile/screens/profile/profile_content.dart` for the card's tap target and `paywall_sheet.dart:151` so the paywall subtitle matches the renamed feature string (today it matches neither the old nor the new one).
