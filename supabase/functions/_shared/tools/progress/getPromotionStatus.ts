@@ -11,6 +11,7 @@ import type { ToolContext, ToolDefinition } from "../types.ts";
 import { LADDER, GATES } from "../../rank_engine.ts";
 import { rankDisplayFor, rankAddressFor } from "../../ceremony_text.ts";
 import { istDateStr } from "../../ist_date.ts";
+import { fetchPagesBounded } from "../../paged_fetch_bounded.ts";
 
 const schema = z.object({
   scenario_cadence: z
@@ -160,13 +161,26 @@ async function handler(
   // ── 5a. Streak + gap: computed inline from workout_logs.date ─────────────
   // Pull distinct workout dates from the last year to compute streak and gap.
   const cutoff365 = istDateStr(new Date(Date.now() - 365 * 86_400_000));
-  const { data: dateLogs, error: dateLogsErr } = await sb
-    .from("workout_logs")
-    .select("date")
-    .eq("user_id", userId)
-    .gte("date", cutoff365)
-    .order("date", { ascending: false });
-  if (dateLogsErr) throw dateLogsErr;
+  // Paged (B4): a year of workout_logs can exceed PostgREST's 1,000-row cap, and
+  // a silent cut would shorten the streak. A page error throws (no false zero).
+  const dateLogsRes = await fetchPagesBounded<{ date: string }>(
+    (withCount) =>
+      sb
+        .from("workout_logs")
+        .select("date", withCount ? { count: "exact" } : undefined)
+        .eq("user_id", userId)
+        .gte("date", cutoff365),
+    {
+      orderBy: [{ column: "date", ascending: false }, { column: "id" }],
+      maxPages: 20, // workout_logs has one row per exercise: a year is far below 20,000
+      label: "getPromotionStatus:dates",
+    },
+  );
+  // A cut-off here would silently SHORTEN the streak: fail honestly instead.
+  if (dateLogsRes.truncated) {
+    throw new Error("getPromotionStatus query failed: workout_logs read truncated");
+  }
+  const dateLogs = dateLogsRes.rows;
 
   // Deduplicate dates and sort descending. Cast `dateLogs` (typed `any` via the
   // `sb: any` context) to a typed row array so `.map` yields `string[]` — otherwise
@@ -174,7 +188,7 @@ async function handler(
   // type-checking (Unit C B-pass P2-1).
   const sortedDates: string[] = [
     ...new Set(
-      ((dateLogs ?? []) as Array<{ date: string }>).map((r) => r.date),
+      dateLogs.map((r) => r.date),
     ),
   ].sort((a, b) => b.localeCompare(a));
 

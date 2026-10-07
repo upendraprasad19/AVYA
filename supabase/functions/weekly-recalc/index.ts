@@ -4,7 +4,8 @@ import { istDateStr } from "../_shared/ist_date.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 import { logCronEnd, logCronStart } from "../_shared/cron_telemetry.ts";
 import { fetchAllByIds } from "../_shared/paged_fetch.ts";
-import { excludeDeletedLogs } from "./live_log_filter.ts";
+import { excludeDeletedLogs, liveLogsForWindow } from "./live_log_filter.ts";
+import { buildDayMap, istDatesEnding, windowLogIds } from "../_shared/exercise_day.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -23,7 +24,7 @@ interface WorkoutLog {
   weight_kg: number | null;
   reps: number | null;
   completed_at: string;
-  date: string; // derived from completed_at
+  date: string; // the RESOLVED workout day (IST), not the write time
 }
 
 interface ScheduledWorkout {
@@ -218,29 +219,37 @@ serve(async (req: Request) => {
     // audit-2026-05-11 H-8 — 4-week window now IST-anchored so the
     // weekly recalc covers IST weeks not UTC weeks (5h30m drift
     // would mis-align with the user's actual training calendar).
-    const fourWeeksAgo = new Date();
-    fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
-    const fourWeeksAgoStr = istDateStr(fourWeeksAgo);
+    // L1b (plan B3): the window is exactly 28 IST dates ending today. The
+    // summary rows are selected by `workout_log_id` (UUID v5 of each date,
+    // `_shared/exercise_day.ts`), NOT by `completed_at` — that is the write
+    // time, so an edited old log would sit inside a `completed_at` window while
+    // belonging to a day outside it.
+    const windowDates = istDatesEnding(28);
+    const fourWeeksAgoStr = windowDates[0];
+    const dayMap = await buildDayMap();
+    const logIds = await windowLogIds(windowDates);
 
-    // ── STEP 1: Bulk fetch ALL data in 2 parallel queries ──
+    // ── STEP 1: Bulk fetch ALL data in 2 parallel reads ──
     // Read from workout_log_exercises (per-exercise data) instead of workout_logs
-    // (which now stores summary rows after sync refactor).
+    // (which now stores summary rows after sync refactor). All-user read:
+    // `idx_wle_workout_log_id` serves the `.in("workout_log_id", ...)`.
     const [rawLogs, allScheduled] = await Promise.all([
-      fetchAllRows<{ user_id: string; exercise_id: string; exercise_name: string; weight_kg: number | null; reps: number | null; completed_at: string; deleted_at: string | null }>(
-        supabaseClient,
-        "workout_log_exercises",
-        // OI-246 follow-up (round-2 review finding P2, 2026-09-29): deleted_at
-        // is now selected so a deleted-and-tombstoned row can be excluded
-        // below. Migration 150/151 mutate exercise_id on the delete
-        // transition (suffix), which without this filter would fragment a
-        // deleted log into its own bogus single-entry "exercise" for both
-        // the variety score (unique exercise count) and the weight-
-        // progression grouping — inflating both instead of correctly
-        // excluding a log the user deleted.
-        "user_id, exercise_id, exercise_name, weight_kg, reps, completed_at, deleted_at",
-        "completed_at",
-        fourWeeksAgoStr + "T00:00:00Z",
-        "id", // OI-79: PK — the only stable page key (completed_at is not unique).
+      fetchAllByIds<{ id: number | string; user_id: string; workout_log_id: string | null; exercise_id: string; exercise_name: string; set_number: number | null; is_pr: boolean | null; weight_kg: number | null; reps: number | null; completed_at: string; deleted_at: string | null }>(
+        (chunk) =>
+          supabaseClient
+            .from("workout_log_exercises")
+            // OI-246 follow-up (round-2 review finding P2, 2026-09-29): deleted_at
+            // is selected so a deleted-and-tombstoned row can be excluded below
+            // (migrations 150/151 suffix exercise_id on delete, which would
+            // otherwise fragment the variety score and weight-progression
+            // grouping). L1b adds id / workout_log_id / set_number for the
+            // one-live-row-per-key rule and the day resolution.
+            .select(
+              "id, user_id, workout_log_id, exercise_id, exercise_name, set_number, is_pr, weight_kg, reps, completed_at, deleted_at",
+            )
+            .in("workout_log_id", chunk),
+        logIds,
+        { orderBy: "id", label: "weekly-recalc wle" }, // OI-79: PK — the only stable page key.
       ),
       fetchAllRows<ScheduledWorkout>(
         supabaseClient,
@@ -256,13 +265,11 @@ serve(async (req: Request) => {
     // BEFORE deriving allLogs, so a deleted exercise log never reaches the
     // exercise-variety / weight-progression grouping below (see the fetch
     // comment above for why this matters specifically for this table).
-    const liveRawLogs = excludeDeletedLogs(rawLogs);
+    // L1b (B1/B3): then ONE live row per (user, day, exercise), in-window by
+    // RESOLVED day, `date` = that day (not the write time).
+    const liveRawLogs = liveLogsForWindow(excludeDeletedLogs(rawLogs), dayMap, windowDates);
 
-    // Derive date from completed_at for downstream scoring
-    const allLogs: WorkoutLog[] = liveRawLogs.map((r) => ({
-      ...r,
-      date: r.completed_at ? r.completed_at.split("T")[0] : fourWeeksAgoStr,
-    }));
+    const allLogs: WorkoutLog[] = liveRawLogs;
 
     console.log(
       `weekly-recalc: fetched ${allLogs.length} logs, ${allScheduled.length} scheduled in ${Date.now() - start}ms`,

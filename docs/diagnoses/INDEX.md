@@ -6,6 +6,17 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### wle_live_summary_read_contract (9 bugs)
+- 2026-10-07 b8def0 — getProgressSummary's planned-workouts set had no upper date bound (future scheduled days counted) and did not exclude moved/dropped statuses that the client's invisibleScheduleStatuses and rank_engine…
+- 2026-10-07 d4fab6 — Readers bucketed summary rows by UTC day or by completed_at, which is the WRITE time: an old log edited today sat in today's window and a coach-rescheduled (forward-moved) log in an earlier one;…
+- 2026-10-07 c3e9a5 — getProgressSummary, weekly-report, i-see-you-callout and future-prediction read workout_log_exercises with no deleted_at filter, so a deleted exercise (OI-269) still counted as work done.
+- 2026-10-07 e5abc7 — getProgressSummary, getExerciseHistory, getNutritionHistory, getPromotionStatus, getPRTimeline and future-prediction read long histories with no paging, so a long period silently stopped at…
+- 2026-10-07 b2d8f4 — getExerciseHistory and getPRTimeline described and computed volume as weight x reps x sets although reps is already cumulative across sets (triple count, OI-308); the model and two notification…
+- 2026-10-07 a1c7e3 — A coach tool or report counted one exercise-day twice (volume, sessions, PRs) when two live summary rows existed for the same (user, workout_log_id, exercise_id) after the set count changed (OI-307…
+- 2026-10-07 f6bcd8 — getNutritionHistory read nutrition_log_items with one unchunked .in(log ids) (URL length, 1,000-row cap) and read items even for aggregation 'total', which never uses them.
+- 2026-10-07 c9ef01 — pr-detection read only the last 20 minutes while its cron has run hourly since migration 141, so PRs completed about 20-60 minutes before each tick were never read and never celebrated.
+- 2026-10-07 a7cde9 — getPRTimeline applied .limit(50) newest-first and presented the result as the all-time PR history, with pr_count, first_pr_date and the progression note computed over the clipped set.
+
 ### not_applicable — test-fixture and test-support environment hermeticity; no Hive/cloud writer-reader contract and no entry of docs/sot_registry.yaml covers it (grep over the registry finds none, c3f8e1 recorded the same). (1 bugs)
 - 2026-10-06 e6c4a9 — `test/scripts/contract_sweep_e2e_test.dart` FAILED 5 of its 7 tests (`PathNotFoundException ... argv.txt`, `Expected: <1> Actual: <0>`) whenever the pre-push contract sweep selected it, and the sweep…
 
@@ -1509,6 +1520,15 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-10-07 | b8def0 | getProgressSummary's planned-workouts set had no upper date bound (future scheduled days counted) and did not exclude moved/dropped statuses that the client's invisibleScheduleStatuses and rank_engine… | wle_live_summary_read_contract | supabase/functions/_shared/workout_statuses_test.ts |
+| 2026-10-07 | d4fab6 | Readers bucketed summary rows by UTC day or by completed_at, which is the WRITE time: an old log edited today sat in today's window and a coach-rescheduled (forward-moved) log in an earlier one;… | wle_live_summary_read_contract | supabase/functions/_shared/exercise_day_test.ts |
+| 2026-10-07 | c3e9a5 | getProgressSummary, weekly-report, i-see-you-callout and future-prediction read workout_log_exercises with no deleted_at filter, so a deleted exercise (OI-269) still counted as work done. | wle_live_summary_read_contract | supabase/functions/_shared/tools/__tests__/getProgressSummary_test.ts |
+| 2026-10-07 | e5abc7 | getProgressSummary, getExerciseHistory, getNutritionHistory, getPromotionStatus, getPRTimeline and future-prediction read long histories with no paging, so a long period silently stopped at… | wle_live_summary_read_contract | supabase/functions/_shared/paged_fetch_bounded_test.ts |
+| 2026-10-07 | b2d8f4 | getExerciseHistory and getPRTimeline described and computed volume as weight x reps x sets although reps is already cumulative across sets (triple count, OI-308); the model and two notification… | wle_live_summary_read_contract | supabase/functions/_shared/tools/__tests__/getExerciseHistory_test.ts |
+| 2026-10-07 | a1c7e3 | A coach tool or report counted one exercise-day twice (volume, sessions, PRs) when two live summary rows existed for the same (user, workout_log_id, exercise_id) after the set count changed (OI-307… | wle_live_summary_read_contract | supabase/functions/_shared/live_exercise_rows_test.ts |
+| 2026-10-07 | f6bcd8 | getNutritionHistory read nutrition_log_items with one unchunked .in(log ids) (URL length, 1,000-row cap) and read items even for aggregation 'total', which never uses them. | wle_live_summary_read_contract | supabase/functions/_shared/tools/__tests__/getNutritionHistory_test.ts |
+| 2026-10-07 | c9ef01 | pr-detection read only the last 20 minutes while its cron has run hourly since migration 141, so PRs completed about 20-60 minutes before each tick were never read and never celebrated. | wle_live_summary_read_contract | supabase/functions/pr-detection/window_test.ts |
+| 2026-10-07 | a7cde9 | getPRTimeline applied .limit(50) newest-first and presented the result as the all-time PR history, with pr_count, first_pr_date and the progression note computed over the clipped set. | wle_live_summary_read_contract | supabase/functions/_shared/tools/__tests__/getPRTimeline_test.ts |
 | 2026-10-06 | e6c4a9 | `test/scripts/contract_sweep_e2e_test.dart` FAILED 5 of its 7 tests (`PathNotFoundException ... argv.txt`, `Expected: <1> Actual: <0>`) whenever the pre-push contract sweep selected it, and the sweep… | not_applicable — test-fixture and test-support environment hermeticity; no Hive/cloud writer-reader contract and no entry of docs/sot_registry.yaml covers it (grep over the registry finds none, c3f8e1 recorded the same). | test/contracts/spawn_env_manifest_test.dart |
 | 2026-10-05 | b7c1e4 | A free user could reach and USE the Progress Photos screen by editing the address of an already-open web tab to `#/profile/progress-photos`. The screen had no PRO check of its own: the only gate was… | subscription_state | test/contracts/progress_photos_screen_gate_test.dart |
 | 2026-10-04 | d4a7e1 | Founder-reported (2026-10-01, day-swap report): after swapping Oct 1 and Oct 2 on the web and completing the swapped workout there (log "PULL + CORE"), the Android phone's Train row title for Oct 1… | workout_completion_status | test/contracts/completed_title_follows_log_test.dart |

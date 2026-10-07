@@ -38,6 +38,8 @@ function failingSb(error: unknown): any {
       "gte",
       "lte",
       "in",
+      "is",
+      "range",
       "order",
       "limit",
       "upsert",
@@ -88,6 +90,8 @@ const DB_ERR = { code: "57014", message: "statement timeout", details: "", hint:
 Deno.test("Unit C site 1 — getProgressSummary THROWS on a DB error (no false zero)", async () => {
   await assertRejects(
     () => getProgressSummaryTool.handler!(ctx(failingSb(DB_ERR)), { periodDays: 30 }),
+    Error,
+    "query failed",
   );
 });
 

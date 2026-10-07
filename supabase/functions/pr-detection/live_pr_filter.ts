@@ -34,3 +34,44 @@ export function excludeDeletedPrs<T extends LivePrRef>(
 ): T[] {
   return rows.filter((r) => r.deleted_at == null);
 }
+
+// ── L1b (plan B1/B3) ─────────────────────────────────────────────────────────
+import { recentLivePrs } from "../_shared/recent_prs.ts";
+import type { SummaryRow } from "../_shared/live_exercise_rows.ts";
+
+/**
+ * The PRs worth a push — the shared recency-reader rule, see
+ * `_shared/recent_prs.ts` (dedupe BEFORE `is_pr`; resolved day = IST
+ * yesterday/today). Newest `completed_at` first.
+ */
+export function celebratablePrs<T extends SummaryRow>(
+  rows: readonly T[],
+  dayMap: Map<string, string>,
+  now: Date = new Date(),
+): T[] {
+  return recentLivePrs(rows, dayMap, now);
+}
+
+/**
+ * The PRs to push at a tick: dedupe over `contextRows` (the window's rows PLUS
+ * every other live row of the same (user, workout_log_id) keys, so a superseded
+ * row and its winner are compared even when they were written in different
+ * hours), then keep only winners whose OWN `completed_at` is in `[since, until)`.
+ * A winner written in an earlier or later tick is announced by that tick, never
+ * by this one, so one PR is never announced twice and a stale `is_pr` on an
+ * old-count row never fires (reviewer finding, L1b B-pass).
+ */
+export function celebratablePrsInWindow<T extends SummaryRow>(
+  contextRows: readonly T[],
+  dayMap: Map<string, string>,
+  now: Date,
+  since: string,
+  until: string,
+): T[] {
+  const lo = Date.parse(since);
+  const hi = Date.parse(until);
+  return recentLivePrs(contextRows, dayMap, now).filter((r) => {
+    const t = Date.parse(String(r.completed_at ?? ""));
+    return !Number.isNaN(t) && t >= lo && t < hi;
+  });
+}

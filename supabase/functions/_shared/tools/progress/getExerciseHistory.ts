@@ -1,5 +1,8 @@
 import { z } from "npm:zod@3.25.76";
 import type { ToolContext, ToolDefinition } from "../types.ts";
+import { buildDayMap, inWindow, istDatesEnding, resolveDay } from "../../exercise_day.ts";
+import { liveSummaryRows, type SummaryRow } from "../../live_exercise_rows.ts";
+import { fetchWleWindow } from "../../wle_window_read.ts";
 
 const schema = z.object({
   exerciseId: z.string().min(1).describe(
@@ -15,10 +18,10 @@ type Args = z.infer<typeof schema>;
 interface HistoryEntry {
   date: string; // YYYY-MM-DD
   weight_kg: number;
-  reps: number;
+  total_reps: number; // cumulative reps across ALL sets of the session
   sets: number;
   is_pr: boolean;
-  total_volume_kg: number; // weight * reps * sets
+  total_volume_kg: number; // best weight * total reps
 }
 
 interface ExerciseHistoryResponse {
@@ -39,27 +42,38 @@ async function handler(
   args: Args,
 ): Promise<ExerciseHistoryResponse> {
   const { sb, userId } = ctx;
-  const since = new Date(Date.now() - args.weeks * 7 * 86400_000).toISOString();
+  // Window = exactly `weeks * 7` IST dates ending today (B3). Summary rows are
+  // selected by the UUID v5 of each date (`workout_log_id`), never by
+  // `completed_at` (the write time), then attributed to their own day.
+  const dates = istDatesEnding(args.weeks * 7);
+  const dayMap = await buildDayMap();
 
-  // Per docs/architecture/ai.md, workout_log_exercises is the per-exercise summary table.
-  // Schema (verified via execute_sql): exercise_id (text, NOT NULL) carries the
-  // stable exercise name; set_number = total completed sets; weight_kg = best
-  // across sets; reps = cumulative reps; is_pr boolean; completed_at timestamptz.
-  const { data, error } = await sb
-    .from("workout_log_exercises")
-    .select(
-      "workout_log_id, exercise_id, weight_kg, reps, set_number, is_pr, completed_at",
-    )
-    .eq("user_id", userId)
-    .ilike("exercise_id", args.exerciseId) // case-insensitive name match
-    .gte("completed_at", since)
-    .order("completed_at", { ascending: true });
+  // Per docs/architecture/ai.md, workout_log_exercises is the per-exercise summary table:
+  // exercise_id = stable exercise name; set_number = completed-set COUNT; weight_kg =
+  // best across sets; reps = CUMULATIVE reps across all sets; is_pr; completed_at.
+  const fetched = await fetchWleWindow<SummaryRow>((ids, withCount) =>
+    sb
+      .from("workout_log_exercises")
+      .select(
+        "id, user_id, workout_log_id, exercise_id, weight_kg, reps, set_number, is_pr, completed_at, deleted_at",
+        withCount ? { count: "exact" } : undefined,
+      )
+      .eq("user_id", userId)
+      .ilike("exercise_id", args.exerciseId) // case-insensitive name match
+      .in("workout_log_id", ids)
+      .is("deleted_at", null), dates, { maxPages: 5, label: "getExerciseHistory" });
 
-  if (error) {
-    throw new Error(`getExerciseHistory query failed: ${error.message}`);
-  }
+  // One live row per (user, day, exercise); in-window by RESOLVED day; then
+  // chronological by (resolved day, completed_at) — pages are keyed by the
+  // random id and chunks arrive concurrently, so order is applied here (R9T-2).
+  const data = liveSummaryRows(fetched.rows, dayMap)
+    .filter((r) => inWindow(r, dayMap, dates))
+    .map((r) => ({ r, day: resolveDay(r, dayMap) as string }))
+    .sort((x, y) =>
+      x.day < y.day ? -1 : x.day > y.day ? 1 : String(x.r.completed_at ?? "").localeCompare(String(y.r.completed_at ?? ""))
+    );
 
-  if (!data || data.length === 0) {
+  if (data.length === 0) {
     return {
       exercise_id: args.exerciseId,
       weeks: args.weeks,
@@ -76,23 +90,19 @@ async function handler(
     };
   }
 
-  const history: HistoryEntry[] = (data as Array<{
-    completed_at: string;
-    weight_kg: number | null;
-    reps: number | null;
-    set_number: number | null;
-    is_pr: boolean | null;
-  }>).map((row) => {
+  const history: HistoryEntry[] = data.map(({ r: row, day }) => {
     const w = row.weight_kg ?? 0;
-    const r = row.reps ?? 0;
+    const reps = row.reps ?? 0;
     const s = row.set_number ?? 1;
     return {
-      date: row.completed_at.slice(0, 10),
+      date: day,
       weight_kg: w,
-      reps: r,
+      total_reps: reps,
       sets: s,
       is_pr: row.is_pr ?? false,
-      total_volume_kg: Math.round(w * r * s),
+      // `reps` already holds the cumulative reps of every set: volume is best
+      // weight x total reps, never x sets (a pyramid is still overstated).
+      total_volume_kg: Math.round(w * reps),
     };
   });
 
@@ -104,6 +114,9 @@ async function handler(
   const weightChange = Number((currentWeight - oldestWeight).toFixed(2));
 
   const notes: string[] = [];
+  if (fetched.truncated) {
+    notes.push("History was truncated at the read limit; older sessions may be missing.");
+  }
   if (history.length === 1) {
     notes.push(
       `Only one logged session for "${args.exerciseId}" in this window — limited progression signal.`,
@@ -142,7 +155,7 @@ export const getExerciseHistoryTool: ToolDefinition<
   kind: "read",
   tier: "pro",
   description:
-    "Fetch the chronological progression of one specific exercise over the last N weeks (1-52). Returns each session's weight × reps × sets, PR flags, best weight, weight change. Use when the user asks 'how is my bench progressing?', 'show my squat over 3 months', 'what's my PR history on deadlift'. The user's snapshot has top-5 PRs only — call this for full progression of a single lift.",
+    "Fetch the chronological progression of one specific exercise over the last N weeks (1-52). Returns each session's best weight, total reps across all sets and set count, PR flags, best weight, weight change (total_volume_kg = best weight × total reps). Use when the user asks 'how is my bench progressing?', 'show my squat over 3 months', 'what's my PR history on deadlift'. The user's snapshot has top-5 PRs only — call this for full progression of a single lift.",
   schema,
   maxLatencyMs: 4000,
   handler,

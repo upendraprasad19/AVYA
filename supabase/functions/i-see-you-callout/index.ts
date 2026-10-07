@@ -19,6 +19,8 @@ import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-
 import { shouldSendProactive, markProactiveSent } from "../_shared/proactive_dedup.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
+import { buildDayMap } from "../_shared/exercise_day.ts";
+import { recentLivePrs } from "../_shared/recent_prs.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -224,18 +226,25 @@ async function checkPRAfterBadSleep(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<Moment | null> {
-  // Find any PR set in last 24h
+  // Find any PR set in last 24h. Reads ALL of the user's last-24h summary rows
+  // (not only is_pr, `.limit(1000)` in the same statement — one user's day is
+  // far below it) so a superseded row's stale PR loses to its winner's own
+  // flag, then keeps only a PR whose workout DAY is IST yesterday/today
+  // (_shared/recent_prs.ts; L1b B1/B3).
   const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const { data: prs } = await supabase
+  const { data: recent } = await supabase
     .from("workout_log_exercises")
-    .select("exercise_id, exercise_name, weight_kg, reps, completed_at")
+    .select(
+      "id, user_id, workout_log_id, exercise_id, exercise_name, set_number, is_pr, weight_kg, reps, completed_at, deleted_at",
+    )
     .eq("user_id", userId)
-    .eq("is_pr", true)
+    .is("deleted_at", null)
     .gte("completed_at", yesterday)
     .order("completed_at", { ascending: false })
-    .limit(1);
+    .limit(1000);
 
-  if (!prs || prs.length === 0) return null;
+  const prs = recentLivePrs(recent ?? [], await buildDayMap());
+  if (prs.length === 0) return null;
 
   const pr = prs[0];
   const prDate = new Date(pr.completed_at);
@@ -262,9 +271,14 @@ async function checkPRAfterBadSleep(
   if (isNaN(hrs) || hrs >= 6) return null;
 
   const exName = pr.exercise_name ?? pr.exercise_id ?? "that lift";
-  const w = pr.weight_kg != null ? `${pr.weight_kg} kg` : null;
-  const r = pr.reps != null ? `${pr.reps} reps` : null;
-  const liftStr = [w, r].filter(Boolean).join(" × ");
+  // `reps` is the CUMULATIVE reps across all sets, so it is never shown next to a weight as
+  // a per-set count (that read as one set of N): with a weight show the
+  // weight only; without one, "N total reps" (L1b B2).
+  const liftStr = pr.weight_kg != null && pr.weight_kg > 0
+    ? `${pr.weight_kg} kg`
+    : pr.reps != null
+    ? `${pr.reps} total reps`
+    : "";
   const sleepStr = hrs.toFixed(1);
 
   return {

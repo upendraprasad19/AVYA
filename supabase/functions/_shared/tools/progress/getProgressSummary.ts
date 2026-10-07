@@ -1,6 +1,10 @@
 import { z } from "npm:zod@3.25.76";
 import type { ToolContext, ToolDefinition } from "../types.ts";
-import { istDateStr } from "../../ist_date.ts";
+import { buildDayMap, inWindow, istDatesEnding, resolveDay } from "../../exercise_day.ts";
+import { liveSummaryRows, type SummaryRow } from "../../live_exercise_rows.ts";
+import { fetchPagesBounded } from "../../paged_fetch_bounded.ts";
+import { fetchWleWindow } from "../../wle_window_read.ts";
+import { NON_WORKOUT_STATUSES } from "../../workout_statuses.ts";
 
 const schema = z.object({
   periodDays: z.number().int().min(7).max(365).describe(
@@ -20,125 +24,114 @@ interface ProgressSummary {
   weight_logs_count: number;
   avg_daily_calories: number | null; // null if 0 nutrition logs
   nutrition_log_days: number; // distinct dates with at least one nutrition_log
-  pr_count: number; // distinct workout_log_ids with at least one is_pr=true exercise log in the period
-}
-
-// Helper: ISO date (YYYY-MM-DD) from any timestamp / date string. Falls back to original
-// when input is already a date-only string.
-function toDateOnly(s: string): string {
-  return s.length >= 10 ? s.slice(0, 10) : s;
+  truncated: boolean; // true when any read hit its page budget (numbers are a lower bound)
+  pr_count: number; // distinct workout days with a live is_pr summary row in the period
 }
 
 async function handler(ctx: ToolContext, args: Args): Promise<ProgressSummary> {
   const { sb, userId } = ctx;
-  // IST date N days ago. Used for `date` columns and as a lower bound on `completed_at`.
-  // IST-correct: near IST midnight (05:30 UTC), raw Date.now().toISOString() would yield
-  // yesterday's UTC date, which is today in IST — wrong cut-off for IST-keyed date columns.
-  const sinceDate = istDateStr(new Date(Date.now() - args.periodDays * 86400_000));
-  const sinceTs = `${sinceDate}T00:00:00Z`;
+  // The window is exactly `periodDays` IST dates ending today (B3). The
+  // `date` columns are IST-keyed; summary rows are selected by the UUID v5 of
+  // each window date (their `workout_log_id`), NOT by `completed_at`, which is
+  // the write time (an edited old log carries a recent one).
+  const dates = istDatesEnding(args.periodDays);
+  const sinceDate = dates[0];
+  const today = dates[dates.length - 1];
+  const dayMap = await buildDayMap();
 
-  // Bug t1m5b0 (APK Test #16.2) — Promise.all over 5 independent SELECTs.
-  // Pre-fix each was awaited sequentially; at typical 200-1200 ms per
-  // round-trip on Supabase ap-southeast-1, the 5 awaits accumulated to
-  // 3-5 s wall clock, brushing the 3500 ms tool-loop budget and
-  // returning tool_timeout. None of the queries depend on each other's
-  // results, so parallel dispatch collapses wall clock to the slowest
-  // single query (~1-1.5 s). Paired with maxLatencyMs bump 3500 -> 6000
-  // for cold-Postgres-cache resilience. Pinned by
-  // test/contracts/get_progress_summary_parallel_queries_test.dart.
-  const [
-    { data: exRows, error: exErr },
-    { data: scheduled, error: schedErr },
-    { data: weights, error: weightErr },
-    { data: nutrition, error: nutErr },
-    { data: prs, error: prErr },
-  ] = await Promise.all([
-    // 1. Workouts completed + total volume (per-exercise summary table).
-    //    Schema deviation from spec: `workout_logs.total_volume_kg` does NOT exist in prod.
-    //    Per docs/architecture/ai.md, exercise-level data lives in `workout_log_exercises`. We derive
-    //    distinct workout days from completed_at and compute volume from weight*reps*set_number.
-    sb
-      .from("workout_log_exercises")
-      .select("completed_at, weight_kg, reps, set_number")
-      .eq("user_id", userId)
-      .gte("completed_at", sinceTs),
-    // 2. Workouts planned (distinct scheduled dates that weren't paused/skipped).
-    sb
-      .from("scheduled_workouts")
-      .select("scheduled_date, status")
-      .eq("user_id", userId)
-      .gte("scheduled_date", sinceDate),
+  // Bug t1m5b0 (APK Test #16.2) — the independent SELECTs run via Promise.all
+  // so wall clock is the slowest single query, not the sum (3500 -> 6000 ms
+  // budget). Pinned by test/contracts/get_progress_summary_parallel_queries_test.dart.
+  // L1b: every read is paged (B4) so a long period never stops at PostgREST's
+  // 1,000-row cap; summary rows come through the day-window reader (B3).
+  const [wle, sched, weights, nutrition] = await Promise.all([
+    // 1. Workouts completed + volume + PRs (per-exercise summary rows).
+    fetchWleWindow<SummaryRow>((ids, withCount) =>
+      sb
+        .from("workout_log_exercises")
+        .select(
+          "id, user_id, workout_log_id, exercise_id, set_number, is_pr, completed_at, deleted_at, weight_kg, reps",
+          withCount ? { count: "exact" } : undefined,
+        )
+        .eq("user_id", userId)
+        .in("workout_log_id", ids)
+        .is("deleted_at", null), dates, { maxPages: 10, label: "getProgressSummary:wle" }),
+    // 2. Workouts planned: scheduled dates up to today that were not paused/skipped/rest/...
+    fetchPagesBounded<{ scheduled_date: string; status: string | null }>(
+      (withCount) =>
+        sb
+          .from("scheduled_workouts")
+          .select("scheduled_date, status", withCount ? { count: "exact" } : undefined)
+          .eq("user_id", userId)
+          .gte("scheduled_date", sinceDate)
+          .lte("scheduled_date", today),
+      {
+        orderBy: [{ column: "scheduled_date" }, { column: "id" }],
+        maxPages: 5,
+        label: "getProgressSummary:scheduled",
+      },
+    ),
     // 3. Weight delta — period-window weight history.
-    sb
-      .from("weight_logs")
-      .select("date, weight_kg")
-      .eq("user_id", userId)
-      .gte("date", sinceDate)
-      .order("date", { ascending: true }),
+    fetchPagesBounded<{ date: string; weight_kg: number }>(
+      (withCount) =>
+        sb
+          .from("weight_logs")
+          .select("date, weight_kg", withCount ? { count: "exact" } : undefined)
+          .eq("user_id", userId)
+          .gte("date", sinceDate)
+          .lte("date", today),
+      {
+        orderBy: [{ column: "date" }, { column: "id" }],
+        maxPages: 5,
+        label: "getProgressSummary:weight",
+      },
+    ),
     // 4. Nutrition: avg daily calories + days logged.
-    sb
-      .from("nutrition_logs")
-      .select("date, total_calories")
-      .eq("user_id", userId)
-      .gte("date", sinceDate),
-    // 5. PR count: distinct workout_log_ids with any is_pr=true exercise log in the period.
-    sb
-      .from("workout_log_exercises")
-      .select("workout_log_id")
-      .eq("user_id", userId)
-      .gte("completed_at", sinceTs)
-      .eq("is_pr", true),
+    fetchPagesBounded<{ date: string; total_calories: number | null }>(
+      (withCount) =>
+        sb
+          .from("nutrition_logs")
+          .select("date, total_calories", withCount ? { count: "exact" } : undefined)
+          .eq("user_id", userId)
+          .gte("date", sinceDate)
+          .lte("date", today),
+      {
+        orderBy: [{ column: "date" }, { column: "id" }],
+        maxPages: 10,
+        label: "getProgressSummary:nutrition",
+      },
+    ),
   ]);
 
-  // Unit C (§2.24) — surface a query failure instead of coercing it to empty
-  // arrays. Pre-fix a silent DB error made the coach report "0 workouts / no
-  // progress" as if it were true. A throw is caught per-tool by the tool-loop
-  // (tool-loop.ts:270-291) → Gemini gets {error:"execution_failed"} and narrates
-  // honestly; the turn is NOT aborted. Parallel dispatch above is preserved.
-  const progressErr = exErr ?? schedErr ?? weightErr ?? nutErr ?? prErr;
-  if (progressErr) {
-    throw new Error(
-      `getProgressSummary query failed: ${progressErr.message ?? progressErr}`,
-    );
-  }
+  // Unit C (§2.24) — a query failure THROWS (fetchPagesBounded does) instead of
+  // being coerced to empty arrays; the tool-loop turns the throw into
+  // {error:"execution_failed"} and Gemini narrates honestly.
 
-  // 1. Workouts completed + total volume.
+  // 1. One live row per (user, workout_log_id, exercise_id) (B1), then drop
+  //    rows whose RESOLVED day is outside the window (an edited-old row, a
+  //    rescheduled-forward row, a missing-date-bucket row from another day).
+  const live = liveSummaryRows(wle.rows, dayMap).filter((r) =>
+    inWindow(r, dayMap, dates)
+  );
   const workoutDates = new Set<string>();
+  const prDays = new Set<string>();
   let totalVolume = 0;
-  for (
-    const r of (exRows ?? []) as Array<
-      { completed_at: string; weight_kg: number | null; reps: number | null; set_number: number | null }
-    >
-  ) {
-    if (r.completed_at) workoutDates.add(toDateOnly(r.completed_at));
+  for (const r of live) {
+    const day = resolveDay(r, dayMap);
+    if (day) workoutDates.add(day);
+    // APK Test #12.6 / Obs 8 — `reps` holds CUMULATIVE reps across all sets
+    // (3x10 = 30); volume = weight x cumulative reps, never x set_number.
     const w = r.weight_kg ?? 0;
     const reps = r.reps ?? 0;
-    // APK Test #12.6 / Obs 8 — drop the (* sets) term that triple-counted
-    // volume. Per docs/architecture/ai.md cloud contract, `reps` already holds
-    // CUMULATIVE reps across all sets (e.g. 3×10 = `reps: 30`); multiplying
-    // again by `set_number` 3-4×'d every weighted exercise. Founder
-    // reported 79,713 kg total volume for ~$23k of actual work. Fix:
-    // volume = weight × cumulative_reps. set_number stays available on
-    // the row for renderers / receipts but is NOT a volume multiplier.
     totalVolume += w * reps;
+    if (r.is_pr && day) prDays.add(day);
   }
   const workoutsCompleted = workoutDates.size;
 
-  // 2. APK Test #12.6 / Obs 8 — exclude `rest` days from planned count.
-  // Pre-fix the filter only excluded `paused` and `skipped`, so REST DAYS
-  // were counted as "planned workouts." Founder over 30 days had 28
-  // scheduled dates, 4 of which were rest → "2 of 28 planned = 7%
-  // adherence" was actually "2 of 24 = 8%". Tiny correction in this case
-  // but the formula was structurally wrong: rest is a NON-WORKOUT day by
-  // design. Also exclude null status defensively.
+  // 2. Planned: B7 shared status set (rest days etc. are not workouts).
   const plannedDates = new Set(
-    ((scheduled ?? []) as Array<{ scheduled_date: string; status: string | null }>)
-      .filter((s) =>
-        s.status !== null &&
-        s.status !== "paused" &&
-        s.status !== "skipped" &&
-        s.status !== "rest"
-      )
+    sched.rows
+      .filter((s) => s.status !== null && !NON_WORKOUT_STATUSES.has(s.status))
       .map((s) => s.scheduled_date),
   );
   const workoutsPlanned = plannedDates.size;
@@ -147,7 +140,7 @@ async function handler(ctx: ToolContext, args: Args): Promise<ProgressSummary> {
     : 0;
 
   // 3. Weight delta.
-  const weightRows = (weights ?? []) as Array<{ date: string; weight_kg: number }>;
+  const weightRows = weights.rows;
   const weightLogsCount = weightRows.length;
   let weightChange: number | null = null;
   if (weightLogsCount >= 2) {
@@ -157,16 +150,15 @@ async function handler(ctx: ToolContext, args: Args): Promise<ProgressSummary> {
   }
 
   // 4. Nutrition: avg daily calories + days logged.
-  const nutritionRows = (nutrition ?? []) as Array<{ date: string; total_calories: number | null }>;
+  const nutritionRows = nutrition.rows;
   const nutritionDates = new Set(nutritionRows.map((n) => n.date));
   const totalKcal = nutritionRows.reduce((s, n) => s + (n.total_calories ?? 0), 0);
   const nutritionLogDays = nutritionDates.size;
   const avgDailyCalories = nutritionLogDays > 0 ? Math.round(totalKcal / nutritionLogDays) : null;
 
-  // 5. PR count.
-  const prCount = new Set(
-    ((prs ?? []) as Array<{ workout_log_id: string }>).map((p) => p.workout_log_id),
-  ).size;
+  // 5. PR count: distinct workout DAYS with a live is_pr summary row (from
+  //    query 1's deduped rows — no separate PR query to disagree with it).
+  const prCount = prDays.size;
 
   return {
     period_days: args.periodDays,
@@ -179,6 +171,7 @@ async function handler(ctx: ToolContext, args: Args): Promise<ProgressSummary> {
     avg_daily_calories: avgDailyCalories,
     nutrition_log_days: nutritionLogDays,
     pr_count: prCount,
+    truncated: wle.truncated || sched.truncated || weights.truncated || nutrition.truncated,
   };
 }
 

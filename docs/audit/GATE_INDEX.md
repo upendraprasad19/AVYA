@@ -116,7 +116,7 @@ Total gates: **111** (48 numbered, 63 by filename only).
 | 41 | `check_test_runtime_budget.dart` | assert no individual test exceeds the configured runtime budget. | grandfathered |
 | — | `check_two_user_cross_account.dart` | WI-2 (regression-prevention batch 2026-06-08) — live-DB TWO-USER | grandfathered |
 | 20 | `check_unawaited_has_error_sink.dart` | every `unawaited(...)` call in lib/ must be near (within | grandfathered |
-| — | `check_unbounded_cron_reads.dart` | every fan-out read in a cron-dispatched Edge Function must be bounded. | grandfathered |
+| — | `check_unbounded_cron_reads.dart` | every fan-out read in a cron-dispatched Edge Function must be bounded. | mutation_proven |
 | — | `check_usage_counter_source.dart` | Blocks a TENTH quota counter being derived from `ai_coach_interactions`. | mutation_proven |
 | — | `check_week_selector_phase_labels.dart` | the Train week selector must derive phase labels from the real current_phase, never hardcode | grandfathered |
 | 36 | `check_widget_no_direct_supabase.dart` | enforce CLAUDE.md rule #4 (Repository pattern) — widgets / screens must NEVER | grandfathered |

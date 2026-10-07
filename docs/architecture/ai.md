@@ -52,6 +52,8 @@ being offered it.
 | Plan (5) | `regeneratePlanBlock`, `pausePlan`, `switchGoal`, `createCustomTemplate`, `scheduleTemplate` |
 | Exercise (1) | `getFormCues` |
 
+**Coach read tools and `workout_log_exercises` (L1b, 2026-10-07):** the progress tools, `weekly-report`, `weekly-recalc`, `pr-detection`, `i-see-you-callout` and `future-prediction` read summary rows through ONE rule (`_shared/live_exercise_rows.ts`, SoT `wle_live_summary_read_contract`): drop tombstones, one live row per (user, workout_log_id, exercise_id), dedupe before any `is_pr` filter or cap. A row's day is the date whose UUID v5 is its `workout_log_id` (`_shared/uuid_v5.ts`, `exercise_day.ts`); `completed_at` is the write time, so day windows select by id, not by `completed_at`. `reps` is CUMULATIVE across sets (tool field `total_reps`); volume = best weight x total reps (still overstates pyramid sets). Long reads page through `fetchPagesBounded` (count on page 0, `truncated` flag); `getPRTimeline` returns at most 50 PRs with `truncated`; `getNutritionHistory` `per_day` attaches items only up to 31 days.
+
 **Hive-first hybrid architecture:** READ tools (e.g. `getProgressSummary`, `getExerciseHistory`, `suggestMeal`) execute server-side and feed Gemini results in same turn. WRITE tools emit typed `ToolIntent` to client; client confirms via card/sheet, then writes Hive + fire-and-forget syncs (matching the existing CLAUDE.md §4.4 rule 1 mutation pattern).
 
 3 confirmation classes: trivial (5s auto-confirm card), reviewable (explicit inline card), destructive (bottom-sheet with diff preview). Per-intent dispatch in `lib/features/ai_coach/services/tool_dispatcher.dart`. 1-hour intent TTL + concurrent-edit guards on every dispatch.

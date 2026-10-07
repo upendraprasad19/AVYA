@@ -112,8 +112,12 @@ Deno.test("generateLocalPrediction falls back to the static formulas when there 
         select() { return this; },
         eq() { return this; },
         gte() { return this; },
+        is() { return this; },
         ilike() { return this; },
-        order() { call++; return Promise.resolve({ data: [] }); },
+        order() { return this; },
+        range() { return this; },
+        // Thenable: every awaited chain (with or without .range) resolves empty.
+        then(resolve: (r: { data: never[] }) => void) { call++; resolve({ data: [] }); },
       };
     },
   } as unknown as Parameters<typeof generateLocalPrediction>[0];
@@ -169,4 +173,41 @@ Deno.test("future-prediction no longer calls Gemini for predictions — generate
   if (/isPro\s*\|\|\s*trigger\s*===\s*"onboarding"/.test(src)) {
     throw new Error("expected the isPro-gates-AI branch to be gone");
   }
+});
+
+// ── L1b behavioural: lift trend reads LIVE rows only ─────────────────────────
+import { fakeSb } from "../_shared/tools/__tests__/fake_sb.ts";
+import { workoutLogIdForDate } from "../_shared/uuid_v5.ts";
+
+async function benchRow(date: string, id: number, over: Record<string, unknown> = {}) {
+  return {
+    id, user_id: "u1", workout_log_id: await workoutLogIdForDate(date), exercise_id: "Bench Press",
+    set_number: 3, is_pr: true, completed_at: `${date}T05:00:00Z`, deleted_at: null, weight_kg: 60 + id,
+    ...over,
+  };
+}
+const profile = { current_weight_kg: 80, target_weight_kg: 75, primary_goal: "lose_fat", days_per_week: 4 };
+const progress = { detected_experience_level: "intermediate" };
+
+Deno.test("generateLocalPrediction: PRs on two live days feed the bench trend (not the static fallback)", async () => {
+  const { sb } = fakeSb({
+    workout_log_exercises: [await benchRow("2026-09-01", 1), await benchRow("2026-09-20", 20)],
+  });
+  const r = await generateLocalPrediction(sb as unknown as Parameters<typeof generateLocalPrediction>[0], "u1", profile, progress);
+  const lifts = r.predicted_lifts as { bench_kg: number };
+  assertEquals(lifts.bench_kg !== 64, true); // 64 = round(80 * 0.8) fallback
+});
+
+Deno.test("generateLocalPrediction: a stale PR on a superseded row does NOT enter the trend (falls back)", async () => {
+  const { sb } = fakeSb({
+    workout_log_exercises: [
+      await benchRow("2026-09-01", 1, { set_number: 3 }),
+      await benchRow("2026-09-01", 2, { set_number: 4, is_pr: false }),
+      await benchRow("2026-09-20", 20, { set_number: 3 }),
+      await benchRow("2026-09-20", 21, { set_number: 4, is_pr: false }),
+    ],
+  });
+  const r = await generateLocalPrediction(sb as unknown as Parameters<typeof generateLocalPrediction>[0], "u1", profile, progress);
+  const lifts = r.predicted_lifts as { bench_kg: number };
+  assertEquals(lifts.bench_kg, 64);
 });

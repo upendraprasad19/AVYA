@@ -14187,3 +14187,59 @@ concepts:
         notes: |
           Wholesale toJson() pass-through, subject to private_mode —
           reaches the AI's prompt context with no field-specific plumbing.
+
+  - concept: wle_live_summary_read_contract
+    domain: workout
+    behavioral_test_path: supabase/functions/_shared/live_exercise_rows_test.ts
+    description: |
+      How every SERVER reader turns `workout_log_exercises` summary rows into "what the user did"
+      (L1b, plan docs/plans/coach-history-correctness-tools.md, diagnoses a1c7e3 / c3e9a5 / d4fab6).
+
+      ONE live row per (user_id, workout_log_id, exercise_id): `liveSummaryRows` drops tombstones
+      (`deleted_at`), keeps the highest `set_number` then highest `id`, uses the winner's own `is_pr`,
+      and runs BEFORE any `is_pr` filter or cap. `set_number` is the set COUNT and part of the unique key,
+      so a count change leaves two live rows until migration 155's `single_live` trigger; the readers do
+      not depend on that trigger.
+
+      A row's DAY is the date whose UUID v5 equals `workout_log_id` (namespace 6ba7b810-…, name
+      `workout_<IST date>`, `_shared/uuid_v5.ts`); `completed_at` is the WRITE time. Day-window readers select
+      by `workout_log_id IN (v5 of each window date + the missing-date bucket)` (chunks <= 100), never by
+      `completed_at`; recency readers (pr-detection, i-see-you-callout) require the resolved day = IST
+      yesterday/today (`_shared/recent_prs.ts`).
+
+      `reps` is CUMULATIVE across sets: volume = weight x reps; the tool field is `total_reps`.
+    writers:
+      - file: lib/core/services/sync/sync_workout.dart
+        method: _syncExerciseLogs (workout_log_id = deterministic v5 of workout_<IST date>; completed_at = write time)
+        semantic: cloud-write
+        notes: writer side owned by L1a-1 (migration 155) and L1a-2; unchanged by L1b
+    reader_manifest_complete: true
+    readers:
+      - file: supabase/functions/_shared/tools/progress/getProgressSummary.ts
+        method: handler
+        semantic: aggregated
+        fields_read: [workout_log_id, exercise_id, set_number, is_pr, weight_kg, reps, completed_at, deleted_at]
+      - file: supabase/functions/_shared/tools/progress/getExerciseHistory.ts
+        method: handler
+        semantic: aggregated
+        fields_read: [workout_log_id, exercise_id, set_number, is_pr, weight_kg, reps, completed_at, deleted_at]
+      - file: supabase/functions/_shared/tools/progress/getPRTimeline.ts
+        method: handler
+        semantic: aggregated
+        fields_read: [workout_log_id, exercise_id, set_number, is_pr, weight_kg, reps, completed_at, deleted_at]
+      - file: supabase/functions/weekly-report/week_rows.ts
+        method: weekWorkoutRows
+        semantic: aggregated
+        fields_read: [workout_log_id, exercise_id, set_number, is_pr, weight_kg, reps, completed_at]
+      - file: supabase/functions/weekly-recalc/live_log_filter.ts
+        method: liveLogsForWindow
+        semantic: aggregated
+        fields_read: [workout_log_id, exercise_id, set_number, weight_kg, reps, completed_at]
+      - file: supabase/functions/_shared/recent_prs.ts
+        method: recentLivePrs (pr-detection, i-see-you-callout)
+        semantic: aggregated
+        fields_read: [workout_log_id, exercise_id, set_number, is_pr, completed_at]
+      - file: supabase/functions/future-prediction/index.ts
+        method: generateLocalPrediction liftPrediction
+        semantic: aggregated
+        fields_read: [workout_log_id, exercise_id, set_number, is_pr, weight_kg, completed_at]

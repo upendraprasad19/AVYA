@@ -3,6 +3,9 @@ import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-
 import { istDateStr } from "../_shared/ist_date.ts";
 import { predictLift, predictStreakWeeks, predictWeight } from "./trend.ts";
 import { completionRateOverWindow, windowSinceDateUtc } from "../_shared/rank_engine.ts";
+import { buildDayMap, resolveDay } from "../_shared/exercise_day.ts";
+import { liveSummaryRows, type SummaryRow } from "../_shared/live_exercise_rows.ts";
+import { fetchAllPages } from "../_shared/paged_fetch.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -63,19 +66,30 @@ export async function generateLocalPrediction(
     weightFallback,
   );
 
+  const dayMap = await buildDayMap();
+
   async function liftPrediction(matchSubstring: string, fallback: number): Promise<number> {
-    const { data: rows } = await supabase
-      .from("workout_log_exercises")
-      .select("completed_at, weight_kg")
-      .eq("user_id", userId)
-      .eq("is_pr", true)
-      .ilike("exercise_id", `%${matchSubstring}%`)
-      .order("completed_at", { ascending: true });
+    // L1b (B1): read ALL of the user's live rows for the lift (no `is_pr`
+    // filter), keep ONE per (user, day, exercise), THEN the PRs — a superseded
+    // row's stale PR must not enter the trend. No lower bound (all history).
+    const rows = await fetchAllPages<SummaryRow>(
+      () =>
+        supabase
+          .from("workout_log_exercises")
+          .select("id, user_id, workout_log_id, exercise_id, set_number, is_pr, completed_at, weight_kg, deleted_at")
+          .eq("user_id", userId)
+          .is("deleted_at", null)
+          .ilike("exercise_id", `%${matchSubstring}%`),
+      { orderBy: "id", label: `future-prediction ${matchSubstring}` },
+    );
+    // The PR's DAY is its resolved workout day (an edited old log keeps its own date).
+    const prs = liveSummaryRows(rows, dayMap)
+      .filter((r) => r.is_pr === true)
+      .map((r) => ({ day: resolveDay(r, dayMap), weight_kg: r.weight_kg as number }))
+      .filter((r): r is { day: string; weight_kg: number } => r.day !== null)
+      .sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0));
     return predictLift(
-      (rows ?? []).map((r: Record<string, unknown>) => ({
-        completed_at: r.completed_at as string,
-        weight_kg: r.weight_kg as number,
-      })),
+      prs.map((r) => ({ completed_at: `${r.day}T00:00:00+05:30`, weight_kg: r.weight_kg })),
       fallback,
     );
   }

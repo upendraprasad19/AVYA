@@ -30,3 +30,24 @@ export function excludeDeletedLogs<T extends LiveLogRef>(
 ): T[] {
   return rows.filter((r) => r.deleted_at == null);
 }
+
+// ── L1b (plan B1/B3) ─────────────────────────────────────────────────────────
+import { inWindow, resolveDay } from "../_shared/exercise_day.ts";
+import { liveSummaryRows, type SummaryRow } from "../_shared/live_exercise_rows.ts";
+
+/**
+ * One live summary row per (user, workout_log_id, exercise_id), kept only when
+ * its RESOLVED workout day is in `dates`, with `date` = that day. The progression
+ * and variety scores therefore see each exercise-day once (a superseded row
+ * would double-count it) and an edited-old / rescheduled-forward log lands on
+ * its own day, not on its write time.
+ */
+export function liveLogsForWindow<T extends SummaryRow>(
+  rows: readonly T[],
+  dayMap: Map<string, string>,
+  dates: string[],
+): Array<T & { date: string }> {
+  return liveSummaryRows([...rows], dayMap)
+    .filter((r) => inWindow(r, dayMap, dates))
+    .map((r) => ({ ...r, date: resolveDay(r, dayMap) as string }));
+}

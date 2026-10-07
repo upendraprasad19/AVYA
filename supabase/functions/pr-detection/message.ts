@@ -15,7 +15,8 @@ export function composeMessage(firstName: string, prs: PrRecord[]): string {
     if (weight > 0) {
       return `${p.exercise_id} ${weight}kg`;
     }
-    return `${p.exercise_id} ${reps} reps`;
+    // `reps` is the CUMULATIVE reps across all sets of the exercise: say so.
+    return `${p.exercise_id} ${reps} total reps`;
   };
 
   if (prs.length === 1) {

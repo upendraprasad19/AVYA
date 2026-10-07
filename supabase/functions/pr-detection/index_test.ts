@@ -13,7 +13,7 @@ Deno.test("composeMessage: single PR with reps only (no weight) falls back to re
   const msg = composeMessage("Rahul", [
     { exercise_id: "Pull-up", weight_kg: null, reps: 15 },
   ]);
-  assertStringIncludes(msg, "Pull-up 15 reps PR");
+  assertStringIncludes(msg, "Pull-up 15 total reps PR");
 });
 
 Deno.test("composeMessage: two PRs uses the approved two-PR copy", () => {
@@ -89,17 +89,28 @@ Deno.test("pr-detection: selects deleted_at and filters through excludeDeletedPr
   if (!src.includes("deleted_at: string | null")) {
     throw new Error("expected the workout_log_exercises fetch to select+type deleted_at");
   }
-  if (!src.includes(
-    '"user_id, exercise_id, weight_kg, reps, completed_at, deleted_at"',
-  )) {
+  if (!src.includes("completed_at, deleted_at\"")) {
     throw new Error("expected the workout_log_exercises select column list to include deleted_at");
   }
   if (!src.includes("excludeDeletedPrs(rawRows)")) {
     throw new Error("expected rawRows to be routed through excludeDeletedPrs(rawRows) before grouping");
   }
-  const filterIdx = src.indexOf("excludeDeletedPrs(rawRows)");
+  const filterIdx = src.indexOf("celebratablePrsInWindow(");
   const groupIdx = src.indexOf("const prsByUser = new Map");
   if (filterIdx === -1 || groupIdx === -1 || filterIdx > groupIdx) {
     throw new Error("expected excludeDeletedPrs to run BEFORE grouping by user, not after");
   }
+});
+
+// PRESENCE-ONLY pin (index.ts calls Deno.serve at import; the window arithmetic itself is
+// behaviourally tested in window_test.ts): the read is bounded by the tick-aligned half-open
+// window — `>= since` and `< until`, never `<= until`, which would let two ticks read one row.
+Deno.test("pr-detection: the read is bounded by [since, until) from prWindow(now)", async () => {
+  const src = (await Deno.readTextFile(new URL("./index.ts", import.meta.url)))
+    .replace(/\/\*[\s\S]*?\*\//g, "").split("\n").map((l) => l.replace(/\/\/.*$/, "")).join("\n");
+  if (!src.includes("prWindow(now)")) throw new Error("expected the window to come from prWindow(now)");
+  if (!src.includes('.gte("completed_at", since)')) throw new Error("expected .gte(completed_at, since)");
+  if (!src.includes('.lt("completed_at", until)')) throw new Error("expected the half-open .lt(completed_at, until)");
+  if (src.includes('.lte("completed_at"')) throw new Error("until must be exclusive");
+  if (src.includes('.eq("is_pr", true)')) throw new Error("is_pr must not be filtered server-side (dedupe first)");
 });

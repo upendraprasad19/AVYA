@@ -1,9 +1,11 @@
 // PR Detection — Brainstorm §5 trigger #5.
-// Cron-poll every 15 minutes: scan workout_log_exercises rows with is_pr=true
-// inserted in the last 20 minutes (15min interval + 5min buffer for cron drift).
+// Hourly cron (`proactive_pr_detection`, `0 * * * *` since migration 141): scan
+// workout_log_exercises rows written in the tick-aligned window
+// [floor(now) - 60 min, floor(now)) (window.ts), keep ONE live row per
+// (user, day, exercise), then the ones flagged is_pr whose workout day is IST
+// yesterday/today (live_pr_filter.ts `celebratablePrs`).
 // Group PRs by user, send ONE notification per user mentioning their PR(s).
 // Both free + PRO. Dedup via coach_memory.last_proactive_type (1/day max).
-// Cron target: */15 * * * * (every 15 min). Registration deferred to T6.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { sendPushNotification } from "../_shared/send_notification.ts";
@@ -15,9 +17,11 @@ import { fetchCoachMemory } from "../_shared/coach_memory.ts";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
 import { sanitizeIdentifier } from "../_shared/sanitize_for_prompt.ts";
 import { composeMessage } from "./message.ts";
-import { excludeDeletedPrs } from "./live_pr_filter.ts";
+import { celebratablePrsInWindow, excludeDeletedPrs } from "./live_pr_filter.ts";
+import { prWindow } from "./window.ts";
+import { buildDayMap } from "../_shared/exercise_day.ts";
 import { logCronStart, logCronEnd } from "../_shared/cron_telemetry.ts";
-import { fetchAllPages } from "../_shared/paged_fetch.ts";
+import { fetchAllByIds, fetchAllPages } from "../_shared/paged_fetch.ts";
 import {
   fetchNotificationPrefs,
   isNotificationEnabled,
@@ -36,6 +40,10 @@ interface PRRow {
   reps: number | null;
   completed_at: string; // F43: real workout time, not row sync time
   deleted_at: string | null; // OI-246 follow-up — migrations 150/151
+  id: number | string;
+  workout_log_id: string | null;
+  set_number: number | null;
+  is_pr: boolean | null;
 }
 
 // Audit C-4 (2026-05-11, closes-diagnose 7ad0c4): added CRON_SECRET / service-role-key gate.
@@ -69,28 +77,27 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // Window: last 20 minutes (15min cron + 5min buffer).
-    // F43 (2026-06-07 audit): filter/order by `completed_at` — the real
-    // workout time — NOT `created_at` (row sync time). An offline workout
-    // synced days later carries a fresh created_at; filtering on it fired a
-    // stale "New PR!" push for a lift the user set days ago. completed_at is
-    // when the workout actually happened, so the recency window is honest.
-    const since = new Date(Date.now() - 20 * 60_000).toISOString();
+    // Window: the tick-aligned hour [since, until) — see window.ts. F43
+    // (2026-06-07 audit): filter/order by `completed_at` (the device's write
+    // time), NOT `created_at` (row sync time); the workout DAY is resolved
+    // from `workout_log_id` in `celebratablePrs`.
+    const now = new Date();
+    const { since, until } = prWindow(now);
+    const dayMap = await buildDayMap(now);
 
-    // OI-79: paged. `completed_at` alone was NOT a safe page key — it is not
-    // unique (a whole workout's exercises share one timestamp), so ties could
-    // shuffle between page requests and drop or duplicate a PR. `id` is added as
-    // the unique tiebreaker; completed_at DESC stays first so the existing
-    // newest-first ordering the grouping below relies on is unchanged.
+    // OI-79: paged. `completed_at` alone is NOT a safe page key (a whole
+    // workout shares one timestamp), so `id` is the unique tiebreaker.
+    // L1b: the read no longer filters `is_pr` — a superseded row's stale PR
+    // must lose to its winner's own flag, so dedupe runs first (B1).
     const rawRows = await fetchAllPages<PRRow>(
       () =>
         supabase
           .from("workout_log_exercises")
           .select(
-            "user_id, exercise_id, weight_kg, reps, completed_at, deleted_at",
+            "id, user_id, workout_log_id, exercise_id, set_number, is_pr, weight_kg, reps, completed_at, deleted_at",
           )
-          .eq("is_pr", true)
-          .gte("completed_at", since),
+          .gte("completed_at", since)
+          .lt("completed_at", until),
       {
         orderBy: [
           { column: "completed_at", ascending: false },
@@ -100,12 +107,44 @@ Deno.serve(async (req) => {
       },
     );
 
-    // OI-246 follow-up — a deleted-then-suffixed row's `is_pr`/`completed_at`
-    // are untouched by the tombstone UPSERT, so it would otherwise still
-    // match the window above. Exclude before grouping/composing so a
-    // deleted PR never reaches a push notification. See
-    // live_pr_filter.ts's header for the full symptom.
-    const rows = excludeDeletedPrs(rawRows);
+    // Context read: a superseded row and its winner can be written in different
+    // hours, so dedupe needs EVERY live row of the window rows' (user, day)
+    // keys, not just the window's. Chunked by workout_log_id (idx_wle_workout_log_id).
+    const windowRows = excludeDeletedPrs(rawRows);
+    const keyIds = [
+      ...new Set(windowRows.map((r) => r.workout_log_id).filter((x): x is string => !!x)),
+    ];
+    const keyedRows = keyIds.length === 0 ? [] : await fetchAllByIds<PRRow>(
+      (chunk) =>
+        supabase
+          .from("workout_log_exercises")
+          .select(
+            "id, user_id, workout_log_id, exercise_id, set_number, is_pr, weight_kg, reps, completed_at, deleted_at",
+          )
+          .is("deleted_at", null)
+          .in("workout_log_id", chunk),
+      keyIds,
+      { orderBy: "id", label: "pr-detection keyed rows" },
+    );
+    const seen = new Set<string>();
+    const contextRows: PRRow[] = [];
+    for (const r of [...keyedRows, ...windowRows.filter((w) => !w.workout_log_id)]) {
+      const k = String(r.id);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      contextRows.push(r);
+    }
+
+    // OI-246 follow-up — a deleted-then-suffixed row must never reach a push
+    // (live_pr_filter.ts header); then dedupe over the context, keep winners
+    // written in THIS window that are PRs on a day IST yesterday/today (B1/B3).
+    const rows = celebratablePrsInWindow(
+      excludeDeletedPrs(contextRows),
+      dayMap,
+      now,
+      since,
+      until,
+    );
 
     if (!rows || rows.length === 0) {
       console.log(

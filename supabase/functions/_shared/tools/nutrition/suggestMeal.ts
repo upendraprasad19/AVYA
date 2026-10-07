@@ -99,23 +99,22 @@ async function handler(ctx: ToolContext, args: Args): Promise<SuggestMealRespons
   //
   // Pre-computed *_std columns are the per-standard-serving macros — we use those
   // directly and skip per-100g math.
-  let query = sb.from("food_database").select(
-    "id, name, category, calories_std, protein_std, carbs_std, fat_std, standard_serving_desc, standard_serving_g, is_indian",
-  );
+  const cols =
+    "id, name, category, calories_std, protein_std, carbs_std, fat_std, standard_serving_desc, standard_serving_g, is_indian";
 
   // Cuisine: only 'indian' maps to a column we have. Other values are pass-through.
-  if (args.cuisine === "indian") {
-    query = query.eq("is_indian", true);
-  }
-
   // Cap candidates to avoid pulling the entire 5K-row table. Calorie filter happens
   // server-side too — drop anything whose standard serving already blows the budget
   // (we still allow a 10% buffer below in the per-row check, but no point fetching
   // a 1200-kcal item when budget is 400).
+  // One statement, bounded by `.limit(500)` in the same chain (L1b B8: the
+  // unbounded-read gate recognises a limit in the statement it flags).
   const buffer = 1.1;
-  query = query.lte("calories_std", args.remainingKcal * buffer);
-
-  const { data, error } = await query.limit(500);
+  const { data, error } = await (args.cuisine === "indian"
+    ? sb.from("food_database").select(cols).eq("is_indian", true)
+    : sb.from("food_database").select(cols))
+    .lte("calories_std", args.remainingKcal * buffer)
+    .limit(500);
   if (error) {
     throw new Error(`food_database query failed: ${error.message}`);
   }
