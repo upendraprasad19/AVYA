@@ -5734,3 +5734,30 @@ Residual (iv) of the B1 plan's D1, the OI-283 class: a dashboard edit of the pro
 - **Identified**: 2026-10-06 · filed via mint_oi.sh from branch `progress-photos-b0`
 
 Second unit of batch `spawn-tests-env-and-stderr` (founder decision 2026-10-06, items 1 and 3, scope answer "Shared helper, 2 PRs"). Migrates the other files onto the helper, makes the site guards strict, and prints a failing child's stdout and stderr in each. The batch closes only when this unit merges; the plan will be `docs/plans/spawn-tests-pr2-migrate-remaining.md`.
+
+## OI-320 — redeem-referral has no per-referrer cap: each new referee (idempotent per referee only, index.ts:105-117) adds 7 days to the referrer's PRO, so throwaway accounts extend it without limit - product decision needed on a cap
+
+- **Status**: OPEN
+- **Blocked on**: a founder product decision: whether to cap referral credit per referrer (and at what number), or accept it; then a server-side check in `redeem_referral_atomic`.
+- **Verified**: 2026-10-07 - read `supabase/functions/redeem-referral/index.ts:105-117` (idempotency is per referee only) and found by the B1 Hermes pass (L2 F2, `docs/audit/2026-10-06-hermes-progress-photos-pro-server-rule.md`); the B1 rule inherits it, it does not create it.
+- **Identified**: 2026-10-07 · filed via mint_oi.sh from branch `pp-preexisting-ois`
+
+Pre-existing; surfaced while reviewing the progress-photo PRO rule. Throwaway accounts can chain 7-day credits onto a referrer's PRO, which the progress-photo rule then honours like a paid subscription.
+
+## OI-321 — clean-orphan-media rechecksIsPro uses .maybeSingle() (index.ts:120-129): a user with two unexpired active subscription rows gets an error, data null, and is treated as free - chat-media cleanup only
+
+- **Status**: OPEN
+- **Blocked on**: nothing: a small fix (read the active rows with a limit and test for any, instead of `.maybeSingle()`), with a regression test.
+- **Verified**: 2026-10-07 - read `supabase/functions/clean-orphan-media/index.ts:120-129`: `.maybeSingle()` errors on two matching rows, `data` is null, `!!data` is false, so the user is treated as free. Found by the B1 Hermes pass (L1 note).
+- **Identified**: 2026-10-07 · filed via mint_oi.sh from branch `pp-preexisting-ois`
+
+Impact is limited to chat-media orphan cleanup (a user with two unexpired active rows is cleaned as if free); no PRO gate depends on this function.
+
+## OI-322 — progress_photo_repository.capture sends takenAt.toIso8601String() (lib/features/profile/repositories/progress_photo_repository.dart:141), a local time with no offset, to a timestamptz column read under UTC: taken_at is stored 5.5 h late for IST users and the client daily-cap window (line 89, UTC start of local day) is mis-aligned
+
+- **Status**: OPEN
+- **Blocked on**: nothing: fix in unit B2 of batch `progress-photos-pro-server-rule` (the client unit already edits this file) or as its own change; send `takenAt.toUtc().toIso8601String()` and align the cap window.
+- **Verified**: 2026-10-07 - read `lib/features/profile/repositories/progress_photo_repository.dart:89` (cap window is the UTC start of the local day) and `:141` (`takenAt.toIso8601String()` has no offset); PostgREST session TimeZone is UTC (live read during the B1 review), so an IST user's `taken_at` is stored 5.5 h late. Found by the B1 Hermes pass (L22 F3).
+- **Identified**: 2026-10-07 · filed via mint_oi.sh from branch `pp-preexisting-ois`
+
+Writer: `capture` (line 141). Readers: the cap query (line 89-94) and the list ordering (line 165). Pre-existing and outside the B1 diff.
