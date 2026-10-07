@@ -1,0 +1,196 @@
+# Closure ledger — FOB-1 (week-identity coherence), the first of OI-60's
+# remaining flip-on blockers. Gate 40 (validate_audit_closure.dart).
+# One terminal_state per finding; no `deferred:` key.
+# Branch: claude/oi-pending-hold-weeks-1od97o.
+#
+# Provenance: the founder asked what was pending on them and why the hold-week
+# display fix was invisible in the webapp. The answer — the fix is on main but
+# `enable_hold_weeks` is default OFF and `/dev` is kDebugMode-gated out of the
+# Vercel release build (OI-95) — led to the decision to start clearing OI-60's
+# flip blockers. FOB-1 was chosen because it is the ONLY remaining blocker
+# completable end to end without a live-prod action: FOB-3/FOB-4 need three EF
+# redeploys and FOB-5 a migration apply, each its own §4.3 authorization.
+#
+# This is a founder-sequenced split, not an agent deferral (§4.2): OI-60 was
+# already broken into 7 pieces by explicit founder decision recorded at
+# docs/audit/oi60-streak-identity.closure.yaml:6-12, and every remaining piece
+# is a tracked board item that blocks the flip.
+
+batch: fob1-week-identity
+plan_review_record: docs/plan-reviews/claude-oi-pending-hold-weeks-1od97o.md
+diagnose: docs/diagnoses/2026-08-20-hold-week-identity-clamp-f4c8e1.md
+total_findings: 11
+closed_count: 11
+
+_commit: &wip "fob1-week-identity (uncommitted)"
+_test: &t test/contracts/hold_week_identity_behavioral_test.dart
+
+findings:
+  - id: FOB-1-S1
+    title: "Home eyebrow printed `WK 4` to a holder at every ordinal"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *t
+    notes: >
+      lib/features/home/screens/home_screen.dart. Home carries no HOLDING pill,
+      so unlike the Train header (which DROPS the segment because its pill
+      states the identity ~40px away, c8b3f2 D1) the eyebrow SUBSTITUTES
+      "HOLDING · Hn". Sources weekIdentityProvider, so it repaints when a hold
+      is taken.
+
+  - id: FOB-1-S2
+    title: "Profile subtitle printed `Week 4` to a holder"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *t
+    notes: >
+      lib/features/profile/screens/profile/profile_content.dart. The FOB named
+      this surface only through its provider chain
+      (profile_provider.dart -> profile_content.dart); it was found by grepping
+      the clamp's consumers rather than by trusting the filing.
+
+  - id: FOB-1-S3
+    title: "Journey timeline printed `WEEK 4 OF 4` and `0 weeks to complete Phase 1`"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *t
+    notes: >
+      lib/features/profile/screens/profile/journey_timeline.dart, two strings.
+      The milestone line is the sharper of the two — it renders only when
+      current_phase == 1, which is exactly the holder, and resolved to a flat
+      "0 weeks to complete Phase 1" on the surface a holder sees most.
+
+  - id: FOB-1-S4
+    title: "Roadmap header printed `WK 4 / 12` to a holder"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *t
+    notes: >
+      lib/features/train/screens/phase_roadmap_screen.dart. NOT a direct
+      getCurrentWeekNumber() caller — it reads getProgramWeek(phase), which is
+      programWeekFor(phase, getCurrentWeekNumber()), so the clamp is one level
+      down. The FOB's own comment claimed this file had been moved off the
+      clamp; it had been moved off the DIRECT call only. Counter suppressed;
+      percent and bar deliberately unchanged (see FOB-1-R2).
+
+  - id: FOB-1-S5
+    title: "Share-as-video stamped `WEEK 4 RECAP`"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *t
+    notes: >
+      lib/features/profile/screens/reports_screen.dart + the in-repo Remotion
+      composition remotion/src/components/WeeklyRecapVideo.tsx. The composition
+      gains an OPTIONAL holdOrdinal prop rendering "HOLD Hn RECAP"; a caller
+      that omits it renders byte-identically, so no existing render breaks.
+      Both halves of the cross-surface contract moved in this commit.
+
+  - id: FOB-1-S6
+    title: "The read side had TWO copies of the enable_hold_weeks gate"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *t
+    notes: >
+      holdStatusProvider restated `if (!PlanEngineFlags.holdWeeksEnabled)` while
+      the new identity seam would have needed its own. Two independently
+      maintained copies of one gate is the drift class §4.1 names as the default
+      suspect. Now ONE gate: activeHoldWeeks() / activeHoldOrdinalFor() in the
+      read service, which holdStatusProvider delegates to. Mutation-proven —
+      removing the gate reddens 5 tests across this batch's file and
+      hold_display_read_path_test.dart.
+
+  - id: FOB-1-R1
+    title: "ai_snapshot_builder still feeds the coach the clamped-derived week"
+    terminal_state: upstream_blocked
+    commit: *wip
+    verification: "docs/ship_dark_pending_review.yaml FOB-3 (OPEN)"
+    blocker: >
+      FOB-3 owns the coach snapshot and requires an ai-proxy redeploy, which is
+      a separate explicit founder authorization (§4.3 — plan approval is not
+      deploy approval). This batch had no such authorization.
+    reopen_when: >
+      FOB-3 is picked up. Its batch must adopt WeekIdentity in
+      ai_snapshot_builder.dart:96 and :1221 in the SAME commit that adds the
+      `hold` block, the trimSnapshotToBudget keep-set entry and the
+      captain_manual.ts change, and redeploys ai-proxy.
+    notes: >
+      ROUTED, not deferred. FOB-1's `why:` lists ai_snapshot_builder.dart (x2),
+      but FOB-3 owns the snapshot by the board's own division of OI-60 — it
+      rewrites the SAME lines to add the `hold` block plus the
+      trimSnapshotToBudget keep-set entry and captain_manual.ts, and requires an
+      ai-proxy redeploy under its own §4.3 authorization. Touching it here would
+      have shipped a half-changed snapshot contract with no redeploy behind it.
+      FOB-3 remains a hard flip-on precondition, so nothing is lost.
+
+  - id: FOB-1-R2
+    title: "Inputs where the clamped 4 is HONEST — must NOT be branched"
+    terminal_state: verified_clean
+    commit: *wip
+    verification: *t
+    notes: >
+      Three call sites were examined and deliberately left alone, because
+      branching them would have made them WRONG. (a) journey_timeline's
+      WardBar(pct: currentWeek / 4.0) — during a hold currentWeek is 4 and the
+      phase's four weeks genuinely ARE elapsed, so a full bar is correct;
+      feeding it an ordinal would divide an H-number by 4. (b) phase_roadmap's
+      percentage and bar, derived from the program week — four of twelve program
+      weeks really are done. (c) SelectedWeekNotifier.build stays clamped: hold
+      rows sit at week 5+ and getWeek(5) is empty, so un-clamping renders
+      "Week 5 hasn't started yet" over a week the user is training — the exact
+      trap OI-125 names.
+
+  - id: FOB-1-R3
+    title: "telegram-bot/bot.py prints the clamped week"
+    terminal_state: upstream_blocked
+    commit: *wip
+    verification: "CLAUDE.md §2 — separate project, OpenClaw VPS, not in this repo"
+    blocker: >
+      The file is not in this repository. telegram-bot/ is a separate project
+      deployed on the OpenClaw VPS (@ICanbeFitterBot), so no commit here can
+      reach it.
+    reopen_when: >
+      enable_hold_weeks flips ON. Until then the bot cannot observe a hold at
+      all, because no user has one. At flip time the bot repo adopts the same
+      rule — suppress the week number, Hn is the identity.
+    notes: >
+      Named in FOB-1's `why:` but not in this tree. Stated rather than silently
+      dropped. It is a display-only string in a separate deployment and does not
+      block the flip; whoever owns the bot repo adopts the same rule when
+      enable_hold_weeks flips.
+
+  - id: FOB-1-B1
+    title: "B-pass P1 — userStatsProvider had NO dependency-graph link to the hold write"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "test/contracts/hold_week_identity_behavioral_test.dart (wiring token pins ref.watch(weekIdentityProvider))"
+    notes: >
+      Found by the B-pass, lens guard_without_its_mirror. UserStatsNotifier.build()
+      called WorkoutScheduleService.instance.weekIdentity() as a plain singleton,
+      so journey_timeline and profile_content — 2 of the 6 surfaces this batch
+      fixes — were reachable only via a notifier nothing invalidates on a hold
+      write. The 5 tabs live under StatefulShellRoute.indexedStack, so an
+      already-mounted Profile tab is not rebuilt on tab-switch: a user who
+      visited Profile before holding would see "WEEK 4 OF 4" there while Home and
+      Train said "HOLDING · Hn" — reintroducing the very cross-tab contradiction
+      the batch exists to close. FIXED with ref.watch(weekIdentityProvider),
+      which links the graph once for every present and future call site rather
+      than patching two call sites with an invalidate a third would forget.
+
+  - id: FOB-1-B2
+    title: "B-pass P2 — the surface coverage was presence-only and could not fail"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: test/contracts/hold_week_labels_test.dart
+    notes: >
+      The reviewer PROVED this rather than asserting it: it inverted the ternary
+      in profile_content.dart — a defect showing "Holding · Hnull" to every
+      non-holding user — and all 16 tests still passed, because the only coverage
+      was a source grep for a token. FIXED by extracting all five label ternaries
+      to pure functions in lib/core/utils/hold_week_labels.dart and adding a
+      16-case table-driven test asserting the exact string on BOTH arms of each,
+      plus a group asserting no formatter can interpolate "null". Re-running the
+      reviewer's exact mutation now reddens 4 tests (it reddened 0 before).
+      RESIDUAL, stated not glossed: this closes the LABEL logic, not widget
+      rendering — no widget test mounts these five screens, so a surface that
+      stopped calling its formatter entirely is still caught only by the
+      presence-grep. That is a larger piece of work and is not a flip-on blocker.
