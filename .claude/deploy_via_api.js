@@ -758,6 +758,11 @@ const SMOKE_TOLERATED_CODES = {
   'weekly-report': [400, 401],
   'one-line-coach': [400, 401],
   'streak-restore': [400, 401],
+  // verify_jwt=true (live v9), so the headerless {smoke:true} probe is answered by the
+  // gateway with 401 before the module runs; a healthy deploy would otherwise print
+  // "Smoke FAIL 401" (same omission as log-client-error above). Boot-verify separately with
+  // an anon-key Bearer: a module 4xx means it booted, a 503 means boot-broken.
+  'restore-user-snapshot': [401],
 };
 
 async function runSmokeStep(fnName, projectRef) {

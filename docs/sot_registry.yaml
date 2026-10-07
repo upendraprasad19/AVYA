@@ -2704,8 +2704,8 @@ concepts:
       the scheduled_workouts.template embed is owner-scoped (scopeEmbed, Hermes C13);
       one per-request page budget (TOTAL_PAGE_BUDGET = 120) bounds the work a user
       can force. Any throw becomes the function's 500, which the client answers with
-      its verbatim legacy restore (fail-closed). The live function is unchanged
-      until the deploy go (CLAUDE.md 4.3).
+      its verbatim legacy restore (fail-closed). Live since 2026-10-07 (v10, the
+      three files hash-equal to the committed blobs; diagnose e4c1d7, tier 6).
     writers:
       - file: supabase/functions/restore-user-snapshot/paged_reads.ts
         line_range: 1-9999
