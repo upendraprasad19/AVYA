@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 
 /// Whether the Weekly Report screen should fire its silent refresh-on-open
@@ -29,4 +30,38 @@ bool isLifetimeFreeReportSpent({required int? status, required Object? details})
   if (details is Map) return details['code'] == 'NOT_PRO';
   if (details is String) return details.contains('"NOT_PRO"');
   return false;
+}
+
+/// One `weekly-report` call at a time, ACROSS screen instances (issue #78 / d7b2e5).
+///
+/// The once-per-IST-day cap reads a stamp written only after the slow Gemini
+/// call returns, so a re-open, the free->PRO listener or the Generate card during
+/// that window would each read "no stamp, due" and fire another thinking-on
+/// call. The flag is observable ([inFlight]) so a screen opened mid-call is told
+/// when the call finishes instead of showing a Generate button that never wakes.
+class WeeklyReportCallGate {
+  WeeklyReportCallGate._();
+
+  /// Upper bound on one call. `callFunction` has no timeout of its own and
+  /// retries cold-start 502/503/504 three times, so without this a hung call
+  /// would hold the gate (and disable Generate) for minutes.
+  static const Duration callTimeout = Duration(seconds: 120);
+
+  static final ValueNotifier<bool> inFlight = ValueNotifier<bool>(false);
+
+  /// Runs [body] unless a call is already in flight; returns whether it ran.
+  /// The flag is cleared in a `finally`, so a throw cannot wedge it.
+  static Future<bool> runExclusive(Future<void> Function() body) async {
+    if (inFlight.value) return false;
+    inFlight.value = true;
+    try {
+      await body();
+    } finally {
+      inFlight.value = false;
+    }
+    return true;
+  }
+
+  @visibleForTesting
+  static void resetForTests() => inFlight.value = false;
 }

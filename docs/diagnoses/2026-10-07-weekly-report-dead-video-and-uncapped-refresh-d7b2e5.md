@@ -65,6 +65,12 @@ review_followups: |
   R2-2 the 403 branch keyed on status alone, now isLifetimeFreeReportSpent() requires the
   NOT_PRO body code (behavioral test); R2-3 the four weak source pins were tightened
   (body-scoped, order-checked, respell/move/decoy mutants), 9 mutants reddened.
+  B-pass round 3 (delta of round 2's fixes), all four closed: R3-1 the static in-flight bool could
+  not wake a screen opened mid-call (Generate stayed disabled, fresh report never shown) ->
+  WeeklyReportCallGate, an observable ValueNotifier every screen subscribes to; R3-2 the call was
+  unbounded (callFunction has no timeout, cold-start retries) -> .timeout(120s) + friendly message;
+  R3-3 setState ran before the try -> flag lives in runExclusive's try/finally, explicit path
+  guards mounted; R3-4 pins re-anchored plus behavioral tests (11 mutants, all reddened).
 regression_test_planned:
   - test/contracts/weekly_report_video_and_refresh_issue78_test.dart
 impact_analysis: |

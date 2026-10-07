@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -129,6 +130,61 @@ void main() {
     });
   });
 
+  group('WeeklyReportCallGate (BEHAVIORAL)', () {
+    setUp(WeeklyReportCallGate.resetForTests);
+
+    test('a second call while one is pending does NOT run its body', () async {
+      final gate = Completer<void>();
+      var ran = 0;
+      final first = WeeklyReportCallGate.runExclusive(() async {
+        ran++;
+        await gate.future;
+      });
+      expect(WeeklyReportCallGate.inFlight.value, isTrue);
+      final second = await WeeklyReportCallGate.runExclusive(() async {
+        ran++;
+      });
+      expect(second, isFalse);
+      expect(ran, 1);
+      gate.complete();
+      expect(await first, isTrue);
+      expect(WeeklyReportCallGate.inFlight.value, isFalse);
+    });
+
+    test('a throwing body still clears the flag (no wedge)', () async {
+      await expectLater(
+          WeeklyReportCallGate.runExclusive(() async => throw StateError('x')),
+          throwsStateError);
+      expect(WeeklyReportCallGate.inFlight.value, isFalse);
+      expect(await WeeklyReportCallGate.runExclusive(() async {}), isTrue);
+    });
+
+    test('a body that times out clears the flag (hung call cannot hold it)',
+        () async {
+      await expectLater(
+          WeeklyReportCallGate.runExclusive(() => Completer<void>()
+              .future
+              .timeout(const Duration(milliseconds: 20))),
+          throwsA(isA<TimeoutException>()));
+      expect(WeeklyReportCallGate.inFlight.value, isFalse);
+    });
+
+    test('listeners are told on start AND finish (a screen opened mid-call '
+        'can wake and reload)', () async {
+      final seen = <bool>[];
+      void l() => seen.add(WeeklyReportCallGate.inFlight.value);
+      WeeklyReportCallGate.inFlight.addListener(l);
+      addTearDown(() => WeeklyReportCallGate.inFlight.removeListener(l));
+      await WeeklyReportCallGate.runExclusive(() async {});
+      expect(seen, [true, false]);
+    });
+
+    test('the per-call timeout is bounded', () {
+      expect(WeeklyReportCallGate.callTimeout, lessThanOrEqualTo(
+          const Duration(minutes: 3)));
+    });
+  });
+
   group('reports_screen wiring (PRESENCE-ONLY source pins)', () {
     final screen = _strip(
         File('lib/features/profile/screens/reports_screen.dart')
@@ -187,31 +243,59 @@ void main() {
           reason: 'ref.listen is only legal inside build');
     });
 
-    test('_generateReport: one call at a time, across screen re-opens', () {
-      expect(screen.contains('static bool _inFlight = false;'), isTrue);
-      final g = between('Future<void> _generateReport', 'void _retry()');
-      final guard = g.indexOf('if (_inFlight) return;');
-      final set = g.indexOf('_inFlight = true;');
-      expect(guard, greaterThanOrEqualTo(0));
-      expect(set, greaterThan(guard), reason: 'check BEFORE set');
-      expect(RegExp(r'finally\s*\{\s*_inFlight = false;').hasMatch(g), isTrue,
-          reason: 'cleared in finally, or one failure wedges refresh forever');
+    test('_generateReport runs through the gate; screens subscribe to it', () {
+      expect(screen.contains('static bool _inFlight'), isFalse,
+          reason: 'a plain static bool cannot wake a screen opened mid-call');
+      final g = between('Future<void> _generateReport', 'Future<void> _generateReportBody');
       expect(
-          RegExp(r'onPressed:\s*\(_isGeneratingReport \|\| _inFlight\)')
+          RegExp(r'WeeklyReportCallGate\.runExclusive\(\s*\(\)\s*=>\s*_generateReportBody\(')
+              .hasMatch(g),
+          isTrue);
+      final body = between('Future<void> _generateReportBody', 'void _retry()');
+      expect(
+          RegExp(r'\.callFunction\([\s\S]*?\)\s*\.timeout\(\s*WeeklyReportCallGate\.callTimeout')
+              .hasMatch(body),
+          isTrue,
+          reason: 'callFunction has no timeout of its own');
+      expect(body.contains('TimeoutException'), isTrue);
+      // setState before the try must be guarded: the gate clears in a finally,
+      // but a throw there would surface as an unhandled async error.
+      final pre = body.substring(0, body.indexOf('try {'));
+      expect(pre.contains('if (!mounted) return;'), isTrue);
+      // lifecycle: subscribe in initState, unsubscribe in dispose, wake on change.
+      final init = between('void initState()', 'void dispose()');
+      expect(init.contains('WeeklyReportCallGate.inFlight.addListener(_onGateChanged)'),
+          isTrue);
+      final disp = between('void dispose()', 'void _onGateChanged()');
+      expect(disp.contains('WeeklyReportCallGate.inFlight.removeListener(_onGateChanged)'),
+          isTrue);
+      final wake = between('void _onGateChanged()', 'void _refreshOnOpen()');
+      expect(wake.contains('Future.microtask('), isTrue,
+          reason: 'the gate can flip during a build/listen phase');
+      expect(wake.contains('_loadCachedReport()'), isTrue,
+          reason: 'a screen opened mid-call must re-read the fresh cache');
+      expect(
+          RegExp(r'onPressed:\s*\(_isGeneratingReport\s*\|\|\s*WeeklyReportCallGate\.inFlight\.value\)')
               .hasMatch(screen),
           isTrue,
-          reason: 'the Generate card is disabled while a silent call runs');
+          reason: 'the Generate card is disabled while a call runs');
     });
 
     test('a spent-free-report 403 sets the flag and opens the paywall, '
         'after the silent early-return', () {
       final g = between('Future<void> _generateReport', 'void _retry()');
       final silent = g.indexOf('if (silent) {');
-      final spent = g.indexOf('isLifetimeFreeReportSpent(');
+      final m = RegExp(
+              r'if\s*\(\s*e is FunctionException\s*&&\s*isLifetimeFreeReportSpent\(\s*status:\s*e\.status,\s*details:\s*e\.details,?\s*\)\s*\)\s*\{')
+          .firstMatch(g);
       expect(silent, greaterThanOrEqualTo(0));
+      expect(m, isNotNull,
+          reason: 'the branch must be an if on the helper result, over the '
+              'real FunctionException status and details');
+      final spent = m!.start;
       expect(spent, greaterThan(silent),
           reason: 'else the paywall opens on every screen open');
-      final branch = g.substring(spent);
+      final branch = g.substring(m.end);
       expect(branch.contains("put('first_report_generated', true)"), isTrue,
           reason: 'else the free-user line keeps promising a spent report');
       expect(branch.contains('showPaywallSheet('), isTrue);
@@ -223,8 +307,11 @@ void main() {
           RegExp(r'ref\.listen\(\s*subscriptionInfoProvider')
               .hasMatch(b),
           isTrue);
-      expect(b.contains('prev != null && !prev.isPro && next.isPro'), isTrue);
-      expect(b.contains('_refreshOnOpen()'), isTrue);
+      expect(
+          RegExp(r'if\s*\(\s*prev != null && !prev\.isPro && next\.isPro\s*\)\s*_refreshOnOpen\(\)')
+              .hasMatch(b),
+          isTrue,
+          reason: 'the refresh must be the body of the transition check');
     });
 
     test('the cache stamp uses the test-clock seam, same clock as the policy',

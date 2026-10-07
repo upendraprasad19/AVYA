@@ -40,11 +40,8 @@ class ReportsScreen extends ConsumerStatefulWidget {
 class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   bool _isLoading = true;
   bool _isGeneratingReport = false;
-  // One weekly-report call at a time, across screen re-opens (static): the cache
-  // stamp is written only AFTER the slow Gemini call returns, so without this a
-  // re-open, the free->PRO listener or the Generate card during that window each
-  // read "no stamp, due" and fire another thinking-on call.
-  static bool _inFlight = false;
+  // One weekly-report call at a time across screen instances: see
+  // WeeklyReportCallGate (its notifier wakes a screen opened mid-call).
   Map<String, dynamic>? _aiReport;
   String? _reportError;
   String _weightFilter = '3M'; // All, 1Y, 6M, 3M, 1M, 1W
@@ -56,6 +53,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   @override
   void initState() {
     super.initState();
+    WeeklyReportCallGate.inFlight.addListener(_onGateChanged);
     _loadCachedReport();
     Future.microtask(() {
       if (mounted) setState(() => _isLoading = false);
@@ -71,6 +69,24 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     // transient failure keeps the cache rather than blanking it.
     Future.microtask(() {
       if (mounted) _refreshOnOpen();
+    });
+  }
+
+  @override
+  void dispose() {
+    WeeklyReportCallGate.inFlight.removeListener(_onGateChanged);
+    super.dispose();
+  }
+
+  /// The gate flips from ANY screen instance. Deferred to a microtask because it
+  /// can flip inside a build/listen phase (setState there would throw), and on
+  /// completion this instance re-reads the cache so a screen opened mid-call
+  /// shows the fresh report and a re-enabled Generate card.
+  void _onGateChanged() {
+    Future.microtask(() {
+      if (!mounted) return;
+      if (!WeeklyReportCallGate.inFlight.value) _loadCachedReport();
+      setState(() {});
     });
   }
 
@@ -126,15 +142,17 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   /// network blip doesn't blank a usable cached report. The fresh result still
   /// replaces `_aiReport` + the cache on success. Fix 2026-06-02.
   Future<void> _generateReport({bool silent = false}) async {
-    if (_inFlight) return;
-    _inFlight = true;
+    await WeeklyReportCallGate.runExclusive(
+        () => _generateReportBody(silent: silent));
+  }
+
+  Future<void> _generateReportBody({required bool silent}) async {
     if (!silent) {
+      if (!mounted) return;
       setState(() {
         _isGeneratingReport = true;
         _reportError = null;
       });
-    } else if (mounted) {
-      setState(() {}); // disables the Generate card while the silent call runs
     }
 
     try {
@@ -143,10 +161,12 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         throw Exception('Not authenticated. Please sign in and try again.');
       }
 
-      final response = await SupabaseService.instance.callFunction(
-        AppConstants.weeklyReportFunction,
-        body: {'user_id': userId},
-      );
+      final response = await SupabaseService.instance
+          .callFunction(
+            AppConstants.weeklyReportFunction,
+            body: {'user_id': userId},
+          )
+          .timeout(WeeklyReportCallGate.callTimeout);
 
       final data = response.data;
       if (data == null) {
@@ -211,13 +231,12 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       }
       if (mounted) {
         setState(() {
-          _reportError = e.toString().replaceFirst('Exception: ', '');
+          _reportError = e is TimeoutException
+              ? 'The dispatch is taking longer than usual. Try again in a moment.'
+              : e.toString().replaceFirst('Exception: ', '');
           _isGeneratingReport = false;
         });
       }
-    } finally {
-      _inFlight = false;
-      if (mounted) setState(() {});
     }
   }
 
@@ -1059,7 +1078,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: (_isGeneratingReport || _inFlight)
+              onPressed: (_isGeneratingReport ||
+                      WeeklyReportCallGate.inFlight.value)
                   ? null
                   : () {
                       SubscriptionService.instance.gateAndVerify(
