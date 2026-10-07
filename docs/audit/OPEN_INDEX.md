@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**175 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**178 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -183,3 +183,6 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-315 | ProgressPhotoRepository.cleanupOrphanedStorage has zero callers, and the… | a plan: a server-side per-day cap is a… | 2026-10-06 - `git grep -n… | [:5711](open_issues.md#L5711) |
 | OI-316 | The progress-photos bucket and its SELECT/DELETE/INSERT policies have no… | a plan for a recurring catalog check (a… | 2026-10-06 - the B1 live evidence (E10)… | [:5720](open_issues.md#L5720) |
 | OI-317 | Spawn tests PR 2: migrate the other 48 test files (119 sites) onto… | its own plan and two independent plan… | 2026-10-06 - the PR 1 census of `test/`… | [:5729](open_issues.md#L5729) |
+| OI-320 | redeem-referral has no per-referrer cap: each new referee (idempotent per… | a founder product decision: whether to… | 2026-10-07 - read… | [:5738](open_issues.md#L5738) |
+| OI-321 | clean-orphan-media rechecksIsPro uses .maybeSingle() (index.ts:120-129): a… | nothing: a small fix (read the active… | 2026-10-07 - read… | [:5747](open_issues.md#L5747) |
+| OI-322 | progress_photo_repository.capture sends takenAt.toIso8601String()… | nothing: fix in unit B2 of batch… | 2026-10-07 - read… | [:5756](open_issues.md#L5756) |
