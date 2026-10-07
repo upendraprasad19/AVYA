@@ -31,6 +31,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../copy/streak_freeze_copy.dart';
 import 'error_telemetry.dart';
 import 'sync_service.dart';
 import 'subscription_service.dart';
@@ -111,14 +112,54 @@ class StreakProgressService {
     return usedDates.where((d) => d.compareTo(cutoff) >= 0).toList()..sort();
   }
 
+  /// How many freezes the (still unshown) notice covers once a debit of
+  /// [newlySpent] dates lands on [progress]. A debit that names no date counts
+  /// as one freeze. While the previous notice is still unshown
+  /// (`streak_freeze_just_used == true`) its count carries over (absent or
+  /// non-positive reads as 1); once Home has shown and cleared it, the count
+  /// starts again from this debit alone.
+  static int freezeNoticeCountAfterConsume(
+    Map<String, dynamic>? progress, {
+    required int newlySpent,
+  }) {
+    final unshown = progress?['streak_freeze_just_used'] == true;
+    // `is num`, never `as num?`: this runs while the freeze debit's write is
+    // being assembled, so a throw here would drop the debit itself.
+    final raw = progress?['streak_freeze_just_used_count'];
+    final stored = raw is num && raw.isFinite ? raw.toInt() : null;
+    final carried = !unshown ? 0 : (stored == null || stored < 1 ? 1 : stored);
+    return carried + (newlySpent < 1 ? 1 : newlySpent);
+  }
+
+  /// The text for a freeze that was just spent, or null when no notice is
+  /// pending. A notice is handed out ONCE: it is read and CLEARED in this one
+  /// call (the clear's in-memory effect is visible to the very next read), so
+  /// Home's first-mount check and its background-restore listener can never
+  /// both show it. The words and the LIVE count come from
+  /// [streakFreezeNoticeFromProgress].
+  String? takeFreezeNotice() {
+    final notice =
+        streakFreezeNoticeFromProgress(UserRepository.instance.getProgress());
+    if (notice == null) return null;
+    unawaited(UserRepository.instance.clearStreakFreezeNotice());
+    return notice;
+  }
+
   /// Commit freezes-consumed state. Called from
   /// `WorkoutRepository._calculateStreak(consume: true)` after the
   /// walk-back has identified which dates need to consume.
   ///
   /// Persists the new `streak_freezes_available` + appended
-  /// `streak_freeze_used_dates` + the legacy
-  /// `streak_freeze_just_used` / `streak_freeze_remaining_after_use`
-  /// flags consumed by the streak badge UI.
+  /// `streak_freeze_used_dates` + the session-scoped notice keys read by
+  /// Home's freeze snackbar: `streak_freeze_just_used`,
+  /// `streak_freeze_just_used_count` (how many freezes the notice covers) and
+  /// the legacy `streak_freeze_remaining_after_use` snapshot.
+  ///
+  /// The count ACCUMULATES while the notice is still unshown: a second debit
+  /// before Home clears the flag makes the notice say "2 Streak Freezes used",
+  /// not "1" (a flag with no count reads as 1, the only value a pre-count build
+  /// could have written). The three notice keys are local-only: every progress
+  /// payload builder names its keys, so none of them reaches the cloud.
   ///
   /// Returns the new `streak_freezes_available` after consumption
   /// (same as the [freezesAvailableAfterConsume] argument; returned
@@ -139,6 +180,10 @@ class StreakProgressService {
       'streak_freezes_available': freezesAvailableAfterConsume,
       'streak_freeze_used_dates': usedDatesAfterConsume,
       'streak_freeze_just_used': true,
+      'streak_freeze_just_used_count': freezeNoticeCountAfterConsume(
+        UserRepository.instance.getProgress(),
+        newlySpent: newlyConsumedDates?.length ?? 0,
+      ),
       'streak_freeze_remaining_after_use': freezesAvailableAfterConsume,
     });
     unawaited(SyncService.instance.syncFreezes());

@@ -890,7 +890,7 @@ class AuthSessionBootstrapper {
                   : <String, dynamic>{};
               final cloudProgress =
                   Map<String, dynamic>.from(progressRows.first);
-              // OI-83: the 3 monotonic fields are local-max-wins. This merge
+              // OI-83: the 4 monotonic fields are local-max-wins. This merge
               // used to be cloud-non-null-wins for EVERY key, which silently
               // demoted current_phase / the lifetime counters on a device that
               // had advanced locally and not yet pushed. Shared with
@@ -904,6 +904,10 @@ class AuthSessionBootstrapper {
               await userBox.put('progress', progressMerge.merged);
               reportProgressDemotionsDeclined(progressMerge,
                   source: 'auth_session_bootstrapper');
+              // c9d2f6: the freeze merge kept local ahead of the cloud row.
+              if (progressMerge.scheduleFreezeSyncUp) {
+                unawaited(SyncService.instance.syncFreezes());
+              }
             }
 
             // Hydrate terms acceptance.

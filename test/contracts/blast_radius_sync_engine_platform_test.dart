@@ -216,6 +216,14 @@ const _declined = <String, String>{
   'lib/core/constants/app_constants.dart':
       'constants: the engine stamps what it sends with AppConstants.appVersion '
       '(sync_service.dart); a value, no decision',
+  'lib/core/copy/streak_freeze_copy.dart':
+      'the Streak Freeze notice and explainer words (diagnose a5e3c7): '
+      'streak_progress_service.dart imports it for StreakProgressService.'
+      'takeFreezeNotice, which turns the LOCAL progress map into the snackbar '
+      'text; pure functions and constants with no Hive, no cloud and no I/O, so '
+      'it decides nothing about which copy wins, what is pushed or which key a '
+      'push uses. If it ever reads or writes a store it stops being '
+      'declined-eligible',
   'lib/core/utils/bmr_calculator.dart':
       'calorie and macro arithmetic: UserRepository (platform here) calls '
       'BmrCalculator.calculateTargets when it recomputes targets; a pure '

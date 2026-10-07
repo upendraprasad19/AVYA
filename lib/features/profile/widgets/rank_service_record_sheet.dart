@@ -203,9 +203,9 @@ class RankServiceRecordSheet extends ConsumerWidget {
     final progress = UserRepository.instance.getProgress() ?? {};
     final freezesAvailable =
         (progress['streak_freezes_available'] as int?) ?? 0;
-    // Freezes refill weekly: PRO=3, FREE=1. Total tile shows the
-    // capacity, not historical count, so the user reads "X of Y left
-    // this week".
+    // Freezes are a kept stock (+1 each Monday): PRO keeps up to 3, FREE 1.
+    // The tile shows the stock against its cap, so the user reads
+    // "X / Y IN RESERVE".
     // OI-44 Unit 6 — PURE read: _statusTilesRow runs during build.
     final isPro = SubscriptionService.instance.proStateSnapshot();
     final maxFreezes = isPro ? 3 : 1;
@@ -224,7 +224,7 @@ class RankServiceRecordSheet extends ConsumerWidget {
           child: _statusTile(
             label: 'FREEZES LEFT',
             valueLine: '$freezesAvailable / $maxFreezes',
-            unitLine: 'THIS WEEK',
+            unitLine: 'IN RESERVE',
           ),
         ),
       ],

@@ -310,8 +310,11 @@ void main() {
         await box().put(sKey, row());
         await box().put(wKey, wlog());
         expect(await SyncService.healCompletedTitlesAfterRestore(), 1);
-        // `restoreCompletedTick` also gates streak decay
-        // (workout_repository.dart:244-248): the heal must NOT open that gate.
+        // `restoreCompletedTick` is the repaint tick the background heal bumps
+        // AFTER its streak reckon (`DayRolloverObserver.
+        // reckonAndNotifyAfterRestore`, b4e7a1 — the decay gate itself is the
+        // per-account restore marker now): the title heal must NOT bump it, or
+        // listeners would repaint before the reckon's debit lands.
         expect(
           SyncService.instance.restoreCompletedTick.value,
           completedBefore,
@@ -554,10 +557,15 @@ String _methodBody(String src, String signature) {
   return src.substring(open, i + 1);
 }
 
+// Paths are normalised to forward slashes at this ONE choke point: three
+// assertions below compare `f.path` to `lib/...` literals, and on Windows
+// `listSync` yields `lib\...`, which made them fail locally while CI (Linux)
+// stayed green. `File('lib/x.dart')` opens fine on Windows.
 Iterable<File> _libFiles() => Directory('lib')
     .listSync(recursive: true)
     .whereType<File>()
-    .where((f) => f.path.endsWith('.dart'));
+    .where((f) => f.path.endsWith('.dart'))
+    .map((f) => File(f.path.replaceAll('\\', '/')));
 
 /// The body of the OUTERMOST function/member enclosing [at]: walks back over
 /// lines that open a block at indent <= 2, and returns the nearest whose

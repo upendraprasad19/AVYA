@@ -64,6 +64,7 @@ part 'sync/sync_nutrition.dart';
 part 'sync/sync_profile.dart';
 part 'sync/sync_realtime.dart';
 part 'sync/sync_restore_completeness.dart';
+part 'sync/sync_restore_failure_collector.dart';
 part 'sync/sync_resilience.dart';
 part 'sync/sync_workout.dart';
 
@@ -185,6 +186,15 @@ class SyncService {
   /// `syncBox` (shared) so they are intentionally NOT reset here —
   /// the namespacing already scopes them by ownership at read time.
   void _onUserChanged() {
+    // diagnose b4e7a1 — "the restore for THIS account settled" does not carry
+    // across an account swap. FIRST statement on purpose (B-pass F3): this is the
+    // only line here that gates a PERMANENT write (the streak decay persist), and
+    // every step below can throw; a throw must not leave account A's marker open
+    // for an A -> B -> A return. (`restoreCompletedTick` never reset — that was
+    // the 2026-09-17 spurious debit.)
+    _restoreSettledUserId = null;
+    _lastRestoreWithheldReason = null;
+
     // Drop realtime subscription so the next user does not receive
     // the previous user's broadcast events.
     //
@@ -1846,6 +1856,79 @@ class SyncService {
   /// Bump [restoreCompletedTick] — call after a background restore + heals.
   void bumpRestoreCompleted() => restoreCompletedTick.value++;
 
+  // ── diagnose b4e7a1 — "the restore for THIS account settled" ─────────────
+  //
+  // The streak decay persist used to be gated on `restoreCompletedTick > 0`: a
+  // PROCESS-lifetime counter, never reset on an account swap and bumped only
+  // by the background heal AFTER the cold-start rollover had already run. So a
+  // cold start never persisted the idle-day freeze debit, and an inherited
+  // tick persisted a debit against the NEW account's pre-restore rows (the
+  // 2026-09-17 spurious debit). The gate is now this marker: the id of the
+  // account whose full restore finished with no streak-critical op reporting a
+  // failure. Plan docs/plans/streak-freeze-restore-ownership.md §3 (Unit 1).
+
+  /// The account whose restore settled; null until one does. In-memory only.
+  String? _restoreSettledUserId;
+
+  /// Why the last [restoreFromCloudForUser] did NOT settle the marker (null when
+  /// it did, or before any call). Diagnostic — read by the post-restore reckon
+  /// for its one best-effort telemetry event.
+  String? _lastRestoreWithheldReason;
+
+  /// True iff the restore for the CURRENT account settled: the marker is set
+  /// AND equals the live account AND equals the account the Hive session is
+  /// open for. PURE (no write, no telemetry): the CQRS gate scans every getter.
+  bool get restoreSettledForCurrentUser {
+    final marker = _restoreSettledUserId;
+    if (marker == null) return false;
+    return marker == _liveUserId && marker == HiveUserSession.currentOwnerFullId;
+  }
+
+  /// See [_lastRestoreWithheldReason].
+  String? get lastRestoreWithheldReason => _lastRestoreWithheldReason;
+
+  /// Test seam: set / clear the marker directly.
+  @visibleForTesting
+  void debugSetRestoreSettledUserIdForTest(String? uid) =>
+      _restoreSettledUserId = uid;
+
+  /// The settle decision, pure so every clause is unit-testable and
+  /// mutation-killable (an end-to-end swap becomes `cancelled` first, so the two
+  /// uid clauses are reachable only from a swap landing inside the awaited title
+  /// heal). Mirrors [shouldHealAfterRestore].
+  @visibleForTesting
+  static bool shouldSettleRestoreMarker({
+    required String? uid,
+    required String? liveUid,
+    required String? ownerUid,
+    required RestoreResult result,
+    required Set<String> failures,
+  }) =>
+      result.succeeded &&
+      restoreSettlesStreak(failures) &&
+      uid != null &&
+      liveUid == uid &&
+      ownerUid == uid;
+
+  void _settleRestoreMarker(
+      String? uid, RestoreResult result, Set<String> failures) {
+    if (shouldSettleRestoreMarker(
+      uid: uid,
+      liveUid: _liveUserId,
+      ownerUid: HiveUserSession.currentOwnerFullId,
+      result: result,
+      failures: failures,
+    )) {
+      _restoreSettledUserId = uid;
+      _lastRestoreWithheldReason = null;
+      return;
+    }
+    // A failed restore never clears an earlier success for the same account.
+    _lastRestoreWithheldReason = 'succeeded=${result.succeeded} '
+        'cancelled=${result.cancelled} failed=${failures.toList()..sort()} '
+        'uidMatch=${uid != null && uid == _liveUserId}';
+  }
+
   /// OI-284 — the public entry every production caller uses
   /// (`restoring_screen.dart` ×2). After a SUCCEEDED full restore the logs and
   /// the scheduled-workouts overlay have landed, so a completed non-template
@@ -1853,13 +1936,20 @@ class SyncService {
   /// ([CompletedTitleHealer]); this runs BEFORE the restoring screen's
   /// `_healAfterRestoreInBackground` bump, which then refreshes the UI. A
   /// failed or cancelled restore does not heal (the pass is pure/idempotent
-  /// and runs at the next success). `restoreCompletedTick` is NOT touched:
-  /// it also gates streak decay (`workout_repository.dart:244-248`).
+  /// and runs at the next success). `restoreCompletedTick` is NOT touched
+  /// here. After the heal, a restore that succeeded with NO streak-critical op
+  /// reporting a failure settles the per-account marker that opens the streak
+  /// decay persist (b4e7a1). The uid is captured BEFORE awaiting; the failure
+  /// sink is a zone value so a concurrent lightweight restore cannot pollute it.
   Future<RestoreResult> restoreFromCloudForUser() async {
-    final result = await _restoreFromCloudForUserCore();
+    final uid = _liveUserId;
+    final failures = <String>{};
+    final result = await RestoreFailureCollector.run(
+        failures, () => _restoreFromCloudForUserCore());
     if (shouldHealAfterRestore(result)) {
       await healCompletedTitlesAfterRestore();
     }
+    _settleRestoreMarker(uid, result, failures);
     return result;
   }
 
@@ -1881,7 +1971,10 @@ class SyncService {
   /// every one of its many returns passes through the single heal above.
   Future<RestoreResult> _restoreFromCloudForUserCore() async {
     _restoreCancelled = false;
-    final userId = _supabase.currentUser?.id;
+    // `_liveUserId` is exactly `_supabase.currentUser?.id` in production (the
+    // test resolver is null there); b4e7a1 reads it here so the whole wrapper
+    // — marker included — runs under `SyncHarness`.
+    final userId = _liveUserId;
     if (userId == null) {
       return RestoreResult.failed('No authenticated user');
     }
@@ -1958,6 +2051,11 @@ class SyncService {
         }
         // null → single-call FAULT; restorePath stays 'legacy_fallback' and we
         // fall through to the legacy fan-out below (heals any clobber).
+        // b4e7a1 (B-pass F4): the aborted attempt may already have reported a
+        // failure for an op the legacy fan-out below re-runs and restores fine —
+        // that stale entry must not hold the streak marker closed. The legacy
+        // ops report their own failures into the same sink.
+        RestoreFailureCollector.clear();
       }
 
       // Step A — profile + lightweight data
@@ -2137,7 +2235,7 @@ class SyncService {
       // A StartMissionBrief/ResumeOnboarding cancel, or a fast account-switch
       // mid-call, must not write user A's bundle into user B's boxes.
       if (restoreAbortedFor(userId)) return RestoreResult.cancelled();
-      if (_supabase.currentUser?.id != userId) {
+      if (_liveUserId != userId) {
         debugPrint('[SyncService._attemptSingleCallRestore] '
             'owner changed mid-call → cancel (no write)');
         return RestoreResult.cancelled();
@@ -2786,6 +2884,9 @@ class SyncService {
     required Object error,
     int retryCount = 0,
   }) async {
+    // b4e7a1 — FIRST, before any await: the restore failure collector (a no-op
+    // outside a `restoreFromCloudForUser` zone; total, never throws).
+    RestoreFailureCollector.note(opType);
     // closes-diagnose e5b2a9 — single funnel for every push AND restore
     // failure. Tell the retry controller, which accepts only outage-shaped
     // PUSH failures.
@@ -2943,6 +3044,32 @@ class SyncService {
   /// Fetches all rows from a Supabase table using offset-based pagination.
   /// Replaces hardcoded `.limit(5000)` to support full-history restore.
   /// Safety ceiling: 50,000 rows per table to prevent runaway fetches.
+  ///
+  /// [tieBreak] (diagnose c7e2a9, Slice B2): extra ORDER BY columns appended
+  /// after [orderBy], each with an explicit `ascending: false` (the primary
+  /// stays descending, the Dart client's own default, now written out). The
+  /// LAST column MUST be unique per row (`id`; `date` for `readiness_daily`,
+  /// whose primary key is `(user_id, date)`): with a non-unique sort key two
+  /// page requests can return tied rows in different orders and skip or
+  /// duplicate a row across the page seam. Empty (the default, and always
+  /// when `disable_restore_paging_fix` is set) is the pre-fix single-column
+  /// order.
+  ///
+  /// The loop still stops on a SHORT page, which is right only while the
+  /// server's `db-max-rows` equals [pageSize] (1000 on this project, measured
+  /// 2026-10-06; `_shared/paged_fetch.ts` documents the hazard of a lower
+  /// cap). `test/sync/restore_legacy_paging_behavioral_test.dart` DOCUMENTS the
+  /// assumption by showing what a lower cap does here (one page, the rest
+  /// lost); it cannot DETECT a lowered cap, because the cap is a platform
+  /// setting the client never reads. Stopping on an EMPTY page instead (as the
+  /// Edge Function's `paged_fetch.ts` does) was not adopted: it costs one extra
+  /// request on every read of the fallback path (about eleven), and it would
+  /// loop to the 50,000-row ceiling on any stub that answers a table with the
+  /// same non-empty rows whatever the offset (no existing test does that to a
+  /// `_fetchAllRows` table today). If the cap is ever lowered, change this loop
+  /// and that test together; `paged_fetch.ts` documents a cap-independent stop
+  /// that needs no extra request (`Prefer: count=exact` answers 206 with the
+  /// total in `Content-Range`).
   Future<List<Map<String, dynamic>>> _fetchAllRows(
     String table,
     String userId, {
@@ -2951,8 +3078,10 @@ class SyncService {
     String orderBy = 'created_at',
     int pageSize = 1000,
     String? selectColumns,
+    List<String> tieBreak = const <String>[],
   }) async {
     const maxRows = 50000;
+    final ties = SyncFlags.restorePagingFixEnabled ? tieBreak : const <String>[];
     final results = <Map<String, dynamic>>[];
     int offset = 0;
     while (true) {
@@ -2963,9 +3092,11 @@ class SyncService {
       if (dateColumn != null && since != null) {
         query = query.gte(dateColumn, since);
       }
-      final rows = await query
-          .order(orderBy)
-          .range(offset, offset + pageSize - 1);
+      var ordered = query.order(orderBy, ascending: false);
+      for (final column in ties) {
+        ordered = ordered.order(column, ascending: false);
+      }
+      final rows = await ordered.range(offset, offset + pageSize - 1);
       for (final row in rows) {
         results.add(Map<String, dynamic>.from(row as Map));
       }
@@ -2973,6 +3104,10 @@ class SyncService {
       offset += pageSize;
       if (results.length >= maxRows) {
         debugPrint('[SyncService._fetchAllRows] Hit $maxRows ceiling for $table');
+        // A restore that stopped at the ceiling is not a complete restore:
+        // say so where the founder can see it (LOW priority, table name only).
+        unawaited(ErrorTelemetry.logEvent('restore_row_ceiling_hit',
+            message: table));
         break;
       }
     }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/copy/streak_freeze_copy.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
@@ -37,7 +38,11 @@ class StreakExplainerSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final maxFreezes = isPro ? 3 : 1;
+    // The caps this sheet states: ONE pair for rule 4 and for the PRO note
+    // (they equal the refill's `isPro ? 3 : 1`, pinned by a test).
+    const freeMax = 1;
+    const proMax = 3;
+    final maxFreezes = isPro ? proMax : freeMax;
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(
@@ -84,10 +89,8 @@ class StreakExplainerSheet extends StatelessWidget {
             _rule('You earn +1 for every scheduled training day you complete. '
                 'Rest days never count against you.'),
             _rule('Rest days and off days don\'t count against you.'),
-            _rule('Miss a scheduled workout and we\'ll use a Streak Freeze '
-                'automatically to keep your streak alive.'),
-            _rule('Freezes refill every Monday — $maxFreezes per week '
-                '${isPro ? "(PRO)" : "(free tier)"}.'),
+            _rule(kStreakFreezeRuleMissed),
+            _rule(streakFreezeRuleRefill(maxFreezes)),
             _rule('You have $freezesAvailable freeze${freezesAvailable == 1 ? "" : "s"} '
                 'available right now.'),
             if (!isPro) ...[
@@ -102,7 +105,7 @@ class StreakExplainerSheet extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'PRO users get 3 freezes per week instead of 1.',
+                        streakFreezeProNote(freeMax: freeMax, proMax: proMax),
                         style: AppTypography.bodySm.copyWith(
                           color: AppColors.proGold,
                           fontWeight: FontWeight.w700,
