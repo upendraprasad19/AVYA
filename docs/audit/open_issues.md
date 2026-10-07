@@ -5696,3 +5696,41 @@ The repo root has no allowlist, so a command that writes a file there (a stray s
 - **Identified**: 2026-10-06 · filed via mint_oi.sh from branch `spawn-tests-env-and-stderr` (founder decision 2026-10-06, item 2: "Put the 254 on the issue board: yes"; the first sighting was `a7f3d1`, July 2026)
 
 The one failure was a single run on `main`; the cause is UNESTABLISHED. This entry exists so the board, not only a closure ledger, tracks it (answers row C4 of the `sot-gate-test-stderr` ledger).
+
+## OI-314 — Progress photos: a lapsed PRO user cannot view or delete their old photos in the app, and the repository's free-tier branch is still alive (founder decisions 5 and 6 of 2026-10-06)
+
+- **Status**: OPEN
+- **Blocked on**: unit B1 of batch `progress-photos-pro-server-rule` (the server-side PRO rule, migration 154 `progress_photos_pro_insert_rls_rule`) being applied live AND merged to `main`; B2 may not start before that.
+- **Verified**: 2026-10-06 - founder decisions recorded in chat the same day (decision 5: delete the repository's free-tier branch once the server rule exists; decision 6: a lapsed PRO user may VIEW and DELETE old photos, no new uploads). Code read: `lib/features/profile/repositories/progress_photo_repository.dart:85-86` (`isPro` picks `_proDailyCap` or `_freeDailyCap`), `:112-119` (free branch: 2048 px / 85 % quality), `:128-137` (the Storage upload and the row insert).
+- **Identified**: 2026-10-06 · filed via mint_oi.sh from branch `progress-photos-b0`
+
+Implementation is unit B2 (client): delete the free branch (the 2/day cap and the 2048/85 quality tier), let a lapsed PRO user open the Progress screen to view and delete existing photos while new uploads stay refused, and show a specific message when the server refuses an upload (a Storage 403 or `P0001 progress_photo_pro_required`), including the just-paid window while `isPaymentInFlight` is true. B2's commit closes this OI (`closes-oi:`) and flips rows C6 and C7 of `docs/audit/progress-screen-pro-gate.closure.yaml` to `closed_in_commit`.
+
+**Migration-number reservation: DO NOT RELEASE `mig/154` (slug `progress_photos_pro_insert_rls_rule`, branch `progress-photos-pro-server-rule`) while this OI is open.** The draft sits in `docs/drafts/` until the founder authorises the live apply, so `scripts/mint_migration.sh` reads the number as UNFILED and another session's `--release 154` would succeed and the next mint could hand 154 out again.
+
+## OI-315 — ProgressPhotoRepository.cleanupOrphanedStorage has zero callers, and the 5/day progress-photo cap is client-side only: a PRO caller can upload unlimited 8 MiB objects
+
+- **Status**: OPEN
+- **Blocked on**: a plan: a server-side per-day cap is a schema change (a BEFORE INSERT trigger like the AI-coach caps, or a Storage-side limit), and wiring or deleting the sweeper needs a decision on when it may run.
+- **Verified**: 2026-10-06 - `git grep -n cleanupOrphanedStorage -- lib test supabase` finds no caller in `lib/` or `supabase/` (the definition is `progress_photo_repository.dart:240`; the only other hits are source-grep assertions in `test/sync/closeout_maintenance_test.dart`); `capture()` uploads first (`:128`) and inserts the row second (`:137`), so an object whose row insert fails is an orphan that nothing removes. The 5/day cap is a client-side count before the pick (`:85-99`); no trigger or policy enforces it.
+- **Identified**: 2026-10-06 · filed via mint_oi.sh from branch `progress-photos-b0`
+
+Residuals (i) and (iii) of the B1 plan's D1: a PRO caller can upload an unbounded number of objects of up to 8 MiB each, and failed captures leave orphan objects. Found by the B1 plan review round 1 (finding 12).
+
+## OI-316 — The progress-photos bucket and its SELECT/DELETE/INSERT policies have no repo migration, and no recurring live check detects a dashboard edit of them (the OI-283 class)
+
+- **Status**: OPEN
+- **Blocked on**: a plan for a recurring catalog check (a catalog-snapshot test in CI or a nightly cron) and the founder's call on where it runs.
+- **Verified**: 2026-10-06 - the B1 live evidence (E10) lists nine INSERT policies on `storage.objects`, three of them duplicates per bucket, none created by a repo migration; the avatars, banners, chat-media and coach-media policies were also made in the dashboard. B1's live-verify file catches a wrong policy once, at apply time; nothing recurring does.
+- **Identified**: 2026-10-06 · filed via mint_oi.sh from branch `progress-photos-b0`
+
+Residual (iv) of the B1 plan's D1, the OI-283 class: a dashboard edit of the progress-photos policies (a new permissive INSERT policy, a widened UPDATE policy) would silently reopen the door B1 closes. Propose a scheduled catalog snapshot compared with a committed expectation.
+
+## OI-317 — Spawn tests PR 2: migrate the other 48 test files (119 sites) onto test/helpers/spawn.dart and make the site guards strict
+
+- **Status**: OPEN
+- **Blocked on**: its own plan and two independent plan reviews (CLAUDE.md 4.12); PR 1 of the batch (`spawn-tests-env-and-stderr`, PR #81) must be merged first.
+- **Verified**: 2026-10-06 - the PR 1 census of `test/` found 48 spawn test files with 119 spawn sites still building their own child environment; PR 1 migrated two files and shipped the helper `test/helpers/spawn.dart` plus a derived manifest.
+- **Identified**: 2026-10-06 · filed via mint_oi.sh from branch `progress-photos-b0`
+
+Second unit of batch `spawn-tests-env-and-stderr` (founder decision 2026-10-06, items 1 and 3, scope answer "Shared helper, 2 PRs"). Migrates the other files onto the helper, makes the site guards strict, and prints a failing child's stdout and stderr in each. The batch closes only when this unit merges; the plan will be `docs/plans/spawn-tests-pr2-migrate-remaining.md`.
