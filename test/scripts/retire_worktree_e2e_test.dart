@@ -26,21 +26,13 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-Map<String, String> _cleanEnv() {
-  final env = Map<String, String>.from(Platform.environment);
-  env.removeWhere((k, _) {
-    final u = k.toUpperCase();
-    return u.startsWith('GIT_') || u.startsWith('GITHUB_') || u == 'PUSH_BEFORE';
-  });
-  return env;
-}
+import '../helpers/spawn.dart';
 
-ProcessResult _run(String exe, List<String> args, String cwd) => Process.runSync(
+ProcessResult _run(String exe, List<String> args, String cwd) => runSpawn(
       exe,
       args,
+      why: 'retire_worktree e2e: $exe ${args.join(' ')} (in $cwd)',
       workingDirectory: cwd,
-      environment: _cleanEnv(),
-      includeParentEnvironment: false,
       runInShell: true,
     );
 

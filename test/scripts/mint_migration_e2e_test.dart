@@ -23,21 +23,24 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-Map<String, String> _cleanEnv() {
-  final env = Map<String, String>.from(Platform.environment);
-  env.removeWhere((k, _) => k.toUpperCase().startsWith('GIT_'));
-  env.remove('MINT_MIG_TRANSPORT');
-  env.remove('MINT_MIG_TEST_HOOK_BEFORE_PUSH');
-  return env;
-}
+import '../helpers/spawn.dart';
+
+/// The MINT_MIG_* names this file's scenarios set ON PURPOSE (a closed literal set, never computed
+/// from the caller's map): the helper strips the whole MINT_MIG_ family from the parent, so a
+/// stray MINT_MIG_REMOTE in the operator's shell can no longer redirect the script.
+const _mintMigControl = {
+  'MINT_MIG_TRANSPORT',
+  'MINT_MIG_TEST_HOOK_BEFORE_PUSH',
+  'MINT_MIG_GH_BIN',
+  'MINT_MIG_OWNER_REPO',
+};
 
 ProcessResult _run(String exe, List<String> args, String cwd, {Map<String, String>? extra}) {
-  final env = _cleanEnv();
-  if (extra != null) env.addAll(extra);
-  return Process.runSync(exe, args,
+  return runSpawn(exe, args,
+      why: '$exe ${args.join(' ')} (mint_migration scratch origin/clones)',
       workingDirectory: cwd,
-      environment: env,
-      includeParentEnvironment: false,
+      extraEnv: extra ?? const {},
+      allowControl: _mintMigControl,
       stdoutEncoding: utf8,
       stderrEncoding: utf8);
 }

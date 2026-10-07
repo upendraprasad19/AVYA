@@ -25,22 +25,24 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-Map<String, String> _cleanEnv() {
-  final env = Map<String, String>.from(Platform.environment);
-  env.removeWhere((k, _) => k.toUpperCase().startsWith('GIT_'));
-  env.remove('MINT_OI_TRANSPORT');
-  env.remove('MINT_OI_TEST_HOOK_BEFORE_PUSH');
-  return env;
-}
+import '../helpers/spawn.dart';
+
+/// The MINT_OI_* control variables this file's scenarios set ON PURPOSE (a CLOSED
+/// literal set, never computed from the caller's map).
+const Set<String> _mintControl = <String>{
+  'MINT_OI_TRANSPORT',
+  'MINT_OI_TEST_HOOK_BEFORE_PUSH',
+  'MINT_OI_GH_BIN',
+  'MINT_OI_OWNER_REPO',
+};
 
 ProcessResult _run(String exe, List<String> args, String cwd,
     {Map<String, String>? extra}) {
-  final env = _cleanEnv();
-  if (extra != null) env.addAll(extra);
-  return Process.runSync(exe, args,
+  return runSpawn(exe, args,
+      why: '$exe ${args.join(' ')}',
       workingDirectory: cwd,
-      environment: env,
-      includeParentEnvironment: false,
+      extraEnv: extra ?? const <String, String>{},
+      allowControl: _mintControl,
       stdoutEncoding: utf8,
       stderrEncoding: utf8);
 }
