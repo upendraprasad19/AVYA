@@ -284,9 +284,11 @@ void main() {
     });
 
     test('runInShell is forwarded (a shell BUILTIN is only reachable through a shell)', () {
-      // `export` exists only as a POSIX shell builtin, `echo` only as a cmd.exe builtin:
+      // `export` exists only as a POSIX shell builtin, `ver` only as a cmd.exe builtin:
       // no executable of that name is on PATH, so without a shell the spawn throws.
-      final builtin = Platform.isWindows ? 'echo' : 'export';
+      // (Not `echo`: Git for Windows puts a real echo.exe on PATH, so a dev machine
+      // with Git's usr/bin on PATH could spawn it without a shell.)
+      final builtin = Platform.isWindows ? 'ver' : 'export';
       final r = runSpawn(builtin, const ['X=1'], why: 'shell builtin', runInShell: true);
       expect(r.exitCode, 0);
       expect(() => runSpawn(builtin, const ['X=1'], why: 'no shell'), throwsA(isA<ProcessException>()),
