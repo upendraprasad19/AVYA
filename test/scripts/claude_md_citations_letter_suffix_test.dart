@@ -33,6 +33,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/spawn.dart';
+
 void main() {
   late String gateScript;
   late Directory fixture;
@@ -57,9 +59,10 @@ void main() {
 
   /// Runs the REAL gate with [fixture] as CWD and returns (exitCode, output).
   ({int code, String out}) runGate() {
-    final r = Process.runSync(
-      'dart',
+    final r = runSpawn(
+      dartBin(),
       ['run', gateScript],
+      why: 'check_claude_md_citations.dart against a fixture CLAUDE.md',
       workingDirectory: fixture.path,
       runInShell: true,
     );

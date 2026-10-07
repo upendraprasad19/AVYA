@@ -26,6 +26,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/spawn.dart';
+
 /// Subprocess environment with git/CI leakage removed.
 ///
 ///   GIT_*      — git exports GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE into
@@ -36,15 +38,7 @@ import 'package:flutter_test/flutter_test.dart';
 ///   GITHUB_*   — this gate reads no GITHUB_* var today; scrubbed anyway so the
 ///                family shares one hermetic contract.
 ///   PUSH_BEFORE — same rationale as GITHUB_*.
-Map<String, String> _cleanEnv() {
-  final env = Map<String, String>.from(Platform.environment);
-  env.removeWhere((k, _) {
-    final u = k.toUpperCase();
-    return u.startsWith('GIT_') || u.startsWith('GITHUB_') || u == 'PUSH_BEFORE';
-  });
-  return env;
-}
-
+/// (Now done by the shared spawn helper: `runSpawn` / `hermeticEnvironment`.)
 late final String _freshGate;
 
 /// The freshness gate shells out to `dart run scripts/build_gate_index.dart`
@@ -63,12 +57,11 @@ Directory _fixture() {
   return dir;
 }
 
-ProcessResult _run(String exe, List<String> args, String cwd) => Process.runSync(
-      exe,
+ProcessResult _run(String exe, List<String> args, String cwd) => runSpawn(
+      exe == 'dart' ? dartBin() : exe,
       args,
+      why: 'gate-index freshness e2e: $exe ${args.join(' ')}',
       workingDirectory: cwd,
-      environment: _cleanEnv(),
-      includeParentEnvironment: false,
       runInShell: true,
     );
 
@@ -77,7 +70,14 @@ void main() {
     _freshGate = File('scripts/check_gate_index_fresh.dart').absolute.path;
     expect(File(_freshGate).existsSync(), isTrue,
         reason: 'run from the repo root');
-    expect(_cleanEnv().keys.where((k) => k.toUpperCase().startsWith('GIT_')),
+    expect(
+        hermeticEnvironment(parent: {
+          'GIT_DIR': '/poison/.git',
+          'GIT_WORK_TREE': '/poison',
+          'GITHUB_REF': 'refs/heads/poison',
+          'PUSH_BEFORE': 'aaaa',
+          'PATH': Platform.environment['PATH'] ?? '',
+        }).keys.where((k) => k.toUpperCase().startsWith('GIT_')),
         isEmpty,
         reason: 'env scrub failed — the fixture would read the REAL repo');
   });

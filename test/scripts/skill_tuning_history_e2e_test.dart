@@ -22,6 +22,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/spawn.dart';
+
 /// Subprocess environment with git/CI leakage removed.
 ///
 /// git exports GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE into every hook, and
@@ -29,34 +31,24 @@ import 'package:flutter_test/flutter_test.dart';
 /// fixture silently reads the REAL repo whenever the suite runs inside
 /// pre-commit (feedback_mistake_git_hook_env_leak). Removed, not set to '' —
 /// an empty GIT_DIR is still an override.
-Map<String, String> _cleanEnv() {
-  final env = Map<String, String>.from(Platform.environment);
-  env.removeWhere((k, _) {
-    final u = k.toUpperCase();
-    return u.startsWith('GIT_') || u.startsWith('GITHUB_');
-  });
-  return env;
-}
-
+/// (Now done by the shared spawn helper: `runSpawn` / `hermeticEnvironment`.)
 late final String _gate;
 late final String _lib;
 
-ProcessResult _git(String cwd, List<String> args) => Process.runSync(
+ProcessResult _git(String cwd, List<String> args) => runSpawn(
       'git',
       args,
+      why: 'git ${args.join(' ')} in the skill-tuning fixture',
       workingDirectory: cwd,
-      environment: _cleanEnv(),
-      includeParentEnvironment: false,
       runInShell: true,
     );
 
 ProcessResult _runGate(String cwd, {List<String> args = const []}) =>
-    Process.runSync(
-      'dart',
+    runSpawn(
+      dartBin(),
       ['run', 'scripts/check_skill_tuning_history.dart', ...args],
+      why: 'check_skill_tuning_history.dart against a fixture repo',
       workingDirectory: cwd,
-      environment: _cleanEnv(),
-      includeParentEnvironment: false,
       runInShell: true,
     );
 

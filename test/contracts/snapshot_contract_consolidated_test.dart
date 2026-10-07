@@ -35,6 +35,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/spawn.dart';
+
 void main() {
   // ── ORIGINAL: snapshot_contract_gate_test.dart ──────────────────────
   //
@@ -55,9 +57,10 @@ void main() {
   // closes-oi: OI-03
   group('OI-03 — snapshot contract gate', () {
     test('production snapshot_contract.yaml passes the gate', () async {
-      final result = await Process.run(
+      final result = await runSpawnAsync(
         'dart',
         ['run', 'scripts/check_snapshot_contract.dart'],
+        why: 'check_snapshot_contract on the production snapshot_contract.yaml',
         runInShell: true,
       );
       expect(result.exitCode, 0,

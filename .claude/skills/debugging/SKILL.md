@@ -212,6 +212,7 @@ Per CLAUDE.md rules 21 + 22:
 | 2.88 | A "completed is sacred" guard freezes the whole row, but the row's TITLE has a different source of truth than its status | the completed card (reads the log) is right while the Train row / Home Today widget (read the schedule row) show the pre-swap title after a cross-device swap | test/contracts/completed_title_follows_log_test.dart |
 | 2.89 | A PRO-only screen whose gate sits on its DOOR only (a row or button holds `gateAndVerify`; the screen reads and writes the protected data with no check, so a typed web address, a deep link or a second button skips it) | a free user uses a "PRO" feature; docs say "each destination keeps its own gate"; source pins pin the door and stay green while a second door exists | test/contracts/progress_photos_screen_gate_test.dart |
 | 2.90 | A spawned-process test asserts only the exit code, so the one stream that holds the cause is never printed (`dart run` exits 254 on a compile or load error with the reason on stderr, 255 on an uncaught exception) | one CI test fails with `Expected: <0> Actual: <254>` and nothing else, and the re-run is green | test/contracts/sot_registry_citations_test.dart |
+| 2.91 | A spawn test is green only because nothing in the ambient environment contradicts it (hand-copied env filters; only a poisoned-parent run on both arms measures them) | a test keeps its own `_cleanEnv()` and passes everywhere; 6 of 50 files failed or leaked under a poisoned parent in their original form | test/contracts/spawn_sites_guard_test.dart |
 
 ---
 

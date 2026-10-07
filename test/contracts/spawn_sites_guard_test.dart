@@ -19,7 +19,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../helpers/spawn_sites_scan.dart';
 
-const bool _reportOnly = true;
+const bool _reportOnly = false;
 
 const String _guardPath = 'test/contracts/spawn_sites_guard_test.dart';
 const String _helperPath = 'test/helpers/spawn.dart';
@@ -41,6 +41,9 @@ const Map<String, int> _allowStartMode = <String, int>{_helperPath: 2};
 const Map<String, ({int count, String reason})> _allowWholeMap = <String, ({int count, String reason})>{
   _helperPath: (count: 1, reason: 'helper'),
   'test/scripts/contract_sweep_e2e_test.dart': (count: 1, reason: 'seam'),
+  // two poisoned-parent maps ({...Platform.environment, 'ALLOW_RAW_GIT': '1'} and the FOUNDER_APPROVED_NO_VERIFY twin)
+  // handed to runHook(parentEnv:) -> parentEnvironment:, never to extraEnv
+  'test/contracts/git_safety_hook_integration_test.dart': (count: 2, reason: 'seam'),
 };
 const Set<String> _wholeMapReasons = <String>{'helper', 'seam', 'scan'};
 

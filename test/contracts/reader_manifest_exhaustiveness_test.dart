@@ -31,13 +31,16 @@ library;
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/spawn.dart';
+
 void main() {
   test(
     'check_reader_manifest_complete passes (forbidden-patterns + exhaustive readers)',
     () async {
-      final result = await Process.run(
+      final result = await runSpawnAsync(
         'dart',
         ['run', 'scripts/check_reader_manifest_complete.dart'],
+        why: 'check_reader_manifest_complete (forbidden patterns + exhaustive readers)',
         workingDirectory: Directory.current.path,
         runInShell: true,
       );
