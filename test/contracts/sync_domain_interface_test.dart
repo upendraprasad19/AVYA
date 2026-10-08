@@ -246,6 +246,10 @@ void main() {
         'ProfileNow',
         'ProgressNow',
         'NotificationsInboxEntry',
+        // Slice C2: @visibleForTesting entry point that runs the push half of
+        // user_progress (_syncUserProgress) for the week-marker behavioral test;
+        // restore is _restoreUserProgress.
+        'UserProgressForTest',
       };
       const restoreOnlyAllowlist = <String>{
         'IfNeeded',
