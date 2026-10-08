@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### subscription_state — the screen is now the one place that decides what a not-PRO user sees of their progress photos; the repository makes no PRO decision. (1 bugs)
+- 2026-10-08 c2b7e4 — (1) A user whose PRO lapsed could not open the Progress screen to view or delete the progress photos they already held: the Photos hub row ran the PRO gate and showed the paywall without opening the…
+
 ### subscription_state — the server's one definition of PRO, status = 'active' AND end_date > now(), gains a new reader (the database itself, at both doors of a NEW progress photo). (1 bugs)
 - 2026-10-07 d8f2a6 — The PRO gate on progress photos existed only in the client (the Photos hub row, the Progress screen entry and its Add button, and ProgressPhotoRepository.capture's own isPro read). A free user calling…
 
@@ -1530,6 +1533,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-10-08 | c2b7e4 | (1) A user whose PRO lapsed could not open the Progress screen to view or delete the progress photos they already held: the Photos hub row ran the PRO gate and showed the paywall without opening the… | subscription_state — the screen is now the one place that decides what a not-PRO user sees of their progress photos; the repository makes no PRO decision. | test/contracts/progress_photo_client_rules_test.dart |
 | 2026-10-07 | d8f2a6 | The PRO gate on progress photos existed only in the client (the Photos hub row, the Progress screen entry and its Add button, and ProgressPhotoRepository.capture's own isPro read). A free user calling… | subscription_state — the server's one definition of PRO, status = 'active' AND end_date > now(), gains a new reader (the database itself, at both doors of a NEW progress photo). | test/contracts/progress_photos_pro_insert_rule_test.dart |
 | 2026-10-07 | a5e3c7 | Home's snackbar after a streak freeze is spent read "Streak Freeze used! N remaining this week." That sentence describes a weekly allowance and the app does not have one: a freeze is a KEPT stock (+1… | streak_freeze_notice | test/contracts/streak_freeze_notice_behavioral_test.dart |
 | 2026-10-07 | d7b2e5 | Issue #78: on the Weekly Report screen "Share as Video" never produces a video. Root cause: the client polls an Edge Function that has been a 410 Gone stub since 2026-04-18. Two adjacent defects found… | weekly_report_screen | test/contracts/weekly_report_video_and_refresh_issue78_test.dart |

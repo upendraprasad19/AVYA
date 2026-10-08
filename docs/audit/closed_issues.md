@@ -5378,3 +5378,28 @@ The sync engine's core files sit outside the `sync/**` glob, so a change that on
 Second unit of batch `spawn-tests-env-and-stderr` (founder decision 2026-10-06, items 1 and 3, scope answer "Shared helper, 2 PRs"). Migrates the other files onto the helper, makes the site guards strict, and prints a failing child's stdout and stderr in each. The batch closes only when this unit merges; the plan will be `docs/plans/spawn-tests-pr2-migrate-remaining.md`.
 
 **CLOSED 2026-10-07 (`spawn-tests-pr2`, diagnose `e6c4a9`):** all 50 files / 120 sites now spawn through `test/helpers/spawn.dart`; the strict guard `test/contracts/spawn_sites_guard_test.dart` replaces the token list; closure ledger `docs/audit/spawn-tests-env-and-stderr-pr2.closure.yaml`. The planned counts (48 / 119) were corrected by the plan reviews to 50 / 120.
+
+## OI-314 — Progress photos: a lapsed PRO user cannot view or delete their old photos in the app, and the repository's free-tier branch is still alive (founder decisions 5 and 6 of 2026-10-06)
+
+- **Status**: CLOSED · 2026-10-08 · branch `progress-photos-client-b2` · the commit carrying `closes-oi: OI-314` (`git log --grep='closes-oi: OI-314'`)
+- **Blocked on**: — (resolved)
+- **Verified**: 2026-10-06 - founder decisions recorded in chat the same day (decision 5: delete the repository's free-tier branch once the server rule exists; decision 6: a lapsed PRO user may VIEW and DELETE old photos, no new uploads). Code read: `lib/features/profile/repositories/progress_photo_repository.dart:85-86` (`isPro` picks `_proDailyCap` or `_freeDailyCap`), `:112-119` (free branch: 2048 px / 85 % quality), `:128-137` (the Storage upload and the row insert).
+- **Identified**: 2026-10-06 · filed via mint_oi.sh from branch `progress-photos-b0`
+
+Implementation is unit B2 (client): delete the free branch (the 2/day cap and the 2048/85 quality tier), let a lapsed PRO user open the Progress screen to view and delete existing photos while new uploads stay refused, and show a specific message when the server refuses an upload (a Storage 403 or `P0001 progress_photo_pro_required`), including the just-paid window while `isPaymentInFlight` is true. B2's commit closes this OI (`closes-oi:`) and flips rows C6 and C7 of `docs/audit/progress-screen-pro-gate.closure.yaml` to `closed_in_commit`.
+
+**Migration-number reservation: DO NOT RELEASE `mig/154` (slug `progress_photos_pro_insert_rls_rule`, branch `progress-photos-pro-server-rule`) while this OI is open.** The draft sits in `docs/drafts/` until the founder authorises the live apply, so `scripts/mint_migration.sh` reads the number as UNFILED and another session's `--release 154` would succeed and the next mint could hand 154 out again.
+
+**CLOSED 2026-10-08 (`progress-photos-client-b2`, diagnose `c2b7e4`):** the repository's free branch is deleted; a lapsed user can view and delete in the app (the screen decides; the hub no longer gates); a server refusal is classified and answered per `PROF-09`. Ledger `docs/audit/progress-photos-client-b2.closure.yaml`; plan `docs/plans/progress-photos-client-b2.md` (four review rounds).
+
+## OI-322 — progress_photo_repository.capture sends takenAt.toIso8601String() (lib/features/profile/repositories/progress_photo_repository.dart:141), a local time with no offset, to a timestamptz column read under UTC: taken_at is stored 5.5 h late for IST users and the client daily-cap window (line 89, UTC start of local day) is mis-aligned
+
+- **Status**: CLOSED · 2026-10-08 · branch `progress-photos-client-b2` · the commit carrying `closes-oi: OI-322` (`git log --grep='closes-oi: OI-322'`)
+- **Blocked on**: — (resolved)
+- **Verified**: 2026-10-07 - read `lib/features/profile/repositories/progress_photo_repository.dart:89` (cap window is the UTC start of the local day) and `:141` (`takenAt.toIso8601String()` has no offset); PostgREST session TimeZone is UTC (live read during the B1 review), so an IST user's `taken_at` is stored 5.5 h late. Found by the B1 Hermes pass (L22 F3).
+- **Identified**: 2026-10-07 · filed via mint_oi.sh from branch `pp-preexisting-ois`
+
+Writer: `capture` (line 141). Readers: the cap query (line 89-94) and the list ordering (line 165). Pre-existing and outside the B1 diff.
+
+**CLOSED 2026-10-08 (`progress-photos-client-b2`, diagnose `c2b7e4`):** `taken_at` is sent as UTC with an offset and the cap window is IST midnight in UTC; no backfill (old rows stay as stored; effects bounded to a day).
+

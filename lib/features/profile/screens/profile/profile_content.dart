@@ -295,8 +295,8 @@ extension _ProfileContent on _ProfileScreenState {
               // Reports hosts the weekly AI report AND the photos entry (photos
               // moved here from SHARE & GROW per 2026-04-18 user feedback; the
               // two photo rows became ONE "Photos" hub row on 2026-10-04). The
-              // Progress PRO gate lives in the hub (`user_photos_screen.dart`),
-              // not on this row.
+              // Progress decision (PRO gallery / lapsed read-only / locked card)
+              // lives in `ProgressPhotosScreen`, not on this row or the hub.
               //
               // Plan D D-10: Predictions moved into REPORTS as the first
               // REPORTS \u2014 WeeklyReportCard on top, then a single card for
@@ -345,8 +345,8 @@ extension _ProfileContent on _ProfileScreenState {
                     onTap: () => context.go('/profile/progress-comparison'),
                   ),
                   // One row for both photo surfaces. The hub
-                  // (UserPhotosScreen) routes to Progress (PRO-gated there)
-                  // and Saved (coach-media consent, Unit 8 / OI-25).
+                  // (UserPhotosScreen) routes to Progress (the screen decides
+                  // what each user sees) and Saved (coach-media consent, Unit 8 / OI-25).
                   ProfileRow(
                     icon: Icons.photo_library_outlined,
                     title: 'Photos',
