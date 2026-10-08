@@ -1,0 +1,221 @@
+# Closure ledger — sot-gate-test-stderr
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no
+# `deferred:` key. closed_count == total_findings.
+#
+# WHAT PRODUCED THESE: one unexplained main-CI failure on 2026-10-04 (run 37203140849,
+# `Expected: <0> Actual: <254>` from a spawned `dart run` gate, stderr never printed), a
+# founder go for a test-only diagnostic fix (2026-10-05), two context-blind plan-review
+# rounds (docs/plan-reviews/sot-gate-test-stderr.md), three mutation rounds in sandbox
+# copies, and the local gate loop. No diagnose-doc: the commit is `test(contracts):`, not `fix:`.
+#
+# `commit:` on a closed_in_commit row names the batch's single commit: the commit that ADDS
+# this file. A commit cannot name its own SHA; find it with
+#   git log --diff-filter=A --format=%h -- docs/audit/sot-gate-test-stderr.closure.yaml
+# (the merge to main is a --no-ff merge commit; the code commit is its second parent's tip).
+
+batch: sot-gate-test-stderr
+plan_review_record: docs/plan-reviews/sot-gate-test-stderr.md
+diagnose_docs: []
+total_findings: 22
+closed_count: 22
+
+findings:
+  # ── The planned units ─────────────────────────────────────────────
+  - id: C1
+    title: "gateDiag added and wired at the choke point through a replaceable reporter: runGateOn ends with report(gateDiag(r, <which spawn>)); return r; (report defaults to printOnFailure)"
+    terminal_state: closed_in_commit
+    commit: sot-gate-test-stderr batch commit (see header)
+    verification: >
+      test/contracts/sot_registry_citations_test.dart (33 tests, 28 at the base). Measured end to end in a sandbox copy
+      with scripts/check_sot_registry_citations.dart made uncompilable: the 10 tests that call runGateOn failed, and each
+      failing test's log carried `<script> on <doc>: <first line>`, `exit=254`, `stdout=` and the Dart compiler's own
+      error lines (first on the round-1 design, 8 of 32; repeated on the final file in round 2, 10 of 33). The mechanism
+      was also measured with a scratch test under the expanded (CI) and the compact reporter: the text prints under the
+      failing test and a passing test prints nothing.
+
+  - id: C2
+    title: "the builder, the wiring and a real run are pinned by behaviour and by source, and the gate-test ledger still sees the red-path assertions"
+    terminal_state: closed_in_commit
+    commit: sot-gate-test-stderr batch commit (see header)
+    verification: >
+      Five new tests: the builder's content (why / exit / stdout / stderr, distinct stdout and stderr values), a 60-line
+      stderr whole, a REAL failing gate run reported in full (label, exit=1, stdout, the gate's own stderr), a REAL
+      passing run reported too, and an order-sensitive pin read from runGateOn's own body that also checks the default
+      reporter and counts every spawn in the file. Mutation round 3: K01-K10 and R01-R07, 20 of 20 red (the trim at the
+      call site and the empty label only by the real-run cases; the second spawn and the default reporter only by the
+      pin). The ledger regex matches five real assertions now (the four base ones plus the new failing-run case's own
+      expect(r.exitCode, 1)); no comment matches (grep output in RS1-02).
+
+  - id: C3
+    title: "the cause of the 2026-10-04 exit 254 (the second sighting of an unexplained spawn-level 254; a7f3d1 was the first)"
+    terminal_state: upstream_blocked
+    blocker: >
+      Not reproducible: 200 of 200 concurrent local spawns exit 0, the file passes under CI=true, the re-run was green,
+      and the last 30 failed CI runs hold no unit-test failure and no Actual: <254>. The neighbouring causes are excluded
+      by reading (4f2a9e GIT_* leak, c3f8e1 CI environment, c3f9a7 timeout); the hypotheses nobody has tested are a
+      concurrent implicit pub get / .dart_tool rewrite and launcher races under load.
+    reopen_when: >
+      A CI run (or a local run) of ANY test whose spawned `dart` exits 254 fails again. This file's log now carries the
+      process's stderr under the failing test; another spawn test's log does not yet (row C5), so read whatever that log
+      offers and, if it offers nothing, say so before reasoning about the cause. Do not add a retry first: it would hide
+      that evidence.
+
+  - id: C4
+    title: "file an OI for C3 so the board, not only this ledger, tracks it"
+    terminal_state: blocked_on_user
+    reason: >
+      scripts/mint_oi.sh pushes a reservation ref to GitHub, which needs the founder's explicit go (CLAUDE.md section 4.3
+      and the standing rule for this session). This ledger row (Gate 40 validates its blocker and reopen_when) is the
+      tracker until then; the final report offers it.
+
+  - id: C5
+    title: "the same one call in the OTHER spawn tests, starting with test/scripts/gate_input_family_e2e_test.dart (where a7f3d1's July sighting was recorded)"
+    terminal_state: blocked_on_user
+    reason: >
+      The founder's go named the one failing test ("a one-line, test-only fix so the failure message includes the error
+      text if it ever repeats"). Round 2 showed that a7f3d1's sighting (2026-07-27) predates this test file, so the same
+      blind spot has already bitten a different test, whose exit-code assertions (r.code, reason strings that never print
+      the run's output) would still show only an exit code. Adding the call there, and to the other spawn tests (a census
+      of how many omit a stream was not measured), is a scope decision beyond what was approved. Nothing was changed
+      outside sot_registry_citations_test.dart. The final report says plainly that only this file prints the error text.
+
+  - id: C6
+    title: "debugging skill: bug class 2.90 (a spawned-process test asserts only the exit code, so the stream that holds the cause is never printed), with its index row and changelog line"
+    terminal_state: closed_in_commit
+    commit: sot-gate-test-stderr batch commit (see header)
+    verification: >
+      .claude/skills/debugging/bug-classes.md section 2.90, and in SKILL.md the index row and a changelog line, committed
+      with the fix (CLAUDE.md section 5.1 step 3). Each fact in the section was re-checked against the files on 2026-10-05:
+      the test names and count (33 tests, 5 new), the report parameter, the four prior-incident diagnose-docs, and the
+      exit codes (254 = the VM could not compile or load the script, 255 = an uncaught exception).
+
+  - id: C7
+    title: "found at the push of the Progress-screen PRO-gate batch: test/scripts/contract_sweep_e2e_test.dart fails 5 of its 7 tests whenever the pre-push sweep runs it, because it inherits CONTRACT_SWEEP_NESTED=1"
+    terminal_state: blocked_on_user
+    reason: >
+      Cause reproduced 2026-10-05. scripts/contract_sweep.dart:31 sets CONTRACT_SWEEP_NESTED=1 on its own `flutter test`
+      spawn; the test's _env() (lines 66-76) removes only GIT_*, GITHUB_* and PUSH_BEFORE, so the runner under test
+      inherits the flag and exits 0 as "nested" (scripts/contract_sweep.dart:68) without spawning the stub. With
+      CONTRACT_SWEEP_NESTED=1 in the environment the file gives 2 passed / 5 failed (the 2 tests that set the flag
+      themselves stay green); with no CONTRACT_SWEEP_* variable set it is 7 of 7, as in the full suite and in CI. The sweep
+      selects the file whenever a push changes docs/sot_registry.yaml (its content arm keys on the basename of every changed
+      non-test, non-prose file, and the fixture writes a file of that name), so every registry-touching push prints
+      `WARN: flutter test exit 1` under --warn-only, and OI-220's flip criterion ("one clean batch under --warn-only")
+      cannot be met while that holds. The repair is one prefix in the test's environment filter, a pin for it in
+      test/contracts/gate_e2e_env_hermetic_test.dart, and a mutation proof. It is a recurrence of the class behind
+      feedback_mistake_git_hook_env_leak, so it takes the full diagnose-doc and the two plan reviews (CLAUDE.md sections
+      4.4 rule 22 and 4.12), and merging it redeploys the web app. A third pull request beyond the two the founder
+      approved needs the founder's go; nothing was changed in that test.
+
+  # ── Round 1 of the plan review (one reviewer, verdict harden, 9 findings) ──
+  - id: RS1-01
+    title: "P1 — the pin's third check was satisfied by the pin's own literal and by the site it names, so it could never fail"
+    terminal_state: closed_in_commit
+    commit: sot-gate-test-stderr batch commit (see header)
+    verification: >
+      The per-site design and its pin are gone. The pin slices runGateOn's own body (from `ProcessResult runGateOn({`
+      to `const goodRegistry`) over the comment-stripped file, so what protects it from its own text is the SLICE: the
+      pin's literals sit after `const goodRegistry`, outside it (round 2, finding 4, corrected an earlier claim that
+      backslashes in its regex literals did this: its `return r;` literal has none). Mutants K08, K09, K10 red.
+
+  - id: RS1-02
+    title: "P2 — the doc comment spelled the literal red-path text, so a comment could satisfy check_gate_test_ledger.dart for this file"
+    terminal_state: closed_in_commit
+    commit: sot-gate-test-stderr batch commit (see header)
+    verification: >
+      grep -nP "exitCode,\s*(1|2|isNot\(0\)|isNonZero|greaterThan\(0\))" on the file prints exactly five lines now: the four
+      base assertions (287, 328, 347, 357; at the base 256, 297, 316, 326) and the new failing-run case's own
+      expect(r.exitCode, 1) at 378. No comment matches.
+
+  - id: RS1-03
+    title: "P2 — the pin saw only a result variable named r; a block comment or a skipped site went unnoticed"
+    terminal_state: closed_in_commit
+    commit: sot-gate-test-stderr batch commit (see header)
+    verification: "The choke point is runGateOn: every spawn goes through it whatever a caller names the result (D1)."
+
+  - id: RS1-04
+    title: "P2 — proportionality: a one-call choke-point alternative (a call in runGateOn) instead of eight per-site reasons plus a pin"
+    terminal_state: closed_in_commit
+    commit: sot-gate-test-stderr batch commit (see header)
+    verification: "Adopted; sites keep the base text; measured under both reporters and end to end (C1)."
+
+  - id: RS1-05
+    title: "P2 — no bug-history lookup (a7f3d1, 4f2a9e, c3f8e1, c3f9a7)"
+    terminal_state: closed_in_commit
+    commit: sot-gate-test-stderr batch commit (see header)
+    verification: "Plan section 1 item 4: each diagnose-doc was read; the recurrence statement is in the plan, and the memory note carries it."
+
+  - id: RS1-06
+    title: "P2 — the unexplained 254 had no tracker the repo reads"
+    terminal_state: closed_in_commit
+    commit: sot-gate-test-stderr batch commit (see header)
+    verification: "Rows C3 (upstream_blocked with blocker and reopen_when) and C4 (the OI, blocked_on_user) above; Gate 40 validates both."
+
+  - id: RS1-07
+    title: "P3 — the fixtures used a one-line stderr; nothing showed the text reaches the failure end to end"
+    terminal_state: closed_in_commit
+    commit: sot-gate-test-stderr batch commit (see header)
+    verification: "A 60-line, over-1000-character stderr fixture (K07 red), the two real-run cases, and the uncompilable-gate run (C1)."
+
+  - id: RS1-08
+    title: "P3 — stale plan text (group name, line counts, the 'only 2 never mention stderr' count)"
+    terminal_state: closed_in_commit
+    commit: sot-gate-test-stderr batch commit (see header)
+    verification: "Plan rewritten as v2 and again as v3; the repo-wide census is stated as not measured (D5)."
+
+  - id: RS1-09
+    title: "P3 — docs/audit/gate_test_ledger.yaml says the mapping-shape mutation reddens '8 of 28 tests'"
+    terminal_state: closed_in_commit
+    commit: sot-gate-test-stderr batch commit (see header)
+    verification: >
+      Re-measured 2026-10-05 with the mutation the entry describes (parseConcepts back to the mapping shape `  <name>:`):
+      8 red of 28 at the base (5 subprocess cases and 3 parseConcepts cases; the entry's remark that the 8 are all
+      subprocess cases was already imprecise) and 9 red of 33 now (the same 8 plus the new case that runs a real passing
+      gate). Round 2 (finding 4) asked for the sentence in the ledger entry itself: it is there, dated.
+
+  # ── Round 2 of the plan review (a second reviewer, verdict harden, 5 findings) ──
+  - id: RS2-01
+    title: "P2 — the wiring pin checked three pieces of text, not their order or which r; five edits survived it (call moved into the git loop, a conditional call or early return, a trim at the call site, an empty label, a dart spawn outside runGateOn)"
+    terminal_state: closed_in_commit
+    commit: sot-gate-test-stderr batch commit (see header)
+    verification: >
+      runGateOn takes `report` (default printOnFailure); two cases read the report of a REAL failing and a REAL passing
+      run; the pin is order-sensitive, checks the default reporter and counts every Process.run*/start (2). Mutants R01
+      (moved into the git loop), R02a/R02b (conditional), R03a/R03b/R03c (early return), R04 (trim), R05 (empty label),
+      R06 (second spawn), R07 (report ignored) and K09 (default print) all red, each by the test the plan names.
+
+  - id: RS2-02
+    title: "P2 — the fix covers only this file; a7f3d1's sighting predates it, and C3 reopened only if 'this file' failed again"
+    terminal_state: closed_in_commit
+    commit: sot-gate-test-stderr batch commit (see header)
+    verification: >
+      C3's reopen_when now covers any test whose spawned dart exits 254; row C5 (blocked_on_user) records the extension to
+      the other spawn tests as a scope call; the plan, this ledger and the final report say that only this file prints the
+      error text.
+
+  - id: RS2-03
+    title: "P3 — the plan said the skill row 'is done' while section 5 said it comes after item 1 merges; no ledger row"
+    terminal_state: closed_in_commit
+    commit: sot-gate-test-stderr batch commit (see header)
+    verification: "Plan section 2 reworded ('NOT written yet', lands after item 1 merges); the plan's ledger line names a row C6 for the skill row, added in the commit that adds the row."
+
+  - id: RS2-04
+    title: "P3 — stale citations in the ledgers (RS1-01's backslash claim, C2's 'grep output in the plan', gate_test_ledger.yaml's '8 of 28')"
+    terminal_state: closed_in_commit
+    commit: sot-gate-test-stderr batch commit (see header)
+    verification: "RS1-01 and C2 reworded above; the dated re-measurement is in docs/audit/gate_test_ledger.yaml (see RS1-09)."
+
+  - id: RS2-05
+    title: "P3 — with empty args the label had two spaces"
+    terminal_state: closed_in_commit
+    commit: sot-gate-test-stderr batch commit (see header)
+    verification: "The label is built as [script, ...args, 'on <doc>: <first line>'].join(' '); the failing-run case asserts its exact start."
+
+  - id: RS2-06
+    title: "round 2's answers: OI-158 missing from the prior art, no retrospective in the records list, a redundant stream-label test, the end-to-end run not repeated on the final file"
+    terminal_state: closed_in_commit
+    commit: sot-gate-test-stderr batch commit (see header)
+    verification: >
+      OI-158 added to plan section 1 item 4 (a missing @Timeout is a hang, not a 254, and untouched); the project
+      retrospective added to the plan's records; the stream-label test removed (K02 and K05 stay red through the builder
+      test); the uncompilable-gate run repeated on the final file (10 of 33 red, the report in each log).
