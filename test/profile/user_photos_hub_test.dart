@@ -1,12 +1,14 @@
 // Profile "Photos" hub: one row on the Profile tab opens UserPhotosScreen,
-// which routes to Progress (PRO-gated) and Saved (coach-media). The hub only
-// routes; the Progress row runs `gateAndVerify` and gives a free user the
-// paywall. The Progress screen gates itself too, since 2026-10-05
-// (`progress_photos_screen_gate_test.dart`), but a free user should still get
-// the paywall from here, never the screen's locked card.
+// which routes to Progress and Saved (coach-media). The hub only routes. Since
+// OI-314 (founder decision 6 of 2026-10-06) the hub makes NO PRO decision about
+// Progress: the row pushes the Progress screen for everyone and the SCREEN decides
+// (PRO gallery + Add; a lapsed user's gallery + delete; the locked card for a user
+// who is not PRO and holds no photos). Before, the row ran `gateAndVerify` and
+// showed a free user the paywall, which also locked a lapsed user out of their
+// own photos.
 //
 // WHAT IS BEHAVIORAL HERE and what is only a source pin:
-//   behavioral — the hub shows exactly two rows; the Progress subtitle keeps the
+//   behavioral - the hub shows exactly two rows; the Progress subtitle keeps the
 //     PRO hint for a free user, drops it for a PRO user and drops it when a free
 //     user upgrades with the hub open (provider override); the back stack
 //     Profile -> hub -> destination unwinds one step at a time through the REAL
@@ -15,21 +17,20 @@
 //     and the shell chrome (the bottom navigation's place) stays on screen for
 //     the hub and for a pushed destination.
 //   source pin (presence only, on COMMENT-STRIPPED source: a commented-out line
-//     is not live code) — the Progress tap is built as gate -> feature constant
-//     -> onPro (one push) -> onFree (one paywall); the Progress screen is named
+//     is not live code) - the hub contains no gate, no paywall, no
+//     SubscriptionService and no feature constant; the Progress screen is named
 //     exactly once in the hub (under any spelling: path, route name, class,
-//     file); each gate callback OPENS with the mounted check (position, not a
-//     count); and no file under lib/ except the router, the hub and the screen
-//     itself names the Progress screen, so a new way in has to be added to the
-//     allow-list here, next to the question of whether it is gated.
-//   where the rest lives — the production route table (`/profile/photos` and
+//     file); the only subscription read is the display-only subtitle; and no file
+//     under lib/ except the router, the hub and the screen itself names the
+//     Progress screen, so a new way in has to be added to the allow-list here.
+//   where the rest lives - the production route table (`/profile/photos` and
 //     both destinations resolve under /profile inside the shell, to the right
-//     screens): `test/router/photos_hub_route_resolution_test.dart`. The gate's
-//     RUN-time behavior against the real SubscriptionService (a FREE user gets
-//     the paywall, a PRO user reaches the screen, a sweep over every tappable
-//     widget never builds Progress for a FREE user, leaving the hub inside the
-//     server verify): `user_photos_gate_behavioral_test.dart`, which needs a
-//     Hive harness this file deliberately does not carry.
+//     screens): `test/router/photos_hub_route_resolution_test.dart`. The hub's
+//     RUN-time behavior against the real SubscriptionService (the row pushes for
+//     FREE and PRO alike, no gate runs, a sweep over every tappable widget):
+//     `user_photos_gate_behavioral_test.dart`, which needs a Hive harness this
+//     file deliberately does not carry. The screen's own decision:
+//     `progress_photos_screen_gate_test.dart` and `progress_photos_lapsed_flow_test.dart`.
 
 import 'dart:io';
 
@@ -295,60 +296,26 @@ void main() {
           'lib/features/profile/screens/user_photos_screen.dart');
     });
 
-    test('Progress is built as gate -> feature -> onPro (one push) -> onFree '
-        '(one paywall)', () {
-      final gate = hub.indexOf('gateAndVerify(');
-      final feature = hub.indexOf('AppConstants.featureProgressPhotos');
-      final onPro = hub.indexOf('onPro:');
-      final push = hub.indexOf("context.push('/profile/progress-photos')");
-      final onFree = hub.indexOf('onFree:');
-      final paywall =
-          hub.indexOf("showPaywallSheet(context, feature: 'Progress Photos')");
-      expect(gate, greaterThan(-1));
-      expect(feature, greaterThan(gate));
-      expect(onPro, greaterThan(feature));
-      expect(push, greaterThan(onPro), reason: 'navigation only inside onPro');
-      expect(onFree, greaterThan(push));
-      expect(paywall, greaterThan(onFree), reason: 'free users get the paywall');
-
-      // First-occurrence indexes cannot see a SECOND, ungated navigation, so
-      // count them: one gate call, one paywall, and ONE mention of the Progress
-      // screen under any spelling (a `pushNamed('progressPhotos')`, a
-      // `MaterialPageRoute(... ProgressPhotosScreen ...)` or a second path
-      // string all add a match).
-      expect('gateAndVerify('.allMatches(hub).length, 1);
-      expect('showPaywallSheet('.allMatches(hub).length, 1);
+    test('the hub makes NO PRO decision: no gate, no paywall, one push to the '
+        'Progress screen', () {
+      expect(hub.contains('gateAndVerify('), isFalse,
+          reason: 'OI-314: the Progress screen decides what each user sees; a '
+              'gate here would lock a lapsed user out of their own photos');
+      expect(hub.contains('showPaywallSheet('), isFalse);
+      expect(hub.contains('AppConstants.featureProgressPhotos'), isFalse);
+      expect(hub.contains('SubscriptionService'), isFalse);
       expect(_progressDestination.allMatches(hub).length, 1,
-          reason: 'a second way into the Progress screen beside the gate would '
-              'hand a free user the screen\'s locked card instead of the '
-              'paywall (the screen gates itself, the hub is where the paywall '
-              'belongs)');
+          reason: 'ONE way into the Progress screen from the hub, under any '
+              'spelling (a pushNamed, a MaterialPageRoute, a second path string)');
       expect("context.push('/profile/progress-photos')".allMatches(hub).length, 1);
-      expect(
-          RegExp(r'gateAndVerify\(\s*AppConstants\.featureProgressPhotos,')
-              .hasMatch(hub),
-          isTrue,
-          reason: 'the constant is what puts the feature on the server-verified '
-              '(high-value) list in SubscriptionService');
     });
 
-    test('each gate callback OPENS with the mounted check', () {
-      // gateAndVerify awaits a server verify (up to 10 s) before it calls the
-      // callbacks for a locally-PRO user; the user can leave the hub in that
-      // window. A count of `if (!context.mounted) return;` cannot tell a guard
-      // that opens the callback from one placed after the push, or moved onto
-      // a different row, so the check is anchored to the callback it protects.
-      // (onPro is also proven at runtime in the gate test; onFree only runs
-      // late when the SERVER disagrees with the local PRO flag, which no unit
-      // test can produce, so for onFree this is the whole proof.)
-      for (final cb in ['onPro', 'onFree']) {
-        expect(
-            RegExp('$cb:\\s*\\(\\)\\s*\\{\\s*'
-                    r'if\s*\(\s*!context\.mounted\s*\)\s*return;')
-                .hasMatch(hub),
-            isTrue,
-            reason: '$cb must start with `if (!context.mounted) return;`');
-      }
+    test('the only subscription read in the hub is the display-only subtitle',
+        () {
+      expect('subscriptionInfoProvider'.allMatches(hub).length, 1);
+      expect(
+          RegExp(r"ref\.watch\(subscriptionInfoProvider\)\.isPro").hasMatch(hub),
+          isTrue);
     });
 
     test('both destinations are pushed, never go()', () {
@@ -361,12 +328,10 @@ void main() {
 
   group('who may name the Progress screen (source scan of lib/)', () {
     test('only the router, the hub and the screen itself do', () {
-      // The Progress screen gates itself since 2026-10-05 (ledger row R1-04,
-      // progress_photos_screen_gate_test.dart), so a stray door no longer hands a
-      // free user a working screen; but it would hand them the locked card instead
-      // of the paywall. A new entry point anywhere in lib/ (a Home shortcut, a
-      // notification route, a deep link) must be added HERE on purpose, and be
-      // gated like the hub row.
+      // The Progress screen decides what each user sees (OI-314), so a stray
+      // door is no longer a bypass; but a new entry point anywhere in lib/ (a
+      // Home shortcut, a notification route, a deep link) must still be added
+      // HERE on purpose.
       final hits = <String>[];
       for (final f in Directory('lib')
           .listSync(recursive: true)

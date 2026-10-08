@@ -1113,14 +1113,13 @@ concepts:
         semantic: flag-check
         fields_read: [isPro]
       - file: lib/features/profile/repositories/progress_photo_repository.dart
-        line_range: 81-91
-        method: ProgressPhotoRepository.capture quota tier
+        line_range: 1-9999
+        method: "ProgressPhotoRepository.capture / isProgressPhotoProRefusal (OI-314, unit B2): NO isPro read any more (the free tier -- 2/day, 2048/85 -- is deleted; one cap of 5 per IST day, one quality 3000/95). capture reads SubscriptionService.instance.isPaymentInFlight only, to classify a server refusal (the just-paid window) in a pure function."
         semantic: flag-check
         fields_read: [isPro]
         notes: |
-          Service-layer non-reactive read. Photo daily quota differs
-          per tier (2/day free, 5/day PRO). Quality 2048/85 free,
-          3000/95 PRO.
+          Service-layer non-reactive read, now of the payment-in-flight flag, not of isPro: the screen gates the call
+          (gateAndVerify) and the server refuses a free caller (migration 154); the repository makes no PRO decision.
       - file: lib/features/auth/screens/splash_screen.dart
         line_range: 231-291
         method: _autoGenerateNextPhaseForPro
@@ -1146,12 +1145,12 @@ concepts:
         fields_read: [isPro]
       - file: lib/features/profile/screens/user_photos_screen.dart
         line_range: 1-9999
-        method: "UserPhotosScreen build (profile-share-grow-order, 2026-10-04 -- ref.watch(subscriptionInfoProvider).isPro, DISPLAY-ONLY: picks the Progress row subtitle so a free user keeps the 'PRO -- visual progress timeline' hint the old Profile row showed. The GATE is SubscriptionService.instance.gateAndVerify(AppConstants.featureProgressPhotos) in the same file, the first of TWO PRO locks on the way to ProgressPhotosScreen (since 2026-10-05 the screen runs the same gate itself, on entry and on its Add button: progress_photos_screen.dart _enter / _onAddPhoto, pinned by test/contracts/progress_photos_screen_gate_test.dart); both branches, a FREE sweep over every tappable widget on the hub, and the leave-the-hub-inside-the-verify case are pinned by test/profile/user_photos_gate_behavioral_test.dart)"
+        method: "UserPhotosScreen build (profile-share-grow-order, 2026-10-04 -- ref.watch(subscriptionInfoProvider).isPro, DISPLAY-ONLY: picks the Progress row subtitle so a user who is not PRO keeps the 'PRO -- visual progress timeline' hint. Since OI-314 (unit B2) the hub runs NO PRO gate: the Progress row pushes ProgressPhotosScreen for every user and the SCREEN decides; pinned by test/profile/user_photos_hub_test.dart (no gateAndVerify / paywall / SubscriptionService in the hub) and test/profile/user_photos_gate_behavioral_test.dart (FREE and PRO both push, zero gate events, a sweep over every tappable widget))"
         semantic: display-only
         fields_read: [isPro]
       - file: lib/features/profile/screens/progress_photos_screen.dart
         line_range: 1-9999
-        method: "ProgressPhotosScreen _enter / _onAddPhoto (progress-screen-pro-gate, 2026-10-05, closes R1-04 -- the screen's OWN PRO gate: SubscriptionService.instance.gateAndVerify(AppConstants.featureProgressPhotos) on entry and again on the Add button, the server-verified branch for a high-value feature; a refused user sees ProLockedOverlay and, after upgrading, the gate re-runs from a ref.listen on subscriptionInfoProvider; behavioural proof against the real SubscriptionService in test/contracts/progress_photos_screen_gate_test.dart)"
+        method: "ProgressPhotosScreen _reload / _onAddPhoto / _onProRefused (OI-314 unit B2 over progress-screen-pro-gate 2026-10-05): the screen's PRO decision, SubscriptionService.instance.gateAndVerify(AppConstants.featureProgressPhotos), server-verified branch for a high-value feature, run by the single writer _reload (entry, Retry, the upgrade listener) and again on the Add button; PRO -> gallery + Add; not PRO and photos held -> read-only gallery (view + delete; Add leads to the paywall); not PRO and none -> ProLockedOverlay; behavioural proof against the real SubscriptionService in test/contracts/progress_photos_screen_gate_test.dart and test/contracts/progress_photos_lapsed_flow_test.dart)"
         semantic: flag-check
         fields_read: [isPro]
       - file: supabase/migrations/154_progress_photos_pro_insert_rls_rule.sql

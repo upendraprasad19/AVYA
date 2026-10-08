@@ -126,12 +126,21 @@ void main() {
           reason: 'F29: cart_auditor showed REMAINING while scan + food-logger showed USED');
     });
 
-    test('F40: progress-photo capture handles PhotoQuotaException (paywall / snackbar)', () {
+    test('F40: progress-photo capture handles PhotoQuotaException (snackbar) and '
+        'always clears the busy spinner', () {
       final s = _read('lib/features/profile/screens/progress_photos_screen.dart');
       expect(s.contains('on PhotoQuotaException'), isTrue,
           reason: 'F40: an uncaught quota throw stuck the _uploading spinner forever');
-      expect(s.contains('showPaywallSheet'), isTrue,
-          reason: 'F40: a free user who hits the cap must be shown the paywall');
+      expect(s.contains('Daily photo limit reached'), isTrue,
+          reason: 'F40: the user must be told to come back tomorrow');
+      // Since OI-314 only PRO users reach capture (the screen gates the call), so
+      // the cap branch has no upgrade paywall; behaviour is proven in
+      // test/contracts/progress_photos_lapsed_flow_test.dart ('the daily cap').
+      expect(
+          RegExp(r'finally \{\s*if \(mounted\) setState\(\(\) => _uploading = false\);')
+              .hasMatch(s),
+          isTrue,
+          reason: 'F40: _uploading is released in a finally, on every exit');
     });
   });
 }

@@ -79,9 +79,9 @@ findings:
 
   - id: C6
     title: "delete the repository's now-nearly-unreachable free branch (2/day, 2048/85)?"
-    terminal_state: upstream_blocked
-    blocker: "decided by the founder 2026-10-06 (decision 5: delete the free branch once the server rule exists; decision 6: a lapsed PRO user may view and delete old photos, no new uploads); implemented by OI-314 (unit B2) after B1, the server-side PRO rule (migration 154), is applied live and merged"
-    reopen_when: "B1 is applied live and merged to main; B2 then flips this row to closed_in_commit"
+    terminal_state: closed_in_commit
+    commit: progress-photos-client-b2 batch commit (unit B2, OI-314)
+    verification: "implemented by unit B2: the repository's free branch is deleted (C6) and a lapsed user can view and delete in the app (C7); see docs/audit/progress-photos-client-b2.closure.yaml rows C1 and C5, diagnose c2b7e4"
     notes: >
       Analysis recorded before the decision, kept for the record (the recommendation to keep the branch until C5 exists is
       superseded by decision 5):
@@ -94,9 +94,9 @@ findings:
 
   - id: C7
     title: "should a lapsed user still VIEW and DELETE old progress photos in the app?"
-    terminal_state: upstream_blocked
-    blocker: "decided by the founder 2026-10-06 (decision 5: delete the free branch once the server rule exists; decision 6: a lapsed PRO user may view and delete old photos, no new uploads); implemented by OI-314 (unit B2) after B1, the server-side PRO rule (migration 154), is applied live and merged"
-    reopen_when: "B1 is applied live and merged to main; B2 then flips this row to closed_in_commit"
+    terminal_state: closed_in_commit
+    commit: progress-photos-client-b2 batch commit (unit B2, OI-314)
+    verification: "implemented by unit B2: the repository's free branch is deleted (C6) and a lapsed user can view and delete in the app (C7); see docs/audit/progress-photos-client-b2.closure.yaml rows C1 and C5, diagnose c2b7e4"
     notes: >
       Analysis recorded before the decision, kept for the record (the recommendation to keep the branch until C5 exists is
       superseded by decision 5):

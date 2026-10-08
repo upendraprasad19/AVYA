@@ -5711,17 +5711,6 @@ The repo root has no allowlist, so a command that writes a file there (a stray s
 
 The one failure was a single run on `main`; the cause is UNESTABLISHED. This entry exists so the board, not only a closure ledger, tracks it (answers row C4 of the `sot-gate-test-stderr` ledger).
 
-## OI-314 — Progress photos: a lapsed PRO user cannot view or delete their old photos in the app, and the repository's free-tier branch is still alive (founder decisions 5 and 6 of 2026-10-06)
-
-- **Status**: OPEN
-- **Blocked on**: unit B1 of batch `progress-photos-pro-server-rule` (the server-side PRO rule, migration 154 `progress_photos_pro_insert_rls_rule`) being applied live AND merged to `main`; B2 may not start before that.
-- **Verified**: 2026-10-06 - founder decisions recorded in chat the same day (decision 5: delete the repository's free-tier branch once the server rule exists; decision 6: a lapsed PRO user may VIEW and DELETE old photos, no new uploads). Code read: `lib/features/profile/repositories/progress_photo_repository.dart:85-86` (`isPro` picks `_proDailyCap` or `_freeDailyCap`), `:112-119` (free branch: 2048 px / 85 % quality), `:128-137` (the Storage upload and the row insert).
-- **Identified**: 2026-10-06 · filed via mint_oi.sh from branch `progress-photos-b0`
-
-Implementation is unit B2 (client): delete the free branch (the 2/day cap and the 2048/85 quality tier), let a lapsed PRO user open the Progress screen to view and delete existing photos while new uploads stay refused, and show a specific message when the server refuses an upload (a Storage 403 or `P0001 progress_photo_pro_required`), including the just-paid window while `isPaymentInFlight` is true. B2's commit closes this OI (`closes-oi:`) and flips rows C6 and C7 of `docs/audit/progress-screen-pro-gate.closure.yaml` to `closed_in_commit`.
-
-**Migration-number reservation: DO NOT RELEASE `mig/154` (slug `progress_photos_pro_insert_rls_rule`, branch `progress-photos-pro-server-rule`) while this OI is open.** The draft sits in `docs/drafts/` until the founder authorises the live apply, so `scripts/mint_migration.sh` reads the number as UNFILED and another session's `--release 154` would succeed and the next mint could hand 154 out again.
-
 ## OI-315 — ProgressPhotoRepository.cleanupOrphanedStorage has zero callers, and the 5/day progress-photo cap is client-side only: a PRO caller can upload unlimited 8 MiB objects
 
 - **Status**: OPEN
@@ -5757,15 +5746,6 @@ Pre-existing; surfaced while reviewing the progress-photo PRO rule. Throwaway ac
 - **Identified**: 2026-10-07 · filed via mint_oi.sh from branch `pp-preexisting-ois`
 
 Impact is limited to chat-media orphan cleanup (a user with two unexpired active rows is cleaned as if free); no PRO gate depends on this function.
-
-## OI-322 — progress_photo_repository.capture sends takenAt.toIso8601String() (lib/features/profile/repositories/progress_photo_repository.dart:141), a local time with no offset, to a timestamptz column read under UTC: taken_at is stored 5.5 h late for IST users and the client daily-cap window (line 89, UTC start of local day) is mis-aligned
-
-- **Status**: OPEN
-- **Blocked on**: nothing: fix in unit B2 of batch `progress-photos-pro-server-rule` (the client unit already edits this file) or as its own change; send `takenAt.toUtc().toIso8601String()` and align the cap window.
-- **Verified**: 2026-10-07 - read `lib/features/profile/repositories/progress_photo_repository.dart:89` (cap window is the UTC start of the local day) and `:141` (`takenAt.toIso8601String()` has no offset); PostgREST session TimeZone is UTC (live read during the B1 review), so an IST user's `taken_at` is stored 5.5 h late. Found by the B1 Hermes pass (L22 F3).
-- **Identified**: 2026-10-07 · filed via mint_oi.sh from branch `pp-preexisting-ois`
-
-Writer: `capture` (line 141). Readers: the cap query (line 89-94) and the list ordering (line 165). Pre-existing and outside the B1 diff.
 
 ## OI-323 — weekly-report has no server-side per-day cap for PRO: consume_quota runs only for non-PRO (weekly-report/index.ts:716), so the client once-per-IST-day cap is bypassed by a direct API call or a second device and each call is a thinking-on Gemini call - product decision needed on a PRO cap
 

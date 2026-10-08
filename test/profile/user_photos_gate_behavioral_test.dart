@@ -1,53 +1,30 @@
-// Behavioral proof of the Progress gate on the Photos hub, against the REAL
-// SubscriptionService.
+// Behavioral proof that the Photos hub makes NO PRO decision about Progress, against
+// the REAL SubscriptionService (OI-314, founder decision 6 of 2026-10-06).
 //
-// The Progress row moved from the Profile tab into UserPhotosScreen; its PRO gate
-// (root CLAUDE.md §4.4 rules 5 + 19) must have survived the move:
-//   FREE — the row opens the paywall for 'Progress Photos' and never the
-//          Progress screen.
-//   PRO  — the row opens the Progress screen (pushed, so back returns to the hub)
-//          and no paywall.
-// Both runs go through `SubscriptionService.instance.gateAndVerify` unchanged.
-// It needs no network: Supabase is not initialized in a test, so for the
-// high-value feature `verifyFromServer()` answers from local state
-// (`subscription_service.dart`, "supabase not ready" branch) — the same local
-// path `test/contracts/subscription_cqrs_behavioral_test.dart` drives.
-//
-// What it pins beyond the two outcomes: the feature (the gate's telemetry message
-// names it, `feature=progress_photos`, so any other constant turns both cases
-// red) and, for PRO, WHICH branch ran — `reason=verify_pro` is the server-verified
-// (high-value) branch, so dropping `featureProgressPhotos` from
-// `SubscriptionService._highValueFeatures` (root CLAUDE.md §4.4 rule 19) turns
-// the PRO case red (the gate would take the `local_pro` branch instead).
-//
-// Two more cases exist so that a free user gets the PAYWALL from the hub and
-// never the Progress screen's locked card (the screen gates itself since
-// 2026-10-05, `progress_photos_screen_gate_test.dart`, but the hub is where the
-// paywall belongs):
-//   * a FREE sweep taps EVERY tappable widget on the hub, each on a fresh app,
-//     and asserts the Progress screen is never built — so a second, ungated way
-//     in (a shortcut button, a push by route name) turns it red;
-//   * leaving the hub while a PRO user's server verify is pending must drop the
-//     push quietly (the `if (!context.mounted) return;` in `onPro`). The test
-//     calls the row's handler and unmounts the hub in the same synchronous
-//     stretch, because `pump` flushes pending microtasks BEFORE it builds a
-//     frame, which would let the gate's callback run first.
-//
-// What it does NOT prove (by design, stated): the server round-trip itself —
-// Supabase is not initialized here, so `verifyFromServer()` answers from local
-// state — and the `onFree` mounted guard: a locally-free user gets `onFree`
-// synchronously inside the tap, and it runs after the await only when the SERVER
-// disagrees with the local PRO flag, which no unit test can produce. For
-// `onFree` the source pin in `user_photos_hub_test.dart` is the whole proof.
+// History: the Progress row moved from the Profile tab into UserPhotosScreen with
+// its PRO gate (root CLAUDE.md section 4.4 rules 5 + 19) and showed a FREE user the
+// paywall without opening the screen. That also locked a LAPSED user out of the
+// photos they already held. Since OI-314 the hub row pushes the Progress screen
+// for everyone and the SCREEN decides (progress_photos_screen_gate_test.dart and
+// progress_photos_lapsed_flow_test.dart: PRO gallery + Add; lapsed gallery +
+// delete, Add leads to the paywall; nobody-has-photos locked card).
+//   FREE and PRO alike - tapping Progress pushes the screen (so back returns to the
+//          hub), opens no paywall, and runs NO gate: zero `subscription_gate_routed`
+//          events from the hub.
+//   A sweep taps EVERY tappable widget on the hub, each on a fresh app, and asserts
+//          the only routes reached are Progress (once per tap of that row) and
+//          Saved, and that no tap opens the paywall: a stray paywall or a second
+//          way in would turn it red.
+// It needs no network: Supabase is not initialized in a test.
 //
 // HARNESS (precedent: test/widgets/swap_picker_sheet_test.dart, which also pumps
 // the real PaywallSheet):
 //   * the FIRST test is a typography warmup, run BEFORE setUpHiveForTests installs
-//     its path_provider mock — GoogleFonts caches per family+weight and a mocked
+//     its path_provider mock - GoogleFonts caches per family+weight and a mocked
 //     path_provider makes it fail LOUDLY instead of degrading (root CLAUDE.md
-//     §4.9);
-//   * Hive's real disk I/O is escaped with tester.runAsync (§4.9: an awaited disk
-//     write inside a testWidgets body hangs);
+//     section 4.9);
+//   * Hive's real disk I/O is escaped with tester.runAsync (section 4.9: an awaited
+//     disk write inside a testWidgets body hangs);
 //   * @Timeout + library bound a regression of either to a failure, not a stall.
 @Timeout(Duration(minutes: 3))
 library;
@@ -63,7 +40,6 @@ import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/features/profile/screens/user_photos_screen.dart';
-import 'package:icanbefitter/features/profile/widgets/profile_row.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/ward_button.dart';
 
@@ -200,7 +176,7 @@ void main() {
               DateTime.now().add(const Duration(days: 30)).toIso8601String());
         });
 
-    testWidgets('FREE: Progress opens the paywall and never the screen',
+    testWidgets('FREE: Progress pushes the screen, with no paywall and no gate',
         (tester) async {
       await tester.runAsync(() => MigratedKey.write('isPro', false));
       await tester.pumpWidget(_app(visited, displayPro: false));
@@ -209,55 +185,18 @@ void main() {
       await tester.tap(find.text('Progress'));
       await tester.pumpAndSettle();
 
-      expect(find.text(paywallLetterheadTitle('Progress Photos')),
-          findsOneWidget,
-          reason: 'a free user is shown the Progress Photos paywall');
-      expect(find.text('PROGRESS SCREEN'), findsNothing);
-      expect(visited, isEmpty,
-          reason: 'the Progress route must never be built for a free user');
-      expect(routed(), hasLength(1));
-      expect(routed().single, contains('feature=progress_photos'));
-      expect(routed().single, contains('exit=onFree'));
-      expect(routed().single, contains('reason=not_pro_local'));
-      expect(nonFatals, isEmpty,
-          reason: 'neither gate callback may throw (a dead context, a missing '
-              'route): _runCallback would only report it as '
-              'subscription_gate_callback_threw');
-    });
-
-    testWidgets('FREE: no tappable widget on the hub builds the Progress screen',
-        (tester) async {
-      await tester.runAsync(() => MigratedKey.write('isPro', false));
-      await tester.pumpWidget(_app(visited, displayPro: false));
-      await tester.pumpAndSettle();
-
-      // Every GestureDetector: InkWell / InkResponse / IconButton / TextButton /
-      // ListTile all build one, so this covers the rows AND anything someone
-      // adds beside them (a shortcut icon, a capture pill).
-      final count = find.byType(GestureDetector).evaluate().length;
-      expect(count, greaterThanOrEqualTo(2),
-          reason: 'at least the Progress and Saved rows');
-
-      for (var i = 0; i < count; i++) {
-        // A fresh app per target: a tap can push a screen or open the paywall.
-        await tester.pumpWidget(const SizedBox.shrink());
-        await tester.pumpWidget(_app(visited, displayPro: false));
-        await tester.pumpAndSettle();
-        await tester.tap(find.byType(GestureDetector).at(i),
-            warnIfMissed: false);
-        await tester.pumpAndSettle();
-      }
-
-      expect(visited, isNot(contains('progress')),
-          reason: 'a FREE user gets the paywall from the hub, never the Progress '
-              'screen (and its locked card), from ANY widget on the hub');
-      expect(visited, contains('saved'),
-          reason: 'the sweep did tap the ungated Saved row, so it taps real '
-              'rows (a sweep that taps nothing would pass vacuously)');
+      expect(find.text('PROGRESS SCREEN'), findsOneWidget,
+          reason: 'the screen decides what a user who is not PRO sees (a lapsed '
+              'user must reach their photos)');
+      expect(find.text(paywallLetterheadTitle('Progress Photos')), findsNothing,
+          reason: 'the hub no longer shows the paywall');
+      expect(visited, ['progress']);
+      expect(routed(), isEmpty,
+          reason: 'the hub runs no PRO gate: the decision belongs to the screen');
       expect(nonFatals, isEmpty);
     });
 
-    testWidgets('PRO: Progress opens the screen, pushed, and no paywall',
+    testWidgets('PRO: Progress pushes the screen, and back returns to the hub',
         (tester) async {
       await makePro(tester);
       await tester.pumpWidget(_app(visited, displayPro: true));
@@ -269,12 +208,7 @@ void main() {
       expect(find.text('PROGRESS SCREEN'), findsOneWidget);
       expect(find.text(paywallLetterheadTitle('Progress Photos')), findsNothing);
       expect(visited, ['progress']);
-      expect(routed(), hasLength(1));
-      expect(routed().single, contains('feature=progress_photos'));
-      expect(routed().single, contains('exit=onPro'));
-      expect(routed().single, contains('reason=verify_pro'),
-          reason: 'the server-verified branch: progress_photos must stay on '
-              "SubscriptionService's high-value list");
+      expect(routed(), isEmpty);
       expect(nonFatals, isEmpty);
 
       // Pushed, so one step back is the hub again (not Profile).
@@ -284,38 +218,40 @@ void main() {
       expect(find.text('PROFILE'), findsNothing);
     });
 
-    testWidgets('PRO: leaving the hub inside the server verify drops the push '
-        'without an error', (tester) async {
-      await makePro(tester);
-      final mounted = ValueNotifier<bool>(true);
-      addTearDown(mounted.dispose);
-      await tester.pumpWidget(_app(visited, displayPro: true, mounted: mounted));
-      await tester.pumpAndSettle();
+    for (final pro in [false, true]) {
+      testWidgets(
+          '${pro ? 'PRO' : 'FREE'}: no tappable widget on the hub opens the '
+          'paywall or runs a gate', (tester) async {
+        await tester.runAsync(() => MigratedKey.write('isPro', pro));
+        await tester.pumpWidget(_app(visited, displayPro: pro));
+        await tester.pumpAndSettle();
 
-      // The row's handler, called directly: it starts the gate, which suspends
-      // at `await verifyFromServer()`. Nothing is awaited from here to the
-      // unmount below, so no microtask (the gate's continuation) can run yet.
-      final row = tester.widget<ProfileRow>(find.ancestor(
-          of: find.text('Progress'), matching: find.byType(ProfileRow)));
-      row.onTap!();
+        // Every GestureDetector: InkWell / InkResponse / IconButton / TextButton /
+        // ListTile all build one, so this covers the rows AND anything someone
+        // adds beside them (a shortcut icon, a capture pill).
+        final count = find.byType(GestureDetector).evaluate().length;
+        expect(count, greaterThanOrEqualTo(2),
+            reason: 'at least the Progress and Saved rows');
 
-      // Drop the hub from the tree and FINALIZE it (context.mounted turns
-      // false) without a pump, which would flush the pending microtasks first.
-      mounted.value = false;
-      tester.binding.buildOwner!
-        ..buildScope(tester.binding.rootElement!)
-        ..finalizeTree();
+        for (var i = 0; i < count; i++) {
+          // A fresh app per target: a tap can push a screen or open the paywall.
+          await tester.pumpWidget(const SizedBox.shrink());
+          await tester.pumpWidget(_app(visited, displayPro: pro));
+          await tester.pumpAndSettle();
+          await tester.tap(find.byType(GestureDetector).at(i),
+              warnIfMissed: false);
+          await tester.pumpAndSettle();
+          expect(find.text(paywallLetterheadTitle('Progress Photos')),
+              findsNothing,
+              reason: 'tappable #$i opened the paywall from the hub');
+        }
 
-      // Now the verify "answers" and the gate calls onPro on a dead context.
-      await tester.pump();
-
-      expect(routed(), hasLength(1));
-      expect(routed().single, contains('exit=onPro'));
-      expect(visited, isEmpty,
-          reason: 'the guard must stop the push: the hub is gone');
-      expect(nonFatals, isEmpty,
-          reason: 'without the guard `context.push` throws on the dead context '
-              'and the gate reports subscription_gate_callback_threw');
-    });
+        expect(visited.toSet(), {'progress', 'saved'},
+            reason: 'the sweep reached both destinations (a sweep that taps '
+                'nothing would pass vacuously) and nothing else');
+        expect(routed(), isEmpty, reason: 'the hub runs no PRO gate');
+        expect(nonFatals, isEmpty);
+      });
+    }
   });
 }
