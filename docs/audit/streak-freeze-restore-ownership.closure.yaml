@@ -193,6 +193,13 @@ findings:
     terminal_state: blocked_on_user
     reason: "Founder GO 2026-10-06 on the migration. Counter half = Slice C1: DONE and live (migration 156, 2026-10-08, GREATEST in update_user_progress_snapshot; diagnose 47de4f); only the marker half remains. Marker half (last_streak_week to the cloud) = Slice C2, only after the weekly-stamp fix (Slice D; founder D5 = yes, 2026-10-06, found because train_provider.dart stamps the marker on EVERY completion so a second session in a week is never counted) and its own plan-review round. Neither half is introduced by this batch: the re-count after a reinstall happens identically with the pre-fix cloud-wins restore, and max-wins only stops a restore from LOWERING the count. Recorded in lib/core/services/CLAUDE.md next to the monotonic-merge row. Each live apply needs the founder's per-action go (CLAUDE.md 4.3)."
 
+  # ── Slice D (diagnose b7d3e5): the weekly-streak marker moves only when a week counts ──
+  - id: WEEKLY-COUNT-STAMP
+    title: "The weekly-streak counter under-counts: last_streak_week was stamped on every completeWorkout, so the first session of a week blocked the qualifying later one (Unit 7, founder decision D5 = yes)"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: b7d3e5' (Slice D commit)"
+    verification: "Diagnose b7d3e5. New pure weeklyStreakAfterCompletion in train_provider.dart; the marker (now the calendar week last counted, local key last_counted_week_key) is stamped only when the counter increments; B-pass P1 (plan week ids repeat across phases) fixed in the batch; test/contracts/weekly_streak_counter_writer_to_reader_test.dart (10 behavioural rows + a presence pin), 6/6 mutants red, file byte-identical after. Forward-only, no retroactive credit (the founder's 2026-09-14 week stays uncounted unless the founder asks for a one-off production write, its own go). Device check owed (CLAUDE.md section 5)."
+
   # ── Slice B1 (diagnose e4c1d7): restore-user-snapshot returns every row, scoped on every read ──
   - id: B1-EF-DEPLOY
     title: "The paged-read fix to restore-user-snapshot is live only once the Edge Function is deployed (deployed 2026-10-07, v10)"
@@ -316,5 +323,5 @@ findings:
     terminal_state: blocked_on_user
     reason: "The paged function went live 2026-10-07 (v10, B1-EF-DEPLOY). Its per-request cost and row counts are measured only once the founder's phone restores against it (a fresh install or sign-in; I cannot trigger that): then read the per-request rows line from the function logs and compare each count with a live count(*) for the founder's user, and read restore_step_done / restore_completed from client_errors against the baseline. Baseline read-only on 2026-10-06 (before any deploy): the last 8 single-call restores had total_ms 15,034 to 127,281 (restore_completed, 2026-10-04 to 2026-10-06) and the sampled step=B values 153 to 2,366 ms; the call is bounded today by the restoring screen's 15 s / 30 s hint and its CONTINUE escape. Closes as verified_clean with the measured cost once a restore has run against v10."
 
-total_findings: 48
-closed_count: 48
+total_findings: 49
+closed_count: 49

@@ -133,6 +133,7 @@ class SimulationService {
     prog['current_streak_days'] = 0;
     prog['current_streak_weeks'] = 0;
     prog['last_streak_week'] = -1;
+    prog['last_counted_week_key'] = -1;
     prog.remove('last_workout_date');
     await UserRepository.instance.saveProgress(prog);
 

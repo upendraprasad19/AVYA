@@ -3913,7 +3913,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 2070-2161
+        line_range: 2131-2222
         method: TemplatesNotifier.build
         semantic: pass-through
         fields_read: [type, name, exercises, assigned_days, exercise_count, group_id, group_day_index, group_total_days, last_used_at, created_at, updated_at]
@@ -5040,6 +5040,69 @@ concepts:
          stored as NULL, never as the ceiling).
       3. The signature of `update_user_progress_snapshot` stays 13 arguments:
          an overload or a DROP would reset the ACL (bug class 2.36).
+
+  - concept: weekly_streak_counter
+    domain: workout
+    description: |
+      Slice D (diagnose b7d3e5, founder decision D5) - the weekly-streak counter
+      `current_streak_weeks` and its marker `last_streak_week`. The marker
+      `last_counted_week_key` means "the CALENDAR week last counted" (the Monday as
+      days since the epoch, `calendarWeekKey`; the plan week id is clamped to 1..4 and
+      repeats across phases, so it cannot be the key - B-pass P1): `weeklyStreakAfterCompletion` stamps it only when
+      the counter increments (it used to be stamped on every completion, so the
+      first session of a week blocked the qualifying later one and a 6-planned
+      week never counted). Forward-only: the counter never decreases, no
+      retroactive credit. The counter is cloud-synced (migration 156 makes the
+      push GREATEST, the restore is max-wins); the marker is local-only today.
+    writers:
+      - file: lib/features/train/providers/train_provider.dart
+        line_range: 1762-2098
+        method: completeWorkout
+        notes: the ONLY production writer of both keys; calls weeklyStreakAfterCompletion and writes weekly.weeks / weekly.marker (last_counted_week_key).
+      - file: lib/features/train/providers/train_provider.dart
+        line_range: 662-682
+        method: weeklyStreakAfterCompletion
+        notes: the pure rule; counts when planned > 0, completedCount >= ceil(0.8 * planned) and the calendar-week key differs from the marker. calendarWeekKey (645) is the key; weekIsCurrent (from resolveStreakWeekState) must be true or nothing counts.
+    reader_manifest_complete: false
+    readers:
+      - file: lib/core/services/badge_service.dart
+        line_range: 94-139
+        method: checkAll
+        semantic: pass-through
+        fields_read: [current_streak_weeks]
+        notes: the 4/8/12-week streak badges.
+      - file: lib/features/ai_coach/services/pattern_detector.dart
+        line_range: 110-125
+        method: _streakRisk
+        semantic: pass-through
+        fields_read: [current_streak_weeks]
+        notes: fires the streak-risk insight when weeks > 2.
+      - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
+        line_range: 62-140
+        method: buildAiContext
+        semantic: pass-through
+        fields_read: [current_streak_weeks]
+        notes: the coach snapshot.
+    behavioral_test_path: test/contracts/weekly_streak_counter_writer_to_reader_test.dart
+    additional_tests:
+      - test/contracts/hold_week_streak_identity_behavioral_test.dart  # the week id the marker compares against (hold weeks)
+    hive:
+      box: userBox
+      key_prefix: "progress"
+      key_formula: "userBox['progress'][current_streak_weeks | last_counted_week_key]"
+    cloud:
+      table: user_progress
+      columns: [current_streak_weeks]
+    sync_methods: [syncProgressNow]
+    restore_methods: [_restoreUserProgress]
+    class_constraints: |
+      0. The marker is keyed by the CALENDAR week, never the plan week id.
+      1. The marker moves only when the counter does; a second place that stamps
+         it on every completion reintroduces the under-count.
+      2. The counter is forward-only (restore max-wins, push GREATEST); a reset
+         feature is the separate WEEKS-RESET-FEATURE product decision.
+      3. The marker is local-only until Slice C2; do not assume a restore brings
+         it back.
 
   - concept: sleep_logs
     domain: health
