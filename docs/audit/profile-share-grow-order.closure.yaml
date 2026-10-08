@@ -161,8 +161,9 @@ findings:
       Founder decision 2026-10-05 ("Explain and yes"): the Progress screen enforces PRO itself. Closed by the
       progress-screen-pro-gate batch (docs/audit/progress-screen-pro-gate.closure.yaml, diagnose b7c1e4): the screen gates
       its entry and its Add button, and test/contracts/progress_photos_screen_gate_test.dart proves FREE -> locked card and
-      PRO -> gallery against the real SubscriptionService. What stays open from this row's facts is the SERVER side (no PRO
-      rule on the progress_photos RLS or the bucket), which is row C5 of that ledger, blocked_on_user.
+      PRO -> gallery against the real SubscriptionService. The SERVER side (no PRO
+      rule on the progress_photos RLS or the bucket) was row C5 of that ledger and closed on 2026-10-07 by migration 154
+      (batch progress-photos-pro-server-rule, diagnose d8f2a6).
     history: >
       Until 2026-10-05 this row was blocked_on_user, with this reason. A product decision with a user-visible effect,
       pre-existing and unchanged by this batch. Facts from the repo

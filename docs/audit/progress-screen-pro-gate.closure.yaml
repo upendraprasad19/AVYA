@@ -62,12 +62,20 @@ findings:
 
   - id: C5
     title: "server-side PRO enforcement for progress_photos (RLS or a BEFORE INSERT check modelled on the AI-coach daily-cap trigger)"
-    terminal_state: blocked_on_user
-    reason: >
-      A client gate stops honest users and a typed address; a client calling Storage or PostgREST directly is not
-      stopped (progress_photos RLS is own-row only; the progress-photos bucket policies are not in the repo's
-      migrations). The real lock is a database rule: a migration plus a live apply, which needs the founder's separate
-      explicit go (CLAUDE.md section 4.3). Nothing was applied or drafted live.
+    terminal_state: closed_in_commit
+    commit: progress-photos-pro-server-rule batch commit (git log --diff-filter=A --format=%h -- docs/audit/progress-photos-pro-server-rule.closure.yaml)
+    verification: >
+      Migration 154 (supabase/migrations/154_progress_photos_pro_insert_rls_rule.sql) was applied live on 2026-10-07 by the
+      founder (cloud_version 20261007181916, backups/applied_migrations.json): the Storage policy progress_photos_insert_own
+      and the BEFORE INSERT trigger trg_progress_photo_pro refuse a NEW photo without status = 'active' AND end_date > now().
+      Live verify: test/sql/progress_photos_pro_insert_rule_live_verify.sql read 30 of 30 ok after the apply (16 cases failed
+      before it); the onconflict arbiter read 28 of 28 ok including progress_photos:id. Contract test
+      test/contracts/progress_photos_pro_insert_rule_test.dart (211 tests). Diagnose d8f2a6.
+    history: >
+      Until 2026-10-07 this row was blocked_on_user: a client gate stops honest users and a typed address; a client calling
+      Storage or PostgREST directly was not stopped (progress_photos RLS was own-row only; the progress-photos bucket
+      policies were not in the repo's migrations). The real lock is a database rule: a migration plus a live apply, which
+      needed the founder's separate explicit go (CLAUDE.md section 4.3).
 
   - id: C6
     title: "delete the repository's now-nearly-unreachable free branch (2/day, 2048/85)?"
