@@ -1154,6 +1154,16 @@ concepts:
         method: "ProgressPhotosScreen _enter / _onAddPhoto (progress-screen-pro-gate, 2026-10-05, closes R1-04 -- the screen's OWN PRO gate: SubscriptionService.instance.gateAndVerify(AppConstants.featureProgressPhotos) on entry and again on the Add button, the server-verified branch for a high-value feature; a refused user sees ProLockedOverlay and, after upgrading, the gate re-runs from a ref.listen on subscriptionInfoProvider; behavioural proof against the real SubscriptionService in test/contracts/progress_photos_screen_gate_test.dart)"
         semantic: flag-check
         fields_read: [isPro]
+      - file: supabase/migrations/154_progress_photos_pro_insert_rls_rule.sql
+        line_range: 1-9999
+        method: "progress-photos server rule (progress-photos-pro-server-rule B1, applied live 2026-10-07, diagnose d8f2a6 -- the Storage INSERT policy progress_photos_insert_own and the BEFORE INSERT trigger trg_progress_photo_pro / enforce_progress_photo_pro read public.subscriptions: status = 'active' AND end_date > now())"
+        semantic: flag-check
+        fields_read: [status, end_date]
+        notes: |
+          The DATABASE's own reader of the subscription predicate, enforced at both doors of a NEW progress photo
+          (the Storage object and the row). INSERT only: a lapsed user keeps SELECT and DELETE. Same predicate as
+          verify-subscription, _shared/subscription.ts and the cap triggers (111/113/114/127/129/132/153); the contract test
+          test/contracts/progress_photos_pro_insert_rule_test.dart pins the copies and a tripwire over later migrations.
     regression_test: test/subscription/payment_grace_window_test.dart
     hive:
       box: configBox
@@ -8661,10 +8671,6 @@ concepts:
           Behavioral: test/contracts/hold_week_labels_test.dart
           (deploymentEyebrowLabel group — exact-string assertions for
           phase 1 / phase 2 / phase 12 zero-pad boundary / holding).
-      - file: lib/features/profile/screens/reports_screen.dart
-        method: share-as-video inputProps.holdOrdinal → Remotion renders "HOLD Hn RECAP"
-        semantic: latest
-        fields_read: [WeekIdentity.holdOrdinal]
     class_constraints: |
       WeekIdentity MUST NOT gain a projected week getter. The hold arm asserts
       weekInPhase is NULL precisely so a projection cannot be reintroduced.

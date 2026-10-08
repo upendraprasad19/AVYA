@@ -53,27 +53,31 @@ void main() async {
     );
     exit(0);
   }
-  final result = await Process.run(
-    'flutter',
-    ['test', ...dartPaths],
-    // Git exports GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE into every hook, and
-    // this gate runs only from pre-commit on a merge commit. Those override both
-    // `workingDirectory:` and `-C <path>`, so any test building its own git repo
-    // gets pointed at the REAL repo — mid-merge — and fails on unrelated state.
-    // See scrubbedChildEnvironment's doc comment for the measured evidence.
-    environment: scrubbedChildEnvironment(Platform.environment),
-    includeParentEnvironment: false,
-    // Windows: Dart's Process.run cannot resolve `flutter.bat` without a shell,
-    // so the merge-commit regression walk threw ProcessException ("cannot find
-    // the file specified") whenever the recent-window test list was non-empty.
-    // runInShell is cross-platform safe (cmd.exe on Windows, /bin/sh on Unix).
-    runInShell: true,
-  );
-  if (result.exitCode != 0) {
-    stderr.writeln('Regression catalog: at least one recent regression test FAILED:');
-    stderr.writeln(result.stdout);
-    stderr.writeln(result.stderr);
-    exit(1);
+  // cmd.exe caps a command line at 8191 characters; run the paths in groups
+  // (chunkPathsByCommandLength) so a long recent window cannot trip it.
+  for (final chunk in chunkPathsByCommandLength(dartPaths)) {
+    final result = await Process.run(
+      'flutter',
+      ['test', ...chunk],
+      // Git exports GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE into every hook, and
+      // this gate runs only from pre-commit on a merge commit. Those override both
+      // `workingDirectory:` and `-C <path>`, so any test building its own git repo
+      // gets pointed at the REAL repo — mid-merge — and fails on unrelated state.
+      // See scrubbedChildEnvironment's doc comment for the measured evidence.
+      environment: scrubbedChildEnvironment(Platform.environment),
+      includeParentEnvironment: false,
+      // Windows: Dart's Process.run cannot resolve `flutter.bat` without a shell,
+      // so the merge-commit regression walk threw ProcessException ("cannot find
+      // the file specified") whenever the recent-window test list was non-empty.
+      // runInShell is cross-platform safe (cmd.exe on Windows, /bin/sh on Unix).
+      runInShell: true,
+    );
+    if (result.exitCode != 0) {
+      stderr.writeln('Regression catalog: at least one recent regression test FAILED:');
+      stderr.writeln(result.stdout);
+      stderr.writeln(result.stderr);
+      exit(1);
+    }
   }
   stdout.writeln(
     'Regression catalog: ${dartPaths.length} recent Dart tests all green'
