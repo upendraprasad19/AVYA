@@ -1622,3 +1622,13 @@ added, false of the flip being performed.
 - **Test shape that can fail:** behavioral tests of the gate (second call's body does not run, a throw clears, a timed-out body clears, listeners see true then false); source pins scoped to the method body and order-checked; mutate with CODE (a comment-only mutant is equivalent when the pin strips comments).
 - **Prior incidents:** `d7b2e5` (issue #78). Related: 2.25 (a guard checked at async entry, not at the side effect), 2.43 (un-debounced fire-and-forget fan-out).
 - **Regression tests:** `test/contracts/weekly_report_video_and_refresh_issue78_test.dart` (24 tests).
+
+### 2.95 A guard regex written for the shape you just wrote misses the list, schema-wide, unqualified and search_path forms of the same operation (NEW 2026-10-07)
+
+- **Telltale:** a tripwire or second-door scan over later migrations is green, and a reviewer shows a migration that defeats it with a one-token change: `GRANT ... ON progress_photos, other TO x` (a table list), `GRANT ... ON ALL TABLES IN SCHEMA storage`, an unqualified `objects` under a changed `search_path`, or `SET session_replication_role = replica`.
+- **Root-cause shape:** the pattern was derived from the author's own statement (`ON public.progress_photos`, `storage.objects`), so it matches that spelling only; the same permission or write path has three or four other spellings in SQL.
+- **Why it survives review:** the pins are mutated by DELETING the protection, never by respelling the attack; the author's mutants share the author's blind spot.
+- **Fix pattern:** write the pattern against the grammar (`(?:GRANT|REVOKE)\b[^;]*?\bON\b[^;]*?(?:name|ALL TABLES IN SCHEMA ...)`), make schema qualification optional, add the session-level switches (`session_replication_role`), and anchor predicate-parity pins so a widened copy (`OR`, `+`, `-`, `:`) cannot satisfy a substring match.
+- **Class rule:** for every guard over SQL text, list the spellings of the operation (list, schema-wide, unqualified, role-level setting) and add one synthetic respelled case each that must fire.
+- **Prior incidents:** `d8f2a6` (B-pass round 5, findings B1-B5). Related: 2.39 (a mutation set built only from "delete the protection"), 2.37 (a positive grep cannot see a defect in an argument).
+- **Regression tests:** `test/contracts/progress_photos_pro_insert_rule_test.dart` (211 tests; the synthetic L37-L40 and isolated C3d/C3a/C2b/C3k/C4b cases).

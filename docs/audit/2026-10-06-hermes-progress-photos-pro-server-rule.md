@@ -11,8 +11,8 @@ verdict: accepted
 
 # Hermes Pass: progress-photos-pro-server-rule (unit B1, catastrophic tier)
 
-Batch: a Postgres migration (one `DO` block, draft `docs/drafts/154_progress_photos_pro_insert_rls_rule.sql`, to be
-`supabase/migrations/154_...` after the founder-authorised apply) that makes the database refuse a NEW progress photo
+Batch: a Postgres migration (one `DO` block, formerly the draft `docs/drafts/154_progress_photos_pro_insert_rls_rule.sql`, now
+`supabase/migrations/154_progress_photos_pro_insert_rls_rule.sql`, applied live 2026-10-07) that makes the database refuse a NEW progress photo
 unless the user has an active, unexpired subscription: the Storage INSERT policy `progress_photos_insert_own` is
 altered in place, a BEFORE INSERT trigger guards `public.progress_photos`, and a repo-history policy
 `users_own_subscriptions` is dropped (`IF EXISTS`). INSERT only. Catastrophic by the slug rule (`rls`); this pass is
@@ -124,11 +124,11 @@ mandatory at that tier.
 
 ## Founder triage
 
-Pending the founder's go on the three `blocked_on_user` rows (each needs an OI mint):
+The founder approved the three OI mints on 2026-10-07; they are OI-320, OI-321 and OI-322 (rows below). Terminal state of each, in the batch closure ledger:
 
-1. Per-referrer cap on `referral_trial` credits (L2 F2): a product decision.
-2. `clean-orphan-media` `.maybeSingle()` with two unexpired active rows (L1 note).
-3. `taken_at` naive-local timestamp and the UTC cap window (L22 F3): fix inside unit B2, or its own OI.
+1. Per-referrer cap on `referral_trial` credits (L2 F2): OI-320, a product decision.
+2. `clean-orphan-media` `.maybeSingle()` with two unexpired active rows (L1 note): OI-321.
+3. `taken_at` naive-local timestamp and the UTC cap window (L22 F3): OI-322, fixed inside unit B2.
 
 ## Action items
 
