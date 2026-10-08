@@ -52,11 +52,14 @@ class StubReadReply {
   final Object? body;
 }
 
-/// Filtering is NOT applied here: a GET answers whatever its table's
+/// Filtering is NOT applied here unless the table is registered in
+/// [SyncStubServer.pagedTables]: a GET answers whatever its table's
 /// `getResponders` closure returns, whatever the `select=` / `eq.` query.
 /// A test whose assertion depends on filtering must filter inside its
 /// responder (it gets the full `StubRequest`, `query` included), or it
-/// passes vacuously (plan-review round 2, slice A F2).
+/// passes vacuously (plan-review round 2, slice A F2) -- or register the table
+/// in [SyncStubServer.pagedTables], which models PostgREST's filters, order,
+/// offset/limit and 1000-row response clamp for real (addendum A, Slice B2).
 class SyncStubServer {
   HttpServer? _server;
   final List<StubRequest> requests = [];
@@ -85,6 +88,45 @@ class SyncStubServer {
 
   /// GET responders per table; a table without one answers `[]`.
   final Map<String, Object? Function(StubRequest)> getResponders = {};
+
+  /// Tables answered with REAL PostgREST read semantics (addendum A, Slice
+  /// B2): the `eq.` / `gt.` / `gte.` / `lt.` / `lte.` filters, the `order=` list
+  /// (`col.desc.nullslast`, comma-joined, as the Dart client writes it),
+  /// `offset` / `limit`, and a response clamp of [dbMaxRows] rows answered with
+  /// an HTTP 200 (production's `db-max-rows`). Any other filter operator, or an
+  /// `order` term that is not a column of the rows, is answered 400 / 42703 and
+  /// recorded in [pagedErrors], so a request shape this stub does not model can
+  /// never pass vacuously. A table not listed
+  /// here keeps the [getResponders] behaviour byte for byte. Checked after
+  /// [readReplies] and before [getResponders].
+  final Map<String, List<Map<String, dynamic>>> pagedTables = {};
+
+  /// The server's response clamp for [pagedTables] (production: 1000, measured
+  /// 2026-10-06). A test lowers it to model a smaller cap.
+  int dbMaxRows = 1000;
+
+  /// When true, rows that tie on EVERY `order=` column come back in the
+  /// opposite order on alternate [pagedTables] requests: the adversarial model
+  /// of Postgres returning ties in an unstable order across separate queries.
+  /// A read whose order ends in a unique column has no ties, so this changes
+  /// nothing for it; a read ordered by a non-unique column skips and
+  /// duplicates rows across a page seam.
+  bool reshuffleTies = false;
+
+  /// The row ids (`id` where a row has one, else its `date`) each [pagedTables]
+  /// GET answered with, in answer order, keyed by table: one inner list per
+  /// request. Lets a test assert, on the wire, that no row was skipped or
+  /// served twice across pages.
+  final Map<String, List<List<Object?>>> pagedServed = {};
+
+  /// Messages of every [pagedTables] request this stub could not model (an
+  /// unknown filter operator, or an order / filter column the seeded rows lack).
+  /// Each is answered 400 / 42703 (what PostgREST answers for an undefined
+  /// column) AND recorded here, so a test can assert none happened instead of
+  /// a swallowed 400 passing for an empty restore.
+  final List<String> pagedErrors = [];
+
+  int _pagedRequestCount = 0;
 
   /// A table listed here answers EVERY GET with the given status + body (an
   /// outage / auth-rejection simulation). Checked before [getResponders]. Note
@@ -119,6 +161,142 @@ class SyncStubServer {
 
   List<StubRequest> writesTo(String table) =>
       requests.where((r) => r.isWrite && r.table == table).toList();
+
+  static const _reservedParams = {
+    'select',
+    'order',
+    'limit',
+    'offset',
+    'columns',
+    'on_conflict',
+  };
+
+  List<Map<String, dynamic>> _pagedAnswer(StubRequest r) {
+    final table = r.table!;
+    final request = _pagedRequestCount++;
+    final rows = <Map<String, dynamic>>[
+      for (final row in pagedTables[table]!)
+        if (_passesFilters(row, r.query)) row,
+    ];
+    final terms = _orderTerms(r.query['order']);
+    var ordered = rows;
+    if (terms.isNotEmpty) {
+      // Dart's List.sort is not guaranteed stable: break ties by input index.
+      final indexed = [for (var i = 0; i < rows.length; i++) (i, rows[i])]
+        ..sort((a, b) {
+          final c = _compareRows(a.$2, b.$2, terms);
+          return c != 0 ? c : a.$1.compareTo(b.$1);
+        });
+      ordered = [for (final e in indexed) e.$2];
+      if (reshuffleTies && request.isOdd) {
+        final out = <Map<String, dynamic>>[];
+        var runStart = 0;
+        for (var i = 1; i <= ordered.length; i++) {
+          if (i == ordered.length ||
+              _compareRows(ordered[i - 1], ordered[i], terms) != 0) {
+            out.addAll(ordered.sublist(runStart, i).reversed);
+            runStart = i;
+          }
+        }
+        ordered = out;
+      }
+    }
+    final offset = int.tryParse(r.query['offset'] ?? '') ?? 0;
+    final asked = int.tryParse(r.query['limit'] ?? '') ?? ordered.length;
+    final take = asked < dbMaxRows ? asked : dbMaxRows;
+    final end = (offset + take) < ordered.length ? offset + take : ordered.length;
+    final page = offset >= ordered.length
+        ? <Map<String, dynamic>>[]
+        : ordered.sublist(offset, end);
+    (pagedServed[table] ??= []).add([
+      for (final row in page) row.containsKey('id') ? row['id'] : row['date'],
+    ]);
+    return page;
+  }
+
+  bool _passesFilters(Map<String, dynamic> row, Map<String, String> query) {
+    for (final e in query.entries) {
+      if (_reservedParams.contains(e.key)) continue;
+      final dot = e.value.indexOf('.');
+      if (dot < 0) {
+        throw StateError('paged stub: unmodelled filter ${e.key}=${e.value}');
+      }
+      final op = e.value.substring(0, dot);
+      final operand = e.value.substring(dot + 1);
+      if (!row.containsKey(e.key)) {
+        throw StateError('paged stub: filter column ${e.key} is not a column of '
+            'the seeded rows');
+      }
+      final c = _compareValue(row[e.key], operand);
+      final ok = switch (op) {
+        'eq' => c == 0,
+        'gt' => c > 0,
+        'gte' => c >= 0,
+        'lt' => c < 0,
+        'lte' => c <= 0,
+        _ => throw StateError('paged stub: unmodelled operator $op on ${e.key}'),
+      };
+      if (!ok) return false;
+    }
+    return true;
+  }
+
+  /// Compares a row value with a query operand: numerically when the row value
+  /// is a number, else as text (ISO dates and uuids compare correctly as text:
+  /// every seed of one column must use ONE timestamp format, since `+00:00`
+  /// and `Z` spellings of one instant do not compare equal as text). A null row
+  /// value compares as smaller than everything, so `lt` / `lte` would pass it
+  /// where PostgREST would not; no test uses those operators on a nullable
+  /// column.
+  int _compareValue(Object? value, String operand) {
+    if (value == null) return -1;
+    if (value is num) return value.compareTo(num.parse(operand));
+    return value.toString().compareTo(operand);
+  }
+
+  List<({String column, bool desc, bool nullsFirst})> _orderTerms(String? raw) {
+    if (raw == null || raw.isEmpty) return const [];
+    return [
+      for (final term in raw.split(','))
+        (
+          column: term.split('.').first,
+          desc: term.split('.').contains('desc'),
+          // PostgREST/Postgres default when unstated: nulls sort as the largest
+          // value (last ascending, first descending). The Dart client always states it.
+          nullsFirst: term.contains('nullsfirst') ||
+              (!term.contains('nullslast') && term.split('.').contains('desc')),
+        ),
+    ];
+  }
+
+  int _compareRows(Map<String, dynamic> a, Map<String, dynamic> b,
+      List<({String column, bool desc, bool nullsFirst})> terms) {
+    for (final t in terms) {
+      if (!a.containsKey(t.column) && !b.containsKey(t.column)) {
+        throw StateError('paged stub: order column ${t.column} is not a column '
+            'of the seeded rows');
+      }
+      final x = a[t.column];
+      final y = b[t.column];
+      int c;
+      if (x == null || y == null) {
+        if (x == null && y == null) {
+          c = 0;
+        } else {
+          // The null side goes first or last as stated, independent of direction.
+          final nullIsFirst = t.nullsFirst;
+          c = x == null ? (nullIsFirst ? -1 : 1) : (nullIsFirst ? 1 : -1);
+          return c;
+        }
+      } else if (x is num && y is num) {
+        c = x.compareTo(y);
+      } else {
+        c = x.toString().compareTo(y.toString());
+      }
+      if (c != 0) return t.desc ? -c : c;
+    }
+    return 0;
+  }
 
   Future<void> _handle(HttpRequest req) async {
     String raw;
@@ -179,6 +357,24 @@ class SyncStubServer {
       res
         ..statusCode = reply.status
         ..write(reply.body is String ? reply.body : jsonEncode(reply.body));
+    } else if (r.method == 'GET' &&
+        r.table != null &&
+        pagedTables.containsKey(r.table)) {
+      try {
+        final page = _pagedAnswer(r);
+        res
+          ..statusCode = 200
+          ..write(jsonEncode(page));
+      } catch (e) {
+        // ANY failure of the model (an unmodelled operator or column, a
+        // non-numeric operand against a numeric column) is answered, never left
+        // hanging, and recorded.
+        final message = e is StateError ? e.message : e.toString();
+        pagedErrors.add(message);
+        res
+          ..statusCode = 400
+          ..write(jsonEncode({'code': '42703', 'message': message}));
+      }
     } else if (r.method == 'GET' && r.table != null) {
       res
         ..statusCode = 200

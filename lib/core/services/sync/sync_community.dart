@@ -314,16 +314,28 @@ extension SyncServiceCommunity on SyncService {
     };
   }
 
+  /// The legacy-fallback read behind [_restoreCustomExercises] and
+  /// [_restoreCustomFoods] (diagnose c7e2a9, Slice B2): the bare
+  /// `select().eq('user_id')` was clamped by PostgREST to 1000 rows with an
+  /// HTTP 200, so a user with more custom rows silently lost the rest. Fix ON:
+  /// paged through [_fetchAllRows] (no `since`, newest first, unique `id` as the
+  /// tie-break). Fix OFF (`disable_restore_paging_fix`): the pre-fix read,
+  /// VERBATIM.
+  Future<List<Map<String, dynamic>>> _readCustomRows(
+      String table, String userId) async {
+    if (!SyncFlags.restorePagingFixEnabled) {
+      return await _supabase.client.from(table).select().eq('user_id', userId);
+    }
+    return _fetchAllRows(table, userId, tieBreak: const ['id']);
+  }
+
   /// [preFetched] (C3 single-call): injected `user_custom_exercises` rows;
   /// legacy callers omit it → network read. Plan §4.
   Future<void> _restoreCustomExercises(String userId,
       {Object? preFetched = _kNoInject}) async {
     try {
       final rows = identical(preFetched, _kNoInject)
-          ? await _supabase.client
-              .from('user_custom_exercises')
-              .select()
-              .eq('user_id', userId)
+          ? await _readCustomRows('user_custom_exercises', userId)
           : (preFetched as List? ?? const []);
 
       if (rows.isEmpty) return;
@@ -389,10 +401,7 @@ extension SyncServiceCommunity on SyncService {
       {Object? preFetched = _kNoInject}) async {
     try {
       final rows = identical(preFetched, _kNoInject)
-          ? await _supabase.client
-              .from('user_custom_foods')
-              .select()
-              .eq('user_id', userId)
+          ? await _readCustomRows('user_custom_foods', userId)
           : (preFetched as List? ?? const []);
 
       if (rows.isEmpty) return;
@@ -462,13 +471,19 @@ extension SyncServiceCommunity on SyncService {
       for (int page = 0; page < maxPages; page++) {
         final from = page * pageSize;
         final to = from + pageSize - 1;
-        final foods = await _supabase.client
+        var foodQuery = _supabase.client
             .from('user_custom_foods')
             .select()
             .eq('approved', true)
             .gte('created_at', since)
-            .order('created_at', ascending: true)
-            .range(from, to);
+            .order('created_at', ascending: true);
+        if (SyncFlags.restorePagingFixEnabled) {
+          // c7e2a9: `created_at` is not unique, so two page requests could
+          // order tied rows differently and skip one; the pull then stamps
+          // last_community_sync, so a skipped row is never fetched again.
+          foodQuery = foodQuery.order('id', ascending: true);
+        }
+        final foods = await foodQuery.range(from, to);
         if (foods.isEmpty) break;
         for (final row in foods) {
           final map = Map<String, dynamic>.from(row as Map);
@@ -479,6 +494,11 @@ extension SyncServiceCommunity on SyncService {
           }
         }
         if (foods.length < pageSize) break;
+        if (page == maxPages - 1) {
+          // The pull stopped at its cap, then stamps last_community_sync: say so.
+          unawaited(ErrorTelemetry.logEvent('restore_row_ceiling_hit',
+              message: 'community_pull:user_custom_foods'));
+        }
       }
 
       // Pull approved community exercises — paginated.
@@ -486,13 +506,16 @@ extension SyncServiceCommunity on SyncService {
       for (int page = 0; page < maxPages; page++) {
         final from = page * pageSize;
         final to = from + pageSize - 1;
-        final exercises = await _supabase.client
+        var exerciseQuery = _supabase.client
             .from('user_custom_exercises')
             .select()
             .eq('approved_for_library', true)
             .gte('created_at', since)
-            .order('created_at', ascending: true)
-            .range(from, to);
+            .order('created_at', ascending: true);
+        if (SyncFlags.restorePagingFixEnabled) {
+          exerciseQuery = exerciseQuery.order('id', ascending: true);
+        }
+        final exercises = await exerciseQuery.range(from, to);
         if (exercises.isEmpty) break;
         for (final row in exercises) {
           final map = Map<String, dynamic>.from(row as Map);
@@ -515,6 +538,10 @@ extension SyncServiceCommunity on SyncService {
           }
         }
         if (exercises.length < pageSize) break;
+        if (page == maxPages - 1) {
+          unawaited(ErrorTelemetry.logEvent('restore_row_ceiling_hit',
+              message: 'community_pull:user_custom_exercises'));
+        }
       }
 
       await _hive.syncBox.put('last_community_sync', DateTime.now().toIso8601String());

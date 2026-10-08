@@ -13,7 +13,9 @@
 //   • NO client-supplied user-id param ever. EVERY table read is scoped to v_uid.
 //     The three user_id-LESS tables are scoped via parent / dual-FK (live-verified):
 //       - nutrition_log_items  → embedded under nutrition_logs (parent user_id)
-//       - template_exercises   → embedded under workout_templates / scheduled_workouts
+//       - template_exercises   → embedded under workout_templates (parent user_id). The
+//                                scheduled_workouts→template embed is NOT parent-scoped (the FK is
+//                                caller-writable): paged_reads.ts scopeEmbed nulls a foreign owner (C13).
 //       - referral_redemptions → dual-FK .or(referrer_id=v_uid, referee_id=v_uid)  (H-8:
 //         v_uid is UUID-validated above, so the .or() string interpolation is injection-safe)
 //     (workout_log_sets / workout_log_exercises DO carry user_id → scoped directly.)
@@ -30,37 +32,43 @@
 //   nesting (nutrition_logs→nutrition_log_items(*); workout_templates→template_exercises(*);
 //   scheduled_workouts→template:template_id(...template_exercises(*))) and the exact column
 //   projections (coach_memory 10-col, freezes 5-col, referral_codes 3-col, redemptions
-//   5-col, users 2-col), so the client `_restoreX` parsers hydrate UNCHANGED. Caps inherit
-//   today's behaviour verbatim (H-9). Column names are verbatim (H-11).
+//   5-col, users 2-col), so the client `_restoreX` parsers hydrate UNCHANGED. The caps of the
+//   NON-paged reads (limit 1/20/50/52/200/500) inherit today's behaviour verbatim (H-9); the
+//   thirteen paged reads return EVERY row up to 50,000 per table. Column names are verbatim (H-11).
 //   Unit 3b (OI-45 cross-device half, e6b9c4): freezes went 4-col -> 5-col to add
 //   streak_progress_version — the legacy client-side _restoreFreezes select was updated in
 //   the same commit, and this projection must keep matching it per H-1's own contract.
 //
+// ── PAGED READS (diagnose: restore-user-snapshot returns every row) ──
+//   PostgREST clamps every response to `db-max-rows` (1000) with HTTP 200 and error === null, so a
+//   single `.range(0, 49999)` silently returned at most 1000 rows. The thirteen bulk reads and the
+//   coach window now live in `./paged_reads.ts` (testable without booting this module): every one
+//   pages through `_shared/paged_fetch.ts` until an EMPTY page, applies its own `user_id` scope
+//   (code-owned, never data), and orders by an explicit, unique-ended key. Beyond 50,000 rows in
+//   one table, or beyond the per-request page budget across all of them, a read THROWS → the catch
+//   below → 500 → the client's verbatim legacy restore (fail-closed).
+//
 // verify_jwt: true at deploy (user must be authenticated; gateway pre-check + getUser here).
 // Plan: ~/.claude/plans/restore-single-call-c3.md.
-// Deployed and LIVE (v3, ACTIVE as of 2026-07-30 — confirmed via list_edge_functions;
-// SyncService._singleCallKillSwitch defaults OFF, so the client attempts this path
-// by default, NOT founder-gated-off). This header previously claimed "NOT YET
-// DEPLOYED — deploy is founder-gated"; that was stale and was corrected by Unit 3b
-// round-1 review (diagnose e6b9c4) after the freezes-projection edit below assumed
-// it was inert pre-deploy prep. Any future edit to this file's response shape is a
-// LIVE behavior change, not future-proofing — redeploy + smoke-test accordingly.
+// Live version: ask `list_edge_functions` (the deploy skill records each deploy in its diagnose
+// doc); SyncService._singleCallKillSwitch defaults OFF, so the client attempts this path by
+// default. Any edit to this file's response shape is a LIVE behavior change, not future-proofing —
+// redeploy + smoke-test accordingly.
 // closes-diagnose: (restore-perf single-call) — see docs/diagnoses on impl.
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import {
+  createPageBudget,
+  readCoachNewest,
+  readPaged,
+  rowCountLogLine,
+  UUID_RE,
+} from "./paged_reads.ts";
 
 // Bump SCHEMA_VERSION whenever the bundle shape or table set changes — the client
 // rejects a bundle whose schema_version it does not recognise (→ legacy fallback).
 const SCHEMA_VERSION = 1;
-
-// Full-history restore window — UNCHANGED from the legacy client (sync_service.dart:1280).
-const SINCE = "2020-01-01T00:00:00Z";
-const SINCE_DATE = SINCE.substring(0, 10); // '2020-01-01' for date-typed columns (daily_steps / water_logs / scheduled_workouts)
-
-// Mirrors `_fetchAllRows` maxRows ceiling (sync_service.dart:1867). One .range() fetch
-// covers it for the paginated tables (payload is sub-MB at live volumes; verified).
-const PAGINATED_CEILING = 50000;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -80,10 +88,9 @@ if (!SUPABASE_URL || !SERVICE_ROLE) {
   throw new Error("[restore-user-snapshot] required env vars not set");
 }
 
-// RFC-4122 UUID shape — the H-4 guard. A token-derived user.id that is null / empty /
-// non-UUID is rejected BEFORE any query, so a fail-open cross-user read is impossible.
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// The H-4 guard uses the ONE UUID_RE exported by paged_reads.ts (the readers re-validate with the
+// same regexp): a token-derived user.id that is null / empty / non-UUID is rejected BEFORE any
+// query, so a fail-open cross-user read is impossible.
 
 function jsonError(status: number, error: string, requestId: string): Response {
   return new Response(JSON.stringify({ error, request_id: requestId }), {
@@ -139,6 +146,8 @@ serve(async (req: Request) => {
     };
 
     const tables: Record<string, unknown> = {};
+    // ONE page budget per request, shared by every paged read (paged_reads.ts: TOTAL_PAGE_BUDGET).
+    const budget = createPageBudget();
 
     // ── Step A — profile + lightweight ──────────────────────────────────────────
     tables["user_profile"] = await q(
@@ -177,93 +186,36 @@ serve(async (req: Request) => {
       "workout_plan",
       db.from("user_progress").select("plan_json").eq("user_id", vUid).limit(1),
     );
-    tables["user_custom_exercises"] = await q(
-      "user_custom_exercises",
-      db.from("user_custom_exercises").select("*").eq("user_id", vUid),
-    );
-    tables["user_custom_foods"] = await q(
-      "user_custom_foods",
-      db.from("user_custom_foods").select("*").eq("user_id", vUid),
-    );
+    tables["user_custom_exercises"] = await readPaged(db, vUid, "user_custom_exercises", budget);
+    tables["user_custom_foods"] = await readPaged(db, vUid, "user_custom_foods", budget);
 
-    // ── Step B — bulk history ─────────────────────────────────────────────────────
-    tables["workout_logs"] = await q(
-      "workout_logs",
-      db.from("workout_logs").select("*").eq("user_id", vUid)
-        .gte("created_at", SINCE).order("created_at").range(0, PAGINATED_CEILING - 1),
-    );
-    tables["workout_log_exercises"] = await q(
-      "workout_log_exercises",
-      db.from("workout_log_exercises").select("*").eq("user_id", vUid)
-        .gte("completed_at", SINCE).order("completed_at").range(0, PAGINATED_CEILING - 1),
-    );
-    tables["workout_log_sets"] = await q(
-      "workout_log_sets",
-      db.from("workout_log_sets").select("*").eq("user_id", vUid)
-        .gte("completed_at", SINCE).order("completed_at").range(0, PAGINATED_CEILING - 1),
-    );
-    tables["workout_schedule_completions"] = await q(
-      "workout_schedule_completions",
-      // No .limit() — inherits the legacy PostgREST default cap verbatim (H-9).
-      db.from("workout_schedule_completions").select("*").eq("user_id", vUid)
-        .gte("completed_at", SINCE).order("scheduled_date"),
-    );
-    tables["weight_logs"] = await q(
-      "weight_logs",
-      db.from("weight_logs").select("*").eq("user_id", vUid)
-        .gte("created_at", SINCE).order("created_at").range(0, PAGINATED_CEILING - 1),
-    );
-    tables["daily_steps"] = await q(
-      "daily_steps",
-      db.from("daily_steps").select("*").eq("user_id", vUid)
-        .gte("date", SINCE_DATE).order("date").range(0, PAGINATED_CEILING - 1),
-    );
-    tables["nutrition_logs"] = await q(
-      "nutrition_logs",
-      db.from("nutrition_logs").select("*, nutrition_log_items(*)").eq("user_id", vUid)
-        .gte("created_at", SINCE).order("created_at").range(0, PAGINATED_CEILING - 1),
-    );
-    tables["body_measurements"] = await q(
-      "body_measurements",
-      db.from("body_measurements").select("*").eq("user_id", vUid)
-        .gte("created_at", SINCE).order("created_at").range(0, PAGINATED_CEILING - 1),
-    );
-    tables["water_logs"] = await q(
-      "water_logs",
-      db.from("water_logs").select("*").eq("user_id", vUid)
-        .gte("date", SINCE_DATE).order("date").range(0, PAGINATED_CEILING - 1),
-    );
-    tables["sleep_logs"] = await q(
-      "sleep_logs",
-      db.from("sleep_logs").select("*").eq("user_id", vUid)
-        .gte("created_at", SINCE).order("created_at").range(0, PAGINATED_CEILING - 1),
-    );
+    // ── Step B — bulk history (paged: see the PAGED READS header; every call passes vUid) ──
+    tables["workout_logs"] = await readPaged(db, vUid, "workout_logs", budget);
+    tables["workout_log_exercises"] = await readPaged(db, vUid, "workout_log_exercises", budget);
+    tables["workout_log_sets"] = await readPaged(db, vUid, "workout_log_sets", budget);
+    tables["workout_schedule_completions"] = await readPaged(db, vUid, "workout_schedule_completions", budget);
+    tables["weight_logs"] = await readPaged(db, vUid, "weight_logs", budget);
+    tables["daily_steps"] = await readPaged(db, vUid, "daily_steps", budget);
+    tables["nutrition_logs"] = await readPaged(db, vUid, "nutrition_logs", budget);
+    tables["body_measurements"] = await readPaged(db, vUid, "body_measurements", budget);
+    tables["water_logs"] = await readPaged(db, vUid, "water_logs", budget);
+    tables["sleep_logs"] = await readPaged(db, vUid, "sleep_logs", budget);
     tables["streaks"] = await q(
       "streaks",
       db.from("streaks").select("*").eq("user_id", vUid)
         .order("week_start", { ascending: false }).limit(52),
     );
-    // OI-252: `deleted_at` added to the embed so the client can tell a
-    // deleted template's schedule day apart from a merely-missing embed
-    // (a genuinely orphaned FK) -- the two need different handling.
-    tables["scheduled_workouts"] = await q(
-      "scheduled_workouts",
-      db.from("scheduled_workouts")
-        .select("*, template:template_id(id, name, workout_type, deleted_at, template_exercises(*))")
-        .eq("user_id", vUid)
-        .gte("scheduled_date", SINCE_DATE)
-        .order("scheduled_date")
-        .range(0, 999),
-    );
+    // OI-252: `deleted_at` is in the embed so the client can tell a deleted template's schedule
+    // day apart from a merely-missing embed. The embed is owner-scoped inside readPaged (a
+    // foreign template becomes null: Hermes C13).
+    tables["scheduled_workouts"] = await readPaged(db, vUid, "scheduled_workouts", budget);
     tables["user_saved_meals"] = await q(
       "user_saved_meals",
       db.from("user_saved_meals").select("*").eq("user_id", vUid).limit(500),
     );
-    tables["ai_coach_interactions"] = await q(
-      "ai_coach_interactions",
-      db.from("ai_coach_interactions").select("*").eq("user_id", vUid)
-        .gte("created_at", SINCE).order("created_at").limit(1000),
-    );
+    // The NEWEST 1000 coach interactions, ascending (bundle shape unchanged). It used to keep
+    // the OLDEST 1000 once a user passed 1000 rows.
+    tables["ai_coach_interactions"] = await readCoachNewest(db, vUid);
     tables["coach_memory"] = await q(
       "coach_memory",
       // 10-column projection ONLY (H-12) — never SELECT * (keeps server-only risk
@@ -314,6 +266,10 @@ serve(async (req: Request) => {
         .or(`referrer_id.eq.${vUid},referee_id.eq.${vUid}`)
         .order("created_at", { ascending: false }).limit(50),
     );
+
+    // Table names and row COUNTS only (never a row value): the live behaviour of the paged reads
+    // is read from the function logs, since no user token is available to smoke-test with.
+    console.log(rowCountLogLine(requestId, tables));
 
     // ── 3. RETURN — all keys present + sentinel. (subscriptions is NOT in the bundle;
     //     the client keeps the separate refreshFromSupabase() call — H-3.) ──────────

@@ -21,9 +21,12 @@
 // operation monotonic. These are the RESTORE operation: a different writer, a
 // different correct answer, and the answer was a founder product call
 // (2026-08-03) — **local-max-wins on the monotonic fields, with telemetry**. The
-// set is THREE, not the four OI-83 proposed: round-1 review removed
+// set was THREE, not the four OI-83 proposed: round-1 review removed
 // `longest_gap_days` as an inverted field (higher is worse, gates a rank, no
 // client writer), where max-wins could only ever refuse a server correction.
+// It is FOUR since 2026-10-06 (founder decision "A now"): `current_streak_weeks`
+// joined, because its only writer increments it and nothing resets it (see the
+// doc on `UserRepository.monotonicProgressFields` and the weeks group below).
 //
 // HOW EACH TEST DISCRIMINATES (rule 21 — a test that cannot fail is not a
 // regression test). Group A carries the PRE-FIX merge expression inline as a
@@ -141,11 +144,13 @@ void main() {
         'current_phase': 4,
         'deployments_complete': 3,
         'total_workouts_done': 120,
+        'current_streak_weeks': 6,
       };
       final cloud = <String, dynamic>{
         'current_phase': 1,
         'deployments_complete': 0,
         'total_workouts_done': 12,
+        'current_streak_weeks': 5,
       };
 
       final control = _preFixMerge(local, cloud);
@@ -155,7 +160,7 @@ void main() {
         expect(control[f], cloud[f], reason: 'control: $f was demoted pre-fix');
         expect(r.merged[f], local[f], reason: '$f must hold its local max');
       }
-      expect(r.declinedFields, hasLength(3));
+      expect(r.declinedFields, hasLength(4));
     });
 
     test('longest_gap_days is NOT guarded — the guard would point backwards',
@@ -209,14 +214,16 @@ void main() {
     });
 
     test('NON-monotonic fields still take cloud — including a genuine 0', () {
-      // A streak legitimately resets. Max-wins here would make a broken streak
-      // un-resettable from the cloud, which is why the set is exactly 3.
+      // The DAILY streak legitimately resets (the live walk re-stamps it). Max-
+      // wins here would make a broken streak un-resettable from the cloud.
+      // `current_streak_weeks` was in this assertion until the 2026-10-06
+      // founder decision moved it into the monotonic set (its own group below);
+      // the premise "a streak resets" never held for it: nothing resets it.
       final r = UserRepository.mergeCloudProgress(
-        local: {'current_streak_days': 30, 'current_streak_weeks': 4},
-        cloud: {'current_streak_days': 0, 'current_streak_weeks': 0},
+        local: {'current_streak_days': 30},
+        cloud: {'current_streak_days': 0},
       );
       expect(r.merged['current_streak_days'], 0);
-      expect(r.merged['current_streak_weeks'], 0);
       expect(r.hasDeclined, isFalse);
     });
 
@@ -311,6 +318,100 @@ void main() {
   });
 
   // ──────────── B — the merge → Hive → read chain the writers run ───────────
+
+  // ── current_streak_weeks is a lifetime counter (2026-10-06) ───────────────
+
+  group('current_streak_weeks is local-max-wins (founder decision A)', () {
+    test('a LOWER cloud weeks value is refused — pre-fix took it', () {
+      // 6 good weeks on this phone, whose last +1 had not synced; the cloud
+      // still says 5. A reinstall / second device / sign-in restore used to take
+      // the 5 silently.
+      final local = <String, dynamic>{'current_streak_weeks': 6};
+      final cloud = <String, dynamic>{'current_streak_weeks': 5};
+
+      expect(_preFixMerge(local, cloud)['current_streak_weeks'], 5,
+          reason: 'control must reproduce the demotion, else it proves nothing');
+
+      final r = UserRepository.mergeCloudProgress(local: local, cloud: cloud);
+      expect(r.merged['current_streak_weeks'], 6);
+      expect(r.declinedFields.single.field, 'current_streak_weeks');
+      expect(r.declinedFields.single.localValue, 6);
+      expect(r.declinedFields.single.cloudValue, 5);
+    });
+
+    test('MIRROR: a HIGHER cloud weeks value still wins (another device '
+        'trained more) and nothing is reported', () {
+      final r = UserRepository.mergeCloudProgress(
+        local: {'current_streak_weeks': 3},
+        cloud: {'current_streak_weeks': 5},
+      );
+      expect(r.merged['current_streak_weeks'], 5);
+      expect(r.hasDeclined, isFalse);
+    });
+
+    test('MIRROR: a fresh reinstall (no local weeks) adopts the cloud value, '
+        'including 0', () {
+      final r = UserRepository.mergeCloudProgress(
+        local: const {},
+        cloud: {'current_streak_weeks': 4},
+      );
+      expect(r.merged['current_streak_weeks'], 4);
+      final zero = UserRepository.mergeCloudProgress(
+        local: const {},
+        cloud: {'current_streak_weeks': 0},
+      );
+      expect(zero.merged['current_streak_weeks'], 0);
+      expect(r.hasDeclined || zero.hasDeclined, isFalse);
+    });
+
+    test('MIRROR: the DAILY streak is still free to fall (it resets for real)',
+        () {
+      final r = UserRepository.mergeCloudProgress(
+        local: {'current_streak_days': 16, 'current_streak_weeks': 6},
+        cloud: {'current_streak_days': 0, 'current_streak_weeks': 6},
+      );
+      expect(r.merged['current_streak_days'], 0,
+          reason: 'a broken daily streak must be able to land from the cloud');
+      expect(r.merged['current_streak_weeks'], 6);
+      expect(r.hasDeclined, isFalse);
+    });
+
+    test('a malformed cloud weeks value keeps LOCAL and reports, never throws',
+        () {
+      final r = UserRepository.mergeCloudProgress(
+        local: {'current_streak_weeks': 6},
+        cloud: {'current_streak_weeks': 'five'},
+      );
+      expect(r.merged['current_streak_weeks'], 6);
+      expect(r.malformedFields, contains('current_streak_weeks'));
+    });
+
+    test('the OI-83 kill switch restores cloud-wins for weeks verbatim (§4.6)',
+        () async {
+      final local = <String, dynamic>{'current_streak_weeks': 6};
+      final cloud = <String, dynamic>{'current_streak_weeks': 5};
+      await HiveService.instance.configBox.put(
+          UserRepository.kDisableProgressRestoreMonotonicMergeKey, true);
+      addTearDown(() => HiveService.instance.configBox
+          .delete(UserRepository.kDisableProgressRestoreMonotonicMergeKey));
+      final off = UserRepository.mergeCloudProgress(local: local, cloud: cloud);
+      expect(off.merged['current_streak_weeks'], 5);
+      expect(off.hasDeclined, isFalse);
+    });
+
+    test('round-trips through Hive: a stale restore leaves the higher weeks',
+        () async {
+      await HiveService.instance.userBox
+          .put('progress', <String, dynamic>{'current_streak_weeks': 6});
+      final existing = Map<String, dynamic>.from(
+          HiveService.instance.userBox.get('progress') as Map);
+      final r = UserRepository.mergeCloudProgress(
+          local: existing, cloud: {'current_streak_weeks': 5});
+      await HiveService.instance.userBox.put('progress', r.merged);
+      final after = HiveService.instance.userBox.get('progress') as Map;
+      expect(after['current_streak_weeks'], 6);
+    });
+  });
 
   // ── OI-150: the phase delta moves as one group ────────────────────────────
   //

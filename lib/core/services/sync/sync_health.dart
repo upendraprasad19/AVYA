@@ -126,6 +126,7 @@ extension SyncServiceHealth on SyncService {
           ? await _fetchAllRows(
               'readiness_daily', userId,
               dateColumn: 'created_at', since: since, orderBy: 'created_at',
+              tieBreak: const ['date'],
             )
           : (preFetched as List? ?? const []);
       if (rows.isEmpty) return;
@@ -462,6 +463,7 @@ extension SyncServiceHealth on SyncService {
           ? await _fetchAllRows(
               'weight_logs', userId,
               dateColumn: 'created_at', since: since, orderBy: 'created_at',
+              tieBreak: const ['id'],
             )
           : (preFetched as List? ?? const []);
 
@@ -498,6 +500,7 @@ extension SyncServiceHealth on SyncService {
           ? await _fetchAllRows(
               'body_measurements', userId,
               dateColumn: 'created_at', since: since, orderBy: 'created_at',
+              tieBreak: const ['id'],
             )
           : (preFetched as List? ?? const []);
 
@@ -537,6 +540,7 @@ extension SyncServiceHealth on SyncService {
           ? await _fetchAllRows(
               'sleep_logs', userId,
               dateColumn: 'created_at', since: since, orderBy: 'created_at',
+              tieBreak: const ['id'],
             )
           : (preFetched as List? ?? const []);
 
@@ -578,6 +582,7 @@ extension SyncServiceHealth on SyncService {
         rows = await _fetchAllRows(
           'daily_steps', userId,
           dateColumn: 'date', since: sinceDate, orderBy: 'date',
+          tieBreak: const ['id'],
         );
       } else {
         rows = preFetched as List? ?? const [];

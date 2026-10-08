@@ -163,15 +163,28 @@ void main() {
           reason: 'default/fresh-install path keeps the proven order');
     });
 
-    test('bg heals run post-restore, ref-free, then bump the tick', () {
+    test('bg heals run post-restore, ref-free, then reckon + bump the tick '
+        '(b4e7a1)', () {
       final idx =
           restoring.indexOf('Future<void> _healAfterRestoreInBackground()');
       expect(idx, greaterThan(-1));
       final body = restoring.substring(idx);
       expect(body.contains('ExlogKeyMigrator.runIfNeeded()'), isTrue);
       expect(body.contains('PhaseProgressReconciler.reconcile('), isTrue);
+      // The bare `bumpRestoreCompleted()` became `reckonAndNotifyAfterRestore()`
+      // (reckon the streak decay, THEN bump). The heal must call it AFTER the
+      // weekly refill (the reckon reads the refilled budget) and must no longer
+      // bump directly — a direct bump would repaint BEFORE the debit lands.
+      final refill = body.indexOf('refillIfNewWeek()');
+      final reckon = body.indexOf(
+          'DayRolloverObserver.instance.reckonAndNotifyAfterRestore()');
+      expect(reckon, greaterThan(-1));
+      expect(refill, greaterThan(-1));
+      expect(reckon, greaterThan(refill),
+          reason: 'the reckon reads the refilled weekly budget');
       expect(body.contains('SyncService.instance.bumpRestoreCompleted()'),
-          isTrue);
+          isFalse,
+          reason: 'bumping directly would repaint before the debit lands');
     });
 
     test('bg heal reconciles the exlog index (defense-in-depth c5a1f2)', () {
