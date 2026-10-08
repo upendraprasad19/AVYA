@@ -67,6 +67,16 @@ SELECT 'update_user_progress_snapshot service_role retained',
          'public.update_user_progress_snapshot(uuid, bigint, integer, integer, timestamptz, timestamptz, integer, integer, text, integer, integer, date, integer)',
          'EXECUTE') = true
 UNION ALL
+-- Slice C2 (diagnose a3c8f1) — the week-marker function: anon blocked, the two client-facing roles retained.
+SELECT 'raise_streak_week_marker anon revoked',
+       has_function_privilege('anon', 'public.raise_streak_week_marker(uuid, integer)', 'EXECUTE') = false
+UNION ALL
+SELECT 'raise_streak_week_marker authenticated retained',
+       has_function_privilege('authenticated', 'public.raise_streak_week_marker(uuid, integer)', 'EXECUTE') = true
+UNION ALL
+SELECT 'raise_streak_week_marker service_role retained',
+       has_function_privilege('service_role', 'public.raise_streak_week_marker(uuid, integer)', 'EXECUTE') = true
+UNION ALL
 SELECT 'update_user_progress_snapshot cross-account guard present',
        pg_get_functiondef('public.update_user_progress_snapshot(uuid, bigint, integer, integer, timestamptz, timestamptz, integer, integer, text, integer, integer, date, integer)'::regprocedure)
          ILIKE '%cross-account progress write blocked%'

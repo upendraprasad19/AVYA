@@ -149,12 +149,14 @@ void main() {
         'deployments_complete': 3,
         'total_workouts_done': 120,
         'current_streak_weeks': 6,
+        'last_counted_week_key': 20731,
       };
       final cloud = <String, dynamic>{
         'current_phase': 1,
         'deployments_complete': 0,
         'total_workouts_done': 12,
         'current_streak_weeks': 5,
+        'last_counted_week_key': 20724,
       };
 
       final control = _preFixMerge(local, cloud);
@@ -164,7 +166,37 @@ void main() {
         expect(control[f], cloud[f], reason: 'control: $f was demoted pre-fix');
         expect(r.merged[f], local[f], reason: '$f must hold its local max');
       }
-      expect(r.declinedFields, hasLength(4));
+      expect(r.declinedFields, hasLength(5));
+      // The exact set (a list that silently grows or shrinks must fail here).
+      expect(UserRepository.monotonicProgressFields, <String>[
+        'current_phase',
+        'deployments_complete',
+        'total_workouts_done',
+        'current_streak_weeks',
+        'last_counted_week_key',
+      ]);
+    });
+
+    test('C2 week marker: local max wins, cloud adopted when local absent or '
+        'lower, a double is normalised to int', () {
+      Map<String, dynamic> merge(Map<String, dynamic> l, Map<String, dynamic> c) =>
+          UserRepository.mergeCloudProgress(
+                  local: l, cloud: c, istToday: kTestIstToday)
+              .merged;
+      expect(merge({'last_counted_week_key': 20731},
+          {'last_counted_week_key': 20724})['last_counted_week_key'], 20731);
+      expect(merge({'last_counted_week_key': 20724},
+          {'last_counted_week_key': 20731})['last_counted_week_key'], 20731);
+      expect(merge({}, {'last_counted_week_key': 20731})['last_counted_week_key'],
+          20731);
+      final fromDouble = merge({}, {'last_counted_week_key': 20731.0})[
+          'last_counted_week_key'];
+      expect(fromDouble, isA<int>(), reason: 'train_provider reads it as an int');
+      expect(fromDouble, 20731);
+      final overString = merge({'last_counted_week_key': 'x'},
+          {'last_counted_week_key': 20731.0})['last_counted_week_key'];
+      expect(overString, isA<int>());
+      expect(overString, 20731);
     });
 
     test('longest_gap_days is NOT guarded — the guard would point backwards',

@@ -185,6 +185,18 @@ void main() {
     });
   });
 
+  group('lastCountedWeekKeyFrom: the persisted marker read (C2, diagnose a3c8f1)',
+      () {
+    test('an int, a numeric double and everything else', () {
+      expect(lastCountedWeekKeyFrom(20731), 20731);
+      expect(lastCountedWeekKeyFrom(20731.0), 20731,
+          reason: 'a cloud double restored under the wider kill switch must not '
+              'crash the `as int?` read it replaced');
+      expect(lastCountedWeekKeyFrom(null), -1);
+      expect(lastCountedWeekKeyFrom('20731'), -1);
+    });
+  });
+
   group('wiring (PRESENCE only - the behaviour is above)', () {
     test('completeWorkout uses the function and no longer stamps unconditionally',
         () {
@@ -199,6 +211,11 @@ void main() {
       expect(stripped.contains("'last_counted_week_key': weekly.marker"), isTrue);
       expect(stripped.contains("'current_streak_weeks': weekly.weeks"), isTrue);
       expect(stripped.contains('weekKey: streakWeek.weekKey'), isTrue);
+      expect(
+          stripped.contains(
+              "lastCountedWeekKeyFrom(progress['last_counted_week_key'])"),
+          isTrue,
+          reason: 'the call site reads the marker through the tolerant helper');
       expect(
           stripped.contains('weekIsCurrent: streakWeek.weekIsCurrent'), isTrue);
       expect(stripped.contains("'last_streak_week':"), isFalse,

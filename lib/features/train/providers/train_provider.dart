@@ -642,6 +642,11 @@ DateTime resolveSessionDate({
 /// block a later week that shares the id (counted week 4, then three weeks that
 /// do not qualify, then week 4 of the next phase). The calendar week never
 /// repeats.
+/// Reads the persisted week marker (`progress['last_counted_week_key']`) as an
+/// int, tolerating a numeric double (a cloud value restored with the wider
+/// kill switch on) and treating anything else as "never counted" (-1).
+int lastCountedWeekKeyFrom(Object? raw) => raw is num ? raw.toInt() : -1;
+
 int calendarWeekKey(DateTime workoutDate) {
   final day = DateTime.utc(workoutDate.year, workoutDate.month, workoutDate.day);
   final monday = day.subtract(Duration(days: day.weekday - DateTime.monday));
@@ -2037,7 +2042,8 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     final completedCount = streakWeek.completedCount;
     final weekly = weeklyStreakAfterCompletion(
       streakWeeks: (progress['current_streak_weeks'] as int?) ?? 0,
-      lastCountedWeekKey: (progress['last_counted_week_key'] as int?) ?? -1,
+      lastCountedWeekKey:
+          lastCountedWeekKeyFrom(progress['last_counted_week_key']),
       weekKey: streakWeek.weekKey,
       weekIsCurrent: streakWeek.weekIsCurrent,
       planned: planned,

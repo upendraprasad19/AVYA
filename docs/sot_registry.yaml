@@ -3392,7 +3392,7 @@ concepts:
         semantic: pass-through
         fields_read: [is_pro, expires_at, plan, paymentInFlightOrder]
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 1047-1049
+        line_range: 1054-1056
         method: isOnboarded
         semantic: flag-check
         fields_read: [onboarding_completed]
@@ -5053,7 +5053,11 @@ concepts:
       first session of a week blocked the qualifying later one and a 6-planned
       week never counted). Forward-only: the counter never decreases, no
       retroactive credit. The counter is cloud-synced (migration 156 makes the
-      push GREATEST, the restore is max-wins); the marker is local-only today.
+      push GREATEST, the restore is max-wins). Slice C2 (diagnose a3c8f1) syncs the marker
+      too: `SyncService._pushStreakWeekMarker` calls `raise_streak_week_marker`
+      (a GREATEST-only SECURITY DEFINER function, clamped to this IST week's Monday)
+      after a successful snapshot push or retry, and the restore merges
+      `last_counted_week_key` max-wins (`monotonicProgressFields`).
     writers:
       - file: lib/features/train/providers/train_provider.dart
         line_range: 1762-2098
@@ -5086,13 +5090,16 @@ concepts:
     behavioral_test_path: test/contracts/weekly_streak_counter_writer_to_reader_test.dart
     additional_tests:
       - test/contracts/hold_week_streak_identity_behavioral_test.dart  # the week id the marker compares against (hold weeks)
+      - test/contracts/streak_week_marker_push_behavioral_test.dart  # C2: the push (stub server, real SyncService)
+      - test/contracts/progress_restore_monotonic_behavioral_test.dart  # C2: the restore merge of the marker
+      - test/contracts/streak_week_marker_migration_text_test.dart  # C2: migration text pins (PRESENCE only)
     hive:
       box: userBox
       key_prefix: "progress"
       key_formula: "userBox['progress'][current_streak_weeks | last_counted_week_key]"
     cloud:
       table: user_progress
-      columns: [current_streak_weeks]
+      columns: [current_streak_weeks, last_counted_week_key]
     sync_methods: [syncProgressNow]
     restore_methods: [_restoreUserProgress]
     class_constraints: |
@@ -5101,8 +5108,12 @@ concepts:
          it on every completion reintroduces the under-count.
       2. The counter is forward-only (restore max-wins, push GREATEST); a reset
          feature is the separate WEEKS-RESET-FEATURE product decision.
-      3. The marker is local-only until Slice C2; do not assume a restore brings
-         it back.
+      3. The marker is synced since Slice C2 (cloud column
+         `user_progress.last_counted_week_key`, written ONLY through
+         `raise_streak_week_marker`, restored max-wins). The server rule is
+         GREATEST, which is correct only because a calendar-week key never
+         repeats; never reuse a recurring id here. Stored values are not an
+         integrity boundary (RLS lets a user PATCH their own row).
 
   - concept: sleep_logs
     domain: health
@@ -5534,7 +5545,7 @@ concepts:
           stayed NULL -> forced re-onboard on a new device. Now carries the
           column (guarded SyncService._hasValue, never clobbers with null).
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 1052-1054
+        line_range: 1059-1061
         method: setOnboarded
       - file: lib/core/services/auth_session_bootstrapper.dart
         line_range: 758-1088
@@ -11456,7 +11467,7 @@ concepts:
           a corrupted or half-written value cannot silently darken a
           notification. Swallows storage errors and returns {} (=> all-enabled).
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 963-1033
+        line_range: 1080-1150
         method: _restoreUserPreferences
         semantic: latest
         fields_read: [enabled]

@@ -6,7 +6,8 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
-### weekly_streak_counter (1 bugs)
+### weekly_streak_counter (2 bugs)
+- 2026-10-08 a3c8f1 — The weekly-streak marker `last_counted_week_key` (the calendar week last counted, Slice D) lived only in the local Hive progress map. A reinstall or a second device restored the counter…
 - 2026-10-08 b7d3e5 — The weekly-streak counter (`current_streak_weeks`) under-counts. With 6 planned workouts the threshold is 5, but the FIRST completed session of a week stamped the marker `last_streak_week` with that…
 
 ### progress_last_workout_date (1 bugs)
@@ -1530,6 +1531,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-10-08 | a3c8f1 | The weekly-streak marker `last_counted_week_key` (the calendar week last counted, Slice D) lived only in the local Hive progress map. A reinstall or a second device restored the counter… | weekly_streak_counter | test/contracts/streak_week_marker_push_behavioral_test.dart |
 | 2026-10-08 | b7d3e5 | The weekly-streak counter (`current_streak_weeks`) under-counts. With 6 planned workouts the threshold is 5, but the FIRST completed session of a week stamped the marker `last_streak_week` with that… | weekly_streak_counter | test/contracts/weekly_streak_counter_writer_to_reader_test.dart |
 | 2026-10-07 | 47de4f | A stale value could overwrite a newer one in two places. (1) CLIENT: the whole-row restore (`UserRepository.mergeCloudProgress`) copied the cloud `last_workout_date` over the local one… | progress_last_workout_date | test/contracts/last_workout_date_latest_wins_behavioral_test.dart |
 | 2026-10-07 | a5e3c7 | Home's snackbar after a streak freeze is spent read "Streak Freeze used! N remaining this week." That sentence describes a weekly allowance and the app does not have one: a freeze is a KEPT stock (+1… | streak_freeze_notice | test/contracts/streak_freeze_notice_behavioral_test.dart |

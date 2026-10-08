@@ -33,6 +33,12 @@ class StubRequest {
 
   bool get isWrite => table != null && method != 'GET';
 
+  /// The rpc function name for a `/rest/v1/rpc/<name>` path, else null.
+  String? get rpcName {
+    const prefix = '/rest/v1/rpc/';
+    return path.startsWith(prefix) ? path.substring(prefix.length) : null;
+  }
+
   /// The row maps in a write body (an upsert may send one map or a list).
   List<Map<String, dynamic>> get rows {
     final b = body;
@@ -42,6 +48,16 @@ class StubRequest {
     }
     return const [];
   }
+}
+
+/// A canned answer for an rpc function (C2, diagnose a3c8f1). [dropConnection]
+/// closes the socket without a response, which the client surfaces as a
+/// transport error.
+class StubRpcReply {
+  const StubRpcReply(this.status, this.body, {this.dropConnection = false});
+  final int status;
+  final Object? body;
+  final bool dropConnection;
 }
 
 /// A canned answer for a table's GETs (status + body). A String body is sent
@@ -84,6 +100,12 @@ class SyncStubServer {
   /// [failWritesTo]. Lets a test model state the cloud holds, e.g. a
   /// 23503 FK violation until the parent row is written again.
   final Map<String, Map<String, Object?>? Function(StubRequest)> writeFailers =
+      {};
+
+  /// Per-function rpc answers, keyed by function name (`update_user_progress_snapshot`).
+  /// An rpc without an entry keeps the historical default: 200 with body
+  /// `null`. The closure sees the request, so a test can answer by body.
+  final Map<String, FutureOr<StubRpcReply> Function(StubRequest)> rpcResponders =
       {};
 
   /// GET responders per table; a table without one answers `[]`.
@@ -350,6 +372,16 @@ class SyncStubServer {
         ..statusCode = 500
         ..write(jsonEncode(failBodies[r.table] ??
             {'message': 'stub failure', 'code': 'XX000'}));
+    } else if (r.rpcName != null && rpcResponders.containsKey(r.rpcName)) {
+      final reply = await rpcResponders[r.rpcName]!(r);
+      if (reply.dropConnection) {
+        final socket = await req.response.detachSocket(writeHeaders: false);
+        socket.destroy();
+        return;
+      }
+      res
+        ..statusCode = reply.status
+        ..write(reply.body is String ? reply.body : jsonEncode(reply.body));
     } else if (r.method == 'GET' &&
         r.table != null &&
         readReplies.containsKey(r.table)) {

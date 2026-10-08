@@ -432,6 +432,9 @@ class UserRepository {
     'deployments_complete',
     'total_workouts_done',
     'current_streak_weeks',
+    // C2 (diagnose a3c8f1): the calendar week last COUNTED. A calendar-week
+    // key only moves forward, so local-max-wins is the right direction.
+    'last_counted_week_key',
   ];
 
   /// The three fields `commitPhaseAdvance` writes ATOMICALLY alongside
@@ -722,7 +725,10 @@ class UserRepository {
       // would have restored with no phase at all. The guard against corrupt
       // data must not fire on the ordinary absence of data.
       if (localRaw == null) {
-        merged[entry.key] = cloudRaw;
+        // The marker is read `as int?` downstream: a cloud double must not
+        // be written through.
+        merged[entry.key] =
+            entry.key == 'last_counted_week_key' ? cloudRaw.toInt() : cloudRaw;
         continue;
       }
 
@@ -739,7 +745,8 @@ class UserRepository {
         // on a String rather than yielding null). Persisting garbage silently
         // just moves the crash one hop.
         malformed.add(entry.key);
-        merged[entry.key] = cloudRaw;
+        merged[entry.key] =
+            entry.key == 'last_counted_week_key' ? cloudRaw.toInt() : cloudRaw;
         continue;
       }
       final localValue = localRaw.toInt();
