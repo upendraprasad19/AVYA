@@ -61,8 +61,9 @@ findings:
 
   - id: S9
     title: "Telegram bot (out-of-repo project) does not insert progress_photos rows"
-    terminal_state: blocked_on_user
-    reason: "The bot lives outside this repo; only the founder can check it. A bot that inserts as a free user would now be refused P0001."
+    terminal_state: upstream_blocked
+    blocker: "OI-227: the user-facing Telegram coach has no account-linking handshake (commit e921fac1, 2026-09-22, removed the connect UI; the app shows 'Telegram - Coming Soon'), so the bot cannot associate a chat with an app user_id and has no identity to insert a progress_photos row under. No Edge Function in supabase/functions references progress_photos (git grep). The bot's own code is out of repo and was not read."
+    reopen_when: "Telegram account linking returns (phase 2): the bot must then be checked for any progress_photos insert; a free user's insert is refused P0001 / Storage RLS since migration 154."
 
   - id: HM1
     title: "Hermes L1 F1 (docs/audit/2026-10-06-hermes-progress-photos-pro-server-rule.md)"
