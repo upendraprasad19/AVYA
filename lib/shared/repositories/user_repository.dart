@@ -8,6 +8,7 @@ import 'package:icanbefitter/core/services/streak_progress_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/profile/services/profile_write_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FileOptions;
 
@@ -46,6 +47,105 @@ class ProgressDemotion {
   String toString() => '$field local=$localValue cloud=$cloudValue';
 }
 
+/// One ISO-date field (`last_workout_date`) a cloud restore tried to move
+/// BACKWARDS and was refused (diagnose of Slice C1). The date twin of
+/// [ProgressDemotion], whose fields are `int`, so a date needs its own type.
+class DateDecline {
+  final String field;
+  final String localValue;
+  final String cloudValue;
+  const DateDecline({
+    required this.field,
+    required this.localValue,
+    required this.cloudValue,
+  });
+
+  @override
+  String toString() => '$field local=$localValue cloud=$cloudValue';
+}
+
+/// What [laterIsoDate] decided for one date field.
+///
+/// [write] is true only when the merged map must take [value] (the cloud date
+/// won, or repaired a malformed local one); false means LOCAL stands as it is.
+class IsoDateMerge {
+  final String? value;
+  final bool write;
+  final bool declined;
+  final bool malformed;
+  const IsoDateMerge({
+    this.value,
+    this.write = false,
+    this.declined = false,
+    this.malformed = false,
+  });
+}
+
+/// The calendar day AFTER [isoDay] (`YYYY-MM-DD`), or null when [isoDay] is not
+/// a real calendar date.
+String? _isoDayPlusOne(String isoDay) {
+  final d = _parseIsoDay(isoDay);
+  if (d == null) return null;
+  // d is UTC midnight; +1 day lands at 05:30 IST on the SAME calendar day, so the
+  // IST formatter returns the day after [isoDay] without hand-rolling a key.
+  return istDateStr(d.add(const Duration(days: 1)));
+}
+
+final RegExp _isoDayShape = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+
+/// A real calendar date in UTC, or null: rejects a wrong shape and a shape that
+/// does not round-trip (`2026-09-99`, `2026-02-30`).
+DateTime? _parseIsoDay(String s) {
+  if (!_isoDayShape.hasMatch(s)) return null;
+  final y = int.parse(s.substring(0, 4));
+  final m = int.parse(s.substring(5, 7));
+  final d = int.parse(s.substring(8, 10));
+  final t = DateTime.utc(y, m, d);
+  if (t.year != y || t.month != m || t.day != d) return null;
+  return t;
+}
+
+/// PURE latest-wins merge of one ISO-date field for a cloud restore.
+///
+/// A value is WELL-FORMED only if it is a String of the shape `YYYY-MM-DD`
+/// that is a real calendar date and is not later than [istToday] + 1 day (the
+/// same ceiling the server clamps to, so a device with its clock set ahead
+/// cannot restore a FUTURE date that nothing could ever lower).
+///
+/// Takes `Object?` because both sides have been through JSON: the file's own
+/// `as num?` crash precedent is the comment above `monotonicProgressFields`'s
+/// loop in [UserRepository.mergeCloudProgress].
+///
+/// Rows (L = local, C = cloud; "ok" = well-formed):
+/// - L ok, C ok: later wins; C earlier is a DECLINE (local kept).
+/// - L absent, C ok: cloud (the reinstall row; NOT malformed).
+/// - L malformed, C ok: cloud repairs it, reported malformed.
+/// - L ok / absent / malformed, C malformed: local kept, reported malformed.
+/// - C absent: the caller never asks (cloud null never wins).
+IsoDateMerge laterIsoDate(Object? local, Object? cloud,
+    {required String istToday}) {
+  final ceiling = _isoDayPlusOne(istToday);
+  bool ok(Object? v) =>
+      v is String &&
+      _parseIsoDay(v) != null &&
+      (ceiling == null || v.compareTo(ceiling) <= 0);
+
+  if (cloud is! String || !ok(cloud)) {
+    // Garbage (or a future date) never wins. Report it only if it is present.
+    return IsoDateMerge(malformed: cloud != null);
+  }
+  final c = cloud;
+  if (local == null) return IsoDateMerge(value: c, write: true);
+  if (local is! String || !ok(local)) {
+    return IsoDateMerge(value: c, write: true, malformed: true);
+  }
+  final l = local;
+  final cmp = c.compareTo(l);
+  if (cmp > 0) return IsoDateMerge(value: c, write: true);
+  if (cmp < 0) return const IsoDateMerge(declined: true);
+  return const IsoDateMerge();
+}
+
 /// Result of [UserRepository.mergeCloudProgress] — the map to persist plus the
 /// demotions that were refused. Mirrors the shape of
 /// `StreakProgressService.mergeFreezeProgress`'s result, the existing
@@ -78,15 +178,22 @@ class ProgressMergeResult {
   /// anti-push-storm protection).
   final bool scheduleFreezeSyncUp;
 
+  /// ISO-date fields (`last_workout_date`) where local was LATER than the cloud
+  /// row and the restore kept local (Slice C1). Kept apart from
+  /// [declinedFields], whose entries are `int` pairs.
+  final List<DateDecline> declinedDateFields;
+
   const ProgressMergeResult({
     required this.merged,
     required this.declinedFields,
     this.malformedFields = const <String>[],
     this.refusedPhaseDeltaFields = const <String>[],
     this.scheduleFreezeSyncUp = false,
+    this.declinedDateFields = const <DateDecline>[],
   });
 
-  bool get hasDeclined => declinedFields.isNotEmpty;
+  bool get hasDeclined =>
+      declinedFields.isNotEmpty || declinedDateFields.isNotEmpty;
 }
 
 /// SHARED telemetry emitter for a refused restore demotion (OI-83). Both
@@ -102,6 +209,15 @@ void reportProgressDemotionsDeclined(
   required String source,
 }) {
   for (final d in result.declinedFields) {
+    unawaited(ErrorTelemetry.logEvent(
+      'progress_restore_demotion_declined',
+      message: 'source=$source field=${d.field} '
+          'local=${d.localValue} cloud=${d.cloudValue}',
+    ));
+  }
+  // Slice C1: the date twin, under the SAME event name (already high priority
+  // in error_telemetry.dart and its twin log-client-error/index.ts).
+  for (final d in result.declinedDateFields) {
     unawaited(ErrorTelemetry.logEvent(
       'progress_restore_demotion_declined',
       message: 'source=$source field=${d.field} '
@@ -415,6 +531,25 @@ class UserRepository {
     }
   }
 
+  /// §4.6 kill-switch for the `last_workout_date` latest-wins merge (Slice C1).
+  /// INDEPENDENT of both neighbours: set = `last_workout_date` takes the
+  /// pre-addendum generic cloud-non-null-wins branch, and the wider
+  /// [kDisableProgressRestoreMonotonicMergeKey] still copies everything
+  /// verbatim. Fails CLOSED (the new behaviour stays ACTIVE) when the box is
+  /// not open.
+  @visibleForTesting
+  static const String kDisableProgressDateMergeKey =
+      'disable_progress_date_merge';
+
+  static bool get _dateMergeDisabled {
+    try {
+      return HiveService.instance.configBox.get(kDisableProgressDateMergeKey) ==
+          true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// The freeze family that [mergeCloudProgress] merges by the ONE rule
   /// (`StreakProgressService.mergeFreezeProgress`) instead of copying from
   /// cloud. The cloud's plural `used_dates` column is read here and written to
@@ -471,12 +606,18 @@ class UserRepository {
   /// precedent it otherwise mirrors: this has two PRODUCTION callers in other
   /// libraries, and the annotation would make both an
   /// `invalid_use_of_visible_for_testing_member` warning.
+  ///
+  /// [istToday] is the IST calendar day (`istDateStr(nowWall())`) both callers
+  /// pass; `last_workout_date` is merged latest-wins and a date later than
+  /// [istToday] + 1 is treated as malformed (Slice C1, [laterIsoDate]).
   static ProgressMergeResult mergeCloudProgress({
     required Map<String, dynamic> local,
     required Map<String, dynamic> cloud,
+    required String istToday,
   }) {
     final merged = <String, dynamic>{...local};
     final declined = <ProgressDemotion>[];
+    final declinedDates = <DateDecline>[];
     final malformed = <String>[];
     // OI-150: set by the loop at the two branches where local's `current_phase`
     // survives. Read by the post-pass below, so the companion decision cannot
@@ -520,6 +661,25 @@ class UserRepository {
           (_freezeFamilyKeys.contains(entry.key) ||
               _controlPlaneKeys.contains(entry.key))) {
         continue; // merged by the post-pass / never copied
+      }
+      // Slice C1: `last_workout_date` is LATEST-wins, not cloud-wins. The old
+      // generic branch let a stale restore move a newer, not-yet-pushed local
+      // date backwards, and the next push wrote the regression to the cloud.
+      if (!guardOff &&
+          entry.key == 'last_workout_date' &&
+          !_dateMergeDisabled) {
+        final outcome =
+            laterIsoDate(local[entry.key], entry.value, istToday: istToday);
+        if (outcome.malformed) malformed.add(entry.key);
+        if (outcome.declined) {
+          declinedDates.add(DateDecline(
+            field: entry.key,
+            localValue: '${local[entry.key]}',
+            cloudValue: '${entry.value}',
+          ));
+        }
+        if (outcome.write) merged[entry.key] = outcome.value;
+        continue;
       }
       if (guardOff || !monotonicProgressFields.contains(entry.key)) {
         merged[entry.key] = entry.value;
@@ -643,6 +803,7 @@ class UserRepository {
       malformedFields: malformed,
       refusedPhaseDeltaFields: refusedPhaseDelta,
       scheduleFreezeSyncUp: scheduleFreezeSyncUp,
+      declinedDateFields: declinedDates,
     );
   }
 

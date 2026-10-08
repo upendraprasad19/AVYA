@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### progress_last_workout_date (1 bugs)
+- 2026-10-07 47de4f — A stale value could overwrite a newer one in two places. (1) CLIENT: the whole-row restore (`UserRepository.mergeCloudProgress`) copied the cloud `last_workout_date` over the local one…
+
 ### streak_freeze_notice (1 bugs)
 - 2026-10-07 a5e3c7 — Home's snackbar after a streak freeze is spent read "Streak Freeze used! N remaining this week." That sentence describes a weekly allowance and the app does not have one: a freeze is a KEPT stock (+1…
 
@@ -1524,6 +1527,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-10-07 | 47de4f | A stale value could overwrite a newer one in two places. (1) CLIENT: the whole-row restore (`UserRepository.mergeCloudProgress`) copied the cloud `last_workout_date` over the local one… | progress_last_workout_date | test/contracts/last_workout_date_latest_wins_behavioral_test.dart |
 | 2026-10-07 | a5e3c7 | Home's snackbar after a streak freeze is spent read "Streak Freeze used! N remaining this week." That sentence describes a weekly allowance and the app does not have one: a freeze is a KEPT stock (+1… | streak_freeze_notice | test/contracts/streak_freeze_notice_behavioral_test.dart |
 | 2026-10-06 | c7e2a9 | When the single-call restore is unavailable the client falls back to its legacy per-table restore, and that path lost or doubled rows silently for a long-history account. PostgREST clamps every… | restore_legacy_paged_reads | test/sync/restore_legacy_paging_behavioral_test.dart |
 | 2026-10-06 | c9d2f6 | The founder's Home screen showed streak 16 with 2 freezes. The persisted count was wrong: the streak only holds at 16 because two missed days (2026-10-03 and 2026-10-05) are SIMULATED as covered by… | progress_restore_freeze_merge | test/contracts/progress_restore_freeze_merge_behavioral_test.dart |

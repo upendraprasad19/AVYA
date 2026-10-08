@@ -1172,5 +1172,15 @@
       "slug": "gemini3_limits_refund",
       "cloud_version": "20261002083656",
       "note": "Part B of gemini3-limits-caching. Chat cap free 7 / PRO 20 (PRO no longer exempt; the trigger counts ONLY the model_used='pending' reservation row so PRO media rows on channel app spend no chat unit); vision cap free 4 / PRO 20 on one shared key; adds refund_quota(uuid,text) SECURITY INVOKER, service_role only (REVOKE names PUBLIC, anon, authenticated): latch on model_used='pending', ledger row checked before the 3/IST-day refund_budget is spent, used-1 AND used>0. Trigger messages print pro=true|false. Applied via MCP apply_migration after the founder's explicit go 2026-10-02 (pre-apply live read: top 152, no refund_quota, 0 pending rows, nobody at the new caps). Live verified post-apply: version 20261002083656; anon/authenticated execute on refund_quota false, service_role true, prosecdef false; both trigger bodies carry the new caps; 3 cap triggers still bound. Diagnose-docs: c4e9b2, d7a1f5. Live behavioural script test/sql/gemini3_limits_refund_live_verify.sql NOT yet run."
+  },
+  {
+      "migration": "156",
+      "applied_at": "2026-10-08T00:42:00+05:30",
+      "hash": "sha256:e5c549f29502b9810544d72526926619f2c64d7ce51e9bfa081f00a88d6da848",
+      "applier": "claude-via-mcp-apply-migration",
+      "diagnose": "47de4f",
+      "slug": "user_progress_snapshot_monotonic_weeks_and_date",
+      "cloud_version": "20261007184012",
+      "note": "Slice C1 of streak-freeze-restore-ownership. Body-only CREATE OR REPLACE of update_user_progress_snapshot (same 13-argument signature): current_streak_weeks and last_workout_date are GREATEST, the date is clamped to IST-today + 1 with an explicit NULL branch (a NULL date stays NULL), and the fresh INSERT stores the clamped value. A closing DO block asserts one function, the exact grantee set {authenticated, postgres, service_role}, search_path=public, SECURITY DEFINER, 13 arguments. Applied via MCP apply_migration on the founder's 'Go approved' 2026-10-08, after: B-pass (2 seats), Hermes pass (4 Sonnet seats, docs/audit/2026-10-08-hermes-streak-freeze-c1.md, accepted), and an always-aborting A1 dry-run (pre-check: live body md5 097b73d4a59ed7ed33db095bb5340268 equal to migration 115's; new body 10/10 cases ok; the live 115 body failed exactly the 4 discriminating cases; nothing persisted). Live verified post-apply: version 20261007184012; body carries both rules; ACL {postgres,service_role,authenticated} unchanged; search_path public; prosecdef true; 1 function, 13 args; comment preserved; anon execute false; anon-key POST of 13 named keys rejected 42501 'permission denied for function update_user_progress_snapshot' (not PGRST202); security_definer_anon_revoke.sql snapshot rows all true. Pre-apply live read: 0 of 32 user_progress rows had a date later than IST-today + 1. Rollback: a NEW minted migration with migration 115's body (literal block at end of the file). Diagnose-doc: docs/diagnoses/2026-10-07-last-workout-date-and-weeks-overwritten-by-stale-value-47de4f.md."
   }
 ]

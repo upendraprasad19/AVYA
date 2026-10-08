@@ -43,6 +43,7 @@ import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show User;
 
@@ -100,7 +101,11 @@ Map<String, dynamic> _preFixMerge(
 
 ProgressMergeResult _merge(
         Map<String, dynamic> local, Map<String, dynamic> cloud) =>
-    UserRepository.mergeCloudProgress(local: local, cloud: cloud);
+    UserRepository.mergeCloudProgress(local: local, cloud: cloud, istToday: kTestIstToday);
+
+// The IST calendar day every merge call in this file passes (Slice C1: the
+// merge needs it for the last_workout_date ceiling).
+const String kTestIstToday = '2026-10-07';
 
 void main() {
   // ── Group A — the pure merge (no Hive: the kill-switch getters FAIL CLOSED
@@ -692,6 +697,74 @@ void main() {
       expect(rpcs(), isNotEmpty,
           reason: 'local is ahead of the cloud row — the hydrate must push');
       expect((rpcs().first.body! as Map)['p_freezes_available'], 2);
+    });
+
+    // Slice C1: BOTH production callers must hand the merge the IST day from
+    // the (test-overridable) clock. The clock is set to a day far from the real
+    // one, so a caller that passed raw DateTime.now() or no day would accept the
+    // out-of-range cloud date below and fail these.
+    //   clock 2026-03-01 (IST) => ceiling 2026-03-02.
+    Future<void> withClock(Future<void> Function() body) async {
+      setTestClockTo(DateTime(2026, 3, 1, 12));
+      addTearDown(resetTestClock);
+      await body();
+    }
+
+    test('C1 lightweight restore: the merge gets the IST day from the clock '
+        '(a date past tomorrow is refused; a stale date does not win)',
+        () async {
+      await withClock(() async {
+        await seed({
+          ..._local(avail: 2, lastRefill: _p, used: []),
+          'last_workout_date': '2026-03-01',
+        });
+        await SyncService.instance.restoreUserProgressForTest(kTestUserId,
+            preFetched: [
+              {
+                ...cloudRow(avail: 2, lastRefill: _p),
+                'last_workout_date': '2026-02-20',
+              }
+            ]);
+        expect(progressMap()['last_workout_date'], '2026-03-01',
+            reason: 'a stale cloud date must not move local backwards');
+
+        await seed({
+          ..._local(avail: 2, lastRefill: _p, used: []),
+        }..remove('last_workout_date'));
+        await SyncService.instance.restoreUserProgressForTest(kTestUserId,
+            preFetched: [
+              {
+                ...cloudRow(avail: 2, lastRefill: _p),
+                'last_workout_date': '2026-03-05', // clock + 4 days
+              }
+            ]);
+        expect(progressMap()['last_workout_date'], isNull,
+            reason: 'a date past IST-today + 1 is malformed, never stored');
+      });
+    });
+
+    test('C1 sign-in hydrate: the merge gets the IST day from the clock',
+        () async {
+      await withClock(() async {
+        await seed({
+          ..._local(avail: 2, lastRefill: _p, used: []),
+          'last_workout_date': '2026-03-01',
+        });
+        await hydrate({
+          ...cloudRow(avail: 2, lastRefill: _p),
+          'last_workout_date': '2026-02-20',
+        });
+        expect(progressMap()['last_workout_date'], '2026-03-01');
+
+        await seed({
+          ..._local(avail: 2, lastRefill: _p, used: []),
+        }..remove('last_workout_date'));
+        await hydrate({
+          ...cloudRow(avail: 2, lastRefill: _p),
+          'last_workout_date': '2026-03-05',
+        });
+        expect(progressMap()['last_workout_date'], isNull);
+      });
     });
 
     test('MIRROR: a SIGN-IN HYDRATE whose cloud row already equals local '

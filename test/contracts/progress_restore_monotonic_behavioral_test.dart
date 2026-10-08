@@ -87,6 +87,10 @@ Map<String, dynamic> _preFixMerge(
         if (e.value != null) e.key: e.value,
     };
 
+// The IST calendar day every merge call in this file passes (Slice C1: the
+// merge needs it for the last_workout_date ceiling).
+const String kTestIstToday = '2026-10-07';
+
 void main() {
   late Directory tempDir;
   const testUser = 'b17ec0de-1111-4444-8888-0f18d5c0ffee';
@@ -132,7 +136,7 @@ void main() {
       expect(_preFixMerge(local, cloud)['current_phase'], 2,
           reason: 'control must reproduce the demotion, else it proves nothing');
 
-      final r = UserRepository.mergeCloudProgress(local: local, cloud: cloud);
+      final r = UserRepository.mergeCloudProgress(local: local, cloud: cloud, istToday: kTestIstToday);
       expect(r.merged['current_phase'], 5);
       expect(r.declinedFields.single.field, 'current_phase');
       expect(r.declinedFields.single.localValue, 5);
@@ -154,7 +158,7 @@ void main() {
       };
 
       final control = _preFixMerge(local, cloud);
-      final r = UserRepository.mergeCloudProgress(local: local, cloud: cloud);
+      final r = UserRepository.mergeCloudProgress(local: local, cloud: cloud, istToday: kTestIstToday);
 
       for (final f in UserRepository.monotonicProgressFields) {
         expect(control[f], cloud[f], reason: 'control: $f was demoted pre-fix');
@@ -174,6 +178,7 @@ void main() {
       expect(UserRepository.monotonicProgressFields,
           isNot(contains('longest_gap_days')));
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
         local: {'longest_gap_days': 30},
         cloud: {'longest_gap_days': 3},
       );
@@ -191,20 +196,21 @@ void main() {
       addTearDown(() => HiveService.instance.configBox
           .delete(UserRepository.kDisableProgressRestoreMonotonicMergeKey));
 
-      final off = UserRepository.mergeCloudProgress(local: local, cloud: cloud);
+      final off = UserRepository.mergeCloudProgress(local: local, cloud: cloud, istToday: kTestIstToday);
       expect(off.merged, equals(_preFixMerge(local, cloud)),
           reason: 'switch closed must be byte-identical to the old merge');
       expect(off.hasDeclined, isFalse);
 
       await HiveService.instance.configBox
           .delete(UserRepository.kDisableProgressRestoreMonotonicMergeKey);
-      final on = UserRepository.mergeCloudProgress(local: local, cloud: cloud);
+      final on = UserRepository.mergeCloudProgress(local: local, cloud: cloud, istToday: kTestIstToday);
       expect(on.merged['current_phase'], 5,
           reason: 'switch open (default) must guard — else this test is inert');
     });
 
     test('a HIGHER cloud value still wins — this is a guard, not a freeze', () {
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
         local: {'current_phase': 2, 'total_workouts_done': 10},
         cloud: {'current_phase': 6, 'total_workouts_done': 99},
       );
@@ -220,6 +226,7 @@ void main() {
       // founder decision moved it into the monotonic set (its own group below);
       // the premise "a streak resets" never held for it: nothing resets it.
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
         local: {'current_streak_days': 30},
         cloud: {'current_streak_days': 0},
       );
@@ -231,6 +238,7 @@ void main() {
       // The server owns this counter; adopting a higher LOCAL value would make
       // the next optimistic-lock RPC fail its version check.
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
         local: {'streak_progress_version': 9},
         cloud: {'streak_progress_version': 4},
       );
@@ -247,7 +255,7 @@ void main() {
         'current_streak_days': 3,
       };
       final r =
-          UserRepository.mergeCloudProgress(local: const {}, cloud: cloud);
+          UserRepository.mergeCloudProgress(local: const {}, cloud: cloud, istToday: kTestIstToday);
       expect(r.merged, equals(cloud));
       expect(r.hasDeclined, isFalse,
           reason: 'nothing to demote when there is no local value');
@@ -257,6 +265,7 @@ void main() {
 
     test('cloud nulls never win, monotonic or not (unchanged semantics)', () {
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
         local: {'current_phase': 3, 'plan_generated_at': 'x'},
         cloud: {'current_phase': null, 'plan_generated_at': null},
       );
@@ -272,6 +281,7 @@ void main() {
       // `as int?`, which throws on a String rather than yielding null.
       // Persisting garbage just moves the crash one hop.
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
         local: {'current_phase': 4},
         cloud: {'current_phase': 'garbage'},
       );
@@ -283,6 +293,7 @@ void main() {
 
     test('a numeric cloud value REPAIRS a corrupt local one, and reports', () {
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
         local: {'current_phase': 'garbage'},
         cloud: {'current_phase': 3},
       );
@@ -297,6 +308,7 @@ void main() {
       // monotonic key from the merged map, so a reinstalling user restored
       // with NO current_phase at all.
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
         local: const {},
         cloud: {'current_phase': 6, 'deployments_complete': 5},
       );
@@ -309,6 +321,7 @@ void main() {
       // The cloud side has been through JSON — read as num, per the
       // sync_profile.dart:100 idiom rather than commitPhaseAdvance's `as int?`.
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
         local: {'current_phase': 5},
         cloud: {'current_phase': 2.0},
       );
@@ -332,7 +345,7 @@ void main() {
       expect(_preFixMerge(local, cloud)['current_streak_weeks'], 5,
           reason: 'control must reproduce the demotion, else it proves nothing');
 
-      final r = UserRepository.mergeCloudProgress(local: local, cloud: cloud);
+      final r = UserRepository.mergeCloudProgress(local: local, cloud: cloud, istToday: kTestIstToday);
       expect(r.merged['current_streak_weeks'], 6);
       expect(r.declinedFields.single.field, 'current_streak_weeks');
       expect(r.declinedFields.single.localValue, 6);
@@ -342,6 +355,7 @@ void main() {
     test('MIRROR: a HIGHER cloud weeks value still wins (another device '
         'trained more) and nothing is reported', () {
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
         local: {'current_streak_weeks': 3},
         cloud: {'current_streak_weeks': 5},
       );
@@ -352,11 +366,13 @@ void main() {
     test('MIRROR: a fresh reinstall (no local weeks) adopts the cloud value, '
         'including 0', () {
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
         local: const {},
         cloud: {'current_streak_weeks': 4},
       );
       expect(r.merged['current_streak_weeks'], 4);
       final zero = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
         local: const {},
         cloud: {'current_streak_weeks': 0},
       );
@@ -367,6 +383,7 @@ void main() {
     test('MIRROR: the DAILY streak is still free to fall (it resets for real)',
         () {
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
         local: {'current_streak_days': 16, 'current_streak_weeks': 6},
         cloud: {'current_streak_days': 0, 'current_streak_weeks': 6},
       );
@@ -379,6 +396,7 @@ void main() {
     test('a malformed cloud weeks value keeps LOCAL and reports, never throws',
         () {
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
         local: {'current_streak_weeks': 6},
         cloud: {'current_streak_weeks': 'five'},
       );
@@ -394,7 +412,7 @@ void main() {
           UserRepository.kDisableProgressRestoreMonotonicMergeKey, true);
       addTearDown(() => HiveService.instance.configBox
           .delete(UserRepository.kDisableProgressRestoreMonotonicMergeKey));
-      final off = UserRepository.mergeCloudProgress(local: local, cloud: cloud);
+      final off = UserRepository.mergeCloudProgress(local: local, cloud: cloud, istToday: kTestIstToday);
       expect(off.merged['current_streak_weeks'], 5);
       expect(off.hasDeclined, isFalse);
     });
@@ -406,6 +424,7 @@ void main() {
       final existing = Map<String, dynamic>.from(
           HiveService.instance.userBox.get('progress') as Map);
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
           local: existing, cloud: {'current_streak_weeks': 5});
       await HiveService.instance.userBox.put('progress', r.merged);
       final after = HiveService.instance.userBox.get('progress') as Map;
@@ -434,6 +453,7 @@ void main() {
 
     test('local advanced: all FOUR local values survive a stale cloud', () {
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
           local: localAdvanced(), cloud: cloudStale());
       expect(r.merged['current_phase'], 2);
       expect(r.merged['current_week'], 1);
@@ -445,6 +465,7 @@ void main() {
 
     test('reinstall: empty local adopts all four from cloud', () {
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
           local: <String, dynamic>{}, cloud: cloudStale());
       expect(r.merged['current_phase'], 1);
       expect(r.merged['current_week'], 4);
@@ -455,6 +476,7 @@ void main() {
 
     test('cloud ahead (second device): all four come from cloud', () {
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
         local: <String, dynamic>{
           'current_phase': 1,
           'current_week': 2,
@@ -478,6 +500,7 @@ void main() {
       // advances the phase alone. Refusing an absent key would drop it from
       // the merged map and anchor the next plan regen at today.
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
         local: <String, dynamic>{'current_phase': 2, 'current_week': 1},
         cloud: cloudStale(),
       );
@@ -490,6 +513,7 @@ void main() {
 
     test('identical values are not reported as a refusal', () {
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
         local: <String, dynamic>{'current_phase': 2, 'phase_started_at': 'SAME'},
         cloud: <String, dynamic>{'current_phase': 1, 'phase_started_at': 'SAME'},
       );
@@ -500,6 +524,7 @@ void main() {
     test('cloud non-numeric phase WITH local present couples the companions',
         () {
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
         local: localAdvanced(),
         cloud: <String, dynamic>{
           'current_phase': 'garbage',
@@ -513,6 +538,7 @@ void main() {
     test('cloud non-numeric phase with local ABSENT does NOT couple', () {
       // "Kept whatever local had" when local had nothing is not a kept value.
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
         local: <String, dynamic>{},
         cloud: <String, dynamic>{
           'current_phase': 'garbage',
@@ -533,6 +559,7 @@ void main() {
       // Here local HOLDS a companion, so the guard is the only thing deciding —
       // remove it and this reddens.
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
         local: <String, dynamic>{'phase_started_at': 'LOCAL'},
         cloud: <String, dynamic>{
           'current_phase': 'garbage',
@@ -553,6 +580,7 @@ void main() {
           .delete(UserRepository.kDisableProgressRestoreMonotonicMergeKey));
 
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
           local: localAdvanced(), cloud: cloudStale());
       expect(r.merged['current_phase'], 1);
       expect(r.merged['current_week'], 4);
@@ -569,6 +597,7 @@ void main() {
           .delete(UserRepository.kDisableProgressPhaseDeltaCouplingKey));
 
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
           local: localAdvanced(), cloud: cloudStale());
       expect(r.merged['current_phase'], 2,
           reason: 'the two switches are independent — rolling the new one '
@@ -588,6 +617,7 @@ void main() {
           .delete(UserRepository.kDisableProgressRestoreMonotonicMergeKey));
 
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
         local: localAdvanced(),
         cloud: <String, dynamic>{'phase_started_at': 'CLOUD'},
       );
@@ -606,6 +636,7 @@ void main() {
           .delete(UserRepository.kDisableProgressRestoreMonotonicMergeKey));
 
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
         local: localAdvanced(),
         cloud: <String, dynamic>{
           'current_phase': null,
@@ -618,6 +649,7 @@ void main() {
 
     test('unrelated non-monotonic keys still take cloud while coupled', () {
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
         local: <String, dynamic>{'current_phase': 5, 'current_streak_days': 9},
         cloud: <String, dynamic>{'current_phase': 2, 'current_streak_days': 0},
       );
@@ -635,6 +667,7 @@ void main() {
         'current_phase': 1,
       };
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
           local: localAdvanced(), cloud: cloud);
       expect(r.merged['phase_started_at'], '2026-05-25T00:00:00.000Z');
     });
@@ -644,6 +677,7 @@ void main() {
       // The loop never visits a key cloud does not have, so it cannot signal
       // that local's phase survived. Seeded before the loop instead.
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
         local: localAdvanced(),
         cloud: <String, dynamic>{'phase_started_at': 'CLOUD'},
       );
@@ -656,6 +690,7 @@ void main() {
 
     test('cloud current_phase explicitly NULL: same (N1)', () {
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
         local: localAdvanced(),
         cloud: <String, dynamic>{
           'current_phase': null,
@@ -668,6 +703,7 @@ void main() {
 
     test('cloud phase absent AND local absent: no coupling (N1 carve-out)', () {
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
         local: <String, dynamic>{'phase_started_at': 'LOCAL'},
         cloud: <String, dynamic>{'phase_started_at': 'CLOUD'},
       );
@@ -687,6 +723,7 @@ void main() {
       addTearDown(() => ErrorTelemetry.debugOnLogEventForTests = null);
 
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
           local: localAdvanced(), cloud: cloudStale());
       reportProgressDemotionsDeclined(r, source: 'test');
 
@@ -706,6 +743,7 @@ void main() {
       addTearDown(() => ErrorTelemetry.debugOnLogEventForTests = null);
 
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
         local: <String, dynamic>{'current_phase': 1},
         cloud: <String, dynamic>{'current_phase': 3, 'phase_started_at': 'C'},
       );
@@ -717,6 +755,7 @@ void main() {
 
     test('current_phase demotion telemetry is unchanged by the coupling', () {
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
           local: localAdvanced(), cloud: cloudStale());
       expect(r.declinedFields.map((d) => d.field), contains('current_phase'));
       final d = r.declinedFields.firstWhere((x) => x.field == 'current_phase');
@@ -739,6 +778,7 @@ void main() {
           ? Map<String, dynamic>.from(existing)
           : <String, dynamic>{};
       final result = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
         local: local,
         cloud: {'current_phase': 2, 'total_workouts_done': 10, 'current_week': 1},
       );
@@ -768,6 +808,7 @@ void main() {
           (op, {String? message}) => seen.add('$op|$message');
 
       final r = UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
         local: {'current_phase': 4, 'total_workouts_done': 50},
         cloud: {'current_phase': 1, 'total_workouts_done': 5},
       );
@@ -794,6 +835,7 @@ void main() {
 
       reportProgressDemotionsDeclined(
         UserRepository.mergeCloudProgress(
+        istToday: kTestIstToday,
           local: {'current_phase': 1},
           cloud: {'current_phase': 3},
         ),

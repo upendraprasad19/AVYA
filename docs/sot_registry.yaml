@@ -3392,7 +3392,7 @@ concepts:
         semantic: pass-through
         fields_read: [is_pro, expires_at, plan, paymentInFlightOrder]
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 886-888
+        line_range: 1047-1049
         method: isOnboarded
         semantic: flag-check
         fields_read: [onboarding_completed]
@@ -4925,15 +4925,15 @@ concepts:
       `streak_progress_service_concurrency_test.dart` greps raw source).
     writers:
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 474-647
+        line_range: 613-808
         method: mergeCloudProgress
         notes: skips the freeze family and the control-plane keys in the cloud-copy loop when the freeze merge is on.
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 663-776
+        line_range: 824-937
         method: _mergeFreezeFamily
         notes: the post-pass; delegates to StreakProgressService.mergeFreezeProgress.
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 926-1023
+        line_range: 926-1024
         method: _restoreUserProgress
         notes: owner guard before the put, then `unawaited(syncFreezes())` when the merge scheduled a push.
       - file: lib/core/services/auth_session_bootstrapper.dart
@@ -4980,6 +4980,66 @@ concepts:
          push) — never "count lost, flag true".
       4. `scheduleFreezeSyncUp` compares against the ORIGINAL cloud values and
          compares `used_dates` AS A SET, so a steady state never pushes.
+
+  - concept: progress_last_workout_date
+    domain: workout
+    description: |
+      Slice C1 (diagnose 47de4f) — `user_progress.last_workout_date` and
+      `current_streak_weeks` stop being overwritten by a stale value. CLIENT:
+      `UserRepository.mergeCloudProgress` merges `last_workout_date` with the pure
+      rule `laterIsoDate` (well-formed `YYYY-MM-DD`, a real calendar day, not later
+      than IST-today + 1; the later date wins; local absent + cloud date takes the
+      cloud; a malformed side is reported, never written over a good one). Callers
+      pass `istToday` (both whole-row restores). Kill switch
+      `disable_progress_date_merge`; `disable_progress_restore_monotonic_merge`
+      remains the wider rollback. SERVER: `update_user_progress_snapshot` (same
+      13-argument signature, body-only) uses GREATEST for `current_streak_weeks`
+      and `last_workout_date`, clamps the date to IST-today + 1, and keeps a NULL
+      date NULL (explicit branch: LEAST(NULL, x) is x).
+    writers:
+      - file: lib/shared/repositories/user_repository.dart
+        line_range: 613-808
+        method: mergeCloudProgress
+        notes: the date branch inside the cloud-copy loop; laterIsoDate at 125.
+      - file: lib/core/services/sync/sync_profile.dart
+        line_range: 926-1024
+        method: _restoreUserProgress
+        notes: passes istToday; the push sends p_last_workout_date.
+      - file: lib/core/services/auth_session_bootstrapper.dart
+        line_range: 1-9999
+        method: hydrateFromCloud
+        notes: the sign-in hydrate; passes istToday.
+    reader_manifest_complete: false
+    readers:
+      - file: lib/core/services/sync/sync_profile.dart
+        line_range: 926-1024
+        method: _restoreUserProgress
+        semantic: pass-through
+        fields_read: [last_workout_date, current_streak_weeks]
+        notes: reads the cloud row it merges; the rank-promotion gap gate is the downstream consumer.
+    behavioral_test_path: test/contracts/last_workout_date_latest_wins_behavioral_test.dart
+    additional_tests:
+      - test/contracts/progress_last_workout_date_writer_to_reader_test.dart  # migration text + client call-site pins; Gate 9 name
+      - test/contracts/progress_restore_monotonic_behavioral_test.dart  # existing OI-83 merge, now passes istToday
+      - test/contracts/progress_restore_freeze_merge_behavioral_test.dart  # caller tests drive the real restore with a pinned clock
+    hive:
+      box: userBox
+      key_prefix: "progress"
+      key_formula: "userBox['progress'][last_workout_date | current_streak_weeks]"
+    cloud:
+      table: user_progress
+      columns: [last_workout_date, current_streak_weeks]
+    sync_methods: [syncProgressNow, pushOnboardingProgressSnapshot]
+    restore_methods: [_restoreUserProgress]
+    telemetry:
+      failure_op_types: [progress_restore_demotion_declined]
+    class_constraints: |
+      1. The date rule lives in ONE pure function (`laterIsoDate`); a second
+         comparison of these strings is how drift starts.
+      2. The server clamp must keep its explicit NULL branch (a NULL date is
+         stored as NULL, never as the ceiling).
+      3. The signature of `update_user_progress_snapshot` stays 13 arguments:
+         an overload or a DROP would reset the ACL (bug class 2.36).
 
   - concept: sleep_logs
     domain: health
@@ -5411,7 +5471,7 @@ concepts:
           stayed NULL -> forced re-onboard on a new device. Now carries the
           column (guarded SyncService._hasValue, never clobbers with null).
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 891-893
+        line_range: 1052-1054
         method: setOnboarded
       - file: lib/core/services/auth_session_bootstrapper.dart
         line_range: 758-1088
@@ -14557,7 +14617,7 @@ concepts:
           without this, the very next extraction pass would silently
           overwrite every pre-existing user's genuine profile values.
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 1207-1227
+        line_range: 1368-1388
         method: lockCoachExtractionFields
         notes: |
           Client call site: `.rpc('lock_coach_extraction_fields', params: {'p_fields': fields})`.
@@ -14643,7 +14703,7 @@ concepts:
           streak_freezes_available. The three notice keys are local-only: every progress
           payload builder names its keys (sync_profile.dart _buildUserProgressRpcParams).
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 846-862
+        line_range: 1006-1022
         method: clearStreakFreezeNotice
         notes: |
           The ONE clearer: the flag, the count and the snapshot in ONE updateProgress delta

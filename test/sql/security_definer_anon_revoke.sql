@@ -122,7 +122,7 @@ SELECT 'morning_alert_get_service_key search_path set',
        EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
                WHERE n.nspname='private' AND p.proname='morning_alert_get_service_key'
                  AND p.proconfig IS NOT NULL
-                 AND EXISTS (SELECT 1 FROM unnest(p.proconfig) c WHERE c LIKE 'search_path=%'));
+                 AND EXISTS (SELECT 1 FROM unnest(p.proconfig) c WHERE c LIKE 'search_path=%'))
 UNION ALL
 -- --------------------------------------------------------------------------
 -- Migration 121 (log_table_retention, diagnose c8e5b3). Added 2026-09-10 from

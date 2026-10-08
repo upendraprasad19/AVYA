@@ -984,6 +984,7 @@ extension SyncServiceProfile on SyncService {
       final result = UserRepository.mergeCloudProgress(
         local: existingMap,
         cloud: cloud,
+        istToday: istDateStr(nowWall()),
       );
       // closes-diagnose c9d2f6 (and the e5c2d1 class). `userId` was captured
       // before the read above, and the freeze push below derives the live
