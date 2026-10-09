@@ -7,6 +7,16 @@
 // coach calls this tool with a YYYY-MM-DD inclusive range.
 import { z } from "npm:zod@3.25.76";
 import type { ToolContext, ToolDefinition } from "../types.ts";
+import { chunkIds } from "../../exercise_day.ts";
+import { fetchPagesBounded } from "../../paged_fetch_bounded.ts";
+
+/** per_day attaches items only up to this many days (B5); longer ranges return totals only. */
+export const MAX_ITEM_RANGE_DAYS = 31;
+export const ITEMS_OMITTED_NOTE = "items omitted for ranges over 31 days";
+
+function rangeDays(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000) + 1;
+}
 
 const schema = z.object({
   date_from: z
@@ -25,7 +35,7 @@ const schema = z.object({
     .enum(["per_day", "total"])
     .default("per_day")
     .describe(
-      "per_day returns one row per date with totals + items; total returns a single aggregate over the range.",
+      "per_day returns one row per date with totals + items (items only for ranges up to 31 days; longer ranges return per-day totals without items); total returns a single aggregate over the range.",
     ),
 });
 
@@ -68,6 +78,8 @@ interface Result {
   aggregation: "per_day" | "total";
   days?: DayRow[];
   total?: TotalRow;
+  note?: string;
+  truncated?: boolean; // a read hit its page budget: totals are a lower bound
 }
 
 interface NutritionLogRow {
@@ -103,33 +115,55 @@ export const getNutritionHistoryTool: ToolDefinition<Args, Result> = {
   maxLatencyMs: 3000,
   handler: async (ctx: ToolContext, args: Args): Promise<Result> => {
     const { sb, userId } = ctx;
-    const { data: logsRaw, error: logsErr } = await sb
-      .from("nutrition_logs")
-      .select(
-        "id, date, total_calories, total_protein, total_carbs, total_fat, total_fiber, meal_type",
-      )
-      .eq("user_id", userId)
-      .gte("date", args.date_from)
-      .lte("date", args.date_to)
-      .order("date", { ascending: true });
-    if (logsErr) {
-      throw new Error(`nutrition_logs query failed: ${logsErr.message}`);
-    }
-    const logs: NutritionLogRow[] = logsRaw ?? [];
+    // Paged (B4): a wide range of logs exceeds PostgREST's 1,000-row cap.
+    const logsRes = await fetchPagesBounded<NutritionLogRow>(
+      (withCount) =>
+        sb
+          .from("nutrition_logs")
+          .select(
+            "id, date, total_calories, total_protein, total_carbs, total_fat, total_fiber, meal_type",
+            withCount ? { count: "exact" } : undefined,
+          )
+          .eq("user_id", userId)
+          .gte("date", args.date_from)
+          .lte("date", args.date_to),
+      {
+        orderBy: [{ column: "date" }, { column: "id" }],
+        maxPages: 10,
+        label: "getNutritionHistory:logs",
+      },
+    );
+    const logs: NutritionLogRow[] = logsRes.rows;
+    let truncated = logsRes.truncated;
 
-    const logIds = logs.map((r) => r.id);
+    // B5: items are never read for `total`; for `per_day` only when the range
+    // is <= 31 days. Longer per_day ranges return totals plus a note (no
+    // rejection: `aggregation` defaults to per_day, so the default call must work).
+    const wantItems = args.aggregation === "per_day" &&
+      rangeDays(args.date_from, args.date_to) <= MAX_ITEM_RANGE_DAYS;
     let items: NutritionItemRow[] = [];
-    if (logIds.length > 0) {
-      const { data: itemRows, error: itemsErr } = await sb
-        .from("nutrition_log_items")
-        .select("log_id, food_name, calories, protein, carbs, fat")
-        .in("log_id", logIds);
-      if (itemsErr) {
-        throw new Error(
-          `nutrition_log_items query failed: ${itemsErr.message}`,
-        );
-      }
-      items = itemRows ?? [];
+    if (wantItems && logs.length > 0) {
+      const chunks = await Promise.all(
+        chunkIds(logs.map((r) => r.id)).map((ids, i) =>
+          fetchPagesBounded<NutritionItemRow>(
+            (withCount) =>
+              sb
+                .from("nutrition_log_items")
+                .select(
+                  "log_id, food_name, calories, protein, carbs, fat",
+                  withCount ? { count: "exact" } : undefined,
+                )
+                .in("log_id", ids),
+            {
+              orderBy: [{ column: "id" }],
+              maxPages: 5,
+              label: `getNutritionHistory:items#${i}`,
+            },
+          )
+        ),
+      );
+      items = chunks.flatMap((c) => c.rows);
+      truncated = truncated || chunks.some((c) => c.truncated);
     }
 
     // Group by date
@@ -182,6 +216,8 @@ export const getNutritionHistoryTool: ToolDefinition<Args, Result> = {
         range: { from: args.date_from, to: args.date_to },
         aggregation: "per_day",
         days,
+        ...(wantItems ? {} : { note: ITEMS_OMITTED_NOTE }),
+        ...(truncated ? { truncated: true } : {}),
       };
     }
 
@@ -207,6 +243,7 @@ export const getNutritionHistoryTool: ToolDefinition<Args, Result> = {
     return {
       range: { from: args.date_from, to: args.date_to },
       aggregation: "total",
+      ...(truncated ? { truncated: true } : {}),
       total: {
         ...total,
         days_with_logs: daysWithLogs,

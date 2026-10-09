@@ -4,6 +4,10 @@ import { geminiChat, labelForModel, MODEL_PRO } from "../_shared/gemini.ts";
 import { reportGeminiExhaustion } from "../_shared/gemini_failure_alert.ts";
 import { CAPTAIN_MANUAL } from "../_shared/captain_manual.ts";
 import { istDateStr } from "../_shared/ist_date.ts";
+import { buildDayMap, istDatesEnding } from "../_shared/exercise_day.ts";
+import type { SummaryRow } from "../_shared/live_exercise_rows.ts";
+import { fetchWleWindow } from "../_shared/wle_window_read.ts";
+import { weekWorkoutRows } from "./week_rows.ts";
 import {
   asAuthoredPrompt, sanitizeIdentifier
 } from "../_shared/sanitize_for_prompt.ts";
@@ -168,10 +172,13 @@ serve(async (req: Request) => {
     // weekly report covers the user's actual training week
     // (Mon-Sun IST), not UTC.
     const now = new Date();
-    const sevenDaysAgo = new Date(now);
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    const sevenDaysAgoStr = istDateStr(sevenDaysAgo);
-    const todayStr = istDateStr(now);
+    // L1b (B3): exactly 7 IST dates ending today (was 8) — the SAME window
+    // for the nutrition, exercise and workout-summary reads so the report's
+    // days line up.
+    const weekDates = istDatesEnding(7, now);
+    const sevenDaysAgoStr = weekDates[0];
+    const todayStr = weekDates[weekDates.length - 1];
+    const dayMap = await buildDayMap(now);
 
     // 1. Nutrition logs for the past 7 days
     const { data: nutritionLogs, error: nutritionError } = await supabase
@@ -213,15 +220,24 @@ serve(async (req: Request) => {
 
     // 4a. Exercise-level data from workout_log_exercises (per-set granular data)
     // workout_logs now stores summary rows; exercise details are in workout_log_exercises.
-    const { data: exerciseLogs, error: exerciseError } = await supabase
-      .from("workout_log_exercises")
-      .select(
-        "exercise_name, set_number, reps, weight_kg, duration_seconds, is_pr, completed_at",
-      )
-      .eq("user_id", targetUserId)
-      .gte("completed_at", sevenDaysAgoStr + "T00:00:00Z")
-      .lte("completed_at", todayStr + "T23:59:59Z")
-      .order("completed_at", { ascending: true });
+    // Selected by workout_log_id (UUID v5 of each window date), NOT by
+    // completed_at (the write time); one live row per exercise-day.
+    let exerciseRaw: SummaryRow[] = [];
+    let exerciseError: { message?: string } | null = null;
+    try {
+      exerciseRaw = (await fetchWleWindow<SummaryRow>((ids, withCount) =>
+        supabase
+          .from("workout_log_exercises")
+          .select(
+            "id, user_id, workout_log_id, exercise_id, exercise_name, set_number, reps, weight_kg, duration_seconds, is_pr, completed_at, deleted_at",
+            withCount ? { count: "exact" } : undefined,
+          )
+          .eq("user_id", targetUserId)
+          .in("workout_log_id", ids)
+          .is("deleted_at", null), weekDates, { maxPages: 5, label: "weekly-report:wle" })).rows;
+    } catch (e) {
+      exerciseError = { message: String(e) };
+    }
 
     if (exerciseError) {
       console.error("Exercise logs query error:", exerciseError);
@@ -243,16 +259,11 @@ serve(async (req: Request) => {
     // Merge into unified workoutLogs format for downstream code.
     // Each row is a per-exercise SUMMARY (not per-set). set_number = total sets for that exercise.
     // Summary logs provide: date, duration_seconds, rpe
-    const workoutLogs: Array<Record<string, unknown>> = (exerciseLogs ?? []).map((e: Record<string, unknown>) => ({
-      date: e.completed_at ? (e.completed_at as string).split("T")[0] : todayStr,
-      exercise_name: e.exercise_name,
-      sets_completed: (e.set_number as number) ?? 1, // actual set count from per-exercise summary
-      reps_completed: e.reps,
-      weight_kg: e.weight_kg,
-      duration_seconds: e.duration_seconds,
-      is_pr: e.is_pr,
-      rpe: null, // RPE is workout-level, not exercise-level
-    }));
+    const workoutLogs: Array<Record<string, unknown>> = weekWorkoutRows(
+      exerciseRaw,
+      dayMap,
+      weekDates,
+    ) as unknown as Array<Record<string, unknown>>;
 
     // Attach RPE from workout summaries to the first exercise entry of each date
     const rpeByDate: Record<string, number | null> = {};

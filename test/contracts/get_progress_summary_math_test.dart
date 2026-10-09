@@ -41,11 +41,18 @@ void main() {
 
     test('planned-workouts filter excludes rest days', () {
       // The bug: filter only excluded "paused" and "skipped".
-      // The fix: also exclude "rest" (and null defensively).
-      expect(source, contains('s.status !== "rest"'),
+      // The fix: also exclude "rest" (and null defensively). L1b moved the
+      // status set into the shared constant `NON_WORKOUT_STATUSES` (parity with
+      // rank_engine + the client pinned by workout_statuses_test.ts); the tool
+      // must still null-guard and route through it.
+      expect(source, contains('s.status !== null'));
+      expect(source, contains('NON_WORKOUT_STATUSES.has(s.status)'),
           reason: 'Rest days must NOT count as planned workouts.');
-      expect(source, contains('s.status !== "paused"'));
-      expect(source, contains('s.status !== "skipped"'));
+      final statuses = File('supabase/functions/_shared/workout_statuses.ts')
+          .readAsStringSync();
+      for (final s in ['"paused"', '"skipped"', '"rest"', '"moved"', '"dropped"']) {
+        expect(statuses, contains(s));
+      }
     });
   });
 }

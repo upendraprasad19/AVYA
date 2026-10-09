@@ -1,7 +1,7 @@
 // Bug t1m5b0 regression test (APK Test #16.2).
 //
 // Pins the contract that supabase/functions/_shared/tools/progress/
-// getProgressSummary.ts dispatches its 5 read-only SELECTs via
+// getProgressSummary.ts dispatches its 4 read-only SELECTs via
 // Promise.all rather than sequential awaits.
 //
 // Pre-fix each was awaited sequentially; at typical 200-1200 ms per
@@ -20,7 +20,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('t1m5b0 — getProgressSummary handler uses Promise.all over its 5 SELECTs',
+  test('t1m5b0 — getProgressSummary handler uses Promise.all over its 4 SELECTs',
       () {
     final src = File(
             'supabase/functions/_shared/tools/progress/getProgressSummary.ts')
@@ -39,20 +39,20 @@ void main() {
       stripped.contains('await Promise.all('),
       isTrue,
       reason:
-          'getProgressSummary must dispatch its 5 read-only SELECTs via '
+          'getProgressSummary must dispatch its 4 read-only SELECTs via '
           'Promise.all. Sequential awaits accumulate past the wall-clock '
           'budget and return tool_timeout, which Gemini paraphrases as '
           '"the system timed out gathering your phase summary."',
     );
 
     // Count occurrences of `.from("` inside the parallelized block —
-    // there must be at least 5 (one per SELECT). Crude but catches any
+    // there must be at least 4 (one per SELECT; L1b removed the separate PR query, pr_count now derives from the deduped summary rows). Crude but catches any
     // accidental removal of a query during a future refactor.
     final fromMatches =
         RegExp(r'\.from\(\s*"\w+"').allMatches(stripped).length;
-    expect(fromMatches, greaterThanOrEqualTo(5),
+    expect(fromMatches, greaterThanOrEqualTo(4),
         reason:
-            'Expected at least 5 sb.from("...") calls in the handler (one per '
+            'Expected at least 4 sb.from("...") calls in the handler (one per '
             'SELECT). Found $fromMatches — has a query been removed?');
   });
 

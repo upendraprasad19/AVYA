@@ -43,9 +43,12 @@
 //
 // SCOPE / LIMITS (honest — same discipline as check_schema_column_refs.dart)
 // -------------------------------------------------------------------------
-//   - Only CRON-dispatched functions + `_shared/`. Client-invoked functions
-//     (ai-proxy, verify-payment, …) read one user's own rows and are out of
-//     scope by design.
+//   - CRON-dispatched functions + `_shared/` + (L1b, plan B8) the coach tools
+//     under `_shared/tools/**`, which are client-invoked but read a user's
+//     whole history and clip silently at the same 1000-row cap (a hard
+//     failure since the L1b flip, §4.11). Other client-invoked functions
+//     (verify-payment, …) read one user's own rows and stay out of scope by
+//     design.
 //   - Chain extraction is textual: from `.from(`/`.rpc(` forward to the
 //     statement's terminating `;`. A query built across several statements
 //     (`let q = supabase.from(...); q = q.eq(...)`) is NOT tracked — it would
@@ -74,7 +77,8 @@ const int postgrestMaxRows = 1000;
 /// sites carry a generic parameter (`fetchAllPages<Record<string, unknown>>(`)
 /// whose nested angle brackets no simple regex matches. The bare name inside a
 /// 6-line window is signal enough.
-final _pagedHelper = RegExp(r'fetchAll(Pages|ByIds)\b');
+final _pagedHelper =
+    RegExp(r'(fetchAll(Pages|ByIds)|fetchPagesBounded|fetchWleWindow)\b');
 final _single = RegExp(r'\.(maybeSingle|single)\s*\(');
 final _headCount = RegExp(r'head\s*:\s*true');
 final _range = RegExp(r'\.range\s*\(');
@@ -177,6 +181,21 @@ void main(List<String> args) {
       if (e is File &&
           e.path.endsWith('.ts') &&
           !e.path.contains('_test') &&
+          !e.path.endsWith('.test.ts')) {
+        addTarget(e);
+      }
+    }
+  }
+
+  // L1b (plan B8): the coach tools, scanned RECURSIVELY (the `_shared` scan
+  // above is not), keeping the test exclusions.
+  final toolsDir = Directory('$root/supabase/functions/_shared/tools');
+  if (toolsDir.existsSync()) {
+    for (final e in toolsDir.listSync(recursive: true)) {
+      if (e is File &&
+          e.path.endsWith('.ts') &&
+          !e.path.contains('_test') &&
+          !e.path.contains('__tests__') &&
           !e.path.endsWith('.test.ts')) {
         addTarget(e);
       }
