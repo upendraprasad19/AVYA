@@ -6,9 +6,43 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### subscription_state — the screen is now the one place that decides what a not-PRO user sees of their progress photos; the repository makes no PRO decision. (1 bugs)
+- 2026-10-08 c2b7e4 — (1) A user whose PRO lapsed could not open the Progress screen to view or delete the progress photos they already held: the Photos hub row ran the PRO gate and showed the paywall without opening the…
+
+### weekly_streak_counter (2 bugs)
+- 2026-10-08 a3c8f1 — The weekly-streak marker `last_counted_week_key` (the calendar week last counted, Slice D) lived only in the local Hive progress map. A reinstall or a second device restored the counter…
+- 2026-10-08 b7d3e5 — The weekly-streak counter (`current_streak_weeks`) under-counts. With 6 planned workouts the threshold is 5, but the FIRST completed session of a week stamped the marker `last_streak_week` with that…
+
+### subscription_state — the server's one definition of PRO, status = 'active' AND end_date > now(), gains a new reader (the database itself, at both doors of a NEW progress photo). (1 bugs)
+- 2026-10-07 d8f2a6 — The PRO gate on progress photos existed only in the client (the Photos hub row, the Progress screen entry and its Add button, and ProgressPhotoRepository.capture's own isPro read). A free user calling…
+
+### progress_last_workout_date (1 bugs)
+- 2026-10-07 47de4f — A stale value could overwrite a newer one in two places. (1) CLIENT: the whole-row restore (`UserRepository.mergeCloudProgress`) copied the cloud `last_workout_date` over the local one…
+
+### streak_freeze_notice (1 bugs)
+- 2026-10-07 a5e3c7 — Home's snackbar after a streak freeze is spent read "Streak Freeze used! N remaining this week." That sentence describes a weekly allowance and the app does not have one: a freeze is a KEPT stock (+1…
+
+### weekly_report_screen (1 bugs)
+- 2026-10-07 d7b2e5 — Issue #78: on the Weekly Report screen "Share as Video" never produces a video. Root cause: the client polls an Edge Function that has been a 410 Gone stub since 2026-04-18. Two adjacent defects found…
+
 ### wle_single_live_summary (2 bugs)
 - 2026-10-06 bd79b1 — OI-312. Deleting an exercise log never reaches the cloud. The delete drain (`_drainPendingExlogDeletes`) upserts a tombstone keyed on (user_id, workout_log_id, exercise_id, set_number). Migration…
 - 2026-10-06 4b5c38 — OI-307 (writer half). An exercise logged, synced, then edited to a different number of sets leaves TWO live summary rows in workout_log_exercises for the same (user_id, workout_log_id, exercise_id):…
+
+### restore_legacy_paged_reads (1 bugs)
+- 2026-10-06 c7e2a9 — When the single-call restore is unavailable the client falls back to its legacy per-table restore, and that path lost or doubled rows silently for a long-history account. PostgREST clamps every…
+
+### progress_restore_freeze_merge (1 bugs)
+- 2026-10-06 c9d2f6 — The founder's Home screen showed streak 16 with 2 freezes. The persisted count was wrong: the streak only holds at 16 because two missed days (2026-10-03 and 2026-10-05) are SIMULATED as covered by…
+
+### restore_user_snapshot_paged_reads (1 bugs)
+- 2026-10-06 e4c1d7 — The single-call restore (Edge Function restore-user-snapshot) silently returned at most 1000 rows per table. PostgREST clamps every response to db-max-rows (1000 on this project) with HTTP 200 and…
+
+### not_applicable — test-fixture and test-support environment hermeticity; no Hive/cloud writer-reader contract and no entry of docs/sot_registry.yaml covers it (grep over the registry finds none, c3f8e1 recorded the same). (1 bugs)
+- 2026-10-06 e6c4a9 — `test/scripts/contract_sweep_e2e_test.dart` FAILED 5 of its 7 tests (`PathNotFoundException ... argv.txt`, `Expected: <1> Actual: <0>`) whenever the pre-push contract sweep selected it, and the sweep…
+
+### streak_decay_restore_settled_marker (1 bugs)
+- 2026-10-06 b4e7a1 — Founder (account upendra), 2026-10-06 06:45 IST, phone: Home shows streak 16 with 2 streak freezes. Truth is streak 16 with ZERO freezes in reserve. The Home streak number is a read-only walk…
 
 ### subscription_state (8 bugs)
 - 2026-10-05 b7c1e4 — A free user could reach and USE the Progress Photos screen by editing the address of an already-open web tab to `#/profile/progress-photos`. The screen had no PRO check of its own: the only gate was…
@@ -1510,8 +1544,20 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-10-08 | c2b7e4 | (1) A user whose PRO lapsed could not open the Progress screen to view or delete the progress photos they already held: the Photos hub row ran the PRO gate and showed the paywall without opening the… | subscription_state — the screen is now the one place that decides what a not-PRO user sees of their progress photos; the repository makes no PRO decision. | test/contracts/progress_photo_client_rules_test.dart |
+| 2026-10-08 | a3c8f1 | The weekly-streak marker `last_counted_week_key` (the calendar week last counted, Slice D) lived only in the local Hive progress map. A reinstall or a second device restored the counter… | weekly_streak_counter | test/contracts/streak_week_marker_push_behavioral_test.dart |
+| 2026-10-08 | b7d3e5 | The weekly-streak counter (`current_streak_weeks`) under-counts. With 6 planned workouts the threshold is 5, but the FIRST completed session of a week stamped the marker `last_streak_week` with that… | weekly_streak_counter | test/contracts/weekly_streak_counter_writer_to_reader_test.dart |
+| 2026-10-07 | d8f2a6 | The PRO gate on progress photos existed only in the client (the Photos hub row, the Progress screen entry and its Add button, and ProgressPhotoRepository.capture's own isPro read). A free user calling… | subscription_state — the server's one definition of PRO, status = 'active' AND end_date > now(), gains a new reader (the database itself, at both doors of a NEW progress photo). | test/contracts/progress_photos_pro_insert_rule_test.dart |
+| 2026-10-07 | 47de4f | A stale value could overwrite a newer one in two places. (1) CLIENT: the whole-row restore (`UserRepository.mergeCloudProgress`) copied the cloud `last_workout_date` over the local one… | progress_last_workout_date | test/contracts/last_workout_date_latest_wins_behavioral_test.dart |
+| 2026-10-07 | a5e3c7 | Home's snackbar after a streak freeze is spent read "Streak Freeze used! N remaining this week." That sentence describes a weekly allowance and the app does not have one: a freeze is a KEPT stock (+1… | streak_freeze_notice | test/contracts/streak_freeze_notice_behavioral_test.dart |
+| 2026-10-07 | d7b2e5 | Issue #78: on the Weekly Report screen "Share as Video" never produces a video. Root cause: the client polls an Edge Function that has been a 410 Gone stub since 2026-04-18. Two adjacent defects found… | weekly_report_screen | test/contracts/weekly_report_video_and_refresh_issue78_test.dart |
 | 2026-10-06 | bd79b1 | OI-312. Deleting an exercise log never reaches the cloud. The delete drain (`_drainPendingExlogDeletes`) upserts a tombstone keyed on (user_id, workout_log_id, exercise_id, set_number). Migration… | wle_single_live_summary | test/sql/workout_log_exercises_delete_final_rename_live_verify.sql |
 | 2026-10-06 | 4b5c38 | OI-307 (writer half). An exercise logged, synced, then edited to a different number of sets leaves TWO live summary rows in workout_log_exercises for the same (user_id, workout_log_id, exercise_id):… | wle_single_live_summary | test/sql/wle_single_live_summary_live_verify.sql |
+| 2026-10-06 | c7e2a9 | When the single-call restore is unavailable the client falls back to its legacy per-table restore, and that path lost or doubled rows silently for a long-history account. PostgREST clamps every… | restore_legacy_paged_reads | test/sync/restore_legacy_paging_behavioral_test.dart |
+| 2026-10-06 | c9d2f6 | The founder's Home screen showed streak 16 with 2 freezes. The persisted count was wrong: the streak only holds at 16 because two missed days (2026-10-03 and 2026-10-05) are SIMULATED as covered by… | progress_restore_freeze_merge | test/contracts/progress_restore_freeze_merge_behavioral_test.dart |
+| 2026-10-06 | e4c1d7 | The single-call restore (Edge Function restore-user-snapshot) silently returned at most 1000 rows per table. PostgREST clamps every response to db-max-rows (1000 on this project) with HTTP 200 and… | restore_user_snapshot_paged_reads | supabase/functions/restore-user-snapshot/paged_reads_test.ts |
+| 2026-10-06 | e6c4a9 | `test/scripts/contract_sweep_e2e_test.dart` FAILED 5 of its 7 tests (`PathNotFoundException ... argv.txt`, `Expected: <1> Actual: <0>`) whenever the pre-push contract sweep selected it, and the sweep… | not_applicable — test-fixture and test-support environment hermeticity; no Hive/cloud writer-reader contract and no entry of docs/sot_registry.yaml covers it (grep over the registry finds none, c3f8e1 recorded the same). | test/contracts/spawn_env_manifest_test.dart |
+| 2026-10-06 | b4e7a1 | Founder (account upendra), 2026-10-06 06:45 IST, phone: Home shows streak 16 with 2 streak freezes. Truth is streak 16 with ZERO freezes in reserve. The Home streak number is a read-only walk… | streak_decay_restore_settled_marker | test/contracts/streak_reckon_restore_settled_behavioral_test.dart |
 | 2026-10-05 | b7c1e4 | A free user could reach and USE the Progress Photos screen by editing the address of an already-open web tab to `#/profile/progress-photos`. The screen had no PRO check of its own: the only gate was… | subscription_state | test/contracts/progress_photos_screen_gate_test.dart |
 | 2026-10-04 | d4a7e1 | Founder-reported (2026-10-01, day-swap report): after swapping Oct 1 and Oct 2 on the web and completing the swapped workout there (log "PULL + CORE"), the Android phone's Train row title for Oct 1… | workout_completion_status | test/contracts/completed_title_follows_log_test.dart |
 | 2026-10-03 | c7e3a9 | Founder-reported (2026-10-01, observation 2 of the day-swap report): after swapping today's workout with tomorrow's, Home's AI-coach insight sentence kept naming the pre-swap workout while the rest of… | scheduled_workouts_mutations | test/contracts/ai_insight_follows_today_row_test.dart |

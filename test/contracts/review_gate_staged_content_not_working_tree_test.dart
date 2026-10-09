@@ -104,40 +104,39 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-/// `GIT_*` environment variables to strip before every git call this test
-/// spawns. When `flutter test` runs as a child of `git commit` (i.e. from
-/// inside the `pre-commit` hook, which this test's own regression coverage
-/// runs under), git sets `GIT_DIR`/`GIT_WORK_TREE`/`GIT_INDEX_FILE`/
-/// `GIT_PREFIX`/`GIT_COMMON_DIR` in the HOOK's environment so any git
-/// command the hook script itself runs stays pinned to the commit in
-/// progress, regardless of that command's cwd or `-C` flag. Dart's
-/// `Process.run` inherits the parent environment by default, so those
-/// variables leak into every subprocess this test spawns — silently
-/// overriding `-C <tmp.path>` and making git treat the temp repo as if it
-/// were the SHARED real repo. This is the actual mechanism behind BOTH
-/// incidents in this file's history (the original workingDirectory bug
-/// AND the "temp dir already inside a repo" retry-exhaustion failure —
-/// both were really the same root cause, `GIT_DIR` et al. leaking in from
-/// the hook, not a `workingDirectory` bug or a naming collision).
-const _gitEnvKeysToStrip = [
-  'GIT_DIR',
-  'GIT_WORK_TREE',
-  'GIT_INDEX_FILE',
-  'GIT_PREFIX',
-  'GIT_COMMON_DIR',
-];
+import '../helpers/spawn.dart';
 
-/// Runs `git -C <repoPath> <args>` with a git-env-scrubbed environment. The
-/// `-C` flag tells git which directory to operate in as an explicit
-/// argument, independent of the process's actual working directory —
-/// necessary but NOT sufficient on its own, since `GIT_DIR`/`GIT_WORK_TREE`
-/// (if inherited) take precedence over `-C` for repository identity. See
-/// `_gitEnvKeysToStrip`'s doc comment for why both are needed together.
+// HISTORY of the environment handling (the hand-copied `_gitEnvKeysToStrip`
+// list this note used to document is gone; every spawn in this file now goes
+// through test/helpers/spawn.dart, whose hermeticEnvironment applies the
+// canonical scrub, a superset of the five names listed here).
+//
+// `GIT_*` environment variables stripped before every git call this test
+// spawns. When `flutter test` runs as a child of `git commit` (i.e. from
+// inside the `pre-commit` hook, which this test's own regression coverage
+// runs under), git sets `GIT_DIR`/`GIT_WORK_TREE`/`GIT_INDEX_FILE`/
+// `GIT_PREFIX`/`GIT_COMMON_DIR` in the HOOK's environment so any git
+// command the hook script itself runs stays pinned to the commit in
+// progress, regardless of that command's cwd or `-C` flag. Dart's
+// `Process.run` inherits the parent environment by default, so those
+// variables leak into every subprocess this test spawns — silently
+// overriding `-C <tmp.path>` and making git treat the temp repo as if it
+// were the SHARED real repo. This is the actual mechanism behind BOTH
+// incidents in this file's history (the original workingDirectory bug
+// AND the "temp dir already inside a repo" retry-exhaustion failure —
+// both were really the same root cause, `GIT_DIR` et al. leaking in from
+// the hook, not a `workingDirectory` bug or a naming collision).
+
+/// Runs `git -C <repoPath> <args>` through the shared spawn helper (a
+/// git-env-scrubbed environment). The `-C` flag tells git which directory to
+/// operate in as an explicit argument, independent of the process's actual
+/// working directory — necessary but NOT sufficient on its own, since
+/// `GIT_DIR`/`GIT_WORK_TREE` (if inherited) take precedence over `-C` for
+/// repository identity. See the history note above for why both are needed
+/// together.
 Future<ProcessResult> _git(String repoPath, List<String> args) {
-  final cleanEnv = Map<String, String>.from(Platform.environment)
-    ..removeWhere((key, _) => _gitEnvKeysToStrip.contains(key.toUpperCase()));
-  return Process.run('git', ['-C', repoPath, ...args],
-      environment: cleanEnv, includeParentEnvironment: false);
+  return runSpawnAsync('git', ['-C', repoPath, ...args],
+      why: 'git -C <temp repo> ${args.join(' ')}');
 }
 
 /// Creates a fresh temp directory and verifies it is NOT already inside a
@@ -273,7 +272,7 @@ void main() {
 
       // The hash the gate will demand — computed the same way it does, over the
       // staged diff EXCLUDING docs/reviews.
-      final diff = await Process.run(
+      final diff = await runSpawnAsync(
           // MUST be byte-identical to the gate's own argv in
           // check_code_review_pass_exists.dart, or this computes a different
           // oracle and the test passes by coincidence (round-2 review P2-C
@@ -286,29 +285,20 @@ void main() {
               ':(top,exclude)docs/reviews',
               ':(top,exclude).claude/skills/code-review/SKILL.md',
               ':(top,exclude).claude/skills/code-review/tuning-history.md'],
-          stdoutEncoding: null,
-          environment: Map<String, String>.from(Platform.environment)
-            ..removeWhere((k, _) => _gitEnvKeysToStrip.contains(k.toUpperCase())),
-          includeParentEnvironment: false);
-      final hasher = await Process.start('git', ['hash-object', '--stdin']);
-      hasher.stdin.add(diff.stdout as List<int>);
-      await hasher.stdin.close();
-      final hash = (await hasher.stdout
-              .transform(const SystemEncoding().decoder)
-              .join())
-          .trim()
-          .substring(0, 12);
-      await hasher.exitCode;
+          why: 'git diff --cached of the staged catastrophic change (raw bytes)',
+          stdoutEncoding: null);
+      final hasher = await runSpawnWithInput('git', ['hash-object', '--stdin'],
+          why: 'git hash-object --stdin over the staged diff (raw bytes)',
+          stdin: diff.stdout as List<int>);
+      final hash = hasher.stdout.trim().substring(0, 12);
       return (tmp: tmp, hash: hash);
     }
 
-    Future<ProcessResult> runGate(Directory tmp) => Process.run(
+    Future<ProcessResult> runGate(Directory tmp) => runSpawnAsync(
           'dart',
           ['scripts/check_code_review_pass_exists.dart'],
+          why: 'check_code_review_pass_exists.dart in the isolated temp repo',
           workingDirectory: tmp.path,
-          environment: Map<String, String>.from(Platform.environment)
-            ..removeWhere((k, _) => _gitEnvKeysToStrip.contains(k.toUpperCase())),
-          includeParentEnvironment: false,
           runInShell: true,
         );
 

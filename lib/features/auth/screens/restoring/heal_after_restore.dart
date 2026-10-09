@@ -70,6 +70,32 @@ Future<void> _healAfterRestoreInBackground() async {
     unawaited(
         ErrorTelemetry.recordNonFatal(e, st, reason: 'bg_heal_exlog_index'));
   }
-  // Notify the (now-mounted) home screen to refresh from the updated Hive.
-  SyncService.instance.bumpRestoreCompleted();
+  // b4e7a1 — reckon the streak decay NOW that the restore has settled (the
+  // cold-start rollover ran before it and was gated off), THEN notify the
+  // (now-mounted) tabs to refresh from the updated Hive. Replaces the bare
+  // `bumpRestoreCompleted()`; the bump is the LAST statement inside it, so the
+  // repaint sees the already-debited freeze ledger.
+  DayRolloverObserver.instance.reckonAndNotifyAfterRestore();
+}
+
+/// b4e7a1 (B-pass reviewer C F1) — runs [heal] (the post-restore heal + streak
+/// reckon) once [restore] SUCCEEDS; a failed or cancelled restore never heals
+/// (partial Hive state — B-pass F-3). Ref-free, so it survives the screen's
+/// disposal.
+///
+/// Why it exists: `_goHome`'s background-restore branch attaches the heal, but
+/// the CONTINUE escape (`_onContinueAnyway`) leaves the screen while the restore
+/// started by `_kickoffRestore` is still running, and `_goHome` returns early
+/// once the screen is disposed. That cohort's restore could settle the streak
+/// marker and still never reckon the idle-day debit (nor run the heals) until a
+/// later trigger. The heal steps are idempotent and each is guarded, so a second
+/// attach on a mounted screen cannot do harm.
+void healAfterRestoreWhenSucceeded(
+  Future<RestoreResult>? restore, {
+  Future<void> Function() heal = _healAfterRestoreInBackground,
+}) {
+  if (restore == null) return;
+  unawaited(restore.then((result) {
+    if (result.succeeded) return heal();
+  }, onError: (Object _) {}));
 }

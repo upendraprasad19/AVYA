@@ -67,6 +67,16 @@ SELECT 'update_user_progress_snapshot service_role retained',
          'public.update_user_progress_snapshot(uuid, bigint, integer, integer, timestamptz, timestamptz, integer, integer, text, integer, integer, date, integer)',
          'EXECUTE') = true
 UNION ALL
+-- Slice C2 (diagnose a3c8f1) — the week-marker function: anon blocked, the two client-facing roles retained.
+SELECT 'raise_streak_week_marker anon revoked',
+       has_function_privilege('anon', 'public.raise_streak_week_marker(uuid, integer)', 'EXECUTE') = false
+UNION ALL
+SELECT 'raise_streak_week_marker authenticated retained',
+       has_function_privilege('authenticated', 'public.raise_streak_week_marker(uuid, integer)', 'EXECUTE') = true
+UNION ALL
+SELECT 'raise_streak_week_marker service_role retained',
+       has_function_privilege('service_role', 'public.raise_streak_week_marker(uuid, integer)', 'EXECUTE') = true
+UNION ALL
 SELECT 'update_user_progress_snapshot cross-account guard present',
        pg_get_functiondef('public.update_user_progress_snapshot(uuid, bigint, integer, integer, timestamptz, timestamptz, integer, integer, text, integer, integer, date, integer)'::regprocedure)
          ILIKE '%cross-account progress write blocked%'
@@ -122,7 +132,7 @@ SELECT 'morning_alert_get_service_key search_path set',
        EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
                WHERE n.nspname='private' AND p.proname='morning_alert_get_service_key'
                  AND p.proconfig IS NOT NULL
-                 AND EXISTS (SELECT 1 FROM unnest(p.proconfig) c WHERE c LIKE 'search_path=%'));
+                 AND EXISTS (SELECT 1 FROM unnest(p.proconfig) c WHERE c LIKE 'search_path=%'))
 UNION ALL
 -- --------------------------------------------------------------------------
 -- Migration 121 (log_table_retention, diagnose c8e5b3). Added 2026-09-10 from

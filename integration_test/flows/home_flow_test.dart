@@ -251,7 +251,9 @@ void main() {
     // Wait for the post-frame callback toast
     await tester.pump(const Duration(seconds: 2));
 
-    // The SnackBar should show "Streak Freeze used! 0 remaining this week."
+    // The SnackBar should show "Streak Freeze used on a missed day. None left.
+    // A new one arrives next Monday." (the copy is pinned by
+    // test/contracts/streak_freeze_notice_*_test.dart)
     // Note: SnackBar may have been dismissed or may not appear in test env.
     // We just verify the home screen didn't crash with the freeze flag set.
     expect(tester.takeException(), isNull,

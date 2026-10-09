@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/core/services/streak_progress_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -174,6 +175,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     ref.invalidate(todayStepsProvider);
   }
 
+  /// b4e7a1 — a background restore can now PERSIST an idle-day freeze debit
+  /// while Home is already mounted (`DayRolloverObserver.
+  /// reckonAndNotifyAfterRestore`, run by the restoring screen's background
+  /// heal). `_checkStreakFreezeUsed` otherwise runs only from [initTab] (first
+  /// mount), so the notice for that debit would sit in
+  /// `streak_freeze_just_used` until the next cold start. The check clears the
+  /// flag before it schedules the snackbar, so [initTab] plus this listener can
+  /// never double-fire.
+  @override
+  void invalidateOnBackgroundRestore(WidgetRef ref) {
+    invalidateOnRetry(ref);
+    _checkStreakFreezeUsed();
+  }
+
   // Bug #14 — Prediction polling moved to ProfileScreen alongside the
   // Future Prediction card. Home no longer renders the prediction.
 
@@ -208,20 +223,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   }
 
   void _checkStreakFreezeUsed() {
-    final progress = UserRepository.instance.getProgress();
-    if (progress == null) return;
-    final justUsed = progress['streak_freeze_just_used'] as bool? ?? false;
-    if (!justUsed) return;
-    final remaining = (progress['streak_freeze_remaining_after_use'] as int?) ?? 0;
-    // Clear the flag
-    UserRepository.instance.updateProgress({'streak_freeze_just_used': false});
+    // `takeFreezeNotice` reads the notice (the words, the count of freezes
+    // spent and the LIVE number left) and CLEARS it in the same call, so
+    // initTab plus the background-restore listener (see the doc on
+    // [invalidateOnBackgroundRestore]) can never both show it.
+    final notice = StreakProgressService.instance.takeFreezeNotice();
+    if (notice == null) return;
     // Show toast
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(
-          'Streak Freeze used! $remaining remaining this week.',
+          notice,
           style: AppTypography.body.copyWith(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.w600,

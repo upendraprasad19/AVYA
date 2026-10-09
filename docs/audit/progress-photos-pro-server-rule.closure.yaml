@@ -1,0 +1,220 @@
+# Closure ledger — progress-photos-pro-server-rule (unit B1, OI-314 server half)
+# Gate 40. One terminal_state per finding; no `deferred:` key.
+# `commit:` on a closed_in_commit row names the batch commit that ADDS this file; find it with
+#   git log --diff-filter=A --format=%h -- docs/audit/progress-photos-pro-server-rule.closure.yaml
+
+batch: progress-photos-pro-server-rule
+plan_review_record: docs/plan-reviews/progress-photos-pro-server-rule.md
+diagnose_docs:
+  - docs/diagnoses/2026-10-06-progress-photo-pro-server-rule-d8f2a6.md
+total_findings: 36
+closed_count: 36
+
+findings:
+  - id: S1
+    title: "trigger trg_progress_photo_pro + SECURITY INVOKER function enforce_progress_photo_pro (search_path public, pg_temp, P0001 progress_photo_pro_required) in migration 154"
+    terminal_state: closed_in_commit
+    commit: progress-photos-pro-server-rule batch commit (see header)
+    verification: "statement-level pins in test/contracts/progress_photos_pro_insert_rule_test.dart (211 tests); live read-back 2026-10-07: tgenabled O, proconfig search_path=public, pg_temp, prosecdef false; live-verify V3-V7 30 of 30 ok. Mutants H1-H11 and the 16 replica mutants reddened (diagnose d8f2a6)."
+
+  - id: S2
+    title: "Storage policy progress_photos_insert_own carries the active-unexpired-subscription EXISTS conjunct"
+    terminal_state: closed_in_commit
+    commit: progress-photos-pro-server-rule batch commit (see header)
+    verification: "policy pins + live-verify V3/V8a-V8d ok; catalog read-back after apply shows the EXISTS in with_check; before the apply 16 live-verify cases failed exactly where the rule was missing."
+
+  - id: S3
+    title: "INSERT only (no UPDATE/DELETE PRO conjunct) and the later-migration tripwire (GRANT/REVOKE lists and schema-wide, unqualified objects, session_replication_role)"
+    terminal_state: closed_in_commit
+    commit: progress-photos-pro-server-rule batch commit (see header)
+    verification: "INSERT-only pins; V4a/V4b/V4e ok (lapsed user views and deletes); tripwire mutants from the B-pass round reddened 1-8 tests each."
+
+  - id: S4
+    title: "live apply of migration 154 with before/after verification"
+    terminal_state: closed_in_commit
+    commit: progress-photos-pro-server-rule batch commit (see header)
+    verification: "Founder applied in the dashboard SQL editor 2026-10-07 after a production always-aborting dry run reached dry_run_rollback; list_migrations shows 20261007181916; live-verify 30 of 30 ok after; arbiter test/sql/onconflict_live_arbiter.sql 28 of 28 ok (wrapped form, no BEGIN/ROLLBACK); residue reads 0. The classifier denial of apply_migration was not worked around."
+
+  - id: S5
+    title: "row C5 of docs/audit/progress-screen-pro-gate.closure.yaml flipped to closed_in_commit; R1-04 of profile-share-grow-order repointed"
+    terminal_state: closed_in_commit
+    commit: progress-photos-pro-server-rule batch commit (see header)
+    verification: "Gate 40 passes on both ledgers."
+
+  - id: S6
+    title: "backups/applied_migrations.json entry for migration 154 (hash, applier, cloud_version)"
+    terminal_state: closed_in_commit
+    commit: progress-photos-pro-server-rule batch commit (see header)
+    verification: "Gate 39 (check_applied_migrations_ledger) passes; hash sha256:2e22806f... equals the file's."
+
+  - id: S7
+    title: "SoT registry: reader entry for the migration under subscription_state"
+    terminal_state: closed_in_commit
+    commit: progress-photos-pro-server-rule batch commit (see header)
+    verification: "Gate 42 passes. Deviation from the plan, recorded here: the plan named a new presence-only concept progress_photos_pro_insert_rule; a reader entry on the existing subscription_state concept was used because the rule is a new reader of that definition, and the behavioural pin is the contract test."
+
+  - id: S8
+    title: "FULL diagnose-doc d8f2a6 (tier l_fix)"
+    terminal_state: closed_in_commit
+    commit: progress-photos-pro-server-rule batch commit (see header)
+    verification: "dart run scripts/validate_diagnose_doc.dart passes."
+
+  - id: S9
+    title: "Telegram bot (out-of-repo project) does not insert progress_photos rows"
+    terminal_state: upstream_blocked
+    blocker: "OI-227: the user-facing Telegram coach has no account-linking handshake (commit e921fac1, 2026-09-22, removed the connect UI; the app shows 'Telegram - Coming Soon'), so the bot cannot associate a chat with an app user_id and has no identity to insert a progress_photos row under. No Edge Function in supabase/functions references progress_photos (git grep). The bot's own code is out of repo and was not read."
+    reopen_when: "Telegram account linking returns (phase 2): the bot must then be checked for any progress_photos insert; a free user's insert is refused P0001 / Storage RLS since migration 154."
+
+  - id: HM1
+    title: "Hermes L1 F1 (docs/audit/2026-10-06-hermes-progress-photos-pro-server-rule.md)"
+    terminal_state: closed_in_commit
+    commit: progress-photos-pro-server-rule batch commit (see header)
+    verification: "Fixed in tests, live-verify, header comments or docs; the executable SQL was unchanged by the Hermes round. Pins reddened under mutation."
+
+  - id: HM2
+    title: "Hermes L1 F2 (docs/audit/2026-10-06-hermes-progress-photos-pro-server-rule.md)"
+    terminal_state: closed_in_commit
+    commit: progress-photos-pro-server-rule batch commit (see header)
+    verification: "Fixed in tests, live-verify, header comments or docs; the executable SQL was unchanged by the Hermes round. Pins reddened under mutation."
+
+  - id: HM3
+    title: "Hermes L1 F3 (= L12 F3 = L22 F2) (docs/audit/2026-10-06-hermes-progress-photos-pro-server-rule.md)"
+    terminal_state: closed_in_commit
+    commit: progress-photos-pro-server-rule batch commit (see header)
+    verification: "Fixed in tests, live-verify, header comments or docs; the executable SQL was unchanged by the Hermes round. Pins reddened under mutation."
+
+  - id: HM4
+    title: "Hermes L2 F1"
+    terminal_state: verified_clean
+    evidence: "Live evidence E27 in docs/plans/progress-photos-pro-server-rule.evidence.md"
+
+  - id: HM5
+    title: "Hermes L2 observation"
+    terminal_state: verified_clean
+    evidence: "Live evidence E27 in docs/plans/progress-photos-pro-server-rule.evidence.md"
+
+  - id: HM6
+    title: "Hermes L2 F3 (docs/audit/2026-10-06-hermes-progress-photos-pro-server-rule.md)"
+    terminal_state: closed_in_commit
+    commit: progress-photos-pro-server-rule batch commit (see header)
+    verification: "Fixed in tests, live-verify, header comments or docs; the executable SQL was unchanged by the Hermes round. Pins reddened under mutation."
+
+  - id: HM7
+    title: "Hermes L12 F1 (docs/audit/2026-10-06-hermes-progress-photos-pro-server-rule.md)"
+    terminal_state: closed_in_commit
+    commit: progress-photos-pro-server-rule batch commit (see header)
+    verification: "Fixed in tests, live-verify, header comments or docs; the executable SQL was unchanged by the Hermes round. Pins reddened under mutation."
+
+  - id: HM8
+    title: "Hermes L12 F2 (docs/audit/2026-10-06-hermes-progress-photos-pro-server-rule.md)"
+    terminal_state: closed_in_commit
+    commit: progress-photos-pro-server-rule batch commit (see header)
+    verification: "Fixed in tests, live-verify, header comments or docs; the executable SQL was unchanged by the Hermes round. Pins reddened under mutation."
+
+  - id: HM9
+    title: "Hermes L12 F4"
+    terminal_state: verified_clean
+    evidence: "Live evidence E28 in docs/plans/progress-photos-pro-server-rule.evidence.md"
+
+  - id: HM10
+    title: "Hermes L14 F1"
+    terminal_state: verified_clean
+    evidence: "Live evidence by design in docs/plans/progress-photos-pro-server-rule.evidence.md"
+
+  - id: HM11
+    title: "Hermes L14 F2 (docs/audit/2026-10-06-hermes-progress-photos-pro-server-rule.md)"
+    terminal_state: closed_in_commit
+    commit: progress-photos-pro-server-rule batch commit (see header)
+    verification: "Fixed in tests, live-verify, header comments or docs; the executable SQL was unchanged by the Hermes round. Pins reddened under mutation."
+
+  - id: HM12
+    title: "Hermes L14 F3 (docs/audit/2026-10-06-hermes-progress-photos-pro-server-rule.md)"
+    terminal_state: closed_in_commit
+    commit: progress-photos-pro-server-rule batch commit (see header)
+    verification: "Fixed in tests, live-verify, header comments or docs; the executable SQL was unchanged by the Hermes round. Pins reddened under mutation."
+
+  - id: HM13
+    title: "Hermes L22 F1 (docs/audit/2026-10-06-hermes-progress-photos-pro-server-rule.md)"
+    terminal_state: closed_in_commit
+    commit: progress-photos-pro-server-rule batch commit (see header)
+    verification: "Fixed in tests, live-verify, header comments or docs; the executable SQL was unchanged by the Hermes round. Pins reddened under mutation."
+
+  - id: HM14
+    title: "Hermes L23 F1"
+    terminal_state: verified_clean
+    evidence: "Live evidence E29 in docs/plans/progress-photos-pro-server-rule.evidence.md"
+
+  - id: HM15
+    title: "Hermes L23 F2 (docs/audit/2026-10-06-hermes-progress-photos-pro-server-rule.md)"
+    terminal_state: closed_in_commit
+    commit: progress-photos-pro-server-rule batch commit (see header)
+    verification: "Fixed in tests, live-verify, header comments or docs; the executable SQL was unchanged by the Hermes round. Pins reddened under mutation."
+
+  - id: HM16
+    title: "Hermes L23 F3"
+    terminal_state: verified_clean
+    evidence: "Live evidence E29 in docs/plans/progress-photos-pro-server-rule.evidence.md"
+
+  - id: HM17
+    title: "Hermes L35 F1 (docs/audit/2026-10-06-hermes-progress-photos-pro-server-rule.md)"
+    terminal_state: closed_in_commit
+    commit: progress-photos-pro-server-rule batch commit (see header)
+    verification: "Fixed in tests, live-verify, header comments or docs; the executable SQL was unchanged by the Hermes round. Pins reddened under mutation."
+
+  - id: HM18
+    title: "Hermes L35 F2 (docs/audit/2026-10-06-hermes-progress-photos-pro-server-rule.md)"
+    terminal_state: closed_in_commit
+    commit: progress-photos-pro-server-rule batch commit (see header)
+    verification: "Fixed in tests, live-verify, header comments or docs; the executable SQL was unchanged by the Hermes round. Pins reddened under mutation."
+
+  - id: HM19
+    title: "Hermes L35 F3 (docs/audit/2026-10-06-hermes-progress-photos-pro-server-rule.md)"
+    terminal_state: closed_in_commit
+    commit: progress-photos-pro-server-rule batch commit (see header)
+    verification: "Fixed in tests, live-verify, header comments or docs; the executable SQL was unchanged by the Hermes round. Pins reddened under mutation."
+
+  - id: B1B
+    title: "B-pass B1 (docs/plans/progress-photos-pro-server-rule.md section 9f, round 5)"
+    terminal_state: closed_in_commit
+    commit: progress-photos-pro-server-rule batch commit (see header)
+    verification: "Fixed in the contract test (anchored predicate parity, GRANT/REVOKE list and schema-wide forms, unqualified objects, session_replication_role); each mutated and reddened."
+
+  - id: B2B
+    title: "B-pass B2 (docs/plans/progress-photos-pro-server-rule.md section 9f, round 5)"
+    terminal_state: closed_in_commit
+    commit: progress-photos-pro-server-rule batch commit (see header)
+    verification: "Fixed in the contract test (anchored predicate parity, GRANT/REVOKE list and schema-wide forms, unqualified objects, session_replication_role); each mutated and reddened."
+
+  - id: B3B
+    title: "B-pass B3 (docs/plans/progress-photos-pro-server-rule.md section 9f, round 5)"
+    terminal_state: closed_in_commit
+    commit: progress-photos-pro-server-rule batch commit (see header)
+    verification: "Fixed in the contract test (anchored predicate parity, GRANT/REVOKE list and schema-wide forms, unqualified objects, session_replication_role); each mutated and reddened."
+
+  - id: B4B
+    title: "B-pass B4 (docs/plans/progress-photos-pro-server-rule.md section 9f, round 5)"
+    terminal_state: closed_in_commit
+    commit: progress-photos-pro-server-rule batch commit (see header)
+    verification: "Fixed in the contract test (anchored predicate parity, GRANT/REVOKE list and schema-wide forms, unqualified objects, session_replication_role); each mutated and reddened."
+
+  - id: B5B
+    title: "B-pass B5 (docs/plans/progress-photos-pro-server-rule.md section 9f, round 5)"
+    terminal_state: closed_in_commit
+    commit: progress-photos-pro-server-rule batch commit (see header)
+    verification: "Fixed in the contract test (anchored predicate parity, GRANT/REVOKE list and schema-wide forms, unqualified objects, session_replication_role); each mutated and reddened."
+
+  - id: OI-320
+    title: "per-referrer cap on referral_trial credit (OI-320)"
+    terminal_state: blocked_on_user
+    reason: "Product decision: none / hard cap / rolling cap / credit after referee activity. Filed as OI-320 (PR #84)."
+
+  - id: OI-321
+    title: "clean-orphan-media .maybeSingle() with two active rows (OI-321)"
+    terminal_state: blocked_on_user
+    reason: "Fix needs an Edge Function deploy, which is founder-owned. Filed as OI-321."
+
+  - id: OI-322
+    title: "taken_at stored without an offset (OI-322)"
+    terminal_state: upstream_blocked
+    blocker: "Fixed inside unit B2 (client toUtc); B2 starts after this unit merges."
+    reopen_when: "unit B2 lands"

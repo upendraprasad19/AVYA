@@ -551,7 +551,8 @@
       "last_workout_date",
       "longest_gap_days",
       "streak_freezes_first_pro_grant_done",
-      "sync_epoch"
+      "sync_epoch",
+      "last_counted_week_key"
     ],
     "user_saved_meals": [
       "id",

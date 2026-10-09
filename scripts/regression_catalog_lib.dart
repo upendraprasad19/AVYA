@@ -70,6 +70,42 @@ Set<String> extractRecentTestPaths(String indexContent, DateTime cutoff) {
   return (dartPaths: dartPaths, sqlPaths: sqlPaths, helperPaths: helperPaths);
 }
 
+/// The prefixes of the repo-owned (and git / GitHub-owned) control-variable families a
+/// spawned child must not inherit. See [scrubbedChildEnvironment].
+const List<String> childEnvStrippedPrefixes = <String>[
+  'GIT_',
+  'GITHUB_',
+  'CONTRACT_SWEEP_',
+  'PRE_COMMIT_',
+  'PRE_PUSH_',
+  'DISCIPLINE_HOOK_',
+  'MINT_OI_',
+  'MINT_MIG_',
+];
+
+/// Exact (case-insensitive) names stripped from a child: operator escape hatches,
+/// secrets and build inputs the repo's scripts read, and device selectors.
+const List<String> childEnvStrippedNames = <String>[
+  'PUSH_BEFORE',
+  'ALLOW_RAW_GIT',
+  'ALLOW_MAIN_COMMIT',
+  'FOUNDER_APPROVED_NO_VERIFY',
+  'SUPABASE_ACCESS_TOKEN',
+  'SUPABASE_ACCESS_TOKEN_FITNESS',
+  'SUPABASE_SERVICE_ROLE_KEY',
+  'SUPABASE_URL',
+  'SUPABASE_ANON_KEY',
+  'RAZORPAY_KEY_ID',
+  'USDA_API_KEY',
+  '_SKIP_RENDER_CHECK',
+  'ANDROID_DEVICE_ID',
+];
+
+/// Variables read by an EXTERNAL tool (not by any repo script), stripped because a
+/// spawned git fixture otherwise takes its author identity from them (diagnose
+/// d9e4b1). Hand-listed: no scan of the repo's own scripts can see an external reader.
+const List<String> childEnvExternalReaders = <String>['EMAIL'];
+
 /// The environment to hand the child `flutter test`, with git's hook variables
 /// removed.
 ///
@@ -118,15 +154,59 @@ Set<String> extractRecentTestPaths(String indexContent, DateTime cutoff) {
 /// tracks — and they had already drifted: that copy stripped the three `GIT_*`
 /// names only, so it leaked both hatches straight into the hook under test even
 /// when this function was never involved.
+///
+/// 2026-10-06 (diagnose in docs/diagnoses/2026-10-06-spawn-test-env-leak-*.md): the
+/// list below was extended from the three families above to EVERY environment
+/// variable the repo's own scripts read as a control switch, because a spawned test
+/// that inherits one is inverted or skipped by it (class 2.56, fifth instance:
+/// `contract_sweep_e2e_test.dart` inherited `CONTRACT_SWEEP_NESTED=1` from the very
+/// sweep that ran it and 5 of its 7 tests failed). The lists are exported so
+/// `test/contracts/spawn_env_manifest_test.dart` can check them against a scan of
+/// what the scripts actually read (two-way) instead of trusting this hand-kept copy.
+/// Repo-owned families are matched by PREFIX; everything else by EXACT name (class
+/// 2.56's rule: never widen an exact name to a prefix, `SUPABASE_` is not ours).
+/// `DART_BIN_OVERRIDE` is deliberately NOT here: the merge walk's child contains tests
+/// that read it from their own process environment to find dart.
 Map<String, String> scrubbedChildEnvironment(Map<String, String> parent) {
   final env = Map<String, String>.from(parent);
-  env.removeWhere((k, _) {
-    final u = k.toUpperCase();
-    return u.startsWith('GIT_') ||
-        u.startsWith('GITHUB_') ||
-        u == 'PUSH_BEFORE' ||
-        u == 'ALLOW_RAW_GIT' ||
-        u == 'FOUNDER_APPROVED_NO_VERIFY';
-  });
+  env.removeWhere((k, _) => isChildControlVariable(k));
   return env;
+}
+
+/// True when [name] is one the scrub removes (case-insensitive: Windows environment
+/// names are). The one decision point both [scrubbedChildEnvironment] and the spawn
+/// helper's `extra:` guard (test/helpers/spawn.dart) use, so the two cannot disagree.
+bool isChildControlVariable(String name) {
+  final u = name.toUpperCase();
+  return childEnvStrippedPrefixes.any(u.startsWith) ||
+      childEnvStrippedNames.contains(u) ||
+      childEnvExternalReaders.contains(u);
+}
+
+/// Splits [paths] into groups whose joined length stays under [maxChars].
+///
+/// `Process.run(..., runInShell: true)` goes through cmd.exe on Windows, which
+/// rejects a command line over 8191 characters with "The syntax of the command
+/// is incorrect." The 30-day window held 145 test paths (8099 characters before
+/// the `cmd /c` wrapper), so every merge commit on Windows failed the catalog
+/// walk with no test actually red. One `flutter test` call per group keeps the
+/// walk covering every path.
+List<List<String>> chunkPathsByCommandLength(
+  Iterable<String> paths, {
+  int maxChars = 6000,
+}) {
+  final chunks = <List<String>>[];
+  var current = <String>[];
+  var length = 0;
+  for (final p in paths) {
+    if (current.isNotEmpty && length + p.length + 1 > maxChars) {
+      chunks.add(current);
+      current = <String>[];
+      length = 0;
+    }
+    current.add(p);
+    length += p.length + 1;
+  }
+  if (current.isNotEmpty) chunks.add(current);
+  return chunks;
 }

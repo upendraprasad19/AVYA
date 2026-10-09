@@ -210,6 +210,44 @@ class SyncFlags {
     }
   }
 
+  /// Kill switch for the per-account streak-decay gate (diagnose b4e7a1).
+  /// Opt-OUT polarity: `configBox['disable_streak_reckon_user_gate'] = true`
+  /// makes `WorkoutRepository.reckonStreakDecayAndPersist` use the pre-fix
+  /// `restoreCompletedTick > 0` gate verbatim, and
+  /// `DayRolloverObserver.reckonAndNotifyAfterRestore` only bump the tick.
+  /// With the box not open the fix stays ON.
+  static bool get streakReckonUserGateEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('disable_streak_reckon_user_gate') !=
+          true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// Kill switch for the legacy restore's paging + tie-order fix (diagnose
+  /// c7e2a9 / addendum A Slice B2). PostgREST clamps every response to 1000
+  /// rows with HTTP 200, so the bare `workout_schedule_completions`,
+  /// `user_custom_exercises` and `user_custom_foods` reads silently dropped
+  /// rows past 1000, and `_fetchAllRows` ordered by ONE column, so rows tying on
+  /// it could be skipped or duplicated across a page seam. With the fix on
+  /// those three reads page through `_fetchAllRows` and every paged read adds
+  /// its unique tie-break column; the community-catalogue pull
+  /// (`syncCommunityItems`, the same offset-paging defect, not a restore) takes
+  /// the same `id` term. Opt-OUT polarity:
+  /// `configBox['disable_restore_paging_fix'] = true` reverts every read to its
+  /// pre-fix chain VERBATIM. With the box not open the fix stays ON.
+  static bool get restorePagingFixEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('disable_restore_paging_fix') !=
+          true;
+    } catch (_) {
+      return true;
+    }
+  }
+
   /// Test-only setter. Production callers MUST NOT toggle flags in
   /// code — they flip via `configBox.put` from a one-shot migration
   /// or remote-config write only.

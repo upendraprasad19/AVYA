@@ -11,18 +11,17 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../scripts/regression_catalog_lib.dart' show scrubbedChildEnvironment;
+import '../helpers/spawn.dart';
 
 late final String _repoRoot;
 late final String _gate;
 
 ProcessResult _runGate(String cwd, [List<String> extra = const []]) =>
-    Process.runSync(
-      'dart',
+    runSpawn(
+      dartBin(),
       ['run', _gate, ...extra],
+      why: 'sync hash-skip atomicity gate against a fixture',
       workingDirectory: cwd,
-      environment: scrubbedChildEnvironment(Platform.environment),
-      includeParentEnvironment: false,
       stdoutEncoding: utf8,
       stderrEncoding: utf8,
       runInShell: true,

@@ -801,6 +801,7 @@ extension SyncServiceWorkout on SyncService {
           ? await _fetchAllRows(
               'workout_logs', userId,
               dateColumn: 'created_at', since: since, orderBy: 'created_at',
+              tieBreak: const ['id'],
             )
           : (preFetched as List? ?? const []);
 
@@ -866,6 +867,7 @@ extension SyncServiceWorkout on SyncService {
           ? await _fetchAllRows(
               'workout_log_exercises', userId,
               dateColumn: 'completed_at', since: since, orderBy: 'completed_at',
+              tieBreak: const ['created_at', 'id'],
             )
           : (preFetchedExercises as List? ?? const []);
 
@@ -878,6 +880,7 @@ extension SyncServiceWorkout on SyncService {
             ? await _fetchAllRows(
                 'workout_log_sets', userId,
                 dateColumn: 'completed_at', since: since, orderBy: 'completed_at',
+                tieBreak: const ['created_at', 'id'],
               )
             : (preFetchedSets as List? ?? const []);
         for (final raw in setRows) {
@@ -1044,12 +1047,7 @@ extension SyncServiceWorkout on SyncService {
       {Object? preFetched = _kNoInject}) async {
     try {
       final rows = identical(preFetched, _kNoInject)
-          ? await _supabase.client
-              .from('workout_schedule_completions')
-              .select()
-              .eq('user_id', userId)
-              .gte('completed_at', since)
-              .order('scheduled_date')
+          ? await _readScheduleCompletionRows(userId, since)
           : (preFetched as List? ?? const []);
 
       for (final row in rows) {
@@ -1128,6 +1126,33 @@ extension SyncServiceWorkout on SyncService {
         await _reportSyncFailure(opType: 'restore_schedule_completions', error: e);
       } catch (_) {}
     }
+  }
+
+  /// The legacy-fallback read behind [_restoreScheduleCompletions] (diagnose
+  /// c7e2a9, Slice B2). PostgREST clamps a bare select to 1000 rows with an
+  /// HTTP 200, so the pre-fix read silently dropped every completion past the
+  /// 1000th. Fix ON: paged through [_fetchAllRows], newest `scheduled_date`
+  /// first with the unique `id` as the tie-break. Fix OFF
+  /// (`disable_restore_paging_fix`): the pre-fix single read, VERBATIM.
+  /// It lives HERE, after the method, and returns the rows rather than
+  /// `Future<void>`, so `orphan_completion_synthesizes_wlog_test.dart`'s
+  /// 4000-character window and `restore_field_canonical_test.dart`'s
+  /// `Future<void>` slicing keep their boundaries.
+  Future<List<Map<String, dynamic>>> _readScheduleCompletionRows(
+      String userId, String since) async {
+    if (!SyncFlags.restorePagingFixEnabled) {
+      return await _supabase.client
+          .from('workout_schedule_completions')
+          .select()
+          .eq('user_id', userId)
+          .gte('completed_at', since)
+          .order('scheduled_date');
+    }
+    return _fetchAllRows('workout_schedule_completions', userId,
+        dateColumn: 'completed_at',
+        since: since,
+        orderBy: 'scheduled_date',
+        tieBreak: const ['id']);
   }
 
   /// [preFetched] (C3 single-call): injected `streaks` rows; legacy callers
@@ -1765,6 +1790,26 @@ extension SyncServiceWorkout on SyncService {
   Future<Set<String>> _deletedTemplateCloudIds(
     String userId, {
     List? preFetchedTemplateRows,
+  }) async =>
+      // Fail EMPTY, never fail closed-as-"everything deleted" — an empty set
+      // means every downstream filter that uses it is a no-op this pass, which
+      // is the safe direction for a RESTORE (nothing the user did not delete is
+      // ever removed by an uncertain answer here). A writer that must NOT let a
+      // ghost day in on an uncertain answer asks [_deletedTemplateCloudIdsOrNull].
+      await _deletedTemplateCloudIdsOrNull(userId,
+          preFetchedTemplateRows: preFetchedTemplateRows) ??
+      const <String>{};
+
+  /// [_deletedTemplateCloudIds] that tells "the lookup answered with an empty
+  /// set" (`{}`) from "the lookup could not answer" (`null`) — the two must not
+  /// collapse (bug-class "bad news vs no news"). b4e7a1 (B-pass): the plan
+  /// reconciler writes `schedule_*` rows AFTER a restore settled, outside any
+  /// restore zone, so a fail-empty answer there resurrects a deleted template's
+  /// day as a past `planned` row — which the streak reckon then debits, for
+  /// good. It takes the `null` and refuses to write what it cannot vet.
+  Future<Set<String>?> _deletedTemplateCloudIdsOrNull(
+    String userId, {
+    List? preFetchedTemplateRows,
   }) async {
     try {
       final rows = preFetchedTemplateRows ??
@@ -1786,21 +1831,26 @@ extension SyncServiceWorkout on SyncService {
       debugPrint('[SyncService._deletedTemplateCloudIds] $e');
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
           reason: 'sync_deleted_template_cloud_ids'));
-      // Fail EMPTY, never fail closed-as-"everything deleted" — an
-      // empty set means every downstream filter that uses it is a
-      // no-op this pass, which is the safe direction (nothing the user
-      // did not delete is ever removed by an uncertain answer here).
-      return const {};
+      // b4e7a1 — fail-empty is right for this method's deletion filters, but
+      // inside a "successful" plan / scheduled-workouts restore it lets ghost
+      // days back in as past `planned` rows (a spurious, PERMANENT freeze
+      // debit once the streak persist is open). Tell the restore failure
+      // collector; a no-op outside a restore zone (the boot-time forwarder).
+      RestoreFailureCollector.note('restore_deleted_template_ids');
+      return null;
     }
   }
 
-  /// Public forwarder for [_deletedTemplateCloudIds] — the boot-time
-  /// [PlanIntegrityReconciler] lives in a separate file/library (it is not
-  /// `part of` this one) and needs the same deleted-templates set for its
-  /// own `plan_json.schedules` ghost-day filter, so it cannot reach the
-  /// private method directly.
-  Future<Set<String>> deletedTemplateCloudIdsForUser(String userId) =>
-      _deletedTemplateCloudIds(userId);
+  /// Public forwarder for [_deletedTemplateCloudIdsOrNull] — the
+  /// [PlanIntegrityReconciler] (boot, foreground restore and background heal)
+  /// lives in a separate file/library (it is not `part of` this one) and needs
+  /// the same deleted-templates set for its own `plan_json.schedules` ghost-day
+  /// filter, so it cannot reach the private method directly. Returns `null`
+  /// when the lookup could not answer (b4e7a1 B-pass): the reconciler then
+  /// skips every template-bearing entry instead of treating "unknown" as "none
+  /// deleted".
+  Future<Set<String>?> deletedTemplateCloudIdsForUser(String userId) =>
+      _deletedTemplateCloudIdsOrNull(userId);
 
   /// Restores workout templates (with exercises) from Supabase.
   /// [preFetched] (C3 single-call): injected `workout_templates` rows, each

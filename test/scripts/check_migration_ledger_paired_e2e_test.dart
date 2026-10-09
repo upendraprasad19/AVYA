@@ -13,40 +13,15 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-/// Dart binary to spawn the gate with — NOT `Platform.resolvedExecutable`, which under
-/// `flutter test` is flutter_tester and HANGS the suite instead of failing (same fallback
-/// chain as check_migrations_applied_collision_e2e_test.dart).
-String _dartBin() {
-  final override = Platform.environment['DART_BIN_OVERRIDE'];
-  if (override != null && File(override).existsSync()) return override;
-  final which = Process.runSync(Platform.isWindows ? 'where' : 'which', ['dart'], stdoutEncoding: utf8);
-  if (which.exitCode == 0) {
-    final first = (which.stdout as String).split('\n').map((l) => l.trim()).firstWhere((l) => l.isNotEmpty, orElse: () => '');
-    if (first.isNotEmpty) {
-      final dir = File(first).parent.path.replaceAll(r'\', '/');
-      for (final c in ['$dir/cache/dart-sdk/bin/dart.exe', '$dir/cache/dart-sdk/bin/dart']) {
-        if (File(c).existsSync()) return c;
-      }
-    }
-  }
-  return 'dart';
-}
-
-Map<String, String> _cleanEnv() {
-  final env = Map<String, String>.from(Platform.environment);
-  // A surrounding git hook exports GIT_DIR / GIT_WORK_TREE, which override workingDirectory
-  // and would point the child at the REAL repo (memory/feedback_mistake_git_hook_env_leak).
-  env.removeWhere((k, _) => k.toUpperCase().startsWith('GIT_'));
-  return env;
-}
+import '../helpers/spawn.dart';
 
 void main() {
   late Directory tmp;
   final repoRoot = Directory.current.path;
-  final dart = _dartBin();
+  final dart = dartBin();
 
-  ProcessResult git(List<String> args) => Process.runSync('git', args,
-      workingDirectory: tmp.path, environment: _cleanEnv(), includeParentEnvironment: false);
+  ProcessResult git(List<String> args) =>
+      runSpawn('git', args, why: 'scratch-repo git ${args.join(' ')}', workingDirectory: tmp.path);
 
   setUp(() {
     tmp = Directory.systemTemp.createTempSync('gate_mlp_');
@@ -74,8 +49,8 @@ void main() {
         {'migration': id, 'applied_at': '2026-09-29T00:00:00+05:30', 'hash': 'sha256:x', 'applier': 't'},
     ]));
     expect(git(['add', '-A']).exitCode, 0);
-    return Process.runSync(dart, ['scripts/check_migration_ledger_paired.dart'],
-        workingDirectory: tmp.path, environment: _cleanEnv(), includeParentEnvironment: false);
+    return runSpawn(dart, ['scripts/check_migration_ledger_paired.dart'],
+        why: 'Gate-MLP pairing gate against the staged scratch repo', workingDirectory: tmp.path);
   }
 
   test('a normal staged migration with a matching ledger entry passes', () {
@@ -115,8 +90,8 @@ void main() {
     f.writeAsStringSync('select 1;\n');
     File('${tmp.path}/backups/applied_migrations.json').writeAsStringSync('[]');
     git(['add', 'supabase/migrations/154_x.sql']);
-    final r = Process.runSync(dart, ['scripts/check_migration_ledger_paired.dart'],
-        workingDirectory: tmp.path, environment: _cleanEnv(), includeParentEnvironment: false);
+    final r = runSpawn(dart, ['scripts/check_migration_ledger_paired.dart'],
+        why: 'Gate-MLP pairing gate, ledger not staged', workingDirectory: tmp.path);
     expect(r.exitCode, 1);
   });
 }

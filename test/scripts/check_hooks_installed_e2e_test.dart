@@ -20,18 +20,13 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-Map<String, String> _cleanEnv() {
-  final env = Map<String, String>.from(Platform.environment);
-  env.removeWhere((k, _) => k.toUpperCase().startsWith('GIT_'));
-  return env;
-}
+import '../helpers/spawn.dart';
 
-ProcessResult _git(String cwd, List<String> args) => Process.runSync(
+ProcessResult _git(String cwd, List<String> args) => runSpawn(
       'git',
       args,
+      why: 'check_hooks_installed fixture: git ${args.join(' ')}',
       workingDirectory: cwd,
-      environment: _cleanEnv(),
-      includeParentEnvironment: false,
       runInShell: true,
     );
 
@@ -81,9 +76,10 @@ Directory _repoWithInstalledHooks() {
   return dir;
 }
 
-ProcessResult _runGate(String cwd) => Process.runSync(
+ProcessResult _runGate(String cwd) => runSpawn(
       'dart',
       ['run', 'scripts/check_hooks_installed.dart'],
+      why: 'Gate 32 check_hooks_installed.dart run in a fixture repo',
       workingDirectory: cwd,
       runInShell: true,
     );

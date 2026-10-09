@@ -14,6 +14,7 @@ import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/utils/injury_vocab.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/features/profile/services/profile_write_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
@@ -890,7 +891,7 @@ class AuthSessionBootstrapper {
                   : <String, dynamic>{};
               final cloudProgress =
                   Map<String, dynamic>.from(progressRows.first);
-              // OI-83: the 3 monotonic fields are local-max-wins. This merge
+              // OI-83: the 4 monotonic fields are local-max-wins. This merge
               // used to be cloud-non-null-wins for EVERY key, which silently
               // demoted current_phase / the lifetime counters on a device that
               // had advanced locally and not yet pushed. Shared with
@@ -900,10 +901,15 @@ class AuthSessionBootstrapper {
               final progressMerge = UserRepository.mergeCloudProgress(
                 local: existingProgressMap,
                 cloud: cloudProgress,
+                istToday: istDateStr(nowWall()),
               );
               await userBox.put('progress', progressMerge.merged);
               reportProgressDemotionsDeclined(progressMerge,
                   source: 'auth_session_bootstrapper');
+              // c9d2f6: the freeze merge kept local ahead of the cloud row.
+              if (progressMerge.scheduleFreezeSyncUp) {
+                unawaited(SyncService.instance.syncFreezes());
+              }
             }
 
             // Hydrate terms acceptance.

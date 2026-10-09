@@ -359,6 +359,8 @@ date already carried a template link; travels WITH the template so a swap-back c
 `disable_rest_row_refill_guard` (L1); `disable_swap_arrangement_merge` (L3);
 `disable_plan_merge_skip_when_known` (L2, both halves); `disable_restore_write_if_changed`
 (template / progress / profile restore writes); `disable_restore_single_plan_fetch`;
+`disable_restore_paging_fix` (every legacy paged restore read's tie-break, the three formerly
+un-paged reads, and the community pull's tie-break; diagnose c7e2a9);
 `disable_day_swap_train_ui` (Train UI only — see `lib/features/train/CLAUDE.md`).
 
 **M1 (unchanged limitation):** two overlapping sync passes for the same domain can still both

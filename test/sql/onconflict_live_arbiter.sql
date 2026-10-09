@@ -299,10 +299,18 @@ BEGIN
   END;
 
   ----- 16. progress_photos (id) -----------------------------------------
+  -- POST-154 (d8f2a6): trg_progress_photo_pro refuses a progress_photos INSERT for a user with no
+  -- active, unexpired subscription, and triggers fire for the postgres role too. Alice has none at
+  -- this point (case 27's redeem_referral_atomic grants hers later), so the case seeds an active
+  -- monthly row first and removes it right after the photo INSERT: case 27's referee state stays
+  -- byte-identical to what it was before the rule. An exception rolls the seed back with the block.
   BEGIN
+    INSERT INTO public.subscriptions (user_id, plan, status, start_date, end_date)
+      VALUES (v_user, 'monthly', 'active', v_now, v_now + interval '30 days');
     INSERT INTO public.progress_photos (id, user_id, storage_path, taken_at)
       VALUES (gen_random_uuid(), v_user, 'arbiter/test.jpg', v_now)
       ON CONFLICT (id) DO UPDATE SET storage_path = EXCLUDED.storage_path;
+    DELETE FROM public.subscriptions WHERE user_id = v_user;
     INSERT INTO _v_results VALUES ('progress_photos:id', 'ok', NULL, NULL);
   EXCEPTION WHEN OTHERS THEN
     INSERT INTO _v_results VALUES ('progress_photos:id', 'fail', SQLSTATE, SQLERRM);

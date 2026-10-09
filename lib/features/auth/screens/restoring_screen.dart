@@ -83,6 +83,7 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
   // a3f6d9 — true once _goHome is about to run; the CTA timer above is
   // wall-clock, independent of classification, so timing alone can't infer this.
   bool _committedToGoHome = false;
+  Future<RestoreResult>? _restoreFuture;
 
   @override
   void initState() {
@@ -112,6 +113,7 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
     // A7 / B5 D9-D10 — canonical provider path.
     final restoreFuture =
         ref.read(syncServiceProvider).restoreFromCloudForUser();
+    _restoreFuture = restoreFuture;
 
     final destination = await destinationFuture;
 
@@ -506,16 +508,15 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
     // touches userBox, so MUST run AFTER HiveUserSession.openForUser above.
 
     // (1) Cold-start clear of the session-scoped `streak_freeze_just_used`
-    // UI flag. Set by commitConsume(), read+cleared by
-    // home_screen._checkStreakFreezeUsed. If a prior session set the flag
+    // UI flag. Set by commitConsume(), taken+cleared by
+    // StreakProgressService.takeFreezeNotice. If a prior session set the flag
     // but never reached the home read (auth race, crash, signOut before
     // snackbar fired), the flag lingers in durable Hive and surfaces as a
     // spurious banner. Real consumes this session re-set it.
     try {
       final progress = UserRepository.instance.getProgress();
       if (progress != null && progress['streak_freeze_just_used'] == true) {
-        await UserRepository.instance
-            .updateProgress({'streak_freeze_just_used': false});
+        await UserRepository.instance.clearStreakFreezeNotice();
       }
     } catch (e, st) {
       debugPrint('[RestoringScreen] just_used clear failed (non-fatal): $e\n$st');
@@ -652,6 +653,7 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
     if (mounted) {
       context.go(RestoringScreen.resolveRestoreDestination(widget.next));
     }
+    if (ownershipOpen) healAfterRestoreWhenSucceeded(_restoreFuture);
   }
 
   @override

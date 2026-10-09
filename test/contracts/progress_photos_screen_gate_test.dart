@@ -206,11 +206,13 @@ void main() {
     late List<String> events;
     late List<String> nonFatals;
     late int listCalls;
+    late int captureCalls;
 
     setUp(() async {
       events = [];
       nonFatals = [];
       listCalls = 0;
+      captureCalls = 0;
       // Hooks FIRST (see user_photos_gate_behavioral_test.dart): opening the Hive
       // user session notifies the singleton registry, and a stray non-fatal must
       // land in the hook, not in the real telemetry path.
@@ -219,6 +221,10 @@ void main() {
       ErrorTelemetry.debugOnRecordNonFatalForTests =
           (e, st, {required reason, extra}) => nonFatals.add(reason);
       ProgressPhotoRepository.debugOnListForTests = () => listCalls++;
+      ProgressPhotoRepository.debugCaptureOverride = (_, _) async {
+        captureCalls++;
+        return null;
+      };
       dir = await setUpHiveForTests();
       events.clear();
       nonFatals.clear();
@@ -228,6 +234,7 @@ void main() {
       ErrorTelemetry.debugOnLogEventForTests = null;
       ErrorTelemetry.debugOnRecordNonFatalForTests = null;
       ProgressPhotoRepository.debugOnListForTests = null;
+      ProgressPhotoRepository.debugCaptureOverride = null;
       await tearDownHiveForTests(dir);
     });
 
@@ -283,8 +290,11 @@ void main() {
       expect(find.text('Upgrade to PRO'), findsOneWidget);
       expect(find.text('Add photo'), findsNothing,
           reason: 'a free user must not be offered a Storage write');
-      expect(listCalls, 0,
-          reason: 'a free user must trigger no photo read (list())');
+      expect(listCalls, 1,
+          reason: 'one read of the user\'s OWN photos, to tell a never-PRO user '
+              'from a lapsed one (OI-314); it found none, hence the locked card');
+      expect(captureCalls, 0,
+          reason: 'a free user must trigger no Storage write');
 
       expect(routed(), hasLength(1));
       expect(routed().single, contains('feature=progress_photos'));
@@ -293,17 +303,22 @@ void main() {
       expect(nonFatals, isEmpty);
     });
 
-    testWidgets('FREE: the very first frame already shows the locked card (no '
-        'spinner flash)', (tester) async {
+    testWidgets('FREE: the first frame is the spinner (the screen cannot yet '
+        'tell never-PRO from lapsed), then the locked card', (tester) async {
       await makeFree(tester);
       _firstFrame(tester, _app());
 
-      expect(find.byType(ProLockedOverlay), findsOneWidget);
-      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byType(ProLockedOverlay), findsNothing,
+          reason: 'a lapsed user\'s photos must not be hidden behind the card '
+              'before the read answers');
       expect(find.text('Add photo'), findsNothing);
 
       await tester.pumpAndSettle();
-      expect(listCalls, 0);
+      expect(find.byType(ProLockedOverlay), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(listCalls, 1);
+      expect(captureCalls, 0);
     });
 
     testWidgets('FREE: the card\'s Upgrade button opens the paywall',
@@ -401,8 +416,11 @@ void main() {
         }
       }
 
-      expect(listCalls, 0,
-          reason: 'no tap on the locked screen may read photos (list())');
+      // One entry read per app built: the first one above plus one per target; a
+      // tap adds none.
+      expect(listCalls, count + 1,
+          reason: 'no tap on the locked screen may read photos again');
+      expect(captureCalls, 0, reason: 'no tap may reach a Storage write');
       expect(paywalls, greaterThanOrEqualTo(1),
           reason: 'the sweep did tap the Upgrade button (a sweep that taps '
               'nothing would pass vacuously)');
@@ -557,7 +575,8 @@ void main() {
       expect(find.byType(ProLockedOverlay), findsNothing);
       expect(find.text('No photos yet'), findsOneWidget);
       expect(find.text('Add photo'), findsOneWidget);
-      expect(listCalls, 1, reason: 'the photos are read once, after the gate');
+      expect(listCalls, 2,
+          reason: 'the free entry\'s read, then the post-upgrade read');
       expect(routed(), hasLength(2));
       expect(routed().last, contains('feature=progress_photos'));
       expect(routed().last, contains('exit=onPro'));
@@ -598,7 +617,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('No photos yet'), findsOneWidget);
       expect(find.text('Add photo'), findsOneWidget);
-      expect(listCalls, 2, reason: 'the re-check reads the photos again');
+      expect(listCalls, 3,
+          reason: 'entry, the refused Add tap\'s reload, then the re-check');
     });
 
     // ── PRO ───────────────────────────────────────────────────────────────
@@ -854,8 +874,8 @@ void main() {
 
     // ── Through the hub ───────────────────────────────────────────────────
 
-    testWidgets('through the hub: a PRO user passes BOTH locks and ends on the '
-        'gallery', (tester) async {
+    testWidgets('through the hub: a PRO user passes the screen\'s gate and ends '
+        'on the gallery', (tester) async {
       await makePro(tester);
       await tester.pumpWidget(_throughTheHub());
       await tester.pumpAndSettle();
@@ -873,7 +893,8 @@ void main() {
 
       final passes =
           routed().where((e) => e.contains('feature=progress_photos')).toList();
-      expect(passes, hasLength(2), reason: 'the hub row, then the screen');
+      expect(passes, hasLength(1),
+          reason: 'only the screen gates now; the hub row pushes for everyone');
       for (final p in passes) {
         expect(p, contains('exit=onPro'));
         expect(p, contains('reason=verify_pro'));
@@ -890,39 +911,81 @@ void main() {
           'lib/features/profile/screens/progress_photos_screen.dart');
     });
 
-    test('initState starts the entry gate and does nothing else', () {
+    /// The text of `Future<void> _reload(` up to its matching closing brace.
+    String reloadBody() {
+      final start = src.indexOf('Future<void> _reload(');
+      expect(start, greaterThanOrEqualTo(0));
+      final open = src.indexOf('{', src.indexOf(') async', start));
+      var depth = 0;
+      for (var i = open; i < src.length; i++) {
+        if (src[i] == '{') depth++;
+        if (src[i] == '}') {
+          depth--;
+          if (depth == 0) return src.substring(start, i + 1);
+        }
+      }
+      fail('unbalanced braces in _reload');
+    }
+
+    test('initState starts the reload and does nothing else', () {
       expect(
-          RegExp(r'void initState\(\) \{\s*super\.initState\(\);\s*_enter\(\);\s*\}')
+          RegExp(r'void initState\(\) \{\s*super\.initState\(\);\s*'
+                  r'_reload\(keepGallery: true\);\s*\}')
               .hasMatch(src),
           isTrue,
-          reason: 'initState must be super.initState() + _enter(): a _load() '
-              'there would read photos for a free user before the gate answers');
+          reason: 'initState must be super.initState() + _reload(...): a photo '
+              'read there, outside the single writer, would race it');
     });
 
-    test('_load() runs only from the entry gate\'s onPro (and the retry / '
-        'post-capture refresh)', () {
+    test('_reload is the ONLY code that assigns _access, _photos and _error '
+        '(bar the field initialisers and the optimistic tile removal)', () {
+      final body = reloadBody();
+      final outside = src.replaceFirst(body, '');
+      expect(RegExp(r'\b_access\s*=(?!=)').allMatches(outside).length, 1,
+          reason: 'only the field initialiser `_Access _access = ...` may assign '
+              '_access outside _reload');
+      expect(RegExp(r'\b_error\s*=(?!=)').allMatches(outside).length, 0);
+      // `_photos =` outside: the field is `_photos;` (no assignment) and the one '
+      // optimistic removal in _delete.
+      expect(RegExp(r'\b_photos\s*=(?!=)').allMatches(outside).length, 1,
+          reason: 'only _delete\'s optimistic removal may assign _photos');
+      expect(outside.contains('_photos = ['), isTrue);
+      expect(RegExp(r'\b_access\s*=(?!=)').allMatches(body).length, greaterThan(2));
+    });
+
+    test('_reload checks mounted and the sequence after EVERY await', () {
+      final body = reloadBody();
+      final awaits = RegExp(r'\bawait\b').allMatches(body).length;
+      final checks = RegExp(r'if \(!mounted \|\| gen != _seq\) return;')
+          .allMatches(body)
+          .length;
+      expect(awaits, 2, reason: 'the gate and the read');
+      expect(checks, greaterThanOrEqualTo(awaits),
+          reason: 'one check after each await, plus the one in the catch');
+      expect(body.contains('final gen = ++_seq;'), isTrue);
+      expect(body.contains('finally'), isTrue,
+          reason: 'the in-flight counter is released in a finally');
+    });
+
+    test('a failed read is never treated as an empty gallery', () {
+      final body = reloadBody();
+      // `denied` is reachable only from a non-null read result.
       expect(
-          RegExp(r'onPro:\s*\(\)\s*\{\s*if\s*\(\s*!mounted\s*\)\s*return;\s*'
-                  r'setState\(\(\)\s*=>\s*_access\s*=\s*_Access\.granted\);\s*'
-                  r'_load\(\);')
-              .hasMatch(src),
-          isTrue,
-          reason: 'the granted state and the first read belong to onPro');
-      // The other references are the ErrorState retry (`onRetry: _load`, a
-      // tear-off) and the refreshes after a successful capture and after a
-      // delete; all are reachable only from a granted screen. REFERENCES are
-      // counted, not calls (`\b_load\b`, no parenthesis): a tear-off such as
-      // `IconButton(onPressed: _load)` is a caller too, and a count of `_load(`
-      // cannot see it. Five: the definition, the onPro call, the two refreshes
-      // and the retry tear-off.
-      expect(RegExp(r'\b_load\b').allMatches(src).length, 5,
-          reason: 'a new _load reference (call OR tear-off) must be justified: '
-              'before the gate it would read photos for a free user');
+          RegExp(r'if \(photos != null\) \{[\s\S]*?photos\.isEmpty \? _Access\.denied')
+              .hasMatch(body),
+          isTrue);
+      expect(RegExp(r'_Access\.denied').allMatches(body).length, 1);
+    });
+
+    test('the gate callbacks in _reload only record a verdict', () {
+      final body = reloadBody();
+      expect(body.contains('onPro: () => pro = true,'), isTrue);
+      expect(body.contains('onFree: () => pro = false,'), isTrue);
     });
 
     test('exactly two gates, both on the progress_photos feature', () {
       expect(RegExp(r'gateAndVerify\(').allMatches(src).length, 2,
-          reason: 'entry (_enter) + the write action (_onAddPhoto)');
+          reason: 'the reload (entry) + the write action (_onAddPhoto)');
       expect(
           RegExp(r'gateAndVerify\(\s*AppConstants\.featureProgressPhotos,')
               .allMatches(src)
@@ -930,30 +993,36 @@ void main() {
           2);
     });
 
-    test('every gate callback opens with the mounted check', () {
+    test('the write gate\'s callbacks open with the mounted check', () {
       for (final cb in const ['onPro', 'onFree']) {
         expect(
             RegExp('$cb:\\s*\\(\\)\\s*\\{\\s*if\\s*\\(\\s*!mounted\\s*\\)\\s*return;')
                 .allMatches(src)
                 .length,
-            2,
-            reason: '$cb is used by both gates and must open with the guard');
+            1,
+            reason: '$cb of _onAddPhoto must open with the guard');
       }
     });
 
-    test('the paywall is shown by the locked card, the refused write and the '
-        'quota branch; F40\'s handler is still there', () {
+    test('the paywall is shown by the locked card, the Add gate\'s onFree and '
+        'the refusal branch only; the quota branch shows none', () {
       expect(RegExp(r'showPaywallSheet\(').allMatches(src).length, 3);
       expect(src.contains('on PhotoQuotaException'), isTrue);
+      expect(src.contains('on ProgressPhotoProRequiredException'), isTrue);
+    });
+
+    test('the Add button is offered only to PRO, or to a lapsed user who holds '
+        'photos', () {
+      expect(
+          src.contains('!(_access == _Access.granted ||'), isTrue);
+      expect(
+          RegExp(r'_access == _Access\.readOnly && \(_photos\?\.isNotEmpty \?\? false\)')
+              .hasMatch(src),
+          isTrue);
     });
 
     test('every method that touches Storage has exactly one caller, and the '
         'picker is reached only from the write gate', () {
-      // A new caller (an AppBar action, a retry button) would be a Storage write
-      // or read that skips both gates; it must be added HERE on purpose.
-      // References are counted WITHOUT a following parenthesis: a tear-off such as
-      // `IconButton(onPressed: _pickAndCapture)` is a caller too (the FREE sweep
-      // above is the behaviour behind these counts).
       expect(RegExp(r'\b_pickAndCapture\b').allMatches(src).length, 2,
           reason: 'the definition and the one call');
       expect(
@@ -965,13 +1034,12 @@ void main() {
       expect(RegExp(r'\b_capture\b').allMatches(src).length, 2,
           reason: 'the definition and the call inside _pickAndCapture');
       expect(RegExp(r'\b_delete\b').allMatches(src).length, 2,
-          reason: 'the definition and the long-press on a granted grid tile');
+          reason: 'the definition and the long-press on a gallery tile');
       expect(RegExp(r'\b_repo\b').allMatches(src).length, 4,
-          reason: 'the field, then list, capture, delete: one use each');
+          reason: 'the field, then listStrict, capture, delete: one use each');
       expect(RegExp(r'\bProgressPhotoRepository\b').allMatches(src).length, 1,
           reason: 'the one handle on the repository is the _repo field; a second '
-              'handle (a direct ProgressPhotoRepository.instance.capture(...)) '
-              'would skip every count above');
+              'handle would skip every count above');
     });
   });
 }
