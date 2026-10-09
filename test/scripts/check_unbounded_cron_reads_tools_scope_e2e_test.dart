@@ -11,26 +11,11 @@
 @Timeout(Duration(minutes: 3))
 library;
 
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-String _dartBin() {
-  final override = Platform.environment['DART_BIN_OVERRIDE'];
-  if (override != null && File(override).existsSync()) return override;
-  final which = Process.runSync(Platform.isWindows ? 'where' : 'which', ['dart'], stdoutEncoding: utf8);
-  if (which.exitCode == 0) {
-    final first = (which.stdout as String).split('\n').map((l) => l.trim()).firstWhere((l) => l.isNotEmpty, orElse: () => '');
-    if (first.isNotEmpty) {
-      final dir = File(first).parent.path.replaceAll(r'\', '/');
-      for (final c in ['$dir/cache/dart-sdk/bin/dart.exe', '$dir/cache/dart-sdk/bin/dart']) {
-        if (File(c).existsSync()) return c;
-      }
-    }
-  }
-  return 'dart';
-}
+import '../helpers/spawn.dart';
 
 const _registry = '''
 | # | job | cron | IST | Function | Auth | Notes |
@@ -58,7 +43,7 @@ const _pagedBounded = 'export const x = async (sb: any) => {\n'
 void main() {
   late Directory tmp;
   final repoRoot = Directory.current.path;
-  final dart = _dartBin();
+  final dart = dartBin();
 
   setUp(() {
     tmp = Directory.systemTemp.createTempSync('gate_unbounded_');
@@ -77,11 +62,8 @@ void main() {
     } catch (_) {}
   });
 
-  ProcessResult run() {
-    final env = Map<String, String>.from(Platform.environment)..removeWhere((k, _) => k.toUpperCase().startsWith('GIT_'));
-    return Process.runSync(dart, ['scripts/check_unbounded_cron_reads.dart'],
-        workingDirectory: tmp.path, environment: env, includeParentEnvironment: false);
-  }
+  ProcessResult run() => runSpawn(dart, ['scripts/check_unbounded_cron_reads.dart'],
+      why: 'unbounded-reads gate in a scratch tree', workingDirectory: tmp.path);
 
   void tool(String rel, String body) =>
       File('${tmp.path}/supabase/functions/_shared/tools/$rel')
