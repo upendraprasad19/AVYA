@@ -4540,13 +4540,6 @@ this repo's migration protocol, not a quick follow-on to d8a2f6.
 - **Verified**: never
 - **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/next-aab-decision-d1227b`
 
-## OI-237 — Extreme update:insert ratios on scheduled_workouts (34:1) and template_exercises (39:1) — possible sync write-amplification rewriting full rows instead of deltas, needs docs/architecture/sync.md + WriteServices code review
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/next-aab-decision-d1227b`
-
 ## OI-239 — Acknowledging an alert re-arms its dedup window instead of waiting out the original interval — a systemic property shared by all 6 alert_* cron jobs
 
 - **Status**: OPEN
@@ -5798,3 +5791,41 @@ Priority: LOW, not a go-live blocker. Since slice C1 neither the server nor rest
 - **Identified**: 2026-10-09 · filed via mint_oi.sh from branch `claude/avya-streak-data-check-b506de`
 
 Priority: LOW, no go-live impact (one account). Slice D fixed the counting rule going forward; it does not back-fill weeks already lost. If the founder wants this week credited, the steps are: read the live row, state the exact UPDATE, run it in a transaction that returns the before/after, and get a separate go (CLAUDE.md section 4.3, live prod needs its own authorization). The value to correct is `user_progress.current_streak_weeks` (with `last_counted_week_key` left alone).
+
+## OI-329 — water_logs still takes about 54 updates per day after the sync-load batch (602 in 11 days on about 50 rows, only a 34% drop): the send-only-changed skip is not holding for water, or older app builds still push it
+
+- **Status**: OPEN
+- **Blocked on**: none, fixable now; start by reading `_syncWaterLogs` and the live water rows
+- **Verified**: 2026-10-09 - live `pg_stat_user_tables` (snapshot 3, `docs/audit/2026-09-oi237-io-measurements.md`): `water_logs` n_tup_upd went 1765 to 2367 between 2026-09-28 08:26 UTC and 2026-10-09 12:40 UTC, which is 602 updates in 11.18 days (53.9/day), while n_live_tup moved 41 to 50 (13 inserts). The same table ran 81/day in the 31-hour window before the batch.
+- **Identified**: 2026-10-09 · filed via mint_oi.sh from branch `oi237-closeout`
+
+The day-swapper + sync-load batch (OI-237) set out to stop re-sending unchanged rows. The headline tables (scheduled_workouts, template_exercises, workout_logs, streaks, weight_logs, workout_templates) fell 97 to 100 percent and workout_schedule_completions fell 81 percent. Water fell 34 percent.
+
+`docs/architecture/sync.md:187` lists water as covered (`sync_water_payload_hash_index`, kill switch `disable_water_hash_skip`, `_syncWaterLogs` at `lib/core/services/sync/sync_nutrition.dart:457`), and `:208` records that `updated_at` on water defeats SERVER-side suppression, so for water only the client skip can help. Two explanations, and the counters cannot tell them apart:
+
+1. Older app builds (the +46 and +47 AABs and pre-batch APKs) still push every water row on every nutrition pass.
+2. The skip fingerprint for water includes something that changes on each pass, so the new code re-sends too.
+
+First moves: read `_syncWaterLogs` and its fingerprint thunk; read the live `water_logs` rows (about 50) grouped by user and by `updated_at` day to see whether the writes come from one or two accounts; confirm `disable_water_hash_skip` is not set on a tester's device. Done when a later snapshot shows water at or below about 10 updates/day with the +48 build on the active devices.
+
+## OI-330 — workout_log_exercises updates rose from about 5 to about 62 per day across the day-swapper window (695 updates, 685 non-HOT so they rewrite indexes): cause unknown, migration 151's insert path and the exercise-log tombstone drain (OI-307, OI-312) are the first suspects
+
+- **Status**: OPEN
+- **Blocked on**: none, but it needs a diagnosis first (writers and readers named by file:line) before any fix
+- **Verified**: 2026-10-09 - live `pg_stat_user_tables` (snapshot 3, `docs/audit/2026-09-oi237-io-measurements.md`): `workout_log_exercises` n_tup_upd went 533 to 1228 between 2026-09-28 08:26 UTC and 2026-10-09 12:40 UTC, which is 695 updates in 11.18 days (62/day), against 7 in the 31 hours before it (5.4/day). n_tup_hot_upd moved only 532 to 542, so 685 of the 695 were NON-HOT (they rewrite index entries). n_live_tup 207 to 235; inserts 24 to 167.
+- **Identified**: 2026-10-09 · filed via mint_oi.sh from branch `oi237-closeout`
+
+Not a target of the day-swapper batch; found while reading snapshot 3. Migration 149 puts the identical-update suppressor on this table (`supabase/migrations/149_sync_noop_suppress_completed_guard_sync_epoch.sql:104-106`), and a counted update is one the trigger let through, so these 695 changed at least one column. The same window contains migrations 150, 151 and 155, which all change this table's insert, upsert or delete path (`150_workout_log_exercises_tombstone_delete.sql`, `151_workout_log_exercises_delete_trigger_insert_path.sql`, `155_wle_single_live_summary.sql`), and the board already records the delete drain missing its arbiter (OI-312) and a second live summary row appearing when a set count changes (OI-307).
+
+Candidates, none verified: the tombstone drain re-sending, the summary row being rewritten whenever its set count changes, or the client exercise-log push not skipping unchanged rows. First moves: name every writer of this table by file:line, then read which columns differ for a bounded sample of recently updated rows (one small query, not a scan). Done when the cause is named and either fixed or shown to be a one-off, and a later snapshot reads at or below about 10 updates/day.
+
+## OI-331 — No detector for leftover background processes: a helper agent's unbounded until-grep wait loop ran 46 hours unnoticed because its regex could never match, and the batch-close hook does not list stray child processes
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-10-09 - found live: two bash process pairs (PIDs 1216/2848 and 21992/19184) had run `until grep -qE "All tests passed|Some tests failed|^Failed to" <task>.output; do sleep 5; done` for about 46 hours. The watched file's last line was `All other tests passed!`, which that pattern cannot match. They were children of a Task-20 implementer agent that stayed "running" 46.4 hours until they were killed. Cost was negligible (a 5-second file read); nothing else was touched.
+- **Identified**: 2026-10-09 · filed via mint_oi.sh from branch `oi237-closeout`
+
+Origin of the class: `feedback_mistake_schedulewakeup_misuse_for_background_tasks.md` (12th instance) and `feedback_kill_zombie_processes.md` (the founder's 2026-09-27 decision to build a warn-only detector).
+
+Proposed shape, not designed: a new row in the Stop hook (`scripts/batch_close_hook.dart`, CLAUDE.md section 5) that lists live `bash`/`sh`/`dart`/`flutter` processes older than about 30 minutes whose command line is an `until` or `sleep` loop, or that are children of a finished agent. WARN only, fail open, kill switch like its siblings, `Get-CimInstance Win32_Process` on Windows. Also add to `docs/agent_brief_preamble.md` that a subagent never starts an unbounded wait loop and wraps any wait in `timeout`. Done when the hook row exists with a mutation-proven test (CLAUDE.md section 4.4 rule 21) and the preamble carries the rule.
