@@ -119,9 +119,12 @@ void main() {
       await PendingExlogDeletes.add(
           workoutLogId: 'wlog_a', exerciseId: 'Bench Press', setNumber: 3);
       final all = PendingExlogDeletes.read();
-      expect(all, [
-        {'workout_log_id': 'wlog_a', 'exercise_id': 'Bench Press', 'set_number': 3}
-      ]);
+      expect(all, hasLength(1));
+      expect(all.single['workout_log_id'], 'wlog_a');
+      expect(all.single['exercise_id'], 'Bench Press');
+      expect(all.single['set_number'], 3);
+      // L1a-2 U4: every entry records WHEN the user deleted it.
+      expect(all.single['deleted_at_ms'], isA<int>());
     });
 
     test('adding the same natural key twice does not duplicate', () async {
@@ -145,8 +148,13 @@ void main() {
           workoutLogId: 'wlog_a', exerciseId: 'Bench Press', setNumber: 3);
       await PendingExlogDeletes.add(
           workoutLogId: 'wlog_b', exerciseId: 'Squat', setNumber: 5);
+      final queued = PendingExlogDeletes.read()
+          .firstWhere((e) => e['exercise_id'] == 'Bench Press');
       await PendingExlogDeletes.remove(
-          workoutLogId: 'wlog_a', exerciseId: 'Bench Press', setNumber: 3);
+          workoutLogId: 'wlog_a',
+          exerciseId: 'Bench Press',
+          setNumber: 3,
+          deletedAtMs: queued['deleted_at_ms'] as int?);
       final all = PendingExlogDeletes.read();
       expect(all.length, 1);
       expect(all.first['exercise_id'], 'Squat');
@@ -257,20 +265,22 @@ void main() {
               'sync pass');
     });
 
-    test('_drainPendingExlogDeletes upserts a deleted_at tombstone per '
-        'queued natural key', () {
+    test('_drainPendingExlogDeletes tombstones with a filtered UPDATE on the '
+        'queued key (kill switch: the same-count upsert)', () {
       final start = src.indexOf('Future<void> _drainPendingExlogDeletes(');
       expect(start, greaterThan(0));
       final next = src.indexOf('\n  Future<void> ', start + 1);
       final body = src.substring(start, next > start ? next : src.length);
       expect(body.contains("'deleted_at':"), isTrue);
+      expect(body.contains(".lte('completed_at', cutoff)"), isTrue,
+          reason: 'only versions written at or before the delete (L1a-2 U4)');
+      expect(body.contains(".eq('exercise_id', exerciseId)"), isTrue);
       expect(
           body.contains(
               "onConflict: 'user_id,workout_log_id,exercise_id,set_number'"),
           isTrue,
-          reason: 'must target the exact natural key '
-              'uniq_wle_user_wlog_ex_set covers, or the tombstone lands on '
-              'the wrong row (or a duplicate)');
+          reason: 'the kill-switch path keeps the exact natural key '
+              'uniq_wle_user_wlog_ex_set covers');
     });
 
     test('_restoreExerciseLogs skips a tombstoned (deleted_at != null) row',

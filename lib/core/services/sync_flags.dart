@@ -248,6 +248,42 @@ class SyncFlags {
     }
   }
 
+  /// Kill switch for the exercise-log restore rules (plan
+  /// coach-history-correctness-client U2 (a)-(d)): one live summary per
+  /// (workout_log_id, exercise_id) chosen by highest set count, a rank-cut
+  /// per-set join, the day taken from `workout_log_id`, and entries queued in
+  /// `PendingExlogDeletes` skipped. An on-by-default emergency switch kept
+  /// permanently (the oi83 precedent), not a ship-dark flag:
+  /// `configBox['disable_exlog_restore_dedupe'] = true` restores the old
+  /// behaviour VERBATIM (the newest-written summary wins, every per-set row, day from
+  /// `completed_at`). With the box not open the rules stay ON.
+  static bool get exlogRestoreDedupeEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('disable_exlog_restore_dedupe') !=
+          true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// Kill switch for the exercise-log delete drain (plan
+  /// coach-history-correctness-client U4). On: one filtered UPDATE per queued
+  /// delete -- every set count, only versions with `completed_at <=` the
+  /// delete time ("the newest action wins"). `configBox['disable_exlog_allcount_drain']
+  /// = true` falls back to the old same-count tombstone upsert VERBATIM.
+  /// Dev-panel only (no RemoteConfig, OI-95), the oi83 precedent. With the box
+  /// not open the new drain stays ON.
+  static bool get exlogAllCountDrainEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('disable_exlog_allcount_drain') !=
+          true;
+    } catch (_) {
+      return true;
+    }
+  }
+
   /// Test-only setter. Production callers MUST NOT toggle flags in
   /// code — they flip via `configBox.put` from a one-shot migration
   /// or remote-config write only.

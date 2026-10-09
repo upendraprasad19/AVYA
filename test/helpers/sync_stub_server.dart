@@ -108,6 +108,13 @@ class SyncStubServer {
   final Map<String, FutureOr<StubRpcReply> Function(StubRequest)> rpcResponders =
       {};
 
+  /// Write answers per table (L1a-2 U4): a closure that returns the JSON a
+  /// PostgREST write would answer with (a list of rows for a filtered UPDATE
+  /// with `Prefer: return=representation`), or null to keep the default. The
+  /// closure sees the whole request (query filters, body), so a test can model
+  /// state the cloud holds. Checked after [writeFailers] / [failWritesTo].
+  final Map<String, Object? Function(StubRequest)> writeResponders = {};
+
   /// GET responders per table; a table without one answers `[]`.
   final Map<String, Object? Function(StubRequest)> getResponders = {};
 
@@ -412,7 +419,28 @@ class SyncStubServer {
         ..statusCode = 200
         ..write(jsonEncode(getResponders[r.table]?.call(r) ?? const []));
     } else if (r.isWrite) {
-      res.statusCode = r.method == 'POST' ? 201 : 204;
+      final custom = writeResponders[r.table]?.call(r);
+      final wantsRepresentation =
+          (r.headers['prefer'] ?? '').contains('return=representation');
+      if (custom != null) {
+        res
+          ..statusCode = 200
+          ..write(jsonEncode(custom));
+      } else if (wantsRepresentation) {
+        // As real PostgREST answers a write that asks for the representation:
+        // 200 with the rows it touched (none here). Before L1a-2 every write
+        // answered 204/201 with no body, which postgrest-dart turns into a
+        // null body, so a test exercised the network-failure catch instead of
+        // the "0 rows touched" branch. An object-shaped Accept (`.single()`)
+        // gets `{}`.
+        res.statusCode = 200;
+        res.write((r.headers['accept'] ?? '')
+                .contains('application/vnd.pgrst.object+json')
+            ? '{}'
+            : '[]');
+      } else {
+        res.statusCode = r.method == 'POST' ? 201 : 204;
+      }
     } else {
       res
         ..statusCode = 200

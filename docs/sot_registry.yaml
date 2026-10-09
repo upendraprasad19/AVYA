@@ -78,7 +78,7 @@ concepts:
           log resurrecting on the next full restore, and (151) a re-log after
           such a delete being silently dropped.
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1507-1521
+        line_range: 1533-1547
         method: resolveSummarySetCount
         notes: |
           OI-246 (2026-09-28, round-2 review finding P3 — split from deleteLog's
@@ -365,7 +365,9 @@ concepts:
           sets[] contributes its own top-level aggregates (restore-shaped
           rows from sync_workout.dart), so a collision never recomputes
           downward.
-          LOCAL-ONLY — cloud exercise_logs residual tracked on OI-174.
+          Cloud (L1a-2 U4, closes the exlog half of OI-218): both branches
+          queue the SOURCE day in PendingExlogDeletes and the target day's
+          queued delete is cancelled; concept pending_exlog_deletes.
     reader_manifest_complete: true
     readers:
       - file: lib/features/train/repositories/workout_repository.dart
@@ -408,7 +410,7 @@ concepts:
       key_formula: "'exercise_log_index_${istDateStr(date)}'"
     ist_sites:
       - { file: lib/core/utils/date_utils.dart, line: 27, fn: formatDateKey }
-      - { file: lib/core/services/workout_write_service.dart, line: 1495, fn: wlogKey }
+      - { file: lib/core/services/workout_write_service.dart, line: 1521, fn: wlogKey }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\\.keys.*manually.*date", reason: "O(n) scan — use the index key instead" }
       - { pattern: "DateTime\\.now\\(\\)\\.toIso8601String\\(\\)\\.substring\\(0,\\s*10\\)", reason: "UTC date, disagrees with IST-keyed reader; use istDateStr(DateTime.now())" }
@@ -440,9 +442,9 @@ concepts:
         method: _syncExerciseLogs
         notes: summary upsert on (user_id, workout_log_id, exercise_id, set_number), then the per-set upsert
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 216-254
+        line_range: 206-290
         method: _drainPendingExlogDeletes
-        notes: tombstone-shaped upsert at the queued count (installed APKs)
+        notes: L1a-2 U4 sends one time-filtered UPDATE per queued delete (every set count); the tombstone-shaped same-count upsert survives only behind the kill switch disable_exlog_allcount_drain and in installed APKs
       - file: supabase/migrations/155_wle_single_live_summary.sql
         line_range: 72-293
         method: workout_log_exercises_single_live / workout_log_exercises_delete_final_rename
@@ -450,17 +452,103 @@ concepts:
     reader_manifest_complete: false
     readers:
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 861-1042
+        line_range: 928-1110
         method: _restoreExerciseLogs
         semantic: live rows only (skips deleted_at)
         fields_read: [workout_log_id, exercise_id, set_number, completed_at, deleted_at]
-        notes: put-if-absent; with one live row per key there is nothing to choose between
+        notes: L1a-2 U2 selects ONE live summary per (workout_log_id, exercise_id) by highest set_number (selectLiveSummaries) and joins per-set rows by rank (rankedSetRows); test/sync/exlog_restore_u2_behavioral_test.dart
       - file: supabase/functions/_shared/tools/progress/getExerciseHistory.ts
         line_range: 1-9999
         method: getExerciseHistory
         semantic: aggregated
         fields_read: [exercise_id, set_number, reps, weight_kg, completed_at]
         notes: server readers dedupe on the same key on their own until the apply (L1b B1, docs/plans/coach-history-correctness-tools.md)
+  - concept: pending_exlog_deletes
+    domain: workout
+    behavioral_test_path: test/sync/exlog_delete_u4_behavioral_test.dart  # d7bae4/c6a9d3 - the real drain against the stub: time-filtered UPDATE, every count, newest action wins, move queues the source day, re-log cancels, owner checks at each sink, queue re-read, kill switch
+    description: |
+      L1a-2 U4 (docs/plans/coach-history-correctness-client.md). The queue of
+      exercise-log deletes not yet confirmed against the cloud, in userBox key
+      pending_exlog_deletes. Each entry is {workout_log_id, exercise_id,
+      set_number, deleted_at_ms}. The drain tombstones every set count of
+      (workout_log_id, exercise_id) written at or before deleted_at_ms ("the
+      newest action wins", founder 2026-10-06); a re-log (logExercise,
+      moveExerciseLogs into the day, ExlogKeyMigrator) cancels the entry; a
+      move queues its SOURCE day. The queue key is user-independent, so the
+      drain checks ownerChangedSince at each write sink.
+    writers:
+      - file: lib/core/services/workout_write_service.dart
+        line_range: 1310-1316
+        method: deleteLog
+        notes: PendingExlogDeletes.add at local-delete time (count = resolveSummarySetCount)
+      - file: lib/core/services/workout_write_service.dart
+        line_range: 902-960
+        method: moveExerciseLogs
+        notes: add for the SOURCE day (both branches), cancelFor the TARGET day
+      - file: lib/core/services/workout_write_service.dart
+        line_range: 92-260
+        method: logExercise
+        notes: cancelFor after the Hive write
+      - file: lib/core/services/exlog_key_migrator.dart
+        line_range: 35-150
+        method: runIfNeeded
+        notes: cancelFor for the re-created row
+    reader_manifest_complete: true
+    readers:
+      - file: lib/core/services/sync/sync_workout.dart
+        line_range: 206-290
+        method: _drainPendingExlogDeletes
+        semantic: queue drained
+        fields_read: [workout_log_id, exercise_id, set_number, deleted_at_ms]
+      - file: lib/core/services/sync/sync_workout.dart
+        line_range: 928-1110
+        method: _restoreExerciseLogs
+        semantic: skips an exercise-day with a queued delete (U2(d))
+        fields_read: [workout_log_id, exercise_id]
+    hive:
+      box: userBox
+      key_prefix: "pending_exlog_deletes"
+      key_formula: "List of {workout_log_id: v5(workout_<IST date>), exercise_id: exercise name, set_number, deleted_at_ms}"
+    cloud:
+      table: workout_log_exercises
+      columns: [user_id, workout_log_id, exercise_id, completed_at, deleted_at]
+    sync_methods: [_drainPendingExlogDeletes]
+    restore_methods: [_restoreExerciseLogs]
+  - concept: exlog_workout_day
+    domain: workout
+    behavioral_test_path: test/sync/exlog_push_u3_behavioral_test.dart  # b5f8c2 - the push derives workout_log_id from date / key date / skip, sends max(resolved, updated_at_ms); paired with the restore half test/sync/exlog_restore_u2_behavioral_test.dart (a4e7b1)
+    description: |
+      L1a-2 U3/U2 (docs/plans/coach-history-correctness-client.md). The DAY of
+      an exercise log in the cloud is the date whose UUID v5 (namespace
+      6ba7b810-9dad-11d1-80b4-00c04fd430c8, name workout_<IST date>) equals
+      workout_log_id; completed_at is the WRITE time (the latest local write,
+      max(resolved, updated_at_ms)) and is never read for the day. Writer: the
+      exlog push (date, else the date in the Hive key, else no push). Readers:
+      restore (ExlogWorkoutDays inverts the id over 2020-01-01..today+400 and
+      drives the Hive key, date, wlog_ fallback and day index) and every server
+      reader (supabase/functions/_shared/exercise_day.ts, L1b).
+    writers:
+      - file: lib/core/services/sync/sync_workout.dart
+        line_range: 255-420
+        method: _syncExerciseLogs
+        notes: day from date / _dateFromKey(key); completed_at = latestWriteIso(...); uniquePerSetNumbers
+    reader_manifest_complete: true
+    readers:
+      - file: lib/core/services/sync/sync_workout.dart
+        line_range: 928-1110
+        method: _restoreExerciseLogs
+        semantic: day from workout_log_id, completed_at only as the fallback
+        fields_read: [workout_log_id, completed_at]
+      - file: supabase/functions/_shared/exercise_day.ts
+        line_range: 1-9999
+        method: server day resolver
+        semantic: same inversion over the same horizon
+        fields_read: [workout_log_id, completed_at]
+    cloud:
+      table: workout_log_exercises
+      columns: [workout_log_id, completed_at]
+    sync_methods: [_syncExerciseLogs]
+    restore_methods: [_restoreExerciseLogs]
   - concept: scheduled_workouts_mutations
     domain: workout
     behavioral_test_path: test/contracts/scheduled_workouts_mutations_behavioral_test.dart
@@ -555,7 +643,7 @@ concepts:
     restore_methods: [_restoreScheduledWorkouts, _restoreScheduleCompletions]
     provider_invalidation_set: [currentPlanProvider, calendarWeekProvider, todayWorkoutProvider]
     ist_sites:
-      - { file: lib/core/services/workout_write_service.dart, line: 1524, fn: scheduleKey }
+      - { file: lib/core/services/workout_write_service.dart, line: 1550, fn: scheduleKey }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\.put\('schedule_", reason: "Never write schedule keys directly from a widget — use WorkoutScheduleService" }
     class_constraints: |
@@ -2844,7 +2932,7 @@ concepts:
           range(offset, offset + pageSize - 1) until a short page or the 50,000-row
           ceiling. tieBreak is gated by SyncFlags.restorePagingFixEnabled.
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 1131-1156
+        line_range: 1252-1277
         method: _readScheduleCompletionRows
         notes: |
           Kill switch off -> the pre-fix single un-paged read, verbatim; on ->
@@ -2879,7 +2967,7 @@ concepts:
     reader_manifest_complete: false
     readers:
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 1046-1129
+        line_range: 1149-1232
         method: _restoreScheduleCompletions
         semantic: aggregated
         fields_read: [scheduled_date, completed_at, duration_seconds, workout_name]
@@ -3939,7 +4027,7 @@ concepts:
           (train_provider.saveTemplate, template_builder_screen,
           workout_repository's AI multi-day loop) routes through it.
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1350-1389
+        line_range: 1376-1415
         method: deleteTemplate
         notes: |
           OI-252 — the canonical delete writer. Hive-only (layering:
@@ -3951,7 +4039,7 @@ concepts:
           circular-dependency avoidance; that stays the caller's
           responsibility (`TemplatesNotifier.deleteTemplate`).
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 1479-1520
+        line_range: 1582-1623
         method: _drainPendingTemplateDeletes
         notes: |
           OI-252 — drains the queue by UPSERTing a tombstone per id
@@ -4003,7 +4091,7 @@ concepts:
           (legacy-key rekey gate, scoped to this function only — never
           `_restoreIfNeeded` as a whole) then `_drainPendingTemplateDeletes`.
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 1758-1915
+        line_range: 1861-2018
         method: _restoreWorkoutTemplates
         semantic: pass-through
         fields_read: [id, name, workout_type, deleted_at, template_exercises]
@@ -4018,7 +4106,7 @@ concepts:
           positive-evidence-only removal replaces it (a legacy sweep would
           delete every not-yet-pushed local template on a first restore).
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 1256-1420
+        line_range: 1359-1523
         method: _restoreWorkoutPlan
         semantic: cross-concept ghost-day filter
         fields_read: [template_id, template.deleted_at (embed)]
@@ -4895,7 +4983,7 @@ concepts:
           lookup could not answer" (null) as "none deleted": it skips every
           `tmpl_<uuid>` day then (B-pass reviewer B F1).
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 1852-1853
+        line_range: 1963-1964
         method: deletedTemplateCloudIdsForUser
         notes: |
           Public forwarder of `_deletedTemplateCloudIdsOrNull`: `null` = could not
@@ -7497,7 +7585,7 @@ concepts:
           ("8-12" ranges). Judges the write by the stored row
           (customExerciseRowLanded), throwing write_failed only when absent.
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1391-1433
+        line_range: 1417-1459
         method: upsertCustomExercise
         notes: |
           Canonical writer (audit 2026-05-21 / A3). Locks per-key,
@@ -11767,7 +11855,7 @@ concepts:
           (→913) despite the gate not flagging it, found by grepping the
           symbol directly rather than trusting the gate's silence on it.
       - file: lib/core/services/sync_service.dart
-        line_range: 2719-2719
+        line_range: 2721-2721
         method: restoreOpTimeout
         semantic: per-op-ceiling
         notes: day-swapper + sync-load Task 20 fix1 (diagnose a9d3f6) shifted

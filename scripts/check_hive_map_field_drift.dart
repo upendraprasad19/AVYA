@@ -305,6 +305,11 @@ const _alwaysOk = <String>{
   // FILE-WIDE (sync_workout.dart contains readers for every prefix) rather
   // than scoped to the specific map instance being read.
   'deleted_at',
+  // L1a-2 U4 (c6a9d3): `deleted_at_ms` is a field of a `PendingExlogDeletes`
+  // QUEUE ENTRY (userBox['pending_exlog_deletes'], read off `entry[...]` in
+  // `_drainPendingExlogDeletes`), never an exlog_/schedule_/wlog_ Hive map
+  // field; the heuristic flags it FILE-WIDE under all three prefixes.
+  'deleted_at_ms',
   // Slice D (b7d3e5): the weekly-streak marker, a key of userBox['progress'],
   // read in train_provider.dart where exlog_ maps are also read.
   'last_counted_week_key',

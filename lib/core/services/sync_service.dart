@@ -32,6 +32,8 @@ import 'package:icanbefitter/core/services/sync_domains/streaks_sync_domain.dart
 import 'package:icanbefitter/core/services/sync_domains/workouts_sync_domain.dart';
 import 'package:icanbefitter/core/services/sync/schedule_completion_time.dart';
 import 'package:icanbefitter/core/services/sync/sync_skip_index.dart';
+import 'package:icanbefitter/core/services/sync/exlog_push_rules.dart';
+import 'package:icanbefitter/core/services/sync/exlog_restore_rules.dart';
 import 'package:icanbefitter/core/services/sync_error.dart';
 import 'package:icanbefitter/core/services/sync_flags.dart';
 import 'package:icanbefitter/core/services/nutrition_write_service.dart';

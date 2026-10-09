@@ -6,6 +6,14 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### pending_exlog_deletes (2 bugs)
+- 2026-10-09 c6a9d3 — An exercise log deleted on one device left a live cloud row in four cases: the drain tombstoned only the SAME set count (a stale count stayed live), after migration 151 it could tombstone a newer…
+- 2026-10-09 d7bae4 — The exercise-log delete drain had no owner check: it iterated a copy of the queue, and its queue key (v5 of workout_<date> plus the exercise name) is user-independent, so an account swap during a…
+
+### exlog_workout_day (2 bugs)
+- 2026-10-09 b5f8c2 — An exercise-log push derived workout_log_id from log['date'] ?? '' so a row without a date landed in the shared v5('workout_') bucket; it sent a restored row's old created_at as completed_at even…
+- 2026-10-09 a4e7b1 — Restoring exercise logs from the cloud kept the first row it saw per exercise (the read is newest-first, so the newest write won whatever its set count), joined every per-set row including sets above…
+
 ### subscription_state — the screen is now the one place that decides what a not-PRO user sees of their progress photos; the repository makes no PRO decision. (1 bugs)
 - 2026-10-08 c2b7e4 — (1) A user whose PRO lapsed could not open the Progress screen to view or delete the progress photos they already held: the Photos hub row ran the PRO gate and showed the paywall without opening the…
 
@@ -1555,6 +1563,10 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-10-09 | c6a9d3 | An exercise log deleted on one device left a live cloud row in four cases: the drain tombstoned only the SAME set count (a stale count stayed live), after migration 151 it could tombstone a newer… | pending_exlog_deletes | test/sync/exlog_delete_u4_behavioral_test.dart |
+| 2026-10-09 | d7bae4 | The exercise-log delete drain had no owner check: it iterated a copy of the queue, and its queue key (v5 of workout_<date> plus the exercise name) is user-independent, so an account swap during a… | pending_exlog_deletes | test/sync/exlog_delete_u4_behavioral_test.dart |
+| 2026-10-09 | b5f8c2 | An exercise-log push derived workout_log_id from log['date'] ?? '' so a row without a date landed in the shared v5('workout_') bucket; it sent a restored row's old created_at as completed_at even… | exlog_workout_day | test/sync/exlog_push_u3_behavioral_test.dart |
+| 2026-10-09 | a4e7b1 | Restoring exercise logs from the cloud kept the first row it saw per exercise (the read is newest-first, so the newest write won whatever its set count), joined every per-set row including sets above… | exlog_workout_day | test/sync/exlog_restore_u2_behavioral_test.dart |
 | 2026-10-08 | c2b7e4 | (1) A user whose PRO lapsed could not open the Progress screen to view or delete the progress photos they already held: the Photos hub row ran the PRO gate and showed the paywall without opening the… | subscription_state — the screen is now the one place that decides what a not-PRO user sees of their progress photos; the repository makes no PRO decision. | test/contracts/progress_photo_client_rules_test.dart |
 | 2026-10-08 | a3c8f1 | The weekly-streak marker `last_counted_week_key` (the calendar week last counted, Slice D) lived only in the local Hive progress map. A reinstall or a second device restored the counter… | weekly_streak_counter | test/contracts/streak_week_marker_push_behavioral_test.dart |
 | 2026-10-08 | b7d3e5 | The weekly-streak counter (`current_streak_weeks`) under-counts. With 6 planned workouts the threshold is 5, but the FIRST completed session of a week stamped the marker `last_streak_week` with that… | weekly_streak_counter | test/contracts/weekly_streak_counter_writer_to_reader_test.dart |

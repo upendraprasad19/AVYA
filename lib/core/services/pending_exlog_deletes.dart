@@ -40,46 +40,86 @@ class PendingExlogDeletes {
         .toList();
   }
 
-  /// Queues an exercise log for deletion by its natural key. A no-op if this
-  /// exact (workoutLogId, exerciseId, setNumber) triple is already queued.
+  /// Queues an exercise log for deletion by its natural key and records WHEN
+  /// the user deleted it (`deleted_at_ms`, L1a-2 U4): the drain tombstones only
+  /// versions written BEFORE that moment, so a re-log made after the delete
+  /// (here or on another device) survives. Queuing the same triple again
+  /// REPLACES the earlier entry with the later time (a re-queued delete is a
+  /// newer action).
   static Future<void> add({
     required String workoutLogId,
     required String exerciseId,
     required int setNumber,
+    int? deletedAtMs,
   }) async {
-    // GROWABLE copy — read() can return the `const []` literal (nothing
+    // GROWABLE copy -- read() can return the `const []` literal (nothing
     // queued yet on a fresh box), and .add() below would throw
-    // UnsupportedError against it. Caught live by this file's own test
-    // (test/contracts/exlog_tombstone_delete_writer_to_reader_test.dart) on
-    // the very first delete for a fresh user; PendingTemplateDeletes shares
-    // this exact `return const []` shape and is NOT independently fixed
-    // here — out of scope, filed separately.
-    final list = List<Map<String, dynamic>>.of(read());
-    final alreadyQueued = list.any((e) =>
-        e['workout_log_id'] == workoutLogId &&
-        e['exercise_id'] == exerciseId &&
-        e['set_number'] == setNumber);
-    if (alreadyQueued) return;
-    list.add({
-      'workout_log_id': workoutLogId,
-      'exercise_id': exerciseId,
-      'set_number': setNumber,
-    });
-    await HiveService.instance.userBox.put(_key, list);
-  }
-
-  /// Removes the entry matching this exact natural key -- called once the
-  /// drain confirms the cloud tombstone UPSERT raised no exception.
-  static Future<void> remove({
-    required String workoutLogId,
-    required String exerciseId,
-    required int setNumber,
-  }) async {
+    // UnsupportedError against it.
     final list = List<Map<String, dynamic>>.of(read())
       ..removeWhere((e) =>
           e['workout_log_id'] == workoutLogId &&
           e['exercise_id'] == exerciseId &&
           e['set_number'] == setNumber);
+    list.add({
+      'workout_log_id': workoutLogId,
+      'exercise_id': exerciseId,
+      'set_number': setNumber,
+      'deleted_at_ms': deletedAtMs ?? DateTime.now().millisecondsSinceEpoch,
+    });
+    await HiveService.instance.userBox.put(_key, list);
+  }
+
+  /// Cancels every queued delete for this exercise on this workout day, at
+  /// any set count -- called when the exercise is logged (or moved) back onto
+  /// that day, so a stale delete cannot tombstone the new version. The key is
+  /// the exact queue key [add] stores: `workoutLogId` = the day's UUID v5 id,
+  /// `exerciseName` = the exercise_id the push uses (the exercise name).
+  static Future<void> cancelFor({
+    required String workoutLogId,
+    required String exerciseName,
+  }) async {
+    final all = read();
+    final kept = all
+        .where((e) =>
+            !(e['workout_log_id'] == workoutLogId &&
+                e['exercise_id'] == exerciseName))
+        .toList();
+    if (kept.length == all.length) return;
+    await HiveService.instance.userBox.put(_key, kept);
+  }
+
+  /// True while this exact queued entry (same triple AND same `deleted_at_ms`)
+  /// is still queued. The drain asks this IMMEDIATELY before its cloud UPDATE,
+  /// because passes are not serialised and [cancelFor] may have run since the
+  /// drain took its copy of the queue.
+  static bool isQueued({
+    required String workoutLogId,
+    required String exerciseId,
+    required int setNumber,
+    int? deletedAtMs,
+  }) =>
+      read().any((e) =>
+          e['workout_log_id'] == workoutLogId &&
+          e['exercise_id'] == exerciseId &&
+          e['set_number'] == setNumber &&
+          e['deleted_at_ms'] == deletedAtMs);
+
+  /// Removes the entry matching this exact natural key AND delete time --
+  /// called once the drain's cloud write returned. A newer re-queue of the
+  /// same triple carries a later `deleted_at_ms`, so it is NOT removed by a
+  /// drain that started from the older entry.
+  static Future<void> remove({
+    required String workoutLogId,
+    required String exerciseId,
+    required int setNumber,
+    int? deletedAtMs,
+  }) async {
+    final list = List<Map<String, dynamic>>.of(read())
+      ..removeWhere((e) =>
+          e['workout_log_id'] == workoutLogId &&
+          e['exercise_id'] == exerciseId &&
+          e['set_number'] == setNumber &&
+          e['deleted_at_ms'] == deletedAtMs);
     await HiveService.instance.userBox.put(_key, list);
   }
 }

@@ -243,6 +243,14 @@ class WorkoutWriteService {
       // 5. Write Hive
       await box.put(key, entry);
 
+      // L1a-2 U4: a re-log cancels any cloud delete still queued for this
+      // exercise on this day (at any set count). The newer version must not be
+      // tombstoned by a stale delete (also guarded by the drain's time filter).
+      await PendingExlogDeletes.cancelFor(
+        workoutLogId: SyncService.workoutLogIdForDate(dateStr),
+        exerciseName: exerciseName,
+      );
+
       // 6. Update exercise_log_index_<date> — AWAITED so the index reaches disk
       // before this method returns (and before the UI paints the log). A
       // fire-and-forget put here meant the row persisted (awaited above) but the
@@ -885,12 +893,12 @@ class WorkoutWriteService {
   ///     rows. Only when the row CARRIES an id (restore-shaped legacy rows
   ///     may not).
   ///
-  /// LOCAL-ONLY by design: the cloud `exercise_logs` rows for the moved-out
-  /// date are not tombstoned here — no cloud exlog tombstone protocol exists,
-  /// so moved-out-date rows linger in cloud and a restore can resurrect the
-  /// from-date logs. Residual tracked in the e8f4a3 B-pass addendum at
-  /// docs/diagnoses/2026-09-18-reschedule-terminal-rows-e8f4a3.md (NOT OI-174 —
-  /// that is plan_end pruning; an earlier draft of this comment miscited it).
+  /// CLOUD: the moved-out day's `workout_log_exercises` row is tombstoned
+  /// through `PendingExlogDeletes` (L1a-2 U4, closes the exlog half of
+  /// OI-218): both branches queue the SOURCE day's key, and the target day's
+  /// queued delete (if any) is cancelled. The remaining half of OI-218 -- a
+  /// restore-recreated terminal schedule row losing `moved_to`/`moved_via` --
+  /// is a different table and stays open.
   Future<void> moveExerciseLogs({
     required String fromDate,
     required String toDate,
@@ -916,6 +924,20 @@ class WorkoutWriteService {
         if (name == null || name.isEmpty) continue;
         final newKey = exlogKey(toDateTime, name);
         final existing = box.get(newKey);
+        // L1a-2 U4 (closes the exlog half of OI-218): the moved-out day's
+        // cloud row is tombstoned -- queue the SOURCE day's key (count = the
+        // moved row's local count, mirroring deleteLog) -- and a delete still
+        // queued for the TARGET day is cancelled (the exercise is back there).
+        // A->B->A before a sync therefore leaves A live.
+        await PendingExlogDeletes.add(
+          workoutLogId: SyncService.workoutLogIdForDate(fromDate),
+          exerciseId: name,
+          setNumber: resolveSummarySetCount(row),
+        );
+        await PendingExlogDeletes.cancelFor(
+          workoutLogId: SyncService.workoutLogIdForDate(toDate),
+          exerciseName: name,
+        );
         if (existing is Map) {
           // Collision merge — see the doc comment above.
           final existingSets = (existing['sets'] as List? ?? const [])
@@ -1009,6 +1031,10 @@ class WorkoutWriteService {
           if (row['workout_log_id'] != null) {
             row['workout_log_id'] = wlogKey(toDateTime);
           }
+          // U3: a move is a write. The row's own timestamps (a restored
+          // row's `created_at`) are older than the move, so stamp it; the
+          // exlog push sends max(resolved, updated_at_ms) as `completed_at`.
+          row['updated_at_ms'] = DateTime.now().millisecondsSinceEpoch;
           await box.put(newKey, row);
         }
         await box.delete(oldKey);
