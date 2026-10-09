@@ -1,0 +1,75 @@
+# Closure ledger — coach-history-correctness-client (L1a-2). Gate 40: one terminal_state per
+# finding, no `deferred:` key. Code commits 5c19161a (U2, U3, U4) and 077e70a8 (B-pass fixes).
+batch: coach-history-correctness-client
+plan_review_record: docs/plan-reviews/coach-history-correctness-client.md
+diagnose_docs:
+  - docs/diagnoses/2026-10-09-exlog-restore-picks-wrong-row-and-day-a4e7b1.md
+  - docs/diagnoses/2026-10-09-exlog-push-day-and-latest-write-b5f8c2.md
+  - docs/diagnoses/2026-10-09-exlog-delete-never-reaches-newest-version-c6a9d3.md
+  - docs/diagnoses/2026-10-09-exlog-drain-after-account-swap-d7bae4.md
+total_findings: 14
+closed_count: 14
+
+findings:
+  - id: D2
+    title: "restore picks the wrong row and day (U2 a-d): highest set count, rank join, day from workout_log_id, queued deletes skipped, PR list by workout day, old-key row re-keyed"
+    terminal_state: closed_in_commit
+    commit: 5c19161a
+    verification: "test/sync/exlog_restore_u2_behavioral_test.dart; mutants red (rules, wiring, PR reader, kill switch, IST midnight instant; east-of-IST variant red under TZ=Pacific/Auckland); heal and instant compare added in 077e70a8"
+  - id: D3
+    title: "exlog push dated by the workout day, latest local write time, unique per-set numbers (U3); OI-313 day drift fixed on the read side for every APK"
+    terminal_state: closed_in_commit
+    commit: 5c19161a
+    verification: "test/sync/exlog_push_u3_behavioral_test.dart; 9 of 9 mutants red; created_at fallback added in 077e70a8"
+  - id: D4
+    title: "deletes reach every set count, the newest action wins, a move queues its source day (U4, exlog half of OI-218)"
+    terminal_state: closed_in_commit
+    commit: 5c19161a
+    verification: "test/sync/exlog_delete_u4_behavioral_test.dart + test/contracts/pending_exlog_deletes_writer_to_reader_test.dart; 15 of 15 mutants red; B-pass reversal (timed entries not cancelled by a re-log), empty-pass keep, future-cutoff clamp, malformed time, move ordering in 077e70a8"
+  - id: D5
+    title: "drain owner check at each sink and queue re-read before the UPDATE (debugging class 2.44)"
+    terminal_state: closed_in_commit
+    commit: 5c19161a
+    verification: "exlog_delete_u4_behavioral_test.dart sinks group; first owner check pinned by a Hive-watch account switch (M5 red); remove() exact time pinned (M14 red)"
+  - id: BPASS
+    title: "B-pass: 15 findings (A 7, B 8), 0 P0, 2 P1, 0 false alarms"
+    terminal_state: closed_in_commit
+    commit: 077e70a8
+    verification: "docs/reviews/coach-history-correctness-client-bpass.md; 8 new protections mutated red; full suite 8463 passed"
+  - id: D4-prelanding
+    title: "pre-landing evidence for moved-out cloud rows"
+    terminal_state: verified_clean
+    evidence: "read-only 2026-10-09: 0 scheduled_workouts rows with status moved, so no leftover moved-out live row and no repair migration; 235 of 235 workout_log_exercises ids equal the v5 of the IST day of completed_at; 0 null workout_log_id; 0 live duplicate groups"
+  - id: R11C-1
+    title: "an old PR row moved or edited into today or yesterday can trigger one extra New PR push per user per IST day"
+    terminal_state: verified_clean
+    evidence: "founder decision 2026-10-06 (accepted; the alternative was a moved marker column, a schema change)"
+  - id: RES-i
+    title: "device clocks that disagree by minutes can misjudge a log made within that skew of a delete"
+    terminal_state: verified_clean
+    evidence: "founder decision 2026-10-06 (corrected): newest action wins, clock skew accepted; a future delete time is clamped to now at the drain"
+  - id: RES-ii
+    title: "a creating push still in flight two passes after the delete can stay live"
+    terminal_state: verified_clean
+    evidence: "narrowed by the one-extra-pass keep after an empty UPDATE (B-F3); remaining window is a push in flight across two passes; pre-existing class, unchanged by this landing"
+  - id: RES-horizon
+    title: "a workout_log_id outside 2020-01-01..today+400 days or the missing-date bucket restores onto the write day"
+    terminal_state: verified_clean
+    evidence: "plan-accepted horizon (same as the server readers); 0 live rows in the missing-date bucket, read-only 2026-10-09"
+  - id: RES-stray
+    title: "a stray cloud summary an old build pushed under a write-day id is left in place"
+    terminal_state: verified_clean
+    evidence: "tombstoning it by time could delete a legitimate same-day row of the same exercise; readers attribute rows by workout_log_id, so the stray reads as a log on the write day exactly as it did before this landing"
+  - id: APK-residual
+    title: "installed APKs run the old code (no force-update): their moves never queue a source delete and they push a restored row's old time"
+    terminal_state: upstream_blocked
+    blocker: "installed APKs run the old code; no minimum-version gate exists"
+    reopen_when: "a minimum-version gate ships (tracked under OI-313)"
+  - id: DEVICE-CHECK
+    title: "device restore check on a founder-built APK: restore on a second device shows one live row per exercise-day on its workout day, with the right sets; a delete then a re-log at a different set count leaves only the re-log"
+    terminal_state: blocked_on_user
+    reason: "needs a founder-initiated APK build (/build-apk from CI-green main only) and a restore on a device"
+  - id: OI-flips
+    title: "board: OI-218 re-titled to its schedule-metadata half (done in this landing); OI-313 / OI-307 / OI-312 flips"
+    terminal_state: blocked_on_user
+    reason: "OI-313, OI-307 and OI-312 are live only on branch coach-progress-review (not on main); flip after the device check, and OI-307 only after all L1b deploy rows and the L1a-1 apply row are closed"
