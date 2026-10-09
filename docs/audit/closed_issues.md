@@ -5403,3 +5403,12 @@ Writer: `capture` (line 141). Readers: the cap query (line 89-94) and the list o
 
 **CLOSED 2026-10-08 (`progress-photos-client-b2`, diagnose `c2b7e4`):** `taken_at` is sent as UTC with an offset and the cap window is IST midnight in UTC; no backfill (old rows stay as stored; effects bounded to a day).
 
+
+## OI-237 — Extreme update:insert ratios on scheduled_workouts (34:1) and template_exercises (39:1) — possible sync write-amplification rewriting full rows instead of deltas, needs docs/architecture/sync.md + WriteServices code review
+
+- **Status**: CLOSED · 2026-10-09 · branch `oi237-closeout` · the commit carrying `closes-oi: OI-237` (`git log --grep='closes-oi: OI-237'`)
+- **Blocked on**: — (resolved)
+- **Verified**: 2026-10-09 - live `pg_stat_user_tables` snapshot 3 against snapshots 1 and 2 (`docs/audit/2026-09-oi237-io-measurements.md`): updates per day before to after, scheduled_workouts 90 to 3, template_exercises 49 to 0, workout_templates 12 to 0.2, workout_logs 69 to 0.3, streaks 18 to 0.5, weight_logs 46 to 0, workout_schedule_completions 67 to 13.
+- **Identified**: 2026-09-21 · filed via mint_oi.sh from branch `claude/next-aab-decision-d1227b`
+
+**CLOSED 2026-10-09 (`day-swapper-sync-load`, PR #47, migration 149, diagnose `a9d3f6`):** the send-only-changed skip helper plus the server-side identical-update suppressor removed the amplification on the two tables named in the title (97 to 100 percent). "Before" is the 31 hours between snapshots 1 and 2; "after" is the 11.18 days from snapshot 2 to snapshot 3. Caveats: the after window includes about 1.6 days when only the server trigger was live (web shipped 2026-09-29, the +48 AAB was built 2026-10-01), and older app builds still push the old way, so this is not a clean test of the app change alone. Two tables did not follow and are tracked on their own: OI-329 (`water_logs`, only a 34 percent drop) and OI-330 (`workout_log_exercises`, updates rose and 685 of 695 were non-HOT).

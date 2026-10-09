@@ -68,3 +68,52 @@ Before-window update deltas (snapshot 2 − 1), the tables the batch targets: wa
 workout_logs +89, workout_schedule_completions +87, scheduled_workouts +117, template_exercises
 +63, streaks +23, weight_logs +59. The low-traffic tables barely moved; the "after" window is
 compared per day once snapshot 3 exists.
+
+## Snapshot 3
+
+Taken 2026-10-09 12:40 UTC from the live database (`stats_reset` is null, so the counters never reset and the
+differences are valid). The "before" window is snapshot 1 to 2 (31.06 hours); the "after" window is snapshot 2 to 3
+(11.18 days). Caveat: the after window includes about 1.6 days when only the server trigger (migration 149) was live;
+the web app shipped 2026-09-29 and the +48 AAB was built 2026-10-01, and older app builds still push the old way.
+
+| table | n_tup_ins | n_tup_upd | n_tup_hot_upd | n_live_tup | captured_at |
+|---|---|---|---|---|---|
+| ai_coach_interactions | 775 | 274 | 249 | 325 | 2026-10-09 12:40:49.247348+00 |
+| body_measurements | 2 | 0 | 0 | 0 | 2026-10-09 12:40:49.247348+00 |
+| daily_steps | 10 | 73 | 73 | 16 | 2026-10-09 12:40:49.247348+00 |
+| nutrition_log_items | 177 | 491 | 491 | 236 | 2026-10-09 12:40:49.247348+00 |
+| nutrition_logs | 113 | 153 | 153 | 80 | 2026-10-09 12:40:49.247348+00 |
+| readiness_daily | 22 | 64 | 63 | 31 | 2026-10-09 12:40:49.247348+00 |
+| scheduled_workouts | 297 | 1593 | 1565 | 1181 | 2026-10-09 12:40:49.247348+00 |
+| sleep_logs | 2 | 0 | 0 | 0 | 2026-10-09 12:40:49.247348+00 |
+| streaks | 7 | 325 | 325 | 16 | 2026-10-09 12:40:49.247348+00 |
+| template_exercises | 7 | 869 | 869 | 25 | 2026-10-09 12:40:49.247348+00 |
+| user_custom_exercises | 6 | 40 | 40 | 3 | 2026-10-09 12:40:49.247348+00 |
+| user_custom_foods | 2 | 0 | 0 | 0 | 2026-10-09 12:40:49.247348+00 |
+| user_progress | 104 | 252 | 250 | 32 | 2026-10-09 12:40:49.247348+00 |
+| user_saved_meals | 2 | 0 | 0 | 0 | 2026-10-09 12:40:49.247348+00 |
+| water_logs | 18 | 2367 | 2367 | 50 | 2026-10-09 12:40:49.247348+00 |
+| weight_logs | 97 | 237 | 237 | 68 | 2026-10-09 12:40:49.247348+00 |
+| workout_log_exercises | 167 | 1228 | 542 | 235 | 2026-10-09 12:40:49.247348+00 |
+| workout_log_sets | 228 | 1671 | 1628 | 582 | 2026-10-09 12:40:49.247348+00 |
+| workout_logs | 91 | 1224 | 1224 | 62 | 2026-10-09 12:40:49.247348+00 |
+| workout_schedule_completions | 16 | 1361 | 1361 | 48 | 2026-10-09 12:40:49.247348+00 |
+| workout_templates | 9 | 204 | 204 | 8 | 2026-10-09 12:40:49.247348+00 |
+
+Updates per day, the tables the batch targets (delta divided by window length):
+
+| table | before (snapshot 1 to 2) | after (snapshot 2 to 3) | change |
+|---|---|---|---|
+| scheduled_workouts | 117 in 31h = 90/day | 33 in 11.18d = 3/day | -97% |
+| template_exercises | 63 = 49/day | 0 = 0/day | -100% |
+| workout_templates | 15 = 12/day | 2 = 0.2/day | -98% |
+| workout_logs | 89 = 69/day | 3 = 0.3/day | -99.6% |
+| streaks | 23 = 18/day | 6 = 0.5/day | -97% |
+| weight_logs | 59 = 46/day | 0 = 0/day | -100% |
+| workout_schedule_completions | 87 = 67/day | 142 = 13/day | -81% |
+| workout_log_sets | 19 = 15/day | 72 = 6/day | -56% |
+| water_logs | 105 = 81/day | 602 = 54/day | -34% (OI-329) |
+| workout_log_exercises | 7 = 5/day | 695 = 62/day | +1050%, 685 non-HOT (OI-330) |
+
+Verdict for OI-237: the two tables named in its title (scheduled_workouts, template_exercises) are fixed, so it
+closes. The two tables that missed are filed as OI-329 and OI-330.
