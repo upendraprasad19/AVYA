@@ -68,9 +68,9 @@ findings:
     verification: "check_unbounded_cron_reads_tools_scope_e2e_test.dart, 2 of 5 red under the every-path-is-tools mutant; ledger moved to mutation_proven"
   - id: B8-flip
     title: "delete the scoped-WARN branch and flip the tools case to exit 1 (§4.11)"
-    terminal_state: upstream_blocked
-    blocker: "§4.11 baseline: the flip commit must land at least 24 h after the scoped-WARN commit 9e8b6d09 (2026-10-07)"
-    reopen_when: "2026-10-08 or later; baseline WARN list is already zero"
+    terminal_state: closed_in_commit
+    commit: 346a82de
+    verification: "baseline WARN list zero at both commits; e2e test flipped (tools violation exits 1); flip mutant (tools violations removed after the scan) reddened 2 of 5; ledger evidence updated"
   - id: PromotionStatus-window
     title: "getPromotionStatus rolling window"
     terminal_state: verified_clean
