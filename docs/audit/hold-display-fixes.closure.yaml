@@ -1,0 +1,99 @@
+# Closure ledger — hold-display fixes (D1 + L1 + L3).
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no
+# `deferred:` key. Branch: hold-display-fixes.
+#
+# Provenance: a LIVE walkthrough on test7 (2026-07-25, flag ON via the /dev
+# Flags card + time travel) plus TWO independent context-blind plan reviews.
+# The reviews returned NOT CONVERGED with 4 P0s on a proposed 6-fix batch; per
+# §4.12.1 ("when successive reviews keep surfacing new material issues the unit
+# is too large — split it and ship the smallest converged piece") the unit was
+# split. The two fixes BOTH reviewers explicitly cleared ship here; the rest are
+# recorded as hard flip-on preconditions in docs/ship_dark_pending_review.yaml
+# (flip_on_blockers FOB-1..FOB-7), which the flip-on's own ×2 review must show
+# closed. That is a gate, not a deferral — enable_hold_weeks cannot go live
+# while any FOB is open.
+
+batch: hold-display-fixes
+plan_review_record: docs/plan-reviews/hold-display-fixes.md
+bpass_review: docs/reviews/hold-display-fixes-bpass.md
+total_findings: 5
+closed_count: 5
+
+_commit: &wip "hold-display-fixes (uncommitted)"
+_test: &t test/contracts/hold_display_read_path_test.dart
+
+findings:
+  - id: D1
+    title: "Train deployment banner printed 'WK 4 OF 4' directly under the HOLDING·Hn pill"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *t
+    notes: >
+      Found by eye in the live walkthrough — the two sat ~40px apart in the same
+      scroll view. Branched on holdStatus.isHolding (already in scope); the
+      holding arm drops the week counter, matching the rule plan_header.dart
+      already applies. The non-holding arm keeps the literal pinned by
+      phase_relative_week_label_test.dart, which stays green. Reviewer A: "the
+      only fix I can fully clear."
+  - id: L1
+    title: "A completed hold day credited a ✓ to a padlocked PHASE II/III week chip"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *t
+    notes: >
+      completedWeekNumbersFrom maps date→week via plan_start + 7k with no
+      is_hold filter. Invisible today ONLY because _WeekChip suppresses the tick
+      on a locked chip and a holder is always free — and week_selector watches
+      subscriptionInfoProvider, so the chip unlocks the instant they upgrade,
+      BEFORE any phase advance moves plan_start. They would then see a ✓ on a
+      week never trained and could tap it into "Week 5 hasn't started yet".
+      Fixed by excluding is_hold rows from the predicate. Verified the only
+      production caller is week_selector, and HoldWeekInfo.isCompleted computes
+      the H-chip tick independently, so hold ticks are unaffected.
+  - id: L1-T
+    title: "L1 regression test parameterized over hold start date (not hardcoded to plan_start+28)"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *t
+    notes: >
+      Reviewer-mandated. holdWeek() places a hold in the calendar week containing
+      TODAY, so a late return leaves a gap: ordinal 1 can sit at date-week 8, and
+      a hold >12 date-weeks out is clipped by maxWeek:12 and injects nothing —
+      the pre-fix bug was INTERMITTENT. Three cases pinned (contiguous → would
+      have been week 5; late-return → week 8; beyond maxWeek → clipped) plus a
+      regression case proving ordinary week completions still tick.
+  - id: L3
+    title: "The real completion writer's preserve-is_hold property was unpinned"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: *t
+    notes: >
+      markCompleted merges the row in place so is_hold/hold_ordinal survive —
+      true by inspection, but the existing test faked completion via
+      upsertScheduled, so a future refactor that rebuilt the row from a template
+      would silently vanish the H chip after the user trained it. Now driven
+      through the REAL WorkoutWriteService.markCompleted.
+  - id: SPLIT
+    title: "Four further proposed fixes returned NOT CONVERGED — recorded as hard flip-on preconditions"
+    terminal_state: blocked_on_user
+    commit: *wip
+    verification: docs/ship_dark_pending_review.yaml
+    reason: >
+      Founder must (a) decide the week-identity product rule for a holder —
+      recommended: suppress the week number everywhere and let Hn be the
+      identity, which is what the shipped Train UI already chose — and
+      (b) authorize the ai-proxy Edge Function deploy that FOB-3/FOB-4 require
+      (§4.3: a prod EF deploy needs its own explicit go, plan approval is not
+      deploy approval). Neither is an engineering unknown; both are founder
+      calls that gate the design.
+    notes: >
+      §4.12.1 split. The reviews killed my streak fix outright (P0: `4 + ordinal`
+      is a LABEL not a date offset — it would have read unmaterialized dates and
+      silently produced NO streak increment and NO streaks row on the commonest
+      real path, a lapsed user returning, while passing under time travel), and
+      rejected the coach/push design (P0: it reintroduces the three-surface week
+      drift diagnose c9f4a2 closed, and manufactures the exact number the shipped
+      UI already ruled dishonest). Those need a design pass around "a hold
+      suppresses the week number; Hn is the identity", not a patch. Recorded as
+      FOB-1..FOB-7; blocked_on_user because the flip-on decision and the ai-proxy
+      deploy authorization are both founder-gated.
