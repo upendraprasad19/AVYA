@@ -7,6 +7,8 @@
 //            set_number, deleted_at_ms); logExercise / move target -> cancelFor
 //   readers  PendingExlogDeletes.read / isQueued (the drain and restore ask these)
 
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/pending_exlog_deletes.dart';
@@ -61,14 +63,42 @@ void main() {
         isFalse);
   });
 
-  test('a re-log cancels the entry the delete wrote', () async {
+  test('a re-log keeps a TIMED entry (the drain time filter spares the new '
+      'version) and cancels a time-less one', () async {
     await log();
     await WorkoutWriteService.instance.deleteLog(
         logKey: WorkoutWriteService.exlogKey(day, 'Bench Press'),
         source: WriteSource.activeWorkout);
     expect(PendingExlogDeletes.read(), hasLength(1));
     await log();
-    expect(PendingExlogDeletes.read(), isEmpty);
-    expect(HiveService.instance.userBox.get('pending_exlog_deletes'), isA<List>());
+    expect(PendingExlogDeletes.read(), hasLength(1),
+        reason: 'timed: kept so the OLDER cloud versions are tombstoned');
+
+    await HiveService.instance.userBox.put('pending_exlog_deletes', [
+      {
+        'workout_log_id': SyncService.workoutLogIdForDate('2026-09-01'),
+        'exercise_id': 'Bench Press',
+        'set_number': 2,
+      }
+    ]);
+    await log();
+    expect(PendingExlogDeletes.read(), isEmpty,
+        reason: 'a pre-L1a-2 entry has no time: cancelled');
+  });
+
+  // PRESENCE-ONLY (source order): the move's Hive work cannot be made to throw
+  // from a test, so the ordering is pinned by position. A queued cloud delete
+  // for a source row that is still live locally would tombstone the cloud copy
+  // and leave the local one (B-pass 5c19161a, reviewer B F6).
+  test('moveExerciseLogs queues the source delete only AFTER its Hive work',
+      () {
+    final src = File('lib/core/services/workout_write_service.dart')
+        .readAsStringSync();
+    final start = src.indexOf('Future<void> moveExerciseLogs({');
+    final body = src.substring(start, src.indexOf('Future<WriteResult> regenerateWeek', start));
+    final del = body.indexOf('await box.delete(oldKey);');
+    final add = body.indexOf('await PendingExlogDeletes.add(');
+    expect(del, greaterThan(0));
+    expect(add, greaterThan(del));
   });
 }

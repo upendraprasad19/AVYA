@@ -203,6 +203,18 @@ extension SyncServiceWorkout on SyncService {
     await index.commit(liveKeys: liveKeys);
   }
 
+  /// The delete time a drain cuts off at: the entry's own `deleted_at_ms`,
+  /// never later than now (a device clock that was ahead when it queued the
+  /// delete must not tombstone other devices' later re-logs). An entry queued
+  /// before L1a-2 has no time; it means "everything up to now" (the old
+  /// all-count behaviour), so the drain moment IS the intended value, not a
+  /// stand-in for a missing authoring time.
+  static int _drainCutoffMs(int? deletedAtMs) {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    if (deletedAtMs == null || deletedAtMs > nowMs) return nowMs;
+    return deletedAtMs;
+  }
+
   /// OI-246 / L1a-2 U4 — drains `PendingExlogDeletes`: one filtered UPDATE per
   /// queued delete tombstones every set count of that (workout_log_id,
   /// exercise_id) written at or before the user's delete ("the newest action
@@ -211,19 +223,12 @@ extension SyncServiceWorkout on SyncService {
   /// same-count re-log. Called BEFORE the per-key push loop so an exercise log
   /// deleted this session can never be re-created by its own stale in-memory
   /// copy in the same sync pass. Kill switch `disable_exlog_allcount_drain`
-  /// restores the same-count upsert. Known residuals (diagnose, founder
-  /// decision 2026-10-06): device clocks that disagree by minutes can misjudge
-  /// a log made within that skew of the delete, and a push already in flight
-  /// when the delete happened can land after the drain and stay live.
-  /// The delete time a drain cuts off at. An entry queued before L1a-2 has no
-  /// `deleted_at_ms`; it means "everything up to now" (the old all-count
-  /// behaviour), so the drain moment IS the intended value, not a stand-in for
-  /// a missing authoring time.
-  static int _legacyDrainCutoffMs(int? deletedAtMs) {
-    if (deletedAtMs != null) return deletedAtMs;
-    return DateTime.now().millisecondsSinceEpoch;
-  }
-
+  /// restores the same-count upsert. An UPDATE that touches no row keeps the
+  /// entry for ONE more pass (a creating push already on the wire can land
+  /// after it; the UPDATE cannot create a tombstone the way the upsert could).
+  /// Known residuals (diagnose, founder decision 2026-10-06): device clocks
+  /// that disagree by minutes can misjudge a log made within that skew of the
+  /// delete, and a push still in flight two passes later can stay live.
   Future<void> _drainPendingExlogDeletes(String userId) async {
     final allCount = SyncFlags.exlogAllCountDrainEnabled;
     for (final entry in PendingExlogDeletes.read()) {
@@ -231,6 +236,7 @@ extension SyncServiceWorkout on SyncService {
       final exerciseId = entry['exercise_id'] as String;
       final setNumber = entry['set_number'] as int;
       final deletedAtMs = entry['deleted_at_ms'] as int?;
+      final emptyBefore = entry['empty_pass'] == true;
       try {
         // Owner check at the write SINK (never at function entry): an account
         // switch between two queue entries must not send the next account's
@@ -240,7 +246,7 @@ extension SyncServiceWorkout on SyncService {
         // Passes are not serialised (weeklyFullSync, pushExerciseLogsForSync-
         // Domain and a coalesced per-write pass can overlap) and this loop
         // iterates a COPY of the queue: re-read it immediately before the
-        // write so a delete cancelled by a re-log since is not sent.
+        // write so an entry removed or replaced since is not sent.
         if (!PendingExlogDeletes.isQueued(
           workoutLogId: workoutLogId,
           exerciseId: exerciseId,
@@ -249,19 +255,19 @@ extension SyncServiceWorkout on SyncService {
         )) {
           continue;
         }
+        var touched = 1;
         if (allCount) {
           // L1a-2 U4 -- the newest action wins. One UPDATE, every set count,
           // only versions written at or before the delete: `completed_at` is
           // the write time (the exlog push sends max(resolved, updated_at_ms)),
           // so a re-log made after the delete -- here or on another device --
           // is later and is left alone, while this device's own older rows
-          // (including a stale count) are tombstoned. An entry queued before
-          // this landing has no time and cuts off at drain time (the old
-          // all-count behaviour). 0 rows touched = nothing older to delete.
-          final cutoffMs = _legacyDrainCutoffMs(deletedAtMs);
-          final cutoff = DateTime.fromMillisecondsSinceEpoch(cutoffMs, isUtc: true)
+          // (including a stale count) are tombstoned.
+          final cutoff = DateTime.fromMillisecondsSinceEpoch(
+                  _drainCutoffMs(deletedAtMs),
+                  isUtc: true)
               .toIso8601String();
-          await _supabase.client
+          final rows = await _supabase.client
               .from('workout_log_exercises')
               .update({'deleted_at': DateTime.now().toUtc().toIso8601String()})
               .eq('user_id', userId)
@@ -270,6 +276,7 @@ extension SyncServiceWorkout on SyncService {
               .isFilter('deleted_at', null)
               .lte('completed_at', cutoff)
               .select();
+          touched = (rows as List).length;
         } else {
           // Kill switch `disable_exlog_allcount_drain`: the pre-L1a-2 drain.
           await _supabase.client.from('workout_log_exercises').upsert({
@@ -281,8 +288,17 @@ extension SyncServiceWorkout on SyncService {
             'deleted_at': DateTime.now().toUtc().toIso8601String(),
           }, onConflict: 'user_id,workout_log_id,exercise_id,set_number');
         }
-        // Same sink rule for the local remove.
+        // Same sink rule for the local queue writes.
         if (ownerChangedSince(userId)) return;
+        if (touched == 0 && !emptyBefore) {
+          await PendingExlogDeletes.markEmptyPass(
+            workoutLogId: workoutLogId,
+            exerciseId: exerciseId,
+            setNumber: setNumber,
+            deletedAtMs: deletedAtMs,
+          );
+          continue;
+        }
         await PendingExlogDeletes.remove(
           workoutLogId: workoutLogId,
           exerciseId: exerciseId,
@@ -336,7 +352,13 @@ extension SyncServiceWorkout on SyncService {
         // neither, skip (a missing date used to land in the shared
         // `v5('workout_')` bucket). The SAME day derives `workout_log_id`.
         final dateField = log['date'] as String? ?? '';
-        final date = dateField.isNotEmpty ? dateField : (_dateFromKey(key) ?? '');
+        var date = dateField.isNotEmpty ? dateField : (_dateFromKey(key) ?? '');
+        if (date.isEmpty) {
+          // Same fallback the readers use (`istDateForExlogRow`): the IST day
+          // of created_at.
+          final createdAt = DateTime.tryParse(log['created_at'] as String? ?? '');
+          if (createdAt != null) date = WorkoutWriteService.istDateStr(createdAt);
+        }
         if (date.isEmpty) {
           unawaited(ErrorTelemetry.logEvent(
             'sync_skipped_exlog_no_day',
@@ -979,8 +1001,9 @@ extension SyncServiceWorkout on SyncService {
 
       // U2 (plan coach-history-correctness-client): one live summary per
       // (workout_log_id, exercise_id), the highest set count; kill switch
-      // `disable_exlog_restore_dedupe` iterates every row, oldest first, as
-      // before.
+      // `disable_exlog_restore_dedupe` iterates every row in read order
+      // (`_fetchAllRows` is newest-first), so the first row seen per key - the
+      // newest write - wins, as before.
       final dedupe = SyncFlags.exlogRestoreDedupeEnabled;
       final Iterable<dynamic> toRestore =
           dedupe ? selectLiveSummaries(rows) : rows;
@@ -1135,6 +1158,24 @@ extension SyncServiceWorkout on SyncService {
         // rows that are absent locally. Mirrors the weight-restore pattern
         // (sync_health.dart:300). Always ensure the row is indexed — this heals
         // an orphaned-but-present row (e4a8b1). closes-diagnose: e4a8b1.
+        // U2 heal: a row restored under the OLD rules sits under the key of the
+        // day it was last written. Re-key it onto the workout day instead of
+        // writing a second row beside it (only a row whose `workout_log_id`
+        // IS this cloud row's id was restored; a locally logged row carries
+        // `wlog_<date>`).
+        if (dedupe && _hive.workoutBox.get(logId) == null) {
+          final writeDay = DateTime.tryParse(completedAt);
+          if (writeDay != null) {
+            final staleKey = WorkoutWriteService.exlogKey(writeDay, name);
+            final stale = _hive.workoutBox.get(staleKey);
+            if (staleKey != logId &&
+                stale is Map &&
+                stale['workout_log_id'] == map['workout_log_id']) {
+              await WorkoutWriteService.instance.rekeyRestoredExerciseLog(
+                  oldKey: staleKey, newKey: logId, newDate: dateStr);
+            }
+          }
+        }
         if (_hive.workoutBox.get(logId) == null) {
           await _hive.workoutBox.put(logId, logMap);
         }

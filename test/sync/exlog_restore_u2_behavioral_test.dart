@@ -208,6 +208,20 @@ void main() {
           reason: 'the PR list dates a restored edited log to the workout day');
     });
 
+    test('PRs on the same day list in a stable order by exercise name', () async {
+      h.server.pagedTables['workout_log_exercises'] = [
+        _summary(n: 1, day: '2026-09-01', name: 'Squat', sets: 3),
+        _summary(n: 2, day: '2026-09-01', name: 'Bench Press', sets: 3),
+        _summary(n: 3, day: '2026-09-01', name: 'Deadlift', sets: 3),
+      ];
+      await restore();
+      final names = WorkoutRepository.instance
+          .loadAllExercisePRs()
+          .map((p) => p.exerciseName)
+          .toList();
+      expect(names, ['Bench Press', 'Deadlift', 'Squat']);
+    });
+
     test('a forward-rescheduled (future-day) row restores onto its day',
         () async {
       final future = DateTime.now().toUtc().add(const Duration(days: 20));
@@ -261,6 +275,73 @@ void main() {
       ];
       await restore();
       expect(localLog('2026-09-01', 'Bench Press'), isNotNull);
+    });
+  });
+
+  group('U2 heal: a row restored under the OLD rules is re-keyed, not duplicated',
+      () {
+    test('an edit-day-keyed restored row moves onto the workout day; one row '
+        'remains and both day indexes are right', () async {
+      final box = HiveService.instance.workoutBox;
+      final cloudId = SyncService.workoutLogIdForDate('2026-09-01');
+      // As the old restore wrote it: keyed by the day of completed_at.
+      final staleKey = WorkoutWriteService.exlogKey(_istMidnight('2026-10-05'), 'Bench Press');
+      await box.put(staleKey, {
+        'id': staleKey,
+        'type': 'exercise_log',
+        'exercise_name': 'Bench Press',
+        'date': '2026-10-05',
+        'workout_log_id': cloudId,
+        'created_at': '2026-10-05T10:00:00+00:00',
+        'set_number': 3,
+      });
+      await box.put('exercise_log_index_2026-10-05', <String>[staleKey]);
+      h.server.pagedTables['workout_log_exercises'] = [
+        _summary(n: 1, day: '2026-09-01', sets: 3, completedAt: '2026-10-05T10:00:00+00:00'),
+      ];
+      await restore();
+
+      final goodKey = WorkoutWriteService.exlogKey(_istMidnight('2026-09-01'), 'Bench Press');
+      expect(box.get(staleKey), isNull, reason: 'the stale-day row is gone');
+      final healed = Map<String, dynamic>.from(box.get(goodKey) as Map);
+      expect(healed['date'], '2026-09-01');
+      expect(healed['id'], goodKey);
+      expect((box.get('exercise_log_index_2026-09-01') as List), contains(goodKey));
+      final oldIdx = box.get('exercise_log_index_2026-10-05') as List?;
+      expect(oldIdx == null || !oldIdx.contains(staleKey), isTrue);
+      final exlogKeys = box.keys.whereType<String>().where((k) => k.startsWith('exlog_'));
+      expect(exlogKeys, [goodKey], reason: 'exactly one local row for the exercise');
+    });
+
+    test('a LOCALLY logged row on the write day is never touched (its '
+        'workout_log_id is a wlog_ id, not the cloud id)', () async {
+      final box = HiveService.instance.workoutBox;
+      final localKey = WorkoutWriteService.exlogKey(_istMidnight('2026-10-05'), 'Bench Press');
+      await box.put(localKey, {
+        'id': localKey,
+        'exercise_name': 'Bench Press',
+        'date': '2026-10-05',
+        'workout_log_id': 'wlog_2026-10-05',
+        'set_number': 2,
+      });
+      h.server.pagedTables['workout_log_exercises'] = [
+        _summary(n: 1, day: '2026-09-01', sets: 3, completedAt: '2026-10-05T10:00:00+00:00'),
+      ];
+      await restore();
+      expect(box.get(localKey), isNotNull, reason: 'a different log, left alone');
+      expect(localLog('2026-09-01', 'Bench Press'), isNotNull,
+          reason: 'the cloud row restores on its own day');
+    });
+  });
+
+  group('selectLiveSummaries compares timestamps as instants', () {
+    test('equal counts: the later INSTANT wins whatever the offset spelling', () {
+      final rows = [
+        // 12:00+05:30 = 06:30Z, earlier than 09:00Z although the text sorts later
+        {'workout_log_id': 'w', 'exercise_id': 'x', 'set_number': 3, 'completed_at': '2026-10-05T12:00:00+05:30', 'id': 'a'},
+        {'workout_log_id': 'w', 'exercise_id': 'x', 'set_number': 3, 'completed_at': '2026-10-05T09:00:00+00:00', 'id': 'b'},
+      ];
+      expect(selectLiveSummaries(rows).single['id'], 'b');
     });
   });
 

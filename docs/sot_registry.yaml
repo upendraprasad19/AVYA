@@ -78,7 +78,7 @@ concepts:
           log resurrecting on the next full restore, and (151) a re-log after
           such a delete being silently dropped.
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1533-1547
+        line_range: 1569-1583
         method: resolveSummarySetCount
         notes: |
           OI-246 (2026-09-28, round-2 review finding P3 — split from deleteLog's
@@ -410,7 +410,7 @@ concepts:
       key_formula: "'exercise_log_index_${istDateStr(date)}'"
     ist_sites:
       - { file: lib/core/utils/date_utils.dart, line: 27, fn: formatDateKey }
-      - { file: lib/core/services/workout_write_service.dart, line: 1521, fn: wlogKey }
+      - { file: lib/core/services/workout_write_service.dart, line: 1557, fn: wlogKey }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\\.keys.*manually.*date", reason: "O(n) scan — use the index key instead" }
       - { pattern: "DateTime\\.now\\(\\)\\.toIso8601String\\(\\)\\.substring\\(0,\\s*10\\)", reason: "UTC date, disagrees with IST-keyed reader; use istDateStr(DateTime.now())" }
@@ -473,12 +473,14 @@ concepts:
       set_number, deleted_at_ms}. The drain tombstones every set count of
       (workout_log_id, exercise_id) written at or before deleted_at_ms ("the
       newest action wins", founder 2026-10-06); a re-log (logExercise,
-      moveExerciseLogs into the day, ExlogKeyMigrator) cancels the entry; a
-      move queues its SOURCE day. The queue key is user-independent, so the
+      moveExerciseLogs into the day, ExlogKeyMigrator) cancels only an entry
+      with no delete time (queued by an older build); a timed entry stays so
+      the older cloud versions are tombstoned while the time filter spares the
+      newer one; a move queues its SOURCE day. The queue key is user-independent, so the
       drain checks ownerChangedSince at each write sink.
     writers:
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1310-1316
+        line_range: 1346-1352
         method: deleteLog
         notes: PendingExlogDeletes.add at local-delete time (count = resolveSummarySetCount)
       - file: lib/core/services/workout_write_service.dart
@@ -488,7 +490,7 @@ concepts:
       - file: lib/core/services/workout_write_service.dart
         line_range: 92-260
         method: logExercise
-        notes: cancelFor after the Hive write
+        notes: cancelFor (time-less entries only) after the index append
       - file: lib/core/services/exlog_key_migrator.dart
         line_range: 35-150
         method: runIfNeeded
@@ -643,7 +645,7 @@ concepts:
     restore_methods: [_restoreScheduledWorkouts, _restoreScheduleCompletions]
     provider_invalidation_set: [currentPlanProvider, calendarWeekProvider, todayWorkoutProvider]
     ist_sites:
-      - { file: lib/core/services/workout_write_service.dart, line: 1550, fn: scheduleKey }
+      - { file: lib/core/services/workout_write_service.dart, line: 1586, fn: scheduleKey }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\.put\('schedule_", reason: "Never write schedule keys directly from a widget — use WorkoutScheduleService" }
     class_constraints: |
@@ -2932,7 +2934,7 @@ concepts:
           range(offset, offset + pageSize - 1) until a short page or the 50,000-row
           ceiling. tieBreak is gated by SyncFlags.restorePagingFixEnabled.
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 1252-1277
+        line_range: 1293-1318
         method: _readScheduleCompletionRows
         notes: |
           Kill switch off -> the pre-fix single un-paged read, verbatim; on ->
@@ -4027,7 +4029,7 @@ concepts:
           (train_provider.saveTemplate, template_builder_screen,
           workout_repository's AI multi-day loop) routes through it.
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1376-1415
+        line_range: 1412-1451
         method: deleteTemplate
         notes: |
           OI-252 — the canonical delete writer. Hive-only (layering:
@@ -4039,7 +4041,7 @@ concepts:
           circular-dependency avoidance; that stays the caller's
           responsibility (`TemplatesNotifier.deleteTemplate`).
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 1582-1623
+        line_range: 1623-1664
         method: _drainPendingTemplateDeletes
         notes: |
           OI-252 — drains the queue by UPSERTing a tombstone per id
@@ -4091,7 +4093,7 @@ concepts:
           (legacy-key rekey gate, scoped to this function only — never
           `_restoreIfNeeded` as a whole) then `_drainPendingTemplateDeletes`.
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 1861-2018
+        line_range: 1902-2059
         method: _restoreWorkoutTemplates
         semantic: pass-through
         fields_read: [id, name, workout_type, deleted_at, template_exercises]
@@ -4983,7 +4985,7 @@ concepts:
           lookup could not answer" (null) as "none deleted": it skips every
           `tmpl_<uuid>` day then (B-pass reviewer B F1).
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 1963-1964
+        line_range: 2004-2005
         method: deletedTemplateCloudIdsForUser
         notes: |
           Public forwarder of `_deletedTemplateCloudIdsOrNull`: `null` = could not
@@ -6728,7 +6730,7 @@ concepts:
           line count further; caught by check_sot_registry_parity.dart
           and fixed opportunistically while touching this file.
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1209-1279
+        line_range: 1245-1315
         method: deleteLog
         notes: removes an exlog_* entry + updates exercise_log_index; fires cloud delete
       - file: lib/core/services/nutrition_write_service.dart
@@ -7585,7 +7587,7 @@ concepts:
           ("8-12" ranges). Judges the write by the stored row
           (customExerciseRowLanded), throwing write_failed only when absent.
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1417-1459
+        line_range: 1453-1495
         method: upsertCustomExercise
         notes: |
           Canonical writer (audit 2026-05-21 / A3). Locks per-key,

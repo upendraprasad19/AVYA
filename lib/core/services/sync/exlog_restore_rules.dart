@@ -95,11 +95,18 @@ List<Map<String, dynamic>> selectLiveSummaries(Iterable<dynamic> rows) {
 bool _beats(Map<String, dynamic> a, Map<String, dynamic> b) {
   int c = _count(a).compareTo(_count(b));
   if (c != 0) return c > 0;
-  c = _s(a['completed_at']).compareTo(_s(b['completed_at']));
+  c = _instant(a['completed_at']).compareTo(_instant(b['completed_at']));
   if (c != 0) return c > 0;
-  c = _s(a['created_at']).compareTo(_s(b['created_at']));
+  c = _instant(a['created_at']).compareTo(_instant(b['created_at']));
   if (c != 0) return c > 0;
   return _s(a['id']).compareTo(_s(b['id'])) > 0;
+}
+
+/// A timestamp as an instant, so two spellings of one moment (`+00:00`,
+/// `Z`, `+05:30`) compare by time, not by text. Unparseable sorts first.
+int _instant(Object? v) {
+  final d = v is String ? DateTime.tryParse(v) : null;
+  return d == null ? -1 : d.microsecondsSinceEpoch;
 }
 
 int _count(Map<String, dynamic> m) => (m['set_number'] as num?)?.toInt() ?? 0;

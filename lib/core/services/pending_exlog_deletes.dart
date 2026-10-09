@@ -1,9 +1,22 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+
+import 'error_telemetry.dart';
 import 'hive_service.dart';
 
-/// OI-246 — the queue of exercise-log deletes not yet confirmed against the
-/// cloud. Written by `WorkoutWriteService.deleteLog` at local-delete time;
-/// drained (removed) by `SyncService._drainPendingExlogDeletes` on every
-/// exercise-log push, which UPSERTs a tombstone for each queued natural key.
+/// OI-246 / L1a-2 U4 — the queue of exercise-log deletes not yet confirmed
+/// against the cloud. Written by `WorkoutWriteService.deleteLog` (and, for the
+/// SOURCE day, `moveExerciseLogs`) at local-delete time; drained (removed) by
+/// `SyncService._drainPendingExlogDeletes` on every exercise-log push, which
+/// sends ONE time-filtered UPDATE per entry: every set count of
+/// (workout_log_id, exercise_id) written at or before the entry's
+/// `deleted_at_ms` is tombstoned, anything written after it survives ("the
+/// newest action wins"). Because that filter protects a re-log by itself, a
+/// re-log does NOT cancel a timed entry (a cancel would also keep the OLDER
+/// version, possibly at a different set count, alive in the cloud); only an
+/// entry queued by an app build before L1a-2 (no time) is cancelled by a
+/// re-log, since its cutoff would be "the drain moment".
 ///
 /// Unlike `PendingTemplateDeletes`, every entry always carries its FULL
 /// natural key at queue time -- `deleteLog` reads the exact Hive row being
@@ -37,6 +50,12 @@ class PendingExlogDeletes {
             m['workout_log_id'] is String &&
             m['exercise_id'] is String &&
             m['set_number'] is int)
+        // A malformed time reads as "no time" (a pre-L1a-2 entry), never as a
+        // cast failure that would stop every exercise-log push.
+        .map((m) => <String, dynamic>{
+              for (final e in m.entries)
+                if (e.key != 'deleted_at_ms' || e.value is int) e.key: e.value,
+            })
         .toList();
   }
 
@@ -69,23 +88,34 @@ class PendingExlogDeletes {
     await HiveService.instance.userBox.put(_key, list);
   }
 
-  /// Cancels every queued delete for this exercise on this workout day, at
-  /// any set count -- called when the exercise is logged (or moved) back onto
-  /// that day, so a stale delete cannot tombstone the new version. The key is
-  /// the exact queue key [add] stores: `workoutLogId` = the day's UUID v5 id,
-  /// `exerciseName` = the exercise_id the push uses (the exercise name).
+  /// Cancels the queued deletes for this exercise on this workout day that
+  /// carry NO delete time (queued by an app build before L1a-2): their cutoff
+  /// would be the drain moment, which would tombstone the version being
+  /// written now. A TIMED entry is left alone on purpose -- the drain's
+  /// `completed_at <= deleted_at_ms` filter already spares a newer version,
+  /// and keeping the entry is what tombstones the OLDER cloud versions (any
+  /// set count). The key is the exact queue key [add] stores: `workoutLogId`
+  /// = the day's UUID v5 id, `exerciseName` = the exercise_id the push uses.
+  /// Never throws: the caller is a log/move write that has already changed
+  /// Hive, and a queue failure must not fail it.
   static Future<void> cancelFor({
     required String workoutLogId,
     required String exerciseName,
   }) async {
-    final all = read();
-    final kept = all
-        .where((e) =>
-            !(e['workout_log_id'] == workoutLogId &&
-                e['exercise_id'] == exerciseName))
-        .toList();
-    if (kept.length == all.length) return;
-    await HiveService.instance.userBox.put(_key, kept);
+    try {
+      final all = read();
+      final kept = all
+          .where((e) => !(e['workout_log_id'] == workoutLogId &&
+              e['exercise_id'] == exerciseName &&
+              e['deleted_at_ms'] == null))
+          .toList();
+      if (kept.length == all.length) return;
+      await HiveService.instance.userBox.put(_key, kept);
+    } catch (e, st) {
+      debugPrint('[PendingExlogDeletes.cancelFor] $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'pending_exlog_deletes_cancel_failed'));
+    }
   }
 
   /// True while this exact queued entry (same triple AND same `deleted_at_ms`)
@@ -120,6 +150,29 @@ class PendingExlogDeletes {
           e['exercise_id'] == exerciseId &&
           e['set_number'] == setNumber &&
           e['deleted_at_ms'] == deletedAtMs);
+    await HiveService.instance.userBox.put(_key, list);
+  }
+
+  /// Records that the drain's UPDATE touched no row for this entry. The entry
+  /// is KEPT for one more pass: a creating push that was already on the wire
+  /// when the user deleted may land after the UPDATE (the UPDATE cannot create
+  /// a tombstone the way the old upsert could), and the next pass's UPDATE
+  /// then tombstones it. A second empty pass removes the entry.
+  static Future<void> markEmptyPass({
+    required String workoutLogId,
+    required String exerciseId,
+    required int setNumber,
+    int? deletedAtMs,
+  }) async {
+    final list = read();
+    for (final e in list) {
+      if (e['workout_log_id'] == workoutLogId &&
+          e['exercise_id'] == exerciseId &&
+          e['set_number'] == setNumber &&
+          e['deleted_at_ms'] == deletedAtMs) {
+        e['empty_pass'] = true;
+      }
+    }
     await HiveService.instance.userBox.put(_key, list);
   }
 }

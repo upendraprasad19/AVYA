@@ -128,12 +128,24 @@ void main() {
           reason: 'never the shared missing-date bucket');
     });
 
-    test('no date and no date in the key: nothing is pushed', () async {
-      final row = _bench()..remove('date');
+    test('no date, no date in the key, no created_at: nothing is pushed',
+        () async {
+      final row = _bench()
+        ..remove('date')
+        ..remove('created_at');
       await HiveService.instance.workoutBox.put('exlog_legacykey', row);
       await push();
       expect(summaries(), isEmpty);
       expect(setRows(), isEmpty);
+    });
+
+    test('no date and no key date: the IST day of created_at (the readers\' '
+        'own fallback)', () async {
+      final row = _bench()..remove('date');
+      await HiveService.instance.workoutBox.put('exlog_legacykey', row);
+      await push();
+      expect(summaries().single['workout_log_id'],
+          SyncService.workoutLogIdForDate('2026-09-01'));
     });
 
     test(

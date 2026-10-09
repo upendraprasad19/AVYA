@@ -830,8 +830,15 @@ class WorkoutRepository {
       }
     }
 
+    // Newest day first; PRs on the same day (the date is now a day, not a
+    // timestamp) in a stable order by exercise name.
     final result = bestMap.values.toList()
-      ..sort((a, b) => b.date.compareTo(a.date));
+      ..sort((a, b) {
+        final c = b.date.compareTo(a.date);
+        return c != 0
+            ? c
+            : a.exerciseName.toLowerCase().compareTo(b.exerciseName.toLowerCase());
+      });
     return result;
   }
 

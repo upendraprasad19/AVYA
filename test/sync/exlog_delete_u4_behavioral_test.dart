@@ -66,6 +66,20 @@ void main() {
     );
   }
 
+  // An entry exactly as an app build before L1a-2 queued it (no delete time).
+  Future<void> queueLegacy(String day, String name, {int sets = 3}) async {
+    final box = HiveService.instance.userBox;
+    final cur = (box.get('pending_exlog_deletes') as List?) ?? const [];
+    await box.put('pending_exlog_deletes', [
+      ...cur,
+      {
+        'workout_log_id': _wl(day),
+        'exercise_id': name,
+        'set_number': sets,
+      }
+    ]);
+  }
+
   group('the drain is one filtered UPDATE, all counts', () {
     test('sends the delete as a time-filtered UPDATE on the queued key, no upsert',
         () async {
@@ -86,8 +100,81 @@ void main() {
           reason: 'ALL set counts: no set_number filter');
       expect((p.single.body as Map)['deleted_at'], isA<String>());
       expect(_posts(h), isEmpty, reason: 'the old fallback upsert is gone');
+      // The UPDATE touched no row (the stub's cloud is empty). The entry is
+      // KEPT for one more pass: a creating push already on the wire can land
+      // after the UPDATE, and the UPDATE cannot create a tombstone.
+      expect(PendingExlogDeletes.read().single['empty_pass'], isTrue);
+      await drain();
+      expect(_patches(h), hasLength(2), reason: 'the second pass tries again');
       expect(PendingExlogDeletes.read(), isEmpty,
-          reason: 'a 0-row answer still completes the entry');
+          reason: 'a second empty pass completes the entry');
+    });
+
+    test('an UPDATE that touched a row completes the entry at once', () async {
+      h.server.writeResponders['workout_log_exercises'] = (r) => [
+            {'id': 'x', 'deleted_at': 'now'}
+          ];
+      await queue('2026-09-01', 'Bench Press', at: 1000);
+      await drain();
+      expect(PendingExlogDeletes.read(), isEmpty);
+    });
+
+    test('an in-flight creating push that lands after an empty first pass is '
+        'tombstoned by the second pass', () async {
+      final cloud = <Map<String, dynamic>>[];
+      h.server.writeResponders['workout_log_exercises'] = (r) {
+        final cutoff = DateTime.parse(r.query['completed_at']!.substring(4));
+        final touched = <Map<String, dynamic>>[];
+        for (final row in cloud) {
+          if (row['deleted_at'] == null &&
+              !DateTime.parse(row['completed_at'] as String).isAfter(cutoff)) {
+            row['deleted_at'] = 'now';
+            touched.add(row);
+          }
+        }
+        return touched;
+      };
+      await queue('2026-09-01', 'Bench Press', at: 5000);
+      await drain(); // nothing in the cloud yet: kept
+      cloud.add({
+        'completed_at': DateTime.fromMillisecondsSinceEpoch(4000, isUtc: true)
+            .toIso8601String(),
+        'deleted_at': null,
+      }); // the creating push lands now
+      await drain();
+      expect(cloud.single['deleted_at'], isNotNull);
+      expect(PendingExlogDeletes.read(), isEmpty);
+    });
+
+    test('a delete time in the future is clamped to now at the drain', () async {
+      final future = DateTime.now().add(const Duration(days: 30)).millisecondsSinceEpoch;
+      await queue('2026-09-01', 'Bench Press', at: future);
+      await drain();
+      final cutoff = DateTime.parse(_patches(h).single.query['completed_at']!.substring(4));
+      expect(cutoff.isAfter(DateTime.now().toUtc().add(const Duration(minutes: 1))),
+          isFalse);
+    });
+
+    test('a malformed delete time reads as no time and cannot stop the drain',
+        () async {
+      final box = HiveService.instance.userBox;
+      await box.put('pending_exlog_deletes', [
+        {
+          'workout_log_id': _wl('2026-09-01'),
+          'exercise_id': 'Bench Press',
+          'set_number': 3,
+          'deleted_at_ms': 'not-a-number',
+        },
+        {
+          'workout_log_id': _wl('2026-09-02'),
+          'exercise_id': 'Squat',
+          'set_number': 3,
+          'deleted_at_ms': 2000,
+        },
+      ]);
+      expect(PendingExlogDeletes.read().first.containsKey('deleted_at_ms'), isFalse);
+      await drain();
+      expect(_patches(h), hasLength(2), reason: 'both entries were sent');
     });
 
     test('an entry queued before this landing (no time) cuts off at drain time',
@@ -108,7 +195,6 @@ void main() {
           isFalse);
       expect(cutoff.isAfter(DateTime.now().toUtc().add(const Duration(seconds: 5))),
           isFalse);
-      expect(PendingExlogDeletes.read(), isEmpty);
     });
 
     test(
@@ -162,41 +248,91 @@ void main() {
     });
   });
 
-  group('a re-log cancels the queued delete', () {
-    test('delete -> failed drain -> re-log: the re-log stays live', () async {
+  group('a re-log after a delete: the older version dies, the newer survives',
+      () {
+    test('delete -> failed drain -> re-log at a DIFFERENT count: the stale 3-set '
+        'cloud row is tombstoned, the 2-set re-log is spared', () async {
       final day = DateTime(2026, 9, 1);
-      Future<void> log() async {
+      Future<void> log(int n) async {
         await WorkoutWriteService.instance.logExercise(
           date: day,
           exerciseName: 'Bench Press',
           sets: [
-            ExerciseSet(
-                weightKg: 60, reps: 8, loggedAtMs: day.millisecondsSinceEpoch),
+            for (var i = 0; i < n; i++)
+              ExerciseSet(weightKg: 60, reps: 8, loggedAtMs: day.millisecondsSinceEpoch),
           ],
           source: WriteSource.activeWorkout,
         );
       }
 
-      await log();
+      await log(3);
       final key = WorkoutWriteService.exlogKey(day, 'Bench Press');
       await WorkoutWriteService.instance
           .deleteLog(logKey: key, source: WriteSource.activeWorkout);
-      expect(PendingExlogDeletes.read(), hasLength(1));
+      final deletedAt = PendingExlogDeletes.read().single['deleted_at_ms'] as int;
 
       h.server.failWritesTo.add('workout_log_exercises');
       await drain();
       expect(PendingExlogDeletes.read(), hasLength(1),
           reason: 'the failed drain left it queued');
 
-      await log(); // re-created
-      expect(PendingExlogDeletes.read(), isEmpty,
-          reason: 'logExercise cancels the stale delete');
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      await log(2); // re-created, a newer write at another count
+      expect(PendingExlogDeletes.read(), hasLength(1),
+          reason: 'a timed delete is NOT cancelled by the re-log: it is what '
+              'tombstones the older version');
 
+      // The cloud holds the old 3-set version (written before the delete) and,
+      // once the push lands, the 2-set re-log (written after it).
+      final cloud = <Map<String, dynamic>>[
+        {
+          'sets': 3,
+          'completed_at': DateTime.fromMillisecondsSinceEpoch(deletedAt - 1000, isUtc: true)
+              .toIso8601String(),
+          'deleted_at': null,
+        },
+        {
+          'sets': 2,
+          'completed_at': DateTime.fromMillisecondsSinceEpoch(deletedAt + 1000, isUtc: true)
+              .toIso8601String(),
+          'deleted_at': null,
+        },
+      ];
       h.server.failWritesTo.clear();
-      h.server.clear();
+      h.server.writeResponders['workout_log_exercises'] = (r) {
+        if (r.method != 'PATCH') return null;
+        final cutoff = DateTime.parse(r.query['completed_at']!.substring(4));
+        final touched = <Map<String, dynamic>>[];
+        for (final row in cloud) {
+          if (row['deleted_at'] == null &&
+              !DateTime.parse(row['completed_at'] as String).isAfter(cutoff)) {
+            row['deleted_at'] = 'now';
+            touched.add(row);
+          }
+        }
+        return touched;
+      };
       await drain();
-      expect(_patches(h), isEmpty,
-          reason: 'nothing left to send: the re-log is not tombstoned');
+      expect(cloud[0]['deleted_at'], isNotNull, reason: 'stale 3-set version gone');
+      expect(cloud[1]['deleted_at'], isNull, reason: 're-log survives');
+      expect(PendingExlogDeletes.read(), isEmpty);
+    });
+
+    test('an entry queued by an older app build (no time) IS cancelled by a '
+        're-log (its cutoff would be the drain moment)', () async {
+      final day = DateTime(2026, 9, 1);
+      await queueLegacy('2026-09-01', 'Bench Press');
+      await WorkoutWriteService.instance.logExercise(
+        date: day,
+        exerciseName: 'Bench Press',
+        sets: [
+          ExerciseSet(weightKg: 60, reps: 8, loggedAtMs: day.millisecondsSinceEpoch),
+        ],
+        source: WriteSource.activeWorkout,
+      );
+      expect(PendingExlogDeletes.read(), isEmpty);
+      await drain();
+      expect(_patches(h), isEmpty);
     });
   });
 
@@ -244,41 +380,62 @@ void main() {
       expect(PendingExlogDeletes.read().single['workout_log_id'], _wl('2026-09-01'));
     });
 
-    test('a delete queued for the TARGET day is cancelled by the move',
-        () async {
+    test('a TIMED delete queued for the TARGET day stays (the time filter '
+        'spares the moved row); a time-less one is cancelled', () async {
       final box = HiveService.instance.workoutBox;
       await box.put(key('2026-09-01'), row('2026-09-01'));
       await queue('2026-09-02', 'Bench Press', sets: 4);
+      await queueLegacy('2026-09-02', 'Squat');
+      await box.put(
+          WorkoutWriteService.exlogKey(DateTime.utc(2026, 9, 1), 'Squat'),
+          row('2026-09-01', extra: {'exercise_name': 'Squat'}));
       await WorkoutWriteService.instance
           .moveExerciseLogs(fromDate: '2026-09-01', toDate: '2026-09-02');
-      final ids = PendingExlogDeletes.read().map((e) => e['workout_log_id']);
-      expect(ids, [_wl('2026-09-01')], reason: 'only the source remains queued');
+      final q = PendingExlogDeletes.read();
+      expect(
+          q.any((e) =>
+              e['workout_log_id'] == _wl('2026-09-02') &&
+              e['exercise_id'] == 'Bench Press'),
+          isTrue,
+          reason: 'timed target delete kept');
+      expect(
+          q.any((e) =>
+              e['workout_log_id'] == _wl('2026-09-02') && e['exercise_id'] == 'Squat'),
+          isFalse,
+          reason: 'time-less target delete cancelled');
     });
 
-    test('A -> B -> A before a sync leaves A live (nothing queued for A)',
-        () async {
+    test('A -> B -> A before a sync: both days are queued with their times, and '
+        'the moved-back row (newer) survives A\'s drain', () async {
       final box = HiveService.instance.workoutBox;
       await box.put(key('2026-09-01'), row('2026-09-01'));
       await WorkoutWriteService.instance
           .moveExerciseLogs(fromDate: '2026-09-01', toDate: '2026-09-02');
+      await Future<void>.delayed(const Duration(milliseconds: 5));
       await WorkoutWriteService.instance
           .moveExerciseLogs(fromDate: '2026-09-02', toDate: '2026-09-01');
-      final ids = PendingExlogDeletes.read().map((e) => e['workout_log_id']).toList();
-      expect(ids, [_wl('2026-09-02')],
-          reason: 'B is queued, A was cancelled by the move back');
+      final q = PendingExlogDeletes.read();
+      expect(q.map((e) => e['workout_log_id']).toSet(),
+          {_wl('2026-09-01'), _wl('2026-09-02')});
+      final a = q.firstWhere((e) => e['workout_log_id'] == _wl('2026-09-01'));
+      final backRow = Map<String, dynamic>.from(box.get(key('2026-09-01')) as Map);
+      expect(backRow['updated_at_ms'] as int, greaterThan(a['deleted_at_ms'] as int),
+          reason: 'the row moved back is a newer write than A\'s delete, so '
+              'the time filter spares it');
     });
   });
 
   group('sinks: queue re-read, owner checks', () {
-    test('an entry cancelled after the drain read its copy sends nothing for it',
+    test('an entry removed after the drain read its copy sends nothing for it',
         () async {
       await queue('2026-09-01', 'Bench Press', at: 1000);
-      await queue('2026-09-02', 'Squat', at: 2000);
+      await queueLegacy('2026-09-02', 'Squat');
       var first = true;
       h.server.writeResponders['workout_log_exercises'] = (r) {
         if (first) {
           first = false;
-          // A re-log of the SECOND entry lands while the first is on the wire.
+          // A re-log of the SECOND (time-less) entry's exercise lands while
+          // the first is on the wire.
           PendingExlogDeletes.cancelFor(
               workoutLogId: _wl('2026-09-02'), exerciseName: 'Squat');
         }
@@ -368,13 +525,13 @@ void main() {
         'set_number': 1,
         'updated_at_ms': 1,
       });
-      await queue('2026-09-01', 'Bench Press', sets: 1);
+      await queueLegacy('2026-09-01', 'Bench Press', sets: 1);
       await queue('2026-09-02', 'Squat', sets: 2);
       await HiveService.instance.configBox.delete('exlog_key_migration_v8');
       await ExlogKeyMigrator.runIfNeeded();
       final ids = PendingExlogDeletes.read().map((e) => e['workout_log_id']).toList();
       expect(ids, [_wl('2026-09-02')],
-          reason: 'only the re-created exercise\'s delete is cancelled');
+          reason: 'only the re-created exercise\'s time-less delete is cancelled');
     });
   });
 }
