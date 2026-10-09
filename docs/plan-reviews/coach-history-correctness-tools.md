@@ -6,6 +6,7 @@ review_rounds: 11
 ground_truth_verified: true
 verdict: converged
 bpass: accepted
+bpass_review: docs/reviews/coach-history-correctness-tools-bpass.md
 ---
 
 # Plan-review record — L1b coach history tools and server readers (`coach-history-correctness-tools`)
