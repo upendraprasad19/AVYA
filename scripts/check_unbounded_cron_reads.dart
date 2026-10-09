@@ -45,10 +45,10 @@
 // -------------------------------------------------------------------------
 //   - CRON-dispatched functions + `_shared/` + (L1b, plan B8) the coach tools
 //     under `_shared/tools/**`, which are client-invoked but read a user's
-//     whole history and clip silently at the same 1000-row cap. Other
-//     client-invoked functions (verify-payment, …) read one user's own rows
-//     and stay out of scope by design. `_shared/tools/**` is in WARN-ONLY scope
-//     (see `warnScopePrefixes`) until the L1b conversions land, per §4.11.
+//     whole history and clip silently at the same 1000-row cap (a hard
+//     failure since the L1b flip, §4.11). Other client-invoked functions
+//     (verify-payment, …) read one user's own rows and stay out of scope by
+//     design.
 //   - Chain extraction is textual: from `.from(`/`.rpc(` forward to the
 //     statement's terminating `;`. A query built across several statements
 //     (`let q = supabase.from(...); q = q.eq(...)`) is NOT tracked — it would
@@ -70,13 +70,6 @@
 import 'dart:io';
 
 const int postgrestMaxRows = 1000;
-
-/// §4.11 scoped baseline (L1b plan B8): a violation under one of these path
-/// prefixes prints `WARN` and is left OUT of the exit code; every other
-/// violation still exits 1. The whole-gate `--warn-only` flag is not usable
-/// here — pre-commit and CI run every gate with no arguments and discard the
-/// output. The LAST L1b commit deletes this constant and its branch.
-const List<String> warnScopePrefixes = ['supabase/functions/_shared/tools/'];
 
 /// Markers that make a query chain bounded.
 ///
@@ -209,18 +202,9 @@ void main(List<String> args) {
     }
   }
 
-  final allViolations = <Violation>[];
+  final violations = <Violation>[];
   for (final file in targets) {
-    allViolations.addAll(_scan(file, root));
-  }
-  bool inWarnScope(Violation v) =>
-      warnScopePrefixes.any((p) => v.file.startsWith(p));
-  final warnScoped = allViolations.where(inWarnScope).toList();
-  final violations = allViolations.where((v) => !inWarnScope(v)).toList();
-  for (final v in warnScoped) {
-    stderr.writeln(
-      'WARN  ${v.file}:${v.line}  .${v.kind}("${v.name}") — ${v.reason}',
-    );
+    violations.addAll(_scan(file, root));
   }
 
   if (violations.isEmpty) {

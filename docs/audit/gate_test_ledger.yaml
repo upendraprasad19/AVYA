@@ -702,14 +702,14 @@ check_unbounded_cron_reads.dart:
   test_path:
     - test/scripts/check_unbounded_cron_reads_tools_scope_e2e_test.dart
   evidence: >
-    L1b (2026-10-07, OI-308/OI-296 coach-tool reads): the gate gained a recursive scan of
-    _shared/tools/** in a WARN-ONLY scope (warnScopePrefixes; a violation prints WARN and is left out
-    of the exit code while every other violation still exits 1) and recognises fetchPagesBounded /
-    fetchWleWindow as paged helpers. Mutation: making every path tools-scope (inWarnScope => true)
-    reddened 2 of 5 tests ("a NON-tools violation still exits 1", "both in ONE run"); the original was
-    restored and re-run green. The LAST L1b commit deletes the scoped-WARN branch and flips the
-    tools-violation case to exit 1. Predates this entry: the original OI-79 gate was grandfathered
-    2026-08-10 with no fixture test.
+    L1b (2026-10-07, OI-308/OI-296 coach-tool reads): the gate scans _shared/tools/** recursively and
+    recognises fetchPagesBounded / fetchWleWindow as paged helpers. First commit shipped the tools scope
+    WARN-only (a scoped branch, because pre-commit and CI discard output); the flip commit (2026-10-09,
+    after the 24 h baseline with a zero WARN list) deleted that branch, so a coach-tool violation now exits 1.
+    Mutation, run at both commits: the first-commit mutant (every path tools-scope) reddened 2 of 5 tests; the
+    flip mutant (violations under _shared/tools/ removed after the scan) reddened 2 of 5 ("a coach-tool violation
+    FAILS the gate", "both in ONE run"); each original was restored and re-run green. Predates this entry: the
+    original OI-79 gate was grandfathered 2026-08-10 with no fixture test.
 
 check_week_selector_phase_labels.dart:
   grandfathered: 2026-08-10

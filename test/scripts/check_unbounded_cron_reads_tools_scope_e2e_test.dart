@@ -1,14 +1,13 @@
 // test/scripts/check_unbounded_cron_reads_tools_scope_e2e_test.dart
 //
-// END-TO-END for scripts/check_unbounded_cron_reads.dart's L1b (plan B8) coach-tools scope.
-// The coach tools under `_shared/tools/**` are in WARN-ONLY scope (§4.11 baseline): a violation
-// there prints `WARN` and is left OUT of the exit code, while EVERY OTHER violation still
-// exits 1 in the same run. Pre-commit and CI run the gate with no arguments and discard its
-// output, which is why the whole-gate `--warn-only` flag cannot carry this baseline.
+// END-TO-END for scripts/check_unbounded_cron_reads.dart's coach-tools scope (L1b plan B8). The
+// coach tools under `_shared/tools/**` are scanned RECURSIVELY and a violation there FAILS the gate
+// (exit 1), like any other. History: the first L1b commit shipped this as WARN-only (§4.11
+// baseline: pre-commit and CI discard output, so a whole-gate --warn-only could not carry it);
+// the flip commit deleted the scoped branch after the 24 h baseline with a zero WARN list.
 //
-// Mutation proof (gate mutation recorded in docs/audit/gate_test_ledger.yaml and diagnose e5abc7):
-// treating every path as tools-scope makes the "non-tools violation => exit 1" and the "both in
-// ONE run" assertions go red (2 of 5).
+// Mutation proof (gate_test_ledger.yaml, diagnose e5abc7): re-adding a scope that exempts the tools
+// path from the exit code reddens the tools-violation cases below.
 @Timeout(Duration(minutes: 3))
 library;
 
@@ -89,11 +88,10 @@ void main() {
         ..createSync(recursive: true)
         ..writeAsStringSync(body);
 
-  test('a coach-tool violation (nested dir) prints WARN and exits 0', () {
+  test('a coach-tool violation (nested dir) FAILS the gate and names the file', () {
     tool('nutrition/t.ts', _unbounded);
     final r = run();
-    expect(r.exitCode, 0, reason: '${r.stdout}\n${r.stderr}');
-    expect('${r.stderr}', contains('WARN'));
+    expect(r.exitCode, 1, reason: '${r.stdout}\n${r.stderr}');
     expect('${r.stderr}', contains('_shared/tools/nutrition/t.ts'));
   });
 
@@ -103,25 +101,26 @@ void main() {
     expect(r.exitCode, 1, reason: '${r.stdout}\n${r.stderr}');
   });
 
-  test('both in ONE run: non-tools violation exits 1 and the tools WARN is still printed', () {
+  test('both in ONE run: exit 1 and BOTH files are reported', () {
     tool('nutrition/t.ts', _unbounded);
     File('${tmp.path}/supabase/functions/fn-a/index.ts').writeAsStringSync(_unbounded);
     final r = run();
     expect(r.exitCode, 1, reason: '${r.stdout}\n${r.stderr}');
-    expect('${r.stderr}', contains('WARN  supabase/functions/_shared/tools/nutrition/t.ts'));
+    expect('${r.stderr}', contains('_shared/tools/nutrition/t.ts'));
+    expect('${r.stderr}', contains('fn-a/index.ts'));
   });
 
-  test('a tool read routed through fetchPagesBounded is recognised as bounded (no WARN)', () {
+  test('a tool read routed through fetchPagesBounded is recognised as bounded (exit 0)', () {
     tool('nutrition/t.ts', _pagedBounded);
     final r = run();
     expect(r.exitCode, 0, reason: '${r.stdout}\n${r.stderr}');
-    expect('${r.stderr}', isNot(contains('WARN')));
+    expect('${r.stderr}', isNot(contains('unbounded read')));
   });
 
   test('test files under tools/ (__tests__) are not scanned', () {
     tool('__tests__/x_test.ts', _unbounded);
     final r = run();
     expect(r.exitCode, 0, reason: '${r.stdout}\n${r.stderr}');
-    expect('${r.stderr}', isNot(contains('WARN')));
+    expect('${r.stderr}', isNot(contains('unbounded read')));
   });
 }

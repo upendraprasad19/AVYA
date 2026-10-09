@@ -38,7 +38,7 @@ forbidden_patterns_checked:
   - { pattern: "\\.eq\\(\"is_pr\", true\\) before any dedupe in a reader", absent: true }
   - { pattern: "completed_at used to select a day window of wle rows", absent: true }
 proposed_fix: >-
-  _shared/paged_fetch_bounded.ts fetchPagesBounded (count on page 0 only, offsets advance by rows received, bounded maxPages, truncated flag) and wle_window_read.ts; future-prediction uses fetchAllPages. Tools surface `truncated` where a read can hit its budget (getProgressSummary, getNutritionHistory); getPromotionStatus throws instead of shortening a streak. Gate check_unbounded_cron_reads.dart now scans _shared/tools/** (scoped WARN, flip pending: the LAST L1b commit, at least 24 h after the first, deletes the scoped branch).
+  _shared/paged_fetch_bounded.ts fetchPagesBounded (count on page 0 only, offsets advance by rows received, bounded maxPages, truncated flag) and wle_window_read.ts; future-prediction uses fetchAllPages. Tools surface `truncated` where a read can hit its budget (getProgressSummary, getNutritionHistory); getPromotionStatus throws instead of shortening a streak. Gate check_unbounded_cron_reads.dart now scans _shared/tools/** (scoped WARN, flipped 2026-10-09 by the last L1b commit).
 regression_test_planned: >-
   supabase/functions/_shared/paged_fetch_bounded_test.ts (plus the per-reader Deno tests named in docs/audit/coach-history-correctness-tools.closure.yaml). Tests use the Deno runner:
   deno test --no-check --allow-all --node-modules-dir=none supabase/functions/.
@@ -71,7 +71,7 @@ getProgressSummary, getExerciseHistory, getNutritionHistory, getPromotionStatus,
 
 ## Fix
 
-_shared/paged_fetch_bounded.ts fetchPagesBounded (count on page 0 only, offsets advance by rows received, bounded maxPages, truncated flag) and wle_window_read.ts; future-prediction uses fetchAllPages. Gate check_unbounded_cron_reads.dart now scans _shared/tools/** (scoped WARN, flip pending: the LAST L1b commit, at least 24 h after the first, deletes the scoped branch).
+_shared/paged_fetch_bounded.ts fetchPagesBounded (count on page 0 only, offsets advance by rows received, bounded maxPages, truncated flag) and wle_window_read.ts; future-prediction uses fetchAllPages. Gate check_unbounded_cron_reads.dart now scans _shared/tools/** (scoped WARN, flipped 2026-10-09 by the last L1b commit).
 
 ## Verification
 
