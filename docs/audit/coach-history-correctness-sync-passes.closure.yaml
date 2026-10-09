@@ -12,15 +12,15 @@ findings:
   - id: D5a
     title: "overlapping passes overwrite each other's skip-index confirmations (M1, all 17 domains)"
     terminal_state: closed_in_commit
-    commit: PENDING
+    commit: c73dded9
     verification: "test/sync/sync_skip_index_overlap_commit_test.dart; merge-base mutant (snapshot instead of re-read) RED 2 of 4"
   - id: D2e
     title: "restored exercise logs are pushed straight back once (M2)"
     terminal_state: closed_in_commit
-    commit: PENDING
+    commit: c73dded9
     verification: "test/sync/exlog_restore_fingerprint_l1a3_behavioral_test.dart; 4 mutants RED (no record, record when local won, hash-skip switch ignored, restore-dedupe switch ignored)"
   - id: BPASS
     title: "B-pass: 10 findings (A 5, B 5), 0 P0, 0 P1, 0 false alarms; fixes: restoredBundleEqualsCloud guard, fail-open record block, per-set continue restored, 9 new tests"
     terminal_state: closed_in_commit
-    commit: PENDING
+    commit: 09bbbd7f
     verification: "docs/reviews/coach-history-correctness-sync-passes-bpass.md; 5 of 5 new protections mutated RED"
