@@ -1,0 +1,21 @@
+# Closure ledger — coach-history-correctness-sync-passes (L1a-3). Gate 40: one terminal_state per
+# finding, no `deferred:` key.
+batch: coach-history-correctness-sync-passes
+plan_review_record: docs/plan-reviews/coach-history-correctness-sync-passes.md
+diagnose_docs:
+  - docs/diagnoses/2026-10-09-skip-index-overlapping-passes-a8c4e5.md
+  - docs/diagnoses/2026-10-09-restored-exlog-pushed-back-f3d2a7.md
+total_findings: 2
+closed_count: 2
+
+findings:
+  - id: D5a
+    title: "overlapping passes overwrite each other's skip-index confirmations (M1, all 17 domains)"
+    terminal_state: closed_in_commit
+    commit: PENDING
+    verification: "test/sync/sync_skip_index_overlap_commit_test.dart; merge-base mutant (snapshot instead of re-read) RED 2 of 4"
+  - id: D2e
+    title: "restored exercise logs are pushed straight back once (M2)"
+    terminal_state: closed_in_commit
+    commit: PENDING
+    verification: "test/sync/exlog_restore_fingerprint_l1a3_behavioral_test.dart; 4 mutants RED (no record, record when local won, hash-skip switch ignored, restore-dedupe switch ignored)"

@@ -147,7 +147,13 @@ class SyncSkipIndex {
   final bool Function() _ownerChangedNow;
   final SyncSkipFailureReporter _reportFailure;
   final Map<String, String> _stored;
-  bool _dirty = false;
+
+  /// L1a-3 (D5a): THIS pass's own deltas against the stored index. [commit]
+  /// applies only these to a fresh re-read of the box, so two overlapping
+  /// passes never overwrite each other's confirmations with a stale snapshot.
+  /// A key is in at most one of the two. Skipped keys are in neither.
+  final Map<String, String> _confirmed = <String, String>{};
+  final Set<String> _forgotten = <String>{};
   bool _aborted = false;
 
   /// D13 no-flood: the fingerprint catch runs per ROW, so only the FIRST
@@ -242,15 +248,18 @@ class SyncSkipIndex {
       return false;
     }
     pushed++;
-    if (fp != null && _stored[rowKey] != fp) {
+    if (fp != null) {
       _stored[rowKey] = fp;
-      _dirty = true;
+      _confirmed[rowKey] = fp;
+      _forgotten.remove(rowKey);
     }
     return true;
   }
 
   void _forget(String rowKey) {
-    if (_stored.remove(rowKey) != null) _dirty = true;
+    _stored.remove(rowKey);
+    _confirmed.remove(rowKey);
+    _forgotten.add(rowKey);
   }
 
   /// Persists the index once per pass: prunes rows not in [liveKeys] and
@@ -263,12 +272,18 @@ class SyncSkipIndex {
         if (_box.containsKey(domain.indexKey)) await _box.delete(domain.indexKey);
         return;
       }
-      final before = _stored.length;
-      _stored.removeWhere((k, _) => !liveKeys.contains(k));
-      if (_stored.length != before) _dirty = true;
-      if (!_dirty) return;
-      await _box.put(domain.indexKey, Map<String, String>.from(_stored));
-      _dirty = false;
+      // Merge this pass's deltas into the CURRENT stored map (re-read, with
+      // no await between the read and the put), never the construction-time
+      // snapshot: an overlapping pass may have confirmed other rows since.
+      final fresh = readIndex(_box, domain.indexKey);
+      final merged = Map<String, String>.from(fresh)
+        ..addAll(_confirmed)
+        ..removeWhere((k, _) => _forgotten.contains(k) || !liveKeys.contains(k));
+      if (merged.length == fresh.length &&
+          merged.entries.every((e) => fresh[e.key] == e.value)) {
+        return;
+      }
+      await _box.put(domain.indexKey, merged);
     } catch (e, st) {
       // Losing the index costs one extra push next pass — never a false skip.
       debugPrint('[SyncSkipIndex] ${domain.name} commit: $e');
@@ -308,6 +323,29 @@ class SyncSkipIndex {
     final m = readIndex(box, domain.indexKey);
     if (m[rowKey] == fingerprint) return;
     m[rowKey] = fingerprint;
+    await box.put(domain.indexKey, m);
+  }
+
+  /// Records several download-confirmed fingerprints in ONE read-merge-put
+  /// (L1a-3 / M2: the exercise-log restore, so a log it just wrote is not
+  /// pushed straight back). Nothing is written once the owner changed, and
+  /// nothing when every entry is already recorded.
+  static Future<void> recordConfirmedAll(
+    Box<dynamic> box,
+    SyncSkipDomain domain,
+    Map<String, String> fingerprints, {
+    required bool Function() ownerChangedNow,
+  }) async {
+    if (fingerprints.isEmpty || ownerChangedNow()) return;
+    final m = readIndex(box, domain.indexKey);
+    var changed = false;
+    fingerprints.forEach((k, v) {
+      if (m[k] != v) {
+        m[k] = v;
+        changed = true;
+      }
+    });
+    if (!changed) return;
     await box.put(domain.indexKey, m);
   }
 

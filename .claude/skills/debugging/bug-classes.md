@@ -1654,3 +1654,12 @@ added, false of the flip being performed.
 - **Test shape:** a fake client that applies the SAME filters PostgREST does (`in`, `is`, `ilike`, count on page 0, a page cap), because a fake that ignores the id filter makes the "edited old log" case vacuous; a missing-date-bucket row proves the in-memory window filter; cadence read from the migration WRITER, comment-stripped, not from a constant.
 - **Prior incidents:** 7ad0d3 (IST day boundaries), OI-307 / OI-246 follow-up (superseded and tombstoned rows), APK #12.6 (volume x sets).
 - **Regression test:** `supabase/functions/_shared/live_exercise_rows_test.ts`, `exercise_day_test.ts`, `pr-detection/window_test.ts`; diagnoses `a1c7e3`, `d4fab6`, `c9ef01`.
+
+### 2.98 A history index committed as a WHOLE-MAP snapshot, and a restore that records nothing it wrote (NEW 2026-10-09)
+
+- **Telltale:** unchanged rows are re-uploaded every sync pass; right after a restore the first push re-upserts every restored row; two quick syncs make the second pass push what the first just confirmed.
+- **Root-cause shape:** `SyncSkipIndex` hydrated `_stored` once at construction and `commit` wrote the whole map back, so an overlapping pass overwrote the other pass's confirmations (D5a). Separately, the restore wrote Hive rows equal to the cloud but recorded no fingerprint, so the push could not know they were already there (D2e).
+- **Fix pattern:** a pass tracks only its OWN deltas (pushed-and-confirmed fingerprints, forgotten keys; skipped keys are in neither) and `commit` applies them to a fresh re-read in one synchronous section; a restore that WRITES a row records the fingerprint the push would compute, built by the SAME extracted function (`_buildExlogPushBundle`), only when its put ran.
+- **Test shape:** two index instances built before either commits; mutate the merge base back to the snapshot. For the restore: restore then push and count the upserts, a local-wins row that is NOT recorded, and both kill switches.
+- **Prior incidents:** OI-204 / d3f8a6 (the skip index itself), e6a2d4 (restore completeness).
+- **Regression test:** `test/sync/sync_skip_index_overlap_commit_test.dart`, `test/sync/exlog_restore_fingerprint_l1a3_behavioral_test.dart`; diagnoses `a8c4e5`, `f3d2a7`.

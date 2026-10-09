@@ -315,6 +315,235 @@ extension SyncServiceWorkout on SyncService {
     }
   }
 
+  /// L1a-3 (M2): the cloud push bundle (summary row + per-set rows) of ONE
+  /// local exlog row, or null when the row cannot be pushed (no day, or an
+  /// empty natural key). Extracted VERBATIM from the push loop so the restore
+  /// can fingerprint the rows it writes by the SAME function the push uses
+  /// (D2e: a freshly restored log must not be pushed straight back).
+  ({Map<String, dynamic> summary, List<Map<String, dynamic>> sets})?
+      _buildExlogPushBundle(String userId, String key, Map<String, dynamic> log) {
+    // ── SUMMARY ROW ──
+    // 1 row per exercise. weight_kg = best; reps = cumulative; set_number = total.
+    // U3: the workout DAY is `date`, else the date in the Hive key; with
+    // neither, skip (a missing date used to land in the shared
+    // `v5('workout_')` bucket). The SAME day derives `workout_log_id`.
+    final dateField = log['date'] as String? ?? '';
+    var date = dateField.isNotEmpty ? dateField : (_dateFromKey(key) ?? '');
+    if (date.isEmpty) {
+      // Same fallback the readers use (`istDateForExlogRow`): the IST day
+      // of created_at.
+      final createdAt = DateTime.tryParse(log['created_at'] as String? ?? '');
+      if (createdAt != null) date = WorkoutWriteService.istDateStr(createdAt);
+    }
+    if (date.isEmpty) {
+      unawaited(ErrorTelemetry.logEvent(
+        'sync_skipped_exlog_no_day',
+        message: 'key=$key',
+      ));
+      return null;
+    }
+    final workoutLogId = SyncService._deterministicId('workout_$date');
+    final exerciseId =
+        (log['exercise_name'] as String?) ?? key; // stable identity
+
+    // Plan A A-5: support BOTH the legacy `sets_completed`/`sets_detail`
+    // shape and the new WorkoutWriteService shape (`set_number` count +
+    // `sets` list). Resolve per-set list once; reuse for summary +
+    // per-set rows.
+    final List<Map<String, dynamic>> resolvedSets =
+        uniquePerSetNumbers(_resolvePerSetList(log));
+    final int summarySetCount = resolvedSets.isNotEmpty
+        ? resolvedSets.length
+        : (log['sets_completed'] as num?)?.toInt() ??
+            (log['set_number'] as num?)?.toInt() ??
+            1;
+    // APK Test #12.7 — preserve the row's authoring time instead of
+    // re-stamping every backlog entry to NOW. The helper checks
+    // created_at → completed_at → updated_at_ms → completed_at_ms →
+    // IST date prefix from the Hive key. Without this, the founder's
+    // 2026-05-05 / 2026-05-06 workouts (sat in Hive ~24h waiting for
+    // the silent-sync fix) would have uploaded with completed_at =
+    // NOW, breaking the AI coach's date filters.
+    // U3: the pushed time is the LATEST local write (`max(resolved,
+    // updated_at_ms)`), see exlog_push_rules.dart. Readers take the day
+    // from `workout_log_id`, not from this value.
+    final String completedAt = latestWriteIso(
+      _resolveCompletedAt(
+        log,
+        dateKeyPrefix: date,
+        hiveKey: key,
+      ),
+      log['updated_at_ms'],
+    );
+
+    // Audit 2026-05-12 P0-A — onConflict was 'id', but live schema has a
+    // partial UNIQUE on (workout_log_id, exercise_id, set_number). When a
+    // Hive key for the same exercise mutates (e.g. name re-normalize) the
+    // deterministic `id` shifts, the natural unique trips first, and the
+    // upsert raises 23505 + orphan sets accumulate in workout_log_sets
+    // (per-set rows succeed in their own try-block). 31 errors over 24h
+    // in production. Switch to the natural key so PostgREST merges instead
+    // of inserting. The PK `id` is still UNIQUE but is no longer the
+    // conflict target — duplicate rows from the legacy 'id' path become
+    // unreachable but harmless (next sync overwrites the natural-key row).
+    //
+    // Bug a2b3c4 (APK Test #15.3) — duration_seconds aggregate. The
+    // WorkoutWriteService Hive shape carries per-set durations inside
+    // `sets[]` entries (`duration_sec` canonical; `duration_seconds`
+    // legacy after restore). The pre-fix line `log['duration_seconds']`
+    // resolved to null for every WriteService row → cloud column was
+    // dead schema data. Consumers (receipt, train_screen,
+    // weekly-report) all worked around by summing per-set rows from
+    // workout_log_sets. Populate the aggregate so future analytics
+    // queries joining workout_log_exercises directly see the correct
+    // total seconds for timed/cardio exercises.
+    final loggingType = log['logging_type'] as String?;
+    final isTimedOrCardio =
+        loggingType == 'timed' || loggingType == 'cardio';
+    int aggregateDurationSecs = 0;
+    if (isTimedOrCardio && resolvedSets.isNotEmpty) {
+      for (final s in resolvedSets) {
+        final raw =
+            s['duration_sec'] ?? s['duration_seconds'];
+        aggregateDurationSecs += (raw as num?)?.toInt() ?? 0;
+      }
+    }
+    // Audit 2026-05-15 — belt-and-suspenders null-key guard. Skip the
+    // upsert when the natural-key triple (workout_log_id, exercise_id,
+    // set_number) has any null/empty member. Prevents a future
+    // column-nullability regression from quietly merging unrelated
+    // exercises onto a single null-keyed cloud row.
+    final wlIdGuard = workoutLogId.trim();
+    final exIdGuard = exerciseId.trim();
+    if (wlIdGuard.isEmpty || exIdGuard.isEmpty) {
+      unawaited(ErrorTelemetry.logEvent(
+        'sync_skipped_null_natural_key',
+        message:
+            'table=workout_log_exercises key=$key workout_log_id_null=${wlIdGuard.isEmpty} exercise_id_null=${exIdGuard.isEmpty} set_number_null=false',
+      ));
+      return null;
+    }
+    // Guard: workout_log_exercises.reps is the CUMULATIVE total (Σ set
+    // reps). Clamp to the wle_reps_realistic bound (<=10000, migration 084)
+    // so an out-of-range value (a migrator duration->reps leak, a parse
+    // glitch) is CLAMPED + logged (op_type wle_reps_out_of_range) instead
+    // of being silently rejected by Postgres (23514) and lost. diagnose e7b3c9.
+    final rawReps = (log['reps_completed'] as num?)?.toInt();
+    final clampedReps =
+        rawReps == null ? null : rawReps.clamp(0, 10000).toInt();
+    if (rawReps != null && rawReps != clampedReps) {
+      unawaited(ErrorTelemetry.logEvent(
+        'wle_reps_out_of_range',
+        message:
+            'raw=$rawReps clamped=$clampedReps exercise=${log['exercise_name']}',
+      ));
+    }
+
+    final summaryPayload = <String, dynamic>{
+      // id OMITTED (fix 2026-06-02 cross-user collision) — gen_random_uuid()
+      // on insert / kept on conflict. The natural key below now includes
+      // user_id so two users with the same date+exercise+set don't collide.
+      'workout_log_id': workoutLogId,
+      'user_id': userId,
+      'exercise_id': exerciseId,
+      'exercise_name': log['exercise_name'] ?? '',
+      'logging_type': log['logging_type'],
+      'set_number': summarySetCount,
+      'reps': clampedReps,
+      'weight_kg': log['weight_kg'],
+      'duration_seconds': aggregateDurationSecs,
+      'distance_km': log['distance_km'],
+      'is_pr': log['is_pr'] ?? false,
+      'has_warmup_sets': log['has_warmup_sets'] ?? false,
+      'completed_at': completedAt,
+      // Fix 2026-06-02: user_id added to the conflict key (matching new
+      // index uniq_wle_user_wlog_ex_set) — workout_log_id is date-only, so
+      // without user_id two users' same-date+exercise+set rows collided and
+      // DO UPDATE could overwrite the OTHER user's row (cross-user corruption).
+    };
+
+    // ── PER-SET ROWS (F4) — resolved BEFORE either network call, so the
+    // fingerprint below covers the whole bundle.
+    // Upserts a row per set into `workout_log_sets`. Natural key is
+    // (workout_log_id, exercise_id, set_number) → idempotent across
+    // re-syncs and retries. Source: legacy `sets_detail` OR the new
+    // WorkoutWriteService `sets` list (Plan A A-5).
+    final pendingSetRows = <Map<String, dynamic>>[];
+    if (resolvedSets.isNotEmpty) {
+      // Audit 2026-05-15 — belt-and-suspenders null-key guard.
+      // Mirrors the summary-row guard above; ensures we never push
+      // per-set rows whose natural-key parents (workout_log_id /
+      // exercise_id) are empty even if a future code path bypasses
+      // the summary-row early-continue.
+      final perSetWlId = workoutLogId.trim();
+      final perSetExId = exerciseId.trim();
+      if (perSetWlId.isEmpty || perSetExId.isEmpty) {
+        unawaited(ErrorTelemetry.logEvent(
+          'sync_skipped_null_natural_key',
+          message:
+              'table=workout_log_sets key=$key workout_log_id_null=${perSetWlId.isEmpty} exercise_id_null=${perSetExId.isEmpty}',
+        ));
+      } else {
+        for (final sm in resolvedSets) {
+          final setNum = (sm['set_number'] as num?)?.toInt();
+          if (setNum == null) {
+            unawaited(ErrorTelemetry.logEvent(
+              'sync_skipped_null_natural_key',
+              message:
+                  'table=workout_log_sets key=$key workout_log_id_null=false exercise_id_null=false set_number_null=true',
+            ));
+            return null;
+          }
+          // Guard: workout_log_sets.reps must satisfy wls_reps_realistic
+          // (<=10000, migration 085). Clamp + log an out-of-range per-set
+          // value (e.g. a migrator duration->reps leak) so the row is never
+          // silently rejected by Postgres (23514) and lost — the per-set
+          // rows back the receipt/Train/weekly-report sums. Mirrors the wle
+          // clamp on the summary row above. diagnose d9a4f2.
+          final rawSetReps = (sm['reps'] as num?)?.toInt();
+          final clampedSetReps =
+              rawSetReps == null ? null : rawSetReps.clamp(0, 10000).toInt();
+          if (rawSetReps != null && rawSetReps != clampedSetReps) {
+            unawaited(ErrorTelemetry.logEvent(
+              'wls_reps_out_of_range',
+              message:
+                  'raw=$rawSetReps clamped=$clampedSetReps set=$setNum exercise=$exerciseId',
+            ));
+          }
+          // Guard: workout_log_sets.duration_secs must satisfy
+          // wls_duration_secs_realistic (<=3600). A per-set duration >1h is
+          // implausible (a set, not a session) — clamp a glitch value rather
+          // than let the all-or-nothing per-set upsert 23514 and drop the
+          // batch. Mirrors the reps clamp above (WI-3 constraint-parity,
+          // diagnose a3e8f1).
+          final rawSetDur =
+              (sm['duration_seconds'] ?? sm['duration_sec']) as num?;
+          final clampedSetDur =
+              rawSetDur == null ? null : rawSetDur.clamp(0, 3600).toInt();
+          if (rawSetDur != null && rawSetDur != clampedSetDur) {
+            unawaited(ErrorTelemetry.logEvent(
+              'wls_duration_out_of_range',
+              message:
+                  'raw=$rawSetDur clamped=$clampedSetDur set=$setNum exercise=$exerciseId',
+            ));
+          }
+          pendingSetRows.add({
+            'user_id': userId,
+            'workout_log_id': workoutLogId,
+            'exercise_id': exerciseId,
+            'set_number': setNum,
+            'weight_kg': sm['weight_kg'],
+            'reps': clampedSetReps,
+            'duration_secs': clampedSetDur,
+            'distance_km': sm['distance_km'],
+            'completed_at': completedAt,
+          });
+        }
+      }
+    }
+    return (summary: summaryPayload, sets: pendingSetRows);
+  }
+
   /// Pushes individual exercise logs (exlog_* keys) to
   /// Supabase workout_log_exercises (summary) + workout_log_sets (per-set).
   ///
@@ -346,225 +575,10 @@ extension SyncServiceWorkout on SyncService {
       final log = Map<String, dynamic>.from(raw);
 
       try {
-        // ── SUMMARY ROW ──
-        // 1 row per exercise. weight_kg = best; reps = cumulative; set_number = total.
-        // U3: the workout DAY is `date`, else the date in the Hive key; with
-        // neither, skip (a missing date used to land in the shared
-        // `v5('workout_')` bucket). The SAME day derives `workout_log_id`.
-        final dateField = log['date'] as String? ?? '';
-        var date = dateField.isNotEmpty ? dateField : (_dateFromKey(key) ?? '');
-        if (date.isEmpty) {
-          // Same fallback the readers use (`istDateForExlogRow`): the IST day
-          // of created_at.
-          final createdAt = DateTime.tryParse(log['created_at'] as String? ?? '');
-          if (createdAt != null) date = WorkoutWriteService.istDateStr(createdAt);
-        }
-        if (date.isEmpty) {
-          unawaited(ErrorTelemetry.logEvent(
-            'sync_skipped_exlog_no_day',
-            message: 'key=$key',
-          ));
-          continue;
-        }
-        final workoutLogId = SyncService._deterministicId('workout_$date');
-        final exerciseId =
-            (log['exercise_name'] as String?) ?? key; // stable identity
-
-        // Plan A A-5: support BOTH the legacy `sets_completed`/`sets_detail`
-        // shape and the new WorkoutWriteService shape (`set_number` count +
-        // `sets` list). Resolve per-set list once; reuse for summary +
-        // per-set rows.
-        final List<Map<String, dynamic>> resolvedSets =
-            uniquePerSetNumbers(_resolvePerSetList(log));
-        final int summarySetCount = resolvedSets.isNotEmpty
-            ? resolvedSets.length
-            : (log['sets_completed'] as num?)?.toInt() ??
-                (log['set_number'] as num?)?.toInt() ??
-                1;
-        // APK Test #12.7 — preserve the row's authoring time instead of
-        // re-stamping every backlog entry to NOW. The helper checks
-        // created_at → completed_at → updated_at_ms → completed_at_ms →
-        // IST date prefix from the Hive key. Without this, the founder's
-        // 2026-05-05 / 2026-05-06 workouts (sat in Hive ~24h waiting for
-        // the silent-sync fix) would have uploaded with completed_at =
-        // NOW, breaking the AI coach's date filters.
-        // U3: the pushed time is the LATEST local write (`max(resolved,
-        // updated_at_ms)`), see exlog_push_rules.dart. Readers take the day
-        // from `workout_log_id`, not from this value.
-        final String completedAt = latestWriteIso(
-          _resolveCompletedAt(
-            log,
-            dateKeyPrefix: date,
-            hiveKey: key,
-          ),
-          log['updated_at_ms'],
-        );
-
-        // Audit 2026-05-12 P0-A — onConflict was 'id', but live schema has a
-        // partial UNIQUE on (workout_log_id, exercise_id, set_number). When a
-        // Hive key for the same exercise mutates (e.g. name re-normalize) the
-        // deterministic `id` shifts, the natural unique trips first, and the
-        // upsert raises 23505 + orphan sets accumulate in workout_log_sets
-        // (per-set rows succeed in their own try-block). 31 errors over 24h
-        // in production. Switch to the natural key so PostgREST merges instead
-        // of inserting. The PK `id` is still UNIQUE but is no longer the
-        // conflict target — duplicate rows from the legacy 'id' path become
-        // unreachable but harmless (next sync overwrites the natural-key row).
-        //
-        // Bug a2b3c4 (APK Test #15.3) — duration_seconds aggregate. The
-        // WorkoutWriteService Hive shape carries per-set durations inside
-        // `sets[]` entries (`duration_sec` canonical; `duration_seconds`
-        // legacy after restore). The pre-fix line `log['duration_seconds']`
-        // resolved to null for every WriteService row → cloud column was
-        // dead schema data. Consumers (receipt, train_screen,
-        // weekly-report) all worked around by summing per-set rows from
-        // workout_log_sets. Populate the aggregate so future analytics
-        // queries joining workout_log_exercises directly see the correct
-        // total seconds for timed/cardio exercises.
-        final loggingType = log['logging_type'] as String?;
-        final isTimedOrCardio =
-            loggingType == 'timed' || loggingType == 'cardio';
-        int aggregateDurationSecs = 0;
-        if (isTimedOrCardio && resolvedSets.isNotEmpty) {
-          for (final s in resolvedSets) {
-            final raw =
-                s['duration_sec'] ?? s['duration_seconds'];
-            aggregateDurationSecs += (raw as num?)?.toInt() ?? 0;
-          }
-        }
-        // Audit 2026-05-15 — belt-and-suspenders null-key guard. Skip the
-        // upsert when the natural-key triple (workout_log_id, exercise_id,
-        // set_number) has any null/empty member. Prevents a future
-        // column-nullability regression from quietly merging unrelated
-        // exercises onto a single null-keyed cloud row.
-        final wlIdGuard = workoutLogId.trim();
-        final exIdGuard = exerciseId.trim();
-        if (wlIdGuard.isEmpty || exIdGuard.isEmpty) {
-          unawaited(ErrorTelemetry.logEvent(
-            'sync_skipped_null_natural_key',
-            message:
-                'table=workout_log_exercises key=$key workout_log_id_null=${wlIdGuard.isEmpty} exercise_id_null=${exIdGuard.isEmpty} set_number_null=false',
-          ));
-          continue;
-        }
-        // Guard: workout_log_exercises.reps is the CUMULATIVE total (Σ set
-        // reps). Clamp to the wle_reps_realistic bound (<=10000, migration 084)
-        // so an out-of-range value (a migrator duration->reps leak, a parse
-        // glitch) is CLAMPED + logged (op_type wle_reps_out_of_range) instead
-        // of being silently rejected by Postgres (23514) and lost. diagnose e7b3c9.
-        final rawReps = (log['reps_completed'] as num?)?.toInt();
-        final clampedReps =
-            rawReps == null ? null : rawReps.clamp(0, 10000).toInt();
-        if (rawReps != null && rawReps != clampedReps) {
-          unawaited(ErrorTelemetry.logEvent(
-            'wle_reps_out_of_range',
-            message:
-                'raw=$rawReps clamped=$clampedReps exercise=${log['exercise_name']}',
-          ));
-        }
-
-        final summaryPayload = <String, dynamic>{
-          // id OMITTED (fix 2026-06-02 cross-user collision) — gen_random_uuid()
-          // on insert / kept on conflict. The natural key below now includes
-          // user_id so two users with the same date+exercise+set don't collide.
-          'workout_log_id': workoutLogId,
-          'user_id': userId,
-          'exercise_id': exerciseId,
-          'exercise_name': log['exercise_name'] ?? '',
-          'logging_type': log['logging_type'],
-          'set_number': summarySetCount,
-          'reps': clampedReps,
-          'weight_kg': log['weight_kg'],
-          'duration_seconds': aggregateDurationSecs,
-          'distance_km': log['distance_km'],
-          'is_pr': log['is_pr'] ?? false,
-          'has_warmup_sets': log['has_warmup_sets'] ?? false,
-          'completed_at': completedAt,
-          // Fix 2026-06-02: user_id added to the conflict key (matching new
-          // index uniq_wle_user_wlog_ex_set) — workout_log_id is date-only, so
-          // without user_id two users' same-date+exercise+set rows collided and
-          // DO UPDATE could overwrite the OTHER user's row (cross-user corruption).
-        };
-
-        // ── PER-SET ROWS (F4) — resolved BEFORE either network call, so the
-        // fingerprint below covers the whole bundle.
-        // Upserts a row per set into `workout_log_sets`. Natural key is
-        // (workout_log_id, exercise_id, set_number) → idempotent across
-        // re-syncs and retries. Source: legacy `sets_detail` OR the new
-        // WorkoutWriteService `sets` list (Plan A A-5).
-        final pendingSetRows = <Map<String, dynamic>>[];
-        if (resolvedSets.isNotEmpty) {
-          // Audit 2026-05-15 — belt-and-suspenders null-key guard.
-          // Mirrors the summary-row guard above; ensures we never push
-          // per-set rows whose natural-key parents (workout_log_id /
-          // exercise_id) are empty even if a future code path bypasses
-          // the summary-row early-continue.
-          final perSetWlId = workoutLogId.trim();
-          final perSetExId = exerciseId.trim();
-          if (perSetWlId.isEmpty || perSetExId.isEmpty) {
-            unawaited(ErrorTelemetry.logEvent(
-              'sync_skipped_null_natural_key',
-              message:
-                  'table=workout_log_sets key=$key workout_log_id_null=${perSetWlId.isEmpty} exercise_id_null=${perSetExId.isEmpty}',
-            ));
-          } else {
-            for (final sm in resolvedSets) {
-              final setNum = (sm['set_number'] as num?)?.toInt();
-              if (setNum == null) {
-                unawaited(ErrorTelemetry.logEvent(
-                  'sync_skipped_null_natural_key',
-                  message:
-                      'table=workout_log_sets key=$key workout_log_id_null=false exercise_id_null=false set_number_null=true',
-                ));
-                continue;
-              }
-              // Guard: workout_log_sets.reps must satisfy wls_reps_realistic
-              // (<=10000, migration 085). Clamp + log an out-of-range per-set
-              // value (e.g. a migrator duration->reps leak) so the row is never
-              // silently rejected by Postgres (23514) and lost — the per-set
-              // rows back the receipt/Train/weekly-report sums. Mirrors the wle
-              // clamp on the summary row above. diagnose d9a4f2.
-              final rawSetReps = (sm['reps'] as num?)?.toInt();
-              final clampedSetReps =
-                  rawSetReps == null ? null : rawSetReps.clamp(0, 10000).toInt();
-              if (rawSetReps != null && rawSetReps != clampedSetReps) {
-                unawaited(ErrorTelemetry.logEvent(
-                  'wls_reps_out_of_range',
-                  message:
-                      'raw=$rawSetReps clamped=$clampedSetReps set=$setNum exercise=$exerciseId',
-                ));
-              }
-              // Guard: workout_log_sets.duration_secs must satisfy
-              // wls_duration_secs_realistic (<=3600). A per-set duration >1h is
-              // implausible (a set, not a session) — clamp a glitch value rather
-              // than let the all-or-nothing per-set upsert 23514 and drop the
-              // batch. Mirrors the reps clamp above (WI-3 constraint-parity,
-              // diagnose a3e8f1).
-              final rawSetDur =
-                  (sm['duration_seconds'] ?? sm['duration_sec']) as num?;
-              final clampedSetDur =
-                  rawSetDur == null ? null : rawSetDur.clamp(0, 3600).toInt();
-              if (rawSetDur != null && rawSetDur != clampedSetDur) {
-                unawaited(ErrorTelemetry.logEvent(
-                  'wls_duration_out_of_range',
-                  message:
-                      'raw=$rawSetDur clamped=$clampedSetDur set=$setNum exercise=$exerciseId',
-                ));
-              }
-              pendingSetRows.add({
-                'user_id': userId,
-                'workout_log_id': workoutLogId,
-                'exercise_id': exerciseId,
-                'set_number': setNum,
-                'weight_kg': sm['weight_kg'],
-                'reps': clampedSetReps,
-                'duration_secs': clampedSetDur,
-                'distance_km': sm['distance_km'],
-                'completed_at': completedAt,
-              });
-            }
-          }
-        }
+        final bundle = _buildExlogPushBundle(userId, key, log);
+        if (bundle == null) continue;
+        final summaryPayload = bundle.summary;
+        final pendingSetRows = bundle.sets;
 
         // OI-204 / Task 13 — the fingerprint is now a THUNK evaluated inside
         // SyncSkipIndex's own try (plan D4): a throwing fingerprint fails
@@ -970,6 +984,7 @@ extension SyncServiceWorkout on SyncService {
       // F4 · Pre-fetch all per-set rows once and index by
       // (workout_log_id, exercise_id) so we can reconstruct the Hive
       // `sets_detail` list without a per-exercise round-trip.
+      final restoredFingerprints = <String, String>{};
       final setsByLogExercise = <String, List<Map<String, dynamic>>>{};
       try {
         final setRows = identical(preFetchedSets, _kNoInject)
@@ -1178,10 +1193,26 @@ extension SyncServiceWorkout on SyncService {
         }
         if (_hive.workoutBox.get(logId) == null) {
           await _hive.workoutBox.put(logId, logMap);
+          // D2e: the row now equals the cloud's, so record the push
+          // fingerprint of what we wrote -- only when the put RAN (a local
+          // row that won is not the cloud's content).
+          if (dedupe && !_hashSkipKillSwitchOn(SyncSkipDomain.exlog)) {
+            final bundle = _buildExlogPushBundle(userId, logId, logMap);
+            if (bundle != null) {
+              restoredFingerprints[logId] = SyncService.exlogPayloadFingerprint(
+                  bundle.summary, bundle.sets);
+            }
+          }
         }
         await WorkoutWriteService.instance
             .addToExlogIndex(_hive.workoutBox, dateStr, logId);
       }
+      await SyncSkipIndex.recordConfirmedAll(
+        _hive.workoutBox,
+        SyncSkipDomain.exlog,
+        restoredFingerprints,
+        ownerChangedNow: () => ownerChangedSince(userId),
+      );
     } catch (e, st) {
       debugPrint('[SyncService._restoreExerciseLogs] $e');
       // audit-2026-05-11 H-42 — telemetry pair.
