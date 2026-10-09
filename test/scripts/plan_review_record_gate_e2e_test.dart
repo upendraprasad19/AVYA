@@ -27,10 +27,12 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/spawn.dart';
+
 /// Parent environment minus anything git-related, so a surrounding hook cannot
 /// redirect the child git at the real repository.
-Map<String, String> _cleanEnv() {
-  final env = Map<String, String>.from(Platform.environment);
+// Scrubbing is now done by the shared spawn helper (`runSpawn`); the history of
+// why each family is stripped:
   // GIT_*  — a surrounding git hook exports GIT_DIR / GIT_WORK_TREE, which
   //          override BOTH `workingDirectory:` and `-C <path>`, so the child
   //          git would operate on the REAL repo (feedback_mistake_git_hook_env_leak).
@@ -45,21 +47,15 @@ Map<String, String> _cleanEnv() {
   //          give it. Each test re-supplies the GITHUB_* keys it actually wants
   //          via `extra:`, so the spawned gate sees only what the scenario
   //          declares. Hermetic by construction rather than by luck.
-  env.removeWhere((k, _) {
-    final u = k.toUpperCase();
-    return u.startsWith('GIT_') || u.startsWith('GITHUB_') || u == 'PUSH_BEFORE';
-  });
-  return env;
-}
 
 ProcessResult _run(String exe, List<String> args, String cwd,
     {Map<String, String>? extra}) {
-  final env = _cleanEnv();
-  if (extra != null) env.addAll(extra);
-  return Process.runSync(exe, args,
+  return runSpawn(exe == 'dart' ? dartBin() : exe, args,
+      why: 'plan-review-record gate e2e: $exe ${args.join(' ')}',
       workingDirectory: cwd,
-      environment: env,
-      includeParentEnvironment: false,
+      extraEnv: extra ?? const <String, String>{},
+      // GITHUB_REF / GITHUB_REPOSITORY_OWNER / PUSH_BEFORE are set on purpose.
+      allowControl: (extra ?? const <String, String>{}).keys.toSet(),
       runInShell: true);
 }
 

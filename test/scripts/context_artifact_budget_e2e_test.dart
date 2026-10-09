@@ -27,28 +27,21 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/spawn.dart';
+
 /// Subprocess environment with git/CI leakage removed — same hermetic contract
 /// as the other `test/scripts/` e2e files. git exports GIT_DIR / GIT_WORK_TREE
 /// into every hook and they override `workingDirectory:`, so a fixture that
 /// builds its own tree would silently read the REAL repo when this test runs
 /// inside pre-commit (feedback_mistake_git_hook_env_leak).
-Map<String, String> _cleanEnv() {
-  final env = Map<String, String>.from(Platform.environment);
-  env.removeWhere((k, _) {
-    final u = k.toUpperCase();
-    return u.startsWith('GIT_') || u.startsWith('GITHUB_') || u == 'PUSH_BEFORE';
-  });
-  return env;
-}
-
+/// (Now done by the shared spawn helper: `runSpawn` / `hermeticEnvironment`.)
 late final String _gate;
 
-ProcessResult _run(String cwd, {List<String> args = const []}) => Process.runSync(
-      'dart',
+ProcessResult _run(String cwd, {List<String> args = const []}) => runSpawn(
+      dartBin(),
       ['run', _gate, ...args],
+      why: 'check_context_artifact_budget.dart against a fixture root',
       workingDirectory: cwd,
-      environment: _cleanEnv(),
-      includeParentEnvironment: false,
       runInShell: true,
     );
 

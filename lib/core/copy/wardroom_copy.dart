@@ -425,6 +425,14 @@ class WardroomCopy {
   static const reportTrendVolume = 'VOLUME';
   static const reportTrendEnergy = 'ENERGY';
 
+  /// Weekly Report card title (issue #78) — also the paywall feature name, so
+  /// the letterhead reads "Coach's Weekly Dispatch is a PRO feature".
+  static const reportCardTitle = "Coach's Weekly Dispatch";
+  static const reportCardBlurb =
+      'Your coach reads your week \u2014 sessions, meals, weight \u2014 and tells you what held, what slipped, and what to fix next.';
+  static const reportFirstFreeLine = 'Your first dispatch is on us.';
+  static const reportBackToProfileCta = '\u2190 Back to Profile';
+
   /// Notifications screen.
   static const notificationsEyebrow = 'INBOX';
   static const notificationsTitle = 'Notifications';

@@ -149,6 +149,18 @@ void main() {
           // reader out of ai_coach_repository.dart into a dedicated
           // service. The read-then-emit pattern moved with it.
           'lib/features/ai_coach/services/ai_snapshot_builder.dart',
+          // c9d2f6 (B-pass reviewer A F3): `UserRepository.mergeCloudProgress`
+          // projects the cloud freeze family onto the local map through
+          // `StreakProgressService.mergeFreezeProgress` (the ONE rule) as a
+          // post-pass, writing the result by INDEX assignment. A restore
+          // projection, not a second state-mutation rule. It was always in this
+          // position (the pre-fix loop assigned `merged[entry.key]`), but the
+          // map-literal regex below could not see index assignment — it can now.
+          'lib/shared/repositories/user_repository.dart',
+          // f8c1a5 Layer 2: a one-shot, idempotent Hive REPAIR migrator that
+          // clamps an out-of-cap value to the tier cap. Index assignment, so it
+          // matched nothing before; named here so the next index writer is not.
+          'lib/core/services/streak_freeze_clamp_migrator.dart',
         };
         // refactor/sync-service-part-split (2026-05-13) — every part
         // file under `lib/core/services/sync/` is library-equivalent
@@ -166,9 +178,13 @@ void main() {
           if (rel.contains(syncPartFilePrefix)) continue;
           final src = f.readAsStringSync();
           // Pattern: `'streak_freezes_available':` inside a Map
-          // literal — typically the LHS of a write.
+          // literal — typically the LHS of a write — OR an INDEX assignment
+          // `x['streak_freezes_available'] = ...` (B-pass reviewer A F3: the
+          // first form alone let `merged[...] = ...` writers through).
           if (RegExp(r'''['"]streak_freezes_available['"]\s*:''')
-              .hasMatch(src)) {
+                  .hasMatch(src) ||
+              RegExp(r'''\[\s*['"]streak_freezes_available['"]\s*\]\s*=(?!=)''')
+                  .hasMatch(src)) {
             offenders.add(rel);
           }
         }

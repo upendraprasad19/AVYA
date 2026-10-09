@@ -57,7 +57,7 @@ void main() {
     h.server.getResponders['workout_templates'] = (_) => [];
     h.server.getResponders['user_preferences'] = (_) => [];
 
-    await SyncService.instance.restoreLightweightAlways('test-user');
+    await SyncService.instance.restoreLightweightAlways(kTestUserId);
 
     final selects = h.server.requests.where((r) =>
         r.method == 'GET' && r.path == '/rest/v1/user_progress');
@@ -77,7 +77,7 @@ void main() {
     h.server.getResponders['workout_templates'] = (_) => [];
     h.server.getResponders['user_preferences'] = (_) => [];
 
-    await SyncService.instance.restoreLightweightAlways('test-user');
+    await SyncService.instance.restoreLightweightAlways(kTestUserId);
 
     final progress = HiveService.instance.userBox.get('progress') as Map;
     expect(progress.containsKey('plan_json'), isFalse);
@@ -107,7 +107,7 @@ void main() {
     h.server.getResponders['workout_templates'] = (_) => [];
     h.server.getResponders['user_preferences'] = (_) => [];
 
-    await SyncService.instance.restoreLightweightAlways('test-user');
+    await SyncService.instance.restoreLightweightAlways(kTestUserId);
 
     expect(HiveService.instance.workoutBox.get('sync_epoch_seen'), 2);
     expect(
@@ -175,7 +175,7 @@ void main() {
       h.server.getResponders['workout_templates'] = (_) => [];
       h.server.getResponders['user_preferences'] = (_) => [];
 
-      await SyncService.instance.restoreLightweightAlways('test-user');
+      await SyncService.instance.restoreLightweightAlways(kTestUserId);
 
       expect(HiveService.instance.workoutBox.get('sync_epoch_seen'), 1);
       expect(
@@ -199,7 +199,7 @@ void main() {
       h.server.getResponders['workout_templates'] = (_) => [];
       h.server.getResponders['user_preferences'] = (_) => [];
 
-      await SyncService.instance.restoreLightweightAlways('test-user');
+      await SyncService.instance.restoreLightweightAlways(kTestUserId);
 
       expect(HiveService.instance.workoutBox.get('sync_epoch_seen'), 2);
       expect(
@@ -235,7 +235,7 @@ void main() {
           (d) => d == SyncSkipDomain.water;
       addTearDown(() => SyncSkipIndex.debugForceClearFailureForTests = null);
 
-      await SyncService.instance.restoreLightweightAlways('test-user');
+      await SyncService.instance.restoreLightweightAlways(kTestUserId);
 
       // Pre-fix bug: sync_epoch_seen was stored unconditionally right after
       // the clearAll attempt, so a partial failure was silently marked
@@ -264,7 +264,7 @@ void main() {
       await HiveService.instance.workoutBox.put(
           SyncSkipDomain.sched.indexKey, {'2026-08-01': 'fp-stale-again'});
 
-      await SyncService.instance.restoreLightweightAlways('test-user');
+      await SyncService.instance.restoreLightweightAlways(kTestUserId);
 
       expect(HiveService.instance.workoutBox.get('sync_epoch_seen'), 2,
           reason: 'the retry succeeds once nothing is forced to fail');
@@ -291,7 +291,7 @@ void main() {
       h.server.getResponders['workout_templates'] = (_) => [];
       h.server.getResponders['user_preferences'] = (_) => [];
 
-      await SyncService.instance.restoreLightweightAlways('test-user');
+      await SyncService.instance.restoreLightweightAlways(kTestUserId);
 
       expect(
           SyncSkipIndex.readIndex(
@@ -310,7 +310,7 @@ void main() {
       h.server.getResponders['workout_templates'] = (_) => [];
       h.server.getResponders['user_preferences'] = (_) => [];
 
-      await SyncService.instance.restoreLightweightAlways('test-user');
+      await SyncService.instance.restoreLightweightAlways(kTestUserId);
 
       expect(HiveService.instance.workoutBox.get('sync_epoch_seen'), 0,
           reason: 'a missing column must never read as "newer than anything"');
@@ -331,7 +331,7 @@ void main() {
     h.server.getResponders['workout_templates'] = (_) => [];
     h.server.getResponders['user_preferences'] = (_) => [];
 
-    await SyncService.instance.restoreLightweightAlways('test-user');
+    await SyncService.instance.restoreLightweightAlways(kTestUserId);
 
     final selects = h.server.requests.where((r) =>
         r.method == 'GET' && r.path == '/rest/v1/user_progress');

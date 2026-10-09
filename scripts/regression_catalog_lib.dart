@@ -182,3 +182,31 @@ bool isChildControlVariable(String name) {
       childEnvStrippedNames.contains(u) ||
       childEnvExternalReaders.contains(u);
 }
+
+/// Splits [paths] into groups whose joined length stays under [maxChars].
+///
+/// `Process.run(..., runInShell: true)` goes through cmd.exe on Windows, which
+/// rejects a command line over 8191 characters with "The syntax of the command
+/// is incorrect." The 30-day window held 145 test paths (8099 characters before
+/// the `cmd /c` wrapper), so every merge commit on Windows failed the catalog
+/// walk with no test actually red. One `flutter test` call per group keeps the
+/// walk covering every path.
+List<List<String>> chunkPathsByCommandLength(
+  Iterable<String> paths, {
+  int maxChars = 6000,
+}) {
+  final chunks = <List<String>>[];
+  var current = <String>[];
+  var length = 0;
+  for (final p in paths) {
+    if (current.isNotEmpty && length + p.length + 1 > maxChars) {
+      chunks.add(current);
+      current = <String>[];
+      length = 0;
+    }
+    current.add(p);
+    length += p.length + 1;
+  }
+  if (current.isNotEmpty) chunks.add(current);
+  return chunks;
+}

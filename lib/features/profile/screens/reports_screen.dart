@@ -5,6 +5,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show FunctionException;
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -16,6 +17,8 @@ import 'package:icanbefitter/features/train/repositories/workout_repository.dart
 import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/health_read_service.dart';
+import 'package:icanbefitter/core/copy/wardroom_copy.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/utils/readiness.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
@@ -24,10 +27,8 @@ import 'package:icanbefitter/shared/widgets/pro_badge.dart';
 import 'package:icanbefitter/shared/widgets/screen_loading_skeleton.dart';
 import 'package:icanbefitter/shared/widgets/error_state.dart';
 import 'package:icanbefitter/shared/widgets/empty_state.dart';
-import 'package:icanbefitter/shared/widgets/video_share_button.dart';
-import 'package:icanbefitter/features/train/providers/video_render_provider.dart';
-import 'package:icanbefitter/features/train/providers/train_provider.dart';
 import '../providers/profile_provider.dart';
+import '../services/weekly_report_refresh_policy.dart';
 
 class ReportsScreen extends ConsumerStatefulWidget {
   const ReportsScreen({super.key});
@@ -39,6 +40,8 @@ class ReportsScreen extends ConsumerStatefulWidget {
 class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   bool _isLoading = true;
   bool _isGeneratingReport = false;
+  // One weekly-report call at a time across screen instances: see
+  // WeeklyReportCallGate (its notifier wakes a screen opened mid-call).
   Map<String, dynamic>? _aiReport;
   String? _reportError;
   String _weightFilter = '3M'; // All, 1Y, 6M, 3M, 1M, 1W
@@ -50,20 +53,62 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   @override
   void initState() {
     super.initState();
+    WeeklyReportCallGate.inFlight.addListener(_onGateChanged);
     _loadCachedReport();
     Future.microtask(() {
       if (mounted) setState(() => _isLoading = false);
     });
     // Fix 2026-06-02 (stale-report zeros) — the report is cloud-sourced and the
     // cache was treated as valid for 7 DAYS, so the founder saw a multi-day-old
-    // report (0 workouts + a protein target computed at an old weight). Refresh
-    // on every open so it reflects current data. SILENT: the cached report (if
-    // any) stays on screen until the fresh one lands; a transient failure keeps
-    // the cache rather than blanking it. Cheap — the PRO report is opened
-    // infrequently, and the cloud now has correct data (sync-ID fixes 082).
+    // report (0 workouts + a protein target computed at an old weight). It then
+    // refreshed on EVERY open. Issue #78 (d7b2e5) narrowed that: PRO only and at
+    // most once per IST day (every refresh is a thinking-on Gemini call), and
+    // the manual Regenerate button is gone by founder decision, so a workout
+    // logged after today's refresh shows on the next IST day. SILENT: the
+    // cached report (if any) stays on screen until the fresh one lands; a
+    // transient failure keeps the cache rather than blanking it.
     Future.microtask(() {
-      if (mounted) _generateReport(silent: true);
+      if (mounted) _refreshOnOpen();
     });
+  }
+
+  @override
+  void dispose() {
+    WeeklyReportCallGate.inFlight.removeListener(_onGateChanged);
+    super.dispose();
+  }
+
+  /// The gate flips from ANY screen instance. Deferred to a microtask because it
+  /// can flip inside a build/listen phase (setState there would throw), and on
+  /// completion this instance re-reads the cache so a screen opened mid-call
+  /// shows the fresh report and a re-enabled Generate card.
+  void _onGateChanged() {
+    Future.microtask(() {
+      if (!mounted) return;
+      if (!WeeklyReportCallGate.inFlight.value) _loadCachedReport();
+      setState(() {});
+    });
+  }
+
+  /// Issue #78: the open-time refresh is PRO-only and at most once per IST day.
+  /// A free user's one lifetime report is spent only by the explicit Generate
+  /// tap (never silently on open); PRO is capped because every refresh is one
+  /// thinking-on Gemini call and the server has no PRO per-day cap.
+  void _refreshOnOpen() {
+    SubscriptionService.instance.gateAndVerify(
+      AppConstants.featureWeeklyAiReport,
+      onPro: () {
+        if (!mounted) return;
+        final configBox = HiveService.instance.configBox;
+        final due = shouldSilentRefreshWeeklyReport(
+          cachedJson: configBox.get(_reportCacheKey) as String?,
+          cachedDateIso: configBox.get(_reportCacheDateKey) as String?,
+          now: nowWall(),
+        );
+        if (due) _generateReport(silent: true);
+      },
+      onFree: () {},
+    );
   }
 
   /// Load cached report from Hive configBox if it exists and is from this week.
@@ -97,7 +142,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   /// network blip doesn't blank a usable cached report. The fresh result still
   /// replaces `_aiReport` + the cache on success. Fix 2026-06-02.
   Future<void> _generateReport({bool silent = false}) async {
+    await WeeklyReportCallGate.runExclusive(
+        () => _generateReportBody(silent: silent));
+  }
+
+  Future<void> _generateReportBody({required bool silent}) async {
     if (!silent) {
+      if (!mounted) return;
       setState(() {
         _isGeneratingReport = true;
         _reportError = null;
@@ -110,10 +161,12 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         throw Exception('Not authenticated. Please sign in and try again.');
       }
 
-      final response = await SupabaseService.instance.callFunction(
-        AppConstants.weeklyReportFunction,
-        body: {'user_id': userId},
-      );
+      final response = await SupabaseService.instance
+          .callFunction(
+            AppConstants.weeklyReportFunction,
+            body: {'user_id': userId},
+          )
+          .timeout(WeeklyReportCallGate.callTimeout);
 
       final data = response.data;
       if (data == null) {
@@ -143,7 +196,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       final configBox = HiveService.instance.configBox;
       await configBox.put(_reportCacheKey, jsonEncode(report));
       await configBox.put(
-          _reportCacheDateKey, DateTime.now().toIso8601String());
+          _reportCacheDateKey, nowWall().toIso8601String());
 
       // Mark first report as generated (for free user gating).
       await configBox.put('first_report_generated', true);
@@ -161,9 +214,26 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         debugPrint('[ReportsScreen._generateReport] silent refresh failed: $e');
         return;
       }
+      // The server's lifetime free report is spent (403 NOT_PRO): the local
+      // `first_report_generated` flag is per-device and does not survive a
+      // reinstall / second device, so learn it from the server's answer and
+      // show the paywall instead of a raw error (and stop promising a free one).
+      if (e is FunctionException &&
+          isLifetimeFreeReportSpent(status: e.status, details: e.details)) {
+        await HiveService.instance.configBox.put('first_report_generated', true);
+        if (!mounted) return;
+        setState(() {
+          _reportError = null;
+          _isGeneratingReport = false;
+        });
+        showPaywallSheet(context, feature: WardroomCopy.reportCardTitle);
+        return;
+      }
       if (mounted) {
         setState(() {
-          _reportError = e.toString().replaceFirst('Exception: ', '');
+          _reportError = e is TimeoutException
+              ? 'The dispatch is taking longer than usual. Try again in a moment.'
+              : e.toString().replaceFirst('Exception: ', '');
           _isGeneratingReport = false;
         });
       }
@@ -180,6 +250,11 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // A free user who upgrades (or whose entitlement finishes loading) while
+    // the screen is open gets the same open-time refresh a PRO open would.
+    ref.listen(subscriptionInfoProvider, (prev, next) {
+      if (prev != null && !prev.isPro && next.isPro) _refreshOnOpen();
+    });
     return Scaffold(
       backgroundColor: AppColors.bg,
       // Handoff dispatch-style header (`utility.jsx` ReportScreen lines
@@ -220,9 +295,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                       ),
                       const Spacer(),
                       // F41 \u2014 the gold "SHARE" header label was a dead
-                      // affordance (styled like a button but had no onTap;
-                      // the real share is the weekly-video row below). Removed
-                      // the tappable-looking text. An invisible mirror of the
+                      // affordance (styled like a button but had no onTap).
+                      // Removed the tappable-looking text. An invisible mirror of the
                       // BACK label keeps the seal optically centred between
                       // the two Spacers.
                       Visibility(
@@ -955,17 +1029,28 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               const Icon(Icons.auto_awesome,
                   color: AppColors.proGold, size: 18),
               const SizedBox(width: 8),
-              Text('AI Weekly Report', style: AppTypography.titleS),
+              Text(WardroomCopy.reportCardTitle, style: AppTypography.titleS),
               const SizedBox(width: 8),
               const ProBadge(scale: 0.8),
             ],
           ),
           const SizedBox(height: 10),
           Text(
-            'Get a personalised AI-generated weekly report with insights and recommendations.',
+            WardroomCopy.reportCardBlurb,
             style:
                 AppTypography.bodyM.copyWith(color: AppColors.textSecondary),
           ),
+          if (!ref.watch(subscriptionInfoProvider).isPro &&
+              HiveService.instance.configBox
+                      .get('first_report_generated', defaultValue: false) !=
+                  true) ...[
+            const SizedBox(height: 6),
+            Text(
+              WardroomCopy.reportFirstFreeLine,
+              style: AppTypography.bodyM.copyWith(
+                  color: AppColors.proGold, fontWeight: FontWeight.w800),
+            ),
+          ],
           if (_reportError != null) ...[
             const SizedBox(height: 10),
             Container(
@@ -993,7 +1078,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: _isGeneratingReport
+              onPressed: (_isGeneratingReport ||
+                      WeeklyReportCallGate.inFlight.value)
                   ? null
                   : () {
                       SubscriptionService.instance.gateAndVerify(
@@ -1008,7 +1094,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                   ) as bool;
                           if (alreadyGenerated) {
                             showPaywallSheet(context,
-                                feature: 'AI Weekly Report');
+                                feature: WardroomCopy.reportCardTitle);
                           } else {
                             _generateReport();
                           }
@@ -1107,7 +1193,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child:
-                        Text('AI Weekly Report', style: AppTypography.titleS),
+                        Text(WardroomCopy.reportCardTitle, style: AppTypography.titleS),
                   ),
                   const ProBadge(scale: 0.8),
                 ],
@@ -1299,27 +1385,12 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           ),
         const SizedBox(height: AppSpacing.sectionGap),
 
-        // Share as Video — Remotion weekly recap render
-        _buildWeeklyVideoShareRow(report),
-        const SizedBox(height: AppSpacing.inlineGap),
-
-        // Regenerate button
+        // Issue #78: no video (its backend is a 410 stub) and no manual
+        // regenerate (refresh-on-open is PRO + once per IST day) — back only.
         SizedBox(
           width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: _isGeneratingReport ? null : () => _generateReport(),
-            icon: _isGeneratingReport
-                ? const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: AppColors.accent),
-                  )
-                : const Icon(Icons.refresh, size: 16),
-            label: Text(
-              _isGeneratingReport ? 'Regenerating...' : 'Regenerate Report',
-              style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.accent),
-            ),
+          child: OutlinedButton(
+            onPressed: () => context.go('/profile'),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.accent,
               side: BorderSide(
@@ -1330,65 +1401,16 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 borderRadius: BorderRadius.circular(AppRadius.pill),
               ),
             ),
+            child: Text(
+              WardroomCopy.reportBackToProfileCta,
+              style: AppTypography.body.copyWith(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.accent),
+            ),
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildWeeklyVideoShareRow(Map<String, dynamic> report) {
-    final renderState = ref.watch(videoRenderNotifierProvider);
-
-    if (renderState.isLoading ||
-        renderState.status == VideoRenderStatus.ready ||
-        renderState.status == VideoRenderStatus.failed) {
-      return SizedBox(
-          width: double.infinity,
-          child: Center(child: VideoShareButton()));
-    }
-
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton.icon(
-        onPressed: () {
-          final userName =
-              UserRepository.instance.getProfile()?['full_name'] as String? ??
-                  'Athlete';
-          final workoutSummary =
-              report['workout_summary'] as Map<String, dynamic>? ?? {};
-          ref.read(videoRenderNotifierProvider.notifier).triggerWorkoutVideo(
-            compositionId: 'WeeklyRecap',
-            inputProps: {
-              'userName': userName,
-              // FOB-1 (OI-60): getCurrentWeekNumber() clamps to [1,4] and a
-              // hold starts at plan_start+28, so the recap card stamped
-              // "WEEK 4 RECAP" for every hold at every ordinal. `holdOrdinal`
-              // supersedes the counter in the composition when present; it is
-              // null for every user while `enable_hold_weeks` is OFF, so the
-              // rendered video is byte-identical until the flip.
-              'weekNumber': WorkoutRepository.instance.getCurrentWeekNumber(),
-              'holdOrdinal': ref.read(weekIdentityProvider).holdOrdinal,
-              'totalVolume': workoutSummary['total_volume_kg'] ?? 0,
-              'totalWorkouts': workoutSummary['workouts_completed'] ?? 0,
-              'totalPrs': workoutSummary['prs_hit'] ?? 0,
-              'aiTagline': report['summary'] ?? '',
-            },
-          );
-        },
-        icon: const Icon(Icons.video_library_rounded, size: 16),
-        label: Text(
-          'Share as Video',
-          style: AppTypography.body.copyWith(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.textDim),
-        ),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.textSecondary,
-          side: const BorderSide(color: AppColors.border),
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-          ),
-        ),
-      ),
     );
   }
 

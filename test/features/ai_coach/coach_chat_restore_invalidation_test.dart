@@ -160,7 +160,8 @@ void main() {
       // Simulate a background restore landing: new rows appear in coachBox
       // (exactly what _restoreCoachInteractions does), then the tick fires —
       // in production this is SyncService.instance.bumpRestoreCompleted(),
-      // called from RestoringScreen._healAfterRestoreInBackground; see file
+      // called LAST by DayRolloverObserver.reckonAndNotifyAfterRestore from
+      // RestoringScreen._healAfterRestoreInBackground; see file
       // header for why the fake stands in for it here.
       await tester.runAsync(() => HiveService.instance.coachBox.put('coach_2', {
             'id': 'coach_2',

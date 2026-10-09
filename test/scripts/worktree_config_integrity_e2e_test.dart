@@ -30,10 +30,13 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-/// Parent environment minus anything git-related, so a surrounding git hook
-/// cannot redirect the child git at the real repository.
+import '../helpers/spawn.dart';
+
+/// Runs a child through the shared spawn helper: parent environment minus the
+/// control variables, so a surrounding git hook cannot redirect the child git
+/// at the real repository.
 ///
-/// Scrubs the same three keys as the rest of the gate-e2e family
+/// The helper scrubs the same three keys as the rest of the gate-e2e family
 /// (test/contracts/gate_e2e_env_hermetic_test.dart enforces this uniformly):
 ///   GIT_*      — load-bearing HERE specifically: GIT_DIR / GIT_WORK_TREE
 ///                override both `workingDirectory:` and `-C <path>`, and this
@@ -44,22 +47,12 @@ import 'package:flutter_test/flutter_test.dart';
 ///                one hermetic contract and a future reader of CI env cannot
 ///                silently acquire the c3f8e1 failure mode.
 ///   PUSH_BEFORE — same rationale as GITHUB_*.
-Map<String, String> _cleanEnv() {
-  final env = Map<String, String>.from(Platform.environment);
-  env.removeWhere((k, _) {
-    final u = k.toUpperCase();
-    return u.startsWith('GIT_') || u.startsWith('GITHUB_') || u == 'PUSH_BEFORE';
-  });
-  return env;
-}
-
 ProcessResult _run(String exe, List<String> args, String cwd) {
-  return Process.runSync(
+  return runSpawn(
     exe,
     args,
+    why: 'worktree config integrity e2e: $exe ${args.join(' ')} (in $cwd)',
     workingDirectory: cwd,
-    environment: _cleanEnv(),
-    includeParentEnvironment: false,
     runInShell: true,
   );
 }

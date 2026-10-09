@@ -50,6 +50,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../scripts/retire_worktree_lib.dart';
+import '../helpers/spawn.dart';
 
 /// Ignored paths that MUST keep a worktree alive.
 ///
@@ -252,15 +253,15 @@ void main() {
     // off by env, but git reports the deciding pattern, and a per-directory
     // .gitignore outranks info/exclude — so a source other than `.gitignore:`
     // means the repo rule is gone.
-    Map<String, String> hermeticEnv() {
-      final env = Map<String, String>.from(Platform.environment)
-        ..removeWhere((k, _) => k.toUpperCase().startsWith('GIT_'));
+    // (The GIT_* strip is the shared helper's; only the two pins are ours.)
+    Map<String, String> configPins() {
       final empty = File(
           '${Directory.systemTemp.createTempSync('gi_cfg_').path}/gitconfig')
         ..writeAsStringSync('');
-      env['GIT_CONFIG_GLOBAL'] = empty.path;
-      env['GIT_CONFIG_NOSYSTEM'] = '1';
-      return env;
+      return {
+        'GIT_CONFIG_GLOBAL': empty.path,
+        'GIT_CONFIG_NOSYSTEM': '1',
+      };
     }
 
     for (final tokenPath in const [
@@ -268,11 +269,12 @@ void main() {
       'supabase/.supabase/supabase access token.txt', // the path the tools read
     ]) {
       test('`$tokenPath` is ignored, and by .gitignore', () {
-        final r = Process.runSync(
+        final r = runSpawn(
           'git',
           ['check-ignore', '-v', '--no-index', tokenPath],
-          environment: hermeticEnv(),
-          includeParentEnvironment: false,
+          why: 'git check-ignore on a token path (hermetic config)',
+          extraEnv: configPins(),
+          allowControl: {'GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM'},
           stdoutEncoding: utf8,
           stderrEncoding: utf8,
         );

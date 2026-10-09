@@ -6,6 +6,16 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### subscription_state — the screen is now the one place that decides what a not-PRO user sees of their progress photos; the repository makes no PRO decision. (1 bugs)
+- 2026-10-08 c2b7e4 — (1) A user whose PRO lapsed could not open the Progress screen to view or delete the progress photos they already held: the Photos hub row ran the PRO gate and showed the paywall without opening the…
+
+### weekly_streak_counter (2 bugs)
+- 2026-10-08 a3c8f1 — The weekly-streak marker `last_counted_week_key` (the calendar week last counted, Slice D) lived only in the local Hive progress map. A reinstall or a second device restored the counter…
+- 2026-10-08 b7d3e5 — The weekly-streak counter (`current_streak_weeks`) under-counts. With 6 planned workouts the threshold is 5, but the FIRST completed session of a week stamped the marker `last_streak_week` with that…
+
+### subscription_state — the server's one definition of PRO, status = 'active' AND end_date > now(), gains a new reader (the database itself, at both doors of a NEW progress photo). (1 bugs)
+- 2026-10-07 d8f2a6 — The PRO gate on progress photos existed only in the client (the Photos hub row, the Progress screen entry and its Add button, and ProgressPhotoRepository.capture's own isPro read). A free user calling…
+
 ### wle_live_summary_read_contract (9 bugs)
 - 2026-10-07 b8def0 — getProgressSummary's planned-workouts set had no upper date bound (future scheduled days counted) and did not exclude moved/dropped statuses that the client's invisibleScheduleStatuses and rank_engine…
 - 2026-10-07 d4fab6 — Readers bucketed summary rows by UTC day or by completed_at, which is the WRITE time: an old log edited today sat in today's window and a coach-rescheduled (forward-moved) log in an earlier one;…
@@ -17,8 +27,29 @@ Re-run: `dart run scripts/build_bug_index.dart`
 - 2026-10-07 c9ef01 — pr-detection read only the last 20 minutes while its cron has run hourly since migration 141, so PRs completed about 20-60 minutes before each tick were never read and never celebrated.
 - 2026-10-07 a7cde9 — getPRTimeline applied .limit(50) newest-first and presented the result as the all-time PR history, with pr_count, first_pr_date and the progression note computed over the clipped set.
 
+### progress_last_workout_date (1 bugs)
+- 2026-10-07 47de4f — A stale value could overwrite a newer one in two places. (1) CLIENT: the whole-row restore (`UserRepository.mergeCloudProgress`) copied the cloud `last_workout_date` over the local one…
+
+### streak_freeze_notice (1 bugs)
+- 2026-10-07 a5e3c7 — Home's snackbar after a streak freeze is spent read "Streak Freeze used! N remaining this week." That sentence describes a weekly allowance and the app does not have one: a freeze is a KEPT stock (+1…
+
+### weekly_report_screen (1 bugs)
+- 2026-10-07 d7b2e5 — Issue #78: on the Weekly Report screen "Share as Video" never produces a video. Root cause: the client polls an Edge Function that has been a 410 Gone stub since 2026-04-18. Two adjacent defects found…
+
+### restore_legacy_paged_reads (1 bugs)
+- 2026-10-06 c7e2a9 — When the single-call restore is unavailable the client falls back to its legacy per-table restore, and that path lost or doubled rows silently for a long-history account. PostgREST clamps every…
+
+### progress_restore_freeze_merge (1 bugs)
+- 2026-10-06 c9d2f6 — The founder's Home screen showed streak 16 with 2 freezes. The persisted count was wrong: the streak only holds at 16 because two missed days (2026-10-03 and 2026-10-05) are SIMULATED as covered by…
+
+### restore_user_snapshot_paged_reads (1 bugs)
+- 2026-10-06 e4c1d7 — The single-call restore (Edge Function restore-user-snapshot) silently returned at most 1000 rows per table. PostgREST clamps every response to db-max-rows (1000 on this project) with HTTP 200 and…
+
 ### not_applicable — test-fixture and test-support environment hermeticity; no Hive/cloud writer-reader contract and no entry of docs/sot_registry.yaml covers it (grep over the registry finds none, c3f8e1 recorded the same). (1 bugs)
 - 2026-10-06 e6c4a9 — `test/scripts/contract_sweep_e2e_test.dart` FAILED 5 of its 7 tests (`PathNotFoundException ... argv.txt`, `Expected: <1> Actual: <0>`) whenever the pre-push contract sweep selected it, and the sweep…
+
+### streak_decay_restore_settled_marker (1 bugs)
+- 2026-10-06 b4e7a1 — Founder (account upendra), 2026-10-06 06:45 IST, phone: Home shows streak 16 with 2 streak freezes. Truth is streak 16 with ZERO freezes in reserve. The Home streak number is a read-only walk…
 
 ### subscription_state (8 bugs)
 - 2026-10-05 b7c1e4 — A free user could reach and USE the Progress Photos screen by editing the address of an already-open web tab to `#/profile/progress-photos`. The screen had no PRO check of its own: the only gate was…
@@ -1520,16 +1551,27 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-10-08 | c2b7e4 | (1) A user whose PRO lapsed could not open the Progress screen to view or delete the progress photos they already held: the Photos hub row ran the PRO gate and showed the paywall without opening the… | subscription_state — the screen is now the one place that decides what a not-PRO user sees of their progress photos; the repository makes no PRO decision. | test/contracts/progress_photo_client_rules_test.dart |
+| 2026-10-08 | a3c8f1 | The weekly-streak marker `last_counted_week_key` (the calendar week last counted, Slice D) lived only in the local Hive progress map. A reinstall or a second device restored the counter… | weekly_streak_counter | test/contracts/streak_week_marker_push_behavioral_test.dart |
+| 2026-10-08 | b7d3e5 | The weekly-streak counter (`current_streak_weeks`) under-counts. With 6 planned workouts the threshold is 5, but the FIRST completed session of a week stamped the marker `last_streak_week` with that… | weekly_streak_counter | test/contracts/weekly_streak_counter_writer_to_reader_test.dart |
+| 2026-10-07 | d8f2a6 | The PRO gate on progress photos existed only in the client (the Photos hub row, the Progress screen entry and its Add button, and ProgressPhotoRepository.capture's own isPro read). A free user calling… | subscription_state — the server's one definition of PRO, status = 'active' AND end_date > now(), gains a new reader (the database itself, at both doors of a NEW progress photo). | test/contracts/progress_photos_pro_insert_rule_test.dart |
 | 2026-10-07 | b8def0 | getProgressSummary's planned-workouts set had no upper date bound (future scheduled days counted) and did not exclude moved/dropped statuses that the client's invisibleScheduleStatuses and rank_engine… | wle_live_summary_read_contract | supabase/functions/_shared/workout_statuses_test.ts |
 | 2026-10-07 | d4fab6 | Readers bucketed summary rows by UTC day or by completed_at, which is the WRITE time: an old log edited today sat in today's window and a coach-rescheduled (forward-moved) log in an earlier one;… | wle_live_summary_read_contract | supabase/functions/_shared/exercise_day_test.ts |
 | 2026-10-07 | c3e9a5 | getProgressSummary, weekly-report, i-see-you-callout and future-prediction read workout_log_exercises with no deleted_at filter, so a deleted exercise (OI-269) still counted as work done. | wle_live_summary_read_contract | supabase/functions/_shared/tools/__tests__/getProgressSummary_test.ts |
 | 2026-10-07 | e5abc7 | getProgressSummary, getExerciseHistory, getNutritionHistory, getPromotionStatus, getPRTimeline and future-prediction read long histories with no paging, so a long period silently stopped at… | wle_live_summary_read_contract | supabase/functions/_shared/paged_fetch_bounded_test.ts |
 | 2026-10-07 | b2d8f4 | getExerciseHistory and getPRTimeline described and computed volume as weight x reps x sets although reps is already cumulative across sets (triple count, OI-308); the model and two notification… | wle_live_summary_read_contract | supabase/functions/_shared/tools/__tests__/getExerciseHistory_test.ts |
 | 2026-10-07 | a1c7e3 | A coach tool or report counted one exercise-day twice (volume, sessions, PRs) when two live summary rows existed for the same (user, workout_log_id, exercise_id) after the set count changed (OI-307… | wle_live_summary_read_contract | supabase/functions/_shared/live_exercise_rows_test.ts |
+| 2026-10-07 | 47de4f | A stale value could overwrite a newer one in two places. (1) CLIENT: the whole-row restore (`UserRepository.mergeCloudProgress`) copied the cloud `last_workout_date` over the local one… | progress_last_workout_date | test/contracts/last_workout_date_latest_wins_behavioral_test.dart |
 | 2026-10-07 | f6bcd8 | getNutritionHistory read nutrition_log_items with one unchunked .in(log ids) (URL length, 1,000-row cap) and read items even for aggregation 'total', which never uses them. | wle_live_summary_read_contract | supabase/functions/_shared/tools/__tests__/getNutritionHistory_test.ts |
 | 2026-10-07 | c9ef01 | pr-detection read only the last 20 minutes while its cron has run hourly since migration 141, so PRs completed about 20-60 minutes before each tick were never read and never celebrated. | wle_live_summary_read_contract | supabase/functions/pr-detection/window_test.ts |
 | 2026-10-07 | a7cde9 | getPRTimeline applied .limit(50) newest-first and presented the result as the all-time PR history, with pr_count, first_pr_date and the progression note computed over the clipped set. | wle_live_summary_read_contract | supabase/functions/_shared/tools/__tests__/getPRTimeline_test.ts |
+| 2026-10-07 | a5e3c7 | Home's snackbar after a streak freeze is spent read "Streak Freeze used! N remaining this week." That sentence describes a weekly allowance and the app does not have one: a freeze is a KEPT stock (+1… | streak_freeze_notice | test/contracts/streak_freeze_notice_behavioral_test.dart |
+| 2026-10-07 | d7b2e5 | Issue #78: on the Weekly Report screen "Share as Video" never produces a video. Root cause: the client polls an Edge Function that has been a 410 Gone stub since 2026-04-18. Two adjacent defects found… | weekly_report_screen | test/contracts/weekly_report_video_and_refresh_issue78_test.dart |
+| 2026-10-06 | c7e2a9 | When the single-call restore is unavailable the client falls back to its legacy per-table restore, and that path lost or doubled rows silently for a long-history account. PostgREST clamps every… | restore_legacy_paged_reads | test/sync/restore_legacy_paging_behavioral_test.dart |
+| 2026-10-06 | c9d2f6 | The founder's Home screen showed streak 16 with 2 freezes. The persisted count was wrong: the streak only holds at 16 because two missed days (2026-10-03 and 2026-10-05) are SIMULATED as covered by… | progress_restore_freeze_merge | test/contracts/progress_restore_freeze_merge_behavioral_test.dart |
+| 2026-10-06 | e4c1d7 | The single-call restore (Edge Function restore-user-snapshot) silently returned at most 1000 rows per table. PostgREST clamps every response to db-max-rows (1000 on this project) with HTTP 200 and… | restore_user_snapshot_paged_reads | supabase/functions/restore-user-snapshot/paged_reads_test.ts |
 | 2026-10-06 | e6c4a9 | `test/scripts/contract_sweep_e2e_test.dart` FAILED 5 of its 7 tests (`PathNotFoundException ... argv.txt`, `Expected: <1> Actual: <0>`) whenever the pre-push contract sweep selected it, and the sweep… | not_applicable — test-fixture and test-support environment hermeticity; no Hive/cloud writer-reader contract and no entry of docs/sot_registry.yaml covers it (grep over the registry finds none, c3f8e1 recorded the same). | test/contracts/spawn_env_manifest_test.dart |
+| 2026-10-06 | b4e7a1 | Founder (account upendra), 2026-10-06 06:45 IST, phone: Home shows streak 16 with 2 streak freezes. Truth is streak 16 with ZERO freezes in reserve. The Home streak number is a read-only walk… | streak_decay_restore_settled_marker | test/contracts/streak_reckon_restore_settled_behavioral_test.dart |
 | 2026-10-05 | b7c1e4 | A free user could reach and USE the Progress Photos screen by editing the address of an already-open web tab to `#/profile/progress-photos`. The screen had no PRO check of its own: the only gate was… | subscription_state | test/contracts/progress_photos_screen_gate_test.dart |
 | 2026-10-04 | d4a7e1 | Founder-reported (2026-10-01, day-swap report): after swapping Oct 1 and Oct 2 on the web and completing the swapped workout there (log "PULL + CORE"), the Android phone's Train row title for Oct 1… | workout_completion_status | test/contracts/completed_title_follows_log_test.dart |
 | 2026-10-03 | c7e3a9 | Founder-reported (2026-10-01, observation 2 of the day-swap report): after swapping today's workout with tomorrow's, Home's AI-coach insight sentence kept naming the pre-swap workout while the rest of… | scheduled_workouts_mutations | test/contracts/ai_insight_follows_today_row_test.dart |

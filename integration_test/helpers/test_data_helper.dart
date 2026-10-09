@@ -235,13 +235,18 @@ class TestDataHelper {
     });
   }
 
-  /// Simulates a "streak freeze just used" flag for toast testing.
-  static void setStreakFreezeJustUsed({int remaining = 0}) {
+  /// Simulates a "streak freeze just used" notice for toast testing: the flag,
+  /// the number of freezes it covers ([used]) and the number left
+  /// ([remaining]). The notice text reads the LIVE `streak_freezes_available`
+  /// (the debit-time snapshot is only a fallback), so both are seeded.
+  static void setStreakFreezeJustUsed({int remaining = 0, int used = 1}) {
     final progress =
         (HiveService.instance.userBox.get('progress') as Map?)?.cast<String, dynamic>() ?? {};
     HiveService.instance.userBox.put('progress', {
       ...progress,
       'streak_freeze_just_used': true,
+      'streak_freeze_just_used_count': used,
+      'streak_freezes_available': remaining,
       'streak_freeze_remaining_after_use': remaining,
     });
   }

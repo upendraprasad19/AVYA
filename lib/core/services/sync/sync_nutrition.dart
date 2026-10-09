@@ -617,17 +617,29 @@ extension SyncServiceNutrition on SyncService {
         int offset = 0;
         const pageSize = 1000;
         while (true) {
-          final page = await _supabase.client
+          var ordered = _supabase.client
               .from('nutrition_logs')
               .select('*, nutrition_log_items(*)')
               .eq('user_id', userId)
               .gte('created_at', since)
-              .order('created_at')
-              .range(offset, offset + pageSize - 1);
+              .order('created_at');
+          if (SyncFlags.restorePagingFixEnabled) {
+            // c7e2a9: `id` is unique, so rows tied on created_at cannot swap
+            // places between two page requests and be skipped or doubled.
+            ordered = ordered.order('id', ascending: false);
+          }
+          final page = await ordered.range(offset, offset + pageSize - 1);
           for (final r in page) {
             fetched.add(Map<String, dynamic>.from(r as Map));
           }
-          if (page.length < pageSize || fetched.length >= 50000) break;
+          if (page.length < pageSize) break;
+          if (fetched.length >= 50000) {
+            // The same ceiling announcement as _fetchAllRows: a restore that
+            // stopped here is not a complete restore (table name only).
+            unawaited(ErrorTelemetry.logEvent('restore_row_ceiling_hit',
+                message: 'nutrition_logs'));
+            break;
+          }
           offset += pageSize;
         }
         rows = fetched;
@@ -792,6 +804,7 @@ extension SyncServiceNutrition on SyncService {
           ? await _fetchAllRows(
               'water_logs', userId,
               dateColumn: 'date', since: since.substring(0, 10), orderBy: 'date',
+              tieBreak: const ['id'],
             )
           : (preFetched as List? ?? const []);
 
