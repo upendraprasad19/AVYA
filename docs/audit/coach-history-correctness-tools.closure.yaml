@@ -1,0 +1,105 @@
+# Closure ledger — coach-history-correctness-tools (L1b). Gate 40: one terminal_state per
+# finding, no `deferred:` key. Code commit 9e8b6d09. Deploys are founder-owned rows.
+batch: coach-history-correctness-tools
+plan_review_record: docs/plan-reviews/coach-history-correctness-tools.md
+diagnose_docs:
+  - docs/diagnoses/2026-10-07-exlog-superseded-rows-summed-by-coach-readers-a1c7e3.md
+  - docs/diagnoses/2026-10-07-coach-volume-weight-times-reps-times-sets-b2d8f4.md
+  - docs/diagnoses/2026-10-07-coach-readers-count-tombstoned-rows-c3e9a5.md
+  - docs/diagnoses/2026-10-07-coach-readers-bucket-days-by-write-time-d4fab6.md
+  - docs/diagnoses/2026-10-07-coach-reads-clip-at-postgrest-1000-rows-e5abc7.md
+  - docs/diagnoses/2026-10-07-nutrition-history-items-unchunked-and-read-for-total-f6bcd8.md
+  - docs/diagnoses/2026-10-07-pr-timeline-limit-50-as-all-time-a7cde9.md
+  - docs/diagnoses/2026-10-07-adherence-counts-future-days-and-misses-moved-dropped-b8def0.md
+  - docs/diagnoses/2026-10-07-pr-detection-window-vs-hourly-cron-c9ef01.md
+total_findings: 19
+closed_count: 19
+
+findings:
+  - id: T1
+    title: "superseded summary rows summed (OI-307 reader side)"
+    terminal_state: closed_in_commit
+    commit: 9e8b6d09
+    verification: "live_exercise_rows_test.ts + per-reader tests; mutants M01-M05, M16, M22, M44, M46 red"
+  - id: T2
+    title: "volume x sets, cumulative reps rendered per set (OI-308)"
+    terminal_state: closed_in_commit
+    commit: 9e8b6d09
+    verification: "getExerciseHistory_test.ts, getPRTimeline_test.ts, pr-detection message test, i-see-you pin; M23, M36, M38 red"
+  - id: T3
+    title: "tombstoned rows read as live (OI-269)"
+    terminal_state: closed_in_commit
+    commit: 9e8b6d09
+    verification: "getProgressSummary_test.ts; M01 red"
+  - id: T4
+    title: "UTC / write-time day bucketing"
+    terminal_state: closed_in_commit
+    commit: 9e8b6d09
+    verification: "exercise_day_test.ts, uuid_v5_test.ts (RFC vector + four live ids), reader window tests; M06-M10, M17, M18, M25, M41-M43 red"
+  - id: T5
+    title: "unpaged long reads (OI-296)"
+    terminal_state: closed_in_commit
+    commit: 9e8b6d09
+    verification: "paged_fetch_bounded_test.ts (1000-row pages, cap below page size, shrinking count); M11-M14 red"
+  - id: T6
+    title: "getNutritionHistory items unchunked / read for total"
+    terminal_state: closed_in_commit
+    commit: 9e8b6d09
+    verification: "getNutritionHistory_test.ts; M30, M31 red"
+  - id: T7
+    title: "getPRTimeline limit 50 as all-time"
+    terminal_state: closed_in_commit
+    commit: 9e8b6d09
+    verification: "getPRTimeline_test.ts; M26-M29, M47 red"
+  - id: T8
+    title: "adherence counts future days, misses moved/dropped"
+    terminal_state: closed_in_commit
+    commit: 9e8b6d09
+    verification: "workout_statuses_test.ts parity + getProgressSummary_test.ts; M19, M20, M45 red"
+  - id: T9
+    title: "pr-detection 20-minute window vs hourly cron"
+    terminal_state: closed_in_commit
+    commit: 9e8b6d09
+    verification: "window_test.ts (cadence parsed from migration writer); M32-M35, M48, M49 red"
+  - id: B8-warn
+    title: "gate scoped-WARN scan of _shared/tools/** built and mutation-proven"
+    terminal_state: closed_in_commit
+    commit: 9e8b6d09
+    verification: "check_unbounded_cron_reads_tools_scope_e2e_test.dart, 2 of 5 red under the every-path-is-tools mutant; ledger moved to mutation_proven"
+  - id: B8-flip
+    title: "delete the scoped-WARN branch and flip the tools case to exit 1 (§4.11)"
+    terminal_state: closed_in_commit
+    commit: 346a82de
+    verification: "baseline WARN list zero at both commits; e2e test flipped (tools violation exits 1); flip mutant (tools violations removed after the scan) reddened 2 of 5; ledger evidence updated"
+  - id: PromotionStatus-window
+    title: "getPromotionStatus rolling window"
+    terminal_state: verified_clean
+    evidence: "rolling window read at the plan's R-pass; only its date read changed (paged, throws on truncation)"
+  - id: D1-ai-proxy
+    title: "deploy ai-proxy (coach tools)"
+    terminal_state: blocked_on_user
+    reason: "founder go per deploy; pre-deploy diff of live files vs post-merge main, authenticated smoke showing total_reps"
+  - id: D2-weekly-report
+    title: "deploy weekly-report"
+    terminal_state: blocked_on_user
+    reason: "founder go; check = a new report row with the 7-date window"
+  - id: D3-weekly-recalc
+    title: "deploy weekly-recalc"
+    terminal_state: blocked_on_user
+    reason: "founder go; check = function log of a run with a deduped progression input"
+  - id: D4-i-see-you-callout
+    title: "deploy i-see-you-callout (no manual invoke: sends real pushes)"
+    terminal_state: blocked_on_user
+    reason: "founder go; check = first cron tick log and cron_call_log row"
+  - id: D5-pr-detection
+    title: "deploy pr-detection (no manual invoke: sends real pushes)"
+    terminal_state: blocked_on_user
+    reason: "founder go; check = first cron tick log (pr_rows/users/sent), live cron.job schedule = 0 * * * *, read-only query of the rows in [floor-60min, floor)"
+  - id: D6-future-prediction
+    title: "future-prediction deploy decision (no caller, OI-210)"
+    terminal_state: blocked_on_user
+    reason: "source fixed for parity; deploy or decline is the founder's call"
+  - id: OI-flips
+    title: "board flips OI-296 / OI-308 / OI-269 / OI-307 (live only on branch coach-progress-review)"
+    terminal_state: blocked_on_user
+    reason: "flip after the deploy and check rows close; OI-307 also needs the L1a-1 apply row (done 2026-10-07) merged; the OI entries are not on this branch"

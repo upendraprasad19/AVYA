@@ -1,0 +1,181 @@
+# Closure ledger — progress-photos-client-b2 (unit B2: OI-314, OI-322)
+# Gate 40. One terminal_state per finding; no `deferred:` key.
+# `commit:` on a closed_in_commit row names the batch commit that ADDS this file; find it with
+#   git log --diff-filter=A --format=%h -- docs/audit/progress-photos-client-b2.closure.yaml
+
+batch: progress-photos-client-b2
+plan_review_record: docs/plan-reviews/progress-photos-client-b2.md
+diagnose_docs:
+  - docs/diagnoses/2026-10-08-progress-photos-lapsed-user-and-taken-at-c2b7e4.md
+total_findings: 29
+closed_count: 29
+
+findings:
+  - id: C1
+    title: "repository free branch deleted: one cap (5 per IST day), one quality (3000/95), no isPro read (ledger row C6 of progress-screen-pro-gate; founder decision 5)"
+    terminal_state: closed_in_commit
+    commit: progress-photos-client-b2 batch commit (see header)
+    verification: "test/contracts/progress_photo_capture_wiring_test.dart (no isPro/2048/_freeDailyCap; quality and cap pinned); mutant M14 (free quality back) red."
+
+  - id: C2
+    title: "OI-322: taken_at sent as UTC with an offset; the cap window is IST midnight in UTC"
+    terminal_state: closed_in_commit
+    commit: progress-photos-client-b2 batch commit (see header)
+    verification: "test/contracts/progress_photo_client_rules_test.dart (wire value; window at 23:59:59.999 / 00:00:00.000 IST, local and UTC inputs) the zone matrix (Asia/Kolkata, UTC, America/Los_Angeles) was run BY HAND and is self-attested, because CI pins Asia/Kolkata where a device-local midnight equals IST midnight; in CI the window is guarded by a source pin (capture_wiring_test) and mutants M1-M5, M15-M17 are red."
+
+  - id: C3
+    title: "isProgressPhotoProRefusal + ProgressPhotoProRequiredException: conservative pure classifier, thrown by capture"
+    terminal_state: closed_in_commit
+    commit: progress-photos-client-b2 batch commit (see header)
+    verification: "classifier truth table (a bare 403 and an offline failure are NOT refusals); wiring pins; mutants M6-M13 red (incl. the refusal swallowed to null, class 2.49)."
+
+  - id: C4
+    title: "ProgressPhotosScreen single writer _reload: four states, sequence number, failed read never 'no photos', refusal outcomes, listener rule"
+    terminal_state: closed_in_commit
+    commit: progress-photos-client-b2 batch commit (see header)
+    verification: "test/contracts/progress_photos_lapsed_flow_test.dart (20 incl. a font warmup) + progress_photos_screen_gate_test.dart (source pins: only _reload assigns _access/_error); mutants S1-S13 red."
+
+  - id: C5
+    title: "Photos hub no longer gates Progress; the row pushes for everyone (ledger row C7 of progress-screen-pro-gate; founder decision 6)"
+    terminal_state: closed_in_commit
+    commit: progress-photos-client-b2 batch commit (see header)
+    verification: "test/profile/user_photos_hub_test.dart + user_photos_gate_behavioral_test.dart; mutant H1 red."
+
+  - id: C6
+    title: "listStrict (propagates) with list() a swallowing wrapper; test seams debugListOverride / debugDeleteOverride / debugCaptureOverride"
+    terminal_state: closed_in_commit
+    commit: progress-photos-client-b2 batch commit (see header)
+    verification: "wiring pin (no try around the row read); S3 (failed read treated as empty) red."
+
+  - id: C7
+    title: "existing tests rewritten for the new behaviour, named in plan section 5 R1-4"
+    terminal_state: closed_in_commit
+    commit: progress-photos-client-b2 batch commit (see header)
+    verification: "progress_photos_screen_gate_test.dart, user_photos_hub_test.dart, user_photos_gate_behavioral_test.dart, audit_2026_06_07_batch5_regression_test.dart all pass; git grep of the old literals (TWO PRO locks, first of two, PhotoQuotaException isPro, 2/day) finds only history."
+
+  - id: C8
+    title: "docs: nested profile CLAUDE.md, subscription.md, functionality-flow.md PROF-09, naming_conventions.md, profile_content.dart comments"
+    terminal_state: closed_in_commit
+    commit: progress-photos-client-b2 batch commit (see header)
+    verification: "grep for the stale statements; check_nested_claude_md_content and the doc gates pass in the pre-commit loop."
+
+  - id: C9
+    title: "SoT registry reader entries for the repository, screen and hub"
+    terminal_state: closed_in_commit
+    commit: progress-photos-client-b2 batch commit (see header)
+    verification: "Gate 42 (check_sot_behavioral_test_paths) passes."
+
+  - id: C10
+    title: "FULL diagnose-doc c2b7e4"
+    terminal_state: closed_in_commit
+    commit: progress-photos-client-b2 batch commit (see header)
+    verification: "dart run scripts/validate_diagnose_doc.dart passes."
+
+  - id: C11
+    title: "bug class 2.96 (one screen state, several async writers) + index row"
+    terminal_state: closed_in_commit
+    commit: progress-photos-client-b2 batch commit (see header)
+    verification: "debugging skill index row and bug-classes.md body added in this commit."
+
+  - id: C12
+    title: "OI-314 and OI-322 closed (moved to closed_issues.md); rows C6 and C7 of docs/audit/progress-screen-pro-gate.closure.yaml flipped to closed_in_commit"
+    terminal_state: closed_in_commit
+    commit: progress-photos-client-b2 batch commit (see header)
+    verification: "Gate 40 passes on both ledgers; check_closes_oi_cited satisfied by the closes-oi trailers."
+
+  - id: P1
+    title: "plan review round 1 (5 x P1, 3 x P2, 1 x P3 group): the just-paid refusal mis-detected, local PRO state not corrected, no verify timeout, tests to rewrite, test-plan gaps, list failure states, taken_at deploy-day effects"
+    terminal_state: closed_in_commit
+    commit: progress-photos-client-b2 batch commit (see header)
+    verification: "all folded in plan section 5; docs/plans/progress-photos-client-b2.md."
+
+  - id: P2
+    title: "plan review round 2 (3 x P1, 5 x P2, 2 x P3): a bare 403 to the paywall for a payer, a forced verify re-entering the screen, a just-paid user parked on the locked card"
+    terminal_state: closed_in_commit
+    commit: progress-photos-client-b2 batch commit (see header)
+    verification: "the verify mechanism DELETED (plan section 6); the conservative classifier."
+
+  - id: P3
+    title: "plan review round 3 (2 x P1, 5 x P2, 2 x P3): five async writers of the screen state; the in-flight leg misfiring on a plain network failure"
+    terminal_state: closed_in_commit
+    commit: progress-photos-client-b2 batch commit (see header)
+    verification: "single-writer redesign and the narrowed leg 3 (plan section 7); statusCode excludes non-HTTP failures (storage_client fetch.dart)."
+
+  - id: P4
+    title: "plan review round 4 (1 x P1, 4 x P2, 4 x P3): the listener loop guard, post-write reload latency, first frame and the never-PRO user, 'couldn't confirm' copy, catch-all, _uploading through the verify"
+    terminal_state: closed_in_commit
+    commit: progress-photos-client-b2 batch commit (see header)
+    verification: "plan section 8 (v5, final); each has a test or a source pin."
+
+  - id: P5
+    title: "referral grants: do they write an active subscriptions row (the plan listed it UNVERIFIED)"
+    terminal_state: verified_clean
+    evidence: "B1 evidence E27: redeem_referral_atomic is the only function writing public.subscriptions and writes an active referral_trial row, so a referral grant passes the server rule; the nested CLAUDE.md pitfalls row now says so (OI-320 is the separate cap question)."
+
+  - id: P6
+    title: "does an ABANDONED payment leave isPaymentInFlight true (a lapsed user seeing 'still activating')"
+    terminal_state: verified_clean
+    evidence: "razorpay_service.dart:509-526 calls markPaymentInFlight at payment SUCCESS only; it is cleared at :421, :788, :856 and by a confirmed verify (subscription_service.dart:1086). An abandoned payment never sets it."
+
+  - id: X1
+    title: "a real Storage refusal's error shape (message text, statusCode) is UNVERIFIED against the live API"
+    terminal_state: blocked_on_user
+    reason: "Verifying needs an authed throwaway free account to attempt a real Storage upload: a live write, so it needs the founder's explicit go. Until then the classifier is conservative (a missed refusal shows 'Upload failed', never a paywall for a payer)."
+
+  - id: X2
+    title: "createSignedUrl / image render for a LAPSED account was never exercised live"
+    terminal_state: blocked_on_user
+    reason: "Needs a lapsed account on a device or a throwaway user; B1's V8d only compared the Storage SELECT policy text. A failed signed URL shows today's grey tile."
+
+  - id: X3
+    title: "device check of the whole flow (lapsed gallery + delete, Add -> paywall, a just-paid refusal, spinner-first entry)"
+    terminal_state: blocked_on_user
+    reason: "Nothing in this session can run on a device; founder-owned, as in every UI batch."
+
+  - id: B1
+    title: "B-pass P2: a reload with a known verdict could overwrite a payer's running full re-check (stale not-PRO verdict won)"
+    terminal_state: closed_in_commit
+    commit: progress-photos-client-b2 batch commit (see header)
+    verification: "`_fullInFlight`: a call arriving while a full reload runs is itself full; the test 'a payer's full re-check is not overwritten' and mutant S14 (first version of the test passed for the wrong reason because Add re-gates; rewritten around deleting the last photo)."
+
+  - id: B2
+    title: "B-pass P2: the OI-322 device-local-window regression invisible under the CI zone (Asia/Kolkata)"
+    terminal_state: closed_in_commit
+    commit: progress-photos-client-b2 batch commit (see header)
+    verification: "a source pin that progressPhotoCapWindowStartUtc calls istMidnightUtc and builds no DateTime from local parts; mutant M16 red under IST; the zone-matrix claim reworded as self-attested in the test header, the ledger C2 and the diagnose-doc."
+
+  - id: B3
+    title: "B-pass P2: the cap boundary and the cap query unpinned"
+    terminal_state: closed_in_commit
+    commit: progress-photos-client-b2 batch commit (see header)
+    verification: "progressPhotoCapReached / progressPhotoDailyCap extracted and tested at 0/4/5/6; wiring pins for the user filter and the pure call; mutants M15 and M17 red."
+
+  - id: B4
+    title: "B-pass P3: capture wiring pins depend on exact text"
+    terminal_state: closed_in_commit
+    commit: progress-photos-client-b2 batch commit (see header)
+    verification: "declared presence-only in the test header; behavioural proof is in the pure and screen tests."
+
+  - id: B5
+    title: "B-pass P3: the cap window read nowWall() while takenAt read DateTime.now() (dev time-travel clock only)"
+    terminal_state: closed_in_commit
+    commit: progress-photos-client-b2 batch commit (see header)
+    verification: "takenAt = nowWall(); pinned. Release builds are identical."
+
+  - id: B6
+    title: "B-pass P3: historic rows stored 5.5 h late; the sort order and first-day cap wobble"
+    terminal_state: closed_in_commit
+    commit: progress-photos-client-b2 batch commit (see header)
+    verification: "already stated in the diagnose-doc impact_analysis; bounded to a day; no backfill (it would have to guess each user's zone)."
+
+  - id: B7
+    title: "B-pass P3: the hub row now spins then shows the locked card to a free user; offline shows the error state; a rapid double tap pushes two screens"
+    terminal_state: closed_in_commit
+    commit: progress-photos-client-b2 batch commit (see header)
+    verification: "stated in the diagnose-doc; the double push is the same trade-off the old row accepted (every push row behaves like this)."
+
+  - id: B8
+    title: "B-pass P3: test counts self-attested"
+    terminal_state: closed_in_commit
+    commit: progress-photos-client-b2 batch commit (see header)
+    verification: "re-counted by grep: client_rules 19, lapsed_flow 20 (incl. a font warmup), capture_wiring 8; the docs now say so."
