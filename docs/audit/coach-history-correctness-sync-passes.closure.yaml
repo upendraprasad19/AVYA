@@ -5,8 +5,8 @@ plan_review_record: docs/plan-reviews/coach-history-correctness-sync-passes.md
 diagnose_docs:
   - docs/diagnoses/2026-10-09-skip-index-overlapping-passes-a8c4e5.md
   - docs/diagnoses/2026-10-09-restored-exlog-pushed-back-f3d2a7.md
-total_findings: 2
-closed_count: 2
+total_findings: 3
+closed_count: 3
 
 findings:
   - id: D5a
@@ -19,3 +19,8 @@ findings:
     terminal_state: closed_in_commit
     commit: PENDING
     verification: "test/sync/exlog_restore_fingerprint_l1a3_behavioral_test.dart; 4 mutants RED (no record, record when local won, hash-skip switch ignored, restore-dedupe switch ignored)"
+  - id: BPASS
+    title: "B-pass: 10 findings (A 5, B 5), 0 P0, 0 P1, 0 false alarms; fixes: restoredBundleEqualsCloud guard, fail-open record block, per-set continue restored, 9 new tests"
+    terminal_state: closed_in_commit
+    commit: PENDING
+    verification: "docs/reviews/coach-history-correctness-sync-passes-bpass.md; 5 of 5 new protections mutated RED"

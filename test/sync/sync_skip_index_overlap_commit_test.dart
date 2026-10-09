@@ -73,4 +73,51 @@ void main() {
     await newIndex(disabled: true).commit(liveKeys: {'k1'});
     expect(box.containsKey(domain.indexKey), isFalse);
   });
+
+  test('a re-push with a NEW fingerprint at the same map size is written',
+      () async {
+    await box.put(domain.indexKey, {'k1': 'f1'});
+    final a = newIndex();
+    await a.pushIfChanged('k1', () => 'f1b', () async => true);
+    await a.commit(liveKeys: {'k1'});
+    expect(stored(), {'k1': 'f1b'});
+  });
+
+  test('fail then succeed on the same key in one pass keeps the confirmation',
+      () async {
+    final a = newIndex();
+    await a.pushIfChanged('k1', () => 'f1', () async => false);
+    await a.pushIfChanged('k1', () => 'f1', () async => true);
+    await a.commit(liveKeys: {'k1'});
+    expect(stored(), {'k1': 'f1'});
+  });
+
+  test('succeed then fail on the same key in one pass drops the entry',
+      () async {
+    final a = newIndex();
+    await a.pushIfChanged('k1', () => 'f1', () async => true);
+    await a.pushIfChanged('k1', () => 'f1b', () async => false);
+    await a.commit(liveKeys: {'k1'});
+    expect(stored(), isEmpty);
+  });
+
+  test('a key confirmed this pass but absent from liveKeys is pruned',
+      () async {
+    final a = newIndex();
+    await a.pushIfChanged('gone', () => 'g', () async => true);
+    await a.pushIfChanged('k1', () => 'f1', () async => true);
+    await a.commit(liveKeys: {'k1'});
+    expect(stored(), {'k1': 'f1'});
+  });
+
+  test('recordConfirmedAll: owner change writes nothing; else merges once',
+      () async {
+    await box.put(domain.indexKey, {'k1': 'f1'});
+    await SyncSkipIndex.recordConfirmedAll(box, domain, {'k2': 'f2'},
+        ownerChangedNow: () => true);
+    expect(stored(), {'k1': 'f1'});
+    await SyncSkipIndex.recordConfirmedAll(box, domain, {'k2': 'f2'},
+        ownerChangedNow: () => false);
+    expect(stored(), {'k1': 'f1', 'k2': 'f2'});
+  });
 }

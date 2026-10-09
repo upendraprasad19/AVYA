@@ -40,7 +40,7 @@ proposed_fix: >-
 regression_test_planned: >-
   test/sync/exlog_restore_fingerprint_l1a3_behavioral_test.dart. Run: TZ=Asia/Kolkata flutter test test/sync/exlog_restore_fingerprint_l1a3_behavioral_test.dart
 mutation_proof: >-
-  Rule 21. Four mutants on the restore: recording dropped, recording even when a local row won, kill switch ignored: each RED in its own test (3 of 3, plus a 4th: the restore-dedupe switch ignored, RED); source restored after every run.
+  Rule 21. Four mutants on the restore: recording dropped, recording even when a local row won, kill switch ignored: each RED in its own test (3 of 3, plus a 4th: the restore-dedupe switch ignored, RED); source restored after every run. B-pass B: the recording is gated by restoredBundleEqualsCloud (exlog_restore_rules.dart) so a restored row whose cloud content differs from the push-shaped bundle (gapped set numbers, summary count, legacy NULLs, exercise_id / day id, completed_at) is not fingerprinted and pushes once; the block fails open (own try/catch, presence-only, no injectable throw); the inner per-set continue is restored. Guard-bypass mutant RED. Residuals: a record written after the user deleted the restored row is pruned at the next commit; the builder's telemetry events also fire on restore.
 impact_analysis: >-
   Before: every restored exercise log was pushed straight back once. After: the push pass skips it.
 touched_layers_checked:

@@ -40,7 +40,7 @@ proposed_fix: >-
 regression_test_planned: >-
   test/sync/sync_skip_index_overlap_commit_test.dart. Run: TZ=Asia/Kolkata flutter test test/sync/sync_skip_index_overlap_commit_test.dart
 mutation_proof: >-
-  Rule 21. Mutant: commit merges into the construction-time snapshot (Map.from(_stored)) instead of the fresh re-read: 2 of 4 tests RED (overlap, forgotten/concurrent-confirm); restored and green.
+  Rule 21. Mutant: commit merges into the construction-time snapshot (Map.from(_stored)) instead of the fresh re-read: 2 of 4 tests RED (overlap, forgotten/concurrent-confirm); restored and green. B-pass A added 4 tests (same-size replace, fail-then-succeed, succeed-then-fail, confirmed key not in liveKeys, owner check of recordConfirmedAll) and 4 more mutants, all RED. Residuals: last-commit-wins on a shared key can name the wrong fingerprint if server arrival order differs from commit order (the old whole-snapshot write had the same exposure, wider); a clearAll between construction and commit leaves this pass's own pushed rows recorded (better than the old resurrection of the whole snapshot).
 impact_analysis: >-
   Before: overlapping passes lost each other's skip confirmations and re-pushed unchanged rows. After: each pass contributes only its own changes.
 touched_layers_checked:

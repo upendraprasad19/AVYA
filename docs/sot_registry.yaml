@@ -2977,7 +2977,7 @@ concepts:
     reader_manifest_complete: false
     readers:
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 1149-1232
+        line_range: 1165-1248
         method: _restoreScheduleCompletions
         semantic: aggregated
         fields_read: [scheduled_date, completed_at, duration_seconds, workout_name]
@@ -4049,7 +4049,7 @@ concepts:
           circular-dependency avoidance; that stays the caller's
           responsibility (`TemplatesNotifier.deleteTemplate`).
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 1654-1695
+        line_range: 1670-1711
         method: _drainPendingTemplateDeletes
         notes: |
           OI-252 — drains the queue by UPSERTing a tombstone per id
@@ -4993,7 +4993,7 @@ concepts:
           lookup could not answer" (null) as "none deleted": it skips every
           `tmpl_<uuid>` day then (B-pass reviewer B F1).
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 2035-2036
+        line_range: 2051-2052
         method: deletedTemplateCloudIdsForUser
         notes: |
           Public forwarder of `_deletedTemplateCloudIdsOrNull`: `null` = could not

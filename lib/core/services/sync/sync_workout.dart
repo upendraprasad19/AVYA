@@ -492,7 +492,7 @@ extension SyncServiceWorkout on SyncService {
               message:
                   'table=workout_log_sets key=$key workout_log_id_null=false exercise_id_null=false set_number_null=true',
             ));
-            return null;
+            continue;
           }
           // Guard: workout_log_sets.reps must satisfy wls_reps_realistic
           // (<=10000, migration 085). Clamp + log an out-of-range per-set
@@ -1197,10 +1197,26 @@ extension SyncServiceWorkout on SyncService {
           // fingerprint of what we wrote -- only when the put RAN (a local
           // row that won is not the cloud's content).
           if (dedupe && !_hashSkipKillSwitchOn(SyncSkipDomain.exlog)) {
-            final bundle = _buildExlogPushBundle(userId, logId, logMap);
-            if (bundle != null) {
-              restoredFingerprints[logId] = SyncService.exlogPayloadFingerprint(
-                  bundle.summary, bundle.sets);
+            // Fail open (B-pass B F1): a throw here must never abort the
+            // restore of the remaining logs; the row just pushes once.
+            try {
+              final bundle = _buildExlogPushBundle(userId, logId, logMap);
+              if (bundle != null &&
+                  restoredBundleEqualsCloud(
+                    summary: bundle.summary,
+                    sets: bundle.sets,
+                    cloudSummary: map,
+                    restoredSets: (logMap['sets'] as List?) ?? const [],
+                  )) {
+                restoredFingerprints[logId] =
+                    SyncService.exlogPayloadFingerprint(
+                        bundle.summary, bundle.sets);
+              }
+            } catch (e, st) {
+              debugPrint('[SyncService._restoreExerciseLogs] fingerprint: $e');
+              unawaited(ErrorTelemetry.recordNonFatal(e, st,
+                  reason: 'sync_restore_exlog_fingerprint',
+                  skipServerPost: true));
             }
           }
         }

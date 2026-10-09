@@ -5,14 +5,15 @@ blast_radius: platform
 review_rounds: 2
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
+bpass_review: docs/reviews/coach-history-correctness-sync-passes-bpass.md
 ---
 
 # Plan-review record — L1a-3 exercise-log skip index: merge, don't overwrite; restore records what it wrote (`coach-history-correctness-sync-passes`)
 
 Plan: `docs/plans/coach-history-correctness-sync-passes.md` (v3). Umbrella: `docs/superpowers/specs/2026-10-03-progress-review-design.md` (landing L1). Defects D5a (overlapping passes overwrite each other's skip-index confirmations) and D2e (restored exercise logs are pushed back once). Neither loses data; both cost redundant uploads.
 
-`bpass: pending` — the B-pass runs on the code before the merge and this field becomes `accepted` in that commit.
+`bpass: accepted` (2026-10-09, `docs/reviews/coach-history-correctness-sync-passes-bpass.md`): two fresh context-blind reviewers on commit c73dded9, 10 findings, all fixed or recorded.
 
 ## Lineage and rounds
 
