@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 
 import 'hive_service.dart';
+import 'pending_exlog_deletes.dart';
+import 'sync_service.dart';
 import 'workout_write_service.dart';
 
 /// One-shot migration from `exlog_<timestamp>_<hash>` (Test #5 and
@@ -129,6 +131,16 @@ class ExlogKeyMigrator {
       // put-then-delete re-enters the group next boot (old keys still present)
       // and reproduces the result.
       await box.put(newKey, mergedEntry);
+      // L1a-2 U4: the migrator re-creates the row, so a delete still queued
+      // for this exercise on this day is cancelled (same as a re-log).
+      final migratedName = mergedEntry['exercise_name'] as String?;
+      final migratedDate = mergedEntry['date'] as String?;
+      if (migratedName != null && migratedDate != null) {
+        await PendingExlogDeletes.cancelFor(
+          workoutLogId: SyncService.workoutLogIdForDate(migratedDate),
+          exerciseName: migratedName,
+        );
+      }
       for (final mEntry in group) {
         if (mEntry.key != newKey) {
           await box.delete(mEntry.key);

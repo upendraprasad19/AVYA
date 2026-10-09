@@ -772,8 +772,12 @@ class WorkoutRepository {
       final nameKey = name.toLowerCase();
 
       final loggingType = (log['logging_type'] as String? ?? 'weight_reps');
-      final createdAt = log['created_at'] as String? ?? log['date'] as String? ?? '';
-      final date = DateTime.tryParse(createdAt) ?? DateTime(2020);
+      // U2 (plan coach-history-correctness-client): the PR's date is the
+      // workout DAY (`date`, then `created_at`) through the canonical reader.
+      // `created_at` first dated a restored edited or moved log to the day it
+      // was last written; only restored rows carry it (the cloud write time).
+      final dayKey = WorkoutReadService.istDateForExlogRow(log) ?? '';
+      final date = DateTime.tryParse(dayKey) ?? DateTime(2020);
 
       // OI-02 / OI-08 (closes-diagnose: 2026-05-17-oi-02-read-services) —
       // per-set MAX semantic delegated to canonical WorkoutReadService.
@@ -826,8 +830,15 @@ class WorkoutRepository {
       }
     }
 
+    // Newest day first; PRs on the same day (the date is now a day, not a
+    // timestamp) in a stable order by exercise name.
     final result = bestMap.values.toList()
-      ..sort((a, b) => b.date.compareTo(a.date));
+      ..sort((a, b) {
+        final c = b.date.compareTo(a.date);
+        return c != 0
+            ? c
+            : a.exerciseName.toLowerCase().compareTo(b.exerciseName.toLowerCase());
+      });
     return result;
   }
 

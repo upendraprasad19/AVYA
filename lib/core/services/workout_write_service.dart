@@ -251,6 +251,16 @@ class WorkoutWriteService {
       // while the orphaned row survived on disk. closes-diagnose: e4a8b1.
       await _appendToIndex(box, dateStr, key);
 
+      // L1a-2 U4: only a delete queued by an older app build (no delete time)
+      // is cancelled by a re-log; a timed delete stays so the drain tombstones
+      // the OLDER cloud versions while its time filter spares this one. After
+      // the index append and non-throwing: a queue problem must not leave an
+      // indexless row (e4a8b1).
+      await PendingExlogDeletes.cancelFor(
+        workoutLogId: SyncService.workoutLogIdForDate(dateStr),
+        exerciseName: exerciseName,
+      );
+
       // 7. Fire-and-forget cloud sync
       unawaited(SyncService.instance.syncWorkoutData());
       unawaited(SyncService.instance.pushSnapshot());
@@ -849,6 +859,31 @@ class WorkoutWriteService {
     return v;
   }
 
+  /// L1a-2 U2 heal: re-keys a RESTORED exercise-log row onto its workout day.
+  /// A row restored before the day came from `workout_log_id` sits under the
+  /// key of the day it was last WRITTEN; the next restore would otherwise
+  /// write a second row under the workout-day key. Moves the row (id, `date`)
+  /// and fixes both day indexes; a no-op unless [oldKey] holds a row and
+  /// [newKey] is free. Not a user write, so `updated_at_ms` is not stamped.
+  Future<void> rekeyRestoredExerciseLog({
+    required String oldKey,
+    required String newKey,
+    required String newDate,
+  }) async {
+    final box = HiveService.instance.workoutBox;
+    final raw = box.get(oldKey);
+    if (raw is! Map || box.get(newKey) != null) return;
+    final row = Map<String, dynamic>.from(raw);
+    final oldDate = row['date']?.toString();
+    row['id'] = newKey;
+    row['date'] = newDate;
+    await box.put(newKey, row);
+    await box.delete(oldKey);
+    await addToExlogIndex(box, newDate, newKey);
+    if (oldDate != null) await _removeFromExlogIndex(box, oldDate, oldKey);
+  }
+
+
   /// C2 (e8f4a3) — re-keys partial `exlog_<fromDate>_*` rows onto `<toDate>`
   /// so a moved day keeps its logged exercises (the all-logged completion
   /// backstop and the AI snapshot's recent_logs both read these keys by date).
@@ -885,12 +920,12 @@ class WorkoutWriteService {
   ///     rows. Only when the row CARRIES an id (restore-shaped legacy rows
   ///     may not).
   ///
-  /// LOCAL-ONLY by design: the cloud `exercise_logs` rows for the moved-out
-  /// date are not tombstoned here — no cloud exlog tombstone protocol exists,
-  /// so moved-out-date rows linger in cloud and a restore can resurrect the
-  /// from-date logs. Residual tracked in the e8f4a3 B-pass addendum at
-  /// docs/diagnoses/2026-09-18-reschedule-terminal-rows-e8f4a3.md (NOT OI-174 —
-  /// that is plan_end pruning; an earlier draft of this comment miscited it).
+  /// CLOUD: the moved-out day's `workout_log_exercises` row is tombstoned
+  /// through `PendingExlogDeletes` (L1a-2 U4, closes the exlog half of
+  /// OI-218): both branches queue the SOURCE day's key, and the target day's
+  /// queued delete (if any) is cancelled. The remaining half of OI-218 -- a
+  /// restore-recreated terminal schedule row losing `moved_to`/`moved_via` --
+  /// is a different table and stays open.
   Future<void> moveExerciseLogs({
     required String fromDate,
     required String toDate,
@@ -1009,9 +1044,36 @@ class WorkoutWriteService {
           if (row['workout_log_id'] != null) {
             row['workout_log_id'] = wlogKey(toDateTime);
           }
+          // U3: a move is a write. The row's own timestamps (a restored
+          // row's `created_at`) are older than the move, so stamp it; the
+          // exlog push sends max(resolved, updated_at_ms) as `completed_at`.
+          row['updated_at_ms'] = DateTime.now().millisecondsSinceEpoch;
           await box.put(newKey, row);
         }
         await box.delete(oldKey);
+        // L1a-2 U4 (closes the exlog half of OI-218): the moved-out day's cloud
+        // row is tombstoned -- queue the SOURCE day's key (count = the moved
+        // row's local count, mirroring deleteLog) AFTER the Hive work so a
+        // throwing put can never leave a queued cloud delete for a source row
+        // that is still live locally. A timed delete queued for the TARGET day
+        // stays (the time filter spares the moved row, whose updated_at_ms is
+        // newer); a time-less one is cancelled. A queue failure must not stop
+        // the move of the remaining rows.
+        try {
+          await PendingExlogDeletes.add(
+            workoutLogId: SyncService.workoutLogIdForDate(fromDate),
+            exerciseId: name,
+            setNumber: resolveSummarySetCount(row),
+          );
+          await PendingExlogDeletes.cancelFor(
+            workoutLogId: SyncService.workoutLogIdForDate(toDate),
+            exerciseName: name,
+          );
+        } catch (e, st) {
+          debugPrint('[WorkoutWriteService.moveExerciseLogs] queue: $e');
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'workout_write_service_move_exlog_queue'));
+        }
         // Index maintenance (Finding 1) — the canonical read is INDEX-FIRST.
         await addToExlogIndex(box, toDate, newKey);
         await _removeFromExlogIndex(box, fromDate, oldKey);

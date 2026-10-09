@@ -3950,7 +3950,7 @@ material), the telemetry reader sums it across recent records, and M/L counts de
   mis-selection during baseline is a mapping bug fixed before the flip,
   never a reason to stay warn-only.
 
-## OI-218 — Cloud exlog tombstone residual — moved-out-date rows never tombstoned, restore can resurrect + double-count volume
+## OI-218 — Restore-recreated terminal schedule rows lose moved_to/moved_via/moved_at/dropped_* metadata (the exlog half closed in L1a-2)
 
 - **Status**: OPEN
 - **Blocked on**: none
@@ -3971,8 +3971,20 @@ Separately, restore-recreated terminal (`moved`/`dropped`) rows on a fresh devic
 (`sync_workout.dart:1634`) sends `status` but not those fields, and a cloud-only row has no local
 `existingMap` to inherit them from.
 
-**Fix direction (not designed yet):** either tombstone from-date cloud exlogs on move, or extend
-the push payload with the terminal audit fields so a cloud-only restore keeps them.
+**Exlog half CLOSED 2026-10-09 (L1a-2, branch `coach-history-correctness-client`, diagnose
+`c6a9d3`):** both branches of `moveExerciseLogs` now queue the SOURCE day in
+`PendingExlogDeletes` and the drain tombstones it with a time-filtered UPDATE (every set count,
+the newest action wins); the target day's queued delete is cancelled, so A→B→A leaves A live.
+Pre-landing evidence: 0 live `scheduled_workouts` rows with `status='moved'` (read-only,
+2026-10-09), so no moved-out cloud row is leftover and no repair migration is needed.
+Only moves made on an app build carrying this change queue the delete; installed older builds
+keep the old behaviour (tracked under OI-313).
+
+**Remaining defect (this entry stays OPEN, `Blocked on: none`):** restore-recreated terminal
+(`moved`/`dropped`) schedule rows on a fresh device lose their `moved_to`/`moved_via`/`moved_at`/
+`dropped_*` audit metadata, because the push payload sends `status` but not those fields.
+**Fix direction (not designed yet):** extend the push payload with the terminal audit fields so a
+cloud-only restore keeps them.
 
 ## OI-219 — is_pr not rescanned across moveExerciseLogs — collision merge can drop a true PR flag
 
