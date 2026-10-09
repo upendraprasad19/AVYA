@@ -99,13 +99,13 @@ void main() {
     List<Map<String, dynamic>> summaries() => [
           for (final r in h.server.writesTo('workout_log_exercises'))
             ...(r.body is List
-                ? (r.body as List).map((e) => Map<String, dynamic>.from(e as Map))
-                : [Map<String, dynamic>.from(r.body as Map)]),
+                ? (r.body! as List).map((e) => Map<String, dynamic>.from(e as Map))
+                : [Map<String, dynamic>.from(r.body! as Map)]),
         ];
 
     List<Map<String, dynamic>> setRows() => [
           for (final r in h.server.writesTo('workout_log_sets'))
-            ...(r.body as List).map((e) => Map<String, dynamic>.from(e as Map)),
+            ...(r.body! as List).map((e) => Map<String, dynamic>.from(e as Map)),
         ];
 
     test('a row with a date derives workout_log_id from it (unchanged)',

@@ -98,7 +98,7 @@ void main() {
           reason: 'only versions written at or before the delete');
       expect(q.containsKey('set_number'), isFalse,
           reason: 'ALL set counts: no set_number filter');
-      expect((p.single.body as Map)['deleted_at'], isA<String>());
+      expect((p.single.body! as Map)['deleted_at'], isA<String>());
       expect(_posts(h), isEmpty, reason: 'the old fallback upsert is gone');
       // The UPDATE touched no row (the stub's cloud is empty). The entry is
       // KEPT for one more pass: a creating push already on the wire can land
@@ -212,7 +212,7 @@ void main() {
         for (final row in cloud) {
           if (row['deleted_at'] == null &&
               !DateTime.parse(row['completed_at'] as String).isAfter(cutoff)) {
-            row['deleted_at'] = (r.body as Map)['deleted_at'];
+            row['deleted_at'] = (r.body! as Map)['deleted_at'];
             touched.add(row);
           }
         }
@@ -237,7 +237,7 @@ void main() {
       expect(posts, hasLength(1));
       expect(posts.single.query['on_conflict'],
           'user_id,workout_log_id,exercise_id,set_number');
-      expect((posts.single.body as Map)['set_number'], 3);
+      expect((posts.single.body! as Map)['set_number'], 3);
     });
 
     test('a failed drain leaves the entry queued for the next pass', () async {
