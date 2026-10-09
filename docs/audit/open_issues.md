@@ -5773,3 +5773,28 @@ Every Edge Function call from the client can wait on a stalled socket or a gatew
 - **Identified**: 2026-10-08 · filed via mint_oi.sh from branch `issue78-closeout`
 
 Left out of issue #78 on purpose and then not surfaced: the batch renamed the SCREEN's card title and paywall feature string and I judged the Profile row a navigation label to leave alone; the round-2 reviewer found `profile_content.dart:322` separately and I classed it as "a separate feature label" without asking you. Under CLAUDE.md section 4.2 that should have been fixed in the batch or put to you at the time; it is filed now. Also check `lib/features/profile/screens/profile/profile_content.dart` for the card's tap target and `paywall_sheet.dart:151` so the paywall subtitle matches the renamed feature string (today it matches neither the old nor the new one).
+
+## OI-326 — Restore-after-sign-in cost with the paged Edge Function (v10) is unmeasured: about 13 sequential requests and no client timeout of its own - needs one phone restore, then compare per-request rows with live count(*)
+
+- **Status**: OPEN
+- **Blocked on**: the founder: one sign-out/in on the upend account (a fresh restore against Edge Function v10) - I cannot trigger a phone restore. Then read the per-request `rows` log line from the function logs and compare each count with a live `count(*)` for that user, and read `restore_step_done` / `restore_completed` from `client_errors` against the baseline.
+- **Verified**: 2026-10-09 - read the closure ledger entry `RESTORE-TRANSPORT-NO-TIMEOUT` in `docs/audit/streak-freeze-restore-ownership.closure.yaml` (baseline read-only 2026-10-06: the last 8 single-call restores took 15,034 to 127,281 ms; the paged function went live 2026-10-07 as v10). NOT re-measured since.
+- **Identified**: 2026-10-09 · filed via mint_oi.sh from branch `claude/avya-streak-data-check-b506de`
+
+Priority: MEDIUM, not a go-live blocker. Today the restore is bounded only by the restoring screen's 15 s / 30 s hint and its CONTINUE escape. The paged Edge Function makes about 13 more sequential requests and the client call has no timeout of its own (the general gap is OI-324). This item closes as `verified_clean` with the measured cost once one restore has run against v10; if the numbers are bad, the fix is a timeout plus fewer sequential requests. Moved here from the streak closure ledger so the board shows it.
+## OI-327 — Weekly streak never resets when the daily streak breaks: current_streak_weeks only goes up (server GREATEST since migration 156) - product decision whether a broken daily streak should reset the weeks, then a migration plus a monotonicProgressFields change
+
+- **Status**: OPEN
+- **Blocked on**: a founder product decision: should a broken daily streak reset `current_streak_weeks`? Today it never goes down.
+- **Verified**: 2026-10-09 - read `docs/plans/streak-freeze-restore-ownership-addendum-a.md` ("Not in this addendum": ledger `WEEKS-RESET-FEATURE`, `blocked_on_user`). The server rule is GREATEST since migration 156, merged in PR #90.
+- **Identified**: 2026-10-09 · filed via mint_oi.sh from branch `claude/avya-streak-data-check-b506de`
+
+Priority: LOW, not a go-live blocker. Since slice C1 neither the server nor restore can lower `current_streak_weeks`, so a user whose daily streak breaks keeps their weeks. If the product wants a reset, it needs a new migration (the RPC is GREATEST today) AND removing the field from `UserRepository.monotonicProgressFields`, and the dev simulation reset (`simulation_service.dart:134-136`) then works as intended. Until decided, the behaviour is "weeks only go up".
+## OI-328 — One-off production credit of the 2026-09-14 week for user d7a67a37 (counted week lost to the first-session marker bug fixed in slice D) - a data correction needing its own explicit go
+
+- **Status**: OPEN
+- **Blocked on**: an explicit founder go: it is a live production write to one account. Not a code change.
+- **Verified**: 2026-10-09 - read the plan (`docs/plans/streak-freeze-restore-ownership-addendum-a.md` slice D defect: the first session of a week stamps the marker so the qualifying session never counts). NOT re-queried: whether the 2026-09-14 week is actually missing for user d7a67a37-0b05-4f0a-b13c-388bff3cb59b must be read from the live `user_progress` row before any write.
+- **Identified**: 2026-10-09 · filed via mint_oi.sh from branch `claude/avya-streak-data-check-b506de`
+
+Priority: LOW, no go-live impact (one account). Slice D fixed the counting rule going forward; it does not back-fill weeks already lost. If the founder wants this week credited, the steps are: read the live row, state the exact UPDATE, run it in a transaction that returns the before/after, and get a separate go (CLAUDE.md section 4.3, live prod needs its own authorization). The value to correct is `user_progress.current_streak_weeks` (with `last_counted_week_key` left alone).
