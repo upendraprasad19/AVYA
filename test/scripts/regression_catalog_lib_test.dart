@@ -307,5 +307,32 @@ void main() {
               'scrubbed keys would come straight back — this flag is what makes '
               'the scrub take effect');
     });
+
+  group('chunkPathsByCommandLength', () {
+    test('keeps every path, in order, and every group under the cap', () {
+      final paths = List.generate(145, (i) => 'test/contracts/some_long_regression_name_$i\_test.dart');
+      final chunks = chunkPathsByCommandLength(paths, maxChars: 6000);
+      expect(chunks.expand((c) => c).toList(), paths);
+      expect(chunks.length, greaterThan(1));
+      for (final c in chunks) {
+        expect(c.join(' ').length, lessThanOrEqualTo(6000));
+      }
+    });
+
+    test('an empty list gives no groups and one path gives one group', () {
+      expect(chunkPathsByCommandLength(const <String>[]), isEmpty);
+      expect(chunkPathsByCommandLength(const ['a_test.dart']), [
+        ['a_test.dart'],
+      ]);
+    });
+
+    test('the gate script runs flutter test once per group, not once for all', () {
+      final src = File('scripts/check_regression_catalog.dart').readAsStringSync();
+      final code = src.replaceAll(RegExp(r'^\s*//.*$', multiLine: true), '');
+      expect(code, contains('chunkPathsByCommandLength(dartPaths)'));
+      expect(code, contains("['test', ...chunk]"));
+      expect(code, isNot(contains("['test', ...dartPaths]")));
+    });
+  });
   });
 }

@@ -305,6 +305,9 @@ const _alwaysOk = <String>{
   // FILE-WIDE (sync_workout.dart contains readers for every prefix) rather
   // than scoped to the specific map instance being read.
   'deleted_at',
+  // Slice D (b7d3e5): the weekly-streak marker, a key of userBox['progress'],
+  // read in train_provider.dart where exlog_ maps are also read.
+  'last_counted_week_key',
   // JSON request/response bodies for Edge Functions:
   // restore-user-snapshot (C3) bundle ENVELOPE — read off the EF JSON response
   // (data['schema_version'] / data['tables']), NOT off any exlog_/wlog_ Hive map.

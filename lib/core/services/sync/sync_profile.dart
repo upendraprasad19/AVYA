@@ -1,5 +1,13 @@
 part of '../sync_service.dart';
 
+// C2 (diagnose a3c8f1): the week marker goes to the cloud through its own tiny
+// GREATEST-only function. configBox keys: the opt-out switch, and the memory
+// of what was last pushed (a STRING '<userId>:<marker>:<IST day>' because configBox is a
+// shared box, so a bare marker could be read as "already pushed" by the next
+// account, and the day bounds a stale memory to one day).
+const String _kDisableStreakWeekMarkerPushKey = 'disable_streak_week_marker_push';
+const String _kStreakWeekMarkerPushedKey = 'streak_week_marker_pushed';
+
 /// Sync + restore for user-identity surfaces: user_profile,
 /// user_preferences, user_progress. Plus `users` (full_name + email)
 /// merged into the profile map on restore per APK Test #12.8 / Bug #2.
@@ -413,8 +421,14 @@ extension SyncServiceProfile on SyncService {
         },
       );
       final firstVersion = (firstAttempt as num?)?.toInt();
+      // C2: read from the PRE-await map [p], never re-read from the box after
+      // an await (a sign-out/in during the await would read the next
+      // account's box).
+      final markerRaw = p['last_counted_week_key'];
+      final int? weekMarker = markerRaw is num ? markerRaw.toInt() : null;
       if (firstVersion != null) {
         SyncService._stampProgressVersion(firstVersion, userId: userId);
+        await _pushStreakWeekMarker(userId, weekMarker);
       } else {
         // Version mismatch — a concurrent device's write landed first.
         // Bounded: re-fetch the fresh version, resend the SAME local field
@@ -427,6 +441,7 @@ extension SyncServiceProfile on SyncService {
           userId: userId,
           rpcParams: rpcParams,
           fromQueue: fromQueue,
+          streakWeekMarker: weekMarker,
         );
       }
     } catch (e, st) {
@@ -472,6 +487,7 @@ extension SyncServiceProfile on SyncService {
     required String userId,
     required Map<String, dynamic> rpcParams,
     bool fromQueue = false,
+    int? streakWeekMarker,
   }) async {
     final Object? rawRes = await _supabase.client
         .from('user_progress')
@@ -604,6 +620,43 @@ extension SyncServiceProfile on SyncService {
       return;
     }
     SyncService._stampProgressVersion(retryVersion, userId: userId);
+    await _pushStreakWeekMarker(userId, streakWeekMarker);
+  }
+
+  /// C2 (diagnose a3c8f1) — best-effort push of the calendar week last
+  /// counted to `raise_streak_week_marker` (migration: GREATEST-only, so a
+  /// stale device can only push an older key, which the server ignores).
+  ///
+  /// NEVER throws and never changes the progress sync's outcome: it has its
+  /// own try, logs a named low-priority event, and does not enqueue (the
+  /// pushed-marker memory below makes the next progress sync retry it).
+  /// [marker] is the PRE-await value the caller read from its own map.
+  Future<void> _pushStreakWeekMarker(String userId, int? marker) async {
+    try {
+      if (marker == null || marker < 0) return;
+      if (_hive.configBox.get(_kDisableStreakWeekMarkerPushKey) == true) return;
+      // The IST day in the memory bounds a STALE memory (a cloud row deleted
+      // or nulled out of band while the device keeps its marker): the marker
+      // is re-pushed at most once per IST day, so the cloud heals within a day.
+      final memory = '$userId:$marker:${istDateStr(nowWall())}';
+      if (_hive.configBox.get(_kStreakWeekMarkerPushedKey) == memory) return;
+      if (HiveUserSession.currentOwnerFullId != userId) return;
+      // The return value (the stored marker, or null when no row exists yet)
+      // is deliberately ignored.
+      await _supabase.client.rpc(
+        'raise_streak_week_marker',
+        params: {'p_user_id': userId, 'p_week_key': marker},
+      );
+      // Re-check the owner: the shared configBox must not receive A's memory
+      // after a swap to B during the await.
+      if (HiveUserSession.currentOwnerFullId != userId) return;
+      await _hive.configBox.put(_kStreakWeekMarkerPushedKey, memory);
+    } catch (e) {
+      unawaited(ErrorTelemetry.logEvent(
+        'streak_week_marker_push_failed',
+        message: 'user=$userId marker=$marker: $e',
+      ));
+    }
   }
 
   /// Pushes user preferences to Supabase user_preferences table.
@@ -984,6 +1037,7 @@ extension SyncServiceProfile on SyncService {
       final result = UserRepository.mergeCloudProgress(
         local: existingMap,
         cloud: cloud,
+        istToday: istDateStr(nowWall()),
       );
       // closes-diagnose c9d2f6 (and the e5c2d1 class). `userId` was captured
       // before the read above, and the freeze push below derives the live
@@ -1135,6 +1189,14 @@ extension SyncServiceProfile on SyncService {
     if (userId == null) return;
     await _restoreUserPreferences(userId);
   }
+
+  /// C2 (diagnose a3c8f1) test seam — drives [_syncUserProgress] for an
+  /// explicit [userId] (the public `syncProgressNow` resolves the user from
+  /// the Supabase session, which the stub server does not have).
+  @visibleForTesting
+  Future<void> syncUserProgressForTest(String userId,
+          {bool fromQueue = false}) =>
+      _syncUserProgress(userId, fromQueue: fromQueue);
 
   /// Hermes h7F2 (diagnose f1c6b4) test seam — drives [_restoreUserProgress]
   /// with INJECTED `user_progress` rows. [preFetched] must be passed (even as

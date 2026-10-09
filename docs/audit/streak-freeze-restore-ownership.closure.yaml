@@ -184,13 +184,22 @@ findings:
 
   - id: LAST-WORKOUT-DATE
     title: "last_workout_date is overwritten by the whole-row restore (cloud-non-null-wins); a phone with a newer unpushed date is regressed by a stale cloud row and the regressed value is pushed back"
-    terminal_state: blocked_on_user
-    reason: "B-pass reviewer C F2 corrected this entry (it was verified_clean on a wrong premise). Writers: train_provider.dart completeWorkout (every completion) and the dev simulation; the LOCAL value is only read as the push payload (sync_profile.dart), migration 115 sets it with COALESCE(p_last_workout_date, last_workout_date) (no GREATEST), and the only reader is the rank-promotion gap gate (evaluate-rank-promotions/index.ts). So a stale restore can regress it and the push writes the regression back; it self-heals at the next completion. Founder decision 2026-10-06: widen this batch. Slice C1 of docs/plans/streak-freeze-restore-ownership-addendum-a.md (a body-only migration, date latest-wins with a future clamp, plus a client date-max restore). Needs Hermes review (SECURITY DEFINER content rule) and the founder's per-action go for the live apply; closes as closed_in_commit when C1 lands."
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: 47de4f' (Slice C1 commit)"
+    verification: "Diagnose 47de4f. Client: UserRepository.laterIsoDate (later wins, real calendar date, ceiling IST-today + 1, malformed reported) used by mergeCloudProgress, both callers pass istToday; test/contracts/last_workout_date_latest_wins_behavioral_test.dart (27 tests), 20/20 client mutants red. Server: migration 156 applied live 2026-10-08 on the founder's go (GREATEST for last_workout_date with the clamp and an explicit NULL branch); A1 dry-run 10/10 new cases ok and the old body failed exactly the 4 discriminating cases; post-apply live read: body carries both rules, ACL unchanged, anon-key probe rejected 42501. B-pass (2 seats) and Hermes pass (docs/audit/2026-10-08-hermes-streak-freeze-c1.md, accepted) clean at P3."
 
   - id: WEEKS-PUSH-RPC
-    title: "B-pass reviewer A F5 (P3): the client now treats current_streak_weeks as monotonic on RESTORE, but the push RPC (migration 115) is a bare COALESCE for it (GREATEST for its siblings) and last_streak_week is local-only, so a reinstall re-counts the current week once"
-    terminal_state: blocked_on_user
-    reason: "Founder GO 2026-10-06 on the migration. Counter half = Slice C1 (GREATEST in update_user_progress_snapshot, body-only). Marker half (last_streak_week to the cloud) = Slice C2, only after the weekly-stamp fix (Slice D; founder D5 = yes, 2026-10-06, found because train_provider.dart stamps the marker on EVERY completion so a second session in a week is never counted) and its own plan-review round. Neither half is introduced by this batch: the re-count after a reinstall happens identically with the pre-fix cloud-wins restore, and max-wins only stops a restore from LOWERING the count. Recorded in lib/core/services/CLAUDE.md next to the monotonic-merge row. Each live apply needs the founder's per-action go (CLAUDE.md 4.3)."
+    title: "B-pass reviewer A F5 (P3): the client treats current_streak_weeks as monotonic on RESTORE, but the push RPC (migration 115) was a bare COALESCE for it and the weekly marker was local-only, so a reinstall re-counts the current week once"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: 47de4f' (counter half, Slice C1, migration 156) and git log --grep='closes-diagnose: a3c8f1' (marker half, Slice C2, migration 157)"
+    verification: "Counter half: live since 2026-10-08 (migration 156, GREATEST). Marker half: migration 157 applied live 2026-10-08 (cloud_version 20261008164155) on the founder's per-action go after two always-aborting A1 dry-runs (15/15 cases ok on the exact file bytes; 4 body variants each red on the intended cases) and verified post-apply (column integer, one function, exact grantees, anon EXECUTE false, anon-key POST rejected 42501); client push + max-wins restore + 13 push tests, 12 migration-text tests, 26 mutants RED. Accepted residuals recorded in the diagnose doc a3c8f1: a device ahead of IST on an IST Sunday evening can re-count one week; stored values are not an integrity boundary (RLS lets a user PATCH their own row)."
+
+  # ── Slice D (diagnose b7d3e5): the weekly-streak marker moves only when a week counts ──
+  - id: WEEKLY-COUNT-STAMP
+    title: "The weekly-streak counter under-counts: last_streak_week was stamped on every completeWorkout, so the first session of a week blocked the qualifying later one (Unit 7, founder decision D5 = yes)"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: b7d3e5' (Slice D commit)"
+    verification: "Diagnose b7d3e5. New pure weeklyStreakAfterCompletion in train_provider.dart; the marker (now the calendar week last counted, local key last_counted_week_key) is stamped only when the counter increments; B-pass P1 (plan week ids repeat across phases) fixed in the batch; test/contracts/weekly_streak_counter_writer_to_reader_test.dart (10 behavioural rows + a presence pin), 6/6 mutants red, file byte-identical after. Forward-only, no retroactive credit (the founder's 2026-09-14 week stays uncounted unless the founder asks for a one-off production write, its own go). Device check owed (CLAUDE.md section 5)."
 
   # ── Slice B1 (diagnose e4c1d7): restore-user-snapshot returns every row, scoped on every read ──
   - id: B1-EF-DEPLOY
@@ -315,5 +324,22 @@ findings:
     terminal_state: blocked_on_user
     reason: "The paged function went live 2026-10-07 (v10, B1-EF-DEPLOY). Its per-request cost and row counts are measured only once the founder's phone restores against it (a fresh install or sign-in; I cannot trigger that): then read the per-request rows line from the function logs and compare each count with a live count(*) for the founder's user, and read restore_step_done / restore_completed from client_errors against the baseline. Baseline read-only on 2026-10-06 (before any deploy): the last 8 single-call restores had total_ms 15,034 to 127,281 (restore_completed, 2026-10-04 to 2026-10-06) and the sampled step=B values 153 to 2,366 ms; the call is bounded today by the restoring screen's 15 s / 30 s hint and its CONTINUE escape. Closes as verified_clean with the measured cost once a restore has run against v10."
 
-total_findings: 48
-closed_count: 48
+  # ── Slice C2 (diagnose a3c8f1): the week marker goes to the cloud ──
+  - id: OLD-APK-MARKER-COPY
+    title: "Hermes C2 L35 P1-1: an older client's restore copies every unknown cloud key into its Hive progress map, and the new column has the same name as the Hive key last_counted_week_key"
+    terminal_state: verified_clean
+    evidence: "Measured 2026-10-08 with git grep on origin/main: NO client on origin/main reads or writes last_counted_week_key (the shipped clients use last_streak_week, train_provider.dart:1979/1994 on main), so a shipped client that copies the new column into its progress map never reads it. The only code that reads the key is Slice D, which is unpushed and ships in the SAME pull request as C2 (merge waits for the C2 apply), so a D-without-C2 build cannot be produced from main. Rule recorded here: never build an APK from the intermediate D commit (/build-apk builds from main only, CLAUDE.md 4.3)."
+
+  - id: C2-STALE-PUSHED-MEMORY
+    title: "B-pass A P3 + Hermes C2 L15-16 P2-1 (stale half): the pushed-marker memory could suppress the push forever if the cloud row is reset or nulled out of band while the device keeps its marker"
+    terminal_state: closed_in_commit
+    commit: "git log --grep='closes-diagnose: a3c8f1' (Slice C2 commit)"
+    verification: "The memory is '<userId>:<marker>:<IST day>', so the marker is re-pushed at most once per IST day and the cloud heals within a day. test/contracts/streak_week_marker_push_behavioral_test.dart 'a memory from an earlier IST day re-pushes' (plus mutant M15 'memory without the IST day', RED)."
+
+  - id: C2-DIRECT-WRITE-NOT-AN-INTEGRITY-BOUNDARY
+    title: "Hermes C2 L15-16 P2-1 (direct-write half): RLS user_progress_update_own lets an authenticated user PATCH their own last_counted_week_key to any value, bypassing the clamp and GREATEST"
+    terminal_state: verified_clean
+    evidence: "Same posture as current_streak_weeks and every other client-authoritative user_progress column (C1 accepted it): own-row only, the worst outcome is the user mis-counting their own weekly streak, no cross-account path (the function's auth.uid() guard and the RLS owner policy both bind to the caller). A BEFORE UPDATE trigger would be a separate design for all columns. Stated in the diagnose doc (impact), the SoT registry class_constraints item 3 and lib/core/services/CLAUDE.md row 102."
+
+total_findings: 52
+closed_count: 52

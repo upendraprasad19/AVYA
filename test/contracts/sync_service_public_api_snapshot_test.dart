@@ -148,6 +148,7 @@ void main() {
         // write-if-changed skip is behaviorally testable; delegate to the
         // private restores, production path unchanged.
         'restoreUserProgressForTest',
+        'syncUserProgressForTest',
         'restoreUserProfileForTest',
         'restoreFreezesForTest',
         'debugSetRestoreSettledUserIdForTest',

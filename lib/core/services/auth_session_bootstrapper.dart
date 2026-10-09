@@ -14,6 +14,7 @@ import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/utils/injury_vocab.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/features/profile/services/profile_write_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
@@ -900,6 +901,7 @@ class AuthSessionBootstrapper {
               final progressMerge = UserRepository.mergeCloudProgress(
                 local: existingProgressMap,
                 cloud: cloudProgress,
+                istToday: istDateStr(nowWall()),
               );
               await userBox.put('progress', progressMerge.merged);
               reportProgressDemotionsDeclined(progressMerge,

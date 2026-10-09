@@ -135,6 +135,11 @@ AS $function$
 DECLARE
   v_current_version BIGINT;
   v_new_version BIGINT;
+  -- Slice C1 (2026-10-07): the NULL branch is explicit, see the C1 migration.
+  v_date DATE := CASE
+    WHEN p_last_workout_date IS NULL THEN NULL
+    ELSE LEAST(p_last_workout_date, ((now() AT TIME ZONE 'Asia/Kolkata')::date + 1))
+  END;
 BEGIN
   -- Hermes C4 (2026-07-30): explicit NULL rejection on both guards below —
   -- kept in sync with migration 115 itself, see its comments for reasoning.
@@ -166,7 +171,7 @@ BEGIN
       p_phase_started_at, p_plan_generated_at,
       COALESCE(p_total_workouts_done, 0), COALESCE(p_current_streak_weeks, 0),
       p_detected_experience_level, COALESCE(p_deployments_complete, 0),
-      COALESCE(p_current_streak_days, 0), p_last_workout_date,
+      COALESCE(p_current_streak_days, 0), v_date,
       COALESCE(p_longest_gap_days, 0), 1, now()
     )
     ON CONFLICT (user_id) DO NOTHING;
@@ -189,13 +194,16 @@ BEGIN
         plan_generated_at = COALESCE(p_plan_generated_at, plan_generated_at),
         total_workouts_done =
           GREATEST(COALESCE(p_total_workouts_done, total_workouts_done), total_workouts_done),
-        current_streak_weeks = COALESCE(p_current_streak_weeks, current_streak_weeks),
+        -- Slice C1: GREATEST, the three siblings' shape.
+        current_streak_weeks =
+          GREATEST(COALESCE(p_current_streak_weeks, current_streak_weeks), current_streak_weeks),
         detected_experience_level =
           COALESCE(p_detected_experience_level, detected_experience_level),
         deployments_complete =
           GREATEST(COALESCE(p_deployments_complete, deployments_complete), deployments_complete),
         current_streak_days = COALESCE(p_current_streak_days, current_streak_days),
-        last_workout_date = COALESCE(p_last_workout_date, last_workout_date),
+        -- Slice C1: latest date wins, clamped to IST-today + 1 in v_date.
+        last_workout_date = GREATEST(v_date, last_workout_date),
         -- Final B-pass Finding 1 (2026-07-30): GREATEST guard, mirrors the
         -- migration file's own fix (see that file for the full comment).
         longest_gap_days =
@@ -725,6 +733,210 @@ BEGIN
     END IF;
   EXCEPTION WHEN OTHERS THEN
     INSERT INTO _v_results VALUES ('longest_gap_days_never_decreases', 'fail', SQLSTATE, SQLERRM);
+  END;
+
+  -- =====================================================================
+  -- Slice C1 (2026-10-07, plan streak-freeze-restore-ownership-addendum-a):
+  -- current_streak_weeks and last_workout_date are monotonic on the server,
+  -- last_workout_date is clamped to IST-today + 1, and a NULL date is stored
+  -- as NULL (not as the clamp). Cases 22-31.
+  -- =====================================================================
+
+  -- Case 22 — a LOWER current_streak_weeks resent at the correct version
+  -- does not demote it (was a bare COALESCE: any non-null resend won).
+  BEGIN
+    v_result := public.update_user_progress_snapshot(
+      v_user_a, (SELECT streak_progress_version FROM public.user_progress WHERE user_id = v_user_a),
+      NULL, NULL, NULL, NULL, NULL, 9, NULL, NULL, NULL, NULL, NULL);
+    v_result := public.update_user_progress_snapshot(
+      v_user_a, v_result, NULL, NULL, NULL, NULL, NULL, 3, NULL, NULL, NULL, NULL, NULL);
+    IF v_result IS NOT NULL AND EXISTS (
+      SELECT 1 FROM public.user_progress WHERE user_id = v_user_a AND current_streak_weeks = 9
+    ) THEN
+      INSERT INTO _v_results VALUES ('c1_weeks_lower_refused', 'ok', NULL,
+        'a lower resend did not demote current_streak_weeks below 9');
+    ELSE
+      INSERT INTO _v_results VALUES ('c1_weeks_lower_refused', 'fail', NULL,
+        'current_streak_weeks was demoted by a lower resend');
+    END IF;
+  EXCEPTION WHEN OTHERS THEN
+    INSERT INTO _v_results VALUES ('c1_weeks_lower_refused', 'fail', SQLSTATE, SQLERRM);
+  END;
+
+  -- Case 23 — a HIGHER current_streak_weeks is accepted.
+  BEGIN
+    v_result := public.update_user_progress_snapshot(
+      v_user_a, (SELECT streak_progress_version FROM public.user_progress WHERE user_id = v_user_a),
+      NULL, NULL, NULL, NULL, NULL, 11, NULL, NULL, NULL, NULL, NULL);
+    IF v_result IS NOT NULL AND EXISTS (
+      SELECT 1 FROM public.user_progress WHERE user_id = v_user_a AND current_streak_weeks = 11
+    ) THEN
+      INSERT INTO _v_results VALUES ('c1_weeks_higher_accepted', 'ok', NULL, '9 -> 11 accepted');
+    ELSE
+      INSERT INTO _v_results VALUES ('c1_weeks_higher_accepted', 'fail', NULL,
+        'a higher current_streak_weeks was not stored');
+    END IF;
+  EXCEPTION WHEN OTHERS THEN
+    INSERT INTO _v_results VALUES ('c1_weeks_higher_accepted', 'fail', SQLSTATE, SQLERRM);
+  END;
+
+  -- Case 24 — a NULL current_streak_weeks leaves the column untouched.
+  BEGIN
+    v_result := public.update_user_progress_snapshot(
+      v_user_a, (SELECT streak_progress_version FROM public.user_progress WHERE user_id = v_user_a),
+      NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+    IF v_result IS NOT NULL AND EXISTS (
+      SELECT 1 FROM public.user_progress WHERE user_id = v_user_a AND current_streak_weeks = 11
+    ) THEN
+      INSERT INTO _v_results VALUES ('c1_weeks_null_leaves_column', 'ok', NULL, 'NULL kept 11');
+    ELSE
+      INSERT INTO _v_results VALUES ('c1_weeks_null_leaves_column', 'fail', NULL,
+        'a NULL current_streak_weeks changed the column');
+    END IF;
+  EXCEPTION WHEN OTHERS THEN
+    INSERT INTO _v_results VALUES ('c1_weeks_null_leaves_column', 'fail', SQLSTATE, SQLERRM);
+  END;
+
+  -- Case 25 — an OLDER last_workout_date does not replace a newer one.
+  BEGIN
+    v_result := public.update_user_progress_snapshot(
+      v_user_a, (SELECT streak_progress_version FROM public.user_progress WHERE user_id = v_user_a),
+      NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, DATE '2026-03-10', NULL);
+    v_result := public.update_user_progress_snapshot(
+      v_user_a, v_result, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+      DATE '2026-03-01', NULL);
+    IF v_result IS NOT NULL AND EXISTS (
+      SELECT 1 FROM public.user_progress
+       WHERE user_id = v_user_a AND last_workout_date = DATE '2026-03-10'
+    ) THEN
+      INSERT INTO _v_results VALUES ('c1_date_older_refused', 'ok', NULL,
+        'an older last_workout_date did not replace 2026-03-10');
+    ELSE
+      INSERT INTO _v_results VALUES ('c1_date_older_refused', 'fail', NULL,
+        'last_workout_date was demoted by an older resend');
+    END IF;
+  EXCEPTION WHEN OTHERS THEN
+    INSERT INTO _v_results VALUES ('c1_date_older_refused', 'fail', SQLSTATE, SQLERRM);
+  END;
+
+  -- Case 26 — a NEWER last_workout_date is accepted.
+  BEGIN
+    v_result := public.update_user_progress_snapshot(
+      v_user_a, (SELECT streak_progress_version FROM public.user_progress WHERE user_id = v_user_a),
+      NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, DATE '2026-03-12', NULL);
+    IF v_result IS NOT NULL AND EXISTS (
+      SELECT 1 FROM public.user_progress
+       WHERE user_id = v_user_a AND last_workout_date = DATE '2026-03-12'
+    ) THEN
+      INSERT INTO _v_results VALUES ('c1_date_newer_accepted', 'ok', NULL, '03-10 -> 03-12 accepted');
+    ELSE
+      INSERT INTO _v_results VALUES ('c1_date_newer_accepted', 'fail', NULL,
+        'a newer last_workout_date was not stored');
+    END IF;
+  EXCEPTION WHEN OTHERS THEN
+    INSERT INTO _v_results VALUES ('c1_date_newer_accepted', 'fail', SQLSTATE, SQLERRM);
+  END;
+
+  -- Case 27 — a NULL last_workout_date leaves the column untouched (and is
+  -- NOT turned into the clamp ceiling).
+  BEGIN
+    v_result := public.update_user_progress_snapshot(
+      v_user_a, (SELECT streak_progress_version FROM public.user_progress WHERE user_id = v_user_a),
+      NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+    IF v_result IS NOT NULL AND EXISTS (
+      SELECT 1 FROM public.user_progress
+       WHERE user_id = v_user_a AND last_workout_date = DATE '2026-03-12'
+    ) THEN
+      INSERT INTO _v_results VALUES ('c1_date_null_leaves_column', 'ok', NULL, 'NULL kept 2026-03-12');
+    ELSE
+      INSERT INTO _v_results VALUES ('c1_date_null_leaves_column', 'fail', NULL,
+        'a NULL last_workout_date changed the column');
+    END IF;
+  EXCEPTION WHEN OTHERS THEN
+    INSERT INTO _v_results VALUES ('c1_date_null_leaves_column', 'fail', SQLSTATE, SQLERRM);
+  END;
+
+  -- Case 28 — a far-future date on an UPDATE is clamped to IST-today + 1.
+  BEGIN
+    v_result := public.update_user_progress_snapshot(
+      v_user_a, (SELECT streak_progress_version FROM public.user_progress WHERE user_id = v_user_a),
+      NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, DATE '2099-01-01', NULL);
+    IF v_result IS NOT NULL AND EXISTS (
+      SELECT 1 FROM public.user_progress
+       WHERE user_id = v_user_a
+         AND last_workout_date = ((now() AT TIME ZONE 'Asia/Kolkata')::date + 1)
+    ) THEN
+      INSERT INTO _v_results VALUES ('c1_date_future_clamped_update', 'ok', NULL,
+        '2099-01-01 stored as IST-today + 1');
+    ELSE
+      INSERT INTO _v_results VALUES ('c1_date_future_clamped_update', 'fail', NULL,
+        'a far-future last_workout_date was not clamped to IST-today + 1');
+    END IF;
+  EXCEPTION WHEN OTHERS THEN
+    INSERT INTO _v_results VALUES ('c1_date_future_clamped_update', 'fail', SQLSTATE, SQLERRM);
+  END;
+
+  -- Case 29 — a fresh INSERT with a NULL date stores NULL (the explicit NULL
+  -- branch in DECLARE: LEAST(NULL, x) is x, so an unguarded clamp would store
+  -- IST-tomorrow for the onboarding replay, which sends NULL).
+  BEGIN
+    DELETE FROM public.user_progress WHERE user_id = v_user_c;
+    v_result := public.update_user_progress_snapshot(
+      v_user_c, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+    IF v_result = 1 AND EXISTS (
+      SELECT 1 FROM public.user_progress WHERE user_id = v_user_c AND last_workout_date IS NULL
+    ) THEN
+      INSERT INTO _v_results VALUES ('c1_date_null_insert_stays_null', 'ok', NULL,
+        'fresh INSERT with a NULL date stored NULL');
+    ELSE
+      INSERT INTO _v_results VALUES ('c1_date_null_insert_stays_null', 'fail', NULL,
+        'a fresh INSERT with a NULL date did not store NULL');
+    END IF;
+  EXCEPTION WHEN OTHERS THEN
+    INSERT INTO _v_results VALUES ('c1_date_null_insert_stays_null', 'fail', SQLSTATE, SQLERRM);
+  END;
+
+  -- Case 30 — a fresh INSERT with a far-future date stores IST-today + 1.
+  BEGIN
+    DELETE FROM public.user_progress WHERE user_id = v_user_c;
+    v_result := public.update_user_progress_snapshot(
+      v_user_c, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, DATE '2099-01-01', NULL);
+    IF v_result = 1 AND EXISTS (
+      SELECT 1 FROM public.user_progress
+       WHERE user_id = v_user_c
+         AND last_workout_date = ((now() AT TIME ZONE 'Asia/Kolkata')::date + 1)
+    ) THEN
+      INSERT INTO _v_results VALUES ('c1_date_future_clamped_insert', 'ok', NULL,
+        'fresh INSERT clamped 2099-01-01 to IST-today + 1');
+    ELSE
+      INSERT INTO _v_results VALUES ('c1_date_future_clamped_insert', 'fail', NULL,
+        'a fresh INSERT stored a far-future date unclamped');
+    END IF;
+  EXCEPTION WHEN OTHERS THEN
+    INSERT INTO _v_results VALUES ('c1_date_future_clamped_insert', 'fail', SQLSTATE, SQLERRM);
+  END;
+
+  -- Case 31 — the cross-account guard survives the body change (an
+  -- authenticated caller writing ANOTHER user's progress still raises). Last
+  -- on purpose: it sets a JWT claim, so the service-path cases above are
+  -- already done; the claim is reset afterwards.
+  BEGIN
+    PERFORM set_config('request.jwt.claims',
+      json_build_object('sub', v_user_b::text, 'role', 'authenticated')::text, true);
+    BEGIN
+      v_result := public.update_user_progress_snapshot(
+        v_user_a, (SELECT streak_progress_version FROM public.user_progress WHERE user_id = v_user_a),
+        NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+      INSERT INTO _v_results VALUES ('c1_cross_account_still_blocked', 'fail', NULL,
+        'a cross-account write was NOT blocked');
+    EXCEPTION WHEN OTHERS THEN
+      IF SQLERRM LIKE 'cross-account progress write blocked%' THEN
+        INSERT INTO _v_results VALUES ('c1_cross_account_still_blocked', 'ok', NULL, SQLERRM);
+      ELSE
+        INSERT INTO _v_results VALUES ('c1_cross_account_still_blocked', 'fail', SQLSTATE, SQLERRM);
+      END IF;
+    END;
+    PERFORM set_config('request.jwt.claims', '', true);
   END;
 
 END;

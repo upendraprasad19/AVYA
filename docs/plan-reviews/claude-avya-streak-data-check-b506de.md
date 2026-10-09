@@ -1,12 +1,14 @@
 ---
 branch: claude/avya-streak-data-check-b506de
 date: 2026-10-06
-blast_radius: platform
-review_rounds: 4
+blast_radius: catastrophic
+review_rounds: 9
 ground_truth_verified: true
 verdict: converged
 bpass: accepted
-bpass_review: docs/reviews/streak-freeze-restore-ownership-bpass.md
+bpass_review: docs/reviews/053014089025-review.md
+hermes: accepted
+hermes_report: docs/audit/2026-10-08-hermes-streak-freeze-c2.md
 ---
 
 # Plan-review record — streak decay persists after THIS account's restore settles; a stale cloud row stops overwriting freeze state (`claude/avya-streak-data-check-b506de`)
@@ -41,3 +43,13 @@ No commit, push, APK build, migration apply, Edge Function deploy or production 
 ## Addendum A (slices B1, B2, U6 and the deploy record)
 
 Plan of record: `docs/plans/streak-freeze-restore-ownership-addendum-a.md` (v4), reviewed by context-blind Sonnet reviewers over three rounds before any code (its header names them; the rest of v4 after round 3 is a subset of what round 3 checked clean). The slices that landed on this branch each took their own code-stage B-pass, all `verdict: accepted`: B1 `docs/reviews/restore-user-snapshot-paged-reads-bpass.md`, B2 `docs/reviews/restore-legacy-paging-bpass.md`, U6 `docs/reviews/streak-freeze-notice-bpass.md`. The Edge Function change (B1) was deployed to production on the founder's per-action go (live v10, 2026-10-07, record in diagnose e4c1d7). Slices C1, D and C2 are NOT part of this landing; each takes its own plan-review round and B-pass before it lands.
+
+## Addendum A, slices C1, D and C2 (migrations 156 and 157; catastrophic by content)
+
+The merge diff now carries two SECURITY DEFINER migrations (156 replaced the body of `update_user_progress_snapshot`; 157 adds `raise_streak_week_marker`), so the tier is catastrophic and the record names one Hermes report and one B-pass review for the whole diff.
+
+- **Plan review:** the four rounds above cover the base plan; addendum A took three rounds before any code (45 + 43 + 30 findings); C2's own design (section 8, v7 of the addendum) took two further rounds of three context-blind Sonnet seats each (21 findings, then 0 P0 / 3 P1 / 8 P2 / 12 P3, all folded in, none changed the design). 4 + 3 + 2 = 9 rounds. Ground truth re-verified: every cited file:line re-read, the live schema and ACL read before the dry-run, `git grep` on `origin/main` for the Hermes P1.
+- **Code stage:** C1: B-pass x2 + Hermes x4 (`docs/reviews/a5cf217dfc2f-review.md`, `docs/audit/2026-10-08-hermes-streak-freeze-c1.md`, accepted); D: B-pass x2 rounds (accepted, 14 mutants); C2: B-pass x2, Hermes x3 (`docs/audit/2026-10-08-hermes-streak-freeze-c2.md`, accepted), 26 mutants RED, `docs/reviews/053014089025-review.md` (accepted). The cited `bpass_review` is the staged-diff review of the final slice, whose table lists the earlier ones.
+- **Live evidence:** migration 156 applied 2026-10-08 (cloud_version 20261007184012) and 157 applied 2026-10-08 (cloud_version 20261008164155), each on the founder's per-action go after an always-aborting dry-run on production; post-apply reads and an anon-key probe (42501) recorded in the ledger notes of `backups/applied_migrations.json`.
+- **Rollout:** the migration is applied BEFORE the merge, so no merged client calls a missing function; this record lands in its own commit after the code commit, as the plan says.
+- **Not done here:** the device check on the founder's phone and the sign-out/in comparison of the Edge Function log with the live row count (runtime verification, CLAUDE.md section 5) remain with the founder.

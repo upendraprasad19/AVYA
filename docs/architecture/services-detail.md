@@ -236,7 +236,7 @@ _Moved verbatim from `lib/core/services/CLAUDE.md` (original lines 169-185, cont
   > `test/contracts/restore_completeness_writes_test.dart` and
   > `test/contracts/restore_local_wins_additive_test.dart`.
 - `test/contracts/progress_restore_monotonic_behavioral_test.dart` — the cloud→Hive
-  `progress` merge is local-max-wins on the 4 monotonic fields (d1f6b3 / OI-83; `current_streak_weeks` added 2026-10-06, c9d2f6). The weeks push RPC is still a bare COALESCE and `last_streak_week` is local-only (closure `WEEKS-PUSH-RPC`).
+  `progress` merge is local-max-wins on the 4 monotonic fields (d1f6b3 / OI-83; `current_streak_weeks` added 2026-10-06, c9d2f6). The weeks push RPC is GREATEST since migration 156 (C1). Since Slice C2 (diagnose `a3c8f1`) `last_counted_week_key` is the fifth max-wins field and is pushed through `raise_streak_week_marker` (closure `WEEKS-PUSH-RPC`).
 - `test/contracts/sync_fanout_workout_domain_behavioral_test.dart` (+ `sync_fanout_nutrition_domain_behavioral_test.dart`).
 - `test/contracts/error_telemetry_helper_writer_to_reader_test.dart`.
 - `test/contracts/health_write_service_writer_to_reader_test.dart`.

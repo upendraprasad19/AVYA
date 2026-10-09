@@ -49,7 +49,7 @@ import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart' show formatDateKey;
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/train/providers/train_provider.dart'
-    show resolveStreakWeekState;
+    show calendarWeekKey, resolveStreakWeekState;
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
@@ -156,7 +156,14 @@ void main() {
   }
 
   /// Calls the subject for a completion performed on [on], holding at [ordinal].
-  ({int streakWeekId, DateTime? weekStartDate, int planned, int completedCount})
+  ({
+    int streakWeekId,
+    int weekKey,
+    bool weekIsCurrent,
+    DateTime? weekStartDate,
+    int planned,
+    int completedCount
+  })
       resolve(DateTime on, {int? ordinal}) => resolveStreakWeekState(
             readSvc: read,
             planStart: planStart,
@@ -183,6 +190,11 @@ void main() {
           reason: 'hold 1 sits at plan_start+28 = date-week 5; a clamped '
               'value (4) collides with the real week 4 and freezes the streak');
       expect(r.weekStartDate, hold1Start);
+      // Slice D: the marker key is the CALENDAR week of the workout, never the
+      // plan id (which repeats across phases).
+      expect(r.weekKey, calendarWeekKey(hold1Start));
+      expect(r.weekIsCurrent, isTrue,
+          reason: 'a hold week is derived BY DATE, so it is always current');
     });
 
     test('LATE RETURN: ordinal 1 at date-week 8 → id 8, not 5', () async {
@@ -412,6 +424,9 @@ void main() {
       // the hold arm and report 5 despite the flag being off.
       expect(r.streakWeekId, lessThanOrEqualTo(4),
           reason: 'flag OFF must reach the clamped arm');
+      // Slice D: same key in the non-hold arm, and NOT the clamped plan id.
+      expect(r.weekKey, calendarWeekKey(hold1Start));
+      expect(r.weekKey, isNot(r.streakWeekId));
     });
 
     test('REGRESSION: plan_end rolled +1 week (redoWeek4) keeps id 4', () async {
@@ -438,6 +453,23 @@ void main() {
           reason: 'the non-hold arm must stay clamped to [1,4]');
       expect(formatDateKey(r.weekStartDate!), '2026-06-22',
           reason: "week 4's Monday, exactly as before this fix");
+      // Slice D: the counts above come from the CLAMPED week 4 rows, which are
+      // a PREVIOUS calendar week once the window has rolled on. They must not
+      // be counted again (the old per-completion marker used to hide this).
+      expect(r.weekIsCurrent, isFalse,
+          reason: 'a rolled-on plan window reads stale week-4 rows');
+    });
+
+    test('an in-plan day reads its own calendar week: weekIsCurrent is true',
+        () async {
+      // plan_start is Monday 2026-06-01; 2026-06-10 is Wednesday of plan week 2.
+      final inWeek2 = DateTime(2026, 6, 10, 10);
+      setTestClockTo(inWeek2);
+      final r = resolve(inWeek2);
+      expect(r.streakWeekId, 2);
+      expect(r.weekIsCurrent, isTrue);
+      expect(r.weekKey, calendarWeekKey(DateTime(2026, 6, 8)),
+          reason: "the plan week's Monday is the workout's calendar Monday");
     });
   });
 

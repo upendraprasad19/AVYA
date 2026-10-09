@@ -9,8 +9,15 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### subscription_state — the screen is now the one place that decides what a not-PRO user sees of their progress photos; the repository makes no PRO decision. (1 bugs)
 - 2026-10-08 c2b7e4 — (1) A user whose PRO lapsed could not open the Progress screen to view or delete the progress photos they already held: the Photos hub row ran the PRO gate and showed the paywall without opening the…
 
+### weekly_streak_counter (2 bugs)
+- 2026-10-08 a3c8f1 — The weekly-streak marker `last_counted_week_key` (the calendar week last counted, Slice D) lived only in the local Hive progress map. A reinstall or a second device restored the counter…
+- 2026-10-08 b7d3e5 — The weekly-streak counter (`current_streak_weeks`) under-counts. With 6 planned workouts the threshold is 5, but the FIRST completed session of a week stamped the marker `last_streak_week` with that…
+
 ### subscription_state — the server's one definition of PRO, status = 'active' AND end_date > now(), gains a new reader (the database itself, at both doors of a NEW progress photo). (1 bugs)
 - 2026-10-07 d8f2a6 — The PRO gate on progress photos existed only in the client (the Photos hub row, the Progress screen entry and its Add button, and ProgressPhotoRepository.capture's own isPro read). A free user calling…
+
+### progress_last_workout_date (1 bugs)
+- 2026-10-07 47de4f — A stale value could overwrite a newer one in two places. (1) CLIENT: the whole-row restore (`UserRepository.mergeCloudProgress`) copied the cloud `last_workout_date` over the local one…
 
 ### streak_freeze_notice (1 bugs)
 - 2026-10-07 a5e3c7 — Home's snackbar after a streak freeze is spent read "Streak Freeze used! N remaining this week." That sentence describes a weekly allowance and the app does not have one: a freeze is a KEPT stock (+1…
@@ -1534,7 +1541,10 @@ rather than a Hive box. (1 bugs)
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
 | 2026-10-08 | c2b7e4 | (1) A user whose PRO lapsed could not open the Progress screen to view or delete the progress photos they already held: the Photos hub row ran the PRO gate and showed the paywall without opening the… | subscription_state — the screen is now the one place that decides what a not-PRO user sees of their progress photos; the repository makes no PRO decision. | test/contracts/progress_photo_client_rules_test.dart |
+| 2026-10-08 | a3c8f1 | The weekly-streak marker `last_counted_week_key` (the calendar week last counted, Slice D) lived only in the local Hive progress map. A reinstall or a second device restored the counter… | weekly_streak_counter | test/contracts/streak_week_marker_push_behavioral_test.dart |
+| 2026-10-08 | b7d3e5 | The weekly-streak counter (`current_streak_weeks`) under-counts. With 6 planned workouts the threshold is 5, but the FIRST completed session of a week stamped the marker `last_streak_week` with that… | weekly_streak_counter | test/contracts/weekly_streak_counter_writer_to_reader_test.dart |
 | 2026-10-07 | d8f2a6 | The PRO gate on progress photos existed only in the client (the Photos hub row, the Progress screen entry and its Add button, and ProgressPhotoRepository.capture's own isPro read). A free user calling… | subscription_state — the server's one definition of PRO, status = 'active' AND end_date > now(), gains a new reader (the database itself, at both doors of a NEW progress photo). | test/contracts/progress_photos_pro_insert_rule_test.dart |
+| 2026-10-07 | 47de4f | A stale value could overwrite a newer one in two places. (1) CLIENT: the whole-row restore (`UserRepository.mergeCloudProgress`) copied the cloud `last_workout_date` over the local one… | progress_last_workout_date | test/contracts/last_workout_date_latest_wins_behavioral_test.dart |
 | 2026-10-07 | a5e3c7 | Home's snackbar after a streak freeze is spent read "Streak Freeze used! N remaining this week." That sentence describes a weekly allowance and the app does not have one: a freeze is a KEPT stock (+1… | streak_freeze_notice | test/contracts/streak_freeze_notice_behavioral_test.dart |
 | 2026-10-07 | d7b2e5 | Issue #78: on the Weekly Report screen "Share as Video" never produces a video. Root cause: the client polls an Edge Function that has been a 410 Gone stub since 2026-04-18. Two adjacent defects found… | weekly_report_screen | test/contracts/weekly_report_video_and_refresh_issue78_test.dart |
 | 2026-10-06 | c7e2a9 | When the single-call restore is unavailable the client falls back to its legacy per-table restore, and that path lost or doubled rows silently for a long-history account. PostgREST clamps every… | restore_legacy_paged_reads | test/sync/restore_legacy_paging_behavioral_test.dart |

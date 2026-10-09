@@ -555,7 +555,14 @@ DateTime resolveSessionDate({
 /// Extracted (both arms, not just the hold math) so every assertion is testable
 /// without driving `completeWorkout`, which needs full `startWorkout` state and
 /// fans out to Sync/Rank/Badge — same pattern as [resolveSessionDate].
-({int streakWeekId, DateTime? weekStartDate, int planned, int completedCount})
+({
+  int streakWeekId,
+  int weekKey,
+  bool weekIsCurrent,
+  DateTime? weekStartDate,
+  int planned,
+  int completedCount
+})
     resolveStreakWeekState({
   required WorkoutScheduleReadService readSvc,
   required DateTime? planStart,
@@ -588,6 +595,13 @@ DateTime resolveSessionDate({
     final weekDays = readSvc.getWeek(weekNum);
     return (
       streakWeekId: weekNum,
+      weekKey: calendarWeekKey(workoutDate),
+      // The counts come from the CLAMPED plan week. Once the plan window has
+      // rolled on (redoWeek4, an expired phase) that week is a PREVIOUS calendar
+      // week whose rows still read "completed", so it must not count again.
+      weekIsCurrent: planStart != null &&
+          calendarWeekKey(planStart.add(Duration(days: (weekNum - 1) * 7))) ==
+              calendarWeekKey(workoutDate),
       weekStartDate: planStart?.add(Duration(days: (weekNum - 1) * 7)),
       planned: weekDays.where((d) => isTrainingDayType(d['type'])).length,
       completedCount: weekDays
@@ -612,10 +626,61 @@ DateTime resolveSessionDate({
   final sessions = readSvc.holdWeekSessionProgress(effectiveOrdinal);
   return (
     streakWeekId: (holdMonday.difference(ps).inDays ~/ 7) + 1,
+    weekKey: calendarWeekKey(workoutDate),
+    weekIsCurrent: true,
     weekStartDate: holdMonday,
     planned: sessions.total,
     completedCount: sessions.completed,
   );
+}
+
+/// A key that is unique per CALENDAR week: the days since the epoch of that
+/// week's Monday (UTC-built, so no DST drift). Slice D (diagnose `b7d3e5`).
+///
+/// The plan's week id is NOT unique: the non-hold arm clamps it to 1..4 and it
+/// restarts with every phase, so a marker holding "the id last counted" would
+/// block a later week that shares the id (counted week 4, then three weeks that
+/// do not qualify, then week 4 of the next phase). The calendar week never
+/// repeats.
+/// Reads the persisted week marker (`progress['last_counted_week_key']`) as an
+/// int, tolerating a numeric double (a cloud value restored with the wider
+/// kill switch on) and treating anything else as "never counted" (-1).
+int lastCountedWeekKeyFrom(Object? raw) => raw is num ? raw.toInt() : -1;
+
+int calendarWeekKey(DateTime workoutDate) {
+  final day = DateTime.utc(workoutDate.year, workoutDate.month, workoutDate.day);
+  final monday = day.subtract(Duration(days: day.weekday - DateTime.monday));
+  return monday.millisecondsSinceEpoch ~/ Duration.millisecondsPerDay;
+}
+
+/// Slice D (diagnose `b7d3e5`, founder decision D5): the weekly-streak counter
+/// and its marker after one completed workout.
+///
+/// The marker means "the calendar week LAST COUNTED" ([calendarWeekKey]), so it
+/// is stamped ONLY when the counter increments. It used to be stamped on every
+/// completion, which made the first session of a week block the qualifying later
+/// one (6 planned, threshold 5: the marker already equalled the week by the fifth
+/// session, so the week never counted).
+///
+/// Forward-only: [streakWeeks] never decreases and [lastCountedWeekKey] is
+/// returned unchanged unless the week counts. No retroactive credit.
+({int weeks, int marker}) weeklyStreakAfterCompletion({
+  required int streakWeeks,
+  required int lastCountedWeekKey,
+  required int weekKey,
+  required bool weekIsCurrent,
+  required int planned,
+  required int completedCount,
+}) {
+  // [weekIsCurrent] false = the counts describe a PREVIOUS calendar week (the
+  // plan window rolled on and the clamped week reads stale completed rows).
+  final counts = weekIsCurrent &&
+      planned > 0 &&
+      completedCount >= (planned * 0.8).ceil() &&
+      weekKey != lastCountedWeekKey;
+  return counts
+      ? (weeks: streakWeeks + 1, marker: weekKey)
+      : (weeks: streakWeeks, marker: lastCountedWeekKey);
 }
 
 /// Builds a [WorkoutDayData] for [date] directly from that date's `schedule_*`
@@ -1975,23 +2040,25 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     );
     final planned = streakWeek.planned;
     final completedCount = streakWeek.completedCount;
-    int streakWeeks = (progress['current_streak_weeks'] as int?) ?? 0;
-    final lastStreakWeek = (progress['last_streak_week'] as int?) ?? -1;
-    if (planned > 0 &&
-        completedCount >= (planned * 0.8).ceil() &&
-        streakWeek.streakWeekId != lastStreakWeek) {
-      streakWeeks += 1;
-    }
+    final weekly = weeklyStreakAfterCompletion(
+      streakWeeks: (progress['current_streak_weeks'] as int?) ?? 0,
+      lastCountedWeekKey:
+          lastCountedWeekKeyFrom(progress['last_counted_week_key']),
+      weekKey: streakWeek.weekKey,
+      weekIsCurrent: streakWeek.weekIsCurrent,
+      planned: planned,
+      completedCount: completedCount,
+    );
 
     await UserRepository.instance.updateProgress({
       'total_workouts_done': totalDone,
       'current_streak_days': streakDays,
       'last_workout_date': dateStr,
-      'current_streak_weeks': streakWeeks,
-      // Still an int. Widens from {1..4} to {1..N} during a hold — verified
-      // safe: this field has exactly one reader (the cast above), no cloud
-      // column, and no badge/rank consumer.
-      'last_streak_week': streakWeek.streakWeekId,
+      'current_streak_weeks': weekly.weeks,
+      // Slice D: the calendar week LAST COUNTED (calendarWeekKey), local-only; it
+      // moves only when the counter does. The old last_streak_week (a plan week
+      // id, stamped on every completion) is no longer written or read.
+      'last_counted_week_key': weekly.marker,
     });
 
     // ── Create/update per-week streak row for Supabase streaks table ──
