@@ -126,3 +126,39 @@ List<Map<String, dynamic>> rankedSetRows(
   if (count <= 0 || sorted.length <= count) return sorted;
   return sorted.sublist(0, count);
 }
+
+/// L1a-3 (B-pass B F3): true only when the push bundle built from a RESTORED
+/// log would put exactly the cloud's content back, so recording its
+/// fingerprint can never hide a cloud row that differs (gapped per-set
+/// numbers the push renumbers, a summary count the per-set rows do not back,
+/// legacy NULL columns the push fills, a different exercise_id / day id,
+/// a differently formatted completed_at). When false the row simply pushes
+/// once, as before.
+bool restoredBundleEqualsCloud({
+  required Map<String, dynamic> summary,
+  required List<Map<String, dynamic>> sets,
+  required Map<String, dynamic> cloudSummary,
+  required List<dynamic> restoredSets,
+}) {
+  num? n(Object? v) => v is num ? v : null;
+  if (summary['workout_log_id'] != cloudSummary['workout_log_id']) return false;
+  final cloudExercise = cloudSummary['exercise_id'] ?? cloudSummary['exercise_name'];
+  if (summary['exercise_id'] != cloudExercise) return false;
+  if (cloudSummary['logging_type'] == null) return false;
+  if (n(summary['set_number']) != n(cloudSummary['set_number'])) return false;
+  if ((n(summary['duration_seconds']) ?? 0) !=
+      (n(cloudSummary['duration_seconds']) ?? 0)) {
+    return false;
+  }
+  if (summary['completed_at'] != cloudSummary['completed_at']) return false;
+  final restored = [
+    for (final r in restoredSets)
+      if (r is Map) n(r['set_number'])?.toInt()
+  ];
+  final pushed = [for (final r in sets) n(r['set_number'])?.toInt()];
+  if (restored.length != pushed.length) return false;
+  for (var i = 0; i < pushed.length; i++) {
+    if (restored[i] != pushed[i]) return false;
+  }
+  return true;
+}

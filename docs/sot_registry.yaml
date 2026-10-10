@@ -438,7 +438,7 @@ concepts:
       pg_advisory_xact_lock.
     writers:
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 255-555
+        line_range: 484-784
         method: _syncExerciseLogs
         notes: summary upsert on (user_id, workout_log_id, exercise_id, set_number), then the per-set upsert
       - file: lib/core/services/sync/sync_workout.dart
@@ -531,7 +531,7 @@ concepts:
       reader (supabase/functions/_shared/exercise_day.ts, L1b).
     writers:
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 255-420
+        line_range: 484-649
         method: _syncExerciseLogs
         notes: day from date / _dateFromKey(key); completed_at = latestWriteIso(...); uniquePerSetNumbers
     reader_manifest_complete: true
@@ -2460,8 +2460,13 @@ concepts:
       unchanged exercise log skips its re-upsert instead of re-walking the
       entire historical log every coalesced sync pass (14-40s per pass,
       routinely tripping the 45s restoreOpTimeout — 34x/25h on the founder's
-      account). The SOLE writer AND reader is _syncExerciseLogs -> writer/
-      reader drift is structurally impossible. The per-user workoutBox file
+      account). Writers: _syncExerciseLogs (via SyncSkipIndex.pushIfChanged,
+      confirmed pushes) and, since L1a-3 (diagnose f3d2a7), _restoreExerciseLogs
+      (via SyncSkipIndex.recordConfirmedAll: the fingerprint of a row the
+      restore WROTE, built by the SAME _buildExlogPushBundle the push uses, only
+      when its put ran). The SOLE reader is _syncExerciseLogs. SyncSkipIndex.commit
+      merges THIS pass's deltas into a fresh re-read of the stored map (L1a-3 /
+      D5a), so overlapping passes never overwrite each other's confirmations. The per-user workoutBox file
       IS the namespace -> auto-clears on swap/sign-out/DPDP; resetJourney
       ALSO clears it explicitly (mirrors sync_scheduled_payload_hash_index's
       A-fix-3, since it is a single reserved key, not an exlog_-prefixed one).
@@ -2488,6 +2493,9 @@ concepts:
       - file: lib/core/services/sync/sync_workout.dart
         line_range: 1-9999
         method: _syncExerciseLogs (confirmed :216; constructs a SyncSkipIndex(domain: SyncSkipDomain.exlog) and drives the summary + per-set upserts through its pushIfChanged closure -- the helper stores index[key]=fp ON CONFIRMED FULL-BUNDLE SUCCESS ONLY; commit(liveKeys:) prunes to live exlog_ keys and persists after the loop)
+      - file: lib/core/services/sync/sync_workout.dart
+        line_range: 1-9999
+        method: _restoreExerciseLogs (L1a-3 / M2) -- after its local-wins put RAN it collects exlogPayloadFingerprint(_buildExlogPushBundle(...)) per written key and records them in ONE SyncSkipIndex.recordConfirmedAll (owner check before the write; skipped under the exlog hash-skip kill switch); a local row that won the put is never fingerprinted
       - file: lib/core/services/sync_service.dart
         line_range: 1-9999
         method: exlogPayloadFingerprint (confirmed :340, pure static, byte-identical -- plan D4) + _hashSkipKillSwitchOn(SyncSkipDomain) (confirmed :329, generic kill-switch reader shared with nlog/every future domain, replaces the deleted _exlogHashSkipDisabled getter)
@@ -2518,7 +2526,7 @@ concepts:
         columns: [user_id, workout_log_id, exercise_id, set_number, weight_kg, reps, duration_secs, distance_km, completed_at]
         unique_constraint: "(user_id, workout_log_id, exercise_id, set_number)"
     sync_methods: [_syncExerciseLogs]
-    restore_methods: []
+    restore_methods: [_restoreExerciseLogs]
     atomicity:
       presence_only: false
       presence_only_reason: |
@@ -2934,7 +2942,7 @@ concepts:
           range(offset, offset + pageSize - 1) until a short page or the 50,000-row
           ceiling. tieBreak is gated by SyncFlags.restorePagingFixEnabled.
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 1293-1318
+        line_range: 1324-1349
         method: _readScheduleCompletionRows
         notes: |
           Kill switch off -> the pre-fix single un-paged read, verbatim; on ->
@@ -2969,7 +2977,7 @@ concepts:
     reader_manifest_complete: false
     readers:
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 1149-1232
+        line_range: 1165-1248
         method: _restoreScheduleCompletions
         semantic: aggregated
         fields_read: [scheduled_date, completed_at, duration_seconds, workout_name]
@@ -4041,7 +4049,7 @@ concepts:
           circular-dependency avoidance; that stays the caller's
           responsibility (`TemplatesNotifier.deleteTemplate`).
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 1623-1664
+        line_range: 1670-1711
         method: _drainPendingTemplateDeletes
         notes: |
           OI-252 — drains the queue by UPSERTing a tombstone per id
@@ -4093,7 +4101,7 @@ concepts:
           (legacy-key rekey gate, scoped to this function only — never
           `_restoreIfNeeded` as a whole) then `_drainPendingTemplateDeletes`.
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 1902-2059
+        line_range: 1933-2090
         method: _restoreWorkoutTemplates
         semantic: pass-through
         fields_read: [id, name, workout_type, deleted_at, template_exercises]
@@ -4108,7 +4116,7 @@ concepts:
           positive-evidence-only removal replaces it (a legacy sweep would
           delete every not-yet-pushed local template on a first restore).
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 1359-1523
+        line_range: 1390-1554
         method: _restoreWorkoutPlan
         semantic: cross-concept ghost-day filter
         fields_read: [template_id, template.deleted_at (embed)]
@@ -4985,7 +4993,7 @@ concepts:
           lookup could not answer" (null) as "none deleted": it skips every
           `tmpl_<uuid>` day then (B-pass reviewer B F1).
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 2004-2005
+        line_range: 2051-2052
         method: deletedTemplateCloudIdsForUser
         notes: |
           Public forwarder of `_deletedTemplateCloudIdsOrNull`: `null` = could not

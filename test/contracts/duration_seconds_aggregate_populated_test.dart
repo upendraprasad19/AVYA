@@ -89,10 +89,10 @@ void main() {
     });
 
     test('aggregate computation handles both per-set field names', () {
-      // The aggregate code lives just above the upsert call within
-      // _syncExerciseLogs. Pull a wider window so we can assert on it.
-      final methodStart =
-          syncSrc.indexOf('Future<void> _syncExerciseLogs(');
+      // L1a-3: the aggregate code now lives in _buildExlogPushBundle, which
+      // is defined just above _syncExerciseLogs and its upsert call. Pull a
+      // wider window (bundle start .. upsert) so we can assert on it.
+      final methodStart = syncSrc.indexOf('_buildExlogPushBundle(String userId');
       expect(methodStart, greaterThan(0));
       final upsertStart =
           syncSrc.indexOf("from('workout_log_exercises').upsert(", methodStart);
