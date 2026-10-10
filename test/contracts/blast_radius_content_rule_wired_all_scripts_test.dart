@@ -79,8 +79,9 @@ void main() {
   ///   - pre-push.sh          self-referential — it decides whether the full
   ///                          suite runs before a push, so an edit disabling
   ///                          it skips the suite on the very push that lands
-  ///                          it. CI is no substitute: golden-image tests run
-  ///                          ONLY in that local suite.
+  ///                          it. A branch push now relies on the PR's CI
+  ///                          (OI-275); neither CI nor the local suite runs the
+  ///                          golden-image tests (both exclude the tag).
   ///   - safe_commit.sh /     the only sanctioned write paths (git_safety_hook
   ///     safe_push.sh         exists purely to force them); zero behavioural
   ///                          coverage of their own verification logic.

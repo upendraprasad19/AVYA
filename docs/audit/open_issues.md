@@ -5476,7 +5476,7 @@ recurring concern again before this lands.
 ## OI-275 — Cut release-cycle wall-clock: a version-only bump runs the full suite 3x (pre-push x2 + CI) plus branch/PR/record; and the agent stops for petty approvals
 
 - **Status**: OPEN
-- **Blocked on**: none — founder directive 2026-10-01 is "cut the timing wherever possible, max autonomy"; this entry is the work item, not a question.
+- **Blocked on**: item D only — the founder-owned settings allow-rule `Bash(sh scripts/safe_pr_merge.sh:*)` (a settings change is not mine to make). Items A–C and the levers beyond OI-275 are being delivered by batches B1–B4 in `docs/plans/2026-10-10-release-cycle-speedup.md` (founder directive 2026-10-09: "push and merge and CI is taking a lot of time everyday; plan and implement all of these").
 - **Verified**: 2026-10-01 — timings below are from the AAB +48 session (pre-push log `38:56` full-suite runtime, CI run `36772623448` Unit Tests 11m48s, jobs listed by `gh pr checks 63`); the exemption behavior is read from `scripts/check_plan_review_record_exists.dart` header (OI-58a) and not re-run.
 - **Identified**: 2026-10-01 · filed via mint_oi.sh from branch `oi-fast-version-bump`
 
@@ -5490,6 +5490,8 @@ recurring concern again before this lands.
 - B: a documented one-push sequence for a bump (bump + record in ONE push) in `.claude/skills/build-apk/SKILL.md` Gate 2, so the suite never runs twice for one batch.
 - C: `/build-apk` Gate 2 gains a "versionCode bump" fast path that names the exemption route and the classifier-blocked steps (PR merge) so the agent lists them in its first reply.
 - D: a durable allowlist rule (settings.json) for `gh pr merge` on this repo's own branches once CI is green, if the founder grants it — otherwise the agent must request the go-ahead in its FIRST reply, never at the end. (Settings changes are the founder's; this item records the ask.)
+
+**Progress (2026-10-10):** plan reviewed twice (11 + 8 P1s applied; split into B1..B4). **B1** (pre-push skips the local suite for BRANCH pushes at a known >= account tier; `scripts/safe_pr_merge.sh` fail-closed merge wrapper; diagnose c7a3e9) delivers most of A in practice: a bump's branch push is now analyze-only. A's literal wording (a content-aware classifier below `account`) is NOT built, deliberately: after B1 it only helps a direct push of a bump to `main`, which keeps the full suite by design (fail-safe). **B2** adds the content-keyed merge-commit exemption so a bump PR needs no plan-review record or B-pass (C: the `/build-apk` Gate 2 fast path + one-push sequence). B3 (parallel whole-file test matrix) and B4 (skip the duplicate main run by tree hash) are independent levers.
 
 **Constraints:** do not weaken the full-suite gate for any diff that touches code; the exemption must key on diff CONTENT (OI-58 subject-spoof history). Needs a diagnose-doc and a bare-repo e2e per §4.4.
 

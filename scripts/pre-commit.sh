@@ -113,8 +113,9 @@ fi
 #       Treat 845s as a FLOOR, not a measurement.
 #
 # The decision does not turn on which figure is right: under either, the two
-# flutter steps dominate, and both are ALREADY re-run at pre-push (>=account)
-# and in CI, since test/contracts/ is a strict SUBDIRECTORY of test/. Neither
+# flutter steps dominate, and both are ALREADY re-run in CI (and at pre-push on a
+# main/develop push at >=account; a branch push relies on the PR's CI since
+# 2026-10-10, OI-275), since test/contracts/ is a strict SUBDIRECTORY of test/. Neither
 # step is scoped to the staged diff, so a one-line change paid the full cost.
 #
 # Both now run in scripts/pre-push.sh, which fires ONCE per batch (CLAUDE.md

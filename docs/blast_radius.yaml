@@ -152,12 +152,14 @@ paths:
   # merge — sat at feature tier.
   #
   # pre-push.sh is the self-referential one: it decides whether the ~7-min full
-  # suite runs before code leaves the machine (:64, a string equality against
-  # "feature"), so an edit disabling it would clear zero review gate AND skip
-  # the suite on the very push that lands it. CI is not a substitute —
-  # .github/workflows/test.yml (the `unit-test` job, `--exclude-tags golden`)
-  # excludes golden-image tests, which run ONLY in
-  # that local suite.
+  # suite runs before code leaves the machine (a string equality against
+  # "feature", plus -- since 2026-10-10, OI-275 -- the narrow BRANCH_ONLY skip
+  # in push_class), so an edit disabling it would clear zero review gate AND
+  # skip the suite on the very push that lands it. CI is the full-suite gate for
+  # a branch push now (scripts/safe_pr_merge.sh refuses a red PR). Neither CI
+  # nor the pre-push suite runs the golden-image tests (both pass
+  # `--exclude-tags golden`); corrected 2026-10-10, this comment used to say they
+  # "run ONLY in that local suite".
   #
   # commit-msg.sh is the sole LOCAL enforcement of coding rule 22 (every
   # fix/bug/regression commit must cite a validating diagnose-doc). Hard-fail,
@@ -281,6 +283,15 @@ paths:
   # for the same reason.
   - { glob: "scripts/_git_lock.sh", tier: platform }
   - { glob: "scripts/safe_merge.sh", tier: platform }
+  # OI-275 (2026-10-10): safe_pr_merge is the compensating control that makes a
+  # PR merge depend on green CI now that pre-push no longer runs the local suite
+  # for a branch push (`main` has NO required status checks). Without these
+  # pins an edit that loosened the required-job list would fall through to the
+  # scripts/** feature tier and clear no review gate -- the exact mistake the
+  # safe_commit/safe_push/safe_merge entries above exist to prevent.
+  - { glob: "scripts/safe_pr_merge.sh", tier: platform }
+  - { glob: "scripts/safe_pr_merge.dart", tier: platform }
+  - { glob: "scripts/safe_pr_merge_lib.dart", tier: platform }
   - { glob: "scripts/validate_audit_closure.dart", tier: platform }
   - { glob: "scripts/check_no_deferral_euphemism.dart", tier: platform }
   # The rule-22 diagnose-doc chain commit-msg.sh drives, promoted with it.

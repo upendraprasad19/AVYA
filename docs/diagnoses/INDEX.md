@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### release_cycle_prepush_gate (1 bugs)
+- 2026-10-10 c7a3e9 — A change to this repo spends most of its wall-clock waiting on test suites that run more than once. Measured 2026-10-09/10: the founder PC's local pre-push full suite takes about 39 minutes (one…
+
 ### pending_exlog_deletes (2 bugs)
 - 2026-10-09 c6a9d3 — An exercise log deleted on one device left a live cloud row in four cases: the drain tombstoned only the SAME set count (a stale count stayed live), after migration 151 it could tombstone a newer…
 - 2026-10-09 d7bae4 — The exercise-log delete drain had no owner check: it iterated a copy of the queue, and its queue key (v5 of workout_<date> plus the exercise name) is user-independent, so an account swap during a…
@@ -1563,6 +1566,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-10-10 | c7a3e9 | A change to this repo spends most of its wall-clock waiting on test suites that run more than once. Measured 2026-10-09/10: the founder PC's local pre-push full suite takes about 39 minutes (one… | release_cycle_prepush_gate | test/scripts/pre_push_branch_push_skip_e2e_test.dart |
 | 2026-10-09 | c6a9d3 | An exercise log deleted on one device left a live cloud row in four cases: the drain tombstoned only the SAME set count (a stale count stayed live), after migration 151 it could tombstone a newer… | pending_exlog_deletes | test/sync/exlog_delete_u4_behavioral_test.dart |
 | 2026-10-09 | d7bae4 | The exercise-log delete drain had no owner check: it iterated a copy of the queue, and its queue key (v5 of workout_<date> plus the exercise name) is user-independent, so an account swap during a… | pending_exlog_deletes | test/sync/exlog_delete_u4_behavioral_test.dart |
 | 2026-10-09 | b5f8c2 | An exercise-log push derived workout_log_id from log['date'] ?? '' so a row without a date landed in the shared v5('workout_') bucket; it sent a restored row's old created_at as completed_at even… | exlog_workout_day | test/sync/exlog_push_u3_behavioral_test.dart |
