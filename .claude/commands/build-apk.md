@@ -431,7 +431,7 @@ MD5: <hash>
 If `$ARGUMENTS` contains `--from-green`: the commit being built has already been pushed and
 verified green by CI, so the **redundant local re-run** of Gate 4 (analyze) + Gate 5 (full
 `flutter test`) + the dart gates (7–12, 14–17, 23) is skipped. Lean-workflow batch
-(2026-06-01): pre-push + CI just ran these on this exact SHA, and the `flutter clean` build
+(2026-06-01): CI just ran these on this exact SHA (since 2026-10-10 the local pre-push suite no longer runs for a branch push, so CI on the PR/`main` is the evidence, not a local run), and the `flutter clean` build
 below recompiles everything regardless — a second analyze/test pass is ~7–10 min of zero new
 signal.
 

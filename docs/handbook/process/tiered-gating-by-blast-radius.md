@@ -16,7 +16,7 @@ Don't gate a docs/data push as hard as a payment-code push.
 - **`pre-push`** runs `flutter analyze` **unconditionally** (above every early exit), then
   the full `flutter test` locally only when the pushed range is ≥`account` blast-radius.
   `feature`-tier pushes (docs, most of `scripts/`, `.claude/`, `backups/`, profile-only UI)
-  **skip** the local suite. ⚠ `scripts/` is not uniformly feature-tier — the hook scripts
+  **skip** the local suite; so does a ≥`account` **branch** push (2026-10-10, OI-275: CI on the PR is the gate, merge via `sh scripts/safe_pr_merge.sh <pr>`). ⚠ `scripts/` is not uniformly feature-tier — the hook scripts
   themselves, and the review/blast-radius machinery, are individually pinned `platform`
   (verify with `printf '%s\n' <path> | dart run scripts/blast_radius_from_diff.dart -`).
   ⚠ **This bullet used to end "— CI backstops them ~2 min later", which is false for most
@@ -45,7 +45,7 @@ Don't gate a docs/data push as hard as a payment-code push.
 3. **Batch commits; push once per logical batch.** Each push re-runs the tiered pre-push
    + a fresh CI run — commit→push→commit→push triples the cost on the same code.
 4. **Don't manually re-run the full `flutter test`** when the hooks/CI will. Run targeted
-   tests during dev; pre-push (≥account) + CI are the full-suite gates.
+   tests during dev; CI on the PR + `main` (and pre-push on a `main`/`develop` push at ≥account) are the full-suite gates.
 5. **When parallelizing the gate loop, preserve the Gate-33 markers** — the literal
    `scripts/check_*.dart` glob + the `case "$GATE_NAME" in … esac` allowlist. Bound
    concurrency (`PRE_COMMIT_GATE_JOBS`, default 4) so you don't fork 28 Dart VMs.

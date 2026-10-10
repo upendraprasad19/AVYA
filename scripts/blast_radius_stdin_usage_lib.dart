@@ -71,7 +71,7 @@ bool isPositionalMisuse(String addedLine) {
   // `2>&1`, `&>`) or a line-continuation backslash — never a genuine
   // second CLI argument (which WOULD change the script's own args.length
   // and defeat its `args[0] == '-'` check). Verified against the real
-  // committed shape at scripts/pre-push.sh:168:
+  // committed shape in scripts/pre-push.sh (the blast_radius_from_diff TIER pipeline):
   //   | "$DART_BIN" run scripts/blast_radius_from_diff.dart - 2>/dev/null \
   final safeTrailingToken = RegExp(r'''^(\\|\d*>&?\d*\S*|&>\S*|[`')"]+)$''');
   for (final tok in tokens.skip(1)) {

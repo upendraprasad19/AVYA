@@ -1,0 +1,179 @@
+# Closure ledger — speedup-b1-prepush (release-cycle speedup, batch B1: pre-push branch-push skip + safe_pr_merge.sh; OI-275)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no `deferred:` key.
+# `<branch>@branch` is the in-branch commit form (precedent: unitb-deload-reason.closure.yaml).
+#
+# Sources: the batch's own units (U*), the independent B-pass (BP-1..BP-12, docs/reviews/speedup-b1-prepush-bpass.md,
+# 0 P0 / 0 P1 / 12 P2, all fixed here), and one failure the full local suite surfaced (REG-1).
+
+batch: speedup-b1-prepush
+plan_review_record: docs/plan-reviews/speedup-b1-prepush.md
+bpass_review: docs/reviews/speedup-b1-prepush-bpass.md
+diagnose_docs:
+  - docs/diagnoses/2026-10-10-release-cycle-wallclock-c7a3e9.md
+
+total_findings: 22
+
+findings:
+  # ── Batch units ──────────────────────────────────────────────────────
+  - id: U5-1
+    title: "pre-push skips the ~39-minute local suite for a BRANCH push at a known >= account tier (CI on the open PR is the gate)"
+    terminal_state: closed_in_commit
+    commit: speedup-b1-prepush@branch
+    verification: >
+      scripts/pre-push.sh push_class + the BRANCH_ONLY arm. test/scripts/pre_push_branch_push_skip_e2e_test.dart (23 cases, the REAL hook with
+      git-style stdin and stub flutter/dart); test/contracts/pre_push_blast_radius_failsafe_test.dart (6). Mutation proof in the diagnose doc
+      and the B-pass file: every mutant RED, files restored byte-identical.
+
+  - id: U5-2
+    title: "A delete-only branch push lands nothing and skips even with an empty range / no origin/main"
+    terminal_state: closed_in_commit
+    commit: speedup-b1-prepush@branch
+    verification: >
+      DELETE_ONLY block sits before the origin/main and empty-range fail-safes. Cases: empty range, no origin/main fixture repo, 64-zero sha256
+      delete, mixed update+delete at an unknown tier (must run the suite), delete of main (must run). Mutants M2/M3 RED.
+
+  - id: U5-3
+    title: "Mirror: main/develop, tag, mixed, malformed/empty stdin, unknown tier and PRE_PUSH_FULL=1 still run the full suite"
+    terminal_state: closed_in_commit
+    commit: speedup-b1-prepush@branch
+    verification: >
+      RUN-half cases of the e2e file and the reworded + mirror assertions in pre_push_blast_radius_failsafe_test.dart. The reviewer fed 33
+      hostile stdin shapes to the real classifier under dash and gawk: none lets a push to main/develop classify BRANCH_ONLY or DELETE_ONLY.
+
+  - id: U4-1
+    title: "scripts/safe_pr_merge.sh: fail-closed merge wrapper (main has NO required status checks)"
+    terminal_state: closed_in_commit
+    commit: speedup-b1-prepush@branch
+    verification: >
+      safe_pr_merge_lib.dart (pure evaluator) + safe_pr_merge.dart + the sh wrapper; pinned platform in docs/blast_radius.yaml. Tests:
+      safe_pr_merge_lib_test.dart (65, incl. the REAL PR #96 check-runs fixture and a mirror against the `name:` fields of test.yml),
+      safe_pr_merge_e2e_test.dart (17, against a fake gh). Mutation proof recorded.
+
+  - id: U4-2
+    title: "Standing permission for the wrapper: settings allow-rule `Bash(sh scripts/safe_pr_merge.sh:*)` (OI-275 item D)"
+    terminal_state: blocked_on_user
+    reason: >
+      A settings change is the founder's to make (not mine). The rule names the wrapper ONLY, never raw `gh pr merge` (a raw allow would let a
+      session merge a red PR). Until it is added, a session's merge via the wrapper may be classifier-blocked and needs the founder's yes.
+
+  - id: DOC-1
+    title: "Doc ripple: every passage describing the old pre-push behaviour"
+    terminal_state: closed_in_commit
+    commit: speedup-b1-prepush@branch
+    verification: >
+      CLAUDE.md (section 0 pre-push bullet, section 4.3 incl. the new merge-via-wrapper rule, section 4.4 rule 20),
+      docs/architecture/{hooks.md,process-invariants-detail.md}, docs/handbook/process/tiered-gating-by-blast-radius.md,
+      docs/onboarding/FRESH_CLONE.md, scripts/{setup-hooks.sh,batch_close_lib.dart,pre-commit.sh}, .claude/commands/build-apk.md. No test pins the
+      reworded text (grep); check_context_artifact_budget PASS.
+
+  - id: DOC-2
+    title: "Corrected the false claim that the golden-image tests run in the pre-push suite"
+    terminal_state: closed_in_commit
+    commit: speedup-b1-prepush@branch
+    verification: >
+      Both CI and pre-push pass --exclude-tags golden (pre-push.sh run_full_suite, pinned by pre_push_matches_ci_invocation_test.dart). Corrected in
+      dart_test.yaml, docs/blast_radius.yaml, .github/workflows/test.yml (comment) and
+      test/contracts/blast_radius_content_rule_wired_all_scripts_test.dart. The planned goldens-only local step was DROPPED (it would have been a new gate).
+
+  - id: HOOK-1
+    title: "The installed git hook is a COPY of scripts/pre-push.sh: each clone keeps the old behaviour until `sh scripts/setup-hooks.sh` is re-run"
+    terminal_state: blocked_on_user
+    reason: >
+      check_hooks_installed.dart only WARNS on drift. After this batch merges, `sh scripts/setup-hooks.sh` must run on every clone: this machine
+      (the agent runs it from Bash, which has `sh`, once the founder gives the merge go) and the VPS clone (founder; the founder's PowerShell has no `sh`).
+      Documented in docs/architecture/hooks.md.
+
+  - id: OI275-A
+    title: "OI-275 acceptance A (a version-only diff classifies below account so pre-push skips the suite)"
+    terminal_state: verified_clean
+    evidence: >
+      Not built as worded, deliberately (plan section 3): after this batch a bump's BRANCH push is analyze-only and the merge happens on GitHub, so a
+      content-aware classifier would help only a direct push of a bump to main, which keeps the full suite by design (fail-safe). It would also add an
+      env var needing a spawn_env_manifest classification and a second classifier path next to a gate with four prior failed attempts. B2 delivers the
+      remaining value (no plan-review record / B-pass for a bump merge). Recorded on the OI-275 board entry.
+
+  - id: REG-1
+    title: "Full-suite failure: test/contracts/spawn_env_manifest_test.dart D2 recursion pin did not list the new e2e test that runs the real hook"
+    terminal_state: closed_in_commit
+    commit: speedup-b1-prepush@branch
+    verification: >
+      Full local suite (38 min): 8,542 passed, 1 failed. The pin enumerates every test that executes the hook; pre_push_branch_push_skip_e2e_test.dart
+      (guarded by CONTRACT_SWEEP_SKIP=1) was added to the expected set. spawn_env_manifest_test + spawn_sites_guard_test green. A second trip of the
+      same test (the sh wrapper's `${ALLOW:+...}` read as an env read) was fixed by rewriting it as a plain `if`.
+
+  # ── B-pass findings (all P2; docs/reviews/speedup-b1-prepush-bpass.md) ─
+  - id: BP-1
+    title: "Zero-test anchor unpinned (mutant /^0+/ survived)"
+    terminal_state: closed_in_commit
+    commit: speedup-b1-prepush@branch
+    verification: "Cases with local shas 0aaa... and 000...1 at an unknown tier + empty range; mutant now RED (1)."
+
+  - id: BP-2
+    title: "Mixed update+delete counted as DELETE_ONLY survived"
+    terminal_state: closed_in_commit
+    commit: speedup-b1-prepush@branch
+    verification: "Mixed push at unknown tier and empty range expects the suite; mutant now RED (1)."
+
+  - id: BP-3
+    title: "DELETE_ONLY block below the origin/main guard survived"
+    terminal_state: closed_in_commit
+    commit: speedup-b1-prepush@branch
+    verification: "Third fixture repo with no origin/main + delete-only case; mutant now RED (1)."
+
+  - id: BP-4
+    title: "Core predicate `!= success` unpinned against timed_out/action_required/startup_failure/stale/neutral"
+    terminal_state: closed_in_commit
+    commit: speedup-b1-prepush@branch
+    verification: "Per-required-job loop over the five conclusions; mutant now RED (5)."
+
+  - id: BP-5
+    title: "Unlisted job with only cancelled runs silently ignored (asymmetric floor rule)"
+    terminal_state: closed_in_commit
+    commit: speedup-b1-prepush@branch
+    verification: "evaluateCheckRuns reports every unlisted cancelled-only job; two tests; mutant now RED (1)."
+
+  - id: BP-6
+    title: "PR that edits its own CI (.github/) could make required jobs green vacuously; base branch unchecked"
+    terminal_state: closed_in_commit
+    commit: speedup-b1-prepush@branch
+    verification: >
+      Paginated pulls/N/files read (fail closed); .github/ edits refused without --allow-workflow-change (sh wrapper forwards that one literal
+      flag); base must be main/develop. Lib + e2e tests; mutants (CI-config off: 3 red, base check off: 2 red).
+
+  - id: BP-7
+    title: "Exit-0 `gh pr merge` reported as merged without reading the state back"
+    terminal_state: closed_in_commit
+    commit: speedup-b1-prepush@branch
+    verification: "State read back; not MERGED => exit 2 UNVERIFIED. e2e test with PR_STATE_AFTER=OPEN; mutant now RED (1)."
+
+  - id: BP-8
+    title: "Skip message implied a CI backstop for PR-less branches"
+    terminal_state: closed_in_commit
+    commit: speedup-b1-prepush@branch
+    verification: "Message states no suite has run until a PR into main/develop exists; asserted by an e2e case."
+
+  - id: BP-9
+    title: "sh wrapper hand-off and argument forwarding untested"
+    terminal_state: closed_in_commit
+    commit: speedup-b1-prepush@branch
+    verification: "Hand-off test, scratch-copy + stub-dart forwarding test, argument-allowlist test; three wrapper mutants RED (2, 1, 1)."
+
+  - id: BP-10
+    title: "Stale pre-push claims and line-number citations in comments and docs"
+    terminal_state: closed_in_commit
+    commit: speedup-b1-prepush@branch
+    verification: "Reworded in pre-commit.sh, FRESH_CLONE.md, test.yml (comment only), two test comments, contract_sweep_lib(+test), stdin-usage lib(+test), analyze_narrower test, safe_merge.sh; related tests green."
+
+  - id: BP-11
+    title: "Counts in the diagnose doc off by one; mutant forms not stated"
+    terminal_state: closed_in_commit
+    commit: speedup-b1-prepush@branch
+    verification: "Counts re-measured (23 / 65 / 17 / 6) and the mutation record rewritten; validate_diagnose_doc PASS."
+
+  - id: BP-12
+    title: "New glossary rows lacked the third column"
+    terminal_state: closed_in_commit
+    commit: speedup-b1-prepush@branch
+    verification: "Third cell added to both rows (awk cell count = 3)."
+
+closed_count: 22

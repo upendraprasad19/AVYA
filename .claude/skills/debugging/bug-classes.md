@@ -1663,3 +1663,12 @@ added, false of the flip being performed.
 - **Test shape:** two index instances built before either commits; mutate the merge base back to the snapshot. For the restore: restore then push and count the upserts, a local-wins row that is NOT recorded, and both kill switches.
 - **Prior incidents:** OI-204 / d3f8a6 (the skip index itself), e6a2d4 (restore completeness).
 - **Regression test:** `test/sync/sync_skip_index_overlap_commit_test.dart`, `test/sync/exlog_restore_fingerprint_l1a3_behavioral_test.dart`; diagnoses `a8c4e5`, `f3d2a7`.
+
+### 2.99 A new script line or test trips a repo-wide census it never mentions: the env-read manifest and the "tests that run the real hook" pin (NEW 2026-10-10)
+
+- **Telltale:** a change that is correct and well-tested goes red in `test/contracts/spawn_env_manifest_test.dart`, in a file you did not touch, with `Actual: Set:['ALLOW']` or a set of test paths one larger than expected. It surfaces only in the FULL suite (38 minutes); the targeted tests for the change are green.
+- **Root-cause shape:** two derived censuses read the whole tree. (1) Any `${X:-..}` / `${X:+..}` in `scripts/*` is classified as a READ of environment variable `X`, even when `X` is a plain local the script assigned two lines earlier, so a harmless convenience expansion demands a human classification. (2) The D2 recursion pin enumerates every test that executes the real `scripts/pre-push.sh` (or the sweep runner) and fails when a new one appears, because such a test can recurse if it forgets `CONTRACT_SWEEP_SKIP`.
+- **Fix pattern:** write the plain form (`if [ -n "$ALLOW" ]; then ... fi`), not the expansion. For a new test that runs the hook (even a verbatim COPY of it in a scratch repo), set `CONTRACT_SWEEP_SKIP=1` AND add its path to the expected set in the D2 pin, with a one-line comment saying why it is safe.
+- **How to find it BEFORE the 38-minute run:** after adding a script or a test that spawns one, run `test/contracts/spawn_env_manifest_test.dart` and `test/contracts/spawn_sites_guard_test.dart` (about 20 seconds). They are the two files that scan the whole tree for what your change just added.
+- **Prior incidents:** the same family as 2.91 (a spawn test green only because of the ambient environment); batch `speedup-b1-prepush`, 2026-10-10 (hit twice in one batch: once for the new e2e test, once for `${ALLOW:+..}` in `safe_pr_merge.sh`).
+- **Regression test:** `test/contracts/spawn_env_manifest_test.dart` (the D2 pin lists `test/scripts/pre_push_branch_push_skip_e2e_test.dart`); diagnose `c7a3e9`.

@@ -24,7 +24,8 @@ bool isGolden(String p) => p.startsWith('test/goldens/');
 /// surfaces as `unmapped`, which is print-only — never a fallback, never a
 /// failure. CLAUDE.md is doc-like not because tests ignore it (77 reference
 /// it) but because keying on it over-selects a third of the tree, and it is
-/// pinned platform so pre-push runs the full suite for it regardless.
+/// pinned platform so a main/develop push runs the full suite for it regardless
+/// (a branch push relies on the PR's CI, OI-275).
 const _contractDocDirs = <String>['docs/audit/', 'docs/architecture/'];
 bool isDocLike(String p) =>
     (p.endsWith('.md') || p.endsWith('.txt')) && !_contractDocDirs.any(p.startsWith);

@@ -282,6 +282,8 @@ void main() {
       }
       expect(capable.toSet(), {
         'test/scripts/pre_push_analyze_always_e2e_test.dart',
+        // OI-275 B1: runs a verbatim COPY of the hook with stdin fixtures; guarded by CONTRACT_SWEEP_SKIP=1.
+        'test/scripts/pre_push_branch_push_skip_e2e_test.dart',
         'test/scripts/contract_sweep_e2e_test.dart',
       }, reason: 'the detector must find exactly the tests that execute the hook or spawn the sweep runner');
       expect(unguarded, isEmpty,
