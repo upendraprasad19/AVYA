@@ -220,6 +220,7 @@ Per CLAUDE.md rules 21 + 22:
 | 2.91 | A spawn test is green only because nothing in the ambient environment contradicts it (hand-copied env filters; only a poisoned-parent run on both arms measures them) | a test keeps its own `_cleanEnv()` and passes everywhere; 6 of 50 files failed or leaked under a poisoned parent in their original form | test/contracts/spawn_sites_guard_test.dart |
 | 2.97 | A day window selected by a column that is the WRITE time, not the day (`completed_at`; a recency window shorter than its cron period) | an old log edited today counts in today's window; a moved log lands in the wrong week; an old PR re-announces; hourly cron reads only 20 minutes | supabase/functions/_shared/live_exercise_rows_test.ts |
 | 2.98 | A history index committed as a whole-map snapshot, and a restore that records nothing it wrote | unchanged rows re-uploaded; the first push after a restore re-upserts every restored row | test/sync/sync_skip_index_overlap_commit_test.dart |
+| 2.99 | A new script line or test trips a repo-wide census it never mentions (env-read manifest, tests-that-run-the-hook pin) | correct change, targeted tests green, FULL suite red in spawn_env_manifest_test.dart; `Actual: Set:['ALLOW']` | test/contracts/spawn_env_manifest_test.dart |
 
 ---
 
