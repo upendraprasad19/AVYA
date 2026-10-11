@@ -128,7 +128,8 @@ void main() {
       {bool withRecord = true,
       String? recordBranchField,
       String touchPath = 'pubspec.yaml',
-      bool withBpass = true}) {
+      bool withBpass = true,
+      bool withHermes = false}) {
     _run('git', ['checkout', '-q', '-B', branchName, 'main'], repo);
     if (touchPath == 'pubspec.yaml') {
       File('$repo/pubspec.yaml')
@@ -153,11 +154,16 @@ blast_radius: platform
 review_rounds: 2
 ground_truth_verified: true
 verdict: converged
-${withBpass ? 'bpass: accepted\nbpass_review: docs/reviews/probe.md\n' : ''}---
+${withBpass ? 'bpass: accepted\nbpass_review: docs/reviews/probe.md\n' : ''}${withHermes ? 'hermes: accepted\nhermes_report: docs/audit/probe-hermes.md\n' : ''}---
 ''');
       Directory('$repo/docs/reviews').createSync(recursive: true);
       File('$repo/docs/reviews/probe.md')
           .writeAsStringSync('verdict: accepted\n');
+      if (withHermes) {
+        Directory('$repo/docs/audit').createSync(recursive: true);
+        File('$repo/docs/audit/probe-hermes.md')
+            .writeAsStringSync('verdict: accepted\n');
+      }
       _run('git', ['add', '-A'], repo);
       _run('git', ['commit', '-qm', 'record'], repo);
     } else if (recFile.existsSync()) {
@@ -210,6 +216,27 @@ ${withBpass ? 'bpass: accepted\nbpass_review: docs/reviews/probe.md\n' : ''}---
         withRecord: false);
     expect(code, 0,
         reason: 'syncing main with its own remote is not a feature landing');
+  });
+
+  // OI-321 / blast-radius-clean-orphan-media (2026-10-11): supabase/functions/clean-orphan-media/** is catastrophic.
+  // The classifier and the commit-time review gate each have a test of their own for that rule; THIS gate keeps a
+  // PRIVATE copy of the registry reader that nothing else can import, and it is the one that demands `hermes: accepted`
+  // at the merge. Real registry (copied above), real gate, a probe path inside the directory.
+  test('catastrophic path (clean-orphan-media/): a platform-grade record WITHOUT hermes FAILS', () {
+    final code = mergeAndRunGate('co-media-no-hermes',
+        "Merge branch 'co-media-no-hermes' - probe",
+        touchPath: 'supabase/functions/clean-orphan-media/zz_probe.ts');
+    expect(code, 1, reason: lastGateOut);
+    expect(lastGateOut, contains('catastrophic requires hermes: accepted'),
+        reason: 'it must fail for the hermes rule, not for some other defect');
+  });
+
+  test('catastrophic path (clean-orphan-media/): the same diff WITH an accepted hermes report PASSES (control)', () {
+    final code = mergeAndRunGate('co-media-with-hermes',
+        "Merge branch 'co-media-with-hermes' - probe",
+        touchPath: 'supabase/functions/clean-orphan-media/zz_probe.ts',
+        withHermes: true);
+    expect(code, 0, reason: lastGateOut);
   });
 
   test('REGRESSION: a record naming a DIFFERENT branch is rejected', () {

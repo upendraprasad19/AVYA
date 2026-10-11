@@ -41,6 +41,17 @@ paths:
   - { glob: "supabase/functions/razorpay-webhook/**", tier: catastrophic }
   - { glob: "supabase/functions/verify-payment/**", tier: catastrophic }
   - { glob: "supabase/functions/delete-account/**", tier: catastrophic }
+  # OI-321 (founder decision 2026-10-11): the one scheduled bulk-delete over user files. docs/operations/CRON_REGISTRY.md
+  # calls it the highest-consequence endpoint behind the shared secret, and its f0b6d8 defect would have deleted a PRO
+  # user's chat media on an unreadable subscription read. Until this rule it matched only the `supabase/functions/**`
+  # platform catch-all at the bottom of this file.
+  # The whole directory (tests and docs in it included), so a new file next to index.ts/logic.ts inherits the tier.
+  # Inputs to the delete decision that stay platform ON PURPOSE: `_shared/subscription.ts` (home of readProState; seven
+  # other non-test files import it and none of them deletes anything), `_shared/paged_fetch.ts` (candidate paging),
+  # `_shared/cron_telemetry.ts` (the run status that pages), the candidate RPC `find_orphan_chat_media` (migration 071)
+  # and the cron definition (`supabase/migrations/**`). An edit there is reviewed at platform (a B-pass and a plan-review
+  # record, no hermes pass) unless the migration text mentions SECURITY DEFINER or its filename matches a catastrophic glob.
+  - { glob: "supabase/functions/clean-orphan-media/**", tier: catastrophic }
   - { glob: "supabase/functions/admin-*/**", tier: catastrophic }
   - { glob: "supabase/functions/_shared/cron_auth.ts", tier: catastrophic }
   - { glob: "supabase/migrations/*pseudonymize*.sql", tier: catastrophic }
