@@ -1,0 +1,44 @@
+# Closure ledger — coach-measurement-entry (L2a). Gate 40: one terminal_state per finding, no `deferred:` key.
+batch: coach-measurement-entry
+plan_review_record: docs/plan-reviews/coach-measurement-entry.md
+diagnose_docs:
+  - docs/diagnoses/2026-10-11-measurement-push-blanks-other-devices-c8a4d1.md
+total_findings: 8
+closed_count: 8
+
+findings:
+  - id: U1
+    title: "merge-safe body_measurements push: one payload builder, wire body carries only held sites, fingerprint of the legacy-shape content, kill switch disable_measurement_merge_safe_push"
+    terminal_state: closed_in_commit
+    commit: PENDING
+    verification: "test/sync/body_measurement_push_merge_safe_test.dart + test/sync/measurement_push_rules_test.dart (HEAD wire bodies and fingerprints pinned); 25 mutants all red, baseline 61 passed"
+  - id: U2
+    title: "one site registry kBodyMeasurementSites (+ TS twin, parity test, presence-only derivation test); the five Dart site lists derive from it; blast-radius _declined entry"
+    terminal_state: closed_in_commit
+    commit: PENDING
+    verification: "test/contracts/body_measurement_sites_parity_test.dart, body_measurement_sites_derivation_test.dart, blast_radius_sync_engine_platform_test.dart; registry, twin and prompt mutants red"
+  - id: BPASS
+    title: "B-pass before the merge (>=account, self-triggered)"
+    terminal_state: closed_in_commit
+    commit: PENDING
+    verification: "docs/reviews/coach-measurement-entry-bpass.md"
+  - id: RESIDUALS
+    title: "recorded residuals: old clients still push nulls (an unchanged day is not re-pushed; heals on the next local edit); a stale held value can overwrite a corrected one ('last sync or write wins')"
+    terminal_state: verified_clean
+    evidence: "stated in both directions in the plan (section 2 U1) and the diagnose-doc impact_analysis; 0 live rows so nothing can be overwritten today; a per-site pending set is the L2b entry criterion (row L2B-ENTRY)"
+  - id: PROBE
+    title: "live REST probe as a test user: upsert {date, waist} then {date, chest}, GET, delete; plus a tier-12 trace (chat-log a measurement on a dev build, read the row through the Supabase MCP)"
+    terminal_state: blocked_on_user
+    reason: "needs a test user's credentials / a dev build; not a merge blocker (if PostgREST ignored omit semantics the new body would equal today's behaviour for unheld sites, so it cannot be worse than HEAD)"
+  - id: OI-297-append
+    title: "append the residuals and the L2b obligations to OI-297 (and OI-304's scope to L2b)"
+    terminal_state: blocked_on_user
+    reason: "OI-297 / OI-304 exist only as uncommitted edits on branch coach-progress-review (open_issues.md:5692,5728); adopting them here would collide with that branch; append when the founder commits it. OI-297 stays OPEN (its fix scope is the whole of L2), so no closes-oi trailer"
+  - id: L2B-ENTRY
+    title: "L2b entry criterion: re-decide OQ-L2a (server-side guard / per-site pending set) BEFORE enable_body_measurements flips"
+    terminal_state: blocked_on_user
+    reason: "the '0 rows' premise that makes the stale-overwrite residual acceptable ends when real users enter measurements, and 'edited sites only' cannot hold at the cloud level while the push sends every held site; founder decision"
+  - id: TS-TWIN
+    title: "TS twin supabase/functions/_shared/body_measurement_sites.ts is imported by no Edge Function until L3's athlete state"
+    terminal_state: verified_clean
+    evidence: "part of the founder-approved OI-297 scope ('Dart + TS twin + parity test'); its consumer is test/contracts/body_measurement_sites_parity_test.dart; deno check passes; no deploy is needed because no function imports it"

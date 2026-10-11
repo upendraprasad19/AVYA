@@ -216,6 +216,10 @@ const _declined = <String, String>{
   'lib/core/constants/app_constants.dart':
       'constants: the engine stamps what it sends with AppConstants.appVersion '
       '(sync_service.dart); a value, no decision',
+  'lib/core/constants/body_measurement_sites.dart':
+      'token list the body_measurements payload builder iterates (OI-297); a '
+      'value, no merge, gate, identity or push decision (the builder is '
+      'sync/measurement_push_rules.dart, which is platform by glob)',
   'lib/core/copy/streak_freeze_copy.dart':
       'the Streak Freeze notice and explainer words (diagnose a5e3c7): '
       'streak_progress_service.dart imports it for StreakProgressService.'

@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:icanbefitter/core/constants/body_measurement_sites.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
@@ -1613,8 +1614,7 @@ class PendingLogActionsNotifier extends Notifier<List<PendingLogAction>> {
       case 'log_measurement':
         final type = data['type'] as String? ?? '';
         final valueCm = (data['value_cm'] as num?)?.toDouble() ?? 0;
-        if (!['waist', 'chest', 'hips', 'arms'].contains(type) ||
-            valueCm <= 0) {
+        if (!isBodyMeasurementSite(type) || valueCm <= 0) {
           return null;
         }
         final cap = type.isEmpty ? '' : type[0].toUpperCase() + type.substring(1);

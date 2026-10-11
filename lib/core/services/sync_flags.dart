@@ -267,6 +267,23 @@ class SyncFlags {
     }
   }
 
+  /// Kill switch for the merge-safe body_measurements push (plan
+  /// coach-measurement-entry-l2a U1, OI-297). On (default): the upsert body
+  /// carries only the sites the device holds. `configBox[
+  /// 'disable_measurement_merge_safe_push'] = true` sends the legacy body
+  /// (every site and `notes`, nulls included) verbatim. The skip fingerprint is
+  /// the same either way. A local configBox value, not remote config. With the
+  /// box not open the merge-safe shape stays ON.
+  static bool get measurementMergeSafePushEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('disable_measurement_merge_safe_push') !=
+          true;
+    } catch (_) {
+      return true;
+    }
+  }
+
   /// Kill switch for the exercise-log delete drain (plan
   /// coach-history-correctness-client U4). On: one filtered UPDATE per queued
   /// delete -- every set count, only versions with `completed_at <=` the
