@@ -292,6 +292,12 @@ paths:
   - { glob: "scripts/safe_pr_merge.sh", tier: platform }
   - { glob: "scripts/safe_pr_merge.dart", tier: platform }
   - { glob: "scripts/safe_pr_merge_lib.dart", tier: platform }
+  # OI-275 batch B3 (2026-10-11): ci_test_partition decides WHICH test files each CI
+  # unit-test shard runs. An edit that dropped or duplicated a file would leave a test
+  # running nowhere (or twice) under an all-green Unit Tests check, so it is pinned to
+  # the same tier as .github/workflows/test.yml, whose matrix calls it.
+  - { glob: "scripts/ci_test_partition.dart", tier: platform }
+  - { glob: "scripts/ci_test_partition_lib.dart", tier: platform }
   - { glob: "scripts/validate_audit_closure.dart", tier: platform }
   - { glob: "scripts/check_no_deferral_euphemism.dart", tier: platform }
   # The rule-22 diagnose-doc chain commit-msg.sh drives, promoted with it.

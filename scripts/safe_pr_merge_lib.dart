@@ -37,6 +37,18 @@ const List<String> skippedOkJobs = <String>[
   'Supabase Integration Tests',
 ];
 
+/// Matrix jobs, listed by the `name:` TEMPLATE they carry in test.yml. A matrix
+/// leg's check-run is named after the expanded template (`Unit Tests shard 1/4`),
+/// so it cannot appear in [requiredSuccessJobs] verbatim. These legs need no entry
+/// there: the gate job `Unit Tests` (a required job) fails unless every leg
+/// succeeded, and a leg that is red, cancelled or pending is ALSO refused on its own
+/// by the "other checks" rule in [evaluateCheckRuns]. The list exists so that
+/// test/scripts/safe_pr_merge_lib_test.dart can keep classifying every job in the
+/// workflow on purpose (a new job, or a renamed template, reddens that test).
+const List<String> matrixJobNameTemplates = <String>[
+  r'Unit Tests shard ${{ matrix.shard }}/${{ strategy.job-total }}',
+];
+
 /// Only check-runs created by GitHub Actions are judged. A real PR also carries
 /// third-party checks (e.g. "Vercel Preview Comments", app slug `vercel`)
 /// that say nothing about the test suite.
