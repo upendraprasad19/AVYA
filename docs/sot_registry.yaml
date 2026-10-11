@@ -11865,7 +11865,7 @@ concepts:
           (→913) despite the gate not flagging it, found by grepping the
           symbol directly rather than trusting the gate's silence on it.
       - file: lib/core/services/sync_service.dart
-        line_range: 2721-2721
+        line_range: 2718-2718
         method: restoreOpTimeout
         semantic: per-op-ceiling
         notes: day-swapper + sync-load Task 20 fix1 (diagnose a9d3f6) shifted
@@ -11876,7 +11876,7 @@ concepts:
           an N-M line_range — but left stale it would misdirect a future
           reader by the same +14).
       - file: lib/core/services/sync_service.dart
-        line_range: 2746-2750
+        line_range: 2743-2747
         method: applyRestoreCeiling
         semantic: apply-ceiling
         notes: day-swapper + sync-load Task 20 shifted this range (+148 lines,
@@ -11886,7 +11886,7 @@ concepts:
           blocks on a citation you shifted). Shifted again by task-20-fix1
           (diagnose a9d3f6, +14 lines, same method) for the same reason.
       - file: lib/core/services/sync_service.dart
-        line_range: 2758-2760
+        line_range: 2755-2757
         method: restoreFailureReason
         semantic: telemetry-reason-split
         notes: same shift as applyRestoreCeiling directly above, both times; all three re-derived +3 by the Hermes sync_epoch_seen doc comment (2026-09-28), then +1 (with _safeRestoreOp) by the plan_engine_flags import the merge-review F4 fix added (a3e7d9).
@@ -14310,13 +14310,22 @@ concepts:
       Day-swapper + sync-load Task 18 (spec §5.9, §5.12): SyncSkipIndex for
       SyncSkipDomain.measurement, gating _syncMeasurements. Row key = plain
       IST date string.
+      L2a (OI-297, diagnose c8a4d1): the WIRE body is merge-safe (only the
+      sites the device holds; sync/measurement_push_rules.dart
+      measurementMergeSafeBody) while the FINGERPRINT is the legacy-shape
+      content (measurementFingerprintContent), identical to what every earlier
+      build stored, so an upgrade or a toggle of disable_measurement_merge_safe_push
+      re-pushes nothing. The site list derives from kBodyMeasurementSites.
     writers:
       - file: lib/core/services/sync/sync_health.dart
         line_range: 1-9999
-        method: "_syncMeasurements (confirmed at :253; SyncSkipIndex for SyncSkipDomain.measurement)"
+        method: "_syncMeasurements (SyncSkipIndex for SyncSkipDomain.measurement; builds the legacy payload, the merge-safe body and the fingerprint through measurement_push_rules.dart)"
+      - file: lib/core/services/sync/measurement_push_rules.dart
+        line_range: 1-9999
+        method: "measurementFingerprintContent (the fingerprint source) and measurementMergeSafeBody (the wire body)"
       - file: lib/core/services/sync_service.dart
         line_range: 1-9999
-        method: "_hashSkipKillSwitchOn(SyncSkipDomain.measurement) — the GENERIC kill-switch reader (sync_service.dart:334, called from sync_health.dart:258); disable_measurement_hash_skip via domain.killSwitchKey, NOT a bespoke _measurementHashSkipDisabled getter"
+        method: "_hashSkipKillSwitchOn(SyncSkipDomain.measurement) — the GENERIC kill-switch reader (sync_service.dart, called from sync_health.dart); disable_measurement_hash_skip via domain.killSwitchKey, NOT a bespoke _measurementHashSkipDisabled getter"
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_health.dart
@@ -14325,11 +14334,12 @@ concepts:
         semantic: latest
         fields_read: [sync_measurement_payload_hash_index.<date>]
     regression_test: test/contracts/sync_body_measurement_payload_hash_index_writer_to_reader_test.dart
-    behavioral_test_path: test/contracts/sync_body_measurement_payload_hash_index_writer_to_reader_test.dart
+    behavioral_test_path: test/sync/body_measurement_push_merge_safe_test.dart  # L2a/c8a4d1: the wire + fingerprint contract through a stub cloud model (the older writer_to_reader test stays green with the old nulls body, so it cannot be the behavioral path)
+    behavioral_test_path_rules: test/sync/measurement_push_rules_test.dart  # HEAD's wire bodies and stored fingerprints pinned as literals; boundary and identity cases
     hive:
       box: healthBox
       key_prefix: "sync_measurement_payload_hash_index"
-      key_formula: "reserved single key -> Map{date: SyncFingerprint.of(payload)}"
+      key_formula: "reserved single key -> Map{date: SyncFingerprint.of(measurementFingerprintContent(legacy payload))}"
     cloud:
       table: body_measurements
       columns: [user_id, date, chest, waist, hips, arms, notes, created_at]

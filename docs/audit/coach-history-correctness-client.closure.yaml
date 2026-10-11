@@ -72,4 +72,4 @@ findings:
   - id: OI-flips
     title: "board: OI-218 re-titled to its schedule-metadata half (done in this landing); OI-313 / OI-307 / OI-312 flips"
     terminal_state: blocked_on_user
-    reason: "OI-313, OI-307 and OI-312 are live only on branch coach-progress-review (not on main); flip after the device check, and OI-307 only after all L1b deploy rows and the L1a-1 apply row are closed"
+    reason: "the entries are on main with progress notes (progress-review-spec-board landing, 2026-10-11); flip OI-312 after DEVICE-CHECK passes, OI-307 after DEVICE-CHECK passes and the L1b deploy check rows D1-D5 are recorded (tools ledger; the L1a-1 apply row is done, 2026-10-07); OI-313 stays open (APK-residual is upstream_blocked)"
