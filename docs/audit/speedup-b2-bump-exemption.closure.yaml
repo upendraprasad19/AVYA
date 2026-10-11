@@ -172,13 +172,17 @@ findings:
 
   - id: PW-5
     title: "The same limits in the commit-time and push-time path readers outside this diff: scripts/blast_radius_from_diff.dart and scripts/check_code_review_pass_exists.dart carry their own glob copy and read `git diff --cached --name-only` (C-quoted, newline-split, trimmed, rename detection on, submodules ignored per .gitmodules); scripts/pre-push.sh (RANGE_FILES) and scripts/contract_sweep.dart read `git diff --name-only` too"
-    terminal_state: blocked_on_user
-    reason: >
-      Founder scope call. The two classifiers run in the pre-commit hot path (every commit of every session), so making them exact (a NUL-separated raw-byte reader with --no-renames and
-      --ignore-submodules=none, dotAll in the glob copy, and an end-to-end test plus a mutation each) is a change of its own with its own review surface, and none of these readers is the
-      enforcement point: the keystone gate now grades the exact name at merge-to-main (PW-4, BP-1), so what an odd name or a hidden gitlink can still do there is move the demand for the same
-      record and review from commit time to merge time. Checked and clean: scripts/check_blast_radius_coverage.dart applies its glob copy to synthetic probe strings derived from the registry,
-      never to a git path; scripts/safe_merge.sh's advisory diff now passes --ignore-submodules=none (BP-1). Say "fold in" and the classifiers are made exact on this branch before the commit.
+    terminal_state: verified_clean
+    notes: >
+      Founder decision 2026-10-12 (option B): leave these readers as they are. This is a decision, not a verification. The two classifiers run in the
+      pre-commit hot path (every commit of every session), so making them exact (a NUL-separated raw-byte reader with --no-renames and
+      --ignore-submodules=none, dotAll in the glob copy, and an end-to-end test plus a mutation each) is a change with its own review surface, and none of
+      these readers is the enforcement point: the keystone gate grades the exact name at merge-to-main (PW-4, BP-1), so what an odd name or a hidden gitlink can
+      still do here is move the demand for the same record and review from commit time to merge time. The practical exposure is close to zero: this repository has
+      no submodules, and Windows cannot create a file name that holds a line break. Checked and clean: scripts/check_blast_radius_coverage.dart applies its glob
+      copy to synthetic probe strings derived from the registry, never to a git path; scripts/safe_merge.sh's advisory diff passes --ignore-submodules=none (BP-1).
+      Reopen if a submodule is ever added, or if the repository starts being worked on a filesystem that allows control characters in file names: then both
+      classifiers are made exact in the same way as diffPathsBetween.
 
   - id: MIR-1
     title: ".opencode/command/build-apk.md had missed B1's one-line change and would have missed the Gate 2 rewrite"

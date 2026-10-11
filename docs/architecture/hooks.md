@@ -65,7 +65,8 @@ runs the same gates). See §4 process invariants for the no-deferred-failures po
   ⚠ **Branch-push skip (2026-10-10, OI-275, `push_class`):** the hook now reads git's pre-push stdin
   (it used to drain it). A push whose every ref is a well-formed `refs/heads/<x>` other than `main`/`develop`
   (`BRANCH_ONLY`) skips the ~39-minute local suite at a KNOWN ≥`account` tier — CI on the open PR runs the same
-  suite in ~13 min and `sh scripts/safe_pr_merge.sh <pr>` refuses to merge a PR whose required jobs are not green
+  suite (as parallel whole-file shards since 2026-10-11, OI-275 batch B3; it was ~13 min as one job —
+  the measured wall clock is in `docs/audit/speedup-b3-test-matrix.closure.yaml`) and `sh scripts/safe_pr_merge.sh <pr>` refuses to merge a PR whose required jobs are not green
   (`main` has NO required status checks). A delete-only push (`DELETE_ONLY`) lands nothing and skips even with an
   empty range. Everything else (main/develop, tags, mixed, malformed/empty stdin, unknown tier, `PRE_PUSH_FULL=1`)
   runs the suite as before. Tests: `test/scripts/pre_push_branch_push_skip_e2e_test.dart`, `safe_pr_merge_*_test.dart`.
@@ -120,7 +121,7 @@ runs the same gates). See §4 process invariants for the no-deferred-failures po
   re-scan of a tree already gated at every commit on both sides.
 - **CI (`.github/workflows/test.yml`) is the full-suite source-of-truth for `main`** — analyze +
   full `flutter test` + all gates + a debug-APK compile + **the `deno-edge-functions` job**
-  (`test.yml:120`), which runs `deno test` AND a `deno check` type-check over the WHOLE
+  (in `test.yml`), which runs `deno test` AND a `deno check` type-check over the WHOLE
   `supabase/functions/` tree.
   ⚠ **That job was missing from this list until 2026-08-26, and the omission has teeth: until
   2026-09-12 there was no Deno on the dev machine, so NOTHING type-checked an Edge Function
@@ -136,7 +137,7 @@ runs the same gates). See §4 process invariants for the no-deferred-failures po
   node_modules/.deno && git checkout -- node_modules/`. See `supabase/functions/CLAUDE.md`.**
   Nothing in the hooks runs it yet — it is a habit, not a gate; the pre-commit gates remain
   Dart source-greps. Also note CI's analyze step is named
-  *"Flutter analyze (zero warnings allowed)"* (`test.yml:61`) — stricter than a casual reading of
+  *"Flutter analyze (zero warnings allowed)"* (a step of the `analyze` job in `test.yml`) — stricter than a casual reading of
   the pre-push row suggests. ⚠ It triggers on `push: [main, develop]`
   **and `pull_request` targeting them** — **not on every push**. Counted live 2026-08-11:
   `git ls-remote --heads origin` = 29 refs (28 non-main); 8 have an open PR and so DO get CI on
@@ -147,6 +148,16 @@ runs the same gates). See §4 process invariants for the no-deferred-failures po
   claiming "42 branches, none run CI"; 42 counts remote-*tracking* refs from `git branch -r`,
   including `origin/main` and refs deleted upstream, and it missed the PR trigger entirely.)
   The PR-less majority is exactly why pre-push analyze is unconditional rather than tiered.
+  **The unit tests are a shard matrix (2026-10-11, OI-275 batch B3):** the `unit-test` job fans out into
+  `Unit Tests shard n/N` legs, each running a disjoint set of WHOLE test files chosen by
+  `dart scripts/ci_test_partition.dart n N` (the 0-based file i of the sorted `test/**/*_test.dart` list goes
+  to shard `(i % N) + 1`), and the `unit-tests-gate` job — named exactly `Unit Tests`, the check name
+  `safe_pr_merge.sh` requires green (`requiredSuccessJobs`) — passes only when every shard did. `/build-apk`
+  Gate 3.5 and `reconcile_ci.dart` read no job name: they read the run-level conclusion of the whole
+  `Test & Analyze` workflow, which any red shard turns red.
+  This is NOT `flutter test --total-shards`, which was tried and reverted on 2026-08-10. The shell logic of both
+  jobs is executed, and their wiring (`needs`, `if`, `continue-on-error`, the matrix keys, the step's last
+  command) is pinned, by `test/contracts/ci_unit_test_matrix_shape_test.dart`.
 
 
 ## §7 pointer-table rows — full text (formerly root CLAUDE.md §7)
