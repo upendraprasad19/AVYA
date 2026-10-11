@@ -1,13 +1,12 @@
 # Closure ledger — coach-measurement-entry (L2a). Gate 40: one terminal_state per finding, no `deferred:` key.
-# Code commit dec69fc8 (U1, U2). The B-pass fixes and the review file land in the commit after it; the stamp
-# commit that follows records that commit's SHA (a commit cannot name its own), adds the BPASS row and the
-# full-suite result of the fixed tree. Rows are added only once they are true.
+# Code commits dec69fc8 (U1, U2) and 9208c495 (B-pass fixes and review file). A commit cannot name its own SHA,
+# so this stamp commit records 9208c495 and the full-suite result of that tree. Rows are added only once true.
 batch: coach-measurement-entry
 plan_review_record: docs/plan-reviews/coach-measurement-entry.md
 diagnose_docs:
   - docs/diagnoses/2026-10-11-measurement-push-blanks-other-devices-c8a4d1.md
-total_findings: 10
-closed_count: 10
+total_findings: 11
+closed_count: 11
 
 findings:
   - id: U1
@@ -20,6 +19,11 @@ findings:
     terminal_state: closed_in_commit
     commit: dec69fc8
     verification: "test/contracts/body_measurement_sites_parity_test.dart, body_measurement_sites_derivation_test.dart, blast_radius_sync_engine_platform_test.dart; registry, twin and prompt mutants red"
+  - id: BPASS
+    title: "B-pass before the merge (>=account, self-triggered): 2 fresh context-blind Sonnet reviewers on dec69fc8, 13 findings (A 5, B 8), 0 P0, 0 P1, 1 P2, 12 P3, 0 false alarms; the product code needed no change, the tests and the evidence did"
+    terminal_state: closed_in_commit
+    commit: 9208c495
+    verification: "docs/reviews/coach-measurement-entry-bpass.md and the plan-review record (bpass: accepted); 42 of 42 mutants red (26 original + 16 new, each new one killed by its own test); the 8-file targeted set 82 passed; Gate 42 passes; full suite on 9208c495: 8644 passed, 9 skipped, exit 0 (TZ=Asia/Kolkata, --exclude-tags golden)"
   - id: RESIDUAL-OLD-CLIENTS
     title: "old APKs and an out-of-repo Telegram writer (OI-297) still push nulls; a new build does not re-push an unchanged day, so a blanking heals on the next local edit of that date (a sync_epoch bump is not recommended for multi-device users, SYNC_EPOCH_RESYNC.md:54)"
     terminal_state: upstream_blocked
