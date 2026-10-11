@@ -2,12 +2,18 @@
 library;
 
 // L2a (OI-297, B-pass) - the two chat entry points that guard the body
-// measurement site list. HealthWriteService.logMeasurement does not
-// re-validate the part ("we don't re-validate here to stay flexible"), so
-// these two call sites are the only thing between a model-invented part such as
-// 'thighs' and a day record carrying a key no push or reader knows. Both
-// guards now call isBodyMeasurementSite (the registry); this file executes them
-// (the derivation test only greps for the symbol).
+// measurement site list. Both call isBodyMeasurementSite (the registry) so a
+// model-invented part such as 'thighs' never reaches a day record; this file
+// executes them (the derivation test only greps for the symbol). Since L2b
+// Landing A, HealthWriteService.logMeasurement validates the part and the
+// value as well (test/contracts/body_measurement_bounds_behavioral_test.dart),
+// and the chat parse drops an out-of-range value, so these two guards are the
+// pre-filter and the writer is the backstop.
+//
+// The in-range fixtures below are LITERALS on purpose: derived from
+// kBodyMeasurementSpecs they would follow a moved bound and prove nothing.
+
+import 'dart:convert';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -22,6 +28,30 @@ import 'package:icanbefitter/features/ai_coach/services/conversational_log_handl
 import '../helpers/hive_test_setup.dart';
 
 final _refProvider = Provider<Ref>((ref) => ref);
+
+/// One in-range centimetre value per site and the confirm-card text it must
+/// produce. A new site in the registry fails the lookups below on purpose: it
+/// owes a fixture here.
+const _inRange = <String, ({double cm, String card})>{
+  'chest': (cm: 95, card: 'Chest: 95.0cm'),
+  'waist': (cm: 80, card: 'Waist: 80.0cm'),
+  'hips': (cm: 95, card: 'Hips: 95.0cm'),
+  'arms': (cm: 35, card: 'Arms: 35.0cm'),
+};
+
+/// Values no body produces, per the bounds of L2b Landing A: below a floor
+/// (inches typed in a centimetre field), above a ceiling, zero, negative and
+/// the non-finite pair. `1e999` decodes to Infinity, the way a model reply can
+/// carry it.
+final _outOfRange = <({String site, Object value, String why})>[
+  (site: 'waist', value: 40, why: 'waist 40 is inches'),
+  (site: 'arms', value: 80, why: 'arms 80 is above the ceiling'),
+  (site: 'chest', value: 3000, why: 'chest 3000'),
+  (site: 'hips', value: 59.9, why: 'hips just under the floor'),
+  (site: 'waist', value: 0, why: 'zero'),
+  (site: 'waist', value: -1, why: 'negative'),
+  (site: 'waist', value: jsonDecode('1e999') as Object, why: 'Infinity'),
+];
 
 void main() {
   group('PendingLogActionsNotifier.addActions (the chat action parser)', () {
@@ -44,13 +74,11 @@ void main() {
 
     test('every site token becomes a confirm card', () {
       for (final site in kBodyMeasurementSites) {
-        final pending = parse({'type': site, 'value_cm': 80});
+        final fixture = _inRange[site]!;
+        final pending = parse({'type': site, 'value_cm': fixture.cm});
         expect(pending, hasLength(1), reason: site);
         expect(pending.single.type, LogActionType.measurement);
-        expect(
-          pending.single.displayText,
-          '${site[0].toUpperCase()}${site.substring(1)}: 80.0cm',
-        );
+        expect(pending.single.displayText, fixture.card, reason: site);
       }
     });
 
@@ -64,6 +92,16 @@ void main() {
     test('a missing, zero or negative value is dropped', () {
       for (final v in <Object?>[null, 0, -3]) {
         expect(parse({'type': 'waist', 'value_cm': v}), isEmpty, reason: '$v');
+      }
+    });
+
+    test('an out-of-range or non-finite value is dropped, whatever the site', () {
+      for (final c in _outOfRange) {
+        expect(
+          parse({'type': c.site, 'value_cm': c.value}),
+          isEmpty,
+          reason: c.why,
+        );
       }
     });
   });
@@ -124,7 +162,7 @@ void main() {
       (tester) => withHandler(tester, (run, measurementKeys) async {
         for (final site in kBodyMeasurementSites) {
           expect(
-            await run({'type': site, 'value_cm': 70.5}),
+            await run({'type': site, 'value_cm': _inRange[site]!.cm}),
             isTrue,
             reason: site,
           );
@@ -133,7 +171,7 @@ void main() {
         expect(keys, hasLength(1), reason: 'one record per IST day');
         final rec = HiveService.instance.healthBox.get(keys.single) as Map;
         for (final site in kBodyMeasurementSites) {
-          expect(rec[site], 70.5, reason: site);
+          expect(rec[site], _inRange[site]!.cm, reason: site);
         }
       }),
     );
@@ -168,6 +206,31 @@ void main() {
           );
         }
         expect(measurementKeys(), isEmpty);
+      }),
+    );
+
+    testWidgets(
+      'an out-of-range or non-finite value is refused by the writer and writes nothing',
+      (tester) => withHandler(tester, (run, measurementKeys) async {
+        // The handler has no bound of its own (plan A5): every refusal below
+        // is the writer's, which is what makes a handler-tier bound redundant.
+        for (final c in _outOfRange) {
+          expect(
+            await run({'type': c.site, 'value_cm': c.value}),
+            isFalse,
+            reason: c.why,
+          );
+        }
+        expect(
+          await run({'type': 'waist', 'value_cm': double.nan}),
+          isFalse,
+          reason: 'NaN passes the handler\'s own <= 0 test and the writer refuses it',
+        );
+        expect(
+          measurementKeys(),
+          isEmpty,
+          reason: 'a refused value must not create a day record',
+        );
       }),
     );
   });

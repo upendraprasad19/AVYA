@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../constants/body_measurement_specs.dart';
 import '../utils/ist_date.dart';
 import '../utils/readiness.dart';
 import 'error_telemetry.dart';
@@ -201,22 +202,29 @@ class HealthWriteService {
   /// Logs (or merges into existing) a body measurement.
   ///
   /// Multiple measurement parts on the same date share one Hive entry
-  /// keyed `measurement_<istDate>` — `partName` is folded onto the map
-  /// (matches the conversational AI handler's pre-existing merge shape).
-  /// Allowed parts: `waist`, `chest`, `hips`, `arms` (enforced by reader
-  /// tier in `_logMeasurement`; we don't re-validate here to stay flexible
-  /// for future parts).
+  /// keyed `measurement_<istDate>` — the part is folded onto the map by
+  /// [measurementRecordWith] (matches the conversational AI handler's
+  /// pre-existing merge shape). Allowed parts: `waist`, `chest`, `hips`,
+  /// `arms`, each within its range in `kBodyMeasurementSpecs` (L2b Landing A,
+  /// OI-297): the part name is normalised (trim + lower case), the value is
+  /// rounded to 0.1 cm and validated AFTER rounding, and an unregistered part
+  /// or an out-of-range / non-finite value fails without touching the box.
   Future<WriteResult> logMeasurement({
     required DateTime date,
     required String partName,
     required double valueCm,
     required WriteSource source,
   }) async {
-    if (partName.trim().isEmpty) {
-      return WriteResult.fail('logMeasurement: partName must be non-empty');
-    }
-    if (valueCm <= 0) {
-      return WriteResult.fail('logMeasurement: valueCm must be > 0');
+    final site = partName.trim().toLowerCase();
+    final stored = roundMeasurementToTenth(valueCm);
+    if (!isValidBodyMeasurementCm(site, stored)) {
+      final rejected = measurementRejectionMessage('writer', site, stored);
+      if (rejected != null) {
+        unawaited(ErrorTelemetry.logEvent('measurement_value_rejected',
+            message: rejected));
+      }
+      return WriteResult.fail(
+          'logMeasurement: unknown part or value out of range');
     }
     final dateStr = istDateStr(date);
     final key = 'measurement_$dateStr';
@@ -224,18 +232,12 @@ class HealthWriteService {
     final c = await _acquireLock(lockKey);
     try {
       final box = HiveService.instance.healthBox;
-      final existing = box.get(key);
-      final record = existing is Map
-          ? Map<String, dynamic>.from(existing)
-          : <String, dynamic>{
-              'id': 'meas_${DateTime.now().millisecondsSinceEpoch}',
-              'date': dateStr,
-              'created_at': DateTime.now().toIso8601String(),
-            };
-      record[partName.toLowerCase()] = valueCm;
-      record['source'] = source.code;
-      record['updated_at_ms'] = DateTime.now().millisecondsSinceEpoch;
-      record['updated_at'] = DateTime.now().toIso8601String();
+      final record = measurementRecordWith(
+        box.get(key),
+        dateStr: dateStr,
+        sites: {site: stored},
+        source: source,
+      );
       await box.put(key, record);
 
       unawaited(SyncService.instance.syncMeasurementsNow());
@@ -410,4 +412,39 @@ class HealthWriteService {
     _locks.remove(key);
     if (!c.isCompleted) c.complete();
   }
+}
+
+/// The one definition of the `measurement_<istDate>` day record (L2b).
+///
+/// Copies [existing] when it is a map (every site not in [sites] is kept,
+/// restore-written explicit nulls included), otherwise starts a new record
+/// `{id, date, created_at}`. `date` is stamped on EVERY write: a dateless
+/// record is skipped by the cloud push (`sync_health.dart`, the `date == null`
+/// continue) and by `HealthReadService.measurementHistory`. Then the given
+/// sites, `source`, `updated_at_ms` and `updated_at`.
+///
+/// Top level and at the end of the file on purpose: nothing above
+/// [HealthWriteService.logMeasurement] shifts, so the line pins of the SoT
+/// registry that cite its neighbours stay put.
+@visibleForTesting
+Map<String, dynamic> measurementRecordWith(
+  Object? existing, {
+  required String dateStr,
+  required Map<String, double> sites,
+  required WriteSource source,
+}) {
+  final now = DateTime.now();
+  final record = existing is Map
+      ? Map<String, dynamic>.from(existing)
+      : <String, dynamic>{
+          'id': 'meas_${now.millisecondsSinceEpoch}',
+          'date': dateStr,
+          'created_at': now.toIso8601String(),
+        };
+  record['date'] = dateStr;
+  record.addAll(sites);
+  record['source'] = source.code;
+  record['updated_at_ms'] = now.millisecondsSinceEpoch;
+  record['updated_at'] = now.toIso8601String();
+  return record;
 }

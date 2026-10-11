@@ -1,3 +1,5 @@
+import '../constants/body_measurement_sites.dart';
+import '../constants/body_measurement_specs.dart';
 import '../utils/ist_date.dart';
 import '../utils/readiness.dart';
 import 'hive_service.dart';
@@ -17,6 +19,8 @@ import 'hive_service.dart';
 ///   - `water_ml_<istDate>`   : int (bare total ml — legacy shape preserved)
 ///   - `hydration_<istDate>`  : Map { date, water_ml, urine_color_index, hydration_score, ... }
 ///   - `urine_color_<istDate>`: Map { date, label, index, ... }
+///   - `measurement_<istDate>`: Map { date, chest, waist, hips, arms (cm, any may be
+///     null or absent), source, updated_at_ms, ... }
 class HealthReadService {
   HealthReadService._();
   static final HealthReadService instance = HealthReadService._();
@@ -106,4 +110,123 @@ class HealthReadService {
     out.sort((a, b) => b.date.compareTo(a.date)); // lexical YYYY-MM-DD desc
     return out;
   }
+
+  /// Every VALID body-measurement record, NEWEST FIRST (L2b Landing A, OI-297;
+  /// scans the `measurement_<istDate>` keys).
+  ///
+  /// The read path for what a person sees or the coach is told: the AI snapshot
+  /// goes through [latestBySite], and the Landing B sheet and prompt will go
+  /// through this list. (The sync push and the restore handle the raw records
+  /// themselves; Landing A does not change them.)
+  ///
+  /// A record is valid when its `date` is a real IST calendar day written
+  /// `YYYY-MM-DD` that is not later than today (a wrong device clock stored a
+  /// future date: it would otherwise be the "newest" value and shadow every
+  /// real entry until the day came), and an entry keeps only the sites whose
+  /// value is inside the [kBodyMeasurementSpecs] bounds; a record with no such
+  /// site is dropped. Order: `date` descending, then `updated_at_ms` descending
+  /// (a non-number counts as 0: restored and pulled records carry none), then
+  /// the Hive key descending, so two records with one date still sort the same
+  /// way on every run. Every read is a type test, never a cast: a malformed
+  /// record is skipped, it cannot throw.
+  List<MeasurementEntry> measurementHistory() {
+    final box = HiveService.instance.healthBox;
+    final today = istTodayStr();
+    final rows = <_MeasurementRow>[];
+    for (final key in box.keys) {
+      if (key is! String || !key.startsWith('measurement_')) continue;
+      final raw = box.get(key);
+      if (raw is! Map) continue;
+      final date = raw['date'];
+      if (date is! String || !_isRealIstDateKey(date)) continue;
+      if (date.compareTo(today) > 0) continue;
+      final sites = <String, double>{};
+      for (final site in kBodyMeasurementSites) {
+        final v = raw[site];
+        if (v is! num) continue;
+        final cm = v.toDouble();
+        if (isValidBodyMeasurementCm(site, cm)) sites[site] = cm;
+      }
+      if (sites.isEmpty) continue;
+      final stamp = raw['updated_at_ms'];
+      rows.add(_MeasurementRow(
+        key: key,
+        updatedAtMs: stamp is num ? stamp : 0,
+        entry: MeasurementEntry(date: date, sites: sites),
+      ));
+    }
+    rows.sort((a, b) {
+      final byDate = b.entry.date.compareTo(a.entry.date);
+      if (byDate != 0) return byDate;
+      final byStamp = b.updatedAtMs.compareTo(a.updatedAtMs);
+      if (byStamp != 0) return byStamp;
+      return b.key.compareTo(a.key);
+    });
+    return [for (final r in rows) r.entry];
+  }
+
+  /// The newest valid value of each site, with the day it was logged
+  /// (`latestBySiteOf(measurementHistory())`). A site never measured is absent.
+  Map<String, ({double cm, String date})> latestBySite() =>
+      latestBySiteOf(measurementHistory());
+
+  /// PURE: the newest value per site in [newestFirst], which MUST be ordered
+  /// newest first (the order [measurementHistory] returns). The result is built
+  /// by walking [kBodyMeasurementSites], so its key order is the registry's and
+  /// not the order the records happen to sit in the box. A site whose newest
+  /// record holds no valid value falls through to the newest older record that
+  /// does.
+  static Map<String, ({double cm, String date})> latestBySiteOf(
+      List<MeasurementEntry> newestFirst) {
+    final out = <String, ({double cm, String date})>{};
+    for (final site in kBodyMeasurementSites) {
+      for (final entry in newestFirst) {
+        final cm = entry.sites[site];
+        if (cm == null) continue;
+        out[site] = (cm: cm, date: entry.date);
+        break;
+      }
+    }
+    return out;
+  }
+}
+
+/// One valid body-measurement day as [HealthReadService.measurementHistory]
+/// returns it: the IST day (`YYYY-MM-DD`) and the sites of that record whose
+/// value is within bounds (centimetres, registry tokens only).
+class MeasurementEntry {
+  const MeasurementEntry({required this.date, required this.sites});
+
+  final String date;
+  final Map<String, double> sites;
+}
+
+/// A [MeasurementEntry] with the two tie-break keys the sort needs.
+class _MeasurementRow {
+  const _MeasurementRow({
+    required this.key,
+    required this.updatedAtMs,
+    required this.entry,
+  });
+
+  final String key;
+  final num updatedAtMs;
+  final MeasurementEntry entry;
+}
+
+final RegExp _istDateKeyShape = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+
+/// True when [s] is exactly `YYYY-MM-DD` AND names a day that exists. Dart
+/// normalises an impossible date instead of failing (`DateTime.utc(2026, 13,
+/// 45)` is a valid object, and so is `DateTime.tryParse('2026-02-30')`), so
+/// the check is numeric: the three parts must come back unchanged from a
+/// `DateTime.utc`. Not a string rebuilt with `padLeft` (the date-key drift
+/// gate bans that).
+bool _isRealIstDateKey(String s) {
+  if (!_istDateKeyShape.hasMatch(s)) return false;
+  final y = int.parse(s.substring(0, 4));
+  final m = int.parse(s.substring(5, 7));
+  final d = int.parse(s.substring(8, 10));
+  final t = DateTime.utc(y, m, d);
+  return t.year == y && t.month == m && t.day == d;
 }

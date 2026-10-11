@@ -175,22 +175,22 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-295 | Schedule writers that pass no WidgetRef (deload_evaluator lift via… | an audit of every ref-less schedule… | 2026-10-03 - code read, not reproduced:… | [:5676](open_issues.md#L5676) |
 | OI-296 | Coach progress tools read long windows unpaginated: getProgressSummary's… | founder-owned checks only. The code… | 2026-10-03 by source read + live SQL:… | [:5877](open_issues.md#L5877) |
 | OI-297 | Body measurements have no input UI, no history view and no cadence prompt:… | none (L2a, the merge-safe push and one… | 2026-10-03:… | [:5886](open_issues.md#L5886) |
-| OI-298 | No effort capture (RIR/RPE): workout_logs.rpe is never written (0 rows… | founder — DECIDED 2026-10-06: left out… | 2026-10-03:… | [:5896](open_issues.md#L5896) |
-| OI-299 | No computed athlete-state digest: the coach has no deterministic… | OI-296 (landing L1); landing L3 of the… | 2026-10-03: the coach assembles history… | [:5905](open_issues.md#L5905) |
-| OI-300 | Progress Review: a grounded, coach-generated multi-month review (new… | OI-299 (same landing, L3) of the… | 2026-10-03: the only multi-period report… | [:5914](open_issues.md#L5914) |
+| OI-298 | No effort capture (RIR/RPE): workout_logs.rpe is never written (0 rows… | founder — DECIDED 2026-10-06: left out… | 2026-10-03:… | [:5897](open_issues.md#L5897) |
+| OI-299 | No computed athlete-state digest: the coach has no deterministic… | OI-296 (landing L1); landing L3 of the… | 2026-10-03: the coach assembles history… | [:5906](open_issues.md#L5906) |
+| OI-300 | Progress Review: a grounded, coach-generated multi-month review (new… | OI-299 (same landing, L3) of the… | 2026-10-03: the only multi-period report… | [:5916](open_issues.md#L5916) |
 | OI-301 | No gate stops a stray file at the repo root: existsSync (14 bytes of junk)… | its own plan + review (a new… | 2026-10-03 - `git ls-files` at the repo… | [:5683](open_issues.md#L5683) |
 | OI-302 | Restore keeps the OLDEST cloud workout_logs row for a date completed twice… | a decision: pick the NEWEST row per date… | 2026-10-04 - code read:… | [:5691](open_issues.md#L5691) |
 | OI-303 | Delete the disable_completed_title_heal kill switch and its closed-path… | the founder's on-device check of OI-284… | 2026-10-04 - code read: the kill switch… | [:5698](open_issues.md#L5698) |
-| OI-304 | InsightCard and DeepAnalysisCard are never mounted: PatternDetector's… | none (scheduled into L2b of the… | 2026-10-04 by grep at `4fef03a7`:… | [:5923](open_issues.md#L5923) |
-| OI-305 | Date-of-birth floor is inconsistent (onboarding allows age 10, Edit… | founder — DECIDED 2026-10-06: keep the… | 2026-10-04: `identity_screen.dart:82`… | [:5932](open_issues.md#L5932) |
-| OI-306 | primary_goal_updated_at has zero writers and goal_changed_at is Hive-only… | none | 2026-10-04: `goal_changed_at` is written… | [:5941](open_issues.md#L5941) |
-| OI-307 | workout_log_exercises keeps a second LIVE summary row when a log's set… | founder-owned checks only. All three… | 2026-10-04. Writer:… | [:5950](open_issues.md#L5950) |
-| OI-308 | getExerciseHistory computes total_volume_kg = weight x reps x sets… | founder-owned check only. Fixed in L1b… | 2026-10-04: `getExerciseHistory.ts:88`… | [:5959](open_issues.md#L5959) |
+| OI-304 | InsightCard and DeepAnalysisCard are never mounted: PatternDetector's… | founder decision D2 (L2b plan v3.1,… | 2026-10-04 by grep at `4fef03a7`:… | [:5925](open_issues.md#L5925) |
+| OI-305 | Date-of-birth floor is inconsistent (onboarding allows age 10, Edit… | founder — DECIDED 2026-10-06: keep the… | 2026-10-04: `identity_screen.dart:82`… | [:5934](open_issues.md#L5934) |
+| OI-306 | primary_goal_updated_at has zero writers and goal_changed_at is Hive-only… | none | 2026-10-04: `goal_changed_at` is written… | [:5943](open_issues.md#L5943) |
+| OI-307 | workout_log_exercises keeps a second LIVE summary row when a log's set… | founder-owned checks only. All three… | 2026-10-04. Writer:… | [:5952](open_issues.md#L5952) |
+| OI-308 | getExerciseHistory computes total_volume_kg = weight x reps x sets… | founder-owned check only. Fixed in L1b… | 2026-10-04: `getExerciseHistory.ts:88`… | [:5961](open_issues.md#L5961) |
 | OI-309 | Merge-conflict treadmill: every >=account PR conflicts with main again and… | a plan (it changes hooks and the… | 2026-10-05 - measured on PR #73… | [:5719](open_issues.md#L5719) |
-| OI-310 | App links (sign-up, welcome, Profile) open the icanbefitter.com blog… | founder (+ counsel) — an app privacy… | 2026-10-06. The app opens… | [:5968](open_issues.md#L5968) |
+| OI-310 | App links (sign-up, welcome, Profile) open the icanbefitter.com blog… | founder (+ counsel) — an app privacy… | 2026-10-06. The app opens… | [:5970](open_issues.md#L5970) |
 | OI-311 | A spawned `dart run` exited 254 in CI with no stderr in the log (run… | a second sighting with output. Not… | 2026-10-06 - read from… | [:5729](open_issues.md#L5729) |
-| OI-312 | Exercise-log deletes never reach the cloud: migration 151's BEFORE INSERT… | founder-owned device check. Fixed… | 2026-10-06, live, inside a DO block that… | [:5977](open_issues.md#L5977) |
-| OI-313 | Installed-APK residuals of L1a: APKs without the L1a-2 client fixes keep… | upstream — no minimum-version /… | 2026-10-06 — writers:… | [:5986](open_issues.md#L5986) |
+| OI-312 | Exercise-log deletes never reach the cloud: migration 151's BEFORE INSERT… | founder-owned device check. Fixed… | 2026-10-06, live, inside a DO block that… | [:5979](open_issues.md#L5979) |
+| OI-313 | Installed-APK residuals of L1a: APKs without the L1a-2 client fixes keep… | upstream — no minimum-version /… | 2026-10-06 — writers:… | [:5988](open_issues.md#L5988) |
 | OI-315 | ProgressPhotoRepository.cleanupOrphanedStorage has zero callers, and the… | a plan: a server-side per-day cap is a… | 2026-10-06 - `git grep -n… | [:5738](open_issues.md#L5738) |
 | OI-316 | The progress-photos bucket and its SELECT/DELETE/INSERT policies have no… | a plan for a recurring catalog check (a… | 2026-10-06 - the B1 live evidence (E10)… | [:5747](open_issues.md#L5747) |
 | OI-318 | A 127 s cold-start restore on 2026-10-06 (per-op 9-41 s, two 45 s… | a recurrence: a restore over 60 s on any… | 2026-10-06 - `client_errors` for the… | [:5705](open_issues.md#L5705) |

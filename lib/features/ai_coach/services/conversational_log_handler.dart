@@ -17,7 +17,9 @@ import '../providers/ai_coach_provider.dart';
 /// - weight → [WeightLogNotifier.logWeight]
 /// - food → [FoodLogNotifier.logFood] (with fuzzy Hive search)
 /// - sleep → direct Hive write to healthBox
-/// - measurement → direct Hive write to healthBox
+/// - measurement → [HealthWriteService.logMeasurement] (the bounds and the
+///   0.1 cm rounding are enforced there; the chat parse already drops an
+///   out-of-range value, so a writer refusal here means the two tiers disagree)
 ///
 /// All writes are Hive-first (offline). Cross-screen invalidation happens
 /// via the target providers themselves (fixed in A.0).

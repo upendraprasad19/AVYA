@@ -1,0 +1,83 @@
+# Closure ledger - coach-measurement-sheet, Landing A (measurement value bounds). One terminal_state per finding, no `deferred:` key.
+# Created in the code commit: the rows closed by that commit carry `commit: PENDING`, because a commit cannot name its own SHA.
+# The stamp commit at the end of the landing writes the real SHAs and the full-suite result (the L2a shape, 79e866a2).
+batch: coach-measurement-sheet
+plan_review_record: docs/plan-reviews/coach-measurement-sheet.md
+diagnose_docs:
+  - docs/diagnoses/2026-10-11-measurement-values-unbounded-7c3e9a.md
+total_findings: 15
+closed_count: 15
+
+findings:
+  - id: A1
+    title: "kBodyMeasurementSpecs (inclusive cm ranges per site, keys == registry tokens), isValidBodyMeasurementCm (NaN-safe), roundMeasurementToTenth (total), measurementRejectionMessage - lib/core/constants/body_measurement_specs.dart"
+    terminal_state: closed_in_commit
+    commit: PENDING
+    verification: "test/contracts/body_measurement_bounds_behavioral_test.dart (literal boundary probes, keys both directions, every bound a fixed point of the rounding, totality over NaN and the infinities, exact event messages); mutants A1-01..A1-20 red, see the diagnose-doc Mutation proof section"
+  - id: A2
+    title: "writer tier: HealthWriteService.logMeasurement normalises the part once (trim + lower case), rounds to 0.1 cm, validates the ROUNDED value, rejects an unregistered part or an out-of-range / non-finite value without touching the box (event tier=writer), and builds the day record through measurementRecordWith (date stamped on every write)"
+    terminal_state: closed_in_commit
+    commit: PENDING
+    verification: "bounds test group A2 (rejection rows with exact events, a direct call with 'thigh' and a blank part, 49.96 / 49.94 / 200.04, a padded part, a dateless existing record gains its date, a new record against the old writer's output, a rejected write leaves an existing record byte-identical); mutants A2-01..A2-13 red"
+  - id: A3
+    title: "chat parse tier: PendingLogActionsNotifier case log_measurement reads type and value_cm with type tests (no cast), checks the RAW value against the table, and emits measurement_value_rejected (tier=chat) for a rejected value of a registered site"
+    terminal_state: closed_in_commit
+    commit: PENDING
+    verification: "bounds test group A3 (accepted values emit nothing; rejected values leave exactly one event with the exact message; wrong-typed fields drop without a throw or an event; a later action in the same response still parses) and the whitelist test; mutants A3-01..A3-07 red"
+  - id: A4
+    title: "read tier: HealthReadService.measurementHistory / latestBySite / latestBySiteOf (per-site validity, strict YYYY-MM-DD shape plus a calendar round-trip, no future dates, total order date / updated_at_ms / key, type tests) and AiSnapshotBuilder._getBodyMeasurements re-routed through latestBySite"
+    terminal_state: closed_in_commit
+    commit: PENDING
+    verification: "test/contracts/body_measurement_readers_behavioral_test.dart (tie-break fixtures F1-F3c, per-site fall-through, NaN, numeric-String site, non-String date, impossible and malformed dates, the future filter at three instants, registry key order, the real writer to the reader, the golden clean snapshot fixture compared by value and as JSON text, the dirty snapshot fixture); the previous loop was run on the same fixtures first (clean: same literal; dirty: TypeError; NaN: jsonEncode throws); mutants A4-01..A4-23 red"
+  - id: A5
+    title: "handler tier: no bound added (recorded departure from the L2a obligation); conversational_log_handler.dart gets a class-doc edit only and keeps isBodyMeasurementSite("
+    terminal_state: closed_in_commit
+    commit: PENDING
+    verification: "the handler is fed only by the parse and passes the same type / valueCm to the writer, so a handler-tier bound is an equivalent mutant while the A1 fixed-point test holds; the evidence is the handler test in log_measurement_site_whitelist_test.dart (3000, waist 40, arms 80, NaN, Infinity return false and write nothing); the isBodyMeasurementSite( clauses are presence-only, guarded by body_measurement_sites_derivation_test.dart (mutant A3-09)"
+  - id: A6
+    title: "existing tests and pins that moved: the whitelist test fixtures (literal in-range and out-of-range values), the derivation test consumers (snapshot -> latestBySite(, health_read_service.dart -> kBodyMeasurementSites), SoT registry pins repointed, new concept body_measurement_value_bounds with its behavioral_test_path, the stale BiometricNotifier measurement claim corrected"
+    terminal_state: closed_in_commit
+    commit: PENDING
+    verification: "the sot registry parity, completeness, reader-manifest, behavioral-test-path and snapshot-contract gates pass on the code commit; both edited tests pass"
+  - id: A7
+    title: "docs: diagnose-doc 7c3e9a (full template, G2 SELECT and result, old-reader probe, per-mutant before/after and verdicts, section 4.6 position), naming_conventions rows (measurement_ prefix, measurement bounds, measurement_value_rejected), core services CLAUDE.md row, snapshot_contract note, plan G1 correction, open_issues notes (OI-304 Blocked-on, OI-297 progress, OI-299 L3-BOUNDS)"
+    terminal_state: closed_in_commit
+    commit: PENDING
+    verification: "validate_diagnose_doc passes; the Gate-DEU, ledger, OI-integrity and context-budget checks pass in the pre-commit loop"
+  - id: BPASS
+    title: "B-pass before the merge (account tier, self-triggered): context-blind reviewers on the code commit, findings dispositioned, the review file committed with verdict: accepted and the plan-review record flipped to bpass: accepted"
+    terminal_state: closed_in_commit
+    commit: PENDING
+    verification: "docs/reviews/coach-measurement-sheet-bpass.md and docs/plan-reviews/coach-measurement-sheet.md (bpass: accepted); the same-dated entry in .claude/skills/code-review/tuning-history.md; the stamp commit records the result"
+  - id: D5
+    title: "founder decision D5: the bounds table (chest 60-200, waist 50-200, hips 60-200, arms 20-70; floors double as the probably-inches threshold) is confirmed as written and is live from this landing"
+    terminal_state: closed_in_commit
+    commit: PENDING
+    verification: "answered 2026-10-11 ('Confirm as is (Recommended)'); recorded in the diagnose-doc and the plan-review record"
+  - id: D6
+    title: "founder decision D6: Landing A ships with no kill switch; the rejection event is the observation"
+    terminal_state: closed_in_commit
+    commit: PENDING
+    verification: "answered 2026-10-11 ('No kill switch (Recommended)'); recorded in the diagnose-doc section 4.6 position and the plan-review record"
+  - id: LEGACY-PUSH
+    title: "finite out-of-range values already held locally are still pushed by _syncMeasurements (the default merge-safe push drops only non-finite sites)"
+    terminal_state: upstream_blocked
+    blocker: "founder decision D8 (2026-10-11): the push is bounded in L2c together with the per-site pending set, and L2c exists only if OQ-L2a is decided for the per-site pending set; 0 body_measurements rows exist in the cloud today (G2, re-read 2026-10-11)"
+    reopen_when: "OQ-L2a is decided; if L2c is not chosen this row reopens as blocked_on_user for another route"
+  - id: L3-BOUNDS
+    title: "L3's TS athlete state, the Telegram bot and the restore Edge Function read raw cloud rows, so read-time hiding in the app forks the readers; L3 must apply the same table (a TS twin plus a Dart-to-TS parity test)"
+    terminal_state: upstream_blocked
+    blocker: "landing L3 of the progress-review spec is not started; also recorded on OI-299"
+    reopen_when: "L3's plan is written"
+  - id: REJECTION-REVIEW
+    title: "read the measurement_value_rejected counts in client_errors at least 14 days after this landing reaches a build (the event is LOW priority and dropped under cooldown) and tighten or loosen the table if the below side shows typed inches"
+    terminal_state: blocked_on_user
+    reason: "needs a build in users' hands and a read of live client_errors; the table (D5) is the founder's to adjust"
+  - id: DEVICE-CHECK-A
+    title: "on a build carrying this landing: chat 'log my waist 82 cm' -> card -> confirm -> the record holds 82.0; 'waist 3000' -> no card; the coach context shows the logged value"
+    terminal_state: blocked_on_user
+    reason: "a device build (/build-apk) and a person at the phone; the founder owns builds"
+  - id: OI-304-DECISION
+    title: "OI-304 (InsightCard and DeepAnalysisCard are never mounted): the L2b plan v3.1 no longer schedules the deletion; mount the cards or delete the dead widgets and correct the two docs that name a reader that does not render"
+    terminal_state: blocked_on_user
+    reason: "founder decision D2 (plan section 6); the OI-304 Blocked-on line now says so"

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:icanbefitter/core/constants/body_measurement_sites.dart';
+import 'package:icanbefitter/core/constants/body_measurement_specs.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
@@ -1612,9 +1613,25 @@ class PendingLogActionsNotifier extends Notifier<List<PendingLogAction>> {
         );
 
       case 'log_measurement':
-        final type = data['type'] as String? ?? '';
-        final valueCm = (data['value_cm'] as num?)?.toDouble() ?? 0;
-        if (!isBodyMeasurementSite(type) || valueCm <= 0) {
+        // L2b Landing A: `is` checks, never casts. The model's JSON can carry a
+        // wrong-typed field ("82", true, []); a cast throws here, addActions has
+        // no per-item guard, and the whole response's other actions are lost.
+        final rawType = data['type'];
+        final type = rawType is String ? rawType : '';
+        final rawValue = data['value_cm'];
+        final valueCm = rawValue is num ? rawValue.toDouble() : null;
+        if (!isBodyMeasurementSite(type) || valueCm == null) {
+          return null;
+        }
+        if (!isValidBodyMeasurementCm(type, valueCm)) {
+          // The bounds are live with no lever, so a model that forgets to
+          // convert inches would otherwise drop the card silently. The event
+          // carries the site and below / above / nonfinite, never the number.
+          final rejected = measurementRejectionMessage('chat', type, valueCm);
+          if (rejected != null) {
+            unawaited(ErrorTelemetry.logEvent('measurement_value_rejected',
+                message: rejected));
+          }
           return null;
         }
         final cap = type.isEmpty ? '' : type[0].toUpperCase() + type.substring(1);
