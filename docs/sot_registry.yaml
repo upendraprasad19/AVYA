@@ -11479,7 +11479,7 @@ concepts:
         fields_read: [paths, default_tier]
         notes: informational classifier; printed by the hooks and used by pre-push to decide the local full suite.
       - file: scripts/check_plan_review_record_exists.dart
-        line_range: 104-121
+        line_range: 127-144
         method: _parseRules
         semantic: pass-through
         fields_read: [paths, default_tier]
@@ -11865,7 +11865,7 @@ concepts:
           (→913) despite the gate not flagging it, found by grepping the
           symbol directly rather than trusting the gate's silence on it.
       - file: lib/core/services/sync_service.dart
-        line_range: 2721-2721
+        line_range: 2718-2718
         method: restoreOpTimeout
         semantic: per-op-ceiling
         notes: day-swapper + sync-load Task 20 fix1 (diagnose a9d3f6) shifted
@@ -11876,7 +11876,7 @@ concepts:
           an N-M line_range — but left stale it would misdirect a future
           reader by the same +14).
       - file: lib/core/services/sync_service.dart
-        line_range: 2746-2750
+        line_range: 2743-2747
         method: applyRestoreCeiling
         semantic: apply-ceiling
         notes: day-swapper + sync-load Task 20 shifted this range (+148 lines,
@@ -11886,7 +11886,7 @@ concepts:
           blocks on a citation you shifted). Shifted again by task-20-fix1
           (diagnose a9d3f6, +14 lines, same method) for the same reason.
       - file: lib/core/services/sync_service.dart
-        line_range: 2758-2760
+        line_range: 2755-2757
         method: restoreFailureReason
         semantic: telemetry-reason-split
         notes: same shift as applyRestoreCeiling directly above, both times; all three re-derived +3 by the Hermes sync_epoch_seen doc comment (2026-09-28), then +1 (with _safeRestoreOp) by the plan_engine_flags import the merge-review F4 fix added (a3e7d9).
@@ -14310,13 +14310,22 @@ concepts:
       Day-swapper + sync-load Task 18 (spec §5.9, §5.12): SyncSkipIndex for
       SyncSkipDomain.measurement, gating _syncMeasurements. Row key = plain
       IST date string.
+      L2a (OI-297, diagnose c8a4d1): the WIRE body is merge-safe (only the
+      sites the device holds; sync/measurement_push_rules.dart
+      measurementMergeSafeBody) while the FINGERPRINT is the legacy-shape
+      content (measurementFingerprintContent), identical to what every earlier
+      build stored, so an upgrade or a toggle of disable_measurement_merge_safe_push
+      re-pushes nothing. The site list derives from kBodyMeasurementSites.
     writers:
       - file: lib/core/services/sync/sync_health.dart
         line_range: 1-9999
-        method: "_syncMeasurements (confirmed at :253; SyncSkipIndex for SyncSkipDomain.measurement)"
+        method: "_syncMeasurements (SyncSkipIndex for SyncSkipDomain.measurement; builds the legacy payload, the merge-safe body and the fingerprint through measurement_push_rules.dart)"
+      - file: lib/core/services/sync/measurement_push_rules.dart
+        line_range: 1-9999
+        method: "measurementFingerprintContent (the fingerprint source) and measurementMergeSafeBody (the wire body)"
       - file: lib/core/services/sync_service.dart
         line_range: 1-9999
-        method: "_hashSkipKillSwitchOn(SyncSkipDomain.measurement) — the GENERIC kill-switch reader (sync_service.dart:334, called from sync_health.dart:258); disable_measurement_hash_skip via domain.killSwitchKey, NOT a bespoke _measurementHashSkipDisabled getter"
+        method: "_hashSkipKillSwitchOn(SyncSkipDomain.measurement) — the GENERIC kill-switch reader (sync_service.dart, called from sync_health.dart); disable_measurement_hash_skip via domain.killSwitchKey, NOT a bespoke _measurementHashSkipDisabled getter"
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_health.dart
@@ -14325,11 +14334,12 @@ concepts:
         semantic: latest
         fields_read: [sync_measurement_payload_hash_index.<date>]
     regression_test: test/contracts/sync_body_measurement_payload_hash_index_writer_to_reader_test.dart
-    behavioral_test_path: test/contracts/sync_body_measurement_payload_hash_index_writer_to_reader_test.dart
+    behavioral_test_path: test/sync/body_measurement_push_merge_safe_test.dart  # L2a/c8a4d1: the wire + fingerprint contract through a stub cloud model (the older writer_to_reader test stays green with the old nulls body, so it cannot be the behavioral path)
+    behavioral_test_path_rules: test/sync/measurement_push_rules_test.dart  # HEAD's wire bodies and stored fingerprints pinned as literals; boundary and identity cases
     hive:
       box: healthBox
       key_prefix: "sync_measurement_payload_hash_index"
-      key_formula: "reserved single key -> Map{date: SyncFingerprint.of(payload)}"
+      key_formula: "reserved single key -> Map{date: SyncFingerprint.of(measurementFingerprintContent(legacy payload))}"
     cloud:
       table: body_measurements
       columns: [user_id, date, chest, waist, hips, arms, notes, created_at]
@@ -15054,3 +15064,71 @@ concepts:
       KEEPS the notice keys: mergeCloudProgress starts from a copy of the local map and the
       cloud row has no such columns, which is why a snapshot taken at debit time outlives a
       restore and a refill (the stale count the live read removes).
+
+  - concept: clean_orphan_media_pro_recheck
+    domain: subscription
+    behavioral_test_path: supabase/functions/clean-orphan-media/logic_test.ts
+    behavioral_test_path_pro_state: supabase/functions/_shared/subscription_test.ts
+    description: |
+      OI-321 (bug class 2.49, recurrence of f2b9d4). The daily `clean-orphan-media` cron
+      (03:00 UTC) deletes `chat-media` objects older than 30 days for users who are NOT PRO.
+      Its candidates come from the RPC `find_orphan_chat_media` (migration 071), which already
+      excludes every user with an active unexpired subscription; the per-candidate recheck at
+      delete time guards "the user upgraded between the scan and the delete".
+      THE RULE: an object is removed ONLY when the subscription read SUCCEEDED and found no
+      active unexpired row (`readProState` === "free"). "pro" keeps it; "unknown" (a populated
+      error, a thrown rejection, a non-array result, an empty user id, a malformed candidate)
+      keeps it too and is counted and written to `cron_call_log.error_summary`. The run ends
+      `success` unless it could not do its job: at least five candidates undecided
+      (`skippedUnknown + failed`) AND a majority of those scanned (`isSystematicFailure`) ends
+      it `failed`/500, which pages through `alert_cron_failures`; a partial outage below that
+      threshold is recorded but raises no alert. The pre-fix recheck was `.maybeSingle()` keeping only `data`: two unexpired
+      active rows (an ordinary renewal) answered PGRST116 with a null `data`, and so did any
+      read failure; both read "free" and the file was deleted. `isProUser` (false on error)
+      is the right default for notification copy and the WRONG one before a delete, which is
+      why a three-state read exists. The ONLY Storage `.remove(` in the function folder is
+      `removeFromBucket`, pinned to the `chat-media` bucket (`coach-media` is long-term
+      consented retention, migration 070, diagnose c1ea30).
+    writers:
+      - file: supabase/functions/clean-orphan-media/logic.ts
+        line_range: 66-78
+        method: removeFromBucket
+        notes: The ONLY Storage removal in the function folder; a thrown call becomes { error } so one bad object cannot stop the run.
+    reader_manifest_complete: true
+    readers:
+      - file: supabase/functions/_shared/subscription.ts
+        line_range: 310-348
+        method: readProState
+        semantic: three-state-pro-read
+        fields_read: [subscriptions.user_id, subscriptions.status, subscriptions.end_date]
+      - file: supabase/functions/clean-orphan-media/logic.ts
+        line_range: 104-171
+        method: sweepOrphans
+        semantic: remove-only-on-exactly-free
+        fields_read: [subscriptions.user_id]
+      - file: supabase/migrations/071_rename_orphan_media_rpc.sql
+        line_range: 18-39
+        method: find_orphan_chat_media
+        semantic: candidate-prefilter-excludes-pro
+        fields_read: [subscriptions.user_id, subscriptions.status, subscriptions.end_date]
+        notes: LIVE body read with pg_get_functiondef on 2026-10-11 and identical to this file plus the search_path migration 090 added.
+      - file: supabase/functions/clean-orphan-media/logic.ts
+        line_range: 210-213
+        method: isSystematicFailure
+        semantic: run-outcome-classification
+        notes: At least 5 candidates undecided (skippedUnknown + failed) AND a majority of those scanned ends the run failed/500, which pages through alert_cron_failures; below that the run stays success with the counts on error_summary.
+      - file: supabase/functions/clean-orphan-media/index.ts
+        line_range: 94-125
+        method: runSweep
+        semantic: wiring-and-run-telemetry
+        notes: Records skipped_unknown / failed / already_gone on the cron_call_log row via runErrorSummary and picks the run status with isSystematicFailure; the candidate-RPC leg and the catch leg keep the failed status.
+    cloud_table: subscriptions
+    cloud_columns:
+      - user_id
+      - status
+      - end_date
+    regression_test: test/contracts/clean_orphan_media_pro_recheck_test.dart
+    forbidden_legacy_patterns:
+      - "a .maybeSingle() PRO recheck in front of a delete (PGRST116 on two unexpired active rows reads as free)"
+      - "treating an unreadable subscription read as free before a delete (isProUser answers false on error)"
+      - "a second Storage .remove( in the clean-orphan-media folder, or the coach-media bucket anywhere in the sweep"

@@ -6,6 +6,15 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### clean_orphan_media_pro_recheck — an object is removed only when the subscription read SUCCEEDED and found no active unexpired row. (1 bugs)
+- 2026-10-11 f0b6d8 — `clean-orphan-media` (daily cron, 03:00 UTC) rechecked "is this user PRO?" with a `.maybeSingle()` that kept only `data` and ignored `error`. `.maybeSingle()` over two unexpired active rows (an…
+
+### sync_body_measurement_payload_hash_index (1 bugs)
+- 2026-10-11 c8a4d1 — The body_measurements push sent all four sites and notes from the day's Hive record, nulls included. A device that held only some sites (logMeasurement folds ONE part per call; restore writes explicit…
+
+### keystone_gate_exemption_path_input (1 bugs)
+- 2026-10-11 34e764 — The plan-review keystone gate (scripts/check_plan_review_record_exists.dart) grants two "nothing here needs a record" exemptions from the CHANGED PATH LIST of a commit or merge: a bare version bump…
+
 ### release_cycle_prepush_gate (1 bugs)
 - 2026-10-10 c7a3e9 — A change to this repo spends most of its wall-clock waiting on test suites that run more than once. Measured 2026-10-09/10: the founder PC's local pre-push full suite takes about 39 minutes (one…
 
@@ -1570,6 +1579,9 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-10-11 | f0b6d8 | `clean-orphan-media` (daily cron, 03:00 UTC) rechecked "is this user PRO?" with a `.maybeSingle()` that kept only `data` and ignored `error`. `.maybeSingle()` over two unexpired active rows (an… | clean_orphan_media_pro_recheck — an object is removed only when the subscription read SUCCEEDED and found no active unexpired row. | supabase/functions/clean-orphan-media/logic_test.ts |
+| 2026-10-11 | c8a4d1 | The body_measurements push sent all four sites and notes from the day's Hive record, nulls included. A device that held only some sites (logMeasurement folds ONE part per call; restore writes explicit… | sync_body_measurement_payload_hash_index | test/sync/body_measurement_push_merge_safe_test.dart |
+| 2026-10-11 | 34e764 | The plan-review keystone gate (scripts/check_plan_review_record_exists.dart) grants two "nothing here needs a record" exemptions from the CHANGED PATH LIST of a commit or merge: a bare version bump… | keystone_gate_exemption_path_input | test/scripts/gate_input_family_e2e_test.dart |
 | 2026-10-10 | c7a3e9 | A change to this repo spends most of its wall-clock waiting on test suites that run more than once. Measured 2026-10-09/10: the founder PC's local pre-push full suite takes about 39 minutes (one… | release_cycle_prepush_gate | test/scripts/pre_push_branch_push_skip_e2e_test.dart |
 | 2026-10-09 | c6a9d3 | An exercise log deleted on one device left a live cloud row in four cases: the drain tombstoned only the SAME set count (a stale count stayed live), after migration 151 it could tombstone a newer… | pending_exlog_deletes | test/sync/exlog_delete_u4_behavioral_test.dart |
 | 2026-10-09 | d7bae4 | The exercise-log delete drain had no owner check: it iterated a copy of the queue, and its queue key (v5 of workout_<date> plus the exercise name) is user-independent, so an account swap during a… | pending_exlog_deletes | test/sync/exlog_delete_u4_behavioral_test.dart |

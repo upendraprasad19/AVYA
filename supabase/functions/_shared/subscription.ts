@@ -274,3 +274,75 @@ export async function fetchLatestActiveEndByUser(
   // read failure and swallowed into `null`.
   return reduceLatestEndByUser(rows);
 }
+
+/** The answer of `readProState`: PRO, free, or could not tell. */
+export type ProState = "pro" | "free" | "unknown";
+
+/**
+ * Three answers, not two: PRO, free, or "could not tell".
+ *
+ * Use this — NOT `isProUser` — when the NOT-PRO branch of the caller is
+ * DESTRUCTIVE (a Storage delete, a purge, a downgrade). `isProUser` returns
+ * `false` on a read error or a thrown rejection, which is the fail-safe
+ * direction for choosing notification copy and the DESTRUCTIVE direction before
+ * a delete: a paying user whose subscription read failed once would be treated
+ * as free. A caller of this function must act destructively ONLY on `"free"`
+ * and must leave the object alone on `"unknown"` (bug class 2.49, OI-321).
+ *
+ *   "pro"     at least one row with status = 'active' AND end_date > now.
+ *   "free"    the read SUCCEEDED and returned zero such rows.
+ *   "unknown" anything else: a populated `error`, a thrown rejection, a `data`
+ *             that is not an array, an empty or non-string `userId` (answered
+ *             WITHOUT querying), or an invalid `now`.
+ *
+ * The read is an ARRAY read with `.limit(1)`, never `.maybeSingle()`: a user
+ * can hold several unexpired active rows (a renewal bought before the old term
+ * lapses), and `.maybeSingle()` answers that with PGRST116 and a null `data`
+ * — indistinguishable from "no row" (diagnose f2b9d4 fixed the same shape in
+ * ai-proxy's `checkPro`).
+ *
+ * `now` is a seam so the `end_date > now` boundary is testable; production
+ * callers omit it. The predicate is the same one `isProUser` and
+ * `fetchProUserIds` apply, written with its own `nowIso` binding so a pin on
+ * one copy cannot be satisfied by another (a change to the definition of PRO
+ * must change every copy: test/contracts/progress_photos_pro_insert_rule_test.dart).
+ */
+export async function readProState(
+  client: SupabaseLike,
+  userId: string,
+  now: Date = new Date(),
+): Promise<ProState> {
+  if (typeof userId !== "string" || userId.trim().length === 0) {
+    console.error("[subscription] readProState called without a user id");
+    return "unknown";
+  }
+  try {
+    const nowIso = now.toISOString();
+    const { data, error } = await client
+      .from("subscriptions")
+      .select("user_id")
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .gt("end_date", nowIso)
+      .limit(1);
+
+    if (error) {
+      const e = error as { code?: unknown; message?: unknown };
+      console.error(
+        "[subscription] readProState failed:",
+        typeof e.code === "string" ? e.code : "no_code",
+        typeof e.message === "string" ? e.message : "no_message",
+      );
+      return "unknown";
+    }
+    if (!Array.isArray(data)) {
+      console.error("[subscription] readProState got a non-array result");
+      return "unknown";
+    }
+    return data.length > 0 ? "pro" : "free";
+  } catch (err) {
+    // Transport-level rejection, or an invalid `now` (toISOString throws).
+    console.error("[subscription] readProState threw:", err);
+    return "unknown";
+  }
+}

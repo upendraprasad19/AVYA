@@ -4,10 +4,11 @@ import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 // 93f6fe41 2026-07-28) while 2.39.3 (36 files) fetched fine in the very same
 // runs. A version nobody else requests is cold at the CDN edge. Patch-level
 // move, and it deletes the failing URL from the repo.
-import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { isAuthorizedCronCall } from '../_shared/cron_auth.ts';
 import { logCronStart, logCronEnd } from '../_shared/cron_telemetry.ts';
 import { fetchAllPages } from '../_shared/paged_fetch.ts';
+import { isSystematicFailure, runErrorSummary, runSweep } from './logic.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -86,22 +87,42 @@ serve(async (req: Request) => {
       );
     }
 
-    let scanned = 0;
-    let deleted = 0;
-    for (const obj of candidates ?? []) {
-      scanned++;
-      // Re-check isPro at delete time — user may have upgraded mid-window.
-      const isPro = await rechecksIsPro(supabaseClient, obj.user_id);
-      if (isPro) continue;
-      await supabaseClient.storage.from('chat-media').remove([obj.path]);
-      deleted++;
-    }
+    // OI-321 (bug class 2.49): the per-candidate PRO recheck and the removal live
+    // in ./logic.ts. An object is removed ONLY when the subscription read
+    // succeeded and found no active unexpired row; an unreadable read leaves it
+    // for tomorrow's run. The counts below say how many were left and why.
+    const result = await runSweep(supabaseClient, candidates ?? []);
 
-    console.log(`[clean-orphan-media] request_id=${requestId} scanned=${scanned} deleted=${deleted}`);
-    await logCronEnd(logId, 'success', { httpStatus: 200, requestId });
+    const line =
+      `[clean-orphan-media] request_id=${requestId} scanned=${result.scanned} deleted=${result.deleted} ` +
+      `skipped_pro=${result.skippedPro} skipped_unknown=${result.skippedUnknown} ` +
+      `failed=${result.failed} already_gone=${result.alreadyGone}`;
+    if (result.skippedUnknown > 0 || result.failed > 0) console.warn(line);
+    else console.log(line);
+
+    // A run that could not decide or remove MOST of its candidates is a failed
+    // run (see isSystematicFailure): it pages through alert_cron_failures instead
+    // of ending `success` with nothing deleted. Anything milder stays `success`
+    // and is recorded on error_summary.
+    const status = isSystematicFailure(result) ? 'failed' : 'success';
+    const httpStatus = status === 'failed' ? 500 : 200;
+    await logCronEnd(logId, status, {
+      httpStatus,
+      requestId,
+      errorSummary: runErrorSummary(result),
+    });
     return new Response(
-      JSON.stringify({ scanned, deleted, request_id: requestId }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      JSON.stringify({
+        ...(status === 'failed' ? { error: 'Sweep could not decide most candidates' } : {}),
+        scanned: result.scanned,
+        deleted: result.deleted,
+        skipped_pro: result.skippedPro,
+        skipped_unknown: result.skippedUnknown,
+        failed: result.failed,
+        already_gone: result.alreadyGone,
+        request_id: requestId,
+      }),
+      { status: httpStatus, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   } catch (err) {
     console.error(`[clean-orphan-media] request_id=${requestId}`, err);
@@ -116,14 +137,3 @@ serve(async (req: Request) => {
     );
   }
 });
-
-async function rechecksIsPro(client: SupabaseClient, userId: string): Promise<boolean> {
-  const { data } = await client
-    .from('subscriptions')
-    .select('end_date')
-    .eq('user_id', userId)
-    .eq('status', 'active')
-    .gt('end_date', new Date().toISOString())
-    .maybeSingle();
-  return !!data;
-}

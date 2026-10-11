@@ -22,6 +22,7 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:icanbefitter/core/constants/body_measurement_sites.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/rank_ladder_data.dart';
@@ -1619,7 +1620,7 @@ class AiSnapshotBuilder {
       final date = DateTime.tryParse(dateStr);
       if (date == null) continue;
 
-      for (final field in ['chest', 'waist', 'hips', 'arms']) {
+      for (final field in kBodyMeasurementSites) {
         final v = (raw[field] as num?)?.toDouble();
         if (v == null) continue;
         final prev = latestByType[field];

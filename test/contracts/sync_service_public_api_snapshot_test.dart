@@ -106,6 +106,11 @@ void main() {
         'restoreExerciseLogsForSyncDomain',
         'restoreFreezesForSyncDomain',
         'restoreMeasurementsForSyncDomain',
+        // OI-297 B-pass (diagnose c8a4d1) - @visibleForTesting seam: the
+        // cross-channel pull's measurement leg without the `currentUser`
+        // gate of pullRecentCrossChannelLogs; delegates to
+        // _pullMeasurements, production path unchanged.
+        'pullMeasurementsForTest',
         'restoreNotificationsInboxForSyncDomain',
         'restoreNutritionLogsForSyncDomain',
         'restoreRankPromotionsForSyncDomain',

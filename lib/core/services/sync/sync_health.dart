@@ -262,6 +262,11 @@ extension SyncServiceHealth on SyncService {
           unawaited(_reportSyncFailure(opType: op, error: e)),
     );
     final liveKeys = <String>{};
+    // L2a (OI-297, diagnose c8a4d1): the wire body carries only the sites this
+    // device HOLDS, so a push never blanks a value another device entered. The
+    // flag is read once per pass; the fingerprint is the LEGACY-shape content
+    // either way, so neither an upgrade nor a toggle re-pushes anything.
+    final mergeSafe = SyncFlags.measurementMergeSafePushEnabled;
     // Writers use per-day keys like 'measurement_2026-04-07'.
     for (final key in healthBox.keys) {
       if (index.aborted) break;
@@ -273,26 +278,27 @@ extension SyncServiceHealth on SyncService {
       if (date == null) continue;
       liveKeys.add(date);
       final createdAt = log['created_at'] as String? ?? _healthCreatedAtFromMs(log);
-      final payload = <String, dynamic>{
-        'user_id': userId,
-        'date': date,
-        'chest': log['chest'],
-        'waist': log['waist'],
-        'hips': log['hips'],
-        'arms': log['arms'],
-        'notes': log['notes'],
-        if (createdAt != null) 'created_at': createdAt,
-      };
+      final legacy = measurementLegacyPayload(
+        userId: userId,
+        date: date,
+        log: log,
+        createdAt: createdAt,
+      );
+      // Kill switch set: the legacy body verbatim (the defect's shape, kept
+      // reachable per CLAUDE.md section 4.6). On: only what the device holds;
+      // a record holding no site and no notes pushes nothing.
+      final body = mergeSafe ? measurementMergeSafeBody(legacy) : legacy;
+      if (body == null) continue;
       await index.pushIfChanged(
         date,
-        () => SyncFingerprint.of(payload),
+        () => SyncFingerprint.of(measurementFingerprintContent(legacy)),
         () async {
           // id OMITTED + onConflict on the new user-inclusive natural key
           // (migration 082) — same cross-user PK-collision fix as weight_logs.
           // Fix 2026-06-02.
           await _supabase.client
               .from('body_measurements')
-              .upsert(payload, onConflict: 'user_id,date');
+              .upsert(body, onConflict: 'user_id,date');
           // E.14.A · audit-2026-05-16 — success-path emission.
           unawaited(ErrorTelemetry.logEvent('upsert_body_measurements_success',
               message: 'date=$date'));
@@ -645,6 +651,18 @@ extension SyncServiceHealth on SyncService {
     final userId = await _ensureSessionOpen();
     if (userId == null) return;
     await _restoreMeasurements(userId, since ?? _kSyncDomainRestoreSinceHealth);
+  }
+
+  /// OI-297 B-pass (diagnose c8a4d1) - test seam: runs the cross-channel
+  /// pull's measurement leg WITHOUT [pullRecentCrossChannelLogs]'s
+  /// `currentUser` gate (the stub harness has no auth session), so the pull's
+  /// merge and its `put` are behaviourally testable. Delegates to
+  /// `_pullMeasurements`; the production path is unchanged.
+  @visibleForTesting
+  Future<void> pullMeasurementsForTest({String? since}) async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _pullMeasurements(userId, since ?? _kSyncDomainRestoreSinceHealth);
   }
 
   Future<void> pushSleepLogsForSyncDomain() async {

@@ -161,8 +161,9 @@ fi
 # invocation -- a no-op shipped as a guard against no-ops. Its own three tests
 # passed only because their fixture committed the record onto MAIN, a shape the
 # real workflow never produces. `git show "$BRANCH:<path>"` is the same
-# read-from-a-rev pattern `check_plan_review_record_exists.dart:216` already
-# uses, and is the reason that gate does not have this bug.
+# read-from-a-rev pattern the gate already uses (`readAt` in its `_validateRecord`,
+# and `gitBlobAt` in scripts/version_bump_git_lib.dart), and is the reason that gate
+# does not have this bug.
 #
 # ⚠ SLUG, NOT RAW BRANCH NAME (B-pass finding 3). The record filename is
 # `plan_review_record_lib.dart`'s `recordSlug()`: strip a leading `origin/`,
@@ -172,7 +173,7 @@ fi
 # a live convention here. Shell port below, matching this file's own precedent
 # of porting `_norm()` from the Dart side.
 # The three shapes below MIRROR the CI gate's own three rejections
-# (`check_plan_review_record_exists.dart:846-858`), and that parity is the
+# (the anti-fabrication block of the gate's `_validateRecord`), and that parity is the
 # point: a precheck that covers fewer shapes than the gate it previews is
 # silent exactly where a merge is about to fail. Round-1 review confirmed
 # empirically that the first version warned on ONLY the third shape --
@@ -239,14 +240,22 @@ fi
 # dcb94a93 on 2026-09-10; 0768a0ce on 2026-09-19, whose repair 8ffe28fb
 # authored the record after the fact).
 #
-# Mirrors check_plan_review_record_exists.dart:617-620 + :790-796: a record is
+# Mirrors check_plan_review_record_exists.dart (the merge loop's `tier < account`
+# skip and the "has no plan-review record" rejection in `_validateRecord`): a record is
 # required iff the branch's blast-radius is >= account. Three-dot (merge-base)
 # because the merge commit does not exist yet; refs/heads/ on BOTH sides
 # because a same-named tag resolves first (see the tag test in
-# test/scripts/safe_merge_test.dart); --no-renames + quotePath=false mirror
-# the gate's own diff flags (:309-315). The gate's exemptions (dependabot
-# manifest-only, bare version bump) are deliberately NOT mirrored: 0768a0ce
-# was a version bump and the gate failed it (OI-222).
+# test/scripts/safe_merge_test.dart); --no-renames mirrors the gate's diff flag, and
+# quotePath=false keeps non-ASCII names readable for the tier classifier (this is an
+# ADVISORY tier estimate; the gate itself now reads NUL-separated paths, `diffPathsBetween`
+# in scripts/version_bump_git_lib.dart, diagnose 34e764). The gate's bare-VERSION-BUMP exemption IS
+# mirrored since OI-275 batch B2 (2026-10-11): a branch whose merge-base..tip change
+# is a bare bump is told it needs no record, via scripts/version_bump_range.dart
+# (the same rangeIsVersionBump the gate runs). Before B2 this block warned a bump
+# branch about a record the gate did not exempt it from either (0768a0ce was a
+# version bump and the gate failed it: OI-222); the gate now exempts it and this
+# advisory agrees. The DEPENDABOT manifest-only exemption is still deliberately
+# NOT mirrored (bot branches do not go through safe_merge.sh).
 #
 # Residues, stated: this fires only on the safe_merge.sh path (`gh pr merge`
 # and a raw `git merge` bypass it); an `origin/foo` spelling is silent (same
@@ -264,7 +273,10 @@ if [ -z "${_REC_CONTENT:-}" ] \
     . "$REPO_ROOT/scripts/_dart_bin.sh" || true
     _PRE_DART="$(resolve_dart_bin 2>/dev/null || echo dart)"
   fi
-  _PRE_PATHS="$(git -c core.quotePath=false diff --no-renames --name-only "refs/heads/main...refs/heads/${BRANCH}" 2>/dev/null || true)"
+  # --ignore-submodules=none: plain `git diff` honours a `.gitmodules` `ignore = all` the branch itself
+  # may carry and would drop a gitlink move from this list (B-pass F1 of OI-275 B2, diagnose 34e764
+  # instance 5) - the same flag the gate's own path reader passes (version_bump_git_lib.dart).
+  _PRE_PATHS="$(git -c core.quotePath=false diff --no-renames --ignore-submodules=none --name-only "refs/heads/main...refs/heads/${BRANCH}" 2>/dev/null || true)"
   _PRE_TIER=""
   if [ -n "$_PRE_PATHS" ]; then
     # Same preamble-tolerant extraction as the TIER pipeline in pre-push.sh: `dart run` may
@@ -281,11 +293,34 @@ if [ -z "${_REC_CONTENT:-}" ] \
   fi
   case "${_PRE_TIER:-}" in
     account|platform|catastrophic)
-      echo "[safe_merge] WARNING: '$BRANCH' is blast-radius=$_PRE_TIER (>= account) but has NO plan-review record at $_REC on that branch." >&2
-      echo "  CI's keystone gate reads the record AT THE MERGE COMMIT, so merging now means the" >&2
-      echo "  only repair is unwinding this merge (it cost exactly that on 2026-08-30, 2026-09-10 and 2026-09-19)." >&2
-      echo "  Write docs/plan-reviews/${_REC_SLUG}.md on '$BRANCH' FIRST (CLAUDE.md §4.12.3)." >&2
-      echo "  (Advisory only -- proceeding. CI is the authoritative gate.)" >&2
+      # OI-275 batch B2 (mirrors OI-222): CI's keystone gate EXEMPTS a merge whose net change
+      # is a bare version bump (scripts/version_bump_git_lib.dart rangeIsVersionBump), so
+      # warning a bump branch that it needs a record is noise that trains the reader to skim
+      # past the real warning. Three-dot like the classification above: merge-base..branch is
+      # what the merge would bring. Every failure path falls through to the warning (fail
+      # closed): a missing CLI, an unresolvable merge base, a non-bump, or an erroring dart
+      # all leave `_PRE_BUMP` empty. Exit 0 of the CLI is the ONLY thing that silences it.
+      # Plain `dart <file>`, not `dart run`: the CLI has only relative imports, and `dart run`
+      # fails in a checkout whose pubspec.yaml lacks an SDK lower bound (verified).
+      _PRE_BUMP=""
+      _PRE_BASE="$(git merge-base "refs/heads/main" "refs/heads/${BRANCH}" 2>/dev/null || true)"
+      if [ -n "$_PRE_BASE" ] && [ -r "$REPO_ROOT/scripts/version_bump_range.dart" ] \
+         && "$_PRE_DART" scripts/version_bump_range.dart "$_PRE_BASE" "refs/heads/${BRANCH}" >/dev/null 2>&1; then
+        _PRE_BUMP=1
+      fi
+      if [ -n "$_PRE_BUMP" ]; then
+        # Wording is deliberately conditional: this asks about merge-base..tip (the branch's own net
+        # change), the gate asks about <merge>^1..<merge> (the net change against main's tip AT THE
+        # MERGE, including anything the merge itself writes resolving a conflict). They agree unless
+        # the merge writes content of its own (B-pass F6 of OI-275 B2).
+        echo "[safe_merge] NOTE: '$BRANCH' is a bare version bump (blast-radius=$_PRE_TIER) -- CI's keystone gate exempts a bare bump by content, so no plan-review record is needed, unless the merge itself writes content (a conflict resolution): the gate judges the merge commit's net change against main." >&2
+      else
+        echo "[safe_merge] WARNING: '$BRANCH' is blast-radius=$_PRE_TIER (>= account) but has NO plan-review record at $_REC on that branch." >&2
+        echo "  CI's keystone gate reads the record AT THE MERGE COMMIT, so merging now means the" >&2
+        echo "  only repair is unwinding this merge (it cost exactly that on 2026-08-30, 2026-09-10 and 2026-09-19)." >&2
+        echo "  Write docs/plan-reviews/${_REC_SLUG}.md on '$BRANCH' FIRST (CLAUDE.md §4.12.3)." >&2
+        echo "  (Advisory only -- proceeding. CI is the authoritative gate.)" >&2
+      fi
       ;;
   esac
 fi
