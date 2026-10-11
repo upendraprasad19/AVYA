@@ -214,9 +214,12 @@ for the same reason — the client-side skip index is its only protection for th
 holds (a null site in an upsert body is an assignment that blanks another device's value; an absent key leaves the column alone),
 so its wire body is NOT the legacy payload. Its fingerprint is `SyncFingerprint.of(measurementFingerprintContent(legacy))`
 (`sync/measurement_push_rules.dart`): the LEGACY-shape content (every site, `notes`, `created_at`, with non-pushable values as
-null), which equals the payload every earlier build fingerprinted. A payload-shape change, an upgrade, or a toggle of
-`disable_measurement_merge_safe_push` therefore re-pushes nothing (a re-push is a stale-overwrite trigger when the push sends held
-values another device has since corrected).
+null), which equals the payload every earlier build fingerprinted. A wire-body change, an upgrade, or a toggle of
+`disable_measurement_merge_safe_push` therefore re-pushes nothing. A change to the site registry (`kBodyMeasurementSites`) DOES
+re-fingerprint every stored day, because the legacy payload iterates it: appending a token costs one re-push per day. A re-push is
+a stale-overwrite trigger when the push sends held values another device has since corrected; the others are a new site on this
+device, `sync_epoch` clearAll, `disable_measurement_hash_skip`, the first push of each restored day, an offline-retried push and a
+cross-channel pull fill (founder rule 'last sync or write wins'; the per-site pending set is the L2b entry criterion).
 
 **4. Server rules (migration `149_sync_noop_suppress_completed_guard_sync_epoch.sql`).**
 Three independent fixes, one file:

@@ -653,6 +653,18 @@ extension SyncServiceHealth on SyncService {
     await _restoreMeasurements(userId, since ?? _kSyncDomainRestoreSinceHealth);
   }
 
+  /// OI-297 B-pass (diagnose c8a4d1) - test seam: runs the cross-channel
+  /// pull's measurement leg WITHOUT [pullRecentCrossChannelLogs]'s
+  /// `currentUser` gate (the stub harness has no auth session), so the pull's
+  /// merge and its `put` are behaviourally testable. Delegates to
+  /// `_pullMeasurements`; the production path is unchanged.
+  @visibleForTesting
+  Future<void> pullMeasurementsForTest({String? since}) async {
+    final userId = await _ensureSessionOpen();
+    if (userId == null) return;
+    await _pullMeasurements(userId, since ?? _kSyncDomainRestoreSinceHealth);
+  }
+
   Future<void> pushSleepLogsForSyncDomain() async {
     final userId = await _ensureSessionOpen();
     if (userId == null) return;

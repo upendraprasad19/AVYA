@@ -5,14 +5,15 @@ blast_radius: platform
 review_rounds: 3
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
+bpass_review: docs/reviews/coach-measurement-entry-bpass.md
 ---
 
 # Plan-review record — L2a merge-safe measurement push and one site registry (`coach-measurement-entry`)
 
 Plan: `docs/plans/coach-measurement-entry-l2a.md` (v3.1). Umbrella: `docs/superpowers/specs/2026-10-03-progress-review-design.md` (landing L2, OI-297 / OI-304; the spec and both OI entries exist only on branch `coach-progress-review`). L2 is split into L2a (this record) and L2b (its own plan and record, written after L2a lands).
 
-`bpass: pending` — the B-pass runs on the code before the merge and this field becomes `accepted`, with a `bpass_review:` file, in that commit.
+`bpass: accepted` (2026-10-11, `docs/reviews/coach-measurement-entry-bpass.md`): two fresh context-blind reviewers on commit dec69fc8, 13 findings (0 P0, 0 P1, 1 P2, 12 P3, 0 false alarms), all fixed or triaged. The flip is in the same commit that adds the review file, never before it.
 
 ## Rounds
 
@@ -32,7 +33,11 @@ Round 1 lens B ran two read-only `git ls-remote --heads origin` calls (a network
 
 ## Founder decisions
 
-None needed for L2a to ship. OQ-L2a (a server-side guard against old clients sending nulls) is recorded in the plan with a recommendation (none for L2a) and is re-asked as the L2b entry criterion, before `enable_body_measurements` flips.
+None needed for L2a to ship. The standing rule "Last sync or write wins" (L1a, 2026-10-06; recorded in `docs/plan-reviews/coach-history-correctness-client.md` under Founder decisions, item 1) is what the stale-overwrite residual rests on; the B-pass added the cross-channel pull fill to its trigger list and pinned it with a test. OQ-L2a (a server-side guard against old clients sending nulls) is recorded in the plan with a recommendation (none for L2a) and is re-asked as the L2b entry criterion, before `enable_body_measurements` flips.
+
+## B-pass fixes (after round 3)
+
+Product code: none changed except one `@visibleForTesting` seam, `SyncService.pullMeasurementsForTest` (the cross-channel pull is unreachable without a signed-in user; precedent `restoreWorkoutPlanForTest`). Tests: the pull tests, the kill-switch all-null record, the empty-row fixture moved first, a deterministic NaN-test observable, the rules boundary and identity tests, a lib-wide derivation scan with scanner negative controls, and a behavioral test of the two chat whitelist call sites. Docs: the registry-coupling claims qualified, the residual trigger list completed, the closure ledger rebuilt in the order the L1a-3 ledger used, the SoT behavioral path repointed, and OI-332 filed for the weight and sleep sibling pushes (latent: live 2026-10-11 `sleep_logs` 0 rows, `weight_logs` 69 rows with 0 notes).
 
 ## §4.6
 

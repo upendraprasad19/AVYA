@@ -30,7 +30,7 @@ Map<String, dynamic> measurementLegacyPayload({
   'date': date,
   for (final site in kBodyMeasurementSites) site: log[site],
   'notes': log['notes'],
-  if (createdAt != null) 'created_at': createdAt,
+  'created_at': ?createdAt,
 };
 
 /// [legacy] with every site that is not a finite number, and a `notes` that is
@@ -71,8 +71,9 @@ Map<String, dynamic>? measurementMergeSafeBody(Map<String, dynamic> legacy) {
     hasContent = true;
   }
   if (!hasContent) return null;
-  if (legacy.containsKey('created_at'))
+  if (legacy.containsKey('created_at')) {
     body['created_at'] = legacy['created_at'];
+  }
   return body;
 }
 

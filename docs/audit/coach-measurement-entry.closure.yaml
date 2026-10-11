@@ -1,31 +1,42 @@
 # Closure ledger — coach-measurement-entry (L2a). Gate 40: one terminal_state per finding, no `deferred:` key.
+# Code commit dec69fc8 (U1, U2). The B-pass fixes and the review file land in the commit after it; the stamp
+# commit that follows records that commit's SHA (a commit cannot name its own), adds the BPASS row and the
+# full-suite result of the fixed tree. Rows are added only once they are true.
 batch: coach-measurement-entry
 plan_review_record: docs/plan-reviews/coach-measurement-entry.md
 diagnose_docs:
   - docs/diagnoses/2026-10-11-measurement-push-blanks-other-devices-c8a4d1.md
-total_findings: 8
-closed_count: 8
+total_findings: 10
+closed_count: 10
 
 findings:
   - id: U1
     title: "merge-safe body_measurements push: one payload builder, wire body carries only held sites, fingerprint of the legacy-shape content, kill switch disable_measurement_merge_safe_push"
     terminal_state: closed_in_commit
-    commit: PENDING
-    verification: "test/sync/body_measurement_push_merge_safe_test.dart + test/sync/measurement_push_rules_test.dart (HEAD wire bodies and fingerprints pinned); 25 mutants all red, baseline 61 passed"
+    commit: dec69fc8
+    verification: "at dec69fc8: test/sync/body_measurement_push_merge_safe_test.dart + test/sync/measurement_push_rules_test.dart (HEAD wire bodies and fingerprints pinned as literals captured from the unmodified tree); 26 mutants red; full suite 8624 passed, 9 skipped (the first text said 25 mutants and a 61-test baseline: both miscounts, corrected in the diagnose-doc)"
   - id: U2
     title: "one site registry kBodyMeasurementSites (+ TS twin, parity test, presence-only derivation test); the five Dart site lists derive from it; blast-radius _declined entry"
     terminal_state: closed_in_commit
-    commit: PENDING
+    commit: dec69fc8
     verification: "test/contracts/body_measurement_sites_parity_test.dart, body_measurement_sites_derivation_test.dart, blast_radius_sync_engine_platform_test.dart; registry, twin and prompt mutants red"
-  - id: BPASS
-    title: "B-pass before the merge (>=account, self-triggered)"
-    terminal_state: closed_in_commit
-    commit: PENDING
-    verification: "docs/reviews/coach-measurement-entry-bpass.md"
-  - id: RESIDUALS
-    title: "recorded residuals: old clients still push nulls (an unchanged day is not re-pushed; heals on the next local edit); a stale held value can overwrite a corrected one ('last sync or write wins')"
+  - id: RESIDUAL-OLD-CLIENTS
+    title: "old APKs and an out-of-repo Telegram writer (OI-297) still push nulls; a new build does not re-push an unchanged day, so a blanking heals on the next local edit of that date (a sync_epoch bump is not recommended for multi-device users, SYNC_EPOCH_RESYNC.md:54)"
+    terminal_state: upstream_blocked
+    blocker: "the server cannot tell a null meaning 'not held' from 'cleared' per write, and no minimum-version gate or force-update exists (the OI-313 shape); the Telegram writer is not in this repo"
+    reopen_when: "a minimum-version gate ships, or the Telegram writer's payload is fixed, or OQ-L2a option 2 (a server-side keep-old-on-NULL guard) is chosen at the L2b entry (row L2B-ENTRY)"
+  - id: RESIDUAL-STALE
+    title: "a stale held value can overwrite a value another device corrected (triggers: a new site added here, sync_epoch clearAll, disable_measurement_hash_skip, the first push of each restored day, an offline-retried push, a cross-channel pull fill)"
     terminal_state: verified_clean
-    evidence: "stated in both directions in the plan (section 2 U1) and the diagnose-doc impact_analysis; 0 live rows so nothing can be overwritten today; a per-site pending set is the L2b entry criterion (row L2B-ENTRY)"
+    evidence: "the founder's standing rule 'Last sync or write wins' (L1a, 2026-10-06; docs/plan-reviews/coach-history-correctness-client.md, Founder decisions item 1) applied to this table; stated with the full trigger list in the plan section 2 U1, the diagnose-doc impact_analysis, docs/architecture/sync.md and bug class 2.100; executable as the RESIDUAL test in test/sync/body_measurement_push_merge_safe_test.dart; 0 live body_measurements rows (read-only 2026-10-11), so nothing can be overwritten today; the per-site pending set is the L2b entry criterion (row L2B-ENTRY)"
+  - id: KILL-SWITCH
+    title: "disable_measurement_merge_safe_push keeps the old, null-carrying body reachable (CLAUDE.md section 4.6 step 4 says delete the old path in the batch that rolls the gate)"
+    terminal_state: verified_clean
+    evidence: "kept permanently BY DECISION on the exlogRestoreDedupeEnabled (oi83) precedent, lib/core/services/sync_flags.dart:255-256 ('An on-by-default emergency switch kept permanently, not a ship-dark flag'), accepted at plan review R1-A8; a local configBox lever reachable only in debug and test builds (OI-95, ADR-0020), default ON, catch -> ON; the negative-control and toggle tests need the old arm. The founder can order the old arm deleted: a one-line change plus those tests"
+  - id: SIBLING-PUSHES
+    title: "_syncWeightLogs (notes) and _syncSleepLogs (quality, bed_time, wake_time, notes) send explicit nulls too - the class of bug 2.100 outside body_measurements"
+    terminal_state: verified_clean
+    evidence: "latent, not absent: records are atomic per day, no in-repo writer sets weight_logs.notes or sleep_logs.bed_time/wake_time (grep), and live read-only counts on project dedsavbjuwgarrhphgnl, 2026-10-11: sleep_logs 0 rows, weight_logs 69 rows with 0 notes, so no value exists for a null to blank. OI-332 holds the obligation (merge-safe shape BEFORE the first such writer ships) and class 2.100 carries a 'sibling sweep' line"
   - id: PROBE
     title: "live REST probe as a test user: upsert {date, waist} then {date, chest}, GET, delete; plus a tier-12 trace (chat-log a measurement on a dev build, read the row through the Supabase MCP)"
     terminal_state: blocked_on_user

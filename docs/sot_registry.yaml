@@ -14334,7 +14334,8 @@ concepts:
         semantic: latest
         fields_read: [sync_measurement_payload_hash_index.<date>]
     regression_test: test/contracts/sync_body_measurement_payload_hash_index_writer_to_reader_test.dart
-    behavioral_test_path: test/contracts/sync_body_measurement_payload_hash_index_writer_to_reader_test.dart
+    behavioral_test_path: test/sync/body_measurement_push_merge_safe_test.dart  # L2a/c8a4d1: the wire + fingerprint contract through a stub cloud model (the older writer_to_reader test stays green with the old nulls body, so it cannot be the behavioral path)
+    behavioral_test_path_rules: test/sync/measurement_push_rules_test.dart  # HEAD's wire bodies and stored fingerprints pinned as literals; boundary and identity cases
     hive:
       box: healthBox
       key_prefix: "sync_measurement_payload_hash_index"
