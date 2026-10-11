@@ -582,7 +582,73 @@ check_onconflict_live_arbiter.dart:
   grandfathered: 2026-08-10
 
 check_plan_review_record_exists.dart:
-  grandfathered: 2026-08-10
+  mutation_proven: true
+  test_path:
+    - test/scripts/gate_input_family_e2e_test.dart
+    - test/scripts/plan_review_record_gate_e2e_test.dart
+    - test/scripts/version_bump_git_lib_test.dart
+    - test/scripts/version_bump_exemption_test.dart
+    - test/scripts/plan_review_record_lib_test.dart
+    - test/contracts/plan_review_gate_harness_copies_imports_test.dart
+  evidence: >
+    Moved off `grandfathered:` 2026-10-11 (OI-275 batch B2) because the batch
+    materially changes the gate's protection surface (rule 24): a MERGE whose net
+    change against its first parent is a bare version bump now needs no record and no
+    B-pass, so a wrong answer waives the review of platform-tier files. The git readers
+    moved into scripts/version_bump_git_lib.dart (rangeIsVersionBump), shared by the
+    direct-commit loop, the merge loop and scripts/version_bump_range.dart.
+    Mutations, each confirmed applied and restored byte-identical (cmp), run against the
+    named test files: exemption diffs the wrong rev (sha^2) 4 red; exemption consults the
+    merge subject 1; exemption removed 4; both path-set preconditions of
+    isVersionBumpCommit dropped 5; rangeIsVersionBump says yes to any non-empty diff 14
+    (all gate_input_family_e2e_test.dart, 28 tests); second version token allowed 2 (gate
+    e2e) and 1 (version_bump_exemption_test.dart, 16 tests); regular-file mode check
+    dropped 1 (gate e2e), 1 (unit test) and 2 (version_bump_git_lib_test.dart, 19 tests);
+    head-side mode forced regular 1 (gate e2e) and 1 (CLI test); base-side mode forced
+    regular, the MIRROR case, 1 (CLI test, a test added for it); --no-renames dropped 1
+    (gate e2e, the pre-existing OI-58a rename test, proving the move kept it); lenient UTF-8
+    decoding 1 (CLI test, added for it); CLI always exits 0 14 (CLI test). WHITESPACE
+    LOOK-ALIKE (diagnose 34e764): a probe found that a file named " pubspec.yaml" (leading
+    space) riding a genuine bump was judged a bare bump, because the predicate and the git
+    helper trimmed paths - a bypass that predates B2 and was already live for direct pushes.
+    Paths are now read NUL-separated as raw bytes (`-z`) and compared EXACTLY. Test-first: the
+    4 new look-alike tests were RED on the unfixed code. Mutations after the fix: predicate
+    trims paths again 1 (version_bump_exemption_test.dart), 1 (version_bump_git_lib_test.dart)
+    and 2 (gate e2e); diffPathsBetween trims each path again 1 (CLI test) and 2 (gate e2e);
+    `-z` dropped 5 (CLI test) and 25 (gate e2e); --no-renames dropped after the rewrite 1
+    (gate e2e). HONEST NOTE: the first run of the mode-check and token-count mutants
+    SURVIVED the gate e2e (0 red of 27) because the fixtures did not discriminate (the
+    symlink target text was not the whole bumped pubspec; the duplicate-token base carried
+    one token, so the blobs differed anyway). The fixtures were rewritten and a second
+    duplicate-token test added for app_constants.dart; the numbers above are from the
+    rerun. Argued equivalent and not run: the null and empty-path guards in
+    rangeIsVersionBump duplicate isVersionBumpCommit's own, and _gitOrNull cannot turn a
+    git failure into an exemption because a failed git command prints nothing.
+    SIBLINGS FOUND BY SWEEPING THE GATE FOR THE SAME CLASS (diagnose 34e764): the Dependabot
+    exemption (dependabotDiffIsManifestOnly) trimmed paths too, so a look-alike " pubspec.lock"
+    rode along on a bot-shaped merge. Mutations: the predicate trims paths again 1
+    (plan_review_record_lib_test.dart) and 1 (gate e2e); pubspec.lock dropped from the allow-list
+    1 (gate e2e, the CONTROL goes red as designed); the predicate accepts any non-empty diff 4
+    (plan_review_record_lib_test.dart). TIER MATCHER: _globToRegExp compiled `**` and `?` to a
+    bare `.`, which does not match a line terminator, so a path whose NAME holds LF, CR, U+2028
+    or U+2029 was graded the default tier (predates B2). Fixed with dotAll; mutation dotAll
+    removed: 4 red (gate e2e, through the real gate), and the MIRROR (a line-break name under a
+    feature-tier directory stays feature) stays green.
+    B-PASS OF B2 (docs/reviews/speedup-b2-bump-exemption-bpass.md): an independent reviewer found a
+    HIDDEN-GITLINK hole in the path list (git diff honours a committed .gitmodules `ignore = all` and
+    omits the gitlink move from --name-only; diagnose 34e764 instance 5; fixed with
+    --ignore-submodules=none), two mutants that survived 57 tests (the NULL contract of
+    diffPathsBetween: a failing git diff returned as an empty list, and a lenient UTF-8 decode of the
+    path list) and an import detector in the harness-closure test that saw one spelling. Mutations after
+    the fixes, each confirmed applied and restored byte-identical: --ignore-submodules=none removed
+    4 (lib test + gate e2e); a failing diff returns [] 3; lenient path decode 2; the direct-loop
+    null guard prints instead of failing 2; the merge-loop null guard likewise 1; an empty diff becomes
+    NULL 1 (the mirror); BOM dropped again 1; mode equality removed 2; appVersion accepts any quoted
+    text 2; a merge exempt when EITHER parent's diff is a bump 2; the exemption judged on the second parent
+    7; harness-closure detector: a prefixed import added to the gate 2, the plain-spelling control 2,
+    the detector put back to the old shape 1; safe_merge.sh advisory loses the flag 1 (safe_merge_test.dart,
+    not a test_path of this gate). The "byte-identical once the version token is normalised" claim is now
+    true: a BOM gained or lost, an executable-bit flip and a non-version appVersion value are refused.
 
 check_profile_write_service_only.dart:
   grandfathered: 2026-08-10

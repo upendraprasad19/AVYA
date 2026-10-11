@@ -11,6 +11,7 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   fetchLatestActiveEndByUser,
+  readProState,
   reduceLatestEndByUser,
   usersWithLatestEndIn,
 } from "./subscription.ts";
@@ -293,4 +294,245 @@ Deno.test("fetchLatestActiveEndByUser warns loudly at the 5000-row sanity ceilin
   } finally {
     console.warn = origWarn;
   }
+});
+
+
+// ── readProState (OI-321): pro / free / unknown ─────────────────────────────
+//
+// The fake below EVALUATES `.eq` / `.gt` / `.limit` / `.maybeSingle` against
+// real rows with PostgREST semantics -- in particular `.maybeSingle()` over
+// MORE THAN ONE matching row answers PGRST116 with a null `data`, which is what
+// made the pre-fix recheck read a PRO user as free. A recording-only fake would
+// pass for the pre-fix shape too.
+
+interface ProRow {
+  user_id: string;
+  status: string;
+  end_date: string;
+}
+
+interface ProRec {
+  queries: number;
+  table: string;
+  select: string;
+  filters: Array<[string, string, unknown]>;
+  limit: number | null;
+  maybeSingleCalled: boolean;
+}
+
+type ProFail = "error" | "error_no_message" | "error_empty" | "throw" | "null_data" | "object_data";
+
+function makeProClient(rows: ProRow[], rec: ProRec, failWith?: ProFail) {
+  return {
+    from(table: string) {
+      rec.queries++;
+      rec.table = table;
+      const filters: Array<[string, string, unknown]> = [];
+      let limitN: number | null = null;
+      const evaluate = (): ProRow[] => {
+        const m = rows.filter((r) =>
+          filters.every(([col, op, v]) => {
+            const cell = (r as unknown as Record<string, unknown>)[col];
+            if (op === "eq") return cell === v;
+            if (op === "gte") return Date.parse(String(cell)) >= Date.parse(String(v));
+            return Date.parse(String(cell)) > Date.parse(String(v)); // gt
+          })
+        );
+        return limitN === null ? m : m.slice(0, limitN);
+      };
+      const builder = {
+        select(cols: string) {
+          rec.select = cols;
+          return builder;
+        },
+        eq(col: string, v: unknown) {
+          filters.push([col, "eq", v]);
+          rec.filters = filters;
+          return builder;
+        },
+        gt(col: string, v: unknown) {
+          filters.push([col, "gt", v]);
+          rec.filters = filters;
+          return builder;
+        },
+        gte(col: string, v: unknown) {
+          filters.push([col, "gte", v]);
+          rec.filters = filters;
+          return builder;
+        },
+        limit(n: number) {
+          limitN = n;
+          rec.limit = n;
+          return builder;
+        },
+        maybeSingle() {
+          rec.maybeSingleCalled = true;
+          const m = evaluate();
+          if (m.length > 1) {
+            return Promise.resolve({
+              data: null,
+              error: { code: "PGRST116", message: "JSON object requested, multiple (or no) rows returned" },
+            });
+          }
+          return Promise.resolve({ data: m[0] ?? null, error: null });
+        },
+        then(res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) {
+          if (failWith === "throw") return Promise.reject(new Error("transport reset")).then(res, rej);
+          if (failWith === "error") return Promise.resolve({ data: null, error: { code: "57014", message: "boom" } }).then(res, rej);
+          if (failWith === "error_no_message") return Promise.resolve({ data: null, error: { code: "57014" } }).then(res, rej);
+          if (failWith === "error_empty") return Promise.resolve({ data: null, error: {} }).then(res, rej);
+          if (failWith === "null_data") return Promise.resolve({ data: null, error: null }).then(res, rej);
+          if (failWith === "object_data") return Promise.resolve({ data: { user_id: "x" }, error: null }).then(res, rej);
+          return Promise.resolve({ data: evaluate().map((r) => ({ user_id: r.user_id })), error: null }).then(res, rej);
+        },
+      };
+      return builder;
+    },
+  };
+}
+
+const newProRec = (): ProRec => ({
+  queries: 0,
+  table: "",
+  select: "",
+  filters: [],
+  limit: null,
+  maybeSingleCalled: false,
+});
+
+const NOW = new Date("2026-10-11T10:00:00.000Z");
+const U = "11111111-1111-1111-1111-111111111111";
+const OTHER = "22222222-2222-2222-2222-222222222222";
+const row = (end_date: string, over: Partial<ProRow> = {}): ProRow => ({
+  user_id: U,
+  status: "active",
+  end_date,
+  ...over,
+});
+
+/** Silences the helper's console.error while a test provokes its failure legs. */
+async function quiet<T>(fn: () => Promise<T>): Promise<{ result: T; logs: string[] }> {
+  const logs: string[] = [];
+  const orig = console.error;
+  console.error = (...a: unknown[]) => void logs.push(a.join(" "));
+  try {
+    return { result: await fn(), logs };
+  } finally {
+    console.error = orig;
+  }
+}
+
+Deno.test("readProState: one active unexpired row -> pro, and the query is the PRO predicate with an ARRAY read", async () => {
+  const rec = newProRec();
+  const state = await readProState(makeProClient([row("2026-11-01T00:00:00.000Z")], rec), U, NOW);
+  assertEquals(state, "pro");
+  assertEquals(rec.table, "subscriptions");
+  assertEquals(rec.select, "user_id");
+  assertEquals(rec.filters, [
+    ["user_id", "eq", U],
+    ["status", "eq", "active"],
+    ["end_date", "gt", NOW.toISOString()],
+  ]);
+  assertEquals(rec.limit, 1);
+  assertEquals(rec.maybeSingleCalled, false, "never .maybeSingle(): it errors on a second row");
+});
+
+Deno.test("readProState: TWO active unexpired rows -> pro (the OI-321 case)", async () => {
+  const rec = newProRec();
+  const state = await readProState(
+    makeProClient([row("2026-11-01T00:00:00.000Z"), row("2026-12-01T00:00:00.000Z")], rec),
+    U,
+    NOW,
+  );
+  assertEquals(state, "pro");
+});
+
+Deno.test("regression anchor: the verbatim PRE-FIX recheck reads that same two-row user, and a read error, as NOT PRO", async () => {
+  // The body of clean-orphan-media's old `rechecksIsPro`, verbatim: it takes
+  // only `data` and returns `!!data`. Run against the same fake, it proves the
+  // fake reproduces PGRST116 and that the old shape is the defect.
+  // deno-lint-ignore no-explicit-any
+  async function oldRechecksIsPro(client: any, userId: string): Promise<boolean> {
+    const { data } = await client
+      .from("subscriptions")
+      .select("end_date")
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .gt("end_date", NOW.toISOString())
+      .maybeSingle();
+    return !!data;
+  }
+  const two = [row("2026-11-01T00:00:00.000Z"), row("2026-12-01T00:00:00.000Z")];
+  assertEquals(await oldRechecksIsPro(makeProClient(two, newProRec()), U), false, "two rows -> PGRST116 -> data null -> read as free");
+  assertEquals(await oldRechecksIsPro(makeProClient([row("2026-11-01T00:00:00.000Z")], newProRec()), U), true, "one row -> pro (the fake is faithful for the easy case)");
+  assertEquals(await readProState(makeProClient(two, newProRec()), U, NOW), "pro", "the fix answers pro for the same fixture");
+});
+
+Deno.test("readProState: zero matching rows -> free (only when the read SUCCEEDED)", async () => {
+  assertEquals(await readProState(makeProClient([], newProRec()), U, NOW), "free");
+  // an expired row (status still 'active', as in production), another user's row, other statuses
+  const cases: ProRow[][] = [
+    [row("2026-10-01T00:00:00.000Z")],
+    [row("2026-11-01T00:00:00.000Z", { user_id: OTHER })],
+    [row("2026-11-01T00:00:00.000Z", { status: "cancelled" })],
+    [row("2026-11-01T00:00:00.000Z", { status: "expired" })],
+  ];
+  for (const rows of cases) {
+    assertEquals(await readProState(makeProClient(rows, newProRec()), U, NOW), "free", JSON.stringify(rows));
+  }
+});
+
+Deno.test("readProState: a populated error is unknown, with or without a message, and logs a code (no user id)", async () => {
+  for (const mode of ["error", "error_no_message", "error_empty"] as const) {
+    const { result, logs } = await quiet(() =>
+      readProState(makeProClient([row("2026-11-01T00:00:00.000Z")], newProRec(), mode), U, NOW)
+    );
+    assertEquals(result, "unknown", mode);
+    assertEquals(logs.length, 1, mode);
+    assertEquals(logs[0].includes(U), false, "the log line must not carry the user id");
+  }
+});
+
+Deno.test("readProState: a thrown rejection is unknown", async () => {
+  const { result } = await quiet(() =>
+    readProState(makeProClient([row("2026-11-01T00:00:00.000Z")], newProRec(), "throw"), U, NOW)
+  );
+  assertEquals(result, "unknown");
+});
+
+Deno.test("readProState: data that is not an array is unknown, never free", async () => {
+  for (const mode of ["null_data", "object_data"] as const) {
+    const { result } = await quiet(() => readProState(makeProClient([], newProRec(), mode), U, NOW));
+    assertEquals(result, "unknown", mode);
+  }
+});
+
+Deno.test("readProState: an empty or non-string user id is unknown and is NOT queried", async () => {
+  for (const bad of ["", "   ", undefined, null, 42, {}]) {
+    const rec = newProRec();
+    const { result } = await quiet(() =>
+      readProState(makeProClient([row("2026-11-01T00:00:00.000Z")], rec), bad as unknown as string, NOW)
+    );
+    assertEquals(result, "unknown", String(bad));
+    assertEquals(rec.queries, 0, `no query for ${String(bad)}`);
+  }
+});
+
+Deno.test("readProState: the expiry boundary is strictly greater-than now (end_date == now is free)", async () => {
+  const at = (ms: number) => new Date(NOW.getTime() + ms).toISOString();
+  assertEquals(await readProState(makeProClient([row(at(0))], newProRec()), U, NOW), "free", "end_date == now");
+  assertEquals(await readProState(makeProClient([row(at(1))], newProRec()), U, NOW), "pro", "now + 1ms");
+  assertEquals(await readProState(makeProClient([row(at(-1))], newProRec()), U, NOW), "free", "now - 1ms");
+});
+
+Deno.test("readProState: the DEFAULT clock is the real clock (production callers omit `now`)", async () => {
+  assertEquals(await readProState(makeProClient([row("2099-01-01T00:00:00.000Z")], newProRec()), U), "pro");
+  assertEquals(await readProState(makeProClient([row("2000-01-01T00:00:00.000Z")], newProRec()), U), "free");
+});
+
+Deno.test("readProState: an invalid `now` is unknown (toISOString throws), not free", async () => {
+  const { result } = await quiet(() =>
+    readProState(makeProClient([row("2026-11-01T00:00:00.000Z")], newProRec()), U, new Date(NaN))
+  );
+  assertEquals(result, "unknown");
 });

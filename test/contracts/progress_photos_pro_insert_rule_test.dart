@@ -1086,12 +1086,15 @@ CREATE POLICY "other" ON storage.objects FOR INSERT WITH CHECK (zzz);
       final m111 = normalizeSql(File('supabase/migrations/111_chat_vision_daily_cap_triggers.sql').readAsStringSync());
       expect(_predicateAnchored(m111, "status = 'active' AND end_date > now()"), isTrue);
       final shared = File('supabase/functions/_shared/subscription.ts').readAsStringSync().replaceAll(RegExp(r'\s+'), ' ');
-      // both PRO reads (fetchProUserIds, isProUser) filter status = active AND end_date strictly after now;
+      // the three PRO reads (fetchProUserIds, isProUser, readProState) filter status = active AND end_date strictly after now;
       // `fetchLatestActiveEndByUser` legitimately uses `.gte` (a window of expiries), so it is not counted
       // the ARGUMENT is pinned too (Hermes L1 F2): `.gt("end_date", <now minus a grace>)` must not pass
       expect(shared, contains('const cutoffIso = new Date().toISOString(); '), reason: 'fetchProUserIds pins its cutoff to the clock, with no offset');
       expect(shared, contains('.eq("status", "active") .gt("end_date", cutoffIso)'), reason: 'fetchProUserIds: status = active AND end_date > now');
       expect(shared, contains('.eq("status", "active") .gt("end_date", new Date().toISOString())'), reason: 'isProUser: status = active AND end_date > now');
+      // readProState (OI-321) binds its own `nowIso` so its copy can never satisfy the pins above (clean_orphan_media_pro_recheck_test.dart counts each form)
+      expect(shared, contains('const nowIso = now.toISOString(); '), reason: 'readProState pins its cutoff to the clock it is given');
+      expect(shared, contains('.eq("status", "active") .gt("end_date", nowIso)'), reason: 'readProState: status = active AND end_date > now');
       // The client reads `status = 'active'` and compares end_date with the clock itself (proStateSnapshot): a
       // different shape of the same predicate, so these two are PRESENCE pins that a status literal is still there.
       final client = File('lib/core/services/subscription_service.dart').readAsStringSync().replaceAll(RegExp(r'\s+'), ' ');

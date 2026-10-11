@@ -336,3 +336,9 @@ Last evolved: B5 D1 of tech-debt audit 2026-05-20 (initial creation; codifies ho
 **Fix:** use `--token-file "<primary repo>/.supabase/supabase access token.txt"` (or the resolver in `.claude/token_path.js` once merged). Check with one `curl -s -o /dev/null -w '%{http_code}'` against `GET /v1/projects/dedsavbjuwgarrhphgnl/functions`. Never print a token. Also note: a 401 from the FUNCTION itself on an unauthenticated smoke is a booted function, not this bug.
 **Prior:** Gemini 3 deploy 2026-10-02 (lost a round trip); CLAUDE.md §0 now names the dead file.
 
+
+### 6.12 A cron Edge Function that DELETES data: smoke it UNAUTHENTICATED only, an authenticated invoke runs the real job (NEW 2026-10-11)
+**Telltale:** `clean-orphan-media` (OI-321; `verify_jwt=false`, authenticates with the shared cron secret inside the module) is the one bulk-delete job over user files. Any authenticated call is not a smoke: it runs the real sweep against live Storage.
+**Root cause:** the usual "boot-verify with a real token" advice (§6.5, §6.7) assumes the endpoint is read-only or idempotent; a cron that removes objects is neither, and there is no dry-run flag to ask for.
+**Fix:** deploy WITHOUT `--no-snapshot` (the snapshot is the rollback), smoke with NO credentials and expect the function's own 401 (`isAuthorizedCronCall` runs before the method check, so this also proves the new import graph boots), then confirm the real behaviour from the next scheduled run: `cron_call_log` status and the counts in the function log. Never invoke it with the cron secret or a service-role key to "check".
+**Prior:** OI-321 plan section 4 (`docs/plans/oi321-orphan-media-pro-check.md`); regression for the sweep itself: `supabase/functions/clean-orphan-media/logic_test.ts`.
