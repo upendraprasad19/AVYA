@@ -52,9 +52,13 @@ class CoachMediaRepository {
   /// originate one of these photos) and tapping Save on it; this is a
   /// real, if rare, path, not dead code. PRO users (the common case) keep
   /// both — the
-  /// `clean-orphan-media` cron already skips PRO users unconditionally
-  /// (`rechecksIsPro` in `supabase/functions/clean-orphan-media/index.ts`),
-  /// so this mirrors, rather than special-cases, that existing behaviour.
+  /// `clean-orphan-media` cron's candidate RPC excludes PRO users, and its
+  /// per-object recheck (`readProState` in
+  /// `supabase/functions/_shared/subscription.ts`, OI-321) removes only on a
+  /// confirmed "free", never on an unreadable subscription (a purchase landing
+  /// between that recheck and the removal itself is not covered; the recheck
+  /// logic is live once the Edge Function is redeployed), so this mirrors,
+  /// rather than special-cases, that existing behaviour.
   ///
   /// Returns true only when the copy itself succeeds (or is confirmed to
   /// have already succeeded on a prior attempt — see the retry-idempotency
