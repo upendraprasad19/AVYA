@@ -216,6 +216,14 @@ const _declined = <String, String>{
   'lib/core/constants/app_constants.dart':
       'constants: the engine stamps what it sends with AppConstants.appVersion '
       '(sync_service.dart); a value, no decision',
+  'lib/core/constants/body_measurement_sites.dart':
+      'token list the body_measurements payload builder iterates (OI-297): it '
+      'decides which columns the push sends and the pull merges, and it is part '
+      'of the legacy fingerprint content, so appending a token re-fingerprints '
+      'every stored day (one re-push); guarded by body_measurement_sites_'
+      'parity_test.dart (live columns == the list) and the lib-wide derivation '
+      'test. It holds no merge, gate, identity or push RULE of its own (those '
+      'are sync/measurement_push_rules.dart, platform by glob)',
   'lib/core/copy/streak_freeze_copy.dart':
       'the Streak Freeze notice and explainer words (diagnose a5e3c7): '
       'streak_progress_service.dart imports it for StreakProgressService.'
