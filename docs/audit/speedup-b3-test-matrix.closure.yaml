@@ -11,7 +11,7 @@ bpass_review: docs/reviews/speedup-b3-test-matrix-bpass.md
 diagnose_docs:
   - docs/diagnoses/2026-10-10-release-cycle-wallclock-c7a3e9.md
 
-total_findings: 21
+total_findings: 22
 
 findings:
   # ── Batch units (master plan section 4) ──────────────────────────────
@@ -86,17 +86,28 @@ findings:
 
   - id: U7-9
     title: "Pre-committed abort conditions: measure the first PR run of this branch"
+    terminal_state: closed_in_commit
+    commit: speedup-b3-test-matrix@branch
+    verification: >
+      Measured on the first PR run of this branch (run 38165332016, PR #104, event pull_request, head 1f976876), with the read-only script that applies the
+      arithmetic fixed in advance. (1) End-to-end wall clock (first job start to last job end, the gate job included): 4.32 min against the limit of 9.84
+      (baseline median 13.12 min over 20 runs, BASE-1), i.e. 67% under the baseline; every job started within 2 s of the run being created. PASS. (2) No test red:
+      all four shards green, and they ran 2,422 + 2,109 + 2,113 + 2,232 = 8,876 tests with 4 + 4 + 1 + 0 = 9 skipped, which is exactly the single-job count of main's
+      run on the base of this PR (run 38145687795, 9ffb2018: 8,752 passed, 9 skipped) plus this batch's own 124 tests (106 + 18), so the shard union ran the same tests as
+      the single job. PASS. (3) see U7-10. Skew: the shards took 3.53 / 4.03 / 4.12 / 4.17 min, slowest/fastest 1.18x against the 1.5x trigger, so no re-balance. The
+      wall clock beat the plan's 6-8 minute estimate because the four setups (checkout, Flutter, pub get) run in parallel as well as the tests.
+
+  - id: U7-10
+    title: "Abort condition (3): a PR run and a main run in flight together queue no worse than today"
     terminal_state: upstream_blocked
     blocker: >
-      The measurement needs a PR run of the matrix, which exists only after this branch is pushed (nothing in a local run can stand in: shard seconds
-      measured here ran under heavy contention). Conditions, fixed before the first run: (1) end-to-end workflow wall clock (first job start to last job
-      end, the gate job included) at most 9.84 min, i.e. 25% under the baseline median of 13.12 min (BASE-1); (2) no test red in a shard that is green in
-      the single job on the same SHA (local cross-check already done on the final tree: 8,712 passed, 0 failed); (3) no queueing worse than today when a PR run and a main run
-      are in flight together (9 and 11 jobs; job started_at minus run created_at); skew above 1.5x slowest/fastest shard re-balances with a committed
-      measured-duration table in the same batch. Any breach reverts B3.
+      The condition needs a PR run and a main run in flight at the same time, and none overlapped the first PR run (no main run was in flight), so the pair cannot be
+      measured yet. What is known: the first PR run started every runner job within 2 s of its creation. Arithmetic: a PR run now holds up to 8 runners at once
+      (analyze, audit gates, Deno, build check, 4 shards) and a main run up to 10 (those 8 plus the Supabase integration job and the plan-review record job), 18 in
+      all, under the 20 concurrent jobs GitHub allows a free account; before this batch the pair held 5 + 7 = 12.
     reopen_when: >
-      The PR run for this branch completes. Then replace this entry with closed_in_commit (numbers + run id in `verification:`) in a commit on the same
-      branch BEFORE merge, or revert the batch if a condition fails.
+      The first time a PR run and a main run are in flight together after this batch merges: run the measurement script on both and compare each job's started_at
+      minus its run's created_at. Any job queued for more than a minute reverts the batch or lowers the matrix size.
 
   - id: BASE-1
     title: "Baseline for abort condition (1): 20 successful PR runs of `Test & Analyze`, 2026-10-06..10, committed so the number can be re-derived"
@@ -184,4 +195,4 @@ findings:
       slowest/fastest trigger is evaluated on the first PR run (U7-9). Runner-minute cost is not a constraint: the repository is PUBLIC (standard-runner
       minutes are free) and the three extra setups run in parallel.
 
-closed_count: 21
+closed_count: 22
