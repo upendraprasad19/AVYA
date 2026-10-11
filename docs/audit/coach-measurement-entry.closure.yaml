@@ -47,8 +47,9 @@ findings:
     reason: "needs a test user's credentials / a dev build; not a merge blocker (if PostgREST ignored omit semantics the new body would equal today's behaviour for unheld sites, so it cannot be worse than HEAD)"
   - id: OI-297-append
     title: "append the residuals and the L2b obligations to OI-297 (and OI-304's scope to L2b)"
-    terminal_state: blocked_on_user
-    reason: "OI-297 / OI-304 exist only as uncommitted edits on branch coach-progress-review (open_issues.md:5692,5728); adopting them here would collide with that branch; append when the founder commits it. OI-297 stays OPEN (its fix scope is the whole of L2), so no closes-oi trailer"
+    terminal_state: closed_in_commit
+    commit: dde0fc68
+    verification: "dde0fc68 landed OI-297 and OI-304 on main (they had been uncommitted edits on branch coach-progress-review): OI-297 carries a Progress (2026-10-11) bullet with L2a shipped, both residuals and the L2b obligations, and OI-304's Blocked-on names L2b. OI-297 stays OPEN (its fix scope is the whole of L2), so no closes-oi trailer. check_oi_numbering_unique and Gate 40 pass at that commit"
   - id: L2B-ENTRY
     title: "L2b entry criterion: re-decide OQ-L2a (server-side guard / per-site pending set) BEFORE enable_body_measurements flips"
     terminal_state: blocked_on_user
