@@ -5747,12 +5747,18 @@ Pre-existing; surfaced while reviewing the progress-photo PRO rule. Throwaway ac
 
 ## OI-321 — clean-orphan-media rechecksIsPro uses .maybeSingle() (index.ts:120-129): a user with two unexpired active subscription rows gets an error, data null, and is treated as free - chat-media cleanup only
 
-- **Status**: OPEN
-- **Blocked on**: nothing: a small fix (read the active rows with a limit and test for any, instead of `.maybeSingle()`), with a regression test.
+- **Status**: OPEN · fixed in code on branch `oi321-orphan-media-pro-check` (2026-10-11), merge and EF deploy pending
+- **Blocked on**: the founder's explicit go for the live `clean-orphan-media` Edge Function deploy (CLAUDE.md §4.3), then one post-deploy docs commit that closes this entry (`closes-oi: OI-321`).
 - **Verified**: 2026-10-07 - read `supabase/functions/clean-orphan-media/index.ts:120-129`: `.maybeSingle()` errors on two matching rows, `data` is null, `!!data` is false, so the user is treated as free. Found by the B1 Hermes pass (L1 note).
 - **Identified**: 2026-10-07 · filed via mint_oi.sh from branch `pp-preexisting-ois`
 
 Impact is limited to chat-media orphan cleanup (a user with two unexpired active rows is cleaned as if free); no PRO gate depends on this function.
+
+**Corrections found while fixing it (2026-10-11, diagnose `docs/diagnoses/2026-10-11-clean-orphan-media-unreadable-pro-check-f0b6d8.md`):**
+- The hole was LARGER than filed: `rechecksIsPro` kept only `data`, so ANY failed subscription read (not only the two-row `PGRST116`) read "free" and the next line deleted the object. The filed fix ("read the active rows with a limit and test for any") and the shared `isProUser` helper would have closed the two-row case and left the error case, because both answer `false` on a read error.
+- It was NARROWER in reach than the title reads: the candidate RPC `find_orphan_chat_media` (migration 071; live body read with `pg_get_functiondef`) already excludes every user with an active unexpired subscription, so the recheck only matters when the user upgrades between the scan and the delete.
+- It is a direct recurrence of `f2b9d4` (`ai-proxy` `checkPro`, the same missing `.limit(1)`) and bug class 2.49. A sweep of all 27 `from('subscriptions')` reads under `supabase/functions` found this the only user-keyed PRO read without `.limit(1)` and the only one whose unknown branch is destructive.
+- Fix: `readProState` (pro / free / unknown) in `_shared/subscription.ts`, `clean-orphan-media/logic.ts` removing only on exactly `free`, the unknown count recorded on `cron_call_log.error_summary`. Not live until the Edge Function is redeployed.
 
 ## OI-323 — weekly-report has no server-side per-day cap for PRO: consume_quota runs only for non-PRO (weekly-report/index.ts:716), so the client once-per-IST-day cap is bypassed by a direct API call or a second device and each call is a thinking-on Gemini call - product decision needed on a PRO cap
 

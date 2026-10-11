@@ -15054,3 +15054,71 @@ concepts:
       KEEPS the notice keys: mergeCloudProgress starts from a copy of the local map and the
       cloud row has no such columns, which is why a snapshot taken at debit time outlives a
       restore and a refill (the stale count the live read removes).
+
+  - concept: clean_orphan_media_pro_recheck
+    domain: subscription
+    behavioral_test_path: supabase/functions/clean-orphan-media/logic_test.ts
+    behavioral_test_path_pro_state: supabase/functions/_shared/subscription_test.ts
+    description: |
+      OI-321 (bug class 2.49, recurrence of f2b9d4). The daily `clean-orphan-media` cron
+      (03:00 UTC) deletes `chat-media` objects older than 30 days for users who are NOT PRO.
+      Its candidates come from the RPC `find_orphan_chat_media` (migration 071), which already
+      excludes every user with an active unexpired subscription; the per-candidate recheck at
+      delete time guards "the user upgraded between the scan and the delete".
+      THE RULE: an object is removed ONLY when the subscription read SUCCEEDED and found no
+      active unexpired row (`readProState` === "free"). "pro" keeps it; "unknown" (a populated
+      error, a thrown rejection, a non-array result, an empty user id, a malformed candidate)
+      keeps it too and is counted and written to `cron_call_log.error_summary`. The run ends
+      `success` unless it could not do its job: at least five candidates undecided
+      (`skippedUnknown + failed`) AND a majority of those scanned (`isSystematicFailure`) ends
+      it `failed`/500, which pages through `alert_cron_failures`; a partial outage below that
+      threshold is recorded but raises no alert. The pre-fix recheck was `.maybeSingle()` keeping only `data`: two unexpired
+      active rows (an ordinary renewal) answered PGRST116 with a null `data`, and so did any
+      read failure; both read "free" and the file was deleted. `isProUser` (false on error)
+      is the right default for notification copy and the WRONG one before a delete, which is
+      why a three-state read exists. The ONLY Storage `.remove(` in the function folder is
+      `removeFromBucket`, pinned to the `chat-media` bucket (`coach-media` is long-term
+      consented retention, migration 070, diagnose c1ea30).
+    writers:
+      - file: supabase/functions/clean-orphan-media/logic.ts
+        line_range: 66-78
+        method: removeFromBucket
+        notes: The ONLY Storage removal in the function folder; a thrown call becomes { error } so one bad object cannot stop the run.
+    reader_manifest_complete: true
+    readers:
+      - file: supabase/functions/_shared/subscription.ts
+        line_range: 310-348
+        method: readProState
+        semantic: three-state-pro-read
+        fields_read: [subscriptions.user_id, subscriptions.status, subscriptions.end_date]
+      - file: supabase/functions/clean-orphan-media/logic.ts
+        line_range: 104-171
+        method: sweepOrphans
+        semantic: remove-only-on-exactly-free
+        fields_read: [subscriptions.user_id]
+      - file: supabase/migrations/071_rename_orphan_media_rpc.sql
+        line_range: 18-39
+        method: find_orphan_chat_media
+        semantic: candidate-prefilter-excludes-pro
+        fields_read: [subscriptions.user_id, subscriptions.status, subscriptions.end_date]
+        notes: LIVE body read with pg_get_functiondef on 2026-10-11 and identical to this file plus the search_path migration 090 added.
+      - file: supabase/functions/clean-orphan-media/logic.ts
+        line_range: 210-213
+        method: isSystematicFailure
+        semantic: run-outcome-classification
+        notes: At least 5 candidates undecided (skippedUnknown + failed) AND a majority of those scanned ends the run failed/500, which pages through alert_cron_failures; below that the run stays success with the counts on error_summary.
+      - file: supabase/functions/clean-orphan-media/index.ts
+        line_range: 94-125
+        method: runSweep
+        semantic: wiring-and-run-telemetry
+        notes: Records skipped_unknown / failed / already_gone on the cron_call_log row via runErrorSummary and picks the run status with isSystematicFailure; the candidate-RPC leg and the catch leg keep the failed status.
+    cloud_table: subscriptions
+    cloud_columns:
+      - user_id
+      - status
+      - end_date
+    regression_test: test/contracts/clean_orphan_media_pro_recheck_test.dart
+    forbidden_legacy_patterns:
+      - "a .maybeSingle() PRO recheck in front of a delete (PGRST116 on two unexpired active rows reads as free)"
+      - "treating an unreadable subscription read as free before a delete (isProUser answers false on error)"
+      - "a second Storage .remove( in the clean-orphan-media folder, or the coach-media bucket anywhere in the sweep"
