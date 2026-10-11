@@ -189,7 +189,7 @@ each `(indexKey, killSwitchKey, opType, box)`:
 | `urine` | `sync_urine_payload_hash_index` | health | `disable_urine_hash_skip` | `_syncUrineColorLogs` (`sync_health.dart`) — SoT `sync_urine_color_log_payload_hash_index` |
 | `sleep` | `sync_sleep_payload_hash_index` | health | `disable_sleep_hash_skip` | `_syncSleepLogs` (`sync_health.dart`) — SoT `sync_sleep_log_payload_hash_index` |
 | `weight` | `sync_weight_payload_hash_index` | health | `disable_weight_hash_skip` | `_syncWeightLogs` (`sync_health.dart`) — SoT `sync_weight_log_payload_hash_index` |
-| `measurement` | `sync_measurement_payload_hash_index` | health | `disable_measurement_hash_skip` | `_syncMeasurements` (`sync_health.dart`) — SoT `sync_body_measurement_payload_hash_index` |
+| `measurement` | `sync_measurement_payload_hash_index` | health | `disable_measurement_hash_skip` | `_syncMeasurements` (`sync_health.dart`) — SoT `sync_body_measurement_payload_hash_index`; wire body merge-safe, fingerprint of the legacy-shape content (point 3 exception), second switch `disable_measurement_merge_safe_push` |
 | `readiness` | `sync_readiness_payload_hash_index` | health | `disable_readiness_hash_skip` | `_syncReadiness` (`sync_health.dart`) — SoT `sync_readiness_daily_payload_hash_index` |
 | `savedMeal` | `sync_saved_meal_payload_hash_index` | nutrition | `disable_saved_meal_hash_skip` | `_syncSavedMeals` (`sync_nutrition.dart`) |
 | `customItem` | `sync_custom_item_payload_hash_index` | custom | `disable_custom_item_hash_skip` | `_syncCustomItems` (`sync_community.dart`, one shared index for `user_custom_exercises` + `user_custom_foods`, split by `opType` override) |
@@ -209,6 +209,17 @@ no other content change and defeat the skip on every call: `updated_at` on water
 logs, `synced_at` on steps and the plan bundle. A domain whose writer stamps a genuinely fresh
 sent-at column on every push (water, steps) cannot be suppressed server-side either (point 4 below)
 for the same reason — the client-side skip index is its only protection for those two tables.
+
+**Exception — `measurement` (L2a, OI-297, diagnose `c8a4d1`).** The `body_measurements` push now sends only the sites the device
+holds (a null site in an upsert body is an assignment that blanks another device's value; an absent key leaves the column alone),
+so its wire body is NOT the legacy payload. Its fingerprint is `SyncFingerprint.of(measurementFingerprintContent(legacy))`
+(`sync/measurement_push_rules.dart`): the LEGACY-shape content (every site, `notes`, `created_at`, with non-pushable values as
+null), which equals the payload every earlier build fingerprinted. A wire-body change, an upgrade, or a toggle of
+`disable_measurement_merge_safe_push` therefore re-pushes nothing. A change to the site registry (`kBodyMeasurementSites`) DOES
+re-fingerprint every stored day, because the legacy payload iterates it: appending a token costs one re-push per day. A re-push is
+a stale-overwrite trigger when the push sends held values another device has since corrected; the others are a new site on this
+device, `sync_epoch` clearAll, `disable_measurement_hash_skip`, the first push of each restored day, an offline-retried push and a
+cross-channel pull fill (founder rule 'last sync or write wins'; the per-site pending set is the L2b entry criterion).
 
 **4. Server rules (migration `149_sync_noop_suppress_completed_guard_sync_epoch.sql`).**
 Three independent fixes, one file:

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:icanbefitter/core/constants/body_measurement_sites.dart';
 import 'package:icanbefitter/core/services/health_write_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
@@ -155,7 +156,7 @@ class ConversationalLogHandler {
     final type = data['type'] as String?;
     final valueCm = (data['value_cm'] as num?)?.toDouble();
     if (type == null || valueCm == null || valueCm <= 0) return false;
-    if (!['waist', 'chest', 'hips', 'arms'].contains(type)) return false;
+    if (!isBodyMeasurementSite(type)) return false;
 
     // audit-2026-05-16 task E.7 — route through HealthWriteService so the
     // measurement key uses `istDateStr` and the sync fan-out + telemetry

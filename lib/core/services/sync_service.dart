@@ -34,6 +34,7 @@ import 'package:icanbefitter/core/services/sync/schedule_completion_time.dart';
 import 'package:icanbefitter/core/services/sync/sync_skip_index.dart';
 import 'package:icanbefitter/core/services/sync/exlog_push_rules.dart';
 import 'package:icanbefitter/core/services/sync/exlog_restore_rules.dart';
+import 'package:icanbefitter/core/services/sync/measurement_push_rules.dart';
 import 'package:icanbefitter/core/services/sync_error.dart';
 import 'package:icanbefitter/core/services/sync_flags.dart';
 import 'package:icanbefitter/core/services/nutrition_write_service.dart';
@@ -2604,13 +2605,9 @@ class SyncService {
       // Merge — don't overwrite if exists (individual fields may differ)
       final existing = healthBox.get(key);
       if (existing is Map) {
-        final merged = Map<String, dynamic>.from(existing);
-        // Only fill in fields that are null locally
-        for (final field in ['waist', 'chest', 'hips', 'arms']) {
-          if (merged[field] == null && map[field] != null) {
-            merged[field] = map[field];
-          }
-        }
+        // Only fill in sites that are null locally (measurement_push_rules.dart).
+        final merged =
+            mergeCloudSitesIntoLocal(Map<String, dynamic>.from(existing), map);
         await healthBox.put(key, merged);
       } else {
         await healthBox.put(key, {
