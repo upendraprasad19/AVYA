@@ -5764,12 +5764,18 @@ Pre-existing; surfaced while reviewing the progress-photo PRO rule. Throwaway ac
 
 ## OI-321 — clean-orphan-media rechecksIsPro uses .maybeSingle() (index.ts:120-129): a user with two unexpired active subscription rows gets an error, data null, and is treated as free - chat-media cleanup only
 
-- **Status**: OPEN
-- **Blocked on**: nothing: a small fix (read the active rows with a limit and test for any, instead of `.maybeSingle()`), with a regression test.
+- **Status**: OPEN · fixed in code on branch `oi321-orphan-media-pro-check` (2026-10-11), merge and EF deploy pending
+- **Blocked on**: the founder's explicit go for the live `clean-orphan-media` Edge Function deploy (CLAUDE.md §4.3), then one post-deploy docs commit that closes this entry (`closes-oi: OI-321`).
 - **Verified**: 2026-10-07 - read `supabase/functions/clean-orphan-media/index.ts:120-129`: `.maybeSingle()` errors on two matching rows, `data` is null, `!!data` is false, so the user is treated as free. Found by the B1 Hermes pass (L1 note).
 - **Identified**: 2026-10-07 · filed via mint_oi.sh from branch `pp-preexisting-ois`
 
 Impact is limited to chat-media orphan cleanup (a user with two unexpired active rows is cleaned as if free); no PRO gate depends on this function.
+
+**Corrections found while fixing it (2026-10-11, diagnose `docs/diagnoses/2026-10-11-clean-orphan-media-unreadable-pro-check-f0b6d8.md`):**
+- The hole was LARGER than filed: `rechecksIsPro` kept only `data`, so ANY failed subscription read (not only the two-row `PGRST116`) read "free" and the next line deleted the object. The filed fix ("read the active rows with a limit and test for any") and the shared `isProUser` helper would have closed the two-row case and left the error case, because both answer `false` on a read error.
+- It was NARROWER in reach than the title reads: the candidate RPC `find_orphan_chat_media` (migration 071; live body read with `pg_get_functiondef`) already excludes every user with an active unexpired subscription, so the recheck only matters when the user upgrades between the scan and the delete.
+- It is a direct recurrence of `f2b9d4` (`ai-proxy` `checkPro`, the same missing `.limit(1)`) and bug class 2.49. A sweep of all 27 `from('subscriptions')` reads under `supabase/functions` found this the only user-keyed PRO read without `.limit(1)` and the only one whose unknown branch is destructive.
+- Fix: `readProState` (pro / free / unknown) in `_shared/subscription.ts`, `clean-orphan-media/logic.ts` removing only on exactly `free`, the counts recorded on `cron_call_log.error_summary`, and a ratio rule (at least 5 undecided AND a majority of the scanned) that ends the run `failed` so `alert_cron_failures` pages the founder. Committed as `5c001dd6`; not live until the Edge Function is redeployed.
 
 ## OI-323 — weekly-report has no server-side per-day cap for PRO: consume_quota runs only for non-PRO (weekly-report/index.ts:716), so the client once-per-IST-day cap is bypassed by a direct API call or a second device and each call is a thinking-on Gemini call - product decision needed on a PRO cap
 
@@ -5991,3 +5997,14 @@ Obligation on whoever adds that writer, BEFORE it ships: move the push to the `m
 - **Verified**: 2026-10-06 — writers: `workout_write_service.dart:204-221` (exlog carries `updated_at_ms`, no string timestamp), `:1136` (`editLog` re-stamps), resolver order `sync_workout.dart:581-612`. Live: 0 of 226 rows drifted (true day recovered from `workout_log_id` = UUID v5 of `workout_<istDate>`). New APKs are fixed by L1a-2 U3 (`docs/plans/coach-history-correctness-client.md`); readers bucket by the day of `workout_log_id` (L1b B3).
 - **Progress (2026-10-11)**: L1a-2 merged (PR #96, merge fdf06564, 2026-10-09); its fixes protect only devices running an APK built from main at or after that commit. Installed older APKs keep the residuals R1-R4 until a minimum-version gate exists. Status unchanged.
 - **Identified**: 2026-10-06 · filed via mint_oi.sh from branch `coach-progress-review`
+
+## OI-333 — daily-snapshot/index_test.ts leaks DISABLE_GEMINI_FAILURE_ALERT into the whole-tree Deno process, failing 3 gemini_failure_alert tests when the file list is hand-built
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-10-11 - `supabase/functions/daily-snapshot/index_test.ts:32` runs `Deno.env.set("DISABLE_GEMINI_FAILURE_ALERT", "true")` at module scope and never restores it; `Deno.env` is process-wide, and `_shared/gemini_failure_alert.ts:90` returns early on that variable. A `deno test` invocation over a hand-built file list (`find ... | sort`) ran 1105 passed / 3 failed (`reportGeminiExhaustion classifies 429 as quota/billing`, `... classifies 401/403 as key/secret issue`, `... downgrades to warn inside the dedup window`: `client.inserted` empty). The same file alone is 14 of 14, and the directory form CI uses (`deno test --no-check --allow-all supabase/functions/`) is 1108 passed / 0 failed.
+- **Identified**: 2026-10-11 · filed via mint_oi.sh from branch `oi321-orphan-media-pro-check`
+
+Found while verifying OI-321; the branch touches neither file. Measured 2026-10-11: `deno test` over just `daily-snapshot/index_test.ts` and `_shared/gemini_failure_alert_test.ts` given as explicit file arguments is 52 passed / 3 failed in EITHER argument order (so the variable is set at module load, before any test runs), while the directory form `deno test supabase/functions/daily-snapshot supabase/functions/_shared` is 669 passed / 0 failed and the whole tree in CI's directory form is 1108 / 0. Why the directory form does not hit it was NOT established here; the risk is that CI's green depends on a Deno discovery detail rather than on the test being isolated.
+
+Fix when picked up: save the variable's prior value at the top of `daily-snapshot/index_test.ts` and restore it in an `unload` listener or after the last test (or set it inside the tests that need it with try/finally, the way `gemini_failure_alert_test.ts:79-95` already does). Regression check: run both files in one `deno test` invocation in BOTH orders and expect 0 failures. Related: `reference_vps_quirks.md` (the separate `:8000` AddrInUse quirk).
