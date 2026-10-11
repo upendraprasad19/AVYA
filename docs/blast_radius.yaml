@@ -105,6 +105,13 @@ paths:
   # (merge-governance batch 2026-07-26, review round 1 finding F8.)
   - { glob: "scripts/check_plan_review_record_exists.dart", tier: platform }
   - { glob: "scripts/plan_review_record_lib.dart", tier: platform }
+  # OI-275 batch B2 (2026-10-11): the version-bump exemption's git readers and the CLI that
+  # safe_merge.sh shells out to. The gate EXEMPTS a merge whose net change is a bare version
+  # bump only if rangeIsVersionBump says yes; an edit that widened it (any non-empty diff, a
+  # missing mode check, a path normaliser such as trim) would silently waive the record + B-pass for any change at all, so
+  # these sit at the same tier as the gate that calls them.
+  - { glob: "scripts/version_bump_git_lib.dart", tier: platform }
+  - { glob: "scripts/version_bump_range.dart", tier: platform }
   # c9f1d3 (2026-07-27): the review-ACCEPTANCE gate, one word away in name from
   # the record gate above and identical in function, was missed by the sweep
   # that wrote the comment above — it fell through scripts/** to feature tier.

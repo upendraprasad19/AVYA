@@ -11479,7 +11479,7 @@ concepts:
         fields_read: [paths, default_tier]
         notes: informational classifier; printed by the hooks and used by pre-push to decide the local full suite.
       - file: scripts/check_plan_review_record_exists.dart
-        line_range: 104-121
+        line_range: 127-144
         method: _parseRules
         semantic: pass-through
         fields_read: [paths, default_tier]

@@ -206,8 +206,15 @@ const dependabotAllowedPaths = <String>{
 ///
 /// The exemption is earned by what the diff contains, not by trusting a branch
 /// name — anyone with push access can name a local branch `dependabot/x`.
+///
+/// The paths are compared EXACTLY - never trimmed (diagnose 34e764, the sibling of
+/// [isVersionBumpCommit]): ` pubspec.lock` with a leading space is a different, valid git
+/// path that can hold anything, and a normaliser that trimmed it into the real lock file
+/// let a look-alike ride along on a bot-shaped merge whose record was waived. Only an EMPTY
+/// entry (an artefact of splitting) is ignored; a whitespace-only entry is a path like any
+/// other and disqualifies the diff.
 bool dependabotDiffIsManifestOnly(Iterable<String> changedPaths) {
-  final paths = changedPaths.map((p) => p.trim()).where((p) => p.isNotEmpty);
+  final paths = changedPaths.where((p) => p.isNotEmpty);
   if (paths.isEmpty) return false;
   return paths.every(dependabotAllowedPaths.contains);
 }
@@ -233,8 +240,15 @@ final versionLinePubspec =
     RegExp(r'^version:[ 	]*[0-9]+\.[0-9]+\.[0-9]+\+[0-9]+[ 	]*$', multiLine: true);
 
 /// The `appVersion` constant declaration in `app_constants.dart`.
+///
+/// The value is version-SHAPED (`major.minor.patch+build`, digits only), the same shape the
+/// `pubspec.yaml` line above already requires - not "anything between two quotes" (B-pass F4 of
+/// OI-275 batch B2). The first draft accepted `'[^']*'`, so the token the exemption lets change
+/// could become any string at all (`'1.0.0+37'` -> `'x'`); only Gate 51
+/// (`check_app_version_matches_pubspec.dart`, a commit-time check this keystone gate does not
+/// run) caught a value that disagrees with pubspec. The real value is `'1.0.0+48'`.
 final versionLineConstants =
-    RegExp(r"static\s+const\s+String\s+appVersion\s*=\s*'[^']*'\s*;");
+    RegExp(r"static\s+const\s+String\s+appVersion\s*=\s*'[0-9]+\.[0-9]+\.[0-9]+\+[0-9]+'\s*;");
 
 /// Replaces the version token in [content] with a fixed placeholder.
 ///
@@ -274,9 +288,13 @@ String? normalizeVersionToken(String path, String content) {
 /// returns the LINK TARGET text for a symlink entry (mode 120000) as if it were
 /// file content, so converting `pubspec.yaml` into a symlink whose target string
 /// happens to read like a bumped pubspec was granted the exemption. Content
-/// alone cannot see that; the mode can. (A submodule/gitlink, mode 160000, fails
-/// closed on its own because `git show` errors on it — but relying on that
-/// accident for symlinks too would be luck, not design.)
+/// alone cannot see that; the mode can. (A gitlink, mode 160000, AT one of the two version
+/// paths fails closed on its own because `git show` errors on it — but relying on that
+/// accident for symlinks too would be luck, not design. A gitlink at ANY OTHER path is a
+/// different matter: it is not read here at all, it has to be visible in the path list, and
+/// plain `git diff` can hide it when `.gitmodules` says `ignore = all` - which is why
+/// `diffPathsBetween` in `version_bump_git_lib.dart` passes `--ignore-submodules=none`;
+/// diagnose 34e764 instance 5.)
 typedef VersionBumpFile = ({
   String path,
   String? before,
@@ -313,10 +331,16 @@ const regularFileModes = <String>{'100644', '100755'};
 ///
 /// [changedPaths] is the commit's FULL path list, so touching a third file
 /// disqualifies regardless of what [files] contains.
+///
+/// The paths are compared EXACTLY - never trimmed. ` pubspec.yaml` (a leading space)
+/// is a different, perfectly valid git path that can hold anything; a normaliser that
+/// trimmed it into the real version file let a look-alike ride along on a genuine
+/// bump (OI-275 batch B2, diagnose 34e764; the bug predates B2 and was found by probing).
+/// Only an EMPTY entry (an artefact of splitting) is ignored; a whitespace-only entry
+/// is a path like any other and disqualifies the commit.
 bool isVersionBumpCommit(
     Iterable<String> changedPaths, List<VersionBumpFile> files) {
-  final paths =
-      changedPaths.map((p) => p.trim()).where((p) => p.isNotEmpty).toList();
+  final paths = changedPaths.where((p) => p.isNotEmpty).toList();
   if (paths.isEmpty) return false;
   if (!paths.every(versionBumpPaths.contains)) return false;
 
@@ -335,6 +359,11 @@ bool isVersionBumpCommit(
         !regularFileModes.contains(f.afterMode)) {
       return false;
     }
+    // Nor is flipping the executable bit (100644 <-> 100755): both are regular files, so the
+    // check above passes, but a bump that also changes the mode is not "byte-identical once the
+    // version token is normalised" - the mode is part of what git records (B-pass F4 of OI-275
+    // batch B2). A real bump never touches the mode.
+    if (f.beforeMode != f.afterMode) return false;
 
     final beforeN = normalizeVersionToken(f.path, f.before!);
     final afterN = normalizeVersionToken(f.path, f.after!);
