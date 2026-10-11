@@ -78,28 +78,28 @@ findings:
   - id: D1-ai-proxy
     title: "deploy ai-proxy (coach tools)"
     terminal_state: blocked_on_user
-    reason: "founder go per deploy; pre-deploy diff of live files vs post-merge main, authenticated smoke showing total_reps"
+    reason: "DEPLOYED 2026-10-09 about 18:55 IST with the founder's approval (live ai-proxy v93, read 2026-10-11); the check is not recorded yet: pre-deploy diff of live files vs post-merge main, authenticated smoke showing total_reps"
   - id: D2-weekly-report
     title: "deploy weekly-report"
     terminal_state: blocked_on_user
-    reason: "founder go; check = a new report row with the 7-date window"
+    reason: "DEPLOYED 2026-10-09 about 18:55 IST with the founder's approval (live weekly-report v35, read 2026-10-11); the check is not recorded yet: a new report row with the 7-date window"
   - id: D3-weekly-recalc
     title: "deploy weekly-recalc"
     terminal_state: blocked_on_user
-    reason: "founder go; check = function log of a run with a deduped progression input"
+    reason: "DEPLOYED 2026-10-09 about 18:56 IST with the founder's approval (live weekly-recalc v28, read 2026-10-11); the check is not recorded yet: function log of a run with a deduped progression input"
   - id: D4-i-see-you-callout
     title: "deploy i-see-you-callout (no manual invoke: sends real pushes)"
     terminal_state: blocked_on_user
-    reason: "founder go; check = first cron tick log and cron_call_log row"
+    reason: "DEPLOYED 2026-10-09 about 18:56 IST with the founder's approval (live i-see-you-callout v13, read 2026-10-11); the check is not recorded yet: first cron tick log and cron_call_log row"
   - id: D5-pr-detection
     title: "deploy pr-detection (no manual invoke: sends real pushes)"
     terminal_state: blocked_on_user
-    reason: "founder go; check = first cron tick log (pr_rows/users/sent), live cron.job schedule = 0 * * * *, read-only query of the rows in [floor-60min, floor)"
+    reason: "DEPLOYED 2026-10-09 about 18:56 IST with the founder's approval (live pr-detection v20, read 2026-10-11); the check is not recorded yet: first cron tick log (pr_rows/users/sent), live cron.job schedule = 0 * * * *, read-only query of the rows in [floor-60min, floor)"
   - id: D6-future-prediction
     title: "future-prediction deploy decision (no caller, OI-210)"
     terminal_state: blocked_on_user
-    reason: "source fixed for parity; deploy or decline is the founder's call"
+    reason: "source fixed for parity; NOT deployed (live future-prediction is v20 from 2026-07-28, read 2026-10-11); deploy or decline is the founder's call"
   - id: OI-flips
-    title: "board flips OI-296 / OI-308 / OI-269 / OI-307 (live only on branch coach-progress-review)"
+    title: "board flips OI-296 / OI-308 / OI-269 / OI-307 (entries on main since the progress-review-spec-board landing)"
     terminal_state: blocked_on_user
-    reason: "flip after the deploy and check rows close; OI-307 also needs the L1a-1 apply row (done 2026-10-07) merged; the OI entries are not on this branch"
+    reason: "the entries are on main with progress notes (progress-review-spec-board landing, 2026-10-11); flip OI-296 and OI-308 after D1-D5 are recorded, OI-269 after D1-D5 are recorded and D6 is decided, OI-307 after D1-D5 are recorded and the client ledger DEVICE-CHECK passes (its L1a-1 apply row is done, 2026-10-07)"
