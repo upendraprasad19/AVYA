@@ -59,12 +59,16 @@ bool isValidBodyMeasurementCm(String? site, double? v) {
 double roundMeasurementToTenth(double v) => double.parse(v.toStringAsFixed(1));
 
 /// The `ErrorTelemetry` message for a rejected value, for example
-/// `tier=chat site=waist side=below` (`side` is `below`, `above` or
-/// `nonfinite`), or null when there is nothing to report (an unregistered site,
-/// a missing value, or a value that is valid). Never carries the number itself.
-String? measurementRejectionMessage(String tier, String? site, double? v) {
+/// `tier=chat site=waist side=below`, or null when there is nothing to report
+/// (an unregistered site, a missing value, or a value that is valid). [raw] is
+/// the value as it arrived: a number gives `side` = `below`, `above` or
+/// `nonfinite`; any other non-null value (the model wrote "82" or true) gives
+/// `wrongtype`. Never carries the value itself.
+String? measurementRejectionMessage(String tier, String? site, Object? raw) {
   final spec = site == null ? null : kBodyMeasurementSpecs[site];
-  if (spec == null || v == null) return null;
+  if (spec == null || raw == null) return null;
+  if (raw is! num) return 'tier=$tier site=$site side=wrongtype';
+  final v = raw.toDouble();
   if (isValidBodyMeasurementCm(site, v)) return null;
   final side = !v.isFinite ? 'nonfinite' : (v < spec.minCm ? 'below' : 'above');
   return 'tier=$tier site=$site side=$side';

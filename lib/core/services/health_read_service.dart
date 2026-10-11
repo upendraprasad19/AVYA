@@ -123,7 +123,10 @@ class HealthReadService {
   /// `YYYY-MM-DD` that is not later than today (a wrong device clock stored a
   /// future date: it would otherwise be the "newest" value and shadow every
   /// real entry until the day came), and an entry keeps only the sites whose
-  /// value is inside the [kBodyMeasurementSpecs] bounds; a record with no such
+  /// value, rounded to 0.1 cm the way the writer rounds it, is inside the
+  /// [kBodyMeasurementSpecs] bounds, and holds that rounded value (a waist an
+  /// older build stored as 49.96 reads as the 50.0 the writer would store, so
+  /// the writer and this reader accept the same inputs); a record with no such
   /// site is dropped. Order: `date` descending, then `updated_at_ms` descending
   /// (a non-number counts as 0: restored and pulled records carry none), then
   /// the Hive key descending, so two records with one date still sort the same
@@ -144,7 +147,7 @@ class HealthReadService {
       for (final site in kBodyMeasurementSites) {
         final v = raw[site];
         if (v is! num) continue;
-        final cm = v.toDouble();
+        final cm = roundMeasurementToTenth(v.toDouble());
         if (isValidBodyMeasurementCm(site, cm)) sites[site] = cm;
       }
       if (sites.isEmpty) continue;
@@ -171,13 +174,23 @@ class HealthReadService {
       latestBySiteOf(measurementHistory());
 
   /// PURE: the newest value per site in [newestFirst], which MUST be ordered
-  /// newest first (the order [measurementHistory] returns). The result is built
-  /// by walking [kBodyMeasurementSites], so its key order is the registry's and
-  /// not the order the records happen to sit in the box. A site whose newest
-  /// record holds no valid value falls through to the newest older record that
-  /// does.
+  /// newest first (the order [measurementHistory] returns; a debug build
+  /// asserts that no date is later than the one before it, because an
+  /// oldest-first list would silently return the OLDEST value per site). The
+  /// result is built by walking [kBodyMeasurementSites], so its key order is
+  /// the registry's and not the order the records happen to sit in the box. A
+  /// site whose newest record holds no valid value falls through to the newest
+  /// older record that does.
   static Map<String, ({double cm, String date})> latestBySiteOf(
       List<MeasurementEntry> newestFirst) {
+    assert(() {
+      for (var i = 1; i < newestFirst.length; i++) {
+        if (newestFirst[i].date.compareTo(newestFirst[i - 1].date) > 0) {
+          return false;
+        }
+      }
+      return true;
+    }(), 'latestBySiteOf needs its input newest first');
     final out = <String, ({double cm, String date})>{};
     for (final site in kBodyMeasurementSites) {
       for (final entry in newestFirst) {

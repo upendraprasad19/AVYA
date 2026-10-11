@@ -42,7 +42,7 @@ concept. Selected mappings (full list in `docs/sot_registry.yaml`):
 |---|---|---|
 | `exercise_logs_read_path` / `workout_receipt_rendering` | `workout_write_service.dart` `logExercise` — top-level `reps_completed`/`weight_kg`/`volume_kg` MUST be computed from `cleanedSets` (post logging-type normalization), never `mergedSets` (bug e8f95e) | `workout_read_service.dart` `exerciseLogsForIstDate` |
 | `nutrition_total_calories` / `food_log_delete_with_undo` | `nutrition_write_service.dart` `logMeal` / `deleteLog(allowUndo:)` (audit-fixwave F12 — was mis-named `deleteWithUndo`) | `nutrition_read_service.dart` |
-| `health_write_service` | `health_write_service.dart` (water / weight / sleep / readiness / urine / hydration / measurement; `logMeasurement` normalises the part, rounds to 0.1 cm and rejects an unregistered part or a value outside `kBodyMeasurementSpecs` (L2b Landing A, OI-297); the record shape is `measurementRecordWith`) | `health_read_service.dart` (`measurementHistory` / `latestBySite` for the coach and the sheet) |
+| `health_write_service` | `health_write_service.dart` (water / weight / sleep / readiness / urine / hydration / measurement; `logMeasurement` normalises the part, rounds to 0.1 cm and rejects an unregistered part or a value outside `kBodyMeasurementSpecs` (L2b Landing A, OI-297); the record shape is `measurementRecordWith`) | `health_read_service.dart` (`measurementHistory` / `latestBySite` for the coach; the sheet arrives in Landing B) |
 | `subscription_state` / `subscription_payment_grace_window` | `subscription_service.dart` `setPro` + Razorpay webhook handlers | `subscriptionInfoProvider`, `gate()` |
 | `water_target` | `water_target_service.dart` | `waterTargetProvider` |
 | `error_telemetry_helper` | `error_telemetry.dart` `recordNonFatal` | every catch block app-wide |
@@ -72,8 +72,9 @@ The WriteService pattern enforces three steps every write:
 3. **Fire-and-forget `unawaited(syncDomain())`** — never block the UI on cloud.
 
 Failures from step 3 are captured by `ErrorTelemetry.recordNonFatal` with an
-`op_type` from `op_types_canonical.dart`; the catch block never bubbles up to
-the user. Every WriteService method returns a `WriteResult` so the caller can
+`op_type` literal (the high-priority ones are `ErrorTelemetry.highPriorityOpTypes`,
+parity-tested; there is no `op_types_canonical.dart`); the catch block never
+bubbles up to the user. Every WriteService method returns a `WriteResult` so the caller can
 distinguish "Hive succeeded" from "cloud succeeded".
 
 **Sync fan-out is COALESCED (Unit H).** `syncWorkoutData()` / `syncNutritionData()` / `pushSnapshot()` are fire-and-forget coalesced entries (`SyncCoalescer`, in-flight + dirty do-while): a burst of per-write calls collapses to 1–2 cloud passes (diagnoses c4f8d2 / b4f7e2 / e7c1a9). Rules:

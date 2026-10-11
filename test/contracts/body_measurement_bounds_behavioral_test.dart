@@ -126,6 +126,22 @@ void main() {
       }
     });
 
+    test('roundMeasurementToTenth rounds the way the confirm card prints the '
+        'value (toStringAsFixed(1)), ties included', () {
+      // The card shows value.toStringAsFixed(1) and the writer stores the same
+      // rounding, so what the person confirmed is what is stored. These doubles
+      // sit just below or above the decimal tie (82.35 is 82.3499999999999943,
+      // 33.35 is 33.3500000000000014); 70.25 is an exact tie, which rounds away
+      // from zero. A rounding written (v * 10).roundToDouble() / 10 is also
+      // total and monotone, but it disagrees on 82.35 (82.4), 70.05 (70.1, over
+      // the arms ceiling) and 199.95 (200.0).
+      expect(roundMeasurementToTenth(82.35), 82.3);
+      expect(roundMeasurementToTenth(70.05), 70.0);
+      expect(roundMeasurementToTenth(199.95), 199.9);
+      expect(roundMeasurementToTenth(33.35), 33.4);
+      expect(roundMeasurementToTenth(70.25), 70.3);
+    });
+
     test('roundMeasurementToTenth is TOTAL: NaN and the infinities come back '
         'unchanged and then fail the predicate', () {
       // `(v * 10).round() / 10` throws UnsupportedError on all three; this is
@@ -176,6 +192,25 @@ void main() {
       expect(measurementRejectionMessage('chat', 'thigh', 3000), isNull);
       expect(measurementRejectionMessage('chat', null, 3000), isNull);
       expect(measurementRejectionMessage('chat', 'waist', null), isNull);
+      // a value that is not a number: wrongtype, for a registered site only
+      for (final bad in <Object>[
+        '82',
+        'abc',
+        '',
+        true,
+        <Object>[],
+        <String, Object>{},
+      ]) {
+        expect(
+          measurementRejectionMessage('chat', 'waist', bad),
+          'tier=chat site=waist side=wrongtype',
+          reason: '$bad',
+        );
+      }
+      expect(measurementRejectionMessage('writer', 'arms', '30'),
+          'tier=writer site=arms side=wrongtype');
+      expect(measurementRejectionMessage('chat', 'thigh', '82'), isNull);
+      expect(measurementRejectionMessage('chat', null, '82'), isNull);
       // the number never appears
       expect(
         measurementRejectionMessage('chat', 'waist', 3141.5)!.contains('3141'),
@@ -331,29 +366,90 @@ void main() {
       expect(r['waist'], 80.0);
     });
 
-    test('a NEW record differs from the old writer output only in the rounded '
-        'value', () async {
+    test('a NEW record has the old writer shape: every stamp comes from ONE '
+        'clock reading and only the value is rounded', () async {
+      final before = DateTime.now();
       expect((await log('Waist', 82.34)).success, isTrue);
+      final after = DateTime.now();
       final r = Map<String, dynamic>.from(record());
       // What the writer before Landing A produced for the same call: the same
       // keys, the raw value, `source` = the WriteSource code.
-      final old = <String, dynamic>{
-        'id': r['id'],
-        'date': '2026-10-05',
-        'created_at': r['created_at'],
-        'waist': 82.34,
-        'source': WriteSource.aiCoach.code,
-        'updated_at_ms': r['updated_at_ms'],
-        'updated_at': r['updated_at'],
-      };
-      expect(r.keys.toSet(), old.keys.toSet());
-      for (final k in r.keys) {
-        if (k == 'waist') continue;
-        expect(r[k], old[k], reason: k);
-      }
+      expect(r.keys.toSet(), {
+        'id',
+        'date',
+        'created_at',
+        'waist',
+        'source',
+        'updated_at_ms',
+        'updated_at',
+      });
+      expect(r['date'], '2026-10-05');
+      expect(r['source'], WriteSource.aiCoach.code);
       expect(r['waist'], 82.3);
-      expect((r['id'] as String).startsWith('meas_'), isTrue);
-      expect(r['updated_at_ms'], isA<int>());
+      // created_at is pushed to the cloud (measurement_push_rules.dart), so it
+      // must be a real timestamp taken during the call; every other stamp
+      // derives from the same reading.
+      final created = DateTime.parse(r['created_at'] as String);
+      expect(created.isBefore(before), isFalse);
+      expect(created.isAfter(after), isFalse);
+      expect(r['updated_at'], r['created_at']);
+      final ms = r['updated_at_ms'] as int;
+      expect(ms, created.millisecondsSinceEpoch);
+      expect(r['id'], 'meas_$ms');
+    });
+
+    test("the source is the caller's: a manual write is stamped manual",
+        () async {
+      final res = await HealthWriteService.instance.logMeasurement(
+        date: _day,
+        partName: 'hips',
+        valueCm: 97,
+        source: WriteSource.manual,
+      );
+      expect(res.success, isTrue);
+      expect(record()['source'], WriteSource.manual.code);
+      expect(WriteSource.manual.code, isNot(WriteSource.aiCoach.code));
+    });
+
+    test('the key and the stamped date are the IST day, not the UTC day',
+        () async {
+      // 2026-10-05T20:00Z is 01:30 IST on 2026-10-06: the record belongs to the
+      // 6th. A date taken from the UTC clock would file it under the 5th.
+      final res = await log('waist', 80, date: DateTime.utc(2026, 10, 5, 20));
+      expect(res.success, isTrue);
+      expect(measurementKeys(), ['measurement_2026-10-06']);
+      final r =
+          HiveService.instance.healthBox.get('measurement_2026-10-06') as Map;
+      expect(r['date'], '2026-10-06');
+    });
+
+    test('a Hive-decoded existing record (Map<dynamic, dynamic>, the shape a '
+        'record has after an app restart) is merged, not replaced', () async {
+      await HiveService.instance.healthBox.put(_dayKey, <dynamic, dynamic>{
+        'id': 'meas_1',
+        'date': '2026-10-05',
+        'chest': 99.0,
+      });
+      expect((await log('waist', 80)).success, isTrue);
+      final r = record();
+      expect(r['id'], 'meas_1');
+      expect(r['chest'], 99.0);
+      expect(r['waist'], 80.0);
+    });
+
+    test('the rejection event names the NORMALISED site', () async {
+      final res = await log('  Waist ', 3000);
+      expect(res.success, isFalse);
+      expect(events.single.message, 'tier=writer site=waist side=above');
+    });
+
+    test('a tie value just under the arms ceiling rounds DOWN and is accepted',
+        () async {
+      // 70.05 is 70.0499999999999972, which toStringAsFixed(1) prints as 70.0;
+      // (v * 10).roundToDouble() / 10 gives 70.1 and would refuse it.
+      expect((await log('arms', 70.05)).success, isTrue);
+      expect(record()['arms'], 70.0);
+      expect(events, isEmpty);
     });
 
     test('a second site on the same day merges and keeps the first', () async {
@@ -402,6 +498,17 @@ void main() {
       expect(merged['notes'], 'kept');
       expect(merged['source'], WriteSource.aiCoach.code);
       expect(merged['updated_at_ms'], isA<int>());
+
+      // a Hive-decoded map (Map<dynamic, dynamic>) is copied, not rejected
+      final decoded = measurementRecordWith(
+        <dynamic, dynamic>{'id': 'meas_7', 'chest': 99.0},
+        dateStr: '2026-10-05',
+        sites: {'waist': 80.0},
+        source: WriteSource.aiCoach,
+      );
+      expect(decoded['id'], 'meas_7');
+      expect(decoded['chest'], 99.0);
+      expect(decoded['waist'], 80.0);
     });
   });
 
@@ -413,6 +520,9 @@ void main() {
 
     setUp(() async {
       tempDir = await setUpHiveForTests();
+      // The agreement tests below call the writer, whose accepted write fans
+      // out a background sync pass; there is no cloud.
+      SyncService.pausedForSimulation = true;
       events = <_Event>[];
       ErrorTelemetry.debugOnLogEventForTests =
           (op, {message}) => events.add((op: op, message: message));
@@ -420,6 +530,7 @@ void main() {
 
     tearDown(() async {
       ErrorTelemetry.debugOnLogEventForTests = null;
+      SyncService.pausedForSimulation = false;
       await tearDownHiveForTests(tempDir);
     });
 
@@ -462,6 +573,13 @@ void main() {
         ('chest', 59.9, 'below'),
         ('hips', 0, 'below'),
         ('hips', -1, 'below'),
+        // within 0.05 of a bound: the parse checks the RAW value, so these are
+        // refused here although the writer would round them into range (see
+        // 'the chat parse is never looser than the writer' below)
+        ('waist', 49.96, 'below'),
+        ('arms', 70.04, 'above'),
+        ('chest', 59.96, 'below'),
+        ('hips', 200.04, 'above'),
       ];
       for (final r in rows) {
         events.clear();
@@ -478,6 +596,9 @@ void main() {
     });
 
     test('Infinity (jsonDecode of 1e999) is dropped as nonfinite', () {
+      // A client-side decode: the proxy's own JSON.stringify turns an Infinity
+      // into null before a reply reaches the app, so this is the latent-hazard
+      // row (the Landing B text field parses user text), not a wire case.
       final inf = jsonDecode('1e999') as num;
       expect(inf.isInfinite, isTrue);
       expect(parse({'type': 'waist', 'value_cm': inf}), isEmpty);
@@ -487,8 +608,7 @@ void main() {
       expect(events.single.message, 'tier=chat site=waist side=nonfinite');
     });
 
-    test('no event for an unknown site, a missing value or a wrong-typed value',
-        () {
+    test('no event for an unknown site, a missing value or a null value', () {
       expect(parse({'type': 'thighs', 'value_cm': 3000}), isEmpty);
       expect(parse({'type': 'Waist', 'value_cm': 3000}), isEmpty);
       expect(parse({'type': 'waist'}), isEmpty);
@@ -497,26 +617,53 @@ void main() {
       expect(events, isEmpty);
     });
 
-    test('wrong-typed fields are dropped without throwing and without an event',
-        () {
-      // Before Landing A `data['value_cm'] as num?` and `data['type'] as String?`
-      // threw a TypeError on each of these.
-      for (final bad in <Object>['82', true, <Object>[], <String, Object>{}]) {
+    test('a wrong-typed value of a known site is dropped without throwing and '
+        'leaves ONE wrongtype event', () {
+      // Before Landing A `data['value_cm'] as num?` threw a TypeError on each of
+      // these inside send's try: the error bubble replaced the reply that was
+      // shown. Dropping them quietly would turn a model that starts writing
+      // numbers as strings (a String survives the proxy) into a silent outage,
+      // so each leaves one event.
+      for (final bad in <Object>[
+        '82',
+        'abc',
+        '',
+        true,
+        <Object>[],
+        <String, Object>{},
+      ]) {
+        events.clear();
+        late List<PendingLogAction> pending;
         expect(
-          () => parse({'type': 'waist', 'value_cm': bad}),
+          () => pending = parse({'type': 'waist', 'value_cm': bad}),
           returnsNormally,
           reason: 'value_cm $bad',
         );
-        expect(parse({'type': 'waist', 'value_cm': bad}), isEmpty);
-      }
-      for (final bad in <Object>[5, true, <Object>[], 4.5]) {
+        expect(pending, isEmpty, reason: 'value_cm $bad');
+        expect(events, hasLength(1), reason: 'value_cm $bad');
+        expect(events.single.op, 'measurement_value_rejected');
         expect(
-          () => parse({'type': bad, 'value_cm': 80}),
+          events.single.message,
+          'tier=chat site=waist side=wrongtype',
+          reason: 'value_cm $bad',
+        );
+      }
+    });
+
+    test('a wrong-typed type, or a wrong-typed value of an unknown site, is '
+        'dropped without throwing and without an event', () {
+      // `data['type'] as String?` threw on each of these before Landing A. There
+      // is no registered site to name, so there is nothing to report.
+      for (final bad in <Object>[5, true, <Object>[], 4.5]) {
+        late List<PendingLogAction> pending;
+        expect(
+          () => pending = parse({'type': bad, 'value_cm': 80}),
           returnsNormally,
           reason: 'type $bad',
         );
-        expect(parse({'type': bad, 'value_cm': 80}), isEmpty);
+        expect(pending, isEmpty, reason: 'type $bad');
       }
+      expect(parse({'type': 'thighs', 'value_cm': '82'}), isEmpty);
       expect(events, isEmpty);
     });
 
@@ -545,6 +692,115 @@ void main() {
         [LogActionType.measurement, LogActionType.water],
       );
       expect(pending.first.displayText, 'Chest: 95.0cm');
+    });
+
+    test('two actions of one type in one response get distinct ids, and '
+        'confirming or skipping one does not touch the other', () {
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final notifier = c.read(pendingLogActionsProvider.notifier);
+      notifier.addActions([
+        {
+          'action': 'log_water',
+          'data': {'ml': 250},
+        },
+        {
+          'action': 'log_water',
+          'data': {'ml': 500},
+        },
+        {
+          'action': 'log_measurement',
+          'data': {'type': 'waist', 'value_cm': 80},
+        },
+        {
+          'action': 'log_measurement',
+          'data': {'type': 'chest', 'value_cm': 95},
+        },
+      ], c.read(_refProvider));
+      final pending = c.read(pendingLogActionsProvider);
+      expect(pending, hasLength(4));
+      expect(
+        pending.map((a) => a.id).toSet(),
+        hasLength(4),
+        reason: 'one id per action (the id was millisecond + action name)',
+      );
+      notifier.markLogged(pending[0].id);
+      expect(
+        c.read(pendingLogActionsProvider).map((a) => a.isLogged).toList(),
+        [true, false, false, false],
+      );
+      notifier.dismiss(pending[3].id);
+      expect(
+        c.read(pendingLogActionsProvider).map((a) => a.isDismissed).toList(),
+        [false, false, false, true],
+      );
+    });
+
+    // The parse checks the RAW value, the writer the value ROUNDED to 0.1 cm.
+    // Every bound is a multiple of 0.1, so anything the parse accepts the writer
+    // accepts, and the parse is stricter by under 0.05 cm at an edge. The table
+    // is literal on purpose (a table read from the spec follows a moved bound).
+    test('the chat parse is never looser than the writer, edge by edge',
+        () async {
+      // (site, literal floor, literal ceiling)
+      const sites = <(String, double, double)>[
+        ('chest', 60, 200),
+        ('waist', 50, 200),
+        ('hips', 60, 200),
+        ('arms', 20, 70),
+      ];
+      for (final s in sites) {
+        // (value, the parse accepts it, the writer accepts it)
+        final rows = <(double, bool, bool)>[
+          (s.$2 - 0.06, false, false), // rounds to 0.1 under the floor
+          (s.$2 - 0.04, false, true), // the writer rounds it up onto the floor
+          (s.$2, true, true),
+          (s.$3, true, true),
+          (s.$3 + 0.04, false, true), // the writer rounds it down to the ceiling
+          (s.$3 + 0.06, false, false), // rounds to 0.1 over the ceiling
+        ];
+        for (final r in rows) {
+          final why = '${s.$1} ${r.$1}';
+          final parsed = parse({'type': s.$1, 'value_cm': r.$1}).isNotEmpty;
+          final written = (await HealthWriteService.instance.logMeasurement(
+            date: _day,
+            partName: s.$1,
+            valueCm: r.$1,
+            source: WriteSource.aiCoach,
+          ))
+              .success;
+          expect(parsed, r.$2, reason: 'parse: $why');
+          expect(written, r.$3, reason: 'writer: $why');
+          expect(!parsed || written, isTrue, reason: 'parse looser: $why');
+        }
+      }
+    });
+
+    test('the value on the confirm card is the value the writer stores',
+        () async {
+      // The card prints value.toStringAsFixed(1) and the writer stores the same
+      // rounding, so what the person confirms is what lands. Each raw value
+      // sits just under a decimal tie (82.35, 33.35 is just over) or on one
+      // (80.25).
+      const rows = <(String, double, String, double)>[
+        ('waist', 82.35, 'Waist: 82.3cm', 82.3),
+        ('chest', 95.15, 'Chest: 95.2cm', 95.2),
+        ('hips', 80.25, 'Hips: 80.3cm', 80.3),
+        ('arms', 33.35, 'Arms: 33.4cm', 33.4),
+      ];
+      for (final r in rows) {
+        final card = parse({'type': r.$1, 'value_cm': r.$2});
+        expect(card.single.displayText, r.$3, reason: r.$1);
+        final res = await HealthWriteService.instance.logMeasurement(
+          date: _day,
+          partName: r.$1,
+          valueCm: r.$2,
+          source: WriteSource.aiCoach,
+        );
+        expect(res.success, isTrue, reason: r.$1);
+        final rec = HiveService.instance.healthBox.get(_dayKey) as Map;
+        expect(rec[r.$1], r.$4, reason: r.$1);
+      }
     });
   });
 }

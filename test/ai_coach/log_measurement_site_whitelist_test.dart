@@ -39,10 +39,11 @@ const _inRange = <String, ({double cm, String card})>{
   'arms': (cm: 35, card: 'Arms: 35.0cm'),
 };
 
-/// Values no body produces, per the bounds of L2b Landing A: below a floor
-/// (inches typed in a centimetre field), above a ceiling, zero, negative and
-/// the non-finite pair. `1e999` decodes to Infinity, the way a model reply can
-/// carry it.
+/// Values implausible as centimetres, per the bounds of L2b Landing A: below a
+/// floor (inches typed in a centimetre field), above a ceiling, zero, negative
+/// and an Infinity. `1e999` decodes to Infinity when the app decodes it itself;
+/// the proxy's JSON.stringify turns an Infinity into null before a reply
+/// reaches the app, so this row is the latent hazard, not a wire case.
 final _outOfRange = <({String site, Object value, String why})>[
   (site: 'waist', value: 40, why: 'waist 40 is inches'),
   (site: 'arms', value: 80, why: 'arms 80 is above the ceiling'),
@@ -212,8 +213,9 @@ void main() {
     testWidgets(
       'an out-of-range or non-finite value is refused by the writer and writes nothing',
       (tester) => withHandler(tester, (run, measurementKeys) async {
-        // The handler has no bound of its own (plan A5): every refusal below
-        // is the writer's, which is what makes a handler-tier bound redundant.
+        // The handler's only own check is `valueCm <= 0` (the zero and negative
+        // rows below are refused there); every other refusal is the writer's,
+        // which is what makes a handler-tier bound redundant (plan A5).
         for (final c in _outOfRange) {
           expect(
             await run({'type': c.site, 'value_cm': c.value}),

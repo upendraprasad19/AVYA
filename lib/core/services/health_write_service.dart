@@ -423,9 +423,9 @@ class HealthWriteService {
 /// continue) and by `HealthReadService.measurementHistory`. Then the given
 /// sites, `source`, `updated_at_ms` and `updated_at`.
 ///
-/// Top level and at the end of the file on purpose: nothing above
-/// [HealthWriteService.logMeasurement] shifts, so the line pins of the SoT
-/// registry that cite its neighbours stay put.
+/// Top level, so a test can call it without a box, and at the end of the file,
+/// so that defining it moved no line of the methods above it (the SoT registry
+/// pins several of them by line).
 @visibleForTesting
 Map<String, dynamic> measurementRecordWith(
   Object? existing, {

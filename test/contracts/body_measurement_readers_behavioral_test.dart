@@ -12,6 +12,12 @@ library;
 // tearDown): the reader hides future-dated records, so a fixture dated after the
 // real "today" would flip with the day the file runs.
 //
+// The suite runs with TZ=Asia/Kolkata (CI pins it), where the device-local date
+// and the IST date coincide. The instant whose UTC date differs from its IST
+// date (the future-filter group) is what separates them on any other host, so a
+// "today" built from the host-local clock is invisible here and red under
+// TZ=UTC; that run was done by hand and is recorded in the diagnose-doc.
+//
 // Diagnose: docs/diagnoses/2026-10-11-measurement-values-unbounded-7c3e9a.md
 
 import 'dart:convert';
@@ -22,6 +28,7 @@ import 'package:icanbefitter/core/constants/body_measurement_sites.dart';
 import 'package:icanbefitter/core/services/health_read_service.dart';
 import 'package:icanbefitter/core/services/health_write_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
@@ -46,8 +53,15 @@ void main() {
     await tearDownHiveForTests(tempDir);
   });
 
+  /// Hive hands a record back as Map<dynamic, dynamic> once it has been read
+  /// from disk, so the fixtures take that shape: a Map<String, ...> literal
+  /// would hide a reader that narrows the type (the app would then see no
+  /// record at all after a restart).
   Future<void> put(String key, Object? value) =>
-      HiveService.instance.healthBox.put(key, value);
+      HiveService.instance.healthBox.put(
+        key,
+        value is Map ? Map<dynamic, dynamic>.from(value) : value,
+      );
 
   /// A day record the way the writer, a restore or the bot would leave it.
   Future<void> day(
@@ -70,11 +84,17 @@ void main() {
       await day('2026-10-01', {'waist': 85.0});
       expect(dates(), ['2026-10-09', '2026-10-03', '2026-10-01']);
       expect(history().first.sites, {'waist': 82.0, 'chest': 100.0});
+      expect(
+        history().first.sites.keys.toList(),
+        ['chest', 'waist'],
+        reason: "an entry's sites come in registry order, not the record's",
+      );
     });
 
     test('reads only measurement_ keys that hold a map', () async {
       await put('weight_2026-10-05', {'date': '2026-10-05', 'weight_kg': 70.0});
       await put('measurements_2026-10-05', {'date': '2026-10-05', 'waist': 80.0});
+      await put('old_measurement_2026-10-05', {'date': '2026-10-05', 'waist': 80.0});
       await put('measurement_2026-10-05', 'not a map');
       await put('measurement_2026-10-06', 42);
       await HiveService.instance.healthBox
@@ -90,16 +110,18 @@ void main() {
     // which is why no single fixture kills every mutant of the comparator.
     Future<double?> winnerWaist(
       Object? stampOnSmallerKey,
-      Object? stampOnLargerKey,
-    ) async {
+      Object? stampOnLargerKey, {
+      String smallerKey = 'measurement_2026-10-05',
+      String largerKey = 'measurement_2026-10-05b',
+    }) async {
       await day('2026-10-05', {
         'waist': 80.0,
         'updated_at_ms': ?stampOnSmallerKey,
-      }, key: 'measurement_2026-10-05');
+      }, key: smallerKey);
       await day('2026-10-05', {
         'waist': 81.0,
         'updated_at_ms': ?stampOnLargerKey,
-      }, key: 'measurement_2026-10-05b');
+      }, key: largerKey);
       return history().first.sites['waist'];
     }
 
@@ -127,6 +149,24 @@ void main() {
       expect(await winnerWaist(1, '9999'), 80.0);
     });
 
+    test('F2b a fractional updated_at_ms is a number too (the greater wins, on '
+        'the SMALLER key)', () async {
+      expect(await winnerWaist(2000.5, 1000.5), 80.0);
+    });
+
+    test('F3d tie on date and stamp with keys of EQUAL length: the larger key '
+        'wins (the order is the key text, not its length)', () async {
+      expect(
+        await winnerWaist(
+          null,
+          null,
+          smallerKey: 'measurement_x1',
+          largerKey: 'measurement_x2',
+        ),
+        81.0,
+      );
+    });
+
     test('equal dates: both records are still read (no record is lost)', () async {
       await winnerWaist(1000, 2000);
       expect(history(), hasLength(2));
@@ -146,6 +186,96 @@ void main() {
         (cm: 95.0, date: '2026-10-03'),
         reason: 'chest 3000 on the newest day is hidden, the older day shows',
       );
+    });
+
+    // (site, literal just under the floor, floor, ceiling, literal just over).
+    // Literals on purpose: a table read from the spec follows a moved bound.
+    const boundRows = <(String, double, double, double, double)>[
+      ('chest', 59.9, 60, 200, 200.1),
+      ('waist', 49.9, 50, 200, 200.1),
+      ('hips', 59.9, 60, 200, 200.1),
+      ('arms', 19.9, 20, 70, 70.1),
+    ];
+
+    test('every site: a value just outside either bound is dropped', () async {
+      var n = 0;
+      for (final r in boundRows) {
+        await day('2026-09-0${++n}', {r.$1: r.$2});
+        await day('2026-09-0${++n}', {r.$1: r.$5});
+      }
+      expect(history(), isEmpty);
+    });
+
+    test('every site: the bounds themselves are kept', () async {
+      var n = 0;
+      for (final r in boundRows) {
+        await day('2026-09-0${++n}', {r.$1: r.$3}); // the floor
+        await day('2026-09-0${++n}', {r.$1: r.$4}); // the ceiling
+      }
+      // dates 09-01 .. 09-08, newest first
+      expect([for (final e in history()) e.sites], [
+        {'arms': 70.0},
+        {'arms': 20.0},
+        {'hips': 200.0},
+        {'hips': 60.0},
+        {'waist': 200.0},
+        {'waist': 50.0},
+        {'chest': 200.0},
+        {'chest': 60.0},
+      ]);
+    });
+
+    test('a value an older build stored unrounded is judged, and shown, as the '
+        'writer would have stored it', () async {
+      // The writer rounds to 0.1 cm and validates the ROUNDED value, so it
+      // accepts 49.96 (stored 50.0). The reader accepts the same inputs.
+      await day('2026-10-09', {
+        'chest': 59.97,
+        'waist': 49.96,
+        'hips': 200.04,
+        'arms': 70.04,
+      });
+      // These round to 0.1 on the far side of each edge: dropped, as the
+      // writer would refuse them.
+      await day('2026-10-08', {
+        'chest': 59.94,
+        'waist': 49.94,
+        'hips': 200.06,
+        'arms': 70.06,
+      });
+      await day('2026-10-07', {'waist': 82.34});
+      expect(dates(), ['2026-10-09', '2026-10-07']);
+      expect(history().first.sites, {
+        'chest': 60.0,
+        'waist': 50.0,
+        'hips': 200.0,
+        'arms': 70.0,
+      });
+      expect(history()[1].sites, {'waist': 82.3});
+    });
+
+    test('a record read back from disk after a restart is read the same '
+        '(Hive decodes it as Map<dynamic, dynamic>)', () async {
+      SyncService.pausedForSimulation = true;
+      final res = await HealthWriteService.instance.logMeasurement(
+        date: nowWall(),
+        partName: 'waist',
+        valueCm: 82.34,
+        source: WriteSource.aiCoach,
+      );
+      expect(res.success, isTrue);
+      await HiveUserSession.closeAll();
+      await HiveUserSession.openForUser(kTestUserId);
+      final raw = HiveService.instance.healthBox.get('measurement_2026-10-10');
+      expect(raw, isA<Map>());
+      expect(
+        raw is Map<String, dynamic>,
+        isFalse,
+        reason: 'the point of this test: a map from disk is not Map<String, _>',
+      );
+      expect(HealthReadService.instance.latestBySite(), {
+        'waist': (cm: 82.3, date: '2026-10-10'),
+      });
     });
 
     test('a record with no valid site is dropped', () async {
@@ -194,12 +324,14 @@ void main() {
       expect(history().single.sites['waist'], isA<double>());
     });
 
-    // Each row below is rejected by exactly ONE check: the first group matches
-    // the YYYY-MM-DD shape and only the calendar round-trip catches it (Dart
-    // normalises 2026-13-45 and 2026-02-30 instead of failing, and so does
-    // DateTime.tryParse); the second group fails the shape (tryParse accepts
-    // 20261001 and a timestamp, so a tryParse-based round-trip alone would
-    // absorb the shape check).
+    // The first group matches the YYYY-MM-DD shape, so only the calendar
+    // round-trip can drop it (Dart normalises 2026-13-45 and 2026-02-30 instead
+    // of failing, and so does DateTime.tryParse). Two of its rows, 2026-13-45
+    // and 2026-10-32, are also later than the pinned "today" and the future
+    // filter would drop them too; the other five belong to the round-trip
+    // alone. The second group fails the shape (tryParse accepts 20261001 and a
+    // timestamp, so a tryParse-based round-trip alone would absorb the shape
+    // check).
     test('an impossible calendar day is dropped (round-trip)', () async {
       for (final d in [
         '2026-13-45',
@@ -241,6 +373,12 @@ void main() {
         '26-10-05',
         arabicIndic,
         '',
+        '2025/10/05', // another separator: the shape wants a hyphen
+        '2025.10.05',
+        '2026-10-050', // an extra digit
+        '2026-10-05x', // trailing text
+        'x2026-10-05', // leading text
+        '2026-10-052026-10-05', // a doubled date: the tail is a date, the head is read too
       ]) {
         await put('measurement_row${n++}', {'date': d, 'waist': 80.0});
       }
@@ -340,6 +478,28 @@ void main() {
       expect(
         HealthReadService.latestBySiteOf([newest]).keys.toList(),
         ['waist'],
+      );
+    });
+
+    test('oldest-first input is refused in a debug build (the newest-first '
+        'contract is asserted)', () {
+      expect(
+        () => HealthReadService.latestBySiteOf([oldest, middle, newest]),
+        throwsA(isA<AssertionError>()),
+      );
+      expect(
+        () => HealthReadService.latestBySiteOf([newest, oldest, middle]),
+        throwsA(isA<AssertionError>()),
+        reason: 'one out-of-order pair is enough',
+      );
+    });
+
+    test('two entries with the same date are in order', () {
+      const a = MeasurementEntry(date: '2026-10-05', sites: {'waist': 81.0});
+      const b = MeasurementEntry(date: '2026-10-05', sites: {'waist': 80.0});
+      expect(
+        HealthReadService.latestBySiteOf([a, b]),
+        {'waist': (cm: 81.0, date: '2026-10-05')},
       );
     });
   });

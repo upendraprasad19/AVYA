@@ -525,7 +525,8 @@ keys:
     readers: []
     prompt_passthrough: true
     notes: |
-      Latest VALID cm per site (chest/waist/hips/arms), in registry order. A value
+      Latest VALID cm per site (chest/waist/hips/arms), in registry order, rounded
+      to 0.1 cm as the writer rounds it. A value
       outside the bounds of kBodyMeasurementSpecs, a non-finite value and a record
       whose date is malformed, impossible or in the future are omitted; an invalid
       newer value lets the newest valid older one show through (L2b Landing A,
