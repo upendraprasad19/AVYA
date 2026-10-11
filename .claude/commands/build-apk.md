@@ -64,13 +64,36 @@ LAST_BUMP=$(git log -1 --format=%H --grep="bump versionCode" -- pubspec.yaml)
 echo "Current versionCode: $CURRENT (last bump commit: $LAST_BUMP)"
 ```
 
-If a bump is needed: `Edit pubspec.yaml → 1.0.0+N → 1.0.0+(N+1)` **AND**
-`Edit lib/core/constants/app_constants.dart → appVersion = '1.0.0+(N+1)'` in the SAME commit —
-`check_app_version_matches_pubspec.dart` (Gate 51, pre-commit) hard-fails a commit where the two
-drift, so both edits are required, not optional. Then commit via
-`sh scripts/safe_commit.sh "chore: bump versionCode 1.0.0+N → 1.0.0+(N+1) for APK Test #X"`
-(NOT a raw `git commit` — a PreToolUse hook blocks that; `safe_commit.sh` is the sanctioned path,
-see CLAUDE.md §4.3), then continue.
+If a bump is needed, land it as **ONE commit through a PR** (OI-275). A direct commit on `main`
+still passes CI's keystone gate (exempt by content), but its push runs the full local suite
+(~39 minutes); a branch push runs analyze only, and the CI-green PR is the full-suite evidence.
+**Tell the founder the whole list below up front**, including the steps in the last paragraph that
+a permission classifier or sandbox has blocked before, so none of them is a surprise mid-flow:
+
+1. **Worktree** — `sh scripts/new-worktree.sh bump-<N+1>`, then work ONLY inside it (CLAUDE.md §4.13).
+2. **Edit BOTH files** — `pubspec.yaml` `1.0.0+N → 1.0.0+(N+1)` **AND**
+   `lib/core/constants/app_constants.dart` `appVersion = '1.0.0+(N+1)'`.
+   `check_app_version_matches_pubspec.dart` (Gate 51, pre-commit) hard-fails a commit where the two
+   drift, so both edits are required, not optional. Touch NOTHING else: a third file of any kind (a
+   docs note, a plan-review record) means this is no longer a bare bump and step 6's exemption is lost.
+3. **ONE commit** — `sh scripts/safe_commit.sh "chore: bump versionCode 1.0.0+N → 1.0.0+(N+1) for APK Test #X"`
+   (NOT a raw `git commit` — a PreToolUse hook blocks that; `safe_commit.sh` is the sanctioned path,
+   see CLAUDE.md §4.3).
+4. **ONE push** — `sh scripts/safe_push.sh origin bump-<N+1>`. A branch push skips the local full suite.
+5. **PR** — `gh pr create --base main --title "chore: bump versionCode 1.0.0+N → 1.0.0+(N+1)" --body "Version bump only."`
+6. **CI green, then merge** — `sh scripts/safe_pr_merge.sh <pr>`, never raw `gh pr merge`: `main` has no required
+   status checks, so this wrapper is what checks the PR's Analyze / Unit Tests / Deno / Audit Gates / Build Check.
+   CI's keystone gate (`check_plan_review_record_exists.dart`) exempts a merge whose net change is ONLY those
+   two version lines, **by content** (OI-275 batch B2, `rangeIsVersionBump`): no plan-review record and no
+   B-pass is written for a bump.
+7. **Continue on `main`** — in the primary checkout `git fetch origin main && git merge --ff-only origin/main`,
+   then carry on with the gates below (`--from-green` needs `HEAD == origin/main`).
+
+**Steps a classifier or sandbox can block** (ask before starting, not after): raw `gh pr merge` is
+blocked as "Merge Without Review" (a past session's was; use step 6 instead); `sh scripts/safe_pr_merge.sh` may
+prompt or be refused until the founder adds the allow-rule `Bash(sh scripts/safe_pr_merge.sh:*)` to their
+settings (a settings change is the founder's, not the agent's); and `cd` / `git -C` into the primary
+checkout from a linked worktree (step 7) has been refused by some sessions' sandbox.
 
 **Why this matters:** Android silently rejects a same-versionCode reinstall as a no-op. Founder hit this on Tests #7, #8, #10, #11, #11.1, #12 — all originally built at `1.0.0+6`.
 
