@@ -84,7 +84,7 @@ void main() {
 
     test(
         'GOOD: real committed usage — trailing dash followed by shell '
-        'redirection (pre-push.sh:168 verbatim shape)', () {
+        'redirection (the verbatim shape in pre-push.sh)', () {
       expect(
         isPositionalMisuse(
             r'  | "$DART_BIN" run scripts/blast_radius_from_diff.dart - 2>/dev/null \'),

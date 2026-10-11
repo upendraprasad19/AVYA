@@ -45,7 +45,8 @@ worktree shares.
   regression catalog on merge commits. It does **not** run `flutter analyze` or `flutter test`
   (cost split 2026-08-11 — see CLAUDE.md §0).
 - **`pre-push`** runs `flutter analyze` on every push, then the full `flutter test` when the
-  pushed range is ≥`account` blast-radius.
+  pushed range is ≥`account` blast-radius — except on a branch push, where CI on the open PR is that gate
+  (since 2026-10-10, OI-275; merge via `sh scripts/safe_pr_merge.sh <pr>`).
 
 See CLAUDE.md §0 for the bypass policy and the `PRE_COMMIT_LEGACY` / `PRE_COMMIT_FULL` /
 `PRE_PUSH_FULL` escape hatches.

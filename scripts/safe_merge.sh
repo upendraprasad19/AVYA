@@ -267,7 +267,7 @@ if [ -z "${_REC_CONTENT:-}" ] \
   _PRE_PATHS="$(git -c core.quotePath=false diff --no-renames --name-only "refs/heads/main...refs/heads/${BRANCH}" 2>/dev/null || true)"
   _PRE_TIER=""
   if [ -n "$_PRE_PATHS" ]; then
-    # Same preamble-tolerant extraction as pre-push.sh:167-170: `dart run` may
+    # Same preamble-tolerant extraction as the TIER pipeline in pre-push.sh: `dart run` may
     # prepend a "Running build hooks..." banner on the SAME line, so match the
     # token anywhere (-oE), never anchored.
     _PRE_TIER="$(printf '%s\n' "$_PRE_PATHS" \

@@ -17,7 +17,16 @@
 #   - blast-radius `feature` (docs, scripts, .claude, backups, profile-only UI)
 #     -> SKIP the local full suite.
 #   - `account` / `platform` / `catastrophic` (auth, ai_coach, sync, ai-proxy,
-#     payment, migrations, CLAUDE.md, ...) -> RUN the full suite locally.
+#     payment, migrations, CLAUDE.md, ...) -> RUN the full suite locally,
+#     EXCEPT on a BRANCH push (2026-10-10, OI-275): a push whose every ref is a
+#     `refs/heads/<x>` branch other than main/develop skips the ~39-minute
+#     local suite, because the PR's CI runs the same suite in ~13 minutes and
+#     scripts/safe_pr_merge.sh refuses to merge a PR that is not green. A push
+#     that only DELETES such branches lands nothing and skips too. main/develop,
+#     tags, mixed pushes, malformed or empty stdin, an unknown tier and
+#     PRE_PUSH_FULL=1 all keep the full suite (see push_class below).
+#     The golden-image tests are NOT in either suite (both pass
+#     `--exclude-tags golden`); they run only under PRE_COMMIT_FULL=1 or by hand.
 #
 # CORRECTION (2026-08-11): this header used to justify the `feature` skip with
 # "CI runs it ~2 min after push (the backstop)". That is true only for a push to
@@ -92,8 +101,11 @@ flutter() {
   env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE flutter "$@"
 }
 
-# Pre-push receives ref updates on stdin; consume so we don't break the protocol.
-cat > /dev/null
+# Pre-push receives ref updates on stdin (`<local ref> <local sha> <remote ref>
+# <remote sha>`, one line per ref). Capture them (this used to be drained with
+# `cat > /dev/null`) so the push can be classified below -- see push_class. An
+# empty or unreadable stdin classifies OTHER, i.e. the fail-safe full suite.
+PUSH_REFS=$(cat)
 
 # UNCONDITIONAL analyze (2026-08-11). PLACEMENT IS THE POINT: this must stay
 # ABOVE the PRE_PUSH_FULL early-return, above the origin/main + empty-range
@@ -153,9 +165,44 @@ run_full_suite() {
   exit 0
 }
 
+# Classify what is being pushed from the stdin captured above. Prints one word:
+#   BRANCH_ONLY  >= 1 line, every line is a well-formed 4-field update or delete
+#                of a `refs/heads/<x>` branch that is NOT main/develop.
+#   DELETE_ONLY  as BRANCH_ONLY but every line deletes (all-zero local sha):
+#                nothing lands, so there is nothing to test.
+#   OTHER        everything else -- main/develop, tags, notes, mixed with any
+#                of those, a malformed line, or empty stdin. OTHER is the
+#                fail-safe: it keeps the full-suite behaviour exactly as before.
+# awk reads the WHOLE string and prints a verdict; a `while read` after a pipe
+# would lose its variables in the pipe's subshell.
+push_class() {
+  printf '%s\n' "$PUSH_REFS" | awk '
+    NF == 0 { next }
+    { n++ }
+    NF != 4 { bad = 1; next }
+    $3 !~ /^refs\/heads\// || $3 == "refs/heads/main" || $3 == "refs/heads/develop" { other = 1; next }
+    $2 ~ /^0+$/ { del++; next }
+    { upd++ }
+    END {
+      if (n == 0 || bad || other) { print "OTHER"; exit }
+      if (upd == 0 && del > 0) { print "DELETE_ONLY"; exit }
+      print "BRANCH_ONLY"
+    }'
+}
+PUSH_CLASS=$(push_class)
+
 # Explicit override: always run the full suite.
 if [ "${PRE_PUSH_FULL:-0}" = "1" ]; then
   run_full_suite "PRE_PUSH_FULL=1"
+fi
+
+# A push that only deletes non-main/develop branches lands no code. It sits
+# BEFORE the origin/main and empty-range fail-safes on purpose: a deletion
+# leaves the pushed range empty, which those guards read as "cannot tell" and
+# answer with the full suite (e.g. `mint_oi.sh --prune`).
+if [ "$PUSH_CLASS" = "DELETE_ONLY" ]; then
+  echo "[pre-push] delete-only branch push -- nothing lands; analyze passed; skipping local full suite."
+  exit 0
 fi
 
 # Fail-safe: need origin/main to compute the pushed range.
@@ -185,6 +232,27 @@ if [ "$TIER" = "feature" ]; then
   echo "[pre-push]  on the push to main. See the CORRECTION note at the top of this file.)"
   echo "[pre-push] (force locally with: PRE_PUSH_FULL=1 git push)"
   exit 0
+fi
+
+# A BRANCH push (never main/develop, tag, or anything malformed) at a risky tier
+# no longer runs the ~39-minute local suite: CI runs the same suite on the open
+# PR (~13 min), and scripts/safe_pr_merge.sh refuses to merge a PR whose
+# required jobs are not all green. Only a KNOWN tier skips -- an empty or
+# unrecognised TIER still falls through to the suite (never skip on
+# uncertainty). main/develop pushes, tags, mixed pushes and PRE_PUSH_FULL=1 keep
+# the full suite (OI-275, docs/plans/2026-10-10-release-cycle-speedup.md).
+if [ "$PUSH_CLASS" = "BRANCH_ONLY" ]; then
+  case "$TIER" in
+    account|platform|catastrophic)
+      echo "[pre-push] blast-radius=$TIER on a branch push -- analyze passed; skipping the local full suite."
+      echo "[pre-push] CI on the open PR is the full-suite gate: open the PR now, and merge it with"
+      echo "[pre-push]   sh scripts/safe_pr_merge.sh <pr>   (refuses unless the required jobs are green)."
+      echo "[pre-push] NOTE: CI runs ONLY for a PR into main/develop. Until that PR exists NO test suite has run"
+      echo "[pre-push] anywhere for this branch -- only analyze (the old hook ran the suite here)."
+      echo "[pre-push] (force the local suite with: PRE_PUSH_FULL=1 git push)"
+      exit 0
+      ;;
+  esac
 fi
 
 run_full_suite "blast-radius=${TIER:-unknown}"

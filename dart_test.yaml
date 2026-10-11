@@ -4,11 +4,15 @@
 # widgets pixel-for-pixel and are inherently PLATFORM-SPECIFIC: font hinting
 # and anti-aliasing differ between the dev platform (Windows, where the golden
 # PNGs are generated via `--update-goldens`) and CI's Linux runners. They pass
-# locally (the pre-push full suite runs them) but mismatch on Linux.
+# on the Windows dev platform but mismatch on Linux.
 #
 # CI's unit-test job therefore runs `flutter test test/ --exclude-tags golden`
-# (see .github/workflows/test.yml). Goldens remain a LOCAL-only visual gate;
-# to run them on a matching platform: `flutter test test/goldens/`.
+# (see .github/workflows/test.yml), and so does the pre-push full suite
+# (scripts/pre-push.sh run_full_suite -- pinned to CI's invocation by
+# test/scripts/pre_push_matches_ci_invocation_test.dart). Corrected 2026-10-10:
+# this comment used to say the pre-push suite runs the goldens; it does not.
+# They run ONLY on a matching platform, by hand (`flutter test test/goldens/`)
+# or under PRE_COMMIT_FULL=1, which runs a bare `flutter test`.
 # Background: feedback_local_ci_env_divergence.md (4th env-divergence flavor,
 # after Flutter-pin -> CRLF/LF -> timezone IST/UTC).
 tags:

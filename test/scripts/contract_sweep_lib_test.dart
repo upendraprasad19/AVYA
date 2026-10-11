@@ -37,7 +37,7 @@ void main() {
         'lib/main.dart',
         'test/contracts/foo_test.dart',           // arm (c) territory — excluded here
         'docs/superpowers/plans/2026-09-19-x.md', // prose .md — excluded
-        'CLAUDE.md',                              // prose .md — excluded: 77 test files reference it (over-selection), and it is pinned platform so pre-push runs the full suite anyway
+        'CLAUDE.md',                              // prose .md — excluded: 77 test files reference it (over-selection), and it is pinned platform, so the full suite covers it anyway (CI on the PR; pre-push on a main push)
         'docs/audit/open_issues.md',              // .md under docs/audit/ — a DATA contract with 10 test readers → a key
         'docs/architecture/sync.md',              // .md under docs/architecture/ — 29 test readers → a key
         'test/helpers/h.dart',                    // a test HELPER is a key

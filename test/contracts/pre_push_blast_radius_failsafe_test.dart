@@ -36,9 +36,48 @@ void main() {
         reason: 'pre-push must compute the tier via blast_radius_from_diff.dart');
   });
 
-  test('skips the local full suite ONLY on feature tier', () {
+  test('skips the local full suite on feature tier, and ONLY otherwise on a narrow branch push', () {
     expect(src.contains(r'"$TIER" = "feature"'), isTrue,
         reason: 'the skip must be gated on tier == feature (not unconditional)');
+    // OI-275 (2026-10-10): a SECOND skip path exists -- a branch-only push at a
+    // known risky tier (CI on the PR is the gate). It must stay narrow. The
+    // behavioural proof is test/scripts/pre_push_branch_push_skip_e2e_test.dart;
+    // these are the PRESENCE pins for the pieces that make it narrow, so a
+    // future edit that widens the predicate has to delete a pinned literal.
+    expect(src.contains(r'"$PUSH_CLASS" = "BRANCH_ONLY"'), isTrue,
+        reason: 'the second skip must be gated on the BRANCH_ONLY push class');
+    expect(src.contains('account|platform|catastrophic)'), isTrue,
+        reason: 'the branch-push skip must name the KNOWN tiers; a `*)` arm would '
+            'skip on an unknown/empty tier, i.e. on uncertainty');
+    expect(src.contains(r'$3 == "refs/heads/main"'), isTrue,
+        reason: 'main must be excluded from the BRANCH_ONLY class');
+    expect(src.contains(r'$3 == "refs/heads/develop"'), isTrue,
+        reason: 'develop must be excluded from the BRANCH_ONLY class');
+    expect(src.contains(r'NF != 4'), isTrue,
+        reason: 'a malformed pre-push line must classify OTHER (fail-safe), not be ignored');
+    expect(src.contains(r'n == 0 || bad || other'), isTrue,
+        reason: 'empty stdin / malformed / non-branch refs must all classify OTHER');
+  });
+
+  test('PUSH_REFS is captured, not drained, and still above the analyze call', () {
+    expect(src.contains(r'PUSH_REFS=$(cat)'), isTrue,
+        reason: 'stdin must be captured for classification');
+    expect(src.contains('cat > /dev/null'), isFalse,
+        reason: 'the old drain would discard the ref lines the classifier needs');
+    expect(src.indexOf(r'PUSH_REFS=$(cat)'), lessThan(src.indexOf('flutter analyze')),
+        reason: 'stdin is consumed before analyze, as before');
+  });
+
+  test('the mirror: the suite still runs for main/develop/tags/unknown (full-suite path intact)', () {
+    // `run_full_suite "blast-radius=..."` is the last statement: everything not
+    // explicitly skipped above it reaches it.
+    final lastCall = src.lastIndexOf('run_full_suite');
+    final skipCase = src.indexOf('account|platform|catastrophic)');
+    expect(skipCase, greaterThan(0));
+    expect(lastCall, greaterThan(skipCase),
+        reason: 'the unconditional fall-through to the full suite must come AFTER '
+            'the narrow branch-push skip, so every unmatched push still runs it');
+    expect(src.contains(r'run_full_suite "blast-radius=${TIER:-unknown}"'), isTrue);
   });
 
   test('is fail-safe: empty/undetermined range runs the full suite', () {

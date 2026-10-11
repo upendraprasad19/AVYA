@@ -154,42 +154,42 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-272 | Reconcile live prod migrations against the applied-migrations ledger… | none | 2026-09-29 — data below re-derived by… | [:5373](open_issues.md#L5373) |
 | OI-273 | Branch sweep for merged branches that never had a worktree here… | none — this unit's exclusion from its… | 2026-09-29 — every constraint below was… | [:5411](open_issues.md#L5411) |
 | OI-274 | Vercel Flutter SDK re-clone on every build wastes ~1/3 of build time (no… | none — fixable any time; needs… | 2026-09-30 — confirmed live via Vercel's… | [:5431](open_issues.md#L5431) |
-| OI-275 | Cut release-cycle wall-clock: a version-only bump runs the full suite 3x… | none — founder directive 2026-10-01 is… | 2026-10-01 — timings below are from the… | [:5476](open_issues.md#L5476) |
-| OI-276 | Chat video analysis feature: nothing in the client uploads video (no… | founder prioritisation… | 2026-10-01 — `grep -rn pickVideo lib/`… | [:5498](open_issues.md#L5498) |
-| OI-277 | Free-tier chat cost exposure after the Gemini 3.1 Flash-Lite move:… | no real PRO/volume data yet — PRO only… | 2026-10-01 — inputs: measured avg chat… | [:5509](open_issues.md#L5509) |
-| OI-278 | Telegram bot chat cap parity: bot is disabled; when re-enabled its cap… | the Telegram bot (separate OpenClaw VPS… | 2026-10-01 —… | [:5520](open_issues.md#L5520) |
-| OI-279 | Phase 1b: pull-on-resume - a backgrounded device refreshes itself (7-day… | Phase 1 (e5b2a9) merged to `main`; needs… | 2026-10-02 - read on the branch: the… | [:5531](open_issues.md#L5531) |
-| OI-280 | Phase 2 multi-device delta sync: updated_at+deleted_at on every synced… | Phase 1b (OI-279) merged; needs the… | 2026-10-02 - read… | [:5552](open_issues.md#L5552) |
-| OI-281 | Meal deletes never reach the cloud: NutritionWriteService.deleteLog is… | needs a cloud tombstone (`deleted_at`)… | 2026-10-02 - code read, NOT reproduced… | [:5567](open_issues.md#L5567) |
-| OI-283 | Live-DB SQL harness runners (check_onconflict_live_arbiter,… | founder decision: provision a CI secret… | 2026-10-02: both runners work by hand… | [:5578](open_issues.md#L5578) |
-| OI-284 | Completed day-swap row keeps its pre-swap title after a cross-device… | the founder's on-device check (an APK… | 2026-10-03 - live rows (user d7a67a37):… | [:5587](open_issues.md#L5587) |
-| OI-285 | mergeScheduleBundleIntoHive decides snapshot winners once before the loop… | its own plan + review; touches the… | 2026-10-03 - code read:… | [:5594](open_issues.md#L5594) |
-| OI-286 | Replaced-swap notice: a device whose local swap loses to a newer… | OI-285 (the notice needs the per-week… | 2026-10-03 - code read: L3… | [:5601](open_issues.md#L5601) |
-| OI-287 | Day-swap allowance is per-device: a swap on web leaves the phone showing… | founder go on the read path:… | 2026-10-03 - live: phone daily snapshot… | [:5608](open_issues.md#L5608) |
-| OI-288 | Discipline: accepted-residual wording in tests pinned a defect as correct… | its own L-tier branch (root CLAUDE.md +… | 2026-10-03 -… | [:5615](open_issues.md#L5615) |
-| OI-289 | Nutrition cross-device probe: verify meal add/edit/delete converge… | the founder running the two-device walk… | never - asked by the founder 2026-10-01… | [:5622](open_issues.md#L5622) |
-| OI-290 | DaySwapRules leaves week_number unclassified (travels as content); hygiene… | founder call - close as no-symptom… | 2026-10-03 - `day_swap_rules.dart:17-28`… | [:5629](open_issues.md#L5629) |
-| OI-292 | morning-alert push names a workout from YESTERDAY's snapshot: the 02:00… | a design decision on the date-correct… | 2026-10-03 -… | [:5636](open_issues.md#L5636) |
-| OI-293 | Restore outcomes are unobservable on a release Android device:… | its own plan: the outcome must… | 2026-10-03 -… | [:5643](open_issues.md#L5643) |
-| OI-294 | A cold-start restore that never returns (killed or hung mid-restore)… | its own plan (split out of… | 2026-10-04 - code read, NOT reproduced… | [:5650](open_issues.md#L5650) |
-| OI-295 | Schedule writers that pass no WidgetRef (deload_evaluator lift via… | an audit of every ref-less schedule… | 2026-10-03 - code read, not reproduced:… | [:5657](open_issues.md#L5657) |
-| OI-301 | No gate stops a stray file at the repo root: existsSync (14 bytes of junk)… | its own plan + review (a new… | 2026-10-03 - `git ls-files` at the repo… | [:5664](open_issues.md#L5664) |
-| OI-302 | Restore keeps the OLDEST cloud workout_logs row for a date completed twice… | a decision: pick the NEWEST row per date… | 2026-10-04 - code read:… | [:5672](open_issues.md#L5672) |
-| OI-303 | Delete the disable_completed_title_heal kill switch and its closed-path… | the founder's on-device check of OI-284… | 2026-10-04 - code read: the kill switch… | [:5679](open_issues.md#L5679) |
-| OI-309 | Merge-conflict treadmill: every >=account PR conflicts with main again and… | a plan (it changes hooks and the… | 2026-10-05 - measured on PR #73… | [:5700](open_issues.md#L5700) |
-| OI-311 | A spawned `dart run` exited 254 in CI with no stderr in the log (run… | a second sighting with output. Not… | 2026-10-06 - read from… | [:5710](open_issues.md#L5710) |
-| OI-315 | ProgressPhotoRepository.cleanupOrphanedStorage has zero callers, and the… | a plan: a server-side per-day cap is a… | 2026-10-06 - `git grep -n… | [:5719](open_issues.md#L5719) |
-| OI-316 | The progress-photos bucket and its SELECT/DELETE/INSERT policies have no… | a plan for a recurring catalog check (a… | 2026-10-06 - the B1 live evidence (E10)… | [:5728](open_issues.md#L5728) |
-| OI-318 | A 127 s cold-start restore on 2026-10-06 (per-op 9-41 s, two 45 s… | a recurrence: a restore over 60 s on any… | 2026-10-06 - `client_errors` for the… | [:5686](open_issues.md#L5686) |
-| OI-319 | current_streak_weeks is a lifetime counter that never resets when the… | a founder product decision (not… | 2026-10-06 - code read: no code path… | [:5693](open_issues.md#L5693) |
-| OI-320 | redeem-referral has no per-referrer cap: each new referee (idempotent per… | a founder product decision: whether to… | 2026-10-07 - read… | [:5737](open_issues.md#L5737) |
-| OI-321 | clean-orphan-media rechecksIsPro uses .maybeSingle() (index.ts:120-129): a… | nothing: a small fix (read the active… | 2026-10-07 - read… | [:5746](open_issues.md#L5746) |
-| OI-323 | weekly-report has no server-side per-day cap for PRO: consume_quota runs… | a FOUNDER product decision: cap PRO… | 2026-10-08 - read… | [:5755](open_issues.md#L5755) |
-| OI-324 | SupabaseService.callFunction has no timeout of its own… | none - an engineering choice (a default… | 2026-10-08 - read… | [:5764](open_issues.md#L5764) |
-| OI-325 | Profile weekly-report card still says 'Weekly AI Report'… | a FOUNDER copy decision: the one name… | 2026-10-08 - `grep -rn "Weekly AI… | [:5773](open_issues.md#L5773) |
-| OI-326 | Restore-after-sign-in cost with the paged Edge Function (v10) is… | the founder: one sign-out/in on the… | 2026-10-09 - read the closure ledger… | [:5782](open_issues.md#L5782) |
-| OI-327 | Weekly streak never resets when the daily streak breaks:… | a founder product decision: should a… | 2026-10-09 - read… | [:5790](open_issues.md#L5790) |
-| OI-328 | One-off production credit of the 2026-09-14 week for user d7a67a37… | an explicit founder go: it is a live… | 2026-10-09 - read the plan… | [:5798](open_issues.md#L5798) |
-| OI-329 | water_logs still takes about 54 updates per day after the sync-load batch… | none, fixable now; start by reading… | 2026-10-09 - live `pg_stat_user_tables`… | [:5807](open_issues.md#L5807) |
-| OI-330 | workout_log_exercises updates rose from about 5 to about 62 per day across… | none, but it needs a diagnosis first… | 2026-10-09 - live `pg_stat_user_tables`… | [:5823](open_issues.md#L5823) |
-| OI-331 | No detector for leftover background processes: a helper agent's unbounded… | none | 2026-10-09 - found live: two bash… | [:5834](open_issues.md#L5834) |
+| OI-275 | Cut release-cycle wall-clock: a version-only bump runs the full suite 3x… | item D only — the founder-owned settings… | 2026-10-01 — timings below are from the… | [:5476](open_issues.md#L5476) |
+| OI-276 | Chat video analysis feature: nothing in the client uploads video (no… | founder prioritisation… | 2026-10-01 — `grep -rn pickVideo lib/`… | [:5500](open_issues.md#L5500) |
+| OI-277 | Free-tier chat cost exposure after the Gemini 3.1 Flash-Lite move:… | no real PRO/volume data yet — PRO only… | 2026-10-01 — inputs: measured avg chat… | [:5511](open_issues.md#L5511) |
+| OI-278 | Telegram bot chat cap parity: bot is disabled; when re-enabled its cap… | the Telegram bot (separate OpenClaw VPS… | 2026-10-01 —… | [:5522](open_issues.md#L5522) |
+| OI-279 | Phase 1b: pull-on-resume - a backgrounded device refreshes itself (7-day… | Phase 1 (e5b2a9) merged to `main`; needs… | 2026-10-02 - read on the branch: the… | [:5533](open_issues.md#L5533) |
+| OI-280 | Phase 2 multi-device delta sync: updated_at+deleted_at on every synced… | Phase 1b (OI-279) merged; needs the… | 2026-10-02 - read… | [:5554](open_issues.md#L5554) |
+| OI-281 | Meal deletes never reach the cloud: NutritionWriteService.deleteLog is… | needs a cloud tombstone (`deleted_at`)… | 2026-10-02 - code read, NOT reproduced… | [:5569](open_issues.md#L5569) |
+| OI-283 | Live-DB SQL harness runners (check_onconflict_live_arbiter,… | founder decision: provision a CI secret… | 2026-10-02: both runners work by hand… | [:5580](open_issues.md#L5580) |
+| OI-284 | Completed day-swap row keeps its pre-swap title after a cross-device… | the founder's on-device check (an APK… | 2026-10-03 - live rows (user d7a67a37):… | [:5589](open_issues.md#L5589) |
+| OI-285 | mergeScheduleBundleIntoHive decides snapshot winners once before the loop… | its own plan + review; touches the… | 2026-10-03 - code read:… | [:5596](open_issues.md#L5596) |
+| OI-286 | Replaced-swap notice: a device whose local swap loses to a newer… | OI-285 (the notice needs the per-week… | 2026-10-03 - code read: L3… | [:5603](open_issues.md#L5603) |
+| OI-287 | Day-swap allowance is per-device: a swap on web leaves the phone showing… | founder go on the read path:… | 2026-10-03 - live: phone daily snapshot… | [:5610](open_issues.md#L5610) |
+| OI-288 | Discipline: accepted-residual wording in tests pinned a defect as correct… | its own L-tier branch (root CLAUDE.md +… | 2026-10-03 -… | [:5617](open_issues.md#L5617) |
+| OI-289 | Nutrition cross-device probe: verify meal add/edit/delete converge… | the founder running the two-device walk… | never - asked by the founder 2026-10-01… | [:5624](open_issues.md#L5624) |
+| OI-290 | DaySwapRules leaves week_number unclassified (travels as content); hygiene… | founder call - close as no-symptom… | 2026-10-03 - `day_swap_rules.dart:17-28`… | [:5631](open_issues.md#L5631) |
+| OI-292 | morning-alert push names a workout from YESTERDAY's snapshot: the 02:00… | a design decision on the date-correct… | 2026-10-03 -… | [:5638](open_issues.md#L5638) |
+| OI-293 | Restore outcomes are unobservable on a release Android device:… | its own plan: the outcome must… | 2026-10-03 -… | [:5645](open_issues.md#L5645) |
+| OI-294 | A cold-start restore that never returns (killed or hung mid-restore)… | its own plan (split out of… | 2026-10-04 - code read, NOT reproduced… | [:5652](open_issues.md#L5652) |
+| OI-295 | Schedule writers that pass no WidgetRef (deload_evaluator lift via… | an audit of every ref-less schedule… | 2026-10-03 - code read, not reproduced:… | [:5659](open_issues.md#L5659) |
+| OI-301 | No gate stops a stray file at the repo root: existsSync (14 bytes of junk)… | its own plan + review (a new… | 2026-10-03 - `git ls-files` at the repo… | [:5666](open_issues.md#L5666) |
+| OI-302 | Restore keeps the OLDEST cloud workout_logs row for a date completed twice… | a decision: pick the NEWEST row per date… | 2026-10-04 - code read:… | [:5674](open_issues.md#L5674) |
+| OI-303 | Delete the disable_completed_title_heal kill switch and its closed-path… | the founder's on-device check of OI-284… | 2026-10-04 - code read: the kill switch… | [:5681](open_issues.md#L5681) |
+| OI-309 | Merge-conflict treadmill: every >=account PR conflicts with main again and… | a plan (it changes hooks and the… | 2026-10-05 - measured on PR #73… | [:5702](open_issues.md#L5702) |
+| OI-311 | A spawned `dart run` exited 254 in CI with no stderr in the log (run… | a second sighting with output. Not… | 2026-10-06 - read from… | [:5712](open_issues.md#L5712) |
+| OI-315 | ProgressPhotoRepository.cleanupOrphanedStorage has zero callers, and the… | a plan: a server-side per-day cap is a… | 2026-10-06 - `git grep -n… | [:5721](open_issues.md#L5721) |
+| OI-316 | The progress-photos bucket and its SELECT/DELETE/INSERT policies have no… | a plan for a recurring catalog check (a… | 2026-10-06 - the B1 live evidence (E10)… | [:5730](open_issues.md#L5730) |
+| OI-318 | A 127 s cold-start restore on 2026-10-06 (per-op 9-41 s, two 45 s… | a recurrence: a restore over 60 s on any… | 2026-10-06 - `client_errors` for the… | [:5688](open_issues.md#L5688) |
+| OI-319 | current_streak_weeks is a lifetime counter that never resets when the… | a founder product decision (not… | 2026-10-06 - code read: no code path… | [:5695](open_issues.md#L5695) |
+| OI-320 | redeem-referral has no per-referrer cap: each new referee (idempotent per… | a founder product decision: whether to… | 2026-10-07 - read… | [:5739](open_issues.md#L5739) |
+| OI-321 | clean-orphan-media rechecksIsPro uses .maybeSingle() (index.ts:120-129): a… | nothing: a small fix (read the active… | 2026-10-07 - read… | [:5748](open_issues.md#L5748) |
+| OI-323 | weekly-report has no server-side per-day cap for PRO: consume_quota runs… | a FOUNDER product decision: cap PRO… | 2026-10-08 - read… | [:5757](open_issues.md#L5757) |
+| OI-324 | SupabaseService.callFunction has no timeout of its own… | none - an engineering choice (a default… | 2026-10-08 - read… | [:5766](open_issues.md#L5766) |
+| OI-325 | Profile weekly-report card still says 'Weekly AI Report'… | a FOUNDER copy decision: the one name… | 2026-10-08 - `grep -rn "Weekly AI… | [:5775](open_issues.md#L5775) |
+| OI-326 | Restore-after-sign-in cost with the paged Edge Function (v10) is… | the founder: one sign-out/in on the… | 2026-10-09 - read the closure ledger… | [:5784](open_issues.md#L5784) |
+| OI-327 | Weekly streak never resets when the daily streak breaks:… | a founder product decision: should a… | 2026-10-09 - read… | [:5792](open_issues.md#L5792) |
+| OI-328 | One-off production credit of the 2026-09-14 week for user d7a67a37… | an explicit founder go: it is a live… | 2026-10-09 - read the plan… | [:5800](open_issues.md#L5800) |
+| OI-329 | water_logs still takes about 54 updates per day after the sync-load batch… | none, fixable now; start by reading… | 2026-10-09 - live `pg_stat_user_tables`… | [:5809](open_issues.md#L5809) |
+| OI-330 | workout_log_exercises updates rose from about 5 to about 62 per day across… | none, but it needs a diagnosis first… | 2026-10-09 - live `pg_stat_user_tables`… | [:5825](open_issues.md#L5825) |
+| OI-331 | No detector for leftover background processes: a helper agent's unbounded… | none | 2026-10-09 - found live: two bash… | [:5836](open_issues.md#L5836) |

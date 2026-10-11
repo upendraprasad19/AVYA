@@ -246,8 +246,9 @@ BatchCloseVerdict evaluateBatchClose(BatchCloseInputs i) {
   rows.add(const ChecklistRow(
     'Full-suite SCOPE stated (§4.3)',
     null,
-    'UNVERIFIED — pre-push (>=account) and CI are the full-suite gates and '
-    'neither has run on unpushed commits. If you report tests green, say WHICH.',
+    'UNVERIFIED — CI on the PR / main (and pre-push on a main push at >=account) '
+    'are the full-suite gates and none has run on unpushed commits. If you report '
+    'tests green, say WHICH.',
   ));
 
   return BatchCloseVerdict(

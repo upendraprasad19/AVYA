@@ -78,7 +78,7 @@ void main() {
     });
 
     test('REGRESSION: "flutter analyze" inside prose/echo text is not a real '
-        'invocation (real line, scripts/pre-push.sh:111)', () {
+        'invocation (the real `flutter analyze` line in scripts/pre-push.sh)', () {
       final violations = findScopedAnalyzeInTooling(
         _diff(
           'scripts/pre-push.sh',

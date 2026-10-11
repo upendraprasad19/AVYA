@@ -49,7 +49,7 @@ runs the same gates). See §4 process invariants for the no-deferred-failures po
   is MANDATORY before the merge per §4.3; the echo is only the reminder, not the gate.
   It does **NOT** run `flutter analyze` or `flutter test` (cost split 2026-08-11 — see ADR-0018).
   The two flutter steps dominated commit cost and were the most duplicated work in the pipeline:
-  `test/contracts/` is a strict subdirectory of `test/`, so pre-push (≥account) and CI each re-run
+  `test/contracts/` is a strict subdirectory of `test/`, so pre-push (≥account, except on a branch push since 2026-10-10) and CI each re-run
   those same files. ⚠ **The exact seconds are contested. OI-102 is CLOSED** (2026-08-11 — ADR-0018
   removed its trigger); the unanswered measurement half was carried forward as **OI-106** (`Verified:
   never`), which owns the still-unexplained "CI runs 690 files in 417s while local ran 478 in
@@ -62,6 +62,15 @@ runs the same gates). See §4 process invariants for the no-deferred-failures po
   either. `PRE_COMMIT_FULL=1` runs analyze + the FULL suite here; `PRE_COMMIT_LEGACY=1` restores
   the old analyze + contracts-subset behaviour. If both are set, `PRE_COMMIT_FULL` wins.
 - **`scripts/pre-push.sh` (analyze always + blast-radius-tiered suite):**
+  ⚠ **Branch-push skip (2026-10-10, OI-275, `push_class`):** the hook now reads git's pre-push stdin
+  (it used to drain it). A push whose every ref is a well-formed `refs/heads/<x>` other than `main`/`develop`
+  (`BRANCH_ONLY`) skips the ~39-minute local suite at a KNOWN ≥`account` tier — CI on the open PR runs the same
+  suite in ~13 min and `sh scripts/safe_pr_merge.sh <pr>` refuses to merge a PR whose required jobs are not green
+  (`main` has NO required status checks). A delete-only push (`DELETE_ONLY`) lands nothing and skips even with an
+  empty range. Everything else (main/develop, tags, mixed, malformed/empty stdin, unknown tier, `PRE_PUSH_FULL=1`)
+  runs the suite as before. Tests: `test/scripts/pre_push_branch_push_skip_e2e_test.dart`, `safe_pr_merge_*_test.dart`.
+  The installed hook is a COPY: re-run `sh scripts/setup-hooks.sh` after pulling this change (drift is only a
+  warning in `check_hooks_installed.dart`).
   `flutter analyze --no-fatal-infos` runs **unconditionally**, above every early exit — placement
   is load-bearing, because on a `feature`-tier branch push it is the only compile check that runs
   anywhere (see the CI row).

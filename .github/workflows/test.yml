@@ -107,7 +107,8 @@ jobs:
       - name: Run unit tests (pure Dart — no device needed)
         # Golden-image tests are platform-specific (Windows-generated PNGs vs
         # CI's Linux render differ in font hinting/anti-aliasing); excluded
-        # here, run locally via the pre-push full suite. See dart_test.yaml +
+        # here and from the pre-push suite (same tag filter); they run only on a matching
+        # platform, by hand. See dart_test.yaml +
         # feedback_local_ci_env_divergence.md.
         run: flutter test test/ --exclude-tags golden --reporter expanded
 

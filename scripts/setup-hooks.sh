@@ -12,8 +12,10 @@
 #                       path (cost split 2026-08-11; PRE_COMMIT_LEGACY=1 or
 #                       PRE_COMMIT_FULL=1 bring them back for one run).
 #   pre-push          — flutter analyze ALWAYS, then the full flutter test suite
-#                       when the pushed range is >=account (audit 2026-05-20 /
-#                       I10 split; analyze added 2026-08-11).
+#                       when the pushed range is >=account and the push is NOT a
+#                       branch push (audit 2026-05-20 / I10 split; analyze added
+#                       2026-08-11; branch-push skip 2026-10-10, OI-275 -- CI on
+#                       the open PR is that gate, merge via safe_pr_merge.sh).
 #   commit-msg        — bug-fix discipline gate (closes-diagnose /
 #                       regression-test-skipped) + the closes-oi gate.
 #   prepare-commit-msg— auto-prepends the `Blast-radius:` line.
@@ -76,7 +78,7 @@ install_hook "$REPO_ROOT/scripts/prepare-commit-msg.sh" "$HOOKS_DIR/prepare-comm
 install_hook "$REPO_ROOT/scripts/pre-merge-commit.sh" "$HOOKS_DIR/pre-merge-commit"
 
 # SSH keepalive for pushes (2026-05-30 cross-check fix).
-# The pre-push hook runs analyze and (at >=account) the full flutter test suite,
+# The pre-push hook runs analyze and (at >=account, except on a branch push) the full flutter test suite,
 # so the idle window GREW on 2026-08-11 rather than shrank: analyze now runs on
 # EVERY push, including the feature-tier ones that skip the suite and previously
 # idled for only a moment. git opens the
