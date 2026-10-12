@@ -16,6 +16,7 @@ self-evolving: true
 - **Required** for commits with blast-radius `catastrophic` (gate `check_code_review_pass_exists.dart` blocks without an `accepted` verdict)
 - **Manual**: `/review` any time, including pre-push and pre-batch-finalization
 - **Skip**: commits with blast-radius `feature` (cost > value)
+- **Skip**: a bare version bump (OI-275 B2: ONLY `pubspec.yaml` + `app_constants.dart`, decided by content, all-or-nothing). Both files are `platform` tier, so the pre-commit NOTE above still prints for it; ignore it. CI's keystone gate exempts the merge from the record and the B-pass (`/build-apk` Gate 2 is the flow).
 
 ## 1. The contract
 

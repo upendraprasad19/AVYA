@@ -20,9 +20,10 @@
 #     payment, migrations, CLAUDE.md, ...) -> RUN the full suite locally,
 #     EXCEPT on a BRANCH push (2026-10-10, OI-275): a push whose every ref is a
 #     `refs/heads/<x>` branch other than main/develop skips the ~39-minute
-#     local suite, because the PR's CI runs the same suite in ~13 minutes and
-#     scripts/safe_pr_merge.sh refuses to merge a PR that is not green. A push
-#     that only DELETES such branches lands nothing and skips too. main/develop,
+#     local suite, because the PR's CI runs the same suite (as parallel shards;
+#     ~13 minutes when it was one job) and scripts/safe_pr_merge.sh refuses to
+#     merge a PR that is not green. A push that only DELETES such branches
+#     lands nothing and skips too. main/develop,
 #     tags, mixed pushes, malformed or empty stdin, an unknown tier and
 #     PRE_PUSH_FULL=1 all keep the full suite (see push_class below).
 #     The golden-image tests are NOT in either suite (both pass
@@ -236,7 +237,7 @@ fi
 
 # A BRANCH push (never main/develop, tag, or anything malformed) at a risky tier
 # no longer runs the ~39-minute local suite: CI runs the same suite on the open
-# PR (~13 min), and scripts/safe_pr_merge.sh refuses to merge a PR whose
+# PR (parallel shards), and scripts/safe_pr_merge.sh refuses to merge a PR whose
 # required jobs are not all green. Only a KNOWN tier skips -- an empty or
 # unrecognised TIER still falls through to the suite (never skip on
 # uncertainty). main/develop pushes, tags, mixed pushes and PRE_PUSH_FULL=1 keep
