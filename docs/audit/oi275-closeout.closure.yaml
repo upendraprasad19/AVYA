@@ -30,8 +30,8 @@ findings:
     commit: oi275-closeout@branch
     verification: >
       Each entry now carries `evidence:` instead of `reason:`; B1 U4-2 holds the read-back, the other two point at it. scripts/validate_audit_closure.dart
-      (Gate 40) passes over every closure ledger; the declared totals are unchanged (B1 22, B2 27, B3 22) because every terminal state counts. B1 keeps its
-      other blocked_on_user entry, HOOK-1 (the VPS clone), which is not part of OI-275.
+      (Gate 40) passes over every closure ledger; the declared totals are unchanged (B1 22, B2 27, B3 22) because every terminal state counts. B1's other
+      blocked_on_user entry, HOOK-1 (the VPS clone), was not part of OI-275 and was resolved afterwards in the hook1-vps-done batch.
 
   - id: C-3
     title: "/build-apk Gate 2 still said the merge wrapper 'may prompt or be refused until the founder adds the allow-rule' (both copies)"
