@@ -31,7 +31,8 @@ jobs:
   # ── Tier 1: Static Analysis + Unit Tests ───────────────────────
   # Was ONE job running analyze + the full suite. Measured on run 31350916315 it
   # was 7m49s and the ENTIRE workflow wall clock — every other job finished with
-  # minutes to spare. Split 2026-08-10 into `analyze` + a sharded `unit-test`.
+  # minutes to spare. Split 2026-08-10 into `analyze` + `unit-test` (which became a
+  # whole-file shard matrix plus a `Unit Tests` gate job on 2026-10-11, below).
   # History worth keeping: this job was cancelled at a 10-min limit when a slower
   # runner pushed the ~10-min suite over the edge (2026-07-01; C1 merge run
   # 28517992078 hit 10m15s twice while "All tests passed!" printed just before
@@ -61,36 +62,67 @@ jobs:
       - name: Flutter analyze (zero warnings allowed)
         run: flutter analyze --no-fatal-infos
 
-  # SHARDING WAS TRIED AND REVERTED — 2026-08-10, same day it landed. Both of
-  # the plan's own pre-committed abort conditions fired on the first real run
-  # (31364967041), and they are recorded here so this is not re-proposed:
+  # ── Unit tests: a parallel matrix of WHOLE-FILE shards + one gate job ────────
+  # (OI-275 batch B3, 2026-10-11; plan docs/plans/2026-10-10-release-cycle-speedup.md §4.)
+  #
+  # The suite was ONE job: 13.0-13.5 min, the critical path of the whole workflow
+  # (median 13.12 min end to end over the last 20 PR runs; every other job is under
+  # 4 min). It is now N jobs that each run a DISJOINT set of whole test files
+  # (scripts/ci_test_partition.dart: the 0-based file i of the sorted
+  # `test/**/*_test.dart` list goes to shard (i % N) + 1), then `unit-tests-gate`,
+  # named exactly `Unit Tests`, which passes only when every shard did. The gate
+  # keeps the check name that scripts/safe_pr_merge_lib.dart requires green
+  # (requiredSuccessJobs); the shards are named `Unit Tests shard n/N`. /build-apk
+  # Gate 3.5 and scripts/reconcile_ci.dart do NOT read a job name: they read the
+  # run-level conclusion of the whole "Test & Analyze" workflow, which any red shard
+  # turns red with or without the gate.
+  #
+  # HISTORY THAT MUST NOT BE LOST — within-suite sharding was TRIED AND REVERTED on
+  # 2026-08-10, the same day it landed. Both of the plan's own pre-committed abort
+  # conditions fired on the first real run (31364967041):
   #
   # 1. MEASURED 18.3%, under the 25% floor the plan fixed IN ADVANCE.
   #    7m49s -> 6m23s. `--total-shards` slices WITHIN each suite
   #    (test_core/runner.dart:496-502), so every shard still compiled and loaded
   #    all ~693 files; only test bodies divided. The fixed cost does not shard,
-  #    so the ceiling was always low. The plan predicted no number precisely
-  #    because this was unknown — and the rule it wrote instead says: below 25%,
-  #    sharding is the wrong lever, use path filters.
+  #    so the ceiling was always low.
   #
-  # 2. IT BROKE A TEST, exactly where round 2 said it would. Shard 2 failed
-  #    `worktree_config_integrity_e2e_test.dart` "--warn-only ... still reports
-  #    the violation": that test asserts on corruption a PREVIOUS test in the
-  #    same file injects, and within-suite sharding handed shard 2 the assertion
-  #    without its predecessor. Round 2's P1-2 named intra-file carryover as the
-  #    real hazard (as opposed to the cross-file isolation the plan had actually
-  #    verified); it was recorded as "may not work" and shipped past. It fired on
-  #    the first run.
+  # 2. IT BROKE A TEST. Shard 2 failed `worktree_config_integrity_e2e_test.dart`
+  #    "--warn-only ... still reports the violation": that test asserts on
+  #    corruption a PREVIOUS test in the same file injects, and within-suite
+  #    sharding handed shard 2 the assertion without its predecessor.
   #
-  # The `analyze` split above is KEPT — it is a genuine, risk-free 47s off the
-  # critical path and is unaffected by either finding.
+  # THIS IS NOT THAT. A shard here is a list of WHOLE FILES passed to `flutter test`,
+  # so (a) a file is never split — a later test never loses its predecessor — and
+  # (b) a shard compiles only its own files, so the fixed cost divides too.
+  #
+  # PRE-COMMITTED ABORT CONDITIONS (written before the first matrix run; any one
+  # reverts this batch — measured on the PR run that introduces it):
+  #   (1) the workflow's end-to-end wall clock (first job start -> last job end, the
+  #       gate job included) is not >= 25% under the MEDIAN of the baseline, i.e. it
+  #       must be <= 9.84 min against the measured baseline median of 13.12 min
+  #       (N=20 successful PR runs, 2026-10-06..10, min 10.9 / max 13.9; the 20 run ids
+  #       are in docs/audit/speedup-b3-test-matrix.closure.yaml, so this can be re-derived);
+  #   (2) any test is red in a shard that is green in the single job on the same SHA;
+  #   (3) a PR run and a main run in flight together (9 and 11 jobs) queue so long
+  #       that the pair is slower than today (job started_at - run created_at).
+  # The first run also logs each shard's duration: a slowest/fastest skew above 1.5x
+  # re-balances with a committed measured-duration table in the same batch.
+  #
+  # `fail-fast: false` so one red shard does not hide the others' failures. The shard
+  # count is the matrix length (`strategy.job-total`), never a second literal.
   unit-test:
-    name: Unit Tests
+    name: Unit Tests shard ${{ matrix.shard }}/${{ strategy.job-total }}
     runs-on: ubuntu-latest
-    # Restored to 20 min: this is the full suite again, and test.yml's 2026-07-01
-    # note (run 28517992078, cancelled at a 10-min limit while "All tests passed!"
-    # printed) is why that headroom exists.
+    # Restored to 20 min per shard, as for the single job: this headroom exists
+    # because of test.yml's 2026-07-01 note (run 28517992078, cancelled at a 10-min
+    # limit while "All tests passed!" printed). A shard is expected to take a
+    # quarter of that; the limit is deliberately not tightened on a guess.
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
 
     steps:
       - uses: actions/checkout@v4
@@ -104,13 +136,56 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Run unit tests (pure Dart — no device needed)
+      - name: Run this shard's whole test files (pure Dart — no device needed)
         # Golden-image tests are platform-specific (Windows-generated PNGs vs
         # CI's Linux render differ in font hinting/anti-aliasing); excluded
         # here and from the pre-push suite (same tag filter); they run only on a matching
         # platform, by hand. See dart_test.yaml +
         # feedback_local_ci_env_divergence.md.
-        run: flutter test test/ --exclude-tags golden --reporter expanded
+        #
+        # The list is unquoted on purpose (scripts/ci_test_partition.dart refuses any
+        # path that unquoted expansion would split or glob). `test -n` is NOT
+        # redundant with the `|| exit 1`: an empty argument list makes `flutter test`
+        # run the ENTIRE test/ directory, i.e. every shard would run everything.
+        # Plain `dart`, not `dart run`: its "Running build hooks..." line would
+        # become a bogus path in the list; the STRAY check below is the net under that
+        # class (any non-path line the CLI ever printed would otherwise be handed to
+        # `flutter test` as a file argument).
+        #
+        # `flutter test` is the LAST command and is not piped, `|| true`-ed or
+        # continue-on-error'd: the default `bash -e {0}` has no pipefail, so the
+        # step's status is that of its last command. The matrix shape test runs this
+        # block with a failing flutter and pins the exact last line.
+        run: |
+          FILES="$(dart scripts/ci_test_partition.dart "${{ matrix.shard }}" "${{ strategy.job-total }}")" || exit 1
+          test -n "$FILES" || { echo "::error::shard ${{ matrix.shard }}/${{ strategy.job-total }} has no test files"; exit 1; }
+          STRAY="$(printf '%s\n' "$FILES" | grep -v -E '^test/[A-Za-z0-9_./+-]+_test\.dart$' || true)"
+          test -z "$STRAY" || { echo "::error::the partition printed a line that is not a test path: $STRAY"; exit 1; }
+          echo "shard ${{ matrix.shard }}/${{ strategy.job-total }}: $(echo "$FILES" | wc -l) test files"
+          flutter test $FILES --exclude-tags golden --reporter expanded
+
+  # The single check that means "the unit tests passed". `if: !cancelled()` so it
+  # still RUNS (and fails) when a shard failed — a gate that is skipped when its
+  # input fails reports "skipped", which scripts/safe_pr_merge_lib.dart does not
+  # treat as success for this job. It passes only on `success`: a skipped, failed or
+  # cancelled shard set is a failure of THIS check.
+  unit-tests-gate:
+    name: Unit Tests
+    needs: unit-test
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Every shard must have succeeded
+        env:
+          SHARDS_RESULT: ${{ needs.unit-test.result }}
+        run: |
+          echo "unit-test shards finished as: $SHARDS_RESULT"
+          if [ "$SHARDS_RESULT" != "success" ]; then
+            echo "::error::Unit Tests failed: the shards finished as '$SHARDS_RESULT', not 'success'"
+            exit 1
+          fi
 
   # ── Deno Edge-Function tests (added Unit C 2026-07-08, diagnose a7e2c4) ──
   # Until now NO CI job ran the Deno tests under supabase/functions/**, so a red
