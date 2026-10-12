@@ -486,7 +486,7 @@ void main() {
   test('RED PATH: warns when a >= account branch has NO plan-review record',
       () {
     installClassifier(primary);
-    // supabase/migrations/** classifies `platform` (docs/blast_radius.yaml:62).
+    // supabase/migrations/** classifies `platform` (the `supabase/migrations/**` rule in docs/blast_radius.yaml).
     final branch = makeBranchAdding(
         primary, 'no-record-platform', 'supabase/migrations/900_probe.sql');
     final r = _run('sh', ['scripts/safe_merge.sh', branch], primary);

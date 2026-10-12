@@ -2,8 +2,9 @@
 //
 // The exercise-plate kill switch.
 //
-// WHY THIS EXISTS: the batch classifies `platform` (docs/blast_radius.yaml:324
-// pins `pubspec.yaml`, and :68 pins `CLAUDE.md` — either alone is enough), and
+// WHY THIS EXISTS: the batch classifies `platform` (docs/blast_radius.yaml
+// pins `pubspec.yaml` and `CLAUDE.md` as platform by exact path — either alone is enough; cited by path
+// because a line number moves every time the registry grows), and
 // platform tier's `requires:` list includes `feature_flag`. Nothing mechanical
 // enforces that — `check_blast_radius_coverage.dart` only asserts every path has
 // SOME tier, and the keystone plan-review gate never reads `requires:` — so an
