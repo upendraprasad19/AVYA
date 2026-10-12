@@ -95,10 +95,11 @@ findings:
 
   - id: OI275-D
     title: "OI-275 stays OPEN after this batch: the standing permission for the merge wrapper"
-    terminal_state: blocked_on_user
-    reason: >
-      The settings allow-rule `Bash(sh scripts/safe_pr_merge.sh:*)` (OI-275 item D, carried from B1) is a permission change and is the founder's to make; the
-      rule names the wrapper ONLY, never raw `gh pr merge`. The Gate 2 flow added here depends on it for an unattended merge. No closes-oi trailer is used.
+    terminal_state: verified_clean
+    evidence: >
+      Resolved 2026-10-12: the founder added the settings allow-rule `Bash(sh scripts/safe_pr_merge.sh:*)` (OI-275 item D, carried from B1), read back the same
+      day (see speedup-b1-prepush U4-2), and OI-275 was closed in the oi275-closeout batch (closes-oi: OI-275). The rule names the wrapper ONLY, never raw
+      `gh pr merge`. This batch itself used no closes-oi trailer, as recorded when it shipped.
 
   # ── Found by the author's own mutation runs and probing (before the B-pass) ──
   - id: REG-1
