@@ -46,7 +46,8 @@ void main() {
 
     test('T5 — community surfaces pseudonymized (FK SET NULL not CASCADE)', () {
       // user_custom_exercises / user_custom_foods / community_reviews
-      // / food_corrections / promo_code_uses survive with user_id = NULL.
+      // / food_corrections / promo_code_uses survive with user_id = NULL (and, since migration 158,
+      // referral_redemptions survives with referrer_id / referee_id = NULL).
     }, skip: 'Phase 7 scaffold — irreversible; needs test-user provisioning.');
 
     test('T6 — rate-limit: 6th attempt within 1h returns 429 Retry-After: 3600', () {
