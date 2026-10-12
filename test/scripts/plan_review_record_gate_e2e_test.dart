@@ -131,13 +131,20 @@ void main() {
       String? recordBranchField,
       String touchPath = 'pubspec.yaml',
       bool withBpass = true,
-      bool withHermes = false}) {
+      bool withHermes = false,
+      List<String> extraTouch = const []}) {
     _run('git', ['checkout', '-q', '-B', branchName, 'main'], repo);
     if (touchPath == 'pubspec.yaml') {
       File('$repo/pubspec.yaml')
           .writeAsStringSync('name: probe\n# $branchName\n');
     } else {
       File('$repo/$touchPath')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('// probe $branchName\n');
+    }
+    // A MIXED diff: further paths on the same branch (the gate must take the MAX tier across all of them).
+    for (final extra in extraTouch) {
+      File('$repo/$extra')
         ..createSync(recursive: true)
         ..writeAsStringSync('// probe $branchName\n');
     }
@@ -239,6 +246,48 @@ ${withBpass ? 'bpass: accepted\nbpass_review: docs/reviews/probe.md\n' : ''}${wi
         touchPath: 'supabase/functions/clean-orphan-media/zz_probe.ts',
         withHermes: true);
     expect(code, 0, reason: lastGateOut);
+  });
+
+  // blast-radius-data-deleting-paths (2026-10-12): rolling-context/** and _shared/purge_user_storage*.ts are catastrophic.
+  // Same reason as above: this gate's registry reader is private, and it is the one that demands `hermes: accepted`.
+  test('catastrophic path (rolling-context/): a platform-grade record WITHOUT hermes FAILS', () {
+    final code = mergeAndRunGate('rolling-no-hermes',
+        "Merge branch 'rolling-no-hermes' - probe",
+        touchPath: 'supabase/functions/rolling-context/zz_probe.ts');
+    expect(code, 1, reason: lastGateOut);
+    expect(lastGateOut, contains('catastrophic requires hermes: accepted'),
+        reason: 'it must fail for the hermes rule, not for some other defect');
+  });
+
+  test('catastrophic path (rolling-context/): the same diff WITH an accepted hermes report PASSES (control)', () {
+    final code = mergeAndRunGate('rolling-with-hermes',
+        "Merge branch 'rolling-with-hermes' - probe",
+        touchPath: 'supabase/functions/rolling-context/zz_probe.ts',
+        withHermes: true);
+    expect(code, 0, reason: lastGateOut);
+  });
+
+  test('catastrophic path (_shared/purge_user_storage.ts): a platform-grade record WITHOUT hermes FAILS', () {
+    final code = mergeAndRunGate('purge-no-hermes',
+        "Merge branch 'purge-no-hermes' - probe",
+        touchPath: 'supabase/functions/_shared/purge_user_storage.ts');
+    expect(code, 1, reason: lastGateOut);
+    expect(lastGateOut, contains('catastrophic requires hermes: accepted'),
+        reason: 'it must fail for the hermes rule, not for some other defect');
+  });
+
+  // The gate must judge a MIXED diff by its MAX tier, not by the first or the last path it happens to read. `git diff`
+  // lists paths in byte order, so a root-level feature file `aa_...` sorts BEFORE `supabase/...` and `zz_...` AFTER it:
+  // a "first path wins" or a "last path wins" gate would see `feature`, pass the record, and let a catastrophic change
+  // through without hermes. Both neighbours are in the one diff so that either mutant fails it.
+  test('catastrophic path MIXED with feature files sorting before AND after it: still FAILS for hermes (max tier)', () {
+    final code = mergeAndRunGate('mixed-no-hermes',
+        "Merge branch 'mixed-no-hermes' - probe",
+        touchPath: 'supabase/functions/rolling-context/zz_probe.ts',
+        extraTouch: const ['aa_feature_probe.txt', 'zz_feature_probe.txt']);
+    expect(code, 1, reason: lastGateOut);
+    expect(lastGateOut, contains('catastrophic requires hermes: accepted'),
+        reason: 'it must fail for the hermes rule, not for some other defect');
   });
 
   test('REGRESSION: a record naming a DIFFERENT branch is rejected', () {

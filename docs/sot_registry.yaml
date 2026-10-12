@@ -11456,6 +11456,7 @@ concepts:
     behavioral_test_path_sync_engine: test/contracts/blast_radius_sync_engine_platform_test.dart
     behavioral_test_path_sync_engine_keystone: test/scripts/plan_review_record_gate_e2e_test.dart
     behavioral_test_path_clean_orphan_media: test/contracts/blast_radius_clean_orphan_media_catastrophic_test.dart
+    behavioral_test_path_data_deleting_paths: test/contracts/blast_radius_data_deleting_paths_catastrophic_test.dart
     description: |
       docs/blast_radius.yaml is the SINGLE writer of every file's review tier.
       Four independent engines read it (the classifier, both review gates, and
@@ -11517,7 +11518,7 @@ concepts:
       enforced at merge.
     writers:
       - file: docs/blast_radius.yaml
-        line_range: 39-506
+        line_range: 39-536
         method: paths list (declaration order, first match wins)
         notes: |
           THE canonical writer. Exact-path rules must be declared ABOVE the
