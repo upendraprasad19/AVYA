@@ -1,0 +1,90 @@
+# Closure ledger - coach-measurement-sheet, Landing A (measurement value bounds). One terminal_state per finding, no `deferred:` key.
+# Code commit c8bc98e8 and B-pass commit 106a7434 (the fixes, the review file, the record flip). A commit cannot name its own SHA, so this
+# stamp commit records both and the full-suite result of the fixed tree (the L2a shape, 79e866a2). Rows are added only once true.
+# Mutation totals on the final tree (the B-pass commit): 111 mutants, 103 red, 8 recorded equivalents (A3-07, RB-M11, RB-M29a, RB-M29b,
+# RB-M29c, RB-M30, RB-M31, RB-M32; each with its reason in the diagnose-doc), 0 compile errors; plus 7 mutants of the writer-to-reader contract file, all red.
+# The targeted set is 116 tests in five files (107 in the four files the B-pass reviewed, 9 in the writer-to-reader contract file Gate 9 asked for).
+batch: coach-measurement-sheet
+plan_review_record: docs/plan-reviews/coach-measurement-sheet.md
+diagnose_docs:
+  - docs/diagnoses/2026-10-11-measurement-values-unbounded-7c3e9a.md
+total_findings: 16
+closed_count: 16
+
+findings:
+  - id: A1
+    title: "kBodyMeasurementSpecs (inclusive cm ranges per site, keys == registry tokens), isValidBodyMeasurementCm (NaN-safe), roundMeasurementToTenth (total), measurementRejectionMessage - lib/core/constants/body_measurement_specs.dart"
+    terminal_state: closed_in_commit
+    commit: c8bc98e8
+    verification: "test/contracts/body_measurement_bounds_behavioral_test.dart (literal boundary probes, keys both directions, every bound a fixed point of the rounding, totality over NaN and the infinities, exact event messages including side=wrongtype); mutants A1-01..A1-20 and X-01..X-03 red, see the diagnose-doc Mutation proof section"
+  - id: A2
+    title: "writer tier: HealthWriteService.logMeasurement normalises the part once (trim + lower case), rounds to 0.1 cm, validates the ROUNDED value, rejects an unregistered part or an out-of-range / non-finite value without touching the box (event tier=writer), and builds the day record through measurementRecordWith (date stamped on every write)"
+    terminal_state: closed_in_commit
+    commit: c8bc98e8
+    verification: "bounds test group A2 (rejection rows with exact events, a direct call with 'thigh' and a blank part, 49.96 / 49.94 / 200.04, a padded part, a dateless existing record gains its date, a new record against the old writer's output, a rejected write leaves an existing record byte-identical, created_at / updated_at / updated_at_ms / id asserted independently of the record under test, the key and the stamp at an instant whose UTC date differs from its IST date, a Hive-decoded Map<dynamic, dynamic> existing record); mutants A2-01..A2-13 and RB-M02..M10, RB-M12 red; RB-M11 (an un-awaited put) is a recorded equivalent"
+  - id: A3
+    title: "chat parse tier: PendingLogActionsNotifier case log_measurement reads type and value_cm with type tests (no cast), checks the RAW value against the table, and emits measurement_value_rejected (tier=chat) for a rejected value of a registered site"
+    terminal_state: closed_in_commit
+    commit: c8bc98e8
+    verification: "bounds test group A3 (accepted values emit nothing; rejected values leave exactly one event with the exact message; wrong-typed fields drop without a throw or an event; a later action in the same response still parses) the edge rows 49.96 / 70.04 / 59.96 / 200.04 and the parse-versus-writer relation at floor-0.06 .. ceiling+0.06, four actions of one type in one response getting four ids) and the whitelist test; mutants A3-01..A3-06, A3-08, A3-09, X-04..X-07 and RB-M13, RB-M14 red; A3-07 is a recorded equivalent"
+  - id: A4
+    title: "read tier: HealthReadService.measurementHistory / latestBySite / latestBySiteOf (per-site validity, strict YYYY-MM-DD shape plus a calendar round-trip, no future dates, total order date / updated_at_ms / key, type tests) and AiSnapshotBuilder._getBodyMeasurements re-routed through latestBySite"
+    terminal_state: closed_in_commit
+    commit: c8bc98e8
+    verification: "test/contracts/body_measurement_readers_behavioral_test.dart (tie-break fixtures F1-F3c, per-site fall-through, NaN, numeric-String site, non-String date, impossible and malformed dates, the future filter at three instants, registry key order, the real writer to the reader, the golden clean snapshot fixture compared by value and as JSON text, the dirty snapshot fixture); the previous loop was run on the same fixtures first (clean: same literal; dirty: TypeError; NaN: jsonEncode throws); the fixtures are Hive-shaped Map<dynamic, dynamic> and one test writes through the real writer, closes and reopens the user session and reads back; legacy values 59.97 / 49.96 / 200.04 / 70.04 are judged and returned rounded; latestBySiteOf asserts newest-first input; mutants A4-01..A4-23, X-08..X-14 and RB-M01, RB-M17..M28 red (RB-M21 under TZ=UTC); RB-M29a..c are recorded equivalents"
+  - id: A5
+    title: "handler tier: no bound added (recorded departure from the L2a obligation); conversational_log_handler.dart gets a class-doc edit only and keeps its isBodyMeasurementSite clause (presence-only)"
+    terminal_state: closed_in_commit
+    commit: c8bc98e8
+    verification: "the handler is fed only by the parse and passes the same type / valueCm to the writer, so a handler-tier bound is an equivalent mutant while the A1 fixed-point test holds; the evidence is the handler test in log_measurement_site_whitelist_test.dart (3000, waist 40, arms 80, NaN, Infinity return false and write nothing); the isBodyMeasurementSite( clauses are presence-only, guarded by body_measurement_sites_derivation_test.dart (mutant A3-09)"
+  - id: A6
+    title: "existing tests and pins that moved: the whitelist test fixtures (literal in-range and out-of-range values), the derivation test consumers (snapshot -> latestBySite(, health_read_service.dart -> kBodyMeasurementSites), SoT registry pins repointed, new concept body_measurement_value_bounds with its behavioral_test_path and its Gate 9 writer-to-reader contract file (test/contracts/body_measurement_value_bounds_writer_to_reader_test.dart, 9 tests, mutants W1-W7 red), the stale BiometricNotifier measurement claim corrected"
+    terminal_state: closed_in_commit
+    commit: c8bc98e8
+    verification: "the sot registry parity, completeness, behavioral-test-path and snapshot-contract gates pass on the code commit; both edited tests pass. The reader-manifest gate (Gate 50) did NOT evaluate the new concept at the code commit (it used the plural key_prefixes, which the gate does not read); the B-pass found that and the concept now uses the singular key_prefix and lists sync_health.dart and sync_service.dart, so Gate 50 checks it (proven read: 46 enforced concepts instead of 45 with the plural spelling; dropping health_read_service.dart from readers: fails the gate at health_read_service.dart:140, dropping sync_health.dart from writers: and the allow-list fails it at sync_health.dart:273; the interpolated-key writers, sync_service.dart among them, are invisible to the gate and are listed from reading)"
+  - id: A7
+    title: "docs: diagnose-doc 7c3e9a (full template, G2 SELECT and result, old-reader probe, per-mutant before/after and verdicts, section 4.6 position), naming_conventions rows (measurement_ prefix, measurement bounds, measurement_value_rejected), core services CLAUDE.md row, snapshot_contract note, plan G1 correction, open_issues notes (OI-304 Blocked-on, OI-297 progress, OI-299 L3-BOUNDS)"
+    terminal_state: closed_in_commit
+    commit: c8bc98e8
+    verification: "validate_diagnose_doc passes; the Gate-DEU, ledger, OI-integrity and context-budget checks pass in the pre-commit loop"
+  - id: D5
+    title: "founder decision D5: the bounds table (chest 60-200, waist 50-200, hips 60-200, arms 20-70; floors double as the probably-inches threshold) is confirmed as written and is live from this landing"
+    terminal_state: closed_in_commit
+    commit: c8bc98e8
+    verification: "answered 2026-10-11 ('Confirm as is (Recommended)'); recorded in the diagnose-doc and the plan-review record"
+  - id: D6
+    title: "founder decision D6: Landing A ships with no kill switch; the rejection event is the observation"
+    terminal_state: closed_in_commit
+    commit: c8bc98e8
+    verification: "answered 2026-10-11 ('No kill switch (Recommended)'); recorded in the diagnose-doc section 4.6 position and the plan-review record"
+  - id: BPASS
+    title: "B-pass before the merge (account tier, self-triggered): 3 fresh context-blind Sonnet reviewers on c8bc98e8, 34 findings (A 10, B 10, C 14), 0 P0, 0 P1, 7 P2, 27 P3, 0 false alarms; the mechanism held, the tests and the evidence needed work"
+    terminal_state: closed_in_commit
+    commit: 106a7434
+    verification: "docs/reviews/coach-measurement-sheet-bpass.md (line-anchored verdict: accepted) and docs/plan-reviews/coach-measurement-sheet.md (bpass: accepted); the same-dated entry in .claude/skills/code-review/tuning-history.md; the targeted set is 116 tests in five files; 118 mutants (111 on the four reviewed files: 103 red and 8 recorded equivalents; 7 on the writer-to-reader file: all red), 0 compile errors; the SoT parity, completeness, behavioral-path and reader-manifest gates, the writeservice-contracts gate, the snapshot-contract gate and the context-budget gate pass; full suite on the fixed tree (run before 106a7434 was committed; only document figures changed after it): 8743 passed, 9 skipped, exit 0 (TZ=Asia/Kolkata, --exclude-tags golden)"
+  - id: FUTURE-FILTER-BEHIND-CLOCK
+    title: "the reader hides any record dated after the READING device's today, so a restored or pulled record dated ahead of a device whose clock runs behind real time is hidden from the coach until the clock reaches the date or is corrected (B-pass BP-A2)"
+    terminal_state: verified_clean
+    notes: "working as designed, residual stated in plan section 7 and the diagnose-doc: the filter exists to stop a wrong-clock-AHEAD write from shadowing every real entry, and the two cases cannot be told apart from the record alone (the source field does not say whose clock was wrong); a one-day tolerance would re-open the shadowing it stops. The coach meanwhile gets the older valid value, which is stale but never a wrong one"
+  - id: LEGACY-PUSH
+    title: "finite out-of-range values already held locally are still pushed by _syncMeasurements (the default merge-safe push drops only non-finite sites)"
+    terminal_state: upstream_blocked
+    blocker: "founder decision D8 (2026-10-11): the push is bounded in L2c together with the per-site pending set, and L2c exists only if OQ-L2a is decided for the per-site pending set; 0 body_measurements rows exist in the cloud today (G2, re-read 2026-10-11). The same L2c edit must replace the two casts in _syncMeasurements (log['date'] as String?, log['created_at'] as String?, sync_health.dart:277,280): a record whose date is not a String throws there and ends the whole push pass at that key (no in-repo writer produces one; sync/** is platform tier, so an account-tier landing does not touch it)"
+    reopen_when: "OQ-L2a is decided; if L2c is not chosen this row reopens as blocked_on_user for another route"
+  - id: L3-BOUNDS
+    title: "L3's TS athlete state, the Telegram bot and the restore Edge Function read raw cloud rows, so read-time hiding in the app forks the readers; L3 must apply the same table (a TS twin plus a Dart-to-TS parity test)"
+    terminal_state: upstream_blocked
+    blocker: "landing L3 of the progress-review spec is not started; also recorded on OI-299"
+    reopen_when: "L3's plan is written"
+  - id: REJECTION-REVIEW
+    title: "read the measurement_value_rejected counts in client_errors at least 14 days after this landing reaches a build (the event is LOW priority and dropped under cooldown) and tighten or loosen the table if the below side shows typed inches"
+    terminal_state: blocked_on_user
+    reason: "needs a build in users' hands and a read of live client_errors; the table (D5) is the founder's to adjust"
+  - id: DEVICE-CHECK-A
+    title: "on a build carrying this landing: chat 'log my waist 82 cm' -> card -> confirm -> the record holds 82.0; 'waist 3000' -> no card; the coach context shows the logged value"
+    terminal_state: blocked_on_user
+    reason: "a device build (/build-apk) and a person at the phone; the founder owns builds"
+  - id: OI-304-DECISION
+    title: "OI-304 (InsightCard and DeepAnalysisCard are never mounted): the L2b plan v3.1 no longer schedules the deletion; mount the cards or delete the dead widgets and correct the two docs that name a reader that does not render"
+    terminal_state: blocked_on_user
+    reason: "founder decision D2 (plan section 6); the OI-304 Blocked-on line now says so"

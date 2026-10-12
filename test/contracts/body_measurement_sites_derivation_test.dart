@@ -3,8 +3,9 @@ library;
 
 // L2a (OI-297) - PRESENCE ONLY (source-grep, said plainly). Two rules:
 //
-//  1. the five named Dart consumers of the body-measurement site list use the
-//     registry symbol and none carries a literal site list;
+//  1. the six named Dart consumers of the body-measurement site list use the
+//     registry symbol (or, for the snapshot, the reader that does) and none
+//     carries a literal site list;
 //  2. LIB-WIDE: no flat list / set / map literal under lib/ other than the
 //     registry itself carries two or more of the four site tokens, so a sixth
 //     hard-coded copy cannot appear in a file nobody thought to name (the L2b
@@ -29,8 +30,10 @@ const _consumers = <String, String>{
       'isBodyMeasurementSite(',
   'lib/features/ai_coach/services/conversational_log_handler.dart':
       'isBodyMeasurementSite(',
-  'lib/features/ai_coach/services/ai_snapshot_builder.dart':
-      'kBodyMeasurementSites',
+  // L2b Landing A: the snapshot no longer walks the sites itself; it asks the
+  // reader, and the reader walks the registry.
+  'lib/features/ai_coach/services/ai_snapshot_builder.dart': 'latestBySite(',
+  'lib/core/services/health_read_service.dart': 'kBodyMeasurementSites',
 };
 
 const _registryPath = 'lib/core/constants/body_measurement_sites.dart';

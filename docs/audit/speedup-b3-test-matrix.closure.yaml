@@ -131,10 +131,13 @@ findings:
 
   - id: OI275-C
     title: "OI-275 stays OPEN after this batch"
-    terminal_state: blocked_on_user
-    reason: >
-      OI-275 closes only when the founder adds the settings allow-rule `Bash(sh scripts/safe_pr_merge.sh:*)` (item D, carried from B1) and B4 is decided.
-      This batch adds no `closes-oi:` trailer and does not edit docs/audit/open_issues.md.
+    terminal_state: verified_clean
+    evidence: >
+      Resolved 2026-10-12: the founder added the settings allow-rule `Bash(sh scripts/safe_pr_merge.sh:*)` (item D, carried from B1; read back the same day,
+      see speedup-b1-prepush U4-2) and OI-275 was closed in the oi275-closeout batch (closes-oi: OI-275). B4 was not built: the founder closed OI-275 on
+      2026-10-12 without a B4 go. This is a decision record, not a verification. The agent's recommendation on record is not to build it: after B3 the critical
+      path is the APK build check (3.6-4.3 min) and the slowest shard (4.2-4.6 min), so B4 would save runner minutes, not waiting time; the design stays in plan
+      section 5. This batch itself added no `closes-oi:` trailer and did not edit docs/audit/open_issues.md.
 
   # ── B-pass findings (docs/reviews/speedup-b3-test-matrix-bpass.md) ───
   - id: BP-1

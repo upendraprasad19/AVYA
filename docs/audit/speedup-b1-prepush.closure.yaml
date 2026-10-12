@@ -51,10 +51,12 @@ findings:
 
   - id: U4-2
     title: "Standing permission for the wrapper: settings allow-rule `Bash(sh scripts/safe_pr_merge.sh:*)` (OI-275 item D)"
-    terminal_state: blocked_on_user
-    reason: >
-      A settings change is the founder's to make (not mine). The rule names the wrapper ONLY, never raw `gh pr merge` (a raw allow would let a
-      session merge a red PR). Until it is added, a session's merge via the wrapper may be classifier-blocked and needs the founder's yes.
+    terminal_state: verified_clean
+    evidence: >
+      Resolved 2026-10-12: the founder added the rule to `permissions.allow` in C:/Users/upend/.claude/settings.json (a settings change is the founder's to
+      make, not the agent's). Read back the same day: valid JSON, 60 entries, the rule once and last, and no raw `gh pr merge` entry in `permissions.allow`
+      (a raw allow would let a session merge a red PR). This is a state read, not a behaviour test: B3's wrapper merge passed with no rule in place, so
+      whether the rule removes a classifier block is observed at the first wrapper merge made with it. OI-275 was closed in the oi275-closeout batch.
 
   - id: DOC-1
     title: "Doc ripple: every passage describing the old pre-push behaviour"

@@ -4292,7 +4292,7 @@ concepts:
         method: WaterIntakeNotifier.addWater + increment + decrement
         notes: Routes through HealthWriteService.setWaterMl (audit-2026-05-16 E.7).
       - file: lib/core/services/health_write_service.dart
-        line_range: 261-298
+        line_range: 263-300
         method: setWaterMl
         notes: |
           Sole canonical writer. Per-(date,water) mutex; IST baked into
@@ -4395,7 +4395,7 @@ concepts:
     restore_methods: [_restoreWaterLogs]
     ist_sites:
       - { file: lib/features/nutrition/providers/nutrition_provider.dart, line: 409, fn: WaterIntakeNotifier.build }
-      - { file: lib/core/services/health_write_service.dart, line: 261, fn: setWaterMl }
+      - { file: lib/core/services/health_write_service.dart, line: 263, fn: setWaterMl }
     telemetry:
       failure_op_types: [upsert_water_log]
     class_constraints: |
@@ -4516,7 +4516,7 @@ concepts:
       # the source of truth — it just calls HealthWriteService.instance.logWeight
       # (plus a companion profile current_weight_kg write).
       - file: lib/core/services/health_write_service.dart
-        line_range: 163-199
+        line_range: 164-200
         method: HealthWriteService.logWeight
         canonical: true
       - file: lib/features/home/providers/home_provider.dart
@@ -4604,7 +4604,7 @@ concepts:
     ist_sites:
       # F12 (2026-06-07): the IST key is built in the canonical writer, not the
       # home_provider delegate.
-      - { file: lib/core/services/health_write_service.dart, line: 171, fn: logWeight }
+      - { file: lib/core/services/health_write_service.dart, line: 172, fn: logWeight }
     telemetry:
       failure_op_types: [upsert_weight_log, realtime_handler_weight_logs, realtime_stream_weight_logs]
     class_constraints: |
@@ -7332,8 +7332,25 @@ concepts:
       cloud sync via routed `SyncService.syncXxxNow()` per method.
     writers:
       - file: lib/core/services/health_write_service.dart
-        line_range: 60-340
+        line_range: 61-399
         method: logSleep + logWeight + logMeasurement + setWaterMl + logUrine + logHydration
+        notes: |
+          logMeasurement (L2b Landing A, OI-297, diagnose 7c3e9a): the part is
+          normalised (trim + lower case), the value is rounded to 0.1 cm and
+          validated AFTER rounding against kBodyMeasurementSpecs, and an
+          unregistered part or an out-of-range / non-finite value fails without
+          touching the box (an out-of-range or non-finite value of a registered
+          part also emits measurement_value_rejected, tier=writer; an
+          unregistered part emits nothing).
+      - file: lib/core/services/health_write_service.dart
+        line_range: 417-450
+        method: measurementRecordWith
+        notes: |
+          The ONE definition of the measurement_<istDate> day record: copies the
+          existing map (other sites and restore-written nulls survive), stamps
+          `date` on every write, sets the given sites, source and the updated_at
+          pair. logMeasurement calls it; the Landing B batch writer will too.
+    # NOT CHECKED (OI-335): Gate 50 reads only a singular hive.key_prefix, and this concept spells six prefixes with the plural key_prefixes.
     reader_manifest_complete: true
     readers:
       - file: lib/features/home/providers/home_provider.dart
@@ -7347,7 +7364,7 @@ concepts:
           + invalidates the canonical provider set.
       - file: lib/features/profile/providers/profile_provider.dart
         line_range: 418-510
-        method: BiometricNotifier (sleep + measurements display) + logSleep
+        method: BiometricNotifier (sleep) + logSleep
         semantic: latest
         fields_read: [type, sleep_hours, date]
         notes: |
@@ -7393,6 +7410,26 @@ concepts:
         fields_read: []
         notes: |
           Chat-handler writers route through HealthWriteService.
+      - file: lib/core/services/health_read_service.dart
+        line_range: 1-9999
+        method: measurementHistory + latestBySite + latestBySiteOf
+        semantic: latest
+        fields_read: [date, chest, waist, hips, arms, updated_at_ms]
+        notes: |
+          L2b Landing A (OI-297): the read path for what a person sees or the
+          coach is told. Per-site bounds (a value outside kBodyMeasurementSpecs
+          is skipped and an older valid day shows through), a real IST calendar
+          day written YYYY-MM-DD that is not later than today, order date /
+          updated_at_ms / key descending, type tests instead of casts.
+      - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
+        line_range: 1-9999
+        method: _getBodyMeasurements
+        semantic: latest
+        fields_read: [chest, waist, hips, arms]
+        notes: |
+          Snapshot `body_measurements` = HealthReadService.latestBySite() values,
+          in registry order. The loop that stood here cast every field and put a
+          stored NaN into the snapshot (diagnose 7c3e9a).
     regression_test: test/contracts/health_write_service_writer_to_reader_test.dart
     hive:
       box: healthBox
@@ -7555,15 +7592,16 @@ concepts:
     description: |
       Canonical READ service for health-domain Hive surfaces.
       Exposes latest-weight / sleep-hours-for-date / water-ml-for-date
-      with IST-anchored key formulas matching HealthWriteService.
+      with IST-anchored key formulas matching HealthWriteService, and (L2b
+      Landing A) the measurement history / latest-per-site readers.
     writers:
       - file: lib/core/services/health_read_service.dart
-        line_range: 1-82
+        line_range: 1-9999
         method: HealthReadService
     reader_manifest_complete: true
     readers: []
     reader_allow_files:
-      - { file: lib/core/services/health_read_service.dart, reason: "self — instance methods read healthBox weight_*/sleep_log_*/water_ml_* prefixes" }
+      - { file: lib/core/services/health_read_service.dart, reason: "self — instance methods read healthBox weight_*/sleep_log_*/water_ml_*/measurement_* prefixes" }
     regression_test: test/contracts/health_read_service_test.dart
     class_constraints: |
       Date keys MUST be computed via `istDateStr(date)` to agree with
@@ -11417,6 +11455,7 @@ concepts:
     behavioral_test_path: test/contracts/blast_radius_content_rule_wired_all_scripts_test.dart
     behavioral_test_path_sync_engine: test/contracts/blast_radius_sync_engine_platform_test.dart
     behavioral_test_path_sync_engine_keystone: test/scripts/plan_review_record_gate_e2e_test.dart
+    behavioral_test_path_clean_orphan_media: test/contracts/blast_radius_clean_orphan_media_catastrophic_test.dart
     description: |
       docs/blast_radius.yaml is the SINGLE writer of every file's review tier.
       Four independent engines read it (the classifier, both review gates, and
@@ -11478,7 +11517,7 @@ concepts:
       enforced at merge.
     writers:
       - file: docs/blast_radius.yaml
-        line_range: 39-495
+        line_range: 39-506
         method: paths list (declaration order, first match wins)
         notes: |
           THE canonical writer. Exact-path rules must be declared ABOVE the
@@ -15149,6 +15188,98 @@ concepts:
       - "a .maybeSingle() PRO recheck in front of a delete (PGRST116 on two unexpired active rows reads as free)"
       - "treating an unreadable subscription read as free before a delete (isProUser answers false on error)"
       - "a second Storage .remove( in the clean-orphan-media folder, or the coach-media bucket anywhere in the sweep"
+
+  - concept: body_measurement_value_bounds
+    domain: health
+    behavioral_test_path: test/contracts/body_measurement_bounds_behavioral_test.dart
+    description: |
+      L2b Landing A (OI-297, diagnose 7c3e9a): a body-measurement value is
+      bounded where it enters and where the coach reads it. ONE table,
+      kBodyMeasurementSpecs (lib/core/constants/body_measurement_specs.dart:
+      inclusive cm ranges per site, keys == kBodyMeasurementSites, every bound a
+      multiple of 0.1), ONE predicate (isValidBodyMeasurementCm, NaN-safe) and ONE
+      rounding (roundMeasurementToTenth, total on NaN / Infinity). Enforced at
+      three tiers: the chat parse (raw value), the writer (the value rounded to
+      0.1 cm) and the reader (per site, judging and returning the value rounded
+      to 0.1 cm, so it accepts what the writer accepts). A value out of range is
+      REJECTED, never clamped (the opposite of nutrition's clamp, diagnose
+      4e8f1b). A rejection emits ErrorTelemetry.logEvent
+      measurement_value_rejected with `tier=<chat|writer> site=<site>
+      side=<below|above|nonfinite|wrongtype>`, never the value; it is a LOW
+      priority event, dropped during a telemetry cooldown, so its counts are a
+      lower bound. No kill switch (founder decision D6, 2026-10-11).
+    writers:
+      - file: lib/core/constants/body_measurement_specs.dart
+        line_range: 1-9999
+        method: kBodyMeasurementSpecs + isValidBodyMeasurementCm + roundMeasurementToTenth + measurementRejectionMessage
+        notes: The only place the numbers live; a bound moves only here.
+      - file: lib/core/services/health_write_service.dart
+        line_range: 212-255
+        method: logMeasurement
+        notes: Writer tier. Validates the ROUNDED value; emits tier=writer.
+      - file: lib/features/ai_coach/providers/ai_coach_provider.dart
+        line_range: 1620-1651
+        method: PendingLogActionsNotifier._parse (case log_measurement)
+        notes: Chat parse tier. Type tests, never casts; checks the RAW value; emits tier=chat (a wrong-typed value of a registered site emits side=wrongtype).
+      - file: lib/core/services/sync/sync_health.dart
+        line_range: 1-9999
+        method: _restoreMeasurements (cloud restore, local-wins)
+        notes: NOT bounded, by founder decision D8 (the same decision as the push, L2c below): it stores the cloud row verbatim plus source, so a restored record carries no updated_at_ms. The reader tier covers it at read time.
+      - file: lib/core/services/sync_service.dart
+        line_range: 1-9999
+        method: _pullMeasurements (cross-channel pull, fills null sites only)
+        notes: NOT bounded, by founder decision D8; same cover at read time.
+    reader_manifest_complete: true
+    readers:
+      - file: lib/core/services/health_read_service.dart
+        line_range: 1-9999
+        method: measurementHistory + latestBySite + latestBySiteOf
+        semantic: latest
+        fields_read: [date, chest, waist, hips, arms, updated_at_ms]
+        notes: Read tier. Per-site validity on the value rounded to 0.1 cm (and that rounded value is returned); an invalid newer value falls through to the newest valid older one.
+      - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
+        line_range: 1-9999
+        method: _getBodyMeasurements
+        semantic: latest
+        fields_read: [chest, waist, hips, arms]
+        notes: The coach context; same keys and values as before on clean data, key order = the registry's.
+    reader_allow_files:
+      - { file: lib/core/services/sync/sync_health.dart, reason: "the cloud push (_syncMeasurements) scans the measurement_ prefix and sends every finite held site: unbounded by founder decision D8 (class_constraints 4)" }
+    additional_tests:
+      - test/contracts/body_measurement_value_bounds_writer_to_reader_test.dart  # the writer to reader contract (the file name Gate 9 asks for): the field names, the day record, the registry order, a rejected write invisible, the restore shape
+      - test/contracts/body_measurement_readers_behavioral_test.dart  # the read tier incl. the golden clean fixture and the dirty snapshot fixture
+      - test/ai_coach/log_measurement_site_whitelist_test.dart  # the chat parse and the confirm handler end to end (literal in-range and out-of-range fixtures)
+      - test/contracts/body_measurement_sites_derivation_test.dart  # presence only: the consumers derive from the registry
+    hive:
+      box: healthBox
+      key_prefix: "measurement_"
+    class_constraints: |
+      1. The numbers live ONLY in kBodyMeasurementSpecs. Every bound is a multiple
+         of 0.1 (a fixed point of roundMeasurementToTenth): the parse checks the raw
+         value and the writer checks the rounded one, so a bound rounding would
+         move lets the parse accept a value the writer then rejects.
+      2. The floors double as the "probably inches" threshold (waist 26-49, chest
+         and hips 30-55, arms 10-19 land below them). A value valid in both units
+         (waist 50-78, chest and hips 60-78, arms 20-27) is stored as centimetres.
+      3. A handler-tier bound is deliberately absent: any value that survives the
+         parse survives the writer, and a value the writer refuses makes the
+         handler return false (equivalent while the fixed-point test holds).
+      4. The sync push, the restore and the cross-channel pull are NOT bounded
+         in Landing A (founder decision D8): the push sends every finite held
+         site (it drops non-finite ones by design), and the restore and the pull
+         store the cloud row verbatim; the reader tier covers all of them at
+         read time. Bounding the push is L2c's, with the per-site pending set;
+         L2c exists only if OQ-L2a is decided for that pending set (closure
+         ledger row LEGACY-PUSH says what happens otherwise).
+      5. This list is checked: Gate 50 evaluates it because the hive block names
+         the prefix with the SINGULAR key_prefix (the plural key_prefixes is
+         read by nothing, which is how the older health_write_service concept
+         above is never checked: OI-335). The gate sees only a literal-key read
+         (.get('measurement_...') or .startsWith('measurement_')): it names
+         health_read_service.dart and sync_health.dart (the push) when they are
+         undeclared, and it cannot see a writer that builds the key by
+         interpolation ('measurement_$date': logMeasurement, the restore, the
+         pull), so those writers are listed from reading, not by the gate.
 
   - concept: referral_referrer_cap
     domain: profile

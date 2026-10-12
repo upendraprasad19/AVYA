@@ -77,7 +77,7 @@ Each gate was added for a good reason at the time (pre-push suite 2026-05-20/06-
 
 ## Fix
 
-See `proposed_fix`. B2 (version-bump merge exemption), B3 (parallel whole-file test matrix) and B4 (skip the duplicate main run by tree hash) follow in `docs/plans/2026-10-10-release-cycle-speedup.md`; OI-275 stays OPEN until its item D (the founder's settings allow-rule `Bash(sh scripts/safe_pr_merge.sh:*)`) is closed.
+See `proposed_fix`. B2 (version-bump merge exemption), B3 (parallel whole-file test matrix) and B4 (skip the duplicate main run by tree hash) follow in `docs/plans/2026-10-10-release-cycle-speedup.md`; OI-275 stays OPEN until its item D (the founder's settings allow-rule `Bash(sh scripts/safe_pr_merge.sh:*)`) is closed. (Update 2026-10-12: the founder added the rule and OI-275 is closed, see `docs/audit/closed_issues.md`.)
 
 ## Related
 
