@@ -5729,15 +5729,6 @@ Residuals (i) and (iii) of the B1 plan's D1: a PRO caller can upload an unbounde
 
 Residual (iv) of the B1 plan's D1, the OI-283 class: a dashboard edit of the progress-photos policies (a new permissive INSERT policy, a widened UPDATE policy) would silently reopen the door B1 closes. Propose a scheduled catalog snapshot compared with a committed expectation.
 
-## OI-320 — redeem-referral has no per-referrer cap: each new referee (idempotent per referee only, index.ts:105-117) adds 7 days to the referrer's PRO, so throwaway accounts extend it without limit - product decision needed on a cap
-
-- **Status**: OPEN
-- **Blocked on**: a founder product decision: whether to cap referral credit per referrer (and at what number), or accept it; then a server-side check in `redeem_referral_atomic`.
-- **Verified**: 2026-10-07 - read `supabase/functions/redeem-referral/index.ts:105-117` (idempotency is per referee only) and found by the B1 Hermes pass (L2 F2, `docs/audit/2026-10-06-hermes-progress-photos-pro-server-rule.md`); the B1 rule inherits it, it does not create it.
-- **Identified**: 2026-10-07 · filed via mint_oi.sh from branch `pp-preexisting-ois`
-
-Pre-existing; surfaced while reviewing the progress-photo PRO rule. Throwaway accounts can chain 7-day credits onto a referrer's PRO, which the progress-photo rule then honours like a paid subscription.
-
 ## OI-321 — clean-orphan-media rechecksIsPro uses .maybeSingle() (index.ts:120-129): a user with two unexpired active subscription rows gets an error, data null, and is treated as free - chat-media cleanup only
 
 - **Status**: OPEN · fix merged (PR #101, `df2b1282`) and LIVE as Edge Function v15 (deployed 2026-10-11 12:37 UTC on the founder's go; unauthenticated smoke 401)
@@ -6010,3 +6001,15 @@ Same workflow, a second gap (found when retiring the deploy worktree, 2026-10-11
 A registry flag that reads "complete" and is never evaluated is worse than no flag: it reads as coverage (compare the note in `lib/CLAUDE.md` about gates that never existed). The readers of those six prefixes outside the concept's `readers:` list, for instance `sync/sync_health.dart`, which scans `weight_` and `measurement_`, would be named the first time the gate looks.
 
 Fix: either split the concept per prefix (one singular `key_prefix` each, then run Gate 50 and list the readers it names in `readers:` or `reader_allow_files:`), or teach the gate a list of prefixes. Until then the claim stays unchecked; a comment above `reader_manifest_complete` in the concept says so. No runtime path is affected.
+
+## OI-336 — Referral cap UX: should the invite copy state the 7-per-90-days cap, and should a referrer see how many credits remain
+
+- **Status**: OPEN · DECIDED 2026-10-11 (founder): YES to both questions - the invite copy states the cap, and a referrer sees how many of the 7 credits remain ("n of 7 left"). Not built yet.
+- **Blocked on**: the build (a feature batch: Wardroom-voice copy for the founder's wording review, the referrer-facing surface, and the precondition below - the two restore selects must carry `referrer_rewarded` / `referee_rewarded`, and the Edge Function half needs its own deploy go). OI-320 (the cap itself, migration 158) is live and does not depend on it.
+- **Verified**: 2026-10-11 - the copy and the data are as quoted below (read in the repo); nothing about the answers can be verified, they are decisions.
+- **Identified**: 2026-10-11 · filed via mint_oi.sh from branch `oi320-referrer-cap`
+
+Split out of OI-320 when it closed (its closure ledger rows Q1 and Q2). The cap (a referrer is credited for at most 7 referrals in any rolling 90 days; the referee is always credited) is enforced server-side and silently: the Edge Function reply and the app do not change. Two questions for the founder:
+
+1. **Should the invite surfaces state the cap?** `lib/features/profile/screens/invite_friends_sheet.dart:246` says "you both get 7 days of PRO free" and `lib/features/profile/screens/profile/profile_content.dart:561` says "Both get 7 days PRO free". Both stay true for the friend always and for the referrer up to 7 per 90 days; after that the referrer's friend still gets 7 days and the referrer gets nothing, with no message. User-facing copy needs the Wardroom voice and the founder's call.
+2. **Should a referrer see how many of the 7 credits remain, and when the next one frees up?** The data exists and the client can already read it (RLS lets a referrer read their own `referral_redemptions` rows): `referrer_rewarded` per row and `created_at + 90 days` for the oldest credited row. A capped referrer today gets no signal that a friend's redemption was not credited. A new surface, so a product decision. **Precondition if either surface is built:** the restore path does not carry the flags - `sync_restore_completeness.dart:677` and `restore-user-snapshot/index.ts:265` select `code, referrer_id, referee_id, days_granted_each, created_at` but not `referrer_rewarded` / `referee_rewarded`, and `days_granted_each` stays 7 on a capped row - so a restored history cannot tell a capped referral from a credited one until both selects add the two flags (the Edge Function change needs its own deploy go). Nothing reads `referral_redemption_history` today.

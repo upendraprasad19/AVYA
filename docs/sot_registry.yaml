@@ -7874,7 +7874,7 @@ concepts:
     cloud_columns:
       - id
       - referee_id
-      - referrer_user_id
+      - referrer_id
       - code
       - created_at
     regression_test: test/contracts/referral_repository_only_test.dart
@@ -8142,6 +8142,10 @@ concepts:
         line_range: 1-9999
         method: redeem_referral_atomic
         notes: The OTHER entitlement writer — inserts a referral_trial row or extends an active end_date (see referral_trial_subscription_grant). Together with the two Edge Functions above these are every write to subscriptions.end_date.
+      - file: supabase/migrations/158_referral_referrer_cap.sql
+        line_range: 111-204
+        method: redeem_referral_atomic (the LIVE definition from migration 158; the last CREATE OR REPLACE wins)
+        notes: The same entitlement write with one change - the REFERRER is credited only while that referrer has fewer than 7 credited referrals in the last 90 days (concept referral_referrer_cap); the referee is always credited. Migration 038 above is the origin of the body.
     reader_manifest_complete: true
     readers:
       - file: supabase/functions/_shared/subscription.ts
@@ -8192,9 +8196,12 @@ concepts:
     description: |
       The DB-layer GRANT half of a referral redemption (sibling of
       `referral_redemption`, which covers the redemption row + transport).
-      redeem_referral_atomic (migration 038) INSERTs a `referral_trial` row
-      into `subscriptions` for BOTH referrer and referee (or extends an
-      existing active sub's end_date). Migration 094 (a1c9f4) made this path
+      redeem_referral_atomic (migration 038; the LIVE body is migration 158
+      since 2026-10-11, the last CREATE OR REPLACE) INSERTs a `referral_trial`
+      row into `subscriptions` for the referee and, while the referrer has
+      fewer than 7 credited referrals in the last 90 days (concept
+      referral_referrer_cap), for the referrer too (or extends an existing
+      active sub's end_date). Migration 094 (a1c9f4) made this path
       actually work for the first time ever: it DROPPED the razorpay_* NOT NULL
       that 23502'd every referral_trial INSERT (referral has never once
       succeeded — 0 rows). It also hardened the AFTER INSERT/UPDATE trigger
@@ -8213,7 +8220,16 @@ concepts:
           SECURITY DEFINER RPC. INSERTs a referral_trial subscription when the
           target has no future-dated active sub, else extends end_date; runs for
           referrer + referee. Omits razorpay_* (null for non-purchase grants) —
-          requires migration 094's DROP NOT NULL to succeed.
+          requires migration 094's DROP NOT NULL to succeed. ORIGIN of the body:
+          the live definition is migration 158 (next entry).
+      - file: supabase/migrations/158_referral_referrer_cap.sql
+        line_range: 111-204
+        method: redeem_referral_atomic (LIVE definition)
+        notes: |
+          Same grant statements, unchanged token for token (pinned by
+          test/contracts/referral_referrer_cap_migration_test.dart group 3c), the
+          referrer's half now inside IF v_credit_referrer. The referee is always
+          credited, in both the insert and the extend branch.
       - file: supabase/migrations/094_subscriptions_razorpay_nullable.sql
         line_range: 1-9999
         method: DROP NOT NULL (+ historical update_user_subscription_status trigger)
@@ -8254,6 +8270,7 @@ concepts:
     related_concepts:
       - referral_redemption
       - subscription_state
+      - referral_referrer_cap
 
   - concept: rank_promotion_log
     domain: profile
@@ -15263,3 +15280,112 @@ concepts:
          undeclared, and it cannot see a writer that builds the key by
          interpolation ('measurement_$date': logMeasurement, the restore, the
          pull), so those writers are listed from reading, not by the gate.
+
+  - concept: referral_referrer_cap
+    domain: profile
+    behavioral_test_path: test/sql/oi320_referrer_cap_live_verify.sql
+    behavioral_test_path_concurrency: test/sql/oi320_referrer_cap_concurrency_local.sh
+    behavioral_test_path_deletion: test/sql/oi320_referrer_cap_deletion_replica.sql
+    description: |
+      OI-320 (founder decision 2026-10-11, migration 158). A referrer earns PRO days for at most 7
+      CREDITED referrals in any rolling 90 days; the referee is ALWAYS credited. Before it,
+      `redeem_referral_atomic` (migration 038) credited the referrer for every new referee and idempotency
+      was per referee only (UNIQUE referee_id), so throwaway accounts chained 7-day credits onto one
+      referrer without limit (12 referees x 7 days = 84 days of PRO per 84-day window), and the
+      progress-photo server rule (migration 154) honours a `referral_trial` row like a paid one.
+      THE RULE: under advisory locks on BOTH users (lowest key first), count `referral_redemptions` rows of this referrer with
+      `referrer_rewarded` true and `created_at > now() - interval '90 days'`; credit the referrer only when
+      that count is below 7. The audit row always records the outcome: `referee_rewarded` true,
+      `referrer_rewarded` = the decision. Counting credited rows only is deliberate: counting uncredited
+      attempts too would make a capped referrer's lock-out grow with every further attempt instead of
+      expiring 90 days after the 7th credit. The window clock is `created_at`: the live table has NO
+      `redeemed_at` column (database.md said it did; migration 037 only names an index
+      `idx_referral_redemptions_redeemed_at`, which is on `created_at`). `referrer_rewarded` /
+      `referee_rewarded` existed with no writer and no reader anywhere (measured live 2026-10-11, every
+      row false); this rule is their first writer and first reader. The 3 legacy rows (one referrer,
+      June 2026) keep false and are older than any window. The redeem-referral Edge Function is unchanged
+      and never reads the cap (the RPC returns void).
+      ACCOUNT DELETION (plan-review round 1, a P1, and its mirror in round 2): both user columns of
+      `referral_redemptions` were ON DELETE CASCADE, and `delete-account` ends in `auth.admin.deleteUser`,
+      which cascades through `public.users`. A throwaway referee that deleted its own account took its
+      credited audit row with it and freed a slot (3 deletions turned 7 credits into 10), and a deleted
+      REFERRER took the audit rows of their referees, so each of those referees could redeem a second code.
+      Migration 158 makes BOTH columns nullable with ON DELETE SET NULL: the row survives with a NULL party,
+      still counts, and `UNIQUE(referee_id)` (which tolerates many NULLs) still stops the referee redeeming
+      again. The readers of the table tolerate NULL (the restore path stores rows raw; `ReferralRepository`
+      filters `referee_id = <signed-in user>`; the Edge Function reads by `referee_id = <caller>`; the RLS
+      policy reads both columns inside an OR). The cap is per ACCOUNT: a referrer who deletes their account
+      and signs up again starts with a fresh count (residual, stated in the migration header).
+      LOCK ORDER: both users' advisory keys, lowest first, transaction-level. Two redemptions that touch a
+      common user share a key, so they serialise before touching a subscription row; this also removes the
+      cross-order row-lock deadlock of the previous body (measured: 51 and 2 `deadlock detected` in two runs of
+      3000 opposite pairs on the old body, 0 on 158). The DDL runs under `SET lock_timeout = '3s'` because a
+      foreign-key DROP takes ACCESS EXCLUSIVE on `public.users` too.
+    writers:
+      - file: supabase/migrations/158_referral_referrer_cap.sql
+        line_range: 77-212
+        method: redeem_referral_atomic (+ both user columns nullable and both foreign keys ON DELETE SET NULL, :79-85, post-condition :89-109)
+        notes: |
+          The NULL guard (:133-135), the two sorted advisory locks (:139-140), the cap decision (count :143-147,
+          decision :148), the audit row recording both outcomes (:152-156), the referrer credit gated by
+          `IF v_credit_referrer` (:159-180), and the referee credit (:182-202), never gated.
+          Same signature, RETURNS void, SECURITY DEFINER, `SET search_path TO 'public'` (restated: a
+          CREATE OR REPLACE that omits it undoes migration 053).
+      - file: supabase/functions/redeem-referral/index.ts
+        line_range: 112-118
+        method: redeem_referral_atomic RPC call
+        notes: The only caller. Passes the four declared parameters and no cap value.
+    reader_manifest_complete: true
+    readers:
+      - file: supabase/migrations/158_referral_referrer_cap.sql
+        line_range: 143-148
+        method: redeem_referral_atomic (the count)
+        semantic: count-credited-in-rolling-window
+        fields_read: [referral_redemptions.referrer_id, referral_redemptions.referrer_rewarded, referral_redemptions.created_at]
+        notes: No other code reads referrer_rewarded or referee_rewarded (git grep 2026-10-11 finds them only in backups/live_schema_columns.json).
+      - file: lib/core/services/sync/sync_restore_completeness.dart
+        line_range: 674-691
+        method: _restoreReferralRedemptions
+        semantic: restore-raw
+        fields_read: [referral_redemptions.code, referral_redemptions.referrer_id, referral_redemptions.referee_id, referral_redemptions.days_granted_each, referral_redemptions.created_at]
+        notes: Selects the rows where the user is either party and stores them raw in Hive (`referral_redemption_history`); no field is parsed, so a NULL party is carried through. Migration 158 makes either party NULL once that account is deleted.
+      - file: supabase/functions/restore-user-snapshot/index.ts
+        line_range: 261-266
+        method: restore snapshot, referral_redemptions table
+        semantic: restore-raw
+        fields_read: [referral_redemptions.code, referral_redemptions.referrer_id, referral_redemptions.referee_id, referral_redemptions.days_granted_each, referral_redemptions.created_at]
+        notes: Same five columns, same `.or(referrer_id.eq.<uid>,referee_id.eq.<uid>)` filter, returned as-is.
+      - file: lib/features/profile/repositories/referral_repository.dart
+        line_range: 40-71
+        method: ReferralRepository.hasRedeemed
+        semantic: flag-check
+        fields_read: [referral_redemptions.id, referral_redemptions.referee_id]
+        notes: Line 57 filters `referee_id = <signed-in user>` and the select reads only `id`; a NULL referrer is irrelevant, and a row whose referee was deleted cannot match.
+      - file: supabase/functions/redeem-referral/index.ts
+        line_range: 104-106
+        method: idempotency read
+        semantic: flag-check
+        fields_read: [referral_redemptions.referee_id]
+        notes: Filters `referee_id = <caller>`; many NULL referees never collide with a real caller.
+      - file: supabase/migrations/100_rls_initplan_select_wrap.sql
+        line_range: 92
+        method: policy "Users can read own redemptions"
+        semantic: rls-select
+        fields_read: [referral_redemptions.referrer_id, referral_redemptions.referee_id]
+        notes: "`auth.uid() = referrer_id OR auth.uid() = referee_id`: a row with one NULL party is still visible to the other party, and a row with both NULL is visible to nobody. Dashboard-created objects and the out-of-repo Telegram bot are not checked from the repo."
+    cloud_table: referral_redemptions
+    cloud_columns:
+      - referrer_id
+      - referee_id
+      - referrer_rewarded
+      - referee_rewarded
+      - created_at
+    regression_test: test/contracts/referral_referrer_cap_migration_test.dart
+    forbidden_legacy_patterns:
+      - "crediting the referrer with no per-referrer limit (migration 038 body)"
+      - "a cap read of redeemed_at (the live table has only created_at)"
+      - "counting uncredited redemptions toward the cap (the lock-out would never expire)"
+      - "a count that drops rows of deleted referees (referee_id IS NOT NULL, or count(DISTINCT referee_id))"
+      - "referral_redemptions.referee_id or referrer_id ON DELETE CASCADE (an account deletion would free a referrer slot, or hand a referee a second code)"
+      - "gating the referee's credit (insert OR extend) on the referrer's cap decision"
+      - "a single advisory lock, or two locks not taken lowest-key-first (mutual redemption can deadlock)"
