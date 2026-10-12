@@ -319,7 +319,7 @@ void main() {
 
     test('every name this evaluator relies on exists in test.yml', () {
       final names = workflowJobNames();
-      for (final n in [...requiredSuccessJobs, ...skippedOkJobs]) {
+      for (final n in [...requiredSuccessJobs, ...skippedOkJobs, ...matrixJobNameTemplates]) {
         expect(names, contains(n),
             reason: 'safe_pr_merge_lib.dart names "$n" but .github/workflows/test.yml has no job '
                 'with that name:. A renamed job would make every merge refuse (or, if the name '
@@ -328,12 +328,12 @@ void main() {
     });
 
     test('MIRROR: every job in test.yml is classified here (a new job must be a conscious decision)', () {
-      final classified = {...requiredSuccessJobs, ...skippedOkJobs};
+      final classified = {...requiredSuccessJobs, ...skippedOkJobs, ...matrixJobNameTemplates};
       final unclassified = workflowJobNames().difference(classified);
       expect(unclassified, isEmpty,
           reason: 'test.yml has job(s) $unclassified that safe_pr_merge_lib.dart does not name. '
-              'Add each to requiredSuccessJobs (must be green to merge) or skippedOkJobs '
-              '(push-only). Unnamed jobs are still judged by the "other checks" rule, but a '
+              'Add each to requiredSuccessJobs (must be green to merge), skippedOkJobs '
+              '(push-only) or matrixJobNameTemplates (a matrix leg). Unnamed jobs are still judged by the "other checks" rule, but a '
               'job that gates quality should be listed on purpose.');
     });
   });

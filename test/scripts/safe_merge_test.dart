@@ -435,7 +435,8 @@ void main() {
   // branch with NO record at all was the one shape it could never see — and
   // that is the shape that has cost a merge unwind three times (2026-08-30,
   // `dcb94a93` 2026-09-10, `0768a0ce` 2026-09-19). The keystone gate
-  // (check_plan_review_record_exists.dart:617-620, :790-796) requires a
+  // (check_plan_review_record_exists.dart: the merge loop's `tier < account` skip and the
+  // 'has no plan-review record' rejection in `_validateRecord`) requires a
   // record iff the branch's blast-radius is >= account; this precheck asks the
   // same question one step earlier, from the three-dot
   // `refs/heads/main...refs/heads/<branch>` range. ADVISORY like its sibling:
@@ -533,5 +534,183 @@ void main() {
         reason: 'two-dot (`main..branch` compares the two TREES) would report '
             "main's own migration as the branch's change and warn about a "
             'branch that changed one feature-tier file');
+  });
+
+  // ── OI-275 batch B2: the advisory mirrors the gate's bare-version-bump exemption ──
+  // Before B2 this precheck told the author of a version-bump branch that it needed a
+  // plan-review record the keystone gate (then) also demanded; the gate now exempts a
+  // merge whose net change is a bare bump (check_plan_review_record_exists.dart,
+  // rangeIsVersionBump), and the advisory has to agree or it cries wolf on every release.
+  // The CLI it calls is scripts/version_bump_range.dart; every failure to run it falls
+  // through to the warning (fail closed).
+  group('absent-record precheck vs the version-bump exemption (OI-275 B2)', () {
+    /// A pubspec `dart run` accepts (it needs an SDK lower bound; the classifier is invoked
+    /// with `dart run` in this checkout) carrying exactly one top-level `version:` line.
+    String pubspecWith(String v) => 'name: probe\nenvironment:\n  sdk: ^3.0.0\nversion: $v\n';
+
+    /// Base version files at +36 on main (pubspec.yaml is platform tier, app_constants
+    /// account), committed AND pushed so main stays equal to origin/main. Idempotent.
+    void installVersionFiles(String primary) {
+      if (File('$primary/pubspec.yaml').existsSync()) return;
+      File('$primary/pubspec.yaml').writeAsStringSync(pubspecWith('1.0.0+36'));
+      File('$primary/.gitignore').writeAsStringSync('.dart_tool/\npubspec.lock\n');
+      Directory('$primary/lib/core/constants').createSync(recursive: true);
+      File('$primary/lib/core/constants/app_constants.dart').writeAsStringSync(
+          "class AppConstants {\n  static const String appVersion = '1.0.0+36';\n}\n");
+      _run('git', ['add', '-A'], primary);
+      _run('git', ['commit', '-q', '-m', 'fixture: version files'], primary);
+      expect(_run('git', ['push', '-q', 'origin', 'main'], primary).exitCode, 0,
+          reason: 'setup: main must stay equal to origin/main');
+    }
+
+    /// The bump CLI and the two libs it imports. Idempotent; committed and pushed.
+    void installBumpCli(String primary) {
+      if (File('$primary/scripts/version_bump_range.dart').existsSync()) return;
+      for (final rel in const [
+        'scripts/version_bump_range.dart',
+        'scripts/version_bump_git_lib.dart',
+        'scripts/plan_review_record_lib.dart',
+      ]) {
+        File('$primary/$rel')
+          ..parent.createSync(recursive: true)
+          ..writeAsBytesSync(File('$srcRoot/$rel').readAsBytesSync());
+      }
+      _run('git', ['add', '-A'], primary);
+      _run('git', ['commit', '-q', '-m', 'fixture: bump cli'], primary);
+      expect(_run('git', ['push', '-q', 'origin', 'main'], primary).exitCode, 0,
+          reason: 'setup: main must stay equal to origin/main');
+    }
+
+    /// A branch off main whose ONLY change is the version in both files (plus [extra]
+    /// when given). Reads the CURRENT version from main so successive tests chain.
+    String makeBumpBranch(String primary, String name, {String? extra}) {
+      final cur = RegExp(r'version: 1\.0\.0\+(\d+)')
+          .firstMatch(File('$primary/pubspec.yaml').readAsStringSync())!
+          .group(1)!;
+      final next = '1.0.0+${int.parse(cur) + 1}';
+      _run('git', ['checkout', '-q', '-B', name, 'main'], primary);
+      File('$primary/pubspec.yaml').writeAsStringSync(pubspecWith(next));
+      File('$primary/lib/core/constants/app_constants.dart').writeAsStringSync(
+          "class AppConstants {\n  static const String appVersion = '$next';\n}\n");
+      if (extra != null) {
+        File('$primary/$extra')
+          ..parent.createSync(recursive: true)
+          ..writeAsStringSync('-- extra\n');
+      }
+      // Explicit paths, never -A: `dart run` in this checkout leaves an ignored .dart_tool.
+      _run('git', ['add', 'pubspec.yaml', 'lib/core/constants/app_constants.dart', ?extra], primary);
+      _run('git', ['commit', '-qm', 'chore: bump versionCode $next'], primary);
+      _run('git', ['checkout', '-q', 'main'], primary);
+      return name;
+    }
+
+    test('FAIL CLOSED: a bump branch still gets the warning when the bump CLI is not installed', () {
+      // Runs BEFORE installBumpCli on purpose: the shared fixture primary never has the
+      // CLI at this point, which is exactly "a checkout that predates B2".
+      installClassifier(primary);
+      installVersionFiles(primary);
+      expect(File('$primary/scripts/version_bump_range.dart').existsSync(), isFalse,
+          reason: 'setup: this test needs the CLI ABSENT');
+      final branch = makeBumpBranch(primary, 'bump-no-cli');
+      final r = _run('sh', ['scripts/safe_merge.sh', branch], primary);
+      expect(r.exitCode, 0, reason: 'advisory: ${r.stdout}${r.stderr}');
+      expect('${r.stdout}${r.stderr}', contains('NO plan-review record'),
+          reason: 'an advisory that cannot run its exemption check must warn, never go quiet');
+      expect('${r.stdout}${r.stderr}', isNot(contains('is a bare version bump')));
+    });
+
+    test('a bare version-bump branch gets a NOTE, not the NO-record warning', () {
+      installClassifier(primary);
+      installVersionFiles(primary);
+      installBumpCli(primary);
+      final branch = makeBumpBranch(primary, 'bump-bare');
+      final r = _run('sh', ['scripts/safe_merge.sh', branch], primary);
+      expect(r.exitCode, 0, reason: '${r.stdout}${r.stderr}');
+      expect('${r.stdout}${r.stderr}', contains('is a bare version bump'),
+          reason: 'the keystone gate exempts it by content; telling the author otherwise is the '
+              'cry-wolf that trains people to skim past the real warning');
+      expect('${r.stdout}${r.stderr}', isNot(contains('NO plan-review record')));
+    });
+
+    test('a bump plus ONE other file still gets the warning', () {
+      installClassifier(primary);
+      installVersionFiles(primary);
+      installBumpCli(primary);
+      final branch = makeBumpBranch(primary, 'bump-plus-file', extra: 'docs/extra-note.md');
+      final r = _run('sh', ['scripts/safe_merge.sh', branch], primary);
+      expect(r.exitCode, 0, reason: '${r.stdout}${r.stderr}');
+      expect('${r.stdout}${r.stderr}', contains('NO plan-review record'),
+          reason: 'the exemption is all-or-nothing: a third path means the record is required');
+      expect('${r.stdout}${r.stderr}', isNot(contains('is a bare version bump')));
+    });
+
+    test('MIRROR: a bump branch cut BEFORE main moved on still gets the NOTE (merge-base, not main)', () {
+      // The advisory asks about merge-base..tip - what the merge would BRING. Asked about
+      // main..tip it would also count everything main gained since the cut (in reverse), call
+      // that "not a bump" and cry wolf on exactly the release flow, where main usually has moved.
+      installClassifier(primary);
+      installVersionFiles(primary);
+      installBumpCli(primary);
+      final branch = makeBumpBranch(primary, 'bump-main-moved');
+      File('$primary/docs/landed-after-the-cut.md')
+        ..parent.createSync(recursive: true)
+        ..writeAsStringSync('main moved on after the branch was cut\n');
+      _run('git', ['add', 'docs/landed-after-the-cut.md'], primary);
+      _run('git', ['commit', '-qm', 'docs: lands on main after the bump branch was cut'], primary);
+      expect(_run('git', ['push', '-q', 'origin', 'main'], primary).exitCode, 0,
+          reason: 'setup: main must stay equal to origin/main');
+      final r = _run('sh', ['scripts/safe_merge.sh', branch], primary);
+      expect(r.exitCode, 0, reason: '${r.stdout}${r.stderr}');
+      expect('${r.stdout}${r.stderr}', contains('is a bare version bump'),
+          reason: 'main moving on must not turn a bare bump into a warned-about branch');
+      expect('${r.stdout}${r.stderr}', isNot(contains('NO plan-review record')));
+    });
+
+    test('B-pass F1: a gitlink under a governed path, hidden by a .gitmodules `ignore = all` already on main, still gets the warning', () {
+      // Plain `git diff --name-only` omits a gitlink whose submodule says `ignore = all`, so the
+      // classifier saw an EMPTY path list for this branch and the advisory stayed silent about a branch
+      // the keystone gate (whose path reader passes --ignore-submodules=none) fails in CI. `.gitmodules`
+      // is read from the WORKING TREE of the checkout the script runs in (main), so it has to be on main
+      // first - which is how a pusher would do it: a feature-tier file lands, then the gitlink follows.
+      // LAST in the file on purpose: the merge that follows the advisory leaves both on the shared
+      // fixture's main.
+      installClassifier(primary);
+      const gitlinkPath = 'supabase/migrations/vendor_x';
+      File('$primary/.gitmodules').writeAsStringSync(
+          '[submodule "$gitlinkPath"]\n\tpath = $gitlinkPath\n\turl = https://example.invalid/x.git\n\tignore = all\n');
+      _run('git', ['add', '.gitmodules'], primary);
+      _run('git', ['commit', '-qm', 'fixture: gitmodules'], primary);
+      expect(_run('git', ['push', '-q', 'origin', 'main'], primary).exitCode, 0,
+          reason: 'setup: main must stay equal to origin/main');
+      final tip = (_run('git', ['rev-parse', 'main'], primary).stdout as String).trim();
+
+      _run('git', ['checkout', '-q', '-B', 'hidden-gitlink', 'main'], primary);
+      final u = _run('git', ['update-index', '--add', '--cacheinfo', '160000,$tip,$gitlinkPath'], primary);
+      expect(u.exitCode, 0, reason: 'setup: ${u.stdout}${u.stderr}');
+      _run('git', ['commit', '-qm', 'branch: hidden gitlink'], primary);
+      _run('git', ['checkout', '-q', 'main'], primary);
+
+      // Setup guard: the attack is REAL - plain git hides the gitlink, the flag reveals it.
+      List<String> listed({required bool seeSubmodules}) => (_run('git', [
+            'diff',
+            '--no-renames',
+            if (seeSubmodules) '--ignore-submodules=none',
+            '--name-only',
+            'refs/heads/main...refs/heads/hidden-gitlink',
+          ], primary)
+              .stdout as String)
+          .split('\n')
+          .where((s) => s.trim().isNotEmpty)
+          .toList();
+      expect(listed(seeSubmodules: false), isEmpty, reason: 'setup: plain `git diff` must hide the gitlink');
+      expect(listed(seeSubmodules: true), [gitlinkPath], reason: 'setup: the flag must reveal it');
+
+      final r = _run('sh', ['scripts/safe_merge.sh', 'hidden-gitlink'], primary);
+      expect(r.exitCode, 0, reason: 'advisory: ${r.stdout}${r.stderr}');
+      expect('${r.stdout}${r.stderr}', contains('NO plan-review record'),
+          reason: 'supabase/migrations/** is platform tier; a hidden gitlink there must not make the '
+              'advisory silent while the gate fails the merge');
+      expect('${r.stdout}${r.stderr}', contains('blast-radius=platform'));
+    });
   });
 }

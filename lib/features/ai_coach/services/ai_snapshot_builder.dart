@@ -22,7 +22,7 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:icanbefitter/core/constants/body_measurement_sites.dart';
+import 'package:icanbefitter/core/services/health_read_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/rank_ladder_data.dart';
@@ -1606,32 +1606,16 @@ class AiSnapshotBuilder {
         profile?['primary_goal_updated_at'] as String?;
   }
 
+  /// `body_measurements`: the newest valid centimetre value per site, in
+  /// registry order. Routed through `HealthReadService.latestBySite()` (L2b
+  /// Landing A, OI-297), which drops out-of-range, non-finite, malformed-dated
+  /// and future-dated values per site and cannot throw on a malformed record;
+  /// the loop that stood here threw on a numeric-String site or a non-String
+  /// date and put a stored NaN into the snapshot, where its size trim
+  /// (`jsonEncode`) threw and every chat context build and snapshot push died.
   Map<String, dynamic> _getBodyMeasurements() {
-    final results = <String, dynamic>{};
-    final latestByType = <String, DateTime>{};
-
-    for (final key in _hive.healthBox.keys) {
-      final k = key.toString();
-      if (!k.startsWith('measurement_')) continue;
-      final raw = _hive.healthBox.get(key);
-      if (raw is! Map) continue;
-      final dateStr = raw['date'] as String?;
-      if (dateStr == null) continue;
-      final date = DateTime.tryParse(dateStr);
-      if (date == null) continue;
-
-      for (final field in kBodyMeasurementSites) {
-        final v = (raw[field] as num?)?.toDouble();
-        if (v == null) continue;
-        final prev = latestByType[field];
-        if (prev == null || date.isAfter(prev)) {
-          latestByType[field] = date;
-          results[field] = v;
-        }
-      }
-    }
-
-    return results;
+    final latest = HealthReadService.instance.latestBySite();
+    return {for (final e in latest.entries) e.key: e.value.cm};
   }
 
   String? _getOnboardingCompletedAt() {

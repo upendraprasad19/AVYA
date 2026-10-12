@@ -138,10 +138,12 @@ findings:
 
   - id: D1
     title: "the live Edge Function deploy of clean-orphan-media (bundle gains _shared/subscription.ts and ./logic.ts; live v14 now)"
-    terminal_state: blocked_on_user
-    reason: "A live production deploy needs the founder's own explicit go (CLAUDE.md section 4.3), even though the work was approved. Protocol in the plan, section 4: merge first, re-read the live version, deploy WITHOUT --no-snapshot, UNAUTHENTICATED smoke only (expects 401; an authenticated invoke would run the real sweep and delete live objects), commit the backup payload and snapshot reference in the post-deploy docs commit. Until then OI-321 stays OPEN and the fix is not live."
+    terminal_state: closed_in_commit
+    commit: df2b1282 (the merge of PR #101 whose tree was deployed; deploy run 2026-10-11 12:37 UTC on the founder's explicit go, "live deploy authorized. Go deploy")
+    verification: "Live project dedsavbjuwgarrhphgnl, function clean-orphan-media: version 14 -> 15, status ACTIVE, verify_jwt false, ezbr_sha256 9994c329... -> 998d66ef... (re-read through GET /v1/projects/<ref>/functions/clean-orphan-media after the deploy, not taken from the script's summary). Payload of 6 files (index.ts, logic.ts, _shared/subscription.ts, cron_auth.ts, cron_telemetry.ts, paged_fetch.ts), emitted from a worktree fast-forwarded to origin/main with supabase/functions identical to the PR head. Smoke UNAUTHENTICATED only: HTTP 401 from the function's own auth, re-run by hand with curl and no credentials (401 again). No authenticated call was made. Backup payload backups/edge_function_payloads/clean-orphan-media/v2_df2b128.json. NOT a proof of the sweep's behaviour: that is V1. Two corrections found while deploying are recorded in OI-334 (the pre-deploy snapshot wrote 0 files, so the rollback this ledger and the plan named did not exist; the working rollback is a forward deploy of the git-SHA payload with an explicit verify_jwt false) and in the deploy skill sections 6.12/6.13."
 
   - id: V1
     title: "live confirmation: the next scheduled run (03:00 UTC) shows cron_call_log status success and the counts in the function log"
-    terminal_state: blocked_on_user
-    reason: "Needs D1 first. Nothing can be observed live before the deploy, and a run cannot be forced without the cron secret (an authenticated invoke deletes live objects)."
+    terminal_state: upstream_blocked
+    blocker: "Time: the first execution of the deployed code is the next scheduled run of cron job clean_orphan_media_daily, 2026-10-12 03:00 UTC (08:30 IST). A run cannot be forced without the cron secret, and an authenticated invoke deletes live objects."
+    reopen_when: "After 2026-10-12 03:00 UTC: read cron_call_log for clean-orphan-media (status success, error_summary empty or carrying scanned/skipped counts) and the function log line with the counts. A failed row, or unknown/failed counts in error_summary, is the finding. Then close OI-321 with closes-oi: OI-321."
