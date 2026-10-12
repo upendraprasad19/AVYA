@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**200 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**201 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -195,7 +195,7 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-318 | A 127 s cold-start restore on 2026-10-06 (per-op 9-41 s, two 45 s… | a recurrence: a restore over 60 s on any… | 2026-10-06 - `client_errors` for the… | [:5681](open_issues.md#L5681) |
 | OI-319 | current_streak_weeks is a lifetime counter that never resets when the… | a founder product decision (not… | 2026-10-06 - code read: no code path… | [:5688](open_issues.md#L5688) |
 | OI-320 | redeem-referral has no per-referrer cap: each new referee (idempotent per… | a founder product decision: whether to… | 2026-10-07 - read… | [:5732](open_issues.md#L5732) |
-| OI-321 | clean-orphan-media rechecksIsPro uses .maybeSingle() (index.ts:120-129): a… | the founder's explicit go for the live… | 2026-10-07 - read… | [:5741](open_issues.md#L5741) |
+| OI-321 | clean-orphan-media rechecksIsPro uses .maybeSingle() (index.ts:120-129): a… | time. The first execution of the new… | 2026-10-07 - read… | [:5741](open_issues.md#L5741) |
 | OI-323 | weekly-report has no server-side per-day cap for PRO: consume_quota runs… | a FOUNDER product decision: cap PRO… | 2026-10-08 - read… | [:5756](open_issues.md#L5756) |
 | OI-324 | SupabaseService.callFunction has no timeout of its own… | none - an engineering choice (a default… | 2026-10-08 - read… | [:5765](open_issues.md#L5765) |
 | OI-325 | Profile weekly-report card still says 'Weekly AI Report'… | a FOUNDER copy decision: the one name… | 2026-10-08 - `grep -rn "Weekly AI… | [:5774](open_issues.md#L5774) |
@@ -207,4 +207,5 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-331 | No detector for leftover background processes: a helper agent's unbounded… | none | 2026-10-09 - found live: two bash… | [:5835](open_issues.md#L5835) |
 | OI-332 | weight_logs and sleep_logs pushes send explicit nulls for notes, quality,… | none today; becomes a defect the day any… | 2026-10-11 - live read-only counts on… | [:5846](open_issues.md#L5846) |
 | OI-333 | daily-snapshot/index_test.ts leaks DISABLE_GEMINI_FAILURE_ALERT into the… | none | 2026-10-11 -… | [:5979](open_issues.md#L5979) |
-| OI-335 | Gate 50 (check_reader_manifest_complete) never evaluates a SoT concept… | none for the registry wording; making… | 2026-10-11 by reading:… | [:5990](open_issues.md#L5990) |
+| OI-334 | deploy_via_api.js rollback gaps: the pre-deploy cloud snapshot writes 0… | none - an engineering choice (see the… | 2026-10-11 - two measurements during the… | [:5990](open_issues.md#L5990) |
+| OI-335 | Gate 50 (check_reader_manifest_complete) never evaluates a SoT concept… | none for the registry wording; making… | 2026-10-11 by reading:… | [:6003](open_issues.md#L6003) |
