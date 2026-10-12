@@ -67,6 +67,20 @@
 //           itself wrote while resolving conflicts. Now every diff is two-dot
 //           over the actual range, so resolution content is inspected too.
 //
+// ── 2026-10-11, the merge-commit version-bump exemption (OI-275 batch B2) ───
+// The OI-58a exemption below covered only commits pushed straight to main. A bump
+// that arrives as a PR MERGE (the flow a cheap branch push now makes the default)
+// was judged by the merge loop, which demanded a converged plan-review record and a
+// B-pass for two version lines. A merge whose net change against its first parent
+// (`<sha>^1..<sha>`) is a bare version bump is now exempt too, by the SAME content
+// predicate (`rangeIsVersionBump`, scripts/version_bump_git_lib.dart): every changed
+// path is pubspec.yaml or lib/core/constants/app_constants.dart, each byte-identical
+// to its base once the single version token is normalised, equal regular-file modes. All or
+// nothing - a bump plus any other file, including a docs record or
+// docs/blast_radius.yaml (OI-70), is not a bump. The merge SUBJECT is not consulted
+// (OI-58b is untouched). Tests: test/scripts/gate_input_family_e2e_test.dart
+// (group 'U1b'), test/scripts/version_bump_git_lib_test.dart.
+//
 // CI WIRING: runs ONLY in a DEDICATED CI job with `fetch-depth: 0` (the shared
 // test jobs are shallow `fetch-depth:1` → the range base is unreachable). That
 // job passes the pushed range's base as `PUSH_BEFORE`; the gate falls back to
@@ -82,6 +96,7 @@ import 'dart:io';
 
 import 'blast_radius_content_rules_lib.dart';
 import 'plan_review_record_lib.dart';
+import 'version_bump_git_lib.dart';
 
 /// Repo owner for the PR-merge subject guard, when `GITHUB_REPOSITORY_OWNER`
 /// is absent (local runs). Derived from origin's URL; returns null if it cannot
@@ -152,7 +167,11 @@ RegExp _globToRegExp(String glob) {
     }
   }
   buf.write(r'$');
-  return RegExp(buf.toString());
+  // dotAll: `**` and `?` compile to `.`, which does not match a line terminator, so a file named
+  // `lib/features/auth/re<LF>set.dart` matched no rule and fell to default_tier. The path list is
+  // NUL-separated (`diffPathsBetween`), so the name arrives verbatim and the matcher must take it
+  // verbatim too. A path with no line terminator in it classifies exactly as before.
+  return RegExp(buf.toString(), dotAll: true);
 }
 
 String _tierFor(String path, _Registry reg) {
@@ -178,50 +197,6 @@ String? _gitOrNull(List<String> args) {
 
 /// Convenience for the sites where an empty answer is genuinely benign.
 String _git(List<String> args) => _gitOrNull(args) ?? '';
-
-/// Reads a blob VERBATIM — no trimming, no lossy decoding.
-///
-/// Round-2 review P1-3 + P2-2, two bugs in one line of plumbing:
-///
-///   `_gitOrNull` uses `Process.runSync`'s default `stdoutEncoding`, which on
-///   Linux is a STRICT `Utf8Decoder` — it THROWS on the first invalid byte. The
-///   direct-commit loop added a second site that reads `git show <rev>:<path>`
-///   for changed paths, and this repo tracks 79 binary files, so a push touching
-///   any PNG would have crashed CI with an uncaught FormatException. Windows
-///   never saw it: its ACP decoder is total.
-///
-///   `_gitOrNull` also `.trim()`s, which silently breaks the byte-identity
-///   contract `isVersionBumpCommit` documents — leading/trailing whitespace
-///   changes were accepted as "byte-identical".
-///
-/// DO NOT "fix" the first half with `allowMalformed: true`: verified that both
-/// 0x80 and 0x81 decode to U+FFFD under that flag, which would convert a loud
-/// crash into a silent byte-equality COLLISION. Bytes are read raw and decoded
-/// strictly; a blob that is not valid UTF-8 returns null, and every caller
-/// treats null as "cannot judge this" rather than "nothing to see".
-/// The git tree MODE of [path] at [rev] (`100644`, `120000`, …), or null.
-///
-/// B-pass P0-2: `git show <rev>:<path>` returns a symlink's TARGET TEXT as if it
-/// were file content, so a `pubspec.yaml` converted to a symlink pointing at a
-/// string that reads like a bumped pubspec was granted the exemption. Content
-/// cannot see that; the mode can.
-String? _gitMode(String rev, String path) {
-  final out = _gitOrNull(['ls-tree', rev, '--', path]);
-  if (out == null || out.isEmpty) return null;
-  final m = RegExp(r'^(\d{6})\s').firstMatch(out.trimLeft());
-  return m?.group(1);
-}
-
-String? _gitBlob(String rev, String path) {
-  final r = Process.runSync('git', ['show', '$rev:$path'], stdoutEncoding: null);
-  if (r.exitCode != 0) return null;
-  try {
-    return const Utf8Decoder(allowMalformed: false)
-        .convert(r.stdout as List<int>);
-  } on FormatException {
-    return null; // binary or non-UTF-8 — not something we can compare textually
-  }
-}
 
 bool _gitOk(List<String> args) => Process.runSync('git', args).exitCode == 0;
 
@@ -275,7 +250,7 @@ String _maxTierAcross(
     if (_tierRank('catastrophic') > _tierRank(t) &&
         isMigrationSqlPath(p) &&
         _gitOk(['cat-file', '-e', '$atRev:$p'])) {
-      final blob = _gitBlob(atRev, p);
+      final blob = gitBlobAt(atRev, p);
       if (blob == null) {
         stdout.writeln('[plan-review-record] NOTE: $p exists at $atRev but '
             'could not be read; treating as catastrophic rather than clean.');
@@ -291,28 +266,6 @@ String _maxTierAcross(
   }
   return maxTier;
 }
-
-/// Changed paths between two revs, or NULL when git could not answer.
-///
-/// Two flags are load-bearing, both from round-2 review:
-///
-///   `--no-renames` (P1-1): with rename detection on, `--name-only` prints ONLY
-///   the destination, so deleting a governed file by renaming it out of the way
-///   made it invisible to the tier computation. Verified: a commit renaming a
-///   `platform` path into `docs/` graded `feature` and was skipped entirely.
-///
-///   `-c core.quotePath=false` (P1-2): by default git C-quotes non-ASCII paths
-///   (`"lib/core/rÃ©sumÃ©.dart"`). The glob matcher anchors
-///   `^...$`, so the quoted form matches no rule and fell to `default_tier`.
-///   Verified: editing a `platform`-tier file with an accented name graded
-///   `feature`.
-List<String>? _diffPaths(String from, String to) => _gitOrNull(
-        ['-c', 'core.quotePath=false', 'diff', '--no-renames', '--name-only',
-         '$from..$to'])
-    ?.split('\n')
-    .map((s) => s.trim())
-    .where((s) => s.isNotEmpty)
-    .toList();
 
 /// Outcome of resolving the pushed range's base.
 ///
@@ -520,7 +473,7 @@ void main(List<String> args) {
   // never the decision.
   for (final sha in directCommits) {
     final short = sha.length >= 8 ? sha.substring(0, 8) : sha;
-    final paths = _diffPaths('$sha^', sha);
+    final paths = diffPathsBetween('$sha^', sha);
     if (paths == null) {
       fail('$short: could not diff $sha^..$sha (git failed). A landing whose '
           'contents cannot be read must not be assumed benign.');
@@ -543,29 +496,13 @@ void main(List<String> args) {
       continue;
     }
 
-    // Fetch each touched file's BEFORE and AFTER blob. Deliberately not a diff:
-    // round-1 review broke the diff-parsing version three ways in one pass, all
-    // from the same root — the diff text is written by the thing being checked.
-    // See `isVersionBumpCommit`.
-    final bumpFiles = <VersionBumpFile>[];
-    var blobReadFailed = false;
-    for (final p in paths) {
-      if (!versionBumpPaths.contains(p)) continue;
-      // `git show <rev>:<path>` fails when the path is absent at that rev; a
-      // create or delete is not a bump, so null is the correct value to carry
-      // and `isVersionBumpCommit` rejects on it.
-      final before = _gitBlob('$sha^', p);
-      final after = _gitBlob(sha, p);
-      if (before == null || after == null) blobReadFailed = true;
-      bumpFiles.add((
-        path: p,
-        before: before,
-        after: after,
-        beforeMode: _gitMode('$sha^', p),
-        afterMode: _gitMode(sha, p),
-      ));
-    }
-    if (!blobReadFailed && isVersionBumpCommit(paths, bumpFiles)) {
+    // The decision lives in `rangeIsVersionBump` (scripts/version_bump_git_lib.dart),
+    // shared with the merge loop below and safe_merge.sh's advisory. It fetches each
+    // touched file's BEFORE and AFTER blob and compares them with the version token
+    // normalised - deliberately not a diff: round-1 review broke the diff-parsing
+    // version three ways in one pass, all from the same root - the diff text is
+    // written by the thing being checked. See `isVersionBumpCommit`.
+    if (rangeIsVersionBump('$sha^', sha)) {
       stdout.writeln('$tag NOTE (version-bump exemption): $short is '
           'blast-radius=$tier but every touched file is byte-identical to its '
           'parent once the version token is normalised (${paths.join(', ')}). '
@@ -589,7 +526,7 @@ void main(List<String> args) {
     final short = sha.length >= 8 ? sha.substring(0, 8) : sha;
     // Two-dot: includes what the merge commit itself wrote resolving conflicts
     // (OI-71). The old three-dot `HEAD^1...HEAD^2` stopped at the branch tip.
-    final paths = _diffPaths('$sha^1', sha);
+    final paths = diffPathsBetween('$sha^1', sha);
     if (paths == null) {
       // P1-2: the deleted `diff.isEmpty` guard used to shout exactly here.
       fail('$short: could not diff $sha^1..$sha (git failed — typically an '
@@ -616,6 +553,30 @@ void main(List<String> args) {
 
     if (_tierRank(tier) < _tierRank('account')) {
       stdout.writeln('$tag NOTE: $short blast-radius=$tier (< account; no record required).');
+      continue;
+    }
+
+    // OI-275 batch B2: a merge whose NET change against its first parent is a bare
+    // version bump needs no plan-review record and no B-pass - there is no plan to
+    // review in two version lines, and demanding one cost a record + a second PR CI
+    // round per release (docs/plans/2026-10-10-release-cycle-speedup.md section 3).
+    // `rangeIsVersionBump` is the SAME content predicate the direct-commit loop above
+    // uses (blobs before/after with the single version token normalised, the same regular-file
+    // modes, ALL changed paths in `versionBumpPaths`): a bump plus ANY other file -
+    // including a docs record, or `docs/blast_radius.yaml` (OI-70) - is not a bump.
+    //
+    // Decided by CONTENT only; the merge SUBJECT is not consulted (OI-58b untouched).
+    // Placed BEFORE the switch on the subject on purpose: an unrecognised subject or a
+    // foreign-owner PR whose entire change is two version lines has nothing to review,
+    // and failing it for its spelling would be the wrong reason to block a release.
+    // The diff is `<sha>^1..<sha>`: the first parent is the tip this merge landed on,
+    // so it includes whatever the merge itself wrote resolving conflicts (OI-71).
+    if (rangeIsVersionBump('$sha^1', sha)) {
+      stdout.writeln('$tag NOTE (version-bump exemption): $short is a merge at '
+          'blast-radius=$tier whose net change against its first parent is a bare '
+          'version bump (${paths.join(', ')}); every touched file is byte-identical '
+          'to its parent once the version token is normalised. No record required '
+          '(the merge subject was not consulted).');
       continue;
     }
 
@@ -686,7 +647,8 @@ void main(List<String> args) {
 
   if (failures.isEmpty) {
     stdout.writeln('$tag PASS: every landing in $base..HEAD is accounted for — '
-        '${merges.length} merge(s) with a valid record, '
+        '${merges.length} merge(s) (each with a valid record, below account tier, or '
+        'exempt as a bare version bump), '
         '${directCommits.length} direct commit(s) either below account tier or '
         'exempt as a bare version bump (each noted above).');
     exit(0);
@@ -763,8 +725,8 @@ String? _checkOneRecordOneLanding(
     if (!isTrustedLandingKind || priorMs.branch != rawBranch) continue;
 
     // Most recent earlier landing of the SAME raw branch name found.
-    final priorContent = _gitBlob(priorSha, recordPath);
-    final currentContent = _gitBlob(sha, recordPath);
+    final priorContent = gitBlobAt(priorSha, recordPath);
+    final currentContent = gitBlobAt(sha, recordPath);
     if (priorContent == null || currentContent == null) return null;
     if (priorContent != currentContent) return null; // record WAS updated — fine.
 

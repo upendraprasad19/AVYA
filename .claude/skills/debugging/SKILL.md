@@ -222,6 +222,8 @@ Per CLAUDE.md rules 21 + 22:
 | 2.98 | A history index committed as a whole-map snapshot, and a restore that records nothing it wrote | unchanged rows re-uploaded; the first push after a restore re-upserts every restored row | test/sync/sync_skip_index_overlap_commit_test.dart |
 | 2.99 | A new script line or test trips a repo-wide census it never mentions (env-read manifest, tests-that-run-the-hook pin) | correct change, targeted tests green, FULL suite red in spawn_env_manifest_test.dart; `Actual: Set:['ALLOW']` | test/contracts/spawn_env_manifest_test.dart |
 | 2.100 | An upsert body that carries NULL for columns the device does not hold blanks another writer's values | a value entered on one device disappears after a second device syncs; body_measurements sites go NULL | test/sync/body_measurement_push_merge_safe_test.dart |
+| 2.101 | A gate decides on a rendering of the change that its own author can edit (trimmed, quoted or renamed paths, a glob `.`, a lenient decoder, git config read from a tracked `.gitmodules`) | an exemption or tier decision passes only for an odd path spelling; every ordinary-name test is green | test/scripts/gate_input_family_e2e_test.dart |
+| 2.102 | A bound written as value <= 0 lets NaN and Infinity through, and one stored non-finite value breaks every JSON encode around it | an absurd finite value reaches the model as fact; a wrong-typed model field throws out of the chat parse; (latent: a stored NaN makes jsonEncode throw - find the producer first) | test/contracts/body_measurement_bounds_behavioral_test.dart |
 
 ---
 

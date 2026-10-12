@@ -91,12 +91,14 @@ void main() {
           'running assertions against the real repository.');
     }
 
-    // The gate + its two relative imports.
+    // The gate + its three relative imports (the closure is pinned by
+    // test/contracts/plan_review_gate_harness_copies_imports_test.dart, so a fourth cannot be missed).
     Directory('$repo/scripts').createSync(recursive: true);
     for (final f in const [
       'check_plan_review_record_exists.dart',
       'plan_review_record_lib.dart',
       'blast_radius_content_rules_lib.dart',
+      'version_bump_git_lib.dart',
     ]) {
       File('$srcRoot/scripts/$f').copySync('$repo/scripts/$f');
     }

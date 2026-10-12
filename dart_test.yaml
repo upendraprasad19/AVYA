@@ -6,8 +6,10 @@
 # PNGs are generated via `--update-goldens`) and CI's Linux runners. They pass
 # on the Windows dev platform but mismatch on Linux.
 #
-# CI's unit-test job therefore runs `flutter test test/ --exclude-tags golden`
-# (see .github/workflows/test.yml), and so does the pre-push full suite
+# CI's unit-test shards (one per matrix leg, each a disjoint set of whole files;
+# since 2026-10-11) therefore each run `flutter test <their files> --exclude-tags
+# golden` (see .github/workflows/test.yml), and the pre-push full suite runs
+# `flutter test test/ --exclude-tags golden`
 # (scripts/pre-push.sh run_full_suite -- pinned to CI's invocation by
 # test/scripts/pre_push_matches_ci_invocation_test.dart). Corrected 2026-10-10:
 # this comment used to say the pre-push suite runs the goldens; it does not.

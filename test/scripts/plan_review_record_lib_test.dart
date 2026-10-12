@@ -302,6 +302,31 @@ Compare with the earlier work, where:
       expect(dependabotDiffIsManifestOnly(['  ']), isFalse);
     });
 
+    test('REGRESSION (34e764): a look-alike of a manifest path is NOT a manifest - paths are compared exactly', () {
+      // ' pubspec.lock' (leading space) is a distinct, valid git path that can hold anything. The
+      // predicate used to trim each path, which turned it into the real lock file and let a
+      // look-alike ride along on a bot-shaped merge whose plan-review record was waived. Found
+      // while probing the sibling version-bump predicate for the same normaliser. The control
+      // comes first, or the loop below proves nothing.
+      expect(dependabotDiffIsManifestOnly(['pubspec.yaml', 'pubspec.lock']), isTrue,
+          reason: 'setup: the unspoofed pair qualifies');
+      for (final spoof in [
+        ' pubspec.lock',
+        'pubspec.lock ',
+        '\tpubspec.yaml',
+        ' pubspec.yaml',
+        'pubspec.yaml\r',
+        'pubspec.lock\n',
+      ]) {
+        expect(dependabotDiffIsManifestOnly(['pubspec.yaml', spoof]), isFalse,
+            reason: 'a diff that also carries ${spoof.codeUnits} is not manifest-only');
+      }
+      // A path made ONLY of whitespace is a path too, not "nothing to see".
+      expect(dependabotDiffIsManifestOnly(['pubspec.yaml', ' ']), isFalse);
+      // An EMPTY entry is a splitting artefact and is ignored, as before.
+      expect(dependabotDiffIsManifestOnly(['pubspec.yaml', '']), isTrue);
+    });
+
     test('author check accepts real Dependabot identities', () {
       expect(
           allCommitsAuthoredByDependabot(

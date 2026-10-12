@@ -85,7 +85,7 @@ Total gates: **111** (48 numbered, 63 by filename only).
 | 34 | `check_no_raw_ispro_read.dart` | assert that no production code reads `configBox.get('isPro')` / `config.get('isPro')` | grandfathered |
 | — | `check_oi_numbering_unique.dart` | Closes the MINT-TIME half of OI-112. The LANDING half (a corrupt board that | mutation_proven |
 | — | `check_onconflict_live_arbiter.dart` | 2026-05-15 — Runs `test/sql/onconflict_live_arbiter.sql` against the | grandfathered |
-| — | `check_plan_review_record_exists.dart` | P1.A keystone (discipline overhaul 2026-06-18) — the plan-quality forcing | grandfathered |
+| — | `check_plan_review_record_exists.dart` | P1.A keystone (discipline overhaul 2026-06-18) — the plan-quality forcing | mutation_proven |
 | 35 | `check_profile_write_service_only.dart` | assert that no production code outside `ProfileWriteService` writes to userBox under | grandfathered |
 | — | `check_raw_hex_in_features.dart` | Ban raw `Color(0x......)` hex literals under lib/features/**. Palette colours | grandfathered |
 | 24 | `check_razorpay_key_flavor.dart` | assert that Razorpay key prefixes match the build flavor. `rzp_live_*` MUST appear only in | grandfathered |

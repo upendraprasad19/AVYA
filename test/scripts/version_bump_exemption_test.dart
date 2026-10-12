@@ -187,6 +187,67 @@ void main() {
     });
   });
 
+  // ── B-pass of OI-275 batch B2, finding F4 ───────────────────────────────────
+  // The exemption says a bump is "byte-identical once the version token is normalised". Three
+  // things that claim did not actually cover: the file MODE (100644 <-> 100755 are both regular
+  // files), the VALUE of the token in app_constants.dart (any text between two quotes), and a
+  // leading byte-order mark (a git-reader matter, pinned through the CLI in
+  // version_bump_git_lib_test.dart; the pure predicate sees the BOM as a character).
+  group('B-pass F4: the "byte-identical" claim holds for the mode, the token value and a BOM', () {
+    final bumped = [
+      _f(_pubspec, _pub('1.0.0+37'), _pub('1.0.0+38')),
+      _f(_constants, _con('1.0.0+37'), _con('1.0.0+38')),
+    ];
+
+    test('CONTROL: the unmodified bump is a bump (the three tests below mean nothing otherwise)', () {
+      expect(isVersionBumpCommit([_pubspec, _constants], bumped), isTrue);
+    });
+
+    test('flipping the executable bit beside a bump is NOT a bump (100644 -> 100755 and back)', () {
+      for (final (before, after) in const [('100644', '100755'), ('100755', '100644')]) {
+        expect(
+            isVersionBumpCommit([_pubspec], [
+              _f(_pubspec, _pub('1.0.0+37'), _pub('1.0.0+38'), beforeMode: before, afterMode: after),
+            ]),
+            isFalse,
+            reason: 'a mode change is a change git records; $before -> $after is not "byte-identical"');
+      }
+    });
+
+    test('MIRROR: a file that is executable on BOTH sides is still a bump (equality, not "must be 100644")', () {
+      expect(
+          isVersionBumpCommit([_pubspec], [
+            _f(_pubspec, _pub('1.0.0+37'), _pub('1.0.0+38'), beforeMode: '100755', afterMode: '100755'),
+          ]),
+          isTrue,
+          reason: 'the rule is that the mode did not change, not that it equals one value');
+    });
+
+    test('the appVersion value must stay version-SHAPED: any other string is NOT a bump', () {
+      for (final value in const ['x', '', '1.0.0', 'v1.0.0+37', '1.0.0+37-beta', '1.0+37', "1.0.0+37' + 'x"]) {
+        expect(
+            isVersionBumpCommit([_pubspec, _constants], [
+              _f(_pubspec, _pub('1.0.0+37'), _pub('1.0.0+38')),
+              _f(_constants, _con('1.0.0+37'), _con(value)),
+            ]),
+            isFalse,
+            reason: "appVersion = '$value' is not major.minor.patch+build; only Gate 51 (commit time) "
+                'would notice it disagrees with pubspec');
+      }
+    });
+
+    test('a byte-order mark gained or lost beside a bump is NOT a bump (the predicate compares it as a character)', () {
+      const bom = '\uFEFF';
+      expect(
+          isVersionBumpCommit([_pubspec], [_f(_pubspec, _pub('1.0.0+37'), '$bom${_pub('1.0.0+38')}')]), isFalse);
+      expect(
+          isVersionBumpCommit([_pubspec], [_f(_pubspec, '$bom${_pub('1.0.0+37')}', _pub('1.0.0+38'))]), isFalse);
+      expect(
+          isVersionBumpCommit([_pubspec], [_f(_pubspec, '$bom${_pub('1.0.0+37')}', '$bom${_pub('1.0.0+38')}')]), isTrue,
+          reason: 'MIRROR: a BOM that is on both sides changes nothing');
+    });
+  });
+
   group('structural rejections', () {
     test('a third file disqualifies even a perfect bump', () {
       expect(
@@ -236,6 +297,33 @@ void main() {
 
     test('an empty path list is not a bump', () {
       expect(isVersionBumpCommit(const [], const []), isFalse);
+    });
+
+    test('a path that differs from a version file only by surrounding whitespace is NOT that file', () {
+      // The decision's input must be EXACT. ' pubspec.yaml' (leading space) is a distinct, valid
+      // git path that can hold anything; a trimming normaliser turned it into the real version
+      // file, so a spoof rode along on a genuine bump under the exemption (found by probing, not
+      // by an earlier review). The control must pass first, or the loop below proves nothing.
+      final files = [
+        _f(_pubspec, _pub('1.0.0+37'), _pub('1.0.0+38')),
+        _f(_constants, _con('1.0.0+37'), _con('1.0.0+38')),
+      ];
+      expect(isVersionBumpCommit([_pubspec, _constants], files), isTrue,
+          reason: 'setup: the unspoofed bump is a bump');
+      for (final spoof in [
+        ' pubspec.yaml',
+        'pubspec.yaml ',
+        '\tpubspec.yaml',
+        '\u00a0pubspec.yaml',
+        'pubspec.yaml\r',
+        ' lib/core/constants/app_constants.dart',
+        'lib/core/constants/app_constants.dart\n',
+      ]) {
+        expect(isVersionBumpCommit([_pubspec, _constants, spoof], files), isFalse,
+            reason: 'a third path ${spoof.codeUnits} is not a version file');
+      }
+      // A path made ONLY of whitespace is a path too, not "nothing to see".
+      expect(isVersionBumpCommit([_pubspec, _constants, ' '], files), isFalse);
     });
   });
 }
