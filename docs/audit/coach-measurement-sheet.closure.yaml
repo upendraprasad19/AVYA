@@ -1,0 +1,111 @@
+# Closure ledger - coach-measurement-sheet-ui, L2b Landing B (the dark measurements sheet, due prompt and entry points). One terminal_state per
+# unit, no `deferred:` key. The rows that closed in the code commit carry its SHA (dcde6ac6, written by the stamp commit that follows it: a commit
+# cannot name its own SHA; the L2a shape, 79e866a2, which Landing A's own stamp a6cb7077 followed).
+# The B-pass review (docs/reviews/coach-measurement-sheet-ui-bpass.md, its mutant appendix ...-bpass-mutants.md and the same-dated tuning-history
+# entry) shipped in the SAME commit as the rows that cite it, so no row closed on a file that did not exist (the Landing A lesson, B-pass finding BPB-C4);
+# the BPASS row is added here, with the real SHA.
+# Mutation totals and the per-mutant before / after text are in docs/reviews/coach-measurement-sheet-ui-bpass-mutants.md (183 mutants, 178 RED, 5 recorded equivalents).
+# The L2a ledger rows OQ-L2A and PROBE (and Landing A's FUTURE-FILTER-BEHIND-CLOCK) are referenced here, not duplicated.
+batch: coach-measurement-sheet-ui
+plan_review_record: docs/plan-reviews/coach-measurement-sheet-ui.md
+diagnose_docs: []
+total_findings: 21
+closed_count: 21
+
+findings:
+  - id: B1
+    title: "HealthWriteService.logMeasurements: the sheet's batch writer - validate the whole map first (rounded, all-or-nothing, one rejection event per call), ONE put and one fan-out under the day lock logMeasurement uses"
+    terminal_state: closed_in_commit
+    commit: dcde6ac6
+    verification: "test/contracts/measurement_write_batch_behavioral_test.dart (group B1: one put for four sites, rounding at 49.96 / 49.94, one event naming the first known offender, an empty map and an unknown key, merge onto a held day, a rejected call leaves the record as it was, the IST day, a racing logMeasurement, a failing box write under its own reason, the source stamp and the fan-out pins) and test/sync/measurement_batch_push_test.dart (4 tests: a two-site call is ONE merge-safe upsert row, a merged third site, a rejected call pushes nothing, an unpaused call fans out by itself); mutants W1-W8 in docs/reviews/coach-measurement-sheet-ui-bpass-mutants.md"
+  - id: B2
+    title: "providers: measurementsEnabledProvider (own file), bodyMeasurementsProvider (no value equality on purpose), measurementWriteProvider with save() (refresh AFTER the awaited write, unit remembered only under token agreement via shouldRememberUnit), measurementPromptProvider"
+    terminal_state: closed_in_commit
+    commit: dcde6ac6
+    verification: "test/contracts/measurement_save_unit_rule_test.dart (the pure rule, one clause false per row, plus the function-sliced pin of how save reads the token), measurement_write_batch_behavioral_test.dart group B2 (the contended-order test and the token-flip wiring row with its control), user_scoped_provider_rebuilds_on_auth_change_test.dart (both user-scoped providers follow the token); mutants S1-S8, H1-H6, Q1-Q10 in docs/reviews/coach-measurement-sheet-ui-bpass-mutants.md"
+  - id: B3
+    title: "prompt rules (pure measurementPromptFor and parseIstKeyStrict) and the three per-user keys (userScopedKeys)"
+    terminal_state: closed_in_commit
+    commit: dcde6ac6
+    verification: "test/contracts/measurement_prompt_state_behavioral_test.dart (literal day counts, one clause false per none row, future dates absent, month / year / leap boundaries, parse parity with the reader, the providers under the token override, two users, a closed history box and a closed user box, the anonymous token), measurement_sign_out_lifecycle_test.dart (the real clearAllData removes the three keys and the flag); mutants P1-P14 in docs/reviews/coach-measurement-sheet-ui-bpass-mutants.md"
+  - id: B4
+    title: "BodyMeasurementsSheet and measurement_units.dart: four optional fields in cm or in, the unit control reads digits and never rewrites them, derived validity / hint / stored-as line, batch Save with a guard variable, previous values captured before the await, the delta / Baseline set / plain acknowledgement, the error state with Retry, geometries"
+    terminal_state: closed_in_commit
+    commit: dcde6ac6
+    verification: "test/features/profile/body_measurements_sheet_test.dart (53 widget tests: the unit story, hints, Save semantics, double tap, swipe-away mid-save, failure seams, defaults, 44 dp targets, TextInputAction, root-navigator and shell geometries at scale 1.0 and 2.0 asserting where Save ends up, the semantics flags, AA contrast, the haptic channel, the clock seam in a year the real clock is not in, plus one real-Hive end to end), test/utils/measurement_units_test.dart (76 pure tests) and test/contracts/dart_source_slice_helper_test.dart (12 tests of the source-slicing helper every presence pin stands on); mutants M1-M36 and U1-U8 in docs/reviews/coach-measurement-sheet-ui-bpass-mutants.md"
+  - id: B5
+    title: "flag enable_body_measurements (default OFF) with MeasurementFlags, the debug-only dev toggle and 'Open measurements sheet' button, the exact-path platform blast-radius rule, the ship-dark entry"
+    terminal_state: closed_in_commit
+    commit: dcde6ac6
+    verification: "test/contracts/measurement_flag_off_identity_test.dart (the getter rows, observer-based OFF identity with a positive control per path, the dev-toggle order pin), blast_radius_measurement_flags_test.dart (classification, exactness, order, rot); docs/ship_dark_pending_review.yaml entry with build_commit null"
+  - id: B6
+    title: "the Home surfaces: MeasurementDueSlot and MeasurementDueBanner (due and baseline variants, one X), and the Weight-sheet link latched in initState (the sheet scrolls only when the link is offered)"
+    terminal_state: closed_in_commit
+    commit: dcde6ac6
+    verification: "test/home/measurement_slots_test.dart and test/home/weight_sheet_measurements_link_test.dart (20 and 24 tests: literal copy, one X at 44 dp, text scale 1.0 and 2.0, a real-graph slot group where the X clears the banner with no parent rebuild and the flag flips ON and OFF under a mounted slot, both launch shapes of the Weight sheet, the flip-while-open rows, the overflow matrix against the link-less baseline compared per creation location), measurement_flag_off_identity_test.dart (16 tests, including the pin that `_buildContent` mounts the slot after `_buildRepeatNudge`); mutants B1-B5, L1-L5, Wt1-Wt7 in docs/reviews/coach-measurement-sheet-ui-bpass-mutants.md"
+  - id: B7
+    title: "the one edit to a live path: ConversationalLogHandler._logMeasurement refreshes the measurements history after a successful chat write, flag-guarded, with neither the lookup nor the refresh able to turn a successful write into false"
+    terminal_state: closed_in_commit
+    commit: dcde6ac6
+    verification: "test/contracts/measurement_chat_path_off_identity_test.dart (flag OFF reads no provider and returns true, flag ON refreshes a live provider, a refused write refreshes nothing, a throwing noteWritten and a notifier that cannot be built still return true); mutants C1-C5 in docs/reviews/coach-measurement-sheet-ui-bpass-mutants.md"
+  - id: B8
+    title: "refresh lists: HomeScreen.invalidateOnRetry (retry and background-restore ticks) and the day-rollover health block each invalidate bodyMeasurementsProvider"
+    terminal_state: closed_in_commit
+    commit: dcde6ac6
+    verification: "test/contracts/day_rollover_provider_invalidation_behavioral_test.dart Test G (a 27-day-old entry becomes due after a rollover that moves the clock one day, flag ON) and the flag-OFF rollover creating neither provider, day_rollover_provider_invalidation_writer_to_reader_test.dart (the exact statement), measurement_flag_off_identity_test.dart (the invalidateOnRetry slice pin); mutants R1 and HS1 in docs/reviews/coach-measurement-sheet-ui-bpass-mutants.md"
+  - id: B9
+    title: "docs and registry: sot_registry concepts measurement_prompt_state and measurement_surface_hosts plus the repointed ranges, naming_conventions rows, the three nested CLAUDE.md files, functionality-flow, the OI-297 note, plan section 9 copy (final strings), and the wording corrections to Landing A's documents (the sheet's field cannot produce a non-finite value)"
+    terminal_state: closed_in_commit
+    commit: dcde6ac6
+    verification: "the pre-commit gate loop passes (sot registry parity / completeness / behavioral paths, Gate 7, 9, 37, 42, 50, naming, context-artifact budget); the locator grep for the Landing A wording returns only the Landing B plan and its record"
+  - id: BPASS
+    title: "B-pass before the merge (platform tier, self-triggered): 3 fresh context-blind Sonnet reviewers on the uncommitted Landing B tree, 46 findings (A 12, B 19, C 15), 0 P0, 1 P1, 15 P2, 30 P3, 0 false alarms; the mechanism held, the tests and the evidence needed work (the P1: four chat-path tests pinned to the authoring day, red from 2026-10-13 IST)"
+    terminal_state: closed_in_commit
+    commit: dcde6ac6
+    verification: "docs/reviews/coach-measurement-sheet-ui-bpass.md (line-anchored verdict: accepted), its mutant appendix, docs/plan-reviews/coach-measurement-sheet-ui.md (bpass: accepted) and the same-dated entry in .claude/skills/code-review/tuning-history.md, all in dcde6ac6; 378 targeted tests in 18 files pass (before and after the rebase onto main f2ad2b9f); 183 distinct mutants over 14 runs on the final tree: 178 RED, 5 recorded equivalents, 0 compile errors; flutter analyze 0 errors and 0 warnings; the pre-commit loop passes at platform on the pre-rebase tree and again on the rebased tree; the full suite (TZ=Asia/Kolkata, --exclude-tags golden) was 9282 passed, 9 skipped, exit 0 on the pre-rebase tree, and the PR's CI and the merge-seam run it on the rebased tree"
+  - id: FLIP
+    title: "flipping enable_body_measurements to default ON (or removing the flag): its own commit with its own x2 plan review and B-pass (section 4.12.4); docs/ship_dark_pending_review.yaml stays pending until then"
+    terminal_state: blocked_on_user
+    reason: "founder-owned and sequenced: after Landing C has merged (E3's permanent door; without it no B surface is reachable on demand), OQ-L2a is decided (and L2c merged if chosen), the founder has taken a position on OI-310, and the under-18 status quo (spec decision 7, OI-305) is acknowledged"
+  - id: D3-D4
+    title: "D3 (the first baseline prompt on tenure day 7, a one-line constant) and D4 (one dismissal silences the banner, the Weight-sheet link and the baseline prompt; the Progress Comparison card, in Landing C, deliberately ignores it) are built on their stated defaults"
+    terminal_state: blocked_on_user
+    reason: "founder confirms or changes the two defaults; a change is one constant (D3) or one clause of measurementPromptFor (D4)"
+  - id: D7
+    title: "scope cut: E3 (Progress Comparison card) and E4 (chat chip) leave this landing for Landing C"
+    terminal_state: closed_in_commit
+    commit: dcde6ac6
+    verification: "answered 2026-10-12 ('Cut E3/E4 into Landing C (Recommended)'); recorded in docs/plans/coach-measurement-sheet-ui.md section 6 and in docs/plan-reviews/coach-measurement-sheet-ui.md (both in 875b0804, the plan commit rebased onto main; the pre-rebase sha was b709fde2) and in the umbrella's D7 row (docs/plans/coach-measurement-sheet-l2b.md, in dcde6ac6)"
+  - id: DEVICE-CHECK
+    title: "on a DEBUG build with the dev-panel flag: the sheet reaches all four fields and Save with the real keyboard open on a small phone, the unit control, the banner and the Weight-sheet link behave (re-toggle the flag after each sign-out)"
+    terminal_state: blocked_on_user
+    reason: "a device build (/build-apk, debug) and a person at the phone; TWO checks, because the geometry differs: (1) the dev panel's 'Open measurements sheet' button opens the sheet on the ROOT navigator (the /dev route is outside the shell), where the live keyboard inset reaches it; (2) the Home banner or the Weight-sheet link, which open inside the shell body, reached by moving the dev clock until the prompt is non-none (an account that measured within 28 days, or is younger than 7 days, has no door otherwise); the real keyboard on a small phone is the one geometry no widget test reproduces"
+  - id: SNAPSHOT-DEVIATION
+    title: "D1 departs from the founder-approved spec text: the sheet writes no snapshot (user_stat_snapshots) row"
+    terminal_state: blocked_on_user
+    reason: "founder confirms the departure; the umbrella's G6 supports the reasoning, not the state"
+  - id: CHAT-PULL-STALE
+    title: "pullRecentCrossChannelLogs and the restore paths write measurement_* without invalidating the providers, so a Telegram-origin or restored entry refreshes the banner and the 'Last:' hints at the next rollover, restore tick or app start (a hint can be up to a day old)"
+    terminal_state: blocked_on_user
+    reason: "founder accepts the staleness (0 such rows exist) or asks for a refresh in the pull; the pull is in lib/core/services/sync_service.dart (platform tier)"
+  - id: LANDING-C
+    title: "Landing C: E3 (Progress Comparison card) and E4 (chat chip), the two surfaces the D7 cut moved out of this landing"
+    terminal_state: upstream_blocked
+    blocker: "Landing C (branch coach-measurement-surfaces) starts only after this landing has merged; its own plan and x2 review come first, and D7 was answered 2026-10-12"
+    reopen_when: "this landing is merged to main"
+  - id: DECIMAL-COMMA
+    title: "the sheet's formatter admits only '.', as the Weight sheet's does, so a comma-decimal keyboard cannot enter a decimal point"
+    terminal_state: blocked_on_user
+    reason: "founder accepts or asks for a locale-aware formatter, which would change both sheets"
+  - id: MIGRATEDKEY-FALLBACK
+    title: "a dismissal stamp written while userBox.put throws falls back to the shared configBox and is readable by the next account until sign-out (nag state only); the unit preference has the stronger token guard, whose one instant-wide gap is stated in plan section 7"
+    terminal_state: blocked_on_user
+    reason: "founder accepts or asks for a stricter MigratedKey write for these keys"
+  - id: NO-STAMP-NO-BASELINE
+    title: "a profile without onboarding_completed_at (1 of 33 cloud rows and pre-Unit-D local profiles) never gets the baseline prompt; a measured user still gets 'due'"
+    terminal_state: blocked_on_user
+    reason: "founder accepts or asks for a fallback tenure source"
+  - id: ERROR-STATE-DOOR
+    title: "the sheet's error state (history unreadable) is reachable only mid-sheet or through the debug-only button, and Retry helps a transient failure only (it does not reopen a closed box or change the token)"
+    terminal_state: blocked_on_user
+    reason: "founder accepts or asks for a visible door in the error state"

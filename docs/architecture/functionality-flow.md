@@ -118,6 +118,8 @@ Section prefixes: `ONB-`/`AUTH-` onboarding & auth · `HOME-` home dashboard ·
 - **`HOME-18`** — The AI coach insight card is computed from local schedule data (next workout, consistency tips), not a live API call. **Verify:** needs test.
 - **`HOME-19`** — The Future Prediction card truncates to 4 lines + "Read More →" on Home (full sheet on tap); the shareable card caps at 500 chars. **Verify:** needs test (widget).
 - **`HOME-20`** — Steps/sleep cards filter health data by BOTH date AND type (`step_log`/`sleep_log`); chat-logged sleep is read from the `sleep_logs` list as fallback. **Verify:** `test/contracts/sleep_logs_writer_to_reader_test.dart`.
+- **`HOME-24`** — (L2b Landing B, DARK behind `enable_body_measurements`, default OFF) WHEN the flag is ON and the newest valid body-measurement entry is at least 28 days old, or the user has never measured and onboarded at least 7 days ago, THEN Home shows one banner ("due" or "baseline" text) whose card opens the measurements sheet; the one X silences it for 7 days (baseline: 28). WHEN the flag is OFF THEN no measurements provider is created on any path. **Verify:** `test/contracts/measurement_prompt_state_behavioral_test.dart`, `test/contracts/measurement_flag_off_identity_test.dart`, `test/home/measurement_slots_test.dart`.
+- **`HOME-25`** — WHEN the Weight sheet opens with the flag ON and a non-`none` prompt THEN it offers "Add body measurements" under SAVE (decided once at open; the sheet then scrolls); a tap closes it and opens the measurements sheet. **Verify:** `test/home/weight_sheet_measurements_link_test.dart`.
 
 ### Plan expiry & promotion
 
@@ -267,6 +269,7 @@ Section prefixes: `ONB-`/`AUTH-` onboarding & auth · `HOME-` home dashboard ·
 - **`PROF-16`** — WHEN the user deletes their account THEN `delete_account_screen` → `delete-account` Edge Function performs the DPDP §17 hard-delete + pseudonymization; FK columns are `ON DELETE SET NULL` so community signal survives, and read consumers tolerate `user_id = NULL`. **Verify:** `test/contracts/delete_account_safety_contract_test.dart`.
 - **`PROF-17`** — Shareable cards (workout receipt, future prediction, beat-my-coach) are all FREE and embed the ICANBEFITTER wordmark + QR → icanbefitter.com. **Verify:** needs test (share-card content).
 - **`PROF-18`** — Notifications inbox is written via `NotificationInboxService.record` and synced via `syncNotificationsInboxEntry`; theme is locked dark. **Verify:** needs test (inbox sync).
+- **`PROF-20`** — (L2b Landing B, DARK) WHEN the user saves the body-measurements sheet THEN the edited sites (cm; inches are converted on read, the digits never rewritten) are written in ONE all-or-nothing batch (`HealthWriteService.logMeasurements`), the history provider refreshes after the awaited write, the cm/in choice is remembered only when the save succeeded under an unchanged real auth token, and the snackbar reads "Baseline set ✓", a one-site delta in centimetres, or "Measurements saved ✓". Nothing is PRO-gated. **Verify:** `test/contracts/measurement_write_batch_behavioral_test.dart`, `test/contracts/measurement_save_unit_rule_test.dart`, `test/features/profile/body_measurements_sheet_test.dart`.
 
 ### Referral lifecycle (`PROF-19`)
 

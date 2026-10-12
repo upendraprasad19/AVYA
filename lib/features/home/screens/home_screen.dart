@@ -28,12 +28,14 @@ import '../widgets/day_detail_sheet.dart';
 import '../widgets/quick_action_button.dart';
 import '../widgets/profile_nudge_card.dart';
 import '../widgets/phase_repeat_nudge_banner.dart';
+import '../widgets/measurement_due_slot.dart';
 import '../widgets/quote_card.dart';
 import '../widgets/ai_insight_card.dart';
 import '../widgets/today_workout_card.dart';
 import '../widgets/streak_explainer_sheet.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/features/profile/providers/body_measurements_provider.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/features/train/widgets/plan_expired_card.dart';
 import 'package:icanbefitter/features/train/widgets/phase_generating_card.dart';
@@ -173,6 +175,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     ref.invalidate(recentFoodLogsProvider);
     ref.invalidate(dailyQuoteProvider);
     ref.invalidate(todayStepsProvider);
+    // L2b Landing B — a restore can write `measurement_*` records; the prompt
+    // follows through its watch. A no-op until built (flag OFF).
+    ref.invalidate(bodyMeasurementsProvider);
   }
 
   /// b4e7a1 — a background restore can now PERSIST an idle-day freeze debit
@@ -482,6 +487,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         _buildStreakWarning(ref),
         _buildExpiryBanner(ref),
         _buildRepeatNudge(ref),
+        // L2b Landing B — body-measurements banner (flag-gated slot; owns its own
+        // flag + prompt checks, so an OFF build creates no measurements provider).
+        const MeasurementDueSlot(),
         // Unit 3 obs 6 — web-only "Add to Home Screen" prompt (kIsWeb-gated
         // inside the widget; SizedBox.shrink on Android/iOS + when not
         // installable). Below the safety banners, above the calendar.

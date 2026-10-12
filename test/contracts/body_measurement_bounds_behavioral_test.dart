@@ -598,7 +598,7 @@ void main() {
     test('Infinity (jsonDecode of 1e999) is dropped as nonfinite', () {
       // A client-side decode: the proxy's own JSON.stringify turns an Infinity
       // into null before a reply reaches the app, so this is the latent-hazard
-      // row (the Landing B text field parses user text), not a wire case.
+      // row (a hand-built value; the Landing B sheet's input formatter keeps only a leading digit prefix, so its field cannot produce one), not a wire case.
       final inf = jsonDecode('1e999') as num;
       expect(inf.isInfinite, isTrue);
       expect(parse({'type': 'waist', 'value_cm': inf}), isEmpty);

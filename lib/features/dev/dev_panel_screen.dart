@@ -10,6 +10,9 @@ import 'package:icanbefitter/core/services/rank_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
+import 'package:icanbefitter/core/services/measurement_flags.dart';
+import 'package:icanbefitter/features/profile/providers/measurement_flag_provider.dart';
+import 'package:icanbefitter/features/profile/widgets/body_measurements_sheet.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import 'package:icanbefitter/features/train/providers/train_provider.dart';
 import 'package:icanbefitter/features/dev/simulation_service.dart';
@@ -260,6 +263,23 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
     _toast('enable_hold_weeks = ${next ? 'ON' : 'OFF'}');
   }
 
+  /// L2b Landing B: the ship-dark flag of the body-measurements sheet.
+  ///
+  /// Three statements, in this order, and each is load-bearing: write the key;
+  /// invalidate `measurementsEnabledProvider` (the ONLY refresh of that cached
+  /// bool provider: without it the toggle silently does nothing and the
+  /// device check reads as "UI broken"); then run the rollover so the history
+  /// and the prompt rebuild. Pinned by a function-sliced source test.
+  Future<void> _toggleBodyMeasurements() async {
+    final next = !MeasurementFlags.bodyMeasurementsEnabled;
+    await HiveService.instance.configBox.put('enable_body_measurements', next);
+    ref.invalidate(measurementsEnabledProvider);
+    await DayRolloverObserver.instance.runRolloverNow(ref);
+    if (!mounted) return;
+    setState(() {});
+    _toast('enable_body_measurements = ${next ? 'ON' : 'OFF'}');
+  }
+
   /// The equipment-exclusions KILL-SWITCH (diagnose e2d6b8, flipped ON
   /// 2026-08-05). Unlike `enable_hold_weeks` this flag is DEFAULT ON, so the
   /// switch writes `disable_equipment_exclusions = true` to turn the feature
@@ -461,6 +481,8 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
             children: [
               _kv('enable_hold_weeks',
                   PlanEngineFlags.holdWeeksEnabled ? 'ON' : 'off'),
+              _kv('enable_body_measurements',
+                  MeasurementFlags.bodyMeasurementsEnabled ? 'ON' : 'off'),
               // DEFAULT ON since 2026-08-05 (e2d6b8) — the kill-switch key is
               // `disable_equipment_exclusions`, so "off" here means killed.
               _kv('equipment exclusions (+ WU-2 gym cardio)',
@@ -479,6 +501,19 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
                         ? 'Turn hold weeks OFF'
                         : 'Turn hold weeks ON',
                     () => _toggleHoldWeeks(),
+                  ),
+                  _btn(
+                    MeasurementFlags.bodyMeasurementsEnabled
+                        ? 'Turn body measurements OFF'
+                        : 'Turn body measurements ON',
+                    () => _toggleBodyMeasurements(),
+                  ),
+                  // The sheet has no door on demand while the flag is OFF or the
+                  // prompt is `none`; this debug-only button reaches it for the
+                  // keyboard check without moving the dev clock.
+                  _btn(
+                    'Open measurements sheet',
+                    () => BodyMeasurementsSheet.show(context),
                   ),
                   _btn(
                     PlanEngineFlags.equipmentExclusionsEnabled

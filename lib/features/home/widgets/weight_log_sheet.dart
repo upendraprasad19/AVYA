@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:icanbefitter/core/copy/measurement_copy.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import '../providers/home_provider.dart';
+import '../../profile/providers/measurement_flag_provider.dart';
+import '../../profile/providers/measurement_prompt_provider.dart';
 import '../../profile/providers/profile_provider.dart';
+import '../../profile/services/measurement_prompt_rules.dart';
+import '../../profile/widgets/body_measurements_sheet.dart';
 
 /// Bottom sheet for quickly logging today's weight from the home screen.
 class WeightLogSheet extends ConsumerStatefulWidget {
@@ -22,11 +27,21 @@ class _WeightLogSheetState extends ConsumerState<WeightLogSheet> {
   String? _lastDate;
   double? _lastWeight;
 
+  /// L2b Landing B (E2): whether to offer the body-measurements link. LATCHED
+  /// once in [initState] (a prompt change while the sheet is open must not add
+  /// or remove the link, which would re-create the autofocused field's subtree),
+  /// and the flag is read first so an OFF build never creates the prompt
+  /// provider. With the flag OFF this stays false and `build` returns today's
+  /// tree verbatim.
+  bool _showMeasurementsLink = false;
+
   @override
   void initState() {
     super.initState();
     _loadLastWeightData();
     _controller = TextEditingController(text: _weight.toStringAsFixed(1));
+    _showMeasurementsLink = ref.read(measurementsEnabledProvider) &&
+        ref.read(measurementPromptProvider) != MeasurementPrompt.none;
   }
 
   /// Read last weight from Hive — sets _weight, _lastWeight, _lastDate
@@ -128,7 +143,7 @@ class _WeightLogSheetState extends ConsumerState<WeightLogSheet> {
         AppSpacing.gutter,
         MediaQuery.of(context).viewInsets.bottom + 24,
       ),
-      child: Column(
+      child: _scrollIfLinked(Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           // Drag handle
@@ -253,11 +268,42 @@ class _WeightLogSheetState extends ConsumerState<WeightLogSheet> {
               ),
             ),
           ),
+          // L2b Landing B (E2): offered only when the prompt provider is not
+          // `none` at the moment the sheet opened (latched in initState). A
+          // typed but unsaved weight is discarded by the pop (no weight log is
+          // written); accepted and tested.
+          if (_showMeasurementsLink)
+            TextButton(
+              onPressed: () {
+                // Synchronous, from this sheet's own context: `Navigator.of`
+                // resolves while the popped route's exit animation runs.
+                Navigator.pop(context);
+                BodyMeasurementsSheet.show(context);
+              },
+              style: TextButton.styleFrom(
+                minimumSize: const Size.fromHeight(44),
+                foregroundColor: AppColors.accent,
+              ),
+              child: Text(
+                MeasurementCopy.weightSheetLink,
+                style: AppTypography.bodyS.copyWith(
+                  color: AppColors.accent,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
           const SizedBox(height: 8),
         ],
-      ),
+      )),
     );
   }
+
+  /// With the measurements link the body is wrapped in a scroll view: the sheet
+  /// is a bare Column with an autofocused field, and the extra row would
+  /// otherwise overflow small or large-text screens. Without the link (flag OFF,
+  /// or the prompt is `none`) the tree is exactly today's.
+  Widget _scrollIfLinked(Widget column) =>
+      _showMeasurementsLink ? SingleChildScrollView(child: column) : column;
 
   String _formatDate(String dateStr) {
     final parts = dateStr.split('-');

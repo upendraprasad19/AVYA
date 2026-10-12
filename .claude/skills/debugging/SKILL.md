@@ -224,6 +224,7 @@ Per CLAUDE.md rules 21 + 22:
 | 2.100 | An upsert body that carries NULL for columns the device does not hold blanks another writer's values | a value entered on one device disappears after a second device syncs; body_measurements sites go NULL | test/sync/body_measurement_push_merge_safe_test.dart |
 | 2.101 | A gate decides on a rendering of the change that its own author can edit (trimmed, quoted or renamed paths, a glob `.`, a lenient decoder, git config read from a tracked `.gitmodules`) | an exemption or tier decision passes only for an odd path spelling; every ordinary-name test is green | test/scripts/gate_input_family_e2e_test.dart |
 | 2.102 | A bound written as value <= 0 lets NaN and Infinity through, and one stored non-finite value breaks every JSON encode around it | an absurd finite value reaches the model as fact; a wrong-typed model field throws out of the chat parse; (latent: a stored NaN makes jsonEncode throw - find the producer first) | test/contracts/body_measurement_bounds_behavioral_test.dart |
+| 2.103 | A test clock pinned to the day the test was written cannot tell the seam from the device clock, and goes red the morning after | a test sets the clock to its authoring date and reads a record under that key; the code reads the real clock, or a mutant swapping the seam for the device clock survives | test/contracts/measurement_chat_path_off_identity_test.dart |
 
 ---
 
