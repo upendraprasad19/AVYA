@@ -54,6 +54,23 @@ paths:
   - { glob: "supabase/functions/clean-orphan-media/**", tier: catastrophic }
   - { glob: "supabase/functions/admin-*/**", tier: catastrophic }
   - { glob: "supabase/functions/_shared/cron_auth.ts", tier: catastrophic }
+  # The two other Edge Function paths that delete user data (founder decision 2026-10-11, asked at the close of OI-321).
+  # `rolling-context` (nightly cron) summarises, and tries to embed, a user's older `ai_coach_interactions` turns, then
+  # DELETES them, keeping the newest ten (the `.delete().in("id", batch)` loop in index.ts): a database row delete, not a Storage one. The embedding is
+  # best-effort (a turn whose embedding failed is deleted all the same), which is the data-loss path this tier is for.
+  # The whole directory, tests and docs included, as for delete-account/** above. Its edits are mostly cross-cutting
+  # (Gemini-wide, prompt-wide), so the next such batch that includes it becomes catastrophic as a whole; that is the
+  # price of this rule, stated in the plan.
+  - { glob: "supabase/functions/rolling-context/**", tier: catastrophic }
+  # The account-deletion Storage purge (sole production caller delete-account/index.ts, its `purgeUserStorage(` call, which is itself catastrophic): a
+  # diff confined to the purge does not touch that directory and was platform via `_shared/**` below. One glob for the module,
+  # its Deno test and any file later split off it by name. Inputs that stay platform ON PURPOSE: `_shared/user_owned_buckets.ts`
+  # (the bucket list: a change to what it CONTAINS also edits the five names that purge_user_storage_test.ts pins, so it lands
+  # catastrophic through that file; delete_account_purges_all_user_buckets_test.dart ties the list to the client's writes; only
+  # a comment-only edit stays platform), the shared helpers rolling-context imports (embeddings, gemini, gemini_failure_alert,
+  # paged_fetch, cron_telemetry, sanitize_for_prompt: promoting one would raise every function that shares it) and the cron
+  # definition (`supabase/migrations/**`).
+  - { glob: "supabase/functions/_shared/purge_user_storage*.ts", tier: catastrophic }
   - { glob: "supabase/migrations/*pseudonymize*.sql", tier: catastrophic }
   - { glob: "supabase/migrations/*rls*.sql", tier: catastrophic }
   - { glob: "supabase/migrations/*security_definer*.sql", tier: catastrophic }

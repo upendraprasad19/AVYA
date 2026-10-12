@@ -400,4 +400,88 @@ void main() {
       expect('${r.stdout}${r.stderr}', contains('verdict is not "accepted"'));
     });
   });
+
+  // blast-radius-data-deleting-paths (2026-10-12): the groups above stage a SECURITY DEFINER migration, so the tier
+  // there is forced by CONTENT. Nothing exercised the gate's own PATH-GLOB loop (first matching rule wins, then the
+  // MAX across staged paths), which is the half of the catastrophic tier that `rolling-context/**` and
+  // `_shared/purge_user_storage*.ts` now depend on. The contract test for those rules re-implements that loop
+  // (`gateRule`), so it cannot catch the gate's own loop being wrong: a gate without the `break` lets a later, broader
+  // rule (`supabase/functions/**`, platform) overwrite the catastrophic match.
+  group('path-glob catastrophic tier at COMMIT time (real gate, real registry, isolated repo)', () {
+    /// An isolated repo carrying the real gate + registry, with [paths] staged (no review file anywhere).
+    Future<Directory> stageOnly(String prefix, List<String> paths) async {
+      final srcRoot = Directory.current.path;
+      final tmp = await _freshIsolatedGitTargetDir(prefix);
+      await _git(tmp.path, ['init', '-q']);
+      await _git(tmp.path, ['config', 'user.email', 'test@example.com']);
+      await _git(tmp.path, ['config', 'user.name', 'Test']);
+      await Directory('${tmp.path}/scripts').create(recursive: true);
+      for (final f in const [
+        'check_code_review_pass_exists.dart',
+        'blast_radius_content_rules_lib.dart',
+      ]) {
+        File('$srcRoot/scripts/$f').copySync('${tmp.path}/scripts/$f');
+      }
+      await Directory('${tmp.path}/docs/reviews').create(recursive: true);
+      File('$srcRoot/docs/blast_radius.yaml')
+          .copySync('${tmp.path}/docs/blast_radius.yaml');
+      for (final rel in paths) {
+        final f = File('${tmp.path}/$rel');
+        await f.parent.create(recursive: true);
+        await f.writeAsString('// probe\n');
+        await _git(tmp.path, ['add', rel]);
+      }
+      return tmp;
+    }
+
+    Future<ProcessResult> runGate(Directory tmp) => runSpawnAsync(
+          'dart',
+          ['scripts/check_code_review_pass_exists.dart'],
+          why: 'check_code_review_pass_exists.dart in the isolated temp repo',
+          workingDirectory: tmp.path,
+          runInShell: true,
+        );
+
+    const demands = 'requires a STAGED review file';
+
+    for (final path in const [
+      'supabase/functions/rolling-context/zz_probe.ts',
+      'supabase/functions/_shared/purge_user_storage.ts',
+      'supabase/functions/_shared/purge_user_storage_test.ts',
+    ]) {
+      test('a lone staged $path demands a STAGED accepted review', () async {
+        final tmp = await stageOnly('pathglob_lone_test', [path]);
+        addTearDown(() => tmp.delete(recursive: true));
+        final r = await runGate(tmp);
+        expect(r.exitCode, 1, reason: '${r.stdout}${r.stderr}');
+        expect('${r.stdout}${r.stderr}', contains(demands),
+            reason: 'it must fail because the path is catastrophic, not for '
+                'some other defect');
+      });
+    }
+
+    test('control: a lone staged feature-tier file demands no review (so the failures above are the TIER)',
+        () async {
+      final tmp = await stageOnly('pathglob_control_test', ['zz_feature_probe.txt']);
+      addTearDown(() => tmp.delete(recursive: true));
+      final r = await runGate(tmp);
+      expect(r.exitCode, 0, reason: '${r.stdout}${r.stderr}');
+      expect('${r.stdout}${r.stderr}', contains('PASS: max blast-radius = feature'));
+    });
+
+    test('MIXED: a catastrophic path with feature files sorting before AND after it still demands the review (max tier)',
+        () async {
+      // `git diff --name-only` lists in byte order: aa_... < supabase/... < zz_... A gate that kept the FIRST or the
+      // LAST path's tier would see `feature` and wave the commit through.
+      final tmp = await stageOnly('pathglob_mixed_test', [
+        'aa_feature_probe.txt',
+        'supabase/functions/rolling-context/zz_probe.ts',
+        'zz_feature_probe.txt',
+      ]);
+      addTearDown(() => tmp.delete(recursive: true));
+      final r = await runGate(tmp);
+      expect(r.exitCode, 1, reason: '${r.stdout}${r.stderr}');
+      expect('${r.stdout}${r.stderr}', contains(demands));
+    });
+  });
 }
