@@ -6,6 +6,10 @@ B-pass of each batch. Each batch's `docs/plan-reviews/<branch>.md` cites rounds 
 Base `fdf06564` (origin/main 2026-10-10). Every batch gets its OWN worktree/branch off the then-current `origin/main` (§4.13).
 Founder directive 2026-10-09: "push and merge and CI is taking a lot of time everyday; plan and implement all of these." Max-autonomy: all gates in §6.
 
+Outcome 2026-10-12: B1 (PR #98 `d363553e`), B2 (PR #102 `9ffb2018`) and B3 (PR #104 `06ebe7cf`) shipped, and OI-275 is closed (`docs/audit/closed_issues.md`).
+B4 (section 5) was NOT built: the founder closed OI-275 without a B4 go. After B3 the critical path is the APK build check (3.6-4.3 min) and the slowest
+test shard (4.2-4.6 min), so B4 would save runner minutes, not waiting time; section 5 stays as the design if that changes.
+
 ## 0. Baseline (measured; source in the right column)
 
 | Fact | Value | Source |
@@ -49,7 +53,7 @@ Every new file/symbol is registered: new names (`tested-tree`, `dup-check`, `CI_
 - Merges with `gh pr merge <n> --merge --match-head-commit <sha>`. If main has commits the PR lacks it WARNS (does not refuse — today's behaviour; main CI runs in full on a non-identical tree). If the merge is refused for `required_conversation_resolution` it prints that reason.
 - Pinned `platform` in `docs/blast_radius.yaml` (like `safe_commit/safe_push/safe_merge`), and so is `safe_pr_merge_lib.dart`.
 
-**U4 (founder-owned):** allow-rule text for the handoff: `Bash(sh scripts/safe_pr_merge.sh:*)` — names the wrapper ONLY, never raw `gh pr merge`. The harness classifier already blocks a raw `gh pr merge` from a session ("Merge Without Review"); that stays. Alternative NOT proposed: required status checks on main — on 2026-07-25 they blocked every direct push and `/build-apk` (`feedback_mistake_branch_protection_semantics.md`). Terminal state `blocked_on_user`.
+**U4 (founder-owned):** allow-rule text for the handoff: `Bash(sh scripts/safe_pr_merge.sh:*)` — names the wrapper ONLY, never raw `gh pr merge`. The harness classifier already blocks a raw `gh pr merge` from a session ("Merge Without Review"); that stays. Alternative NOT proposed: required status checks on main — on 2026-07-25 they blocked every direct push and `/build-apk` (`feedback_mistake_branch_protection_semantics.md`). Terminal state `blocked_on_user`. Resolved 2026-10-12: the founder added the rule (closure ledger `speedup-b1-prepush` U4-2).
 
 **Tests (mutation-proven, §4.4 r21):**
 - `test/scripts/pre_push_branch_push_skip_e2e_test.dart`: the REAL `pre-push.sh` with stubbed `flutter`/`dart` and a stdin fixture (the existing e2e always passes `< /dev/null`): branch-only >= account (skip), delete-only (skip), main, develop, tag, mixed refs, empty stdin, garbage lines, unknown tier, `PRE_PUSH_FULL=1`, feature tier. Mutations: treat `main` as a branch; drop the zero-sha check; make garbled input skip => the matching cases redden.
@@ -106,7 +110,7 @@ Proof by TREE HASH, not timestamps:
 1. This plan: round 1 and round 2 done and applied (Sonnet, context-blind); each batch's record cites them; mechanical re-check of the post-round-2 edits happens in each batch's B-pass.
 2. Per batch: full local gate loop before its B-pass dispatch (§4.12.8): `flutter analyze lib/`, `TZ=Asia/Kolkata flutter test`, the pre-commit loop — not a subset; `/code-review` B-pass self-triggered before the merge; record + bpass review file per branch.
 3. Commit/push ONLY on the founder's word via `safe_commit.sh` / `safe_push.sh`; one push per batch; B1's first push runs the OLD hook (39 min) once.
-4. Founder-only: (a) the U4 allow rule `Bash(sh scripts/safe_pr_merge.sh:*)`; (b) approving the B4 flip commit after the `dry` evidence; (c) `sh scripts/setup-hooks.sh` on the VPS clone (I do it here).
+4. Founder-only: (a) the U4 allow rule `Bash(sh scripts/safe_pr_merge.sh:*)`; (b) approving the B4 flip commit after the `dry` evidence; (c) `sh scripts/setup-hooks.sh` on the VPS clone (I do it here). Status 2026-10-12: (a) done; (b) moot, B4 was not built; (c) done on the founder's Windows machine 2026-10-11, the VPS clone is still the founder's (B1 ledger `HOOK-1`).
 5. After each merge retire its worktree (§4.13.8). Then AAB 1.0.0+49 via `/build-apk` on a separate explicit go (+48 is recorded built 2026-10-01).
 
 ## 7. Savings summary (estimates; each cites its input; first runs re-measure)

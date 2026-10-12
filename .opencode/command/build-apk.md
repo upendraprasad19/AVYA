@@ -94,9 +94,11 @@ a permission classifier or sandbox has blocked before, so none of them is a surp
    then carry on with the gates below (`--from-green` needs `HEAD == origin/main`).
 
 **Steps a classifier or sandbox can block** (ask before starting, not after): raw `gh pr merge` is
-blocked as "Merge Without Review" (a past session's was; use step 6 instead); `sh scripts/safe_pr_merge.sh` may
-prompt or be refused until the founder adds the allow-rule `Bash(sh scripts/safe_pr_merge.sh:*)` to their
-settings (a settings change is the founder's, not the agent's); and `cd` / `git -C` into the primary
+blocked as "Merge Without Review" (a past session's was; use step 6 instead); `sh scripts/safe_pr_merge.sh` is
+covered by the founder's allow-rule `Bash(sh scripts/safe_pr_merge.sh:*)` in their settings (added 2026-10-12;
+a settings change is the founder's, not the agent's), so run it as the plain command from the worktree root: the rule
+matches the command text, and per the Claude Code docs a `cd` plus an output redirect in one compound command can still
+prompt. If it is blocked anyway, say so and ask. Also `cd` / `git -C` into the primary
 checkout from a linked worktree (step 7) has been refused by some sessions' sandbox.
 
 **Why this matters:** Android silently rejects a same-versionCode reinstall as a no-op. Founder hit this on Tests #7, #8, #10, #11, #11.1, #12 — all originally built at `1.0.0+6`.
