@@ -168,6 +168,27 @@ pending:
       see docs/audit/open_issues.md's OI-53 entry for the founder's scoping
       decision.
 
+  - flag: enable_body_measurements
+    branch: coach-measurement-sheet-ui
+    build_commit: null
+    build_date: 2026-10-12
+    flip_reviewed: false
+    flip_commit: null
+    note: >
+      L2b Landing B (the dark measurements sheet, the due/baseline prompt, the
+      Home banner and the Weight-sheet link), plan
+      docs/plans/coach-measurement-sheet-ui.md v3.1, record
+      docs/plan-reviews/coach-measurement-sheet-ui.md. This build took the FULL
+      x2 review (3 rounds) and a B-pass, not the ship_dark_build tier. Default
+      OFF in configBox; OFF identity is proved by the observer-based tests in
+      test/contracts/measurement_flag_off_identity_test.dart. build_commit is
+      null because this note is written in the same commit it describes; the
+      stamp commit sets the sha (no test or script reads this field, so the
+      stamp is self-attested). The flip waits for Landing C (E3's permanent
+      "Add measurements" door), the OQ-L2a decision, a position on OI-310 and
+      the under-18 status quo (OI-305); it needs the full x2 + bpass: accepted
+      again, and deletes the blast_radius.yaml rule for measurement_flags.dart.
+
 # ── HARD PRECONDITIONS for flipping enable_hold_weeks ─────────────────────
 # Not a wish-list. The flip-on commit already requires the full ×2 + bpass
 # (§4.12.4); this is the checklist that review must show closed. Every item was

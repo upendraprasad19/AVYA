@@ -19,8 +19,11 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
+import 'package:icanbefitter/features/profile/providers/body_measurements_provider.dart';
+import 'package:icanbefitter/features/profile/providers/measurement_flag_provider.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
@@ -28,6 +31,10 @@ import '../helpers/hive_test_setup.dart';
 
 const _userA = '5f0a13b2-aaaa-bbbb-cccc-dddddddddddd';
 const _userB = '5f0a13b2-eeee-ffff-aaaa-bbbbbbbbbbbb';
+// A different first-8-hex prefix: the per-user box name is derived from it, so
+// _userA and _userB above share ONE set of boxes (hive_user_session.dart
+// namespacedBoxName).
+const _userC = '7a1b2c3d-aaaa-bbbb-cccc-eeeeeeeeeeee';
 
 void main() {
   late Directory tempDir;
@@ -93,5 +100,62 @@ void main() {
             "new user's Hive box — got: $profileB");
     expect((profileB['height_cm'] as num).toInt(), 170);
     expect((profileB['current_weight_kg'] as num).toInt(), 70);
+  });
+
+  // L2b Landing B: the two user-scoped providers of the measurements sheet
+  // follow the auth token as well (Bug c4055a class).
+  test('bodyMeasurementsProvider rebuilds against the new user\'s box when '
+      'authUserIdTokenProvider changes', () async {
+    await HiveService.instance.healthBox.put('measurement_2026-10-05', {
+      'id': 'a',
+      'date': '2026-10-05',
+      'waist': 81.0,
+      'updated_at_ms': 1,
+    });
+    final container = ProviderContainer(overrides: [
+      authUserIdTokenProvider.overrideWithValue(_userA),
+    ]);
+    addTearDown(container.dispose);
+    final sub = container.listen(bodyMeasurementsProvider, (_, __) {});
+    addTearDown(sub.close);
+
+    expect(container.read(bodyMeasurementsProvider).latest['waist']?.cm, 81.0,
+        reason: 'first read reflects user A');
+
+    await HiveUserSession.openForUser(_userC);
+    await HiveService.instance.healthBox.put('measurement_2026-10-06', {
+      'id': 'b',
+      'date': '2026-10-06',
+      'chest': 100.0,
+      'updated_at_ms': 1,
+    });
+    container.updateOverrides([
+      authUserIdTokenProvider.overrideWithValue(_userC),
+    ]);
+
+    final s = container.read(bodyMeasurementsProvider);
+    expect(s.latest.keys.toSet(), {'chest'},
+        reason: 'after the token changes the provider rebuilds from B\'s box');
+    expect(s.latest.containsKey('waist'), isFalse);
+  });
+
+  test('measurementsEnabledProvider re-reads the flag when the token '
+      'changes', () async {
+    final container = ProviderContainer(overrides: [
+      authUserIdTokenProvider.overrideWithValue(_userA),
+    ]);
+    addTearDown(container.dispose);
+    final sub = container.listen(measurementsEnabledProvider, (_, __) {});
+    addTearDown(sub.close);
+    expect(container.read(measurementsEnabledProvider), isFalse);
+
+    await HiveService.instance.configBox.put('enable_body_measurements', true);
+    expect(container.read(measurementsEnabledProvider), isFalse,
+        reason: 'cached until something tells it');
+
+    container.updateOverrides([
+      authUserIdTokenProvider.overrideWithValue(_userB),
+    ]);
+    expect(container.read(measurementsEnabledProvider), isTrue);
   });
 }

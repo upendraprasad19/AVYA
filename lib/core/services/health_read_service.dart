@@ -115,8 +115,8 @@ class HealthReadService {
   /// scans the `measurement_<istDate>` keys).
   ///
   /// The read path for what a person sees or the coach is told: the AI snapshot
-  /// goes through [latestBySite], and the Landing B sheet and prompt will go
-  /// through this list. (The sync push and the restore handle the raw records
+  /// goes through [latestBySite], and the Landing B history provider (and so
+  /// the sheet and the prompt) goes through this list. (The sync push and the restore handle the raw records
   /// themselves; Landing A does not change them.)
   ///
   /// A record is valid when its `date` is a real IST calendar day written

@@ -511,6 +511,11 @@ paths:
   # singleton holding the previous account's state (13 call sites register, the engine is one).
   - { glob: "lib/core/services/singleton_lifecycle_registry.dart", tier: platform }   # cross-account reset hook
 
+  # L2b Landing B: the ship-dark flag of the body-measurements sheet. A UI flag file, NOT engine code, so it sits
+  # outside the sync-engine block above. Declared above the lib/core/services/** catch-all (first match wins); the
+  # flip commit deletes this rule together with the flag.
+  - { glob: "lib/core/services/measurement_flags.dart", tier: platform }   # enable_body_measurements: gates every B surface
+
   # ----- catch-all fallbacks (lowest specificity; declared last) -----
   # Any other service file under lib/core/services/ is account-tier by default.
   # If a new service is clearly platform-scoped, add an explicit rule ABOVE this line.

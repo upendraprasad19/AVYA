@@ -95,6 +95,13 @@ class UserConfigMigrator {
     // Profile state
     'progress_photo_count', 'first_report_viewed',
     'profile_nudge_dismissed_at',
+    // Body-measurements sheet (L2b Landing B): the two prompt stamps (IST day
+    // strings) and the last-used unit ('cm' | 'in'). Per-user: leaked, a
+    // dismissal or a unit preference would carry to the next account. New keys,
+    // never in configBox — no _flagKey bump.
+    'body_measurement_prompt_dismissed_at',
+    'body_measurement_prompt_baseline_skipped_at',
+    'body_measurement_sheet_unit',
   ];
 
   /// Keys that intentionally stay in shared `configBox`.

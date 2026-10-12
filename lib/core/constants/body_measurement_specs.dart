@@ -1,9 +1,24 @@
-/// Inclusive sanity range, in centimetres, for one body-measurement site.
+/// Inclusive sanity range, in centimetres, for one body-measurement site, plus
+/// the copy the entry sheet shows for it (L2b Landing B).
+///
+/// [label] is the field title and [guide] one line (at most 90 characters,
+/// asserted by `test/utils/measurement_units_test.dart`) saying where to hold
+/// the tape. The copy stays on the spec on purpose: a flat map keyed by the site
+/// tokens elsewhere would trip the lib-wide flat-literal scan in
+/// `body_measurement_sites_derivation_test.dart`, and a constructor call does
+/// not.
 class BodyMeasurementSpec {
-  const BodyMeasurementSpec({required this.minCm, required this.maxCm});
+  const BodyMeasurementSpec({
+    required this.minCm,
+    required this.maxCm,
+    required this.label,
+    required this.guide,
+  });
 
   final double minCm;
   final double maxCm;
+  final String label;
+  final String guide;
 }
 
 /// Sanity bounds (centimetres) for the four body-measurement sites in
@@ -33,10 +48,30 @@ class BodyMeasurementSpec {
 /// literal for `test/contracts/body_measurement_sites_derivation_test.dart`
 /// (the keys == tokens test is the protection, not that scan's blind spot).
 const Map<String, BodyMeasurementSpec> kBodyMeasurementSpecs = {
-  'chest': BodyMeasurementSpec(minCm: 60, maxCm: 200),
-  'waist': BodyMeasurementSpec(minCm: 50, maxCm: 200),
-  'hips': BodyMeasurementSpec(minCm: 60, maxCm: 200),
-  'arms': BodyMeasurementSpec(minCm: 20, maxCm: 70),
+  'chest': BodyMeasurementSpec(
+    minCm: 60,
+    maxCm: 200,
+    label: 'Chest',
+    guide: 'Around the fullest part of your chest, tape level under your arms.',
+  ),
+  'waist': BodyMeasurementSpec(
+    minCm: 50,
+    maxCm: 200,
+    label: 'Waist',
+    guide: 'Around your natural waist, just above the navel, after a normal exhale.',
+  ),
+  'hips': BodyMeasurementSpec(
+    minCm: 60,
+    maxCm: 200,
+    label: 'Hips',
+    guide: 'Around the widest part of your hips, feet together.',
+  ),
+  'arms': BodyMeasurementSpec(
+    minCm: 20,
+    maxCm: 70,
+    label: 'Arms',
+    guide: 'Around the middle of your upper arm, relaxed, halfway from shoulder to elbow.',
+  ),
 };
 
 /// True when [site] is a registered site and [v] lies within its bounds,

@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/dart_source_slice.dart';
+
 /// Source-of-truth contract: writer/reader pairs for `day_rollover_provider_invalidation`
 /// from docs/sot_registry.yaml.
 ///
@@ -73,6 +75,22 @@ void main() {
     // had NO invalidation anywhere in the app (not just here) before this
     // fix; see docs/audit/open_issues.md OI-267 for the still-open
     // write-time invalidation gap this fix does not cover.
+    // L2b Landing B: "due" depends on the clock, so the measurements history is
+    // refreshed by the rollover (the prompt follows through its watch). The
+    // exact statement, not the bare name: a comment or an unrelated mention must
+    // not satisfy it. Behavioural proof: Test G in
+    // day_rollover_provider_invalidation_behavioral_test.dart.
+    test('runRolloverNow invalidates bodyMeasurementsProvider (exact statement, '
+        'in the rollover function, outside comments)', () {
+      final body = functionBody(stripDartComments(rolloverSrc),
+          'Future<void> _doRolloverWithRef(');
+      expect(countOf(body, 'ref.invalidate(bodyMeasurementsProvider);'), 1,
+          reason: 'must invalidate bodyMeasurementsProvider — '
+              'the 28-day "due" rule reads the clock');
+      // A commented-out copy elsewhere in the file must not satisfy it.
+      expect(body.contains('//'), isFalse, reason: 'the slice is comment-free');
+    });
+
     test('runRolloverNow invalidates weeklyReportDataProvider', () {
       expect(rolloverSrc.contains('weeklyReportDataProvider'), isTrue,
           reason: 'runRolloverNow must invalidate weeklyReportDataProvider — '

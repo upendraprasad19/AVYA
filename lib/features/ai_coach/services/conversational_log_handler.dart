@@ -1,13 +1,16 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/body_measurement_sites.dart';
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/health_write_service.dart';
+import 'package:icanbefitter/core/services/measurement_flags.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/shared/repositories/food_repository.dart';
+import 'package:icanbefitter/features/profile/providers/body_measurements_provider.dart';
 import '../providers/ai_coach_provider.dart';
 
 /// Routes AI-detected log actions to existing Riverpod providers.
@@ -160,6 +163,15 @@ class ConversationalLogHandler {
     if (type == null || valueCm == null || valueCm <= 0) return false;
     if (!isBodyMeasurementSite(type)) return false;
 
+    // L2b Landing B: with the flag ON a successful chat write refreshes the
+    // measurements history (the notifier's own Ref outlives this widget). With
+    // the flag OFF no provider is read at all, so this path is byte-identical
+    // to before. Both the read and the call are guarded: neither may turn a
+    // successful write into a `false` from executeAction's catch-all.
+    final notifier = MeasurementFlags.bodyMeasurementsEnabled
+        ? _tryMeasurementNotifier()
+        : null;
+
     // audit-2026-05-16 task E.7 — route through HealthWriteService so the
     // measurement key uses `istDateStr` and the sync fan-out + telemetry
     // pattern is identical to every other health-domain mutation.
@@ -169,7 +181,27 @@ class ConversationalLogHandler {
       valueCm: valueCm,
       source: WriteSource.aiCoach,
     );
+    if (result.success) {
+      try {
+        notifier?.noteWritten();
+      } catch (_) {
+        // The write succeeded; only the history refresh failed. Record it (the
+        // history would otherwise stay stale with no trace) and carry on.
+        unawaited(ErrorTelemetry.logEvent('measurement_chat_refresh_failed',
+            message: 'stage=note'));
+      }
+    }
     return result.success;
+  }
+
+  MeasurementWriteNotifier? _tryMeasurementNotifier() {
+    try {
+      return ref.read(measurementWriteProvider.notifier);
+    } catch (_) {
+      unawaited(ErrorTelemetry.logEvent('measurement_chat_refresh_failed',
+          message: 'stage=lookup'));
+      return null;
+    }
   }
 
   // ── Helpers ────────────────────────────────────────────────────

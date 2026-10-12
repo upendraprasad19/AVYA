@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../constants/body_measurement_sites.dart';
 import '../constants/body_measurement_specs.dart';
 import '../utils/ist_date.dart';
 import '../utils/readiness.dart';
@@ -248,6 +249,78 @@ class HealthWriteService {
       debugPrint('[HealthWriteService.logMeasurement] $e\n$st');
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
           reason: 'health_write_service_log_measurement'));
+      return WriteResult.fail(e.toString());
+    } finally {
+      _releaseLock(lockKey, c);
+    }
+  }
+
+  /// Logs SEVERAL body-measurement sites for one day in ONE write (L2b Landing
+  /// B, the measurements sheet). [sites] is keyed by the canonical tokens in
+  /// `kBodyMeasurementSites`.
+  ///
+  /// All-or-nothing: the whole map is validated first, in a loop that only
+  /// reads, before the box is touched. A value is rounded to 0.1 cm and judged
+  /// AFTER rounding (the rounded value is the one stored); an empty map, an
+  /// unregistered key or any out-of-range / non-finite value fails and writes
+  /// nothing. A rejection logs ONE `measurement_value_rejected` event per call
+  /// (`tier=writer`, the first offending KNOWN site, never the value); a map of
+  /// unknown sites only logs none. The day record, its lock key and its fan-out
+  /// are those of [logMeasurement]: the two methods never nest, so the
+  /// non-re-entrant [_acquireLock] cannot deadlock, and a site that is not in
+  /// [sites] is kept as it was ([measurementRecordWith]).
+  Future<WriteResult> logMeasurements({
+    required DateTime date,
+    required Map<String, double> sites,
+    required WriteSource source,
+  }) async {
+    if (sites.isEmpty) {
+      return WriteResult.fail('logMeasurements: no sites');
+    }
+    final rounded = <String, double>{};
+    String? rejected;
+    var valid = true;
+    for (final entry in sites.entries) {
+      final site = entry.key;
+      final stored = roundMeasurementToTenth(entry.value);
+      if (!isBodyMeasurementSite(site) ||
+          !isValidBodyMeasurementCm(site, stored)) {
+        valid = false;
+        rejected ??= measurementRejectionMessage('writer', site, stored);
+        continue;
+      }
+      rounded[site] = stored;
+    }
+    if (!valid) {
+      if (rejected != null) {
+        unawaited(ErrorTelemetry.logEvent('measurement_value_rejected',
+            message: rejected));
+      }
+      return WriteResult.fail(
+          'logMeasurements: unknown site or value out of range');
+    }
+    final dateStr = istDateStr(date);
+    final key = 'measurement_$dateStr';
+    final lockKey = '$dateStr::measurement';
+    final c = await _acquireLock(lockKey);
+    try {
+      final box = HiveService.instance.healthBox;
+      final record = measurementRecordWith(
+        box.get(key),
+        dateStr: dateStr,
+        sites: rounded,
+        source: source,
+      );
+      await box.put(key, record);
+
+      unawaited(SyncService.instance.syncMeasurementsNow());
+      unawaited(SyncService.instance.pushSnapshot());
+
+      return WriteResult.ok(key);
+    } catch (e, st) {
+      debugPrint('[HealthWriteService.logMeasurements] $e\n$st');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'health_write_service_log_measurements'));
       return WriteResult.fail(e.toString());
     } finally {
       _releaseLock(lockKey, c);

@@ -35,6 +35,7 @@ import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show ProviderBase;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:icanbefitter/core/services/day_rollover_service.dart';
@@ -44,7 +45,11 @@ import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
+import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
+import 'package:icanbefitter/features/profile/providers/body_measurements_provider.dart';
+import 'package:icanbefitter/features/profile/providers/measurement_prompt_provider.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
+import 'package:icanbefitter/features/profile/services/measurement_prompt_rules.dart';
 import 'package:icanbefitter/features/profile/providers/weekly_report_data_provider.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
@@ -92,6 +97,8 @@ void main() {
     // testWidgets body gets a clean singleton (no stale ref from prior test).
     DayRolloverObserver.instance.dispose();
   });
+
+  tearDown(resetTestClock);
 
   const testUser = 'test-day-rollover-behav-0055-aabbccdd';
 
@@ -487,7 +494,111 @@ void main() {
               'rebuilds and picks up the 72.5kg entry written while the old '
               'build was cached');
     });
+
+    // ── Test G: bodyMeasurementsProvider (L2b Landing B) ────────────────
+    //
+    // "Due" depends on the clock: an entry 27 days old is not due today and is
+    // due tomorrow, with no write in between. Only the rollover can tell the
+    // cached history (and, through its watch, the prompt) that the day moved.
+    // The history state deliberately has no value equality: with one, the
+    // rebuilt (equal) state would not notify the prompt and it would stay
+    // `none` until something else rebuilt it.
+
+    testWidgets(
+        'with the measurements flag ON a rollover that moves the clock one '
+        'day turns a 27-day-old entry from none into due', (tester) async {
+      await tester.runAsync(() async {
+        await HiveUserSession.openForUser(testUser);
+        await HiveService.instance.configBox
+            .put('enable_body_measurements', true);
+        await HiveService.instance.userBox.put(
+            'profile', {'onboarding_completed_at': '2026-07-01T00:00:00Z'});
+        await HiveService.instance.healthBox.put('measurement_2026-09-15', {
+          'id': 'meas_1',
+          'date': '2026-09-15',
+          'waist': 80.0,
+          'updated_at_ms': 1,
+        });
+        await HiveService.instance.configBox
+            .put('last_known_date', '2026-10-11');
+      });
+      setTestClockTo(DateTime.utc(2026, 10, 12, 6)); // IST 2026-10-12: 27 days
+
+      final refCompleter =
+          Completer<({WidgetRef ref, ProviderContainer container})>();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [authUserIdTokenProvider.overrideWithValue(testUser)],
+          child: _RefCaptureWidget(onCapture: refCompleter.complete),
+        ),
+      );
+      await tester.pump();
+      final captured = await tester.runAsync(() => refCompleter.future);
+      final c = captured!.container;
+      final sub = c.listen(measurementPromptProvider, (_, _) {});
+      addTearDown(sub.close);
+
+      expect(c.read(measurementPromptProvider), MeasurementPrompt.none,
+          reason: 'precondition: 27 days is not due');
+
+      setTestClockTo(DateTime.utc(2026, 10, 13, 6)); // IST 2026-10-13: 28 days
+      expect(c.read(measurementPromptProvider), MeasurementPrompt.none,
+          reason: 'cached: nothing has told the prompt the day moved');
+
+      await tester.runAsync(() async {
+        await DayRolloverObserver.instance.runRolloverNow(captured.ref);
+      });
+
+      expect(c.read(measurementPromptProvider), MeasurementPrompt.due,
+          reason: 'runRolloverNow must invalidate bodyMeasurementsProvider; '
+              'the prompt follows through its watch');
+    });
+
+    testWidgets(
+        'with the measurements flag OFF a rollover creates neither '
+        'measurements provider', (tester) async {
+      await tester.runAsync(() async {
+        await HiveUserSession.openForUser(testUser);
+        await HiveService.instance.configBox
+            .put('last_known_date', '2026-10-11');
+      });
+      setTestClockTo(DateTime.utc(2026, 10, 13, 6));
+
+      final created = _Created();
+      final refCompleter =
+          Completer<({WidgetRef ref, ProviderContainer container})>();
+      await tester.pumpWidget(
+        ProviderScope(
+          observers: [created],
+          overrides: [authUserIdTokenProvider.overrideWithValue(testUser)],
+          child: _RefCaptureWidget(onCapture: refCompleter.complete),
+        ),
+      );
+      await tester.pump();
+      final captured = await tester.runAsync(() => refCompleter.future);
+      // Control: the observer sees a provider this container creates.
+      captured!.container.read(waterIntakeProvider);
+      expect(created.saw(waterIntakeProvider), isTrue);
+
+      await tester.runAsync(() async {
+        await DayRolloverObserver.instance.runRolloverNow(captured.ref);
+      });
+
+      expect(created.saw(bodyMeasurementsProvider), isFalse);
+      expect(created.saw(measurementPromptProvider), isFalse);
+    });
   });
+}
+
+final class _Created extends ProviderObserver {
+  final List<ProviderBase<Object?>> providers = [];
+
+  @override
+  void didAddProvider(ProviderObserverContext context, Object? value) {
+    providers.add(context.provider);
+  }
+
+  bool saw(ProviderBase<Object?> p) => providers.contains(p);
 }
 
 // ── Widget bridge to obtain a real WidgetRef + ProviderContainer ──────────

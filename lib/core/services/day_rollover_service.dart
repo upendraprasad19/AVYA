@@ -25,6 +25,7 @@ import 'package:icanbefitter/features/train/providers/train_provider.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 
 // ── Profile providers (biometrics from health sync) ──
+import 'package:icanbefitter/features/profile/providers/body_measurements_provider.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/features/profile/providers/referral_eligibility_provider.dart';
 import 'package:icanbefitter/features/profile/providers/weekly_report_data_provider.dart';
@@ -280,6 +281,9 @@ class DayRolloverObserver with WidgetsBindingObserver {
     ref.invalidate(todayStepsProvider);
     ref.invalidate(todayWeightLoggedProvider);
     ref.invalidate(biometricProvider);
+    // L2b Landing B: "due" and the future-date filter depend on the clock. The
+    // prompt provider follows through its watch. A no-op until built.
+    ref.invalidate(bodyMeasurementsProvider);
 
     // ── Profile providers ──
     // Plan-review round 1 finding (docs/plan-reviews/reps-secs-invalidation-fixes.md)
