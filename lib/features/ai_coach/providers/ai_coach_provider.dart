@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:icanbefitter/core/constants/body_measurement_sites.dart';
+import 'package:icanbefitter/core/constants/body_measurement_specs.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
@@ -1478,6 +1479,11 @@ class PendingLogAction {
 }
 
 class PendingLogActionsNotifier extends Notifier<List<PendingLogAction>> {
+  /// Keeps ids unique inside one response: two actions of one type parsed in
+  /// the same millisecond used to share an id, so confirming (or skipping) one
+  /// card marked the other too.
+  int _actionSeq = 0;
+
   @override
   List<PendingLogAction> build() {
     ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
@@ -1567,7 +1573,7 @@ class PendingLogActionsNotifier extends Notifier<List<PendingLogAction>> {
     final data = raw['data'];
     if (action == null || data is! Map<String, dynamic>) return null;
 
-    final id = '${DateTime.now().millisecondsSinceEpoch}_$action';
+    final id = '${DateTime.now().millisecondsSinceEpoch}_${_actionSeq++}_$action';
 
     switch (action) {
       case 'log_water':
@@ -1612,9 +1618,28 @@ class PendingLogActionsNotifier extends Notifier<List<PendingLogAction>> {
         );
 
       case 'log_measurement':
-        final type = data['type'] as String? ?? '';
-        final valueCm = (data['value_cm'] as num?)?.toDouble() ?? 0;
-        if (!isBodyMeasurementSite(type) || valueCm <= 0) {
+        // L2b Landing A: `is` checks, never casts. The model's JSON can carry a
+        // wrong-typed field ("82", true, []) and a String stays a String through
+        // the proxy; a cast throws here inside send's try, the error bubble
+        // replaces the reply that was shown, and the later actions and the typed
+        // intents of that response are lost.
+        final rawType = data['type'];
+        final type = rawType is String ? rawType : '';
+        final rawValue = data['value_cm'];
+        final valueCm = rawValue is num ? rawValue.toDouble() : null;
+        if (!isBodyMeasurementSite(type)) return null;
+        if (valueCm == null || !isValidBodyMeasurementCm(type, valueCm)) {
+          // The bounds are live with no lever, so a model that forgets to
+          // convert inches, or writes the number as a string (which used to
+          // throw and be logged by the send catch), would otherwise drop the
+          // card silently. The event carries the site and below / above /
+          // nonfinite / wrongtype, never the value; a missing or null value
+          // stays silent (the message is null for it).
+          final rejected = measurementRejectionMessage('chat', type, rawValue);
+          if (rejected != null) {
+            unawaited(ErrorTelemetry.logEvent('measurement_value_rejected',
+                message: rejected));
+          }
           return null;
         }
         final cap = type.isEmpty ? '' : type[0].toUpperCase() + type.substring(1);
