@@ -81,3 +81,7 @@ The founder merged the PR, then gave the deploy go in their own words ("live dep
 5. The deploy archived `backups/edge_function_payloads/clean-orphan-media/v2_df2b128.json`; it lands in the branch that carries this section.
 
 OI-321 is NOT closed by the deploy: the plan's line "OI-321 -> CLOSED" in section 5 assumed the deploy was the last step. The proof of behaviour is ledger row V1 (the next run, 2026-10-12 03:00 UTC). OI-321 closes with `closes-oi: OI-321` once V1 is read.
+
+## 7. V1 result (2026-10-12, after the first scheduled run on v15)
+
+Read-only, 04:12 UTC: `cron_call_log` id 9752 (`clean-orphan-media`, 2026-10-12 03:00:02 UTC) is `success`, HTTP 200, empty `error_summary`; the function log for request `76f39f0a` on version 15 carries `scanned=0 deleted=0 skipped_pro=0 skipped_unknown=0 failed=0 already_gone=0` and the edge log shows POST 200 in 2422 ms. The candidate set was empty, so the run shows the deployed bundle boots, authenticates and reports, not the PRO recheck on a live row (self-attested residue from section 5 stands). Ledger row V1 is `closed_in_commit` and OI-321 moved to `closed_issues.md` with `closes-oi: OI-321`.

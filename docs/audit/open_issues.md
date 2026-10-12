@@ -5729,21 +5729,6 @@ Residuals (i) and (iii) of the B1 plan's D1: a PRO caller can upload an unbounde
 
 Residual (iv) of the B1 plan's D1, the OI-283 class: a dashboard edit of the progress-photos policies (a new permissive INSERT policy, a widened UPDATE policy) would silently reopen the door B1 closes. Propose a scheduled catalog snapshot compared with a committed expectation.
 
-## OI-321 — clean-orphan-media rechecksIsPro uses .maybeSingle() (index.ts:120-129): a user with two unexpired active subscription rows gets an error, data null, and is treated as free - chat-media cleanup only
-
-- **Status**: OPEN · fix merged (PR #101, `df2b1282`) and LIVE as Edge Function v15 (deployed 2026-10-11 12:37 UTC on the founder's go; unauthenticated smoke 401)
-- **Blocked on**: time. The first execution of the new code is the next scheduled run, 2026-10-12 03:00 UTC (08:30 IST). Read `cron_call_log` for `clean-orphan-media` (status `success`, `error_summary` empty or carrying counts) and the function log line with the counts (ledger row V1 in `docs/audit/oi321-orphan-media-recheck.closure.yaml`), then close this entry with `closes-oi: OI-321`.
-- **Verified**: 2026-10-07 - read `supabase/functions/clean-orphan-media/index.ts:120-129`: `.maybeSingle()` errors on two matching rows, `data` is null, `!!data` is false, so the user is treated as free. Found by the B1 Hermes pass (L1 note).
-- **Identified**: 2026-10-07 · filed via mint_oi.sh from branch `pp-preexisting-ois`
-
-Impact is limited to chat-media orphan cleanup (a user with two unexpired active rows is cleaned as if free); no PRO gate depends on this function.
-
-**Corrections found while fixing it (2026-10-11, diagnose `docs/diagnoses/2026-10-11-clean-orphan-media-unreadable-pro-check-f0b6d8.md`):**
-- The hole was LARGER than filed: `rechecksIsPro` kept only `data`, so ANY failed subscription read (not only the two-row `PGRST116`) read "free" and the next line deleted the object. The filed fix ("read the active rows with a limit and test for any") and the shared `isProUser` helper would have closed the two-row case and left the error case, because both answer `false` on a read error.
-- It was NARROWER in reach than the title reads: the candidate RPC `find_orphan_chat_media` (migration 071; live body read with `pg_get_functiondef`) already excludes every user with an active unexpired subscription, so the recheck only matters when the user upgrades between the scan and the delete.
-- It is a direct recurrence of `f2b9d4` (`ai-proxy` `checkPro`, the same missing `.limit(1)`) and bug class 2.49. A sweep of all 27 `from('subscriptions')` reads under `supabase/functions` found this the only user-keyed PRO read without `.limit(1)` and the only one whose unknown branch is destructive.
-- Fix: `readProState` (pro / free / unknown) in `_shared/subscription.ts`, `clean-orphan-media/logic.ts` removing only on exactly `free`, the counts recorded on `cron_call_log.error_summary`, and a ratio rule (at least 5 undecided AND a majority of the scanned) that ends the run `failed` so `alert_cron_failures` pages the founder. Committed as `5c001dd6`, merged with PR #101 (`df2b1282`) and live since the v15 deploy of 2026-10-11 (the rollback it named did not exist: OI-334).
-
 ## OI-323 — weekly-report has no server-side per-day cap for PRO: consume_quota runs only for non-PRO (weekly-report/index.ts:716), so the client once-per-IST-day cap is bypassed by a direct API call or a second device and each call is a thinking-on Gemini call - product decision needed on a PRO cap
 
 - **Status**: OPEN
