@@ -110,7 +110,7 @@ Proof by TREE HASH, not timestamps:
 1. This plan: round 1 and round 2 done and applied (Sonnet, context-blind); each batch's record cites them; mechanical re-check of the post-round-2 edits happens in each batch's B-pass.
 2. Per batch: full local gate loop before its B-pass dispatch (§4.12.8): `flutter analyze lib/`, `TZ=Asia/Kolkata flutter test`, the pre-commit loop — not a subset; `/code-review` B-pass self-triggered before the merge; record + bpass review file per branch.
 3. Commit/push ONLY on the founder's word via `safe_commit.sh` / `safe_push.sh`; one push per batch; B1's first push runs the OLD hook (39 min) once.
-4. Founder-only: (a) the U4 allow rule `Bash(sh scripts/safe_pr_merge.sh:*)`; (b) approving the B4 flip commit after the `dry` evidence; (c) `sh scripts/setup-hooks.sh` on the VPS clone (I do it here). Status 2026-10-12: (a) done; (b) moot, B4 was not built; (c) done on the founder's Windows machine 2026-10-11, the VPS clone is still the founder's (B1 ledger `HOOK-1`).
+4. Founder-only: (a) the U4 allow rule `Bash(sh scripts/safe_pr_merge.sh:*)`; (b) approving the B4 flip commit after the `dry` evidence; (c) `sh scripts/setup-hooks.sh` on the VPS clone (I do it here). Status 2026-10-12: (a) done; (b) moot, B4 was not built; (c) done on the founder's Windows machine 2026-10-11, and the VPS session reported its hooks current on 2026-10-12 (B1 ledger `HOOK-1`, `verified_clean`, relayed report).
 5. After each merge retire its worktree (§4.13.8). Then AAB 1.0.0+49 via `/build-apk` on a separate explicit go (+48 is recorded built 2026-10-01).
 
 ## 7. Savings summary (estimates; each cites its input; first runs re-measure)

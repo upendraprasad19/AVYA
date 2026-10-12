@@ -79,11 +79,12 @@ findings:
 
   - id: HOOK-1
     title: "The installed git hook is a COPY of scripts/pre-push.sh: each clone keeps the old behaviour until `sh scripts/setup-hooks.sh` is re-run"
-    terminal_state: blocked_on_user
-    reason: >
-      check_hooks_installed.dart only WARNS on drift. After this batch merges, `sh scripts/setup-hooks.sh` must run on every clone: this machine
-      (the agent runs it from Bash, which has `sh`, once the founder gives the merge go) and the VPS clone (founder; the founder's PowerShell has no `sh`).
-      Documented in docs/architecture/hooks.md.
+    terminal_state: verified_clean
+    evidence: >
+      check_hooks_installed.dart only WARNS on drift, so `sh scripts/setup-hooks.sh` had to run on every clone. This machine: run by the agent 2026-10-11 after the
+      merge. VPS clone: on 2026-10-12 the founder relayed the report of the session working on the VPS clone, which said its installed hooks matched the repo
+      byte for byte and that check_hooks_installed (Gate 32) passed with all five hooks installed. This is a RELAYED report, not something the agent on the
+      laptop checked, and Gate 32 only proves the five hooks exist; the byte comparison is the VPS session's own claim. Documented in docs/architecture/hooks.md.
 
   - id: OI275-A
     title: "OI-275 acceptance A (a version-only diff classifies below account so pre-push skips the suite)"
