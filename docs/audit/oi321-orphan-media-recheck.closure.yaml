@@ -144,6 +144,6 @@ findings:
 
   - id: V1
     title: "live confirmation: the next scheduled run (03:00 UTC) shows cron_call_log status success and the counts in the function log"
-    terminal_state: upstream_blocked
-    blocker: "Time: the first execution of the deployed code is the next scheduled run of cron job clean_orphan_media_daily, 2026-10-12 03:00 UTC (08:30 IST). A run cannot be forced without the cron secret, and an authenticated invoke deletes live objects."
-    reopen_when: "After 2026-10-12 03:00 UTC: read cron_call_log for clean-orphan-media (status success, error_summary empty or carrying scanned/skipped counts) and the function log line with the counts. A failed row, or unknown/failed counts in error_summary, is the finding. Then close OI-321 with closes-oi: OI-321."
+    terminal_state: closed_in_commit
+    commit: oi321-v1-close batch commit (the commit carrying closes-oi: OI-321)
+    verification: "Read 2026-10-12 04:12 UTC, project dedsavbjuwgarrhphgnl, read-only. cron_call_log id 9752: function_name clean-orphan-media, started_at 2026-10-12 03:00:02.878056+00, status success, http_status 200, request_id 76f39f0a, error_summary empty. The function log for the same request (execution on deployment version 15, boot 36 ms) carries the line [clean-orphan-media] request_id=76f39f0a scanned=0 deleted=0 skipped_pro=0 skipped_unknown=0 failed=0 already_gone=0, and the edge log shows POST 200 in 2422 ms, version 15. The two earlier daily runs (2026-10-10 and 2026-10-11 03:00 UTC, ids 9600 and 9674) were also success with an empty error_summary and ran on v14. SCOPE STATED: the candidate set was empty (scanned=0), so this run proves the v15 bundle boots, passes the cron auth, runs the sweep and writes the telemetry line and the cron_call_log row; it does NOT exercise the three-state PRO recheck against a live row (that remains proven only by the fakes in test/contracts/clean_orphan_media_*)."
