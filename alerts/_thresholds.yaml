@@ -115,6 +115,37 @@ thresholds:
     phase: 1
     defined_in_migration: "146_alert_cron_job_silent.sql"
 
+  referral_conversions_failed:
+    description: "referral reward credits that raised inside one run of referral_conversions_hourly (the row stays pending and is retried every hour). Written in its OWN sub-block with its OWN source; names the redemption ids in context_json"
+    severity: warn   # the founder digest reads every severity; the Telegram trigger fires on critical only
+    fire_at: 1       # any failed credit
+    cron_cadence: "41 * * * *"
+    dedup_window_hours: 23   # an unacknowledged alert of this source from the last 23 hours suppresses a new one (145's rule)
+    acknowledge_sql: "UPDATE public.alerts SET acknowledged = true, acknowledged_at = now() WHERE id = <id>"
+    phase: 1
+    defined_in_migration: "159_referral_reward_on_conversion.sql"
+
+  referral_conversions_stalled:
+    description: "referral rewards that have been pending more than pending_days_above days since their payment (a 7-day vest plus 3 days; a healthy row is credited within the hour after the vest). Counted at the START of every run, before the job lock, so it still fires while a forgotten session holds that lock (a run that returns {skipped: locked} writes a succeeded row, which migration 146 cannot see). It cannot fire when the job is switched off (146's weekly re-surfacing covers that)"
+    severity: warn
+    pending_days_above: 10
+    cron_cadence: "41 * * * *"
+    dedup_window_hours: 23
+    acknowledge_sql: "UPDATE public.alerts SET acknowledged = true, acknowledged_at = now() WHERE id = <id>"
+    phase: 1
+    defined_in_migration: "159_referral_reward_on_conversion.sql"
+
+  referral_conversions_volume:
+    description: "unusual referral volume: strictly more than credits_in_one_run_above rewards credited in one run, or strictly more than redemptions_in_24h_above redemptions created in the last 24 hours. Phase-1 PLACEHOLDERS: three redemptions have ever existed, so there is no baseline to tune from"
+    severity: warn
+    credits_in_one_run_above: 10
+    redemptions_in_24h_above: 20
+    cron_cadence: "41 * * * *"
+    dedup_window_hours: 23
+    acknowledge_sql: "UPDATE public.alerts SET acknowledged = true, acknowledged_at = now() WHERE id = <id>"
+    phase: 1
+    defined_in_migration: "159_referral_reward_on_conversion.sql"
+
 # Notes on suppression / acknowledgement
 # --------------------------------------
 # Every cron job dedup-checks for an unacknowledged alert from the same

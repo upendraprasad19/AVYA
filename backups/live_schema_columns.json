@@ -4,8 +4,8 @@
     "project_id": "dedsavbjuwgarrhphgnl",
     "captured_at": "2026-08-26",
     "captured_via": "SELECT table_name, array_agg(column_name) FROM information_schema.columns WHERE table_schema='public' GROUP BY table_name",
-    "regenerated_at": "2026-09-30",
-    "regenerated_for": "migration 152 (OI-202, drop_users_subscription_mirror, applied 2026-09-30, cloud version 20260930065332): dropped users.subscription_status and users.subscription_expires_at. A live information_schema.columns read of public.users after the apply matched this file (14 columns, same order as before minus those two)."
+    "regenerated_at": "2026-10-13",
+    "regenerated_for": "migration 159 (referral_reward_on_conversion, applied 2026-10-13, cloud version 20261013040701): added public.referral_redemptions.converted_at, referrer_reward_days and referrer_credited_at (all nullable). A live information_schema.columns read of public.referral_redemptions after the apply matched this file (11 columns, the three new ones last). Earlier regeneration: migration 152 (OI-202), dropped users.subscription_status and users.subscription_expires_at."
   },
   "storage_buckets": [
     "chat-media",
@@ -347,7 +347,10 @@
       "referee_rewarded",
       "created_at",
       "code",
-      "days_granted_each"
+      "days_granted_each",
+      "converted_at",
+      "referrer_reward_days",
+      "referrer_credited_at"
     ],
     "saved_diet_plans": [
       "user_id",
