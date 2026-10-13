@@ -235,6 +235,8 @@ void main() {
     test('malformed input gives the empty string, never a throw', () {
       for (final bad in [
         '2026-13-45',
+        '2026-13-10',
+        '2026-00-31',
         '2026-00-10',
         '2026-10-00',
         '2026-10-32',
@@ -250,6 +252,65 @@ void main() {
 
     test('an unparsable today treats every year as another year', () {
       expect(formatShortIstDate('2026-09-05', todayIst: 'abc'), '5 Sep 2026');
+    });
+  });
+
+  group('formatLongIstDate (L2b Landing C)', () {
+    // Literals: 2026-10-12 is the "today" of these rows; no consumer reads the
+    // device clock, so no date makes them go red.
+    const today = '2026-10-12';
+    test('the current year drops the year, other years keep it', () {
+      expect(formatLongIstDate('2026-09-05', todayIst: today), '5 September');
+      expect(formatLongIstDate('2026-10-12', todayIst: today), '12 October');
+      expect(
+        formatLongIstDate('2025-12-31', todayIst: today),
+        '31 December 2025',
+      );
+      expect(
+        formatLongIstDate('2027-01-01', todayIst: today),
+        '1 January 2027',
+      );
+    });
+
+    test('every month name, in full', () {
+      const names = [
+        'January', 'February', 'March', 'April', 'May', 'June', //
+        'July', 'August', 'September', 'October', 'November', 'December',
+      ];
+      for (var m = 1; m <= 12; m++) {
+        final mm = m < 10 ? '0$m' : '$m';
+        expect(
+          formatLongIstDate('2026-$mm-15', todayIst: today),
+          '15 ${names[m - 1]}',
+        );
+      }
+    });
+
+    test('malformed input gives the empty string, never a throw', () {
+      for (final bad in [
+        '2026-13-45',
+        // A month past December with a valid day: the month table would be
+        // indexed past its end, so these are the rows that prove "never a throw".
+        '2026-13-10',
+        '2026-00-31',
+        '2026-00-10',
+        '2026-10-00',
+        '2026-10-32',
+        'abc',
+        '',
+        '20261012',
+        '2026-10-12T00:00:00Z',
+        '2026-10-12\n',
+      ]) {
+        expect(formatLongIstDate(bad, todayIst: today), '', reason: "'$bad'");
+      }
+    });
+
+    test('an unparsable today treats every year as another year', () {
+      expect(
+        formatLongIstDate('2026-09-05', todayIst: 'abc'),
+        '5 September 2026',
+      );
     });
   });
 

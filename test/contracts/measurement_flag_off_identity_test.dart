@@ -26,6 +26,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/measurement_flags.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/features/ai_coach/widgets/measurement_chip_slot.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/home/widgets/measurement_due_banner.dart';
 import 'package:icanbefitter/features/home/widgets/measurement_due_slot.dart';
@@ -35,10 +36,12 @@ import 'package:icanbefitter/features/profile/providers/measurement_flag_provide
 import 'package:icanbefitter/features/profile/providers/measurement_prompt_provider.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/features/profile/services/measurement_prompt_rules.dart';
+import 'package:icanbefitter/features/profile/widgets/measurements_card_frame.dart';
 
 import '../helpers/dart_source_slice.dart';
 import '../helpers/flutter_error_capture.dart';
 import '../helpers/hive_test_setup.dart';
+import '../helpers/read_screen_source.dart';
 
 final class _Created extends ProviderObserver {
   final List<ProviderBase<Object?>> providers = [];
@@ -281,6 +284,71 @@ void main() {
       await tester.pump();
       expect(obs.saw(measurementPromptProvider), isTrue);
     });
+
+    // ── L2b Landing C: the chat chip and the Progress comparison card ───────
+
+    wtest('the chat chip slot, flag OFF: renders nothing and creates neither '
+        'the prompt nor the history provider', (tester) async {
+      final node = FocusNode();
+      addTearDown(node.dispose);
+      await setFlag(tester, false);
+      await plantCorrupt(tester);
+      await tester.pumpWidget(
+        scope(MeasurementChipSlot(inputFocusNode: node, isSending: false)),
+      );
+      await tester.pump();
+      expect(find.byType(MeasurementChipSlot), findsOneWidget);
+      expect(find.byIcon(Icons.close), findsNothing);
+      expect(obs.saw(measurementsEnabledProvider), isTrue, reason: 'control');
+      expect(obs.saw(measurementPromptProvider), isFalse);
+      expect(obs.saw(bodyMeasurementsProvider), isFalse);
+    });
+
+    wtest('control, the chat chip slot with the flag ON creates the prompt '
+        'and the history provider', (tester) async {
+      final node = FocusNode();
+      addTearDown(node.dispose);
+      await setFlag(tester, true);
+      await tester.pumpWidget(
+        scope(MeasurementChipSlot(inputFocusNode: node, isSending: false)),
+      );
+      await tester.pump();
+      expect(obs.saw(measurementPromptProvider), isTrue);
+      expect(obs.saw(bodyMeasurementsProvider), isTrue);
+    });
+
+    wtest('the card frame, flag OFF: renders its child alone and creates no '
+        'measurements provider', (tester) async {
+      await setFlag(tester, false);
+      await plantCorrupt(tester);
+      await tester.pumpWidget(
+        scope(const MeasurementsCardFrame(child: Text('child'))),
+      );
+      await tester.pump();
+      expect(find.text('child'), findsOneWidget);
+      expect(obs.saw(measurementsEnabledProvider), isTrue, reason: 'control');
+      expect(obs.saw(measurementPromptProvider), isFalse);
+      expect(obs.saw(bodyMeasurementsProvider), isFalse);
+      expect(obs.saw(measurementWriteProvider), isFalse);
+    });
+
+    wtest('control, the card frame with the flag ON creates the history '
+        'provider', (tester) async {
+      await setFlag(tester, true);
+      // A bounded host: the frame lays itself out against its constraints.
+      await tester.pumpWidget(
+        scope(
+          const SizedBox(
+            height: 500,
+            child: MeasurementsCardFrame(child: Text('child')),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(obs.saw(bodyMeasurementsProvider), isTrue);
+      expect(obs.saw(measurementPromptProvider), isFalse,
+          reason: 'the card ignores the prompt (D4)');
+    });
   });
 
   // ── pins on the OFF paths' source (presence only) ─────────────────────────
@@ -402,6 +470,9 @@ void main() {
           'lib/features/home/widgets/measurement_due_banner.dart',
           'lib/features/profile/providers/measurement_prompt_provider.dart',
           'lib/features/profile/providers/body_measurements_provider.dart',
+          'lib/features/profile/widgets/measurements_card.dart',
+          'lib/features/profile/widgets/measurements_card_frame.dart',
+          'lib/features/ai_coach/widgets/measurement_chip_slot.dart',
         ]) {
           final src = strip(path);
           for (final banned in [
@@ -420,5 +491,65 @@ void main() {
         }
       },
     );
+
+    // L2b Landing C: the chat chip's ONE host line. Comment-stripped,
+    // whitespace-insensitive and sliced to screen.dart's own `build`: the
+    // declarations of `_buildQuickPrompts` and `_buildInputBar` live in part
+    // files that sort before screen.dart in the concatenation (and in this
+    // file's body), and would fool a plain indexOf.
+    test('the AI Coach screen mounts the chip slot once, in_app only, between '
+        'the quick prompts and the input bar', () {
+      final build = functionBody(
+        strip('lib/features/ai_coach/screens/ai_coach/screen.dart'),
+        'Widget build(BuildContext context)',
+      ).replaceAll(RegExp(r'\s+'), '').replaceAll(',)', ')');
+      expect(countOf(build, 'MeasurementChipSlot('), 1);
+      expect(
+        countOf(
+          build,
+          "if(channel=='in_app')MeasurementChipSlot("
+          'inputFocusNode:_inputFocusNode,isSending:isSending,'
+          'onShown:(height)=>keepBottomAfterChip(_scrollController,height)),',
+        ),
+        1,
+      );
+      final prompts = build.indexOf('_buildQuickPrompts()');
+      final chip = build.indexOf('MeasurementChipSlot(');
+      final bar = build.indexOf('_buildInputBar(');
+      expect(prompts, greaterThanOrEqualTo(0));
+      expect(chip, greaterThan(prompts));
+      expect(bar, greaterThan(chip));
+    });
+
+    // The chip hides while the composer has focus only because the host hands
+    // the slot the SAME node the composer field is bound to. The slot tests
+    // mount their own TextField, so nothing else sees this binding.
+    test('the composer TextField is bound to the focus node the chip slot gets',
+        () {
+      final bar = strip('lib/features/ai_coach/screens/ai_coach/input_bar.dart')
+          .replaceAll(RegExp(r'\s+'), '');
+      expect(countOf(bar, 'TextField(controller:_messageController,'
+          'focusNode:_inputFocusNode,'), 1);
+      final screen = strip('lib/features/ai_coach/screens/ai_coach/screen.dart')
+          .replaceAll(RegExp(r'\s+'), '');
+      expect(countOf(screen, 'final_inputFocusNode=FocusNode('), 1,
+          reason: 'one node, owned by the screen state');
+    });
+
+    test('the quick prompts are unchanged: one PromptChip, one send per tap, '
+        'one condition', () {
+      final all = readScreenSourceStripped('ai_coach')
+          .replaceAll(RegExp(r'\s+'), '');
+      expect(countOf(all, 'PromptChip('), 1);
+      expect(countOf(all, 'onTap:()=>_sendMessage(prompt)'), 1);
+      expect(
+        countOf(
+          all,
+          "if(channel=='in_app'&&!isSending&&messages.length<=1)"
+          '_buildQuickPrompts(),',
+        ),
+        1,
+      );
+    });
   });
 }

@@ -13,7 +13,6 @@ import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/utils/measurement_units.dart';
 import 'package:icanbefitter/features/profile/providers/body_measurements_provider.dart';
-import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
 /// The body-measurements entry sheet (L2b Landing B, B4): four optional fields
 /// (chest, waist, hips, arms), a cm / inch control, a per-site "Last:" hint and
@@ -59,9 +58,7 @@ class _BodyMeasurementsSheetState extends ConsumerState<BodyMeasurementsSheet> {
   @override
   void initState() {
     super.initState();
-    _inches =
-        ref.read(measurementWriteProvider.notifier).lastUnitInches() ??
-        !UserRepository.instance.getUnitsMetric();
+    _inches = ref.read(measurementWriteProvider.notifier).preferredInches();
     for (final site in kBodyMeasurementSites) {
       _nodes[site]!.addListener(() {
         if (!_nodes[site]!.hasFocus && _controllers[site]!.text.isNotEmpty) {

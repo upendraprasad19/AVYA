@@ -254,6 +254,89 @@ void main() {
         expect(s.contains('—'), isFalse, reason: 'no em dash in: $s');
       }
     });
+
+    // L2b Landing C: the card and chip copy. The scan above is a lowercase
+    // SUBSTRING test (`miss` matches inside "Dismiss"), so the new strings get
+    // WORD-BOUNDARY patterns, scoped to the new constants and builder outputs.
+    testWidgets('Landing C copy: no good / bad wording, no guilt, no streak '
+        'framing, no "snapshot", no em dash (word-boundary scan over the '
+        'builder output in both units)', (tester) async {
+      final em = String.fromCharCode(0x2014);
+      final strings = <String>[
+        MeasurementCopy.cardAddButton,
+        MeasurementCopy.chipLabel,
+        MeasurementCopy.bannerDismissLabel,
+        MeasurementCopy.cardTileTitle('Waist', '3 Oct'),
+      ];
+      for (final inches in [false, true]) {
+        strings.add(MeasurementCopy.cardValue(79.5, inches: inches));
+        for (final delta in [1.5, -1.5, 0.0, -0.0]) {
+          strings.add(
+            MeasurementCopy.cardDeltaLine(
+              delta,
+              inches: inches,
+              shortFirstDate: '12 Sep',
+            ),
+          );
+          strings.add(
+            MeasurementCopy.cardTileSemantics(
+              label: 'Waist',
+              value: 79.5,
+              inches: inches,
+              longLatestDate: '3 October',
+              delta: delta,
+              longFirstDate: '12 September',
+            ),
+          );
+        }
+        strings.add(
+          MeasurementCopy.cardTileSemantics(
+            label: 'Waist',
+            value: 79.5,
+            inches: inches,
+            longLatestDate: '3 October',
+          ),
+        );
+      }
+      expect(strings.length, greaterThan(15), reason: 'the scan saw them all');
+      final banned = <RegExp>[
+        for (final w in [
+          'good',
+          'bad',
+          'lost?',
+          'lose',
+          'gained',
+          'gain',
+          'streak',
+          'behind',
+          'ahead',
+          'miss(ed)?',
+          'should',
+          'must',
+          'overdue',
+          'great',
+          'pro',
+          'better',
+          'worse',
+          'progress',
+          'fail(ed)?',
+        ])
+          RegExp('\\b$w\\b', caseSensitive: false),
+        RegExp('snapshot', caseSensitive: false),
+      ];
+      for (final s in strings) {
+        for (final re in banned) {
+          expect(re.hasMatch(s), isFalse, reason: "'$s' matches ${re.pattern}");
+        }
+        expect(s.contains(em), isFalse, reason: 'no em dash in: $s');
+      }
+      // The scan is not vacuous: the word-boundary patterns do not trip on
+      // "Dismiss" (which the old substring scan would), and they do trip on a
+      // real banned word.
+      expect(banned.any((re) => re.hasMatch('Dismiss measurements reminder')),
+          isFalse);
+      expect(banned.any((re) => re.hasMatch('you missed a week')), isTrue);
+    });
   });
 
   group('MeasurementDueSlot', () {
