@@ -9,6 +9,7 @@ import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
+import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
 /// What the measurements sheet and the prompt know about the stored history
 /// (L2b Landing B, B2).
@@ -17,7 +18,12 @@ import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.
 /// no entries); false on a failed read or in the anonymous-token window, so
 /// that "could not read" never looks like "never measured". [latest] is the
 /// newest valid value per site with its IST day; [lastEntryDate] is the newest
-/// entry's day.
+/// entry's day. [entries] is the valid history NEWEST FIRST, the list
+/// `HealthReadService.measurementHistory()` returned (L2b Landing C: the
+/// Progress comparison card derives the first and latest value of each site
+/// from it; the sheet and the prompt keep reading [latest] and
+/// [lastEntryDate]). It stays empty on a failed read and in the anonymous-token
+/// window, like the rest of the state.
 ///
 /// Deliberately NO value equality: Riverpod 3 filters notifications with `==`,
 /// so an `==` over [latest] would stop a rollover refresh reaching the prompt.
@@ -28,11 +34,13 @@ class BodyMeasurementsState {
     this.loaded = false,
     this.latest = const {},
     this.lastEntryDate,
+    this.entries = const [],
   });
 
   final bool loaded;
   final Map<String, ({double cm, String date})> latest;
   final String? lastEntryDate;
+  final List<MeasurementEntry> entries;
 }
 
 class BodyMeasurementsNotifier extends Notifier<BodyMeasurementsState> {
@@ -48,6 +56,7 @@ class BodyMeasurementsNotifier extends Notifier<BodyMeasurementsState> {
         loaded: true,
         latest: HealthReadService.latestBySiteOf(history),
         lastEntryDate: history.isEmpty ? null : history.first.date,
+        entries: history,
       );
     } catch (_) {
       unawaited(ErrorTelemetry.logEvent('measurement_history_read_failed',
@@ -136,6 +145,23 @@ class MeasurementWriteNotifier extends Notifier<void> {
     if (v == 'in') return true;
     if (v == 'cm') return false;
     return null;
+  }
+
+  /// Whether the sheet and the Progress comparison card show inches: the unit of
+  /// the last successful save, else the device's `units_metric` setting (L2b
+  /// Landing C: the ONE expression both surfaces use, so they cannot disagree).
+  ///
+  /// TOTAL: a throwing read (a corrupt stored value, an account-swap window)
+  /// answers centimetres and logs `measurement_unit_read_failed`, so a widget
+  /// build or a sheet `initState` that calls it cannot throw.
+  bool preferredInches() {
+    try {
+      return lastUnitInches() ?? !UserRepository.instance.getUnitsMetric();
+    } catch (_) {
+      unawaited(ErrorTelemetry.logEvent('measurement_unit_read_failed',
+          message: 'stage=unit'));
+      return false;
+    }
   }
 }
 

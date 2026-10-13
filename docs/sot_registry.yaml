@@ -7417,12 +7417,13 @@ concepts:
           Chat-handler writers route through HealthWriteService.
       - file: lib/core/services/health_read_service.dart
         line_range: 1-9999
-        method: measurementHistory + latestBySite + latestBySiteOf
+        method: measurementHistory + latestBySite + latestBySiteOf + firstBySiteOf
         semantic: latest
         fields_read: [date, chest, waist, hips, arms, updated_at_ms]
         notes: |
           L2b Landing A (OI-297): the read path for what a person sees or the
-          coach is told. Per-site bounds (a value outside kBodyMeasurementSpecs
+          coach is told. (Landing C adds the pure firstBySiteOf, the OLDEST value
+          per site, for the Progress comparison card.) Per-site bounds (a value outside kBodyMeasurementSpecs
           is skipped and an older valid day shows through), a real IST calendar
           day written YYYY-MM-DD that is not later than today, order date /
           updated_at_ms / key descending, type tests instead of casts.
@@ -15239,10 +15240,10 @@ concepts:
     readers:
       - file: lib/core/services/health_read_service.dart
         line_range: 1-9999
-        method: measurementHistory + latestBySite + latestBySiteOf
+        method: measurementHistory + latestBySite + latestBySiteOf + firstBySiteOf
         semantic: latest
         fields_read: [date, chest, waist, hips, arms, updated_at_ms]
-        notes: Read tier. Per-site validity on the value rounded to 0.1 cm (and that rounded value is returned); an invalid newer value falls through to the newest valid older one.
+        notes: Read tier (firstBySiteOf, L2b Landing C, is the same walk from the oldest end). Per-site validity on the value rounded to 0.1 cm (and that rounded value is returned); an invalid newer value falls through to the newest valid older one.
       - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
         line_range: 1-9999
         method: _getBodyMeasurements
@@ -15426,7 +15427,7 @@ concepts:
           only with a session owner (without one the key would land in the shared
           configBox). Each ends with ref.invalidateSelf().
       - file: lib/features/profile/providers/body_measurements_provider.dart
-        line_range: 88-125
+        line_range: 97-132
         method: MeasurementWriteNotifier.save
         notes: |
           The sheet's unit key, written only when shouldRememberUnit holds; the
@@ -15451,11 +15452,21 @@ concepts:
           stamp is a UTC ISO string read through a type test, never its first ten
           characters.
       - file: lib/features/profile/providers/body_measurements_provider.dart
-        line_range: 134-139
+        line_range: 140-148
         method: lastUnitInches
         semantic: hive-read
         fields_read: [body_measurement_sheet_unit]
-        notes: MeasurementWriteNotifier.lastUnitInches. The sheet's initial unit; null falls back to the device units_metric setting.
+        notes: MeasurementWriteNotifier.lastUnitInches. The remembered unit; null falls back to the device units_metric setting (in preferredInches).
+      - file: lib/features/profile/providers/body_measurements_provider.dart
+        line_range: 150-165
+        method: preferredInches
+        semantic: hive-read
+        fields_read: [body_measurement_sheet_unit, units_metric]
+        notes: |
+          L2b Landing C. The ONE expression for "inches or centimetres" that the
+          sheet (initState) and the Progress comparison card (tiles branch only)
+          both call: lastUnitInches() ?? the device setting, TOTAL (a throwing
+          read answers centimetres and logs measurement_unit_read_failed).
       - file: lib/features/home/widgets/measurement_due_slot.dart
         line_range: 15-37
         method: MeasurementDueSlot
@@ -15481,6 +15492,58 @@ concepts:
          the prompt.
       5. Nothing here is PRO-gated.
 
+  - concept: measurement_card_rows
+    domain: health
+    behavioral_test_path: test/features/profile/measurement_card_end_to_end_test.dart
+    description: |
+      L2b Landing C (E3), DARK behind enable_body_measurements. The tiles of the
+      "Body measurements" card on Profile -> Progress comparison: per site the
+      newest value with its day, and the change since the FIRST entry holding
+      that site. A pure DERIVATION over the history the sheet and the prompt
+      already read; it owns no stored value and adds no key or column. The
+      change is display(latest) - display(first) rounded to 0.1 in the unit the
+      card shows (the unit is MeasurementWriteNotifier.preferredInches, the same
+      expression the sheet opens with), so it is the difference of the numbers a
+      person can see; neutral (never a good or bad colour or word); a site held
+      on one day only has no change line.
+    writers:
+      - file: lib/core/services/health_write_service.dart
+        line_range: 1-9999
+        method: logMeasurements (the sheet, the chat path and the cross-channel pull write the records the card derives from)
+        notes: The card writes nothing; every record it shows came through the measurement writers registered under measurement_history_read.
+    readers:
+      - file: lib/features/profile/services/measurement_card_rules.dart
+        line_range: 52-107
+        method: measurementCardRows
+        semantic: pure-rule
+        fields_read: [date, chest, waist, hips, arms]
+        notes: Pure. latestBySiteOf and firstBySiteOf over the newest-first entries, the displayed unit, the IST today for the year rule; all text through MeasurementCopy.
+      - file: lib/features/profile/widgets/measurements_card.dart
+        line_range: 46-111
+        method: MeasurementsCard
+        semantic: render
+        fields_read: [BodyMeasurementsState.entries]
+        notes: Watches the auth token (the anonymous window renders nothing) and bodyMeasurementsProvider; refreshes once on mount.
+      - file: lib/features/profile/widgets/measurements_card.dart
+        line_range: 217-273
+        method: _Tiles
+        semantic: render
+        fields_read: [BodyMeasurementsState.entries, preferredInches]
+        notes: The unit is read only here (a card with nothing to show reads none) and once per history state (initState, and didUpdateWidget when the history instance changes), not once per layout pass.
+    additional_tests:
+      - test/features/profile/measurement_card_rules_test.dart  # the pure rows, the delta rule against its mutant (inch pairs), dates, strings
+      - test/features/profile/measurements_card_test.dart  # states, units (read once per history), colours, tile geometry, semantics and their tap action, the header at the real 0.6 em advance, mount refresh, account swap, the New Year year rule
+      - test/features/profile/measurements_card_frame_test.dart  # the cap at literal body heights, the real card's height against the derived floor, stable shape, the anonymous window, the flag flipping under a mounted frame
+    class_constraints: |
+      1. The change is computed from the DISPLAYED values, never from the
+         centimetre difference converted afterwards (79.6 -> 80.9 cm is +0.6 in,
+         not +0.5).
+      2. A site's first value is the OLDEST entry holding it, not the previous
+         entry and not the oldest entry overall.
+      3. The card and the sheet resolve the unit through one expression.
+      4. Nothing here is PRO-gated, and the card ignores the due state and the
+         dismissal.
+
   - concept: measurement_surface_hosts
     domain: health
     presence_only: true
@@ -15496,14 +15559,25 @@ concepts:
       provider observer in test/contracts/measurement_flag_off_identity_test.dart,
       the rollover refresh in day_rollover_provider_invalidation_behavioral_test
       Test G). Three things are comment-stripped, function-sliced source pins
-      ONLY, all in measurement_flag_off_identity_test.dart: the retry /
+      ONLY (a fourth, the AI Coach host line below, joins them; all in
+      measurement_flag_off_identity_test.dart): the retry /
       restore-tick refresh (invalidateOnRetry: one top-level invalidate, no
       read, watch or refresh), the Home mount line (_buildContent holds
       `const MeasurementDueSlot(),` exactly once, after the repeat nudge and
       before the PWA banner), and the Weight sheet's initState-before-build
-      decision.
+      decision. L2b Landing C adds two more host lines, each with ONE home:
+      the AI Coach chip line (comment-stripped, whitespace-insensitive, sliced
+      to screen.dart's own build; between the quick prompts and the input bar,
+      in_app only, with its onShown scroll hook) and the pin that the composer
+      TextField is bound to the same _inputFocusNode the slot gets, both in
+      measurement_flag_off_identity_test.dart; and the Progress comparison
+      screen's single `body: MeasurementsCardFrame(child: _buildBody())` in
+      test/features/profile/progress_comparison_screen_measurements_test.dart
+      (the screen's empty state and the OFF rects are behavioural there; the
+      frame's geometry is behavioural in
+      test/features/profile/measurements_card_frame_test.dart).
     description: |
-      L2b Landing B, DARK behind enable_body_measurements. The hosts of the
+      L2b Landing B + C, DARK behind enable_body_measurements. The hosts of the
       measurements surfaces and what each is allowed to do.
     writers:
       - file: lib/features/home/screens/home_screen.dart
@@ -15521,10 +15595,28 @@ concepts:
           _WeightLogSheetState.initState. The link decision, latched once: the flag is read first, and only then the
           prompt provider. build() makes no provider call, so a flag-OFF sheet is
           today's tree verbatim.
+      - file: lib/features/profile/screens/progress_comparison_screen.dart
+        line_range: 161-161
+        method: body (MeasurementsCardFrame(child: _buildBody()))
+        notes: L2b Landing C, E3. One line; the frame owns the flag and the height cap, so a flag-OFF screen returns its own body instance.
+      - file: lib/features/ai_coach/screens/ai_coach/screen.dart
+        line_range: 509-516
+        method: MeasurementChipSlot (the mount line in build)
+        notes: L2b Landing C, E4. Between the quick prompts and the input bar, in_app only; the slot owns its flag, prompt, focus and sending checks and is given no send callback; onShown scrolls a chat that was at its bottom back to its bottom (keepBottomAfterChip).
     readers:
       - file: lib/features/home/widgets/measurement_due_slot.dart
         line_range: 15-37
         method: MeasurementDueSlot
         semantic: render
         notes: Reads measurementsEnabledProvider first, then measurementPromptProvider.
+      - file: lib/features/ai_coach/widgets/measurement_chip_slot.dart
+        line_range: 38-186
+        method: MeasurementChipSlot
+        semantic: render
+        notes: Reads measurementsEnabledProvider first, then measurementPromptProvider; the composer's FocusNode through a ListenableBuilder; reports its first frame through onShown (keepBottomAfterChip is the host's handler).
+      - file: lib/features/profile/widgets/measurements_card_frame.dart
+        line_range: 27-67
+        method: MeasurementsCardFrame
+        semantic: render
+        notes: Reads measurementsEnabledProvider, then (ON only) the auth token for the anonymous window; OFF returns its child.
     regression_test: test/contracts/measurement_flag_off_identity_test.dart

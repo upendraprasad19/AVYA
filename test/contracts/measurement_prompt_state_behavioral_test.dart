@@ -16,6 +16,7 @@ library;
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
@@ -613,6 +614,213 @@ void main() {
     });
   });
 
+  // ── L2b Landing C: `entries` and `preferredInches` ───────────────────────
+
+  group('Landing C: entries and preferredInches', () {
+    late Directory tempDir;
+    late List<({String op, String? message})> events;
+
+    setUp(() async {
+      tempDir = await setUpHiveForTests();
+      setTestClockTo(_now);
+      events = [];
+      ErrorTelemetry.debugOnLogEventForTests = (op, {message}) =>
+          events.add((op: op, message: message));
+      await HiveService.instance.configBox.put(
+        'enable_body_measurements',
+        true,
+      );
+    });
+
+    tearDown(() async {
+      ErrorTelemetry.debugOnLogEventForTests = null;
+      resetTestClock();
+      await tearDownHiveForTests(tempDir);
+    });
+
+    ProviderContainer container({
+      String token = kTestUserId,
+      List<Override> extra = const [],
+    }) {
+      final c = ProviderContainer(
+        overrides: [authUserIdTokenProvider.overrideWithValue(token), ...extra],
+      );
+      addTearDown(c.dispose);
+      return c;
+    }
+
+    Future<void> putEntry(String date, Map<String, double> sites) =>
+        HiveService.instance.healthBox.put('measurement_$date', {
+          'id': 'meas_$date',
+          'date': date,
+          ...sites,
+          'created_at': '${date}T01:00:00.000Z',
+          'updated_at_ms': 1,
+        });
+
+    test(
+      'entries is the valid history NEWEST FIRST (dates and site maps)',
+      () async {
+        await putEntry('2026-08-01', {'waist': 82.0, 'chest': 96.0});
+        await putEntry('2026-10-05', {'waist': 79.5});
+        await putEntry('2026-09-01', {'hips': 100.0});
+        final s = container().read(bodyMeasurementsProvider);
+        expect(s.loaded, isTrue);
+        expect(s.entries.map((e) => e.date).toList(), [
+          '2026-10-05',
+          '2026-09-01',
+          '2026-08-01',
+        ]);
+        expect(s.entries.map((e) => e.sites).toList(), [
+          {'waist': 79.5},
+          {'hips': 100.0},
+          {'waist': 82.0, 'chest': 96.0},
+        ]);
+        // `latest` and `lastEntryDate` still come from the same list.
+        expect(s.lastEntryDate, '2026-10-05');
+        expect(s.latest['waist'], (cm: 79.5, date: '2026-10-05'));
+      },
+    );
+
+    test('an empty history is loaded with no entries', () {
+      final s = container().read(bodyMeasurementsProvider);
+      expect(s.loaded, isTrue);
+      expect(s.entries, isEmpty);
+    });
+
+    test(
+      'a failed read and the anonymous-token window leave entries empty',
+      () async {
+        await putEntry('2026-09-01', {'waist': 80.0});
+        expect(
+          container(token: '<anon>').read(bodyMeasurementsProvider).entries,
+          isEmpty,
+          reason: 'anonymous window',
+        );
+        await Hive.box(
+          HiveUserSession.namespacedBoxName(
+            HiveService.healthBoxName,
+            kTestUserId,
+          ),
+        ).close();
+        final failed = container().read(bodyMeasurementsProvider);
+        expect(failed.loaded, isFalse);
+        expect(failed.entries, isEmpty, reason: 'closed box');
+      },
+    );
+
+    test('a real save() puts the new entry first', () async {
+      SyncService.pausedForSimulation = true;
+      addTearDown(() => SyncService.pausedForSimulation = false);
+      // 20:00 UTC on the 12th is 01:30 IST on the 13th: the UTC day and the
+      // device-local day both differ from the IST day the save must be dated by.
+      setTestClockTo(DateTime.utc(2026, 10, 12, 20));
+      await putEntry('2026-09-01', {'waist': 81.0});
+      final c = container();
+      final sub = c.listen(bodyMeasurementsProvider, (_, _) {});
+      addTearDown(sub.close);
+      expect(
+        c.read(bodyMeasurementsProvider).entries.single.date,
+        '2026-09-01',
+      );
+      final res = await c
+          .read(measurementWriteProvider.notifier)
+          .save(
+            sites: {'waist': 79.5},
+            source: WriteSource.manual,
+            inchesUsed: false,
+          );
+      expect(res.success, isTrue);
+      final entries = c.read(bodyMeasurementsProvider).entries;
+      expect(entries.map((e) => e.date).toList(), ['2026-10-13', '2026-09-01']);
+      expect(entries.first.sites, {'waist': 79.5});
+    });
+
+    // preferredInches over the four combinations: a remembered unit wins over
+    // the device setting in BOTH directions; nothing remembered follows the
+    // device.
+    for (final row
+        in <
+          ({String name, Object? remembered, bool deviceMetric, bool inches})
+        >[
+          (
+            name: 'remembered in, metric device',
+            remembered: 'in',
+            deviceMetric: true,
+            inches: true,
+          ),
+          (
+            name: 'remembered cm, imperial device',
+            remembered: 'cm',
+            deviceMetric: false,
+            inches: false,
+          ),
+          (
+            name: 'nothing remembered, metric device',
+            remembered: null,
+            deviceMetric: true,
+            inches: false,
+          ),
+          (
+            name: 'nothing remembered, imperial device',
+            remembered: null,
+            deviceMetric: false,
+            inches: true,
+          ),
+        ]) {
+      test(
+        'preferredInches: ${row.name} -> ${row.inches ? 'inches' : 'cm'}',
+        () async {
+          await HiveService.instance.configBox.put(
+            'units_metric',
+            row.deviceMetric,
+          );
+          if (row.remembered != null) {
+            await HiveService.instance.userBox.put(
+              'body_measurement_sheet_unit',
+              row.remembered,
+            );
+          }
+          final n = container().read(measurementWriteProvider.notifier);
+          expect(n.preferredInches(), row.inches);
+          expect(events, isEmpty);
+        },
+      );
+    }
+
+    test('a throwing read answers centimetres and logs one '
+        'measurement_unit_read_failed (stage=unit)', () async {
+      // An IMPERIAL device: a catch that fell back to the device setting would
+      // answer inches here, so only centimetres proves the fallback is fixed.
+      await HiveService.instance.configBox.put('units_metric', false);
+      final n = container(
+        extra: [measurementWriteProvider.overrideWith(_ThrowingUnitWrite.new)],
+      ).read(measurementWriteProvider.notifier);
+      expect(n.preferredInches(), isFalse);
+      await Future<void>.delayed(Duration.zero);
+      final failed = events.where(
+        (e) => e.op == 'measurement_unit_read_failed',
+      );
+      expect(failed, hasLength(1));
+      expect(failed.single.message, 'stage=unit');
+    });
+
+    test(
+      'an unrecognised stored unit falls through to the device setting',
+      () async {
+        await HiveService.instance.configBox.put('units_metric', false);
+        await HiveService.instance.userBox.put(
+          'body_measurement_sheet_unit',
+          'x',
+        );
+        expect(
+          container().read(measurementWriteProvider.notifier).preferredInches(),
+          isTrue,
+        );
+      },
+    );
+  });
+
   // ── parity with the reader's private date check ──────────────────────────
 
   group('parseIstKeyStrict agrees with the reader on which dates are real', () {
@@ -677,4 +885,9 @@ void main() {
       }
     });
   });
+}
+
+class _ThrowingUnitWrite extends MeasurementWriteNotifier {
+  @override
+  bool? lastUnitInches() => throw StateError('corrupt unit');
 }

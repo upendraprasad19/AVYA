@@ -1712,3 +1712,30 @@ added, false of the flip being performed.
 - **Test shape:** the same assertion under a seam clock far from the real date; `Last: ... 3 Feb` (same year as the seam) against `12 Sep 2026` (another year) in one widget row; the IST-vs-UTC day in the prompt stamps at 2026-03-15T20:00Z; a mutant per consumer that swaps the seam for the device clock, run on the final tree.
 - **Prior incidents:** `2.76` (clock anchor), the Landing A reader test run under `TZ=UTC` (host-local "today").
 - **Regression test:** `test/contracts/measurement_chat_path_off_identity_test.dart` (no clock, no date literal), `test/features/profile/body_measurements_sheet_test.dart` (the 2031 row), `test/contracts/measurement_prompt_state_behavioral_test.dart` (the 20:00Z rows); B-pass finding `BPB-B1` / `BPB-B7` in `docs/reviews/coach-measurement-sheet-ui-bpass.md`.
+
+### 2.104 A widget inserted AFTER the event a scroll-to-bottom was scheduled for takes its height from the list and leaves the last item clipped (NEW 2026-10-13)
+
+- **Telltale:** a chat (or any top-anchored list with a controller) calls `animateTo(maxScrollExtent)` in a post-frame callback when its data changes, and a sibling in the same `Column` appears LATER because a different state flips (`isSending` ends after the reply is appended and the notes extraction finishes). The viewport shrinks by the sibling's height, the offset stays, and the last bubble's bottom is under the new widget until the next scroll. Reproduces under every reply while the sibling's condition holds.
+- **Root-cause shape:** `maxScrollExtent` is computed once, in the frame the data changed, and nothing re-runs it when the viewport changes. Two events, one scroll target. Found by a reviewer reading the send flow (`ai_coach_provider.dart:952,962,971,1118`), not by any test: the AI Coach screen cannot be pumped.
+- **Fix pattern:** the widget that appears reports its first frame and the height it took (`onShown(double)`, once per appearance via a State's `initState` post-frame callback); the host calls a pure helper that scrolls back to the bottom only if the list was at (or within a slack of) its bottom, and leaves a list scrolled up alone. OFF paths never fire it.
+- **Test shape:** a chat-like `Column[Expanded(ListView(controller)), slot, field]` with the slot toggled by `isSending`; a CONTROL row without the follow that shows the list short by exactly the slot's height (so the row can see the difference); a scrolled-up row that must not move; a count of `onShown` calls per appearance (not per rebuild, not while hidden).
+- **Prior incidents:** `2.28` (a sheet rendering a captured snapshot) is the nearest widget-lifecycle class; no earlier instance of this one.
+- **Regression test:** `test/ai_coach/measurement_chip_slot_test.dart` (group "the chat above the chip"); B-pass finding `BPC-A1` in `docs/reviews/coach-measurement-surfaces-bpass.md`.
+
+### 2.105 A layout claim about a real font that was only run in the test font (Ahem is the widest face, not the tallest) (NEW 2026-10-13)
+
+- **Telltale:** a plan or a test comment says "the header is one run in the real font" or "a narrower font can only make it shorter", and every test of it renders Ahem (1 em advance, 1 em line height). The face on the widget is not the app's body face (`AppTypography.mono` and `label` are JetBrains Mono, not DM Sans).
+- **Root-cause shape:** Ahem is conservative for WIDTH and optimistic for HEIGHT. The real face is 0.6 em wide and 1.32 em tall (measured from the TTF: advance 600/1000, hhea ascent 1020, descent -300), so a header that fits in Ahem at 2.0x can be 6 dp taller on a device, and a header the plan called one run was 297 dp against 282 dp on a 360 dp phone.
+- **Fix pattern:** read the face from the style, measure the font file's tables with `struct`, write the numbers in the doc comment; test a width claim with `TextScaler.linear(0.6)` over Ahem (an exact 0.6 em advance, letter spacing unscaled) with a control row at 1.0 that wraps; test a height floor by measuring the REAL widget and adding `0.32 x fontSize x min(scale, clamp)`.
+- **Test shape:** one row at the real advance (one run, flush right, a gap of 8 dp or more) and its wrapping control; the floor row sums the real card, the frame's margin constants and the missing line height against the derived constant.
+- **Prior incidents:** none recorded (the Wardroom soul pins the faces, not their metrics).
+- **Regression test:** `test/features/profile/measurements_card_test.dart` (the header rows), `test/features/profile/measurements_card_frame_test.dart` (the floor row); B-pass findings `BPC-A2`, `BPC-B3`.
+
+### 2.106 `Semantics(excludeSemantics: true)` over an `InkWell` makes the declared `onTap` the ONLY way a screen reader reaches the control, and a label-and-role test cannot see it missing (NEW 2026-10-13)
+
+- **Telltale:** a single-node control is built as `Semantics(button: true, excludeSemantics: true, label: ..., onTap: ..., child: InkWell(onTap: ...))` to stop the visible text being announced twice. A test asserts the label and `flagsCollection.isButton` and passes; deleting `onTap:` from the `Semantics` (not the `InkWell`) leaves every test green and gives TalkBack a button that does nothing.
+- **Root-cause shape:** `excludeSemantics` blocks the `InkWell`'s own tap semantics, so the outer node's `onTap` is the only `SemanticsAction.tap` handler.
+- **Fix pattern:** none in production; the test must perform the action: `tester.semantics.tap(find.semantics.byLabel('...'))` throws if the node has no tap action, then assert the effect (the sheet opens; the dismiss was logged).
+- **Test shape:** one row per control (card button, chip, X). The mutant deletes the `onTap:` line of the `Semantics`.
+- **Prior incidents:** the Landing B sheet's unit options (BPB-A5) had the same shape and were fixed by adding `selected` and `button` flags; the action itself was not tapped.
+- **Regression test:** `test/features/profile/measurements_card_test.dart`, `test/ai_coach/measurement_chip_slot_test.dart` (semantics rows); B-pass finding `BPC-B1` (mutants MUT-20, 21, 22).

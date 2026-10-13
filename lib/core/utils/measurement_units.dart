@@ -103,7 +103,38 @@ final RegExp _kIstShape = RegExp(r'^\d{4}-\d{2}-\d{2}$');
 /// `lib/core/utils` cannot import the features-layer date parser). It SPLITS the
 /// stored string; it never goes through `DateTime.parse` and local formatting,
 /// which can move the day in a far-east zone for a timestamp.
-String formatShortIstDate(String istDate, {required String todayIst}) {
+String formatShortIstDate(String istDate, {required String todayIst}) =>
+    _formatIstDate(istDate, todayIst, _kMonthNames);
+
+const List<String> _kLongMonthNames = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+/// [formatShortIstDate] with the full month name (`12 September`, and
+/// `12 September 2025` when the year is not the current one): the words a
+/// screen reader says for a tile of the Progress comparison card (L2b Landing
+/// C). Same strict shape and the same empty string for anything malformed.
+String formatLongIstDate(String istDate, {required String todayIst}) =>
+    _formatIstDate(istDate, todayIst, _kLongMonthNames);
+
+/// The one body of both formatters, so a later fix to the shape check reaches
+/// the visible title and the spoken sentence together.
+String _formatIstDate(
+  String istDate,
+  String todayIst,
+  List<String> monthNames,
+) {
   if (!_kIstShape.hasMatch(istDate)) return '';
   final year = int.parse(istDate.substring(0, 4));
   final month = int.parse(istDate.substring(5, 7));
@@ -112,6 +143,6 @@ String formatShortIstDate(String istDate, {required String todayIst}) {
   final currentYear = _kIstShape.hasMatch(todayIst)
       ? int.parse(todayIst.substring(0, 4))
       : null;
-  final base = '$day ${_kMonthNames[month - 1]}';
+  final base = '$day ${monthNames[month - 1]}';
   return year == currentYear ? base : '$base $year';
 }

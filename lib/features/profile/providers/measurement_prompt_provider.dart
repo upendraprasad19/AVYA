@@ -16,8 +16,8 @@ String? _storedDate(String key) {
   return v is String ? v : null;
 }
 
-/// Which body-measurements prompt the Home banner and the Weight-sheet link
-/// show (L2b Landing B, B2/B3).
+/// Which body-measurements prompt the Home banner, the Weight-sheet link and
+/// the AI Coach chip show (L2b Landing B, B2/B3; the chip is Landing C, E4).
 ///
 /// `build()` is TOTAL: it must yield a value, never throw into a widget build.
 /// Order: (1) the anonymous token returns `none` silently, before the flag, the

@@ -5,6 +5,7 @@ import '../../../core/services/stat_snapshot_service.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
+import '../widgets/measurements_card_frame.dart';
 
 /// Reports row destination — Progress Comparison.
 ///
@@ -13,8 +14,13 @@ import '../../../core/theme/typography.dart';
 /// between that snapshot and the onboarding baseline.
 ///
 /// Top-right "Take Snapshot Now" button → manual snapshot via
-/// `StatSnapshotService.snapshotManual()`. MVP: no measurements UI yet
-/// (Test #7 enhancement); fires with empty measurements + photos.
+/// `StatSnapshotService.snapshotManual()`; it fires with empty measurements +
+/// photos (D1: nothing reads the snapshot's `measurements` column).
+///
+/// Above the list sits the "Body measurements" card (L2b Landing C, E3), hosted
+/// by `MeasurementsCardFrame` behind the default-OFF flag
+/// `enable_body_measurements`: latest values from the stored history and a door
+/// to the entry sheet. It is independent of the snapshots below it.
 ///
 /// APK Test #6 / Plan F-11.
 class ProgressComparisonScreen extends ConsumerStatefulWidget {
@@ -152,7 +158,7 @@ class _ProgressComparisonScreenState
           const SizedBox(width: 8),
         ],
       ),
-      body: _buildBody(),
+      body: MeasurementsCardFrame(child: _buildBody()),
     );
   }
 
@@ -176,26 +182,40 @@ class _ProgressComparisonScreenState
     }
     final snaps = _snapshots ?? const [];
     if (snaps.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.screenPadding),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'No snapshots yet',
-                style: AppTypography.h3.copyWith(color: AppColors.textPrimary),
+      // Scrollable (L2b Landing C, C2b): beside the measurements card, or at a
+      // large text size, the empty message may not fit; it scrolls instead of
+      // overflowing. When it fits it sits exactly where the old Center put it.
+      return LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          key: const ValueKey('progress_empty_scroll'),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: constraints.hasBoundedHeight ? constraints.maxHeight : 0,
+            ),
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.screenPadding),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'No snapshots yet',
+                      style: AppTypography.h3
+                          .copyWith(color: AppColors.textPrimary),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Your starting baseline is captured at onboarding. '
+                      'Promotion snapshots fire automatically as you climb the rank ladder. '
+                      'You can also tap "Take Snapshot" above to capture a manual checkpoint.',
+                      textAlign: TextAlign.center,
+                      style: AppTypography.bodyM
+                          .copyWith(color: AppColors.textDim),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Your starting baseline is captured at onboarding. '
-                'Promotion snapshots fire automatically as you climb the rank ladder. '
-                'You can also tap "Take Snapshot" above to capture a manual checkpoint.',
-                textAlign: TextAlign.center,
-                style:
-                    AppTypography.bodyM.copyWith(color: AppColors.textDim),
-              ),
-            ],
+            ),
           ),
         ),
       );

@@ -81,6 +81,11 @@ class _FakeWrite extends MeasurementWriteNotifier {
   bool? lastUnitInches() => unit;
 }
 
+class _ThrowingUnitWrite extends _FakeWrite {
+  @override
+  bool? lastUnitInches() => throw StateError('corrupt unit');
+}
+
 BodyMeasurementsState known(
   Map<String, double> cmBySite, {
   String date = '2026-09-12',
@@ -437,6 +442,46 @@ void main() {
       expect(write.calls.single.sites, {'waist': 86.4});
       expect(write.calls.single.inches, isTrue);
     });
+
+    // L2b Landing C: the sheet's opening unit is `preferredInches()`, the one
+    // expression the Progress comparison card also uses.
+    testWidgets('nothing remembered and an imperial device: the sheet opens in '
+        'inches', (tester) async {
+      await tester.runAsync(
+        () => HiveService.instance.configBox.put('units_metric', false),
+      );
+      await open(tester, host([_empty], w: _FakeWrite()));
+      expect(find.text('in'), findsNWidgets(4));
+      expect(find.text('cm'), findsNothing);
+    });
+
+    testWidgets('nothing remembered and a metric device: the sheet opens in '
+        'centimetres', (tester) async {
+      await open(tester, host([_empty], w: _FakeWrite()));
+      expect(find.text('cm'), findsNWidgets(4));
+      expect(find.text('in'), findsNothing);
+    });
+
+    testWidgets('a remembered unit beats the device setting', (tester) async {
+      await tester.runAsync(
+        () => HiveService.instance.configBox.put('units_metric', false),
+      );
+      await open(tester, host([_empty], w: _FakeWrite(unit: false)));
+      expect(find.text('cm'), findsNWidgets(4));
+    });
+
+    testWidgets(
+      'a throwing unit read does not stop the sheet opening: it opens '
+      'in centimetres, even on an imperial device',
+      (tester) async {
+        await tester.runAsync(
+          () => HiveService.instance.configBox.put('units_metric', false),
+        );
+        await open(tester, host([_empty], w: _ThrowingUnitWrite()));
+        expect(find.byType(BodyMeasurementsSheet), findsOneWidget);
+        expect(find.text('cm'), findsNWidgets(4));
+      },
+    );
 
     testWidgets('80 in the waist field in inches is above 78.7: message and a '
         'centimetres hint; the hint switches to centimetres', (tester) async {

@@ -504,6 +504,120 @@ void main() {
     });
   });
 
+  // ── firstBySiteOf (L2b Landing C) ───────────────────────────────────────
+
+  group('firstBySiteOf (pure; input newest first)', () {
+    // `waist` is held by all three days, `chest` by the middle and the oldest,
+    // `hips` by the oldest only, `arms` by the middle only: the OLDEST holder
+    // of a site is not always the oldest entry, and not always the newest.
+    const newest = MeasurementEntry(date: '2026-10-09', sites: {'waist': 81.0});
+    const middle = MeasurementEntry(
+      date: '2026-10-03',
+      // deliberately not in registry order
+      sites: {'arms': 33.0, 'waist': 79.0, 'chest': 95.0},
+    );
+    const oldest = MeasurementEntry(
+      date: '2026-10-01',
+      sites: {'waist': 80.0, 'hips': 97.0, 'chest': 90.0},
+    );
+
+    test('the OLDEST entry holding a site wins that site', () {
+      final out = HealthReadService.firstBySiteOf([newest, middle, oldest]);
+      expect(out, {
+        'chest': (cm: 90.0, date: '2026-10-01'),
+        'waist': (cm: 80.0, date: '2026-10-01'),
+        'hips': (cm: 97.0, date: '2026-10-01'),
+        'arms': (cm: 33.0, date: '2026-10-03'),
+      });
+    });
+
+    test('a site absent from the oldest entry comes from the next holder', () {
+      const oldestWithoutWaist = MeasurementEntry(
+        date: '2026-10-01',
+        sites: {'hips': 97.0},
+      );
+      final out = HealthReadService.firstBySiteOf([
+        newest,
+        middle,
+        oldestWithoutWaist,
+      ]);
+      expect(
+        out['waist'],
+        (cm: 79.0, date: '2026-10-03'),
+        reason: 'not the newest (81.0) and not skipped past the middle',
+      );
+      expect(out['hips'], (cm: 97.0, date: '2026-10-01'));
+    });
+
+    test('a single entry is both the first and the latest', () {
+      expect(HealthReadService.firstBySiteOf([newest]), {
+        'waist': (cm: 81.0, date: '2026-10-09'),
+      });
+    });
+
+    test("the key order is the registry's, not the entries'", () {
+      final out = HealthReadService.firstBySiteOf([newest, middle, oldest]);
+      expect(out.keys.toList(), kBodyMeasurementSites);
+      final partial = HealthReadService.firstBySiteOf([middle]);
+      expect(partial.keys.toList(), ['chest', 'waist', 'arms']);
+    });
+
+    test('a site never measured is absent; no history is an empty map', () {
+      expect(HealthReadService.firstBySiteOf(const []), isEmpty);
+      expect(HealthReadService.firstBySiteOf([newest]).keys.toList(), [
+        'waist',
+      ]);
+    });
+
+    test('oldest-first input is refused in a debug build (the newest-first '
+        'contract is asserted)', () {
+      expect(
+        () => HealthReadService.firstBySiteOf([oldest, middle, newest]),
+        throwsA(isA<AssertionError>()),
+      );
+      expect(
+        () => HealthReadService.firstBySiteOf([newest, oldest, middle]),
+        throwsA(isA<AssertionError>()),
+        reason: 'one out-of-order pair is enough',
+      );
+      // The two fixtures above also break a LATER pair, so a check that skipped
+      // the first pair would still catch them. These break the FIRST pair only.
+      expect(
+        () => HealthReadService.firstBySiteOf([oldest, middle]),
+        throwsA(isA<AssertionError>()),
+        reason: 'two entries: the only pair is the first',
+      );
+      expect(
+        () => HealthReadService.firstBySiteOf([oldest, newest, newest]),
+        throwsA(isA<AssertionError>()),
+        reason: 'the later pair (equal dates) is fine; the first is not',
+      );
+    });
+
+    test(
+      'two entries with the same date: the LAST in list order is the first',
+      () {
+        const a = MeasurementEntry(date: '2026-10-05', sites: {'waist': 81.0});
+        const b = MeasurementEntry(date: '2026-10-05', sites: {'waist': 80.0});
+        expect(HealthReadService.firstBySiteOf([a, b]), {
+          'waist': (cm: 80.0, date: '2026-10-05'),
+        });
+      },
+    );
+
+    test('first and latest agree when only one entry holds the site', () {
+      final list = [newest, middle, oldest];
+      final first = HealthReadService.firstBySiteOf(list);
+      final latest = HealthReadService.latestBySiteOf(list);
+      expect(
+        first['arms'],
+        latest['arms'],
+        reason: 'arms is held by the middle entry alone',
+      );
+      expect(first['waist'], isNot(latest['waist']));
+    });
+  });
+
   // ── the AI snapshot's body_measurements ─────────────────────────────────
 
   group('AI snapshot body_measurements', () {
