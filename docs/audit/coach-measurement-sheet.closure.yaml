@@ -91,7 +91,7 @@ findings:
   - id: LANDING-C
     title: "Landing C: E3 (Progress Comparison card) and E4 (chat chip), the two surfaces the D7 cut moved out of this landing"
     terminal_state: closed_in_commit
-    commit: PENDING
+    commit: 10af65b2
     verification: "Landing C built E3 and E4 on branch coach-measurement-surfaces: docs/plans/coach-measurement-surfaces.md (v3), docs/plan-reviews/coach-measurement-surfaces.md (2 rounds, bpass: accepted) and docs/audit/coach-measurement-surfaces.closure.yaml; Gate 40 counts any terminal state, so closed_count is unchanged"
   - id: DECIMAL-COMMA
     title: "the sheet's formatter admits only '.', as the Weight sheet's does, so a comma-decimal keyboard cannot enter a decimal point"

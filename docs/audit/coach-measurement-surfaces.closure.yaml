@@ -1,6 +1,6 @@
 # Closure ledger - coach-measurement-surfaces, L2b Landing C (the Progress comparison card E3 and the AI Coach chip E4, dark behind
-# enable_body_measurements). One terminal_state per unit, no `deferred:` key. The rows that closed in the code commit carry `commit: PENDING`
-# until the stamp commit that follows it writes the real SHA (a commit cannot name its own SHA; the Landing B shape, dcde6ac6 then 6cde510b).
+# enable_body_measurements). One terminal_state per unit, no `deferred:` key. The rows that closed in the code commit carry its SHA (10af65b2),
+# written by the stamp commit that follows it (a commit cannot name its own SHA; the Landing B shape, dcde6ac6 then 6cde510b).
 # The B-pass review (docs/reviews/coach-measurement-surfaces-bpass.md, its mutant appendix ...-bpass-mutants.md and the same-dated
 # tuning-history entry) ships in the SAME commit as the rows that cite it, so no row closed on a file that did not exist (the Landing A lesson).
 # Mutation totals and the per-mutant text are in docs/reviews/coach-measurement-surfaces-bpass-mutants.md. The B-pass changed the build
@@ -18,62 +18,62 @@ findings:
   - id: C1
     title: "BodyMeasurementsState.entries (the valid history, newest first), the pure HealthReadService.firstBySiteOf (the OLDEST value per site) and a TOTAL MeasurementWriteNotifier.preferredInches() shared by the sheet and the card"
     terminal_state: closed_in_commit
-    commit: PENDING
+    commit: 10af65b2
     verification: "test/contracts/body_measurement_readers_behavioral_test.dart (group firstBySiteOf: the oldest holder, a site absent from the oldest entry, a single entry, registry key order from out-of-order entries, the debug assert on oldest-first input), measurement_prompt_state_behavioral_test.dart (group Landing C: entries order, empty / failed / anonymous states, save() puts the new entry first, preferredInches over the four combinations, a throwing read answers centimetres with one measurement_unit_read_failed), body_measurements_sheet_test.dart (the sheet opens in the unit preferredInches returns, with a throwing read, on an imperial device too)"
   - id: C2
     title: "E3: MeasurementsCardFrame (flag + height cap + one stable Column shape), MeasurementsCard (pinned header with the permanent Add button, tiles that scroll inside the card, error caption with Retry, mount refresh, anonymous-token placeholder), the pure measurementCardRows, the copy builders and formatLongIstDate, and the one host line in progress_comparison_screen.dart"
     terminal_state: closed_in_commit
-    commit: PENDING
+    commit: 10af65b2
     verification: "test/features/profile/measurement_card_rules_test.dart (the change is of the DISPLAYED values: 79.6 -> 80.9 cm is +0.6 in, not +0.5; 79.8 -> 79.9 is +0.1; 79.4 -> 79.5 is no change in inches and +0.1 in cm; first holder not previous entry; the year rule with a 2031 today; every string and the spoken sentences as literals), measurements_card_test.dart (error never reads as empty, the error state after a good read, textDim for every sign and the value and title colours, prompt-independent, unit rows, the unit read once per history state and never for an empty or unreadable card, account swap and the anonymous window, compact mode and its edge, 48 / 44 dp, one semantics node per tile and a semantic tap on the button, the two-up grid by rects, the New Year year rule, the header at the real 0.6 em advance as one run with a control that wraps, the tile scroll view not taking the primary controller, the tile region scrolls and the header does not, 320 dp at 2x, mount refresh built exactly twice, the mounted guard), measurements_card_frame_test.dart (OFF identity, literal body heights 285.9 / 286 / 299 / 300 / 301 / 399.9 / 400 / 408 / 480 / 584, production-like hosts, the REAL card's height plus the frame's margin plus the line height Ahem lacks against kMinCardCap at 320 / 360 / 700 dp and scales 1.0-3.0, four stub children x ON/OFF x scales x hosts, an unbounded host, the anonymous window leaves no band, a 10 dp child still gets the remainder, the flag flipping under a mounted frame, the list keeps its scroll offset across 286 dp), progress_comparison_screen_measurements_test.dart, measurement_card_end_to_end_test.dart (the writer-to-tile chain, the unit agreeing with the sheet, a stored dismissal and a skipped baseline leaving the card). As built: the 0.6 em fixture is a 700 dp host plus a text scale of 0.6 over Ahem; the header button is 48 dp high (the plan's derivation says 52); kCardMarginTop / kCardMarginBottom are public constants; the card has a branch for an unbounded host (no Flexible, never compact) that the end-to-end test hosts it in; the unit-agree test lives in the end-to-end file"
   - id: C2B
     title: "the Progress comparison empty state becomes a scroll view under a Center (planned, unconditional): the same rects when it fits, a scroll instead of an overflow at large text or beside the card"
     terminal_state: closed_in_commit
-    commit: PENDING
+    commit: 10af65b2
     verification: "test/features/profile/progress_comparison_screen_measurements_test.dart (OFF: the message sits where the OLD Center > Padding > Column put it, compared with a test-local replica of the old tree; text x1.5 / 2.0 / 3.0: no overflow beyond the OFF baseline, the message scrolls under a real drag at x2.0 and x3.0 (at x1.5 the scroll view exists); the OLD tree overflows at x3 (the precondition); the host line pin); mutants E01-E05 in the appendix"
   - id: C3
     title: "E4: MeasurementChipSlot (flag, prompt, sending and composer-focus checks; ONE tap target and ONE screen-reader node built from WardChip; its own X outside the target calling dismiss() or skipBaseline(); no send callback) and the one host line in the AI Coach screen"
     terminal_state: closed_in_commit
-    commit: PENDING
+    commit: 10af65b2
     verification: "test/ai_coach/measurement_chip_slot_test.dart (the 12-row truth table with the focus precondition, focus after mount and blur, back after a send, a tap at the pill centre and in the padding each open exactly one sheet, the merged semantics node, the X 44 x 44 and (opened, dismissed) == (0, 1), due -> dismiss and baseline -> skipBaseline, a failing dismiss logged not thrown, 320 dp at 2x, a semantic tap on the chip and on the X, a composer that a send disables drops focus and the chip returns, the chat above the chip (a chat at its bottom stays at its bottom when the chip appears, with a control that shows it would not, a chat scrolled up is not moved, onShown once per appearance, never while hidden, no list attached), the real-graph group asserting the prompt each row is named after: X hides the chip, a real save() clears it, flag ON <-> OFF under a mounted slot, OFF creates neither provider over a planted corrupt record), measurement_flag_off_identity_test.dart (the host line with its onShown hook between the quick prompts and the input bar, in_app only; the composer TextField bound to the same focus node; the quick prompts unchanged). As built: the slot reports its first frame (onShown) and the host passes keepBottomAfterChip, so a chat that was at its bottom is scrolled back to its bottom when the chip takes room from it (B-pass finding BPC-A1)"
   - id: OFF-IDENTITY
     title: "with enable_body_measurements OFF neither surface creates a measurements provider; the OFF tree differs from the last build only by C2b's scroll view and one extra node per host (plan section 9)"
     terminal_state: closed_in_commit
-    commit: PENDING
+    commit: 10af65b2
     verification: "test/contracts/measurement_flag_off_identity_test.dart (chip slot and card frame: no prompt / history / write provider with the flag OFF over a planted corrupt record, ON as the positive control; the never-PRO-gated pin lists the three new widget files), measurements_card_frame_test.dart (identical child instance), progress_comparison_screen_measurements_test.dart (rect equality with the old empty state)"
   - id: TESTS
     title: "the Landing C test set: 12 files (6 new, 6 extended), 498 tests in the targeted run of those files, and the full suite"
     terminal_state: closed_in_commit
-    commit: PENDING
+    commit: 10af65b2
     verification: "TZ=Asia/Kolkata flutter test --exclude-tags golden on the twelve files (measurement_card_rules_test, measurements_card_test, measurements_card_frame_test, progress_comparison_screen_measurements_test, measurement_card_end_to_end_test, measurement_chip_slot_test, body_measurement_readers_behavioral_test, measurement_prompt_state_behavioral_test, measurement_flag_off_identity_test, body_measurements_sheet_test, measurement_slots_test, measurement_units_test): 498 passed, 0 failed; the full suite on the final tree: TZ=Asia/Kolkata flutter test --exclude-tags golden finished 9607 passed, 9 skipped, 0 failed (the tree before the B-pass fixes had 9581 passed, 9 skipped, 0 failed). flutter analyze lib/: no error or warning (59 pre-existing infos, none in a Landing C file)"
   - id: MUTATION
     title: "every protection mutated once on the final tree (CLAUDE.md section 4.4 rule 21)"
     terminal_state: closed_in_commit
-    commit: PENDING
+    commit: 10af65b2
     verification: "164 distinct mutants on the final tree, 156 RED and 8 recorded equivalents (F08, R06, R10, S11, S17, S22, MUT-19, MUT-28, each with its re-derived reason), 0 compile errors, 0 anchor misses; reviewer B's 37 proposals all run as written; the first pass over the final tree found nine real survivors (C09, MUT-2, MUT-3, MUT-18, MUT-23, MUT-31, MUT-32, MUT-33, R09), each fixed with a row and re-run RED, and exposed a harness defect (a FlutterErrorCapture row failing an expect while installed hangs the next test) that was fixed in every row; the per-mutant text is in docs/reviews/coach-measurement-surfaces-bpass-mutants.md"
   - id: COPY
     title: "the copy: card eyebrow, one verb Add across the card, the Weight-sheet link and the chip, tile strings, spoken sentences; the psychology pass (stage retention) appended to plan section 8"
     terminal_state: closed_in_commit
-    commit: PENDING
+    commit: 10af65b2
     verification: "docs/plans/coach-measurement-surfaces.md section 8; test/home/measurement_slots_test.dart (word-boundary scan over the new constants and builder outputs in both units, no em dash, no 'snapshot'), measurement_card_rules_test.dart (literals)"
   - id: REGISTRY
     title: "docs/sot_registry.yaml: the new concept measurement_card_rows (behavioral_test_path = the end-to-end test, no hive block), firstBySiteOf in the two method strings, the repointed ranges of save / lastUnitInches, the new preferredInches reader, and the two new host lines in measurement_surface_hosts (presence only, one home each)"
     terminal_state: closed_in_commit
-    commit: PENDING
+    commit: 10af65b2
     verification: "dart run scripts/check_sot_registry_parity.dart, check_sot_behavioral_test_paths.dart (Gate 42) and the pre-commit gate loop pass"
   - id: DOCS
     title: "docs: the nested CLAUDE.md files (profile, ai_coach, home, core/services), functionality-flow.md (PROF-21, COACH-21), naming_conventions.md (the widened prompt / slot rows, the six-constant row and 10 new rows), the screen's class doc, the prompt provider's doc, OI-297's Landing C progress line, the umbrella's section 3b 'Superseded by', the plan's as-built line, the ship-dark note (three OFF changes and what proves each) and Landing B's five edited ledger rows (ERROR-STATE-DOOR's title included)"
     terminal_state: closed_in_commit
-    commit: PENDING
+    commit: 10af65b2
     verification: "dart run scripts/check_context_artifact_budget.dart passes; the pre-commit gate loop passes; git grep for the old 'no measurements UI yet' wording returns nothing in lib/"
   - id: BPASS
     title: "B-pass before the merge (account tier, self-triggered): 3 fresh context-blind Sonnet reviewers on the uncommitted Landing C tree; 34 findings (0 P0, 0 P1, 7 P2, 27 P3, 0 false alarms), every one fixed or recorded with a reason"
     terminal_state: closed_in_commit
-    commit: PENDING
+    commit: 10af65b2
     verification: "docs/reviews/coach-measurement-surfaces-bpass.md (verdict: accepted), its mutant appendix docs/reviews/coach-measurement-surfaces-bpass-mutants.md, docs/plan-reviews/coach-measurement-surfaces.md (bpass: accepted, bpass_review), the 2026-10-13 entry in .claude/skills/code-review/tuning-history.md and bug classes 2.104-2.106 in .claude/skills/debugging, all in the code commit. The two findings that changed the build: BPC-A1 (the chip appears after the chat scrolled to the reply; onShown and keepBottomAfterChip) and BPC-A2 (the header measured 297 dp against 282 dp on a 360 dp phone in the real face)"
   - id: BPASS-RECORDED
     title: "the B-pass items that were recorded with a reason and not changed: BPC-A4 (the card derives its compact mode from its own constraints, which equals the frame's cap exactly; pinned by the frame rows at 399.9 / 399.96 / 400 dp), BPC-A5 (the tile window is one row at scale 1.0 and half a tile at x2.0 on a short phone: an accepted design of plan section 9, the tiles stay reachable by scrolling and the rows at x2.0 and x3.0 pin that), BPC-B7 (the 286-301 rows cannot see the cap's value because the card is compact there; F08 is a re-derived equivalent and the floor row is its tripwire), BPC-C4 (lib/core/services/measurement_flags.dart keeps its Landing B class doc: it is platform tier by an exact-path rule, so a doc-comment edit would raise the whole diff's tier for no behaviour), BPC-C8 (the built departures from the plan are listed here and in plan section 9: the 0.6 em fixture became a 700 dp host plus Ahem at a text scale of 0.6, the header button is 48 dp where the derivation says 52, kCardMarginTop / kCardMarginBottom are public constants, the card has an unbounded-host branch, the empty state guards hasBoundedHeight)"
     terminal_state: closed_in_commit
-    commit: PENDING
+    commit: 10af65b2
     verification: "docs/reviews/coach-measurement-surfaces-bpass.md (dispositions BPC-A4, A5, B7, C4, C8); docs/plans/coach-measurement-surfaces.md section 9 (As built); the frame test's header comment and the floor row"
   - id: NO-SNAPSHOT-READER
     title: "D1 premise re-checked at build: nothing reads UserStatSnapshot.measurements, so the card and the snapshot list do not disagree about measurements"
