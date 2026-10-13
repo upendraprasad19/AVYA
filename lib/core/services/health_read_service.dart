@@ -202,6 +202,37 @@ class HealthReadService {
     }
     return out;
   }
+
+  /// PURE: the OLDEST value per site in [newestFirst] (the first entry that
+  /// holds the site), with the day it was logged (L2b Landing C: the Progress
+  /// comparison card's "change since" baseline). [newestFirst] MUST be ordered
+  /// newest first, the order [measurementHistory] returns; the scan therefore
+  /// starts at the END of the list, and a debug build asserts the order because
+  /// a release build would silently return the newest value as the "first"
+  /// (the only producer of the list is [measurementHistory]). Like
+  /// [latestBySiteOf] the result is built by walking [kBodyMeasurementSites], so
+  /// its key order is the registry's, and a site never measured is absent.
+  static Map<String, ({double cm, String date})> firstBySiteOf(
+      List<MeasurementEntry> newestFirst) {
+    assert(() {
+      for (var i = 1; i < newestFirst.length; i++) {
+        if (newestFirst[i].date.compareTo(newestFirst[i - 1].date) > 0) {
+          return false;
+        }
+      }
+      return true;
+    }(), 'firstBySiteOf needs its input newest first');
+    final out = <String, ({double cm, String date})>{};
+    for (final site in kBodyMeasurementSites) {
+      for (var i = newestFirst.length - 1; i >= 0; i--) {
+        final cm = newestFirst[i].sites[site];
+        if (cm == null) continue;
+        out[site] = (cm: cm, date: newestFirst[i].date);
+        break;
+      }
+    }
+    return out;
+  }
 }
 
 /// One valid body-measurement day as [HealthReadService.measurementHistory]

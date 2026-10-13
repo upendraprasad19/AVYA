@@ -184,10 +184,36 @@ pending:
       test/contracts/measurement_flag_off_identity_test.dart. build_commit
       was null in the commit this note describes (a commit cannot name its own
       sha) and is set by the stamp commit that follows it (no test or script
-      reads this field, so the stamp is self-attested). The flip waits for Landing C (E3's permanent
-      "Add measurements" door), the OQ-L2a decision, a position on OI-310 and
-      the under-18 status quo (OI-305); it needs the full x2 + bpass: accepted
-      again, and deletes the blast_radius.yaml rule for measurement_flags.dart.
+      reads this field, so the stamp is self-attested). The flip waits for the
+      OQ-L2a decision, a position on OI-310 and the under-18 status quo
+      (OI-305) (Landing C, E3's permanent "Add measurements" door, is the
+      paragraph below); it needs the full x2 + bpass: accepted again, and
+      deletes the blast_radius.yaml rule for measurement_flags.dart.
+
+      L2b Landing C (branch coach-measurement-surfaces, plan
+      docs/plans/coach-measurement-surfaces.md v3, record
+      docs/plan-reviews/coach-measurement-surfaces.md; full x2 review in 2
+      rounds and a B-pass): the Progress comparison card (E3) and the AI Coach
+      chip (E4), both behind this same flag. The scalar branch and build_commit
+      above stay Landing B's (this entry is per flag); the Landing C code commit
+      is named in docs/audit/coach-measurement-surfaces.closure.yaml. Landing C
+      changes the OFF tree in these stated ways, and what proves each differs:
+      (1) the Progress screen's empty state is a scroll view: PROVED at text
+      scale 1.0 by rect equality with a replica of the old tree, and at larger
+      scales by comparing its overflow messages with the OFF baseline
+      (test/features/profile/progress_comparison_screen_measurements_test.dart);
+      (2) the Progress body is wrapped by the frame, which returns its child
+      instance itself with the flag OFF: PROVED
+      (test/features/profile/measurements_card_frame_test.dart and the identity
+      test); (3) the AI Coach column gets one zero-size child (the OFF slot),
+      which changes how Flutter matches the elements below it: the composer's
+      element now survives the quick prompts disappearing, a state-lifetime
+      change and not a pixel one. (3) is NOT proved by any test (the AI Coach
+      screen cannot be pumped); only the host line is pinned. It is the
+      AGENT-WEB-CHECK and DEVICE-CHECK-C rows of the Landing C ledger. With
+      Landing C merged the sheet is reachable on demand through the card's
+      button; the flip still waits for OQ-L2a, OI-310 and OI-305 and needs its
+      own full x2 review and B-pass.
 
 # ── HARD PRECONDITIONS for flipping enable_hold_weeks ─────────────────────
 # Not a wish-list. The flip-on commit already requires the full ×2 + bpass

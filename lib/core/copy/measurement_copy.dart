@@ -1,5 +1,6 @@
-/// Copy for the body-measurements sheet, the Home banner and the Weight-sheet
-/// link (L2b Landing B). Constants and pure functions only (no Flutter, no
+/// Copy for the body-measurements sheet, the Home banner, the Weight-sheet
+/// link (L2b Landing B), the Progress comparison card and the chat chip
+/// (Landing C). Constants and pure functions only (no Flutter, no
 /// Hive), so every string is testable.
 ///
 /// Voice: plain Wardroom. Neutral numbers, no good or bad wording on a change,
@@ -43,6 +44,13 @@ class MeasurementCopy {
   // ── Weight sheet ──────────────────────────────────────────────────────
   static const weightSheetLink = 'Add body measurements';
 
+  // ── Progress comparison card and chat chip (L2b Landing C) ────────────
+  // One verb ("Add") across the doors: this button, the Weight-sheet link and
+  // the chip. The card never uses the word "snapshot" (Take Snapshot sits
+  // right below it and does not capture these numbers, plan D1).
+  static const cardAddButton = 'Add measurements';
+  static const chipLabel = 'Add body measurements';
+
   // ── Pure builders ─────────────────────────────────────────────────────
 
   /// "Between 50 and 200 cm" for a centimetre range.
@@ -71,6 +79,51 @@ class MeasurementCopy {
   /// stored values 0.1 cm apart can print the same inch figure).
   static String deltaLine(String label, double before, double after) =>
       '$label ${before.toStringAsFixed(1)} → ${after.toStringAsFixed(1)} cm';
+
+  /// "WAIST · 3 Oct": the tile's first line, the site and the day of its
+  /// latest value ([shortDate] comes from `formatShortIstDate`).
+  static String cardTileTitle(String label, String shortDate) =>
+      '${label.toUpperCase()} · $shortDate';
+
+  /// "79.5 cm" / "31.3 in": [value] is already in the unit [inches] names.
+  static String cardValue(double value, {required bool inches}) =>
+      '${value.toStringAsFixed(1)} ${inches ? 'in' : 'cm'}';
+
+  /// "+1.5 cm since 12 Sep" / "-1.5 cm since 12 Sep" / "no change since 12
+  /// Sep". [delta] is the difference of the two DISPLAYED values, already
+  /// rounded to 0.1; a zero (or negative zero) reads "no change". Neutral on
+  /// purpose: no good or bad wording and no colour for any sign.
+  static String cardDeltaLine(
+    double delta, {
+    required bool inches,
+    required String shortFirstDate,
+  }) {
+    if (delta == 0) return 'no change since $shortFirstDate';
+    final sign = delta > 0 ? '+' : '';
+    return '$sign${cardValue(delta, inches: inches)} since $shortFirstDate';
+  }
+
+  /// The one screen-reader sentence of a tile, built from RAW fields (full
+  /// month names, unit words): "Waist, 79.5 centimetres, measured 3 October.
+  /// Up 1.5 centimetres since 12 September." [delta] and [longFirstDate] are
+  /// both null for a site held by one day only.
+  static String cardTileSemantics({
+    required String label,
+    required double value,
+    required bool inches,
+    required String longLatestDate,
+    double? delta,
+    String? longFirstDate,
+  }) {
+    final unit = inches ? 'inches' : 'centimetres';
+    final head =
+        '$label, ${value.toStringAsFixed(1)} $unit, measured $longLatestDate.';
+    if (delta == null || longFirstDate == null) return head;
+    if (delta == 0) return '$head No change since $longFirstDate.';
+    final word = delta > 0 ? 'Up' : 'Down';
+    return '$head $word ${delta.abs().toStringAsFixed(1)} $unit since '
+        '$longFirstDate.';
+  }
 
   static String _plain(double v) =>
       v == v.roundToDouble() ? v.toInt().toString() : v.toStringAsFixed(1);

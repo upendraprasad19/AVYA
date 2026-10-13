@@ -31,6 +31,7 @@ import '../../widgets/chat_bubble.dart';
 import '../../widgets/completion_prompt_card.dart';
 import '../../widgets/prompt_chip.dart';
 import '../../widgets/log_confirm_card.dart';
+import '../../widgets/measurement_chip_slot.dart';
 import '../../widgets/workout_log_confirm_card.dart';
 import '../../widgets/coach_insight_section.dart';
 import '../../widgets/coach_suggested_actions.dart';
@@ -504,6 +505,15 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                 // ── Quick Prompts (only when chat is empty/welcome only) ──
                 if (channel == 'in_app' && !isSending && messages.length <= 1)
                   _buildQuickPrompts(),
+
+                // ── Body-measurements chip (L2b Landing C, E4; flag-gated, owns its checks) ──
+                if (channel == 'in_app')
+                  MeasurementChipSlot(
+                    inputFocusNode: _inputFocusNode,
+                    isSending: isSending,
+                    onShown: (height) =>
+                        keepBottomAfterChip(_scrollController, height),
+                  ),
 
                 // ── Input Bar with inline message counter ──
                 if (channel == 'in_app')

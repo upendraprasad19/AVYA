@@ -66,11 +66,11 @@ findings:
   - id: FLIP
     title: "flipping enable_body_measurements to default ON (or removing the flag): its own commit with its own x2 plan review and B-pass (section 4.12.4); docs/ship_dark_pending_review.yaml stays pending until then"
     terminal_state: blocked_on_user
-    reason: "founder-owned and sequenced: after Landing C has merged (E3's permanent door; without it no B surface is reachable on demand), OQ-L2a is decided (and L2c merged if chosen), the founder has taken a position on OI-310, and the under-18 status quo (spec decision 7, OI-305) is acknowledged"
+    reason: "founder-owned and sequenced. With Landing C merged the sheet is reachable on demand through E3's permanent button (undiscoverable until D9 is answered); the Home banner, the Weight link and the chip still need a due prompt. The flip still waits for three things: OQ-L2a decided (and L2c merged if chosen), a founder position on OI-310, and the under-18 status quo (spec decision 7, OI-305) acknowledged"
   - id: D3-D4
     title: "D3 (the first baseline prompt on tenure day 7, a one-line constant) and D4 (one dismissal silences the banner, the Weight-sheet link and the baseline prompt; the Progress Comparison card, in Landing C, deliberately ignores it) are built on their stated defaults"
     terminal_state: blocked_on_user
-    reason: "founder confirms or changes the two defaults; a change is one constant (D3) or one clause of measurementPromptFor (D4)"
+    reason: "founder confirms or changes the two defaults. D4 also governs E3's gating (E3, the Progress comparison card, ignores the dismissal) and the chat chip's X (Landing C); a change is one constant (D3) or one clause of measurementPromptFor (D4) plus those two"
   - id: D7
     title: "scope cut: E3 (Progress Comparison card) and E4 (chat chip) leave this landing for Landing C"
     terminal_state: closed_in_commit
@@ -87,12 +87,12 @@ findings:
   - id: CHAT-PULL-STALE
     title: "pullRecentCrossChannelLogs and the restore paths write measurement_* without invalidating the providers, so a Telegram-origin or restored entry refreshes the banner and the 'Last:' hints at the next rollover, restore tick or app start (a hint can be up to a day old)"
     terminal_state: blocked_on_user
-    reason: "founder accepts the staleness (0 such rows exist) or asks for a refresh in the pull; the pull is in lib/core/services/sync_service.dart (platform tier)"
+    reason: "founder accepts the staleness (0 such rows exist) or asks for a refresh in the pull; the pull is in lib/core/services/sync_service.dart (platform tier). Landing C: the stale latest value is a primary displayed number on E3, which is as stale as its open time (it refreshes on mount, on Retry, after a save, after a chat write and on a background-restore tick; only the Telegram pull is unseen until one of those). Up to a day old is still true for the Home banner, the prompt and the chip"
   - id: LANDING-C
     title: "Landing C: E3 (Progress Comparison card) and E4 (chat chip), the two surfaces the D7 cut moved out of this landing"
-    terminal_state: upstream_blocked
-    blocker: "Landing C (branch coach-measurement-surfaces) starts only after this landing has merged; its own plan and x2 review come first, and D7 was answered 2026-10-12"
-    reopen_when: "this landing is merged to main"
+    terminal_state: closed_in_commit
+    commit: 10af65b2
+    verification: "Landing C built E3 and E4 on branch coach-measurement-surfaces: docs/plans/coach-measurement-surfaces.md (v3), docs/plan-reviews/coach-measurement-surfaces.md (2 rounds, bpass: accepted) and docs/audit/coach-measurement-surfaces.closure.yaml; Gate 40 counts any terminal state, so closed_count is unchanged"
   - id: DECIMAL-COMMA
     title: "the sheet's formatter admits only '.', as the Weight sheet's does, so a comma-decimal keyboard cannot enter a decimal point"
     terminal_state: blocked_on_user
@@ -106,6 +106,6 @@ findings:
     terminal_state: blocked_on_user
     reason: "founder accepts or asks for a fallback tenure source"
   - id: ERROR-STATE-DOOR
-    title: "the sheet's error state (history unreadable) is reachable only mid-sheet or through the debug-only button, and Retry helps a transient failure only (it does not reopen a closed box or change the token)"
+    title: "the sheet's error state (history unreadable) is reachable mid-sheet, through the debug-only button and, from Landing C on, through the Progress comparison card's always-present header button; Retry helps a transient failure only (it does not reopen a closed box or change the token)"
     terminal_state: blocked_on_user
-    reason: "founder accepts or asks for a visible door in the error state"
+    reason: "the error state is now reachable from E3's always-present header button (Landing C); Retry helps a transient failure only; the founder's accept-or-ask question stands"
