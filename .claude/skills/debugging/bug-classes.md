@@ -535,7 +535,7 @@ row to the SKILL.md index in the same commit.
 - **Root-cause shape:** something in front of your code answered. On Supabase that is `verify_jwt: true`: the **gateway** rejects a request with no/invalid `Authorization` header *before* the function body executes, and its error schema is not yours. Live proof, diagnose `c8f4a2`:
   ```
   gateway  → {"code":"UNAUTHORIZED_NO_AUTH_HEADER","message":"Missing authorization header"}
-  function → {"error":"...","request_id":"..."}          (redeem-referral/index.ts:57-60, :156-164)
+  function → {"error":"...","request_id":"..."}          (redeem-referral/index.ts: the 401 branch and jsonError())
   ```
   Generalises well beyond Supabase — CDNs, WAFs, rate limiters, auth middleware, load balancers and `enforce_https` redirects all answer on your behalf and none share your error contract.
 - **Why review misses it:** there is nothing wrong with the code, and nothing wrong with the reading of it. The mistake happens one level up, in *which file you decided to open*. A reviewer handed "here is the function, does the assertion match it?" will confirm your framing — the input-set-width failure applied to a READ rather than a check (`feedback_green_check_input_set_width` #22).

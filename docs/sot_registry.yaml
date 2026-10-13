@@ -7814,9 +7814,16 @@ concepts:
       function — repository is a thin transport wrapper.
     writers:
       - file: supabase/functions/redeem-referral/index.ts
-        line_range: 100-145
+        line_range: 100-170
         method: redeem_referral_atomic RPC call
         notes: |
+          Migration 159 / unit S2 (2026-10-13): step 5b refuses a referee who
+          has EVER paid (a `subscriptions` read: plan monthly/yearly, payment id
+          present, `.limit(1)`; a read error falls through to the RPC) with a 400,
+          AFTER the idempotency read and BEFORE the RPC, and the RPC's own
+          `referee_has_paid_plan` refusal (P0001) maps to the same 400. Pins:
+          supabase/functions/redeem-referral/index_test.ts (behavioural, fake
+          client) and test/edge_functions/redeem_referral_test.dart RR-src-7..9.
           Server-side atomic write — inserts into referral_redemptions
           + grants trial subscription. Client never writes this table
           directly; only the Edge Function has the INSERT path. d2b9e6

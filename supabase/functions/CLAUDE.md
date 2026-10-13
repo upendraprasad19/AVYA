@@ -207,7 +207,7 @@ into the response body (CLAUDE.md §4.4 rule 17).
 ## Tests pinning the rules here
 
 - `test/contracts/`: `ai_proxy_placeholder_resolution_test`, `ai_proxy_day_injection_test`, `ai_media_proxy_{ssrf_allowlist,user_scope,status_code_classification,telemetry}_test`, `media_free_image_lifetime_gate_writer_to_reader_test`, `pro_media_daily_caps_writer_to_reader_test`, `coach_replies_test` (server-client copy mirror), `delete_account_rate_limit_writer_to_reader_test`, `verify_payment_rate_limit_writer_to_reader_test`, `cron_auth_adoption_test`, `cron_telemetry_adoption_test`, `food_text_analysis_daily_cap_test`, `vision_analysis_daily_cap_test` (pins the `COMBINED with` / `20/day COMBINED` wording of the `scan_meal`/`cart_auditor` rows above), `edge_function_{safety,503_retry,cold_start_retry_behavioral,storage_race_retry}_test`, `error_telemetry_payload_contract_test`, `chat_media_signed_url_test`.
-- Deno: `supabase/functions/ai-media-proxy/index_test.ts` (user-scope guard over the RESOLVED URL, behavioural).
+- Deno: `supabase/functions/ai-media-proxy/index_test.ts` (user-scope guard over the RESOLVED URL, behavioural); `supabase/functions/redeem-referral/index_test.ts` (the paid-referee guard of migration 159, fake client; importing `index.ts` must bind no server: `serve()` sits under `if (import.meta.main)`).
 
 ## See also
 

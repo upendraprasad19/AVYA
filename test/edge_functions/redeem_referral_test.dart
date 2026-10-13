@@ -29,12 +29,12 @@ import 'package:http/http.dart' as http;
 /// function's:
 ///
 ///   gateway  → {"code":"UNAUTHORIZED_NO_AUTH_HEADER","message":"..."}
-///   function → {"error":"...","request_id":"..."}   (index.ts:57-60, :156-164)
+///   function → {"error":"...","request_id":"..."}   (the 401 branch and jsonError() in index.ts)
 ///
 /// So for RR-1 and RR-2 the function's `{error, ...}` contract is unreachable,
 /// and asserting ANY function-shaped key against them is asserting a contract
 /// nothing produces. `success` is emitted ONLY on the 200 success paths
-/// (index.ts:127, :148).
+/// (the 23505 race branch and the fresh-redeem return in index.ts).
 ///
 /// NOTE: Tests that require valid JWT and code redemption are covered
 /// in the integration test suite on device (auth_flow_test.dart).
@@ -113,7 +113,7 @@ void main() {
     });
     test('RR-6: a VALID non-user JWT reaches the FUNCTION own 401', () async {
       // Added 2026-08-16. Every other 401 in this file is the GATEWAY's, so
-      // before this test index.ts:55-60 — the function's own authentication
+      // before this test the authentication branch of index.ts — the function's own authentication
       // branch — was covered by nothing: deleting it outright reddened no test
       // here. The header above states that the function's {error, ...} contract
       // is unreachable for RR-1/RR-2; this closes that gap rather than only
@@ -137,10 +137,10 @@ void main() {
       final body = jsonDecode(response.body) as Map<String, dynamic>;
 
       // Pinning the literal string is right HERE and wrong in RR-1: this copy
-      // is ours (index.ts:57), not Supabase platform copy. If someone edits the
+      // is ours (the 401 branch of index.ts), not Supabase platform copy. If someone edits the
       // function's message, this SHOULD red.
       expect(body['error'], equals('Authentication required'),
-          reason: 'this 401 comes from index.ts:57, not the gateway');
+          reason: 'this 401 comes from the 401 branch of index.ts, not the gateway');
       expect(body['request_id'], isA<String>(),
           reason: 'index.ts stamps a request_id on every response it authors');
 
@@ -193,7 +193,7 @@ void main() {
 
     test('RR-src-1: codes are trimmed and uppercased before matching', () {
       expect(source, contains(r'(body.code ?? "").trim().toUpperCase()'),
-          reason: 'index.ts:65 — a lowercase code from the UI must still match');
+          reason: 'the code normalisation in index.ts — a lowercase code from the UI must still match');
     });
 
     test('RR-src-2: CODE_FORMAT accepts AVYA- plus 8 uppercase alphanumerics',
@@ -214,7 +214,7 @@ void main() {
 
     test('RR-src-3: the self-referral guard is still present', () {
       expect(source, contains('codeRow.user_id === referee.id'),
-          reason: 'index.ts:88 — without it a user can refer themselves');
+          reason: 'the self-referral guard in index.ts — without it a user can refer themselves');
     });
 
     test('RR-src-4: the PRO grant is still 7 days', () {
@@ -227,7 +227,54 @@ void main() {
           source,
           matches(RegExp(r'const\s+SIGNUP_WINDOW_MS\s*=\s*'
               r'7\s*\*\s*24\s*\*\s*60\s*\*\s*60\s*\*\s*1000\s*;')),
-          reason: 'index.ts:94 compares the referee signup age against this');
+          reason: 'the signup-age check in index.ts compares the referee signup age against this');
+    });
+
+    // ── unit S2 (migration 159): the paid-referee guard ──────────────────────
+    // SOURCE pins on the cascade order and the exact statements. The behaviour is
+    // supabase/functions/redeem-referral/index_test.ts (a fake client, Deno).
+    String squash(String s) => s.replaceAll(RegExp(r'\s+'), ' ').trim();
+
+    test('RR-src-7: the paid check sits AFTER the idempotency step and BEFORE the RPC', () {
+      final code = squash(source);
+      final idem = code.indexOf('.eq("referee_id", referee.id)');
+      final paid = code.indexOf('.from("subscriptions")');
+      final rpc = code.indexOf('supabase.rpc("redeem_referral_atomic"');
+      expect(idem, greaterThanOrEqualTo(0));
+      expect(paid, greaterThan(idem),
+          reason: 'an already-redeemed paid user must still read "Code already applied"');
+      expect(rpc, greaterThan(paid), reason: 'the RPC must not run for a referee the check refuses');
+      expect(
+          code,
+          contains('const { data: paidRows, error: paidErr } = await supabase .from("subscriptions") .select("id") '
+              '.eq("user_id", referee.id) .in("plan", PAID_PLANS) .not("razorpay_payment_id", "is", null) .limit(1); '
+              'if (paidErr) { console.warn('),
+          reason: 'the read must keep its error binding: a failing check is logged, not silently discarded');
+      final warn = code.indexOf('if (paidErr) { console.warn(');
+      final hit = code.indexOf('if (paidRows && paidRows.length > 0) { return jsonError(400, PAID_REFEREE_MESSAGE, requestId); }');
+      expect(hit, greaterThan(warn), reason: 'the refusal reads the rows AFTER the error is logged');
+      expect(code.substring(warn, hit).contains('return'), isFalse,
+          reason: 'a READ ERROR must only be logged and fall through to the RPC, the authoritative check; never answer');
+      expect(code, contains('const PAID_PLANS = ["monthly", "yearly"];'),
+          reason: 'must equal the plan list migration 159 and the reward job use');
+      expect(code, contains("const PAID_REFEREE_MESSAGE = \"Referral codes are for new recruits who haven't subscribed yet.\";"));
+    });
+
+    test('RR-src-8: the RPC refusal referee_has_paid_plan maps to the SAME 400, before the 23505 and 500 branches', () {
+      final code = squash(source);
+      final map = code.indexOf('rpcErr.message.includes("referee_has_paid_plan")');
+      expect(map, greaterThanOrEqualTo(0));
+      expect(code.substring(map, map + 140), contains('return jsonError(400, PAID_REFEREE_MESSAGE, requestId);'));
+      expect(code.indexOf('rpcErr.code === "23505"'), greaterThan(map));
+      expect(code.indexOf('"Internal server error"'), greaterThan(map));
+    });
+
+    test('RR-src-9: serve() runs only when the module is the entrypoint (importing it from a test binds no server)', () {
+      final code = squash(source);
+      expect(code, contains('if (import.meta.main) {'));
+      expect(code.indexOf('serve((req) => handler(req));'), greaterThan(code.indexOf('if (import.meta.main) {')));
+      expect(RegExp(r'^serve\(', multiLine: true).hasMatch(source), isFalse,
+          reason: 'a module-scope serve() makes the Deno test import start a listener');
     });
 
     test('RR-src-6: both 200 paths still carry success:true', () {
@@ -236,7 +283,7 @@ void main() {
       // else the race path renders as a failure to the user.
       expect(RegExp(r'success:\s*true').allMatches(source).length,
           greaterThanOrEqualTo(2),
-          reason: 'index.ts:127 (already-redeemed race) and :148 (fresh)');
+          reason: 'the 23505 already-redeemed race branch and the fresh-redeem return in index.ts');
     });
   });
 }
