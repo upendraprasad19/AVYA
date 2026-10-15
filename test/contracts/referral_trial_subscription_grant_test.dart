@@ -81,11 +81,14 @@ void main() {
   group('a1c9f4 — the live behavioral cases exist in the arbiter scaffold', () {
     final arb = File('test/sql/onconflict_live_arbiter.sql').readAsStringSync();
 
-    test('a direct redeem_referral_atomic -> 2 referral_trial rows case exists', () {
-      expect(arb.contains('redeem_referral_atomic:2_referral_trial_rows'), isTrue,
+    test('a direct redeem_referral_atomic -> 1 referral_trial row (the referee\'s) case exists', () {
+      expect(arb.contains('redeem_referral_atomic:1_referral_trial_row'), isTrue,
           reason:
               'the live RPC-call case (proves the INSERT succeeds + no UNIQUE-NULL '
-              'collision) must stay in the arbiter SQL');
+              'collision) must stay in the arbiter SQL; since migration 159 the '
+              'referrer is credited by the hourly job, not at redemption, so one row');
+      expect(arb.contains('redeem_referral_atomic:2_referral_trial_rows'), isFalse,
+          reason: 'the 2-row expectation is the pre-159 rule (referrer credited at redemption)');
     });
 
     test('the OI-202 mirror-dropped case replaced the GREATEST case', () {

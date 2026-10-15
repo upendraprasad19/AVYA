@@ -434,13 +434,15 @@ BEGIN
     INSERT INTO _v_results VALUES ('saved_diet_plans:user_id', 'fail', SQLSTATE, SQLERRM);
   END;
 
-  ----- 27. redeem_referral_atomic -> 2 referral_trial subscriptions (a1c9f4) ----
+  ----- 27. redeem_referral_atomic -> 1 referral_trial subscription, the REFEREE's (a1c9f4, 159) ----
   -- NOT an onConflict test, but the actual failing referral callsite, verified on
   -- the live schema with this same harness. The RPC takes the code as a PARAM and
   -- never reads referral_codes (that lookup lives in the EF), so no code row needed.
   -- Pre-094: the RPC's subscriptions INSERT 23502s on the razorpay_* NOT NULL ->
-  -- this case is 'fail'. Post-094: both referrer + referee get a referral_trial row,
-  -- both with NULL razorpay_payment_id (proving no UNIQUE-NULL collision) -> 'ok'.
+  -- this case is 'fail'. Post-094 the referee's referral_trial row has a NULL
+  -- razorpay_payment_id (proving no UNIQUE-NULL collision) -> 'ok'. Since migration 159 (founder
+  -- decision 2026-10-12) the REFERRER gets nothing at redemption - the hourly job credits them when
+  -- the friend pays - so the expected count is ONE row, the referee's, and none for the referrer.
   BEGIN
     INSERT INTO public.users (id, email, full_name)
       VALUES (v_referrer, 'test+arbiter-referrer@avya.local', 'arbiter referrer')
@@ -449,14 +451,16 @@ BEGIN
     IF (SELECT count(*) FROM public.subscriptions
           WHERE plan = 'referral_trial'
             AND user_id IN (v_referrer, v_user)
-            AND razorpay_payment_id IS NULL) = 2 THEN
-      INSERT INTO _v_results VALUES ('redeem_referral_atomic:2_referral_trial_rows', 'ok', NULL, NULL);
+            AND razorpay_payment_id IS NULL) = 1
+       AND (SELECT count(*) FROM public.subscriptions
+             WHERE plan = 'referral_trial' AND user_id = v_user AND razorpay_payment_id IS NULL) = 1 THEN
+      INSERT INTO _v_results VALUES ('redeem_referral_atomic:1_referral_trial_row', 'ok', NULL, NULL);
     ELSE
-      INSERT INTO _v_results VALUES ('redeem_referral_atomic:2_referral_trial_rows', 'fail', 'ASSERT',
-        'expected 2 referral_trial rows with NULL razorpay_payment_id');
+      INSERT INTO _v_results VALUES ('redeem_referral_atomic:1_referral_trial_row', 'fail', 'ASSERT',
+        'expected exactly 1 referral_trial row (the referee''s) with NULL razorpay_payment_id and none for the referrer');
     END IF;
   EXCEPTION WHEN OTHERS THEN
-    INSERT INTO _v_results VALUES ('redeem_referral_atomic:2_referral_trial_rows', 'fail', SQLSTATE, SQLERRM);
+    INSERT INTO _v_results VALUES ('redeem_referral_atomic:1_referral_trial_row', 'fail', SQLSTATE, SQLERRM);
   END;
 
   ----- 28. subscription mirror dropped; an active grant needs no mirror (OI-202) ----

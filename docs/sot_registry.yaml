@@ -8148,10 +8148,14 @@ concepts:
         line_range: 1-9999
         method: redeem_referral_atomic
         notes: The OTHER entitlement writer — inserts a referral_trial row or extends an active end_date (see referral_trial_subscription_grant). Together with the two Edge Functions above these are every write to subscriptions.end_date.
-      - file: supabase/migrations/158_referral_referrer_cap.sql
-        line_range: 111-204
-        method: redeem_referral_atomic (the LIVE definition from migration 158; the last CREATE OR REPLACE wins)
-        notes: The same entitlement write with one change - the REFERRER is credited only while that referrer has fewer than 7 credited referrals in the last 90 days (concept referral_referrer_cap); the referee is always credited. Migration 038 above is the origin of the body.
+      - file: supabase/migrations/159_referral_reward_on_conversion.sql
+        line_range: 89-166
+        method: grant_referral_days + redeem_referral_atomic (the LIVE definitions from migration 159; the last CREATE OR REPLACE wins)
+        notes: The same entitlement write, now through ONE helper (`private.grant_referral_days`, an INSERT of a referral_trial row or an UPDATE of end_date by id) and for the REFEREE only; the REFERRER is credited later by the hourly job below, when the friend has paid (concept referral_reward_on_conversion). Migration 038 above is the origin of the body.
+      - file: supabase/migrations/159_referral_reward_on_conversion.sql
+        line_range: 173-367
+        method: process_referral_conversions (hourly pg_cron job)
+        notes: A writer of `subscriptions.end_date` through the helper - it extends the REFERRER of a friend whose payment has stood 7 days. It reads the paid rows the two Edge Functions above insert and never writes a paid row itself.
     reader_manifest_complete: true
     readers:
       - file: supabase/functions/_shared/subscription.ts
@@ -8202,12 +8206,13 @@ concepts:
     description: |
       The DB-layer GRANT half of a referral redemption (sibling of
       `referral_redemption`, which covers the redemption row + transport).
-      redeem_referral_atomic (migration 038; the LIVE body is migration 158
-      since 2026-10-11, the last CREATE OR REPLACE) INSERTs a `referral_trial`
-      row into `subscriptions` for the referee and, while the referrer has
-      fewer than 7 credited referrals in the last 90 days (concept
-      referral_referrer_cap), for the referrer too (or extends an existing
-      active sub's end_date). Migration 094 (a1c9f4) made this path
+      redeem_referral_atomic (migration 038; the LIVE body is migration 159,
+      the last CREATE OR REPLACE) INSERTs a `referral_trial` row into
+      `subscriptions` for the REFEREE only (or extends an existing active sub's
+      end_date), through `private.grant_referral_days`. The REFERRER is credited
+      later, by the hourly job, when the friend has paid (concept
+      referral_reward_on_conversion; under 158 the referrer was credited here,
+      capped at 7 per 90 days). Migration 094 (a1c9f4) made this path
       actually work for the first time ever: it DROPPED the razorpay_* NOT NULL
       that 23502'd every referral_trial INSERT (referral has never once
       succeeded — 0 rows). It also hardened the AFTER INSERT/UPDATE trigger
@@ -8227,15 +8232,17 @@ concepts:
           target has no future-dated active sub, else extends end_date; runs for
           referrer + referee. Omits razorpay_* (null for non-purchase grants) —
           requires migration 094's DROP NOT NULL to succeed. ORIGIN of the body:
-          the live definition is migration 158 (next entry).
-      - file: supabase/migrations/158_referral_referrer_cap.sql
-        line_range: 111-204
-        method: redeem_referral_atomic (LIVE definition)
+          the live definition is migration 159 (next entry).
+      - file: supabase/migrations/159_referral_reward_on_conversion.sql
+        line_range: 89-166
+        method: grant_referral_days + redeem_referral_atomic (LIVE definitions)
         notes: |
-          Same grant statements, unchanged token for token (pinned by
-          test/contracts/referral_referrer_cap_migration_test.dart group 3c), the
-          referrer's half now inside IF v_credit_referrer. The referee is always
-          credited, in both the insert and the extend branch.
+          The grant is now ONE helper (`private.grant_referral_days`: latest
+          active row read FOR UPDATE NOWAIT, INSERT a referral_trial row when none
+          or it has lapsed, else UPDATE end_date by id; pinned by
+          test/contracts/referral_pay_on_conversion_migration_test.dart groups 2
+          and 3c), called for the referee by redeem_referral_atomic and for the
+          referrer by the hourly job (158 wrote the statements twice).
       - file: supabase/migrations/094_subscriptions_razorpay_nullable.sql
         line_range: 1-9999
         method: DROP NOT NULL (+ historical update_user_subscription_status trigger)
@@ -8269,14 +8276,14 @@ concepts:
       - razorpay_payment_id
       - razorpay_signature
     regression_test: test/contracts/referral_trial_subscription_grant_test.dart
-    behavioral_test_path: test/sql/onconflict_live_arbiter.sql  # a1c9f4 — live RPC-call case 'redeem_referral_atomic:2_referral_trial_rows' (2 rows, no UNIQUE-NULL collision) + 'subscription_mirror:dropped' (OI-202 replaced the GREATEST case)
+    behavioral_test_path: test/sql/onconflict_live_arbiter.sql  # a1c9f4 — live RPC-call case 'redeem_referral_atomic:1_referral_trial_row' (the referee's row only since 159, no UNIQUE-NULL collision) + 'subscription_mirror:dropped' (OI-202 replaced the GREATEST case)
     telemetry:
       failure_op_types:
         - referral_repository_redeem
     related_concepts:
       - referral_redemption
       - subscription_state
-      - referral_referrer_cap
+      - referral_reward_on_conversion
 
   - concept: rank_promotion_log
     domain: profile
@@ -15288,74 +15295,102 @@ concepts:
          interpolation ('measurement_$date': logMeasurement, the restore, the
          pull), so those writers are listed from reading, not by the gate.
 
-  - concept: referral_referrer_cap
+  - concept: referral_reward_on_conversion
     domain: profile
-    behavioral_test_path: test/sql/oi320_referrer_cap_live_verify.sql
-    behavioral_test_path_concurrency: test/sql/oi320_referrer_cap_concurrency_local.sh
-    behavioral_test_path_deletion: test/sql/oi320_referrer_cap_deletion_replica.sql
+    behavioral_test_path: test/sql/referral_pay_on_conversion_live_verify.sql
+    behavioral_test_path_concurrency: test/sql/referral_pay_on_conversion_concurrency_local.sh
+    behavioral_test_path_deletion: test/sql/referral_pay_on_conversion_deletion_replica.sql
     description: |
-      OI-320 (founder decision 2026-10-11, migration 158). A referrer earns PRO days for at most 7
-      CREDITED referrals in any rolling 90 days; the referee is ALWAYS credited. Before it,
-      `redeem_referral_atomic` (migration 038) credited the referrer for every new referee and idempotency
-      was per referee only (UNIQUE referee_id), so throwaway accounts chained 7-day credits onto one
-      referrer without limit (12 referees x 7 days = 84 days of PRO per 84-day window), and the
-      progress-photo server rule (migration 154) honours a `referral_trial` row like a paid one.
-      THE RULE: under advisory locks on BOTH users (lowest key first), count `referral_redemptions` rows of this referrer with
-      `referrer_rewarded` true and `created_at > now() - interval '90 days'`; credit the referrer only when
-      that count is below 7. The audit row always records the outcome: `referee_rewarded` true,
-      `referrer_rewarded` = the decision. Counting credited rows only is deliberate: counting uncredited
-      attempts too would make a capped referrer's lock-out grow with every further attempt instead of
-      expiring 90 days after the 7th credit. The window clock is `created_at`: the live table has NO
-      `redeemed_at` column (database.md said it did; migration 037 only names an index
-      `idx_referral_redemptions_redeemed_at`, which is on `created_at`). `referrer_rewarded` /
-      `referee_rewarded` existed with no writer and no reader anywhere (measured live 2026-10-11, every
-      row false); this rule is their first writer and first reader. The 3 legacy rows (one referrer,
-      June 2026) keep false and are older than any window. The redeem-referral Edge Function is unchanged
-      and never reads the cap (the RPC returns void).
-      ACCOUNT DELETION (plan-review round 1, a P1, and its mirror in round 2): both user columns of
-      `referral_redemptions` were ON DELETE CASCADE, and `delete-account` ends in `auth.admin.deleteUser`,
-      which cascades through `public.users`. A throwaway referee that deleted its own account took its
-      credited audit row with it and freed a slot (3 deletions turned 7 credits into 10), and a deleted
-      REFERRER took the audit rows of their referees, so each of those referees could redeem a second code.
-      Migration 158 makes BOTH columns nullable with ON DELETE SET NULL: the row survives with a NULL party,
-      still counts, and `UNIQUE(referee_id)` (which tolerates many NULLs) still stops the referee redeeming
-      again. The readers of the table tolerate NULL (the restore path stores rows raw; `ReferralRepository`
-      filters `referee_id = <signed-in user>`; the Edge Function reads by `referee_id = <caller>`; the RLS
-      policy reads both columns inside an OR). The cap is per ACCOUNT: a referrer who deletes their account
-      and signs up again starts with a fresh count (residual, stated in the migration header).
-      LOCK ORDER: both users' advisory keys, lowest first, transaction-level. Two redemptions that touch a
-      common user share a key, so they serialise before touching a subscription row; this also removes the
-      cross-order row-lock deadlock of the previous body (measured: 51 and 2 `deadlock detected` in two runs of
-      3000 opposite pairs on the old body, 0 on 158). The DDL runs under `SET lock_timeout = '3s'` because a
-      foreign-key DROP takes ACCESS EXCLUSIVE on `public.users` too.
+      Migration 159 (founder decision 2026-10-12; plan docs/plans/referral-pay-on-conversion.md). It SUPERSEDES the
+      7-credits-per-90-days cap of migration 158 (OI-320, closed): the friend gets 7 PRO days when the code is applied;
+      the REFERRER is rewarded only when that friend PAYS, 7 days for a monthly payment and 30 for a yearly one, with
+      no cap on invites. 49 PRO days per 90 days per referrer was judged loss-making, so the reward now comes out of
+      revenue. Defaults the founder accepted: a code is applied once ever, only in the first 7 days of the account (the
+      Edge Function's rule) and never by an account that has ever paid (the RPC's refusal `referee_has_paid_plan`,
+      SQLSTATE P0001); the payment must be made within 90 days of the code; the reward vests 7 days after the payment;
+      a promo-discounted payment counts; the first qualifying payment decides (a monthly payer who later takes yearly
+      does not top the referrer up); the throwaway-account leak is accepted and watched by an alert.
+      THE MECHANISM (no payment function is edited, no trigger sits on `subscriptions`): the two writers of a paid row
+      (razorpay-webhook, verify-payment) INSERT one `monthly`/`yearly` row per captured payment with
+      `razorpay_payment_id` set, and an hourly pg_cron job (`referral_conversions_hourly`, minute 41) reads those rows.
+      `private.process_referral_conversions()`: (1) RECONCILE, one UPDATE: every unrewarded redemption inside a
+      97-day scan (or already pending) is set to the referee's EARLIEST qualifying payment (plan monthly/yearly,
+      payment id present, status active, `cancelled_at` NULL, start_date within [created_at, created_at + 90 days]):
+      `converted_at` = its start_date, `referrer_reward_days` = 30 yearly / 7 monthly, NULL when there is none, so a
+      payment cancelled before the vest voids the row and a later one re-arms it. (2) CREDIT: a pending row whose
+      payment is at least 7 days old is credited ONCE through `private.grant_referral_days` and `referrer_rewarded`
+      flips to true in the same sub-block, so a failure undoes both and the row is retried next hour. (3) ALERTS
+      `referral_conversions_failed`, `referral_conversions_stalled` (counted before the job lock) and
+      `referral_conversions_volume` (warn, 23-hour dedup each).
+      `referrer_rewarded` CHANGES MEANING: under 158 it meant "credited at redemption"; now "the reward has been
+      credited". A row written under live 158 with the flag already true is excluded by the job and stays as it was;
+      readers must tolerate `referrer_rewarded` true with `referrer_reward_days` NULL.
+      NEVER WAITS for a row or advisory lock (the job): `pg_try_advisory_xact_lock`, `FOR UPDATE SKIP LOCKED`, `NOWAIT` on the helper's row and
+      a `FOR KEY SHARE NOWAIT` on the referrer's `public.users` row before any INSERT into `subscriptions` (MEASURED:
+      without it the job and an uncommitted account deletion deadlock, because the deletion's cascade waits for the
+      redemption row the job holds while the INSERT's foreign key waits for the deletion). `redeem_referral_atomic`
+      CAN wait: one blocking advisory lock on the REFEREE's key, behind a running job that credits that user.
+      PRIVACY: there is NO payment-id column. The SELECT policy shows a row to its referrer AND its referee, so one
+      friend's Razorpay payment id would become readable by the other. `converted_at`, `referrer_reward_days` and
+      `referrer_credited_at` ARE readable by both parties (that a friend subscribed, roughly when, which plan).
+      ACCOUNT DELETION (carried over from 158): both user columns are nullable with ON DELETE SET NULL, so the audit
+      row survives with a NULL party; a pending row whose referee was deleted matches no payment and is voided; a row
+      whose referrer was deleted is excluded; UNIQUE(referee_id) still stops a referee redeeming twice.
+      KNOWN LIMITS (stated in the migration header and the plan, section 6): a refund or chargeback that does not touch
+      the `subscriptions` row is invisible; a cancel after the vest has no clawback; the friend cannot buy while on the
+      7-day referral trial (create-razorpay-order answers 409 for any active row), so the reward lands about 14 days
+      after the friend joins; a promo-discounted payment counts whatever the amount.
     writers:
-      - file: supabase/migrations/158_referral_referrer_cap.sql
-        line_range: 77-212
-        method: redeem_referral_atomic (+ both user columns nullable and both foreign keys ON DELETE SET NULL, :79-85, post-condition :89-109)
+      - file: supabase/migrations/159_referral_reward_on_conversion.sql
+        line_range: 127-166
+        method: `redeem_referral_atomic` (LIVE definition from 159; the last CREATE OR REPLACE wins)
         notes: |
-          The NULL guard (:133-135), the two sorted advisory locks (:139-140), the cap decision (count :143-147,
-          decision :148), the audit row recording both outcomes (:152-156), the referrer credit gated by
-          `IF v_credit_referrer` (:159-180), and the referee credit (:182-202), never gated.
-          Same signature, RETURNS void, SECURITY DEFINER, `SET search_path TO 'public'` (restated: a
-          CREATE OR REPLACE that omits it undoes migration 053).
+          Credits ONLY the referee: NULL guard (:141-143), one blocking advisory lock on the referee's key (:146), the
+          refusal of a referee who ever paid (:148-155), the audit row with `referrer_rewarded` false (:158-162), the
+          referee's grant through the helper (:164). Same signature, RETURNS void, SECURITY DEFINER, `SET search_path`.
+      - file: supabase/migrations/159_referral_reward_on_conversion.sql
+        line_range: 173-367
+        method: `process_referral_conversions` (the ONLY writer of the referrer reward)
+        notes: |
+          Stall watch (:197-221), job try-lock (:224-226), reconcile (:231-267), credit loop with its per-row sub-block
+          (:269-312), the failed and volume alerts (:314-357). Writes `referral_redemptions.converted_at` / `referrer_reward_days` /
+          `referrer_credited_at` / `referrer_rewarded`.
+      - file: supabase/migrations/159_referral_reward_on_conversion.sql
+        line_range: 89-120
+        method: `grant_referral_days`
+        notes: The one implementation of "extend a user's PRO by N days" (1..30), used for the referee at redemption and the referrer at credit. Writes `subscriptions` (INSERT a referral_trial row, or UPDATE `end_date` by id).
+      - file: supabase/migrations/159_referral_reward_on_conversion.sql
+        line_range: 69-80
+        method: ALTER TABLE referral_redemptions (three nullable columns, two CHECKs)
+        notes: The coherence CHECK `(converted_at IS NULL) = (referrer_reward_days IS NULL)` is what lets the reconcile write both columns NULL to void a row.
+      - file: supabase/migrations/159_referral_reward_on_conversion.sql
+        line_range: 385-386
+        method: `cron.schedule`
+        notes: Unscheduled BY JOBID, not by a quoted name (Gate 31 reads the quoted form as "this job is gone", OI-193).
       - file: supabase/functions/redeem-referral/index.ts
-        line_range: 112-118
+        line_range: 100-145
         method: redeem_referral_atomic RPC call
-        notes: The only caller. Passes the four declared parameters and no cap value.
+        notes: The only caller. Passes the four declared parameters. (The range is deliberately the whole cascade: unit S2 inserts a paid-referee check before the RPC call and shifts it a few lines.) Its mapping of the RPC's `referee_has_paid_plan` refusal to a 400 is unit S2 of the plan, not part of migration 159.
     reader_manifest_complete: true
     readers:
-      - file: supabase/migrations/158_referral_referrer_cap.sql
-        line_range: 143-148
-        method: redeem_referral_atomic (the count)
-        semantic: count-credited-in-rolling-window
-        fields_read: [referral_redemptions.referrer_id, referral_redemptions.referrer_rewarded, referral_redemptions.created_at]
-        notes: No other code reads referrer_rewarded or referee_rewarded (git grep 2026-10-11 finds them only in backups/live_schema_columns.json).
+      - file: supabase/migrations/159_referral_reward_on_conversion.sql
+        line_range: 231-267
+        method: process_referral_conversions (the reconcile CTE)
+        semantic: earliest-qualifying-payment-per-redemption
+        fields_read: [subscriptions.user_id, subscriptions.plan, subscriptions.razorpay_payment_id, subscriptions.status, subscriptions.cancelled_at, subscriptions.start_date, subscriptions.id, referral_redemptions.referee_id, referral_redemptions.created_at, referral_redemptions.referrer_rewarded, referral_redemptions.converted_at, referral_redemptions.referrer_reward_days]
+        notes: The paid rows it reads are written by razorpay-webhook/index.ts and verify-payment/index.ts (the only INSERTs of a paid row); neither handles refund events, so a refund is visible only if the row is cancelled by hand. The same function also reads `referral_redemptions.id` and `referrer_id` (the reconcile candidates, the credit select :269-286 and the stall watch :197-221) and counts `created_at` for the volume alert (:336-357).
+      - file: supabase/migrations/159_referral_reward_on_conversion.sql
+        line_range: 148-155
+        method: redeem_referral_atomic (the paid-referee refusal)
+        semantic: ever-paid-check
+        fields_read: [subscriptions.user_id, subscriptions.plan, subscriptions.razorpay_payment_id]
+        notes: Any status counts; a `referral_trial` row or a hand grant with a NULL payment id does not.
       - file: lib/core/services/sync/sync_restore_completeness.dart
         line_range: 674-691
         method: _restoreReferralRedemptions
         semantic: restore-raw
         fields_read: [referral_redemptions.code, referral_redemptions.referrer_id, referral_redemptions.referee_id, referral_redemptions.days_granted_each, referral_redemptions.created_at]
-        notes: Selects the rows where the user is either party and stores them raw in Hive (`referral_redemption_history`); no field is parsed, so a NULL party is carried through. Migration 158 makes either party NULL once that account is deleted.
+        notes: Selects the rows where the user is either party and stores them raw in Hive (`referral_redemption_history`, which nothing reads); no field is parsed, so a NULL party is carried through. The three 159 columns are deliberately NOT in the select (no reader).
       - file: supabase/functions/restore-user-snapshot/index.ts
         line_range: 261-266
         method: restore snapshot, referral_redemptions table
@@ -15367,19 +15402,19 @@ concepts:
         method: ReferralRepository.hasRedeemed
         semantic: flag-check
         fields_read: [referral_redemptions.id, referral_redemptions.referee_id]
-        notes: Line 57 filters `referee_id = <signed-in user>` and the select reads only `id`; a NULL referrer is irrelevant, and a row whose referee was deleted cannot match.
+        notes: Filters `referee_id = <signed-in user>` and the select reads only `id`; a NULL referrer is irrelevant, and a row whose referee was deleted cannot match. The counts surface (JOINED / SUBSCRIBED / DAYS EARNED) is unit C of the plan and adds its own reader.
       - file: supabase/functions/redeem-referral/index.ts
-        line_range: 104-106
+        line_range: 100-120
         method: idempotency read
         semantic: flag-check
         fields_read: [referral_redemptions.referee_id]
-        notes: Filters `referee_id = <caller>`; many NULL referees never collide with a real caller.
+        notes: Filters `referee_id = <caller>`; many NULL referees never collide with a real caller. (The range is deliberately wide: unit S2 inserts a header and constants above this read and moves it from 104-106 to 113-117.)
       - file: supabase/migrations/100_rls_initplan_select_wrap.sql
         line_range: 92
         method: policy "Users can read own redemptions"
         semantic: rls-select
         fields_read: [referral_redemptions.referrer_id, referral_redemptions.referee_id]
-        notes: "`auth.uid() = referrer_id OR auth.uid() = referee_id`: a row with one NULL party is still visible to the other party, and a row with both NULL is visible to nobody. Dashboard-created objects and the out-of-repo Telegram bot are not checked from the repo."
+        notes: "`auth.uid() = referrer_id OR auth.uid() = referee_id`: a row with one NULL party is still visible to the other party, and a row with both NULL is visible to nobody; the three 159 columns are readable by both parties through it. Dashboard-created objects and the out-of-repo Telegram bot are not checked from the repo."
     cloud_table: referral_redemptions
     cloud_columns:
       - referrer_id
@@ -15387,15 +15422,19 @@ concepts:
       - referrer_rewarded
       - referee_rewarded
       - created_at
-    regression_test: test/contracts/referral_referrer_cap_migration_test.dart
+      - converted_at
+      - referrer_reward_days
+      - referrer_credited_at
+    regression_test: test/contracts/referral_pay_on_conversion_migration_test.dart
     forbidden_legacy_patterns:
-      - "crediting the referrer with no per-referrer limit (migration 038 body)"
-      - "a cap read of redeemed_at (the live table has only created_at)"
-      - "counting uncredited redemptions toward the cap (the lock-out would never expire)"
-      - "a count that drops rows of deleted referees (referee_id IS NOT NULL, or count(DISTINCT referee_id))"
-      - "referral_redemptions.referee_id or referrer_id ON DELETE CASCADE (an account deletion would free a referrer slot, or hand a referee a second code)"
-      - "gating the referee's credit (insert OR extend) on the referrer's cap decision"
-      - "a single advisory lock, or two locks not taken lowest-key-first (mutual redemption can deadlock)"
+      - "crediting the referrer at redemption (migration 038 and 158 bodies)"
+      - "a per-referrer cap or count in redeem_referral_atomic (withdrawn 2026-10-12; the reward is paid out of revenue)"
+      - "a payment-id column on referral_redemptions (the SELECT policy shows the row to both parties)"
+      - "referral_redemptions.referee_id or referrer_id ON DELETE CASCADE (an account deletion would delete the audit row, or hand a referee a second code)"
+      - "reading referrer_rewarded with a bare NOT (nullable: NOT NULL is NULL and hides the row); use IS NOT TRUE"
+      - "an ELSE in the reward CASE (an unknown plan must yield NULL, which the coherence CHECK requires, not a default 7)"
+      - "a payment-function (razorpay-webhook / verify-payment) or subscriptions-trigger hook for the reward (a referral failure must never block or roll back a payment write)"
+      - "waiting for a row or advisory lock in the job (try-lock, SKIP LOCKED, NOWAIT, key-share NOWAIT only)"
   - concept: measurement_prompt_state
     domain: health
     behavioral_test_path: test/contracts/measurement_prompt_state_behavioral_test.dart

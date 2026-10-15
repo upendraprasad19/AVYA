@@ -1,6 +1,6 @@
 {
   "_comment": "Snapshot of live cron.job on project dedsavbjuwgarrhphgnl. Gate 31 (scripts/check_cron_registry.dart) checks every jobname here against docs/operations/CRON_REGISTRY.md. This exists because Gate 31's original input was the migration FILES, so a migration applied without a file was invisible to it by construction -- log_table_retention ran for five days with four unregistered jobs while the gate reported green (OI-132). CI has no Supabase credentials (OI-105), so a live query would silently skip there; a committed snapshot is the CI-safe shape, following the precedent of backups/live_schema_columns.json. REGENERATE in the same commit as any migration that schedules or unschedules a job -- SQL in the gate's header.",
-  "_generated_at": "2026-09-27T00:01:34+05:30",
+  "_generated_at": "2026-10-13T18:54:00+05:30",
   "_source": "select jobid, jobname, schedule, active from cron.job order by jobname",
   "jobs": [
     { "jobid": 32, "jobname": "alert_cron_function_dead", "schedule": "47 6 * * *", "active": true },
@@ -28,6 +28,7 @@
     { "jobid": 10, "jobname": "proactive_re_engagement", "schedule": "30 06 * * *", "active": true },
     { "jobid": 13, "jobname": "proactive_workout_window_closing", "schedule": "30 15 * * *", "active": true },
     { "jobid": 7, "jobname": "promote_community_item_daily", "schedule": "30 20 * * *", "active": true },
+    { "jobid": 48, "jobname": "referral_conversions_hourly", "schedule": "41 * * * *", "active": true },
     { "jobid": 19, "jobname": "rolling-context-nightly", "schedule": "0 21 * * *", "active": true },
     { "jobid": 20, "jobname": "streak-guardian-daily", "schedule": "30 14 * * *", "active": true },
     { "jobid": 21, "jobname": "weekly_recap_ready_sunday", "schedule": "30 14 * * 0", "active": true }

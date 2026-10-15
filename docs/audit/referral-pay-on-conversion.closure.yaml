@@ -1,0 +1,230 @@
+# Closure ledger - referral-pay-on-conversion (unit S1 of OI-336's redesign; migration 159)
+# Gate 40. One terminal_state per finding; no `deferred:` key.
+# `commit:` on a closed_in_commit row names the batch commit that ADDS this file; find it with
+#   git log --diff-filter=A --format=%h -- docs/audit/referral-pay-on-conversion.closure.yaml
+
+batch: referral-pay-on-conversion
+plan_review_record: docs/plan-reviews/referral-pay-on-conversion.md
+total_findings: 40
+closed_count: 40
+
+findings:
+  - id: R1
+    title: "the rule (founder 2026-10-12 and 2026-10-13): the friend gets 7 days at once when they apply a code; the referrer is rewarded only when that friend's FIRST qualifying payment is 7 days old: 7 days for a monthly payment, 30 for a yearly one; no top-up on a monthly-to-yearly upgrade; unlimited invites; a code is applied once ever, only in the first 7 days of the account, never by an account that has ever paid"
+    terminal_state: closed_in_commit
+    commit: referral-pay-on-conversion batch commit (see header)
+    verification: "migration 159 (redeem_referral_atomic grants only the referee; private.process_referral_conversions reconciles every unrewarded redemption inside a 97-day scan to the referee's earliest qualifying payment and credits the referrer after the 7-day vest). Local replica of the live objects: test/sql/referral_pay_on_conversion_live_verify.sql SUMMARY 86 ok / 0 fail (groups R redeem, W window and plan, P the paid predicate, V vest and credit, X voids, L the legacy shape, S stall and volume alerts, F failure isolation and the chain, K CHECKs, A catalog); the chain case F6b runs the real redeem function, a paid row, a backdated vest and the job and reads exactly one credit."
+
+  - id: R2
+    title: "redeem_referral_atomic rewritten: refuses an ever-paid referee (referee_has_paid_plan / P0001), one blocking advisory lock on the referee key only (the referrer lock of 158 is gone, so the P-redeems-Q while Q-redeems-P deadlock class cannot occur), referee credited through the shared helper, the referrer never credited here"
+    terminal_state: closed_in_commit
+    commit: referral-pay-on-conversion batch commit (see header)
+    verification: "live verify R1-R3, R7-R9, R10b, R11, R12 (the referee alone is credited; allowed for a referral_trial-only referee and for a NULL payment id; a referral_trial row with a payment id is not a paid plan; a NULL referee is refused with 23502) and the refusal cases of the paid-predicate group P; replica concurrency C1 (a redemption racing a credit for the same user: B waited, no days lost, no second row); mutants M01, M02, M04, M30 (referrer credited inside the redeem function), M31 (NULL guard), M42 (wrong lock key), M55-M57b, M61a all red."
+
+  - id: R3
+    title: "the job never waits for a ROW or ADVISORY lock, and a lock cycle with account deletion is closed: pg_try_advisory_xact_lock on the job and on the referrer key, FOR UPDATE SKIP LOCKED on the candidates, FOR KEY SHARE NOWAIT on the referrer's users row, NOWAIT in the helper; a skipped row stays pending and is retried next hour"
+    terminal_state: closed_in_commit
+    commit: referral-pay-on-conversion batch commit (see header)
+    verification: "MEASURED on the replica before the design was fixed (plan section 1, round 3 P2-1): without the key-share pre-check the helper's INSERT waits on the foreign-key check behind an uncommitted DELETE of the referrer and the deleter then hits 40P01; with it the job returns skipped_locked = 1 and the deleter commits. Pinned by test/sql/referral_pay_on_conversion_concurrency_local.sh C2 (two overlapping runs: the second returns skipped at once), C2b (the stall alert is written while the job lock is held), C3 (another session holds key(referrer): prompt return, skipped_locked = 1), C4 (the helper meets a locked subscription row: 55P03), C5 and C5b-C5e (the job against an uncommitted account deletion: no 40P01; users row held FOR UPDATE, a converted-and-vested row held, a FOR NO KEY UPDATE holder), C6 (the flag UPDATE matches no row: ROW_COUNT raises, the grant is rolled back). Mutants M24, M25, M26, M29, M39a, M39b, M40, M52, M53 red. The header wording says ROW or ADVISORY lock, not 'any lock': DDL contention is out of scope and a function-level lock_timeout was rejected on purpose (it would fail the whole run on benign contention)."
+
+  - id: R4
+    title: "account deletion: referral_redemptions keys are ON DELETE SET NULL (migration 158, unchanged); a pending reward whose referee is deleted is voided and never credited, a credited row stays credited, a deleted referrer takes nothing"
+    terminal_state: closed_in_commit
+    commit: referral-pay-on-conversion batch commit (see header)
+    verification: "test/sql/referral_pay_on_conversion_deletion_replica.sql D1-D7 ok (D1 a referee deleted before paying, D2 a paid referee deleted before the vest is voided, D3 a credited row survives the referee's deletion with its days, D4 a deleted referrer, D5 UNIQUE(referee_id) survives, D6 RLS on the orphaned rows and the new columns, D7 no cap); live verify X2 (a deleted referee's pending row is voided) and X3 (a NULL-referrer pending row is not credited); the FK shape is asserted by live verify A6 and the Dart pin."
+
+  - id: R5
+    title: "the OI-320 cap artifacts are replaced, not left behind: the four test/sql/oi320_* files and test/contracts/referral_referrer_cap_migration_test.dart are deleted with the reason in the successor's header; sot_registry concept referral_referrer_cap becomes referral_reward_on_conversion; onconflict_live_arbiter.sql case 27 and referral_trial_subscription_grant_test.dart repointed; OI-320 gets its superseded pointer"
+    terminal_state: closed_in_commit
+    commit: referral-pay-on-conversion batch commit (see header)
+    verification: "git grep for the old file names and the old concept key returns only immutable migration 158 and its ledger entry, the OI-320 hermes report, historical plans and ledgers, and the 'replaces' / 'successor of' headers of the new files; the successor test names one group per old group (plan section 3, 11 groups); Gate 42 resolves every behavioral_test_path of the new concept; parity and the SoT gates pass in the pre-commit loop."
+
+  - id: R6
+    title: "documentation and registry for the new rule: docs/architecture/{payment,database,functionality-flow}.md, docs/naming_conventions.md, docs/operations/CRON_REGISTRY.md row, alerts/_thresholds.yaml (failed, stalled and volume entries), docs/sot_registry.yaml, supabase/functions/CLAUDE.md, supabase/migrations/CLAUDE.md, lib/features/profile/CLAUDE.md, ADR-0021, docs/audit/open_issues.md OI-336 re-scope, the closed_issues pointer"
+    terminal_state: closed_in_commit
+    commit: referral-pay-on-conversion batch commit (see header)
+    verification: "grep over docs/ and the nested CLAUDE.md files for the withdrawn cap wording (the 7-per-90-days rule, 49 days, 'credited at redeem') returns only historical plans and ledgers, kept point-in-time on purpose; ADR-0021 carries the Status and Alternatives considered headings; the pre-commit loop (naming, CRON registry parity, alerts thresholds, ADR index, OPEN_INDEX regeneration) passes except the named expected-red set."
+
+  - id: R7
+    title: "plan round 1, P2-3: the referee's razorpay_payment_id would have been readable by the referrer through the table's SELECT policy; the design stores only converted_at, the plan class's days and the credit time (referrer_reward_days, converted_at, referrer_credited_at), never a payment id"
+    terminal_state: closed_in_commit
+    commit: referral-pay-on-conversion batch commit (see header)
+    verification: "the three nullable columns plus a coherence CHECK and a 7-or-30 CHECK; live verify A4 (column names and data types) and K3 (the coherence CHECK, both directions); Dart pin 'three columns in live snapshot' is the single expected-red test until backups/live_schema_columns.json is regenerated after the apply. What the referrer CAN still read (the payment time and the plan class) is item D3 below."
+
+  - id: R8
+    title: "the inline rollback block: restores the live 158 function body verbatim, drops the three columns and their CHECKs, the two private functions and the cron job (by jobid), keeps the ACL; opens with SET lock_timeout and states that pending rewards are lost"
+    terminal_state: closed_in_commit
+    commit: referral-pay-on-conversion batch commit (see header)
+    verification: "scratchpad rollback_check.py on the FINAL migration (sha256 74631ee7d4ba2d3fe1b0b3b54a98ddae84652d38e8957fe66a115b09f6740df1): apply 159 to a fresh copy of the 158 replica, extract and run the uncommented rollback block; md5(pg_get_functiondef), the column list with types, nullability and defaults, every constraint, the private functions, the cron rows and the ACL equal the pre-apply state; mid-state differs for all but the ACL. Dart group 3b pins the rollback against the 158 body kept in the replica schema."
+
+  - id: B1
+    title: "B-pass finding 1 (reproduced): a reward stalled for days (a forgotten session holding the job lock, a referrer key or a subscription row held for days) was invisible, because a returned {skipped} run is a succeeded cron row that migration 146 cannot see, and the first design counted stalled rows inside the job"
+    terminal_state: closed_in_commit
+    commit: referral-pay-on-conversion batch commit (see header)
+    verification: "step 0 of process_referral_conversions counts rows with converted_at <= now() - 10 days still pending BEFORE the job try-lock and writes the warn alert referral_conversions_stalled (23h dedup); live verify S1-S3, S5, S6 (dedup edge) and concurrency C2b (the alert is written while another session holds the job lock; a placement inside the job would have missed exactly that case); mutants M80-M88, M97 and M98 red."
+
+  - id: B2
+    title: "B-pass finding 3 and hermes seat B F1-F10: the live verify could be silenced by the bug it should catch (a pre-existing row reading as a pass), and its blind spots (session-level advisory lock, alert-write isolation, key-share strength, the coherence CHECK in one direction, a locked payment row, the scan edge)"
+    terminal_state: closed_in_commit
+    commit: referral-pay-on-conversion batch commit (see header)
+    verification: "v_pre read at block start and case Z; SUMMARY reports skipped= so a vacuous pass is visible; new cases W14-W16, P6, A6-A9, R10b, K3 in the live verify and C5e, C10 (a session-level lock leaks and makes a second call wait), C11 (a trigger refuses every alert INSERT; the job still credits), C12 (locked payment row still reconciles), C13 (55 rows: 50 then 5) in the concurrency script; the mutants added after the B-pass (M78 and M80-M106) all red."
+
+  - id: B3
+    title: "unbounded batch: the credit loop held every row lock and one subtransaction per row to the end of one transaction"
+    terminal_state: closed_in_commit
+    commit: referral-pay-on-conversion batch commit (see header)
+    verification: "LIMIT c_batch (50 per run) on the credit select; concurrency C13 reads 50 credited in the first run and 5 in the second; mutants M105 (limit removed) and M106 (limit changed) red. Rows beyond the batch wait one hour; the stalled alert (10 days) bounds how long that can go unseen."
+
+  - id: B4
+    title: "abuse visibility: the volume alert carried no numbers (hermes seat D D2)"
+    terminal_state: closed_in_commit
+    commit: referral-pay-on-conversion batch commit (see header)
+    verification: "referral_conversions_volume context_json carries redemptions_24h and max_redemptions_24h_one_referrer; live verify S4 reads the volume alert and mutant M104 (the context loses redemptions_24h) reddens it; concurrency C7 pins the thresholds (exactly 20 raise nothing, 21 raise one warn) and the dedup."
+
+  - id: B5
+    title: "doc rot and false plan claims found by the reviews: a plan sentence claiming the NULL-referrer filter was killed by an alert assertion, registry line ranges that shifted with each migration edit, stale 'N cases' counts, cap prose in payment.md and supabase/migrations/CLAUDE.md, ADR headings"
+    terminal_state: closed_in_commit
+    commit: referral-pay-on-conversion batch commit (see header)
+    verification: "plan section 3 carries the CORRECTION (dropping referrer_id IS NOT NULL from the credit select alone is killable by no behavioural case; mutants M76/M77, both guards removed, are killed by verify X3/F3); counts replaced by 'the SUMMARY line counts the cases'; registry ranges re-pointed after the LAST migration edit; three new pitfall rows in supabase/migrations/CLAUDE.md."
+
+  - id: P1
+    title: "plan review rounds 1 to 3 (docs/plan-reviews/referral-pay-on-conversion.md): every finding of plan sections 7, 8 and 9 (legacy rows credited, infeasible live-step order, a CAS miss marking a reward done, failures invisible, Gate 31 and cron minute, hourly rewrite of every row, a deleted referee's reward, a lock cycle with account deletion, the reconcile CASE without ELSE, alert dedup)"
+    terminal_state: closed_in_commit
+    commit: referral-pay-on-conversion batch commit (see header)
+    verification: "each row of plan sections 7 to 9 carries its own disposition and, for the measured ones (the lock cycle, the locking CTE and the lateral), the measurement; the ones that changed code are pinned by the cases named in R2, R3, B1 and B2."
+
+  - id: H1
+    title: "hermes pass 2026-10-13: four context-blind seats (A SQL semantics and locking, B tests and mutation adequacy, C docs and gates, D abuse and privacy and the apply protocol); no P0 or P1; every P2 and P3 verified against the tree and resolved here or given a terminal state in this ledger"
+    terminal_state: closed_in_commit
+    commit: referral-pay-on-conversion batch commit (see header)
+    verification: "docs/audit/2026-10-13-hermes-referral-pay-on-conversion.md lists every finding with its disposition and carries the generated mutation table; the seat A wording fix (NEVER WAITS for a ROW or ADVISORY lock), the batch cap, the ADR heading fix and the registry re-pointing are in the staged diff."
+
+  - id: M1
+    title: "rule 21 evidence (self-attested): 104 mutants of the final migration, each applied twice to a fresh replica database, then the live verify, the deletion file, the concurrency script where locking is touched, and the Dart contract test"
+    terminal_state: closed_in_commit
+    commit: referral-pay-on-conversion batch commit (see header)
+    verification: "runner scratchpad rpoc/mut/run_mutants.py (compute-before-write, restore in finally, sha256 check afterwards: unchanged 74631ee7...); 100 killed by a behavioural SQL case, 4 (M22, M32b, M32c, M32e) by Dart pins only, 0 survivors; the table is generated from results.jsonl into the hermes report. The mutation reddened the intended tests, the apply of each mutant was confirmed before it was believed."
+
+  - id: G1
+    title: "gates on the final staged tree: flutter analyze lib/, the full flutter test suite (VPS: TZ=Asia/Kolkata, --exclude-tags golden), the pre-commit gate loop, the context-artifact budget"
+    terminal_state: closed_in_commit
+    commit: referral-pay-on-conversion batch commit (see header)
+    verification: "read against the named expected-red set (Gate 14 check_migrations_applied.dart, applied_migrations_parity_test.dart and the snapshot test 'three columns in live snapshot', all cleared by the post-apply ledger and snapshot updates in the commit); the log lines are in the batch report."
+
+  - id: D1
+    title: "no top-up on a monthly-to-yearly upgrade inside the window: the first qualifying payment decides (7 days), a yearly-then-monthly pair pays 30"
+    terminal_state: verified_clean
+    evidence: "Decided by the founder 2026-10-13 IST ('no top up'); pinned by live-verify cases W9 and W10 and mutant M13 (the earliest payment ordered latest) red."
+
+  - id: D2
+    title: "throwaway accounts each earn the friend's own 7 days"
+    terminal_state: verified_clean
+    evidence: "Accepted by the founder's default (6): the cost is serving 7 PRO days per fake account; the referrer side earns nothing without a real payment; watched by referral_conversions_volume (more than 20 redemptions in 24 hours) which now carries the counts."
+
+  - id: D3
+    title: "a payment row landing between the helper's read and update wastes that grant's days"
+    terminal_state: verified_clean
+    evidence: "Same window as migrations 038 and 158 (the latest active row is read FOR UPDATE NOWAIT inside the helper, so only a concurrent INSERT of a NEW row can land in the window; the cost is that one grant's days, not money); stated in plan 2.1."
+
+  - id: D4
+    title: "rows credited under live migration 158 before this apply"
+    terminal_state: verified_clean
+    evidence: "Live read-only dry run 2026-10-13 (project dedsavbjuwgarrhphgnl) of the reconcile over live rows: 0 candidate rows; the 3 redemptions ever made carry referrer_rewarded = true and are excluded by the job; Unit C tolerates a NULL referrer_reward_days."
+
+  - id: D5
+    title: "promo codes: the live check"
+    terminal_state: verified_clean
+    evidence: "Live read-only query 2026-10-13: promo_codes holds 3 codes, all active, maximum discount 30 percent, none at or above the 76.7 percent monthly break-even (349 x (1 - d) = 81.4 per 7 days), none unbounded; the table's policy lets anyone read active codes. A future code at or above about 76.7 percent would pay a referrer more than the friend paid: keep codes below that. The policy itself is the item below."
+
+  - id: D6
+    title: "referral_redemptions and alerts retention"
+    terminal_state: verified_clean
+    evidence: "No retention rule exists for either table; alerts carry redemption ids only; the redemption table is service-role-write and the audit row is pseudonymised on erasure by the ON DELETE SET NULL keys of migration 158 (the pattern of 049). A stated retention period is a policy-text change outside this repo."
+
+  - id: D7
+    title: "mutants that no SQL case can kill, killed by Dart pins instead: M22 (referrer_id IS NOT NULL dropped from the credit select, masked by the NOT FOUND branch after the key-share read), M32b and M32c (ACL edits, invisible under CREATE OR REPLACE), M32e (REVOKE on a function in schema private)"
+    terminal_state: verified_clean
+    evidence: "Dart pass of the final matrix: all four red in test/contracts/referral_pay_on_conversion_migration_test.dart; the double mutants M76 and M77 (both NULL-referrer guards removed) are killed behaviourally by verify X3 and F3. Recorded rather than claimed as behavioural coverage."
+
+  - id: D8
+    title: "mutants judged equivalent after a re-derivation: v_end < now() versus <= in the helper (equal only at one instant), ORDER BY tie-breaks among identical candidates, dropping the second IS DISTINCT FROM arm of the reconcile"
+    terminal_state: verified_clean
+    evidence: "Each re-derived against the final text by a context-blind hermes seat (B) and by the author; the first needs a payment at exactly now() (frozen inside a transaction, so a fixture cannot straddle it), the second changes no outcome (candidates are independent), the third is covered by the first arm for every row it could change. Not claimed as protection."
+
+  - id: D9
+    title: "the hourly candidate scan locks every in-scan unrewarded row FOR UPDATE SKIP LOCKED once an hour"
+    terminal_state: verified_clean
+    evidence: "3 redemptions have ever existed (live, 2026-10-13); the lock is per row and transaction-scoped, skipped by any holder, and released at the end of a run that credits at most 50 rows; the cost scales with unrewarded redemptions inside 97 days, which the volume alert watches."
+
+  - id: D10
+    title: "statement_timeout atomicity: a run cancelled by a statement timeout rolls back as one transaction"
+    terminal_state: verified_clean
+    evidence: "A cron-dispatched SQL function runs in one transaction: a cancel leaves no partial credit (the grant, the flag UPDATE and the ROW_COUNT check are in one sub-block per row inside the run); the next hour re-selects the same rows. The alerts of that run roll back with it, which the stall alert (10 days) bounds."
+
+  - id: D11
+    title: "p_days bound: the helper accepts 1 to 30 only"
+    terminal_state: verified_clean
+    evidence: "Helper bounds 0, 31, NULL user and NULL days refused with 22023 (live verify F5.1-F5.4) and 1 and 30 accepted (F5.5); mutant M27; the table's 7-or-30 CHECK (K1, K2) is the second barrier; the only callers pass 7 (redeem) and 7 or 30 (the job)."
+
+  - id: D12
+    title: "swap-rule OI and the activation design discussed earlier"
+    terminal_state: verified_clean
+    evidence: "Subsumed: a payment IS the activation, and a swap yields no reward without a payment (plan section 2.4)."
+
+  - id: X1
+    title: "a refund done only in the Razorpay dashboard, without touching the subscriptions row (filed as OI-339 on 2026-10-13)"
+    terminal_state: blocked_on_user
+    reason: "The vest sees a cancelled or missing row, not a dashboard refund; neither payment function handles refund events. A Razorpay-verified vest (a cron EF calling Razorpay's payment API) would close it; the founder decides whether refunds happen and how they are recorded. Control until then: cancel the subscriptions row when refunding."
+
+  - id: X2
+    title: "a chargeback or UPI dispute after the vest (filed as OI-340 on 2026-10-13)"
+    terminal_state: blocked_on_user
+    reason: "The webhook returns 'ignored' for every non-payment event, so nothing reverses a credit. A clawback needs a new webhook event handler in a catastrophic file and a rule for what to take back; the founder's call."
+
+  - id: X3
+    title: "the friend cannot buy while on the 7-day referral trial (create-razorpay-order returns 409 for any active row) (filed as OI-341 on 2026-10-13)"
+    terminal_state: blocked_on_user
+    reason: "Pre-existing. The reward typically lands about 14 days after the friend joins, not 7. FOUNDER DECISION 2026-10-13: purchase must be enabled during the trial and the paid cycle must start when the current PRO ends (prepaid time stacks). What remains is the build, in OI-341: a catastrophic-tier change to create-razorpay-order, verify-payment and razorpay-webhook with its own plan review x2, B-pass and hermes pass; the OI records the constraint found while filing (do not use a future start_date: PRO is read from status and end_date only, and this job reads start_date as the payment time)."
+
+  - id: X4
+    title: "promo-discounted payments count toward a reward (filed as OI-342 on 2026-10-13)"
+    terminal_state: blocked_on_user
+    reason: "No cheap floor exists: subscriptions stores no amount or promo, promo_code_uses has no link to a payment. Break-even is about 76.7 percent discount. A floor needs the paid amount captured in a payment function (catastrophic). The founder decides; until then keep promo codes below 76.7 percent."
+
+  - id: X5
+    title: "phone-verified accounts only (hardening against throwaway signups) (filed as OI-343 on 2026-10-13)"
+    terminal_state: blocked_on_user
+    reason: "Optional hardening that adds signup friction; the founder's product call. Facts read 2026-10-13: email confirmation is ON (mailer_autoconfirm false), phone auth is OFF on the live project and in the app (_kEnablePhoneEnlist = false), so phone verification would need phone auth enabled and an SMS provider (OI-343)."
+
+  - id: X6
+    title: "the alerts cannot catch a patient abuser (19 redemptions a day with staggered payments reaches neither 20 per 24 hours nor 10 credits per run); a per-referrer concentration alert"
+    terminal_state: blocked_on_user
+    reason: "The thresholds are Phase-1 placeholders (three redemptions have ever existed, so there is no baseline). A per-referrer concentration threshold needs real data; the founder decides whether to want it once it exists."
+
+  - id: X7
+    title: "a referrer can read the friend's payment time (to the second) and plan class, and see a void flip, through the table's SELECT policy"
+    terminal_state: blocked_on_user
+    reason: "The product shows the referrer that a friend subscribed; the exact second and the plan class are incidental. Closing it means a view or RPC with a coarsened value (a client read change) or accepting it. The friend is not told today: Unit C adds one disclosure line to the apply sheet; the privacy-policy text lives outside this repo and needs the same sentence. The founder decides."
+
+  - id: X8
+    title: "live apply of migration 159 to project dedsavbjuwgarrhphgnl, its live verify, and the post-apply ledger and snapshots (backups/applied_migrations.json, live_schema_columns.json, live_cron_jobs.json)"
+    terminal_state: closed_in_commit
+    commit: referral-pay-on-conversion batch commit (see header)
+    verification: "Applied on the founder's go ('Go / Commit / Push / Pr / Deploy all approved', 2026-10-13) through MCP apply_migration at 04:07 UTC, cloud version 20261013040701; this is a DEVIATION from the plan (apply right after a :41 tick): it was applied 34 minutes before one. The stored statement's sha256 equals the file's (74631ee7...0df1); the three function md5s equal a local apply of the same file; ACL, 11 columns, 7 constraints and cron job 48 read as designed. The first verify call failed with a transport error and the session sat idle, so the live verify ran at 13:24 UTC: SUMMARY ok=86 fail=0 skipped=0, no fixture row, alert or trial left behind. Nine hourly runs from 04:41 to 12:41 UTC all succeeded and credited nothing. The ledger entry and both snapshots are in this commit."
+
+  - id: X9
+    title: "merge of the S1 and S2 pull requests into main (safe_pr_merge.sh), and the retirement of the two worktrees after that"
+    terminal_state: blocked_on_user
+    reason: "A merge is its own explicit go (CLAUDE.md 4.3) and the founder's 2026-10-13 message approved apply, commit, push, PR and the S2 deploy, not the merge. S2 can merge only after S1 is on main (its cross-pin test needs migration 159)."
+
+  - id: U1
+    title: "unit S2: the Edge Function redeem-referral refuses an ever-paid referee before the RPC and maps the RPC's referee_has_paid_plan refusal to the same 400 (branch referral-redeem-paid-guard, its own plan-review record and B-pass)"
+    terminal_state: upstream_blocked
+    blocker: "S2's cross-file pin test (test/contracts/redeem_referral_paid_referee_migration_pin_test.dart) reads migration 159 and is red on any branch without it, by design, so S2 can merge only after S1 is on main. The S2 Edge Function deploy was approved by the founder on 2026-10-13 and is tracked on the S2 branch."
+    reopen_when: "S1 is merged to main (and, for the deploy, applied live)"
+
+  - id: U2
+    title: "unit C (client): ReferralRepository.referrerSummary, the invite copy for the new rule, invite_friends_sheet._applyCode moved onto ReferralRepository.redeem so a paid friend sees the server's message, and the friend-facing disclosure line (item X7)"
+    terminal_state: upstream_blocked
+    blocker: "Reads the three new columns, so it needs S1 merged AND applied; OI-336 stays open until it ships. Shipped app builds keep saying 'you both get 7 days PRO free' until then (cost nil: three redemptions ever)."
+    reopen_when: "S1 is applied live and merged, so the columns exist in the live snapshot"
