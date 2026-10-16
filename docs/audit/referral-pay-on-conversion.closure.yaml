@@ -2,6 +2,8 @@
 # Gate 40. One terminal_state per finding; no `deferred:` key.
 # `commit:` on a closed_in_commit row names the batch commit that ADDS this file; find it with
 #   git log --diff-filter=A --format=%h -- docs/audit/referral-pay-on-conversion.closure.yaml
+# Rows N8-N11 and N14 (hermes round 2) carry the SHA of the commit that made their change (4a189d5e, a later commit says so in the row);
+# U1 carries d6dc231f, the rebuilt S2 feature commit.
 
 batch: referral-pay-on-conversion
 plan_review_record: docs/plan-reviews/referral-pay-on-conversion.md
@@ -184,7 +186,7 @@ findings:
   - id: X3
     title: "the friend cannot buy while on the 7-day referral trial (create-razorpay-order returns 409 for any active row) (filed as OI-341 on 2026-10-13)"
     terminal_state: blocked_on_user
-    reason: "FOUNDER DECISION 2026-10-13: purchase must be enabled during the trial and the paid cycle must start when the current PRO ends (prepaid time stacks). The decision is made; nothing is built. What the work is waiting for is the founder's go to START the plan (OI-341): a catastrophic-tier change to create-razorpay-order, verify-payment and razorpay-webhook needing its own plan reviewed twice, a B-pass and a hermes pass. Pre-existing behaviour; the reward typically lands about 14 days after the friend joins, not 7. Re-stated 2026-10-16 after hermes round 2 (seat C finding 2: the earlier text read as if the founder still had to decide)."
+    reason: "FOUNDER DECISION 2026-10-13: purchase must be enabled during the trial and the paid cycle must start when the current PRO ends (prepaid time stacks). The decision is made; nothing is built. What the work is waiting for is the founder's go to START the plan (OI-341): a catastrophic-tier change to create-razorpay-order, verify-payment and razorpay-webhook needing its own plan reviewed twice, a B-pass and a hermes pass. The founder was asked for the go on 2026-10-16 (open-items list) and has not answered. Pre-existing behaviour; the reward typically lands about 14 days after the friend joins, not 7. Re-stated 2026-10-16 after hermes round 2 (seat C finding 2: the earlier text read as if the founder still had to decide)."
 
   - id: X4
     title: "promo-discounted payments count toward a reward (filed as OI-342 on 2026-10-13)"
@@ -204,7 +206,7 @@ findings:
   - id: X7
     title: "a referrer can read the friend's payment time (to the second) and plan class, and see a void flip, through the table's SELECT policy"
     terminal_state: blocked_on_user
-    reason: "Hermes round 2 (seat D finding 1) rates this P2: the existing SELECT policy (live, 'Users can read own redemptions': auth.uid() = referrer_id OR = referee_id) shows each side the other's row, so the referrer reads converted_at to the second and the 7/30 reward days (the plan class), sees a void flip, and the friend reads the referrer's id and credit time. FOUNDER DECISION 2026-10-16: the referrer sees AGGREGATES ONLY in the app (friends joined, subscribed, PRO days earned, a pending count; no names, no payment time, no plan class) and learns of a credit in-app when they next open it. The decision does not close the exposure by itself: the policy still returns the columns to a client that asks for them. Closing it is part of Unit C (U2): an aggregate RPC or view for the referrer and a narrower policy or column set, plus the one-line disclosure on the friend's apply sheet and the privacy-policy sentence (outside this repo). Waiting for the founder's go to start Unit C."
+    reason: "Hermes round 2 (seat D finding 1) rates this P2: the existing SELECT policy (live, 'Users can read own redemptions': auth.uid() = referrer_id OR = referee_id) shows each side the other's row, so the referrer reads converted_at to the second and the 7/30 reward days (the plan class), sees a void flip, and the friend reads the referrer's id and credit time. FOUNDER DECISION 2026-10-16: the referrer sees AGGREGATES ONLY in the app (friends joined, subscribed, PRO days earned, a pending count; no names, no payment time, no plan class) and learns of a credit in-app when they next open it. The decision does not close the exposure by itself: the policy still returns the columns to a client that asks for them. Closing it is part of Unit C (U2): an aggregate RPC or view for the referrer and a narrower policy or column set, plus the one-line disclosure on the friend's apply sheet and the privacy-policy sentence (outside this repo). The founder was asked for the go to start Unit C on 2026-10-16 and has answered the design question but not given the go. Waiting for that go."
 
   - id: X8
     title: "live apply of migration 159 to project dedsavbjuwgarrhphgnl, its live verify, and the post-apply ledger and snapshots (backups/applied_migrations.json, live_schema_columns.json, live_cron_jobs.json)"
@@ -226,7 +228,7 @@ findings:
   - id: U2
     title: "unit C (client): ReferralRepository.referrerSummary, the invite copy for the new rule, invite_friends_sheet._applyCode moved onto ReferralRepository.redeem so a paid friend sees the server's message, and the friend-facing disclosure line (item X7)"
     terminal_state: blocked_on_user
-    reason: "Unblocked technically (migration 159 is applied and merged). FOUNDER DECISIONS 2026-10-16: the referrer sees aggregates only and is told of a credit in-app on next open (no push). Unit C is waiting for the founder's go to start, for the psychology-pass review of the copy and the founder's wording review (plan section 2.3). OI-336 stays open until it ships; shipped app builds keep saying 'you both get 7 days PRO free' until then (cost nil: three redemptions ever)."
+    reason: "Unblocked technically (migration 159 is applied and merged). FOUNDER DECISIONS 2026-10-16: the referrer sees aggregates only and is told of a credit in-app on next open (no push). Unit C is waiting for the founder's go to start (asked 2026-10-16, design answered, go not yet given), for the psychology-pass review of the copy and the founder's wording review (plan section 2.3). OI-336 stays open until it ships; shipped app builds keep saying 'you both get 7 days PRO free' until then (cost nil: three redemptions ever)."
 
   - id: X10
     title: "worktree retirement for referral-pay-on-conversion and referral-redeem-paid-guard (CLAUDE.md 4.13.8: autonomous once the branch is merged and main CI is green)"
@@ -236,7 +238,7 @@ findings:
   - id: N1
     title: "hermes round 2, seat A finding 1: the credit select does not re-check referee_id, so a row skipped by the reconcile (locked by a referee deletion) can be credited milliseconds later on its stale converted_at; the migration header says a deleted friend voids the reward"
     terminal_state: blocked_on_user
-    reason: "Migration 159 is applied and immutable; the fix (AND rr.referee_id IS NOT NULL in the credit select) needs migration 160. Filed as OI-344 item 1. The window is milliseconds per hour and costs one reward of 7 or 30 days; B-pass finding 9 had already softened the header wording. The founder was asked on 2026-10-16 and approved filing OI-344 (\"go 2\") but has not yet said to plan or write migration 160; that planning (catastrophic tier, two plan reviews, a B-pass, a hermes pass) is the work waiting for the go, and the live apply is a further separate go."
+    reason: "Migration 159 is applied and immutable; the fix (AND rr.referee_id IS NOT NULL in the credit select) needs migration 160. Filed as OI-344 item 1. The window is milliseconds per hour and costs one reward of 7 or 30 days; B-pass finding 9 had already softened the header wording. The founder was asked on 2026-10-16 and approved filing OI-344 (\"go 2\") but has not yet said to plan or write migration 160; that work (planning, minting the migration number with mint_migration.sh, which pushes a reservation ref, writing the file, two plan reviews, a B-pass, a hermes pass) is what waits for the go, and the live apply is a further separate go."
 
   - id: N2
     title: "hermes round 2, seat A finding 2: the credit batch is ORDER BY converted_at, id LIMIT 50, so rows that stay skipped or failing at the head use batch slots every run"
@@ -290,7 +292,7 @@ findings:
     title: "hermes round 2, seat B findings 4, 5, 6: W15 did not kill a counter swap, the credit order had only a text pin, the concurrency script matched numbers by loose substring"
     terminal_state: closed_in_commit
     commit: "4a189d5e"
-    verification: "W15 now also asserts reconciled >= 3 (swapping the counters reddens W14 and W15, mutant MD). C13 inserts 55 payments with distinct start dates and asserts the 5 NEWEST are the ones left pending after run 1 (ORDER BY ... DESC and a dropped ORDER BY both fail it, mutants ME and MF). Every numeric match in the concurrency script is anchored with its trailing comma or brace (the last three, failed: 1 and reconciled: 1, in the B-pass follow-up commit). The anchored script passes on a fresh replica (CONCURRENCY OK)."
+    verification: "W15 now also asserts reconciled >= 3 (swapping the counters reddens W14 and W15, mutant MD). C13 inserts 55 payments with distinct start dates and asserts the 5 NEWEST are the ones left pending after run 1 (ORDER BY ... DESC and a dropped ORDER BY both fail it, mutants ME and MF). Every numeric match in the concurrency script is anchored with its trailing comma or brace (most in 4a189d5e; the last matches, failed: 1, failed: 0 and reconciled: 0 or 1, in the follow-up commit 4225209f). The anchored script passes on a fresh replica (CONCURRENCY OK)."
 
   - id: N12
     title: "hermes round 2, seat B findings 7 and 8: the live verify's safety rests on the absence of non-transactional triggers, and S1-S6, Z, F3 skip when a real alert already exists"
