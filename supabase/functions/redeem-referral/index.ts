@@ -1,5 +1,5 @@
 /**
- * redeem-referral — Redeems a referral code and grants 7-day PRO to both parties.
+ * redeem-referral — Redeems a referral code and grants 7-day PRO to the REFEREE (the referrer is rewarded later, when the friend pays).
  *
  * Validation cascade (Q4 spec):
  *   1. Format check (AVYA-XXXXXXXX)
@@ -7,8 +7,14 @@
  *   3. Self-referral block
  *   4. Receiver eligibility window (signup ≤ 7 days ago)
  *   5. Idempotency check (UNIQUE on referee_id)
+ *   5b. Paid-referee check: an account that has ever PAID is refused (400)
  *   6. Atomic write via redeem_referral_atomic RPC
  *   7. 23505 race fallback returns 200 with alreadyRedeemed:true
+ *
+ * Since migration 159 the RPC credits the REFEREE only (7 days); the REFERRER is
+ * rewarded later, by the hourly job, when that friend pays. Step 5b gives a paid
+ * friend a clean 400; the RPC refuses the same account authoritatively
+ * (`referee_has_paid_plan`, SQLSTATE P0001) and that refusal maps to the SAME 400.
  *
  * Input:  { code: "AVYA-XXXXXXXX" }
  * Output: { days_granted: 7, request_id: "..." }
@@ -31,6 +37,11 @@ const corsHeaders = {
 const CODE_FORMAT = /^AVYA-[A-Z0-9]{8}$/;
 const SIGNUP_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const DAYS_GRANTED = 7;
+// A paid plan row is what migration 159 calls "paid": plan monthly/yearly WITH a Razorpay payment id. The RPC's refusal
+// counts a row of ANY status; the hourly reward job additionally wants status active, not cancelled, inside the 90-day
+// window. This list and the RPC's must stay in step (test/contracts/redeem_referral_paid_referee_migration_pin_test.dart).
+const PAID_PLANS = ["monthly", "yearly"];
+const PAID_REFEREE_MESSAGE = "Referral codes are for new recruits who haven't subscribed yet.";
 
 interface RedeemRequest {
   code?: string;
@@ -109,6 +120,24 @@ export async function handleRedeemReferral(
     return jsonError(400, "Code already applied to your account.", requestId);
   }
 
+  // 5b. An account that has ever PAID is refused: free days are for new recruits (migration 159). Placed AFTER the
+  // idempotency check so an already-redeemed paid user still reads "Code already applied". A READ ERROR is logged and
+  // falls through to the RPC, whose refusal is the authoritative check once migration 159 is applied (this read only buys
+  // a clean message; before the apply the RPC refuses nobody, so an unreadable check admits a paid friend, as before).
+  const { data: paidRows, error: paidErr } = await supabase
+    .from("subscriptions")
+    .select("id")
+    .eq("user_id", referee.id)
+    .in("plan", PAID_PLANS)
+    .not("razorpay_payment_id", "is", null)
+    .limit(1);
+  if (paidErr) {
+    console.warn(`[redeem-referral] request_id=${requestId} paid-check read failed: ${paidErr.message}`);
+  }
+  if (paidRows && paidRows.length > 0) {
+    return jsonError(400, PAID_REFEREE_MESSAGE, requestId);
+  }
+
   // 6. Atomic write via RPC
   const { error: rpcErr } = await supabase.rpc("redeem_referral_atomic", {
     p_code: code,
@@ -118,6 +147,11 @@ export async function handleRedeemReferral(
   });
 
   if (rpcErr) {
+    // The RPC's own refusal of a paid referee (raised under the referee's lock, so it also covers a payment that landed
+    // between step 5b and here): the same clean 400, not the generic 500.
+    if (typeof rpcErr.message === "string" && rpcErr.message.includes("referee_has_paid_plan")) {
+      return jsonError(400, PAID_REFEREE_MESSAGE, requestId);
+    }
     // 7. 23505 race fallback — two concurrent requests slipped past step 5
     if (rpcErr.code === "23505") {
       return new Response(
@@ -163,7 +197,7 @@ function jsonError(status: number, message: string, requestId: string): Response
   );
 }
 
-serve(async (req: Request) => {
+export async function handler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -201,4 +235,10 @@ serve(async (req: Request) => {
       },
     );
   }
-});
+}
+
+// Only when run as the entrypoint: importing this module from a test must not bind a server (deploy runs it as main).
+// Wrapped, not passed directly: `serve`'s Handler type expects `(req, connInfo)`.
+if (import.meta.main) {
+  serve((req) => handler(req));
+}
