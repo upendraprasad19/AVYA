@@ -218,7 +218,7 @@ echo "C3: run during the hold took ${C3_MS} ms -> '$C3_RET' (flag=$C3_FLAG rows=
 case "$C3_RET" in *'"skipped_locked": 1}'*) ;; *) fail "C3 expected skipped_locked = 1 during the hold, got '$C3_RET'" ;; esac
 [ "$C3_FLAG" = "f" ] && [ "$C3_ROWS" = "0" ] || fail "C3 the row must stay pending and the referrer untouched during the hold (flag=$C3_FLAG rows=$C3_ROWS)"
 case "$C3_RET2" in *'"credited": 1,'*) ;; *) fail "C3 the next run should credit the row, got '$C3_RET2'" ;; esac
-case "$C3_RET2" in *'"reconciled": 0'*) ;; *) fail "C3 the second run must change no column of the already-converted row (reconciled 0), got '$C3_RET2': the IS DISTINCT FROM guard is missing" ;; esac
+case "$C3_RET2" in *'"reconciled": 0,'*) ;; *) fail "C3 the second run must change no column of the already-converted row (reconciled 0), got '$C3_RET2': the IS DISTINCT FROM guard is missing" ;; esac
 [ "$C3_FLAG2" = "t" ]   || fail "C3 the row should be credited after the hold ended"
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -244,11 +244,11 @@ C4_END=$(psql_ -c "select round(extract(epoch from (end_date - now())) / 86400.0
 echo "C4: run during the row lock took ${C4_MS} ms -> '$C4_RET' (failed alerts=$C4_ALERTS flag=$C4_FLAG); next run -> '$C4_RET2'; referrer ends in ~${C4_END} days"
 [ "$C4_MS" -lt 1500 ]   || fail "C4 the job waited ${C4_MS} ms behind a row lock: the helper's read must be NOWAIT"
 case "$C4_RET" in *'"skipped_locked": 1}'*) ;; *) fail "C4 expected skipped_locked = 1, got '$C4_RET'" ;; esac
-case "$C4_RET" in *'"failed": 0'*) ;; *) fail "C4 a held row is a skip, not a failure: '$C4_RET'" ;; esac
+case "$C4_RET" in *'"failed": 0,'*) ;; *) fail "C4 a held row is a skip, not a failure: '$C4_RET'" ;; esac
 [ "$C4_ALERTS" = "0" ]  || fail "C4 no failed alert for a skipped row, got $C4_ALERTS"
 [ "$C4_FLAG" = "f" ]    || fail "C4 the row must stay pending"
 case "$C4_RET2" in *'"credited": 1,'*) ;; *) fail "C4 the next run should credit, got '$C4_RET2'" ;; esac
-case "$C4_RET2" in *'"reconciled": 0'*) ;; *) fail "C4 the second run must change no column of the already-converted row (reconciled 0), got '$C4_RET2'" ;; esac
+case "$C4_RET2" in *'"reconciled": 0,'*) ;; *) fail "C4 the second run must change no column of the already-converted row (reconciled 0), got '$C4_RET2'" ;; esac
 [ "$C4_END" = "32" ]    || fail "C4 expected the paid row extended by 7 (25 + 7 = 32 days out), got $C4_END"
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -426,7 +426,7 @@ psql_ -c "drop trigger if exists rpoc_alert_boom on public.alerts; drop function
 echo "C11: job with every alert INSERT raising -> rc=$C11_RC '$C11_RET'; alerts written=$C11_ALERTS; healthy credited=$C11_A; stalled credited=$C11_C; failing credited=$C11_B"
 [ "$C11_RC" -eq 0 ]       || fail "C11 the job itself failed because an alert could not be written: $(cat "$TMP/c11.err")"
 case "$C11_RET" in *'"credited": 2,'*) ;; *) fail "C11 the two creditable rows must still be credited, got '$C11_RET'" ;; esac
-case "$C11_RET" in *'"failed": 1'*) ;; *) fail "C11 the failing row should be counted failed, got '$C11_RET'" ;; esac
+case "$C11_RET" in *'"failed": 1,'*) ;; *) fail "C11 the failing row should be counted failed, got '$C11_RET'" ;; esac
 [ "$C11_ALERTS" = "0" ]   || fail "C11 the trigger should have refused every alert, got $C11_ALERTS rows"
 [ "$C11_A" = "t" ] && [ "$C11_C" = "t" ] && [ "$C11_B" = "f" ] || fail "C11 credited flags wrong (healthy=$C11_A stalled=$C11_C failing=$C11_B)"
 
@@ -447,7 +447,7 @@ C12_MS=$(( $(now_ms) - T0 ))
 wait "$H_PID"
 echo "C12: job while the friend's payment row is held FOR UPDATE took ${C12_MS} ms -> '$C12_RET'"
 [ "$C12_MS" -lt 1500 ]  || fail "C12 the reconcile waited ${C12_MS} ms behind a lock on a PAYMENT row (payment rows are read, never locked)"
-case "$C12_RET" in *'"reconciled": 1'*) ;; *) fail "C12 the row should have been reconciled, got '$C12_RET'" ;; esac
+case "$C12_RET" in *'"reconciled": 1,'*) ;; *) fail "C12 the row should have been reconciled, got '$C12_RET'" ;; esac
 case "$C12_RET" in *'"credited": 1,'*) ;; *) fail "C12 the vested row should have been credited, got '$C12_RET'" ;; esac
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -497,7 +497,7 @@ psql_ -c "drop trigger rpoc_swallow_flag on public.referral_redemptions; drop fu
 C6_RET2="$(job 2>>"$TMP/c6.err")"
 C6_ROWS2=$(psql_ -c "select count(*) from public.subscriptions where user_id = '$R'")
 echo "C6: with the flag UPDATE swallowed -> '$C6_RET' (referrer rows=$C6_ROWS flag=$C6_FLAG failed alerts=$C6_ALERT); trigger removed -> '$C6_RET2' (rows=$C6_ROWS2)"
-case "$C6_RET" in *'"failed": 1'*) ;; *) fail "C6 expected failed = 1, got '$C6_RET'" ;; esac
+case "$C6_RET" in *'"failed": 1,'*) ;; *) fail "C6 expected failed = 1, got '$C6_RET'" ;; esac
 [ "$C6_ROWS" = "0" ]    || fail "C6 the grant must be rolled back with the failed flag (a free grant that would repeat every hour): rows=$C6_ROWS"
 [ "$C6_FLAG" = "f" ]    || fail "C6 the flag must not read true"
 [ "$C6_ALERT" = "1" ]   || fail "C6 expected one failed alert, got $C6_ALERT"

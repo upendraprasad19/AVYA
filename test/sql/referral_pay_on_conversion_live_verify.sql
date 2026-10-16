@@ -447,6 +447,8 @@ BEGIN
   DELETE FROM public.subscriptions WHERE user_id = ANY (v_pool);
 
   -- ============================================================ H. hermes round 2 (2026-10-16): killers for mutants the first round called equivalent or Dart-only
+  -- (X5 needs fewer than 50 REAL vested, creditable redemptions on the project it runs against: the job also credits real rows, so 50 or
+  -- more of them would starve r1's row and X5 would fail loudly, never pass vacuously. Today the live table has 3 legacy rows.)
   -- X5: 55 vested pending rows with a NULL referrer, all OLDER than the one real row, must not starve it out of the 50-row credit
   -- batch. Without `referrer_id IS NOT NULL` in the credit select they sort first, take every slot, credit nothing and raise no alert.
   INSERT INTO public.referral_redemptions (id, code, referrer_id, referee_id, created_at, referrer_rewarded, referee_rewarded, converted_at, referrer_reward_days)

@@ -13,7 +13,7 @@ findings:
     title: "the rule (founder 2026-10-12 and 2026-10-13): the friend gets 7 days at once when they apply a code; the referrer is rewarded only when that friend's FIRST qualifying payment is 7 days old: 7 days for a monthly payment, 30 for a yearly one; no top-up on a monthly-to-yearly upgrade; unlimited invites; a code is applied once ever, only in the first 7 days of the account, never by an account that has ever paid"
     terminal_state: closed_in_commit
     commit: 5cd0fd08
-    verification: "migration 159 (redeem_referral_atomic grants only the referee; private.process_referral_conversions reconciles every unrewarded redemption inside a 97-day scan to the referee's earliest qualifying payment and credits the referrer after the 7-day vest). Local replica of the live objects: test/sql/referral_pay_on_conversion_live_verify.sql SUMMARY 86 ok / 0 fail (groups R redeem, W window and plan, P the paid predicate, V vest and credit, X voids, L the legacy shape, S stall and volume alerts, F failure isolation and the chain, K CHECKs, A catalog); the chain case F6b runs the real redeem function, a paid row, a backdated vest and the job and reads exactly one credit."
+    verification: "migration 159 (redeem_referral_atomic grants only the referee; private.process_referral_conversions reconciles every unrewarded redemption inside a 97-day scan to the referee's earliest qualifying payment and credits the referrer after the 7-day vest). Local replica of the live objects: test/sql/referral_pay_on_conversion_live_verify.sql SUMMARY 86 ok / 0 fail at the time, 89 after round 2 (groups R redeem, W window and plan, P the paid predicate, V vest and credit, X voids, L the legacy shape, S stall and volume alerts, F failure isolation and the chain, K CHECKs, A catalog); the chain case F6b runs the real redeem function, a paid row, a backdated vest and the job and reads exactly one credit."
 
   - id: R2
     title: "redeem_referral_atomic rewritten: refuses an ever-paid referee (referee_has_paid_plan / P0001), one blocking advisory lock on the referee key only (the referrer lock of 158 is gone, so the P-redeems-Q while Q-redeems-P deadlock class cannot occur), referee credited through the shared helper, the referrer never credited here"
@@ -85,7 +85,7 @@ findings:
     title: "doc rot and false plan claims found by the reviews: a plan sentence claiming the NULL-referrer filter was killed by an alert assertion, registry line ranges that shifted with each migration edit, stale 'N cases' counts, cap prose in payment.md and supabase/migrations/CLAUDE.md, ADR headings"
     terminal_state: closed_in_commit
     commit: 5cd0fd08
-    verification: "plan section 3 carries the CORRECTION (dropping referrer_id IS NOT NULL from the credit select alone is killable by no behavioural case; mutants M76/M77, both guards removed, are killed by verify X3/F3); counts replaced by 'the SUMMARY line counts the cases'; registry ranges re-pointed after the LAST migration edit; three new pitfall rows in supabase/migrations/CLAUDE.md."
+    verification: "plan section 3 carries the CORRECTION (in round 1 dropping referrer_id IS NOT NULL from the credit select alone was killable by no alert-based case; mutants M76/M77, both guards removed, are killed by verify X3/F3; round 2 killed the single-guard mutant too, with verify X5, a starvation case); counts replaced by 'the SUMMARY line counts the cases'; registry ranges re-pointed after the LAST migration edit; three new pitfall rows in supabase/migrations/CLAUDE.md."
 
   - id: P1
     title: "plan review rounds 1 to 3 (docs/plan-reviews/referral-pay-on-conversion.md): every finding of plan sections 7, 8 and 9 (legacy rows credited, infeasible live-step order, a CAS miss marking a reward done, failures invisible, Gate 31 and cron minute, hourly rewrite of every row, a deleted referee's reward, a lock cycle with account deletion, the reconcile CASE without ELSE, alert dedup)"
@@ -103,7 +103,7 @@ findings:
     title: "rule 21 evidence (self-attested): 104 mutants of the final migration, each applied twice to a fresh replica database, then the live verify, the deletion file, the concurrency script where locking is touched, and the Dart contract test"
     terminal_state: closed_in_commit
     commit: 5cd0fd08
-    verification: "runner scratchpad rpoc/mut/run_mutants.py (compute-before-write, restore in finally, sha256 check afterwards: unchanged 74631ee7...); 100 killed by a behavioural SQL case, 4 (M22, M32b, M32c, M32e) by Dart pins only, 0 survivors; the table is generated from results.jsonl into the hermes report. The mutation reddened the intended tests, the apply of each mutant was confirmed before it was believed."
+    verification: "runner scratchpad rpoc/mut/run_mutants.py (compute-before-write, restore in finally, sha256 check afterwards: unchanged 74631ee7...); 100 killed by a behavioural SQL case, 4 (M22, M32b, M32c, M32e) by Dart pins only, 0 survivors (round 2: M22 is now also killed by verify X5, so 101 behavioural and 3 Dart-only); the table is generated from results.jsonl into the hermes report. The mutation reddened the intended tests, the apply of each mutant was confirmed before it was believed."
 
   - id: G1
     title: "gates on the final staged tree: flutter analyze lib/, the full flutter test suite (VPS: TZ=Asia/Kolkata, --exclude-tags golden), the pre-commit gate loop, the context-artifact budget"
@@ -142,14 +142,14 @@ findings:
     evidence: "No retention rule exists for either table; alerts carry redemption ids only; the redemption table is service-role-write and the audit row is pseudonymised on erasure by the ON DELETE SET NULL keys of migration 158 (the pattern of 049). A stated retention period is a policy-text change outside this repo."
 
   - id: D7
-    title: "mutants that no SQL case can kill, killed by Dart pins instead: M22 (referrer_id IS NOT NULL dropped from the credit select, masked by the NOT FOUND branch after the key-share read), M32b and M32c (ACL edits, invisible under CREATE OR REPLACE), M32e (REVOKE on a function in schema private)"
+    title: "mutants that no SQL case can kill, killed by Dart pins instead: M22 in round 1 (referrer_id IS NOT NULL dropped from the credit select, masked by the NOT FOUND branch after the key-share read; killed behaviourally by verify X5 in round 2, row N8), M32b and M32c (ACL edits, invisible under CREATE OR REPLACE), M32e (REVOKE on a function in schema private)"
     terminal_state: verified_clean
-    evidence: "Dart pass of the final matrix: all four red in test/contracts/referral_pay_on_conversion_migration_test.dart; the double mutants M76 and M77 (both NULL-referrer guards removed) are killed behaviourally by verify X3 and F3. Recorded rather than claimed as behavioural coverage."
+    evidence: "Dart pass of the final matrix: all four red in test/contracts/referral_pay_on_conversion_migration_test.dart; the double mutants M76 and M77 (both NULL-referrer guards removed) are killed behaviourally by verify X3 and F3. Recorded rather than claimed as behavioural coverage. Round 2 (2026-10-16): M22 now has verify X5, so only M32b, M32c and M32e remain Dart-pin only."
 
   - id: D8
-    title: "mutants judged equivalent after a re-derivation: v_end < now() versus <= in the helper (equal only at one instant), ORDER BY tie-breaks among identical candidates, dropping the second IS DISTINCT FROM arm of the reconcile"
+    title: "mutants judged equivalent after a re-derivation in round 1: v_end < now() versus <= in the helper, ORDER BY tie-breaks among identical candidates, dropping the second IS DISTINCT FROM arm of the reconcile (round 2 re-derived two of the three as killable)"
     terminal_state: verified_clean
-    evidence: "Each re-derived against the final text by a context-blind hermes seat (B) and by the author; the first needs a payment at exactly now() (frozen inside a transaction, so a fixture cannot straddle it), the second changes no outcome (candidates are independent), the third is covered by the first arm for every row it could change. Not claimed as protection."
+    evidence: "Each re-derived against the final text by a context-blind hermes seat (B) and by the author; the first needs a payment at exactly now() (frozen inside a transaction, so a fixture cannot straddle it), the second changes no outcome (candidates are independent), the third is covered by the first arm for every row it could change. Not claimed as protection. ROUND 2 (2026-10-16) CORRECTION, seat B finding 2: the first and third are NOT equivalent. now() is frozen inside a transaction, so a fixture CAN sit on the boundary (verify H1: an active row ending exactly now() is extended, and a <= mutant inserts a second row), and a payment edited in place from monthly to yearly at the same start_date is rewritten only by the second arm (verify H2). Only the ORDER BY id tie-break among identical candidates stays equivalent."
 
   - id: D9
     title: "the hourly candidate scan locks every in-scan unrewarded row FOR UPDATE SKIP LOCKED once an hour"
@@ -236,22 +236,22 @@ findings:
   - id: N1
     title: "hermes round 2, seat A finding 1: the credit select does not re-check referee_id, so a row skipped by the reconcile (locked by a referee deletion) can be credited milliseconds later on its stale converted_at; the migration header says a deleted friend voids the reward"
     terminal_state: blocked_on_user
-    reason: "Migration 159 is applied and immutable; the fix (AND rr.referee_id IS NOT NULL in the credit select) needs migration 160. Filed as OI-344 item 1. The window is milliseconds per hour and costs one reward of 7 or 30 days; B-pass finding 9 had already softened the header wording. Waiting for the founder's go to plan migration 160 (catastrophic tier, live apply a separate go)."
+    reason: "Migration 159 is applied and immutable; the fix (AND rr.referee_id IS NOT NULL in the credit select) needs migration 160. Filed as OI-344 item 1. The window is milliseconds per hour and costs one reward of 7 or 30 days; B-pass finding 9 had already softened the header wording. The founder was asked on 2026-10-16 and approved filing OI-344 (\"go 2\") but has not yet said to plan or write migration 160; that planning (catastrophic tier, two plan reviews, a B-pass, a hermes pass) is the work waiting for the go, and the live apply is a further separate go."
 
   - id: N2
     title: "hermes round 2, seat A finding 2: the credit batch is ORDER BY converted_at, id LIMIT 50, so rows that stay skipped or failing at the head use batch slots every run"
     terminal_state: blocked_on_user
-    reason: "Needs migration 160 (OI-344 item 2). Starvation needs 50 or more stuck rows at once (today 0); the failed and stalled alerts surface a stuck row. The ordering itself is now behaviourally pinned (C13, mutants ME and MF)."
+    reason: "Needs migration 160 (OI-344 item 2). Starvation needs 50 or more stuck rows at once (today 0); the failed and stalled alerts surface a stuck row. The ordering itself is now behaviourally pinned (C13, mutants ME and MF). Waiting on the same go as N1 (planning and writing migration 160)."
 
   - id: N3
     title: "hermes round 2, seat A finding 3: redeem_referral_atomic now reaches the grant helper's FOR UPDATE NOWAIT, where migration 158 used a plain UPDATE that waited, so a legitimate redeem can raise 55P03 while a webhook holds the referee's subscription row"
     terminal_state: blocked_on_user
-    reason: "Needs migration 160 (OI-344 item 5). Nothing is written when it raises, the Edge Function answers 500 and the client may retry; the plan already records the generic 500."
+    reason: "Needs migration 160 (OI-344 item 5). Nothing is written when it raises, the Edge Function answers 500 and the client may retry; the plan already records the generic 500. Waiting on the same go as N1."
 
   - id: N4
     title: "hermes round 2, seat D finding 4: anon and authenticated hold INSERT, UPDATE, DELETE and TRUNCATE on referral_redemptions (read live 2026-10-16); the table now decides PRO days"
     terminal_state: blocked_on_user
-    reason: "Row security is on and the only policy is a SELECT policy, so no client can write today. REVOKE INSERT, UPDATE, DELETE, TRUNCATE FROM anon, authenticated needs migration 160 (OI-344 item 3); the general class is OI-184."
+    reason: "Row security is on and the only policy is a SELECT policy, so no client can write today. REVOKE INSERT, UPDATE, DELETE, TRUNCATE FROM anon, authenticated needs migration 160 (OI-344 item 3); the general class is OI-184. Waiting on the same go as N1."
 
   - id: N5
     title: "hermes round 2, seat D finding 3: the only ceiling on promo-discounted payments is a promise (break-even about 76.7 percent; the real bar is lower because the friend's own PRO costs money); the promo table is readable by anyone ('Anyone can read active promo codes', read live)"
@@ -271,26 +271,26 @@ findings:
   - id: N8
     title: "hermes round 2, seat B finding 1: mutant M22 (the credit select without referrer_id IS NOT NULL) had only a Dart text pin; 55 older NULL-referrer rows would starve a real reward out of the 50-row batch with no alert"
     terminal_state: closed_in_commit
-    commit: "the hermes round-2 docs-and-tests commit on branch hermes-report-verdict-line"
+    commit: "4a189d5e"
     verification: "New live-verify case X5 (55 NULL-referrer vested rows older than the real row; the real row must be credited in the first run). Replica run on a fresh database: SUMMARY ok=89 fail=0 skipped=0, job md5 d24f43267f2beb15ac569c73e7c54555 equal to the applied one. Mutant applied (function md5 changed) and run: dropping the filter reddens X5 only (M22, MA)."
 
   - id: N9
     title: "hermes round 2, seat B finding 2: two mutants labelled equivalent are killable (the helper's v_end < now() against <=, and the reconcile's second IS DISTINCT FROM arm)"
     terminal_state: closed_in_commit
-    commit: "the hermes round-2 docs-and-tests commit on branch hermes-report-verdict-line"
+    commit: "4a189d5e"
     verification: "New cases H1 (an active row ending exactly now(), frozen, must be extended not shadowed) and H2 (a payment edited in place monthly to yearly at the same start_date must rewrite the pending reward 7 to 30). Mutants run: < to <= reddens H1 only (MB); dropping the second arm reddens H2 only (MC)."
 
   - id: N10
     title: "hermes round 2, seat B finding 3: the round-1 mutation table listed no killer for M02, M05 and M17, contradicting 0 survivors; the runner is not in the repo"
     terminal_state: closed_in_commit
-    commit: "the hermes round-2 docs-and-tests commit on branch hermes-report-verdict-line"
+    commit: "4a189d5e"
     verification: "Re-run on 2026-10-16 against the extended live verify on a fresh replica: M02 aborts the verify block at R8 (referee_has_paid_plan raised for a referee whose only row has no payment id), M05 and M17 abort it on referral_redemptions_converted_coherent_check (23514) inside the job. The table rows now say so. Honest limit kept: the mutation runner is a scratch script, not committed; the table lists the cases it can attribute, not all 104."
 
   - id: N11
     title: "hermes round 2, seat B findings 4, 5, 6: W15 did not kill a counter swap, the credit order had only a text pin, the concurrency script matched numbers by loose substring"
     terminal_state: closed_in_commit
-    commit: "the hermes round-2 docs-and-tests commit on branch hermes-report-verdict-line"
-    verification: "W15 now also asserts reconciled >= 3 (swapping the counters reddens W14 and W15, mutant MD). C13 inserts 55 payments with distinct start dates and asserts the 5 NEWEST are the ones left pending after run 1 (ORDER BY ... DESC and a dropped ORDER BY both fail it, mutants ME and MF). Every numeric match in the concurrency script is anchored with its trailing comma or brace. The anchored script passes on a fresh replica (CONCURRENCY OK)."
+    commit: "4a189d5e"
+    verification: "W15 now also asserts reconciled >= 3 (swapping the counters reddens W14 and W15, mutant MD). C13 inserts 55 payments with distinct start dates and asserts the 5 NEWEST are the ones left pending after run 1 (ORDER BY ... DESC and a dropped ORDER BY both fail it, mutants ME and MF). Every numeric match in the concurrency script is anchored with its trailing comma or brace (the last three, failed: 1 and reconciled: 1, in the B-pass follow-up commit). The anchored script passes on a fresh replica (CONCURRENCY OK)."
 
   - id: N12
     title: "hermes round 2, seat B findings 7 and 8: the live verify's safety rests on the absence of non-transactional triggers, and S1-S6, Z, F3 skip when a real alert already exists"
@@ -305,7 +305,7 @@ findings:
   - id: N14
     title: "hermes round 2, seat C findings 1 to 8: stale ledger states (X9, U1, U2, X3), D4 contradicting the live data, stale OI-336 / plan / plan-review / supabase/functions/CLAUDE.md wording, two stale registry line ranges, a wrong migration date in database.md, OI-341 saying day 8, and 18 placeholder commit fields"
     terminal_state: closed_in_commit
-    commit: "the hermes round-2 docs-and-tests commit on branch hermes-report-verdict-line"
+    commit: "4a189d5e"
     verification: "Each item re-read against the file or the live data and corrected in this commit: D4 (live read), X3/X7/X9/U1/U2 re-stated, X10 added, 18 commit fields stamped 5cd0fd08 (the commit that added this file), the redeem-referral registry range 113-186 (verified against the file), live_cron_jobs.json range 5-35, database.md date 2026-10-13, OI-341 'about day 7', OI-336 blocker, plan and plan-review text, supabase/functions/CLAUDE.md clause. Seat C could not search, so it never opened the registry concept referral_reward_on_conversion; the pre-commit registry gates cover it."
 
   - id: N15

@@ -1,7 +1,7 @@
 ---
 reviewed_at: 2026-10-16
 reviewer: round 1 (2026-10-13) four fresh context-blind Sonnet seats; round 2 (2026-10-16) four fresh context-blind Sonnet seats, read-only (Read, Grep, Glob only; three of the four could not search and read files directly)
-findings: round 1 no P0, no P1; round 2 no P0, no P1, five P2 (privacy exposure, refund and chargeback not seen, promo ceiling is a promise, a test gap on the NULL-referrer filter, stale ledger states), the rest P3; every finding is resolved in the batch or has a terminal state in docs/audit/referral-pay-on-conversion.closure.yaml (rows N1-N15, X7, X9, X10, U1, U2)
+findings: round 1 no P0, no P1; round 2 no P0, no P1, P2s (seat B: a test gap on the NULL-referrer filter; seat C: stale ledger states and a contradicted row; seat D: privacy exposure, refund and chargeback not seen, promo ceiling is a promise), the rest P3; every finding is resolved in the batch or has a terminal state in docs/audit/referral-pay-on-conversion.closure.yaml (rows N1-N15, X7, X9, X10, U1, U2)
 verdict: accepted
 ---
 
@@ -21,9 +21,9 @@ Date: 2026-10-13. Four fresh, context-blind Sonnet seats (A SQL semantics and lo
 | B | F3 P2 the coherence CHECK was tested in one direction; column types unchecked | K3; A4 checks `data_type`; mutants M102, M103. |
 | B | F4 P2 alert-write isolation had no behavioural test | Concurrency C11 (a trigger refuses every alert INSERT; the job still credits); mutants M93-M95. |
 | B | F5 P2 `FOR KEY SHARE` to `FOR SHARE` was Dart-only | Concurrency C5e (a `FOR NO KEY UPDATE` holder); mutant M92. |
-| B | F6 P2 a false plan claim (X3 kills dropping `referrer_id IS NOT NULL` from the credit select) | Corrected in the plan; that mutant (M22) is Dart-pin-only and masked by the `NOT FOUND` branch. |
+| B | F6 P2 a false plan claim (X3 kills dropping `referrer_id IS NOT NULL` from the credit select) | Corrected in the plan; that mutant (M22) was Dart-pin-only in round 1 and masked by the `NOT FOUND` branch for the alert-based cases; round 2 killed it behaviourally with verify X5, a starvation case round 1 did not consider (see Round 2). |
 | B | F7 P2 the live-verify header understated its blast radius | Rewritten. |
-| B | F8-F10 P3 and Q2 mutation classes | SUMMARY now reports `skipped=`; W14-W16 (counter swap, lower bound), P6 (expired status), S5/S6 (dedup edge), C12 (locked payment row), second-apply assertion in the runner; M96-M101. Two classes are equivalent (helper `<` vs `<=` at exactly now(); the second `IS DISTINCT FROM` arm). |
+| B | F8-F10 P3 and Q2 mutation classes | SUMMARY now reports `skipped=`; W14-W16 (counter swap, lower bound), P6 (expired status), S5/S6 (dedup edge), C12 (locked payment row), second-apply assertion in the runner; M96-M101. Two classes were called equivalent in round 1 (helper `<` vs `<=` at exactly now(); the second `IS DISTINCT FROM` arm); round 2 proved both killable (verify H1 and H2, mutants MB and MC) because now() is frozen inside the transaction and a plan can be edited in place. Only the ORDER BY id tie-break among identical candidates stays equivalent. |
 | C | F1 P2 two docs still stated the withdrawn cap | `payment.md` and `supabase/migrations/CLAUDE.md` reworded. |
 | C | F2 P2 plan 2.1 did not describe the code | Synced (stall watch first, three alerts, `LIMIT c_batch`). |
 | C | F3 P2 units S2 and C had no terminal state | Ledger entries. |
@@ -38,7 +38,7 @@ Date: 2026-10-13. Four fresh, context-blind Sonnet seats (A SQL semantics and lo
 
 ## Mutation matrix (rule 21; self-attested, run on a local replica of the live objects)
 
-104 mutants of the final migration (sha256 `74631ee7d4ba2d3fe1b0b3b54a98ddae84652d38e8957fe66a115b09f6740df1`), each applied twice to a fresh replica database (the second apply must succeed and leave one cron job), then the live verify (86 cases), the deletion file (D1-D7), the concurrency script (C1-C13) where the mutant touches locking, and the Dart contract test. **0 survivors.** 100 are killed by a behavioural SQL case; the other 4 (M22, M32b, M32c, M32e) are killed by Dart pins and cannot have a behavioural twin: M22 (dropping `referrer_id IS NOT NULL` from the credit select) is masked by the `NOT FOUND` branch after the key-share read, and the double mutants that remove both guards (M76, M77) are killed by verify X3/F3; M32b/M32c are ACL edits that `CREATE OR REPLACE` preserves; M32e is a REVOKE on a function in schema `private`. The runner is a scratch script (compute-before-write, restore in `finally`, sha check) and is not committed.
+104 mutants of the final migration (sha256 `74631ee7d4ba2d3fe1b0b3b54a98ddae84652d38e8957fe66a115b09f6740df1`), each applied twice to a fresh replica database (the second apply must succeed and leave one cron job), then the live verify (86 cases), the deletion file (D1-D7), the concurrency script (C1-C13) where the mutant touches locking, and the Dart contract test. **0 survivors.** 100 are killed by a behavioural SQL case; the other 4 (M22, M32b, M32c, M32e) are killed by Dart pins and cannot have a behavioural twin: M22 (dropping `referrer_id IS NOT NULL` from the credit select) is masked by the `NOT FOUND` branch after the key-share read, and the double mutants that remove both guards (M76, M77) are killed by verify X3/F3; M32b/M32c are ACL edits that `CREATE OR REPLACE` preserves; M32e is a REVOKE on a function in schema `private`. The runner is a scratch script (compute-before-write, restore in `finally`, sha check) and is not committed. **Round 2 correction (2026-10-16):** M22 does have a behavioural twin, verify X5 (55 older NULL-referrer rows starve the 50-row credit batch when the filter is dropped, a mechanism round 1 did not consider): 101 behavioural, 3 Dart-only (M32b, M32c, M32e).
 
 | id | mutant | killed by (behavioural) | Dart pin |
 |---|---|---|---|
