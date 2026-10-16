@@ -52,8 +52,8 @@ findings:
     verification: "dde0fc68 landed OI-297 and OI-304 on main (they had been uncommitted edits on branch coach-progress-review): OI-297 carries a Progress (2026-10-11) bullet with L2a shipped, both residuals and the L2b obligations, and OI-304's Blocked-on names L2b. OI-297 stays OPEN (its fix scope is the whole of L2), so no closes-oi trailer. check_oi_numbering_unique and Gate 40 pass at that commit"
   - id: L2B-ENTRY
     title: "L2b entry criterion: re-decide OQ-L2a (server-side guard / per-site pending set) BEFORE enable_body_measurements flips"
-    terminal_state: blocked_on_user
-    reason: "the '0 rows' premise that makes the stale-overwrite residual acceptable ends when real users enter measurements, and 'edited sites only' cannot hold at the cloud level while the push sends every held site; founder decision"
+    terminal_state: verified_clean
+    evidence: "founder decided OQ-L2a on 2026-10-16 in chat: option 1, accept both residuals (old clients and the out-of-repo Telegram writer can send blanks; a device holding a stale value can overwrite another device's correction). The per-site pending set (L2c) is not built. Basis stated by the founder: the app is in testing and no measurement data exists from before. The flip still needs its own full x2 review and B-pass, the founder's OI-310 position and the OI-305 acknowledgement."
   - id: TS-TWIN
     title: "TS twin supabase/functions/_shared/body_measurement_sites.ts is imported by no Edge Function until L3's athlete state"
     terminal_state: verified_clean
