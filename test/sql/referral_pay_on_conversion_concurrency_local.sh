@@ -215,10 +215,10 @@ C3_RET2="$(job 2>>"$TMP/c3.err")"
 C3_FLAG2=$(psql_ -c "select referrer_rewarded is true from public.referral_redemptions where referee_id = '$F'")
 echo "C3: run during the hold took ${C3_MS} ms -> '$C3_RET' (flag=$C3_FLAG rows=$C3_ROWS); run after the hold -> '$C3_RET2' (flag=$C3_FLAG2)"
 [ "$C3_MS" -lt 1500 ]   || fail "C3 the job waited ${C3_MS} ms behind a held advisory lock: the referrer lock must be a try-lock"
-case "$C3_RET" in *'"skipped_locked": 1'*) ;; *) fail "C3 expected skipped_locked = 1 during the hold, got '$C3_RET'" ;; esac
+case "$C3_RET" in *'"skipped_locked": 1}'*) ;; *) fail "C3 expected skipped_locked = 1 during the hold, got '$C3_RET'" ;; esac
 [ "$C3_FLAG" = "f" ] && [ "$C3_ROWS" = "0" ] || fail "C3 the row must stay pending and the referrer untouched during the hold (flag=$C3_FLAG rows=$C3_ROWS)"
-case "$C3_RET2" in *'"credited": 1'*) ;; *) fail "C3 the next run should credit the row, got '$C3_RET2'" ;; esac
-case "$C3_RET2" in *'"reconciled": 0'*) ;; *) fail "C3 the second run must change no column of the already-converted row (reconciled 0), got '$C3_RET2': the IS DISTINCT FROM guard is missing" ;; esac
+case "$C3_RET2" in *'"credited": 1,'*) ;; *) fail "C3 the next run should credit the row, got '$C3_RET2'" ;; esac
+case "$C3_RET2" in *'"reconciled": 0,'*) ;; *) fail "C3 the second run must change no column of the already-converted row (reconciled 0), got '$C3_RET2': the IS DISTINCT FROM guard is missing" ;; esac
 [ "$C3_FLAG2" = "t" ]   || fail "C3 the row should be credited after the hold ended"
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -243,12 +243,12 @@ C4_RET2="$(job 2>>"$TMP/c4.err")"
 C4_END=$(psql_ -c "select round(extract(epoch from (end_date - now())) / 86400.0) from public.subscriptions where user_id = '$R'")
 echo "C4: run during the row lock took ${C4_MS} ms -> '$C4_RET' (failed alerts=$C4_ALERTS flag=$C4_FLAG); next run -> '$C4_RET2'; referrer ends in ~${C4_END} days"
 [ "$C4_MS" -lt 1500 ]   || fail "C4 the job waited ${C4_MS} ms behind a row lock: the helper's read must be NOWAIT"
-case "$C4_RET" in *'"skipped_locked": 1'*) ;; *) fail "C4 expected skipped_locked = 1, got '$C4_RET'" ;; esac
-case "$C4_RET" in *'"failed": 0'*) ;; *) fail "C4 a held row is a skip, not a failure: '$C4_RET'" ;; esac
+case "$C4_RET" in *'"skipped_locked": 1}'*) ;; *) fail "C4 expected skipped_locked = 1, got '$C4_RET'" ;; esac
+case "$C4_RET" in *'"failed": 0,'*) ;; *) fail "C4 a held row is a skip, not a failure: '$C4_RET'" ;; esac
 [ "$C4_ALERTS" = "0" ]  || fail "C4 no failed alert for a skipped row, got $C4_ALERTS"
 [ "$C4_FLAG" = "f" ]    || fail "C4 the row must stay pending"
-case "$C4_RET2" in *'"credited": 1'*) ;; *) fail "C4 the next run should credit, got '$C4_RET2'" ;; esac
-case "$C4_RET2" in *'"reconciled": 0'*) ;; *) fail "C4 the second run must change no column of the already-converted row (reconciled 0), got '$C4_RET2'" ;; esac
+case "$C4_RET2" in *'"credited": 1,'*) ;; *) fail "C4 the next run should credit, got '$C4_RET2'" ;; esac
+case "$C4_RET2" in *'"reconciled": 0,'*) ;; *) fail "C4 the second run must change no column of the already-converted row (reconciled 0), got '$C4_RET2'" ;; esac
 [ "$C4_END" = "32" ]    || fail "C4 expected the paid row extended by 7 (25 + 7 = 32 days out), got $C4_END"
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -286,7 +286,7 @@ echo "C5: job -> '$C5_OUT'; deleter rc=$DEL_RC after ${DEL_MS} ms; deadlocks=$C5
 [ "$C5_DEAD" = "0" ]    || fail "C5 deadlock detected between the job and an account deletion: the key-share pre-check is missing or misplaced ($(cat "$TMP/c5job.err" "$TMP/c5del.err"))"
 [ "$DEL_RC" -eq 0 ]     || fail "C5 the deletion errored: $(cat "$TMP/c5del.err")"
 [ "$DEL_MS" -ge 1500 ]  || fail "C5 the deleter did not queue behind the job's key-share (${DEL_MS} ms): the pre-check holds no lock"
-case "$C5_OUT" in *'"credited": 1'*) ;; *) fail "C5 the job should have credited the referrer before the deletion, got '$C5_OUT'" ;; esac
+case "$C5_OUT" in *'"credited": 1,'*) ;; *) fail "C5 the job should have credited the referrer before the deletion, got '$C5_OUT'" ;; esac
 [ "$C5_FLAG" = "t" ]    || fail "C5 the row should be credited AND orphaned (referrer_id NULL) after the deletion"
 [ "$C5_GONE" = "0" ]    || fail "C5 the referrer's account should be deleted"
 # the uncommitted-delete half: the deleter goes first, the job must skip the locked row and finish promptly.
@@ -305,7 +305,7 @@ wait "$H_PID"
 C5B_ROWS=$(psql_ -c "select count(*) from public.subscriptions where user_id = '$R'")
 echo "C5b: job during an uncommitted deletion took ${C5B_MS} ms -> '$C5B_RET'; referrer rows=$C5B_ROWS"
 [ "$C5B_MS" -lt 1500 ]  || fail "C5b the job waited ${C5B_MS} ms behind an uncommitted deletion"
-case "$C5B_RET" in *'"credited": 0'*) ;; *) fail "C5b nothing may be credited to a referrer being deleted, got '$C5B_RET'" ;; esac
+case "$C5B_RET" in *'"credited": 0,'*) ;; *) fail "C5b nothing may be credited to a referrer being deleted, got '$C5B_RET'" ;; esac
 [ "$C5B_ROWS" = "0" ]   || fail "C5b the deleted referrer must hold no subscription row, got $C5B_ROWS"
 
 # the users-row lock half: a session holds FOR UPDATE on the REFERRER's users row (not the redemption row), so the job's
@@ -326,9 +326,9 @@ wait "$H_PID"
 C5C_RET2="$(job 2>>"$TMP/c5c.err")"
 echo "C5c: job while the referrer's users row is locked took ${C5C_MS} ms -> '$C5C_RET' (referrer rows=$C5C_ROWS); next run -> '$C5C_RET2'"
 [ "$C5C_MS" -lt 1500 ]  || fail "C5c the job waited ${C5C_MS} ms for a lock on the referrer's users row: the key-share must be NOWAIT"
-case "$C5C_RET" in *'"skipped_locked": 1'*) ;; *) fail "C5c expected skipped_locked = 1, got '$C5C_RET'" ;; esac
+case "$C5C_RET" in *'"skipped_locked": 1}'*) ;; *) fail "C5c expected skipped_locked = 1, got '$C5C_RET'" ;; esac
 [ "$C5C_ROWS" = "0" ]   || fail "C5c nothing may be granted while the users row is held, got $C5C_ROWS rows"
-case "$C5C_RET2" in *'"credited": 1'*) ;; *) fail "C5c the next run should credit, got '$C5C_RET2'" ;; esac
+case "$C5C_RET2" in *'"credited": 1,'*) ;; *) fail "C5c the next run should credit, got '$C5C_RET2'" ;; esac
 
 # the key-share half: the referrer's users row is held FOR NO KEY UPDATE (what an ordinary UPDATE of a non-key column takes). The job's
 # FOR KEY SHARE NOWAIT is compatible with it, so the job must still credit and must not wait.
@@ -347,7 +347,7 @@ C5E_ROWS=$(psql_ -c "select count(*) from public.subscriptions where user_id = '
 wait "$H_PID"
 echo "C5e: job while the referrer's users row is held FOR NO KEY UPDATE took ${C5E_MS} ms -> '$C5E_RET' (referrer rows=$C5E_ROWS)"
 [ "$C5E_MS" -lt 1500 ]  || fail "C5e the job waited ${C5E_MS} ms behind a FOR NO KEY UPDATE on the referrer's users row"
-case "$C5E_RET" in *'"credited": 1'*) ;; *) fail "C5e FOR KEY SHARE is compatible with FOR NO KEY UPDATE: the job must credit, got '$C5E_RET'" ;; esac
+case "$C5E_RET" in *'"credited": 1,'*) ;; *) fail "C5e FOR KEY SHARE is compatible with FOR NO KEY UPDATE: the job must credit, got '$C5E_RET'" ;; esac
 [ "$C5E_ROWS" = "1" ]   || fail "C5e the referrer should hold one subscription row, got $C5E_ROWS"
 
 # the credit-select half: the redemption row is ALREADY converted and vested (so the credit loop, not only the reconcile, meets
@@ -370,9 +370,9 @@ wait "$H_PID"
 C5D_RET2="$(job 2>>"$TMP/c5d.err")"
 echo "C5d: job while a converted+vested row is held took ${C5D_MS} ms -> '$C5D_RET' (referrer rows=$C5D_ROWS); next run -> '$C5D_RET2'"
 [ "$C5D_MS" -lt 1500 ]  || fail "C5d the job waited ${C5D_MS} ms behind a held, already-converted redemption row: the credit select must be SKIP LOCKED"
-case "$C5D_RET" in *'"credited": 0'*) ;; *) fail "C5d nothing may be credited while the row is held, got '$C5D_RET'" ;; esac
+case "$C5D_RET" in *'"credited": 0,'*) ;; *) fail "C5d nothing may be credited while the row is held, got '$C5D_RET'" ;; esac
 [ "$C5D_ROWS" = "0" ]   || fail "C5d nothing may be granted while the row is held, got $C5D_ROWS rows"
-case "$C5D_RET2" in *'"credited": 1'*) ;; *) fail "C5d the next run should credit the row, got '$C5D_RET2'" ;; esac
+case "$C5D_RET2" in *'"credited": 1,'*) ;; *) fail "C5d the next run should credit the row, got '$C5D_RET2'" ;; esac
 
 # ---------------------------------------------------------------------------------------------------------------------
 # C10 - no session-level advisory lock survives a statement
@@ -425,8 +425,8 @@ C11_B=$(psql_ -c "select referrer_rewarded is true from public.referral_redempti
 psql_ -c "drop trigger if exists rpoc_alert_boom on public.alerts; drop function if exists public.rpoc_alert_boom()" >/dev/null
 echo "C11: job with every alert INSERT raising -> rc=$C11_RC '$C11_RET'; alerts written=$C11_ALERTS; healthy credited=$C11_A; stalled credited=$C11_C; failing credited=$C11_B"
 [ "$C11_RC" -eq 0 ]       || fail "C11 the job itself failed because an alert could not be written: $(cat "$TMP/c11.err")"
-case "$C11_RET" in *'"credited": 2'*) ;; *) fail "C11 the two creditable rows must still be credited, got '$C11_RET'" ;; esac
-case "$C11_RET" in *'"failed": 1'*) ;; *) fail "C11 the failing row should be counted failed, got '$C11_RET'" ;; esac
+case "$C11_RET" in *'"credited": 2,'*) ;; *) fail "C11 the two creditable rows must still be credited, got '$C11_RET'" ;; esac
+case "$C11_RET" in *'"failed": 1,'*) ;; *) fail "C11 the failing row should be counted failed, got '$C11_RET'" ;; esac
 [ "$C11_ALERTS" = "0" ]   || fail "C11 the trigger should have refused every alert, got $C11_ALERTS rows"
 [ "$C11_A" = "t" ] && [ "$C11_C" = "t" ] && [ "$C11_B" = "f" ] || fail "C11 credited flags wrong (healthy=$C11_A stalled=$C11_C failing=$C11_B)"
 
@@ -447,8 +447,8 @@ C12_MS=$(( $(now_ms) - T0 ))
 wait "$H_PID"
 echo "C12: job while the friend's payment row is held FOR UPDATE took ${C12_MS} ms -> '$C12_RET'"
 [ "$C12_MS" -lt 1500 ]  || fail "C12 the reconcile waited ${C12_MS} ms behind a lock on a PAYMENT row (payment rows are read, never locked)"
-case "$C12_RET" in *'"reconciled": 1'*) ;; *) fail "C12 the row should have been reconciled, got '$C12_RET'" ;; esac
-case "$C12_RET" in *'"credited": 1'*) ;; *) fail "C12 the vested row should have been credited, got '$C12_RET'" ;; esac
+case "$C12_RET" in *'"reconciled": 1,'*) ;; *) fail "C12 the row should have been reconciled, got '$C12_RET'" ;; esac
+case "$C12_RET" in *'"credited": 1,'*) ;; *) fail "C12 the vested row should have been credited, got '$C12_RET'" ;; esac
 
 # ---------------------------------------------------------------------------------------------------------------------
 # C13 - at most 50 rewards per run (c_batch)
@@ -462,16 +462,18 @@ with newu as (insert into public.users (id) select gen_random_uuid() from genera
   insert into public.referral_redemptions (code, referrer_id, referee_id, created_at, referrer_rewarded, referee_rewarded)
   select 'AVYA-B13', '$R', id, now() - interval '20 days', false, true from newu returning referee_id)
 insert into public.subscriptions (user_id, plan, status, start_date, end_date, razorpay_payment_id)
-  select referee_id, 'monthly', 'active', now() - interval '8 days', now() + interval '22 days', 'pay_b13_' || gen_random_uuid() from ins;
+  select referee_id, 'monthly', 'active', now() - interval '8 days' - (row_number() over (order by referee_id) || ' seconds')::interval, now() + interval '22 days', 'pay_b13_' || gen_random_uuid() from ins;
 SQLEND
 C13_R1="$(job 2>"$TMP/c13.err")"
+C13_LEFT_NEWEST=$(psql_ -c "select count(*) from (select rr.referrer_rewarded from public.referral_redemptions rr join public.subscriptions s on s.user_id = rr.referee_id where rr.code = 'AVYA-B13' order by s.start_date desc limit 5) t where not t.referrer_rewarded")
 C13_R2="$(job 2>>"$TMP/c13.err")"
 C13_CRED=$(psql_ -c "select count(*) from public.referral_redemptions where code = 'AVYA-B13' and referrer_rewarded")
 psql_ -c "delete from public.users where id not in ($KEEP)" >/dev/null
 echo "C13: 55 vested rewards -> first run '$C13_R1', second run '$C13_R2'; credited in total=$C13_CRED"
-case "$C13_R1" in *'"credited": 50'*) ;; *) fail "C13 the first run must credit exactly 50 (c_batch), got '$C13_R1'" ;; esac
-case "$C13_R2" in *'"credited": 5'*) ;; *) fail "C13 the second run must credit the remaining 5, got '$C13_R2'" ;; esac
+case "$C13_R1" in *'"credited": 50,'*) ;; *) fail "C13 the first run must credit exactly 50 (c_batch), got '$C13_R1'" ;; esac
+case "$C13_R2" in *'"credited": 5,'*) ;; *) fail "C13 the second run must credit the remaining 5, got '$C13_R2'" ;; esac
 [ "$C13_CRED" = "55" ] || fail "C13 all 55 must end credited, got $C13_CRED"
+[ "$C13_LEFT_NEWEST" = "5" ] || fail "C13 the OLDEST 50 must be credited first: the 5 newest rows must be the ones left pending after run 1, got $C13_LEFT_NEWEST of the 5 newest still pending"
 
 # ---------------------------------------------------------------------------------------------------------------------
 # C6 - the flag UPDATE matches no row: the ROW_COUNT check raises and the grant is rolled back
@@ -495,11 +497,11 @@ psql_ -c "drop trigger rpoc_swallow_flag on public.referral_redemptions; drop fu
 C6_RET2="$(job 2>>"$TMP/c6.err")"
 C6_ROWS2=$(psql_ -c "select count(*) from public.subscriptions where user_id = '$R'")
 echo "C6: with the flag UPDATE swallowed -> '$C6_RET' (referrer rows=$C6_ROWS flag=$C6_FLAG failed alerts=$C6_ALERT); trigger removed -> '$C6_RET2' (rows=$C6_ROWS2)"
-case "$C6_RET" in *'"failed": 1'*) ;; *) fail "C6 expected failed = 1, got '$C6_RET'" ;; esac
+case "$C6_RET" in *'"failed": 1,'*) ;; *) fail "C6 expected failed = 1, got '$C6_RET'" ;; esac
 [ "$C6_ROWS" = "0" ]    || fail "C6 the grant must be rolled back with the failed flag (a free grant that would repeat every hour): rows=$C6_ROWS"
 [ "$C6_FLAG" = "f" ]    || fail "C6 the flag must not read true"
 [ "$C6_ALERT" = "1" ]   || fail "C6 expected one failed alert, got $C6_ALERT"
-case "$C6_RET2" in *'"credited": 1'*) ;; *) fail "C6 with the trigger gone the next run should credit, got '$C6_RET2'" ;; esac
+case "$C6_RET2" in *'"credited": 1,'*) ;; *) fail "C6 with the trigger gone the next run should credit, got '$C6_RET2'" ;; esac
 [ "$C6_ROWS2" = "1" ]   || fail "C6 expected one subscription row after the credit, got $C6_ROWS2"
 
 # ---------------------------------------------------------------------------------------------------------------------
