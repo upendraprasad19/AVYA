@@ -1,0 +1,155 @@
+_commit: &wip "claude/oi-pending-hold-weeks-1od97o (uncommitted)"
+batch: oi132-cron-registry
+date: 2026-08-20
+branch: claude/oi-pending-hold-weeks-1od97o
+blast_radius: platform
+source: docs/audit/open_issues.md OI-132
+context: >
+  A migration ran on prod on 2026-08-15 and left no artifact in the repo. The
+  interesting half is not the missing paperwork — it is that Gate 31, the gate
+  built to catch unregistered cron jobs, derives its worldview by SCANNING
+  migration files, so a migration with no file is not merely un-gated but
+  unseeable. Measured: 28 live jobs, 24 registered, 4 missing, and the 4 missing
+  were exactly that migration's. The gate's blind spot was 100% of the gap;
+  everything it could see, it had kept perfect.
+findings:
+
+  - id: OI132-A
+    title: "log_table_retention had no .sql file, no manifest entry, no diagnose-doc"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: supabase/migrations/121_log_table_retention.sql
+    notes: >
+      Statements recovered VERBATIM from schema_migrations.statements rather
+      than rewritten from memory, then wrapped in a DO-NOT-APPLY header and the
+      inline rollback block the original promised but could not have ("reverse
+      block in the repo file" — there was no repo file). FIDELITY MEASURED, not
+      asserted: stripping every -- comment line from the repo file and
+      normalising whitespace yields a 1539-character string identical to the
+      same normalisation of schema_migrations.statements[1] for version
+      20260815155823. Live cron.job confirms all four jobs at jobids 33-36 with
+      the exact schedules the registry now lists. Manifest entry records
+      the ORIGINAL 2026-08-15 apply, with applier recorded as genuinely unknown
+      rather than guessed, and an explicit note that its hash attests the
+      reconstruction matches ITSELF, not that it matches what ran.
+
+  - id: OI132-B
+    title: "four cron jobs unregistered — not two, as first filed"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: docs/operations/CRON_REGISTRY.md
+    notes: >
+      The original filing said two. That came from a reviewer that had filtered
+      on retention-shaped names and was propagated without re-derivation;
+      re-querying cron.job shows FOUR, all active — the two VACUUM (ANALYZE)
+      jobs are not row-destructive but were equally unregistered and equally
+      invisible. Worth recording because it is the same one-layer-up error the
+      whole surrounding batch has been about. Registry now 28 of 28.
+
+  - id: OI132-C
+    title: "Gate 31's input was migration FILES, so a fileless migration defeated it by construction"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: test/scripts/cron_registry_snapshot_gate_test.dart
+    notes: >
+      Second input added: backups/live_cron_jobs.json, a committed snapshot of
+      live cron.job. Snapshot rather than live query because CI holds zero
+      Actions secrets (OI-105), so a live query would silently skip there — a
+      gate passing because it never ran, the same failure one layer up. Follows
+      the backups/live_schema_columns.json precedent.
+      Hard-fails on a missing, malformed OR EMPTY snapshot; an empty snapshot
+      would make every assertion built on it vacuous, which is the Gate-44
+      shape. Input A explicitly re-tested so adding B did not mask it.
+
+  - id: OI132-D
+    title: "Gate 31 promoted out of the grandfathered set"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: docs/audit/gate_test_ledger.yaml
+    notes: >
+      It was grandfathered: 2026-08-10 — an enumerated terminal exemption, not a
+      deferral. It now carries a real mutation-proven test, so it holds
+      mutation_proven: true instead. Five mutations redden, including the OI-132
+      scenario itself. One fewer name on the grandfathered list.
+
+  - id: OI132-E
+    title: "the test hung the suite for >10 minutes before it ran"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: test/scripts/cron_registry_snapshot_gate_test.dart
+    notes: >
+      Platform.resolvedExecutable under `flutter test` is the flutter_tester
+      binary, not dart, so spawning the gate with it never returns. The repo
+      ALREADY documented this exact trap at
+      test/scripts/oi_numbering_lib_test.dart:284 — "Cost this suite one
+      >10-minute hang before it was caught" — and it cost this one another
+      before the note was found. Swapped to that file's resolver; 6 tests now
+      run in ~1s. Recorded rather than quietly fixed: a documented trap that
+      still catches the next author is a discoverability failure, not a
+      knowledge one.
+
+  - id: OI132-F
+    title: "snapshot freshness is NOT proven, and the gate says so"
+    terminal_state: verified_clean
+    evidence: >
+      Deliberate, stated limitation rather than a gap discovered later. The gate
+      proves registry-vs-snapshot parity; it cannot prove snapshot-vs-live
+      freshness without credentials CI does not have. Written into the gate's
+      own header, the registry note, the diagnose-doc and OI-132's closing entry
+      so no future reader mistakes its green for a freshness guarantee.
+      Regeneration SQL is in the gate header and the regeneration step is
+      documented as part of any migration that schedules or unschedules a job.
+
+  - id: OI132-G
+    title: "the migration's SECURITY DEFINER grant hygiene was already correct"
+    terminal_state: verified_clean
+    evidence: >
+      Both cleanup_* functions carry REVOKE ALL FROM PUBLIC, REVOKE ALL FROM
+      anon, authenticated, and GRANT EXECUTE TO postgres — the exact hygiene
+      migration 120 got wrong two days ago (a9d3f1, an anon-executable SECURITY
+      DEFINER function live for ~3m12s). Verified in the recovered statements
+      and flagged in the reconstruction's own comments so a later "simplify"
+      pass does not strip lines that look redundant and are not. CONFIRMED
+      LIVE 2026-08-20, one layer past the file: pg_proc.proacl on both functions
+      reads `postgres=X/postgres | service_role=X/postgres` — no anon, no
+      authenticated, no PUBLIC, and prosecdef true with search_path=public. The
+      service_role entry comes from Supabase's ALTER DEFAULT PRIVILEGES, not
+      from the migration (the recovered statements mention it zero times); the
+      file now says so, so nobody "restores" a grant that was never there.
+
+  - id: OI132-H
+    title: "the re-scope reintroduced its own blind spot: input B was read BELOW input A's exit(0)"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: test/scripts/cron_registry_snapshot_gate_test.dart
+    notes: >
+      Found by the B-pass on this commit, not by the six tests written with the
+      re-scope. Input A opens with "supabase/migrations absent -> SKIP, exit 0",
+      and the new snapshot read was placed after it. A tree without that
+      directory therefore exited green having consulted NEITHER input — the
+      never-ran-so-it-passed shape input B was added to close, reproduced by the
+      edit that added it, one line above the header explaining why it must not
+      happen. Fixed by reading input B first and demoting input A's absent-dir
+      branch from exit(0) to a NOTE. Also fixed alongside: --warn-only exited 0
+      mid-gate on a bad snapshot and skipped input A too (now reports and
+      continues), and the failure count summed the two lists so a job both
+      declared and live counted twice (now a union). Mutation 6 in the ledger;
+      exactly one test reddens under it, the other six stay green.
+
+  - id: OI132-I
+    title: "the manifest entry shipped a literal `sha256:%s` placeholder past Gate 39"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: backups/applied_migrations.json
+    notes: >
+      Found by the B-pass on this commit. The 121 entry's hash field was written
+      as the literal string "sha256:%s" — an unsubstituted format placeholder —
+      and check_applied_migrations_ledger.dart reported PASS, because its
+      _requiredKeys list asserts the KEY exists and never inspects the VALUE.
+      This landed inside the same entry whose own note explains that 60 of 126
+      ledger hashes already match nothing and that an unexplained hash here
+      would have been the 61st. Corrected to the real sha256 of the file, twice
+      (the file changed again when the service_role provenance note was added).
+      The gate hole is filed as OI-137 with a two-step fix, of which step 1 —
+      require ^sha256:[0-9a-f]{64}$ or a documented sentinel — is separable and
+      blocks nothing.

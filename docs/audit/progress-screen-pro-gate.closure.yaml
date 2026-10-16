@@ -1,0 +1,344 @@
+# Closure ledger — progress-screen-pro-gate (diagnose b7c1e4)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no
+# `deferred:` key. closed_count == total_findings.
+#
+# WHAT PRODUCED THESE: a founder decision (2026-10-05: the Progress Photos screen
+# enforces PRO itself, closing ledger row R1-04 of the Photos-hub batch), two
+# context-blind plan-review rounds (docs/plan-reviews/progress-screen-pro-gate.md),
+# three mutation rounds in sandbox copies (21 mutants, then 40 plus two re-runs, then 49 after
+# round 2), and the local gate loop.
+#
+# `commit:` on a closed_in_commit row names the batch's single code commit: the commit
+# that ADDS this file. A commit cannot name its own SHA; find it with
+#   git log --diff-filter=A --format=%h -- docs/audit/progress-screen-pro-gate.closure.yaml
+# (the merge to main is a --no-ff merge commit; the code commit is its second parent's tip).
+
+batch: progress-screen-pro-gate
+plan_review_record: docs/plan-reviews/progress-screen-pro-gate.md
+diagnose_docs:
+  - docs/diagnoses/2026-10-05-progress-screen-no-pro-gate-b7c1e4.md
+total_findings: 36
+closed_count: 36
+
+findings:
+  # ── The planned units ─────────────────────────────────────────────
+  - id: C1
+    title: "the Progress screen enforces PRO itself on entry (_enter from initState; locked card for a refused user; no photo read; no Add button)"
+    terminal_state: closed_in_commit
+    commit: progress-screen-pro-gate batch commit (see header)
+    verification: >
+      test/contracts/progress_photos_screen_gate_test.dart against the real SubscriptionService:
+      FREE (card, label, zero list() calls, no Add button, first frame already the card), PRO
+      (spinner first frame, then gallery and button, reason=verify_pro, one list() call),
+      through the hub (both locks pass). Mutants M01-M03, M09, M11, M12, M16, M19, M22-M24, M40 red.
+
+  - id: C2
+    title: "the Storage-writing Add button is gated again, cannot be entered twice, and shows a busy spinner while its gate waits"
+    terminal_state: closed_in_commit
+    commit: progress-screen-pro-gate batch commit (see header)
+    verification: >
+      Lapse test (paywall, never the picker, card shown), two taps in one synchronous stretch open ONE
+      sheet, busy spinner and recovery test, leaving inside the Add button's verify. Mutants M08, M10,
+      M14, M15, M18, M25-M28 red; M06 and M07 red (the mounted guards, behaviour and pin).
+
+  - id: C3
+    title: "docs, comments and reason strings that said 'the hub row is the only gate' repointed; SoT reader row added; nested CLAUDE.md, subscription.md, functionality-flow.md, naming_conventions.md, registry"
+    terminal_state: closed_in_commit
+    commit: progress-screen-pro-gate batch commit (see header)
+    verification: >
+      git grep over lib/ test/ docs/architecture docs/naming_conventions.md docs/sot_registry.yaml .claude CLAUDE.md for
+      "no PRO check|has no gate|own gate|screen does not check|hub row is the only|only PRO check|ungated" finds
+      only historical rows (the old ledger's A2, B1, B5 and finding rows, the plan and the B-pass review of that batch)
+      and unrelated uses. check_sot_registry_parity.dart, check_nested_claude_md_content.dart and the context-artifact
+      budget pass in the pre-commit loop.
+
+  - id: C4
+    title: "row R1-04 of the Photos-hub ledger (docs/audit/profile-share-grow-order.closure.yaml) closed"
+    terminal_state: closed_in_commit
+    commit: progress-screen-pro-gate batch commit (see header)
+    verification: >
+      The R1-04 row there is now closed_in_commit with a reason pointing at this batch; its header counts are unchanged
+      (the row was already counted as terminal when it was blocked_on_user).
+
+  - id: C5
+    title: "server-side PRO enforcement for progress_photos (RLS or a BEFORE INSERT check modelled on the AI-coach daily-cap trigger)"
+    terminal_state: closed_in_commit
+    commit: progress-photos-pro-server-rule batch commit (git log --diff-filter=A --format=%h -- docs/audit/progress-photos-pro-server-rule.closure.yaml)
+    verification: >
+      Migration 154 (supabase/migrations/154_progress_photos_pro_insert_rls_rule.sql) was applied live on 2026-10-07 by the
+      founder (cloud_version 20261007181916, backups/applied_migrations.json): the Storage policy progress_photos_insert_own
+      and the BEFORE INSERT trigger trg_progress_photo_pro refuse a NEW photo without status = 'active' AND end_date > now().
+      Live verify: test/sql/progress_photos_pro_insert_rule_live_verify.sql read 30 of 30 ok after the apply (16 cases failed
+      before it); the onconflict arbiter read 28 of 28 ok including progress_photos:id. Contract test
+      test/contracts/progress_photos_pro_insert_rule_test.dart (211 tests). Diagnose d8f2a6.
+    history: >
+      Until 2026-10-07 this row was blocked_on_user: a client gate stops honest users and a typed address; a client calling
+      Storage or PostgREST directly was not stopped (progress_photos RLS was own-row only; the progress-photos bucket
+      policies were not in the repo's migrations). The real lock is a database rule: a migration plus a live apply, which
+      needed the founder's separate explicit go (CLAUDE.md section 4.3).
+
+  - id: C6
+    title: "delete the repository's now-nearly-unreachable free branch (2/day, 2048/85)?"
+    terminal_state: closed_in_commit
+    commit: progress-photos-client-b2 batch commit (unit B2, OI-314)
+    verification: "implemented by unit B2: the repository's free branch is deleted (C6) and a lapsed user can view and delete in the app (C7); see docs/audit/progress-photos-client-b2.closure.yaml rows C1 and C5, diagnose c2b7e4"
+    notes: >
+      Analysis recorded before the decision, kept for the record (the recommendation to keep the branch until C5 exists is
+      superseded by decision 5):
+      Reachable only if PRO lapses between the Add button's gate and capture()'s own isPro() read. It is also the
+      client half of the quota message a free user would see. Deleting it is a product call; the recommendation is to
+      keep it until C5 exists. Nothing tests the repository's caps or image tiers: F40
+      (test/contracts/audit_2026_06_07_batch5_regression_test.dart) checks only that the screen's source handles
+      PhotoQuotaException and calls showPaywallSheet (the progress_photo_quota_test.dart that older docs cited was never
+      written). So deleting the branch would turn no test red: a reason to decide it deliberately, not a protection.
+
+  - id: C7
+    title: "should a lapsed user still VIEW and DELETE old progress photos in the app?"
+    terminal_state: closed_in_commit
+    commit: progress-photos-client-b2 batch commit (unit B2, OI-314)
+    verification: "implemented by unit B2: the repository's free branch is deleted (C6) and a lapsed user can view and delete in the app (C7); see docs/audit/progress-photos-client-b2.closure.yaml rows C1 and C5, diagnose c2b7e4"
+    notes: >
+      Analysis recorded before the decision, kept for the record (the recommendation to keep the branch until C5 exists is
+      superseded by decision 5):
+      Entry is blocked at both locks (the hub row already did this before this batch: the old Profile row gated the
+      same way), so the only in-app way to remove a lapsed user's progress photos is Delete Account (a DPDP point).
+      docs/architecture/subscription.md says a downgrade is a soft lock, read-only on PRO content; for these photos
+      that was never implemented in the app. If the founder wants view and delete for a lapsed user, the entry gate
+      becomes a write-only gate: a product decision with a user-visible effect. Once the screen is open, viewing and the
+      long-press delete are not gated again (only entry and Add run the gate), so a user whose subscription lapses while the
+      screen stays open keeps viewing and deleting until the next Add tap.
+
+  - id: C8
+    title: "a user the gate refused who upgrades from the locked card gets the gate re-run (ref.listen on subscriptionInfoProvider)"
+    terminal_state: closed_in_commit
+    commit: progress-screen-pro-gate batch commit (see header)
+    verification: >
+      Tests: purchase from the card (gallery, one read, reason=verify_pro on the re-run), a no-change refresh does not
+      re-gate, a refresh on a granted screen does not re-gate or re-read, lapse then pay again shows the spinner not the
+      old gallery state. Mutants M29-M33 and M17 red.
+
+  - id: C9
+    title: "ProLockedOverlay hardened where this batch first uses it: scrolls in a short window or at a large text scale, keyboard-operable 44 dp CTA, stale 'cyan' doc word fixed"
+    terminal_state: closed_in_commit
+    commit: progress-screen-pro-gate batch commit (see header)
+    verification: >
+      Five window / text-scale cases (1200x800, 360x640, 320x240, 360x640 at 2x, 320x240 at 2x: no overflow, the button on
+      screen), a desktop platform, the 44 dp height and Tab-until-focus then Enter, the semantics (a button with a tap
+      action and its label), the centring at 1200x800 and the pill that hugs its label. Mutants M36 (20 dp), M37
+      (GestureDetector), M38 (no scrolling), M39 (the base overlay), N05 (no button semantics), N06 (no minHeight), N07
+      (no Center) and N08 (no widthFactor) red, each by a test that names it.
+
+  # ── Round 1 of the plan review (one reviewer, verdict harden, 13 findings) ──
+  - id: RV1-01
+    title: "P2 — T1's no-photo-read could not fail by behaviour (the card hides _photos and _error; list() never throws)"
+    terminal_state: closed_in_commit
+    commit: progress-screen-pro-gate batch commit (see header)
+    verification: >
+      ProgressPhotoRepository.debugOnListForTests counts list() calls; FREE asserts zero, PRO one, the upgrade re-check
+      two reads in total. The vacuous 'Couldn't load photos' absence assertion is gone. Mutants M12, M19, M01 red by
+      behaviour (the pin is no longer the only proof); M35 (seam unwired) red.
+
+  - id: RV1-02
+    title: "P2 — mutants that survived: checking showing the lock or the button, an initial granted, a new ungated picker caller, the write-gate mounted guards, a weakened second gate, no hub-to-real-screen test"
+    terminal_state: closed_in_commit
+    commit: progress-screen-pro-gate batch commit (see header)
+    verification: >
+      First-frame tests (PRO spinner, FREE card), leaving inside the Add button's verify, feature=/reason=verify_pro on
+      the second gate's event, a through-the-hub test, a pin that every Storage-touching method has one caller.
+      Mutants M22, M23, M24, M06, M10, M34 red.
+
+  - id: RV1-03
+    title: "P2 — _onAddPhoto was re-entrant: two taps inside a pending gate opened two pickers; the 5-minute cache is stamped only after a 200 answer"
+    terminal_state: closed_in_commit
+    commit: progress-screen-pro-gate batch commit (see header)
+    verification: >
+      _gating guard + busy spinner (D5); tests: two taps in one synchronous stretch open one sheet; busy spinner and
+      recovery. Mutants M25, M26, M27, M28 red. The cache claim was checked against verifyFromServer (the stamp is
+      written only at the end of a 200 path).
+
+  - id: RV1-04
+    title: "P2 — a user who upgraded from the locked card still saw the lock"
+    terminal_state: closed_in_commit
+    commit: progress-screen-pro-gate batch commit (see header)
+    verification: "See C8."
+
+  - id: RV1-05
+    title: "P2 — six stale 'the screen has no gate' statements in three test files; the old ledger's R1-04 row not closed in the diff"
+    terminal_state: closed_in_commit
+    commit: progress-screen-pro-gate batch commit (see header)
+    verification: "Reworded in test/profile/user_photos_hub_test.dart (3), user_photos_gate_behavioral_test.dart (2), profile_share_grow_order_test.dart (1); see C3 and C4."
+
+  - id: RV1-06
+    title: "P2 — the 'typed address on a cold load' premise was wrong: a fresh load goes through /restoring and lands on Home"
+    terminal_state: closed_in_commit
+    commit: progress-screen-pro-gate batch commit (see header)
+    verification: >
+      Checked by reading app_router.dart (the session-open guard returns /restoring), restoring_screen.dart
+      (_allowedNextRoutes is only /admin) and main.dart (Hive only at boot). Plan section 1 item 2 and section 8, the
+      screen's class doc, the nested CLAUDE.md, subscription.md and PROF-09 now say the door is a warm tab and give the
+      device check as 'edit the part after # in the same tab'. Not tried in a browser; stated as such.
+
+  - id: RV1-07
+    title: "P2 — lib/features/profile/CLAUDE.md told the next agent to pass the id 'progress_photos' to the paywall"
+    terminal_state: closed_in_commit
+    commit: progress-screen-pro-gate batch commit (see header)
+    verification: "The row says feature: 'Progress Photos' (the display string) and why; checked against paywallLetterheadTitle and the five call sites."
+
+  - id: RV1-08
+    title: "P2 — process gaps: no commit type, diagnose-doc, ledger, skill row, retrospective in the plan; the gate loop not run before review"
+    terminal_state: closed_in_commit
+    commit: progress-screen-pro-gate batch commit (see header)
+    verification: >
+      Commit type fix(profile) with closes-diagnose b7c1e4; the diagnose-doc validates; this ledger; the plan-review record;
+      the skill bug-class row (.claude/skills/debugging/bug-classes.md); the retrospective in agent memory; the full gate
+      loop (analyze lib/, the full suite, the pre-commit loop) ran on the post-round-1 tree before round 2.
+
+  - id: RV1-09
+    title: "P3 — stale post-frame rationale in T4's comment"
+    terminal_state: closed_in_commit
+    commit: progress-screen-pro-gate batch commit (see header)
+    verification: "The helper's doc and the tests say initState starts the gate synchronously."
+
+  - id: RV1-10
+    title: "P3 — plan citations (onStateChanged, route lines, the repository line) and an understated delay"
+    terminal_state: closed_in_commit
+    commit: progress-screen-pro-gate batch commit (see header)
+    verification: "Plan section 1 re-cited from the base (git show 01a34097); the delay is stated as up to 10 s per verify, about 20 s through the hub after a timeout."
+
+  - id: RV1-11
+    title: "P3 — ProLockedOverlay's first use: not scrollable, a 34 dp non-focusable CTA, a stale 'cyan' doc"
+    terminal_state: closed_in_commit
+    commit: progress-screen-pro-gate batch commit (see header)
+    verification: "See C9."
+
+  - id: RV1-12
+    title: "P3 — 'no UI path reaches' the free branch overclaims"
+    terminal_state: closed_in_commit
+    commit: progress-screen-pro-gate batch commit (see header)
+    verification: "Reworded to 'reachable only if PRO lapses between the Add button's gate and capture' in the repository comment, the nested CLAUDE.md and PROF-09."
+
+  - id: RV1-13
+    title: "P3 — the soft-lock sentence in subscription.md contradicted the new rule; no SoT reader row for the screen"
+    terminal_state: closed_in_commit
+    commit: progress-screen-pro-gate batch commit (see header)
+    verification: "Exception sentence added to subscription.md (names Delete Account as the only in-app erasure); reader row ProgressPhotosScreen _enter / _onAddPhoto added to subscription_state."
+
+  # ── Findings of my own mutation rounds ────────────────────────────
+  - id: MR1-G21
+    title: "mutation round 1: the locked card showing another feature label survived (the label was asserted nowhere)"
+    terminal_state: closed_in_commit
+    commit: progress-screen-pro-gate batch commit (see header)
+    verification: "The FREE test asserts the label inside the overlay and the description; mutant M21 (the same edit) red in round 2."
+
+  - id: MR2-M17
+    title: "mutation round 2: 'checking falls through to the gallery path', recorded as equivalent, was NOT equivalent (a lapse then a new purchase showed the earlier PRO period's gallery state during the re-check)"
+    terminal_state: closed_in_commit
+    commit: progress-screen-pro-gate batch commit (see header)
+    verification: "Test 'PRO, lapses, then pays again: the re-check shows the spinner' added; M17 re-run red x1."
+
+  - id: MR2-M20
+    title: "mutation round 2: the leading mounted guard in _enter was dead (both callers are mounted by construction); it was an equivalent mutant"
+    terminal_state: closed_in_commit
+    commit: progress-screen-pro-gate batch commit (see header)
+    verification: "Guard deleted and the reason recorded in _enter's doc comment; no test changed behaviour (29 green)."
+
+  # ── Round 2 of the plan review (a second reviewer, verdict harden, 8 findings) ──
+  - id: RV2-01
+    title: "P2 — the 'one caller' pin counted calls with a bracket, so a tear-off (onPressed: _pickAndCapture, onRefresh: _load) or a direct repository call passed every test"
+    terminal_state: closed_in_commit
+    commit: progress-screen-pro-gate batch commit (see header)
+    verification: >
+      The pins count REFERENCES (word-boundary, no parenthesis: _load 5, _pickAndCapture 2, _capture 2, _delete 2, _repo 4,
+      ProgressPhotoRepository 1). A FREE sweep taps every GestureDetector on the locked screen, one fresh app each, and
+      requires no Camera / Gallery / angle sheet, zero list() calls and the paywall seen at least once. Mutants N01 (picker
+      tear-off), N02 (_load tear-off) and N03 (a direct repository call) red by the sweep AND by a pin; N10 (a retry that
+      opens the picker) and M34 red by the pins.
+
+  - id: RV2-02
+    title: "P2 — row C6, PROF-09 and the nested CLAUDE.md test list cited test/contracts/progress_photo_quota_test.dart, which was never written"
+    terminal_state: closed_in_commit
+    commit: progress-screen-pro-gate batch commit (see header)
+    verification: >
+      C6 reworded above; PROF-09 and the nested CLAUDE.md now name the one test that exists (F40: two text checks on the
+      screen's source) and say that nothing exercises the repository's caps or image tiers. git grep for the file name now
+      finds only the 2026-09-02 audit's own 'MISSING' note and the rows that say it was never written.
+
+  - id: RV2-03
+    title: "P3 — D11's 'only a LOCKED screen reacts' was untested while the screen is still checking"
+    terminal_state: closed_in_commit
+    commit: progress-screen-pro-gate batch commit (see header)
+    verification: >
+      Test 'PRO: a subscription write while the entry gate is still pending starts no second gate' (a frame built by hand so
+      the listener fires while the gate is pending; one gate event, one photo read). Mutant N04 (the listener also reacts
+      while checking) red.
+
+  - id: RV2-04
+    title: "P3 — three D12 claims had no test: announced as a button, centred while it fits, a pill that hugs its label"
+    terminal_state: closed_in_commit
+    commit: progress-screen-pro-gate batch commit (see header)
+    verification: >
+      Tests: the semantics (containsSemantics: button, tap action, label), the centring at 1200x800 (equal space above and
+      below, centred horizontally), the pill width (label plus the two 20 dp paddings). Mutants N05, N06, N07, N08 red,
+      each by its own test.
+
+  - id: RV2-05
+    title: "P3 — the section 4.2 sibling sweep was not recorded and the diagnose-doc's forbidden pattern overclaimed"
+    terminal_state: closed_in_commit
+    commit: progress-screen-pro-gate batch commit (see header)
+    verification: "Rows S1 and S2 below record the sweep of the other gate-then-navigate doors; the diagnose-doc's pattern now names what was checked."
+
+  - id: RV2-06
+    title: "P3 — the SoT registry reader row for ProgressPhotoRepository.capture still said line_range 70-80 after 11 lines were added above it"
+    terminal_state: closed_in_commit
+    commit: progress-screen-pro-gate batch commit (see header)
+    verification: "docs/sot_registry.yaml now says 81-91 (the isPro() read is at progress_photo_repository.dart:85)."
+
+  - id: RV2-07
+    title: "P3 — the nested CLAUDE.md lumped the Comparison screen in as PRO-only and as a reader of progress photos; C7 and subscription.md said a lapsed user 'cannot view or delete' (true at entry only)"
+    terminal_state: closed_in_commit
+    commit: progress-screen-pro-gate batch commit (see header)
+    verification: >
+      The bullet is split into the two screens (Comparison: no gate, no photo read, read from the file); the photos reader
+      row names only the Progress screen; C7 and subscription.md say that a screen already open keeps showing and deleting
+      until the next Add tap.
+
+  - id: RV2-08
+    title: "P3 — records hygiene: a mutant tally that added to 22 for 21, a plan that said 28 tests, a ledger citing a record not yet written, mutant IDs nobody could decode, the regression test outside test/contracts/ (root section 4.1)"
+    terminal_state: closed_in_commit
+    commit: progress-screen-pro-gate batch commit (see header)
+    verification: >
+      Tally: 17 killed + 1 driver error + 2 equivalent + 1 real survivor = 21 (round 1). The plan and the docs say 34 tests.
+      docs/plan-reviews/progress-screen-pro-gate.md is written. The diagnose-doc carries a table of every mutant (ID, edit,
+      tests reddened). The test moved to test/contracts/progress_photos_screen_gate_test.dart and every citation was
+      repointed (git grep for the old path finds nothing).
+
+  - id: RV2-09
+    title: "round 2's answers: a keyboard test that passed because the AppBar is empty and the non-web shortcut map runs, a reason: that named the wrong detector, a refresh test that depended silently on SubscriptionInfoData having no ==, ProLockedOverlay's undocumented need for a bounded height"
+    terminal_state: closed_in_commit
+    commit: progress-screen-pro-gate batch commit (see header)
+    verification: >
+      The keyboard test tabs until the Upgrade button holds the focus (inside its InkWell: a first version used 'contains the
+      text' and was true before any Tab). The Add button's leave-inside test says where the failure shows up. Notification
+      probes assert that the refresh DID notify; mutant N09 (an == on SubscriptionInfoData) turns the FREE-then-PRO test
+      red. The test header states what is not proven (the web shortcut map, the desktop case proves no exception, only the
+      two 320x240 cases overflow without scrolling). ProLockedOverlay's doc says it needs a bounded height.
+
+  # ── Sibling sweep (CLAUDE.md section 4.2: the same class elsewhere) ──
+  - id: S1
+    title: "sibling sweep: the Reports screen (/profile/reports) is also entered through a gate-then-navigate door (profile_content.dart:319-322)"
+    terminal_state: verified_clean
+    evidence: >
+      Not a PRO-only screen. It shows free charts and the cached report (ReportsScreen.initState reads Hive only,
+      reports_screen.dart:51-53); its own generate button runs gateAndVerify(featureWeeklyAiReport) with a first-free-report
+      path (reports_screen.dart:999-1015); and the weekly-report Edge Function refuses a free user's second report
+      server-side (supabase/functions/weekly-report/index.ts, the NOT_PRO 403 after the lifetime free report). The door's
+      gate there is an upsell shortcut, not the lock.
+
+  - id: S2
+    title: "sibling sweep: the Graduation screen (/train/graduation) is entered through phase_unlock_card.dart:76-79"
+    terminal_state: verified_clean
+    evidence: >
+      'VIEW YOUR ACHIEVEMENT' (a Phase 1 graduate, free) goes straight in; 'UNLOCK PHASE 2' runs
+      gateAndVerify(featurePhases2To12) at the door, and the screen gates its own action again (graduation_screen.dart:341).
+      git grep -n -A6 'gateAndVerify(' -- lib/ lists exactly three gate-then-navigate doors: profile_content.dart:321
+      (Reports), user_photos_screen.dart:108 (this batch) and phase_unlock_card.dart:79 (Graduation).
