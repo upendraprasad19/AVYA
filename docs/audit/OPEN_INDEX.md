@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**210 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**211 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -218,3 +218,4 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-344 | Referral reward hardening bundle (migration 160): credit select re-checks… | the founder's go to plan it… | 2026-10-16 - by reading migration 159… | [:6102](open_issues.md#L6102) |
 | OI-345 | Remove the enable_body_measurements OFF path (flag checks, kill switch,… | founder-owned check of the RELEASE build… | 2026-10-16:… | [:6119](open_issues.md#L6119) |
 | OI-346 | Existing accounts accepted the v1 (blog) policy; nothing asks them to… | the founder's call on how existing users… | 2026-10-16: `AppConstants.termsVersion`… | [:6128](open_issues.md#L6128) |
+| OI-347 | Free-access codes: the founder wants to give out codes that grant PRO for… | none (a plan is the next step; the… | 2026-10-16 - by reading… | [:6137](open_issues.md#L6137) |

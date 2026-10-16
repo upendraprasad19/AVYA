@@ -6133,3 +6133,16 @@ Each item needs a behavioural case in `test/sql/` with a mutation proof.
 - **Identified**: 2026-10-16 · filed via mint_oi.sh from branch `age-floor-signup-consent`
 - **Why**: the founder published an app-specific privacy policy on 2026-10-16 (OI-310) and the sign-up consent now stamps `v2` for new accounts only. Existing users never saw or accepted the new text. DPDP section 5 (notice) and 6 (consent) are the reading counsel confirms.
 - **Fix (to decide)**: (1) a one-time in-app notice on next launch for accounts whose stored version is not `v2` (informational, a tap to dismiss, stamps `v2` and the time); (2) a blocking re-acceptance screen; (3) nothing. Either of (1) and (2) needs the comparison this OI says does not exist, a regression test of the stamp path, and a plan reviewed twice (auth tier).
+
+## OI-347 — Free-access codes: the founder wants to give out codes that grant PRO for a number of days with no payment (distinct from percent-off promo codes, which cannot reach 100 percent because Razorpay cannot charge zero); no mechanism or entry screen exists
+
+- **Status**: OPEN
+- **Blocked on**: none (a plan is the next step; the founder asked for the feature on 2026-10-16)
+- **Verified**: 2026-10-16 - by reading `supabase/functions/validate-promo/index.ts` and `lib/shared/widgets/paywall_sheet.dart:198-318` and the live `promo_codes` table (read-only): a promo code is a percent discount typed into the paywall, re-derived server-side by `create-razorpay-order` and charged through Razorpay; there are three codes (30, 20, 15 percent), none used; there is no screen to create codes (a code is a row in `promo_codes`), and no code can reach 100 percent usefully because a zero-rupee Razorpay order is not possible (believed, not tested)
+- **Identified**: 2026-10-16 · filed via mint_oi.sh from branch `referral-migration-160`
+
+Source: the founder's answer of 2026-10-16 to the N5 question ("i want to give out codes for people to use pro features"; "yes i want that feature. file it as an OI for now"). The percent-off promo mechanism cannot serve it, so a separate grant path is needed.
+
+Impact: the founder cannot hand out free PRO access (testers, creators, partners, marketing give-aways) without editing `subscriptions` by hand (the live table already holds one `manual_...` admin-grant row).
+
+Fix options (to be planned, not decided): (a) a `free_access_codes` table (code, days, max_uses, valid_until, is_active, per-user once) plus a redeem Edge Function that inserts a `subscriptions` row with a distinct plan value, modelled on `redeem-referral` / `private.grant_referral_days` (which already extends the latest active row); (b) reuse the referral redeem screen for a second code type. Open design points: the plan label and every reader that branches on it (the profile dossier, the expiry banner, the admin revenue tab that must not count a free grant as revenue), abuse limits (per-user once, per-code cap, expiry), whether a free-access user may later buy (see OI-341 Piece A stacking), the admin entry path for creating codes (no screen exists), and tier (catastrophic: it grants entitlement).
