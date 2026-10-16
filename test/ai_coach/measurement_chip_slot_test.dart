@@ -653,15 +653,17 @@ void main() {
 
     Future<void> plant(
       WidgetTester tester, {
-      required bool flag,
+      required bool? flag, // null: the key is never written (the default)
       String? lastEntry,
       bool corrupt = false,
     }) async {
       await tester.runAsync(() async {
-        await HiveService.instance.configBox.put(
-          'enable_body_measurements',
-          flag,
-        );
+        if (flag != null) {
+          await HiveService.instance.configBox.put(
+            'enable_body_measurements',
+            flag,
+          );
+        }
         await HiveService.instance.userBox.put('profile', <String, dynamic>{
           'full_name': 'Test',
           'onboarding_completed_at': '2031-01-01T00:00:00Z',
@@ -720,6 +722,18 @@ void main() {
 
     final chip = find.byType(WardChip);
 
+    // The production default since the 2026-10-16 flip: no flag put at all.
+    testWidgets('the key never written (the default ON): the chip shows for a '
+        'due prompt', (tester) async {
+      await plant(tester, flag: null, lastEntry: '2031-05-01');
+      final container = await mount(tester);
+      expect(
+        container.read(measurementPromptProvider),
+        MeasurementPrompt.due,
+      );
+      expect(chip, findsOneWidget);
+    });
+
     testWidgets('due: the chip shows; the X hides it afterwards, no parent '
         'rebuild', (tester) async {
       await plant(tester, flag: true, lastEntry: '2031-05-01');
@@ -770,6 +784,13 @@ void main() {
               inchesUsed: false,
             );
       });
+      // The save invalidates the history provider from inside runAsync, so
+      // Riverpod schedules the refresh on the REAL zone's queue; one real tick
+      // lets it run before the fake-async pump (a full-suite run under load
+      // failed this row without it).
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
       await tester.pumpAndSettle();
       expect(result.success, isTrue, reason: 'precondition: the write landed');
       expect(chip, findsNothing);

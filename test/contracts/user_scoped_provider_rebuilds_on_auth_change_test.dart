@@ -147,7 +147,17 @@ void main() {
     addTearDown(container.dispose);
     final sub = container.listen(measurementsEnabledProvider, (_, __) {});
     addTearDown(sub.close);
-    expect(container.read(measurementsEnabledProvider), isFalse);
+    expect(container.read(measurementsEnabledProvider), isTrue,
+        reason: 'absent reads the default ON since the 2026-10-16 flip');
+    container.updateOverrides([
+      authUserIdTokenProvider.overrideWithValue(_userC),
+    ]);
+    await HiveService.instance.configBox.put('enable_body_measurements', false);
+    container.updateOverrides([
+      authUserIdTokenProvider.overrideWithValue(_userA),
+    ]);
+    expect(container.read(measurementsEnabledProvider), isFalse,
+        reason: 'a stored false (the kill switch) is re-read on a token change');
 
     await HiveService.instance.configBox.put('enable_body_measurements', true);
     expect(container.read(measurementsEnabledProvider), isFalse,

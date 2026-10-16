@@ -263,7 +263,8 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
     _toast('enable_hold_weeks = ${next ? 'ON' : 'OFF'}');
   }
 
-  /// L2b Landing B: the ship-dark flag of the body-measurements sheet.
+  /// L2b Landing B: the flag of the body-measurements surfaces (default ON since
+  /// 2026-10-16; this toggle stores `false` as the debug-build kill switch).
   ///
   /// Three statements, in this order, and each is load-bearing: write the key;
   /// invalidate `measurementsEnabledProvider` (the ONLY refresh of that cached
@@ -277,7 +278,7 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
     await DayRolloverObserver.instance.runRolloverNow(ref);
     if (!mounted) return;
     setState(() {});
-    _toast('enable_body_measurements = ${next ? 'ON' : 'OFF'}');
+    _toast('enable_body_measurements = ${next ? 'ON' : 'KILLED'}');
   }
 
   /// The equipment-exclusions KILL-SWITCH (diagnose e2d6b8, flipped ON
@@ -481,8 +482,9 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
             children: [
               _kv('enable_hold_weeks',
                   PlanEngineFlags.holdWeeksEnabled ? 'ON' : 'off'),
+              // DEFAULT ON since 2026-10-16: a stored `false` means killed.
               _kv('enable_body_measurements',
-                  MeasurementFlags.bodyMeasurementsEnabled ? 'ON' : 'off'),
+                  MeasurementFlags.bodyMeasurementsEnabled ? 'ON' : 'KILLED'),
               // DEFAULT ON since 2026-08-05 (e2d6b8) — the kill-switch key is
               // `disable_equipment_exclusions`, so "off" here means killed.
               _kv('equipment exclusions (+ WU-2 gym cardio)',

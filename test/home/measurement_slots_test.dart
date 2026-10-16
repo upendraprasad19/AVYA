@@ -446,14 +446,16 @@ void main() {
 
     Future<void> plant(
       WidgetTester tester, {
-      required bool flag,
+      required bool? flag, // null: the key is never written (the default)
       String? lastEntry,
     }) async {
       await tester.runAsync(() async {
-        await HiveService.instance.configBox.put(
-          'enable_body_measurements',
-          flag,
-        );
+        if (flag != null) {
+          await HiveService.instance.configBox.put(
+            'enable_body_measurements',
+            flag,
+          );
+        }
         await HiveService.instance.userBox.put('profile', <String, dynamic>{
           'full_name': 'Test',
           'onboarding_completed_at': '2026-08-01T00:00:00Z',
@@ -493,6 +495,26 @@ void main() {
       });
       await tester.pump();
     }
+
+    // The production default since the 2026-10-16 flip: the key was never
+    // written, so the slot must show the banner with no flag put at all.
+    testWidgets('the key never written (the default ON): a due banner shows, '
+        'and a stored false hides it', (tester) async {
+      await plant(tester, flag: null, lastEntry: '2026-09-01');
+      await mount(tester);
+      expect(find.text(MeasurementCopy.bannerDue), findsOneWidget);
+      await tester.runAsync(
+        () => HiveService.instance.configBox.put(
+          'enable_body_measurements',
+          false,
+        ),
+      );
+      ProviderScope.containerOf(
+        tester.element(find.byType(MeasurementDueSlot)),
+      ).invalidate(measurementsEnabledProvider);
+      await tester.pumpAndSettle();
+      expect(find.byType(MeasurementDueBanner), findsNothing);
+    });
 
     testWidgets('X on a due banner: the banner is gone afterwards, with no '
         'rebuild of the parent', (tester) async {
