@@ -470,7 +470,8 @@ class _IdentityScreenState extends State<IdentityScreen> {
     // A date of birth carried in (route extras, an earlier session, or the
     // 10-year floor this screen had until 2026-10-16) can be younger than the
     // floor; the picker only bounds a NEW pick, so check the value itself.
-    if (_dob!.isAfter(latestAllowedDob(DateTime.now()))) {
+    final carried = DateTime(_dob!.year, _dob!.month, _dob!.day);
+    if (carried.isAfter(latestAllowedDob(DateTime.now()))) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(

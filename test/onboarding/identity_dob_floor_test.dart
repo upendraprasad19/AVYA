@@ -11,6 +11,9 @@ import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/utils/age_floor.dart';
 import 'package:icanbefitter/features/onboarding/screens/identity_screen.dart';
 
+// Note: the expected ceiling is computed here and again in production from
+// DateTime.now(); a run that straddles local midnight could differ by a day
+// (a sub-second window once a day; accepted, B-pass A-P3-8).
 void main() {
   testWidgets('the DOB picker offers nothing later than today minus 13 years',
       (tester) async {
@@ -74,11 +77,49 @@ void main() {
     );
   });
 
+  // The old floor admitted 10 to 12 year olds; opening the picker with such a
+  // value as its seed must clamp initialDate to lastDate (Flutter asserts
+  // initialDate <= lastDate), not throw.
+  testWidgets('the picker opens on lastDate when the carried-in date of birth '
+      'is younger than 13', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(480, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final latest = latestAllowedDob(DateTime.now());
+    final tooYoung = DateTime(latest.year, latest.month, latest.day + 1);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: IdentityScreen(
+          initial: {
+            'full_name': 'Test User',
+            'date_of_birth': tooYoung.toIso8601String(),
+            'sex': 'male',
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final tile = find.byIcon(Icons.calendar_today_outlined);
+    await tester.ensureVisible(tile);
+    await tester.tap(tile);
+    await tester.pumpAndSettle();
+
+    final dialog = tester.widget<DatePickerDialog>(
+      find.byType(DatePickerDialog),
+    );
+    expect(dialog.initialDate, dialog.lastDate);
+    expect(dialog.lastDate.day, latest.day);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('CONTINUE accepts a date of birth of exactly 13 today (no '
       'off-by-one at the boundary)', (tester) async {
     await tester.binding.setSurfaceSize(const Size(480, 1000));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    final latest = latestAllowedDob(DateTime.now());
+    // Exactly 13 today, WITH a time of day: a stored date of birth may carry
+    // one, and the check compares the calendar date only.
+    final base = latestAllowedDob(DateTime.now());
+    final latest = DateTime(base.year, base.month, base.day, 15, 30);
     final router = GoRouter(
       routes: [
         GoRoute(

@@ -46,8 +46,9 @@ void main() {
       expect(signin.contains('termsVersion:'), isTrue);
       expect(signin.contains('AppConstants.termsVersion'), isTrue,
           reason: 'terms_version must reference AppConstants.termsVersion so '
-              'bumping the constant forces re-acceptance app-wide — a '
-              'hardcoded literal would silently de-sync.');
+              'the stamped label follows the constant (v2 since 2026-10-16); '
+              'nothing compares it, so bumping it does NOT re-ask existing '
+              'accounts (OI-346) — a hardcoded literal would silently de-sync.');
       expect(signin.contains('DateTime.now().toUtc().toIso8601String()'),
           isTrue,
           reason: 'terms_accepted_at must use a UTC ISO instant — the cloud '

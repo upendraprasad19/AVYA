@@ -1380,10 +1380,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     required String label,
     required bool isLoading,
     required VoidCallback onPressed,
-    bool enabled = true,
     bool compact = false,
   }) {
-    final isDisabled = !enabled || isLoading;
+    final isDisabled = isLoading;
     final radius = compact ? AppRadius.card : AppRadius.sharp;
     return SizedBox(
       width: double.infinity,
@@ -1475,9 +1474,11 @@ class _ConsentNoticeState extends State<_ConsentNotice> {
 
   @override
   Widget build(BuildContext context) {
-    return RichText(
+    // Text.rich, not RichText: the notice IS the consent mechanism, so it
+    // follows the system text size (RichText defaults to no scaling).
+    return Text.rich(
       textAlign: TextAlign.center,
-      text: TextSpan(
+      TextSpan(
         // textDim, not the Welcome footer's textMute: here the notice IS the
         // consent mechanism, so it must stay legible (textMute on bgDeep is
         // about 3.5:1, below the 4.5:1 AA floor).

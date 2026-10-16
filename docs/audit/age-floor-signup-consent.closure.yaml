@@ -1,0 +1,67 @@
+# Closure ledger - age-floor-signup-consent (OI-305 / OI-310 code half): one age floor of 13 for every date-of-birth picker and a
+# "By tapping CREATE ACCOUNT" sign-up consent notice in place of the checkbox. One terminal_state per unit, no `deferred:` key.
+# The rows that closed in the code commit carry its SHA, written by the stamp commit that follows it (a commit cannot name its own SHA).
+# The B-pass review (docs/reviews/age-floor-signup-consent-bpass.md) and the same-dated tuning-history entry ship in the SAME commit as
+# the rows that cite them.
+batch: age-floor-signup-consent
+plan_review_record: docs/plan-reviews/age-floor-signup-consent.md
+diagnose_docs: []
+total_findings: 12
+closed_count: 12
+
+findings:
+  - id: AGE-FLOOR
+    title: "kMinAgeYears = 13 and latestAllowedDob(now) (lib/core/utils/age_floor.dart); the three date-of-birth pickers use it; ScrollDatePicker clamps to lastDate; identity CONTINUE refuses a carried-in date of birth younger than 13 (date-only compare)"
+    terminal_state: closed_in_commit
+    commit: PENDING
+    verification: "test/utils/age_floor_test.dart (13 years back, today allowed / tomorrow not, 29 February clamps to 28 February, date only), test/onboarding/identity_dob_floor_test.dart (the real DatePickerDialog.lastDate; a carried-in date one day short is refused; exactly 13 today WITH a time of day passes), test/widgets/scroll_date_picker_clamp_test.dart (month wheel past lastDate, day wheel past lastDate, a drag that stays before lastDate is not clamped), test/contracts/age_floor_pickers_test.dart (source pins: each picker names the shared floor, no literal floor remains, only these callers)"
+  - id: CONSENT-NOTICE
+    title: "the unticked consent checkbox, _privacyAccepted and _PrivacyCheckboxRow are removed; _ConsentNotice states 'By tapping CREATE ACCOUNT, you agree to our Privacy Policy and Terms.' (textDim, both links); the tap stamps UTC time + AppConstants.termsVersion; no sign-in or sign-up button is gated on consent"
+    terminal_state: closed_in_commit
+    commit: PENDING
+    verification: "test/auth/sign_up_consent_notice_test.dart (exact RichText text, no Checkbox, root-span colour; CREATE ACCOUNT calls signUpWithEmail once with a UTC time inside the tap window and v2, and fails loudly if the button is gated), test/auth/terms_skip_test.dart (repointed: comment-stripped pins that the removed names are gone and the button is not disabled by consent; the vacuous TermsModal copy removed), integration_test/flows/auth_flow_test.dart T3 (no Checkbox on the screen; T5 removed)"
+  - id: TERMS-VERSION
+    title: "AppConstants.termsVersion v2 with termsV2EffectiveFromUtc 2026-10-15T18:30:00Z (IST midnight of 16 October); AuthSessionBootstrapper.termsVersionForAccountCreatedAt labels a Google / phone / email fallback stamp v1 for an account created before it"
+    terminal_state: closed_in_commit
+    commit: PENDING
+    verification: "test/auth/terms_version_for_account_test.dart (the constants; one second before the boundary is v1, the boundary is v2, a missing or unparseable created_at reads v2; a comment-stripped pin that ensureTermsConsentFallback derives the version from created_at and writes it in BOTH the cloud update and the Hive put and never names AppConstants.termsVersion: mutated both call-site lines, both RED), test/contracts/terms_acceptance_writer_to_reader_test.dart (reason text corrected)"
+  - id: TESTS
+    title: "the six new test files, one repointed file and the integration_test edits; the full suite"
+    terminal_state: closed_in_commit
+    commit: PENDING
+    verification: "TZ=Asia/Kolkata flutter test --exclude-tags golden on the final tree (after the B-pass fixes): 9656 passed, 9 skipped, 0 failed; flutter analyze lib/ test integration_test: no error or warning (info lines only, none new in a file of this batch); PRE_COMMIT_GATE_JOBS=1 sh scripts/pre-commit.sh: OK"
+  - id: MUTATION
+    title: "every protection mutated once; the round-2 changes (minimal clamp, date-only CONTINUE compare, fallback call-site pins) mutated again on the final tree"
+    terminal_state: closed_in_commit
+    commit: PENDING
+    verification: "19+ mutants of round 1 RED (the per-mutant list is in the B-pass file; they include the CONTINUE check removed, an off-by-one at the boundary, no clamp, a clamp to the wrong date, the notice colour and the boundary constant); round 2: clamp always-to-last, month not pulled back, day never pulled, no clamp: all RED; CONTINUE compare with the time of day left in (carried = _dob!): RED (needs the time-of-day fixture added in round 2); fallback cloud and Hive lines reverted to AppConstants.termsVersion: both RED. Each mutation was confirmed applied by its anchor count before the run and restored in a finally block."
+  - id: DOCS
+    title: "nested auth CLAUDE.md, docs/architecture/auth-detail.md, database.md, functionality-flow.md, sot_registry.yaml (terms_acceptance), naming_conventions.md, GO_LIVE_CHECKLIST rows 3.1 / 3.4 / 3.5, OI-305 progress paragraph, the plan"
+    terminal_state: closed_in_commit
+    commit: PENDING
+    verification: "the document lens of the B-pass (docs/reviews/age-floor-signup-consent-bpass.md) and the round-2 lens A read every document against the code; the false statements they found (database.md TermsModal sentence, the email-confirmation mechanism claim, a test reason text) are corrected in this commit"
+  - id: REVIEWS
+    title: "two plan-review rounds and a two-reviewer B-pass (code + tests, documents + claims)"
+    terminal_state: closed_in_commit
+    commit: PENDING
+    verification: "docs/plan-reviews/age-floor-signup-consent.md (review_rounds 2, converged, bpass accepted); docs/reviews/age-floor-signup-consent-bpass.md; the same-dated entry in .claude/skills/code-review/tuning-history.md; reviewers' 23 findings (0 P0, 0 P1, 7 P2, 16 P3) each fixed or recorded with a reason in the review file; debugging bug class 2.107"
+  - id: OI-346-FILED
+    title: "existing accounts are never re-asked after the policy change and nothing compares terms_version"
+    terminal_state: verified_clean
+    evidence: "OI-346 is filed on the board (docs/audit/open_issues.md) and indexed in OPEN_INDEX.md; git grep over lib, supabase, scripts, test finds only writes, hydrate copies and migration comments of terms_version, no comparison"
+  - id: DOB-UNDER-13-EXISTING
+    title: "an existing profile whose stored date of birth is under 13 is left alone (founder decision); the policy says such an account is deleted when learned of"
+    terminal_state: verified_clean
+    evidence: "2026-10-04 read of public.users.date_of_birth found the youngest at 24 (recorded in the OI-305 text); CONTINUE refuses only a carried-in date inside the onboarding identity step; ScrollDatePicker.initState does not clamp a seeded initialDate because the old chat floor was 16, stricter than the new lastDate, so a saved answer cannot be later than it"
+  - id: MERGE-ORDER
+    title: "published policy says 13 or older and a date-of-birth check at sign-up while main still accepts 10: merge PR #117 first, then this PR, then PR #118 (the measurements flag flip)"
+    terminal_state: blocked_on_user
+    reason: "merges are the founder's (sh scripts/safe_pr_merge.sh <pr>); this PR must not merge before #117, and #118 must not merge before this one"
+  - id: PLAY-REVIEW-RISK
+    title: "'by continuing' is the weaker DPDP reading and Play's health-app policy leans toward an affirmative tick; a floor of 13 does not meet DPDP's parental-consent rule for under-18s"
+    terminal_state: blocked_on_user
+    reason: "founder decision 2026-10-16 (option B) after the risk was stated once; counsel / Play Data Safety wording is the founder's; restoring the checkbox is local to sign_in_screen.dart and its tests"
+  - id: DEVICE-CHECK-AGE-CONSENT
+    title: "sign up with a fresh email on a phone and on web (the notice shows under the form, CREATE ACCOUNT stamps terms_accepted_at and v2 in public.users), try each of the three date-of-birth pickers at the 13-year boundary"
+    terminal_state: blocked_on_user
+    reason: "needs a device / browser session and a live read of public.users; the agent cannot sign up on a phone"

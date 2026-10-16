@@ -41,7 +41,16 @@ class _ScrollDatePickerState extends State<ScrollDatePicker> {
   @override
   void initState() {
     super.initState();
-    final init = widget.initialDate ?? DateTime(1998, 1, 1);
+    var init = widget.initialDate ?? DateTime(1998, 1, 1);
+    // A seeded date later than lastDate (a saved answer from an older, looser
+    // floor) would put the year wheel past its last item and, unscrolled, keep
+    // a date the picker would never offer (OI-305, B-pass).
+    final last = DateTime(
+      widget.lastDate.year,
+      widget.lastDate.month,
+      widget.lastDate.day,
+    );
+    if (DateTime(init.year, init.month, init.day).isAfter(last)) init = last;
     _selectedDay = init.day;
     _selectedMonth = init.month;
     _selectedYear = init.year;
@@ -79,14 +88,19 @@ class _ScrollDatePickerState extends State<ScrollDatePicker> {
       widget.lastDate.day,
     );
     if (date.isAfter(last)) {
+      // The year wheel is bounded, so only the month or the day can overshoot:
+      // pull the month back first and keep the day when it still fits.
+      final month = _selectedMonth > last.month ? last.month : _selectedMonth;
+      var day = _selectedDay;
+      if (DateTime(last.year, month, day).isAfter(last)) day = last.day;
       setState(() {
         _selectedYear = last.year;
-        _selectedMonth = last.month;
-        _selectedDay = last.day;
+        _selectedMonth = month;
+        _selectedDay = day;
       });
       _monthController.jumpToItem(_selectedMonth - 1);
       _dayController.jumpToItem(_selectedDay - 1);
-      date = last;
+      date = DateTime(last.year, month, day);
     }
     widget.onDateChanged(date);
   }

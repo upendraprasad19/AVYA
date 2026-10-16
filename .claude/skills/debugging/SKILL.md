@@ -228,6 +228,7 @@ Per CLAUDE.md rules 21 + 22:
 | 2.104 | A widget inserted AFTER the event a scroll-to-bottom was scheduled for takes its height from the list and leaves the last item clipped | a chat scrolls to the reply in a post-frame callback and a sibling appears later when another state flips (isSending ends); the last bubble is under it until the next scroll | test/ai_coach/measurement_chip_slot_test.dart |
 | 2.105 | A layout claim about a real font that was only run in the test font (Ahem is the widest face, not the tallest) | a plan says "one run in the real font" or "a narrower font can only make it shorter" and every test renders Ahem; the widget's face is JetBrains Mono, not DM Sans | test/features/profile/measurements_card_test.dart |
 | 2.106 | `Semantics(excludeSemantics: true)` over an `InkWell` makes the declared `onTap` the only way a screen reader reaches the control | a single-node control passes a label-and-role test; deleting the Semantics `onTap:` line leaves every test green | test/ai_coach/measurement_chip_slot_test.dart |
+| 2.107 | A test observes the reported value or the source text while the bug lives in the state the user sees or in the wiring | a clamp, ceiling or version-label change is green and a reviewer's one-line deletion (wheel resync, call-site constant, ceiling expression) reddens nothing | test/widgets/scroll_date_picker_clamp_test.dart |
 
 ---
 

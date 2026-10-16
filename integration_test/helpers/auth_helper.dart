@@ -20,8 +20,8 @@ bool get kTestCredentialsPresent =>
 
 /// Drives the sign-in flow using email + password.
 ///
-/// Automatically ticks the GDPR consent checkbox, navigates to the
-/// email sign-in view, enters credentials, and waits for navigation.
+/// Navigates to the email sign-in view, enters credentials, and waits for
+/// navigation (there is no consent checkbox since 2026-10-16, OI-305).
 Future<void> signInWithTestUser(WidgetTester tester) async {
   // THE GUARD, WIRED. Defining kTestCredentialsPresent and calling it from
   // nowhere is worse than not having it: the B-pass found the constant with a
@@ -42,8 +42,6 @@ Future<void> signInWithTestUser(WidgetTester tester) async {
       'error naming neither the missing define nor this helper.',
     );
   }
-
-  // Tick GDPR consent checkbox first — required before any sign-in button works.
 
   // Tap "Continue with Email" if the main sign-in screen is shown first.
   final emailButton = find.textContaining('Email', findRichText: true);

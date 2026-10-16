@@ -1739,3 +1739,13 @@ added, false of the flip being performed.
 - **Test shape:** one row per control (card button, chip, X). The mutant deletes the `onTap:` line of the `Semantics`.
 - **Prior incidents:** the Landing B sheet's unit options (BPB-A5) had the same shape and were fixed by adding `selected` and `button` flags; the action itself was not tapped.
 - **Regression test:** `test/features/profile/measurements_card_test.dart`, `test/ai_coach/measurement_chip_slot_test.dart` (semantics rows); B-pass finding `BPC-B1` (mutants MUT-20, 21, 22).
+
+### 2.107 A test observes the REPORTED value or the SOURCE TEXT while the bug lives in the STATE the user sees or in the WIRING (NEW 2026-10-16)
+
+- **Telltale:** a clamp / ceiling / version-label change ships with green tests, and a reviewer deletes one line (the two `jumpToItem` calls that put a wheel back; `AppConstants.termsVersion` swapped into the fallback's cloud update and Hive put; `.add(Duration(days: 4000))` on a picker's `lastDate`; the `initialDate` clamp that stops a debug assertion) and nothing reddens.
+- **Root-cause shape:** the test asserts what the callback reported, or that the source contains a helper's name, so it protects the pure function next to the change, not the wiring or the visible state.
+- **Fix pattern:** read the state from the object the user sees (`FixedExtentScrollController.selectedItem`, `DatePickerDialog.initialDate`), pin the exact expression passed (not the helper's name), and pin both call-site lines of a stamp (comment-stripped; strip whole-line comments only when the source holds a URL).
+- **Test shape:** one mutant per deleted line before the test is believed; list the reviewer's mutants and run them all.
+- **Prior incidents:** 2.37 (a positive grep cannot see a defect in an argument), 2.54.
+- **Regression test:** `test/widgets/scroll_date_picker_clamp_test.dart`, `test/contracts/age_floor_pickers_test.dart`, `test/auth/terms_version_for_account_test.dart`, `test/auth/sign_up_consent_notice_test.dart`, `test/onboarding/identity_dob_floor_test.dart` (B-pass `docs/reviews/age-floor-signup-consent-bpass.md`, mutants R1-R8).
+

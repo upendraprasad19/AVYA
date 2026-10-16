@@ -15,9 +15,8 @@ import '../helpers/auth_helper.dart';
 /// Tests:
 ///  T1 – Sign in with email → reach Home screen (existing)
 ///  T2 – Sign in with wrong password → shows error (existing)
-///  T3 – GDPR consent checkbox must be ticked before sign-in buttons work
+///  T3 – The sign-in screen has no consent checkbox (OI-305, 2026-10-16)
 ///  T4 – Referral code field toggle shows and hides
-///  T5 – Sign-in buttons are disabled when consent is not ticked
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -62,8 +61,6 @@ void main() {
       const ProviderScope(child: ICanBeFitterApp()),
     );
     await tester.pumpAndSettle(const Duration(seconds: 3));
-
-    // Must tick consent first
 
     final emailButton = find.textContaining('Email', findRichText: true);
     if (emailButton.evaluate().isNotEmpty) {
@@ -128,8 +125,6 @@ void main() {
     );
     await tester.pumpAndSettle(const Duration(seconds: 3));
 
-    // Tick consent first
-
     // Navigate to email sign-in view
     final emailButton = find.textContaining('Email', findRichText: true);
     if (emailButton.evaluate().isNotEmpty) {
@@ -150,66 +145,5 @@ void main() {
     final referralHint = find.textContaining('AVYA', findRichText: true);
     expect(referralHint.evaluate().isNotEmpty, isTrue,
         reason: 'Referral code input field should appear after tapping toggle');
-  });
-
-  // ── T5 ──────────────────────────────────────────────────────────
-
-  testWidgets('T5: Sign-in buttons disabled without consent', (tester) async {
-    await tester.pumpWidget(
-      const ProviderScope(child: ICanBeFitterApp()),
-    );
-    await tester.pumpAndSettle(const Duration(seconds: 3));
-
-    // Without ticking consent, find the Google sign-in button
-    // It should be present but disabled (onPressed: null)
-    final googleButton = find.textContaining('Google', findRichText: true);
-    if (googleButton.evaluate().isNotEmpty) {
-      // Try to find the ElevatedButton/OutlinedButton ancestor
-      final buttons = find.byType(ElevatedButton);
-      for (final button in buttons.evaluate()) {
-        final widget = button.widget as ElevatedButton;
-        // At least one button should be disabled (onPressed == null)
-        if (widget.onPressed == null) {
-          // Found a disabled button — consent is gating sign-in
-          expect(true, isTrue);
-          return;
-        }
-      }
-      // Also check OutlinedButton
-      final outlinedButtons = find.byType(OutlinedButton);
-      for (final button in outlinedButtons.evaluate()) {
-        final widget = button.widget as OutlinedButton;
-        if (widget.onPressed == null) {
-          expect(true, isTrue);
-          return;
-        }
-      }
-    }
-
-    // If we got here, verify by ticking consent and checking buttons become enabled
-    await tester.pumpAndSettle();
-
-    // After consent, at least one button should be enabled
-    final buttons = find.byType(ElevatedButton);
-    bool foundEnabled = false;
-    for (final button in buttons.evaluate()) {
-      final widget = button.widget as ElevatedButton;
-      if (widget.onPressed != null) {
-        foundEnabled = true;
-        break;
-      }
-    }
-    if (!foundEnabled) {
-      final outlinedButtons = find.byType(OutlinedButton);
-      for (final button in outlinedButtons.evaluate()) {
-        final widget = button.widget as OutlinedButton;
-        if (widget.onPressed != null) {
-          foundEnabled = true;
-          break;
-        }
-      }
-    }
-    expect(foundEnabled, isTrue,
-        reason: 'After ticking consent, at least one sign-in button should be enabled');
   });
 }

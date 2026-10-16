@@ -2214,14 +2214,14 @@ concepts:
       defect this concept exists to fix.
     writers:
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 1159-1168
+        line_range: 1290-1295
         method: terms-write block inside _ensureLocalUser (not itself a named method)
         semantic: hive-write
         notes: |
           Stamps userBox terms_accepted_at (UTC ISO) + terms_version
           (AppConstants.termsVersion) — email signup only, sourced from
           params threaded through from sign_in_screen.dart's CREATE ACCOUNT
-          onPressed (line ~939) via signUpWithEmail. Runs after
+          onPressed (line ~1096) via signUpWithEmail. Runs after
           HiveUserSession.openForUser (line 526) AND after the cross-account
           clear-guard (ends line ~588), before hydrateFromCloud (~line 706) —
           ordering matters: any earlier and a device-swap clearAllData() could
@@ -2255,7 +2255,7 @@ concepts:
           investigation, not folded into this fix).
     readers:
       - file: lib/core/services/auth_session_bootstrapper.dart
-        line_range: 758-1088
+        line_range: 774-1109
         method: hydrateFromCloud
         semantic: cloud-projection + restore
         notes: |

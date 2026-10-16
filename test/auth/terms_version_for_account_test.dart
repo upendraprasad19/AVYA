@@ -1,5 +1,7 @@
 // OI-305 (2026-10-16): the Google / phone consent-fallback stamp must not label
 // an account that predates the v2 privacy policy with v2.
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/auth_session_bootstrapper.dart';
@@ -48,5 +50,33 @@ void main() {
       AuthSessionBootstrapper.termsVersionForAccountCreatedAt('not a date'),
       'v2',
     );
+  });
+
+  // Round-2 lens A (P2): the pure function above is only half the protection.
+  // Reverting the two call-site lines to AppConstants.termsVersion (the exact
+  // bug this batch prevents) reddened nothing. Comment-stripped source pin of
+  // the fallback body: presence of the wiring, absence of the constant.
+  test('ensureTermsConsentFallback stamps the version it derives from '
+      'created_at, in the cloud update AND the Hive write', () {
+    final src = File('lib/core/services/auth_session_bootstrapper.dart')
+        .readAsStringSync()
+        .replaceAll(RegExp(r'//[^\n]*'), '');
+    final start = src.indexOf('Future<void> ensureTermsConsentFallback(');
+    expect(start, greaterThan(0));
+    final end = src.indexOf('\n  }\n', start);
+    expect(end, greaterThan(start));
+    final body = src.substring(start, end);
+
+    expect(
+      body.contains('final version = termsVersionForAccountCreatedAt(stamp);'),
+      isTrue,
+      reason: 'the version must be derived from the stamped created_at',
+    );
+    expect(body.contains("'terms_version': version"), isTrue,
+        reason: 'the cloud update must write the derived version');
+    expect(body.contains("userBox.put('terms_version', version)"), isTrue,
+        reason: 'the Hive write must store the derived version');
+    expect(body.contains('AppConstants.termsVersion'), isFalse,
+        reason: 'the fallback must never stamp the current version blindly');
   });
 }

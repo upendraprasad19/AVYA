@@ -8,6 +8,9 @@
 @Timeout(Duration(minutes: 2))
 library;
 
+import 'dart:io';
+
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -88,7 +91,76 @@ void main() {
             w.text.toPlainText().startsWith('By tapping CREATE ACCOUNT'),
       ),
     );
-    expect(notice.text.style?.color, AppColors.textDim);
+    // Text.rich wraps the span in the ambient style; the notice's own colour is
+    // on the span it was given.
+    final own = (notice.text as TextSpan).children!.single as TextSpan;
+    expect(own.style?.color, AppColors.textDim);
+  });
+
+  testWidgets('the notice follows the system text size (it is the consent '
+      'mechanism)', (tester) async {
+    await _openSignUpStep(tester);
+    final notice = tester.widget<RichText>(
+      find.byWidgetPredicate(
+        (w) =>
+            w is RichText &&
+            w.text.toPlainText().startsWith('By tapping CREATE ACCOUNT'),
+      ),
+    );
+    expect(notice.textScaler, isNot(TextScaler.noScaling));
+  });
+
+  testWidgets('Privacy Policy and Terms are tappable spans, and each opens its '
+      'own page', (tester) async {
+    await _openSignUpStep(tester);
+    final notice = tester.widget<RichText>(
+      find.byWidgetPredicate(
+        (w) =>
+            w is RichText &&
+            w.text.toPlainText().startsWith('By tapping CREATE ACCOUNT'),
+      ),
+    );
+    final spans = ((notice.text as TextSpan).children!.single as TextSpan)
+        .children!
+        .whereType<TextSpan>()
+        .toList();
+    TextSpan span(String text) => spans.firstWhere((s) => s.text == text);
+    expect(span('Privacy Policy').recognizer, isA<TapGestureRecognizer>());
+    expect(span('Terms').recognizer, isA<TapGestureRecognizer>());
+    expect(
+      identical(span('Privacy Policy').recognizer, span('Terms').recognizer),
+      isFalse,
+    );
+
+    // The handlers call launchUrl, which needs a platform channel: pin the
+    // wiring in the stripped source (presence only, said honestly).
+    // Whole-line comments only: a `//` inside a URL must survive.
+    final src = File('lib/features/auth/screens/sign_in_screen.dart')
+        .readAsLinesSync()
+        .where((l) => !l.trimLeft().startsWith('//'))
+        .join('\n');
+    expect(
+      RegExp(r"_privacyRecognizer\.onTap\s*=\s*\(\)\s*=>\s*launchUrl\(\s*"
+              r"Uri\.parse\('https://icanbefitter\.com/privacy'\)")
+          .hasMatch(src),
+      isTrue,
+    );
+    expect(
+      RegExp(r"_termsRecognizer\.onTap\s*=\s*\(\)\s*=>\s*launchUrl\(\s*"
+              r"Uri\.parse\('https://icanbefitter\.com/terms'\)")
+          .hasMatch(src),
+      isTrue,
+    );
+    expect(
+      RegExp(r"text: 'Privacy Policy',[\s\S]{0,400}?recognizer: _privacyRecognizer")
+          .hasMatch(src),
+      isTrue,
+    );
+    expect(
+      RegExp(r"text: 'Terms',[\s\S]{0,400}?recognizer: _termsRecognizer")
+          .hasMatch(src),
+      isTrue,
+    );
   });
 
   testWidgets('CREATE ACCOUNT is enabled with no tick and a tap stamps the '
