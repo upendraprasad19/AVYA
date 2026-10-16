@@ -7,7 +7,7 @@
 -- TEXT. This file calls the REAL redeem_referral_atomic, private.grant_referral_days and private.process_referral_conversions
 -- and reads the resulting rows. Groups: R redeem; W window and plan; P the "paid" predicate, one fixture per clause; V vest and
 -- credit; X voids and deletions; L the legacy shape; F failure isolation, alert dedup, helper bounds and the redeem -> pay ->
--- vest -> credit chain; K the CHECK constraints; A the catalog (ACL, security mode, columns, the cron job).
+-- vest -> credit chain; K the CHECK constraints; A the catalog (ACL, security mode, columns, the cron job); H the hermes round-2 killers (X5 a NULL-referrer backlog cannot starve a real reward, H1 the helper's `<` boundary, H2 an in-place plan edit).
 -- What it CANNOT show (one session): two sessions racing, a lock held by someone else, the account-deletion deadlock, the volume
 -- alert, the ROW_COUNT guard: those are test/sql/referral_pay_on_conversion_concurrency_local.sh (replica only).
 --
@@ -242,7 +242,7 @@ BEGIN
   v_ret := private.process_referral_conversions();
   IF v_ret ? 'skipped' THEN RAISE EXCEPTION 'JOB_LOCKED the job lock is held by another run; retry in a minute'; END IF;
   INSERT INTO _vr (id, descr, ok, note) VALUES
-    ('W15', 'the run that voids the cancelled-payment pending row reports at least 1 voided (kills swapping the two counters)', (v_ret->>'voided')::int >= 1, v_ret::text),
+    ('W15', 'the run that voids the cancelled-payment pending row reports at least 1 voided AND at least 3 reconciled (the three converted fixtures of this run; a swap of the two counters fails the reconciled bound)', (v_ret->>'voided')::int >= 1 AND (v_ret->>'reconciled')::int >= 3, v_ret::text),
     ('W16', 'a payment ONE SECOND before the code was applied is not counted (kills loosening the lower bound of the window)',
       (SELECT converted_at IS NULL FROM public.referral_redemptions WHERE referee_id = f[6]), NULL);
   INSERT INTO _vr (id, descr, ok, note) VALUES
@@ -443,6 +443,53 @@ BEGIN
   INSERT INTO _vr (id, descr, ok, note) VALUES
     ('X4b', 'a CREDITED row whose payment is cancelled afterwards stays credited and keeps converted_at, days and credited_at (no clawback, not reset)',
       (SELECT referrer_rewarded IS TRUE AND converted_at = v_x AND referrer_reward_days = v_d AND referrer_credited_at = v_x2 FROM public.referral_redemptions WHERE referee_id = f[4]), NULL);
+  DELETE FROM public.referral_redemptions WHERE referrer_id = ANY (v_pool) OR referee_id = ANY (v_pool);
+  DELETE FROM public.subscriptions WHERE user_id = ANY (v_pool);
+
+  -- ============================================================ H. hermes round 2 (2026-10-16): killers for mutants the first round called equivalent or Dart-only
+  -- X5: 55 vested pending rows with a NULL referrer, all OLDER than the one real row, must not starve it out of the 50-row credit
+  -- batch. Without `referrer_id IS NOT NULL` in the credit select they sort first, take every slot, credit nothing and raise no alert.
+  INSERT INTO public.referral_redemptions (id, code, referrer_id, referee_id, created_at, referrer_rewarded, referee_rewarded, converted_at, referrer_reward_days)
+  SELECT gen_random_uuid(), v_code, NULL, NULL, now() - interval '60 days', false, true, now() - interval '40 days' - (g || ' seconds')::interval, 7
+    FROM generate_series(1, 55) g;
+  INSERT INTO public.referral_redemptions (id, code, referrer_id, referee_id, created_at, referrer_rewarded, referee_rewarded, converted_at, referrer_reward_days)
+  VALUES (gen_random_uuid(), v_code, r1, f[1], now() - interval '20 days', false, true, NULL, NULL);
+  INSERT INTO public.subscriptions (user_id, plan, status, start_date, end_date, razorpay_payment_id)
+  VALUES (f[1], 'monthly', 'active', now() - interval '10 days', now() + interval '20 days', 'pay_vfy_' || gen_random_uuid());
+  v_ret := private.process_referral_conversions();
+  IF v_ret ? 'skipped' THEN RAISE EXCEPTION 'JOB_LOCKED the job lock is held by another run; retry in a minute'; END IF;
+  INSERT INTO _vr (id, descr, ok, note) VALUES
+    ('X5', 'FIFTY-FIVE older NULL-referrer vested rows do not starve the one real row out of the credit batch (r1 IS credited +7 in the FIRST run; none of the NULL-referrer rows is credited)',
+      (SELECT referrer_rewarded IS TRUE FROM public.referral_redemptions WHERE referee_id = f[1])
+      AND (SELECT max(end_date) = now() + interval '7 days' FROM public.subscriptions WHERE user_id = r1)
+      AND NOT EXISTS (SELECT 1 FROM public.referral_redemptions WHERE referrer_id IS NULL AND code = v_code AND referrer_rewarded IS TRUE), v_ret::text);
+  DELETE FROM public.referral_redemptions WHERE referrer_id = ANY (v_pool) OR referee_id = ANY (v_pool) OR (referrer_id IS NULL AND code = v_code);
+  DELETE FROM public.subscriptions WHERE user_id = ANY (v_pool);
+
+  -- H1: an ACTIVE row whose end_date is exactly now() (now() is frozen, so this is exact) is EXTENDED by the helper, not shadowed by a
+  -- second referral_trial row: the comparison is `v_end < now()`, so `<=` would insert a second row.
+  INSERT INTO public.subscriptions (user_id, plan, status, start_date, end_date)
+  VALUES (f[5], 'referral_trial', 'active', now() - interval '7 days', now());
+  PERFORM private.grant_referral_days(f[5], 7);
+  INSERT INTO _vr (id, descr, ok, note) VALUES
+    ('H1', 'grant_referral_days extends an active row that ends exactly now() (one row, end_date = now() + 7 days) and does not insert a second row',
+      (SELECT count(*) = 1 AND max(end_date) = now() + interval '7 days' FROM public.subscriptions WHERE user_id = f[5]), NULL);
+  DELETE FROM public.subscriptions WHERE user_id = ANY (v_pool);
+
+  -- H2: a payment row edited IN PLACE from monthly to yearly at the same start_date changes only the reward days, so the second
+  -- IS DISTINCT FROM arm of the reconcile is what rewrites 7 to 30 (the payment is 5 days old, so the row stays pending).
+  INSERT INTO public.referral_redemptions (id, code, referrer_id, referee_id, created_at, referrer_rewarded, referee_rewarded, converted_at, referrer_reward_days)
+  VALUES (gen_random_uuid(), v_code, r2, f[6], now() - interval '20 days', false, true, NULL, NULL);
+  INSERT INTO public.subscriptions (user_id, plan, status, start_date, end_date, razorpay_payment_id)
+  VALUES (f[6], 'monthly', 'active', now() - interval '5 days', now() + interval '25 days', 'pay_vfy_' || gen_random_uuid());
+  v_ret := private.process_referral_conversions();
+  IF v_ret ? 'skipped' THEN RAISE EXCEPTION 'JOB_LOCKED the job lock is held by another run; retry in a minute'; END IF;
+  UPDATE public.subscriptions SET plan = 'yearly' WHERE user_id = f[6];
+  v_ret := private.process_referral_conversions();
+  IF v_ret ? 'skipped' THEN RAISE EXCEPTION 'JOB_LOCKED the job lock is held by another run; retry in a minute'; END IF;
+  INSERT INTO _vr (id, descr, ok, note) VALUES
+    ('H2', 'a payment edited in place from monthly to yearly (same start_date) rewrites the pending reward from 7 to 30 days and leaves converted_at unchanged',
+      (SELECT referrer_reward_days = 30 AND converted_at = now() - interval '5 days' AND referrer_rewarded IS NOT TRUE FROM public.referral_redemptions WHERE referee_id = f[6]), NULL);
   DELETE FROM public.referral_redemptions WHERE referrer_id = ANY (v_pool) OR referee_id = ANY (v_pool);
   DELETE FROM public.subscriptions WHERE user_id = ANY (v_pool);
 
