@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**207 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**208 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -207,11 +207,12 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-333 | daily-snapshot/index_test.ts leaks DISABLE_GEMINI_FAILURE_ALERT into the… | none | 2026-10-11 -… | [:5958](open_issues.md#L5958) |
 | OI-334 | deploy_via_api.js rollback gaps: the pre-deploy cloud snapshot writes 0… | none - an engineering choice (see the… | 2026-10-11 - two measurements during the… | [:5969](open_issues.md#L5969) |
 | OI-335 | Gate 50 (check_reader_manifest_complete) never evaluates a SoT concept… | none for the registry wording; making… | 2026-10-11 by reading:… | [:5982](open_issues.md#L5982) |
-| OI-336 | Referral reward UX: the referrer's counts surface (friends joined /… | unit S1 of… | 2026-10-12 - by reading the repo:… | [:5993](open_issues.md#L5993) |
+| OI-336 | Referral reward UX: the referrer's counts surface (friends joined /… | the founder's go to start Unit C… | 2026-10-12 - by reading the repo:… | [:5993](open_issues.md#L5993) |
 | OI-337 | The commit-time gates read staged paths with a plain git diff --cached… | none - an engineering choice; a… | 2026-10-12 - by reading and by… | [:6004](open_issues.md#L6004) |
 | OI-338 | delete_account_purges_all_user_buckets_test.dart reads USER_OWNED_BUCKETS… | none - a test-only edit… | 2026-10-12 - by reading… | [:6017](open_issues.md#L6017) |
 | OI-339 | A Razorpay refund made only in the dashboard is invisible to the referral… | the founder's decision on how refunds… | 2026-10-13 - by reading.… | [:6033](open_issues.md#L6033) |
 | OI-340 | A chargeback or UPI dispute after the referral reward vested has no… | the founder's decision: accept the loss,… | 2026-10-13 - by reading.… | [:6046](open_issues.md#L6046) |
-| OI-341 | A friend on the 7-day referral trial cannot buy: create-razorpay-order… | none - an engineering item that needs… | 2026-10-13 - by reading.… | [:6059](open_issues.md#L6059) |
+| OI-341 | A friend on the 7-day referral trial cannot buy: create-razorpay-order… | the founder's go to start the plan… | 2026-10-13 - by reading.… | [:6059](open_issues.md#L6059) |
 | OI-342 | Promo-discounted payments count toward the referral reward at full value:… | the founder's decision on a floor (for… | 2026-10-13 - by reading… | [:6074](open_issues.md#L6074) |
 | OI-343 | Referral abuse by throwaway accounts: email confirmation is on but… | the founder's decision: accept the… | 2026-10-13 - by reading the live auth… | [:6087](open_issues.md#L6087) |
+| OI-344 | Referral reward hardening bundle (migration 160): credit select re-checks… | the founder's go to plan it… | 2026-10-16 - by reading migration 159… | [:6100](open_issues.md#L6100) |

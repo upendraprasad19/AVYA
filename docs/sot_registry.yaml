@@ -7814,7 +7814,7 @@ concepts:
       function — repository is a thin transport wrapper.
     writers:
       - file: supabase/functions/redeem-referral/index.ts
-        line_range: 100-170
+        line_range: 113-186
         method: redeem_referral_atomic RPC call
         notes: |
           Migration 159 / unit S2 (2026-10-13): step 5b refuses a referee who
@@ -9980,7 +9980,7 @@ concepts:
           RECONSTRUCTION of an already-applied migration, marked DO-NOT-APPLY.
           The four cron.schedule calls here are what input A scans for.
       - file: backups/live_cron_jobs.json
-        line_range: 5-31
+        line_range: 5-35
         method: jobs
         notes: |
           Input B. Snapshot of live cron.job — the only input that can see a

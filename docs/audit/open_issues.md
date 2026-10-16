@@ -5993,7 +5993,7 @@ Fix: either split the concept per prefix (one singular `key_prefix` each, then r
 ## OI-336 — Referral reward UX: the referrer's counts surface (friends joined / subscribed / days earned) and the invite copy, now that the referrer is rewarded when the friend pays
 
 - **Status**: OPEN · RE-SCOPED 2026-10-12 (founder redesign, branch `referral-pay-on-conversion`): the 7-per-90-days cap this issue was filed about is gone (migration 159 replaced it), so both original questions are answered by that decision - there is no cap to state and no "n of 7 left" to count. What remains is to BUILD the referrer-facing surface and the new invite copy (unit C of the plan).
-- **Blocked on**: unit S1 of `docs/plans/referral-pay-on-conversion.md` (migration 159) being merged AND applied live - the surface reads the new `referral_redemptions` columns - and on the founder's wording review of the copy drafts in the plan (section 2.3). Not on the Edge Function unit S2.
+- **Blocked on**: the founder's go to start Unit C (migration 159 is applied live and PRs #114 and #115 are merged, so the columns exist). Founder decisions 2026-10-16: the referrer sees AGGREGATES ONLY (friends joined, subscribed, PRO days earned, a pending count; no names, no payment time, no plan class) and learns of a credit IN-APP when they next open it; the copy still needs the psychology-pass lens and the founder's wording review (plan section 2.3). Not on the Edge Function unit S2.
 - **Verified**: 2026-10-12 - by reading the repo: `ReferralRepository` has no referrer-side read (`lib/features/profile/repositories/referral_repository.dart`), `invite_friends_sheet.dart` still says "you both get 7 days of PRO free" and `profile_content.dart` "Both get 7 days PRO free", and `referral_redemption_history` (the Hive key the restore path fills from `sync_restore_completeness.dart:677`) has NO reader anywhere in `lib/`.
 - **Identified**: 2026-10-11 · filed via mint_oi.sh from branch `oi320-referrer-cap`; re-scoped 2026-10-12 from branch `referral-pay-on-conversion`
 
@@ -6059,11 +6059,11 @@ Fix shape: handle Razorpay's dispute events in `razorpay-webhook` (a catastrophi
 ## OI-341 — A friend on the 7-day referral trial cannot buy: create-razorpay-order answers 409 already_pro for any active subscription row, trial included, so a paid plan cannot be bought until the trial lapses; the founder wants purchase enabled during the trial with the paid cycle starting when the current PRO ends
 
 - **Status**: OPEN · founder decision 2026-10-13: purchase must be enabled during the referral trial, and the paid cycle must start when the current PRO finishes.
-- **Blocked on**: none - an engineering item that needs its own plan (catastrophic tier: both payment functions and the order function).
+- **Blocked on**: the founder's go to start the plan (catastrophic tier: both payment functions and the order function; the design decision is made, see the founder decision above). No work has started.
 - **Verified**: 2026-10-13 - by reading. `supabase/functions/create-razorpay-order/index.ts:84-116` returns 409 `already_pro` for the newest row with `status = 'active' AND end_date > now()` of ANY plan, `referral_trial` included; the guard exists because the founder paid four times in 24 h on 2026-05-06 when local `isPro` read false (comment at :84-96). Checkout creates one-off Razorpay Orders (`POST /v1/orders`, `payment_capture: 1`, `create-razorpay-order/index.ts:184`), i.e. prepaid periods, not an autopay mandate. `verify-payment/index.ts:550-562` (and `razorpay-webhook/index.ts:577`) INSERT the paid row with `start_date = now` and `end_date = now + plan length`. The client derives PRO from `status = 'active' AND end_date > now()` and does not read `start_date` (`lib/core/services/subscription_service.dart:651`). Migration 159's job treats `start_date` as the payment time (`converted_at = start_date`, window `start_date >= created_at AND <= created_at + 90 days`).
 - **Identified**: 2026-10-13 · filed via mint_oi.sh from branch `referral-pay-on-conversion`
 
-Source: plan section 6 and closure ledger item X3 (where the reward lands about day 14 instead of day 8 because the friend cannot pay before the trial ends). Filed at the founder's request, with the stacking answer below.
+Source: plan section 6 and closure ledger item X3 (where the reward lands about day 14 instead of about day 7 because the friend cannot pay before the trial ends). Filed at the founder's request, with the stacking answer below.
 
 How others handle it (general knowledge, not looked up today): a card-on-file subscription is charged when the trial ends, so subscribing during a trial costs nothing until then (Apple, Google Play, Stripe `trial_end`); prepaid time is appended after the current end date (PlayStation Plus and Xbox Game Pass codes, gift cards, Google Play prepaid top-ups), which is exactly the behaviour asked for here, and it is the model that fits a one-off Razorpay Order.
 
@@ -6096,3 +6096,20 @@ Source: plan section 6 and closure ledger item X5; the founder asked whether ema
 What the check proves: control of an inbox. Throwaway inbox services pass it. Under the referral rule a throwaway account earns only its own 7 trial days (accepted default 6 of the plan, watched by the `referral_conversions_volume` alert): the referrer earns nothing without a real payment.
 
 Options: (1) keep as is; (2) refuse known disposable-email domains at sign-up (no SMS cost, no friction for real users, needs a maintained list and a sign-up hook or function); (3) phone verification: enable phone auth, wire an SMS provider, and (for India) register for the telecom regulator's DLT sender rules, at a per-SMS cost and with sign-up friction. Also correct the CLAUDE.md section 2 Auth row to say that phone sign-in is not live.
+
+## OI-344 — Referral reward hardening bundle (migration 160): credit select re-checks referee_id, batch order rotates, REVOKE writes on referral_redemptions from anon/authenticated, optional promo discount_pct ceiling
+
+- **Status**: OPEN
+- **Blocked on**: the founder's go to plan it (catastrophic tier: a new migration 160 changing a SECURITY DEFINER job body and table grants; plan reviewed twice, B-pass, hermes; its live apply is a separate go).
+- **Verified**: 2026-10-16 - by reading migration 159 (lines 203, 234, 275-281, 373-379) and, read-only, the live catalog: `referral_redemptions` grants INSERT/UPDATE/DELETE/TRUNCATE to `anon` and `authenticated` with row security on and a single SELECT policy ("Users can read own redemptions"); `promo_codes` has the policy "Anyone can read active promo codes".
+- **Identified**: 2026-10-16 · filed via mint_oi.sh from branch `hermes-report-verdict-line`
+
+Source: the 2026-10-16 hermes re-review of migration 159 (seats A, B and D; `docs/audit/2026-10-13-hermes-referral-pay-on-conversion.md`, round 2). Migration 159 is applied live and immutable, so each item below needs migration 160.
+
+1. The credit select (159 lines 275-281) does not re-check `referee_id IS NOT NULL`. A reconcile that skipped a row locked by a referee deletion can be followed, milliseconds later, by a credit on that row's stale `converted_at` (B-pass finding 9, seat A finding 1). A one-off 7 or 30 days. Fix: add the predicate.
+2. The credit batch is `ORDER BY converted_at, id LIMIT 50` (line 279). Rows that are skipped or fail permanently stay at the head and use batch slots every run; healthy rows starve only if 50 or more are stuck at once (seat A finding 2). Fix: rotate the order or exclude ids that failed in this run.
+3. `anon` and `authenticated` hold INSERT, UPDATE, DELETE and TRUNCATE on `referral_redemptions` and 159 revokes none of it. Row security with no write policy blocks them today, but the table now decides PRO days, so a future careless policy would be a free-PRO mint (seat D finding 4). Fix: `REVOKE INSERT, UPDATE, DELETE, TRUNCATE ... FROM anon, authenticated`.
+4. Optional: a `CHECK (discount_pct <= 70)` on `promo_codes` turns the OI-342 promise into a technical ceiling (seat D finding 3). Needs the founder's call on whether 100 percent comp codes are needed.
+5. `redeem_referral_atomic` now calls the grant helper with `FOR UPDATE NOWAIT`, where 158 used a plain `UPDATE` that waited, so a legitimate redeem can raise 55P03 while a webhook holds the subscription row (seat A finding 3). Fix: retry once or fall back to waiting with a short lock timeout.
+
+Each item needs a behavioural case in `test/sql/` with a mutation proof.
