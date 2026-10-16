@@ -1,6 +1,6 @@
 # Closure ledger - measurements-flag-flip, the L2b flip of enable_body_measurements to default ON (2026-10-16). One terminal_state per
-# unit, no `deferred:` key. The rows that closed in the code commit carry `commit: PENDING` until the stamp commit that follows it writes the
-# real SHA (a commit cannot name its own SHA; the Landing B and C shape). The plan is docs/plans/measurements-flag-flip.md, its record
+# unit, no `deferred:` key. The rows that closed in the code commit carry the code commit's SHA (fa41470d), written by the stamp commit that follows it
+# (a commit cannot name its own SHA; the Landing B and C shape). The plan is docs/plans/measurements-flag-flip.md, its record
 # docs/plan-reviews/measurements-flag-flip.md, the B-pass docs/reviews/measurements-flag-flip-bpass.md (same commit as these rows).
 batch: measurements-flag-flip
 plan_review_record: docs/plan-reviews/measurements-flag-flip.md
@@ -12,22 +12,22 @@ findings:
   - id: FLIP-CODE
     title: "MeasurementFlags.bodyMeasurementsEnabled reads ON unless a stored bool false (absent or any non-bool value is ON; an unopened box or a thrown read is OFF); the dev panel row and toast read KILLED"
     terminal_state: closed_in_commit
-    commit: PENDING
+    commit: fa41470d
     verification: "lib/core/services/measurement_flags.dart (the getter), lib/features/dev/dev_panel_screen.dart (row and toast), test/contracts/measurement_flag_off_identity_test.dart (absent ON; false OFF; 'false', 'true', 0, 1, 0.5, 'off', 'on', a List and a Map ON; delete returns to ON; unopened OFF; the toast and row source pins)"
   - id: TESTS
     title: "the tests that assumed absent means OFF are rewritten, and the production default (the key never written) is exercised through the real widgets"
     terminal_state: closed_in_commit
-    commit: PENDING
+    commit: fa41470d
     verification: "test/contracts/measurement_flag_off_identity_test.dart, test/contracts/user_scoped_provider_rebuilds_on_auth_change_test.dart, test/contracts/day_rollover_provider_invalidation_behavioral_test.dart (fixture states false), plus the new rows 'the key never written (the default ON)' in test/home/measurement_slots_test.dart and test/ai_coach/measurement_chip_slot_test.dart; the full suite on the final tree: TZ=Asia/Kolkata flutter test --exclude-tags golden finished 9630 passed, 9 skipped, 0 failed; an earlier run of the same tree failed one row (test/ai_coach/measurement_chip_slot_test.dart 'a real save() clears the due prompt under a mounted slot': it waited for the post-save refresh without the one real tick the card's end-to-end row already has), the row got the tick and passed in three isolated runs and the re-run; flutter analyze lib/: no error or warning (59 pre-existing infos)"
   - id: MUTATION
     title: "mutation proof of the getter and of the new widget rows"
     terminal_state: closed_in_commit
-    commit: PENDING
+    commit: fa41470d
     verification: "run by the author on copies of the getter restored in a finally: default false, catch true, == true, ignore a stored false (all RED on the flag test); default false and == true RED on the two new widget rows; the reviewer's survivors (not List/Map, not double, num off) RED after the loop gained 0.5, a List and a Map; two equivalents (stored != false, stored is! bool || stored). Text in docs/reviews/measurements-flag-flip-bpass.md"
   - id: DOCS
     title: "default OFF / dark wording replaced in the nested CLAUDE.md files, functionality-flow (HOME-24, COACH-21, PROF-20, PROF-21), sot_registry, naming_conventions and the provider doc comment"
     terminal_state: closed_in_commit
-    commit: PENDING
+    commit: fa41470d
     verification: "git grep -n 'default OFF' over the files listed returns no measurement-flag hit; the remaining mentions are the historical Landing B and C ledgers, plan-reviews and tuning history"
   - id: REGISTRY-RULE-STAYS
     title: "the exact-path platform rule for measurement_flags.dart in docs/blast_radius.yaml stays (an earlier note said the flip deletes it)"
