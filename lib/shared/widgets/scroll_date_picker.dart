@@ -69,7 +69,25 @@ class _ScrollDatePickerState extends State<ScrollDatePicker> {
       _selectedDay = maxDay;
       _dayController.jumpToItem(_selectedDay - 1);
     }
-    final date = DateTime(_selectedYear, _selectedMonth, _selectedDay);
+    var date = DateTime(_selectedYear, _selectedMonth, _selectedDay);
+    // The year wheel stops at lastDate.year, but a month or day later in that
+    // year is still reachable: clamp to lastDate and bring the wheels back
+    // (OI-305: the conversational onboarding date of birth).
+    final last = DateTime(
+      widget.lastDate.year,
+      widget.lastDate.month,
+      widget.lastDate.day,
+    );
+    if (date.isAfter(last)) {
+      setState(() {
+        _selectedYear = last.year;
+        _selectedMonth = last.month;
+        _selectedDay = last.day;
+      });
+      _monthController.jumpToItem(_selectedMonth - 1);
+      _dayController.jumpToItem(_selectedDay - 1);
+      date = last;
+    }
     widget.onDateChanged(date);
   }
 

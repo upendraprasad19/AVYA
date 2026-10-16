@@ -6096,3 +6096,29 @@ Source: plan section 6 and closure ledger item X5; the founder asked whether ema
 What the check proves: control of an inbox. Throwaway inbox services pass it. Under the referral rule a throwaway account earns only its own 7 trial days (accepted default 6 of the plan, watched by the `referral_conversions_volume` alert): the referrer earns nothing without a real payment.
 
 Options: (1) keep as is; (2) refuse known disposable-email domains at sign-up (no SMS cost, no friction for real users, needs a maintained list and a sign-up hook or function); (3) phone verification: enable phone auth, wire an SMS provider, and (for India) register for the telecom regulator's DLT sender rules, at a per-SMS cost and with sign-up friction. Also correct the CLAUDE.md section 2 Auth row to say that phone sign-in is not live.
+
+## OI-344 — Referral reward hardening bundle (migration 160): credit select re-checks referee_id, batch order rotates, REVOKE writes on referral_redemptions from anon/authenticated, optional promo discount_pct ceiling
+
+- **Status**: OPEN
+- **Blocked on**: the founder's go to plan it (catastrophic tier: a new migration 160 changing a SECURITY DEFINER job body and table grants; plan reviewed twice, B-pass, hermes; its live apply is a separate go).
+- **Verified**: 2026-10-16 - by reading migration 159 (lines 203, 234, 275-281, 373-379) and, read-only, the live catalog: `referral_redemptions` grants INSERT/UPDATE/DELETE/TRUNCATE to `anon` and `authenticated` with row security on and a single SELECT policy ("Users can read own redemptions"); `promo_codes` has the policy "Anyone can read active promo codes".
+- **Identified**: 2026-10-16 · filed via mint_oi.sh from branch `hermes-report-verdict-line`
+
+Source: the 2026-10-16 hermes re-review of migration 159 (seats A, B and D; `docs/audit/2026-10-13-hermes-referral-pay-on-conversion.md`, round 2). Migration 159 is applied live and immutable, so each item below needs migration 160.
+
+1. The credit select (159 lines 275-281) does not re-check `referee_id IS NOT NULL`. A reconcile that skipped a row locked by a referee deletion can be followed, milliseconds later, by a credit on that row's stale `converted_at` (B-pass finding 9, seat A finding 1). A one-off 7 or 30 days. Fix: add the predicate.
+2. The credit batch is `ORDER BY converted_at, id LIMIT 50` (line 279). Rows that are skipped or fail permanently stay at the head and use batch slots every run; healthy rows starve only if 50 or more are stuck at once (seat A finding 2). Fix: rotate the order or exclude ids that failed in this run.
+3. `anon` and `authenticated` hold INSERT, UPDATE, DELETE and TRUNCATE on `referral_redemptions` and 159 revokes none of it. Row security with no write policy blocks them today, but the table now decides PRO days, so a future careless policy would be a free-PRO mint (seat D finding 4). Fix: `REVOKE INSERT, UPDATE, DELETE, TRUNCATE ... FROM anon, authenticated`.
+4. Optional: a `CHECK (discount_pct <= 70)` on `promo_codes` turns the OI-342 promise into a technical ceiling (seat D finding 3). Needs the founder's call on whether 100 percent comp codes are needed.
+5. `redeem_referral_atomic` now calls the grant helper with `FOR UPDATE NOWAIT`, where 158 used a plain `UPDATE` that waited, so a legitimate redeem can raise 55P03 while a webhook holds the subscription row (seat A finding 3). Fix: retry once or fall back to waiting with a short lock timeout.
+
+Each item needs a behavioural case in `test/sql/` with a mutation proof.
+
+## OI-346 — Existing accounts accepted the v1 (blog) policy; nothing asks them to accept the October 2026 app privacy policy, and the terms version is only stamped, never compared
+
+- **Status**: OPEN
+- **Blocked on**: the founder's call on how existing users are told or asked (a one-time notice, or a re-acceptance screen); counsel for the DPDP reading
+- **Verified**: 2026-10-16: `AppConstants.termsVersion` (`lib/core/constants/app_constants.dart`) is written to `userBox['terms_version']` and `users.terms_version` at sign-up (`sign_in_screen.dart`, `auth_provider.dart:1293-1294`) and by the Google / phone fallback (`auth_session_bootstrapper.dart:ensureTermsConsentFallback`); `git grep -n "terms_version\|termsVersion" lib` finds no reader that compares it with anything, and the `TermsModal` its doc comment named no longer exists (removed from the sign-in screen by the OBS-A fix). Accounts that exist today carry `v1` (the icanbefitter.com blog policy, newsletters only, OI-310) or no stamp.
+- **Identified**: 2026-10-16 · filed via mint_oi.sh from branch `age-floor-signup-consent`
+- **Why**: the founder published an app-specific privacy policy on 2026-10-16 (OI-310) and the sign-up consent now stamps `v2` for new accounts only. Existing users never saw or accepted the new text. DPDP section 5 (notice) and 6 (consent) are the reading counsel confirms.
+- **Fix (to decide)**: (1) a one-time in-app notice on next launch for accounts whose stored version is not `v2` (informational, a tap to dismiss, stamps `v2` and the time); (2) a blocking re-acceptance screen; (3) nothing. Either of (1) and (2) needs the comparison this OI says does not exist, a regression test of the stamp path, and a plan reviewed twice (auth tier).

@@ -64,7 +64,6 @@ void main() {
     await tester.pumpAndSettle(const Duration(seconds: 3));
 
     // Must tick consent first
-    await tickConsentCheckbox(tester);
 
     final emailButton = find.textContaining('Email', findRichText: true);
     if (emailButton.evaluate().isNotEmpty) {
@@ -108,26 +107,17 @@ void main() {
 
   // ── T3 ──────────────────────────────────────────────────────────
 
-  testWidgets('T3: GDPR consent checkbox is visible on sign-in screen', (tester) async {
+  testWidgets('T3: the sign-in screen has no consent checkbox', (tester) async {
+    // OI-305 (2026-10-16): consent is the tap on CREATE ACCOUNT under a
+    // "By tapping CREATE ACCOUNT, you agree to our Privacy Policy and Terms"
+    // notice (sign-up step only); there is no checkbox anywhere on this screen.
     await tester.pumpWidget(
       const ProviderScope(child: ICanBeFitterApp()),
     );
     await tester.pumpAndSettle(const Duration(seconds: 3));
 
-    // Consent checkbox should be visible
-    final checkbox = find.byType(Checkbox);
-    expect(checkbox, findsOneWidget,
-        reason: 'GDPR consent checkbox must be visible on the sign-in screen');
-
-    // "I agree" text should be visible
-    final agreeText = find.textContaining('I agree', findRichText: true);
-    expect(agreeText, findsOneWidget,
-        reason: 'Consent text "I agree to the..." must be visible');
-
-    // "Privacy Policy" link text should be visible
-    final privacyLink = find.textContaining('Privacy Policy', findRichText: true);
-    expect(privacyLink, findsOneWidget,
-        reason: 'Privacy Policy link must be present in consent text');
+    expect(find.byType(Checkbox), findsNothing,
+        reason: 'the consent checkbox was removed (OI-305, 2026-10-16)');
   });
 
   // ── T4 ──────────────────────────────────────────────────────────
@@ -139,7 +129,6 @@ void main() {
     await tester.pumpAndSettle(const Duration(seconds: 3));
 
     // Tick consent first
-    await tickConsentCheckbox(tester);
 
     // Navigate to email sign-in view
     final emailButton = find.textContaining('Email', findRichText: true);
@@ -198,7 +187,6 @@ void main() {
     }
 
     // If we got here, verify by ticking consent and checking buttons become enabled
-    await tickConsentCheckbox(tester);
     await tester.pumpAndSettle();
 
     // After consent, at least one button should be enabled

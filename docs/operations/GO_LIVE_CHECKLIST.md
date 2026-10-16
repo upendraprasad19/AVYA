@@ -117,11 +117,11 @@ ships.
 
 | # | Item | Owner | Evidence when done |
 |---|---|---|---|
-| 3.1 | **Publish real `icanbefitter.com/privacy` and `/terms`** | FOUNDER | Both URLs return real DPDP-compliant documents |
+| 3.1 | **Publish real `icanbefitter.com/privacy` and `/terms`** | FOUNDER | Both URLs return real DPDP-compliant documents (privacy: published and read 2026-10-16, "Last updated: October 2026"; terms: not re-read) |
 | 3.2 | Play Data Safety form | FOUNDER | Submitted |
 | 3.3 | **Health Connect / health-data declaration** (separate from 3.2) | FOUNDER | Submitted |
-| 3.4 | Consent checkbox not pre-ticked (email path) | AGENT — **DONE 2026-08-25** | `sign_in_screen.dart:111` `_privacyAccepted = false`; pinned + mutation-proven in `test/auth/terms_skip_test.dart`. Diagnose `d8f2c1` |
-| 3.5 | **Decide the Google-OAuth consent posture** | FOUNDER (product/UX) | See the warning below — this is an open pre-launch risk, not a done item |
+| 3.4 | Email sign-up consent | AGENT — **CHANGED 2026-10-16 (OI-305, founder decision)** | The checkbox is gone: "By tapping CREATE ACCOUNT, you agree to our Privacy Policy and Terms" (`_ConsentNotice` in `sign_in_screen.dart`), the tap stamps time + `v2`. History: pre-ticked (Q2) -> unchecked 2026-08-25 (diagnose `d8f2c1`) -> notice 2026-10-16. DPDP section 6 commentary and Play's health-app policy lean toward a tick; counsel / Play review may ask for it back (local change, `test/auth/terms_skip_test.dart` and `sign_up_consent_notice_test.dart` flip with it). |
+| 3.5 | Google-OAuth consent posture | FOUNDER (product/UX) — **RESOLVED 2026-10-16** | Both routes are tap-based now (see the note below the table); the open item is counsel's / Play review's reading of a tap |
 
 > ⚠ **3.1 is load-bearing and currently unverified.** Six in-app links already point at those two
 > URLs (`privacy_dialog.dart:45,62`; `sign_in_screen.dart:1396,1400`;
@@ -133,16 +133,10 @@ ships.
 > The in-app privacy dialog also lists only 3 permission categories while the merged manifest
 > ships 34. Whatever is published at 3.1 must cover what is actually requested.
 
-> ⚠ **3.5 — TWO CONSENT REGIMES RUN AT ONCE, and the email fix sharpened the contrast.**
-> `_privacyAccepted` gates exactly one widget: the email CREATE ACCOUNT button
-> (`sign_in_screen.dart:1023`). **Google OAuth — the primary CTA (`:365`) — has no consent gate.**
-> Those users instead hit the pre-existing `ensureTermsConsentFallback` (diagnose b3f9e7), which
-> auto-stamps `terms_accepted_at` from `created_at` with **no user gesture at all**. So the app now
-> asks for an explicit tick on the secondary route and nothing on the primary one. A DPDP or Play
-> reviewer comparing the two flows sees an inconsistency that is harder to defend than the
-> pre-ticked box was. Fixing it means deciding WHERE consent sits for a redirect flow (before the
-> OAuth launch, or as a post-redirect step) — a UX decision, which is why it is a founder row
-> rather than an agent one. Surfaced by the B-pass on `launch-blockers-1a` (Finding 1, P1).
+> **3.5 — Resolved 2026-10-16 (OI-305).** Both regimes are now tap-based: email (the tap on CREATE ACCOUNT under the
+> notice), Google / phone (`ensureTermsConsentFallback` stamps `created_at`, with the Welcome footer "By continuing,
+> you agree to our Privacy Policy and Terms"). The inconsistency between an explicit tick and no gesture is gone; the
+> remaining risk is that a tap is a weaker DPDP reading than a tick (counsel). Existing accounts are not re-asked (OI-346).
 
 **Permissions the Data Safety form must cover** (from the merged prod-release manifest): health &
 fitness (`READ_STEPS`, `READ_WEIGHT`, `ACTIVITY_RECOGNITION`), camera + photos (`CAMERA`,

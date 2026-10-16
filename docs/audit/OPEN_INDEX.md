@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**207 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**209 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -215,3 +215,5 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-341 | A friend on the 7-day referral trial cannot buy: create-razorpay-order… | none - an engineering item that needs… | 2026-10-13 - by reading.… | [:6059](open_issues.md#L6059) |
 | OI-342 | Promo-discounted payments count toward the referral reward at full value:… | the founder's decision on a floor (for… | 2026-10-13 - by reading… | [:6074](open_issues.md#L6074) |
 | OI-343 | Referral abuse by throwaway accounts: email confirmation is on but… | the founder's decision: accept the… | 2026-10-13 - by reading the live auth… | [:6087](open_issues.md#L6087) |
+| OI-344 | Referral reward hardening bundle (migration 160): credit select re-checks… | the founder's go to plan it… | 2026-10-16 - by reading migration 159… | [:6100](open_issues.md#L6100) |
+| OI-346 | Existing accounts accepted the v1 (blog) policy; nothing asks them to… | the founder's call on how existing users… | 2026-10-16: `AppConstants.termsVersion`… | [:6117](open_issues.md#L6117) |

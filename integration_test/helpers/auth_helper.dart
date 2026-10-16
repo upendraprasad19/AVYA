@@ -18,19 +18,6 @@ const kTestPassword = String.fromEnvironment('SUPABASE_TEST_PASSWORD');
 bool get kTestCredentialsPresent =>
     kTestEmail.isNotEmpty && kTestPassword.isNotEmpty;
 
-/// Ticks the GDPR/DPDP consent checkbox on the sign-in screen.
-///
-/// Must be called before any sign-in attempt — the consent checkbox
-/// gates all sign-in buttons (Google, Email, Phone).
-Future<void> tickConsentCheckbox(WidgetTester tester) async {
-  // The checkbox is inside a GestureDetector row. Find the Checkbox widget.
-  final checkbox = find.byType(Checkbox);
-  if (checkbox.evaluate().isNotEmpty) {
-    await tester.tap(checkbox.first);
-    await tester.pumpAndSettle();
-  }
-}
-
 /// Drives the sign-in flow using email + password.
 ///
 /// Automatically ticks the GDPR consent checkbox, navigates to the
@@ -57,7 +44,6 @@ Future<void> signInWithTestUser(WidgetTester tester) async {
   }
 
   // Tick GDPR consent checkbox first — required before any sign-in button works.
-  await tickConsentCheckbox(tester);
 
   // Tap "Continue with Email" if the main sign-in screen is shown first.
   final emailButton = find.textContaining('Email', findRichText: true);

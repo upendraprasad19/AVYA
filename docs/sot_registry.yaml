@@ -2191,6 +2191,10 @@ concepts:
                            # did not catch) the pre-fix write silently throwing on
                            # every single signup for 2.5 months.
     description: |
+      2026-10-16 (OI-305): the email path is a "by tapping CREATE ACCOUNT"
+      notice (no checkbox); AppConstants.termsVersion is v2 and the OAuth /
+      phone fallback stamps v1 for an account created before
+      AppConstants.termsV2EffectiveFromUtc (termsVersionForAccountCreatedAt).
       DPDP ToS/Privacy acceptance. Email sign-up stamps
       userBox['terms_accepted_at'] + ['terms_version'] in _ensureLocalUser,
       AFTER HiveUserSession.openForUser has opened the box (the pre-fix write
