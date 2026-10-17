@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/core/utils/age_floor.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/shared/widgets/responsive_picker_builder.dart';
 
@@ -12,7 +13,7 @@ import 'package:icanbefitter/shared/widgets/responsive_picker_builder.dart';
 /// Collects the three "who are you" basics before any body-metric or
 /// goal-specific questions:
 ///   * `full_name`  — text input, required
-///   * `date_of_birth` — date picker, required, min age 10
+///   * `date_of_birth` — date picker, required, min age 13 (`kMinAgeYears`)
 ///   * `sex` — Male / Female / Other, required
 ///
 /// Moved here from Stats (sex) and derived-from-age (DOB) so the flow
@@ -74,12 +75,11 @@ class _IdentityScreenState extends State<IdentityScreen> {
 
   Future<void> _pickDob() async {
     final now = DateTime.now();
-    // Min-age 10: max selectable DOB is today-10y.
-    // U10 fix (Test #4 hotfix): lowered from 13 → 10 per user observation
-    // ("i tried inserting date of my son as 2019, i was unable").
-    // Trade-off: less COPPA-aligned but simpler. Track for legal review
-    // post-Test #4. Guardian-managed accounts for under-10 remain out of scope.
-    final max = DateTime(now.year - 10, now.month, now.day);
+    // Min age 13 (`kMinAgeYears`, OI-305, 2026-10-16): the latest selectable DOB
+    // is today minus 13 years. This was 10 from the U10 hotfix (Test #4: a
+    // tester tried to enter his son's birth year, 2019) until 2026-10-16, when
+    // the published privacy policy set 13; the three pickers share one floor.
+    final max = latestAllowedDob(now);
     final seed = _dob ?? DateTime(now.year - 25, 1, 1);
     final picked = await showDatePicker(
       context: context,
@@ -456,6 +456,27 @@ class _IdentityScreenState extends State<IdentityScreen> {
         SnackBar(
           content: Text(
             'Pick your date of birth.',
+            style: AppTypography.bodySm.copyWith(
+              color: AppColors.textPrimary,
+            ),
+          ),
+          backgroundColor: AppColors.bad,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    // A date of birth carried in (route extras, an earlier session, or the
+    // 10-year floor this screen had until 2026-10-16) can be younger than the
+    // floor; the picker only bounds a NEW pick, so check the value itself.
+    final carried = DateTime(_dob!.year, _dob!.month, _dob!.day);
+    if (carried.isAfter(latestAllowedDob(DateTime.now()))) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'You must be $kMinAgeYears or older to use AVYA Fit. '
+            'Pick your date of birth again.',
             style: AppTypography.bodySm.copyWith(
               color: AppColors.textPrimary,
             ),

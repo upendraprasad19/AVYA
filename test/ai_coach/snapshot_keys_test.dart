@@ -215,7 +215,7 @@ void main() {
       final today = DateTime.now();
       // Day 0: PUSH A
       await HiveService.instance.workoutBox.put(
-        'schedule_${today.toIso8601String().substring(0, 10)}',
+        'schedule_${istDateStr(today)}',
         {
           'type': 'PUSH A',
           'workout_name': 'PUSH A',
@@ -228,7 +228,7 @@ void main() {
       // Day 1: PULL A
       final d1 = today.add(const Duration(days: 1));
       await HiveService.instance.workoutBox.put(
-        'schedule_${d1.toIso8601String().substring(0, 10)}',
+        'schedule_${istDateStr(d1)}',
         {
           'type': 'PULL A',
           'workout_name': 'PULL A',
@@ -241,7 +241,7 @@ void main() {
       // Day 2: PUSH A again (duplicate — should NOT appear twice)
       final d2 = today.add(const Duration(days: 2));
       await HiveService.instance.workoutBox.put(
-        'schedule_${d2.toIso8601String().substring(0, 10)}',
+        'schedule_${istDateStr(d2)}',
         {
           'type': 'PUSH A',
           'workout_name': 'PUSH A',
@@ -273,7 +273,7 @@ void main() {
     test('exercise list includes name, sets, reps, weight only', () async {
       final today = DateTime.now();
       await HiveService.instance.workoutBox.put(
-        'schedule_${today.toIso8601String().substring(0, 10)}',
+        'schedule_${istDateStr(today)}',
         {
           'type': 'PUSH A',
           'workout_name': 'PUSH A',

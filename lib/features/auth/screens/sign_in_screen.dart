@@ -121,24 +121,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   /// immediately (B-pass finding 4, 96afd825-review.md).
   bool _checkingEmail = false;
 
-  /// Starts UNCHECKED — the user's tick is the clear affirmative action.
-  ///
-  /// ⚠ THIS REVERSES THE EARLIER Q2 DECISION, which pre-checked the box to
-  /// reduce signup friction on the grounds that "tapping CREATE ACCOUNT with
-  /// the checkbox checked is the affirmative action", citing the common Indian
-  /// fintech pattern (CRED, Zerodha, Razorpay).
-  ///
-  /// Changed for the Play Store launch. DPDP §6(1) requires consent given by a
-  /// "clear affirmative action", and a pre-ticked box is the textbook example
-  /// of what does NOT qualify (the GDPR equivalent was settled in Planet49).
-  /// The button-press argument is arguable, but this app processes HEALTH data
-  /// and is going through Play review with a Data Safety declaration — the
-  /// weaker reading is not worth defending there.
-  ///
-  /// COST, stated plainly: CREATE ACCOUNT is now disabled until the user ticks,
-  /// which will cost some signup conversion. That is a product trade-off, not a
-  /// pure compliance win. Reverting is a one-word change back to `true`.
-  bool _privacyAccepted = false;
 
   @override
   void initState() {
@@ -147,8 +129,16 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     //
     // The Q2 design (APK Test #2) covers ToS/Privacy via:
     //   (a) inline footer on welcome screen
-    //   (b) UNCHECKED consent checkbox above SIGN UP (gates the button) —
-    //       un-ticked 2026-08-25; the tick is the DPDP affirmative action
+    //   (b) "By tapping CREATE ACCOUNT, you agree to our Privacy Policy and
+    //       Terms" above the button (`_ConsentNotice`), the tap being the
+    //       acceptance and stamping terms_accepted_at / terms_version. Founder
+    //       decision 2026-10-16 (OI-305): it replaced an UNCHECKED checkbox
+    //       that gated the button (2026-08-25, for the Play launch), and the
+    //       earlier pre-ticked box before that. The Welcome footer and the
+    //       Google / phone fallback stamp (auth_session_bootstrapper.dart) use
+    //       the same "by continuing" reading. RISK, stated once: DPDP section
+    //       6 commentary and Google Play's health-app policy lean toward an
+    //       affirmative tick; counsel confirms.
     //   (c) returning users have users.terms_accepted_at synced from cloud
     //       to Hive on _ensureLocalUser (auth_provider.dart:466)
     //
@@ -1070,30 +1060,24 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
               ),
               const SizedBox(height: 12),
 
-              // Privacy/Terms checkbox. Starts UNCHECKED — the tick is the
-              // DPDP §6(1) "clear affirmative action". See `_privacyAccepted`.
-              _PrivacyCheckboxRow(
-                value: _privacyAccepted,
-                onChanged: (v) => setState(() => _privacyAccepted = v ?? false),
-              ),
+              // Consent notice: tapping CREATE ACCOUNT is the acceptance
+              // (founder decision 2026-10-16, OI-305). No checkbox.
+              const _ConsentNotice(),
               const SizedBox(height: 12),
 
               _buildPrimaryButton(
                 label: 'CREATE ACCOUNT',
                 isLoading: isLoading,
-                // Gate the CREATE ACCOUNT button on checkbox acceptance.
-                enabled: _privacyAccepted,
                 onPressed: () {
                   if (!_formKey.currentState!.validate()) return;
                   final email = _emailController.text.trim();
                   final password = _passwordController.text;
                   // closes-diagnose: b3f9e7
-                  // The user's own TICK on the (unchecked-by-default) consent
-                  // box is the affirmative-action signal — DPDP §6(1), a clear
-                  // affirmative action. Corrected 2026-08-25: this said
-                  // "pre-checked … per DPDP §11", which stopped being true when
-                  // `_privacyAccepted` was flipped to false, and cited a
-                  // different section than the field's own docstring. The original E.3 fix
+                  // The user's own TAP on CREATE ACCOUNT, under the visible
+                  // "By tapping CREATE ACCOUNT, you agree to our Privacy Policy
+                  // and Terms" notice, is the acceptance (founder decision
+                  // 2026-10-16, OI-305; the 2026-08-25 unchecked checkbox and
+                  // the earlier pre-ticked box are gone). The original E.3 fix
                   // (audit 2026-05-16, F3-1.2) wrote ToS/Privacy acceptance
                   // straight to `HiveService.instance.userBox` HERE, before
                   // signUp — but no Supabase session (and therefore no open
@@ -1396,10 +1380,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     required String label,
     required bool isLoading,
     required VoidCallback onPressed,
-    bool enabled = true,
     bool compact = false,
   }) {
-    final isDisabled = !enabled || isLoading;
+    final isDisabled = isLoading;
     final radius = compact ? AppRadius.card : AppRadius.sharp;
     return SizedBox(
       width: double.infinity,
@@ -1452,21 +1435,20 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   }
 }
 
-/// Privacy/Terms checkbox row shown above the CREATE ACCOUNT button
-/// during email sign-up. Pre-checked; links open Privacy Policy and Terms
-/// in the external browser. The tappable link areas are handled by
-/// [TapGestureRecognizer] to avoid nesting [GestureDetector] inside the row.
-class _PrivacyCheckboxRow extends StatefulWidget {
-  const _PrivacyCheckboxRow({required this.value, required this.onChanged});
-
-  final bool value;
-  final ValueChanged<bool?> onChanged;
+/// Consent notice shown above the CREATE ACCOUNT button during email sign-up:
+/// "By tapping CREATE ACCOUNT, you agree to our Privacy Policy and Terms."
+/// There is no checkbox; the tap on the button is the acceptance (founder
+/// decision 2026-10-16, OI-305). The links open the policy and the terms in the
+/// external browser; the tappable areas use [TapGestureRecognizer] to avoid
+/// nesting [GestureDetector] inside the text.
+class _ConsentNotice extends StatefulWidget {
+  const _ConsentNotice();
 
   @override
-  State<_PrivacyCheckboxRow> createState() => _PrivacyCheckboxRowState();
+  State<_ConsentNotice> createState() => _ConsentNoticeState();
 }
 
-class _PrivacyCheckboxRowState extends State<_PrivacyCheckboxRow> {
+class _ConsentNoticeState extends State<_ConsentNotice> {
   final _privacyRecognizer = TapGestureRecognizer();
   final _termsRecognizer = TapGestureRecognizer();
 
@@ -1492,55 +1474,42 @@ class _PrivacyCheckboxRowState extends State<_PrivacyCheckboxRow> {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        SizedBox(
-          width: 24,
-          height: 24,
-          child: Checkbox(
-            value: widget.value,
-            activeColor: AppColors.accent,
-            checkColor: AppColors.bgDeep,
-            side: const BorderSide(color: AppColors.border, width: 1.5),
-            onChanged: widget.onChanged,
-          ),
+    // Text.rich, not RichText: the notice IS the consent mechanism, so it
+    // follows the system text size (RichText defaults to no scaling).
+    return Text.rich(
+      textAlign: TextAlign.center,
+      TextSpan(
+        // textDim, not the Welcome footer's textMute: here the notice IS the
+        // consent mechanism, so it must stay legible (textMute on bgDeep is
+        // about 3.5:1, below the 4.5:1 AA floor).
+        style: AppTypography.bodyS.copyWith(
+          color: AppColors.textDim,
+          height: 1.4,
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: RichText(
-            text: TextSpan(
-              style: AppTypography.bodyS.copyWith(
-                color: AppColors.textPrimary,
-                height: 1.4,
-              ),
-              children: [
-                const TextSpan(text: 'I agree to the '),
-                TextSpan(
-                  text: 'Privacy Policy',
-                  style: const TextStyle(
-                    color: AppColors.accent,
-                    decoration: TextDecoration.underline,
-                    decorationColor: AppColors.accent,
-                  ),
-                  recognizer: _privacyRecognizer,
-                ),
-                const TextSpan(text: ' and '),
-                TextSpan(
-                  text: 'Terms',
-                  style: const TextStyle(
-                    color: AppColors.accent,
-                    decoration: TextDecoration.underline,
-                    decorationColor: AppColors.accent,
-                  ),
-                  recognizer: _termsRecognizer,
-                ),
-                const TextSpan(text: '.'),
-              ],
+        children: [
+          const TextSpan(text: 'By tapping CREATE ACCOUNT, you agree to our '),
+          TextSpan(
+            text: 'Privacy Policy',
+            style: const TextStyle(
+              color: AppColors.accent,
+              decoration: TextDecoration.underline,
+              decorationColor: AppColors.accent,
             ),
+            recognizer: _privacyRecognizer,
           ),
-        ),
-      ],
+          const TextSpan(text: ' and '),
+          TextSpan(
+            text: 'Terms',
+            style: const TextStyle(
+              color: AppColors.accent,
+              decoration: TextDecoration.underline,
+              decorationColor: AppColors.accent,
+            ),
+            recognizer: _termsRecognizer,
+          ),
+          const TextSpan(text: '.'),
+        ],
+      ),
     );
   }
 }

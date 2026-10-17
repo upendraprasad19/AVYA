@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/utils/age_floor.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/shared/widgets/scroll_date_picker.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
@@ -496,7 +497,7 @@ class _OnboardingChatScreenState extends ConsumerState<OnboardingChatScreen>
         ScrollDatePicker(
           initialDate: seededInitial,
           firstDate: DateTime(1940),
-          lastDate: DateTime.now().subtract(const Duration(days: 365 * 16)),
+          lastDate: latestAllowedDob(DateTime.now()),
           onDateChanged: (picked) {
             notifier.setAnswer(
               state.currentStepData.key,
