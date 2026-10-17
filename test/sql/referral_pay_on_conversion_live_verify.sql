@@ -1,13 +1,15 @@
 -- test/sql/referral_pay_on_conversion_live_verify.sql
 --
--- Behavioural verification of migration 159 (the referrer is rewarded when the friend PAYS: 7 days for a monthly payment,
--- 30 for yearly, vested 7 days; the friend still gets 7 days at redemption). Plan: docs/plans/referral-pay-on-conversion.md.
+-- Behavioural verification of migrations 159 and 160 (159: the referrer is rewarded when the friend PAYS: 7 days for a monthly payment,
+-- 30 for yearly, vested 7 days; the friend still gets 7 days at redemption; 160: client privileges and the payment-status columns, the
+-- referrer_summary() aggregate, the redeem retry, the stale-credit predicate and the 90 percent promo ceiling). Plans: docs/plans/referral-pay-on-conversion.md,
+-- docs/plans/referral-hardening-migration-160.md. It needs BOTH migrations applied: on a 159-only database it aborts with an error at Q6 (referrer_summary() does not exist).
 --
 -- WHAT IT PROVES. The Dart contract test (test/contracts/referral_pay_on_conversion_migration_test.dart) proves the migration
 -- TEXT. This file calls the REAL redeem_referral_atomic, private.grant_referral_days and private.process_referral_conversions
 -- and reads the resulting rows. Groups: R redeem; W window and plan; P the "paid" predicate, one fixture per clause; V vest and
 -- credit; X voids and deletions; L the legacy shape; F failure isolation, alert dedup, helper bounds and the redeem -> pay ->
--- vest -> credit chain; K the CHECK constraints; A the catalog (ACL, security mode, columns, the cron job); H the hermes round-2 killers (X5 a NULL-referrer backlog cannot starve a real reward, H1 the helper's `<` boundary, H2 an in-place plan edit).
+-- vest -> credit chain; K the CHECK constraints; A the catalog (ACL, security mode, columns, the cron job); Q migration 160 (client reads and writes under SET LOCAL ROLE, hidden columns, referrer_summary, the redeem retry, the promo CHECK); H the hermes round-2 killers (X5 a NULL-referrer backlog cannot starve a real reward, H1 the helper's `<` boundary, H2 an in-place plan edit).
 -- What it CANNOT show (one session): two sessions racing, a lock held by someone else, the account-deletion deadlock, the volume
 -- alert, the ROW_COUNT guard: those are test/sql/referral_pay_on_conversion_concurrency_local.sh (replica only).
 --
@@ -29,7 +31,7 @@
 -- `<id> <what>  fail <details>`. A first line `SUMMARY ok=N fail=M skipped=K` counts them (K cases passed vacuously because an open real alert, or a real stalled reward, already existed). Every line must read `ok`. Against the replica
 -- BEFORE migration 159 (the 158 state) the block fails: R2 fails first (the old body credits the referrer), then the first call of
 -- private.process_referral_conversions(), which does not exist, aborts the whole block with an error instead of a result.
--- LOCAL: against test/sql/referral_pay_on_conversion_replica_schema.sql + supabase/migrations/159_referral_reward_on_conversion.sql.
+-- LOCAL: against test/sql/referral_pay_on_conversion_replica_schema.sql + supabase/migrations/159_referral_reward_on_conversion.sql + supabase/migrations/160_referral_hardening.sql.
 
 DO $v$
 DECLARE
@@ -59,6 +61,16 @@ DECLARE
   v_fail int;
   v_ok   int;
   v_res  text;
+  v_c    int;
+  v_msg  text;
+  v_t0   timestamptz;
+  v_ms   numeric;
+  v_j    jsonb;
+  v_col  text;
+  v_codes text[];
+  v_msgs  text[];
+  v_qs   text;
+  v_sp   text;
 BEGIN
   CREATE TEMP TABLE _vr (ord serial, id text, descr text, ok boolean, note text) ON COMMIT DROP;
 
@@ -706,6 +718,210 @@ BEGIN
     ('K3', 'referrer_reward_days without converted_at violates the coherence CHECK too (23514): the equality holds in BOTH directions', v_a3 = '23514', 'got=' || v_a3);
   DELETE FROM public.referral_redemptions WHERE referrer_id = ANY (v_pool) OR referee_id = ANY (v_pool);
 
+
+  -- ============================================================ Q. migration 160: grants, referrer_summary, redeem error, promo ceiling
+  -- Fixtures: r1 is a REFERRER of three friends (f[1] subscribed yearly and credited 30 days, f[2] subscribed monthly and pending, f[3]
+  -- joined only); r2 is the referrer of f[4] under a LEGACY row (credited under 158: referrer_rewarded, converted_at NULL); r3 has no rows.
+  -- Every read below runs UNDER the client role (SET LOCAL ROLE) with the JWT claims set, the way PostgREST runs it; the role is RESET
+  -- before anything is written to the postgres-owned _vr table. A role switch inside a sub-block survives the sub-block's rollback.
+  INSERT INTO public.referral_redemptions (code, referrer_id, referee_id, created_at, referrer_rewarded, referee_rewarded, converted_at, referrer_reward_days, referrer_credited_at, days_granted_each) VALUES
+    ('AVYA-Q1', r1, f[1], now() - interval '30 days', true,  true, now() - interval '20 days', 30, now() - interval '13 days', 7),
+    ('AVYA-Q1', r1, f[2], now() - interval '10 days', false, true, now() - interval '5 days',   7, NULL, 7),
+    ('AVYA-Q1', r1, f[3], now() - interval '2 days',  false, true, NULL, NULL, NULL, 7),
+    ('AVYA-Q1', r1, NULL, now() - interval '1 day',   false, true, NULL, NULL, NULL, 7),   -- a friend who deleted their account: still JOINED
+    ('AVYA-Q2', r2, f[4], now() - interval '3 days',  true,  true, NULL, NULL, NULL, 7);
+
+  -- Q1: the three read shapes the app uses, as the REFEREE f[1] and as the REFERRER r1; another user's row is invisible.
+  PERFORM set_config('request.jwt.claim.sub', f[1]::text, true);
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', f[1], 'role', 'authenticated')::text, true);
+  SET LOCAL ROLE authenticated;
+  SELECT count(id) INTO v_n FROM public.referral_redemptions WHERE referee_id = f[1];                       -- referral_repository.hasRedeemed
+  SELECT count(*) INTO v_c FROM public.referral_redemptions WHERE referee_id = f[4];                         -- somebody else's row
+  RESET ROLE;
+  PERFORM set_config('request.jwt.claim.sub', r1::text, true);
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', r1, 'role', 'authenticated')::text, true);
+  SET LOCAL ROLE authenticated;
+  SELECT count(*) INTO v_n2 FROM (SELECT code, referrer_id, referee_id, days_granted_each, created_at        -- sync_restore_completeness shape
+                                    FROM public.referral_redemptions WHERE referrer_id = r1 OR referee_id = r1 ORDER BY created_at LIMIT 100) t;
+  RESET ROLE;
+  INSERT INTO _vr (id, descr, ok, note) VALUES
+    ('Q1a', 'as the friend: select id where referee_id = me returns the one row (hasRedeemed keeps working)', v_n = 1, format('rows=%s', v_n)),
+    ('Q1b', 'as the friend: another user''s redemption row is invisible (RLS)', v_c = 0, format('rows=%s', v_c)),
+    ('Q1c', 'as the referrer: the restore select (granted columns, or(), order by, limit) returns the four own rows', v_n2 = 4, format('rows=%s', v_n2));
+
+  -- Q2: every hidden column refuses with 42501, individually and through select *.
+  v_codes := ARRAY[]::text[];
+  SET LOCAL ROLE authenticated;
+  FOREACH v_col IN ARRAY ARRAY['converted_at', 'referrer_reward_days', 'referrer_credited_at', 'referrer_rewarded', 'referee_rewarded'] LOOP
+    BEGIN EXECUTE format('SELECT %I FROM public.referral_redemptions LIMIT 1', v_col); v_codes := v_codes || (v_col || '=ok');
+    EXCEPTION WHEN OTHERS THEN v_codes := v_codes || (v_col || '=' || SQLSTATE); END;
+  END LOOP;
+  BEGIN PERFORM * FROM public.referral_redemptions LIMIT 1; v_codes := v_codes || 'star=ok';
+  EXCEPTION WHEN OTHERS THEN v_codes := v_codes || ('star=' || SQLSTATE); END;
+  RESET ROLE;
+  INSERT INTO _vr (id, descr, ok, note) VALUES
+    ('Q2', 'as an authenticated user each of the five payment-status columns, and select *, is refused with 42501',
+      v_codes = ARRAY['converted_at=42501', 'referrer_reward_days=42501', 'referrer_credited_at=42501', 'referrer_rewarded=42501', 'referee_rewarded=42501', 'star=42501'], array_to_string(v_codes, ' '));
+
+  -- Q3: no write verb works for a client, refused BY PRIVILEGE (the message), not by row security (which would also say 42501 for an INSERT).
+  v_msgs := ARRAY[]::text[];
+  SET LOCAL ROLE authenticated;
+  BEGIN INSERT INTO public.referral_redemptions (code, referrer_id, referee_id) VALUES ('AVYA-QX', r1, f[5]); v_msgs := v_msgs || 'insert=ok';
+  EXCEPTION WHEN OTHERS THEN v_msgs := v_msgs || ('insert=' || SQLERRM); END;
+  BEGIN UPDATE public.referral_redemptions SET code = 'AVYA-QX'; v_msgs := v_msgs || 'update=ok';
+  EXCEPTION WHEN OTHERS THEN v_msgs := v_msgs || ('update=' || SQLERRM); END;
+  BEGIN DELETE FROM public.referral_redemptions; v_msgs := v_msgs || 'delete=ok';
+  EXCEPTION WHEN OTHERS THEN v_msgs := v_msgs || ('delete=' || SQLERRM); END;
+  -- TRUNCATE ignores row security: only attempt it when the privilege is already gone, so a run against a database WITHOUT migration 160 reports a red case instead of truncating the live audit table (inside a block that aborts, but with the lock).
+  IF has_table_privilege('authenticated', 'public.referral_redemptions', 'TRUNCATE') THEN v_msgs := v_msgs || 'truncate=NOT ATTEMPTED; authenticated still holds TRUNCATE'::text;
+  ELSE
+    BEGIN TRUNCATE public.referral_redemptions; v_msgs := v_msgs || 'truncate=ok';
+    EXCEPTION WHEN OTHERS THEN v_msgs := v_msgs || ('truncate=' || SQLERRM); END;
+  END IF;
+  RESET ROLE;
+  SELECT count(*) INTO v_n FROM public.referral_redemptions WHERE referrer_id = ANY (v_pool);
+  INSERT INTO _vr (id, descr, ok, note) VALUES
+    ('Q3', 'as an authenticated user INSERT, UPDATE, DELETE and TRUNCATE are each refused with "permission denied for table" and the five fixture rows survive',
+      (SELECT bool_and(m LIKE '%=permission denied for table referral_redemptions') FROM unnest(v_msgs) m) AND v_n = 5, array_to_string(v_msgs, ' | ') || format(' | rows=%s', v_n));
+
+  -- Q4: anon has no access at all.
+  SET LOCAL ROLE anon;
+  BEGIN PERFORM id FROM public.referral_redemptions LIMIT 1; v_msg := 'ok';
+  EXCEPTION WHEN OTHERS THEN v_msg := SQLERRM; END;
+  RESET ROLE;
+  INSERT INTO _vr (id, descr, ok, note) VALUES
+    ('Q4', 'anon cannot read referral_redemptions (permission denied for table)', v_msg = 'permission denied for table referral_redemptions', v_msg);
+
+  -- Q5: the catalog: no table-level privilege of any kind for anon or authenticated, the exact column set for authenticated, none for anon.
+  SELECT string_agg(column_name || ':' || privilege_type, ',' ORDER BY column_name, privilege_type) INTO v_qs
+    FROM information_schema.column_privileges
+   WHERE table_schema = 'public' AND table_name = 'referral_redemptions' AND grantee IN ('authenticated', 'anon');
+  INSERT INTO _vr (id, descr, ok, note) VALUES
+    ('Q5a', 'neither anon nor authenticated holds any table-level privilege (SELECT INSERT UPDATE DELETE TRUNCATE REFERENCES TRIGGER MAINTAIN)',
+      NOT EXISTS (SELECT 1 FROM unnest(ARRAY['anon', 'authenticated']) r, unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER', 'MAINTAIN']) pr
+                   WHERE has_table_privilege(r, 'public.referral_redemptions', pr)), NULL),
+    ('Q5b', 'the column privileges are exactly SELECT on the six granted columns for authenticated and nothing for anon',
+      v_qs = 'code:SELECT,created_at:SELECT,days_granted_each:SELECT,id:SELECT,referee_id:SELECT,referrer_id:SELECT', coalesce(v_qs, 'none')),
+    ('Q5c', 'service_role keeps its table privileges (the Edge Functions and the restore function depend on them)',
+      has_table_privilege('service_role', 'public.referral_redemptions', 'SELECT') AND has_table_privilege('service_role', 'public.referral_redemptions', 'INSERT'), NULL);
+
+  -- Q6: referrer_summary: exact numbers for r1 (4 joined, 2 subscribed, 1 pending, 1 credited, 30 days), the legacy credited row of r2
+  -- (credited, not subscribed, counts days_granted_each), a referrer with NO rows (zeros, days_earned 0 not NULL), a NULL uid (28000), anon (refused).
+  PERFORM set_config('request.jwt.claim.sub', r1::text, true);
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', r1, 'role', 'authenticated')::text, true);
+  SET LOCAL ROLE authenticated;
+  v_j := public.referrer_summary();
+  RESET ROLE;
+  INSERT INTO _vr (id, descr, ok, note) VALUES
+    ('Q6a', 'referrer_summary for r1: joined 4 (one friend deleted their account), subscribed 2, pending 1, credited 1, days_earned 30', v_j = '{"joined":4,"subscribed":2,"pending":1,"credited":1,"days_earned":30}'::jsonb, v_j::text);
+  PERFORM set_config('request.jwt.claim.sub', r2::text, true);
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', r2, 'role', 'authenticated')::text, true);
+  SET LOCAL ROLE authenticated;
+  v_j := public.referrer_summary();
+  RESET ROLE;
+  INSERT INTO _vr (id, descr, ok, note) VALUES
+    ('Q6b', 'a row credited under 158 (converted_at NULL) is credited and not subscribed, and counts days_granted_each', v_j = '{"joined":1,"subscribed":0,"pending":0,"credited":1,"days_earned":7}'::jsonb, v_j::text);
+  PERFORM set_config('request.jwt.claim.sub', r3::text, true);
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', r3, 'role', 'authenticated')::text, true);
+  SET LOCAL ROLE authenticated;
+  v_j := public.referrer_summary();
+  RESET ROLE;
+  INSERT INTO _vr (id, descr, ok, note) VALUES
+    ('Q6c', 'a referrer with NO rows gets zeros and days_earned = 0, never NULL', v_j = '{"joined":0,"subscribed":0,"pending":0,"credited":0,"days_earned":0}'::jsonb, v_j::text);
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claims', '{}', true);
+  SET LOCAL ROLE authenticated;
+  BEGIN PERFORM public.referrer_summary(); v_st := 'no error'; EXCEPTION WHEN OTHERS THEN v_st := SQLSTATE; END;
+  RESET ROLE;
+  INSERT INTO _vr (id, descr, ok, note) VALUES ('Q6d', 'referrer_summary with no authenticated user raises 28000', v_st = '28000', 'got=' || v_st);
+  SET LOCAL ROLE anon;
+  BEGIN PERFORM public.referrer_summary(); v_st := 'no error'; EXCEPTION WHEN OTHERS THEN v_st := SQLSTATE; END;
+  RESET ROLE;
+  INSERT INTO _vr (id, descr, ok, note) VALUES
+    ('Q6e', 'anon cannot execute referrer_summary (42501) and has_function_privilege agrees', v_st = '42501' AND NOT has_function_privilege('anon', 'public.referrer_summary()', 'execute'), 'got=' || v_st);
+  -- the shadow-table probe: a hostile search_path must not redirect the function's reads (relations are schema-qualified and public precedes pg_temp)
+  CREATE TEMP TABLE referral_redemptions (referrer_id uuid, converted_at timestamptz, referrer_rewarded boolean, referrer_reward_days int, days_granted_each int) ON COMMIT DROP;
+  INSERT INTO pg_temp.referral_redemptions VALUES (r3, now(), true, 30, 30);
+  PERFORM set_config('request.jwt.claim.sub', r3::text, true);
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', r3, 'role', 'authenticated')::text, true);
+  v_sp := current_setting('search_path');
+  PERFORM set_config('search_path', 'pg_temp, public', true);
+  v_j := public.referrer_summary();
+  PERFORM set_config('search_path', v_sp, true);
+  INSERT INTO _vr (id, descr, ok, note) VALUES
+    ('Q6f', 'a caller-controlled search_path (pg_temp first) with a shadow referral_redemptions does not redirect referrer_summary', v_j = '{"joined":0,"subscribed":0,"pending":0,"credited":0,"days_earned":0}'::jsonb, v_j::text);
+  DROP TABLE pg_temp.referral_redemptions;
+  -- Q6g: the mirror of Q6a/Q6b: a user who is only ever a REFEREE (f[1] of r1, f[4] of r2) sees ZEROS, never their inviter's rows (an OR of
+  -- referee_id = uid into the filter would hand a friend their inviter's reward status through the aggregate).
+  v_codes := ARRAY[]::text[];
+  FOREACH v_rid IN ARRAY ARRAY[f[1], f[4]] LOOP
+    PERFORM set_config('request.jwt.claim.sub', v_rid::text, true);
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_rid, 'role', 'authenticated')::text, true);
+    SET LOCAL ROLE authenticated;
+    v_j := public.referrer_summary();
+    RESET ROLE;
+    v_codes := v_codes || v_j::text;
+  END LOOP;
+  INSERT INTO _vr (id, descr, ok, note) VALUES
+    ('Q6g', 'referrer_summary as a user who is only a REFEREE returns zeros: the friend of r1 and the friend of r2 never see their inviter''s rows',
+      (SELECT bool_and(x::jsonb = '{"joined":0,"subscribed":0,"pending":0,"credited":0,"days_earned":0}'::jsonb) FROM unnest(v_codes) x), array_to_string(v_codes, ' | '));
+
+  -- Q6h: referrer_rewarded is NULLABLE on the live table. A NULL flag means "not credited": a converted row with a NULL flag is PENDING (the
+  -- comparison must be IS NOT TRUE, not = false), a NULL-flag row counts as neither credited nor in days_earned. Two rows, no referee.
+  INSERT INTO public.referral_redemptions (code, referrer_id, referee_id, created_at, referrer_rewarded, referee_rewarded, converted_at, referrer_reward_days, days_granted_each) VALUES
+    ('AVYA-Q6H', f[7], NULL, now() - interval '9 days', NULL, true, now() - interval '5 days', 7, 7),
+    ('AVYA-Q6H', f[7], NULL, now() - interval '8 days', NULL, true, NULL, NULL, 7);
+  PERFORM set_config('request.jwt.claim.sub', f[7]::text, true);
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', f[7], 'role', 'authenticated')::text, true);
+  SET LOCAL ROLE authenticated;
+  v_j := public.referrer_summary();
+  RESET ROLE;
+  INSERT INTO _vr (id, descr, ok, note) VALUES
+    ('Q6h', 'a NULL referrer_rewarded flag is "not credited": a converted row with it is PENDING, none is credited, days_earned is 0',
+      v_j = '{"joined":2,"subscribed":1,"pending":1,"credited":0,"days_earned":0}'::jsonb, v_j::text);
+  DELETE FROM public.referral_redemptions WHERE code = 'AVYA-Q6H';
+
+  -- Q7: a redeem that hits a NON-lock error (0 days, 22023 from the helper) fails at once: not retried (well under one 250 ms sleep), no audit row.
+  v_t0 := clock_timestamp();
+  BEGIN PERFORM public.redeem_referral_atomic('AVYA-Q3', r3, f[5], 0); v_st := 'no error';
+  EXCEPTION WHEN OTHERS THEN v_st := SQLSTATE; END;
+  v_ms := extract(milliseconds FROM clock_timestamp() - v_t0);
+  SELECT count(*) INTO v_n FROM public.referral_redemptions WHERE referee_id = f[5];
+  INSERT INTO _vr (id, descr, ok, note) VALUES
+    ('Q7', 'a non-lock error (p_days = 0, 22023) propagates at once: in under 200 ms (a WHEN OTHERS retry would take 500 ms+) and with no audit row',
+      v_st = '22023' AND v_ms < 200 AND v_n = 0, format('%s in %s ms, audit rows=%s', v_st, round(v_ms, 1), v_n));
+
+  -- Q8: a vested row whose referee is gone is VOIDED by the reconcile of the same run and never credited (the single-session path). NOTE: this
+  -- case does NOT kill the mutant "drop the referee_id predicate of the credit select": within ONE run the reconcile voids such a row BEFORE the
+  -- credit select reads it. The predicate matters only when the deletion commits BETWEEN the reconcile and the credit select, which needs two
+  -- sessions: test/sql/referral_pay_on_conversion_concurrency_local.sh C14.
+  INSERT INTO public.referral_redemptions (code, referrer_id, referee_id, created_at, referrer_rewarded, referee_rewarded, converted_at, referrer_reward_days)
+    VALUES ('AVYA-Q8', r3, NULL, now() - interval '20 days', false, true, now() - interval '10 days' + interval '1 hour', 7) RETURNING id INTO v_rid;
+  INSERT INTO public.referral_redemptions (code, referrer_id, referee_id, created_at, referrer_rewarded, referee_rewarded)
+    VALUES ('AVYA-Q8', r3, f[6], now() - interval '20 days', false, true) RETURNING id INTO v_rid2;
+  INSERT INTO public.subscriptions (user_id, plan, status, start_date, end_date, razorpay_payment_id)
+    VALUES (f[6], 'monthly', 'active', now() - interval '9 days', now() + interval '21 days', 'pay_vfy_' || gen_random_uuid());
+  v_ret := private.process_referral_conversions();
+  IF v_ret ? 'skipped' THEN RAISE EXCEPTION 'JOB_LOCKED the job lock is held by another run; retry in a minute'; END IF;
+  SELECT count(*) INTO v_n FROM public.subscriptions WHERE user_id = r3;
+  SELECT referrer_rewarded IS TRUE INTO v_b1 FROM public.referral_redemptions WHERE id = v_rid;
+  INSERT INTO _vr (id, descr, ok, note) VALUES
+    ('Q8', 'a vested row with referee_id NULL is voided (converted_at NULL) and never credited, beside a positive control (the referrer is credited ONCE, for the real friend only)',
+      v_n = 1 AND v_b1 IS NOT TRUE AND (SELECT converted_at IS NULL FROM public.referral_redemptions WHERE id = v_rid)
+        AND (SELECT referrer_rewarded IS TRUE FROM public.referral_redemptions WHERE id = v_rid2), format('referrer rows=%s stale credited=%s', v_n, v_b1));
+  DELETE FROM public.referral_redemptions WHERE referrer_id = ANY (v_pool) OR referee_id = ANY (v_pool);
+  DELETE FROM public.subscriptions WHERE user_id = ANY (v_pool);
+
+  -- Q9: the promo ceiling: 90 and 1 are accepted, 91 / 100 / 0 are refused with 23514 (the old bound was 100).
+  v_codes := ARRAY[]::text[];
+  FOREACH v_col IN ARRAY ARRAY['90', '1', '91', '100', '0'] LOOP
+    BEGIN INSERT INTO public.promo_codes (code, discount_pct, valid_until) VALUES ('ZZVERIFY' || v_col, v_col::int, current_date + 1); v_codes := v_codes || (v_col || '=ok');
+    EXCEPTION WHEN OTHERS THEN v_codes := v_codes || (v_col || '=' || SQLSTATE); END;
+  END LOOP;
+  INSERT INTO _vr (id, descr, ok, note) VALUES
+    ('Q9', 'promo_codes.discount_pct: 90 and 1 accepted; 91, 100 and 0 refused (23514)', v_codes = ARRAY['90=ok', '1=ok', '91=23514', '100=23514', '0=23514'], array_to_string(v_codes, ' '));
+  DELETE FROM public.promo_codes WHERE code LIKE 'ZZVERIFY%';
+
   -- ============================================================ A. the catalog
   INSERT INTO _vr (id, descr, ok, note) VALUES
     ('A1', 'all three functions are SECURITY DEFINER with search_path=public',
@@ -746,10 +962,20 @@ BEGIN
     ('A9', 'subscriptions: RLS is enabled and no INSERT/UPDATE/DELETE policy exists for anon, authenticated or PUBLIC (a user cannot forge the paid row the reward is read from)',
       (SELECT relrowsecurity FROM pg_class WHERE oid = 'public.subscriptions'::regclass)
       AND NOT EXISTS (SELECT 1 FROM pg_policy pp WHERE pp.polrelid = 'public.subscriptions'::regclass AND pp.polcmd <> 'r'
-                       AND (pp.polroles = '{0}'::oid[] OR EXISTS (SELECT 1 FROM pg_roles rl WHERE rl.oid = ANY (pp.polroles) AND rl.rolname IN ('anon', 'authenticated')))), NULL);
+                       AND (pp.polroles = '{0}'::oid[] OR EXISTS (SELECT 1 FROM pg_roles rl WHERE rl.oid = ANY (pp.polroles) AND rl.rolname IN ('anon', 'authenticated')))), NULL),
+    ('A10', 'referrer_summary: SECURITY DEFINER, STABLE, search_path public then pg_temp, RETURNS jsonb, executable by authenticated, not by anon, and PUBLIC holds no EXECUTE',
+      (SELECT p.prosecdef AND p.provolatile = 's' AND p.proconfig = ARRAY['search_path=public, pg_temp'] AND pg_get_function_result(p.oid) = 'jsonb'
+         FROM pg_proc p WHERE p.oid = 'public.referrer_summary()'::regprocedure)
+      AND has_function_privilege('authenticated', 'public.referrer_summary()', 'execute')
+      AND NOT has_function_privilege('anon', 'public.referrer_summary()', 'execute')
+      AND NOT EXISTS (SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+                       WHERE p.oid = 'public.referrer_summary()'::regprocedure AND a.grantee = 0 AND a.privilege_type = 'EXECUTE'), NULL),
+    ('A11', 'promo_codes_discount_pct_check is exactly 1..90 and there is one CHECK on discount_pct',
+      (SELECT count(*) = 1 AND bool_and(pg_get_constraintdef(oid) ~ '^CHECK \(\(\(discount_pct >= 1\) AND \(discount_pct <= 90\)\)\)$')
+         FROM pg_constraint WHERE conrelid = 'public.promo_codes'::regclass AND contype = 'c'), NULL);
 
-  SELECT count(*) FILTER (WHERE ok), count(*) FILTER (WHERE NOT ok), count(*) FILTER (WHERE descr LIKE '%[SKIPPED%') INTO v_ok, v_fail, v_skip FROM _vr;
-  SELECT string_agg(format('%s %s  %s', id, descr, CASE WHEN ok THEN 'ok' ELSE 'fail ' || coalesce(note, '') END), E'\n' ORDER BY ord) INTO v_res FROM _vr;
+  SELECT count(*) FILTER (WHERE ok IS TRUE), count(*) FILTER (WHERE ok IS NOT TRUE), count(*) FILTER (WHERE descr LIKE '%[SKIPPED%') INTO v_ok, v_fail, v_skip FROM _vr;   -- IS NOT TRUE: a NULL case (an A-case whose subquery returned no row) is a FAIL, never silently uncounted
+  SELECT string_agg(format('%s %s  %s', id, descr, CASE WHEN ok IS TRUE THEN 'ok' ELSE 'fail ' || coalesce(note, '') END), E'\n' ORDER BY ord) INTO v_res FROM _vr;
   RAISE EXCEPTION 'VERIFY_RESULTS%', E'\nSUMMARY ok=' || v_ok || ' fail=' || v_fail || ' skipped=' || v_skip || E'\n' || v_res;
 END
 $v$;

@@ -208,13 +208,13 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-334 | deploy_via_api.js rollback gaps: the pre-deploy cloud snapshot writes 0… | none - an engineering choice (see the… | 2026-10-11 - two measurements during the… | [:5971](open_issues.md#L5971) |
 | OI-335 | Gate 50 (check_reader_manifest_complete) never evaluates a SoT concept… | none for the registry wording; making… | 2026-10-11 by reading:… | [:5984](open_issues.md#L5984) |
 | OI-336 | Referral reward UX: the referrer's counts surface (friends joined /… | the founder's go to start Unit C… | 2026-10-12 - by reading the repo:… | [:5995](open_issues.md#L5995) |
-| OI-337 | The commit-time gates read staged paths with a plain git diff --cached… | none - an engineering choice; a… | 2026-10-12 - by reading and by… | [:6006](open_issues.md#L6006) |
-| OI-338 | delete_account_purges_all_user_buckets_test.dart reads USER_OWNED_BUCKETS… | none - a test-only edit… | 2026-10-12 - by reading… | [:6019](open_issues.md#L6019) |
-| OI-339 | A Razorpay refund made only in the dashboard is invisible to the referral… | the founder's decision on how refunds… | 2026-10-13 - by reading.… | [:6035](open_issues.md#L6035) |
-| OI-340 | A chargeback or UPI dispute after the referral reward vested has no… | the founder's decision: accept the loss,… | 2026-10-13 - by reading.… | [:6048](open_issues.md#L6048) |
-| OI-341 | A friend on the 7-day referral trial cannot buy: create-razorpay-order… | the founder's go to start the plan… | 2026-10-13 - by reading.… | [:6061](open_issues.md#L6061) |
-| OI-342 | Promo-discounted payments count toward the referral reward at full value:… | the founder's decision on a floor (for… | 2026-10-13 - by reading… | [:6076](open_issues.md#L6076) |
-| OI-343 | Referral abuse by throwaway accounts: email confirmation is on but… | the founder's decision: accept the… | 2026-10-13 - by reading the live auth… | [:6089](open_issues.md#L6089) |
-| OI-344 | Referral reward hardening bundle (migration 160): credit select re-checks… | the founder's go to plan it… | 2026-10-16 - by reading migration 159… | [:6102](open_issues.md#L6102) |
-| OI-345 | Remove the enable_body_measurements OFF path (flag checks, kill switch,… | founder-owned check of the RELEASE build… | 2026-10-16:… | [:6119](open_issues.md#L6119) |
-| OI-346 | Existing accounts accepted the v1 (blog) policy; nothing asks them to… | the founder's call on how existing users… | 2026-10-16: `AppConstants.termsVersion`… | [:6128](open_issues.md#L6128) |
+| OI-337 | The commit-time gates read staged paths with a plain git diff --cached… | none - an engineering choice; a… | 2026-10-12 - by reading and by… | [:6008](open_issues.md#L6008) |
+| OI-338 | delete_account_purges_all_user_buckets_test.dart reads USER_OWNED_BUCKETS… | none - a test-only edit… | 2026-10-12 - by reading… | [:6021](open_issues.md#L6021) |
+| OI-339 | A Razorpay refund made only in the dashboard is invisible to the referral… | the founder's decision on how refunds… | 2026-10-13 - by reading.… | [:6037](open_issues.md#L6037) |
+| OI-340 | A chargeback or UPI dispute after the referral reward vested has no… | the founder's decision: accept the loss,… | 2026-10-13 - by reading.… | [:6050](open_issues.md#L6050) |
+| OI-341 | A friend on the 7-day referral trial cannot buy: create-razorpay-order… | the founder's go to start the plan… | 2026-10-13 - by reading.… | [:6063](open_issues.md#L6063) |
+| OI-342 | Promo-discounted payments count toward the referral reward at full value:… | the founder's decision on a floor (for… | 2026-10-13 - by reading… | [:6078](open_issues.md#L6078) |
+| OI-343 | Referral abuse by throwaway accounts: email confirmation is on but… | the founder's decision: accept the… | 2026-10-13 - by reading the live auth… | [:6093](open_issues.md#L6093) |
+| OI-345 | Remove the enable_body_measurements OFF path (flag checks, kill switch,… | founder-owned check of the RELEASE build… | 2026-10-16:… | [:6106](open_issues.md#L6106) |
+| OI-346 | Existing accounts accepted the v1 (blog) policy; nothing asks them to… | the founder's call on how existing users… | 2026-10-16: `AppConstants.termsVersion`… | [:6115](open_issues.md#L6115) |
+| OI-347 | Free-access codes: the founder wants to give out codes that grant PRO for… | none (a plan is the next step; the… | 2026-10-16 - by reading… | [:6124](open_issues.md#L6124) |

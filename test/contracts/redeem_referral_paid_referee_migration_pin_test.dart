@@ -18,7 +18,11 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-const _migPath = 'supabase/migrations/159_referral_reward_on_conversion.sql';
+// The LIVE definition of redeem_referral_atomic is the LAST CREATE OR REPLACE: migration 160 (retry loop around the grant, the same paid-plan
+// refusal before it and after each pause) when it is on the branch, else migration 159 (the origin of the refusal).
+final _migPath = File('supabase/migrations/160_referral_hardening.sql').existsSync()
+    ? 'supabase/migrations/160_referral_hardening.sql'
+    : 'supabase/migrations/159_referral_reward_on_conversion.sql';
 const _efPath = 'supabase/functions/redeem-referral/index.ts';
 
 String _squash(String s) => s.replaceAll(RegExp(r'\s+'), ' ').trim();
@@ -28,7 +32,7 @@ String _stripSqlComments(String src) => src.split('\n').map((line) {
       return i == -1 ? line : line.substring(0, i);
     }).join('\n');
 
-/// The squashed, comment-free body of public.redeem_referral_atomic in migration 159.
+/// The squashed, comment-free body of public.redeem_referral_atomic in the latest migration that defines it (160, else 159).
 String _redeemBody() {
   final f = File(_migPath);
   if (!f.existsSync()) {

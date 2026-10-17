@@ -13,6 +13,7 @@
 #   docker exec -i rpoc-pgtest psql -U postgres -h 127.0.0.1 -d postgres -c 'create database rpoc_a'
 #   docker exec -i rpoc-pgtest psql -U postgres -h 127.0.0.1 -d rpoc_a -v ON_ERROR_STOP=1 < test/sql/referral_pay_on_conversion_replica_schema.sql
 #   docker exec -i rpoc-pgtest psql -U postgres -h 127.0.0.1 -d rpoc_a -v ON_ERROR_STOP=1 < supabase/migrations/159_referral_reward_on_conversion.sql
+#   docker exec -i rpoc-pgtest psql -U postgres -h 127.0.0.1 -d rpoc_a -v ON_ERROR_STOP=1 --single-transaction < supabase/migrations/160_referral_hardening.sql
 #
 # WHY A SECOND FILE. test/sql/referral_pay_on_conversion_live_verify.sql runs in ONE transaction, so it cannot show two sessions
 # racing or one session holding a lock. Every case below ASSERTS its outcome; each also states the mutation it kills.
@@ -58,6 +59,29 @@
 #      returns promptly and still reconciles and credits.  Kills: FOR UPDATE OF s in the lateral subquery.
 #   C13 the batch cap: 55 vested pending rewards of one referrer: the first run credits exactly 50 (c_batch), the second the other 5.
 #      Kills: dropping the LIMIT, raising the constant.
+#   C14 (migration 160, N1) the stale-credit window, TWO sessions, deterministic (no sleeps: it polls pg_locks). Fixture, in heap order: target
+#      T (vested, converted, payment present, referee FT) inserted BEFORE a decoy D whose reconcile UPDATE fires a replica-only trigger that
+#      blocks on advisory lock K. B deletes FT (uncommitted: T row-locked, referee_id about to become NULL); C holds K; A runs the job: the
+#      reconcile SKIPS T (SKIP LOCKED), updates D and blocks in the trigger on K; B then COMMITS (T.referee_id NULL, converted_at stale);
+#      C releases K; A reaches the credit select. Asserted after run 1: T still has converted_at NOT NULL, referee_id NULL, not rewarded
+#      and the referrer holds 0 subscription rows (T was SKIPPED, not voided); run 2 voids T and still credits nothing.
+#      Kills: drop `AND rr.referee_id IS NOT NULL` from the credit select (the referrer is credited for a deleted payment).
+#   C15 (migration 160, N4) the self-check aborts a half-revoked table or function: a second role holds GRANT OPTION and hands a client role a
+#      privilege the owner's REVOKE cannot remove. Six scenarios, each must name ITS OWN clause: table-level INSERT+SELECT to authenticated, table-level
+#      DELETE to authenticated, table-level MAINTAIN to anon, a column-level UPDATE, EXECUTE on the job to anon, EXECUTE on redeem_referral_atomic to
+#      authenticated. Applying 160 with --single-transaction must FAIL with "self-check failed" and leave the database as it was (no referrer_summary,
+#      the promo CHECK still 1..100).  Kills: remove the self-check DO block or any of its clauses, cut a privilege or role array.
+#   C16 (migration 160, N3) the bounded redeem retry, observed NON-transactionally (a replica-only wrapper of private.grant_referral_days
+#      counts attempts on a sequence, which survives rollback; it is installed, then restored and checked by md5): (a) the friend's active row
+#      is held and RELEASED by a top-level DO block once the redeem is asleep between attempts (pg_stat_activity wait_event PgSleep): the redeem
+#      succeeds on attempt 2, the call took 240 ms to 1.5 s; (b) held for 6 s: it fails with 55P03 after exactly 3 attempts in 480 to 700 ms (a third
+#      pause would take 750+) with NO audit row and the row untouched; (c) a non-lock error (0 days, 22023) is attempted ONCE and fails in under
+#      200 ms; (d) a PAID row lands while the redeem sleeps: it is refused with P0001 referee_has_paid_plan after ONE helper attempt, no audit row.
+#      Kills: retry count 1; no retry; WHEN OTHERS; the final failure swallowed; the sleep removed, made 2 s or moved after the last attempt;
+#      the paid-plan re-validation removed.
+#   C17 (migration 160, review) the inline ROLLBACK block RUNS: it is extracted from the migration text, applied over a database that has 159 + 160,
+#      and the result is compared with a database that only has 159 (md5 of both function definitions, sorted relacl, no leftover column ACL entries,
+#      the promo CHECK, referrer_summary gone, both function ACLs).  Kills: a rollback missing the REVOKE ALL, MAINTAIN or the CHECK restore.
 #   C8 a job run and a redemption of the same REFEREE do not deadlock under load: pgbench, 2 clients (job and redeem) over
 #      DL_PAIRS users; zero errors other than the expected unique_violation / referee_has_paid_plan, every redemption audited.
 #      STATISTICAL and supplementary (a pass proves the lock order only as far as the run was long).
@@ -69,6 +93,7 @@ set -u
 CONTAINER="${1:-rpoc-pgtest}"
 DB="${2:-rpoc_a}"
 DL_PAIRS="${DL_PAIRS:-400}"
+MIG160="${MIG160:-supabase/migrations/160_referral_hardening.sql}"   # the file C15 applies (a mutation run points it at a mutated copy)
 
 if [ "$CONTAINER" != "rpoc-pgtest" ]; then echo "SETUP: refusing container '$CONTAINER' (only rpoc-pgtest)" >&2; exit 2; fi
 case "$DB" in
@@ -77,7 +102,12 @@ case "$DB" in
 esac
 
 TMP="$(mktemp -d)"
-cleanup() { rm -rf "$TMP"; }
+cleanup() {
+  # C16 installs a wrapper of private.grant_referral_days; if the script died in between, put the real function back.
+  docker exec -i "$CONTAINER" psql -U postgres -h 127.0.0.1 -d "$DB" -qAt -c "do \$r\$ begin if to_regprocedure('private.grant_referral_days_real(uuid,integer)') is not null then drop function if exists private.grant_referral_days(uuid, integer); alter function private.grant_referral_days_real(uuid, integer) rename to grant_referral_days; end if; end \$r\$; drop sequence if exists public.rpoc_attempts; drop table if exists public.rpoc_res;" >/dev/null 2>&1
+  docker exec -i "$CONTAINER" psql -U postgres -h 127.0.0.1 -d postgres -qAt -c "drop database if exists rpoc_sc" -c "drop role if exists rpoc_gx" >/dev/null 2>&1
+  rm -rf "$TMP"
+}
 trap cleanup EXIT
 
 psql_() { docker exec -i -e PGOPTIONS="-c client_min_messages=warning" "$CONTAINER" psql -U postgres -h 127.0.0.1 -d "$DB" -v ON_ERROR_STOP=1 -qAt "$@"; }
@@ -88,6 +118,7 @@ if ! psql_ -c "select 1" >/dev/null 2>&1; then echo "SETUP: cannot reach $DB in 
 if [ "$(psql_ -c "select to_regclass('public.rpoc_replica_marker') is not null")" != "t" ]; then echo "SETUP: refusing, $DB has no public.rpoc_replica_marker (not the replica)" >&2; exit 2; fi
 if [ "$(psql_ -c "select count(*) from public.users")" -gt 100 ]; then echo "SETUP: refusing, $DB has >100 users (not the replica)" >&2; exit 2; fi
 if [ "$(psql_ -c "select to_regprocedure('private.process_referral_conversions()') is not null")" != "t" ]; then echo "SETUP: migration 159 is not applied in $DB" >&2; exit 2; fi
+if [ "$(psql_ -c "select to_regprocedure('public.referrer_summary()') is not null")" != "t" ]; then echo "SETUP: migration 160 is not applied in $DB" >&2; exit 2; fi
 
 FAIL=0
 fail() { echo "FAIL: $*"; FAIL=1; }
@@ -97,6 +128,10 @@ reset_tables() {
 drop trigger if exists rpoc_slow_grant on public.subscriptions;
 drop trigger if exists rpoc_swallow_flag on public.referral_redemptions;
 drop trigger if exists rpoc_alert_boom on public.alerts;
+drop trigger if exists rpoc_c14_block on public.referral_redemptions;
+drop function if exists public.rpoc_c14_block();
+drop sequence if exists public.rpoc_c14_seq;
+drop sequence if exists public.rpoc_c14_early;
 drop function if exists public.rpoc_alert_boom();
 drop function if exists public.rpoc_slow_grant();
 drop function if exists public.rpoc_swallow_flag();
@@ -603,6 +638,333 @@ EOF
 [ "$DL_DUP" = "0" ]       || fail "C8 a user ended with two referral_trial rows (a grant raced another): $DL_DUP"
 DL_ALERTS=$(psql_ -c "select count(*) from public.alerts where source in ('referral_conversions_failed', 'referral_conversions_stalled')")
 [ "$DL_ALERTS" = "0" ]    || fail "C8 a failed or stalled alert was written under load ($DL_ALERTS): a job-side failure (a deadlock victim inside the credit sub-block is swallowed into the failed counter) would show nowhere else"
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# helper for the deterministic cases below: poll a boolean SQL until it is true (50 ms steps), fail the case when it never is.
+# ---------------------------------------------------------------------------------------------------------------------
+wait_for() { # <sql returning t/f> <timeout seconds>
+  local sql="$1" t="${2:-20}" i=0
+  while [ "$i" -lt $((t * 20)) ]; do
+    [ "$(psql_ -c "$sql")" = "t" ] && return 0
+    sleep 0.05; i=$((i + 1))
+  done
+  return 1
+}
+adv_held()    { echo "select exists (select 1 from pg_locks where locktype = 'advisory' and classid = 0 and objid = $1 and granted)"; }
+adv_waiting() { echo "select exists (select 1 from pg_locks where locktype = 'advisory' and classid = 0 and objid = $1 and not granted)"; }
+
+# ---------------------------------------------------------------------------------------------------------------------
+# C14 - the stale-credit window (migration 160, N1): a deletion commits BETWEEN the reconcile and the credit select of ONE run
+# ---------------------------------------------------------------------------------------------------------------------
+reset_tables
+R="${U[23]}"; RD="${U[24]}"; FD="${U[25]}"
+FT="$(psql_ -c "insert into public.users (id) values (gen_random_uuid()) returning id")"
+psql_ >/dev/null <<'EOF' || exit 2
+drop sequence if exists public.rpoc_c14_seq;
+drop sequence if exists public.rpoc_c14_early;
+create sequence public.rpoc_c14_seq;
+create sequence public.rpoc_c14_early;
+create function public.rpoc_c14_block() returns trigger language plpgsql as $f$
+begin
+  if new.code = 'AVYA-C14D' then perform pg_advisory_lock(14014); if exists (select 1 from pg_locks where locktype = 'advisory' and classid = 0 and objid = 14015 and granted) then perform nextval('public.rpoc_c14_early'); end if; perform pg_advisory_unlock(14014); perform nextval('public.rpoc_c14_seq'); end if;
+  return new;
+end $f$;
+create trigger rpoc_c14_block before update on public.referral_redemptions for each row execute function public.rpoc_c14_block();
+EOF
+# T first (converted and vested IN the insert, so it keeps its heap slot), then the decoy D: tiny tables, sequential scan, T is read first.
+psql_ >/dev/null <<EOF || exit 2
+insert into public.referral_redemptions (code, referrer_id, referee_id, created_at, referrer_rewarded, referee_rewarded, converted_at, referrer_reward_days)
+  values ('AVYA-C14T', '$R', '$FT', now() - interval '20 days', false, true, now() - interval '10 days', 7);
+insert into public.subscriptions (user_id, plan, status, start_date, end_date, razorpay_payment_id)
+  values ('$FT', 'monthly', 'active', now() - interval '10 days', now() + interval '20 days', 'pay_c14t_' || gen_random_uuid());
+insert into public.referral_redemptions (code, referrer_id, referee_id, created_at, referrer_rewarded, referee_rewarded)
+  values ('AVYA-C14D', '$RD', '$FD', now() - interval '20 days', false, true);
+insert into public.subscriptions (user_id, plan, status, start_date, end_date, razorpay_payment_id)
+  values ('$FD', 'monthly', 'active', now() - interval '3 days', now() + interval '27 days', 'pay_c14d_' || gen_random_uuid());
+EOF
+cat > "$TMP/c14c.sql" <<'EOF'
+do $c$
+declare seen boolean := false; t0 timestamptz := clock_timestamp();
+begin
+  perform pg_advisory_lock(14014);
+  loop
+    if exists (select 1 from pg_locks where locktype = 'advisory' and classid = 0 and objid = 14015 and granted) then seen := true; end if;
+    exit when (seen and not exists (select 1 from pg_locks where locktype = 'advisory' and classid = 0 and objid = 14015 and granted))
+              or clock_timestamp() - t0 > interval '40 seconds';
+    perform pg_sleep(0.005);
+  end loop;
+  perform pg_advisory_unlock(14014);
+end $c$;
+EOF
+cat > "$TMP/c14b.sql" <<EOF
+do \$b\$
+declare t0 timestamptz := clock_timestamp();
+begin
+  delete from public.users where id = '$FT';
+  perform pg_advisory_lock(14015);
+  loop
+    exit when exists (select 1 from pg_locks where locktype = 'advisory' and classid = 0 and objid = 14014 and not granted)
+              or clock_timestamp() - t0 > interval '40 seconds';
+    perform pg_sleep(0.005);
+  end loop;
+  commit;
+end \$b\$;
+EOF
+( psql_ < "$TMP/c14c.sql" >/dev/null 2>"$TMP/c14c.err" ) & C_PID=$!
+C14_OK=1
+wait_for "$(adv_held 14014)" 20 || { fail "C14 setup: session C never took advisory lock K"; C14_OK=0; }
+if [ "$C14_OK" = 1 ]; then
+  ( psql_ < "$TMP/c14b.sql" >/dev/null 2>"$TMP/c14b.err" ) & B_PID=$!
+  wait_for "$(adv_held 14015)" 20 || { fail "C14 setup: session B never deleted the referee and signalled"; C14_OK=0; }
+fi
+if [ "$C14_OK" = 1 ]; then
+  ( psql_ -c "select private.process_referral_conversions()" >"$TMP/c14a.out" 2>"$TMP/c14a.err" ) & A_PID=$!
+  wait "$A_PID"
+  wait "$B_PID"
+  wait "$C_PID"
+  C14_RUN1="$(cat "$TMP/c14a.out")"
+  C14_T="$(psql_ -c "select (converted_at is not null)::text || ',' || (referee_id is null)::text || ',' || (referrer_rewarded is true)::text from public.referral_redemptions where code = 'AVYA-C14T'")"
+  C14_ROWS=$(psql_ -c "select count(*) from public.subscriptions where user_id = '$R'")
+  C14_SEQ="$(psql_ -c "select is_called::text || ',' || last_value from public.rpoc_c14_seq")"
+  C14_EARLY="$(psql_ -c "select is_called::text from public.rpoc_c14_early")"
+  C14_RUN2="$(job 2>"$TMP/c14r2.err")"
+  C14_T2="$(psql_ -c "select (converted_at is not null)::text from public.referral_redemptions where code = 'AVYA-C14T'")"
+  C14_ROWS2=$(psql_ -c "select count(*) from public.subscriptions where user_id = '$R'")
+  echo "C14: run 1 (the deletion committed while it waited in the trigger) -> '$C14_RUN1'; T stale/orphaned/rewarded=$C14_T; referrer rows=$C14_ROWS; run 2 -> '$C14_RUN2' (T converted=$C14_T2, referrer rows=$C14_ROWS2)"
+  case "$C14_RUN1" in *'"credited": 0,'*) ;; *) fail "C14 run 1 must credit nothing (T's referee was deleted before the credit select), got '$C14_RUN1' $(cat "$TMP/c14a.err")" ;; esac
+  [ "$C14_EARLY" = "false" ]       || fail "C14 session A got past the decoy trigger while session B had NOT yet committed (B's signal lock was still held): A never waited for the rendezvous, so the case would pass vacuously"
+  [ "$C14_SEQ" = "true,1" ]        || fail "C14 the rendezvous did not happen: session A must pass the decoy trigger exactly once AFTER session B committed (sequence is_called,last_value = '$C14_SEQ'); without it the case would pass vacuously"
+  [ "$C14_T" = "true,true,false" ] || fail "C14 T must still be converted, orphaned and unrewarded after run 1 (it was SKIPPED by the reconcile, not voided), got '$C14_T': the fixture did not produce the window"
+  [ "$C14_ROWS" = "0" ]            || fail "C14 the referrer was credited for a deleted friend's stale payment ($C14_ROWS subscription rows): the credit select needs AND rr.referee_id IS NOT NULL"
+  case "$C14_RUN2" in *'"voided": 1,'*) ;; *) fail "C14 run 2 must void T (its referee is gone), got '$C14_RUN2'" ;; esac
+  [ "$C14_T2" = "false" ]          || fail "C14 T must be voided (converted_at NULL) by run 2, got $C14_T2"
+  [ "$C14_ROWS2" = "0" ]           || fail "C14 the referrer must still hold no subscription row after run 2, got $C14_ROWS2"
+else
+  kill "$C_PID" 2>/dev/null; wait 2>/dev/null
+fi
+psql_ -c "drop trigger if exists rpoc_c14_block on public.referral_redemptions; drop function if exists public.rpoc_c14_block(); drop sequence if exists public.rpoc_c14_seq; drop sequence if exists public.rpoc_c14_early; delete from public.users where id = '$FT'" >/dev/null
+
+# ---------------------------------------------------------------------------------------------------------------------
+# C15 - the migration's self-check aborts a half-revoked table or function, atomically (migration 160, N4). Four scenarios: a TABLE-level privilege, a
+# COLUMN-level privilege and an EXECUTE on each of the two replaced functions, each granted by ANOTHER role so the owner's REVOKE cannot remove it.
+# ---------------------------------------------------------------------------------------------------------------------
+SC=rpoc_sc
+psql_sc() { docker exec -i -e PGOPTIONS="-c client_min_messages=warning" "$CONTAINER" psql -U postgres -h 127.0.0.1 -d "$SC" -v ON_ERROR_STOP=1 -qAt "$@"; }
+c15_scenario() { # <label> <grant-option statement for rpoc_gx> <statement run as rpoc_gx> <expected message fragment>
+  local label="$1" gx_grant="$2" gx_do="$3" want="$4"
+  docker exec -i "$CONTAINER" psql -U postgres -h 127.0.0.1 -d postgres -qAt -c "drop database if exists rpoc_sc" -c "drop role if exists rpoc_gx" -c "create database rpoc_sc" -c "create role rpoc_gx" -c "grant rpoc_gx to postgres with set true, inherit true" >/dev/null 2>&1 || exit 2
+  psql_sc >/dev/null < test/sql/referral_pay_on_conversion_replica_schema.sql || exit 2
+  psql_sc >/dev/null < supabase/migrations/159_referral_reward_on_conversion.sql 2>/dev/null || exit 2
+  psql_sc >/dev/null <<EOF || exit 2
+grant usage on schema public to rpoc_gx;
+$gx_grant
+set role rpoc_gx;
+$gx_do
+reset role;
+EOF
+  local out rc fn promo
+  out="$(docker exec -i -e PGOPTIONS="-c client_min_messages=warning" "$CONTAINER" psql -U postgres -h 127.0.0.1 -d "$SC" -v ON_ERROR_STOP=1 -qAt --single-transaction < "$MIG160" 2>&1)"
+  rc=$?
+  fn=$(psql_sc -c "select count(*) from pg_proc where proname = 'referrer_summary'")
+  promo=$(psql_sc -c "select pg_get_constraintdef(oid) from pg_constraint where conname = 'promo_codes_discount_pct_check'")
+  echo "C15 ($label): 160 applied over a table with a client privilege granted by another role -> rc=$rc; referrer_summary functions=$fn; promo check='$promo'"
+  [ "$rc" -ne 0 ]                                || fail "C15 ($label) the migration must FAIL when a client privilege survives the REVOKE, but it applied: the self-check is missing or too weak"
+  case "$out" in *"$want"*) ;; *) fail "C15 ($label) the failure must come from the self-check and name '$want', got: $out" ;; esac
+  [ "$fn" = "0" ]                                || fail "C15 ($label) the aborted migration left referrer_summary behind ($fn): the apply is not atomic"
+  case "$promo" in *'discount_pct <= 100'*) ;; *) fail "C15 ($label) the aborted migration left the promo CHECK changed: '$promo'" ;; esac
+}
+c15_scenario "table-level" \
+  "grant select, insert on public.referral_redemptions to rpoc_gx with grant option;" \
+  "grant select, insert on public.referral_redemptions to authenticated;" \
+  "authenticated holds table-level INSERT"
+c15_scenario "table-level delete" \
+  "grant delete on public.referral_redemptions to rpoc_gx with grant option;" \
+  "grant delete on public.referral_redemptions to authenticated;" \
+  "authenticated holds table-level DELETE"
+c15_scenario "table-level maintain (anon)" \
+  "grant maintain on public.referral_redemptions to rpoc_gx with grant option;" \
+  "grant maintain on public.referral_redemptions to anon;" \
+  "anon holds table-level MAINTAIN"
+c15_scenario "column-level" \
+  "grant update (code) on public.referral_redemptions to rpoc_gx with grant option;" \
+  "grant update (code) on public.referral_redemptions to authenticated;" \
+  "authenticated holds a column write privilege"
+# FUNCTION-level: EXECUTE on one of the two replaced functions granted to a client role by ANOTHER role (the owner's REVOKE cannot remove it)
+c15_scenario "function-level job" \
+  "grant usage on schema private to rpoc_gx; grant execute on function private.process_referral_conversions() to rpoc_gx with grant option;" \
+  "grant execute on function private.process_referral_conversions() to anon;" \
+  "anon can execute private.process_referral_conversions()"
+c15_scenario "function-level redeem" \
+  "grant execute on function public.redeem_referral_atomic(text, uuid, uuid, integer) to rpoc_gx with grant option;" \
+  "grant execute on function public.redeem_referral_atomic(text, uuid, uuid, integer) to authenticated;" \
+  "authenticated can execute public.redeem_referral_atomic(text, uuid, uuid, integer)"
+docker exec -i "$CONTAINER" psql -U postgres -h 127.0.0.1 -d postgres -qAt -c "drop database if exists rpoc_sc" -c "drop role if exists rpoc_gx" >/dev/null 2>&1
+
+# ---------------------------------------------------------------------------------------------------------------------
+# C16 - the bounded redeem retry (migration 160, N3), observed through a non-transactional attempt counter
+# ---------------------------------------------------------------------------------------------------------------------
+reset_tables
+RR="${U[26]}"; FR="${U[27]}"; FR2="${U[28]}"; FR3="${U[29]}"
+ORIG_MD5="$(psql_ -c "select md5(pg_get_functiondef('private.grant_referral_days(uuid,integer)'::regprocedure))")"
+psql_ >/dev/null <<'EOF' || exit 2
+drop table if exists public.rpoc_res;
+create table public.rpoc_res (k text, v text);
+drop sequence if exists public.rpoc_attempts;
+create sequence public.rpoc_attempts;
+alter function private.grant_referral_days(uuid, integer) rename to grant_referral_days_real;
+create function private.grant_referral_days(p_user_id uuid, p_days integer) returns void language plpgsql security definer set search_path to 'public' as $f$
+begin perform nextval('public.rpoc_attempts'); perform private.grant_referral_days_real(p_user_id, p_days); end $f$;
+EOF
+attempts() { psql_ -c "select case when is_called then last_value else 0 end from public.rpoc_attempts"; }
+reset_attempts() { psql_ -c "select setval('public.rpoc_attempts', 1, false)" >/dev/null; }
+seed_trial() { psql_ >/dev/null -c "insert into public.subscriptions (user_id, plan, status, start_date, end_date) values ('$1', 'referral_trial', 'active', now() - interval '1 day', now() + interval '6 days')"; }
+# redeem_try <referee> <days> -> writes the SQLSTATE and the in-database elapsed ms to rpoc_res (the autocommit call is wrapped so a 55P03 is data, not a shell failure)
+redeem_try() {
+  psql_ >/dev/null <<EOF || exit 2
+do \$t\$
+declare t0 timestamptz := clock_timestamp(); st text := 'ok';
+begin
+  begin
+    perform public.redeem_referral_atomic('AVYA-C16', '$RR', '$1', $2);
+  exception when others then st := sqlstate;
+  end;
+  insert into public.rpoc_res values ('last', st || ' ' || round(extract(milliseconds from clock_timestamp() - t0))::text);
+end \$t\$;
+EOF
+  psql_ -c "select v from public.rpoc_res where k = 'last' order by ctid desc limit 1"
+}
+# (a) the friend's active row is held and RELEASED as soon as attempt 1 has failed -> success on attempt 2
+reset_attempts; seed_trial "$FR"
+psql_ -c "delete from public.rpoc_res" >/dev/null
+cat > "$TMP/c16a.sql" <<EOF
+do \$h\$
+declare t0 timestamptz := clock_timestamp();
+begin
+  perform 1 from public.subscriptions where user_id = '$FR' for update;
+  perform pg_advisory_lock(14016);
+  loop
+    perform pg_stat_clear_snapshot();   -- pg_stat_activity is a per-TRANSACTION snapshot: without this the loop never sees the redeem fall asleep
+    exit when exists (select 1 from pg_stat_activity where wait_event = 'PgSleep' and pid <> pg_backend_pid() and datname = current_database())
+              or clock_timestamp() - t0 > interval '20 seconds';
+    perform pg_sleep(0.005);
+  end loop;
+  commit;
+end \$h\$;
+EOF
+( psql_ < "$TMP/c16a.sql" >/dev/null 2>"$TMP/c16ah.err" ) & H_PID=$!
+if wait_for "$(adv_held 14016)" 20; then
+  C16A="$(redeem_try "$FR" 7)"
+else
+  C16A="setup-failed"
+fi
+wait "$H_PID"
+C16A_N="$(attempts)"
+C16A_AUDIT=$(psql_ -c "select count(*) from public.referral_redemptions where referee_id = '$FR'")
+C16A_DAYS=$(psql_ -c "select round(extract(epoch from (end_date - now())) / 86400.0) from public.subscriptions where user_id = '$FR'")
+echo "C16a: row released after attempt 1 -> '$C16A'; attempts=$C16A_N; audit rows=$C16A_AUDIT; the friend's row ends in ~${C16A_DAYS} days"
+C16A_ST="${C16A%% *}"; C16A_MS="${C16A##* }"
+[ "$C16A_ST" = "ok" ]                          || fail "C16a the redeem must succeed once the row is released inside the retry window, got '$C16A'"
+[ "$C16A_N" = "2" ]                            || fail "C16a expected exactly 2 attempts (one failed on the held row, the retry succeeded), got $C16A_N"
+[ "${C16A_MS:-0}" -ge 240 ] && [ "${C16A_MS:-99999}" -le 1500 ] || fail "C16a the call must take one 250 ms pause (240..1500 ms), got ${C16A_MS} ms"
+[ "$C16A_AUDIT" = "1" ] && [ "$C16A_DAYS" = "13" ] || fail "C16a one audit row and the trial extended 6 + 7 = 13 days expected, got audit=$C16A_AUDIT days=$C16A_DAYS"
+# (b) held past the third attempt -> 55P03 after exactly 3 attempts, no audit row, row untouched
+reset_attempts; seed_trial "$FR2"
+psql_ -c "delete from public.rpoc_res" >/dev/null
+( { echo "begin;"; echo "select 1 from public.subscriptions where user_id = '$FR2' for update;"; echo "select pg_advisory_lock(14017);"; echo "select pg_sleep(6);"; echo "commit;"; } | psql_ >/dev/null 2>"$TMP/c16bh.err" ) & H_PID=$!
+if wait_for "$(adv_held 14017)" 20; then
+  C16B="$(redeem_try "$FR2" 7)"
+else
+  C16B="setup-failed"
+fi
+wait "$H_PID"
+C16B_N="$(attempts)"
+C16B_AUDIT=$(psql_ -c "select count(*) from public.referral_redemptions where referee_id = '$FR2'")
+C16B_DAYS=$(psql_ -c "select round(extract(epoch from (end_date - now())) / 86400.0) from public.subscriptions where user_id = '$FR2'")
+echo "C16b: row held past the retries -> '$C16B'; attempts=$C16B_N; audit rows=$C16B_AUDIT; the friend's row ends in ~${C16B_DAYS} days"
+C16B_ST="${C16B%% *}"; C16B_MS="${C16B##* }"
+[ "$C16B_ST" = "55P03" ]                       || fail "C16b the redeem must fail with 55P03 after the retries, got '$C16B'"
+[ "$C16B_N" = "3" ]                            || fail "C16b expected exactly 3 attempts, got $C16B_N"
+[ "${C16B_MS:-0}" -ge 480 ] && [ "${C16B_MS:-99999}" -le 700 ] || fail "C16b exactly two 250 ms pauses expected (480..700 ms: a third pause after the last failed attempt would take 750+), got ${C16B_MS} ms"
+[ "$C16B_AUDIT" = "0" ] && [ "$C16B_DAYS" = "6" ] || fail "C16b the failed call must leave NO audit row and the row untouched, got audit=$C16B_AUDIT days=$C16B_DAYS"
+# (c) a NON-lock error is attempted once and fails at once
+reset_attempts
+psql_ -c "delete from public.rpoc_res" >/dev/null
+C16C="$(redeem_try "$FR3" 0)"
+C16C_N="$(attempts)"
+echo "C16c: a non-lock error (0 days) -> '$C16C'; attempts=$C16C_N"
+C16C_ST="${C16C%% *}"; C16C_MS="${C16C##* }"
+[ "$C16C_ST" = "22023" ]                       || fail "C16c 0 days must raise 22023 from the helper, got '$C16C'"
+[ "$C16C_N" = "1" ]                            || fail "C16c a non-lock error must be attempted ONCE (only lock_not_available is retried), got $C16C_N attempts"
+[ "${C16C_MS:-99999}" -lt 200 ]                || fail "C16c a non-lock error must fail at once, took ${C16C_MS} ms"
+# (d) a PAID row lands while the redeem sleeps between attempts -> the precondition is re-validated: P0001, ONE helper attempt, no audit row
+FR4="$(psql_ -c "insert into public.users (id) values (gen_random_uuid()) returning id")"
+reset_attempts; seed_trial "$FR4"
+psql_ -c "delete from public.rpoc_res" >/dev/null
+cat > "$TMP/c16d.sql" <<EOF
+do \$h\$
+declare t0 timestamptz := clock_timestamp();
+begin
+  perform 1 from public.subscriptions where user_id = '$FR4' for update;
+  perform pg_advisory_lock(14018);
+  loop
+    perform pg_stat_clear_snapshot();   -- pg_stat_activity is a per-TRANSACTION snapshot: without this the loop never sees the redeem fall asleep
+    exit when exists (select 1 from pg_stat_activity where wait_event = 'PgSleep' and pid <> pg_backend_pid() and datname = current_database())
+              or clock_timestamp() - t0 > interval '20 seconds';
+    perform pg_sleep(0.005);
+  end loop;
+  insert into public.subscriptions (user_id, plan, status, start_date, end_date, razorpay_payment_id)
+    values ('$FR4', 'monthly', 'active', now(), now() + interval '30 days', 'pay_c16d_' || gen_random_uuid());
+  commit;
+end \$h\$;
+EOF
+( psql_ < "$TMP/c16d.sql" >/dev/null 2>"$TMP/c16dh.err" ) & H_PID=$!
+if wait_for "$(adv_held 14018)" 20; then
+  C16D="$(redeem_try "$FR4" 7)"
+else
+  C16D="setup-failed"
+fi
+wait "$H_PID"
+C16D_N="$(attempts)"
+C16D_AUDIT=$(psql_ -c "select count(*) from public.referral_redemptions where referee_id = '$FR4'")
+C16D_DAYS=$(psql_ -c "select round(extract(epoch from (end_date - now())) / 86400.0) from public.subscriptions where user_id = '$FR4' and plan = 'referral_trial'")
+echo "C16d: a paid row landed during the wait -> '$C16D'; helper attempts=$C16D_N; audit rows=$C16D_AUDIT; the trial row ends in ~${C16D_DAYS} days"
+C16D_ST="${C16D%% *}"
+[ "$C16D_ST" = "P0001" ]                       || fail "C16d a referee who paid while the redeem waited must be refused with P0001 (referee_has_paid_plan), got '$C16D': the precondition is not re-validated after the pause"
+[ "$C16D_N" = "1" ]                            || fail "C16d expected exactly ONE helper attempt (the second iteration must stop at the re-validation), got $C16D_N"
+[ "$C16D_AUDIT" = "0" ] && [ "$C16D_DAYS" = "6" ] || fail "C16d the refused call must leave NO audit row and the trial row untouched, got audit=$C16D_AUDIT days=$C16D_DAYS"
+# restore the real helper and prove it is the original text
+psql_ >/dev/null <<'EOF' || exit 2
+drop function private.grant_referral_days(uuid, integer);
+alter function private.grant_referral_days_real(uuid, integer) rename to grant_referral_days;
+drop sequence public.rpoc_attempts;
+drop table public.rpoc_res;
+EOF
+BACK_MD5="$(psql_ -c "select md5(pg_get_functiondef('private.grant_referral_days(uuid,integer)'::regprocedure))")"
+[ "$BACK_MD5" = "$ORIG_MD5" ] || fail "C16 the real private.grant_referral_days was not restored byte for byte ($ORIG_MD5 vs $BACK_MD5)"
+
+# ---------------------------------------------------------------------------------------------------------------------
+# C17 - the inline ROLLBACK block of migration 160 RUNS and restores the 159 state (it is extracted from the migration text, never retyped)
+# ---------------------------------------------------------------------------------------------------------------------
+awk '/^-- Rollback \(inline;/{f=1; next} f && /^--   /{print substr($0, 6)} f && /^--$/{print ""}' "$MIG160" > "$TMP/rollback160.sql"
+[ -s "$TMP/rollback160.sql" ] || fail "C17 could not extract the inline rollback block from $MIG160"
+docker exec -i "$CONTAINER" psql -U postgres -h 127.0.0.1 -d postgres -qAt -c "drop database if exists rpoc_rb" -c "drop database if exists rpoc_r9" -c "create database rpoc_rb" -c "create database rpoc_r9" >/dev/null 2>&1 || exit 2
+for d in rpoc_rb rpoc_r9; do
+  docker exec -i "$CONTAINER" psql -U postgres -h 127.0.0.1 -d "$d" -v ON_ERROR_STOP=1 -qAt >/dev/null 2>&1 < test/sql/referral_pay_on_conversion_replica_schema.sql || exit 2
+  docker exec -i "$CONTAINER" psql -U postgres -h 127.0.0.1 -d "$d" -v ON_ERROR_STOP=1 -qAt >/dev/null 2>&1 < supabase/migrations/159_referral_reward_on_conversion.sql || exit 2
+done
+docker exec -i "$CONTAINER" psql -U postgres -h 127.0.0.1 -d rpoc_rb -v ON_ERROR_STOP=1 -qAt --single-transaction >/dev/null 2>&1 < "$MIG160" || exit 2
+C17_RB_OUT="$(docker exec -i "$CONTAINER" psql -U postgres -h 127.0.0.1 -d rpoc_rb -v ON_ERROR_STOP=1 -qAt --single-transaction 2>&1 < "$TMP/rollback160.sql")"; C17_RC=$?
+c17_snapshot() {
+  docker exec -i "$CONTAINER" psql -U postgres -h 127.0.0.1 -d "$1" -qAt -c "select md5(pg_get_functiondef('public.redeem_referral_atomic(text,uuid,uuid,integer)'::regprocedure)) || '|' || md5(pg_get_functiondef('private.process_referral_conversions()'::regprocedure)) || '|relacl=' || coalesce((select string_agg(a::text, ',' order by a::text) from pg_class c, unnest(c.relacl) a where c.oid = 'public.referral_redemptions'::regclass), '') || '|colacl=' || (select count(*) from pg_attribute where attrelid = 'public.referral_redemptions'::regclass and attacl is not null)::text || '|promo=' || (select pg_get_constraintdef(oid) from pg_constraint where conname = 'promo_codes_discount_pct_check') || '|summary=' || coalesce(to_regprocedure('public.referrer_summary()')::text, 'none') || '|redeem_acl=' || (select coalesce((select string_agg(a::text, ',' order by a::text) from unnest(proacl) a), 'null') from pg_proc where oid = 'public.redeem_referral_atomic(text,uuid,uuid,integer)'::regprocedure) || '|job_acl=' || (select coalesce((select string_agg(a::text, ',' order by a::text) from unnest(proacl) a), 'null') from pg_proc where oid = 'private.process_referral_conversions()'::regprocedure)"
+}
+C17_AFTER="$(c17_snapshot rpoc_rb)"; C17_BASE="$(c17_snapshot rpoc_r9)"
+echo "C17: rollback rc=$C17_RC; after-rollback state equals the 159-only state: $([ "$C17_AFTER" = "$C17_BASE" ] && echo yes || echo NO)"
+[ "$C17_RC" -eq 0 ]                            || fail "C17 the inline rollback block failed to run: $C17_RB_OUT"
+[ "$C17_AFTER" = "$C17_BASE" ]                 || fail "C17 the rolled-back database differs from the 159-only database:
+  after-rollback: $C17_AFTER
+  159-only:       $C17_BASE"
+docker exec -i "$CONTAINER" psql -U postgres -h 127.0.0.1 -d postgres -qAt -c "drop database if exists rpoc_rb" -c "drop database if exists rpoc_r9" >/dev/null 2>&1
 
 reset_tables
 if [ "$FAIL" -eq 0 ]; then echo "CONCURRENCY OK"; exit 0; fi

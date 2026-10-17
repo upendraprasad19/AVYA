@@ -1,54 +1,54 @@
 {
   ".claude/skills/code-review/SKILL.md": {
-    "bytes": 23617,
-    "recorded_at": "2026-10-11T03:56:03.097224Z"
+    "bytes": 23938,
+    "recorded_at": "2026-10-17T05:22:07.370823Z"
   },
   ".claude/skills/debugging/SKILL.md": {
-    "bytes": 63528,
-    "recorded_at": "2026-10-11T03:56:03.097224Z"
+    "bytes": 65647,
+    "recorded_at": "2026-10-17T05:22:07.370823Z"
   },
   "CLAUDE.md": {
-    "bytes": 43571,
-    "recorded_at": "2026-10-11T03:56:03.097224Z"
+    "bytes": 43803,
+    "recorded_at": "2026-10-17T05:22:07.370823Z"
   },
   "docs/audit/OPEN_INDEX.md": {
-    "bytes": 37577,
-    "recorded_at": "2026-10-11T03:56:03.097224Z"
+    "bytes": 39263,
+    "recorded_at": "2026-10-17T05:22:07.370823Z"
   },
   "docs/audit/open_issues.md": {
-    "bytes": 570243,
-    "recorded_at": "2026-10-11T03:56:03.097224Z"
+    "bytes": 605727,
+    "recorded_at": "2026-10-17T05:22:07.370823Z"
   },
   "lib/core/services/CLAUDE.md": {
-    "bytes": 28421,
-    "recorded_at": "2026-10-11T03:56:03.097224Z"
+    "bytes": 29325,
+    "recorded_at": "2026-10-17T05:22:07.370823Z"
   },
   "lib/features/ai_coach/CLAUDE.md": {
-    "bytes": 16905,
-    "recorded_at": "2026-10-11T03:56:03.097224Z"
+    "bytes": 18356,
+    "recorded_at": "2026-10-17T05:22:07.370823Z"
   },
   "lib/features/auth/CLAUDE.md": {
     "bytes": 19474,
-    "recorded_at": "2026-10-11T03:56:03.097224Z"
+    "recorded_at": "2026-10-17T05:22:07.370823Z"
   },
   "lib/features/onboarding/CLAUDE.md": {
     "bytes": 17384,
-    "recorded_at": "2026-10-11T03:56:03.097224Z"
+    "recorded_at": "2026-10-17T05:22:07.370823Z"
   },
   "lib/features/train/CLAUDE.md": {
     "bytes": 18036,
-    "recorded_at": "2026-10-11T03:56:03.097224Z"
+    "recorded_at": "2026-10-17T05:22:07.370823Z"
   },
   "lib/shared/repositories/plan_engine/CLAUDE.md": {
     "bytes": 16986,
-    "recorded_at": "2026-10-11T03:56:03.097224Z"
+    "recorded_at": "2026-10-17T05:22:07.370823Z"
   },
   "supabase/functions/CLAUDE.md": {
-    "bytes": 26617,
-    "recorded_at": "2026-10-11T03:56:03.097224Z"
+    "bytes": 30770,
+    "recorded_at": "2026-10-17T05:22:07.370823Z"
   },
   "supabase/migrations/CLAUDE.md": {
-    "bytes": 20853,
-    "recorded_at": "2026-10-11T03:56:03.097224Z"
+    "bytes": 24224,
+    "recorded_at": "2026-10-17T05:22:07.370823Z"
   }
 }
