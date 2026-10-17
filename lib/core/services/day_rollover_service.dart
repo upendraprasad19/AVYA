@@ -10,6 +10,7 @@ import 'package:icanbefitter/core/services/sync_flags.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/usage_counter_service.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
+import 'package:icanbefitter/shared/services/pro_phase_advance.dart';
 
 // ── Home screen daily providers ──
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
@@ -177,6 +178,31 @@ class DayRolloverObserver with WidgetsBindingObserver {
       } catch (_) {}
     }
     SyncService.instance.bumpRestoreCompleted();
+    // PRO next-phase ensure (plan 2026-10-16-pro-phase-advance-ensure-current,
+    // Piece A). After the tick on purpose and OUTSIDE the guard above (the
+    // unrelated kill switch must not disable it); fire-and-forget so the
+    // repaint never waits on generation or a network push.
+    unawaited(_runEnsure(site: 'heal'));
+  }
+
+  /// Test seam: the last fire-and-forget ensure, so a test can await
+  /// quiescence before tearing Hive down.
+  @visibleForTesting
+  static Future<void>? debugLastEnsure;
+
+  Future<void> _runEnsure({required String site}) {
+    final run = _runEnsureBody(site);
+    debugLastEnsure = run;
+    return run;
+  }
+
+  Future<void> _runEnsureBody(String site) async {
+    try {
+      await ensureProPhaseAfterRestore(site: site);
+    } catch (e, st) {
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'rollover_ensure_pro_phase'));
+    }
   }
 
   /// Resume-time rollover — uses the stored [_ref] (set by [init]).
@@ -340,6 +366,14 @@ class DayRolloverObserver with WidgetsBindingObserver {
     ref.invalidate(cartAuditorRemainingProvider);
 
     debugPrint('[DayRollover] All daily providers invalidated.');
+
+    // PRO next-phase ensure (plan 2026-10-16-pro-phase-advance-ensure-current,
+    // Piece A). After the invalidations above, and fire-and-forget (the
+    // restoring screen awaits this method before navigating home); it repaints
+    // the tabs itself once the phase exists. The invalidations are LAZY, so a
+    // Train rebuild still lands after the ensure has started: Train's plan
+    // repair waits on phaseAdvanceInFlight for that (B-pass finding 1, d9b3e7).
+    unawaited(_runEnsure(site: 'rollover'));
   }
 
   // ── Foreground midnight-timer backstop ───────────────────────────

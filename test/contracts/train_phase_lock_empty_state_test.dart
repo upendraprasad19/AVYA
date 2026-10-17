@@ -92,6 +92,17 @@ void main() {
     });
   });
 
+  group('screen.dart gates the hero slot through the pure showsTrainHeroSlot', () {
+    test('selectedWeek, plan.currentWeek and proExpired are all passed', () {
+      final i = screenSrc.indexOf('if (showsTrainHeroSlot(');
+      expect(i, isNot(-1));
+      final body = screenSrc.substring(i, i + 200);
+      expect(body, contains('selectedWeek: selectedWeek'));
+      expect(body, contains('currentWeek: plan.currentWeek'));
+      expect(body, contains('proExpired: proExpired'));
+    });
+  });
+
   group('empty_states.dart branches on the phase-lock params instead of '
       'always rendering the generic empty state', () {
     test('_buildEmptyWeek accepts isFutureUngeneratedPhase and currentPhase',
@@ -107,7 +118,10 @@ void main() {
         'generic dumbbell "No workouts scheduled" copy', () {
       final i = emptyStatesSrc.indexOf('Widget _buildEmptyWeek(');
       final body = emptyStatesSrc.substring(i);
-      expect(body, contains('futurePhaseUnlockCopy(currentPhase)'));
+      // The decision moved into the pure `emptyWeekUnlockCopy` (A3; behavioral
+      // in hold_week_labels_test.dart), which wraps futurePhaseUnlockCopy.
+      expect(body, contains('emptyWeekUnlockCopy('));
+      expect(body, contains('proExpired: proExpired'));
       expect(body, contains('Icons.lock_open_outlined'));
       // The old unconditional copy must still exist as the FALLBACK
       // (same-phase empty week, a separate and rarer case this fix does

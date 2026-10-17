@@ -90,6 +90,9 @@ void main() {
         syncService,
         'lib/features/train/repositories/workout_repository.dart',
         'lib/core/services/day_rollover_service.dart',
+        // PRO post-restore phase ensure (2026-10-16): builds the next phase only
+        // behind the settled marker (a third deciding reader, on purpose).
+        'lib/shared/services/pro_phase_advance.dart',
       },
           reason: 'a new file deciding on the marker must be added here on '
               'purpose (the dev simulator only MENTIONS it, in a comment)');

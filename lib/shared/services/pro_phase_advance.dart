@@ -9,6 +9,14 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/plan_integrity_reconciler.dart';
+import 'package:icanbefitter/core/services/plan_window_reanchor.dart';
+import 'package:icanbefitter/core/services/app_events_service.dart';
+import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/core/services/sync_flags.dart';
+import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/core/services/workout_schedule_service.dart';
+import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
+import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/utils/injury_vocab.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
@@ -102,12 +110,33 @@ Future<T> withPhaseAdvanceLock<T>(
   if (_lockDisabled) return await body();
   if (_advanceInFlight) return ifBusy;
   _advanceInFlight = true;
+  final done = Completer<void>();
+  _advanceDone = done;
   try {
     return await body();
   } finally {
     _advanceInFlight = false;
+    _advanceDone = null;
+    done.complete();
   }
 }
+
+Completer<void>? _advanceDone;
+
+/// Completes when the phase advance now holding [withPhaseAdvanceLock] ends;
+/// null when none is running (or the lock is switched off). Train's plan repair
+/// (`CurrentPlanNotifier._autoGeneratePlan`) waits on it instead of generating
+/// the OLD phase over a window that is mid-write (B-pass finding 1, d9b3e7).
+Future<void>? get phaseAdvanceInFlight => _advanceDone?.future;
+
+/// True while a phase advance owns the local plan window and the restore must
+/// leave it alone (the restore writers pass it to `PlanWindowReanchor.resolve`
+/// and re-check it before each window write). Off with either kill switch:
+/// `disable_plan_window_newer_local_guard` or `disable_pro_phase_ensure`.
+bool get planWindowPinnedByAdvance =>
+    SyncFlags.planWindowNewerLocalGuardEnabled &&
+    SyncFlags.proPhaseEnsureEnabled &&
+    phaseAdvanceInFlight != null;
 
 Future<bool> advanceProPhaseIfExpired(WidgetRef ref) async =>
     withPhaseAdvanceLock<bool>(
@@ -136,12 +165,36 @@ Future<bool> advanceProPhaseIfExpired(WidgetRef ref) async =>
 /// ONLY so the behavioral test can drive the real read → slow-generate → write
 /// path (task #41 / OI-45). Production code calls [advanceProPhaseIfExpired].
 @visibleForTesting
-Future<bool> runProPhaseAdvance(WidgetRef ref) async {
+Future<bool> runProPhaseAdvance(WidgetRef ref) async => (await _runAdvanceWith(
+      subscription: ref.read(subscriptionServiceProvider),
+      // ignore: deprecated_member_use — the facade the advance has always used
+      schedule: ref.read(workoutScheduleServiceProvider),
+      sync: ref.read(syncServiceProvider),
+    ))
+        .generated;
+
+/// The advance body, taking the three singletons it needs as parameters so it
+/// runs WITHOUT a `WidgetRef` — from [runProPhaseAdvance] (splash / card /
+/// graduation) and from [ensureProPhaseAfterRestore] (the ref-free post-restore
+/// trigger). One body, no fork: the splash / card behavior is unchanged.
+///
+/// Returns whether plans were `generated` and whether the phase counter was
+/// `committed` (a generation whose commit was declined left stale rows). The
+/// splash / card callers use `generated` only, exactly as before. [expectedUid]
+/// (the ensure passes it) makes the commit refuse when the Hive owner changed
+/// during the generation awaits (B-pass finding 2, d9b3e7).
+Future<({bool generated, bool committed})> _runAdvanceWith({
+  required SubscriptionService subscription,
+  required WorkoutScheduleService schedule,
+  required SyncService sync,
+  String? expectedUid,
+}) async {
+  const none = (generated: false, committed: false);
   // A7 / B5 D9-D10 — canonical provider path (imperative isPro() gate is a
   // point-in-time check inside an action; the UI RENDER guard uses the reactive
   // subscriptionInfoProvider instead — H-1).
-  if (!ref.read(subscriptionServiceProvider).isPro()) return false;
-  if (!ref.read(workoutScheduleServiceProvider).isPhaseExpired()) return false;
+  if (!subscription.isPro()) return none;
+  if (!schedule.isPhaseExpired()) return none;
 
   final profile = UserRepository.instance.getProfile() ?? {};
   final progress = UserRepository.instance.getProgress() ?? {};
@@ -167,12 +220,10 @@ Future<bool> runProPhaseAdvance(WidgetRef ref) async {
   // never runs when the kill-switch is set — then `repeatContent` stays false
   // and this is byte-identical to the fresh-generation path.
   final repeatContent = PlanEngineFlags.adherenceGateEnabled &&
-      ref.read(workoutScheduleServiceProvider).currentPhaseCompletionRate() <
+      schedule.currentPhaseCompletionRate() <
           AppConstants.phaseUnlockCompletionRate;
 
-  final result = await ref
-      .read(workoutScheduleServiceProvider)
-      .autoGenerateNextPhaseIfNeeded(
+  final result = await schedule.autoGenerateNextPhaseIfNeeded(
         goal: goal,
         equipment: equipment,
         daysPerWeek: daysPerWeek,
@@ -183,6 +234,7 @@ Future<bool> runProPhaseAdvance(WidgetRef ref) async {
         repeatContent: repeatContent,
       );
 
+  var committed = false;
   if (result.generated) {
     // Bump user_progress.current_phase + plan_generated_at (monotonic advance).
     //
@@ -206,21 +258,30 @@ Future<bool> runProPhaseAdvance(WidgetRef ref) async {
     // OI-83: this return used to be DISCARDED. A decline here means the
     // generation above wrote schedule_* rows + a plan window for a phase the
     // user is no longer advancing to — see [reconcileAfterDeclinedAdvance].
-    final committed = await commitPhaseAdvance(
+    committed = await commitPhaseAdvance(
       intendedPhase: currentPhase + 1,
       source: 'pro_phase_advance',
+      expectedUid: expectedUid,
     );
     if (!committed) {
+      // The decline can be an OWNER change (expectedUid): the new owner's boxes
+      // may not be readable yet, and this telemetry read must not throw.
+      int livePhase;
+      try {
+        livePhase =
+            (UserRepository.instance.getProgress()?['current_phase'] as int?) ??
+                1;
+      } catch (_) {
+        livePhase = -1;
+      }
       await reportDeclinedAdvanceLeftStaleRows(
         source: 'pro_phase_advance',
         intendedPhase: currentPhase + 1,
-        livePhase:
-            (UserRepository.instance.getProgress()?['current_phase'] as int?) ??
-                1,
+        livePhase: livePhase,
       );
     }
     // Fire-and-forget snapshot push so the AI coach sees the new Phase.
-    unawaited(ref.read(syncServiceProvider).pushSnapshot());
+    unawaited(sync.pushSnapshot());
 
     // ⑧ 3-a2/3-b: on an ACTUAL repeat (G5 gate passed → pins applied), flag the
     // low-adherence "you repeated — step it up?" Home nudge via the SHARED
@@ -230,7 +291,7 @@ Future<bool> runProPhaseAdvance(WidgetRef ref) async {
       await markPhaseRepeatNudgePending();
     }
   }
-  return result.generated;
+  return (generated: result.generated, committed: committed);
 }
 
 /// ⑧ 3-a2/3-b: set the local-only low-adherence "you repeated — step it up?"
@@ -306,7 +367,18 @@ Future<bool> commitPhaseAdvance({
   required int intendedPhase,
   required String source,
   DateTime? now,
+  String? expectedUid,
 }) async {
+  // The Hive owner changed during the caller's generation awaits: this delta
+  // would land in the OTHER account's progress. Refuse (B-pass finding 2).
+  if (expectedUid != null &&
+      HiveUserSession.currentOwnerFullId != expectedUid) {
+    unawaited(ErrorTelemetry.logEvent(
+      'phase_advance_owner_changed',
+      message: 'source=$source intended=$intendedPhase',
+    ));
+    return false;
+  }
   // `as int?`, matching the other two advance-path readers of this field
   // (runGraduationPhaseAdvance below, phase_progress_reconciler `_reconcileLocked`).
   // A `num?)?.toInt()` hardening was written here and REMOVED after the
@@ -406,7 +478,7 @@ Future<void> reportDeclinedAdvanceLeftStaleRows({
     await ErrorTelemetry.logEvent(
       'phase_advance_declined_rows_stale',
       message: 'source=$source intended=$intendedPhase live=$livePhase',
-    );
+    ).timeout(const Duration(seconds: 10)); // inside the advance lock: bounded
   } catch (e, st) {
     unawaited(ErrorTelemetry.recordNonFatal(e, st,
         reason: 'phase_advance_declined_report_failed'));
@@ -480,6 +552,190 @@ class GraduationAdvanceResult {
     this.outcome, {
     this.repeatNudgeFlagged = false,
   });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PRO post-restore phase ensure (plan
+// docs/plans/2026-10-16-pro-phase-advance-ensure-current.md, Piece A).
+//
+// Why it exists: the only AUTOMATIC advance used to be the splash pass, which
+// runs before `/restoring`. On an empty store (fresh tab / reinstall) it sees a
+// null `plan_end` and no PRO flag, returns quietly, and nothing re-runs it after
+// the restore — so a PRO user stares at a "Complete Phase III to unlock Phase
+// IV" card. This function is the post-restore trigger. It is REF-FREE (singletons
+// only) so the day-rollover observer and the background heal can call it.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// What [ensureProPhaseAfterRestore] decided. Visible for tests.
+enum ProPhaseEnsureOutcome {
+  disabled,
+  simulation,
+  ownerMissing,
+  notPro,
+  notExpired,
+  deferredRestorePending,
+  deferredRestoreIncomplete,
+  busy,
+  notGenerated,
+
+  /// Plans were generated but the phase counter was NOT advanced (a concurrent
+  /// advancer or an owner change); stale rows are reported, not repaired.
+  declined,
+  generated,
+}
+
+final Set<String> _ensureEventKeys = <String>{};
+
+/// Test seam: forget which (uid, site, outcome) events were already sent.
+@visibleForTesting
+void debugResetProPhaseEnsureState() => _ensureEventKeys.clear();
+
+/// Best-effort event, deduped per (uid, site, outcome). The uid is part of the
+/// key so nothing needs resetting on an account change. [AppEventsService]
+/// attributes an event to the CURRENT user at emit time, so a late event is
+/// dropped when the Hive owner is no longer [uid].
+void _ensureEvent(String uid, String site, String outcome) {
+  if (HiveUserSession.currentOwnerFullId != uid) return;
+  // Dedupe only the repeatable noise (deferred / skipped); generated, declined
+  // and failed are rare and each one matters in a tab left open for weeks.
+  final dedupe = outcome.startsWith('deferred') || outcome.startsWith('skipped');
+  if (dedupe && !_ensureEventKeys.add('$uid|$site|$outcome')) return;
+  AppEventsService.instance
+      .log('pro_phase_ensure', metadata: {'outcome': outcome, 'site': site});
+}
+
+/// Test seam for the owner guard in [_ensureEvent] (a swap mid-generation
+/// cannot be raced deterministically).
+@visibleForTesting
+void debugEmitEnsureEvent(String uid, String site, String outcome) =>
+    _ensureEvent(uid, site, outcome);
+
+/// PURE local-evidence check behind [ensureProPhaseAfterRestore]. Returns null
+/// when the restored state is complete enough to advance from, else a reason.
+///
+/// Why it exists: restore ops return quietly on an EMPTY answer
+/// (`_restoreUserProgress`, `_restoreWorkoutPlan`, `_restoreUserProfile`), so a
+/// settled marker can coexist with nothing restored; and `refillIfNewWeek` can
+/// MINT a default progress map `{current_phase: 1, …}` before this runs
+/// (`updateProgress`). An advance from that state would build "Phase 2" for a
+/// Phase III user, and `current_phase` only increases. The phase witness
+/// (`current_phase >= max(blobPhase, pastBlocks + 1)`) is the guard.
+@visibleForTesting
+String? proPhaseEvidenceGap({
+  required Map<String, dynamic>? progress,
+  required Map<String, dynamic>? profile,
+  required bool hasScheduleRows,
+  required int? blobPhase,
+  required int pastBlockCount,
+}) {
+  // Strict int, like the advance's own read (`as int?`): the column is int4, a
+  // double would make the advance throw after this check passed.
+  final raw = progress?['current_phase'];
+  final int? phase = raw is int ? raw : null;
+  if (phase == null) return 'no_progress_phase';
+  if (profile == null || profile.isEmpty) return 'no_profile';
+  if (!hasScheduleRows) return 'no_schedule_rows';
+  if (blobPhase == null) return 'no_plan_blob_phase';
+  final floorFromBlocks = pastBlockCount + 1;
+  final required = blobPhase > floorFromBlocks ? blobPhase : floorFromBlocks;
+  if (phase < required) return 'phase_behind_evidence';
+  return null;
+}
+
+/// Builds the next phase for a PRO user whose current phase has expired, from a
+/// RESTORED local state. Idempotent and safe to call from several triggers: it
+/// returns at once unless the user is PRO with an expired plan and the restore
+/// for this account settled, and the existing advance try-lock serialises it.
+///
+/// [site] is `'heal'` (the background heal's tail) or `'rollover'` (the
+/// day-rollover observer). Order: kill switch, simulation, owner, then PURE
+/// checks (PRO, expired) so nothing is emitted or scanned for users who are
+/// not PRO with an expired plan; then the restore marker; then — INSIDE the
+/// lock — the local-evidence witness and the advance. After a generation it
+/// persists the freeze debit for the gap days and repaints the tabs.
+Future<ProPhaseEnsureOutcome> ensureProPhaseAfterRestore({
+  required String site,
+}) async {
+  if (!SyncFlags.proPhaseEnsureEnabled) return ProPhaseEnsureOutcome.disabled;
+  if (SyncService.pausedForSimulation) return ProPhaseEnsureOutcome.simulation;
+  final uid = HiveUserSession.currentOwnerFullId;
+  if (uid == null) return ProPhaseEnsureOutcome.ownerMissing;
+
+  final subscription = SubscriptionService.instance;
+  final schedule = WorkoutScheduleService.instance;
+  final sync = SyncService.instance;
+  final settled = sync.restoreSettledForCurrentUser;
+
+  if (!subscription.proStateSnapshot()) {
+    // The one outcome a not-PRO user can produce, so a silent exit after a
+    // settled restore (PRO unset because the restore's closing entitlement
+    // refresh failed) is visible. Heal site only; deduped.
+    if (site == 'heal' && settled && schedule.isPhaseExpired()) {
+      _ensureEvent(uid, site, 'skipped:not_pro');
+    }
+    return ProPhaseEnsureOutcome.notPro;
+  }
+  if (!schedule.isPhaseExpired()) return ProPhaseEnsureOutcome.notExpired;
+
+  if (!settled) {
+    // A restore that actually finished and withheld the marker leaves a reason;
+    // a pre-restore call has none (silent — it is not news).
+    if (sync.lastRestoreWithheldReason != null) {
+      _ensureEvent(uid, site, 'deferred:restore_pending');
+    }
+    return ProPhaseEnsureOutcome.deferredRestorePending;
+  }
+
+  try {
+    return await withPhaseAdvanceLock<ProPhaseEnsureOutcome>(
+      () async {
+        // Evaluated ONCE, inside the lock: unlocked writers (Train repair regen,
+        // bootstrapper regen) can leave a half-written window.
+        final read = WorkoutScheduleReadService.instance;
+        final gap = proPhaseEvidenceGap(
+          progress: UserRepository.instance.getProgress(),
+          profile: UserRepository.instance.getProfile(),
+          hasScheduleRows: WorkoutRepository.instance.hasAnyScheduleRow(),
+          blobPhase: PlanWindowReanchor.blobPhase(read.getCurrentPlanMap()),
+          pastBlockCount: read.pastPhaseBlocks().length,
+        );
+        if (gap != null) {
+          _ensureEvent(uid, site, 'deferred:restore_incomplete');
+          return ProPhaseEnsureOutcome.deferredRestoreIncomplete;
+        }
+        final advance = await _runAdvanceWith(
+          subscription: subscription,
+          schedule: schedule,
+          sync: sync,
+          expectedUid: uid,
+        );
+        if (!advance.generated) return ProPhaseEnsureOutcome.notGenerated;
+        if (!advance.committed) {
+          // The window and rows were rewritten even though the counter was not
+          // advanced: repaint, and report.
+          sync.bumpRestoreCompleted();
+          _ensureEvent(uid, site, 'declined');
+          return ProPhaseEnsureOutcome.declined;
+        }
+        // The new rows now exist: persist the freeze debit for the gap days
+        // (idempotent via the used-dates ledger; gated inside on the settled
+        // marker, which this path already requires), then repaint every tab.
+        try {
+          WorkoutRepository.instance.reckonStreakDecayAndPersist();
+        } catch (e, st) {
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'pro_phase_ensure_reckon'));
+        }
+        sync.bumpRestoreCompleted();
+        _ensureEvent(uid, site, 'generated');
+        return ProPhaseEnsureOutcome.generated;
+      },
+      ifBusy: ProPhaseEnsureOutcome.busy,
+    );
+  } catch (_) {
+    _ensureEvent(uid, site, 'failed');
+    rethrow;
+  }
 }
 
 /// The graduation screen's phase advance — generation + the progress write,

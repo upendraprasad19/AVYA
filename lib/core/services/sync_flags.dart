@@ -226,6 +226,37 @@ class SyncFlags {
     }
   }
 
+  /// Kill switch for the PRO post-restore phase ensure (plan
+  /// `docs/plans/2026-10-16-pro-phase-advance-ensure-current.md`, Piece A).
+  /// Opt-OUT polarity: `configBox['disable_pro_phase_ensure'] = true` makes
+  /// `ensureProPhaseAfterRestore` return at once, drops its events and the
+  /// post-generation reckon, and removes the plan-push `.timeout`; the splash
+  /// call keeps today's behavior. With the box not open the fix stays ON.
+  static bool get proPhaseEnsureEnabled {
+    try {
+      return HiveService.instance.configBox.get('disable_pro_phase_ensure') !=
+          true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// Kill switch for the phase-gated plan-window re-anchor rule (same plan,
+  /// A1.8b). Opt-OUT polarity: `configBox['disable_plan_window_newer_local_guard']
+  /// = true` restores `PlanWindowReanchor.resolve`'s pre-fix rule (cloud
+  /// verbatim whenever the start dates differ). Its own switch, because a
+  /// restore-side rule must not vanish because the ensure was turned off after a
+  /// splash/card advance already happened. With the box not open the fix stays ON.
+  static bool get planWindowNewerLocalGuardEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('disable_plan_window_newer_local_guard') !=
+          true;
+    } catch (_) {
+      return true;
+    }
+  }
+
   /// Kill switch for the legacy restore's paging + tie-order fix (diagnose
   /// c7e2a9 / addendum A Slice B2). PostgREST clamps every response to 1000
   /// rows with HTTP 200, so the bare `workout_schedule_completions`,

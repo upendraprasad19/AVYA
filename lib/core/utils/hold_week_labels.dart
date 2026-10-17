@@ -198,6 +198,31 @@ String phaseRoman(int phase) {
 bool isFutureUngeneratedPhase(int selectedWeek) =>
     (selectedWeek - 1) ~/ 4 >= 1;
 
+/// Whether the Train hero slot (today card, or the expired-phase card) shows
+/// for the selected week chip. It always shows on the current week; a PRO user
+/// whose phase has EXPIRED also gets it on any other chip, because
+/// `currentWeek` is clamped to 4 and the week their next phase starts (W5) would
+/// otherwise fall through to a "Complete Phase … to unlock" card that is false
+/// for them (ensure-current plan A3).
+bool showsTrainHeroSlot({
+  required int selectedWeek,
+  required int currentWeek,
+  required bool proExpired,
+}) =>
+    selectedWeek == currentWeek || proExpired;
+
+/// The phase-lock copy for an EMPTY week, or null when the generic empty state
+/// applies. Never for a PRO user whose phase already expired (the next phase is
+/// being built or one tap away — it is not "waiting to unlock").
+({String title, String subtitle})? emptyWeekUnlockCopy({
+  required bool isFutureUngeneratedPhase,
+  required bool proExpired,
+  required int currentPhase,
+}) =>
+    isFutureUngeneratedPhase && !proExpired
+        ? futurePhaseUnlockCopy(currentPhase)
+        : null;
+
 /// Copy for the phase-lock empty-state card shown when a PRO user pages
 /// ahead into a phase that isn't generated yet because the current one
 /// isn't finished. Always names the user's ACTUAL current phase as the

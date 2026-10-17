@@ -47,9 +47,15 @@ extension _EmptyStates on _TrainScreenState {
   Widget _buildEmptyWeek({
     bool isFutureUngeneratedPhase = false,
     int currentPhase = 1,
+    // A PRO user whose phase has ALREADY expired is not "waiting to unlock" the
+    // next one (it is being built, or one tap away): never show the unlock copy.
+    bool proExpired = false,
   }) {
-    final copy =
-        isFutureUngeneratedPhase ? futurePhaseUnlockCopy(currentPhase) : null;
+    final copy = emptyWeekUnlockCopy(
+      isFutureUngeneratedPhase: isFutureUngeneratedPhase,
+      proExpired: proExpired,
+      currentPhase: currentPhase,
+    );
     return Padding(
       padding:
           const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),

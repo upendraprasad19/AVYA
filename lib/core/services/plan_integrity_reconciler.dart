@@ -45,6 +45,8 @@ import 'sync_flags.dart';
 import 'sync/sync_skip_index.dart';
 import 'supabase_service.dart';
 import 'sync_service.dart';
+import 'package:icanbefitter/shared/services/pro_phase_advance.dart'
+    show planWindowPinnedByAdvance;
 import 'template_identity.dart';
 import 'workout_schedule_read_service.dart';
 
@@ -550,6 +552,11 @@ class PlanIntegrityReconciler {
         localEnd: MigratedKey.read<String>(_planEndKey),
         cloudStart: pjStart is String ? pjStart : null,
         cloudEnd: pjEnd is String ? pjEnd : null,
+        localPlanPhase:
+            PlanWindowReanchor.blobPhase(hive.workoutBox.get('current_plan')),
+        cloudPlanPhase: PlanWindowReanchor.blobPhase(bundle['plan']),
+        keepNewerLocalPhase: SyncFlags.planWindowNewerLocalGuardEnabled,
+        localWindowPinned: planWindowPinnedByAdvance,
       );
       final reStart = reanchor.planStart;
       final reEnd = reanchor.planEnd;
@@ -562,8 +569,12 @@ class PlanIntegrityReconciler {
       // pre-batch `needsHeal(weeks 1-4)`. Adding the hold trigger gave these two
       // writes no new way to fire; OI-127 itself stays fully OPEN.
       if (triggers.mayReanchor) {
-        if (reStart != null) await MigratedKey.write(_planStartKey, reStart);
-        if (reEnd != null) await MigratedKey.write(_planEndKey, reEnd);
+        if (reStart != null && !planWindowPinnedByAdvance) {
+          await MigratedKey.write(_planStartKey, reStart);
+        }
+        if (reEnd != null && !planWindowPinnedByAdvance) {
+          await MigratedKey.write(_planEndKey, reEnd);
+        }
       }
 
       final schedules = bundle['schedules'];

@@ -22,6 +22,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/utils/hold_week_labels.dart';
 
 void main() {
+  _expiredProTrainGroup();
   group('homeWeekSegment', () {
     test('not holding → the plain week counter', () {
       expect(homeWeekSegment(holdOrdinal: null, weekInPhase: 1), 'WK 1');
@@ -380,6 +381,41 @@ void main() {
         'Complete Phase III to unlock Phase IV',
       );
       expect(futurePhaseUnlockCopy(3).title, isNot(contains('Phase V')));
+    });
+  });
+}
+
+// ensure-current plan A3 — the expired PRO user on the W5 chip.
+void _expiredProTrainGroup() {
+  group('showsTrainHeroSlot / emptyWeekUnlockCopy (PRO + expired phase)', () {
+    test('current week always shows the hero slot', () {
+      expect(
+          showsTrainHeroSlot(selectedWeek: 4, currentWeek: 4, proExpired: false),
+          isTrue);
+    });
+    test('another chip does NOT, unless the PRO phase has expired', () {
+      expect(
+          showsTrainHeroSlot(selectedWeek: 5, currentWeek: 4, proExpired: false),
+          isFalse);
+      expect(
+          showsTrainHeroSlot(selectedWeek: 5, currentWeek: 4, proExpired: true),
+          isTrue,
+          reason: 'the founder case: W5 selected, Phase III expired');
+    });
+    test('unlock copy for a future phase, never for an expired PRO user', () {
+      final copy = emptyWeekUnlockCopy(
+          isFutureUngeneratedPhase: true, proExpired: false, currentPhase: 3);
+      expect(copy?.title, 'Complete Phase III to unlock Phase IV');
+      expect(
+          emptyWeekUnlockCopy(
+              isFutureUngeneratedPhase: true, proExpired: true, currentPhase: 3),
+          isNull);
+    });
+    test('a same-phase empty week keeps the generic empty state', () {
+      expect(
+          emptyWeekUnlockCopy(
+              isFutureUngeneratedPhase: false, proExpired: false, currentPhase: 3),
+          isNull);
     });
   });
 }

@@ -129,6 +129,10 @@ class _TrainScreenState extends ConsumerState<TrainScreen>
     // the free PlanExpiredCard. Watched reactively (H-1) so a mid-session
     // upgrade flips the surface without a manual refresh.
     final isPro = ref.watch(subscriptionInfoProvider).isPro;
+    // A3: PRO + expired phase. Read ONCE per build: the expiry scan walks the
+    // schedule rows only after the stored window says expired.
+    final phaseExpired = WorkoutScheduleService.instance.isPhaseExpired();
+    final proExpired = isPro && phaseExpired;
 
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -169,8 +173,19 @@ class _TrainScreenState extends ConsumerState<TrainScreen>
                     // hero slot instead of an empty/no-workout card, mirroring
                     // Home. Train previously had NO expired state, so it
                     // highlighted a bogus "current" week past plan-end.
-                    if (selectedWeek == plan.currentWeek)
-                      (WorkoutScheduleService.instance.isPhaseExpired()
+                    //
+                    // 2026-10-16 (ensure-current plan A3): a PRO user whose phase
+                    // has expired gets the regenerate card WHATEVER week chip is
+                    // selected. `plan.currentWeek` is clamped to 4, so a user
+                    // sitting on W5 (the week their next phase starts) used to
+                    // fall through to the "Complete Phase III to unlock Phase IV"
+                    // lock card — copy that is false for them.
+                    if (showsTrainHeroSlot(
+                      selectedWeek: selectedWeek,
+                      currentWeek: plan.currentWeek,
+                      proExpired: proExpired,
+                    ))
+                      (phaseExpired
                           ? Padding(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: AppSpacing.screenPadding),
@@ -396,11 +411,14 @@ class _TrainScreenState extends ConsumerState<TrainScreen>
                     const PhaseArcStrip(),
 
                     // Compact week rows
+                    // A3: never the "Complete Phase … to unlock" copy for a PRO
+                    // user whose phase has already expired (`proExpired`).
                     if (weekDays.isEmpty)
                       _buildEmptyWeek(
                         isFutureUngeneratedPhase:
                             isFutureUngeneratedPhase(selectedWeek),
                         currentPhase: plan.phase,
+                        proExpired: proExpired,
                       )
                     else
                       _buildCompactWeekRows(context, weekDays),
