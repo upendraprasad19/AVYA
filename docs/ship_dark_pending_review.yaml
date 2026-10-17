@@ -185,8 +185,9 @@ pending:
       was null in the commit this note describes (a commit cannot name its own
       sha) and is set by the stamp commit that follows it (no test or script
       reads this field, so the stamp is self-attested). The flip waits for the
-      OQ-L2a decision, a position on OI-310 and the under-18 status quo
-      (OI-305) (Landing C, E3's permanent "Add measurements" door, is the
+      OQ-L2a decision (DECIDED 2026-10-16: accept, option 1), a position on
+      OI-310 and the under-18 status quo (OI-305; 2026-10-16: age floor 13)
+      (Landing C, E3's permanent "Add measurements" door, is the
       paragraph below); it needs the full x2 + bpass: accepted again (the
       FLIP paragraph at the end of this entry says what the flip did with the
       blast_radius.yaml rule for measurement_flags.dart).

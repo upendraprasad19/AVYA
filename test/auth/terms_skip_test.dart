@@ -1,78 +1,22 @@
-// Regression tests for Q2 privacy/terms implementation:
-//   1. TermsModal gate logic (_shouldShowTermsModal equivalent).
-//   2. Source-code structural assertions — welcome footer, signup checkbox,
-//      cloud restore, button gate.
-//
-// Pure-logic tests don't open real Hive (avoids filesystem setup in CI).
-// Source assertions give regression protection without production-code changes.
+// Regression tests for the Q2 privacy/terms implementation: source-code
+// structural assertions - welcome footer, the sign-up consent notice (no
+// checkbox since 2026-10-16), cloud restore. They don't open real Hive (avoids
+// filesystem setup in CI) and give regression protection without
+// production-code changes.
 
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:icanbefitter/core/constants/app_constants.dart';
 
 String _src(String relativePath) {
   final file = File('${Directory.current.path}/$relativePath');
   return file.readAsStringSync();
 }
 
-/// Mirrors TermsModal._alreadyAccepted() logic for pure-Dart unit testing
-/// without opening Hive. Accepts the two box values directly.
-bool _shouldShowTermsModal({
-  required String? termsAcceptedAt,
-  required String? termsVersion,
-}) {
-  final accepted = termsAcceptedAt is String && termsAcceptedAt.isNotEmpty;
-  final versionMatch = termsVersion == AppConstants.termsVersion;
-  return !(accepted && versionMatch);
-}
-
 void main() {
-  // ── Pure logic: TermsModal gate ──────────────────────────────
-  group('TermsModal gate logic', () {
-    test('skips when current version timestamp present', () {
-      expect(
-        _shouldShowTermsModal(
-          termsAcceptedAt: DateTime.now().toIso8601String(),
-          termsVersion: AppConstants.termsVersion,
-        ),
-        false,
-        reason: 'Modal should NOT fire when accepted at current version',
-      );
-    });
-
-    test('shows when timestamp present but version stale', () {
-      expect(
-        _shouldShowTermsModal(
-          termsAcceptedAt: DateTime.now().toIso8601String(),
-          termsVersion: 'old-version',
-        ),
-        true,
-        reason: 'Modal SHOULD fire when version is stale',
-      );
-    });
-
-    test('shows when no timestamp', () {
-      expect(
-        _shouldShowTermsModal(
-          termsAcceptedAt: null,
-          termsVersion: null,
-        ),
-        true,
-        reason: 'Modal SHOULD fire when no acceptance stamp',
-      );
-    });
-
-    test('shows when empty string timestamp', () {
-      expect(
-        _shouldShowTermsModal(
-          termsAcceptedAt: '',
-          termsVersion: AppConstants.termsVersion,
-        ),
-        true,
-        reason: 'Empty string should not count as accepted',
-      );
-    });
-  });
+  // The 'TermsModal gate logic' group was removed 2026-10-16 (OI-305 review):
+  // it tested a test-local copy of a gate whose widget no longer exists in lib/
+  // (nothing compares terms_version; OI-346), so it could not fail on any real
+  // change.
 
   // ── Source assertions: welcome footer ────────────────────────
   group('welcome_screen: privacy footer', () {
@@ -104,64 +48,58 @@ void main() {
   });
 
   // ── Source assertions: signup checkbox ───────────────────────
-  group('sign_in_screen: privacy checkbox', () {
+  // OI-305 (founder decision 2026-10-16): the email sign-up consent is a
+  // "By tapping CREATE ACCOUNT, you agree to ..." notice, NOT a checkbox. This
+  // group used to pin the unchecked checkbox (the 2026-08-24 Play-launch
+  // change); it is repointed, not loosened: the new design is pinned by what it
+  // must be and by what must stay gone. Presence-only, said honestly; the
+  // behaviour (button enabled without a tick, the tap stamps time + version) is
+  // test/auth/sign_up_consent_notice_test.dart.
+  group('sign_in_screen: consent notice (no checkbox)', () {
     late String src;
+    late String code; // comments stripped
     setUpAll(() {
       src = _src('lib/features/auth/screens/sign_in_screen.dart');
+      code = src
+          .split('\n')
+          .where((l) => !l.trimLeft().startsWith('//'))
+          .join('\n');
     });
 
-    test('_privacyAccepted state field present', () {
-      expect(src, contains('_privacyAccepted'),
-          reason: 'Checkbox state field must exist');
+    test('_ConsentNotice is shown in the sign-up step', () {
+      // With the trailing comma: the use in the Column, not the class's own
+      // `const _ConsentNotice();` constructor.
+      expect(code, contains('const _ConsentNotice(),'));
+      expect(code, contains('By tapping CREATE ACCOUNT, you agree to our '));
     });
 
-    test('_PrivacyCheckboxRow widget used in email form', () {
-      expect(src, contains('_PrivacyCheckboxRow'),
-          reason: 'Checkbox row must be shown in sign-up email form');
+    test('the checkbox row and its state field are gone', () {
+      expect(code, isNot(contains('_PrivacyCheckboxRow')));
+      expect(code, isNot(contains('_privacyAccepted')));
+      expect(code, isNot(contains('Checkbox(')));
     });
 
-    test('checkbox shown only in the sign-up step builder', () {
-      // Email-first flow (2026-07): the checkbox is no longer gated by a
-      // manual sign-in/sign-up toggle — it lives unconditionally inside the
-      // sign-up-only step builder, reached automatically via the
-      // server-side email-registration check.
-      expect(src, contains('_buildEmailStepSignUp'),
-          reason: 'Sign-up-only fields (checkbox, referral) must live in '
-              'their own step builder, not gated inline by a manual toggle');
-    });
-
-    test('button enabled field gates on _privacyAccepted', () {
-      expect(src, contains('enabled: _privacyAccepted'),
-          reason: 'CREATE ACCOUNT button must be disabled when unchecked');
-    });
-
-    test('the consent checkbox starts UNCHECKED (DPDP affirmative action)', () {
-      // Play-Store-launch change (2026-08-24), reversing the earlier Q2
-      // "pre-check to reduce friction" decision. DPDP §6(1) requires consent
-      // by a "clear affirmative action"; a pre-ticked box is the textbook
-      // example of what does not qualify, and this app processes HEALTH data
-      // under a Play Data Safety declaration.
-      //
-      // Matched by REGEX, not a literal line, so reformatting or a doc-comment
-      // rewrite cannot silently un-pin it — only the VALUE is the contract.
-      // (feedback_mistake_guard_without_its_mirror: match by regex, never by a
-      // literal.)
-      final decl = RegExp(r'bool\s+_privacyAccepted\s*=\s*(true|false)\s*;')
-          .firstMatch(src);
-
-      expect(decl, isNotNull,
-          reason: 'could not find the _privacyAccepted declaration at all — '
+    test('CREATE ACCOUNT is not gated on any consent state', () {
+      final call = RegExp(
+        r"label:\s*'CREATE ACCOUNT'[\s\S]*?onPressed:",
+      ).firstMatch(code);
+      expect(call, isNotNull,
+          reason: 'could not find the CREATE ACCOUNT button call at all - '
               'this guard has stopped checking anything');
-      expect(decl!.group(1), 'false',
-          reason: 'the consent box must not be pre-ticked. Reverting this to '
-              'true re-introduces the DPDP §6(1) problem the launch batch '
-              'fixed; if that is a deliberate product call, change this test '
-              'in the same commit and say why.');
+      expect(call!.group(0), isNot(contains('enabled:')),
+          reason: 'the form validation is the only gate on the button');
     });
 
-    test('sign_in_screen links to icanbefitter.com/privacy', () {
-      expect(src, contains('icanbefitter.com/privacy'),
-          reason: 'Privacy Policy URL must be present in sign-up checkbox');
+    test('sign-up-only fields live in their own step builder', () {
+      // Email-first flow (2026-07): the consent notice and the referral field
+      // live unconditionally inside the sign-up-only step builder, reached
+      // automatically via the server-side email-registration check.
+      expect(src, contains('_buildEmailStepSignUp'));
+    });
+
+    test('sign_in_screen links to icanbefitter.com/privacy and /terms', () {
+      expect(src, contains('icanbefitter.com/privacy'));
+      expect(src, contains('icanbefitter.com/terms'));
     });
   });
 

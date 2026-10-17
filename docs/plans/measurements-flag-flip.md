@@ -12,7 +12,7 @@ Landings A (bounds, PR #103), B (the entry sheet, Home banner, Weight-sheet link
 | `LEGACY-PUSH` (out-of-range finite values still pushed) | accepted by the founder for the same reason (internal testers only); this batch's ledger row `LEGACY-PUSH-ACCEPTED` records it. |
 | OI-310 (privacy policy) | the founder published the updated policy at the existing icanbefitter.com/privacy link on 2026-10-16; the links in the app are unchanged. Fetched and read on 2026-10-16 (ledger `POLICY-CHECK`, verified_clean): it names AVYA Fit, body measurements as health data, Gemini and the other processors, retention, in-app deletion, a grievance officer, and says users must be 13 or older with a date of birth asked at sign-up. |
 | OI-305 (age) | the founder decided on 2026-10-16 to make the floor 13 and acknowledged the age status quo for measurement entry. **The code is not in this batch and NOT yet true of the build:** onboarding still accepts 10 (`identity_screen.dart:82`). The published policy says 13 or older and a date-of-birth check at sign-up, so the flip must not reach production before branch `age-floor-signup-consent` (floor 13, consent text, stored policy version) is merged. **Merge order, binding:** (1) PR #117, (2) the age-floor and consent batch, (3) this flip. |
-| D8-D10 | confirmed as built (recorded on PR #117, not yet on `main`). |
+| D8-D10 | confirmed as built (recorded on PR #117, merged as aa7a1586). |
 
 ## 1. The change (writer and reader named)
 

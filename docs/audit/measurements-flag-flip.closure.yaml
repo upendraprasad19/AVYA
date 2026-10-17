@@ -47,13 +47,12 @@ findings:
     evidence: "fetched 2026-10-16 from https://icanbefitter.com/privacy (HTTP 200, 'Last updated: October 2026'): names AVYA Fit, 'Body weight and body measurements' as health data, Google Gemini and the other processors, AI processing / each health source / notifications as separate choices, withdrawal, retention ('until you delete it') and in-app Delete Account, the DPDP rights, a Grievance Officer, and 'You must be 13 or older' with a date of birth asked at sign-up"
   - id: AGE-POLICY-GAP
     title: "the published policy says 13 or older with a date-of-birth check at sign-up; the build still accepts age 10 (identity_screen.dart:82) and stores no policy version"
-    terminal_state: upstream_blocked
-    blocker: "branch age-floor-signup-consent (floor 13, 'by continuing' consent text, stored policy version) is not merged; OI-305 and OI-310 stay OPEN until it is"
-    reopen_when: "the age-floor and consent batch is merged to main; the plan's binding merge order puts it before this flip"
+    terminal_state: verified_clean
+    evidence: "the age-floor and consent batch is merged: PR #119 (1684edf1, 2026-10-17) puts the floor of 13 on all three date-of-birth pickers and stamps terms_version v2 on a new sign-up; OI-305 and OI-310 stay OPEN until the founder's device check (DEVICE-CHECK-AGE-CONSENT of docs/audit/age-floor-signup-consent.closure.yaml), and existing accounts are not re-asked (OI-346)"
   - id: MERGE-ORDER
-    title: "the merge order: PR #117, then the age-floor and consent batch, then this flip"
+    title: "the merge order: PR #117, then the age-floor and consent batch, then this flip (the first two are merged: #117 aa7a1586, #119 1684edf1)"
     terminal_state: blocked_on_user
-    reason: "the founder merges; merging this flip to main also publishes it on the production web app (app.icanbefitter.com) for every signed-in user, and a release build has no switch short of a new build"
+    reason: "the founder merges this flip; merging this flip to main also publishes it on the production web app (app.icanbefitter.com) for every signed-in user, and a release build has no switch short of a new build"
   - id: CLOUD-ROWS-RECHECK
     title: "the OQ-L2a acceptance rests on a cloud count of 0 body_measurements rows read on 2026-10-11"
     terminal_state: blocked_on_user
