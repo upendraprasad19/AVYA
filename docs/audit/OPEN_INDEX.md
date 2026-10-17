@@ -216,5 +216,5 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-342 | Promo-discounted payments count toward the referral reward at full value:… | the founder's decision on a floor (for… | 2026-10-13 - by reading… | [:6078](open_issues.md#L6078) |
 | OI-343 | Referral abuse by throwaway accounts: email confirmation is on but… | the founder's decision: accept the… | 2026-10-13 - by reading the live auth… | [:6093](open_issues.md#L6093) |
 | OI-345 | Remove the enable_body_measurements OFF path (flag checks, kill switch,… | founder-owned check of the RELEASE build… | 2026-10-16:… | [:6106](open_issues.md#L6106) |
-| OI-346 | Existing accounts accepted the v1 (blog) policy; nothing asks them to… | the founder's call on how existing users… | 2026-10-16: `AppConstants.termsVersion`… | [:6115](open_issues.md#L6115) |
+| OI-346 | Existing accounts accepted the v1 (blog) policy; nothing asks them to… | store launch (upstream_blocked;… | 2026-10-16: `AppConstants.termsVersion`… | [:6115](open_issues.md#L6115) |
 | OI-347 | Free-access codes: the founder wants to give out codes that grant PRO for… | none (a plan is the next step; the… | 2026-10-16 - by reading… | [:6124](open_issues.md#L6124) |
