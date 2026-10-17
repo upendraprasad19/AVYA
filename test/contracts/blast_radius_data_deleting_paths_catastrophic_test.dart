@@ -353,9 +353,14 @@ void main() {
             .toList()
           ..sort());
 
-    /// Path -> reason. EMPTY on purpose: a file that deletes something that is NOT user data (a cache, a temp row)
+    /// Path -> reason. Near-empty on purpose (one entry, a test harness): a file that deletes something that is NOT user data (a cache, a temp row)
     /// would have to be named here with its reason, which is the decision this check exists to force.
-    const allowlist = <String, String>{};
+    const allowlist = <String, String>{
+      // OI-341 Piece A test harness: `Deno.remove(<its own temp dir>)` after importing the unmodified origin/main
+      // writer copy. It never runs in an Edge Function and touches no user data (only a directory it created with
+      // Deno.makeTempDir in the same function). The harness lives in `_shared/` but is imported by tests only.
+      'supabase/functions/_shared/payment_writer_harness.ts': 'removes the temp dir it created for a test import',
+    };
 
     test('self-check: the matcher recognises each deleting form and ignores look-alikes', () {
       // Literal inputs, so that dropping or weakening an arm of the regex is noticed even where no file in the tree

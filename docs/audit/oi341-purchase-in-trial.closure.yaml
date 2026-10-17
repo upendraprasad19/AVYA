@@ -1,0 +1,250 @@
+# Closure ledger - oi341-purchase-in-trial (OI-341 Piece A: the server-side stacking writers, dark)
+# Gate 40. One terminal_state per finding; no `deferred:` key.
+# `commit:` on a closed_in_commit row names the branch state until the batch commit exists; the stamp commit
+# replaces it with the SHA of the commit that ADDS this file:
+#   git log --diff-filter=A --format=%h -- docs/audit/oi341-purchase-in-trial.closure.yaml
+
+batch: oi341-purchase-in-trial
+plan_review_record: docs/plan-reviews/oi341-purchase-in-trial.md
+total_findings: 42
+closed_count: 42
+
+findings:
+  - id: S1
+    title: "_shared/subscription_stacking.ts: isValidPaymentId, stackedEndDate, readLatestActiveEnd (array read, user_id + status active + end_date > now, own-payment exclusion that keeps NULL-payment-id rows), resolveEndDate (strict 'true' switch read per call, OFF = now + days and no query, a thrown read becomes ok:false)"
+    terminal_state: closed_in_commit
+    commit: "oi341-purchase-in-trial (uncommitted)"
+    verification: "supabase/functions/_shared/subscription_stacking_test.ts (24 tests, incl. the exact query-string pin, SQL NULL semantics, a TZ-equivalence subprocess per zone); deno check clean; mutants M02-M08, M10-M16, M18-M19, M21, M22, M26, M27, M30 killed."
+
+  - id: S2
+    title: "verify-payment wired: handler export + import.meta.main tail, resolveEndDate only inside the insert branch after the pre-SELECT, canonicalEndDateIso = the stored value, start_date stays the payment time"
+    terminal_state: closed_in_commit
+    commit: "oi341-purchase-in-trial (uncommitted)"
+    verification: "supabase/functions/verify-payment/index_test.ts (21 tests): ON + trial = trialEnd + 30 / 365, no row = start + 30, distractor rows ignored, replay (both arms) and the 23505 race never read the helper, the sibling-writer interleave; mutants M01, M09, M20, M23, M32 killed."
+
+  - id: S3
+    title: "razorpay-webhook wired the same way: handler export + tail, resolveEndDate only inside the insert branch, endDate reassigned to the stored value so expires_at equals the stored row, start_date stays the payment time"
+    terminal_state: closed_in_commit
+    commit: "oi341-purchase-in-trial (uncommitted)"
+    verification: "supabase/functions/razorpay-webhook/index_test.ts (20 tests): same matrix, plus the H-19 early return reads nothing; mutants M01b, M04, M04b, M09b, M20b killed."
+
+  - id: S4
+    title: "verify-payment rejects payment_id outside ^pay_[A-Za-z0-9]{1,64}$ with 400 before any Razorpay call (not switch-gated)"
+    terminal_state: closed_in_commit
+    commit: "oi341-purchase-in-trial (uncommitted)"
+    verification: "verify-payment/index_test.ts: pay_X?y=1, pay_X/capture, pay_X#1, ../x, a 65-character id, pay_a,b, xpay_abc and pay_ are refused with zero Razorpay requests and zero subscriptions access, switch absent and 'true'; an empty id keeps 'Missing payment_id'; a conforming id passes. Mutants M25 (check dropped), M26 (anchor), M27 (class) killed."
+
+  - id: S5
+    title: "a helper read error or thrown read fails the call (verify-payment: the existing 500 body with request_id; webhook: the existing 500) with NO insert and NO promo, and logs the reconcile line (request_id, payment_id, user_id, error CODE only)"
+    terminal_state: closed_in_commit
+    commit: "oi341-purchase-in-trial (uncommitted)"
+    verification: "both handler suites assert status, body, zero inserts, zero promo calls and the log line fields, and that the error MESSAGE is absent; mutants M05, M24, M24b, M28, M28b, M29, M30 killed. A transport failure reports code=read_error (postgrest-js gives an empty code)."
+
+  - id: S6
+    title: "switch OFF is byte-identical to the unmodified origin/main writers: a golden recording of the full ordered request list and the response, six switch values, plus yearly, promo and no-row, and zero helper reads"
+    terminal_state: closed_in_commit
+    commit: "oi341-purchase-in-trial (uncommitted)"
+    verification: "_shared/fixtures/verify_payment_origin_main.ts.txt and razorpay_webhook_origin_main.ts.txt (from origin/main 45250e91; the harness swaps only the serve( wrapper for an export); mutants M10 (switch ignored), M11, M12 (read when OFF), M12b (loose compare) killed."
+
+  - id: S7
+    title: "mutation proof, CLAUDE.md 4.4 rule 21"
+    terminal_state: closed_in_commit
+    commit: "oi341-purchase-in-trial (uncommitted)"
+    verification: "45 mutants (38 before the B-pass fixes, 4 added for them, 3 for the hermes fixes), each computed before the write, restored in finally, application confirmed: 44 killed. M31 (>= instead of > for a row ending exactly now) is EQUIVALENT (base = that end = now gives the same value). Recorded in docs/plans/oi341-purchase-in-trial.md section 8."
+
+  - id: S8
+    title: "documentation and registry: payment.md rule 5 corrected (event time payload.created_at, not the payment entity) + rule 9, supabase/functions/CLAUDE.md contracts row, naming conventions (ENABLE_SUBSCRIPTION_STACKING, subscription stacking), ship_dark_pending_review.yaml entry, blast_radius.yaml catastrophic glob for _shared/subscription_stacking*.ts above _shared/**, SoT concept subscription_end_date_stacking, OI-341 text (A built, B open), ledger 159 row X3 re-pointed"
+    terminal_state: closed_in_commit
+    commit: "oi341-purchase-in-trial (uncommitted)"
+    verification: "pre-commit gate loop (SoT parity, Gate 42, nested CLAUDE.md, OI board, naming) green except the B-pass gate that waits for the review file; blast_radius_from_diff classifies the module catastrophic."
+
+  - id: S9
+    title: "group V of the live verify gains V12/V12b: a payment made during the friend's trial and stacked after it is converted at the PAYMENT time and credits the referrer exactly 7 days after it"
+    terminal_state: closed_in_commit
+    commit: "oi341-purchase-in-trial (uncommitted)"
+    verification: "disposable replica (rpoc-pgtest, 159 + 160 applied, removed afterwards): SUMMARY ok=113 fail=0 skipped=0. Mutant: migration 160's copy of the job reading the payment time as end_date - 30 days -> V12 and V12b red (14 reds). The first mutant, in migration 159's copy, reddened nothing because 160 re-creates the function (last CREATE OR REPLACE wins)."
+
+  - id: S10
+    title: "sweep (plan section 5): every reader of the two writers' source and every gate scanning supabase/functions"
+    terminal_state: verified_clean
+    evidence: "git grep of verify-payment/index.ts, razorpay-webhook/index.ts and the serve( tail across lib/, supabase/functions, scripts, test, docs, .claude; the 19 Dart contract tests that read the writers were run: one failed (usage_quota_ledger allow-lists every file spelling the quota RPC) and was fixed by changing the fake (fallbackRpc), not the test. Full Deno suite: 1181 passed, 2 failed (future-prediction and re-engagement index_test, AddrInUse on :8000, held by a docker-proxy on this VPS; environmental, memory reference_vps_quirks)."
+
+  - id: S11
+    title: "live read-only exercise of the helper's SQL equivalent before deploy 1 (plan section 3)"
+    terminal_state: verified_clean
+    evidence: "2026-10-17, MCP execute_sql on project dedsavbjuwgarrhphgnl (project id confirmed first), SELECT only: for a real user with one active monthly row the equivalent of the helper's read returns that row's end_date when excluding a different payment id and NULL when excluding the row's own payment id; the statement parses and runs. The PostgREST QUERY STRING itself is not proven live (see G5)."
+
+  - id: S12
+    title: "environment incident: deno test --node-modules-dir=auto rewrote the repo's tracked node_modules/"
+    terminal_state: verified_clean
+    evidence: "restored with rm node_modules/pg, rm -rf node_modules/.deno, git checkout -- node_modules; git status shows only this batch's files. The recovery and the =none flag are already documented in supabase/functions/CLAUDE.md (common pitfalls)."
+
+  - id: G1
+    title: "commit, push, PR and merge of this branch"
+    terminal_state: blocked_on_user
+    reason: "CLAUDE.md 4.3: only on the founder's explicit ask. The merge goes through scripts/safe_pr_merge.sh and needs the B-pass and hermes records and the plan-review record to be accepted."
+
+  - id: G2
+    title: "rollback payloads for both functions built from git (the deploy tool's pre-deploy snapshot writes 0 files, OI-334) and the anon-key boot probe of redeem-referral (503 = broken, plan 2.3 precondition)"
+    terminal_state: blocked_on_user
+    reason: "Part of the deploy sequence, which needs the founder's go. The probe is a request, not a change, but the plan ties it to the first deploy."
+
+  - id: G3
+    title: "deploy of verify-payment (verify_jwt=true), boot-verified with the anon-key Bearer"
+    terminal_state: blocked_on_user
+    reason: "CLAUDE.md 4.3: a live deploy needs its own explicit go, one function per go. Dark: the secret is absent, so nothing observable changes except the 400 on a malformed payment_id."
+
+  - id: G4
+    title: "deploy of razorpay-webhook (verify_jwt=false), boot-verified"
+    terminal_state: blocked_on_user
+    reason: "Its own explicit go. A wrong verify_jwt flag makes Razorpay webhooks 401 at the gateway; the flag is in the plan and the deploy skill."
+
+  - id: G5
+    title: "the fake proves the helper's query STRING and its SQL semantics, not that LIVE PostgREST accepts the string"
+    terminal_state: upstream_blocked
+    blocker: "no live call can issue the query until the secret is set and a payment is made while the user holds an active row; with create-razorpay-order's 409 guard standing that cannot happen"
+    reopen_when: "Piece B opens the door and flips ENABLE_SUBSCRIPTION_STACKING; the first enabled call is the proof and is a Piece B flip step"
+
+  - id: G6
+    title: "whether a dashboard secret change reaches warm Edge Function isolates without a redeploy is not claimed"
+    terminal_state: upstream_blocked
+    blocker: "needs a live secret change on a deployed function"
+    reopen_when: "Piece B's flip step verifies it before relying on it"
+
+  - id: G7
+    title: "Piece B: the order function's 409 guard (deny-list NULL-safe), the Home expiry banner copy for a trial user, the EST seal future-date clamp, the alert row on a read failure, the client copy, and the switch flip (plan section 7)"
+    terminal_state: upstream_blocked
+    blocker: "own plan, branch, two reviews, B-pass and hermes pass; and Piece A deployed and quiet"
+    reopen_when: "Piece A is live"
+
+  - id: G8
+    title: "whether the unvalidated payment_id form in verify-payment was ever exploitable (does Razorpay's API ignore a trailing query or fragment)"
+    terminal_state: blocked_on_user
+    reason: "Not testable without a live Razorpay call with the account's credentials. Live data read 2026-10-16: 14 subscriptions rows, every real id is pay_ + 14 alphanumerics, no evidence of abuse; the new check removes the hazard either way. Reported to the founder as an open, unverified question, not asserted."
+
+  - id: G9
+    title: "OI-339, OI-340, OI-342 and the referral hardening notes N5-N7 are unchanged by this batch"
+    terminal_state: verified_clean
+    evidence: "Piece A touches only the stored end_date of a paid row and the payment_id validation; the reward job, the refund/chargeback handling and the promo floor are untouched (ledger docs/audit/referral-pay-on-conversion.closure.yaml rows X1, X2, X4 keep their states)."
+
+  - id: G10
+    title: "two DIFFERENT concurrent payments by one user would both stack on the same base and overlap (B-pass seat A P3-2)"
+    terminal_state: upstream_blocked
+    blocker: "unreachable while create-razorpay-order answers 409 for any active row; under-delivery only, never over-delivery"
+    reopen_when: "Piece B opens the door: its plan must add a per-user serialisation (an advisory lock or a re-read after the insert); recorded in payment.md rule 9"
+
+  - id: BP-A1
+    title: "B-pass seat A P2-1: with the switch ON a malformed payment id in a signed webhook payload failed 500 on every retry, with it OFF it was accepted"
+    terminal_state: closed_in_commit
+    commit: "oi341-purchase-in-trial (uncommitted)"
+    verification: "razorpay-webhook/index.ts rejects it with 400 before any request, switch-independent; tests: 'a signed payload with a malformed payment id is rejected with 400 before any request' (both switch values, zero requests) and a conforming-id control; mutants M34 and M34b killed."
+
+  - id: BP-A2
+    title: "B-pass seat A P3-1: no Invalid Date guard on the computed end"
+    terminal_state: closed_in_commit
+    commit: "oi341-purchase-in-trial (uncommitted)"
+    verification: "resolveEndDate returns ok:false bad_end_date when the sum is not finite; unit test with a chain stub whose end is the maximum Date; mutant M35 killed."
+
+  - id: BP-A3
+    title: "B-pass seat A P3-3 and seat B P3: the harness leaked a temp directory and built a file:// URL by string concatenation (not Windows-safe)"
+    terminal_state: closed_in_commit
+    commit: "oi341-purchase-in-trial (uncommitted)"
+    verification: "payment_writer_harness.ts uses toFileUrl from std path and removes the directory in a finally; the suites pass."
+
+  - id: BP-B1
+    title: "B-pass seat B P1: test/contracts/razorpay_webhook_supabase_client_decl_order_test.dart source-greps the old serve( wrapper and broke"
+    terminal_state: closed_in_commit
+    commit: "oi341-purchase-in-trial (uncommitted)"
+    verification: "repointed to the exported handler signature (not loosened); it also still pins that supabaseClient is declared before its first use inside the handler body. The earlier two-red targeted run was misread as one failure; the full local suite is the check."
+
+  - id: BP-B2
+    title: "B-pass seat B P2: the webhook OFF golden tests flaked about 3 in 60 runs (created_at differed between the golden and the compared run, so the stored HMAC signature differed)"
+    terminal_state: closed_in_commit
+    commit: "oi341-purchase-in-trial (uncommitted)"
+    verification: "one event time per process in payment_writer_harness.ts; 0 failures in 25 consecutive runs of the webhook suite (the CI step retries three times, which would have hidden the flake)."
+
+  - id: BP-B3
+    title: "B-pass seat B P2: 29 of 61 tests failed under a DST timezone because the test oracle used UTC milliseconds while the module uses local setDate"
+    terminal_state: closed_in_commit
+    commit: "oi341-purchase-in-trial (uncommitted)"
+    verification: "oracles use the same local-time day arithmetic; 65 passed in UTC, Asia/Kolkata, America/New_York, Europe/London and Australia/Lord_Howe. The subprocess test still compares the module with the old inline code per TZ."
+
+  - id: BP-B4
+    title: "B-pass seat B P3: the fake's unique-constraint name did not match migration 010; the V-c comment label in the SQL file was duplicated; edge cases not proved at handler level"
+    terminal_state: closed_in_commit
+    commit: "oi341-purchase-in-trial (uncommitted)"
+    verification: "constraint name unique_razorpay_payment_id; the new SQL comment is V-d; malformed-id handler tests added for both writers and both switch values."
+
+  - id: BP-B5
+    title: "B-pass seats A and B: the live PostgREST acceptance of the query string and a filter on a non-existent column (the fake returns no rows where PostgREST answers 400) remain unproved"
+    terminal_state: upstream_blocked
+    blocker: "same as G5: only a live enabled call can prove it"
+    reopen_when: "Piece B flips ENABLE_SUBSCRIPTION_STACKING"
+
+  - id: BP-X1
+    title: "B-pass seat A and B mutation checks, all red: own-payment exclusion, error fallback, stored end reported, webhook stored end, bare neq, user_id, status, gt, ordering, switch variants, read-when-OFF, helper before pre-SELECT"
+    terminal_state: verified_clean
+    evidence: "no seat mutation survived; seat B notes limit(1) removal is caught only by the query-string pin (the fake returns the latest first anyway), which is why M36 is in the set."
+
+  - id: H-S1-1
+    title: "hermes seat 1 P3-1: the 23505 race arm of verify-payment could report the unstacked now + days when the winner's row could not be re-read (switch ON)"
+    terminal_state: closed_in_commit
+    commit: "oi341-purchase-in-trial (uncommitted)"
+    verification: "canonicalEndDateIso is seeded from the stored value before the insert; test 'ON + 23505 race + the winner's row cannot be re-read' fails without the seed; mutant M23 killed (3 red)."
+
+  - id: H-S1-2
+    title: "hermes seat 1 P3-2 and seat 3 #4: the webhook's expires_at on the idempotent replay and the 23505 race is the call's own computed value, not the stored one"
+    terminal_state: verified_clean
+    evidence: "identical on origin/main (razorpay-webhook/index.ts expires_at: endDate.toISOString() with endDate the inline now + days); only Razorpay receives the body and it reads no field of it; verify-payment reports the stored end on every path."
+
+  - id: H-S1-3
+    title: "hermes seat 1 P3-3 and seat 4 P3-1: a payment.authorized auto-capture followed by a failed insert (or a failed stacking read) leaves the stale authorized payload in a 502 loop for up to 24 hours"
+    terminal_state: blocked_on_user
+    reason: "pre-existing (the same shape for any non-23505 insert failure after the capture, on origin/main); filed as OI-351 with the fix (treat a 4xx already-captured answer from the capture call as success). A change to the capture arm of a catastrophic payment function needs its own plan, two reviews, B-pass, hermes and deploy go; the separate payment.captured event still records the row, so no user is stranded."
+
+  - id: H-S2-1
+    title: "hermes seat 2 P3-a: verify-payment captures an authorized payment and echoes its Razorpay status before the notes.user_id ownership check"
+    terminal_state: blocked_on_user
+    reason: "pre-existing (origin/main lines 383/423/450, unchanged by the diff; the new format check actually closes a path-traversal-shaped id that was open there); filed as OI-350 with the fix. Reordering the ownership check in a catastrophic payment function needs its own plan, reviews and deploy go."
+
+  - id: H-S2-2
+    title: "hermes seat 2 P3-b: the webhook replay-rejection log interpolated the payment id before it was validated"
+    terminal_state: closed_in_commit
+    commit: "oi341-purchase-in-trial (uncommitted)"
+    verification: "the format check runs before the replay block; test 'a malformed payment id on a STALE delivery is rejected as an invalid id' asserts 400 Invalid payment id, the raw id absent from every log line and zero requests; control test keeps 'Webhook too old' for a conforming id; mutant M37 killed (3 red)."
+
+  - id: H-S2-3
+    title: "hermes seat 2 informational: an active row whose end_date is unparseable fails every payment of that user with 500 while the switch is ON; a pasted secret with a trailing newline stays OFF"
+    terminal_state: closed_in_commit
+    commit: "oi341-purchase-in-trial (uncommitted)"
+    verification: "both hazards written into docs/architecture/payment.md rule 9 (enable/flip runbook, items 1 and 2); the OFF behaviour for 'true\\n' and similar values is pinned by the six-value OFF golden tests and the resolveEndDate unit test."
+
+  - id: H-S3-1
+    title: "hermes seat 3 #1-#3: the Profile EST seal, the optimistic local end date, and admin / Telegram row-count views are wrong or double-counting for a stacked user"
+    terminal_state: upstream_blocked
+    blocker: "unreachable while create-razorpay-order answers 409 for any active row; no reader mis-grants or mis-denies PRO (every reader takes the latest end_date); display and reporting only"
+    reopen_when: "Piece B opens the door: the EST seal clamp is already its work item (plan section 6), the optimistic local end date self-heals on the next refreshFromSupabase, the admin views count a stacked user under both plans"
+
+  - id: H-S4-1
+    title: "hermes seat 4 P2-1: the webhook's 500-and-retry safety net assumes Razorpay re-stamps created_at on a retry (nothing in the repo evidences it) and nothing alerts on a captured-but-unrecorded payment"
+    terminal_state: upstream_blocked
+    blocker: "dark until the switch is set; the read-failure path cannot run with the switch OFF"
+    reopen_when: "Piece B: an alert row on the read-failure path and a verified retry-timestamp behaviour are hard preconditions of the flip (payment.md rule 9 runbook item 4)"
+
+  - id: H-S4-2
+    title: "hermes seat 4 P2-2: the deploy tool defaults verify_jwt to true and its smoke tolerates the 401 a wrong flag produces on the webhook (OI-334); the plan's anon-key boot probe cannot tell the flags apart on the webhook"
+    terminal_state: closed_in_commit
+    commit: "oi341-purchase-in-trial (uncommitted)"
+    verification: "plan section 8 'Deploy steps as amended by hermes': explicit flags, webhook probed with NO Authorization header (module body vs gateway body), flags read back from the management API, no --rollback without --dry-run; OI-334 stays open for the tool itself."
+
+  - id: H-S4-3
+    title: "hermes seat 4 P3-2 and P3-3: the deployer's archive prune could delete the pre-change payload; the reconcile line carried no plan or amount"
+    terminal_state: closed_in_commit
+    commit: "oi341-purchase-in-trial (uncommitted)"
+    verification: "the amended deploy steps copy v4_4f5429b.json out first; both reconcile lines now carry plan= and amount_paise= (tests assert them; mutants M38, M38b killed)."
+
+  - id: H-X1
+    title: "hermes confirmations: import.meta.main evidence, emit_payload bundling, deploy order, switch OFF identical, hostile ids and secret values"
+    terminal_state: verified_clean
+    evidence: "seat 4: ai-media-proxy v26 and six other deployed functions ship the same guard and emit_payload.js bundles only index.ts plus ../_shared/subscription_stacking.ts (tests, fixtures, fake and harness are not imported); seat 1: the only switch-OFF differences are the wrapper and the 400 on a malformed id; seat 2 probed ten hostile ids and six hostile secret values; seat 3 read every reader; 65 then 68 Deno tests green."
+

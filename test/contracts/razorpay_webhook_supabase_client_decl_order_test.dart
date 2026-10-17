@@ -31,12 +31,12 @@ void main() {
       // source but bind to a parameter, not the handler-scope const. We
       // restrict the order check to inside the serve handler.
       final serveStart = RegExp(
-        r'serve\s*\(\s*async\s*\(\s*req\s*:\s*Request\s*\)\s*=>\s*\{',
+        r'export\s+async\s+function\s+handler\s*\(\s*req\s*:\s*Request\s*\)\s*:\s*Promise<Response>\s*\{',
       ).firstMatch(src);
       expect(
         serveStart,
         isNotNull,
-        reason: 'expected `serve(async (req: Request) => {` handler entry',
+        reason: 'expected `export async function handler(req: Request): Promise<Response> {` handler entry (OI-341 Piece A: the serve( wrapper became an exported handler)',
       );
       final handler = src.substring(serveStart!.end);
 

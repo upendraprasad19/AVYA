@@ -397,6 +397,29 @@ BEGIN
   DELETE FROM public.referral_redemptions WHERE referrer_id = ANY (v_pool) OR referee_id = ANY (v_pool);
   DELETE FROM public.subscriptions WHERE user_id = ANY (v_pool);
 
+  -- V-d (OI-341 Piece A): a payment made WHILE the friend's 7-day trial runs is stacked after the trial by the payment writers:
+  -- start_date = the PAYMENT time, end_date = trial end + 30 days. The job must read the payment time from start_date (not the trial's
+  -- start, not the stacked end) and credit the referrer exactly 7 days after the PAYMENT, ignoring the trial row (NULL payment id).
+  INSERT INTO public.referral_redemptions (code, referrer_id, referee_id, created_at, referrer_rewarded, referee_rewarded) VALUES
+    (v_code, r1, f[1], now() - interval '10 days', false, true);
+  INSERT INTO public.subscriptions (user_id, plan, status, start_date, end_date, razorpay_payment_id) VALUES
+    (f[1], 'referral_trial', 'active', now() - interval '10 days', now() - interval '3 days', NULL),
+    (f[1], 'monthly', 'active', now() - interval '7 days', (now() - interval '3 days') + interval '30 days', 'pay_vfy_' || gen_random_uuid());
+  v_ret := private.process_referral_conversions();
+  IF v_ret ? 'skipped' THEN RAISE EXCEPTION 'JOB_LOCKED the job lock is held by another run; retry in a minute'; END IF;
+  SELECT count(*) INTO v_n  FROM public.subscriptions WHERE user_id = r1;
+  SELECT max(end_date) INTO v_x FROM public.subscriptions WHERE user_id = r1;
+  INSERT INTO _vr (id, descr, ok, note) VALUES
+    ('V12', 'a stacked payment (start_date = payment time 7 d ago, end_date = trial end + 30 d): converted_at = the PAYMENT time, credited exactly now (7 d after the payment, not 7 d after the trial or the stacked end), 7 days',
+      (SELECT converted_at = now() - interval '7 days' AND referrer_rewarded IS TRUE AND referrer_credited_at = now() AND referrer_reward_days = 7
+         FROM public.referral_redemptions WHERE referee_id = f[1]), NULL),
+    ('V12b', 'the referrer r1 got ONE referral_trial row ending now()+7 days, and the friend''s trial row and stacked row are untouched',
+      v_n = 1 AND v_x = now() + interval '7 days'
+      AND (SELECT end_date = now() - interval '3 days' FROM public.subscriptions WHERE user_id = f[1] AND plan = 'referral_trial')
+      AND (SELECT end_date = (now() - interval '3 days') + interval '30 days' FROM public.subscriptions WHERE user_id = f[1] AND plan = 'monthly'), format('rows=%s end=%s', v_n, v_x));
+  DELETE FROM public.referral_redemptions WHERE referrer_id = ANY (v_pool) OR referee_id = ANY (v_pool);
+  DELETE FROM public.subscriptions WHERE user_id = ANY (v_pool);
+
   -- ============================================================ X. voids and deletions
   -- X1: a payment cancelled before the vest voids the row; a later payment re-arms it with a fresh vest.
   INSERT INTO public.referral_redemptions (code, referrer_id, referee_id, created_at, referrer_rewarded, referee_rewarded)
