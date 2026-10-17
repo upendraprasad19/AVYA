@@ -294,6 +294,11 @@ class WorkoutRepository {
         UserRepository.instance.updateProgress({'current_streak_days': streak}));
   }
 
+  /// Public, pure read of the same predicate (rule 4: callers outside this
+  /// repository — the PRO phase ensure's local-evidence check — must not touch
+  /// `workoutBox` directly).
+  bool hasAnyScheduleRow() => _hasAnyScheduleRow();
+
   /// True when the local workout box holds at least one `schedule_*` row —
   /// the D2 reckon's non-empty-schedule gate.
   bool _hasAnyScheduleRow() {

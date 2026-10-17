@@ -2065,7 +2065,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         if (shouldReschedule == true && mounted) {
           final profile = ref.read(userProfileProvider);
           final experience = (profile['fitness_experience'] as String?) ?? 'intermediate';
-          final currentPhase = (profile['current_phase'] as num?)?.toInt() ?? 1;
+          final currentPhase = (UserRepository.instance.getProgress()?['current_phase'] as num?)?.toInt() ?? 1;
 
           final savedDays = MigratedKey.read<List>('preferred_training_days');
           final preferredDays = savedDays is List

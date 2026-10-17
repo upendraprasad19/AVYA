@@ -1579,13 +1579,21 @@ extension SyncServiceWorkout on SyncService {
         localEnd: MigratedKey.read<String>('plan_end_date'),
         cloudStart: planStart is String ? planStart : null,
         cloudEnd: planEnd is String ? planEnd : null,
+        // Read AFTER the `current_plan` seed above: a null local blob was just
+        // seeded from the cloud, so the phases are equal and cloud wins.
+        localPlanPhase: PlanWindowReanchor.blobPhase(_hive.workoutBox.get('current_plan')),
+        cloudPlanPhase: PlanWindowReanchor.blobPhase(plan),
+        keepNewerLocalPhase: SyncFlags.planWindowNewerLocalGuardEnabled,
+        localWindowPinned: planWindowPinnedByAdvance,
       );
       final reStart = reanchor.planStart;
       final reEnd = reanchor.planEnd;
-      if (reStart != null) {
+      // Re-checked before EACH write: an advance can start between the decision
+      // and the first awaited write (B-pass round 2, finding 7).
+      if (reStart != null && !planWindowPinnedByAdvance) {
         await MigratedKey.write('plan_start_date', reStart);
       }
-      if (reEnd != null) {
+      if (reEnd != null && !planWindowPinnedByAdvance) {
         await MigratedKey.write('plan_end_date', reEnd);
       }
       // Day-swapper + sync-load Task 22 (spec sec 5.7 L2): skip the WHOLE
@@ -2936,6 +2944,8 @@ extension SyncServiceWorkout on SyncService {
     // storm that flag exists to prevent. Also covers holdWeek / deload pushes
     // during a sim. Cloud catches up at the next weeklyFullSync, as before.
     if (SyncService.pausedForSimulation) return;
+    final override = SyncService.debugPlanPushOverride;
+    if (override != null) return override();
     final userId = await _ensureSessionOpen();
     if (userId == null) return;
     await _syncWorkoutPlan(userId);

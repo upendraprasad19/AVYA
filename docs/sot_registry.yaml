@@ -2980,7 +2980,7 @@ concepts:
           never be refetched, because the pull stamps last_community_sync. A pull that
           fills its 10 x 500-row cap emits restore_row_ceiling_hit (community_pull:<table>).
       - file: lib/core/services/sync_flags.dart
-        line_range: 229-249
+        line_range: 260-280
         method: restorePagingFixEnabled
         notes: Opt-out polarity; with the box not open the fix stays ON.
     reader_manifest_complete: false
@@ -3983,7 +3983,7 @@ concepts:
     restore_methods: [_restoreWorkoutPlan, _restoreScheduledWorkouts, _restoreScheduleCompletions]
     provider_invalidation_set: [currentPlanProvider, calendarWeekProvider, todayWorkoutProvider, streakProvider]
     ist_sites:
-      - { file: lib/core/services/workout_schedule_read_service.dart, line: 357, fn: generateAndScheduleFromDate }
+      - { file: lib/core/services/workout_schedule_read_service.dart, line: 366, fn: generateAndScheduleFromDate }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\\.put.*schedule.*status.*planned", reason: "Never overwrite status=completed; check guard first" }
     class_constraints: |
@@ -4073,7 +4073,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 2131-2222
+        line_range: 2150-2241
         method: TemplatesNotifier.build
         semantic: pass-through
         fields_read: [type, name, exercises, assigned_days, exercise_count, group_id, group_day_index, group_total_days, last_used_at, created_at, updated_at]
@@ -4110,7 +4110,7 @@ concepts:
           (legacy-key rekey gate, scoped to this function only — never
           `_restoreIfNeeded` as a whole) then `_drainPendingTemplateDeletes`.
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 1933-2090
+        line_range: 1938-2095
         method: _restoreWorkoutTemplates
         semantic: pass-through
         fields_read: [id, name, workout_type, deleted_at, template_exercises]
@@ -4951,7 +4951,7 @@ concepts:
           `shouldSettleRestoreMarker` (result.succeeded, no streak-critical
           failure, uid non-null, live uid == uid, Hive owner == uid).
       - file: lib/core/services/sync_service.dart
-        line_range: 1944-1954
+        line_range: 1955-1965
         method: restoreFromCloudForUser
         notes: |
           Wrapper shape pinned by completed_title_follows_log_test.dart: runs the
@@ -5002,7 +5002,7 @@ concepts:
           lookup could not answer" (null) as "none deleted": it skips every
           `tmpl_<uuid>` day then (B-pass reviewer B F1).
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 2051-2052
+        line_range: 2058-2059
         method: deletedTemplateCloudIdsForUser
         notes: |
           Public forwarder of `_deletedTemplateCloudIdsOrNull`: `null` = could not
@@ -9241,6 +9241,64 @@ concepts:
           deliberately reverted code (negative controls recorded in the diagnose-doc).
     contract_test_path: test/contracts/week_selector_reads_current_phase_test.dart
 
+  - concept: pro_phase_ensure_current
+    domain: workout
+    behavioral_test_path: test/contracts/pro_phase_ensure_current_behavioral_test.dart
+    description: |
+      A PRO user whose phase has expired gets the next phase built automatically
+      AFTER the restore (d9b3e7, 2026-10-16). The single post-restore trigger is
+      ensureProPhaseAfterRestore (ref-free); the splash advance stays as it was and
+      the two are serialised by withPhaseAdvanceLock. It advances only from a
+      settled restore marker AND local evidence (proPhaseEvidenceGap): a settled
+      marker can coexist with an empty restore, and refillIfNewWeek can mint a
+      default progress map, so the phase witness requires current_phase >=
+      max(plan blob phase, past blocks + 1). Kill switch disable_pro_phase_ensure
+      (the plan push also loses its 20 s bound). Decision D1: the new phase starts
+      at plan_end+1; the days since are missed.
+    writers:
+      - file: lib/shared/services/pro_phase_advance.dart
+        method: ensureProPhaseAfterRestore (-> _runAdvanceWith -> commitPhaseAdvance)
+        notes: >
+          the only new writer; commitPhaseAdvance stays THE single current_phase
+          writer. After a generation it runs reckonStreakDecayAndPersist (freeze
+          debit for the gap days) and one bumpRestoreCompleted.
+    reader_manifest_complete: true
+    readers:
+      - file: lib/core/services/day_rollover_service.dart
+        method: reckonAndNotifyAfterRestore (site heal) and _doRolloverWithRef (site rollover)
+        semantic: trigger-only, fire-and-forget, never awaited
+      - file: lib/features/train/screens/train/screen.dart
+        method: _buildContent (showsTrainHeroSlot / emptyWeekUnlockCopy)
+        semantic: a PRO + expired user sees PhaseGeneratingCard on any week chip and no unlock copy
+    contract_test_path: test/contracts/pro_phase_ensure_current_behavioral_test.dart
+
+  - concept: plan_window_reanchor
+    domain: workout
+    behavioral_test_path: test/contracts/plan_window_reanchor_test.dart
+    description: |
+      PlanWindowReanchor.resolve decides which plan window (plan_start_date /
+      plan_end_date) a restore keeps. d9b3e7 adds one rule: keep the LOCAL window
+      only when it starts strictly after the cloud window (date-only) AND the local
+      plan blob phase is greater than the cloud bundle's (both ints), so a stale
+      Phase III bundle restored after a failed push cannot drag a fresh Phase IV
+      window back. While a phase advance holds the lock the window is pinned: resolve
+      writes nothing and both restore callers re-check before each window write
+      (planWindowPinnedByAdvance). Kill switches disable_plan_window_newer_local_guard,
+      disable_pro_phase_ensure.
+    writers:
+      - file: lib/core/services/plan_window_reanchor.dart
+        method: resolve (pure) and blobPhase
+        notes: pure decision; the callers write the keys
+    reader_manifest_complete: true
+    readers:
+      - file: lib/core/services/sync/sync_workout.dart
+        method: _restoreWorkoutPlan
+        semantic: passes local/cloud phases and the flag
+      - file: lib/core/services/plan_integrity_reconciler.dart
+        method: reconcile
+        semantic: passes local/cloud phases and the flag
+    contract_test_path: test/contracts/plan_window_reanchor_test.dart
+
   - concept: weekly_report_target_and_freshness
     domain: nutrition
     behavioral_test_path: test/contracts/weekly_report_target_and_freshness_behavioral_test.dart
@@ -11405,7 +11463,7 @@ concepts:
           "don't touch" via the RPC's own COALESCE), same value + same
           projection helper, only the transport changed.
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1577-1584
+        line_range: 1586-1593
         method: currentWeekColumnProjection
         notes: pure helper deciding frozen-passthrough (disabled) vs program week (enabled); behaviorally tested.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
@@ -11841,15 +11899,15 @@ concepts:
       That shared walk is the drift guard.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1774-1791
+        line_range: 1788-1805
         method: _scheduleRowsBefore
         semantic: shared-row-walk
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1790-1796
+        line_range: 1804-1810
         method: pastPhaseBlocks
         semantic: strict-set
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1819-1844
+        line_range: 1833-1858
         method: pastPhaseBlocksForDisplay
         semantic: display-recovery
         notes: |
@@ -11946,7 +12004,7 @@ concepts:
           (→913) despite the gate not flagging it, found by grepping the
           symbol directly rather than trusting the gate's silence on it.
       - file: lib/core/services/sync_service.dart
-        line_range: 2718-2718
+        line_range: 2731-2731
         method: restoreOpTimeout
         semantic: per-op-ceiling
         notes: day-swapper + sync-load Task 20 fix1 (diagnose a9d3f6) shifted
@@ -11957,7 +12015,7 @@ concepts:
           an N-M line_range — but left stale it would misdirect a future
           reader by the same +14).
       - file: lib/core/services/sync_service.dart
-        line_range: 2743-2747
+        line_range: 2754-2758
         method: applyRestoreCeiling
         semantic: apply-ceiling
         notes: day-swapper + sync-load Task 20 shifted this range (+148 lines,
@@ -11967,7 +12025,7 @@ concepts:
           blocks on a citation you shifted). Shifted again by task-20-fix1
           (diagnose a9d3f6, +14 lines, same method) for the same reason.
       - file: lib/core/services/sync_service.dart
-        line_range: 2755-2757
+        line_range: 2768-2770
         method: restoreFailureReason
         semantic: telemetry-reason-split
         notes: same shift as applyRestoreCeiling directly above, both times; all three re-derived +3 by the Hermes sync_epoch_seen doc comment (2026-09-28), then +1 (with _safeRestoreOp) by the plan_engine_flags import the merge-review F4 fix added (a3e7d9).
@@ -11982,7 +12040,7 @@ concepts:
         method: _authRedirect
         semantic: delegates-to-pure-fn
       - file: lib/core/services/sync_service.dart
-        line_range: 2742-2784
+        line_range: 2753-2795
         method: _safeRestoreOp
         semantic: bounded-await
     hive:

@@ -256,6 +256,16 @@ const _declined = <String, String>{
       'builds the AI context a snapshot carries: compileDailySnapshot calls '
       'AiCoachRepository.instance.buildAiContext(); a payload builder that '
       'reads local state, the engine decides whether and when to push it',
+  'lib/shared/services/pro_phase_advance.dart':
+      'the phase-advance lock: sync_service.dart and plan_integrity_reconciler.dart '
+      'import ONLY phaseAdvanceInFlight (show clause), a read-only getter on the '
+      'lock completer, and use it to leave the local plan window alone while an '
+      'advance is rewriting it (PlanWindowReanchor localWindowPinned). The file '
+      'itself decides nothing about which copy wins or what is pushed; it keeps '
+      'its own file-scoped account rule (pinned by '
+      'blast_radius_progress_map_writer_paths_test). If the engine ever calls '
+      'anything else from it, or it starts writing cloud rows, it stops being '
+      'declined-eligible (d9b3e7)',
   'lib/features/profile/services/profile_target_recompute.dart':
       'a computation applied to the merge winners: sync_profile.dart gates the '
       'restore recompute with derivedTargetInputsChanged and calls '

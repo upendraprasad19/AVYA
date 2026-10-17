@@ -11,10 +11,12 @@ import 'package:icanbefitter/core/services/seed_service.dart';
 import 'package:icanbefitter/core/services/badge_service.dart';
 import 'package:icanbefitter/core/services/rank_service.dart';
 import 'package:icanbefitter/core/services/workout_read_service.dart';
+import 'package:icanbefitter/core/services/sync_flags.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
+import 'package:icanbefitter/shared/services/pro_phase_advance.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
@@ -736,6 +738,23 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
     // U4: thread injuries so the auto-regenerated plan excludes contraindicated
     // exercises (vocab canonicalized centrally in generateV4).
     final injuries = InjuryVocab.fromProfile(profile['injuries']);
+
+    // A phase advance holds the window mid-write (plan_start/plan_end land
+    // before the new rows): this repair would regenerate the OLD phase over it.
+    // Wait for the advance to finish, then rebuild (a failed advance leaves no
+    // rows, so that rebuild runs the repair as before). d9b3e7, B-pass finding 1.
+    final advancing =
+        SyncFlags.proPhaseEnsureEnabled ? phaseAdvanceInFlight : null;
+    if (advancing != null) {
+      unawaited(advancing.whenComplete(() {
+        try {
+          ref.invalidateSelf();
+        } catch (_) {
+          // disposed while waiting - nothing to refresh
+        }
+      }));
+      return;
+    }
 
     // Fire-and-forget async: generation writes to Hive, then invalidateSelf
     // triggers build() to re-run with the newly written plan data.

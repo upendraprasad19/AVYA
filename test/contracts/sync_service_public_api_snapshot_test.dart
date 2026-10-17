@@ -157,6 +157,9 @@ void main() {
         'restoreUserProfileForTest',
         'restoreFreezesForTest',
         'debugSetRestoreSettledUserIdForTest',
+        // PRO phase ensure (2026-10-16) - @visibleForTesting seam: its
+        // deferred:restore_pending event keys on the withheld reason.
+        'debugSetLastRestoreWithheldReasonForTest',
         // Day-swapper + sync-load Task 19 — test-only wrapper for the
         // onboarding-replay now()-fallback fix (no existing SyncDomain entry
         // point for this one-shot migration replay).

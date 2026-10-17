@@ -24,6 +24,7 @@ import 'migrated_key.dart';
 import 'seed_service.dart';
 import 'singleton_lifecycle_registry.dart';
 import 'sync_service.dart';
+import 'sync_flags.dart';
 import 'workout_write_service.dart';
 import 'write_result.dart';
 import '../utils/date_utils.dart';
@@ -343,7 +344,15 @@ class WorkoutScheduleReadService {
     // self-catching, the try/catch covers the _ensureSessionOpen await.
     if (pushPlanWindow) {
       try {
-        await SyncService.instance.pushWorkoutPlanForSyncDomain();
+        // Bounded (ensure-current plan A1.8a): an unbounded whole-bundle upsert
+        // on a hanging socket held the advance try-lock and kept
+        // `commitPhaseAdvance` from running. `Future.timeout` does not cancel
+        // the push; the lock is released and the advance completes. One call
+        // expression (the oi189 pin counts the push token in this body).
+        final push = SyncService.instance.pushWorkoutPlanForSyncDomain();
+        await (SyncFlags.proPhaseEnsureEnabled
+            ? push.timeout(planPushTimeout)
+            : push);
       } catch (e, st) {
         unawaited(ErrorTelemetry.recordNonFatal(e, st,
             reason: 'generate_and_schedule_plan_window_push'));
@@ -1746,6 +1755,11 @@ class WorkoutScheduleReadService {
     }
     return out;
   }
+
+  /// Bound on the plan-window push inside [generateAndSchedule] (ensure-current
+  /// A1.8a). Static + visible so a test can shrink it.
+  @visibleForTesting
+  static Duration planPushTimeout = const Duration(seconds: 20);
 
   /// Plan start date (Monday of Week 1).
   DateTime? getPlanStartDate() {

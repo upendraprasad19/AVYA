@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### pro_phase_ensure_current (1 bugs)
+- 2026-10-16 d9b3e7 — A PRO user (founder, iPhone Safari, new tab, 2026-10-16) with Phase III fully ticked, plan_end Sun 2026-10-11 and today Fri 2026-10-16 saw Train "WK 5 OF 4" with W5 selected and the lock card…
+
 ### clean_orphan_media_pro_recheck — an object is removed only when the subscription read SUCCEEDED and found no active unexpired row. (1 bugs)
 - 2026-10-11 f0b6d8 — `clean-orphan-media` (daily cron, 03:00 UTC) rechecked "is this user PRO?" with a `.maybeSingle()` that kept only `data` and ignored `error`. `.maybeSingle()` over two unexpired active rows (an…
 
@@ -1582,6 +1585,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-10-16 | d9b3e7 | A PRO user (founder, iPhone Safari, new tab, 2026-10-16) with Phase III fully ticked, plan_end Sun 2026-10-11 and today Fri 2026-10-16 saw Train "WK 5 OF 4" with W5 selected and the lock card… | pro_phase_ensure_current | test/contracts/pro_phase_ensure_current_behavioral_test.dart |
 | 2026-10-11 | f0b6d8 | `clean-orphan-media` (daily cron, 03:00 UTC) rechecked "is this user PRO?" with a `.maybeSingle()` that kept only `data` and ignored `error`. `.maybeSingle()` over two unexpired active rows (an… | clean_orphan_media_pro_recheck — an object is removed only when the subscription read SUCCEEDED and found no active unexpired row. | supabase/functions/clean-orphan-media/logic_test.ts |
 | 2026-10-11 | c8a4d1 | The body_measurements push sent all four sites and notes from the day's Hive record, nulls included. A device that held only some sites (logMeasurement folds ONE part per call; restore writes explicit… | sync_body_measurement_payload_hash_index | test/sync/body_measurement_push_merge_safe_test.dart |
 | 2026-10-11 | 7c3e9a | A body-measurement value was accepted at every entry point with no bound but valueCm <= 0, so an absurd finite value (a waist of 3000, or 32 typed in inches) was stored and told to the coach as fact.… | body_measurement_value_bounds | test/contracts/body_measurement_bounds_behavioral_test.dart |

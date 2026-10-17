@@ -59,6 +59,8 @@ import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.
 import 'package:icanbefitter/features/profile/services/profile_write_service.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
+import 'package:icanbefitter/shared/services/pro_phase_advance.dart'
+    show planWindowPinnedByAdvance;
 
 part 'sync/sync_coach.dart';
 part 'sync/sync_community.dart';
@@ -1894,6 +1896,17 @@ class SyncService {
   @visibleForTesting
   void debugSetRestoreSettledUserIdForTest(String? uid) =>
       _restoreSettledUserId = uid;
+
+  /// Test seam: replaces the plan-window push body so a test can make it hang
+  /// (the bounded push in `generateAndSchedule`). Null in production.
+  @visibleForTesting
+  static Future<void> Function()? debugPlanPushOverride;
+
+  /// Test seam: set / clear the withheld reason directly (the PRO phase ensure's
+  /// `deferred:restore_pending` event keys on it).
+  @visibleForTesting
+  void debugSetLastRestoreWithheldReasonForTest(String? reason) =>
+      _lastRestoreWithheldReason = reason;
 
   /// The settle decision, pure so every clause is unit-testable and
   /// mutation-killable (an end-to-end swap becomes `cancelled` first, so the two
