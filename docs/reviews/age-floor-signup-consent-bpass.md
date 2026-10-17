@@ -1,3 +1,13 @@
+---
+reviewed_at: 2026-10-16
+staged_against: age-floor-signup-consent (git diff 3c86960d: commit fbf20f56 plus the staged round-2 edits; the fixes below were made afterwards in 02ab8f00)
+blast_radius: account (L tier: auth)
+reviewer: two claude-sonnet B-pass reviewers (fresh, context-blind, read-only by an exhaustive command list): A code and tests, B documents and claims
+lens_set: [asserted_fixture_value, guard_without_its_mirror, documentation_rot, writer_reader_drift, boundary_value]
+findings_count: 23
+verdict: accepted
+---
+
 # B-pass review: age floor 13 and the "by tapping" sign-up consent (`age-floor-signup-consent`)
 
 Date: 2026-10-16. Blast radius `account` (L tier: auth). Plan: `docs/plans/age-floor-signup-consent.md`. Record: `docs/plan-reviews/age-floor-signup-consent.md`.
