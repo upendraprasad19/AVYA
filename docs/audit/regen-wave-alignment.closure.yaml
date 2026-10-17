@@ -1,0 +1,135 @@
+# Closure ledger — regen-wave-alignment (OI-166 Unit 1)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no
+# `deferred:` key.
+#
+# WHAT PRODUCED THESE: five plan-review rounds (none converged — the batch was
+# SPLIT per §4.12.1 and this ledger covers only Unit 1), then a self-initiated
+# B-pass run as TWO context-blind agents with the lens set split 1-5 / 6-8.
+#
+# The shape worth reading: 3 of the 5 B-pass findings were not code defects at
+# all. Two were documents describing a batch that no longer existed, and one was
+# a gate reporting a confident PASS about the wrong pair of trees. The code the
+# reviewers were pointed at came back clean on every runtime lens.
+
+batch: regen-wave-alignment
+plan_review_record: docs/plan-reviews/regen-wave-alignment.md
+bpass_review: docs/reviews/df96a61cf598-bpass.md
+diagnose_docs:
+  - docs/diagnoses/2026-09-08-hotel-workout-stamps-hardcoded-a9f3c7.md
+  - docs/diagnoses/2026-09-08-day-of-week-round-trip-c4e8b2.md
+  - docs/diagnoses/2026-09-08-deload-lift-blob-push-ordering-b6d1f4.md
+
+findings:
+  # ── B-pass agent 1 (lenses 1-5, context-blind) ────────────────────
+  - id: B1
+    title: "P0 — three-way OI-number collision: this branch and main independently minted OI-167/168/169 for unrelated issues"
+    terminal_state: closed_in_commit
+    commit: 4282a4e8
+    verification: >
+      Renumbered to OI-173/174/175, verified free across all four boards (open +
+      closed, both sides) with a positive control on OI-172. `build_oi_index.dart`
+      regenerates clean; `check_oi_numbering_unique.dart` PASSes.
+      ⚠ The gate did NOT catch this — it reported `PASS (vacuous)` because the
+      branch had zero commits, making HEAD the merge commit it was cut from, so
+      it compared that commit's two parents rather than the staged board against
+      mainline. Found by hand. Filed as OI-176 (see F1 below).
+
+  - id: B2
+    title: "P0 — the OI-171 regression test was unstaged, and its diagnose-doc cited an unrelated contract test as its coverage"
+    terminal_state: closed_in_commit
+    commit: 4282a4e8
+    verification: >
+      Test staged; `contract_test_path` repointed from
+      plan_week_for_date_behavioral_test.dart (0 references to DeloadEvaluator or
+      pushWorkoutPlanForSyncDomain) to deload_eval_behavioral_test.dart. The
+      staging half was an artifact of holding the index while reviewers read it;
+      the citation half was a real error independent of staging.
+
+  - id: B3
+    title: "P1 — plan doc, board and diff disagreed on tier, scope and status; and the platform tier's required feature_flag was absent"
+    terminal_state: closed_in_commit
+    commit: 4282a4e8
+    verification: >
+      Four corrections, all in this commit. (a) Plan header rewritten to
+      `platform`, measured against the ACTUAL staged file list — its old
+      parenthetical justified `account` by citing sync_workout.dart as a positive
+      control, and folding OI-170 in put that file IN the diff, so the sentence
+      proving the tier became the sentence refuting it. (b) §10's OI-170
+      out-of-scope bullet struck through and kept, with both original reasons
+      shown false. (c) OI-170/171 flipped OPEN -> CLOSED with `closes-oi:`
+      citations. (d) Kill-switch SyncFlags.deriveDayOfWeekOnRestore added,
+      opt-OUT polarity, mutation-proven on 2 legs.
+      ⚠ Nothing enforces blast_radius.yaml's `requires:` list —
+      check_blast_radius_coverage.dart never reads it — so the full gate loop ran
+      green on a platform-tier sync change with no flag at all. Review-read only.
+
+  # ── B-pass agent 2 (lenses 6-8, context-blind) ────────────────────
+  - id: B4
+    title: "P2 — the OI-171 fix shipped with zero regression coverage, self-disclosed in its own diagnose-doc rather than closed"
+    terminal_state: closed_in_commit
+    commit: 4282a4e8
+    verification: >
+      Reviewer deleted deload_evaluator.dart:287 and ran four deload/sync suites:
+      60/60 stayed green. Now pinned by a 3-assertion OI-171 group asserting the
+      push exists, is ORDERED AFTER the blob write, and stays unawaited.
+      Mutation-proven, both legs leaving the file compiling: MOVING the push above
+      the blob write (the exact pre-fix defect) reddens exactly 1 — the ordering
+      assertion — while presence and unawaited stay green, which is what proves
+      ordering carries the weight; DELETING it reddens 3.
+
+  - id: B5
+    title: "P2 — the new schedule-row gate was defeated on the reviewer's first attempt by index-assignment indirection"
+    terminal_state: closed_in_commit
+    commit: 4282a4e8
+    verification: >
+      Reviewer planted a file building the map then assigning the keys by index;
+      the gate reported PASS over 480 files. Each key is now matched by
+      literal-key OR index-assignment, independently, which also catches a file
+      that MIXES the forms. Verified false-positive-free (no file under lib/
+      writes both keys by index assignment). 6 new tests; all four mutation legs
+      re-derived rather than carried forward (legs 1 and 2 rose 2 -> 4; the new
+      index-assignment leg reddens 3).
+    notes: >
+      The named-constant residual is NOT closed and is not claimed to be — a
+      source grep cannot close it, and tightening the pattern only moves the
+      boundary. Verified by planting exactly that file and watching it PASS, then
+      pinned as an executable test so the limit reddens if anyone ever does close
+      it. Unit 2's shared buildScheduleRows is the structural fix; this gate is
+      the §4.11 detector that must precede it, and stays WARN-only until then.
+
+  # ── Filed during the batch, terminal by being on the board ────────
+  - id: F1
+    title: "OI-176 — check_oi_numbering_unique.dart answers PASS (vacuous) for a branch with no commits, which is exactly when numbers are minted"
+    terminal_state: upstream_blocked
+    blocker: >
+      Repairing it means changing which trees the gate compares (staged/working
+      board vs origin/main, rather than dispatching on HEAD's shape). That is a
+      `platform`-tier change to the review machinery and owes its own gate test
+      plus a rule-24 `mutation_proven` ledger entry — a different subsystem from
+      this batch, which touches no gate-comparison logic.
+    reopen_when: >
+      OI-176 is picked up. The board entry carries the observed output verbatim,
+      the mechanism, why the other two invocation points are too late, and a
+      proposed repair.
+
+  - id: F2
+    title: "OI-166's filed symptom (stale phase-arc strip) is NOT fixed by Unit 1"
+    terminal_state: verified_clean
+    evidence: >
+      Correct and intended, not an omission. The stale strip is the AI-coach
+      regen never writing `current_plan`, which is Unit 2's §5. OI-166 remains
+      OPEN on the board and this commit does not cite `closes-oi: OI-166`. Stated
+      in the commit message, the plan-review record and the plan doc so the merge
+      cannot be read as closing it.
+
+  - id: F3
+    title: "Unit 2 — shared buildScheduleRows, callers A/B/C, the deload dual write, the coach current_plan write, the preview-cache rule"
+    terminal_state: upstream_blocked
+    blocker: >
+      §4.12.1 split after five non-converging rounds, round 5 finding four P1s
+      inside round 4's own remediations. Re-planned from scratch; the five
+      surviving P1s are recorded in docs/audit/oi166-regen-wave-alignment-plan.md
+      and in the in-flight memory.
+    reopen_when: >
+      The Unit 2 re-plan is written and passes its own ×2 review. Sequencing
+      relative to the next APK is a founder decision, not assumed here.

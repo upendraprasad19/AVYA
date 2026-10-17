@@ -1,0 +1,74 @@
+# Closure ledger - swap-cross-device-reconcile (diagnose c7e3a9)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no `deferred:` key.
+# `<branch>@branch` is the in-branch commit form (the SHA does not exist until the commit).
+# Scope: founder's 2026-10-01 day-swap report. Plan rounds 1-5 split every unit
+# whose design did not converge onto the OI board; the founder chose (chat
+# 2026-10-03, "Option A ... OK proceed") to ship U1 alone and plan OI-284 +
+# OI-294 together next.
+
+batch: swap-cross-device-reconcile
+plan_review_record: docs/plan-reviews/swap-cross-device-reconcile.md
+diagnose_docs:
+  - docs/diagnoses/2026-10-03-home-insight-stale-after-day-swap-c7e3a9.md
+
+findings:
+  - id: U1
+    title: "Home insight stale after a day swap: AiInsightNotifier read today's row with ref.read; now watches todayWorkoutProvider"
+    terminal_state: closed_in_commit
+    commit: swap-cross-device-reconcile@branch
+    verification: "test/contracts/ai_insight_follows_today_row_test.dart (group 1 red on pre-fix code; mutation +7 -1)"
+  - id: OI-284
+    title: "Completed day-swap row keeps its pre-swap title after a cross-device restore (+ cloud completions name)"
+    terminal_state: blocked_on_user
+    reason: "Pending founder action: approve the next plan (OI-284 + OI-294 together, founder's Option A 2026-10-03) after its two review rounds; four plan rounds found a new design defect in this repair each time."
+  - id: OI-294
+    title: "Launch-path restore never refreshes Home providers"
+    terminal_state: blocked_on_user
+    reason: "Pending founder action: approve the joint OI-284 + OI-294 plan (Option A, 2026-10-03)."
+  - id: OI-292
+    title: "morning-alert names a workout from yesterday's snapshot (today masked by the generic 'workout')"
+    terminal_state: blocked_on_user
+    reason: "Pending founder action: choose the date-correct source for the morning push and give the Edge Function deploy go."
+  - id: OI-293
+    title: "Restore outcomes unobservable on a release Android device"
+    terminal_state: blocked_on_user
+    reason: "Pending founder action: choose where restore outcomes become visible on a release build (export, diagnostics screen, or telemetry) - the reader decides the design."
+  - id: OI-295
+    title: "Ref-less schedule writers (deload_evaluator lift, lazy read-service writes) refresh neither the Today card nor the insight"
+    terminal_state: blocked_on_user
+    reason: "Pending founder action: approve folding OI-295 into the joint OI-284 + OI-294 plan (same refresh-signal design) or scheduling it separately."
+  - id: OI-285
+    title: "Restore merge decides snapshot winners once and puts with no per-date lock"
+    terminal_state: blocked_on_user
+    reason: "Pending founder action: approve its own plan (merge-path change, platform tier) - two-batch scope call 2026-10-02."
+  - id: OI-286
+    title: "Replaced-swap notice"
+    terminal_state: blocked_on_user
+    reason: "Pending founder action: approve the notice copy (Wardroom) and its plan; depends on OI-285."
+  - id: OI-287
+    title: "Day-swap allowance is per-device"
+    terminal_state: blocked_on_user
+    reason: "Pending founder action: pick the read path (consume-day-swap read mode = EF deploy go, or an owner-SELECT RLS migration = apply go)."
+  - id: OI-288
+    title: "Accepted-residual wording pinned a defect (residual-text gate, lens L55, two-device walk row)"
+    terminal_state: blocked_on_user
+    reason: "Pending founder action: approve root CLAUDE.md / lens-registry edits (L-tier) and the grandfather list."
+  - id: OI-289
+    title: "Nutrition cross-device probe"
+    terminal_state: blocked_on_user
+    reason: "Pending founder action: run the two-device nutrition walk (web + phone, same account); findings become their own OIs."
+  - id: OI-290
+    title: "week_number unclassified in DaySwapRules"
+    terminal_state: blocked_on_user
+    reason: "Pending founder action: close as no-symptom hygiene or fix it (two round-4 reviewers found no reader of week_number in lib/; 'week' is already identity, day_swap_rules.dart:17-28)."
+  - id: OI-261
+    title: "displaced_<date> swap backups are local-only"
+    terminal_state: blocked_on_user
+    reason: "Pending founder action: approve its plan (adds a field to the cloud plan bundle; mixed-version behaviour needs a decision)."
+  - id: OI-279-280-281
+    title: "Resume pull / delta sync / meal-delete tombstone (resilient-client session's OIs)"
+    terminal_state: upstream_blocked
+    blocker: "Owned by the resilient-client Phase 1b/2 work (docs/superpowers/plans/2026-10-01-resilient-client-phase1b-resume-pull-DRAFT.md)."
+    reopen_when: "That session's plans land or are abandoned."
+
+closed_count: 14
