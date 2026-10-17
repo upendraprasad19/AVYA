@@ -16,6 +16,7 @@ import 'package:icanbefitter/core/services/prediction_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/utils/age_floor.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/core/utils/equipment_vocab.dart';
 import 'package:icanbefitter/core/utils/injury_vocab.dart';
@@ -673,7 +674,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   Future<void> _pickDateOfBirth() async {
     final now = DateTime.now();
     final min = DateTime(now.year - 100, now.month, now.day);
-    final max = DateTime(now.year - 13, now.month, now.day);
+    final max = latestAllowedDob(now);
     final initial = _dateOfBirth ?? DateTime(now.year - 25, now.month, now.day);
     final picked = await showDatePicker(
       context: context,

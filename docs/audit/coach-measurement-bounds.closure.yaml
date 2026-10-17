@@ -68,9 +68,8 @@ findings:
     notes: "working as designed, residual stated in plan section 7 and the diagnose-doc: the filter exists to stop a wrong-clock-AHEAD write from shadowing every real entry, and the two cases cannot be told apart from the record alone (the source field does not say whose clock was wrong); a one-day tolerance would re-open the shadowing it stops. The coach meanwhile gets the older valid value, which is stale but never a wrong one"
   - id: LEGACY-PUSH
     title: "finite out-of-range values already held locally are still pushed by _syncMeasurements (the default merge-safe push drops only non-finite sites)"
-    terminal_state: upstream_blocked
-    blocker: "founder decision D8 (2026-10-11): the push is bounded in L2c together with the per-site pending set, and L2c exists only if OQ-L2a is decided for the per-site pending set; 0 body_measurements rows exist in the cloud today (G2, re-read 2026-10-11). The same L2c edit must replace the two casts in _syncMeasurements (log['date'] as String?, log['created_at'] as String?, sync_health.dart:277,280): a record whose date is not a String throws there and ends the whole push pass at that key (no in-repo writer produces one; sync/** is platform tier, so an account-tier landing does not touch it)"
-    reopen_when: "OQ-L2a is decided; if L2c is not chosen this row reopens as blocked_on_user for another route"
+    terminal_state: blocked_on_user
+    reason: "OQ-L2a was decided on 2026-10-16 as option 1 (accept), so L2c is not built and this row reopens for another route, as its earlier reopen_when said. The route is the founder's to pick: bound the push inside sync_health.dart:_syncMeasurements (sync/** is platform tier, so it needs its own plan and x2 review) together with replacing the two casts at sync_health.dart:277 and :280, or accept that finite out-of-range values held locally are still pushed. 0 body_measurements rows exist in the cloud and the app is in testing."
   - id: L3-BOUNDS
     title: "L3's TS athlete state, the Telegram bot and the restore Edge Function read raw cloud rows, so read-time hiding in the app forks the readers; L3 must apply the same table (a TS twin plus a Dart-to-TS parity test)"
     terminal_state: upstream_blocked

@@ -645,6 +645,19 @@ class AuthSessionBootstrapper {
     return cloudTermsAcceptedAt == null || cloudTermsAcceptedAt.isEmpty;
   }
 
+  /// The policy version a consent-fallback stamp records for an account created
+  /// at [createdAtIso]: `v1` when the account predates the `v2` policy
+  /// ([AppConstants.termsV2EffectiveFromUtc]), else the current
+  /// [AppConstants.termsVersion]. A missing or unparseable [createdAtIso] reads
+  /// as the current version (the caller then stamps `now()`).
+  @visibleForTesting
+  static String termsVersionForAccountCreatedAt(String? createdAtIso) {
+    final created = DateTime.tryParse(createdAtIso ?? '');
+    if (created == null) return AppConstants.termsVersion;
+    final v2 = DateTime.parse(AppConstants.termsV2EffectiveFromUtc);
+    return created.isBefore(v2) ? 'v1' : AppConstants.termsVersion;
+  }
+
   /// Google OAuth / phone-OTP consent-fallback stamp (closes-diagnose
   /// b3f9e7). Extracted to its own public method (plan-review round 1,
   /// 2026-08-02) — `hydrateFromCloud` is NOT actually reachable for a real
@@ -711,12 +724,14 @@ class AuthSessionBootstrapper {
         // one runs first (B-pass review finding 2, 2026-08-02).
         final stamp = (row?['created_at'] as String?) ??
             DateTime.now().toUtc().toIso8601String();
+        // v1 for an account that predates the v2 policy (OI-305, 2026-10-16).
+        final version = termsVersionForAccountCreatedAt(stamp);
         await _supabase.client.from('users').update({
           'terms_accepted_at': stamp,
-          'terms_version': AppConstants.termsVersion,
+          'terms_version': version,
         }).eq('id', userId);
         await userBox.put('terms_accepted_at', stamp);
-        await userBox.put('terms_version', AppConstants.termsVersion);
+        await userBox.put('terms_version', version);
       }
     } catch (e, st) {
       debugPrint('[AuthSessionBootstrapper.ensureTermsConsentFallback] '

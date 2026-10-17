@@ -108,11 +108,24 @@ class AppConstants {
 
   // ── Terms & Privacy ───────────────────────────────────────
 
-  /// Current ToS/Privacy-Policy version. Bumping this re-prompts every user
-  /// via [TermsModal] on next launch (Hive flag is stamped with the version
-  /// at accept time; mismatch = re-show). Also persisted on the Supabase
-  /// `users.terms_version` column for audit.
-  static const String termsVersion = 'v1';
+  /// Current ToS/Privacy-Policy version, stamped with `terms_accepted_at` at
+  /// the moment of acceptance (Hive `userBox` and the Supabase
+  /// `users.terms_version` column, for audit). Nothing compares it: the
+  /// `TermsModal` that once re-prompted on a mismatch no longer exists, so a
+  /// bump labels NEW acceptances and does not re-ask existing users (OI-346).
+  ///
+  /// `v2` = the app-specific privacy policy published at
+  /// icanbefitter.com/privacy in October 2026 ([termsV2EffectiveFromUtc]);
+  /// `v1` = the earlier blog policy.
+  static const String termsVersion = 'v2';
+
+  /// A DATE boundary, not the publish instant: IST midnight at the start of
+  /// 16 October 2026 (the day the policy was published). A consent fallback
+  /// stamp for an account created before it records `v1`, not `v2`: that user
+  /// never saw the new text. An account created on an older build after this
+  /// instant is still labelled `v2` (label noise only: nothing compares the
+  /// version, OI-346).
+  static const String termsV2EffectiveFromUtc = '2026-10-15T18:30:00Z';
 
   /// App version (pubspec `version:` field). Audit 2026-05-12 P2-A — fixes the
   /// hardcoded `0.0.0+release` placeholder in error telemetry so client_errors
