@@ -5,8 +5,9 @@
 library;
 
 // L2b Landing B (section 4.6) - FLAG-OFF IDENTITY. With
-// configBox['enable_body_measurements'] absent or false, no measurements
-// provider is created on any installation path: the Home slot, the Weight sheet
+// configBox['enable_body_measurements'] a stored bool false (the kill switch;
+// an absent key reads ON since the 2026-10-16 flip) or an unopened box, no
+// measurements provider is created on any installation path: the Home slot, the Weight sheet
 // and the prompt provider read the flag first and stop there. Observer-based:
 // a ProviderObserver records every provider the container creates, so "nothing
 // was created" is a statement about the container and not about a widget tree.
@@ -96,8 +97,8 @@ void main() {
       setUp(() async => dir = await setUpHiveForTests());
       tearDown(() async => tearDownHiveForTests(dir));
 
-      test('absent is OFF', () {
-        expect(MeasurementFlags.bodyMeasurementsEnabled, isFalse);
+      test('absent is ON (the 2026-10-16 default flip)', () {
+        expect(MeasurementFlags.bodyMeasurementsEnabled, isTrue);
       });
 
       test('true is ON', () async {
@@ -108,21 +109,46 @@ void main() {
         expect(MeasurementFlags.bodyMeasurementsEnabled, isTrue);
       });
 
-      test('false, the string "true", 1 and null are OFF (the getter is '
-          '== true, not truthy)', () async {
-        for (final v in <Object?>[false, 'true', 1, 'on']) {
+      test('only a stored bool false is OFF (the kill switch); true and any '
+          'non-bool value read the default ON', () async {
+        await HiveService.instance.configBox.put(
+          'enable_body_measurements',
+          false,
+        );
+        expect(MeasurementFlags.bodyMeasurementsEnabled, isFalse);
+        final nonBool = <Object?>[
+          'false',
+          'true',
+          0,
+          1,
+          0.5,
+          'off',
+          'on',
+          <int>[1],
+          <String, int>{},
+        ];
+        for (final v in nonBool) {
           await HiveService.instance.configBox.put(
             'enable_body_measurements',
             v,
           );
           expect(
             MeasurementFlags.bodyMeasurementsEnabled,
-            isFalse,
+            isTrue,
             reason: '$v',
           );
         }
         await HiveService.instance.configBox.delete('enable_body_measurements');
-        expect(MeasurementFlags.bodyMeasurementsEnabled, isFalse);
+        expect(MeasurementFlags.bodyMeasurementsEnabled, isTrue);
+        await HiveService.instance.configBox.put(
+          'enable_body_measurements',
+          false,
+        );
+        await HiveService.instance.configBox.put(
+          'enable_body_measurements',
+          true,
+        );
+        expect(MeasurementFlags.bodyMeasurementsEnabled, isTrue);
       });
     });
   });
@@ -149,7 +175,11 @@ void main() {
     }
 
     test('flag OFF: none, and neither the history nor the profile provider is '
-        'ever created', () {
+        'ever created', () async {
+      await HiveService.instance.configBox.put(
+        'enable_body_measurements',
+        false,
+      );
       final c = container();
       final sub = c.listen(measurementPromptProvider, (_, _) {});
       addTearDown(sub.close);
@@ -411,12 +441,20 @@ void main() {
         ),
         isTrue,
       );
-      // The status row and the button label read the same getter, ON / off.
+      // The toast and the status row say the same word: ON / KILLED.
+      expect(
+        body.replaceAll(RegExp(r'\s+'), ' ').contains(
+          "_toast('enable_body_measurements = \${next ? 'ON' : 'KILLED'}')",
+        ),
+        isTrue,
+        reason: 'the toast text after a toggle',
+      );
+      // The status row and the button label read the same getter, ON / KILLED.
       final squashed = src.replaceAll(RegExp(r'\s+'), ' ');
       expect(
         squashed.contains(
           "_kv('enable_body_measurements', "
-          "MeasurementFlags.bodyMeasurementsEnabled ? 'ON' : 'off')",
+          "MeasurementFlags.bodyMeasurementsEnabled ? 'ON' : 'KILLED')",
         ),
         isTrue,
       );

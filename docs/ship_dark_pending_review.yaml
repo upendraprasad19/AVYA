@@ -186,9 +186,11 @@ pending:
       sha) and is set by the stamp commit that follows it (no test or script
       reads this field, so the stamp is self-attested). The flip waits for the
       OQ-L2a decision (DECIDED 2026-10-16: accept, option 1), a position on
-      OI-310 and the under-18 status quo (OI-305; 2026-10-16: age floor 13) (Landing C, E3's permanent "Add measurements" door, is the
-      paragraph below); it needs the full x2 + bpass: accepted again, and
-      deletes the blast_radius.yaml rule for measurement_flags.dart.
+      OI-310 and the under-18 status quo (OI-305; 2026-10-16: age floor 13)
+      (Landing C, E3's permanent "Add measurements" door, is the
+      paragraph below); it needs the full x2 + bpass: accepted again (the
+      FLIP paragraph at the end of this entry says what the flip did with the
+      blast_radius.yaml rule for measurement_flags.dart).
 
       L2b Landing C (branch coach-measurement-surfaces, plan
       docs/plans/coach-measurement-surfaces.md v3, record
@@ -212,8 +214,22 @@ pending:
       screen cannot be pumped); only the host line is pinned. It is the
       AGENT-WEB-CHECK and DEVICE-CHECK-C rows of the Landing C ledger. With
       Landing C merged the sheet is reachable on demand through the card's
-      button; the flip still waits for OQ-L2a, OI-310 and OI-305 and needs its
-      own full x2 review and B-pass.
+      button. (At Landing C's merge the flip still waited for OQ-L2a, OI-310
+      and OI-305 and needed its own full x2 review and B-pass; the FLIP
+      paragraph below is the later state.)
+
+      FLIP (branch measurements-flag-flip, plan docs/plans/measurements-flag-flip.md):
+      the default became ON on 2026-10-16 (absent or non-bool reads ON; a stored
+      bool false is the kill switch; an unopened box still reads OFF). The
+      blast_radius.yaml rule for measurement_flags.dart STAYS while the file is
+      the kill switch (an earlier note here said the flip deletes it); OI-345
+      removes the OFF path, the flag and the rule after the founder's device
+      check of the flipped build is recorded. The flip's own full x2 review
+      and B-pass are in docs/plan-reviews/measurements-flag-flip.md and
+      docs/reviews/measurements-flag-flip-bpass.md (plan
+      docs/plans/measurements-flag-flip.md); this entry is removed together
+      with the flag under OI-345, after the FLIPPED-BUILD-CHECK row of
+      docs/audit/measurements-flag-flip.closure.yaml is recorded.
 
 # ── HARD PRECONDITIONS for flipping enable_hold_weeks ─────────────────────
 # Not a wish-list. The flip-on commit already requires the full ×2 + bpass

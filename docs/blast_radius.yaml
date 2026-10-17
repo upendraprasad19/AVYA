@@ -529,9 +529,10 @@ paths:
   - { glob: "lib/core/services/singleton_lifecycle_registry.dart", tier: platform }   # cross-account reset hook
 
   # L2b Landing B: the ship-dark flag of the body-measurements sheet. A UI flag file, NOT engine code, so it sits
-  # outside the sync-engine block above. Declared above the lib/core/services/** catch-all (first match wins); the
-  # flip commit deletes this rule together with the flag.
-  - { glob: "lib/core/services/measurement_flags.dart", tier: platform }   # enable_body_measurements: gates every B surface
+  # outside the sync-engine block above. Declared above the lib/core/services/** catch-all (first match wins). The
+  # flip (2026-10-16) kept this file as the kill switch of a default-ON flag, so the rule stays; OI-345 deletes it
+  # together with the flag once the device check of the flipped build is recorded.
+  - { glob: "lib/core/services/measurement_flags.dart", tier: platform }   # enable_body_measurements (default ON, stored false = kill switch): gates every B and C surface
 
   # ----- catch-all fallbacks (lowest specificity; declared last) -----
   # Any other service file under lib/core/services/ is account-tier by default.

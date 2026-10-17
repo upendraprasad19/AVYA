@@ -18,8 +18,8 @@ import '../widgets/measurements_card_frame.dart';
 /// photos (D1: nothing reads the snapshot's `measurements` column).
 ///
 /// Above the list sits the "Body measurements" card (L2b Landing C, E3), hosted
-/// by `MeasurementsCardFrame` behind the default-OFF flag
-/// `enable_body_measurements`: latest values from the stored history and a door
+/// by `MeasurementsCardFrame` behind `enable_body_measurements` (default ON
+/// since 2026-10-16): latest values from the stored history and a door
 /// to the entry sheet. It is independent of the snapshots below it.
 ///
 /// APK Test #6 / Plan F-11.
