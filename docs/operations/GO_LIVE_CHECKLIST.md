@@ -121,7 +121,7 @@ ships.
 | 3.2 | Play Data Safety form | FOUNDER | Submitted |
 | 3.3 | **Health Connect / health-data declaration** (separate from 3.2) | FOUNDER | Submitted |
 | 3.4 | Email sign-up consent | AGENT — **CHANGED 2026-10-16 (OI-305, founder decision)** | The checkbox is gone: "By tapping CREATE ACCOUNT, you agree to our Privacy Policy and Terms" (`_ConsentNotice` in `sign_in_screen.dart`), the tap stamps time + `v2` (or, when no stamp landed before the confirm link, `ensureTermsConsentFallback` stamps `created_at` + v1/v2). History: pre-ticked (Q2) -> unchecked 2026-08-25 (diagnose `d8f2c1`) -> notice 2026-10-16. DPDP section 6 commentary and Play's health-app policy lean toward a tick; counsel / Play review may ask for it back (local change, `test/auth/terms_skip_test.dart` and `sign_up_consent_notice_test.dart` flip with it). |
-| 3.5 | Google-OAuth consent posture | FOUNDER (product/UX) — **NARROWED 2026-10-16, founder to confirm** | Email sign-up is a tap under a notice now; Google / phone still have no notice on their button (see the note below the table) |
+| 3.5 | Google-OAuth consent posture | FOUNDER (product/UX) — **NARROWED 2026-10-16, founder confirmed 2026-10-17 (Welcome footer is enough for Google for now)** | Email sign-up is a tap under a notice now; Google / phone still have no notice on their button (see the note below the table) |
 
 > ⚠ **3.1 is load-bearing.** Six in-app links already point at those two
 > URLs (`privacy_dialog.dart:45,62`; `sign_in_screen.dart:1459,1463`;
@@ -142,6 +142,8 @@ ships.
 > explicit-tick-versus-no-gesture inconsistency is gone for email; whether the Welcome footer is enough for Google /
 > phone is the founder's and counsel's call, as is the weaker DPDP reading of any tap. Existing accounts are not
 > re-asked (OI-346).
+>
+> **Founder decision 2026-10-17:** the Welcome footer is enough for Google for now (phone is switched off in code, `_kEnablePhoneEnlist = false`); existing accounts are all testing accounts, so OI-346 waits for the store launch.
 
 **Permissions the Data Safety form must cover** (from the merged prod-release manifest): health &
 fitness (`READ_STEPS`, `READ_WEIGHT`, `ACTIVITY_RECOGNITION`), camera + photos (`CAMERA`,
