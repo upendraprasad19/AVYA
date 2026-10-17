@@ -19,10 +19,18 @@
 --   * a STUB `cron` schema (cron.job, cron.schedule, cron.unschedule): pg_cron is not installed in the replica, and 159 only
 --     calls those two functions. A `private` schema (PostgREST does not expose it live either).
 --   * public.users: id only (the live table also has an FK to auth.users, dropped here so fixtures need no auth rows).
+--   * (160) public.promo_codes: ALL seven live columns (code PK, discount_pct integer NOT NULL, valid_until date NOT NULL, max_uses, used_count, is_active,
+--     created_at) with the LIVE constraint promo_codes_discount_pct_check CHECK (discount_pct >= 1 AND discount_pct <= 100)
+--     and the three live codes (30, 20, 15 percent, read 2026-10-16), so migration 160's REPLACEMENT of that constraint is exercised.
+--   * (160) the platform's DEFAULT FUNCTION PRIVILEGES: `ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO anon,
+--     authenticated, service_role` (read live 2026-10-16: pg_default_acl, {postgres=X, anon=X, authenticated=X, service_role=X}),
+--     set BEFORE any function is created. PostgreSQL's own default is EXECUTE to PUBLIC; without this line the mutants "REVOKE FROM
+--     anon omitted" and "EXECUTE left on anon" on referrer_summary would be unkillable here.
 -- Fixtures: 30 users, none holding a subscription or a redemption.
 --
 -- BUILD (once, inside the container rpoc-pgtest, see the header of test/sql/referral_pay_on_conversion_concurrency_local.sh):
 --   create database rpoc_a;   then   psql -d rpoc_a -v ON_ERROR_STOP=1 -f this file   then   -f supabase/migrations/159_referral_reward_on_conversion.sql
+--   then   -f supabase/migrations/160_referral_hardening.sql
 --
 -- ONE TRANSACTION, REFUSING A NON-EMPTY TARGET (the OI-320 B-pass lesson): the whole file is BEGIN ... COMMIT, a guard
 -- refuses a target that already holds any of these objects, and the marker is created LAST.
@@ -34,6 +42,7 @@ BEGIN
      OR to_regclass('public.referral_redemptions') IS NOT NULL
      OR to_regclass('public.subscriptions') IS NOT NULL
      OR to_regclass('public.alerts') IS NOT NULL
+     OR to_regclass('public.promo_codes') IS NOT NULL
      OR to_regclass('public.rpoc_replica_marker') IS NOT NULL
      OR to_regnamespace('auth') IS NOT NULL
      OR to_regnamespace('cron') IS NOT NULL
@@ -45,6 +54,8 @@ END
 $guard$;
 
 CREATE SCHEMA private;
+-- The platform default (see the header): functions created in public from here on are directly executable by these roles.
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;
 CREATE TABLE public.users (id uuid PRIMARY KEY);
 
 CREATE TABLE public.referral_redemptions (
@@ -241,11 +252,26 @@ GRANT USAGE ON SCHEMA auth TO anon, authenticated;
 ALTER TABLE public.referral_redemptions ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can read own redemptions" ON public.referral_redemptions FOR SELECT
   USING (((select auth.uid()) = referrer_id) OR ((select auth.uid()) = referee_id));
-GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON public.referral_redemptions TO anon, authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER, MAINTAIN ON public.referral_redemptions TO anon, authenticated, service_role;   -- live relacl arwdDxtm (m = MAINTAIN, PG17)
 -- The live subscriptions table (read 2026-10-13): RLS on, ONE policy, a SELECT of the caller's own rows. No write policy exists for anon,
 -- authenticated or PUBLIC: that is what keeps a paid row unforgeable (migration 052 dropped the write policies).
 ALTER TABLE public.subscriptions ENABLE ROW LEVEL SECURITY;
 CREATE POLICY subscriptions_select_own ON public.subscriptions FOR SELECT USING ((select auth.uid()) = user_id);
+
+-- (160) the live promo table, column for column (read live 2026-10-16: valid_until is `date NOT NULL` with NO default, so an INSERT that omits it
+-- fails with 23502 on the real project) and the LIVE 1..100 constraint that migration 160 replaces.
+CREATE TABLE public.promo_codes (
+  code         text PRIMARY KEY,
+  discount_pct integer NOT NULL,
+  valid_until  date NOT NULL,
+  max_uses     integer,
+  used_count   integer DEFAULT 0,
+  is_active    boolean DEFAULT true,
+  created_at   timestamptz DEFAULT now(),
+  CONSTRAINT promo_codes_discount_pct_check CHECK (((discount_pct >= 1) AND (discount_pct <= 100)))
+);
+INSERT INTO public.promo_codes (code, discount_pct, valid_until) VALUES
+  ('REPLICA30', 30, current_date + 365), ('REPLICA20', 20, current_date + 365), ('REPLICA15', 15, current_date + 365);
 
 -- Positive marker that identifies a disposable replica, created LAST. The live project does not have this table, and the
 -- replica-only files REFUSE to run without it.

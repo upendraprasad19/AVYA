@@ -206,7 +206,7 @@ findings:
   - id: X7
     title: "a referrer can read the friend's payment time (to the second) and plan class, and see a void flip, through the table's SELECT policy"
     terminal_state: blocked_on_user
-    reason: "Hermes round 2 (seat D finding 1) rates this P2: the existing SELECT policy (live, 'Users can read own redemptions': auth.uid() = referrer_id OR = referee_id) shows each side the other's row, so the referrer reads converted_at to the second and the 7/30 reward days (the plan class), sees a void flip, and the friend reads the referrer's id and credit time. FOUNDER DECISION 2026-10-16: the referrer sees AGGREGATES ONLY in the app (friends joined, subscribed, PRO days earned, a pending count; no names, no payment time, no plan class) and learns of a credit in-app when they next open it. The decision does not close the exposure by itself: the policy still returns the columns to a client that asks for them. Closing it is part of Unit C (U2): an aggregate RPC or view for the referrer and a narrower policy or column set, plus the one-line disclosure on the friend's apply sheet and the privacy-policy sentence (outside this repo). The founder was asked for the go to start Unit C on 2026-10-16 and has answered the design question but not given the go. Waiting for that go."
+    reason: "Hermes round 2 (seat D finding 1) rates this P2: the existing SELECT policy (live, 'Users can read own redemptions': auth.uid() = referrer_id OR = referee_id) shows each side the other's row, so the referrer reads converted_at to the second and the 7/30 reward days (the plan class), sees a void flip, and the friend reads the referrer's id and credit time. FOUNDER DECISION 2026-10-16: the referrer sees AGGREGATES ONLY in the app (friends joined, subscribed, PRO days earned, a pending count; no names, no payment time, no plan class) and learns of a credit in-app when they next open it. The decision does not close the exposure by itself: the policy still returns the columns to a client that asks for them. Migration 160 now closes the column exposure server-side (column-level SELECT; public.referrer_summary() for the referrer's aggregates; see docs/audit/referral-hardening-migration-160.closure.yaml); what remains is Unit C (U2): the client reader of referrer_summary(), the one-line disclosure on the friend's apply sheet and the privacy-policy sentence (outside this repo). The founder was asked for the go to start Unit C on 2026-10-16 and has answered the design question but not given the go. Waiting for that go."
 
   - id: X8
     title: "live apply of migration 159 to project dedsavbjuwgarrhphgnl, its live verify, and the post-apply ledger and snapshots (backups/applied_migrations.json, live_schema_columns.json, live_cron_jobs.json)"
@@ -237,28 +237,32 @@ findings:
 
   - id: N1
     title: "hermes round 2, seat A finding 1: the credit select does not re-check referee_id, so a row skipped by the reconcile (locked by a referee deletion) can be credited milliseconds later on its stale converted_at; the migration header says a deleted friend voids the reward"
-    terminal_state: blocked_on_user
-    reason: "Migration 159 is applied and immutable; the fix (AND rr.referee_id IS NOT NULL in the credit select) needs migration 160. Filed as OI-344 item 1. The window is milliseconds per hour and costs one reward of 7 or 30 days; B-pass finding 9 had already softened the header wording. The founder was asked on 2026-10-16 and approved filing OI-344 (\"go 2\") but has not yet said to plan or write migration 160; that work (planning, minting the migration number with mint_migration.sh, which pushes a reservation ref, writing the file, two plan reviews, a B-pass, a hermes pass) is what waits for the go, and the live apply is a further separate go."
+    terminal_state: closed_in_commit
+    commit: referral-migration-160 batch commit (see docs/audit/referral-hardening-migration-160.closure.yaml header)
+    verification: "migration 160 adds AND rr.referee_id IS NOT NULL to the credit select (diagnose c5e9a3); two-session concurrency case C14 (a decoy trigger holds the RECONCILE open after it has skipped the locked row while a second session deletes the referee and commits; a sequence proves the rendezvous happened) reddens when the predicate is removed (mutant c_no_predicate); row docs/audit/referral-hardening-migration-160.closure.yaml N1."
 
   - id: N2
     title: "hermes round 2, seat A finding 2: the credit batch is ORDER BY converted_at, id LIMIT 50, so rows that stay skipped or failing at the head use batch slots every run"
-    terminal_state: blocked_on_user
-    reason: "Needs migration 160 (OI-344 item 2). Starvation needs 50 or more stuck rows at once (today 0); the failed and stalled alerts surface a stuck row. The ordering itself is now behaviourally pinned (C13, mutants ME and MF). Waiting on the same go as N1 (planning and writing migration 160)."
+    terminal_state: verified_clean
+    evidence: "Founder accepted the residual 2026-10-16 ('accept'): starvation needs 50 or more stuck rows at once (live 0), a stuck row raises referral_conversions_failed or the 10-day stalled alert, and the ordering is behaviourally pinned (C13, mutants ME and MF). Plan docs/plans/referral-hardening-migration-160.md section 2.2."
 
   - id: N3
     title: "hermes round 2, seat A finding 3: redeem_referral_atomic now reaches the grant helper's FOR UPDATE NOWAIT, where migration 158 used a plain UPDATE that waited, so a legitimate redeem can raise 55P03 while a webhook holds the referee's subscription row"
-    terminal_state: blocked_on_user
-    reason: "Needs migration 160 (OI-344 item 5). Nothing is written when it raises, the Edge Function answers 500 and the client may retry; the plan already records the generic 500. Waiting on the same go as N1."
+    terminal_state: closed_in_commit
+    commit: referral-migration-160 batch commit (see docs/audit/referral-hardening-migration-160.closure.yaml header)
+    verification: "migration 160 wraps the grant call in a bounded retry (3 attempts, 0.25 s apart, ONLY on lock_not_available; diagnose f2d6b8); concurrency C16a (ok after a retry, 2 attempts), C16b (55P03 after 3 attempts, no audit row), C16c (another error is raised once, not retried); mutants c_retry_1, c_no_retry, c_no_sleep, c_when_others, c_swallow_final, c_sleep_2s all red."
 
   - id: N4
     title: "hermes round 2, seat D finding 4: anon and authenticated hold INSERT, UPDATE, DELETE and TRUNCATE on referral_redemptions (read live 2026-10-16); the table now decides PRO days"
-    terminal_state: blocked_on_user
-    reason: "Row security is on and the only policy is a SELECT policy, so no client can write today. REVOKE INSERT, UPDATE, DELETE, TRUNCATE FROM anon, authenticated needs migration 160 (OI-344 item 3); the general class is OI-184. Waiting on the same go as N1."
+    terminal_state: closed_in_commit
+    commit: referral-migration-160 batch commit (see docs/audit/referral-hardening-migration-160.closure.yaml header)
+    verification: "migration 160 revokes every table privilege from PUBLIC, anon and authenticated and grants authenticated SELECT on six columns; a DO self-check aborts the apply when any of 8 privileges stays held or a hidden column stays readable; live-verify group Q (Q2 to Q5), concurrency C15 (a grant made by ANOTHER role with GRANT OPTION, table-level and column-level, fails the apply), deletion D6; mutants g_* all red except g_no_revoke_public, argued equivalent (the table never held a PUBLIC grant, so that REVOKE removes nothing)."
 
   - id: N5
     title: "hermes round 2, seat D finding 3: the only ceiling on promo-discounted payments is a promise (break-even about 76.7 percent; the real bar is lower because the friend's own PRO costs money); the promo table is readable by anyone ('Anyone can read active promo codes', read live)"
-    terminal_state: blocked_on_user
-    reason: "OI-342 plus OI-344 item 4: an optional CHECK (discount_pct <= 70) on promo_codes makes the promise a technical ceiling; the founder decides whether 100 percent comp codes are needed. Until then keep promo codes below 76.7 percent."
+    terminal_state: closed_in_commit
+    commit: referral-migration-160 batch commit (see docs/audit/referral-hardening-migration-160.closure.yaml header)
+    verification: "founder decision 2026-10-16: ceiling 90 percent. Live already had CHECK (discount_pct >= 1 AND <= 100) named promo_codes_discount_pct_check; migration 160 replaces it with BETWEEN 1 AND 90 in ONE ALTER TABLE; live verify Q9 (90 and 1 accepted, 91, 100 and 0 refused with 23514) and A11; mutants p_* red. Free-access codes are OI-347."
 
   - id: N6
     title: "hermes round 2, seat D finding 5: razorpay-webhook grants entitlement to whichever user_id a captured payment's notes carry (index.ts lines 457-458) and never checks notes.source, which the app sets to AVYA_app so its orders can be told from the website's in the shared live Razorpay account"

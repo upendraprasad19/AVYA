@@ -14,9 +14,10 @@
 --   D4 a deleted REFERRER: the audit rows stay with referrer_id NULL, the referees keep their trials, the job never touches
 --      them and writes no failed alert;
 --   D5 a referee of a deleted referrer still cannot redeem a SECOND code (UNIQUE(referee_id) survives the SET NULL);
---   D6 row-level security on the orphaned rows, and on the NEW columns: the surviving party reads its row, an unrelated user
---      and anon read none, no authenticated user can UPDATE, DELETE or INSERT audit rows; no column of the table can carry a
---      payment id (the privacy rule of migration 159: one friend's Razorpay id must not become readable by the other);
+--   D6 row-level security on the orphaned rows, and (since migration 160) column privileges on the NEW columns: the surviving
+--      party reads its row through the six granted columns, the payment-status columns are REFUSED (42501) to every client, an
+--      unrelated user reads none, anon is refused outright, and UPDATE, DELETE and INSERT are refused by PRIVILEGE; no column of
+--      the table can carry a payment id (the privacy rule of migration 159: one friend's Razorpay id must not become readable by the other);
 --   D7 there is NO cap: nine redemptions for one referrer are all accepted and the referrer is rewarded for none of them
 --      until a friend pays (the 158 cap, 7 per 90 days, is gone).
 --
@@ -40,14 +41,17 @@ DECLARE
   v_dup   text;
   v_k6a   int;
   v_k6a2  int;
+  v_k6new text;
+  v_k6dtxt text;
   v_k6b   int;
   v_k6c   int;
-  v_k6d   int;
+  v_k6i   text;
   v_k6u   int;
   v_k6x   int;
-  v_k6i   text;
+  v_k6d   int;
+  v_k6updt text;
+  v_k6delt text;
   v_k6col int;
-  v_k6new int;
   v_code  text := 'AVYA-DELETE01';
   i       int;
 BEGIN
@@ -151,15 +155,28 @@ BEGIN
   SET LOCAL ROLE authenticated;
   SELECT count(*) INTO v_k6a FROM public.referral_redemptions;
   SELECT count(*) INTO v_k6a2 FROM public.referral_redemptions WHERE referee_id = f[1] AND referrer_id IS NULL;
-  SELECT count(*) INTO v_k6new FROM (SELECT converted_at, referrer_reward_days, referrer_credited_at FROM public.referral_redemptions WHERE referee_id = f[1]) t;
+  BEGIN
+    PERFORM converted_at, referrer_reward_days, referrer_credited_at FROM public.referral_redemptions WHERE referee_id = f[1];
+    v_k6new := 'readable';
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_k6new := 'denied';
+  END;
   RESET ROLE;
   PERFORM set_config('request.jwt.claim.sub', r::text, true);
   SET LOCAL ROLE authenticated;
   SELECT count(*) INTO v_k6b FROM public.referral_redemptions WHERE referee_id IS NULL;
-  UPDATE public.referral_redemptions SET referrer_rewarded = false WHERE referrer_id = r;
-  GET DIAGNOSTICS v_k6u = ROW_COUNT;
-  DELETE FROM public.referral_redemptions WHERE referrer_id = r;
-  GET DIAGNOSTICS v_k6x = ROW_COUNT;
+  BEGIN
+    UPDATE public.referral_redemptions SET code = 'AVYA-K6' WHERE referrer_id = r;
+    v_k6updt := 'updated';
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_k6updt := 'denied';
+  END;
+  BEGIN
+    DELETE FROM public.referral_redemptions WHERE referrer_id = r;
+    v_k6delt := 'deleted';
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_k6delt := 'denied';
+  END;
   BEGIN
     INSERT INTO public.referral_redemptions (code, referrer_id, referee_id) VALUES ('AVYA-K6', r, NULL);
     v_k6i := 'inserted';
@@ -172,13 +189,18 @@ BEGIN
   SELECT count(*) INTO v_k6c FROM public.referral_redemptions;
   RESET ROLE;
   SET LOCAL ROLE anon;
-  SELECT count(*) INTO v_k6d FROM public.referral_redemptions;
+  BEGIN
+    PERFORM count(*) FROM public.referral_redemptions;
+    v_k6dtxt := 'readable';
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_k6dtxt := 'denied';
+  END;
   RESET ROLE;
   SELECT count(*) INTO v_k6col FROM information_schema.columns
    WHERE table_schema = 'public' AND table_name = 'referral_redemptions' AND (column_name ILIKE '%payment%' OR column_name ILIKE '%razorpay%');
-  v_res := v_res || format(E'\nD6 RLS: a referee of a deleted referrer sees exactly its own row (new columns readable), the referrer sees the NULL-referee rows (D1, D2, D3), an unrelated user and anon see none, own-row UPDATE and DELETE touch 0 rows, an INSERT is refused, and the table has no payment-id column  %s',
-    CASE WHEN v_k6a = 1 AND v_k6a2 = 1 AND v_k6new = 1 AND v_k6b = 3 AND v_k6c = 0 AND v_k6d = 0 AND v_k6u = 0 AND v_k6x = 0 AND v_k6i = 'denied' AND v_k6col = 0 THEN 'ok'
-         ELSE 'fail own=' || v_k6a || '/' || v_k6a2 || '/' || v_k6new || ' nullref=' || v_k6b || ' unrelated=' || v_k6c || ' anon=' || v_k6d || ' upd=' || v_k6u || ' del=' || v_k6x || ' ins=' || v_k6i || ' payment_cols=' || v_k6col END);
+  v_res := v_res || format(E'\nD6 RLS and privileges (160): a referee of a deleted referrer sees exactly its own row, the payment-status columns are refused (42501) to it, the referrer sees the NULL-referee rows (D1, D2, D3), an unrelated user sees none, anon is refused outright, UPDATE, DELETE and INSERT are each refused by privilege, and the table has no payment-id column  %s',
+    CASE WHEN v_k6a = 1 AND v_k6a2 = 1 AND v_k6new = 'denied' AND v_k6b = 3 AND v_k6c = 0 AND v_k6dtxt = 'denied' AND v_k6updt = 'denied' AND v_k6delt = 'denied' AND v_k6i = 'denied' AND v_k6col = 0 THEN 'ok'
+         ELSE 'fail own=' || v_k6a || '/' || v_k6a2 || '/' || v_k6new || ' nullref=' || v_k6b || ' unrelated=' || v_k6c || ' anon=' || v_k6dtxt || ' upd=' || v_k6updt || ' del=' || v_k6delt || ' ins=' || v_k6i || ' payment_cols=' || v_k6col END);
 
   RAISE EXCEPTION 'VERIFY_RESULTS%', v_res;
 END

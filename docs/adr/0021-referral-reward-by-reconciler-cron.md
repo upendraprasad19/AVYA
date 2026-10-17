@@ -60,3 +60,22 @@ redeem function may wait for a running job. At most 50 rewards are credited per 
 
 Plan, review rounds and the measured lock behaviour: `docs/plans/referral-pay-on-conversion.md`. Migration:
 `supabase/migrations/159_referral_reward_on_conversion.sql`. SoT concept: `referral_reward_on_conversion`.
+
+## Amendment 2026-10-16 (migration 160, OI-344) (applied live 2026-10-17, cloud version 20261017005132)
+
+The mechanism is unchanged. Migration 160 closes four findings of the post-merge review of migration 159, in the same
+file set and with the same ACL discipline:
+
+- **Stale credit (c5e9a3).** The credit select now requires `rr.referee_id IS NOT NULL`; the reconcile already voids a row whose
+  friend deleted their account, but a pending row could be selected before that void was visible to a concurrent session.
+- **Lock wait became an error (f2d6b8).** `redeem_referral_atomic` retries the grant up to 3 times, 0.25 s apart, on
+  `lock_not_available` only; any other error, and the third failure, still propagate unchanged. After each pause the paid-plan refusal is
+  re-checked, so a payment that lands during the wait still refuses the trial (a retry must re-validate what it waited on).
+- **Payment status is not the other party's business.** The SELECT policy shows a row to both parties, so `converted_at` would tell the
+  REFERRER when each named friend paid, and `referrer_reward_days` on which plan. Column-level grants hide the five payment-status columns from `authenticated`; the
+  referrer's counts are served by `public.referrer_summary()`, which filters by `auth.uid()` itself.
+- **Promo ceiling.** `promo_codes.discount_pct` is capped at 90 by a CHECK (founder decision 2026-10-16).
+
+Accepted unchanged: the credit-batch ORDER (`ORDER BY converted_at, id LIMIT 50`; starvation needs 50 or more stuck rows at once, today 0; ledger N2, `verified_clean`). Plan:
+`docs/plans/referral-hardening-migration-160.md`. Migration: `supabase/migrations/160_referral_hardening.sql`. SoT concepts:
+`referrer_summary`, `referral_reward_on_conversion`.
