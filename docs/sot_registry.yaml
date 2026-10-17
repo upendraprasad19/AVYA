@@ -15451,7 +15451,7 @@ concepts:
     behavioral_test_path: test/contracts/measurement_prompt_state_behavioral_test.dart
     description: |
       L2b Landing B (OI-297), DARK behind the configBox flag
-      enable_body_measurements (default OFF). Which body-measurements prompt the
+      enable_body_measurements (default ON since 2026-10-16). Which body-measurements prompt the
       Home banner and the Weight-sheet link show, and the one remembered unit of
       the measurements sheet. Three per-user userBox values, all read and written
       through MigratedKey and listed in UserConfigMigrator.userScopedKeys, so
@@ -15546,7 +15546,7 @@ concepts:
     domain: health
     behavioral_test_path: test/features/profile/measurement_card_end_to_end_test.dart
     description: |
-      L2b Landing C (E3), DARK behind enable_body_measurements. The tiles of the
+      L2b Landing C (E3), behind enable_body_measurements. The tiles of the
       "Body measurements" card on Profile -> Progress comparison: per site the
       newest value with its day, and the change since the FIRST entry holding
       that site. A pure DERIVATION over the history the sheet and the prompt
@@ -15627,7 +15627,7 @@ concepts:
       frame's geometry is behavioural in
       test/features/profile/measurements_card_frame_test.dart).
     description: |
-      L2b Landing B + C, DARK behind enable_body_measurements. The hosts of the
+      L2b Landing B + C, behind enable_body_measurements. The hosts of the
       measurements surfaces and what each is allowed to do.
     writers:
       - file: lib/features/home/screens/home_screen.dart

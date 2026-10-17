@@ -3,7 +3,7 @@ import 'package:icanbefitter/core/services/measurement_flags.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 
 /// Whether the body-measurements surfaces are on (`enable_body_measurements`,
-/// default OFF; L2b Landing B).
+/// default ON since 2026-10-16; L2b Landing B).
 ///
 /// Its own file so the flag half of the B-alpha / B-beta cut line is
 /// self-contained. The only new read on the OFF path of the slots, the

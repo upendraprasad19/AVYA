@@ -561,6 +561,12 @@ void main() {
         await HiveUserSession.openForUser(testUser);
         await HiveService.instance.configBox
             .put('last_known_date', '2026-10-11');
+        // The flag defaults ON since 2026-10-16: this row is about the OFF path.
+        // Today the rollover only invalidates, so the row cannot observe the
+        // flag; storing false states its premise and keeps it honest if the
+        // rollover ever reads the flag.
+        await HiveService.instance.configBox
+            .put('enable_body_measurements', false);
       });
       setTestClockTo(DateTime.utc(2026, 10, 13, 6));
 
