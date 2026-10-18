@@ -187,7 +187,7 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-308 | getExerciseHistory computes total_volume_kg = weight x reps x sets… | founder-owned check only. Fixed in L1b… | 2026-10-04: `getExerciseHistory.ts:88`… | [:5925](open_issues.md#L5925) |
 | OI-309 | Merge-conflict treadmill: every >=account PR conflicts with main again and… | a plan (it changes hooks and the… | 2026-10-05 - measured on PR #73… | [:5695](open_issues.md#L5695) |
 | OI-310 | App links (sign-up, welcome, Profile) open the icanbefitter.com blog… | the code half only — the policy was… | 2026-10-06. The app opens… | [:5934](open_issues.md#L5934) |
-| OI-311 | A spawned `dart run` exited 254 in CI with no stderr in the log (run… | none for diagnosis - the second sighting… | 2026-10-06 - read from… | [:5705](open_issues.md#L5705) |
+| OI-311 | A spawned `dart run` exited 254 in CI with no stderr in the log (run… | none for diagnosis - the second and… | 2026-10-06 - read from… | [:5705](open_issues.md#L5705) |
 | OI-312 | Exercise-log deletes never reach the cloud: migration 151's BEFORE INSERT… | founder-owned device check. Fixed… | 2026-10-06, live, inside a DO block that… | [:5944](open_issues.md#L5944) |
 | OI-313 | Installed-APK residuals of L1a: APKs without the L1a-2 client fixes keep… | upstream — no minimum-version /… | 2026-10-06 — writers:… | [:5953](open_issues.md#L5953) |
 | OI-315 | ProgressPhotoRepository.cleanupOrphanedStorage has zero callers, and the… | a plan: a server-side per-day cap is a… | 2026-10-06 - `git grep -n… | [:5718](open_issues.md#L5718) |
