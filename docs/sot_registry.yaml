@@ -626,6 +626,7 @@ concepts:
         semantic: pass-through
         fields_read: [via _schedule.getScheduleForDate(date) at :351, :357, :364, :972, :1055]
     reader_allow_files:
+      - { file: lib/core/services/workout_schedule_read_service.dart, reason: "lapseFacts (d7a3e5, Piece B): READ-ONLY scan of schedule_* keys for the coach plan_status blank-gap and missed-day counts" }
       - { file: lib/shared/repositories/plan_engine/training_history_analyzer.dart, reason: "TrainingHistoryAnalyzer (Track E L6 swap-learning) scans schedule_* READ-ONLY for is_swapped/original_date to prefer swap-in choices" }
       - { file: lib/features/train/widgets/week_selector.dart, reason: "Theme K — past-phase scroll-back iterates schedule_* keys for completed-phase chips" }
       - { file: lib/core/services/scheduled_workouts_resync_migrator.dart, reason: "one-shot resync sweep over schedule_* keys" }
@@ -3965,6 +3966,7 @@ concepts:
         semantic: aggregated
         fields_read: [status, completed_at across 365 days]
     reader_allow_files:
+      - { file: lib/core/services/workout_schedule_read_service.dart, reason: "lapseFacts (d7a3e5, Piece B): READ-ONLY scan of schedule_* keys for the coach plan_status blank-gap and missed-day counts" }
       - { file: lib/shared/repositories/plan_engine/training_history_analyzer.dart, reason: "TrainingHistoryAnalyzer (Track E L7) reads schedule_*.status READ-ONLY to compute adherence/completion-rate for autoregulation" }
       - { file: lib/features/train/widgets/week_selector.dart, reason: "Theme K — past-phase scroll-back reads schedule_*.status for completed-day check glyphs" }
       - { file: lib/core/services/scheduled_workouts_resync_migrator.dart, reason: "one-shot resync sweep over schedule_* keys" }
@@ -5053,6 +5055,85 @@ concepts:
       4. No comment between the wrapper and the core may spell
          `_restoreFromCloudForUserCore(` or `_safeRestoreOp(` (source-grep
          hazard tests: completed_title_follows_log_test, restore_after_session_open_test).
+
+  - concept: lapse_gap_policy
+    domain: workout
+    description: |
+      d7a3e5 (Piece B, plan docs/plans/2026-10-18-pro-gap-policy-and-streak.md) - what the app does
+      when a PRO user comes back after a break. (1) The next phase starts the day after the old one
+      ended when that phase still contains today (the days that passed show as missed), else this
+      Monday: the pure `phaseStartAfterGap`, reached through `nextPhaseStartDate`; the graduation
+      unlock passes `gapStart: false` (a fresh start). (2) The streak walk ends the chain on a rowless
+      day before today, spending no freeze. (3) A phase generated after a blank gap zeroes the streak
+      freezes (`resetFreezesAfterGap`). (4) `completionRateOverWindow` counts rowless days after the
+      first schedule row and before today as scheduled and missed. (5) The coach snapshot carries
+      `plan_status` (null-aware: omitted unless >= 14 idle days or a blank gap before the phase). One
+      kill switch, `disable_lapse_gap_policy` (configBox, absent = live), restores all five. The server
+      rank cron mirrors (4) in `_shared/rank_engine.ts` (`blankDaysInWindow`, opt-in `countBlankDays`,
+      env `DISABLE_LAPSE_GAP_POLICY`); deploy of `evaluate-rank-promotions` is a separate founder go.
+    writers:
+      - file: lib/core/utils/gap_policy.dart
+        line_range: 44-62
+        method: phaseStartAfterGap
+        notes: the ONE start-date rule; pure.
+      - file: lib/core/services/workout_schedule_read_service.dart
+        line_range: 2066-2077
+        method: nextPhaseStartDate
+        notes: delegates to phaseStartAfterGap (gapStart false = the original rule, used by the graduation unlock).
+      - file: lib/shared/services/pro_phase_advance.dart
+        line_range: 188-313
+        method: _runAdvanceWith
+        notes: calls resetFreezesAfterGap ONLY when commitPhaseAdvance returned true and the written window left >= 7 blank days (freezeResetGapDays); runGraduationPhaseAdvance does the same at ~895-902.
+      - file: lib/core/services/streak_progress_service.dart
+        line_range: 325-338
+        method: resetFreezesAfterGap
+        notes: writes ONLY streak_freezes_available (0) via updateProgress, then syncFreezes; flag and ledger untouched.
+    reader_manifest_complete: false
+    readers:
+      - file: lib/features/train/repositories/workout_repository.dart
+        line_range: 338-478
+        method: _calculateStreak
+        semantic: flag-check
+        fields_read: [schedule_<date> presence]
+        notes: a rowless day before today ends the chain (no freeze spent); today is tolerated.
+      - file: lib/features/train/repositories/workout_repository.dart
+        line_range: 492-540
+        method: completionRateOverWindow
+        semantic: flag-check
+        fields_read: [schedule_<date> presence]
+        notes: feeds RankService._qualifies (MCPO, officer track).
+      - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
+        line_range: 1353-1385
+        method: _getPlanStatus
+        semantic: pass-through
+        notes: the coach prompt rule is a separate Edge Function change.
+      - file: supabase/functions/_shared/rank_engine.ts
+        line_range: 173-250
+        method: completionRateOverWindow (countBlankDays)
+        semantic: flag-check
+        fields_read: [scheduled_workouts.scheduled_date]
+        notes: server twin of the client rate; only evaluate-rank-promotions opts in (future-prediction keeps the old semantics).
+    behavioral_test_path: test/contracts/lapse_gap_policy_behavioral_test.dart
+    additional_tests:
+      - test/contracts/lapse_gap_freeze_reset_advance_test.dart  # real runProPhaseAdvance / runGraduationPhaseAdvance: zero only after a committed advance
+      - supabase/functions/_shared/rank_engine_blank_days_test.ts  # server twin of the blank-day rule
+      - test/core/gap_policy_test.dart  # pure start-date table + blankGapDays
+      - test/contracts/phase_unlock_start_date_test.dart  # source pin: nextPhaseStartDate delegates to phaseStartAfterGap
+    hive:
+      box: userBox
+      key_prefix: "progress"
+      key_formula: "progress['streak_freezes_available'] (written); workoutBox schedule_<yyyy-MM-dd> presence (read)"
+    cloud:
+      table: user_progress
+      columns: [streak_freezes_available]
+    sync_methods: [syncFreezes]
+    restore_methods: []
+    telemetry:
+      failure_op_types: []
+    class_constraints: |
+      1. A new reader of schedule_<date> that walks days must decide what a ROWLESS day means; the
+         streak walk and the completion rate both treat it as "missed / chain ends" now.
+      2. The start-date rule has ONE home (gap_policy.dart); never re-derive max(today, end + 1).
 
   - concept: progress_restore_freeze_merge
     domain: workout
@@ -11915,7 +11996,7 @@ concepts:
       That shared walk is the drift guard.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1788-1805
+        line_range: 1812-1829
         method: _scheduleRowsBefore
         semantic: shared-row-walk
       - file: lib/core/services/workout_schedule_read_service.dart
@@ -15051,7 +15132,7 @@ concepts:
         fields_read: [coach_extraction_locked_fields]
         notes: the only reader of the lock list itself
       - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
-        line_range: 1011-1020
+        line_range: 1023-1032
         method: _getCoachMemoryForContext
         semantic: pass-through
         fields_read: [locked_field_conflicts]

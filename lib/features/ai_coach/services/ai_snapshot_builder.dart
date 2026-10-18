@@ -27,8 +27,11 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/rank_ladder_data.dart';
 import 'package:icanbefitter/core/services/rank_service.dart';
+import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
+import 'package:icanbefitter/core/utils/gap_policy.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
+import 'package:icanbefitter/core/utils/date_utils.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
@@ -222,6 +225,14 @@ class AiSnapshotBuilder {
       // trimSnapshotToBudget's keep set — see the note there; not optional.
       'hold': ?holdBlock,
 
+      // Piece B (lapse gap policy): the ONLY fact that tells the coach the user
+      // came back after a break. Null-aware, like `hold`: the key is omitted
+      // for everyone without a lapse signal (and under the kill switch), so
+      // those snapshots stay byte-identical. In `trimSnapshotToBudget`'s keep
+      // set. The ai-proxy prompt rule that teaches the coach to use it is a
+      // separate Edge Function change.
+      'plan_status': ?_getPlanStatus(),
+
       'pr_timeline_summary': _getPRTimelineSummary(),
       'goal_changed_at': _getGoalChangedAt(),
       'body_measurements': _getBodyMeasurements(),
@@ -291,7 +302,7 @@ class AiSnapshotBuilder {
       // would drop `sessions_total` first and keep `ordinal` — a hold block
       // that says LESS the more the user has logged, while still looking
       // present. It is ~90 chars; keeping it whole costs nothing that matters.
-      'hold',
+      'hold', 'plan_status',
       // day-swapper-sync-load (plan D7): the trimmer's largest-non-keep-field
       // loop would otherwise halve a heavy user's 7-day lookahead (a List
       // branch) before ever touching genuinely bulky fields like
@@ -1333,6 +1344,55 @@ class AiSnapshotBuilder {
       for (final w in weekStarts)
         w: DaySwapAllowance.instance.current(w, isPro: isPro).left,
     };
+  }
+
+  /// Piece B: `{days_since_last_workout, current_phase, phase_started_on,
+  /// blank_gap_days_before_phase, missed_days_in_phase, lapsed}` when
+  /// the user shows a lapse (>= 14 days since the last workout, or a blank gap
+  /// before the current phase), else null (key omitted).
+  Map<String, dynamic>? _getPlanStatus() {
+    if (!lapseGapPolicyEnabled) return null;
+    try {
+      final facts = WorkoutScheduleReadService.instance.lapseFacts();
+      // Cheap read first: the progress row's last_workout_date. Only an account
+      // without one falls back to the full-box scan.
+      final progressRow = (_hive.userBox.get('progress') as Map?) ?? const {};
+      final lastDay = DateTime.tryParse(
+          progressRow['last_workout_date']?.toString() ?? '');
+      final nowDay0 = nowWall();
+      final since = lastDay != null
+          ? DateTime(nowDay0.year, nowDay0.month, nowDay0.day)
+              .difference(DateTime(lastDay.year, lastDay.month, lastDay.day))
+              .inDays
+          : WorkoutRepository.instance.getDaysSinceLastWorkout();
+      final start = WorkoutScheduleReadService.instance.getPlanStartDate();
+      // A blank gap before the phase only counts while the user has NOT trained
+      // since the phase began; once they resume, only a fresh >= 14 day idle
+      // spell keeps the fact. (The gap is a property of the past, not a state.)
+      final nowDay = nowWall();
+      final sinceStart = start == null
+          ? 0
+          : DateTime(nowDay.year, nowDay.month, nowDay.day)
+              .difference(DateTime(start.year, start.month, start.day))
+              .inDays;
+      final notTrainedInPhase = since < 0 || since > sinceStart;
+      final lapsed =
+          (facts.blankGapBeforePlan >= kMinBlankGapDaysForFreezeReset &&
+              notTrainedInPhase) || since >= 14;
+      if (!lapsed) return null;
+      final progress = (_hive.userBox.get('progress') as Map?) ?? const {};
+      return {
+        if (since >= 0) 'days_since_last_workout': since,
+        'current_phase': (progress['current_phase'] as int?) ?? 1,
+        if (start != null) 'phase_started_on': formatDateKey(start),
+        'blank_gap_days_before_phase': facts.blankGapBeforePlan,
+        'missed_days_in_phase': facts.missedInPhase,
+        'lapsed': true,
+      };
+    } catch (e) {
+      debugPrint('[AiSnapshotBuilder._getPlanStatus] $e');
+      return null;
+    }
   }
 
   Map<String, dynamic> _getCurrentPlanSummary() {

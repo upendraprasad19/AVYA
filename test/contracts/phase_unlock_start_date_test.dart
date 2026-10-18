@@ -52,14 +52,25 @@ void main() {
       );
     });
 
-    test('helper falls back via max(today, currentPhaseEnd + 1)', () {
-      // The guard against retroactive starts when a user lets Phase 1 expire.
+    test('helper routes the start date through the pure phaseStartAfterGap',
+        () {
+      // Piece B: the start-date rule lives in lib/core/utils/gap_policy.dart.
+      // The original max(today, currentPhaseEnd + 1) survives as its
+      // `gapStart: false` / kill-switch branch (behaviour pinned in
+      // test/core/gap_policy_test.dart and lapse_gap_policy_behavioral_test).
       expect(
-        RegExp(r'candidate\.isAfter\(today\)').hasMatch(stripped),
+        RegExp(r'phaseStartAfterGap\(').hasMatch(stripped),
         isTrue,
-        reason: 'nextPhaseStartDate must compute max(today, '
-            'currentPhaseEnd + 1) so an expired phase does not start the '
-            'new phase retroactively.',
+        reason: 'nextPhaseStartDate must delegate to phaseStartAfterGap.',
+      );
+      final gap = File('lib/core/utils/gap_policy.dart')
+          .readAsStringSync()
+          .replaceAll(RegExp(r'//[^\n]*'), '');
+      expect(
+        RegExp(r'candidate\.isAfter\(now\)').hasMatch(gap),
+        isTrue,
+        reason: 'the original max(today, currentPhaseEnd + 1) branch must '
+            'stay reachable (graduation, kill switch).',
       );
     });
   });
@@ -83,7 +94,7 @@ void main() {
       final advanceStripped = _stripComments(
           File('lib/shared/services/pro_phase_advance.dart').readAsStringSync());
       expect(
-        advanceStripped.contains('nextPhaseStartDate()'),
+        advanceStripped.contains('nextPhaseStartDate(gapStart: false)'),
         isTrue,
         reason: 'runGraduationPhaseAdvance must call nextPhaseStartDate() '
             'before invoking generateAndSchedule. Pre-fix '

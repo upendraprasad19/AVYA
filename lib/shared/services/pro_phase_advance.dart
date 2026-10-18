@@ -12,12 +12,14 @@ import 'package:icanbefitter/core/services/plan_integrity_reconciler.dart';
 import 'package:icanbefitter/core/services/plan_window_reanchor.dart';
 import 'package:icanbefitter/core/services/app_events_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/core/services/streak_progress_service.dart';
 import 'package:icanbefitter/core/services/sync_flags.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
+import 'package:icanbefitter/core/utils/gap_policy.dart';
 import 'package:icanbefitter/core/utils/injury_vocab.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
@@ -223,6 +225,13 @@ Future<({bool generated, bool committed})> _runAdvanceWith({
       schedule.currentPhaseCompletionRate() <
           AppConstants.phaseUnlockCompletionRate;
 
+  // Piece B: the old window's end, read BEFORE the generation moves it. The
+  // freezes are zeroed below ONLY once
+  // the phase counter commit succeeded (a declined or owner-swapped commit
+  // must not touch anybody's freezes).
+  final readSvc = WorkoutScheduleReadService.instance;
+  final oldPlanEnd = readSvc.getPlanEndDate();
+
   final result = await schedule.autoGenerateNextPhaseIfNeeded(
         goal: goal,
         equipment: equipment,
@@ -263,6 +272,16 @@ Future<({bool generated, bool committed})> _runAdvanceWith({
       source: 'pro_phase_advance',
       expectedUid: expectedUid,
     );
+    // The gap comes from the window that was ACTUALLY written (not a pre-read
+    // of the start date: a midnight rollover between the two could differ).
+    final newPlanStart = readSvc.getPlanStartDate();
+    final resetGap = (committed && oldPlanEnd != null && newPlanStart != null)
+        ? freezeResetGapDays(
+            blankGapDays(planEnd: oldPlanEnd, newStart: newPlanStart))
+        : 0;
+    if (resetGap > 0) {
+      StreakProgressService.instance.resetFreezesAfterGap(gapDays: resetGap);
+    }
     if (!committed) {
       // The decline can be an OWNER change (expectedUid): the new owner's boxes
       // may not be readable yet, and this telemetry read must not throw.
@@ -818,7 +837,12 @@ Future<GraduationAdvanceResult> runGraduationPhaseAdvance({
 
       // Theme H fix — nextPhaseStartDate computes max(today, currentPhaseEnd + 1)
       // Monday-normalized (was DateTime.now() → overwrote the current W4 rows).
-      final startDate = scheduleSvc.nextPhaseStartDate();
+      // Piece B: an explicit graduation unlock is a FRESH start — never
+      // backdated into the gap (`gapStart: false`), but the freezes still go to
+      // zero when the unlock follows a blank gap.
+      final startDate = scheduleSvc.nextPhaseStartDate(gapStart: false);
+      final resetGap =
+          freezeResetGapDays(scheduleSvc.blankGapDaysBefore(startDate));
 
       // Build repeat pins BEFORE generateAndSchedule overwrites plan_start
       // (getWeek reads the just-finished window). Only on an explicit "repeat".
@@ -872,6 +896,9 @@ Future<GraduationAdvanceResult> runGraduationPhaseAdvance({
         intendedPhase: nextPhase,
         source: 'graduation_screen',
       );
+      if (committed && resetGap > 0) {
+        StreakProgressService.instance.resetFreezesAfterGap(gapDays: resetGap);
+      }
 
       // ⑧ 3-b: a chosen "repeat" (pins applied) flags the Home "step it up
       // next time" nudge (cross-account gated in the shared writer). The

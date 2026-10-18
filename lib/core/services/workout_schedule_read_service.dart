@@ -28,6 +28,7 @@ import 'sync_flags.dart';
 import 'workout_write_service.dart';
 import 'write_result.dart';
 import '../utils/date_utils.dart';
+import '../utils/gap_policy.dart';
 import '../utils/hold_week_labels.dart';
 import '../utils/ist_date.dart';
 import '../utils/phase_completion.dart';
@@ -2055,18 +2056,82 @@ class WorkoutScheduleReadService {
   /// The `max(today, currentPhaseEnd + 1)` guard handles the edge case
   /// where a user lets Phase 1 expire (e.g. inactivity) — start the new
   /// phase from THIS Monday, not retroactively from the historical end.
-  DateTime nextPhaseStartDate({DateTime? now}) {
+  ///
+  /// Piece B (lapse gap policy, kill switch `disable_lapse_gap_policy`): with
+  /// [gapStart] (the automatic advance) the new phase starts the day after the
+  /// old one ended whenever that phase still contains today, so the days that
+  /// passed show as missed; only a longer gap falls back to this Monday. The
+  /// graduation unlock passes `gapStart: false` (an explicit tap is a fresh
+  /// start). The rule is the pure [phaseStartAfterGap].
+  DateTime nextPhaseStartDate({DateTime? now, bool gapStart = true}) {
     final today = now ?? nowWall(); // seam-aware (dev time-travel / year-sim)
     final endStr = MigratedKey.read<String>(_planEndKey);
     if (endStr != null) {
       final end = DateTime.tryParse(endStr);
       if (end != null) {
-        final candidate = end.add(const Duration(days: 1));
-        final useDate = candidate.isAfter(today) ? candidate : today;
-        return _normalizeToMonday(useDate);
+        return phaseStartAfterGap(
+            planEnd: end, today: today, gapStart: gapStart);
       }
     }
     return _normalizeToMonday(today);
+  }
+
+  /// Coach `plan_status` inputs (Piece B), pure reads over `schedule_*`:
+  /// `blankGapBeforePlan` = rowless days between the last row BEFORE
+  /// `plan_start_date` and the plan start (0 = the phases are back to back or
+  /// there is no earlier row); `missedInPhase` = past (before today) workout
+  /// days of the current window that are not completed (rest, travel, paused,
+  /// moved, dropped and pre-onboarding placeholders excluded).
+  ({int blankGapBeforePlan, int missedInPhase}) lapseFacts() {
+    final start = getPlanStartDate();
+    if (start == null) return (blankGapBeforePlan: 0, missedInPhase: 0);
+    final startDay = DateTime(start.year, start.month, start.day);
+    final startKey = _dateKey(startDay);
+    String? lastBefore;
+    for (final key in _hive.workoutBox.keys) {
+      final k = key.toString();
+      if (!k.startsWith('schedule_')) continue;
+      final d = k.substring('schedule_'.length);
+      if (d.compareTo(startKey) >= 0) continue;
+      if (lastBefore == null || d.compareTo(lastBefore) > 0) lastBefore = d;
+    }
+    var gap = 0;
+    if (lastBefore != null) {
+      final last = DateTime.tryParse(lastBefore);
+      if (last != null) {
+        final g = startDay
+            .difference(DateTime(last.year, last.month, last.day))
+            .inDays;
+        gap = g > 1 ? g - 1 : 0;
+      }
+    }
+    final now = nowWall();
+    final today = DateTime(now.year, now.month, now.day);
+    var missed = 0;
+    for (var d = startDay; d.isBefore(today); d = d.add(const Duration(days: 1))) {
+      final raw = _hive.workoutBox.get('schedule_${_dateKey(d)}');
+      if (raw is! Map) continue;
+      final type = raw['type']?.toString();
+      final status = raw['status']?.toString();
+      if (type == 'rest' || type == 'off' || status == 'rest') continue;
+      if (status == 'travel' || status == 'completed') continue;
+      if (isInvisibleToStreak(status)) continue;
+      if (raw['reason']?.toString() == 'pre_onboarding') continue;
+      missed++;
+    }
+    return (blankGapBeforePlan: gap, missedInPhase: missed);
+  }
+
+  /// Whole blank days (no schedule row) between the end of the current plan
+  /// window and [newStart]. 0 when there is no window or the new phase follows
+  /// directly. Read BEFORE `generateAndSchedule` moves `plan_end_date`. The
+  /// callers (the PRO advance and the graduation unlock) zero the freezes from
+  /// it only AFTER `commitPhaseAdvance` succeeded, via [freezeResetGapDays].
+  int blankGapDaysBefore(DateTime newStart) {
+    final endStr = MigratedKey.read<String>(_planEndKey);
+    final end = endStr == null ? null : DateTime.tryParse(endStr);
+    if (end == null) return 0;
+    return blankGapDays(planEnd: end, newStart: newStart);
   }
 
   /// Format date as YYYY-MM-DD.
