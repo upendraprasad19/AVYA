@@ -37,6 +37,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { encode as base64Encode } from "https://deno.land/std@0.177.0/encoding/base64.ts";
+import { isValidPaymentId, resolveEndDate } from "../_shared/subscription_stacking.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -168,7 +169,7 @@ async function redeemPromo(
  *   4. If payment is captured → upserts subscription row
  *   5. Returns { verified, plan, end_date }
  */
-serve(async (req: Request) => {
+export async function handler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -309,6 +310,20 @@ serve(async (req: Request) => {
     if (!paymentId) {
       return new Response(
         JSON.stringify({ error: "Missing payment_id" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    // OI-341 Piece A (plan 2.4): the id is interpolated into the Razorpay API
+    // URLs below and into a PostgREST logic tree by the stacking read, and is
+    // stored verbatim in a UNIQUE column that only dedupes the exact string.
+    // Every real Razorpay id is `pay_` + alphanumerics; not switch-gated.
+    if (!isValidPaymentId(paymentId)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid payment_id" }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -549,6 +564,39 @@ serve(async (req: Request) => {
     }
 
     if (paymentSubRow === null) {
+      // OI-341 Piece A: the stored end date comes from the shared stacking
+      // module. Switch OFF (the default) = exactly `now + days` and NO query;
+      // ON = stacked after the user's latest active end. A read error fails the
+      // call (never a silent `now + days`, which would under-deliver paid time).
+      const resolved = await resolveEndDate(
+        supabase,
+        userId,
+        paymentId,
+        now,
+        plan === "yearly" ? 365 : 30,
+      );
+      if (!resolved.ok) {
+        const stackFailId = crypto.randomUUID().split("-")[0];
+        console.error(
+          `[verify-payment] stacking read failed request_id=${stackFailId} ` +
+            `payment_id=${paymentId} user_id=${userId} plan=${plan} amount_paise=${actualPaise} code=${resolved.code}`,
+        );
+        return new Response(
+          JSON.stringify({
+            verified: false,
+            error: "Could not record subscription; please retry",
+            request_id: stackFailId,
+          }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+      const storedEnd = resolved.endDate;
+      // Seeded BEFORE the insert: if this insert loses a 23505 race and the winner's row cannot be re-read,
+      // the response must still report the stacked value, not the unstacked `endDate` above.
+      canonicalEndDateIso = storedEnd.toISOString();
       const { error: insertError } = await supabase
         .from("subscriptions")
         .insert({
@@ -556,7 +604,7 @@ serve(async (req: Request) => {
           plan,
           status: "active",
           start_date: now.toISOString(),
-          end_date: endDate.toISOString(),
+          end_date: storedEnd.toISOString(),
           razorpay_payment_id: paymentId,
           razorpay_order_id: payment.order_id ?? null,
           razorpay_signature: razorpaySignatureSentinel,
@@ -666,4 +714,8 @@ serve(async (req: Request) => {
       },
     );
   }
-});
+}
+
+// `serve()` only when run as the entrypoint, so tests can import `handler`
+// without binding a port (OI-341 Piece A, plan 2.3).
+if (import.meta.main) serve(handler);

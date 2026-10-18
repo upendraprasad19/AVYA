@@ -15798,3 +15798,44 @@ concepts:
         semantic: render
         notes: Reads measurementsEnabledProvider, then (ON only) the auth token for the anonymous window; OFF returns its child.
     regression_test: test/contracts/measurement_flag_off_identity_test.dart
+  - concept: subscription_end_date_stacking
+    domain: subscription
+    behavioral_test_path: supabase/functions/verify-payment/index_test.ts
+    behavioral_test_path_webhook: supabase/functions/razorpay-webhook/index_test.ts
+    behavioral_test_path_module: supabase/functions/_shared/subscription_stacking_test.ts
+    description: |
+      OI-341 Piece A (dark). The stored end_date of a PAID subscriptions row is
+      computed by ONE shared module for both payment writers. Switch OFF (the
+      Edge Function secret ENABLE_SUBSCRIPTION_STACKING is not exactly "true"):
+      now + plan days and NO extra query. Switch ON: max(now, the user's latest
+      active unexpired end other than this payment's own row) + plan days.
+      start_date stays the payment time (the referral reward job reads it as
+      the payment time; PRO is read from status and end_date only). A read
+      error fails the call (500, no insert, reconcile log), never a now+days
+      fallback. Both writers call it only inside the insert branch, after the
+      idempotency pre-SELECT, and report the STORED value in their response.
+    writers:
+      - file: supabase/functions/_shared/subscription_stacking.ts
+        line_range: 114-137
+        method: resolveEndDate
+        notes: The ONE decision function. Strict "true" switch read per call; OFF returns before any client use; a thrown read becomes ok:false.
+      - file: supabase/functions/verify-payment/index.ts
+        line_range: 571-585
+        method: resolveEndDate (the call in the insert branch)
+        notes: Replaces the inline endDate for the stored row; canonicalEndDateIso is assigned from the stored value on a first insert.
+      - file: supabase/functions/razorpay-webhook/index.ts
+        line_range: 576-590
+        method: resolveEndDate (the call in the insert branch)
+        notes: endDate is reassigned to the stored value, so expires_at in the response equals the stored row.
+    readers:
+      - file: supabase/functions/_shared/subscription_stacking.ts
+        line_range: 71-107
+        method: readLatestActiveEnd
+        semantic: latest-active-end
+        notes: Array read with limit 1 (never maybeSingle), user_id and status active and end_date greater than now, excluding the payment's own row via an or() that keeps NULL-payment-id trial rows.
+      - file: supabase/functions/_shared/subscription.ts
+        line_range: 236-276
+        method: fetchLatestActiveEndByUser
+        semantic: latest-active-end
+        notes: The existing reduction of many active rows to one end per user; it already reads a longer-than-plan row correctly.
+    regression_test: supabase/functions/_shared/subscription_stacking_test.ts

@@ -42,6 +42,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { encode as hexEncode } from "https://deno.land/std@0.177.0/encoding/hex.ts";
 import { encode as base64Encode } from "https://deno.land/std@0.177.0/encoding/base64.ts";
+import { isValidPaymentId, resolveEndDate } from "../_shared/subscription_stacking.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -233,7 +234,7 @@ async function redeemPromo(
   }
 }
 
-serve(async (req: Request) => {
+export async function handler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -297,6 +298,21 @@ serve(async (req: Request) => {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // OI-341 Piece A (plan 2.4): the same strict shape verify-payment enforces, checked BEFORE the replay
+    // block below so a malformed id is never interpolated into a log line (the replay rejection logs the id).
+    // The id comes from an HMAC-verified payload so a real one always conforms; the check is not switch-gated,
+    // so the switch OFF and ON paths treat a malformed id identically.
+    if (!isValidPaymentId(paymentEntity.id)) {
+      console.error("[razorpay-webhook] rejecting a payment id that is not pay_ + alphanumerics");
+      return new Response(
+        JSON.stringify({ error: "Invalid payment id" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Replay protection — reject webhook DELIVERIES older than 5 minutes.
@@ -538,7 +554,7 @@ serve(async (req: Request) => {
     }
 
     const now = new Date();
-    const endDate = new Date(now);
+    let endDate = new Date(now);
 
     if (plan === "monthly") {
       endDate.setDate(endDate.getDate() + 30);
@@ -568,6 +584,32 @@ serve(async (req: Request) => {
         `Idempotent webhook: payment ${razorpayPaymentId} already recorded, skipping insert`,
       );
     } else {
+      // OI-341 Piece A: the stored end date comes from the shared stacking
+      // module. Switch OFF (the default) = exactly `now + days` and NO query;
+      // ON = stacked after the user's latest active end. A read error returns
+      // 500 (Razorpay retries) and never inserts a shortened `now + days` row.
+      const resolved = await resolveEndDate(
+        supabaseClient,
+        userId,
+        razorpayPaymentId,
+        now,
+        plan === "monthly" ? 30 : 365,
+      );
+      if (!resolved.ok) {
+        const stackFailId = crypto.randomUUID().split("-")[0];
+        console.error(
+          `[razorpay-webhook] stacking read failed request_id=${stackFailId} ` +
+            `payment_id=${razorpayPaymentId} user_id=${userId} plan=${plan} amount_paise=${actualPaise} code=${resolved.code}`,
+        );
+        return new Response(
+          JSON.stringify({ error: "Failed to create subscription record" }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+      endDate = resolved.endDate;
       const { error: insertError } = await supabaseClient
         .from("subscriptions")
         .insert({
@@ -653,4 +695,8 @@ serve(async (req: Request) => {
       },
     );
   }
-});
+}
+
+// `serve()` only when run as the entrypoint, so tests can import `handler`
+// without binding a port (OI-341 Piece A, plan 2.3).
+if (import.meta.main) serve(handler);
