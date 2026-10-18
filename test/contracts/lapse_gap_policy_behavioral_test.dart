@@ -340,12 +340,12 @@ void main() {
       await MigratedKey.write('plan_end_date', end.toIso8601String());
     }
 
-    Future<void> advance() => svc.autoGenerateNextPhaseIfNeeded(
+    Future<void> advance({int phase = 2}) => svc.autoGenerateNextPhaseIfNeeded(
           goal: 'build_muscle',
           equipment: 'full_gym',
           daysPerWeek: 4,
           experienceLevel: 'intermediate',
-          currentPhase: 2,
+          currentPhase: phase,
         );
 
     test('3 weeks late: starts the day after the old phase, no freeze zero',
@@ -382,6 +382,20 @@ void main() {
       expect(HiveService.instance.workoutBox.get('schedule_2026-10-05'),
           isNull,
           reason: 'the blank weeks stay blank (no catch-up phases)');
+    });
+
+    test('free user leaving Phase 1 3 weeks late: fresh start this Monday',
+        () async {
+      await seedLibrary();
+      // Same window as the 3-weeks-late PRO case (which starts 10-26), but the
+      // old phase is Phase 1 (the free phase): Phase 2 starts THIS Monday and
+      // no past day gets a row (founder 2026-10-18).
+      await oldWindow(DateTime(2026, 9, 28), DateTime(2026, 10, 25));
+      await setProgress();
+      await advance(phase: 1);
+      expect(svc.getPlanStartDate(), DateTime(2026, 11, 9));
+      expect(HiveService.instance.workoutBox.get('schedule_2026-10-27'), isNull,
+          reason: 'days before the purchase week are not shown as missed');
     });
 
     test('KILL SWITCH: 10 weeks late behaves as before (freezes kept)',

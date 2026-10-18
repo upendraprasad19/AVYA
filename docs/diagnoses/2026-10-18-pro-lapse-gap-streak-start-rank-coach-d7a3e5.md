@@ -101,3 +101,7 @@ recurrence: none
 # 2026-10-18-pro-lapse-gap-streak-start-rank-coach-d7a3e5
 
 The frontmatter is the record. Plan: docs/plans/2026-10-18-pro-gap-policy-and-streak.md.
+
+## Addendum 2026-10-18: free user who upgrades
+
+Founder decision: plans start on a Monday, and a free user who returns and upgrades gets Phase 2 on THIS week's Monday. Fix: `autoGenerateNextPhaseIfNeeded` passes `gapStart: currentPhase > 1` (Phase 1 is the free phase, so leaving it is a fresh start; no PRO-activation date stored, no subscription code touched). Test: `lapse_gap_policy_behavioral_test.dart` "free user leaving Phase 1 3 weeks late: fresh start this Monday"; mutated (rule reverted to `nextPhaseStartDate()`) and it reddened. `phase_unlock_start_date_test.dart` source grep repointed.

@@ -9950,7 +9950,7 @@ concepts:
       that says LESS the more the user has logged, while still looking present.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1110-1145
+        line_range: 1115-1150
         method: holdSnapshotBlock
         notes: |
           Returns null off a hold day. Reads activeHoldOrdinalFor/activeHoldWeeks
@@ -12004,7 +12004,7 @@ concepts:
         method: pastPhaseBlocks
         semantic: strict-set
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1833-1858
+        line_range: 1838-1863
         method: pastPhaseBlocksForDisplay
         semantic: display-recovery
         notes: |

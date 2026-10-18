@@ -14,7 +14,7 @@ completion-rate ranks, `plan_status` coach fact now (Edge Function prompt change
    row, shown as missed. The phase number goes up by 1. Weights are already reduced by the detraining table (unchanged).
 3. **Return after a longer gap**: ONE phase is generated, starting the Monday of today (the pre-existing behaviour). The weeks in
    between have no rows ("blank"). The phase number goes up by 1.
-4. **PRO only.** The advance already requires `isPro()`; a lapsed PRO user is a free user (unchanged, untouched).
+4. **PRO only; Phase 1 -> 2 is always a fresh start (see below).** The advance already requires `isPro()`; a lapsed PRO user is a free user (unchanged, untouched).
 5. **Graduation (explicit unlock tap) is a fresh start**: it keeps the old rule (`gapStart: false`): never backdated.
 6. **Streak**: an unscheduled (rowless) day before today that has a LATER schedule row after it (a mid gap: a new phase followed)
    ends the chain even when the streak so far is 0. No freeze is spent for it. Today with no row yet stays tolerated (day-boundary
@@ -72,8 +72,10 @@ start date `max(today, plan_end + 1)`, streak skip-at-zero, completion rate igno
 Edge Function prompt change for `plan_status` (founder-owned go). Re-entry volume rule: founder deferred the question until
 after B; not part of this PR.
 
-Open product edge reported to the founder: a FREE user who upgrades after their free plan expired goes through the same auto
-advance and would start in the past. Mitigation in this PR: none beyond the cap; the founder decides.
+Free user who upgrades (founder decision 2026-10-18): leaving Phase 1 is a fresh start. Phase 1 is the free phase, so
+`autoGenerateNextPhaseIfNeeded` passes `gapStart: currentPhase > 1`: a Phase 1 -> 2 advance starts on THIS week's Monday (or
+`plan_end + 1` when that is later), with no backdated days. No PRO-activation date is stored and no subscription code changes.
+Side effect: a PRO user who lapsed during the tail of Phase 1 also gets a blank gap instead of missed days (accepted).
 
 ## Review log
 

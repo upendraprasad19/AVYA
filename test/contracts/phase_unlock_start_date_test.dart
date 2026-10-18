@@ -130,7 +130,7 @@ void main() {
       // Take a window after the signature for the body.
       final tail = svcStripped.substring(autoIdx, autoIdx + 1500);
       expect(
-        tail.contains('nextPhaseStartDate()'),
+        tail.contains('nextPhaseStartDate(gapStart: currentPhase > 1)'),
         isTrue,
         reason: 'autoGenerateNextPhaseIfNeeded must call '
             'nextPhaseStartDate() (not raw DateTime.now()) so the '

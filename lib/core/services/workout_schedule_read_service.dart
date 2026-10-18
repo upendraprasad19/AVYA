@@ -681,7 +681,11 @@ class WorkoutScheduleReadService {
     // plan_start (same obligation as pins).
     final previousPhaseByDay =
         pins == null ? previousPhaseNamesByDay() : null;
-    final startDate = nextPhaseStartDate();
+    // Piece B (founder 2026-10-18): leaving Phase 1 is a fresh start. Phase 1 is
+    // the free phase, so a user who comes back and upgrades was never on a PRO
+    // plan during the gap: their Phase 2 starts on THIS week's Monday, with no
+    // backdated days shown as missed. Only a PRO phase (2+) uses the gap start.
+    final startDate = nextPhaseStartDate(gapStart: currentPhase > 1);
     await generateAndSchedule(
       goal: goal,
       // OI-189: an advance moves the window — push it now (see the parameter).
