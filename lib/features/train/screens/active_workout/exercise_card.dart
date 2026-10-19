@@ -17,6 +17,9 @@ String formatWeightDisplayValue(double w) {
       : rounded.toString();
 }
 
+/// One LOG per exercise: the screen's handler for a LOG tap on this card.
+typedef LogExerciseCallback = LogOutcomeKind Function(Set<int> setIndexes);
+
 class _ExerciseCard extends ConsumerStatefulWidget {
   final int exerciseIndex;
   final ExerciseData exercise;
@@ -37,6 +40,10 @@ class _ExerciseCard extends ConsumerStatefulWidget {
   final bool isExpanded;
   /// Bug #15b — Tap-on-header callback to make this card the focused one.
   final VoidCallback onFocus;
+  /// One LOG per exercise (flag `enable_log_exercise_button`). Non-null puts
+  /// the card in LOG mode: no per-set check taps, a sets stepper + LOG button
+  /// row. Null (flag OFF) leaves the per-set path exactly as it was.
+  final LogExerciseCallback? onLogExercise;
 
   const _ExerciseCard({
     required this.exerciseIndex,
@@ -55,6 +62,7 @@ class _ExerciseCard extends ConsumerStatefulWidget {
     required this.onLongPressHeader,
     required this.isExpanded,
     required this.onFocus,
+    this.onLogExercise,
   });
 
   @override
@@ -68,7 +76,19 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
   late List<TextEditingController> _durationControllers;
   late List<TextEditingController> _distanceControllers;
 
+  // One LOG per exercise: per-set focus nodes (so a blocked LOG can focus the
+  // failing field). Owned here, in step with the four controller lists:
+  // created in _initControllers, appended / retired in didUpdateWidget,
+  // disposed in dispose. A node leaving the list mid-frame is unfocused and
+  // disposed post-frame, never while its TextField may still be mounted.
+  List<FocusNode> _weightFocus = [];
+  List<FocusNode> _repsFocus = [];
+  List<FocusNode> _durationFocus = [];
+  List<FocusNode> _distanceFocus = [];
+
   int get _numSets => int.tryParse(widget.exercise.sets) ?? 3;
+
+  bool get _logMode => widget.onLogExercise != null;
 
   @override
   void initState() {
@@ -143,6 +163,8 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
       }
     }
 
+    _resetFocusNodes(n);
+
     // Pre-seed provider state with controller values so that the receipt card
     // and exercise logger have correct data even if the user checks a set
     // without editing the pre-filled weight/reps fields.
@@ -190,6 +212,7 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
         _durationControllers.add(TextEditingController());
         _distanceControllers.add(TextEditingController());
       }
+      if (_logMode) _seedAppendedSets(oldCount, newCount);
     } else {
       // Shrink: dispose trailing controllers from [newCount..oldCount-1].
       for (var i = oldCount - 1; i >= newCount; i--) {
@@ -199,6 +222,7 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
         _distanceControllers.removeAt(i).dispose();
       }
     }
+    _resizeFocusNodes(newCount);
   }
 
   void _disposeControllers() {
@@ -211,7 +235,187 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
   @override
   void dispose() {
     _disposeControllers();
+    for (final n in [
+      ..._weightFocus,
+      ..._repsFocus,
+      ..._durationFocus,
+      ..._distanceFocus,
+    ]) {
+      n.dispose();
+    }
     super.dispose();
+  }
+
+  List<FocusNode> _newFocusNodes(int n) =>
+      List.generate(n, (_) => FocusNode(), growable: true);
+
+  /// Unfocus now, dispose after the frame (the TextField holding the node is
+  /// rebuilt without it during this frame).
+  void _retireFocusNodes(List<FocusNode> nodes) {
+    if (nodes.isEmpty) return;
+    for (final n in nodes) {
+      n.unfocus();
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      for (final n in nodes) {
+        n.dispose();
+      }
+    });
+  }
+
+  void _resetFocusNodes(int n) {
+    _retireFocusNodes([
+      ..._weightFocus,
+      ..._repsFocus,
+      ..._durationFocus,
+      ..._distanceFocus,
+    ]);
+    _weightFocus = _newFocusNodes(n);
+    _repsFocus = _newFocusNodes(n);
+    _durationFocus = _newFocusNodes(n);
+    _distanceFocus = _newFocusNodes(n);
+  }
+
+  void _resizeFocusNodes(int n) {
+    final retired = <FocusNode>[];
+    for (final list in [_weightFocus, _repsFocus, _durationFocus, _distanceFocus]) {
+      while (list.length < n) {
+        list.add(FocusNode());
+      }
+      while (list.length > n) {
+        retired.add(list.removeLast());
+      }
+    }
+    _retireFocusNodes(retired);
+  }
+
+  SetTexts _textsOf(int setIdx) => SetTexts(
+        weight: _weightControllers[setIdx].text,
+        reps: _repsControllers[setIdx].text,
+        duration: _durationControllers[setIdx].text,
+        distance: _distanceControllers[setIdx].text,
+      );
+
+  SetValidation _validationOf(int setIdx) {
+    final t = _textsOf(setIdx);
+    return validateSetInputs(
+      loggingType: widget.exercise.loggingType,
+      weightText: t.weight,
+      repsText: t.reps,
+      durationText: t.duration,
+      distanceText: t.distance,
+    );
+  }
+
+  /// LOG mode, `+`: seed the appended sets FIELD-FOR-FIELD from the last
+  /// non-warm-up set, then record them after the frame (a provider write must
+  /// not happen inside didUpdateWidget, which runs during build), so the added
+  /// set survives leaving and re-entering the screen (_initControllers
+  /// restores only captured keys).
+  void _seedAppendedSets(int oldCount, int newCount) {
+    final existing = [for (var i = 0; i < oldCount; i++) _textsOf(i)];
+    final warm = [
+      for (var i = 0; i < oldCount; i++)
+        widget.data.isSetWarmUp(widget.exerciseIndex, i),
+    ];
+    final seed = seedForAddedSet(existing, warm);
+    for (var i = oldCount; i < newCount; i++) {
+      _weightControllers[i].text = seed.weight;
+      _repsControllers[i].text = seed.reps;
+      _durationControllers[i].text = seed.duration;
+      _distanceControllers[i].text = seed.distance;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      for (var i = oldCount; i < newCount && i < _weightControllers.length; i++) {
+        _captureSetValues(i);
+      }
+    });
+  }
+
+  /// LOG mode: an edit to an already-LOGGED set is recorded on every keystroke
+  /// (no check tile is left to re-capture it, and FINISH does not move focus).
+  /// Only a VALID value is recorded: a cleared or out-of-range field keeps the
+  /// last valid value, so a 0×0 or 61-rep set can never reach completeWorkout.
+  void _onFieldChanged(int setIdx) {
+    if (!_logMode || setIdx >= _weightControllers.length) return;
+    final data = ref.read(activeWorkoutProvider);
+    // Review mode: completeWorkout will not save again, so a capture here would
+    // only make the header volume disagree with the saved log.
+    if (data.isSaved) return;
+    if (!data.isSetChecked(widget.exerciseIndex, setIdx)) return;
+    if (!_validationOf(setIdx).isOk) return;
+    _captureSetValues(setIdx);
+  }
+
+  FocusNode? _focusNodeFor(int setIdx, SetField field) {
+    final list = switch (field) {
+      SetField.weight => _weightFocus,
+      SetField.reps => _repsFocus,
+      SetField.duration => _durationFocus,
+      SetField.distance => _distanceFocus,
+    };
+    return setIdx < list.length ? list[setIdx] : null;
+  }
+
+  /// Blocked LOG: focus the failing field and open the keypad.
+  void _focusFailingField(int setIdx, SetField field) {
+    final node = _focusNodeFor(setIdx, field);
+    if (node == null) return;
+    FocusScope.of(context).requestFocus(node);
+  }
+
+  void _onLogPressed() {
+    final data = ref.read(activeWorkoutProvider);
+    if (data.isSaved) return;
+    final numSets = _numSets;
+    final toLog = setsToLog(
+      exerciseIndex: widget.exerciseIndex,
+      numSets: numSets,
+      checkedSets: data.checkedSets,
+    );
+    if (toLog.isEmpty) return;
+    for (final i in toLog) {
+      final v = _validationOf(i);
+      if (!v.isOk) {
+        _focusFailingField(i, v.field!);
+        return;
+      }
+    }
+    // Record every set before logging: the unchecked ones being logged, and any
+    // already-logged one whose current text is valid (an invalid edit keeps its
+    // last valid value, as in _onFieldChanged).
+    for (var i = 0; i < numSets && i < _weightControllers.length; i++) {
+      if (toLog.contains(i) || _validationOf(i).isOk) _captureSetValues(i);
+    }
+    final outcome = widget.onLogExercise!(toLog);
+    if (outcome == LogOutcomeKind.logged) _persistLoggedState(toLog.last);
+  }
+
+  /// LOG-mode twin of [_persistActiveState]: the completed count comes from
+  /// the provider AFTER logSets (the shared helper reads the build-time
+  /// `widget.data`, OI-355, and is left untouched for the per-set path).
+  void _persistLoggedState(int setIdx) {
+    final numSets = _numSets;
+    final data = ref.read(activeWorkoutProvider);
+    final completed = List.generate(
+            numSets, (i) => data.isSetChecked(widget.exerciseIndex, i))
+        .where((c) => c)
+        .length;
+    final t = setIdx < _weightControllers.length
+        ? _textsOf(setIdx)
+        : const SetTexts();
+    ActiveWorkoutPersistence.writeState(
+      exerciseName: widget.exercise.name,
+      currentSet: completed.clamp(1, numSets),
+      totalSets: numSets,
+      weight: double.tryParse(t.weight),
+      repsTarget: int.tryParse(widget.exercise.reps) ??
+          _parseRepsMidpoint(widget.exercise.reps),
+      repsCompleted: int.tryParse(t.reps) ?? int.tryParse(t.duration) ?? 0,
+      rpeHistory: const [],
+      restRemainingSecs: null,
+    );
   }
 
   /// Capture current input values and record them into the provider.
@@ -320,6 +524,18 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
     }
   }
 
+  /// LOG mode drops the weight segment (it prints the plan's placeholder
+  /// weight, OI-352); the per-set path keeps [_metaText] unchanged.
+  String _metaTextForLogMode() {
+    switch (widget.exercise.loggingType) {
+      case 'weighted_bodyweight':
+      case 'weight_reps':
+        return '${widget.exercise.sets} sets · ${widget.exercise.reps} reps · ${widget.exercise.rest} rest';
+      default:
+        return _metaText();
+    }
+  }
+
   String _metaText() {
     switch (widget.exercise.loggingType) {
       case 'timed':
@@ -387,6 +603,119 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
           SizedBox(width: 28, child: Center(child: Text('✓', style: AppTypography.monoXs.copyWith(color: AppColors.textDim)))),
         ];
     }
+  }
+
+  /// LOG mode: the sets stepper and the LOG button on ONE row (founder
+  /// 2026-10-17). Rebuilt on every keystroke through the merged controller
+  /// listenable (built here, from the live lists, so it never goes stale), not
+  /// only on the 1 Hz timer rebuild. The tap handler re-validates from the
+  /// controllers and the provider, never from this label.
+  Widget _buildLogRow(int numSets) {
+    final reviewMode = widget.data.isSaved;
+    return ListenableBuilder(
+      listenable: Listenable.merge([
+        ..._weightControllers,
+        ..._repsControllers,
+        ..._durationControllers,
+        ..._distanceControllers,
+      ]),
+      builder: (context, _) {
+        final data = widget.data;
+        final toLog = setsToLog(
+          exerciseIndex: widget.exerciseIndex,
+          numSets: numSets,
+          checkedSets: data.checkedSets,
+        );
+        final working = workingSetsToLog(
+          exerciseIndex: widget.exerciseIndex,
+          numSets: numSets,
+          checkedSets: data.checkedSets,
+          warmUpSets: data.warmUpSets,
+        );
+
+        // Scan EVERY set, logged ones too: a logged set whose text no longer
+        // validates keeps its last valid stored value (_onFieldChanged), so
+        // the row must say so instead of reading LOGGED with a blank field.
+        SetValidation? failure;
+        int? failingSet;
+        for (var i = 0; i < numSets; i++) {
+          if (i >= _weightControllers.length) continue;
+          final v = _validationOf(i);
+          if (!v.isOk) {
+            failure = v;
+            failingSet = i;
+            break;
+          }
+        }
+
+        final Widget button;
+        if (failure != null) {
+          final v = failure;
+          final i = failingSet!;
+          button = _LogExerciseButton(
+            label: blockedLogLabel(v),
+            style: _LogButtonStyle.blocked,
+            onTap: reviewMode ? null : () => _focusFailingField(i, v.field!),
+          );
+        } else if (toLog.isEmpty) {
+          button = const _LogExerciseButton(
+            label: WardroomCopy.activeLoggedLabel,
+            style: _LogButtonStyle.logged,
+          );
+        } else {
+          final workingIdx = [
+            for (final i in toLog)
+              if (i < _weightControllers.length &&
+                  !data.isSetWarmUp(widget.exerciseIndex, i))
+                i,
+          ];
+          button = _LogExerciseButton(
+            label: logButtonLabel(working),
+            subline: liftedSubline(loggedVolumeKg(
+              loggingType: widget.exercise.loggingType,
+              weightTexts: [for (final i in workingIdx) _weightControllers[i].text],
+              repsTexts: [for (final i in workingIdx) _repsControllers[i].text],
+            )),
+            style: _LogButtonStyle.ready,
+            onTap: reviewMode ? null : _onLogPressed,
+          );
+        }
+
+        final notifier = ref.read(activeWorkoutProvider.notifier);
+        return Row(
+          children: [
+            _StepperButton(
+              icon: Icons.remove,
+              semanticLabel: 'Remove last set',
+              onTap: (!reviewMode && numSets > 1)
+                  ? () => notifier.removeLastSet(widget.exerciseIndex)
+                  : null,
+            ),
+            SizedBox(
+              width: 32,
+              child: Center(
+                child: Text(
+                  '$numSets',
+                  style: AppTypography.h2.copyWith(
+                    fontSize: 15,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+            ),
+            _StepperButton(
+              icon: Icons.add,
+              semanticLabel: 'Add a set',
+              onTap: reviewMode
+                  ? null
+                  : () => notifier.addSet(widget.exerciseIndex),
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: button),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -482,7 +811,9 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                                     ),
                                     const SizedBox(height: 1),
                                     Text(
-                                      _metaText(),
+                                      _logMode
+                                          ? _metaTextForLogMode()
+                                          : _metaText(),
                                       style: AppTypography.monoXs.copyWith(
                                         color: AppColors.textDim,
                                         letterSpacing: 1.2,
@@ -638,7 +969,13 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                                     isCompleted: isChecked,
                                     isChecked: isChecked,
                                     onToggleWarmUp: () => widget.onToggleWarmUp(setIdx),
-                                    onCheck: () {
+                                    interactiveCheck: !_logMode,
+                                    weightFocusNode: _logMode ? _focusNodeFor(setIdx, SetField.weight) : null,
+                                    repsFocusNode: _logMode ? _focusNodeFor(setIdx, SetField.reps) : null,
+                                    durationFocusNode: _logMode ? _focusNodeFor(setIdx, SetField.duration) : null,
+                                    distanceFocusNode: _logMode ? _focusNodeFor(setIdx, SetField.distance) : null,
+                                    onChanged: _logMode ? () => _onFieldChanged(setIdx) : null,
+                                    onCheck: _logMode ? null : () {
                                       // If unchecking, allow without validation
                                       final alreadyChecked = widget.data.isSetChecked(
                                           widget.exerciseIndex, setIdx);
@@ -710,6 +1047,9 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
 
                         // ── Add / Remove set buttons ─────────────────
                         const SizedBox(height: 6),
+                        if (_logMode)
+                          _buildLogRow(numSets)
+                        else
                         Row(
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
@@ -796,3 +1136,168 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
 // Old _SetsTableHeader, _SetRow, and _SetInput removed.
 // Set inputs are now handled by SetInputRow from set_input_row.dart
 // with TextEditingControllers managed by _ExerciseCardState.
+
+enum _LogButtonStyle { ready, blocked, logged }
+
+/// The LOG button: gold when ready, a neutral gold outline when a field is
+/// missing (approved: never red), muted once every set is logged.
+class _LogExerciseButton extends StatelessWidget {
+  const _LogExerciseButton({
+    required this.label,
+    required this.style,
+    this.subline,
+    this.onTap,
+  });
+
+  final String label;
+  final String? subline;
+  final _LogButtonStyle style;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ready = style == _LogButtonStyle.ready;
+    final logged = style == _LogButtonStyle.logged;
+    final enabled = onTap != null && !logged;
+    final Color fg = ready
+        ? AppColors.bgDeep
+        : logged
+            ? AppColors.ok
+            : AppColors.accent;
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: label,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: enabled ? onTap : null,
+        child: Opacity(
+          opacity: (onTap == null && !logged) ? 0.4 : 1,
+          child: Container(
+            height: 44,
+            decoration: BoxDecoration(
+              color: ready
+                  ? AppColors.accent
+                  : logged
+                      ? AppColors.ok.withValues(alpha: 0.08)
+                      : AppColors.accentBg,
+              borderRadius: BorderRadius.circular(AppRadius.sharp),
+              border: ready
+                  ? null
+                  : Border.all(
+                      color: logged
+                          ? AppColors.ok.withValues(alpha: 0.3)
+                          : AppColors.accent.withValues(alpha: 0.55),
+                    ),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: (ready || logged
+                          ? AppTypography.mono
+                          : AppTypography.bodySm)
+                      .copyWith(
+                    color: fg,
+                    fontSize: ready || logged ? 12 : 13,
+                    letterSpacing: ready || logged ? 1.6 : 0.2,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (subline != null)
+                  Text(
+                    subline!,
+                    style: AppTypography.monoXs.copyWith(
+                      color: fg.withValues(alpha: 0.75),
+                      letterSpacing: 1.4,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 44 px sets-stepper button (LOG mode); the per-set path keeps its 28 px pair.
+class _StepperButton extends StatelessWidget {
+  const _StepperButton({
+    required this.icon,
+    required this.semanticLabel,
+    this.onTap,
+  });
+
+  final IconData icon;
+  final String semanticLabel;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: semanticLabel,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: AppColors.input,
+            borderRadius: BorderRadius.circular(AppRadius.sharp),
+            border: Border.all(
+              color: enabled
+                  ? AppColors.border
+                  : AppColors.border.withValues(alpha: 0.3),
+            ),
+          ),
+          child: Icon(
+            icon,
+            size: 18,
+            color: enabled ? AppColors.textSecondary : AppColors.textDisabled,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Test seam (plan `docs/plans/active-workout-log-exercise.md` §6): the card is
+/// a private `part of` widget, so tests reach it only through this host. It
+/// watches the real [activeWorkoutProvider] and wires the card the way the
+/// screen does, minus the screen-level focus/advance logic (that lives in
+/// `LogExerciseController` and is tested there).
+@visibleForTesting
+Widget debugExerciseCardHostForTest({
+  required int exerciseIndex,
+  bool isExpanded = true,
+  LogExerciseCallback? onLogExercise,
+}) {
+  return Consumer(builder: (context, ref, _) {
+    final data = ref.watch(activeWorkoutProvider);
+    return _ExerciseCard(
+      exerciseIndex: exerciseIndex,
+      exercise: data.exercises[exerciseIndex],
+      isDone: data.isExerciseDone(exerciseIndex),
+      isActive: true,
+      data: data,
+      isExpanded: isExpanded,
+      onFocus: () {},
+      onToggleSet: (setIdx) => ref
+          .read(activeWorkoutProvider.notifier)
+          .toggleSet(exerciseIndex, setIdx),
+      onToggleWarmUp: (setIdx) => ref
+          .read(activeWorkoutProvider.notifier)
+          .toggleWarmUp(exerciseIndex, setIdx),
+      onSwap: () {},
+      onLongPressHeader: () {},
+      onLogExercise: onLogExercise,
+    );
+  });
+}

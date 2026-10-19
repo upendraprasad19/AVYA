@@ -21,6 +21,18 @@ class SetInputRow extends StatelessWidget {
   final VoidCallback? onToggleWarmUp;
   final VoidCallback? onCheck;
 
+  /// One LOG per exercise (flag `enable_log_exercise_button`). All optional and
+  /// unset on the per-set path, which renders exactly as before.
+  /// `false` hides the check tile's tap target: a checked set shows a static
+  /// tick, an unchecked one an empty slot of the same width.
+  final bool interactiveCheck;
+  final FocusNode? weightFocusNode;
+  final FocusNode? repsFocusNode;
+  final FocusNode? durationFocusNode;
+  final FocusNode? distanceFocusNode;
+  /// Fires on every keystroke in any of the row's fields.
+  final VoidCallback? onChanged;
+
   const SetInputRow({
     super.key,
     required this.loggingType,
@@ -35,6 +47,12 @@ class SetInputRow extends StatelessWidget {
     this.isChecked = false,
     this.onToggleWarmUp,
     this.onCheck,
+    this.interactiveCheck = true,
+    this.weightFocusNode,
+    this.repsFocusNode,
+    this.durationFocusNode,
+    this.distanceFocusNode,
+    this.onChanged,
   });
 
   @override
@@ -80,6 +98,9 @@ class SetInputRow extends StatelessWidget {
           const SizedBox(width: 6),
 
           // Check tile (sharp 2-px)
+          if (!interactiveCheck)
+            _staticCheckSlot()
+          else
           GestureDetector(
             onTap: onCheck,
             child: Container(
@@ -102,51 +123,65 @@ class SetInputRow extends StatelessWidget {
     );
   }
 
+  /// The check column without a tap target (LOG-per-exercise mode).
+  Widget _staticCheckSlot() {
+    if (!isChecked) return const SizedBox(width: 28, height: 28);
+    return Container(
+      width: 28,
+      height: 28,
+      decoration: BoxDecoration(
+        color: AppColors.accent,
+        borderRadius: BorderRadius.circular(2),
+      ),
+      child: Icon(Icons.check, size: 16, color: AppColors.bgDeep),
+    );
+  }
+
   List<Widget> _buildInputs() {
     switch (loggingType) {
       case 'weight_reps':
         return [
-          Expanded(child: _compactInput(weightController, 'KG')),
+          Expanded(child: _compactInput(weightController, 'KG', focusNode: weightFocusNode)),
           const SizedBox(width: 6),
-          Expanded(child: _compactInput(repsController, 'REPS', isInt: true)),
+          Expanded(child: _compactInput(repsController, 'REPS', isInt: true, focusNode: repsFocusNode)),
         ];
 
       case 'bodyweight_reps':
         return [
-          Expanded(child: _compactInput(repsController, 'REPS', isInt: true)),
+          Expanded(child: _compactInput(repsController, 'REPS', isInt: true, focusNode: repsFocusNode)),
         ];
 
       case 'weighted_bodyweight':
         return [
-          Expanded(child: _compactInput(weightController, 'KG')),
+          Expanded(child: _compactInput(weightController, 'KG', focusNode: weightFocusNode)),
           const SizedBox(width: 6),
-          Expanded(child: _compactInput(repsController, 'REPS', isInt: true)),
+          Expanded(child: _compactInput(repsController, 'REPS', isInt: true, focusNode: repsFocusNode)),
         ];
 
       case 'timed':
         return [
-          Expanded(child: _compactInput(durationController, 'SEC', isInt: true)),
+          Expanded(child: _compactInput(durationController, 'SEC', isInt: true, focusNode: durationFocusNode)),
         ];
 
       case 'cardio':
         return [
-          Expanded(child: _compactInput(durationController, 'MIN')),
+          Expanded(child: _compactInput(durationController, 'MIN', focusNode: durationFocusNode)),
           const SizedBox(width: 6),
-          Expanded(child: _compactInput(distanceController, 'KM')),
+          Expanded(child: _compactInput(distanceController, 'KM', focusNode: distanceFocusNode)),
         ];
 
       case 'distance':
         return [
-          Expanded(child: _compactInput(distanceController, 'KM')),
+          Expanded(child: _compactInput(distanceController, 'KM', focusNode: distanceFocusNode)),
           const SizedBox(width: 6),
-          Expanded(child: _compactInput(weightController, 'KG')),
+          Expanded(child: _compactInput(weightController, 'KG', focusNode: weightFocusNode)),
         ];
 
       default:
         return [
-          Expanded(child: _compactInput(weightController, 'KG')),
+          Expanded(child: _compactInput(weightController, 'KG', focusNode: weightFocusNode)),
           const SizedBox(width: 6),
-          Expanded(child: _compactInput(repsController, 'REPS', isInt: true)),
+          Expanded(child: _compactInput(repsController, 'REPS', isInt: true, focusNode: repsFocusNode)),
         ];
     }
   }
@@ -155,6 +190,7 @@ class SetInputRow extends StatelessWidget {
     TextEditingController controller,
     String hint, {
     bool isInt = false,
+    FocusNode? focusNode,
   }) {
     // Green border indicates this set's values have been locked in.
     final lockedBorder = OutlineInputBorder(
@@ -169,6 +205,8 @@ class SetInputRow extends StatelessWidget {
       height: 38,
       child: TextField(
         controller: controller,
+        focusNode: focusNode,
+        onChanged: onChanged == null ? null : (_) => onChanged!(),
         keyboardType: isInt
             ? TextInputType.number
             : const TextInputType.numberWithOptions(decimal: true),

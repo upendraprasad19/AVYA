@@ -231,6 +231,38 @@ pending:
       with the flag under OI-345, after the FLIPPED-BUILD-CHECK row of
       docs/audit/measurements-flag-flip.closure.yaml is recorded.
 
+  - flag: enable_log_exercise_button
+    branch: active-workout-log-exercise
+    build_commit: null
+    build_date: 2026-10-19
+    flip_reviewed: false
+    flip_commit: null
+    note: >
+      U1a of docs/plans/active-workout-log-exercise.md: one LOG button + a
+      same-row sets stepper per exercise instead of per-set check tiles. NOT the
+      lighter 1-round tier: the build plan got 5 context-blind review rounds
+      (docs/plan-reviews/active-workout-log-exercise.md, verdict converged).
+      Default OFF; only the debug-build dev panel writes the key, so a release
+      APK can never turn it on. OFF-path evidence: the `flag OFF` group in
+      test/features/train/log_exercise/log_exercise_card_test.dart (per-set
+      tiles, no LOG, blank appended rows) plus the existing source pins, which
+      pass unchanged. build_commit is filled in by the commit that lands this.
+      See the HARD PRECONDITIONS block below.
+
+# ── HARD PRECONDITIONS for flipping enable_log_exercise_button ────────────
+# Founder 2-+-1 split, 2026-10-19. The flip-on commit needs all of these shown
+# closed in its own plan-review record:
+#   1. Batch 2 (OI-356) landed: UNDO toast after LOG, the MIRROR of set 1's
+#      typed value into blank sets for weight AND duration AND distance (weight
+#      is blank for a new user; duration and distance are blank for EVERY user,
+#      e8f95e, so timed/cardio/distance exercises block LOG on every set
+#      without it; B-pass finding 5), and the last-exercise emphasis. Batch 3
+#      (OI-357) is NOT required.
+#   2. Full x2 plan review on the flip commit + /code-review B-pass accepted.
+#   3. Device check on a DEBUG build (the dev toggle is kDebugMode-only).
+#   4. The edit-after-LOG test (validated capture on every keystroke) green.
+#   5. Founder's explicit go on the flip.
+
 # ── HARD PRECONDITIONS for flipping enable_hold_weeks ─────────────────────
 # Not a wish-list. The flip-on commit already requires the full ×2 + bpass
 # (§4.12.4); this is the checklist that review must show closed. Every item was

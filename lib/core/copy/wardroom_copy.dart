@@ -138,6 +138,35 @@ class WardroomCopy {
   /// Sticky bottom log-set CTA.
   static const activeLogSetCta = 'LOG SET ✓';
 
+  // One LOG per exercise (flag `enable_log_exercise_button`, founder-approved
+  // copy 2026-10-18; docs/plans/active-workout-log-exercise.md §5).
+  /// LOG button, plural — `{n}` = unchecked working sets.
+  static const activeLogSetsCtaTemplate = 'LOG {n} SETS ✓';
+
+  /// LOG button, singular.
+  static const activeLogOneSetCta = 'LOG 1 SET ✓';
+
+  /// LOG button when every unchecked set is a warm-up set.
+  static const activeLogCta = 'LOG ✓';
+
+  /// Disabled LOG area once every set of the exercise is logged.
+  static const activeLoggedLabel = 'LOGGED ✓';
+
+  /// Subline under the LOG button — `{kg}` = projected volume.
+  static const activeLiftedSublineTemplate = '{kg} KG LIFTED';
+
+  /// Blocked LOG button: a required field is empty.
+  static const activeBlockedAddWeight = 'Add weight';
+  static const activeBlockedAddReps = 'Add reps';
+  static const activeBlockedAddTime = 'Add time';
+  static const activeBlockedAddDistance = 'Add distance';
+
+  /// Blocked LOG button: a value is present but invalid (e.g. reps above 60).
+  static const activeBlockedFixWeight = 'Fix weight';
+  static const activeBlockedFixReps = 'Fix reps';
+  static const activeBlockedFixTime = 'Fix time';
+  static const activeBlockedFixDistance = 'Fix distance';
+
   // ── NUTRITION (Galley) ─────────────────────────────────────────────────
   /// Letterhead eyebrow template — "NUTRITION · TUE 14 APR".
   /// Weekday and date filled at render.

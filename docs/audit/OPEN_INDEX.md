@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**210 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**216 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -218,3 +218,9 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-345 | Remove the enable_body_measurements OFF path (flag checks, kill switch,… | founder-owned check of the RELEASE build… | 2026-10-16:… | [:6106](open_issues.md#L6106) |
 | OI-346 | Existing accounts accepted the v1 (blog) policy; nothing asks them to… | the founder's call on how existing users… | 2026-10-16: `AppConstants.termsVersion`… | [:6115](open_issues.md#L6115) |
 | OI-347 | Free-access codes: the founder wants to give out codes that grant PRO for… | none (a plan is the next step; the… | 2026-10-16 - by reading… | [:6124](open_issues.md#L6124) |
+| OI-352 | Active Workout meta line prints hard-coded '0kg' for every scheduled lift | none (pick up after the… | 2026-10-18 - by code read only, NOT on… | [:6137](open_issues.md#L6137) |
+| OI-353 | Plan suggested_weight (ProgressionResolver) is never read by the Active… | none (pick up after the… | 2026-10-18 - by code read: the plan… | [:6150](open_issues.md#L6150) |
+| OI-354 | Active Workout hero tile + full-screen viewer (animated WEBP) blocked on… | the animated-WEBP asset pipeline and its… | 2026-10-18 - design locked in… | [:6163](open_issues.md#L6163) |
+| OI-355 | Active Workout _persistActiveState reads the build-time widget.data, so… | none (pick up after the… | 2026-10-18 - by code read (plan review… | [:6174](open_issues.md#L6174) |
+| OI-356 | Active Workout U1b: edit mode, UNDO, un-log, last-exercise emphasis and… | the U1a batch… | never | [:6187](open_issues.md#L6187) |
+| OI-357 | Active Workout U2: per-set last values, new-user weight mirror, faded… | OI-356 landing and the flag flip;… | never | [:6200](open_issues.md#L6200) |

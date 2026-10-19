@@ -6133,3 +6133,79 @@ Source: the founder's answer of 2026-10-16 to the N5 question ("i want to give o
 Impact: the founder cannot hand out free PRO access (testers, creators, partners, marketing give-aways) without editing `subscriptions` by hand (the live table already holds one `manual_...` admin-grant row).
 
 Fix options (to be planned, not decided): (a) a `free_access_codes` table (code, days, max_uses, valid_until, is_active, per-user once) plus a redeem Edge Function that inserts a `subscriptions` row with a distinct plan value, modelled on `redeem-referral` / `private.grant_referral_days` (which already extends the latest active row); (b) reuse the referral redeem screen for a second code type. Open design points: the plan label and every reader that branches on it (the profile dossier, the expiry banner, the admin revenue tab that must not count a free grant as revenue), abuse limits (per-user once, per-code cap, expiry), whether a free-access user may later buy (see OI-341 Piece A stacking), the admin entry path for creating codes (no screen exists), and tier (catastrophic: it grants entitlement).
+
+## OI-352 — Active Workout meta line prints hard-coded '0kg' for every scheduled lift
+
+- **Status**: OPEN
+- **Blocked on**: none (pick up after the `active-workout-log-exercise` batch, founder 2026-10-18)
+- **Verified**: 2026-10-18 - by code read only, NOT on device: `lib/features/train/providers/train_provider.dart` `_parseExerciseMaps` (~:421-435) sets `weight: '0kg'` on every scheduled `ExerciseData`; `lib/features/train/screens/active_workout/exercise_card.dart` `_metaText()` (~:323-338) prints `${widget.exercise.weight}` for weight_reps and weighted_bodyweight. The prefill at `exercise_card.dart:99-109` already treats "0" as "no weight", so only the header label is suspect.
+- **Identified**: 2026-10-18 · filed via mint_oi.sh from branch `active-workout-log-exercise`
+
+Source: found while planning the one-LOG-per-exercise Active Workout redesign (`docs/plans/active-workout-log-exercise.md`). That redesign drops the weight from the meta line, which hides but does not fix the hard-coded value; swap flows (`swap_sheets.dart:64,179`) also copy `weight` through.
+
+Impact: the header likely reads "... 0kg ..." for every scheduled weight lift, a meaningless number on the screen used mid-set.
+
+Fix options (to be planned): show the real prescribed or last weight, or drop the weight segment from `_metaText()` for weight lifts. Confirm on device first. Needs a regression test per §4.4 rule 21.
+
+## OI-353 — Plan suggested_weight (ProgressionResolver) is never read by the Active Workout screen
+
+- **Status**: OPEN
+- **Blocked on**: none (pick up after the `active-workout-log-exercise` batch, founder 2026-10-18)
+- **Verified**: 2026-10-18 - by code read: the plan engine stamps `suggested_weight` / `weight_cue` (`lib/shared/repositories/plan_engine/models.dart` ~:168-233, `periodization_engine.dart` ~:111-117; ProgressionResolver, phase 2+). Outside plan_engine the only readers are `lib/features/ai_coach/widgets/log_workout_sheet.dart:139` and dev tools (`simulation_service.dart`, `plan_xls.dart`). `lib/features/train/**` never reads it: the card prefill uses the first set of the last logged session (`train_provider.dart` `_getLastPerformance` ~:63-116) and the TRY hint is last weight + 2.5 kg.
+- **Identified**: 2026-10-18 · filed via mint_oi.sh from branch `active-workout-log-exercise`
+
+Source: found while planning the Active Workout redesign. Possible writer/reader drift (see `docs/sot_registry.yaml`, `lib/features/train/CLAUDE.md`), or intended behaviour (last session's actual as the prefill) that is simply undocumented.
+
+Impact: the graded, Epley-capped progression prescription reaches only the AI coach log sheet; a phase 2+ user never sees it on the workout screen, and the TRY hint can disagree with the plan.
+
+Fix options (to be planned, not decided): (a) document that last-session values are authoritative and retire the unused plan field from the Train contract; (b) feed `suggested_weight` into the prefill / TRY hint for phase 2+. Do not touch `plan_generator.dart` (rule 14). Needs a diagnose-doc and a behavioural test if (b).
+
+## OI-354 — Active Workout hero tile + full-screen viewer (animated WEBP) blocked on asset pipeline and delivery architecture
+
+- **Status**: OPEN
+- **Blocked on**: the animated-WEBP asset pipeline and its delivery architecture (founder will brainstorm lazy download + local cache separately: 900+ files x ~400 KB = ~360 MB, so bundling is out). Reopen when: the delivery architecture is decided and at least the first WEBP files exist.
+- **Verified**: 2026-10-18 - design locked in `docs/mockups/2026-10-18-active-workout-hero-tile-v5.html` and `...-tile-states-v6.html`; repo holds no GIF/WEBP today (292 static SVG plates in `assets/exercise_plates/`, `exercise_plate_thumb.dart`, `exercise_plate_sheet.dart`).
+- **Identified**: 2026-10-18 · filed via mint_oi.sh from branch `active-workout-log-exercise`
+
+Source: founder, 2026-10-18. Unit U3 of `docs/plans/active-workout-log-exercise.md`: square hero tile (about half the card width) playing the exercise animation, centred "ENLARGE" overlay, full-screen viewer (animation edge to edge, form & cues below, sticky BACK TO WORKOUT, no bottom sheet), typing-mode fold to the 44 px thumb, reduce-motion first-frame + play button. Exercises without a WEBP keep the compact header + thumb (permanent fallback during rollout).
+
+Impact: the tile and viewer cannot ship without the assets and a delivery path; until then every exercise keeps today's 44 px thumb.
+
+## OI-355 — Active Workout _persistActiveState reads the build-time widget.data, so the coach snapshot completed-set count lags one toggle
+
+- **Status**: OPEN
+- **Blocked on**: none (pick up after the `active-workout-log-exercise` batch, founder 2026-10-18)
+- **Verified**: 2026-10-18 - by code read (plan review round 2): `lib/features/train/screens/active_workout/exercise_card.dart` `_persistActiveState` (~:234-268) counts completed sets with `widget.data.isSetChecked(...)` (~:239-240), the build-time snapshot, and is called right after `widget.onToggleSet(setIdx)` (~:646-690), so the coach snapshot's `current_set` lags one toggle behind the provider state.
+- **Identified**: 2026-10-18 · filed via mint_oi.sh from branch `active-workout-log-exercise`
+
+Source: found by an independent plan reviewer of the one-LOG-per-exercise redesign. Existing behaviour on the per-set path, unrelated to the redesign (the redesign computes its own count from `ref.read`).
+
+Impact: the AI coach's mid-workout snapshot (`ActiveWorkoutPersistence.writeState`, read by `ai_snapshot_builder.dart`) can report one fewer completed set than the user has logged.
+
+Fix options (to be planned): compute the count from `ref.read(activeWorkoutProvider)` inside `_persistActiveState`. Needs a regression test per rule 21 (and check `test/` for source-greps of that function before touching it).
+
+## OI-356 — Active Workout U1b: edit mode, UNDO, un-log, last-exercise emphasis and scroll for the one-LOG-per-exercise flow
+
+- **Status**: OPEN
+- **Blocked on**: the U1a batch (`active-workout-log-exercise`) landing; founder sequenced this as batch 2 of a 2 + 1 split (2026-10-19)
+- **Verified**: never
+- **Identified**: 2026-10-18 · filed via mint_oi.sh from branch `active-workout-log-exercise`
+
+Source: batch 2 of `docs/plans/active-workout-log-exercise.md` (title kept from minting; scope re-cut by the founder 2026-10-19: "go with 2 + 1 split, drop save changes").
+
+Scope (the FLIP-READY batch): UNDO toast after LOG (snackbar recurrence class `b4e7f1`, `s1n4c0`, full diagnose template), the MIRROR mechanism (set 1's typed value copies into blank, untouched fields of the same exercise; no fading) for weight AND duration AND distance: weight is blank for a new user, and duration/distance are blank for every user (e8f95e), so timed/cardio/distance exercises block LOG on every set without it (B-pass finding 5, 2026-10-19), last-exercise emphasis ("All exercises logged." + gold FINISH WORKOUT). Dropped: "Save changes"/edit mode (U1a's validated capture-on-change saves edits) and a separate un-log button (UNDO + the `-` stepper cover it; D1 = no skipping a middle set). Moved to OI-357: auto-scroll.
+
+Impact: the HARD flip precondition for `enable_log_exercise_button`; the flag flips after this lands.
+
+## OI-357 — Active Workout U2: per-set last values, new-user weight mirror, faded prefill and once-only hints
+
+- **Status**: OPEN
+- **Blocked on**: OI-356 landing and the flag flip; founder sequenced this as batch 3 (2026-10-19)
+- **Verified**: never
+- **Identified**: 2026-10-18 · filed via mint_oi.sh from branch `active-workout-log-exercise`
+
+Source: batch 3 of `docs/plans/active-workout-log-exercise.md` (founder 2-+-1 split, 2026-10-19), pre-decisions in its section 9.
+
+Scope (post-flip polish): each set's own last values for returning users, mildly faded (about 62% parchment) prefilled weights with typed/edited solid gold (faded values count on LOG), once-only hints via `MigratedKey` in `UserConfigMigrator.userScopedKeys`, non-superset auto-scroll. The new-user mirror MECHANISM moved to OI-356.
+
+Impact: NOT a flip precondition (founder 2026-10-19); polish after the flag is on.

@@ -4024,7 +4024,7 @@ concepts:
       so partial-failure recovery is row-level instead of template-level.
     writers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1619-1635
+        line_range: 2280-2293
         method: TemplatesNotifier.saveTemplate (single-day; multi-day templates
           land via tool_dispatcher.createCustomTemplate entry below)
       - file: lib/features/train/screens/template_builder_screen.dart
@@ -4073,7 +4073,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 2150-2241
+        line_range: 2262-2278
         method: TemplatesNotifier.build
         semantic: pass-through
         fields_read: [type, name, exercises, assigned_days, exercise_count, group_id, group_day_index, group_total_days, last_used_at, created_at, updated_at]
@@ -12626,6 +12626,62 @@ concepts:
       - file: lib/shared/widgets/exercise_plate/exercise_plate_sheet.dart
         line_range: 93-100
         method: build
+
+  # One LOG per exercise (branch active-workout-log-exercise, 2026-10-19). Ship
+  # dark behind `enable_log_exercise_button` (default OFF).
+  - concept: active_workout_set_logging
+    domain: workout
+    behavioral_test_path: test/contracts/active_workout_set_logging_behavioral_test.dart
+    contract_test_path: test/features/train/log_exercise/log_exercise_card_test.dart
+    description: |
+      Session-only Active Workout set state: `checkedSets` ("exIdx-setIdx" ->
+      true) and `setInputValues` (the typed values `completeWorkout` saves).
+      In-memory provider state, no Hive key, no cloud column; persisted only by
+      `completeWorkout` -> `WorkoutWriteService.logExercise`.
+
+      WRITERS: `toggleSet` (per-set path, flag OFF) and `logSets` (flag ON: one
+      LOG marks every unchecked set of an exercise in ONE state change; additive
+      only, bounds-checked, no-op on a saved/complete session).
+      `recordSetValues` via the card's `_captureSetValues`: first-frame seed,
+      every check toggle (OFF), LOG (ON), every keystroke on an already-logged
+      set if the value VALIDATES (ON; an invalid edit keeps the last valid
+      value), and the post-frame capture of a set added with `+` (ON).
+
+      READERS: `completedSets` (excludes warm-ups), `isExerciseDone` (requires
+      EVERY set checked, warm-ups included: LOG therefore logs warm-up sets
+      too), `liveVolumeKg`, `completeWorkout` aggregation (checked, non-warm-up
+      sets with captured values), the screen's first-non-done focus fallback.
+
+      WARNING: `logSets` must never become a toggle loop (a double tap would
+      UNCHECK every set). Mutation-proven by the behavioral test.
+      WARNING: the LOG input guard reads a MONOTONIC clock (Stopwatch), never
+      `nowWall()`, which is frozen under the dev clock override.
+    writers:
+      - file: lib/features/train/providers/train_provider.dart
+        line_range: 1500-1509
+        method: toggleSet
+      - file: lib/features/train/providers/train_provider.dart
+        line_range: 1516-1531
+        method: logSets
+      - file: lib/features/train/providers/train_provider.dart
+        line_range: 1534-1539
+        method: recordSetValues
+      - file: lib/features/train/screens/active_workout/exercise_card.dart
+        line_range: 340-346
+        method: _onFieldChanged
+      - file: lib/features/train/screens/active_workout/exercise_card.dart
+        line_range: 365-389
+        method: _onLogPressed
+    readers:
+      - file: lib/features/train/providers/train_provider.dart
+        line_range: 1327-1329
+        method: completedSets
+      - file: lib/features/train/providers/train_provider.dart
+        line_range: 1357-1365
+        method: isExerciseDone
+      - file: lib/features/train/services/log_exercise_logic.dart
+        line_range: 270-306
+        method: LogExerciseController.log
 
   # tech-debt audit 2026-09-02 / Slice A (CODE-8, diagnose e4d1b7) — the
   # weekly-report PRO gate is a genuine cloud writer→reader contract on
