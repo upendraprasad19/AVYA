@@ -1,7 +1,7 @@
 # Plan: Active Workout, one LOG per exercise (revision 5: U1a only, after review rounds 1 to 4)
 
 Branch `active-workout-log-exercise` (own worktree, §4.13). Approved visuals: `docs/mockups/2026-10-18-active-workout-neutral-blocked-v8.html` (blocked state). Founder directives quoted from chat are dated 2026-10-17/18.
-Status: **U1a built on this branch, shipped dark (flag OFF), not yet committed.** Review history: rounds 1-5 in `docs/plan-reviews/active-workout-log-exercise.md` (converged at round 5); the B-pass review is in `docs/reviews/`.
+Status: **U1a built and committed (344cd2d1), shipped dark (flag OFF).** Review history: rounds 1-5 in `docs/plan-reviews/active-workout-log-exercise.md` (converged at round 5); the B-pass review is in `docs/reviews/`.
 
 ## 0. Response to rounds 1 and 2 (so round 3 can check it)
 - Round 2 said U1 was still too large (§4.12.1). **U1 is now split: this plan builds only U1a.** U1b (edit mode, UNDO, un-log, last-exercise emphasis, scroll) is a separate unit with its own review; U2 and U3 are as before. The kill-switch is NOT flipped until U1a and U1b have both landed.

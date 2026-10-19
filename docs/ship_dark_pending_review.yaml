@@ -233,7 +233,7 @@ pending:
 
   - flag: enable_log_exercise_button
     branch: active-workout-log-exercise
-    build_commit: null
+    build_commit: 344cd2d1
     build_date: 2026-10-19
     flip_reviewed: false
     flip_commit: null
@@ -246,7 +246,7 @@ pending:
       APK can never turn it on. OFF-path evidence: the `flag OFF` group in
       test/features/train/log_exercise/log_exercise_card_test.dart (per-set
       tiles, no LOG, blank appended rows) plus the existing source pins, which
-      pass unchanged. build_commit is filled in by the commit that lands this.
+      pass unchanged.
       See the HARD PRECONDITIONS block below.
 
 # ── HARD PRECONDITIONS for flipping enable_log_exercise_button ────────────
