@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:icanbefitter/core/copy/referral_copy.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -64,7 +65,7 @@ class _ApplyReferralSheetState extends ConsumerState<ApplyReferralSheet> {
       _controller.text.trim(),
     );
     if (result.success) {
-      await SubscriptionService.instance.verifyFromServer();
+      await SubscriptionService.instance.verifyFromServer(force: true);
       if (mounted) Navigator.of(context).pop(true);
     } else {
       if (mounted) {
@@ -158,6 +159,12 @@ class _ApplyReferralSheetState extends ConsumerState<ApplyReferralSheet> {
                 ),
               ),
             ],
+            const SizedBox(height: 8),
+            Text(
+              ReferralCopy.friendDisclosure,
+              key: const ValueKey('referral-friend-disclosure'),
+              style: AppTypography.bodyS.copyWith(color: AppColors.textDim),
+            ),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,

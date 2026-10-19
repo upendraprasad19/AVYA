@@ -1,9 +1,14 @@
 import 'dart:async';
 
-import 'package:supabase_flutter/supabase_flutter.dart' show FunctionException;
+import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show FunctionException, FunctionResponse, PostgrestException;
 
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/services/sync_retry_controller.dart'
+    show httpStatusOfError, isOutageShapedFailure;
+import 'package:icanbefitter/features/profile/models/referrer_summary.dart';
 
 /// Outcome of a `redeem-referral` Edge Function call.
 ///
@@ -28,6 +33,31 @@ class RedemptionResult {
   const RedemptionResult.failure(this.errorMessage)
       : success = false,
         alreadyRedeemed = false;
+}
+
+/// Whether a failed `referrer_summary()` call is an EXPECTED absence rather
+/// than a defect worth a `client_errors` row: the function does not exist yet
+/// (PGRST202 / HTTP 404, before migration 160), the session lapsed (`28000`,
+/// PGRST301, HTTP 401), EXECUTE was revoked (`42501`: the server-side off switch), or
+/// the network/backend did not answer at all (the shapes
+/// `isOutageShapedFailure` already classifies, including the web ones
+/// `ClientException` / `XMLHttpRequest error`). All of these hide the surface
+/// silently; before migration 160 every Home session would otherwise write a
+/// row, and an offline phone must not flood telemetry.
+bool isExpectedReferrerSummaryAbsence(Object error) {
+  if (error is PostgrestException) {
+    final code = error.code;
+    if (code == 'PGRST202' ||
+        code == 'PGRST301' ||
+        code == '28000' ||
+        code == '42501') {
+      return true;
+    }
+  }
+  final status = httpStatusOfError(error);
+  if (status == 401 || status == 404) return true;
+  if (error.toString().contains('ClientException')) return true;
+  return isOutageShapedFailure(error);
 }
 
 /// Referral repository — wraps all direct Supabase calls related to
@@ -70,6 +100,50 @@ class ReferralRepository {
     }
   }
 
+  /// Test seam: replaces the `referrer_summary` RPC. Always null in production.
+  @visibleForTesting
+  static Future<dynamic> Function()? summaryRpcForTest;
+
+  /// Reads the signed-in user's referrer aggregates (unit C, migration 160).
+  ///
+  /// ONE call to `public.referrer_summary()`; `null` means UNKNOWN (any throw,
+  /// a NULL or a malformed body): the surface hides itself and never shows a
+  /// wrong number. Expected absences (function missing, lapsed session,
+  /// revoked EXECUTE, offline) return `null` silently; any other failure is
+  /// telemetered under `referral_repository_summary`. Deliberate exceptions to
+  /// "error states have a retry" (a non-critical decoration, refreshed on the
+  /// next trigger) and to Hive-first (cloud-only aggregates with no local
+  /// store; nothing blocks on them).
+  Future<ReferrerSummary?> referrerSummary() async {
+    try {
+      final seam = summaryRpcForTest;
+      final dynamic raw;
+      if (seam != null) {
+        raw = await seam();
+      } else {
+        await SupabaseService.instance.ensureFreshToken();
+        raw = await SupabaseService.instance.client
+            .rpc('referrer_summary')
+            .timeout(const Duration(seconds: 15));
+      }
+      return ReferrerSummary.tryParse(raw);
+    } catch (e, stack) {
+      if (!isExpectedReferrerSummaryAbsence(e)) {
+        unawaited(ErrorTelemetry.recordNonFatal(
+          e,
+          stack,
+          reason: 'referral_repository_summary',
+        ));
+      }
+      return null;
+    }
+  }
+
+  /// Test seam: replaces the `redeem-referral` call (the sheets' widget tests
+  /// have no Supabase client). Always null in production.
+  @visibleForTesting
+  static Future<FunctionResponse> Function(String code)? redeemCallForTest;
+
   /// Invokes the `redeem-referral` Edge Function with [code].
   ///
   /// Returns a [RedemptionResult]:
@@ -87,10 +161,13 @@ class ReferralRepository {
   Future<RedemptionResult> redeem(String code) async {
     try {
       // §2.31: callFunction refreshes the JWT before the authed invoke.
-      final response = await SupabaseService.instance.callFunction(
-        'redeem-referral',
-        body: {'code': code},
-      );
+      final seam = redeemCallForTest;
+      final response = seam != null
+          ? await seam(code)
+          : await SupabaseService.instance.callFunction(
+              'redeem-referral',
+              body: {'code': code},
+            );
       final body = response.data as Map?;
       if (response.status == 200) {
         // Server returns either { success:true, ... } or { error: ... }.
@@ -102,6 +179,14 @@ class ReferralRepository {
         final errorMsg = body?['error'] as String?;
         if (errorMsg != null) {
           return RedemptionResult.failure(errorMsg);
+        }
+        // Fail CLOSED (unit C B-pass F5): the function sends success:true on
+        // every 200 it means as a success (and on the 23505 replay), so a 200
+        // without it (a proxy page, an empty body) is not a grant and must not
+        // be announced as "+7 days PRO added".
+        if (body?['success'] != true) {
+          return const RedemptionResult.failure(
+              'Could not confirm that code. Please try again.');
         }
         final alreadyRedeemed =
             body?['alreadyRedeemed'] == true || body?['already_redeemed'] == true;

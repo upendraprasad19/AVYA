@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**212 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**213 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -207,7 +207,7 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-333 | daily-snapshot/index_test.ts leaks DISABLE_GEMINI_FAILURE_ALERT into the… | none | 2026-10-11 -… | [:5962](open_issues.md#L5962) |
 | OI-334 | deploy_via_api.js rollback gaps: the pre-deploy cloud snapshot writes 0… | none - an engineering choice (see the… | 2026-10-11 - two measurements during the… | [:5973](open_issues.md#L5973) |
 | OI-335 | Gate 50 (check_reader_manifest_complete) never evaluates a SoT concept… | none for the registry wording; making… | 2026-10-11 by reading:… | [:5986](open_issues.md#L5986) |
-| OI-336 | Referral reward UX: the referrer's counts surface (friends joined /… | the founder's go to start Unit C… | 2026-10-12 - by reading the repo:… | [:5997](open_issues.md#L5997) |
+| OI-336 | Referral reward UX: the referrer's counts surface (friends joined /… | the founder: (1) the commit/merge go for… | 2026-10-12 - by reading the repo:… | [:5997](open_issues.md#L5997) |
 | OI-337 | The commit-time gates read staged paths with a plain git diff --cached… | none - an engineering choice; a… | 2026-10-12 - by reading and by… | [:6010](open_issues.md#L6010) |
 | OI-338 | delete_account_purges_all_user_buckets_test.dart reads USER_OWNED_BUCKETS… | none - a test-only edit… | 2026-10-12 - by reading… | [:6023](open_issues.md#L6023) |
 | OI-339 | A Razorpay refund made only in the dashboard is invisible to the referral… | the founder's decision on how refunds… | 2026-10-13 - by reading.… | [:6039](open_issues.md#L6039) |
@@ -218,5 +218,6 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-345 | Remove the enable_body_measurements OFF path (flag checks, kill switch,… | founder-owned check of the RELEASE build… | 2026-10-16:… | [:6108](open_issues.md#L6108) |
 | OI-346 | Existing accounts accepted the v1 (blog) policy; nothing asks them to… | store launch (upstream_blocked;… | 2026-10-16: `AppConstants.termsVersion`… | [:6117](open_issues.md#L6117) |
 | OI-347 | Free-access codes: the founder wants to give out codes that grant PRO for… | none (a plan is the next step; the… | 2026-10-16 - by reading… | [:6126](open_issues.md#L6126) |
-| OI-350 | verify-payment captures an authorized payment and echoes its Razorpay… | none | 2026-10-17 - by reading… | [:6139](open_issues.md#L6139) |
-| OI-351 | razorpay-webhook: after a payment.authorized auto-capture, a failed insert… | none | 2026-10-17 - by reading… | [:6146](open_issues.md#L6146) |
+| OI-349 | Onboarding welcome screen overflows at 2x system text on a 640-dp phone:… | the founder's call on whether 2x system… | 2026-10-17 - by running the screen under… | [:6139](open_issues.md#L6139) |
+| OI-350 | verify-payment captures an authorized payment and echoes its Razorpay… | none | 2026-10-17 - by reading… | [:6148](open_issues.md#L6148) |
+| OI-351 | razorpay-webhook: after a payment.authorized auto-capture, a failed insert… | none | 2026-10-17 - by reading… | [:6155](open_issues.md#L6155) |

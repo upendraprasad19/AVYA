@@ -229,6 +229,7 @@ Per CLAUDE.md rules 21 + 22:
 | 2.105 | A layout claim about a real font that was only run in the test font (Ahem is the widest face, not the tallest) | a plan says "one run in the real font" or "a narrower font can only make it shorter" and every test renders Ahem; the widget's face is JetBrains Mono, not DM Sans | test/features/profile/measurements_card_test.dart |
 | 2.106 | `Semantics(excludeSemantics: true)` over an `InkWell` makes the declared `onTap` the only way a screen reader reaches the control | a single-node control passes a label-and-role test; deleting the Semantics `onTap:` line leaves every test green | test/ai_coach/measurement_chip_slot_test.dart |
 | 2.107 | A test observes the reported value or the source text while the bug lives in the state the user sees or in the wiring | a clamp, ceiling or version-label change is green and a reviewer's one-line deletion (wheel resync, call-site constant, ceiling expression) reddens nothing | test/widgets/scroll_date_picker_clamp_test.dart |
+| 2.108 | A pin written to protect one reader of a contract freezes a second, private parser of the same writer in place | a screen shows a generic failure where a sibling screen shows the server's specific reason, and an older contract test asserts the broken screen's old parsing | test/contracts/referral_unit_c_surfaces_test.dart |
 
 ---
 

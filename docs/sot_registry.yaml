@@ -5019,7 +5019,7 @@ concepts:
           The ONE persist gate: marker == live uid == Hive owner AND a non-empty
           schedule. Gated off => a read-only count.
       - file: lib/features/home/screens/home_screen.dart
-        line_range: 192-195
+        line_range: 198-203
         method: invalidateOnBackgroundRestore
         semantic: pass-through
         notes: |
@@ -7839,7 +7839,7 @@ concepts:
           service_role-only RPC -> 0 redemptions ever. 23505 race
           fallback returns 200 with alreadyRedeemed:true.
       - file: lib/features/profile/repositories/referral_repository.dart
-        line_range: 36-55
+        line_range: 70-225
         method: ReferralRepository.redeem
         notes: |
           Canonical client-side transport — invokes redeem-referral
@@ -11809,7 +11809,7 @@ concepts:
         semantic: display-only
         fields_read: [enabled]
       - file: lib/features/profile/screens/profile/profile_content.dart
-        line_range: 62-80
+        line_range: 70-225
         method: build — "N/M enabled" subtitle
         semantic: aggregated
         fields_read: [enabled]
@@ -15561,7 +15561,13 @@ concepts:
         method: column-level GRANT SELECT on referral_redemptions
         semantic: privilege-boundary
         fields_read: [referral_redemptions.id, referral_redemptions.code, referral_redemptions.referrer_id, referral_redemptions.referee_id, referral_redemptions.days_granted_each, referral_redemptions.created_at]
-        notes: The six columns a client may still select directly. ReferralRepository.hasRedeemed reads `id` filtered by `referee_id`, inside this grant. Unit C (plan on branch referral-unit-c-client, docs/plans/referral-unit-c-client.md; not on this branch) adds the client reader of referrer_summary() and registers it here in its own commit.
+        notes: The six columns a client may still select directly. ReferralRepository.hasRedeemed reads `id` filtered by `referee_id`, inside this grant.
+      - file: lib/features/profile/repositories/referral_repository.dart
+        line_range: 103-140
+        method: referrerSummary
+        semantic: aggregate-read
+        fields_read: [joined, subscribed, pending, credited, days_earned]
+        notes: Unit C (OI-336, docs/plans/referral-unit-c-client.md). ONE `rpc('referrer_summary')` call; `ReferrerSummary.tryParse` makes any missing, non-int or negative field UNKNOWN for the whole object (`null`); the surfaces hide themselves on unknown and never show zeros that were not read. Expected absences (PGRST202/404, PGRST301/28000/401, 42501, offline) return null silently, anything else is telemetered as `referral_repository_summary`. Consumers: `referrerSummaryProvider` (ReferrerCountersBlock) and `ReferralCreditNoticeNotifier.check`, sharing ONE in-flight call per account (`ReferrerSummaryGate`).
     cloud_table: referral_redemptions
     cloud_columns:
       - referrer_id
@@ -15574,6 +15580,46 @@ concepts:
       - "select * from referral_redemptions in client code (42501 under the column grant)"
       - "a referrer_summary variant that trusts a caller-supplied user id (it filters by auth.uid())"
       - "EXECUTE on referrer_summary for anon or PUBLIC"
+  - concept: referral_credit_notice
+    domain: profile
+    behavioral_test_path: test/contracts/referral_credit_notice_behavioral_test.dart
+    description: |
+      Unit C (OI-336, docs/plans/referral-unit-c-client.md). The in-app announcement of a referral credit (founder
+      decision 2026-10-16: aggregates only, told in-app on the next open, no push, first run silent). One per-user userBox
+      scalar, `referral_credit_seen_days` (the lifetime `days_earned` total the user has been told about, or silently
+      baselined to), read and written through MigratedKey and listed in UserConfigMigrator.userScopedKeys so it dies with
+      the user boxes at sign-out. The decision is the PURE `creditNoticeFor({daysEarned, seen})`: no scalar -> store the
+      total silently, show nothing; a larger total -> ONE notice for the difference, the scalar written only when the user
+      dismisses or taps through; a lower total -> silent re-baseline; equal or unknown -> nothing. `verifyFromServer(force:
+      true)` runs once per detected total before the card shows. Per-account state (resume throttle, verified-for memory)
+      resets in `build()`; every await captures the auth token and drops its result if the account changed; the write
+      needs a session owner (otherwise MigratedKey would fall back to the SHARED configBox).
+    writers:
+      - file: lib/features/profile/providers/referral_summary_provider.dart
+        line_range: 162-174
+        method: ReferralCreditNoticeNotifier.dismiss + _writeSeen (and the silent baseline in check)
+        notes: |
+          The ONLY writers of referral_credit_seen_days. Guarded by HiveUserSession.currentOwnerFullId and the token
+          comparison; the dismissal stores the announced TOTAL, never the difference.
+    reader_manifest_complete: true
+    readers:
+      - file: lib/features/profile/providers/referral_summary_provider.dart
+        line_range: 112-168
+        method: check
+        semantic: decision
+        fields_read: [referral_credit_seen_days]
+        notes: A stored non-int counts as no scalar. Triggers: Home mount (ReferralCreditSlot), app resume (6-hour throttle), the restore tick, the invite sheet opening. One in-flight network call per account.
+      - file: lib/features/home/widgets/referral_credit_slot.dart
+        line_range: 17-100
+        method: ReferralCreditSlot
+        semantic: render
+        fields_read: [ReferralCreditNotice.days]
+        notes: Renders nothing unless a notice waits; the X dismisses, the card body dismisses and opens InviteFriendsSheet.
+    forbidden_legacy_patterns:
+      - "a push notification for a referral credit (founder decision 2026-10-16: in-app only)"
+      - "announcing the first-seen lifetime total as new (the first evaluation on a device is silent)"
+      - "writing referral_credit_seen_days without a session owner, or after the account changed"
+      - "naming converted_at / referrer_reward_days / referrer_credited_at / referrer_rewarded / referee_rewarded in a client file (migration 160 hides them; the figures come from referrer_summary())"
   - concept: measurement_prompt_state
     domain: health
     behavioral_test_path: test/contracts/measurement_prompt_state_behavioral_test.dart
