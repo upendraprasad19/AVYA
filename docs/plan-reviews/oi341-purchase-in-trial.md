@@ -9,7 +9,7 @@ verdict: converged
 bpass: accepted
 bpass_review: docs/reviews/d88f0a837e41-review.md
 hermes: accepted
-hermes_report: docs/plans/oi341-purchase-in-trial.md section 8 (Hermes pass) and docs/audit/oi341-purchase-in-trial.closure.yaml rows H-S1-1 to H-X1
+hermes_report: docs/audit/2026-10-17-hermes-oi341-purchase-in-trial.md
 ---
 
 # Plan review - OI-341 Piece A, the server-side stacking writers (dark)
