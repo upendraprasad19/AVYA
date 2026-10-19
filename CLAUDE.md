@@ -52,7 +52,7 @@ node .claude/deploy_via_api.js dedsavbjuwgarrhphgnl <fn> .claude/_payload_<fn>.j
 
 ## 1. PROJECT IDENTITY
 
-**App:** ICANBEFITTER — fitness & nutrition platform for young professionals (22-35) in India. **Model:** Freemium, ₹349/month or ₹2,999/year PRO. **Architecture:** Offline-first — Hive primary; Supabase = backup + AI + community.
+**App:** ICANBEFITTER — fitness & nutrition platform for young professionals (22-35) in India. **Model:** Freemium, ₹349/month or ₹2,999/year PRO. **Architecture:** Offline-first — Hive primary; Supabase = backup + AI + community. **Launch status (founder, 2026-10-17):** NOT live in any store yet (the web app at app.icanbefitter.com is reachable, but every existing account, web or phone, is a TESTING account), so existing-user migration, re-consent and "every signed-in user" framings are not real-user risks until the Play/App Store launch (Play internal testing comes first). Never ask the founder to pick an existing-user path pre-launch; park it `upstream_blocked` with `reopen_when: store launch` (on the OI board that is prose in "Blocked on"; Status stays OPEN).
 
 ---
 

@@ -71,6 +71,12 @@ paths:
   # paged_fetch, cron_telemetry, sanitize_for_prompt: promoting one would raise every function that shares it) and the cron
   # definition (`supabase/migrations/**`).
   - { glob: "supabase/functions/_shared/purge_user_storage*.ts", tier: catastrophic }
+  # OI-341 Piece A: the stacking module the two payment writers (verify-payment, razorpay-webhook; both catastrophic through
+  # their own directories) call to compute the stored end_date of a PAID row. A change to it alone does not touch those
+  # directories and was platform via `_shared/**` below, so it would skip hermes and the rollback requirement while changing
+  # what a payment grants. One glob for the module and its Deno test. The test infrastructure (postgrest_fake_fetch.ts,
+  # payment_writer_harness.ts, fixtures/) stays platform on purpose: it grants nothing.
+  - { glob: "supabase/functions/_shared/subscription_stacking*.ts", tier: catastrophic }
   - { glob: "supabase/migrations/*pseudonymize*.sql", tier: catastrophic }
   - { glob: "supabase/migrations/*rls*.sql", tier: catastrophic }
   - { glob: "supabase/migrations/*security_definer*.sql", tier: catastrophic }
