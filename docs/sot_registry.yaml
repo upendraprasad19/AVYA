@@ -12000,7 +12000,7 @@ concepts:
         method: _scheduleRowsBefore
         semantic: shared-row-walk
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1804-1810
+        line_range: 1805-1811
         method: pastPhaseBlocks
         semantic: strict-set
       - file: lib/core/services/workout_schedule_read_service.dart

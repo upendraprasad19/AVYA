@@ -43,6 +43,38 @@ Deno.test("blank-gap days are not scolded as missed workouts", () => {
 });
 
 Deno.test("it does not restart the user at Phase 1", () => {
-  assertStringIncludes(CAPTAIN_MANUAL, "do not call it a restart from Phase 1");
+  assertStringIncludes(CAPTAIN_MANUAL, "Never call it a restart from Phase 1");
   assert(CAPTAIN_MANUAL.includes("Quote only numbers present in"));
+});
+
+function planStatusSection(): string {
+  const i = CAPTAIN_MANUAL.indexOf("PLAN STATUS");
+  const j = CAPTAIN_MANUAL.indexOf("SECTION 4", i);
+  assert(i > 0 && j > i, "section bounds");
+  return CAPTAIN_MANUAL.slice(i, j);
+}
+
+Deno.test("a phase change is claimed only when the snapshot shows one (review P1)", () => {
+  const sec = planStatusSection();
+  assertStringIncludes(sec, "ONLY");
+  assertStringIncludes(sec, "within 14 days");
+  assertStringIncludes(sec, "no phase change happened");
+  assert(!sec.includes("moved up by one"), "unconditional claim is gone");
+});
+
+Deno.test("a plan that began this week is not a failing (review P2)", () => {
+  const sec = planStatusSection();
+  assertStringIncludes(sec, "within the last 7 days");
+  assertStringIncludes(sec, "NOT a failing");
+});
+
+Deno.test("streak, weights and tone rules are pinned (review P2)", () => {
+  const sec = planStatusSection();
+  assertStringIncludes(sec, "quote the snapshot's own streak values");
+  assertStringIncludes(sec, "DAYS (not weeks)");
+  assertStringIncludes(sec, "do not quote");
+  assertStringIncludes(sec, "No guilt, no lecture, no upsell");
+  assertStringIncludes(sec, "present ONLY for a user who has been away");
+  assert(!sec.includes("lowered by design"), "unverifiable claim is gone");
+  assert(!sec.includes("likely zero"), "guess is gone");
 });

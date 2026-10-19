@@ -275,7 +275,12 @@ Future<({bool generated, bool committed})> _runAdvanceWith({
     // The gap comes from the window that was ACTUALLY written (not a pre-read
     // of the start date: a midnight rollover between the two could differ).
     final newPlanStart = readSvc.getPlanStartDate();
-    final resetGap = (committed && oldPlanEnd != null && newPlanStart != null)
+    // Leaving Phase 1 is a fresh start (the free phase): the one-time first-PRO
+    // freeze grant must survive it, so only a PRO phase (2+) resets freezes.
+    final resetGap = (committed &&
+            currentPhase > 1 &&
+            oldPlanEnd != null &&
+            newPlanStart != null)
         ? freezeResetGapDays(
             blankGapDays(planEnd: oldPlanEnd, newStart: newPlanStart))
         : 0;
@@ -841,8 +846,11 @@ Future<GraduationAdvanceResult> runGraduationPhaseAdvance({
       // backdated into the gap (`gapStart: false`), but the freezes still go to
       // zero when the unlock follows a blank gap.
       final startDate = scheduleSvc.nextPhaseStartDate(gapStart: false);
-      final resetGap =
-          freezeResetGapDays(scheduleSvc.blankGapDaysBefore(startDate));
+      // Leaving Phase 1 (the free phase) is a fresh start: no freeze reset, so
+      // the one-time first-PRO grant survives; only a PRO phase (2+) resets.
+      final resetGap = nextPhase > 2
+          ? freezeResetGapDays(scheduleSvc.blankGapDaysBefore(startDate))
+          : 0;
 
       // Build repeat pins BEFORE generateAndSchedule overwrites plan_start
       // (getWeek reads the just-finished window). Only on an explicit "repeat".

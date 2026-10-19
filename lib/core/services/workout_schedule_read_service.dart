@@ -683,8 +683,10 @@ class WorkoutScheduleReadService {
         pins == null ? previousPhaseNamesByDay() : null;
     // Piece B (founder 2026-10-18): leaving Phase 1 is a fresh start. Phase 1 is
     // the free phase, so a user who comes back and upgrades was never on a PRO
-    // plan during the gap: their Phase 2 starts on THIS week's Monday, with no
-    // backdated days shown as missed. Only a PRO phase (2+) uses the gap start.
+    // plan during the gap: their Phase 2 starts on THIS week's Monday (nothing
+    // before it is backdated; Monday..today of that week are ordinary planned
+    // rows, as for any plan that starts on a Monday). Only a PRO phase (2+)
+    // uses the gap start, and only a PRO phase resets freezes.
     final startDate = nextPhaseStartDate(gapStart: currentPhase > 1);
     await generateAndSchedule(
       goal: goal,
@@ -2066,7 +2068,9 @@ class WorkoutScheduleReadService {
   /// old one ended whenever that phase still contains today, so the days that
   /// passed show as missed; only a longer gap falls back to this Monday. The
   /// graduation unlock passes `gapStart: false` (an explicit tap is a fresh
-  /// start). The rule is the pure [phaseStartAfterGap].
+  /// start), and so does the automatic advance OUT OF Phase 1 (the free phase:
+  /// `autoGenerateNextPhaseIfNeeded` passes `gapStart: currentPhase > 1`). The
+  /// rule is the pure [phaseStartAfterGap].
   DateTime nextPhaseStartDate({DateTime? now, bool gapStart = true}) {
     final today = now ?? nowWall(); // seam-aware (dev time-travel / year-sim)
     final endStr = MigratedKey.read<String>(_planEndKey);

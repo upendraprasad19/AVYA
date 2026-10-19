@@ -105,3 +105,5 @@ The frontmatter is the record. Plan: docs/plans/2026-10-18-pro-gap-policy-and-st
 ## Addendum 2026-10-18: free user who upgrades
 
 Founder decision: plans start on a Monday, and a free user who returns and upgrades gets Phase 2 on THIS week's Monday. Fix: `autoGenerateNextPhaseIfNeeded` passes `gapStart: currentPhase > 1` (Phase 1 is the free phase, so leaving it is a fresh start; no PRO-activation date stored, no subscription code touched). Test: `lapse_gap_policy_behavioral_test.dart` "free user leaving Phase 1 3 weeks late: fresh start this Monday"; mutated (rule reverted to `nextPhaseStartDate()`) and it reddened. `phase_unlock_start_date_test.dart` source grep repointed.
+
+Review follow-up (same day): the Phase 1 -> 2 advance (automatic and graduation) also skips the freeze reset so the one-time first-PRO grant (`grantFirstProFreezes`) is not wiped; tests `leaving Phase 1 after a blank gap ...` and `graduation out of Phase 1 ...` in `lapse_gap_freeze_reset_advance_test.dart` (3 mutants red). The coach PLAN STATUS section no longer claims an unconditional phase advance.

@@ -83,7 +83,7 @@ void main() {
     SyncService.pausedForSimulation = false;
   });
 
-  Future<void> seed({int freezes = 3}) async {
+  Future<void> seed({int freezes = 3, int phase = 2}) async {
     await MigratedKey.write('isPro', true);
     await MigratedKey.write(
         'expiresAt', DateTime(2027, 6, 1).toIso8601String());
@@ -98,7 +98,7 @@ void main() {
       'fitness_experience': 'intermediate',
     });
     await UserRepository.instance.saveProgress({
-      'current_phase': 1,
+      'current_phase': phase,
       'streak_freezes_available': freezes,
       'streak_freeze_used_dates': <String>[],
       'streak_freezes_last_refill': '2026-11-09',
@@ -123,8 +123,22 @@ void main() {
     });
     final p = UserRepository.instance.getProgress()!;
     expect(generated, isTrue, reason: 'precondition: a phase was generated');
-    expect(p['current_phase'], 2, reason: 'precondition: the commit landed');
+    expect(p['current_phase'], 3, reason: 'precondition: the commit landed');
     expect(p['streak_freezes_available'], 0);
+  });
+
+  testWidgets('leaving Phase 1 after a blank gap: fresh start this Monday, '
+      'the first-PRO freezes survive (founder 2026-10-18)', (tester) async {
+    await tester.runAsync(() => seed(phase: 1));
+    final cap = await capture(tester);
+    await tester.runAsync(() async => runProPhaseAdvance(cap.ref));
+    final p = UserRepository.instance.getProgress()!;
+    expect(p['current_phase'], 2, reason: 'precondition: the commit landed');
+    expect(WorkoutScheduleReadService.instance.getPlanStartDate(),
+        DateTime(2026, 11, 9),
+        reason: 'Phase 2 starts on the Monday of the week they are in');
+    expect(p['streak_freezes_available'], 3,
+        reason: 'a fresh start must not wipe the one-time first-PRO grant');
   });
 
   testWidgets('KILL SWITCH: the same advance leaves the freezes alone',
@@ -173,7 +187,7 @@ void main() {
       r = await runGraduationPhaseAdvance(
           ref: cap.ref,
           profile: gradProfile(),
-          nextPhase: 2,
+          nextPhase: 3,
           repeat: false,
           stopwatch: Stopwatch());
     });
@@ -196,12 +210,27 @@ void main() {
       await runGraduationPhaseAdvance(
           ref: cap.ref,
           profile: gradProfile(),
-          nextPhase: 2,
+          nextPhase: 3,
           repeat: false,
           stopwatch: Stopwatch());
     });
     expect(WorkoutScheduleReadService.instance.getPlanStartDate(),
         DateTime(2026, 11, 9));
+    expect(UserRepository.instance.getProgress()!['streak_freezes_available'], 3);
+  });
+
+  testWidgets('graduation out of Phase 1 after a blank gap keeps the freezes',
+      (tester) async {
+    await tester.runAsync(() => seed(phase: 1));
+    final cap = await capture(tester);
+    await tester.runAsync(() async {
+      await runGraduationPhaseAdvance(
+          ref: cap.ref,
+          profile: gradProfile(),
+          nextPhase: 2,
+          repeat: false,
+          stopwatch: Stopwatch());
+    });
     expect(UserRepository.instance.getProgress()!['streak_freezes_available'], 3);
   });
 
@@ -215,7 +244,7 @@ void main() {
       final advancing = runGraduationPhaseAdvance(
               ref: cap.ref,
               profile: gradProfile(),
-              nextPhase: 2,
+              nextPhase: 3,
               repeat: false,
               stopwatch: Stopwatch())
           .whenComplete(() => done = true);

@@ -253,6 +253,26 @@ void main() {
       expect(ps['days_since_last_workout'], 46);
     });
 
+    test('the manual names every key the snapshot emits (writer -> reader)',
+        () async {
+      await rows(DateTime(2026, 9, 21), DateTime(2026, 9, 27), 'completed');
+      await wlog('2026-09-27');
+      await rows(DateTime(2026, 11, 9), DateTime(2026, 11, 11), 'planned');
+      await setProgress();
+      await MigratedKey.write(
+          'plan_start_date', DateTime(2026, 11, 9).toIso8601String());
+      final ps = AiCoachRepository.instance.buildAiContext()['plan_status']
+          as Map;
+      final manual =
+          File('supabase/functions/_shared/captain_manual.ts').readAsStringSync();
+      final i = manual.indexOf('PLAN STATUS');
+      final section = manual.substring(i, manual.indexOf('SECTION 4', i));
+      for (final k in ps.keys.cast<String>().where((k) => k != 'lapsed')) {
+        expect(section.contains(k), isTrue,
+            reason: 'the coach manual must name plan_status.$k');
+      }
+    });
+
     test('present at 14 days idle without a blank gap, absent at 13',
         () async {
       await rows(DateTime(2026, 10, 20), DateTime(2026, 11, 11), 'planned');

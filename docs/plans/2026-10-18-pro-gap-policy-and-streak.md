@@ -74,8 +74,11 @@ after B; not part of this PR.
 
 Free user who upgrades (founder decision 2026-10-18): leaving Phase 1 is a fresh start. Phase 1 is the free phase, so
 `autoGenerateNextPhaseIfNeeded` passes `gapStart: currentPhase > 1`: a Phase 1 -> 2 advance starts on THIS week's Monday (or
-`plan_end + 1` when that is later), with no backdated days. No PRO-activation date is stored and no subscription code changes.
-Side effect: a PRO user who lapsed during the tail of Phase 1 also gets a blank gap instead of missed days (accepted).
+`plan_end + 1` when that is later). Nothing before that Monday is backdated; Monday..today of the purchase week are ordinary
+planned rows (the coach prompt says a plan that began within 7 days is not a failing). No PRO-activation date is stored and no
+subscription code changes. Freezes: the Phase 1 -> 2 advance (automatic and graduation) does NOT reset them, so the one-time
+first-PRO grant survives (`grantFirstProFreezes`); only a PRO phase (2+) resets after a blank gap of 7+ days. Side effect: a PRO
+user who lapsed at the tail of Phase 1 also gets a blank gap and keeps their freezes (accepted).
 
 ## Review log
 
@@ -84,3 +87,9 @@ Round 1 (fresh Sonnet, plan + diff): 7 findings, all fixed or disclosed (freeze 
 used the old rate -> mirrored in `_shared/rank_engine.ts`; stale registry/doc text fixed. B-pass (third reader, final diff): P1 the
 streak break hit free users with an expired plan -> mid-gap only; P2 `plan_status` cost -> `last_workout_date` first; P2 sync-lag
 caveat documented for the server rate; P3 test strength (flip-ascending fake), 7-day floor for `plan_status`, date-shaped keys only.
+
+Post-merge-prep review (fresh Sonnet, the PLAN STATUS prompt + the Phase 1 rule): no P0; P1 the prompt claimed an
+unconditional phase advance (now conditional on `phase_started_on` within 14 days or a blank gap); P2 just-upgraded
+`missed_days_in_phase`, streak guess, weeks vs days, unverifiable weights claim (all reworded); P2 first-PRO freeze grant wiped by
+the reset (Phase 1 exempt now); P2 stale comment/doc; test gaps (real-advance Phase 1 test, manual-vs-emitter key pin, more Deno
+pins; 9 mutants red).
