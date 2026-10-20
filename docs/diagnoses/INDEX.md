@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### lapse_gap_policy (1 bugs)
+- 2026-10-18 d7a3e5 — A PRO user who stopped training and came back saw Home "1 DAY" (a streak the user had not earned), the missed weeks never appeared, the freezes were still full, the rank completion rate ignored the…
+
 ### pro_phase_ensure_current (1 bugs)
 - 2026-10-16 d9b3e7 — A PRO user (founder, iPhone Safari, new tab, 2026-10-16) with Phase III fully ticked, plan_end Sun 2026-10-11 and today Fri 2026-10-16 saw Train "WK 5 OF 4" with W5 selected and the lock card…
 
@@ -1589,6 +1592,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-10-18 | d7a3e5 | A PRO user who stopped training and came back saw Home "1 DAY" (a streak the user had not earned), the missed weeks never appeared, the freezes were still full, the rank completion rate ignored the… | lapse_gap_policy | test/contracts/lapse_gap_policy_behavioral_test.dart |
 | 2026-10-16 | d9b3e7 | A PRO user (founder, iPhone Safari, new tab, 2026-10-16) with Phase III fully ticked, plan_end Sun 2026-10-11 and today Fri 2026-10-16 saw Train "WK 5 OF 4" with W5 selected and the lock card… | pro_phase_ensure_current | test/contracts/pro_phase_ensure_current_behavioral_test.dart |
 | 2026-10-16 | f2d6b8 | `redeem_referral_atomic` can fail with SQLSTATE 55P03 (lock_not_available) for a friend applying a referral code while another session holds that friend's active `subscriptions` row for a moment (for… | referral_reward_on_conversion | test/sql/referral_pay_on_conversion_concurrency_local.sh |
 | 2026-10-16 | c5e9a3 | The hourly referral reward job (`private.process_referral_conversions`, migration 159) can credit a referrer PRO days for a payment that no longer exists. A friend's account deleted BETWEEN the job's… | referral_reward_on_conversion | test/sql/referral_pay_on_conversion_concurrency_local.sh |

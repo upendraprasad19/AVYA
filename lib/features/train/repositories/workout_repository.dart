@@ -14,6 +14,7 @@ import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
 import 'package:icanbefitter/core/utils/equipment_vocab.dart';
+import 'package:icanbefitter/core/utils/gap_policy.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:uuid/uuid.dart';
@@ -372,6 +373,12 @@ class WorkoutRepository {
       if (v != null) scheduleCache[date] = v;
     }
 
+    // Latest schedule row date (future rows included); null when none.
+    String? lastRowKey;
+    for (final d in scheduleCache.keys) {
+      if (lastRowKey == null || d.compareTo(lastRowKey) > 0) lastRowKey = d;
+    }
+
     for (int i = 0; i < 365; i++) {
       final date = today.subtract(Duration(days: i));
 
@@ -385,8 +392,22 @@ class WorkoutRepository {
       final raw = scheduleCache[dateStr];
 
       if (raw == null) {
-        // No schedule entry — before plan start or gap
+        // No schedule entry — before plan start or gap.
+        // Piece B (lapse gap policy): an unscheduled day BEFORE today, with a
+        // later row after it, ends the chain even while the streak is still 0 —
+        // otherwise the walk crossed a blank gap and counted the old completed
+        // days (Home "1 DAY"). No freeze is spent for it. Today with no row yet
+        // (day-boundary generation lag) stays tolerated. Kill switch
+        // `disable_lapse_gap_policy` restores the skip-while-zero behaviour.
         if (streak > 0) break;
+        // Only a MID gap (some later row exists, so a new phase followed it)
+        // ends the chain. A TRAILING gap (nothing scheduled after it: a free
+        // user whose plan expired, a PRO user whose advance has not run yet)
+        // is skipped as before - a paywall or an offline phone is not a miss.
+        if (i > 0 && lapseGapPolicyEnabled && lastRowKey != null &&
+            dateStr.compareTo(lastRowKey) < 0) {
+          break;
+        }
         continue;
       }
 
@@ -456,6 +477,33 @@ class WorkoutRepository {
     return streak;
   }
 
+  /// Earliest and latest `schedule_<yyyy-MM-dd>` row dates (local midnight), or
+  /// null when there is none. Bounds for counting blank days as missed: the
+  /// days before the first row are pre-account and the days after the last row
+  /// (a trailing gap: expired free plan, advance not run yet) are not a miss.
+  /// Non-date keys are ignored.
+  ({DateTime first, DateTime last})? _scheduleRowBounds() {
+    final shape = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+    String? first;
+    String? last;
+    for (final key in _hive.workoutBox.keys) {
+      final k = key.toString();
+      if (!k.startsWith('schedule_')) continue;
+      final d = k.substring('schedule_'.length);
+      if (!shape.hasMatch(d)) continue;
+      if (first == null || d.compareTo(first) < 0) first = d;
+      if (last == null || d.compareTo(last) > 0) last = d;
+    }
+    if (first == null || last == null) return null;
+    final f = DateTime.tryParse(first);
+    final l = DateTime.tryParse(last);
+    if (f == null || l == null) return null;
+    return (
+      first: DateTime(f.year, f.month, f.day),
+      last: DateTime(l.year, l.month, l.day),
+    );
+  }
+
   /// Returns the completion rate (0.0..1.0) of scheduled workout days
   /// over the rolling window of the last `windowWeeks` weeks ending today
   /// (IST). Rest days and pre-onboarding placeholders are excluded from
@@ -476,13 +524,31 @@ class WorkoutRepository {
 
     int scheduled = 0;
     int completed = 0;
+    final gapPolicy = lapseGapPolicyEnabled;
+    final rowBounds = gapPolicy ? _scheduleRowBounds() : null;
+    final firstRow = rowBounds?.first;
+    final lastRow = rowBounds?.last;
     for (var d = windowStart;
         !d.isAfter(istToday);
         d = d.add(const Duration(days: 1))) {
       final dateStr =
           '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
       final entry = box.get('schedule_$dateStr') as Map?;
-      if (entry == null) continue;
+      if (entry == null) {
+        // Piece B (lapse gap policy): a blank day after the user's first
+        // schedule row and before today counts as scheduled AND missed, so a
+        // long break costs the rate instead of being ignored. Today (no row yet)
+        // is excluded. Kill switch `disable_lapse_gap_policy` restores the skip.
+        if (gapPolicy &&
+            firstRow != null &&
+            lastRow != null &&
+            !d.isBefore(firstRow) &&
+            d.isBefore(lastRow) &&
+            d.isBefore(istToday)) {
+          scheduled++;
+        }
+        continue;
+      }
       final status = entry['status']?.toString();
       final reason = entry['reason']?.toString();
       // Exclude rest days + pre-onboarding placeholders from both sides.

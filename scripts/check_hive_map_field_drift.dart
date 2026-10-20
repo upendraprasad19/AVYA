@@ -313,6 +313,12 @@ const _alwaysOk = <String>{
   // Slice D (b7d3e5): the weekly-streak marker, a key of userBox['progress'],
   // read in train_provider.dart where exlog_ maps are also read.
   'last_counted_week_key',
+  // d7a3e5 (Piece B): `last_workout_date` is a key of userBox['progress'] (read
+  // in ai_snapshot_builder.dart `_getPlanStatus`, where exlog_/nlog_/wlog_ maps
+  // are also read) and `reason` is the schedule row's placeholder tag
+  // (`pre_onboarding`) read by `lapseFacts`; neither is a field of the map the
+  // file-wide heuristic matched them against.
+  'last_workout_date', 'reason',
   // JSON request/response bodies for Edge Functions:
   // restore-user-snapshot (C3) bundle ENVELOPE — read off the EF JSON response
   // (data['schema_version'] / data['tables']), NOT off any exlog_/wlog_ Hive map.

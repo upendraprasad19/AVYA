@@ -138,10 +138,55 @@ export function windowSinceDateUtc(windowWeeks: number): string {
     .split('T')[0];
 }
 
+/// PURE. Lapse gap policy (d7a3e5, Piece B), the server mirror of the client's
+/// `completionRateOverWindow` blank-day rule: a calendar day with NO
+/// `scheduled_workouts` row, on or after the user's first-ever row and the
+/// window start, and BEFORE today, counts as one scheduled-and-missed day.
+/// All keys are raw-UTC `YYYY-MM-DD` strings (the convention of this file's
+/// window query); `present` holds every date the window query returned.
+/// ⚠ `present` is only complete while the window query stays under the
+/// 1000-row cap (see the waiver note in completionRateOverWindow): a larger
+/// window would silently INFLATE the blank count. The cloud copy is also only
+/// as complete as the user's last sync: unpushed past rows read as blank here
+/// (the rate can only deflate, so it delays a promotion, never grants one).
+export function blankDaysInWindow(
+  present: Set<string>,
+  firstRowDate: string | null,
+  sinceDate: string,
+  todayDate: string,
+): number {
+  if (!firstRowDate) return 0;
+  const start = firstRowDate > sinceDate ? firstRowDate : sinceDate;
+  // Only days BEFORE the latest row in the window can be blank (client twin:
+  // a trailing gap after the last schedule row is not a miss - an expired free
+  // plan, or a PRO advance that has not run yet).
+  let lastRow = '';
+  for (const d of present) if (d > lastRow) lastRow = d;
+  if (!lastRow) return 0;
+  const stop = lastRow < todayDate ? lastRow : todayDate;
+  let n = 0;
+  const end = new Date(stop + 'T00:00:00Z').getTime();
+  for (
+    let t = new Date(start + 'T00:00:00Z').getTime();
+    t < end;
+    t += 24 * 3600 * 1000
+  ) {
+    if (!present.has(new Date(t).toISOString().split('T')[0])) n++;
+  }
+  return n;
+}
+
+/// Kill switch for the blank-day rule: env DISABLE_LAPSE_GAP_POLICY=true
+/// (mirrors the client's configBox `disable_lapse_gap_policy`).
+function lapseGapPolicyOn(): boolean {
+  return Deno.env.get('DISABLE_LAPSE_GAP_POLICY') !== 'true';
+}
+
 export async function completionRateOverWindow(
   supabase: SupabaseClient,
   userId: string,
   windowWeeks: number,
+  countBlankDays = false,
 ): Promise<number> {
   if (windowWeeks <= 0) return 0.0;
   const sinceDate = windowSinceDateUtc(windowWeeks);
@@ -184,7 +229,11 @@ export async function completionRateOverWindow(
   }
   let scheduled = 0;
   let completed = 0;
+  const presentDates = new Set<string>();
   for (const row of data ?? []) {
+    if (typeof row.scheduled_date === 'string') {
+      presentDates.add(row.scheduled_date);
+    }
     // e8f4a3 B-pass P1 — mirror the client's canonical
     // `WorkoutScheduleReadService.invisibleScheduleStatuses` set
     // (lib/core/services/workout_schedule_read_service.dart:889 =
@@ -207,6 +256,29 @@ export async function completionRateOverWindow(
     // 2026-05-01. closes-diagnose: d7c3f1.
     scheduled++;
     if (row.status === 'completed') completed++;
+  }
+  // d7a3e5: blank days count as missed. ONLY the rank cron opts in
+  // (`countBlankDays`); future-prediction's 4-week adherence keeps the old
+  // semantics. One extra single-row read, and only for users who reach a
+  // completion-rate rank (a year or more in). A failed read leaves the rate as
+  // it was (the old behaviour), never a made-up penalty.
+  if (countBlankDays && lapseGapPolicyOn()) {
+    const { data: firstRows, error: firstErr } = await supabase
+      .from('scheduled_workouts')
+      .select('scheduled_date')
+      .eq('user_id', userId)
+      .order('scheduled_date', { ascending: true })
+      .limit(1);
+    if (!firstErr && Array.isArray(firstRows) && firstRows.length > 0) {
+      const first = firstRows[0].scheduled_date as string | undefined;
+      const today = new Date().toISOString().split('T')[0];
+      scheduled += blankDaysInWindow(
+        presentDates,
+        typeof first === 'string' ? first : null,
+        sinceDate,
+        today,
+      );
+    }
   }
   return scheduled === 0 ? 0.0 : completed / scheduled;
 }
