@@ -143,6 +143,51 @@ export interface Scenario {
   eventCreatedAt?: number;
   /** Extra Razorpay notes (e.g. promo_code). */
   notes?: Record<string, string>;
+  /**
+   * Routes `rpc/record_paid_subscription` (OI-341 Piece B1). `rows` is answered as PostgREST answers a
+   * `RETURNS TABLE` function: a JSON array. `body` overrides it (e.g. a scalar `1`, or an error object with a
+   * non-2xx `status`). Unrouted, the RPC falls through to `fallbackRpc` (answers 1) like any other RPC.
+   */
+  recordPaid?: { status?: number; rows?: Row[]; body?: unknown };
+  /** The captured payment entity carries NO order_id key (Razorpay omits it for a payment made without an order). */
+  omitOrderId?: boolean;
+  /** How the `alerts` table answers the payment alert's dedup read and insert. Default: empty read, accepted insert. */
+  alerts?: AlertsBehavior;
+}
+
+export type AlertsBehavior = {
+  dedup?: "none" | "existing" | "error" | "hang";
+  insert?: "ok" | "error" | "hang";
+};
+
+/** An Intercept answering `/rest/v1/alerts` per `b`; undefined for every other request. */
+export function alertsIntercept(b: AlertsBehavior = {}): NonNullable<FakeServer["intercept"]> {
+  return (req) => {
+    if (req.path !== "/rest/v1/alerts") return undefined;
+    if (req.method === "GET") {
+      switch (b.dedup ?? "none") {
+        case "none":
+          return jsonResponse(200, []);
+        case "existing":
+          return jsonResponse(200, [{ id: "alert-prior" }]);
+        case "error":
+          return jsonResponse(500, { code: "XX000", message: "alerts read failed" });
+        case "hang":
+          return new Promise<Response>(() => {});
+      }
+    }
+    if (req.method === "POST") {
+      switch (b.insert ?? "ok") {
+        case "ok":
+          return undefined; // the fake table accepts it and the row lands in server.tables.alerts
+        case "error":
+          return jsonResponse(500, { code: "XX000", message: "alerts insert failed" });
+        case "hang":
+          return new Promise<Response>(() => {});
+      }
+    }
+    return undefined;
+  };
 }
 
 /** A FakeServer wired for either writer: auth, quota, Razorpay payment, promo RPC. */
@@ -163,6 +208,12 @@ export function paymentServer(s: Scenario = {}): { server: FakeServer; promoIncr
         promoIncrements.push(String(args.p_code));
         return null;
       },
+      ...(s.recordPaid
+        ? {
+          record_paid_subscription: () =>
+            jsonResponse(s.recordPaid!.status ?? 200, s.recordPaid!.body ?? s.recordPaid!.rows ?? []),
+        }
+        : {}),
     },
     razorpay: (req) => {
       if (req.method === "GET" && req.path === `/v1/payments/${paymentId}`) {
@@ -172,13 +223,13 @@ export function paymentServer(s: Scenario = {}): { server: FakeServer; promoIncr
           captured: true,
           amount: s.amount ?? MONTHLY_PAISE,
           currency: "INR",
-          order_id: "order_TEST0001",
+          ...(s.omitOrderId ? {} : { order_id: "order_TEST0001" }),
           notes: { user_id: USER, ...(s.notes ?? {}) },
         });
       }
       return jsonResponse(404, { error: { description: `unrouted razorpay ${req.method} ${req.path}` } });
     },
-    intercept: s.intercept,
+    intercept: (req) => s.intercept?.(req) ?? alertsIntercept(s.alerts)(req),
     beforeInsert: s.beforeInsert,
   });
   return { server, promoIncrements };
@@ -206,7 +257,7 @@ export async function webhookRequest(s: Scenario = {}): Promise<Request> {
       payment: {
         entity: {
           id: s.paymentId ?? PAY,
-          order_id: "order_TEST0001",
+          ...(s.omitOrderId ? {} : { order_id: "order_TEST0001" }),
           amount: s.amount ?? MONTHLY_PAISE,
           currency: "INR",
           captured: true,
@@ -223,6 +274,16 @@ export async function webhookRequest(s: Scenario = {}): Promise<Request> {
     },
     body,
   });
+}
+
+/** Calls of `rpc/record_paid_subscription`. */
+export function recordPaidCalls(server: FakeServer): RecordedRequest[] {
+  return server.to("/rest/v1/rpc/record_paid_subscription", "POST");
+}
+
+/** Insert requests (POST) made to `alerts`. */
+export function alertInserts(server: FakeServer): RecordedRequest[] {
+  return server.to("/rest/v1/alerts", "POST");
 }
 
 /** Insert requests (POST) made to `subscriptions`. */

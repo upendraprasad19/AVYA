@@ -1,0 +1,546 @@
+# Closure ledger - oi341-piece-b-door (OI-341 Piece B1: the serialised stacking writer and the payment alert, dark)
+# Gate 40. One terminal_state per finding; no `deferred:` key.
+# `commit:` on a closed_in_commit row names the branch state until the batch commit exists.
+
+batch: oi341-piece-b-door
+plan_review_record: docs/plan-reviews/oi341-piece-b-door.md
+total_findings: 91
+closed_count: 91
+
+findings:
+  - id: B1-MIG
+    title: "migration 161 public.record_paid_subscription: plpgsql VOLATILE SECURITY INVOKER, SET search_path/TimeZone/lock_timeout, shared per-user advisory lock, clock_timestamp after the lock, user-scoped idempotency, finite base guard, ON CONFLICT DO NOTHING + re-select, service_role-only grants, DO self-check, commented rollback"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "test/sql/record_paid_subscription_local.sh R1-R16 + C1-C4 on the replica (SUMMARY ok); scratchpad mutate_161.py: 22 of 22 mutants killed (M09 after R8 learned to check the denial message, since an executable SECURITY INVOKER function still raises 42501 from the table; M13b and M21 added for the B-pass fixes)"
+
+  - id: B1-HELPER
+    title: "_shared/subscription_stacking.ts rewritten: isStackingEnabled (exact 'true'), plainEndDate (OFF, verbatim setDate), recordPaidSubscription (one rpc; SQLSTATE, read_error on an empty code, bad_rpc_response on a malformed answer); readLatestActiveEnd/resolveEndDate/stackedEndDate deleted"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "supabase/functions/_shared/subscription_stacking_test.ts (14 tests incl. the TZ subprocess per zone, 12 malformed shapes, the undefined order id); deno check clean; Deno mutants M1, M5, M5b, M6, M7, M7b, M13, M14, M17* killed"
+
+  - id: B1-VERIFY
+    title: "verify-payment ON branch: one rpc, weInsertedTheRow = rec.inserted, canonicalEndDateIso from the RPC answer, failure = existing 500 + reconcile line + reportPaymentRecordFailure; OFF branch verbatim"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "supabase/functions/verify-payment/index_test.ts (25 tests; OFF golden blocks byte-identical to HEAD); mutants M2b, M3a, M4a, M16a, M19 killed"
+
+  - id: B1-WEBHOOK
+    title: "razorpay-webhook ON branch: endDate = rec.endDate, alreadyProcessed = !rec.inserted, failure = existing 500 + reconcile line + alert; OFF branch verbatim"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "supabase/functions/razorpay-webhook/index_test.ts (28 tests incl. the pre-SELECT interleave and the no-order_id entity); mutants M2a, M3b, M4b, M16b killed"
+
+  - id: B1-ALERT
+    title: "_shared/payment_alert.ts reportPaymentRecordFailure: source payment_record_failed, summary, 24 h unresolved dedup on context_json->>payment_id, critical first / warn after, a failed or hung dedup read pages critical, 3 s bounded round trips, no module-scope I/O, never throws"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "supabase/functions/_shared/payment_alert_test.ts (11 tests incl. the permissionless import subprocess); mutants M8-M12, M15, M15b, M18 killed"
+
+  - id: B1-SERIAL
+    title: "per-user serialisation of concurrent paid inserts (founder decision 2026-10-20 item 5; Piece A G10)"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "test/sql/record_paid_subscription_local.sh C1-C4; M18/M19 killed"
+
+  - id: B1-DOCS
+    title: "blast_radius (payment_alert*.ts catastrophic), sot_registry (subscription_end_date_stacking rewritten, payment_record_failed_alert new), naming_conventions, payment.md rule 9, supabase/functions/CLAUDE.md, ship_dark_pending_review.yaml B1 note, OI-341/OI-351 board, OPEN_INDEX regenerated"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "pre-commit gate loop (sot, naming, blast-radius, OI board gates) run on the staged tree"
+
+  - id: B1-PIECEA-REPOINT
+    title: "Piece A ledger rows G10 (now closed by B1) and H-S4-1 (alert half done, retry-timestamp half to B2) re-pointed"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "docs/audit/oi341-purchase-in-trial.closure.yaml rows G10, H-S4-1"
+
+  - id: L-APPLY
+    title: "apply migration 161 live + backups/applied_migrations.json ledger commit"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "applied 2026-10-20 07:37:01 UTC via MCP apply_migration on the founder go (all approved); cloud version 20261020073701; proacl {postgres=X/postgres,service_role=X/postgres}; anon/authenticated EXECUTE false; md5(pg_get_functiondef) d329fa83... equals the replica install; ledger entry 161 in backups/applied_migrations.json (Gate 39 + Gate 14 pass)"
+
+  - id: L-PROBE
+    title: "PostgREST probe with all 5 args and p_plan 'x' (expect HTTP 400 22023, not PGRST202; NOTIFY pgrst if needed)"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "PostgREST rpc with all five args and p_plan 'x': service_role HTTP 400 22023 invalid_plan (route resolved, rejected before the lock and any write); anon HTTP 401 42501 permission denied for function"
+
+  - id: L-TIMEOUT
+    title: "read statement_timeout for service_role/authenticator from pg_roles.rolconfig and pg_db_role_setting (must be unset or > 5 s)"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "service_role has no own statement_timeout; the authenticator login sets statement_timeout=8s (rolconfig and pg_db_role_setting), above the function lock_timeout of 5s, so lock_timeout acts as designed; no change needed"
+
+  - id: L-PRIV
+    title: "read has_table_privilege('service_role','public.subscriptions','SELECT'/'INSERT') live"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "has_table_privilege service_role SELECT true, INSERT true on public.subscriptions; rolbypassrls true; the only unique constraint is UNIQUE (razorpay_payment_id) (hermes H-S4-1 read)"
+
+  - id: L-DEPLOY-VP
+    title: "deploy verify-payment (verify_jwt true; v25 rollback copied out first)"
+    terminal_state: blocked_on_user
+    reason: "CLAUDE.md 4.3: every live apply/deploy/read against prod needs its own founder go; the switch stays unset throughout (plan section 6)"
+
+  - id: L-DEPLOY-WH
+    title: "deploy razorpay-webhook (verify_jwt false; v29 rollback copied out first)"
+    terminal_state: blocked_on_user
+    reason: "CLAUDE.md 4.3: every live apply/deploy/read against prod needs its own founder go; the switch stays unset throughout (plan section 6)"
+
+  - id: R1-2
+    title: "round 1 P1: unbounded advisory lock"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "SET lock_timeout = '5s'; test/sql/record_paid_subscription_local.sh R14, M16 killed"
+
+  - id: R1-3
+    title: "round 1 P2: idempotency not user-scoped"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "payment_owned_by_other_user at both sites; R5/R6, M05/M06 killed"
+
+  - id: R1-4
+    title: "round 1 P2: stored-end assignment"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "rec.endDate / canonicalEndDateIso from the RPC; Deno M2a/M2b killed"
+
+  - id: R1-6
+    title: "round 1 P2/P3: deploy order (migration, probe, writers)"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "plan section 6 order; live steps L-APPLY..L-DEPLOY-WH"
+
+  - id: R1-7
+    title: "round 1 P3: OI-351 reachability"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "plan section 4; OI-351 2026-10-20 update on the board"
+
+  - id: R1-TZ
+    title: "round 1 open: session TimeZone"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "SET TimeZone = 'UTC'; seeded-2099 case R15, M17 killed"
+
+  - id: R1-1
+    title: "round 1 P1: the door not tied to the switch"
+    terminal_state: upstream_blocked
+    blocker: "B1 never runs ON and the door stays shut (create-razorpay-order still answers 409 for any active row)"
+    reopen_when: "B2 plan docs/plans/oi341-piece-b2-door.md (its own branch, x2 review, founder go)"
+
+  - id: R1-5
+    title: "round 1 P2: order-guard details"
+    terminal_state: upstream_blocked
+    blocker: "B1 never runs ON and the door stays shut (create-razorpay-order still answers 409 for any active row)"
+    reopen_when: "B2 plan docs/plans/oi341-piece-b2-door.md (its own branch, x2 review, founder go)"
+
+  - id: R1-6b
+    title: "round 1 P3: isolate lag on the door switch"
+    terminal_state: upstream_blocked
+    blocker: "B1 never runs ON and the door stays shut (create-razorpay-order still answers 409 for any active row)"
+    reopen_when: "B2 plan docs/plans/oi341-piece-b2-door.md (its own branch, x2 review, founder go)"
+
+  - id: R1-8
+    title: "round 1 P3: client _pendingStacksAfter"
+    terminal_state: upstream_blocked
+    blocker: "B1 never runs ON and the door stays shut (create-razorpay-order still answers 409 for any active row)"
+    reopen_when: "B2 plan docs/plans/oi341-piece-b2-door.md (its own branch, x2 review, founder go)"
+
+  - id: R2-2
+    title: "round 2 P1: missing killing tests (B1 half)"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "every B1 protection has a named mutant: SQL 20/20, Deno table in B1-HELPER..B1-ALERT"
+
+  - id: R2-4
+    title: "round 2 P2: RETURNS TABLE ambiguity"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "out_ columns; R1-R4 read them"
+
+  - id: R2-6
+    title: "round 2 P2: deleting readLatestActiveEnd"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "deleted; grep -rn readLatestActiveEnd supabase/ finds no caller"
+
+  - id: R2-7
+    title: "round 2 P2: lock_timeout breadth; statement_timeout"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "SET lock_timeout scoped to the call (R14); statement_timeout read is live step L-TIMEOUT"
+
+  - id: R2-8
+    title: "round 2 P2: alert reachability and flood"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "B1-ALERT dedup + severity tests"
+
+  - id: R2-9
+    title: "round 2 P2: section 4 omissions"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "B1-DOCS"
+
+  - id: R2-10
+    title: "round 2 P3: stale now"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "clock_timestamp after the lock; R10, M11/M12 killed"
+
+  - id: R3-1
+    title: "round 3 P1: 4.6 deviation"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "switch kept, OFF verbatim; OFF golden blocks byte-identical"
+
+  - id: R3-2
+    title: "round 3 P1: unprobed PostgREST dependency"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "probe is live step L-PROBE before either deploy; ordinary payments stay OFF"
+
+  - id: R3-3
+    title: "round 3 P1: circular equivalence"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "OFF golden + SQL ordinary case R1; Deno 3b labelled shape-and-mapping with PostgREST-format strings"
+
+  - id: R3-4
+    title: "round 3 P2: ordinary-payment claim"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "OFF unchanged; skip branch stated (plan 2.2) and covered by the webhook interleave test"
+
+  - id: R3-5
+    title: "round 3 P2: unread retryable"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "deleted from RecordResult"
+
+  - id: R3-6
+    title: "round 3 P2: DST red-date"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "trial end seeded in 2099 (R15)"
+
+  - id: R3-7
+    title: "round 3 P2: rollback executable (B1 half)"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "rollback = redeploy v25/v29, function kept and inert (plan section 6)"
+
+  - id: R3-9
+    title: "round 3 P2: dedup race, resolved_at, failed read"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "payment_alert_test.ts; M9/M10 killed"
+
+  - id: R3-10
+    title: "round 3 P3: DB clock vs handler clock"
+    terminal_state: verified_clean
+    evidence: "stated in plan 2.1 step 3; the stored start is the DB clock, the log line's handler clock differs by seconds only"
+
+  - id: R3-11
+    title: "round 3 P3: section 4 completeness"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "B1-DOCS"
+
+  - id: R2-1
+    title: "round 2 P1: writer-switch skew at rollback (rollback order)"
+    terminal_state: upstream_blocked
+    blocker: "B1 never runs ON and the door stays shut (create-razorpay-order still answers 409 for any active row)"
+    reopen_when: "B2 plan docs/plans/oi341-piece-b2-door.md (its own branch, x2 review, founder go)"
+
+  - id: R2-2b
+    title: "round 2 P1: door, client and reset tests"
+    terminal_state: upstream_blocked
+    blocker: "B1 never runs ON and the door stays shut (create-razorpay-order still answers 409 for any active row)"
+    reopen_when: "B2 plan docs/plans/oi341-piece-b2-door.md (its own branch, x2 review, founder go)"
+
+  - id: R2-3
+    title: "round 2 P1: non-deterministic both-writers proof at the flip"
+    terminal_state: upstream_blocked
+    blocker: "B1 never runs ON and the door stays shut (create-razorpay-order still answers 409 for any active row)"
+    reopen_when: "B2 plan docs/plans/oi341-piece-b2-door.md (its own branch, x2 review, founder go)"
+
+  - id: R2-5
+    title: "round 2 P2: create-razorpay-order blast-radius tier"
+    terminal_state: upstream_blocked
+    blocker: "B1 never runs ON and the door stays shut (create-razorpay-order still answers 409 for any active row)"
+    reopen_when: "B2 plan docs/plans/oi341-piece-b2-door.md (its own branch, x2 review, founder go)"
+
+  - id: R2-11
+    title: "round 2 P3: window claim and hint"
+    terminal_state: upstream_blocked
+    blocker: "B1 never runs ON and the door stays shut (create-razorpay-order still answers 409 for any active row)"
+    reopen_when: "B2 plan docs/plans/oi341-piece-b2-door.md (its own branch, x2 review, founder go)"
+
+  - id: R3-7b
+    title: "round 3 P2: open-door rollback, reconcile query, drain bound"
+    terminal_state: upstream_blocked
+    blocker: "B1 never runs ON and the door stays shut (create-razorpay-order still answers 409 for any active row)"
+    reopen_when: "B2 plan docs/plans/oi341-piece-b2-door.md (its own branch, x2 review, founder go)"
+
+  - id: R3-8
+    title: "round 3 P2: isolate lag on SET/UNSET"
+    terminal_state: upstream_blocked
+    blocker: "B1 never runs ON and the door stays shut (create-razorpay-order still answers 409 for any active row)"
+    reopen_when: "B2 plan docs/plans/oi341-piece-b2-door.md (its own branch, x2 review, founder go)"
+
+  - id: R4-P2-1
+    title: "ship-dark ledger entry records B1"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "docs/ship_dark_pending_review.yaml B1 note (build_commit, review_rounds 1, re-review obligation)"
+
+  - id: R4-P2-2
+    title: "infinite/unparseable base guard"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "22008 invalid_base_end_date (R11, M13 killed); TS bad_rpc_response (M5/M13)"
+
+  - id: R4-P2-3
+    title: "alert row NOT NULL summary"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "Deno M8 killed"
+
+  - id: R4-P2-4
+    title: "referral concurrency as specified cases"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "test/sql/record_paid_subscription_local.sh C2-C4"
+
+  - id: R4-Q1
+    title: "live function still 'dark' attestation; B2 record key"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "plan top attestation; B2 branch name differs"
+
+  - id: R4-Q2
+    title: "unbound Deno.env.get, double read, dead params, alert module scope"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "isStackingEnabled(env) read once per request; resolveEndDate deleted; M11/M11b killed"
+
+  - id: R4-Q2b
+    title: "Piece A ON tests rewritten (not silently unchanged)"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "both writer index_test.ts ON blocks rewritten (B1-VERIFY, B1-WEBHOOK)"
+
+  - id: R4-Q3
+    title: "volatility, +05:30 fixture, referral-job hold"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "VOLATILE (M20 killed); +05:30 parse test; accepted risk stated plan 2.1"
+
+  - id: R4-Q4
+    title: "both variables, raceRow deletion, log prefix"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "stated plan 2.2; log line [fn] stacking=on payment_id= inserted="
+
+  - id: R4-Q5
+    title: "dedup scope deliberate; alert round trips bounded"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "3 s timeouts, M12 killed"
+
+  - id: R4-Q6
+    title: "tests for clock-after-lock, DO self-check, stored columns, search_path, fallbackRpc"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "R10/R13/R9/R12 + bad_rpc_response; M12/M15/M10/M14 killed"
+
+  - id: R4-Q7
+    title: "probe args, schema reload, timeout read sources"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "plan 6.2; live steps L-PROBE and L-TIMEOUT"
+
+  - id: R4-Q8
+    title: "B2 items as ledger rows; payment.md labels"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "the B2-* rows below; payment.md rule 9 labels"
+
+  - id: AG-1
+    title: "Deno test agent: the rpc call has no client-side timeout; lock_timeout (5 s) and statement_timeout are its only bounds"
+    terminal_state: upstream_blocked
+    blocker: "B1 never runs ON and the door stays shut (create-razorpay-order still answers 409 for any active row); a timeout would only matter on the ON path"
+    reopen_when: "B2: the Razorpay webhook response timeout against the 5 s lock timeout is a listed B2 flip item (plan section 9); L-TIMEOUT reads statement_timeout first"
+
+  - id: AG-2
+    title: "thrown rejection reports err.name as the code"
+    terminal_state: verified_clean
+    evidence: "postgrest-js converts transport failures to an error object (read_error); the throw path is reachable only by a synchronous throw and still yields ok:false -> 500 + alert"
+
+  - id: AG-3
+    title: "webhook second pre-SELECT skip branch reachable only by a race"
+    terminal_state: verified_clean
+    evidence: "covered by the interleave test added in razorpay-webhook/index_test.ts; M16b killed"
+
+  - id: AG-4
+    title: "alert dedup window uses the writer clock"
+    terminal_state: verified_clean
+    evidence: "a 24 h window; seconds of skew cannot change paging materially (plan Q5)"
+
+  - id: AG-5
+    title: "Deno M20 (rec stringified into the reconcile line) survived"
+    terminal_state: verified_clean
+    evidence: "equivalent by construction: rec on failure is exactly {ok:false, code}, pinned by unit tests"
+
+  - id: B2-DOOR
+    title: "create-razorpay-order door behind ENABLE_TRIAL_PURCHASE (handler export, OFF error check 503, ON .neq referral_trial + stacks_after read, blast-radius pin)"
+    terminal_state: upstream_blocked
+    blocker: "B1 never runs ON and the door stays shut (create-razorpay-order still answers 409 for any active row)"
+    reopen_when: "B2 plan docs/plans/oi341-piece-b2-door.md (its own branch, x2 review, founder go)"
+
+  - id: B2-CLIENT
+    title: "client _pendingStacksAfter, optimistic max(now, stacksAfter) + days, _estSealDate clamp, banner test"
+    terminal_state: upstream_blocked
+    blocker: "B1 never runs ON and the door stays shut (create-razorpay-order still answers 409 for any active row)"
+    reopen_when: "B2 plan docs/plans/oi341-piece-b2-door.md (its own branch, x2 review, founder go)"
+
+  - id: B2-COPY
+    title: "'Your paid plan starts when your free days end.' on the paywall and checkout description (Wardroom read)"
+    terminal_state: upstream_blocked
+    blocker: "B1 never runs ON and the door stays shut (create-razorpay-order still answers 409 for any active row)"
+    reopen_when: "B2 plan docs/plans/oi341-piece-b2-door.md (its own branch, x2 review, founder go)"
+
+  - id: B2-FLIP-STACK
+    title: "flip ENABLE_SUBSCRIPTION_STACKING, each writer proven by a controlled replay"
+    terminal_state: upstream_blocked
+    blocker: "B1 never runs ON and the door stays shut (create-razorpay-order still answers 409 for any active row)"
+    reopen_when: "B2 plan docs/plans/oi341-piece-b2-door.md (its own branch, x2 review, founder go)"
+
+  - id: B2-FLIP-DOOR
+    title: "deploy the door OFF, then set ENABLE_TRIAL_PURCHASE (isolate lag stated)"
+    terminal_state: upstream_blocked
+    blocker: "B1 never runs ON and the door stays shut (create-razorpay-order still answers 409 for any active row)"
+    reopen_when: "B2 plan docs/plans/oi341-piece-b2-door.md (its own branch, x2 review, founder go)"
+
+  - id: B2-ROLLBACK
+    title: "rollback order: shut the door, bounded drain, then unset the writer switch"
+    terminal_state: upstream_blocked
+    blocker: "B1 never runs ON and the door stays shut (create-razorpay-order still answers 409 for any active row)"
+    reopen_when: "B2 plan docs/plans/oi341-piece-b2-door.md (its own branch, x2 review, founder go)"
+
+  - id: B2-RECONCILE
+    title: "reconcile query with a named owner"
+    terminal_state: upstream_blocked
+    blocker: "B1 never runs ON and the door stays shut (create-razorpay-order still answers 409 for any active row)"
+    reopen_when: "B2 plan docs/plans/oi341-piece-b2-door.md (its own branch, x2 review, founder go)"
+
+  - id: B2-RETRY-TS
+    title: "webhook retry-timestamp check in Razorpay test mode (Piece A runbook item 4 part 2)"
+    terminal_state: upstream_blocked
+    blocker: "B1 never runs ON and the door stays shut (create-razorpay-order still answers 409 for any active row)"
+    reopen_when: "B2 plan docs/plans/oi341-piece-b2-door.md (its own branch, x2 review, founder go)"
+
+  - id: B2-CONCURRENT-ORDERS
+    title: "concurrent pre-created orders note"
+    terminal_state: upstream_blocked
+    blocker: "B1 never runs ON and the door stays shut (create-razorpay-order still answers 409 for any active row)"
+    reopen_when: "B2 plan docs/plans/oi341-piece-b2-door.md (its own branch, x2 review, founder go)"
+
+  - id: B2-RULE8
+    title: "payment.md rule 8 ('the friend CAN buy')"
+    terminal_state: upstream_blocked
+    blocker: "B1 never runs ON and the door stays shut (create-razorpay-order still answers 409 for any active row)"
+    reopen_when: "B2 plan docs/plans/oi341-piece-b2-door.md (its own branch, x2 review, founder go)"
+
+  - id: B2-HAPPY-PATH
+    title: "first live happy-path stacked purchase on a trial tester in test mode"
+    terminal_state: upstream_blocked
+    blocker: "B1 never runs ON and the door stays shut (create-razorpay-order still answers 409 for any active row)"
+    reopen_when: "B2 plan docs/plans/oi341-piece-b2-door.md (its own branch, x2 review, founder go)"
+
+  - id: B2-REVIEW
+    title: "full x2 review on the flip commit; ship_dark_pending_review entry removed only then"
+    terminal_state: upstream_blocked
+    blocker: "B1 never runs ON and the door stays shut (create-razorpay-order still answers 409 for any active row)"
+    reopen_when: "B2 plan docs/plans/oi341-piece-b2-door.md (its own branch, x2 review, founder go)"
+
+  - id: BP-A1
+    title: "B-pass seat A P2: the SQL test overstated three Kills claims (step 4 as a whole and the end_date > now base filter are equivalent mutations)"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "test/sql/record_paid_subscription_local.sh header: R3/R4 claims reworded, step 4 and the end_date filter added to the EQUIVALENT list; migration step-4 comment states it is a fast path; no ledger row claims a kill for them"
+
+  - id: BP-A2
+    title: "B-pass seat A P3: a re-select that finds NO row raised the permanent-sounding P0001 payment_owned_by_other_user"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "migration 161 raises retryable 40001 payment_row_vanished on NOT FOUND; R16 (RLS seam via a temporary authenticated policy) asserts 40001; mutant M21 killed"
+
+  - id: BP-A3
+    title: "B-pass seat A P3: a base in late 9999 would store a 5-digit-year end that JS Date.parse cannot read"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "base cap is 9999-12-31 minus 366 days; R11b seeds an end of 9999-06-01 and expects 22008; mutant M13b killed"
+
+  - id: BP-A4
+    title: "B-pass seat A P3: a replay returns the stored row whatever its status, plan, order id or signature"
+    terminal_state: verified_clean
+    evidence: "intended: the payment is already recorded and is never re-inserted; no PRO time changes; now stated in the migration step-4 comment and plan 2.1"
+
+  - id: BP-B1
+    title: "B-pass seat B P2: a webhook payment entity with no order_id sent no p_order_id key, so PostgREST would miss the 5-arg function on the ON path (500 + retry loop) while OFF records it"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "recordPaidSubscription sends args.orderId ?? null; subscription_stacking_test.ts (undefined order id, real client body) and razorpay-webhook/index_test.ts (omitOrderId entity) both redden when the ?? null is removed (2 of 2)"
+
+  - id: BP-B2
+    title: "B-pass seat B P3: failure-path latency (unbounded rpc + up to 6 s of alert round trips) can exceed the Razorpay delivery timeout"
+    terminal_state: upstream_blocked
+    blocker: "only the ON path can reach it, and B1 never runs ON (the switch stays unset); a timeout is harmless anyway because Razorpay retries and the SQL is idempotent"
+    reopen_when: "B2: the Razorpay webhook response timeout against the 5 s lock timeout is a listed flip item (plan section 9), together with AG-1"
+
+  - id: BP-B3
+    title: "B-pass seat B P3: every harness payment carried an order_id, hiding BP-B1"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "payment_writer_harness.ts Scenario.omitOrderId drops the key from both the Razorpay payment and the webhook entity; used by the BP-B1 webhook test"
+
+  - id: H-S3-1
+    title: "hermes L23 P3 (pre-existing): verify-payment captures an authorized payment before the owner check"
+    terminal_state: upstream_blocked
+    blocker: "pre-existing OFF-path code; B1 keeps the OFF path byte-identical to origin/main as its ship-dark proof"
+    reopen_when: "OI-359 on docs/audit/open_issues.md (its own regression test + golden refresh)"
+
+  - id: H-S3-2
+    title: "hermes L40 P3 (pre-existing): whole PostgREST error objects and Razorpay notes are logged by both writers"
+    terminal_state: upstream_blocked
+    blocker: "pre-existing OFF-path code; the B1 ON path logs only a SQLSTATE or a fixed code"
+    reopen_when: "OI-360 on docs/audit/open_issues.md"
+
+  - id: H-S4-1
+    title: "hermes L14 P3: the ON CONFLICT arbiter is verified from migration history only (live_schema_columns.json records columns, not constraints)"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "plan step 6.2 adds a read-only pg_constraint read that must show UNIQUE (razorpay_payment_id) before either deploy"
+
+  - id: H-S4-2
+    title: "hermes L35 P3 (reminder): the applied_migrations.json pairing lands with the live apply; 161 is immutable after apply"
+    terminal_state: verified_clean
+    evidence: "Gate 14 + check_migration_ledger_paired block a commit of 161 until the apply and its ledger entry are staged together (observed on this branch)"
+
+  - id: H-S2-1
+    title: "hermes L21 P3 (and seat 1 P3-2): the failure path can take ~11 s (5 s lock timeout + 6 s alert) and the alert header claimed it stayed inside Razorpay's clock"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "payment_alert.ts header corrected to state the ~11 s worst case and that the clock check is a B2 flip item (BP-B2, AG-1)"
+
+  - id: H-S1-1
+    title: "hermes L29 P3: a retryable 55P03 lock timeout pages critical on its first failure"
+    terminal_state: verified_clean
+    evidence: "deliberate (plan 2.3): any captured-but-unrecorded payment pages once; a lock timeout needs the hourly referral job to hold that user key at the payment instant, and later failures of the same payment are warn by dedup"
+

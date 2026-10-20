@@ -42,7 +42,13 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { encode as hexEncode } from "https://deno.land/std@0.177.0/encoding/hex.ts";
 import { encode as base64Encode } from "https://deno.land/std@0.177.0/encoding/base64.ts";
-import { isValidPaymentId, resolveEndDate } from "../_shared/subscription_stacking.ts";
+import {
+  isStackingEnabled,
+  isValidPaymentId,
+  plainEndDate,
+  recordPaidSubscription,
+} from "../_shared/subscription_stacking.ts";
+import { reportPaymentRecordFailure } from "../_shared/payment_alert.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -583,24 +589,35 @@ export async function handler(req: Request): Promise<Response> {
       console.log(
         `Idempotent webhook: payment ${razorpayPaymentId} already recorded, skipping insert`,
       );
-    } else {
-      // OI-341 Piece A: the stored end date comes from the shared stacking
-      // module. Switch OFF (the default) = exactly `now + days` and NO query;
-      // ON = stacked after the user's latest active end. A read error returns
-      // 500 (Razorpay retries) and never inserts a shortened `now + days` row.
-      const resolved = await resolveEndDate(
-        supabaseClient,
+    } else if (isStackingEnabled()) {
+      // OI-341 Piece B1 ON path: ONE call to public.record_paid_subscription
+      // (migration 161): per-user lock shared with the referral redeem and job,
+      // idempotency, stacked end and insert in one transaction. It absorbs the
+      // 23505 race the OFF branch handles below, so `inserted` decides promo
+      // ownership. A failure returns 500 (Razorpay retries), logs the reconcile
+      // line and pages (the payment is captured, the row is not written).
+      const rec = await recordPaidSubscription(supabaseClient, {
         userId,
-        razorpayPaymentId,
-        now,
-        plan === "monthly" ? 30 : 365,
-      );
-      if (!resolved.ok) {
+        plan,
+        paymentId: razorpayPaymentId,
+        orderId: razorpayOrderId,
+        signature: razorpaySignature,
+      });
+      if (!rec.ok) {
         const stackFailId = crypto.randomUUID().split("-")[0];
         console.error(
           `[razorpay-webhook] stacking read failed request_id=${stackFailId} ` +
-            `payment_id=${razorpayPaymentId} user_id=${userId} plan=${plan} amount_paise=${actualPaise} code=${resolved.code}`,
+            `payment_id=${razorpayPaymentId} user_id=${userId} plan=${plan} amount_paise=${actualPaise} code=${rec.code}`,
         );
+        await reportPaymentRecordFailure(supabaseClient, {
+          fn: "razorpay-webhook",
+          requestId: stackFailId,
+          paymentId: razorpayPaymentId,
+          userId,
+          plan,
+          amountPaise: actualPaise,
+          code: rec.code,
+        });
         return new Response(
           JSON.stringify({ error: "Failed to create subscription record" }),
           {
@@ -609,7 +626,15 @@ export async function handler(req: Request): Promise<Response> {
           },
         );
       }
-      endDate = resolved.endDate;
+      endDate = rec.endDate;
+      alreadyProcessed = !rec.inserted;
+      console.log(
+        `[razorpay-webhook] stacking=on payment_id=${razorpayPaymentId} inserted=${rec.inserted}`,
+      );
+    } else {
+      // OFF branch (the default): exactly `now + days`, no extra query; the
+      // insert and its 23505 handling are today's code.
+      endDate = plainEndDate(now, plan === "monthly" ? 30 : 365);
       const { error: insertError } = await supabaseClient
         .from("subscriptions")
         .insert({

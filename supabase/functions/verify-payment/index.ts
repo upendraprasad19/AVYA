@@ -37,7 +37,13 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { encode as base64Encode } from "https://deno.land/std@0.177.0/encoding/base64.ts";
-import { isValidPaymentId, resolveEndDate } from "../_shared/subscription_stacking.ts";
+import {
+  isStackingEnabled,
+  isValidPaymentId,
+  plainEndDate,
+  recordPaidSubscription,
+} from "../_shared/subscription_stacking.ts";
+import { reportPaymentRecordFailure } from "../_shared/payment_alert.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -563,24 +569,38 @@ export async function handler(req: Request): Promise<Response> {
       );
     }
 
-    if (paymentSubRow === null) {
-      // OI-341 Piece A: the stored end date comes from the shared stacking
-      // module. Switch OFF (the default) = exactly `now + days` and NO query;
-      // ON = stacked after the user's latest active end. A read error fails the
-      // call (never a silent `now + days`, which would under-deliver paid time).
-      const resolved = await resolveEndDate(
-        supabase,
+    // OI-341: the stacking switch is read ONCE per request (exactly "true"; absent = OFF).
+    const stackingOn = isStackingEnabled();
+
+    if (paymentSubRow === null && stackingOn) {
+      // OI-341 Piece B1 ON path: ONE call to public.record_paid_subscription
+      // (migration 161), which takes the per-user lock shared with the referral
+      // redeem and job, re-checks idempotency, stacks on the latest active end and
+      // inserts in one transaction. It absorbs the 23505 race the OFF branch
+      // handles below, so `inserted` decides promo ownership. A failure answers
+      // the existing 500 (the client retries), logs the reconcile line and pages.
+      const rec = await recordPaidSubscription(supabase, {
         userId,
+        plan,
         paymentId,
-        now,
-        plan === "yearly" ? 365 : 30,
-      );
-      if (!resolved.ok) {
+        orderId: payment.order_id ?? null,
+        signature: razorpaySignatureSentinel,
+      });
+      if (!rec.ok) {
         const stackFailId = crypto.randomUUID().split("-")[0];
         console.error(
           `[verify-payment] stacking read failed request_id=${stackFailId} ` +
-            `payment_id=${paymentId} user_id=${userId} plan=${plan} amount_paise=${actualPaise} code=${resolved.code}`,
+            `payment_id=${paymentId} user_id=${userId} plan=${plan} amount_paise=${actualPaise} code=${rec.code}`,
         );
+        await reportPaymentRecordFailure(supabase, {
+          fn: "verify-payment",
+          requestId: stackFailId,
+          paymentId,
+          userId,
+          plan,
+          amountPaise: actualPaise,
+          code: rec.code,
+        });
         return new Response(
           JSON.stringify({
             verified: false,
@@ -593,9 +613,17 @@ export async function handler(req: Request): Promise<Response> {
           },
         );
       }
-      const storedEnd = resolved.endDate;
+      canonicalEndDateIso = rec.endDate.toISOString();
+      weInsertedTheRow = rec.inserted;
+      console.log(
+        `[verify-payment] stacking=on payment_id=${paymentId} inserted=${rec.inserted}`,
+      );
+    } else if (paymentSubRow === null) {
+      // OFF branch (the default): exactly `now + days`, no extra query; the
+      // insert and its 23505 handling are today's code.
+      const storedEnd = plainEndDate(now, plan === "yearly" ? 365 : 30);
       // Seeded BEFORE the insert: if this insert loses a 23505 race and the winner's row cannot be re-read,
-      // the response must still report the stacked value, not the unstacked `endDate` above.
+      // the response still reports the value this call stored.
       canonicalEndDateIso = storedEnd.toISOString();
       const { error: insertError } = await supabase
         .from("subscriptions")
