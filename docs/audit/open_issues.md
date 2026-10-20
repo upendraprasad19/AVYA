@@ -6202,19 +6202,6 @@ Impact: the AI coach's mid-workout snapshot (`ActiveWorkoutPersistence.writeStat
 
 Fix options (to be planned): compute the count from `ref.read(activeWorkoutProvider)` inside `_persistActiveState`. Needs a regression test per rule 21 (and check `test/` for source-greps of that function before touching it).
 
-## OI-356 — Active Workout U1b: edit mode, UNDO, un-log, last-exercise emphasis and scroll for the one-LOG-per-exercise flow
-
-- **Status**: OPEN
-- **Blocked on**: the U1a batch (`active-workout-log-exercise`) landing; founder sequenced this as batch 2 of a 2 + 1 split (2026-10-19)
-- **Verified**: never
-- **Identified**: 2026-10-18 · filed via mint_oi.sh from branch `active-workout-log-exercise`
-
-Source: batch 2 of `docs/plans/active-workout-log-exercise.md` (title kept from minting; scope re-cut by the founder 2026-10-19: "go with 2 + 1 split, drop save changes").
-
-Scope (the FLIP-READY batch): UNDO toast after LOG (snackbar recurrence class `b4e7f1`, `s1n4c0`, full diagnose template), the MIRROR mechanism (set 1's typed value copies into blank, untouched fields of the same exercise; no fading) for weight AND duration AND distance: weight is blank for a new user, and duration/distance are blank for every user (e8f95e), so timed/cardio/distance exercises block LOG on every set without it (B-pass finding 5, 2026-10-19), last-exercise emphasis ("All exercises logged." + gold FINISH WORKOUT). Dropped: "Save changes"/edit mode (U1a's validated capture-on-change saves edits) and a separate un-log button (UNDO + the `-` stepper cover it; D1 = no skipping a middle set). Moved to OI-357: auto-scroll.
-
-Impact: the HARD flip precondition for `enable_log_exercise_button`; the flag flips after this lands.
-
 ## OI-357 — Active Workout U2: per-set last values, new-user weight mirror, faded prefill and once-only hints
 
 - **Status**: OPEN
@@ -6227,3 +6214,12 @@ Source: batch 3 of `docs/plans/active-workout-log-exercise.md` (founder 2-+-1 sp
 Scope (post-flip polish): each set's own last values for returning users, mildly faded (about 62% parchment) prefilled weights with typed/edited solid gold (faded values count on LOG), once-only hints via `MigratedKey` in `UserConfigMigrator.userScopedKeys`, non-superset auto-scroll. The new-user mirror MECHANISM moved to OI-356.
 
 Impact: NOT a flip precondition (founder 2026-10-19); polish after the flag is on.
+
+## OI-358 — Active Workout: adding an exercise already in the session crashes the screen (duplicate GlobalKey per exercise name)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-10-20 · filed via mint_oi.sh from branch `log-exercise-batch2`
+
+Found by the batch-2 plan review (round 1, P2-12, 2026-10-20), verified by reading, not reproduced on device. `ActiveWorkoutNotifier.addExercise` (`lib/features/train/providers/train_provider.dart:1642-1646`) appends without a name check, and the exercise picker (`lib/features/train/screens/active_workout/exercise_picker_sheet.dart:47-61`) does not exclude exercises already in the session. The screen keys every card by name: `_exerciseKeys.putIfAbsent(exercise.name, () => GlobalKey())` (`screen.dart:438`) and `key: _exerciseKeys[exercise.name]` (`screen.dart:481`), so two cards with one name share a GlobalKey, which Flutter rejects ("Multiple widgets used the same GlobalKey"). Options to plan: exclude names already in the session from the picker, or key cards by a per-session id instead of the name. The batch-2 UNDO toast's identity check (`exerciseName` at an index) also assumes unique names; it stays correct today only because a duplicate already breaks the screen.
