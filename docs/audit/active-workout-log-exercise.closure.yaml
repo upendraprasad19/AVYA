@@ -1,0 +1,80 @@
+# Closure ledger - active-workout-log-exercise (U1a of docs/plans/active-workout-log-exercise.md):
+# one LOG button + a same-row sets stepper per exercise, ship dark behind enable_log_exercise_button (default OFF).
+# Founder sequencing 2026-10-19: "go with 2 + 1 split, drop save changes" (batch 2 = OI-356, batch 3 = OI-357).
+# Rows carry the SHA of the landing commit (344cd2d1), written by the stamp commit that follows it (a commit cannot name its own SHA).
+batch: active-workout-log-exercise
+plan_review_record: docs/plan-reviews/active-workout-log-exercise.md
+diagnose_docs: []
+total_findings: 14
+closed_count: 14
+
+findings:
+  - id: U1A-FLAG
+    title: "LogExerciseFlags.logExerciseButtonEnabled (configBox enable_log_exercise_button, default OFF, try/catch -> OFF); read ONCE per screen build; debug-only dev panel toggle + status row"
+    terminal_state: closed_in_commit
+    commit: 344cd2d1
+    verification: "test/contracts/active_workout_set_logging_behavioral_test.dart (screen wiring group: one flag read per build, callback only when ON); OFF group in test/features/train/log_exercise/log_exercise_card_test.dart"
+  - id: U1A-LOGSETS
+    title: "ActiveWorkoutNotifier.logSets: additive only, ONE state change, bounds-checked, untouched state on a no-op / saved / complete session"
+    terminal_state: closed_in_commit
+    commit: 344cd2d1
+    verification: "behavioral test logSets group (double call, bounds, saved/complete, parity with N toggles for 5 logging types, warm-ups, removeLastSet/addSet/toggleSet, swap 9b1e7a). Mutations M1 (toggle loop) and M2 (bounds removed): RED."
+  - id: U1A-CONTROLLER
+    title: "LogExerciseController: screen-owned LOG decision, 400 ms input guard on a monotonic Stopwatch (never nowWall), advance = clear manual focus, superset partner reveal (D2: own LOG per exercise)"
+    terminal_state: closed_in_commit
+    commit: 344cd2d1
+    verification: "behavioral test controller group (guard across an advance, first-non-done advance, last exercise stays done and never completes, superset, noop, stale indexes never arm the guard, a partial LOG never arms it, frozen-clock). Mutations RED: M3 (guard neutered), M14 (noop detection removed), M19 (guard stamped on every LOG), M18 (logSets ignores isComplete); M13 (screen bypasses the controller) and M15 (screen does not clear focus) RED on source pins, presence only: the screen State is not pumped."
+  - id: U1A-VALIDATION
+    title: "validateSetInputs structured result (field + kind + verbatim message); single field-to-label table (Add/Fix weight|reps|time|distance); weighted_bodyweight blocks on reps only; cardio 12.5 -> Fix time"
+    terminal_state: closed_in_commit
+    commit: 344cd2d1
+    verification: "test/features/train/log_exercise/log_exercise_logic_test.dart (per type, table, parity with the OFF validator's literal messages and bounds). Mutation M12 (reps before weight): RED."
+  - id: U1A-LOG-ROW
+    title: "card LOG row: 44 px stepper + LOG button on one row; LOG {n} SETS / LOG 1 SET / LOG; {kg} KG LIFTED subline (loaded types only); reactive via a merged controller listenable built in build(); LOGGED state; static ticks for logged sets; meta line drops the placeholder weight (OI-352 hidden, not fixed)"
+    terminal_state: closed_in_commit
+    commit: 344cd2d1
+    verification: "log_exercise_card_test.dart flag ON group (label + subline, one LOG = all sets checked + captured, LOGGED, reactive label with one frame and no timer tick, all-warm-up LOG)"
+  - id: U1A-BLOCKED
+    title: "blocked state is a neutral gold outline (never red); tap focuses the failing field through card-owned FocusNodes"
+    terminal_state: closed_in_commit
+    commit: 344cd2d1
+    verification: "card test 'blocked' (Add weight -> focus set 1, then set 2; Fix reps -> focus reps). Mutation M8 (no focus): RED."
+  - id: U1A-CAPTURE
+    title: "an edit to a LOGGED set is recorded on every keystroke when it validates; a cleared or out-of-range edit keeps the last valid value"
+    terminal_state: closed_in_commit
+    commit: 344cd2d1
+    verification: "card test 'edit after LOG' (no blur, value reaches setInputValues; blank and 61 do not overwrite; the row then shows the blocked label and focuses the field instead of LOGGED, B-pass finding 4) and 'review mode: a keystroke records nothing' (B-pass finding 3). Mutations RED: M4 (no capture), M5 (unvalidated capture), M16 (review-mode capture), M17 (row scans only unchecked sets)."
+  - id: U1A-SEEDING
+    title: "+ seeds the new set field-for-field from the last non-warm-up set (never duration from reps, e8f95e) and records it post-frame (mounted + bounds checked)"
+    terminal_state: closed_in_commit
+    commit: 344cd2d1
+    verification: "card test '+ seeds' (seed, capture, survives leaving and re-entering); logic test seedForAddedSet. Mutation M6 (no seeding): RED; M7 (capture moved inline into didUpdateWidget): RED x4 (Riverpod build-phase write)."
+  - id: U1A-FOCUS-LIFECYCLE
+    title: "FocusNodes owned by the card State in step with the controller lists; removed nodes unfocused then disposed post-frame"
+    terminal_state: closed_in_commit
+    commit: 344cd2d1
+    notes: "card test '- while the last row is focused does not throw' green. Mutation M11 (synchronous dispose) reddened NOTHING on Flutter 3.41.4: the post-frame disposal is DEFENSIVE, not proven necessary; recorded as such, not as coverage."
+  - id: U1A-REVIEW-MODE
+    title: "review mode (isSaved): +, - and LOG disabled in the card, LOG no-ops in the controller and in logSets"
+    terminal_state: closed_in_commit
+    commit: 344cd2d1
+    verification: "card test 'review mode'; behavioral noop tests. Mutation M9 (+ enabled in review mode): RED."
+  - id: U1A-OFF-IDENTITY
+    title: "flag OFF: per-set check tiles, 28 px +/-, blank appended rows, meta line with weight; _validateSetInputs and _persistActiveState untouched; every existing source pin passes without a repoint"
+    terminal_state: closed_in_commit
+    commit: 344cd2d1
+    verification: "card test OFF group; set_add_append_test, duration_controller_seeding_writer_to_reader_test, rep_input_validation_test, exercise_card_weight_display_format_test, swap_undo_snackbar_dismisses_test, exercise_plate_badge_sites_test, readiness_checkin_behavioral_test all green unchanged. Mutation M10 (OFF loses its tiles): RED."
+  - id: TESTS
+    title: "full suite on the final tree, flutter analyze, the pre-commit gate loop"
+    terminal_state: closed_in_commit
+    commit: 344cd2d1
+    verification: "TZ=Asia/Kolkata flutter test --exclude-tags golden (before the B-pass fixes): 9782 passed, 10 skipped, 1 failed: test/scripts/closes_oi_performed_e2e_test.dart, ENVIRONMENTAL (it asserts empty stderr; this cloud container runs flutter as root, which prints a root banner; the file passes 6/6 with BOT=true and the diff does not touch it). After the B-pass fixes: the 49 tests of this batch plus the 7 source-pinning files re-run green. flutter analyze lib/: no new issue. sh scripts/pre-commit.sh: OK."
+  - id: BPASS
+    title: "/code-review B-pass (fresh Sonnet reviewer): 0 P0, 0 P1, 6 P2, all accepted and fixed in this batch"
+    terminal_state: closed_in_commit
+    commit: 344cd2d1
+    verification: "docs/reviews/ (this batch's review file): F1 noop/partial-LOG guard tests, F2 screen-application source pin, F3 review-mode capture guard, F4 visible divergence on a logged set, F5 mirror scope widened to duration/distance (OI-356, flip precondition 1), F6 stale record/plan sentences. Code fixes mutation-proven (M14-M19)."
+  - id: FOLLOW-ON-BATCHES
+    title: "batch 2 (OI-356: UNDO toast, new-user weight mirror, last-exercise emphasis; flip-ready) and batch 3 (OI-357: faded prefill, per-set history, hints, scroll); U3 hero tile OI-354; separate findings OI-352, OI-353, OI-355"
+    terminal_state: blocked_on_user
+    reason: "founder-sequenced follow-on batches (2 + 1 split, 2026-10-19), each needs its own §4.12 plan review; OI-354 is upstream-blocked on the WEBP asset pipeline. All are on the OI board."
