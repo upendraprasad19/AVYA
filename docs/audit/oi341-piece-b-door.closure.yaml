@@ -82,13 +82,15 @@ findings:
 
   - id: L-DEPLOY-VP
     title: "deploy verify-payment (verify_jwt true; v25 rollback copied out first)"
-    terminal_state: blocked_on_user
-    reason: "CLAUDE.md 4.3: every live apply/deploy/read against prod needs its own founder go; the switch stays unset throughout (plan section 6)"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "verify-payment v26 deployed 2026-10-20 (verify_jwt true) from 06fe4ff9 after copying the v25 rollback payload (archive v4_a8d9eeb.json, Piece A code) out; anon-key probe -> the module's own 401 Invalid or expired token; management API read-back v26 / verify_jwt true / ACTIVE; ENABLE_SUBSCRIPTION_STACKING not set"
 
   - id: L-DEPLOY-WH
     title: "deploy razorpay-webhook (verify_jwt false; v29 rollback copied out first)"
-    terminal_state: blocked_on_user
-    reason: "CLAUDE.md 4.3: every live apply/deploy/read against prod needs its own founder go; the switch stays unset throughout (plan section 6)"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "razorpay-webhook v30 deployed 2026-10-20 (verify_jwt false) from 06fe4ff9 after copying the v29 rollback payload (archive v3_a8d9eeb.json) out; no-auth probe -> Missing x-razorpay-signature header; read-back v30 / verify_jwt false / ACTIVE"
 
   - id: R1-2
     title: "round 1 P1: unbounded advisory lock"
