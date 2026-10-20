@@ -1508,6 +1508,28 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     state = state.copyWith(checkedSets: newChecked);
   }
 
+  /// One LOG per exercise (flag `enable_log_exercise_button`): marks every set
+  /// in [setIndexes] of [exerciseIndex] checked in ONE state change. Additive
+  /// only — it never unchecks (unlike [toggleSet]). Out-of-range indexes are
+  /// ignored, so a stale index can never create a phantom set; when nothing new
+  /// is added, or the session is saved/complete, `state` is left untouched.
+  void logSets(int exerciseIndex, Set<int> setIndexes) {
+    if (state.isSaved || state.isComplete) return;
+    if (exerciseIndex < 0 || exerciseIndex >= state.exercises.length) return;
+    final numSets = int.tryParse(state.exercises[exerciseIndex].sets) ?? 3;
+    final newChecked = Map<String, bool>.from(state.checkedSets);
+    var added = false;
+    for (final setIndex in setIndexes) {
+      if (setIndex < 0 || setIndex >= numSets) continue;
+      final key = '$exerciseIndex-$setIndex';
+      if (newChecked.containsKey(key)) continue;
+      newChecked[key] = true;
+      added = true;
+    }
+    if (!added) return;
+    state = state.copyWith(checkedSets: newChecked);
+  }
+
   /// Record input values for a specific set (called from UI controllers).
   void recordSetValues(int exerciseIndex, int setIndex, SetInputValues values) {
     final key = '$exerciseIndex-$setIndex';

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
+import 'package:icanbefitter/core/copy/wardroom_copy.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
@@ -13,6 +14,8 @@ import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_plate_thumb.
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import '../../providers/train_provider.dart';
 import '../../services/active_workout_persistence.dart';
+import '../../services/log_exercise_flags.dart';
+import '../../services/log_exercise_logic.dart';
 import '../../../home/providers/home_provider.dart';
 import '../../widgets/create_custom_exercise_sheet.dart';
 import '../../widgets/exercise_swap_sheet.dart';
@@ -74,6 +77,37 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
   /// unmount the screen — cancel dialog's context.go, system back-gesture —
   /// without needing to enumerate each one).
   ScaffoldMessengerState? _swapUndoMessenger;
+
+  /// One LOG per exercise (flag `enable_log_exercise_button`): the LOG
+  /// decision + input guard live HERE, not on a card — the guard must protect
+  /// the NEXT card's button, which belongs to a different State. Monotonic
+  /// clock: `nowWall()` is frozen under the dev clock override.
+  final Stopwatch _logClock = Stopwatch()..start();
+  late final LogExerciseController _logController =
+      LogExerciseController(clock: () => _logClock.elapsed);
+
+  /// Applies the controller's outcome: clear the manual focus so the next
+  /// non-done exercise expands, and reveal a superset partner.
+  LogOutcomeKind _onLogExercise(int exIdx, Set<int> setIdxs) {
+    final outcome = _logController.log(
+      exerciseIndex: exIdx,
+      setIndexes: setIdxs,
+      logSets: ref.read(activeWorkoutProvider.notifier).logSets,
+      readState: () => ref.read(activeWorkoutProvider),
+    );
+    if (outcome.clearFocus) {
+      setState(() {
+        _focusedExerciseIndex = null;
+      });
+    }
+    final partner = outcome.revealPartner;
+    if (partner != null) {
+      Future.delayed(const Duration(milliseconds: 200), () {
+        if (mounted) _scrollToExercise(partner);
+      });
+    }
+    return outcome.kind;
+  }
 
   void _dismissSwapUndoSnackBar() {
     _swapUndoMessenger?.hideCurrentSnackBar();
@@ -218,6 +252,9 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
     }
 
     final pctInt = (data.progressPercent * 100).round();
+    // Read ONCE per build and passed down, so it cannot change between a
+    // card's didUpdateWidget and its build within one frame.
+    final logMode = LogExerciseFlags.logExerciseButtonEnabled;
 
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -385,6 +422,9 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                             isGroupModeSource: data.supersetGroupingSourceIndex == exIdx,
                             isExpanded: isExpanded,
                             onFocus: () => _focusExercise(exIdx),
+                            onLogExercise: logMode
+                                ? (setIdxs) => _onLogExercise(exIdx, setIdxs)
+                                : null,
                             onToggleSet: (setIdx) {
                               final wasChecked =
                                   data.isSetChecked(exIdx, setIdx);

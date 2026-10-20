@@ -15,6 +15,7 @@ import 'package:icanbefitter/features/profile/providers/measurement_flag_provide
 import 'package:icanbefitter/features/profile/widgets/body_measurements_sheet.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import 'package:icanbefitter/features/train/providers/train_provider.dart';
+import 'package:icanbefitter/features/train/services/log_exercise_flags.dart';
 import 'package:icanbefitter/features/dev/simulation_service.dart';
 import 'package:icanbefitter/features/dev/plan_xls.dart';
 
@@ -263,6 +264,16 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
     _toast('enable_hold_weeks = ${next ? 'ON' : 'OFF'}');
   }
 
+  /// One LOG per exercise (default OFF, ship dark). The Active Workout screen
+  /// reads the flag on every build, so the next timer tick picks it up.
+  Future<void> _toggleLogExerciseButton() async {
+    final next = !LogExerciseFlags.logExerciseButtonEnabled;
+    await HiveService.instance.configBox.put(LogExerciseFlags.key, next);
+    if (!mounted) return;
+    setState(() {});
+    _toast('${LogExerciseFlags.key} = ${next ? 'ON' : 'OFF'}');
+  }
+
   /// L2b Landing B: the flag of the body-measurements surfaces (default ON since
   /// 2026-10-16; this toggle stores `false` as the debug-build kill switch).
   ///
@@ -482,6 +493,8 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
             children: [
               _kv('enable_hold_weeks',
                   PlanEngineFlags.holdWeeksEnabled ? 'ON' : 'off'),
+              _kv(LogExerciseFlags.key,
+                  LogExerciseFlags.logExerciseButtonEnabled ? 'ON' : 'off'),
               // DEFAULT ON since 2026-10-16: a stored `false` means killed.
               _kv('enable_body_measurements',
                   MeasurementFlags.bodyMeasurementsEnabled ? 'ON' : 'KILLED'),
@@ -503,6 +516,12 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
                         ? 'Turn hold weeks OFF'
                         : 'Turn hold weeks ON',
                     () => _toggleHoldWeeks(),
+                  ),
+                  _btn(
+                    LogExerciseFlags.logExerciseButtonEnabled
+                        ? 'Turn one-LOG-per-exercise OFF'
+                        : 'Turn one-LOG-per-exercise ON',
+                    () => _toggleLogExerciseButton(),
                   ),
                   _btn(
                     MeasurementFlags.bodyMeasurementsEnabled
