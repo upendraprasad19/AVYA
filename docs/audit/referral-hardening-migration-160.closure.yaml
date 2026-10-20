@@ -83,8 +83,8 @@ findings:
 
   - id: EC
     title: "OI-342 economics residual: the 90 percent ceiling is above the break-even (monthly 76.7 percent, yearly 88.4 percent)"
-    terminal_state: blocked_on_user
-    reason: "A 90 percent monthly payment is 34.90 rupees for a reward worth about 81 rupees, a 90 percent yearly payment 299.90 rupees for about 349. The ceiling closes the technical hole (no 91 to 100 percent code, no 0-paise order); the floor (count a payment only above a share of the list price, which needs the paid amount stored by verify-payment and razorpay-webhook, both catastrophic) is the founder's decision, tracked in OI-342. Control until then: keep promo codes below 76.7 percent."
+    terminal_state: verified_clean
+    evidence: "Founder decision 2026-10-17 in chat: the 90 percent ceiling is a permission, not a discount given; the founder sets each code's percentage and keeps codes below 76.7 percent, so no floor is built. Closed with OI-342 (docs/audit/closed_issues.md)."
 
   - id: BP-A1
     title: "seat A P3: the rollback re-grants seven privileges, not MAINTAIN (relacl arwdDxtm)"
@@ -207,8 +207,8 @@ findings:
 
   - id: HP-B1
     title: "hermes seat B P2: the 90 percent ceiling sits above the 76.7 percent break-even"
-    terminal_state: blocked_on_user
-    reason: "Tracked by row EC (OI-342): the founder decides the floor."
+    terminal_state: verified_clean
+    evidence: "Row EC: founder decision 2026-10-17, ceiling stays and no floor is built (OI-342 closed)."
 
   - id: HP-B2
     title: "hermes seat B P2: shipped invite copy says 'you both get 7 days' (pre-existing, commit 3874196f)"
