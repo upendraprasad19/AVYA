@@ -190,8 +190,8 @@ findings:
 
   - id: X4
     title: "promo-discounted payments count toward a reward (filed as OI-342 on 2026-10-13)"
-    terminal_state: blocked_on_user
-    reason: "No cheap floor exists: subscriptions stores no amount or promo, promo_code_uses has no link to a payment. Break-even is about 76.7 percent discount. A floor needs the paid amount captured in a payment function (catastrophic). The founder decides; until then keep promo codes below 76.7 percent."
+    terminal_state: verified_clean
+    evidence: "Founder decision 2026-10-17 in chat: the 90 percent ceiling is a permission, not a discount given; the founder sets each code's percentage and keeps codes below 76.7 percent, so no floor is built. Closed with OI-342 (docs/audit/closed_issues.md)."
 
   - id: X5
     title: "phone-verified accounts only (hardening against throwaway signups) (filed as OI-343 on 2026-10-13)"
