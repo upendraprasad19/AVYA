@@ -2,8 +2,11 @@ part of 'screen.dart';
 
 // ── Finish + Cancel Dialogs ──────────────────────────────────────
 
+/// [onComplete] runs in the COMPLETE handler, before the dialog closes and the
+/// (un-awaited) save starts: the screen clears its UNDO toast there (batch 2).
 void _showFinishDialog(
-    BuildContext context, WidgetRef ref, ActiveWorkoutData data) {
+    BuildContext context, WidgetRef ref, ActiveWorkoutData data,
+    {VoidCallback? onComplete}) {
   // Pre-fill with current elapsed seconds — user can edit before confirming.
   final mins = data.elapsedSeconds ~/ 60;
   final secs = data.elapsedSeconds % 60;
@@ -159,6 +162,7 @@ void _showFinishDialog(
             // A7: clear mid-workout state immediately on completion so
             // the AI coach snapshot reflects null (session over) right away.
             ActiveWorkoutPersistence.clearState();
+            onComplete?.call();
             Navigator.of(ctx).pop();
             ref.read(activeWorkoutProvider.notifier).completeWorkout();
           },

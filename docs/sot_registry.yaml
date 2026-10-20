@@ -4026,7 +4026,7 @@ concepts:
       so partial-failure recovery is row-level instead of template-level.
     writers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 2280-2293
+        line_range: 2313-2326
         method: TemplatesNotifier.saveTemplate (single-day; multi-day templates
           land via tool_dispatcher.createCustomTemplate entry below)
       - file: lib/features/train/screens/template_builder_screen.dart
@@ -4075,7 +4075,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 2262-2278
+        line_range: 2295-2311
         method: TemplatesNotifier.build
         semantic: pass-through
         fields_read: [type, name, exercises, assigned_days, exercise_count, group_id, group_day_index, group_total_days, last_used_at, created_at, updated_at]
@@ -12722,47 +12722,93 @@ concepts:
 
       WRITERS: `toggleSet` (per-set path, flag OFF) and `logSets` (flag ON: one
       LOG marks every unchecked set of an exercise in ONE state change; additive
-      only, bounds-checked, no-op on a saved/complete session).
+      only, bounds-checked, no-op on a saved/complete session; deliberately NOT
+      guarded by `_completing`, as LOG during a save is the existing behaviour).
+      `unlogSets` (flag ON, batch 2 UNDO): unchecks exactly the sets one LOG
+      checked, in ONE state change; returns false and leaves `state` identical
+      while `_completing` (set in `completeWorkout` after its review-mode
+      return, reset ONLY at the top of `startWorkout`), saved, complete, out of
+      range, or when another exercise now sits at that index (name identity).
       `recordSetValues` via the card's `_captureSetValues`: first-frame seed,
       every check toggle (OFF), LOG (ON), every keystroke on an already-logged
       set if the value VALIDATES (ON; an invalid edit keeps the last valid
       value), and the post-frame capture of a set added with `+` (ON).
+      Card-local controller text (not provider state) is also written by the
+      batch 2 MIRROR (`_mirrorFrom`): set 1's typed weight/duration/distance
+      into blank or still-mirrored fields of later unlogged, non-warm-up sets.
 
       READERS: `completedSets` (excludes warm-ups), `isExerciseDone` (requires
       EVERY set checked, warm-ups included: LOG therefore logs warm-up sets
       too), `liveVolumeKg`, `completeWorkout` aggregation (checked, non-warm-up
-      sets with captured values), the screen's first-non-done focus fallback.
+      sets with captured values), the screen's first-non-done focus fallback,
+      the receipt (`workout_receipt_card.dart`), `header.dart`, `progressPercent`,
+      `finish_dialog.dart`, `completion_sheet.dart`; batch 2: `undoRecordFor`,
+      `visibleUndoRecord`, `logToastText`, `allExercisesLogged`, and the mirror's
+      fresh warm-up/checked reads. `_initControllers` restores `setInputValues`
+      WITHOUT a checked filter (after an UNDO it shows the logged values again:
+      benign).
 
       WARNING: `logSets` must never become a toggle loop (a double tap would
       UNCHECK every set). Mutation-proven by the behavioral test.
       WARNING: the LOG input guard reads a MONOTONIC clock (Stopwatch), never
       `nowWall()`, which is frozen under the dev clock override.
+      WARNING: UNDO never touches `ActiveWorkoutPersistence` (`active_session`):
+      clearing it would tell `ai_snapshot_builder` the session is over.
+      WARNING: the toast's host (`LogUndoToastHost`) must keep ONE tree shape in
+      LOG mode (the list is always child 0 of one Stack). Swapping between a
+      bare ListView and a Stack rebuilt the list on every toast show/clear:
+      scroll reset, off-screen cards disposed with their typed values lost
+      (B-pass finding 1, 2026-10-20; host test in log_undo_toast_test.dart).
+      The mirror source re-baselines on the rebuild after a warm-up toggle
+      (`_rebaselineIfSourceMoved`), so a one-digit entry in the new source
+      mirrors.
     writers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1500-1509
+        line_range: 1508-1517
         method: toggleSet
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1516-1531
+        line_range: 1524-1539
         method: logSets
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1534-1539
+        line_range: 1546-1563
+        method: unlogSets
+      - file: lib/features/train/providers/train_provider.dart
+        line_range: 1566-1571
         method: recordSetValues
       - file: lib/features/train/screens/active_workout/exercise_card.dart
-        line_range: 340-346
+        line_range: 388-398
         method: _onFieldChanged
       - file: lib/features/train/screens/active_workout/exercise_card.dart
-        line_range: 365-389
+        line_range: 431-462
+        method: _mirrorFrom
+      - file: lib/features/train/screens/active_workout/exercise_card.dart
+        line_range: 481-506
         method: _onLogPressed
     readers:
       - file: lib/features/train/providers/train_provider.dart
         line_range: 1327-1329
         method: completedSets
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1357-1365
+        line_range: 1357-1364
         method: isExerciseDone
+      - file: lib/features/train/providers/train_provider.dart
+        line_range: 1380-1389
+        method: liveVolumeKg
       - file: lib/features/train/services/log_exercise_logic.dart
-        line_range: 270-306
+        line_range: 334-370
         method: LogExerciseController.log
+      - file: lib/features/train/services/log_exercise_logic.dart
+        line_range: 405-430
+        method: undoRecordFor
+      - file: lib/features/train/services/log_exercise_logic.dart
+        line_range: 436-448
+        method: visibleUndoRecord
+      - file: lib/features/train/services/log_exercise_logic.dart
+        line_range: 459-492
+        method: logToastText
+      - file: lib/features/train/services/log_exercise_logic.dart
+        line_range: 496-502
+        method: allExercisesLogged
 
   # tech-debt audit 2026-09-02 / Slice A (CODE-8, diagnose e4d1b7) — the
   # weekly-report PRO gate is a genuine cloud writer→reader contract on

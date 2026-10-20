@@ -1408,6 +1408,13 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
   Timer? _timer;
   DateTime? _workoutStartTime;
 
+  /// True from the start of [completeWorkout] (past its review-mode return)
+  /// until the next [startWorkout]. The finish dialog does not await
+  /// [completeWorkout] and `isSaved` is set only at its end, so [unlogSets]
+  /// checks this to keep an UNDO from removing sets the save is reading.
+  bool _completing = false;
+  bool get isCompleting => _completing;
+
   @override
   ActiveWorkoutData build() {
     ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
@@ -1416,6 +1423,7 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
   }
 
   void startWorkout(WorkoutDayData day, {ReadinessLevel? readiness}) {
+    _completing = false;
     _timer?.cancel();
 
     _workoutStartTime = DateTime.now();
@@ -1528,6 +1536,30 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     }
     if (!added) return;
     state = state.copyWith(checkedSets: newChecked);
+  }
+
+  /// UNDO of one LOG: unchecks the sets in [setIndexes] of [exerciseIndex] in
+  /// ONE state change. Returns false and leaves `state` untouched when a save
+  /// is running or done, the index is out of range, the exercise at that index
+  /// is no longer [exerciseName] (a swap or removal moved it), or none of the
+  /// sets is checked. Never touches `setInputValues` or `warmUpSets`.
+  bool unlogSets(int exerciseIndex, Set<int> setIndexes,
+      {required String exerciseName}) {
+    if (_completing || state.isSaved || state.isComplete) return false;
+    if (exerciseIndex < 0 || exerciseIndex >= state.exercises.length) {
+      return false;
+    }
+    if (state.exercises[exerciseIndex].name != exerciseName) return false;
+    final numSets = int.tryParse(state.exercises[exerciseIndex].sets) ?? 3;
+    final newChecked = Map<String, bool>.from(state.checkedSets);
+    var removed = false;
+    for (final setIndex in setIndexes) {
+      if (setIndex < 0 || setIndex >= numSets) continue;
+      if (newChecked.remove('$exerciseIndex-$setIndex') != null) removed = true;
+    }
+    if (!removed) return false;
+    state = state.copyWith(checkedSets: newChecked);
+    return true;
   }
 
   /// Record input values for a specific set (called from UI controllers).
@@ -1816,6 +1848,7 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       state = state.copyWith(isComplete: true);
       return;
     }
+    _completing = true;
 
     final repo = WorkoutRepository.instance;
     final hive = HiveService.instance;

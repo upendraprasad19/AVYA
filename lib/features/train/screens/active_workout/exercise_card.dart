@@ -86,6 +86,16 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
   List<FocusNode> _durationFocus = [];
   List<FocusNode> _distanceFocus = [];
 
+  // LOG mode, batch 2 mirror: set 1's typed value copies into blank, untouched
+  // fields of later sets. `_mirrored[field][set]` is the text the mirror last
+  // wrote there: a set still holding it (or blank) is a FOLLOWER; a value the
+  // user typed is never written again. Starts empty, so prefilled values never
+  // follow. `_lastSourceText` tells which source field actually changed (one
+  // onChanged per row).
+  final Map<SetField, Map<int, String>> _mirrored = {};
+  Map<SetField, String> _lastSourceText = {};
+  int? _lastSourceIndex;
+
   int get _numSets => int.tryParse(widget.exercise.sets) ?? 3;
 
   bool get _logMode => widget.onLogExercise != null;
@@ -163,6 +173,10 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
       }
     }
 
+    // After the restore loop, so the first edit compares against what is shown.
+    _mirrored.clear();
+    _baselineMirrorSource(ref.read(activeWorkoutProvider));
+
     _resetFocusNodes(n);
 
     // Pre-seed provider state with controller values so that the receipt card
@@ -201,8 +215,11 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
       return;
     }
 
-    // Set count unchanged: nothing to do.
-    if (newCount == oldCount) return;
+    // Set count unchanged: only a warm-up toggle can have moved the source.
+    if (newCount == oldCount) {
+      _rebaselineIfSourceMoved();
+      return;
+    }
 
     if (newCount > oldCount) {
       // Append: preserve [0..oldCount-1] controllers, add new ones for the rest.
@@ -221,8 +238,23 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
         _durationControllers.removeAt(i).dispose();
         _distanceControllers.removeAt(i).dispose();
       }
+      for (final marks in _mirrored.values) {
+        marks.removeWhere((set, _) => set >= newCount);
+      }
     }
     _resizeFocusNodes(newCount);
+    _rebaselineIfSourceMoved();
+  }
+
+  /// LOG mode: a warm-up toggle (or `+`/`-`) can move the mirror source.
+  /// Re-baseline on the rebuild that shows it, so the FIRST keystroke in the
+  /// new source mirrors (a one-digit entry is the whole entry; B-pass finding 2).
+  void _rebaselineIfSourceMoved() {
+    if (!_logMode) return;
+    final data = ref.read(activeWorkoutProvider);
+    if (mirrorSourceIndex(_warmUpFlags(data)) != _lastSourceIndex) {
+      _baselineMirrorSource(data);
+    }
   }
 
   void _disposeControllers() {
@@ -325,6 +357,22 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
       _durationControllers[i].text = seed.duration;
       _distanceControllers[i].text = seed.distance;
     }
+    // A copy of the mirror source, or of one of its followers, keeps following;
+    // a copy of a prefilled or user-typed value is independent.
+    final from = seedIndexForAddedSet(warm, oldCount);
+    if (from != null) {
+      for (final field in mirrorFieldsFor(widget.exercise.loggingType)) {
+        final marks = _mirrored[field];
+        final fromText = _controllersOf(field)[from].text;
+        final follows = from == _lastSourceIndex ||
+            (marks != null && marks[from] == fromText);
+        if (!follows) continue;
+        final m = _mirrored.putIfAbsent(field, () => {});
+        for (var i = oldCount; i < newCount; i++) {
+          m[i] = _controllersOf(field)[i].text;
+        }
+      }
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       for (var i = oldCount; i < newCount && i < _weightControllers.length; i++) {
@@ -343,9 +391,74 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
     // Review mode: completeWorkout will not save again, so a capture here would
     // only make the header volume disagree with the saved log.
     if (data.isSaved) return;
+    _mirrorFrom(setIdx, data);
     if (!data.isSetChecked(widget.exerciseIndex, setIdx)) return;
     if (!_validationOf(setIdx).isOk) return;
     _captureSetValues(setIdx);
+  }
+
+  List<TextEditingController> _controllersOf(SetField field) =>
+      switch (field) {
+        SetField.weight => _weightControllers,
+        SetField.reps => _repsControllers,
+        SetField.duration => _durationControllers,
+        SetField.distance => _distanceControllers,
+      };
+
+  /// Warm-up flags from the FRESH provider state, never the build-time
+  /// `widget.data` (OI-355).
+  List<bool> _warmUpFlags(ActiveWorkoutData data) => [
+        for (var i = 0; i < _weightControllers.length; i++)
+          data.isSetWarmUp(widget.exerciseIndex, i),
+      ];
+
+  void _baselineMirrorSource(ActiveWorkoutData data) {
+    final source = mirrorSourceIndex(_warmUpFlags(data));
+    _lastSourceIndex = source;
+    _lastSourceText = source == null
+        ? {}
+        : {
+            for (final field in SetField.values)
+              field: _controllersOf(field)[source].text,
+          };
+  }
+
+  /// Copies each source field the user just changed into its followers. The
+  /// rebuild after a warm-up toggle normally re-baselines first
+  /// (_rebaselineIfSourceMoved); if a keystroke still sees a moved source, it
+  /// re-baselines and copies nothing. Writes controller text only; LOG records
+  /// it.
+  void _mirrorFrom(int setIdx, ActiveWorkoutData data) {
+    final warm = _warmUpFlags(data);
+    final source = mirrorSourceIndex(warm);
+    if (source == null) return;
+    if (source != _lastSourceIndex) {
+      _baselineMirrorSource(data);
+      return;
+    }
+    if (setIdx != source) return;
+    final logged = [
+      for (var i = 0; i < _weightControllers.length; i++)
+        data.isSetChecked(widget.exerciseIndex, i),
+    ];
+    for (final field in mirrorFieldsFor(widget.exercise.loggingType)) {
+      final controllers = _controllersOf(field);
+      final text = controllers[source].text;
+      if (text == _lastSourceText[field]) continue;
+      _lastSourceText[field] = text;
+      final marks = _mirrored.putIfAbsent(field, () => {});
+      final targets = mirrorTargets(
+        source: source,
+        texts: [for (final c in controllers) c.text],
+        lastMirrored: marks,
+        isWarmUp: warm,
+        isLogged: logged,
+      );
+      for (final t in targets) {
+        controllers[t].text = text;
+        marks[t] = text;
+      }
+    }
   }
 
   FocusNode? _focusNodeFor(int setIdx, SetField field) {
