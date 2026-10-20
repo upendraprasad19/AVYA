@@ -12,7 +12,7 @@ import 'error_telemetry.dart';
 /// Singleton wrapper around the Supabase client.
 ///
 /// Supabase is used for:
-///   - Auth (Email + Google OAuth + Phone OTP)
+///   - Auth (Email + Google OAuth; Phone OTP is not live, AUTH-04)
 ///   - Backup & cross-device restore
 ///   - AI training corpus (snapshots, conversations)
 ///   - Community DB growth (custom foods/exercises)

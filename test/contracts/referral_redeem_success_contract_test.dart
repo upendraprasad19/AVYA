@@ -101,11 +101,21 @@ void main() {
       );
     });
 
-    test("invite_friends_sheet success-detection reads body['success']", () {
-      expect(invite.contains("['success']"), isTrue,
+    test('invite_friends_sheet reaches the 200 body through ReferralRepository.redeem, '
+        'whose 200 path keys off body[error] (unit C repoint of the old '
+        "body['success'] pin)", () {
+      expect(invite.contains('ReferralRepository.instance.redeem'), isTrue,
           reason:
-              "invite_friends keys success off body['success'] — now satisfied by "
-              'the EF sending success:true');
+              'the invite sheet must funnel through the repository, which unpacks '
+              'FunctionException and the 200 body once for every caller');
+      expect(invite.contains("['success']"), isFalse,
+          reason:
+              'the sheet no longer parses the body itself: a second parser is how '
+              'the generic "Could not apply code" mask came back');
+      expect(repo.contains("body?['error']"), isTrue,
+          reason: 'the repository keys the 200 path off the server error field');
+      expect(RegExp(r'success\s*:\s*true').hasMatch(ef), isTrue,
+          reason: 'the producer still sends success:true on every 200 success');
     });
   });
 }

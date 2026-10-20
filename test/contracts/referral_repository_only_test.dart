@@ -14,6 +14,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// Pinned callers:
 ///   - lib/features/profile/providers/referral_eligibility_provider.dart
 ///   - lib/features/profile/screens/apply_referral_sheet.dart
+///   - lib/features/profile/screens/invite_friends_sheet.dart (unit C)
 ///
 /// Helper that strips `/* ... */` + `// ...` comments before substring
 /// checks (per feedback_source_grep_strip_comments_first.md — comments
@@ -70,6 +71,20 @@ void main() {
     );
 
     test(
+      'invite_friends_sheet.dart no longer calls redeem-referral directly (unit C)',
+      () async {
+        final src = _stripComments(await File(
+          'lib/features/profile/screens/invite_friends_sheet.dart',
+        ).readAsString());
+        expect(src, isNot(contains("callFunction(\n        'redeem-referral'")));
+        expect(RegExp(r"redeem-referral").hasMatch(src), isFalse,
+            reason: 'the invite sheet must not name the function: the repository '
+                'is the only caller (the generic catch masked every 4xx, d2b9e6)');
+        expect(src, contains('ReferralRepository.instance.redeem'));
+      },
+    );
+
+    test(
       'referral_eligibility_provider.dart no longer queries referral_redemptions directly',
       () async {
         final raw = await File(
@@ -112,6 +127,8 @@ void main() {
                 'ReferralRepository must expose static `instance` singleton.');
         expect(src, contains('Future<bool> hasRedeemed('),
             reason: 'ReferralRepository must expose `hasRedeemed`.');
+        expect(src, contains('Future<ReferrerSummary?> referrerSummary('),
+            reason: 'ReferralRepository must expose `referrerSummary` (unit C).');
         expect(src, contains('Future<RedemptionResult> redeem('),
             reason: 'ReferralRepository must expose `redeem`.');
         expect(src, contains('ErrorTelemetry.recordNonFatal'),

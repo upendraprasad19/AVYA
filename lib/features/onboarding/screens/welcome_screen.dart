@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:icanbefitter/core/copy/referral_copy.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -305,6 +306,13 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
               Text(
                 'Apply within 7 days of signup',
                 style: AppTypography.bodyS.copyWith(color: AppColors.textMute),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                ReferralCopy.friendDisclosure,
+                key: const ValueKey('referral-friend-disclosure'),
+                textAlign: TextAlign.center,
+                style: AppTypography.bodyS.copyWith(color: AppColors.textDim),
               ),
             ],
           ),

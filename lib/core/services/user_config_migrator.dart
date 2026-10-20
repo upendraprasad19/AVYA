@@ -102,6 +102,11 @@ class UserConfigMigrator {
     'body_measurement_prompt_dismissed_at',
     'body_measurement_prompt_baseline_skipped_at',
     'body_measurement_sheet_unit',
+    // Referral credit notice (unit C): the lifetime days_earned total the user
+    // has already been told about. Per-user: leaked, the next account would be
+    // baselined to (or silently miss) the previous account's total. New key,
+    // never in configBox - no _flagKey bump.
+    'referral_credit_seen_days',
   ];
 
   /// Keys that intentionally stay in shared `configBox`.

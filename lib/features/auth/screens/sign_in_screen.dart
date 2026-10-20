@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:icanbefitter/core/copy/referral_copy.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
@@ -1053,6 +1054,15 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
               const SizedBox(height: 4),
               Text(
                 'Have a referral code? Apply for +7 days PRO.',
+                style: AppTypography.bodySm.copyWith(
+                  fontSize: 12,
+                  color: AppColors.textDim,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                ReferralCopy.friendDisclosure,
+                key: const ValueKey('referral-friend-disclosure'),
                 style: AppTypography.bodySm.copyWith(
                   fontSize: 12,
                   color: AppColors.textDim,

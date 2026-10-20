@@ -190,8 +190,8 @@ findings:
 
   - id: X4
     title: "promo-discounted payments count toward a reward (filed as OI-342 on 2026-10-13)"
-    terminal_state: blocked_on_user
-    reason: "No cheap floor exists: subscriptions stores no amount or promo, promo_code_uses has no link to a payment. Break-even is about 76.7 percent discount. A floor needs the paid amount captured in a payment function (catastrophic). The founder decides; until then keep promo codes below 76.7 percent."
+    terminal_state: verified_clean
+    evidence: "Founder decision 2026-10-17 in chat: the 90 percent ceiling is a permission, not a discount given; the founder sets each code's percentage and keeps codes below 76.7 percent, so no floor is built. Closed with OI-342 (docs/audit/closed_issues.md)."
 
   - id: X5
     title: "phone-verified accounts only (hardening against throwaway signups) (filed as OI-343 on 2026-10-13)"
@@ -228,7 +228,7 @@ findings:
   - id: U2
     title: "unit C (client): ReferralRepository.referrerSummary, the invite copy for the new rule, invite_friends_sheet._applyCode moved onto ReferralRepository.redeem so a paid friend sees the server's message, and the friend-facing disclosure line (item X7)"
     terminal_state: blocked_on_user
-    reason: "Unblocked technically (migration 159 is applied and merged). FOUNDER DECISIONS 2026-10-16: the referrer sees aggregates only and is told of a credit in-app on next open (no push). Unit C is waiting for the founder's go to start (asked 2026-10-16, design answered, go not yet given), for the psychology-pass review of the copy and the founder's wording review (plan section 2.3). OI-336 stays open until it ships; shipped app builds keep saying 'you both get 7 days PRO free' until then (cost nil: three redemptions ever)."
+    reason: "Built 2026-10-17 on branch referral-unit-c-client (ledger docs/audit/referral-unit-c-client.closure.yaml). It is visible to users only after the merge and a /build-apk the founder starts; the device check is OI-348 rows A10 and B1 (OI-348 is filed on branch `pending-checks-oi` and must land before or with this branch). Re-open as closed_in_commit when those are recorded. OI-336 stays open as the owner of X7."
 
   - id: X10
     title: "worktree retirement for referral-pay-on-conversion and referral-redeem-paid-guard (CLAUDE.md 4.13.8: autonomous once the branch is merged and main CI is green)"

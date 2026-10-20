@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**218 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**219 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -207,22 +207,23 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-333 | daily-snapshot/index_test.ts leaks DISABLE_GEMINI_FAILURE_ALERT into the… | none | 2026-10-11 -… | [:5964](open_issues.md#L5964) |
 | OI-334 | deploy_via_api.js rollback gaps: the pre-deploy cloud snapshot writes 0… | none - an engineering choice (see the… | 2026-10-11 - two measurements during the… | [:5975](open_issues.md#L5975) |
 | OI-335 | Gate 50 (check_reader_manifest_complete) never evaluates a SoT concept… | none for the registry wording; making… | 2026-10-11 by reading:… | [:5988](open_issues.md#L5988) |
-| OI-336 | Referral reward UX: the referrer's counts surface (friends joined /… | the founder's go to start Unit C… | 2026-10-12 - by reading the repo:… | [:5999](open_issues.md#L5999) |
+| OI-336 | Referral reward UX: the referrer's counts surface (friends joined /… | the founder: (1) the commit/merge go for… | 2026-10-12 - by reading the repo:… | [:5999](open_issues.md#L5999) |
 | OI-337 | The commit-time gates read staged paths with a plain git diff --cached… | none - an engineering choice; a… | 2026-10-12 - by reading and by… | [:6012](open_issues.md#L6012) |
 | OI-338 | delete_account_purges_all_user_buckets_test.dart reads USER_OWNED_BUCKETS… | none - a test-only edit… | 2026-10-12 - by reading… | [:6025](open_issues.md#L6025) |
 | OI-339 | A Razorpay refund made only in the dashboard is invisible to the referral… | the founder's decision on how refunds… | 2026-10-13 - by reading.… | [:6041](open_issues.md#L6041) |
 | OI-340 | A chargeback or UPI dispute after the referral reward vested has no… | the founder's decision: accept the loss,… | 2026-10-13 - by reading.… | [:6054](open_issues.md#L6054) |
-| OI-341 | A friend on the 7-day referral trial cannot buy: create-razorpay-order… | Piece A: the founder's go to commit,… | 2026-10-13 - by reading.… | [:6067](open_issues.md#L6067) |
-| OI-342 | Promo-discounted payments count toward the referral reward at full value:… | the founder's decision on a floor (for… | 2026-10-13 - by reading… | [:6082](open_issues.md#L6082) |
-| OI-343 | Referral abuse by throwaway accounts: email confirmation is on but… | the founder's decision: accept the… | 2026-10-13 - by reading the live auth… | [:6097](open_issues.md#L6097) |
-| OI-345 | Remove the enable_body_measurements OFF path (flag checks, kill switch,… | founder-owned check of the RELEASE build… | 2026-10-16:… | [:6110](open_issues.md#L6110) |
-| OI-346 | Existing accounts accepted the v1 (blog) policy; nothing asks them to… | store launch (upstream_blocked;… | 2026-10-16: `AppConstants.termsVersion`… | [:6119](open_issues.md#L6119) |
-| OI-347 | Free-access codes: the founder wants to give out codes that grant PRO for… | none (a plan is the next step; the… | 2026-10-16 - by reading… | [:6128](open_issues.md#L6128) |
-| OI-350 | verify-payment captures an authorized payment and echoes its Razorpay… | none | 2026-10-17 - by reading… | [:6141](open_issues.md#L6141) |
-| OI-351 | razorpay-webhook: after a payment.authorized auto-capture, a failed insert… | none | 2026-10-17 - by reading… | [:6148](open_issues.md#L6148) |
-| OI-352 | Active Workout meta line prints hard-coded '0kg' for every scheduled lift | none (pick up after the… | 2026-10-18 - by code read only, NOT on… | [:6155](open_issues.md#L6155) |
-| OI-353 | Plan suggested_weight (ProgressionResolver) is never read by the Active… | none (pick up after the… | 2026-10-18 - by code read: the plan… | [:6168](open_issues.md#L6168) |
-| OI-354 | Active Workout hero tile + full-screen viewer (animated WEBP) blocked on… | the animated-WEBP asset pipeline and its… | 2026-10-18 - design locked in… | [:6181](open_issues.md#L6181) |
-| OI-355 | Active Workout _persistActiveState reads the build-time widget.data, so… | none (pick up after the… | 2026-10-18 - by code read (plan review… | [:6192](open_issues.md#L6192) |
-| OI-357 | Active Workout U2: per-set last values, new-user weight mirror, faded… | OI-356 landing and the flag flip;… | never | [:6205](open_issues.md#L6205) |
-| OI-358 | Active Workout: adding an exercise already in the session crashes the… | none | never | [:6218](open_issues.md#L6218) |
+| OI-341 | A friend on the 7-day referral trial cannot buy: create-razorpay-order… | Piece A: nothing (live, switch unset;… | 2026-10-13 - by reading.… | [:6067](open_issues.md#L6067) |
+| OI-343 | Referral abuse by throwaway accounts: email confirmation is on but… | the founder's decision: accept the… | 2026-10-13 - by reading the live auth… | [:6082](open_issues.md#L6082) |
+| OI-345 | Remove the enable_body_measurements OFF path (flag checks, kill switch,… | founder-owned check of the RELEASE build… | 2026-10-16:… | [:6095](open_issues.md#L6095) |
+| OI-346 | Existing accounts accepted the v1 (blog) policy; nothing asks them to… | store launch (upstream_blocked;… | 2026-10-16: `AppConstants.termsVersion`… | [:6104](open_issues.md#L6104) |
+| OI-347 | Free-access codes: the founder wants to give out codes that grant PRO for… | none (a plan is the next step; the… | 2026-10-16 - by reading… | [:6113](open_issues.md#L6113) |
+| OI-348 | Post-build check list: every founder-owned device, signed-in and… | the final AAB/APK build… | 2026-10-17 - by reading every… | [:6126](open_issues.md#L6126) |
+| OI-349 | Onboarding welcome screen overflows at 2x system text on a 640-dp phone:… | the founder's call on whether 2x system… | 2026-10-17 - by running the screen under… | [:6175](open_issues.md#L6175) |
+| OI-350 | verify-payment captures an authorized payment and echoes its Razorpay… | none | 2026-10-17 - by reading… | [:6184](open_issues.md#L6184) |
+| OI-351 | razorpay-webhook: after a payment.authorized auto-capture, a failed insert… | none | 2026-10-17 - by reading… | [:6191](open_issues.md#L6191) |
+| OI-352 | Active Workout meta line prints hard-coded '0kg' for every scheduled lift | none (pick up after the… | 2026-10-18 - by code read only, NOT on… | [:6198](open_issues.md#L6198) |
+| OI-353 | Plan suggested_weight (ProgressionResolver) is never read by the Active… | none (pick up after the… | 2026-10-18 - by code read: the plan… | [:6211](open_issues.md#L6211) |
+| OI-354 | Active Workout hero tile + full-screen viewer (animated WEBP) blocked on… | the animated-WEBP asset pipeline and its… | 2026-10-18 - design locked in… | [:6224](open_issues.md#L6224) |
+| OI-355 | Active Workout _persistActiveState reads the build-time widget.data, so… | none (pick up after the… | 2026-10-18 - by code read (plan review… | [:6235](open_issues.md#L6235) |
+| OI-357 | Active Workout U2: per-set last values, new-user weight mirror, faded… | OI-356 landing and the flag flip;… | never | [:6248](open_issues.md#L6248) |
+| OI-358 | Active Workout: adding an exercise already in the session crashes the… | none | never | [:6261](open_issues.md#L6261) |
