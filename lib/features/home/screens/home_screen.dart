@@ -29,6 +29,8 @@ import '../widgets/quick_action_button.dart';
 import '../widgets/profile_nudge_card.dart';
 import '../widgets/phase_repeat_nudge_banner.dart';
 import '../widgets/measurement_due_slot.dart';
+import '../widgets/referral_credit_slot.dart';
+import 'package:icanbefitter/features/profile/providers/referral_summary_provider.dart';
 import '../widgets/quote_card.dart';
 import '../widgets/ai_insight_card.dart';
 import '../widgets/today_workout_card.dart';
@@ -96,6 +98,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     // surfaces the next time the user returns to the app.
     if (state == AppLifecycleState.resumed) {
       _maybeShowPendingPromotion();
+      // Unit C: at most once per 6 hours (the throttle lives in the notifier).
+      unawaited(ref
+          .read(referralCreditNoticeProvider.notifier)
+          .check(fromResume: true));
     }
   }
 
@@ -192,6 +198,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   void invalidateOnBackgroundRestore(WidgetRef ref) {
     invalidateOnRetry(ref);
     _checkStreakFreezeUsed();
+    // Unit C: a restore may have changed the account's credit total.
+    unawaited(ref.read(referralCreditNoticeProvider.notifier).check());
   }
 
   // Bug #14 — Prediction polling moved to ProfileScreen alongside the
@@ -490,6 +498,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         // L2b Landing B — body-measurements banner (flag-gated slot; owns its own
         // flag + prompt checks, so an OFF build creates no measurements provider).
         const MeasurementDueSlot(),
+        // Unit C (OI-336): in-app notice for a referral credit; renders nothing
+        // unless one is waiting, and checks once when it mounts.
+        const ReferralCreditSlot(),
         // Unit 3 obs 6 — web-only "Add to Home Screen" prompt (kIsWeb-gated
         // inside the widget; SizedBox.shrink on Android/iOS + when not
         // installable). Below the safety banners, above the calendar.

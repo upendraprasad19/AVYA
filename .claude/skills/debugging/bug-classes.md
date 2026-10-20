@@ -1749,3 +1749,12 @@ added, false of the flip being performed.
 - **Prior incidents:** 2.37 (a positive grep cannot see a defect in an argument), 2.54.
 - **Regression test:** `test/widgets/scroll_date_picker_clamp_test.dart`, `test/contracts/age_floor_pickers_test.dart`, `test/auth/terms_version_for_account_test.dart`, `test/auth/sign_up_consent_notice_test.dart`, `test/onboarding/identity_dob_floor_test.dart` (B-pass `docs/reviews/age-floor-signup-consent-bpass.md`, mutants R1-R8).
 
+
+### 2.108 A pin written to protect ONE reader of a contract freezes a SECOND, private parser of the same writer in place (NEW 2026-10-17)
+
+- **Telltale:** a screen shows a generic failure ("Could not apply code") for a case the server answers with a specific reason, while a sibling screen of the same flow shows the reason. The fix history names the SAME symptom earlier (d2b9e6, "the client masked the 4xx as a generic Network error"), and a contract test still passes that asserts the broken screen reads the old shape (`invite_friends_sheet` keys off `body['success']`).
+- **Root-cause shape:** the earlier fix repaired the repository and one caller, then pinned the other caller's private parsing as part of the contract, so the duplicate looked intended and could not be removed without reddening a test.
+- **Fix pattern:** one parser per writer contract. Route every caller through the repository, then REPOINT the pin to assert the opposite (the screen no longer names the function or parses the body); grep every caller of the writer (`git grep "redeem-referral" lib/`) when a fix lands, not only the ones the symptom was seen on.
+- **Test shape:** behavioural, one per outcome the repository returns (a 4xx with a reason, a replay, a fresh success) pumped through each screen; plus a presence pin that the screen does not call the function.
+- **Prior incidents:** d2b9e6 (the first fix), 2.1 (writer/reader field drift), 2.107.
+- **Regression test:** `test/contracts/referral_unit_c_surfaces_test.dart` (group InviteFriendsSheet), `test/contracts/referral_repository_only_test.dart`, `test/contracts/referral_redeem_success_contract_test.dart` (diagnose `a7d3c1`).
