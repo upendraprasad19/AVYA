@@ -2,9 +2,10 @@
 // one-LOG-per-exercise writer `ActiveWorkoutNotifier.logSets` and the screen's
 // `LogExerciseController` (real notifier, fake monotonic clock).
 // Plan docs/plans/active-workout-log-exercise.md §6 tests 2, 3, 6, 8, 9, 12,
-// 13, 15.
+// 13, 15; batch 2 (docs/plans/log-exercise-batch2.md §6) tests 9, 10, 11, 11b.
 import 'dart:io';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
@@ -288,6 +289,131 @@ void main() {
     });
   });
 
+  group('unlogSets (UNDO writer, batch 2)', () {
+    const values = SetInputValues(weight: 50, reps: 8);
+    ActiveWorkoutData threeLogged() => ActiveWorkoutData(
+          exercises: [ex('A'), ex('B'), ex('C')],
+          checkedSets: const {
+            '1-0': true, '1-1': true, '1-2': true, // B, the logged one
+            '2-0': true, '2-1': true, '2-2': true, // C
+          },
+          setInputValues: const {'1-0': values, '1-1': values, '1-2': values},
+          warmUpSets: const {'1-0': true},
+        );
+
+    test('removes only the given sets, keeps values and warm-up flags', () {
+      final c = containerWith(threeLogged());
+      final n = c.read(activeWorkoutProvider.notifier);
+      expect(n.unlogSets(1, {1, 2}, exerciseName: 'B'), isTrue);
+      final s = c.read(activeWorkoutProvider);
+      expect(s.isSetChecked(1, 0), isTrue);
+      expect(s.isSetChecked(1, 1), isFalse);
+      expect(s.isSetChecked(1, 2), isFalse);
+      expect(s.isExerciseDone(2), isTrue, reason: 'C untouched');
+      expect(s.setInputValues['1-1'], same(values));
+      expect(s.isSetWarmUp(1, 0), isTrue);
+    });
+
+    test('identity: after a removal shifts C into the record index, UNDO of B '
+        'is a no-op and C keeps its sets', () {
+      final c = containerWith(threeLogged());
+      final n = c.read(activeWorkoutProvider.notifier);
+      n.removeExercise(0); // B -> index 0, C -> index 1 (with its 3 checked sets)
+      final before = c.read(activeWorkoutProvider);
+      expect(before.isExerciseDone(1), isTrue);
+      expect(n.unlogSets(1, {0, 1, 2}, exerciseName: 'B'), isFalse);
+      expect(identical(c.read(activeWorkoutProvider), before), isTrue);
+    });
+
+    test('saved / complete / out of range / nothing checked: no-op, state '
+        'identical', () {
+      final saved = containerWith(threeLogged().copyWith(isSaved: true));
+      final sn = saved.read(activeWorkoutProvider.notifier);
+      final s0 = saved.read(activeWorkoutProvider);
+      expect(sn.unlogSets(1, {0, 1, 2}, exerciseName: 'B'), isFalse);
+      expect(identical(saved.read(activeWorkoutProvider), s0), isTrue);
+
+      final done = containerWith(threeLogged().copyWith(isComplete: true));
+      final dn = done.read(activeWorkoutProvider.notifier);
+      final d0 = done.read(activeWorkoutProvider);
+      expect(dn.unlogSets(1, {0}, exerciseName: 'B'), isFalse);
+      expect(identical(done.read(activeWorkoutProvider), d0), isTrue);
+
+      final c = containerWith(threeLogged());
+      final n = c.read(activeWorkoutProvider.notifier);
+      final c0 = c.read(activeWorkoutProvider);
+      expect(n.unlogSets(5, {0}, exerciseName: 'B'), isFalse);
+      expect(n.unlogSets(1, {7, -1}, exerciseName: 'B'), isFalse);
+      expect(n.unlogSets(0, {0, 1, 2}, exerciseName: 'A'), isFalse);
+      expect(identical(c.read(activeWorkoutProvider), c0), isTrue);
+    });
+
+    test('LOG -> UNDO round trip restores completedSets, done and volume', () {
+      final c = containerWith(ActiveWorkoutData(
+        exercises: [ex('A'), ex('B')],
+        setInputValues: const {'0-0': values, '0-1': values, '0-2': values},
+      ));
+      final n = c.read(activeWorkoutProvider.notifier);
+      final s0 = c.read(activeWorkoutProvider);
+      n.logSets(0, {0, 1, 2});
+      final s1 = c.read(activeWorkoutProvider);
+      expect(s1.completedSets, 3);
+      expect(s1.liveVolumeKg, 1200);
+      expect(n.unlogSets(0, {0, 1, 2}, exerciseName: 'A'), isTrue);
+      final s2 = c.read(activeWorkoutProvider);
+      expect(s2.completedSets, s0.completedSets);
+      expect(s2.isExerciseDone(0), s0.isExerciseDone(0));
+      expect(s2.liveVolumeKg, s0.liveVolumeKg);
+    });
+  });
+
+  group('completion race: UNDO while completeWorkout runs (batch 2 test 11)',
+      () {
+    ActiveWorkoutData aLogged() => ActiveWorkoutData(
+          exercises: [ex('Race A'), ex('Race B')],
+          checkedSets: const {'0-0': true, '0-1': true, '0-2': true},
+          setInputValues: const {
+            '0-0': SetInputValues(weight: 50, reps: 8),
+            '0-1': SetInputValues(weight: 50, reps: 8),
+            '0-2': SetInputValues(weight: 50, reps: 8),
+          },
+        );
+
+    test('an un-awaited completeWorkout makes unlogSets a no-op', () async {
+      final dir = await setUpHiveForTests();
+      addTearDown(() => tearDownHiveForTests(dir));
+      final c = containerWith(aLogged());
+      final n = c.read(activeWorkoutProvider.notifier);
+      fakeAsync((_) {
+        n.completeWorkout(); // the finish dialog does not await it either
+        expect(n.isCompleting, isTrue);
+        final before = c.read(activeWorkoutProvider);
+        expect(before.isSaved, isFalse, reason: 'the save is still running');
+        expect(n.unlogSets(0, {0, 1, 2}, exerciseName: 'Race A'), isFalse);
+        expect(identical(c.read(activeWorkoutProvider), before), isTrue);
+        // Never flushed: the save's awaits stay parked in the fake zone.
+      });
+    });
+
+    test('startWorkout resets the guard, so UNDO works in the next session',
+        () async {
+      final dir = await setUpHiveForTests();
+      addTearDown(() => tearDownHiveForTests(dir));
+      final c = containerWith(aLogged());
+      final n = c.read(activeWorkoutProvider.notifier);
+      fakeAsync((_) {
+        n.completeWorkout();
+        expect(n.isCompleting, isTrue);
+        n.startWorkout(WorkoutDayData(
+            dayNumber: 1, name: 'Next', exercises: [ex('Next A')]));
+        expect(n.isCompleting, isFalse);
+        n.logSets(0, {0, 1, 2});
+        expect(n.unlogSets(0, {0, 1, 2}, exerciseName: 'Next A'), isTrue);
+        expect(c.read(activeWorkoutProvider).isSetChecked(0, 0), isFalse);
+      });
+    });
+  });
+
   group('screen wiring (source, presence only — behaviour is above)', () {
     final screen = File('lib/features/train/screens/active_workout/screen.dart')
         .readAsStringSync();
@@ -323,6 +449,79 @@ void main() {
               .length,
           1);
       expect(screen.contains('onLogExercise: logMode'), isTrue);
+    });
+
+    // Batch 2 (docs/plans/log-exercise-batch2.md §6 test 21), presence only;
+    // the behaviour is the pure units (log_exercise_logic_test.dart) and the
+    // notifier groups above.
+    String body(String src, String signature) {
+      final start = src.indexOf(signature);
+      expect(start, greaterThanOrEqualTo(0), reason: 'missing $signature');
+      final end = src.indexOf('\n  }\n', start);
+      return src.substring(start, end);
+    }
+
+    test('LOG creates the UNDO record from before/after, never while a save '
+        'runs', () {
+      final onLog = body(screen, 'LogOutcomeKind _onLogExercise(');
+      expect(onLog.contains('final before = ref.read(activeWorkoutProvider);'),
+          isTrue);
+      expect(onLog.contains('_showLogUndo(exIdx, before)'), isTrue);
+      final show = body(screen, 'void _showLogUndo(');
+      expect(show.contains('undoRecordFor('), isTrue);
+      expect(
+          show.contains(
+              'completing: ref.read(activeWorkoutProvider.notifier).isCompleting'),
+          isTrue);
+      expect(show.contains('_logUndo?.generation != record.generation'), isTrue,
+          reason: 'a late Timer must not clear a newer record');
+    });
+
+    test('render goes through visibleUndoRecord + logToastText, LOG mode only',
+        () {
+      final wrap = body(screen, 'Widget _withLogUndoToast(');
+      expect(wrap.contains('logMode ? visibleUndoRecord('), isTrue);
+      expect(wrap.contains('logToastText(undo, data)'), isTrue);
+      expect(screen.contains('child: _withLogUndoToast('), isTrue);
+    });
+
+    test('UNDO: guard, unlogSets, focus; never touches the coach snapshot', () {
+      final undo = body(screen, 'void _onLogUndo(');
+      expect(undo.contains('shouldIgnoreUndo('), isTrue);
+      expect(undo.contains('.unlogSets('), isTrue);
+      expect(undo.contains('_focusExercise(record.exerciseIndex)'), isTrue);
+      expect(
+          RegExp(r'ActiveWorkoutPersistence\.').hasMatch(undo), isFalse);
+    });
+
+    test('the toast is cleared on COMPLETE, on completion and on unmount', () {
+      expect(screen.contains('onComplete: _clearLogUndo'), isTrue);
+      final dialog = File(
+              'lib/features/train/screens/active_workout/finish_dialog.dart')
+          .readAsStringSync();
+      final call = dialog.indexOf('onComplete?.call();');
+      final pop = dialog.indexOf('Navigator.of(ctx).pop();', call);
+      final save = dialog.indexOf('.completeWorkout();', call);
+      expect(call, greaterThan(0));
+      expect(pop, greaterThan(call));
+      expect(save, greaterThan(pop));
+      final listener = RegExp(
+        r'ref\.listen<ActiveWorkoutData>\(activeWorkoutProvider,.*?\}\);',
+        dotAll: true,
+      ).firstMatch(screen)!.group(0)!;
+      expect(listener.contains('_logUndo = null;'), isTrue);
+      expect(body(screen, 'void dispose(').contains('_logUndoTimer?.cancel();'),
+          isTrue);
+    });
+
+    test('FINISH: outline until every exercise is logged, LOG mode only', () {
+      expect(
+          screen.contains('final allLogged = logMode && allExercisesLogged(data);'),
+          isTrue);
+      expect(
+          screen.contains('variant: logMode && !data.isSaved && !allLogged'),
+          isTrue);
+      expect(screen.contains('WardroomCopy.activeAllExercisesLogged'), isTrue);
     });
   });
 }

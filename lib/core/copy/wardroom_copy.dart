@@ -167,6 +167,21 @@ class WardroomCopy {
   static const activeBlockedFixTime = 'Fix time';
   static const activeBlockedFixDistance = 'Fix distance';
 
+  // Batch 2 (OI-356, founder-approved copy 2026-10-18;
+  // docs/plans/log-exercise-batch2.md §5.4). Toast after LOG:
+  // `{exercise} logged · {n} sets · {kg} KG`, built from these pieces.
+  static const activeLogToastLoggedTemplate = '{exercise} logged';
+  static const activeLogToastSetsTemplate = '{n} sets';
+  static const activeLogToastOneSet = '1 set';
+  static const activeLogToastKgTemplate = '{kg} KG';
+  static const activeLogToastSeparator = ' · ';
+
+  /// The toast's action: reverts the sets that LOG just checked.
+  static const activeLogUndo = 'UNDO';
+
+  /// Above the gold FINISH WORKOUT once every exercise is logged.
+  static const activeAllExercisesLogged = 'All exercises logged.';
+
   // ── NUTRITION (Galley) ─────────────────────────────────────────────────
   /// Letterhead eyebrow template — "NUTRITION · TUE 14 APR".
   /// Weekday and date filled at render.

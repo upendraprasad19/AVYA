@@ -1,6 +1,7 @@
 // One-LOG-per-exercise card behaviour through the real `_ExerciseCard`
 // (seam `debugExerciseCardHostForTest`). Plan
-// docs/plans/active-workout-log-exercise.md §6 tests 4, 5, 7, 10, 11, 14, 16.
+// docs/plans/active-workout-log-exercise.md §6 tests 4, 5, 7, 10, 11, 14, 16;
+// batch 2 (docs/plans/log-exercise-batch2.md §6) mirror tests 12-19.
 @Timeout(Duration(minutes: 4))
 library;
 
@@ -79,13 +80,16 @@ void main() {
 
       await tester.enterText(fieldAt(0), '50');
       await tester.pump(); // one frame, no timer tick
-      expect(find.text('Add weight'), findsOneWidget); // sets 2 and 3 blank
+      // Batch 2 mirror: set 1's weight fills the blank sets 2 and 3.
+      expect(find.text('LOG 3 SETS ✓'), findsOneWidget);
+      await tester.enterText(fieldAt(2), ''); // the user clears set 2
+      await tester.pump();
+      expect(find.text('Add weight'), findsOneWidget);
       await tester.tap(find.text('Add weight'));
       await tester.pump();
       expect(hasFocus(tester, 2), isTrue, reason: 'set 2 weight is next');
 
       await tester.enterText(fieldAt(2), '50');
-      await tester.enterText(fieldAt(4), '50');
       await tester.pump();
       expect(find.text('LOG 3 SETS ✓'), findsOneWidget);
 
@@ -213,6 +217,165 @@ void main() {
       await tester.pump();
       expect(h.logCalls, isEmpty);
       expect(h.state.exercises.first.sets, '3');
+    });
+  });
+
+  group('batch 2 mirror (flag ON, new user unless stated)', () {
+    const newUser = LastPerformanceData();
+    Future<CardHarness> pumpNew(WidgetTester tester,
+            {String type = 'weight_reps', bool logMode = true}) =>
+        pumpCard(tester,
+            seed: ActiveWorkoutData(exercises: [exercise(type: type)]),
+            logMode: logMode,
+            lastPerf: newUser);
+    String text(WidgetTester tester, int i) => controllerAt(tester, i).text;
+    Future<void> type(WidgetTester tester, int field, String value) async {
+      await tester.enterText(fieldAt(field), value);
+      await tester.pump();
+    }
+
+    testWidgets('12: set 1 fills the blank sets; LOG unblocked', (tester) async {
+      await pumpNew(tester);
+      expect(find.text('Add weight'), findsOneWidget);
+      await type(tester, 0, '60');
+      expect([text(tester, 2), text(tester, 4)], ['60', '60']);
+      expect(find.text('LOG 3 SETS ✓'), findsOneWidget);
+    });
+
+    testWidgets('13: followers keep following; a typed value is left alone',
+        (tester) async {
+      await pumpNew(tester);
+      await type(tester, 0, '60');
+      await type(tester, 4, '70'); // the user types set 3
+      await type(tester, 0, '65');
+      expect(text(tester, 2), '65');
+      expect(text(tester, 4), '70');
+    });
+
+    testWidgets('14: editing set 1 REPS does not refill a cleared weight',
+        (tester) async {
+      await pumpNew(tester);
+      await type(tester, 0, '60');
+      await type(tester, 2, ''); // the user clears set 2's weight
+      await type(tester, 1, '9'); // set 1 reps
+      expect(text(tester, 2), '');
+      expect(text(tester, 4), '60');
+    });
+
+    testWidgets('15: clearing set 1 clears its followers', (tester) async {
+      await pumpNew(tester);
+      await type(tester, 0, '60');
+      await type(tester, 0, '');
+      expect([text(tester, 2), text(tester, 4)], ['', '']);
+    });
+
+    testWidgets('16: timed and cardio mirror; bodyweight reps does not',
+        (tester) async {
+      await pumpNew(tester, type: 'timed');
+      await type(tester, 0, '45');
+      expect([text(tester, 1), text(tester, 2)], ['45', '45']);
+    });
+
+    testWidgets('16b: cardio mirrors duration and distance', (tester) async {
+      await pumpNew(tester, type: 'cardio');
+      await type(tester, 0, '20');
+      await type(tester, 1, '5');
+      expect([text(tester, 2), text(tester, 3), text(tester, 4), text(tester, 5)],
+          ['20', '5', '20', '5']);
+    });
+
+    testWidgets('16c: bodyweight reps: nothing mirrors', (tester) async {
+      await pumpNew(tester, type: 'bodyweight_reps');
+      final before = text(tester, 1);
+      await type(tester, 0, '12');
+      expect(text(tester, 1), before);
+    });
+
+    testWidgets('17: a logged set is never written', (tester) async {
+      await pumpNew(tester);
+      await type(tester, 0, '60');
+      await tapWithRealIo(tester, find.text('LOG 3 SETS ✓'));
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pump();
+      expect(text(tester, 6), '60', reason: 'seeded from set 3');
+      await type(tester, 0, '65');
+      expect([text(tester, 2), text(tester, 4)], ['60', '60'],
+          reason: 'sets 2 and 3 are logged');
+      expect(text(tester, 6), '65', reason: 'the added set follows the chain');
+    });
+
+    testWidgets('18: - then + : the re-added set follows through the chain',
+        (tester) async {
+      await pumpNew(tester);
+      await type(tester, 0, '60');
+      await type(tester, 4, '70'); // set 3 typed by the user
+      await tester.tap(find.byIcon(Icons.remove));
+      await tester.pump();
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pump();
+      expect(text(tester, 4), '60', reason: 'seeded from set 2, a follower');
+      await type(tester, 0, '65');
+      expect(text(tester, 4), '65');
+    });
+
+    testWidgets('18 (returning user): a copy of a prefilled set never follows',
+        (tester) async {
+      await pumpCard(tester,
+          seed: ActiveWorkoutData(exercises: [exercise()]), logMode: true);
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pump();
+      await type(tester, 0, '65');
+      expect([text(tester, 2), text(tester, 4), text(tester, 6)],
+          ['60', '60', '60']);
+    });
+
+    testWidgets('18b: a warm-up moving the source re-baselines first',
+        (tester) async {
+      final h = await pumpNew(tester);
+      await type(tester, 0, '60');
+      await type(tester, 2, '70'); // set 2 typed
+      h.container.read(activeWorkoutProvider.notifier).toggleWarmUp(0, 0);
+      await tester.pump();
+      await type(tester, 3, '9'); // set 2 reps: source moved, nothing mirrors
+      expect(text(tester, 4), '60');
+      await type(tester, 2, '75'); // the new source's weight changes
+      expect(text(tester, 4), '75');
+    });
+
+    testWidgets('18c: after a warm-up moves the source, a ONE-digit entry '
+        'mirrors (B-pass finding 2)', (tester) async {
+      final h = await pumpNew(tester);
+      h.container.read(activeWorkoutProvider.notifier).toggleWarmUp(0, 0);
+      await tester.pump();
+      await type(tester, 2, '8'); // set 2 is the source now; one keystroke
+      expect(text(tester, 4), '8');
+      expect(text(tester, 0), '', reason: 'the warm-up set is not a target');
+    });
+
+    testWidgets('18d: + on a one-set exercise follows the source '
+        '(B-pass finding 3)', (tester) async {
+      await pumpCard(tester,
+          seed: ActiveWorkoutData(exercises: [exercise(sets: '1')]),
+          logMode: true,
+          lastPerf: newUser);
+      await type(tester, 0, '60');
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pump();
+      expect(text(tester, 2), '60', reason: 'seeded from set 1, the source');
+      await type(tester, 0, '65');
+      expect(text(tester, 2), '65', reason: 'the copy of the source follows');
+    });
+
+    testWidgets('19: flag OFF never mirrors (weight and timed)', (tester) async {
+      await pumpNew(tester, logMode: false);
+      await type(tester, 0, '60');
+      expect([text(tester, 2), text(tester, 4)], ['', '']);
+    });
+
+    testWidgets('19b: flag OFF never mirrors a timed duration', (tester) async {
+      await pumpNew(tester, type: 'timed', logMode: false);
+      await type(tester, 0, '45');
+      expect([text(tester, 1), text(tester, 2)], ['', '']);
     });
   });
 }

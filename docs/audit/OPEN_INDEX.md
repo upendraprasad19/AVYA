@@ -225,7 +225,7 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-353 | Plan suggested_weight (ProgressionResolver) is never read by the Active… | none (pick up after the… | 2026-10-18 - by code read: the plan… | [:6212](open_issues.md#L6212) |
 | OI-354 | Active Workout hero tile + full-screen viewer (animated WEBP) blocked on… | the animated-WEBP asset pipeline and its… | 2026-10-18 - design locked in… | [:6225](open_issues.md#L6225) |
 | OI-355 | Active Workout _persistActiveState reads the build-time widget.data, so… | none (pick up after the… | 2026-10-18 - by code read (plan review… | [:6236](open_issues.md#L6236) |
-| OI-356 | Active Workout U1b: edit mode, UNDO, un-log, last-exercise emphasis and… | the U1a batch… | never | [:6249](open_issues.md#L6249) |
-| OI-357 | Active Workout U2: per-set last values, new-user weight mirror, faded… | OI-356 landing and the flag flip;… | never | [:6262](open_issues.md#L6262) |
-| OI-359 | verify-payment calls Razorpay capture before the payment-owner check… | none | 2026-10-20 - by code read (hermes pass… | [:6275](open_issues.md#L6275) |
-| OI-360 | verify-payment and razorpay-webhook log whole PostgREST error objects and… | none | 2026-10-20 - by code read (hermes pass… | [:6284](open_issues.md#L6284) |
+| OI-357 | Active Workout U2: per-set last values, new-user weight mirror, faded… | OI-356 landing and the flag flip;… | never | [:6249](open_issues.md#L6249) |
+| OI-358 | Active Workout: adding an exercise already in the session crashes the… | none | never | [:6262](open_issues.md#L6262) |
+| OI-359 | verify-payment calls Razorpay capture before the payment-owner check… | none | 2026-10-20 - by code read (hermes pass… | [:6271](open_issues.md#L6271) |
+| OI-360 | verify-payment and razorpay-webhook log whole PostgREST error objects and… | none | 2026-10-20 - by code read (hermes pass… | [:6280](open_issues.md#L6280) |

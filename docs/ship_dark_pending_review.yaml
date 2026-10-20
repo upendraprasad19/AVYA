@@ -296,6 +296,8 @@ pending:
 #      e8f95e, so timed/cardio/distance exercises block LOG on every set
 #      without it; B-pass finding 5), and the last-exercise emphasis. Batch 3
 #      (OI-357) is NOT required.
+#      STATUS 2026-10-20: built on branch log-exercise-batch2 (OI-356 closed
+#      there; diagnose c7d2a9). Met once that branch is merged to main.
 #   2. Full x2 plan review on the flip commit + /code-review B-pass accepted.
 #   3. Device check on a DEBUG build (the dev toggle is kDebugMode-only).
 #   4. The edit-after-LOG test (validated capture on every keystroke) green.

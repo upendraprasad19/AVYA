@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -18,6 +20,7 @@ import '../../services/log_exercise_flags.dart';
 import '../../services/log_exercise_logic.dart';
 import '../../../home/providers/home_provider.dart';
 import '../../widgets/create_custom_exercise_sheet.dart';
+import '../../widgets/log_undo_toast.dart';
 import '../../widgets/exercise_swap_sheet.dart';
 import '../../widgets/set_input_row.dart';
 import '../../widgets/workout_receipt_card.dart';
@@ -86,9 +89,17 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
   late final LogExerciseController _logController =
       LogExerciseController(clock: () => _logClock.elapsed);
 
+  /// Batch 2 UNDO toast (docs/plans/log-exercise-batch2.md §5.1): an in-tree
+  /// overlay, never a SnackBar, so it cannot outlive this screen. The latest
+  /// LOG wins; the Timer clears only its own generation.
+  LogUndoRecord? _logUndo;
+  int _logUndoGeneration = 0;
+  Timer? _logUndoTimer;
+
   /// Applies the controller's outcome: clear the manual focus so the next
   /// non-done exercise expands, and reveal a superset partner.
   LogOutcomeKind _onLogExercise(int exIdx, Set<int> setIdxs) {
+    final before = ref.read(activeWorkoutProvider);
     final outcome = _logController.log(
       exerciseIndex: exIdx,
       setIndexes: setIdxs,
@@ -106,7 +117,61 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
         if (mounted) _scrollToExercise(partner);
       });
     }
+    if (outcome.kind == LogOutcomeKind.logged) _showLogUndo(exIdx, before);
     return outcome.kind;
+  }
+
+  void _showLogUndo(int exIdx, ActiveWorkoutData before) {
+    final record = undoRecordFor(
+      before: before,
+      after: ref.read(activeWorkoutProvider),
+      exerciseIndex: exIdx,
+      shownAt: _logClock.elapsed,
+      generation: ++_logUndoGeneration,
+      // No toast while a save is running: its UNDO would do nothing.
+      completing: ref.read(activeWorkoutProvider.notifier).isCompleting,
+    );
+    if (record == null) return;
+    _logUndoTimer?.cancel();
+    setState(() => _logUndo = record);
+    _logUndoTimer = Timer(kLogUndoWindow, () {
+      if (!mounted || _logUndo?.generation != record.generation) return;
+      setState(() => _logUndo = null);
+    });
+  }
+
+  void _clearLogUndo() {
+    _logUndoTimer?.cancel();
+    _logUndoTimer = null;
+    if (_logUndo != null) setState(() => _logUndo = null);
+  }
+
+  void _onLogUndo() {
+    final record = _logUndo;
+    if (record == null) return;
+    if (shouldIgnoreUndo(now: _logClock.elapsed, shownAt: record.shownAt)) {
+      return;
+    }
+    _clearLogUndo();
+    // The coach snapshot (ActiveWorkoutPersistence) is left as the LOG wrote
+    // it: clearing it would tell the coach the session is over.
+    final undone = ref.read(activeWorkoutProvider.notifier).unlogSets(
+        record.exerciseIndex, record.setIndexes,
+        exerciseName: record.exerciseName);
+    if (undone) _focusExercise(record.exerciseIndex);
+  }
+
+  /// The exercise list with the UNDO toast over its top edge (LOG mode only).
+  Widget _withLogUndoToast(bool logMode, ActiveWorkoutData data, Widget list) {
+    final undo =
+        logMode ? visibleUndoRecord(_logUndo, _logClock.elapsed, data) : null;
+    return LogUndoToastHost(
+      enabled: logMode,
+      list: list,
+      toast: undo == null
+          ? null
+          : LogUndoToast(text: logToastText(undo, data), onUndo: _onLogUndo),
+    );
   }
 
   void _dismissSwapUndoSnackBar() {
@@ -121,6 +186,7 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
     // unmounts this screen (cancel dialog's context.go, back-gesture pop)
     // without needing to name each one individually.
     _dismissSwapUndoSnackBar();
+    _logUndoTimer?.cancel();
     // A7: clear mid-workout snapshot on any screen exit (back-button, system
     // nav, or auto-dismiss). Completion/cancellation paths also call this
     // explicitly so the AI coach sees null state immediately rather than
@@ -204,6 +270,8 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
     ref.listen<ActiveWorkoutData>(activeWorkoutProvider, (previous, next) {
       if (next.isComplete && previous?.isComplete != true) {
         _dismissSwapUndoSnackBar();
+        _logUndoTimer?.cancel();
+        _logUndo = null;
       }
     });
 
@@ -255,6 +323,7 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
     // Read ONCE per build and passed down, so it cannot change between a
     // card's didUpdateWidget and its build within one frame.
     final logMode = LogExerciseFlags.logExerciseButtonEnabled;
+    final allLogged = logMode && allExercisesLogged(data);
 
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -331,7 +400,10 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
 
               // Exercise cards list
               Expanded(
-                child: ListView(
+                child: _withLogUndoToast(
+                  logMode,
+                  data,
+                  ListView(
                   controller: _scrollController,
                   padding: const EdgeInsets.only(top: 6, bottom: 10),
                   children: [
@@ -524,6 +596,20 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                       ),
                     ),
 
+                    // Batch 2 last-exercise emphasis (LOG mode): FINISH is an
+                    // outline until every exercise is logged, then gold with
+                    // this line above it. OFF and review mode: as before.
+                    if (allLogged)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+                        child: Text(
+                          WardroomCopy.activeAllExercisesLogged,
+                          textAlign: TextAlign.center,
+                          style: AppTypography.bodySm
+                              .copyWith(color: AppColors.accent),
+                        ),
+                      ),
+
                     // Finish Workout button — disabled if already saved (review mode)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
@@ -531,9 +617,13 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                         label: data.isSaved
                             ? '✓ ALREADY SAVED'
                             : '✓ FINISH WORKOUT',
+                        variant: logMode && !data.isSaved && !allLogged
+                            ? WardButtonVariant.outline
+                            : WardButtonVariant.primary,
                         onPressed: data.isSaved
                             ? null
-                            : () => _showFinishDialog(context, ref, data),
+                            : () => _showFinishDialog(context, ref, data,
+                                onComplete: _clearLogUndo),
                       ),
                     ),
 
@@ -548,6 +638,7 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                       ),
                     ),
                   ],
+                ),
                 ),
               ),
             ],
