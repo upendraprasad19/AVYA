@@ -312,6 +312,29 @@ class StreakProgressService {
     unawaited(SyncService.instance.syncFreezes());
   }
 
+  /// Piece B (lapse gap policy): a phase was generated after a BLANK gap (no
+  /// schedule rows between the old window and the new start), so the streak
+  /// freezes go to 0. A blank gap of 7+ days holds at least 3 planned days (the
+  /// smallest plan), which equals the cap of 3, so zeroing equals simulating the
+  /// missed days; the weekly refill (+1 per Monday opened, capped) continues
+  /// from 0. The grant
+  /// flag and the used-dates ledger are untouched. Local write first, then a
+  /// background push (`mergeFreezeProgress` takes the LOWER `available` within a
+  /// week, so a zero cannot be refunded by a stale cloud row). Kill switch
+  /// `disable_lapse_gap_policy` (checked by the caller via `lapseGapPolicyEnabled`).
+  void resetFreezesAfterGap({required int gapDays}) {
+    final progress = UserRepository.instance.getProgress() ?? {};
+    final before = (progress['streak_freezes_available'] as int?) ?? 0;
+    if (before != 0) {
+      UserRepository.instance.updateProgress({'streak_freezes_available': 0});
+      unawaited(ErrorTelemetry.logEvent(
+        'streak_freeze_gap_reset',
+        message: 'before=$before gap_days=$gapDays',
+      ));
+    }
+    unawaited(SyncService.instance.syncFreezes());
+  }
+
   /// Pure merge of local vs cloud streak-freeze state for the restore path
   /// (`_restoreFreezes`). D1 (f9d2e7): `streak_freeze_used_dates` is now a
   /// PERMANENT ledger (commitRefill prunes >365d, never clears), so used_dates

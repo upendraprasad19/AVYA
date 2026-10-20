@@ -249,7 +249,7 @@ serve(async (req: Request) => {
           (progressRow?.deployments_complete as number | undefined) ?? 0,
         lastWorkoutDaysAgo,
         completionRateProvider: (windowWeeks: number) =>
-          completionRateOverWindow(supabase, userId, windowWeeks),
+          completionRateOverWindow(supabase, userId, windowWeeks, true),
       };
 
       const winner = await highestQualified(state);
