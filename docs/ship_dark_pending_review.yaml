@@ -233,7 +233,7 @@ pending:
 
   - flag: ENABLE_SUBSCRIPTION_STACKING
     branch: oi341-purchase-in-trial
-    build_commit: null
+    build_commit: 8be9371d
     build_date: 2026-10-17
     flip_reviewed: false
     flip_commit: null
@@ -254,7 +254,20 @@ pending:
       without a redeploy, and the first enabled call as the proof that live
       PostgREST accepts the helper's query (the fetch-level fake proves the
       string and its SQL semantics, not the live parser). build_commit is
-      stamped when the commit lands.
+      Piece A's build commit (merged in PR #124).
+      SECOND BUILD, Piece B1 (branch oi341-piece-b-door, plan
+      docs/plans/oi341-piece-b-door.md v4.1, built 2026-10-20; its build commit
+      is stamped here after the merge): it REPLACED Piece A's ON path (read,
+      then insert) with ONE call to public.record_paid_subscription (migration
+      161: per-user lock, idempotency, stacked end, insert) and added the
+      payment_record_failed alert, which satisfies the alert precondition
+      above. B1 took tier ship_dark_build with review_rounds: 1 (the unsplit
+      unit had three earlier rounds), plus B-pass and hermes. So the flip's
+      full x2 review (Piece B2) must re-review the SQL body of migration 161
+      and the new ON path in both writers, not only the purchase door. The
+      Piece A items about the helper's PostgREST query no longer apply (that
+      query was removed); the first LIVE happy-path call of the function is a
+      Piece B2 flip step.
 
   - flag: enable_log_exercise_button
     branch: active-workout-log-exercise

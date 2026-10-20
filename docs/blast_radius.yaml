@@ -77,6 +77,10 @@ paths:
   # what a payment grants. One glob for the module and its Deno test. The test infrastructure (postgrest_fake_fetch.ts,
   # payment_writer_harness.ts, fixtures/) stays platform on purpose: it grants nothing.
   - { glob: "supabase/functions/_shared/subscription_stacking*.ts", tier: catastrophic }
+  # OI-341 Piece B1: the alert a payment writer raises when a CAPTURED payment could not be recorded (the paid-but-no-row
+  # signal). A change to it alone is under `_shared/**` (platform) and would skip hermes while changing whether that failure
+  # is seen. One glob for the module and its Deno test.
+  - { glob: "supabase/functions/_shared/payment_alert*.ts", tier: catastrophic }
   - { glob: "supabase/migrations/*pseudonymize*.sql", tier: catastrophic }
   - { glob: "supabase/migrations/*rls*.sql", tier: catastrophic }
   - { glob: "supabase/migrations/*security_definer*.sql", tier: catastrophic }

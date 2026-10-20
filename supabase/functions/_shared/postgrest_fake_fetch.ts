@@ -26,13 +26,16 @@ export interface RecordedRequest {
 }
 
 /** `Response` to answer with, `"throw"` to reject the fetch, undefined to fall through. */
-export type Intercept = (req: RecordedRequest) => Response | "throw" | undefined;
+export type Intercept = (
+  req: RecordedRequest,
+) => Response | Promise<Response> | "throw" | undefined;
 
 export interface FakeServerOptions {
   origin?: string;
   tables?: Record<string, Row[]>;
   /** Bearer token -> auth user. */
   users?: Record<string, { id: string; email?: string }>;
+  /** A handler may return a `Response` to choose the status itself (e.g. a PostgREST error body). */
   rpcs?: Record<string, (args: Row) => unknown>;
   /** Answers any RPC not named in `rpcs` (the handlers' rate-limit counter call). */
   fallbackRpc?: (name: string, args: Row) => unknown;
@@ -133,7 +136,10 @@ export class FakeServer {
     const rpc = /^\/rest\/v1\/rpc\/(.+)$/.exec(url.pathname);
     if (rpc) {
       const fn = this.rpcs[rpc[1]];
-      if (fn) return json(200, fn((body ?? {}) as Row));
+      if (fn) {
+        const answer = fn((body ?? {}) as Row);
+        return answer instanceof Response ? answer : json(200, answer);
+      }
       if (this.fallbackRpc) return json(200, this.fallbackRpc(rpc[1], (body ?? {}) as Row));
       return json(404, { code: "PGRST202", message: `no rpc ${rpc[1]}` });
     }

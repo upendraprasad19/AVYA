@@ -7,6 +7,7 @@ import { assert, assertEquals, assertMatch } from "https://deno.land/std@0.224.0
 import {
   captureConsole,
   type Handler,
+  alertInserts,
   helperReads,
   importWithEnv,
   iso,
@@ -14,17 +15,16 @@ import {
   normalizeRequests,
   PAY,
   paymentServer,
+  recordPaidCalls,
   type Scenario,
   stripInstants,
   subscriptionInserts,
   trialRow,
   USER,
-  OTHER_USER,
   verifyRequest,
   withSwitch,
   YEARLY_PAISE,
 } from "../_shared/payment_writer_harness.ts";
-import { jsonResponse } from "../_shared/postgrest_fake_fetch.ts";
 
 const newHandler = (await importWithEnv(() => import("./index.ts"))).handler as Handler;
 const originHandler = await loadOriginMainHandler("verify_payment_origin_main.ts.txt");
@@ -63,78 +63,81 @@ const promoScenario = (rows: Scenario["rows"]): Scenario => ({
   promoRows: [{ code: "HALF50", discount_pct: 50, is_active: true, valid_until: "2099-01-01T00:00:00Z", max_uses: null, used_count: 0 }],
 });
 
-// ── stacking ON ─────────────────────────────────────────────────────────────
+// ── stacking ON (OI-341 Piece B1): one rpc call, no insert, no helper read ──
 
-t("ON + active trial: end_date = trialEnd + 30, start_date = payment time, response reports the stored end", async () => {
-  const trial = trialRow(3);
-  const r = await run(newHandler, { rows: [trial] }, "true");
+const RPC_END = "2026-12-01T10:00:00.123456+00:00";
+const RPC_END_ISO = new Date(RPC_END).toISOString();
+const rpcRow = (over: Record<string, unknown> = {}) => ({
+  out_end_date: RPC_END,
+  out_start_date: "2026-11-01T10:00:00.654321+00:00",
+  out_inserted: true,
+  ...over,
+});
+const withRpc = (sc: Scenario, over: Record<string, unknown> = {}): Scenario => ({ ...sc, recordPaid: { rows: [rpcRow(over)] } });
+
+t("ON: calls rpc/record_paid_subscription exactly once with the exact args; NO insert POST and NO helper GET", async () => {
+  const r = await run(newHandler, withRpc({ rows: [] }), "true");
   assertEquals(r.res.status, 200);
-  const inserts = subscriptionInserts(r.server);
-  assertEquals(inserts.length, 1);
-  const row = inserts[0].body as Record<string, string>;
-  assertEquals(row.end_date, plusDays(trial.end_date as string, 30));
-  assert(Date.parse(row.start_date) >= r.before && Date.parse(row.start_date) <= r.after, "start_date is the payment time");
-  assertEquals(row.plan, "monthly");
-  assertEquals(r.body.end_date, row.end_date);
-  assertEquals(r.body.verified, true);
-  assertEquals(helperReads(r.server).length, 1);
+  const calls = recordPaidCalls(r.server);
+  assertEquals(calls.length, 1);
+  assertEquals(calls[0].body, {
+    p_user_id: USER,
+    p_plan: "monthly",
+    p_payment_id: PAY,
+    p_order_id: "order_TEST0001",
+    p_signature: "verified_via_api:" + PAY.substring(0, 12),
+  });
+  assertEquals(subscriptionInserts(r.server).length, 0, "the function inserts; the writer must not");
+  assertEquals(helperReads(r.server).length, 0);
+  assertEquals(r.server.tables.subscriptions.length, 0);
 });
 
-t("ON + active trial, YEARLY payment: end_date = trialEnd + 365", async () => {
-  const trial = trialRow(3);
-  const r = await run(newHandler, { rows: [trial], amount: YEARLY_PAISE }, "true");
-  const row = subscriptionInserts(r.server)[0].body as Record<string, string>;
-  assertEquals(row.plan, "yearly");
-  assertEquals(row.end_date, plusDays(trial.end_date as string, 365));
-  assertEquals(r.body.end_date, row.end_date);
-});
-
-t("ON + no active row: today's values (start + 30)", async () => {
-  const r = await run(newHandler, { rows: [] }, "true");
-  const row = subscriptionInserts(r.server)[0].body as Record<string, string>;
-  assertEquals(row.end_date, plusDays(row.start_date, 30));
-  assertEquals(r.body.end_date, row.end_date);
-});
-
-t("ON: distractors are ignored (another user's PRO, a cancelled row, an expired row); the latest ACTIVE of several wins", async () => {
-  const keep = trialRow(5, { id: "keep", razorpay_payment_id: "pay_OLD0000000001" });
-  const rows = [
-    trialRow(300, { id: "other-user", user_id: OTHER_USER }),
-    trialRow(200, { id: "cancelled", status: "cancelled" }),
-    trialRow(-2, { id: "expired" }),
-    trialRow(2, { id: "earlier" }),
-    keep,
-  ];
-  const r = await run(newHandler, { rows }, "true");
-  const row = subscriptionInserts(r.server)[0].body as Record<string, string>;
-  assertEquals(row.end_date, plusDays(keep.end_date as string, 30));
-});
-
-t("ON: the promo is redeemed exactly once on a first insert", async () => {
-  const trial = trialRow(3);
-  const r = await run(newHandler, promoScenario([trial]), "true");
+t("ON, YEARLY payment: p_plan is 'yearly' (the plan is derived, never hard-coded)", async () => {
+  const r = await run(newHandler, withRpc({ rows: [], amount: YEARLY_PAISE }), "true");
   assertEquals(r.res.status, 200);
-  assertEquals(r.promoIncrements, ["HALF50"]);
-  assertEquals(r.server.to("/rest/v1/promo_code_uses", "POST").length, 1);
-  assertEquals((subscriptionInserts(r.server)[0].body as Record<string, string>).end_date, plusDays(trial.end_date as string, 30));
+  assertEquals((recordPaidCalls(r.server)[0].body as Record<string, unknown>).p_plan, "yearly");
 });
 
-// ── read failure: fail the call, never guess ────────────────────────────────
+for (const inserted of [true, false]) {
+  t(`ON, out_inserted=${inserted}: the response end_date is the rpc's out_end_date as an ISO string (not the local now+days)`, async () => {
+    const r = await run(newHandler, withRpc({ rows: [] }, { out_inserted: inserted }), "true");
+    assertEquals(r.res.status, 200);
+    assertEquals(r.body.verified, true);
+    assertEquals(r.body.end_date, RPC_END_ISO);
+    assertEquals(r.body.source, "razorpay_api");
+    assert(r.all.some((l) => l.includes(`[verify-payment] stacking=on payment_id=${PAY} inserted=${inserted}`)));
+  });
+}
 
-const isHelperRead = (q: Array<[string, string]>) => q.some(([k, v]) => k === "end_date" && v.startsWith("gt."));
+t("ON: an out_end_date with a +05:30 offset maps to the right instant", async () => {
+  const r = await run(newHandler, withRpc({ rows: [] }, { out_end_date: "2026-12-01T15:30:00.5+05:30" }), "true");
+  assertEquals(r.body.end_date, "2026-12-01T10:00:00.500Z");
+});
 
-t("ON + helper read DATABASE error: 500, NO insert, no promo, the reconcile log line carries the ids and the code", async () => {
+t("ON, out_inserted=false: the promo is NOT redeemed; out_inserted=true: redeemed exactly once", async () => {
+  const no = await run(newHandler, withRpc(promoScenario([]), { out_inserted: false }), "true");
+  assertEquals(no.res.status, 200);
+  assertEquals(no.promoIncrements.length, 0);
+  assertEquals(no.server.to("/rest/v1/promo_code_uses", "POST").length, 0);
+  const yes = await run(newHandler, withRpc(promoScenario([]), { out_inserted: true }), "true");
+  assertEquals(yes.res.status, 200);
+  assertEquals(yes.promoIncrements, ["HALF50"]);
+  assertEquals(yes.server.to("/rest/v1/promo_code_uses", "POST").length, 1);
+});
+
+// ── rpc failure: fail the call, page, never guess ───────────────────────────
+
+t("ON + rpc DATABASE error: 500, NO insert, no promo, reconcile line with ids and code (no message), one alert row", async () => {
   const sc: Scenario = {
     ...promoScenario([trialRow(3)]),
-    intercept: (req) =>
-      req.method === "GET" && req.path === "/rest/v1/subscriptions" && isHelperRead(req.query)
-        ? jsonResponse(500, { code: "57014", message: "canceling statement due to statement timeout" })
-        : undefined,
+    recordPaid: { status: 400, body: { code: "55P03", message: "could not obtain lock on advisory key", details: null, hint: null } },
   };
   const r = await run(newHandler, sc, "true");
   assertEquals(r.res.status, 500);
   assertEquals(r.body.verified, false);
+  assertEquals(r.body.error, "Could not record subscription; please retry");
   assertMatch(String(r.body.request_id), /^[0-9a-f]{8}$/);
+  assertEquals(recordPaidCalls(r.server).length, 1);
   assertEquals(subscriptionInserts(r.server).length, 0);
   assertEquals(r.promoIncrements.length, 0);
   assertEquals(r.server.to("/rest/v1/promo_code_uses", "POST").length, 0);
@@ -143,24 +146,71 @@ t("ON + helper read DATABASE error: 500, NO insert, no promo, the reconcile log 
   assert(line.includes(`request_id=${r.body.request_id}`));
   assert(line.includes(`payment_id=${PAY}`));
   assert(line.includes(`user_id=${USER}`));
-  assert(line.includes("code=57014"));
-  assert(line.includes("plan=monthly"), "the reconcile line carries the plan");
-  assert(line.includes("amount_paise=17450"), "the reconcile line carries the amount paid");
-  assert(!line.includes("canceling statement"), "the error MESSAGE must never be logged");
+  assert(line.includes("code=55P03"));
+  assert(line.includes("plan=monthly"));
+  assert(line.includes("amount_paise=17450"));
+  assert(!line.includes("advisory key"), "the error MESSAGE must never be logged");
+  const alerts = alertInserts(r.server);
+  assertEquals(alerts.length, 1);
+  const row = alerts[0].body as Record<string, any>;
+  assertEquals(row.source, "payment_record_failed");
+  assertEquals(row.severity, "critical");
+  assertEquals(row.context_json.fn, "verify-payment");
+  assertEquals(row.context_json.request_id, r.body.request_id);
+  assertEquals(row.context_json.payment_id, PAY);
+  assertEquals(row.context_json.user_id, USER);
+  assertEquals(row.context_json.code, "55P03");
+  assert(!JSON.stringify(row).includes("advisory key"));
 });
 
-t("ON + helper read THROWS (transport failure): 500, NO insert, log line with a non-empty code", async () => {
+t("ON + rpc transport failure (fetch throws): 500, NO insert, line code read_error, alert row written", async () => {
   const sc: Scenario = {
     rows: [trialRow(3)],
-    intercept: (req) => (req.method === "GET" && req.path === "/rest/v1/subscriptions" && isHelperRead(req.query) ? "throw" : undefined),
+    intercept: (req) => (req.path === "/rest/v1/rpc/record_paid_subscription" ? "throw" : undefined),
   };
   const r = await run(newHandler, sc, "true");
   assertEquals(r.res.status, 500);
-  assertEquals(r.body.verified, false);
   assertEquals(subscriptionInserts(r.server).length, 0);
   const line = r.errors.find((e) => e.startsWith("[verify-payment] stacking read failed"));
   assert(line, "reconcile log missing");
-  assertMatch(line, /code=\S+/);
+  assert(line.includes("code=read_error"), line);
+  assertEquals(alertInserts(r.server).length, 1);
+});
+
+t("ON + rpc failure + the alert INSERT fails: the response is still the same 500", async () => {
+  const mk = (alerts: Scenario["alerts"]): Scenario => ({
+    rows: [],
+    recordPaid: { status: 400, body: { code: "55P03", message: "x" } },
+    alerts,
+  });
+  const good = await run(newHandler, mk({}), "true");
+  const bad = await run(newHandler, mk({ insert: "error" }), "true");
+  assertEquals(bad.res.status, 500);
+  assertEquals(alertInserts(bad.server).length, 1, "the insert was attempted");
+  assertEquals(bad.res.status, good.res.status);
+  assertEquals({ ...bad.body, request_id: "x" }, { ...good.body, request_id: "x" });
+  assert(bad.errors.some((e) => e.startsWith("[verify-payment] stacking read failed")));
+});
+
+for (const [label, body] of [["scalar 1 (the harness fallbackRpc answer)", 1], ["empty array", []]] as const) {
+  t(`ON + malformed rpc answer (${label}): 500 and an alert with code bad_rpc_response`, async () => {
+    const r = await run(newHandler, { rows: [], recordPaid: { body } }, "true");
+    assertEquals(r.res.status, 500);
+    assertEquals(r.body.verified, false);
+    assertEquals(subscriptionInserts(r.server).length, 0);
+    assertEquals(r.promoIncrements.length, 0);
+    const line = r.errors.find((e) => e.startsWith("[verify-payment] stacking read failed"));
+    assert(line && line.includes("code=bad_rpc_response"), String(line));
+    const alerts = alertInserts(r.server);
+    assertEquals(alerts.length, 1);
+    assertEquals((alerts[0].body as Record<string, any>).context_json.code, "bad_rpc_response");
+  });
+}
+
+t("ON with NO rpc route at all (the fallback answers 1): the call fails, it does not read as success", async () => {
+  const r = await run(newHandler, { rows: [] }, "true");
+  assertEquals(r.res.status, 500);
+  assertEquals(alertInserts(r.server).length, 1);
 });
 
 // ── switch OFF: byte-identical to origin/main, and the helper adds nothing ──
@@ -196,81 +246,25 @@ t("OFF golden: yearly, and with a promo, are identical to origin/main too", asyn
   }
 });
 
-// ── idempotency: replays and races never read, never stack ──────────────────
+// ── idempotency: a row that already exists never reaches the rpc ────────────
 
-t("replay (an ACTIVE row for this payment): early return, no helper read, no insert, the canonical end", async () => {
+t("replay (an ACTIVE row for this payment): early return, NO rpc call, no insert, the canonical end", async () => {
   const done = trialRow(33, { id: "done", razorpay_payment_id: PAY });
-  const r = await run(newHandler, { rows: [done, trialRow(3)] }, "true");
+  const r = await run(newHandler, withRpc({ rows: [done, trialRow(3)] }), "true");
   assertEquals(r.body.source, "existing");
   assertEquals(r.body.end_date, done.end_date);
-  assertEquals(helperReads(r.server).length, 0);
+  assertEquals(recordPaidCalls(r.server).length, 0);
   assertEquals(subscriptionInserts(r.server).length, 0);
 });
 
-t("replay (the row for this payment exists but is not 'active'): pre-SELECT arm, no helper read, no insert, canonical end", async () => {
+t("replay (the row for this payment exists but is not 'active'): pre-SELECT arm, NO rpc call, no insert, canonical end, no promo", async () => {
   const done = trialRow(33, { id: "done", razorpay_payment_id: PAY, status: "cancelled" });
-  const r = await run(newHandler, promoScenario([done, trialRow(3)]), "true");
+  const r = await run(newHandler, withRpc(promoScenario([done, trialRow(3)])), "true");
   assertEquals(r.res.status, 200);
   assertEquals(r.body.end_date, done.end_date);
-  assertEquals(helperReads(r.server).length, 0);
+  assertEquals(recordPaidCalls(r.server).length, 0);
   assertEquals(subscriptionInserts(r.server).length, 0);
   assertEquals(r.promoIncrements.length, 0, "a replay never redeems the promo");
-});
-
-t("sibling-writer interleave: the other writer's row for the SAME payment appears just before the helper read - the helper ignores it, the 23505 arm reports the canonical row, no promo", async () => {
-  const trial = trialRow(3);
-  const canonicalEnd = plusDays(trial.end_date as string, 30);
-  let planted = false;
-  const sc: Scenario = {
-    ...promoScenario([trial]),
-    intercept: (req) => {
-      if (!planted && req.method === "GET" && req.path === "/rest/v1/subscriptions" && isHelperRead(req.query)) {
-        planted = true;
-        sc.rows!.push(trialRow(33, { id: "webhook-row", razorpay_payment_id: PAY, end_date: canonicalEnd }));
-      }
-      return undefined;
-    },
-  };
-  const { server, promoIncrements } = paymentServer(sc);
-  // The scenario's rows array is the server's live table (paymentServer passes it through).
-  assertEquals(server.tables.subscriptions, sc.rows);
-  server.install();
-  try {
-    const { result: res } = await withSwitch("true", () => captureConsole(() => newHandler(verifyRequest())));
-    const body = await res.json();
-    assertEquals(res.status, 200);
-    const attempted = subscriptionInserts(server)[0].body as Record<string, string>;
-    assertEquals(attempted.end_date, canonicalEnd, "the sibling's row must not become the stacking base");
-    assertEquals(body.end_date, canonicalEnd, "the response reports the canonical (sibling) row");
-    assertEquals(promoIncrements.length, 0, "the creator owns the promo; this path must not redeem");
-    assertEquals(server.tables.subscriptions.filter((r) => r.razorpay_payment_id === PAY).length, 1);
-  } finally {
-    server.restore();
-  }
-});
-
-t("ON + 23505 race + the winner's row cannot be re-read: the response still reports the STACKED value, not start + 30", async () => {
-  const trial = trialRow(3);
-  const stacked = plusDays(trial.end_date as string, 30);
-  const sc: Scenario = {
-    rows: [trial],
-    beforeInsert: (table, _row, srv) => {
-      if (table === "subscriptions" && !srv.tables.subscriptions.some((x) => x.razorpay_payment_id === PAY)) {
-        srv.tables.subscriptions.push(trialRow(33, { id: "webhook-row", razorpay_payment_id: PAY }));
-      }
-    },
-    // The race re-read is the only subscriptions GET with select=end_date, a payment id filter and NO end_date filter.
-    intercept: (req) =>
-      req.method === "GET" && req.path === "/rest/v1/subscriptions" &&
-        req.query.some(([k, v]) => k === "select" && v === "end_date") &&
-        req.query.some(([k]) => k === "razorpay_payment_id") && !isHelperRead(req.query)
-        ? jsonResponse(500, { code: "XX000", message: "boom" })
-        : undefined,
-  };
-  const r = await run(newHandler, sc, "true");
-  assertEquals(r.res.status, 200);
-  assertEquals(r.body.end_date, stacked);
-  assertEquals(r.promoIncrements.length, 0);
 });
 
 t("plain 23505 race (switch OFF): reports the canonical row and does not redeem", async () => {

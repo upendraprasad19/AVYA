@@ -129,9 +129,9 @@ findings:
 
   - id: G10
     title: "two DIFFERENT concurrent payments by one user would both stack on the same base and overlap (B-pass seat A P3-2)"
-    terminal_state: upstream_blocked
-    blocker: "unreachable while create-razorpay-order answers 409 for any active row; under-delivery only, never over-delivery"
-    reopen_when: "Piece B opens the door: its plan must add a per-user serialisation (an advisory lock or a re-read after the insert); recorded in payment.md rule 9"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b-door (uncommitted)"
+    verification: "Piece B1 (docs/plans/oi341-piece-b-door.md): the ON path is one call to public.record_paid_subscription (migration 161), which takes the per-user advisory lock shared with the referral redeem/job before it reads the base; test/sql/record_paid_subscription_local.sh C1-C4 (forced overlap via a slow-insert trigger), mutants M18 (lock dropped) and M19 (different key) killed. Ledger docs/audit/oi341-piece-b-door.closure.yaml row B1-SERIAL."
 
   - id: BP-A1
     title: "B-pass seat A P2-1: with the switch ON a malformed payment id in a signed webhook payload failed 500 on every retry, with it OFF it was accepted"
@@ -228,8 +228,8 @@ findings:
   - id: H-S4-1
     title: "hermes seat 4 P2-1: the webhook's 500-and-retry safety net assumes Razorpay re-stamps created_at on a retry (nothing in the repo evidences it) and nothing alerts on a captured-but-unrecorded payment"
     terminal_state: upstream_blocked
-    blocker: "dark until the switch is set; the read-failure path cannot run with the switch OFF"
-    reopen_when: "Piece B: an alert row on the read-failure path and a verified retry-timestamp behaviour are hard preconditions of the flip (payment.md rule 9 runbook item 4)"
+    blocker: "dark until the switch is set; the read-failure path cannot run with the switch OFF. The ALERT half is built in Piece B1 (_shared/payment_alert.ts, ledger docs/audit/oi341-piece-b-door.closure.yaml row B1-ALERT); the retry-timestamp half is still open"
+    reopen_when: "Piece B2: the webhook retry-timestamp check in test mode is a hard precondition of the flip (payment.md rule 9 runbook item 4; B2 ledger row B2-RETRY-TS)"
 
   - id: H-S4-2
     title: "hermes seat 4 P2-2: the deploy tool defaults verify_jwt to true and its smoke tolerates the 401 a wrong flag produces on the webhook (OI-334); the plan's anon-key boot probe cannot tell the flags apart on the webhook"
