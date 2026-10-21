@@ -222,3 +222,6 @@ library exercises and cloud `plan_json.schedules` no longer lists the customs on
    longer the object read before the lock; the migrator passes the row it read and does not latch on that refusal.
 8. **F8** diagnose writer cite → `buildPinnedDays` (:719). **F9** `docs/plan-reviews/l2-custom-repair.md` lands in its
    own commit after this one (the code-review hash-fixed-point rule).
+9. **§4.6 completeness (author, after the B-pass):** the `custom_origin` stamp reads the same kill switch
+   (`SyncFlags.l2CustomStripEnabled` in `_buildCustomExercise`; `plan_generator.dart` untouched, rule 14), so
+   `disable_l2_custom_strip` restores the generator output of the build before as well.

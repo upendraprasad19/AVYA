@@ -2982,7 +2982,7 @@ concepts:
           never be refetched, because the pull stamps last_community_sync. A pull that
           fills its 10 x 500-row cap emits restore_row_ceiling_hit (community_pull:<table>).
       - file: lib/core/services/sync_flags.dart
-        line_range: 275-295
+        line_range: 276-296
         method: restorePagingFixEnabled
         notes: Opt-out polarity; with the box not open the fix stays ON.
     reader_manifest_complete: false
@@ -9676,7 +9676,7 @@ concepts:
         method: generateV4
         notes: CENTRAL normalize - canonicalizes injuries once for every generation caller
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
-        line_range: 828-895
+        line_range: 829-896
         method: _cascadeFill attempt-5 + _isContraindicated
         notes: U2 universal-pool injury filter + safe omission; kill-switch plan_engine_flags.dart
       - file: lib/shared/repositories/plan_engine/warmup_cooldown.dart
@@ -9692,7 +9692,7 @@ concepts:
         fields_read: [injury_contraindications]
         notes: exact lowercase equality (attempts 1-4) - unchanged, already correct
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
-        line_range: 828-895
+        line_range: 829-896
         method: _cascadeFill attempt-5 _isContraindicated
         semantic: flag-check
         fields_read: [injury_contraindications]
@@ -11513,7 +11513,7 @@ concepts:
       - file: lib/core/services/workout_write_service.dart
         method: upsertScheduled ifUnchangedFrom (refuses with rowChangedMessage when the stored row is no longer the object the caller read) + completedDayRefusedMessage (the named planGenerator completed-day refusal the migrator treats as benign)
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
-        method: _buildCustomExercise (buildPinnedDays custom fallback) sets customOrigin 'repeat_pin'; models.dart PlannedExercise copyWith carries it, toMap writes custom_origin
+        method: _buildCustomExercise (buildPinnedDays custom fallback) sets customOrigin 'repeat_pin' unless disable_l2_custom_strip is set; models.dart PlannedExercise copyWith carries it, toMap writes custom_origin
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/workout_schedule_read_service.dart

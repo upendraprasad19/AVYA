@@ -211,11 +211,12 @@ class SyncFlags {
   }
 
   /// Kill switch for the L2 custom-exercise strip (d4b8e1 Batch 0b): the
-  /// one-time `L2CustomAppendRepairMigrator` and the repeat-pin strip in
-  /// `WorkoutScheduleReadService._buildRepeatPins`. Opt-OUT polarity:
-  /// `configBox['disable_l2_custom_strip'] = true` skips both, which is
-  /// byte-identical to the build before the repair. With the box not open the
-  /// strip stays ON.
+  /// one-time `L2CustomAppendRepairMigrator`, the repeat-pin strip in
+  /// `WorkoutScheduleReadService._buildRepeatPins`, and the `custom_origin`
+  /// stamp `ExerciseSelector._buildCustomExercise` puts on a pinned custom.
+  /// Opt-OUT polarity: `configBox['disable_l2_custom_strip'] = true` skips all
+  /// three, which is byte-identical to the build before the repair. With the
+  /// box not open the strip stays ON.
   static bool get l2CustomStripEnabled {
     try {
       return HiveService.instance.configBox.get('disable_l2_custom_strip') !=

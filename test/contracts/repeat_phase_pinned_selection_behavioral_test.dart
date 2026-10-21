@@ -308,6 +308,18 @@ void main() {
         expect(m.containsKey('custom_origin'), isFalse, reason: e.exerciseName);
       }
     }
+
+    // Kill switch disable_l2_custom_strip: no stamp (the build before).
+    await HiveService.instance.configBox.put('disable_l2_custom_strip', true);
+    addTearDown(
+        () => HiveService.instance.configBox.delete('disable_l2_custom_strip'));
+    final off = gen(pins: {
+      0: (a: ['My Landmine Press'], b: const <String>[]),
+    });
+    for (final e in off.weekPlans[0].workoutDays[0].exercises) {
+      expect(e.toMap().containsKey('custom_origin'), isFalse,
+          reason: e.exerciseName);
+    }
   });
 
   test('(8) cardinality: a partial pin fresh-fills unpinned frames; full day '
