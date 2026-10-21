@@ -1057,12 +1057,14 @@ void main() {
     testWidgets('retry after IST midnight writes to the first attempt\'s day',
         (tester) async {
       await ensureHive(tester);
-      DraftSubmitDebug.clock = () => DateTime(2026, 10, 20, 23, 59);
+      // Instants, not local wall times: 23:59 and 00:05 IST (UTC+5:30), so the
+      // case holds on a machine in any time zone.
+      DraftSubmitDebug.clock = () => DateTime.utc(2026, 10, 20, 18, 29);
       final s = await pumpSlot(tester,
           seed: draftOf([lift('Bench Press', 60, 8), bad('X')]));
       await confirm(tester, s);
       expect(s.draft!.status, DraftCardStatus.partial);
-      DraftSubmitDebug.clock = () => DateTime(2026, 10, 21, 0, 5);
+      DraftSubmitDebug.clock = () => DateTime.utc(2026, 10, 20, 18, 35);
       s.n.updateSet(s.draft!.id, 0, 0, DraftSet(weightKg: 5, reps: 8));
       await tester.pump();
       await confirm(tester, s);
