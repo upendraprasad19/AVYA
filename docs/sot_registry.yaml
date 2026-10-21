@@ -58,7 +58,7 @@ concepts:
         method: logExercise
         notes: stamps workout_log_id on every exlog row (Test #12 / Task A-3)
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1118-1201
+        line_range: 1132-1215
         method: deleteLog (queues PendingExlogDeletes)
         notes: |
           OI-246 (2026-09-28). deleteLog queues the row's exact natural key
@@ -78,7 +78,7 @@ concepts:
           log resurrecting on the next full restore, and (151) a re-log after
           such a delete being silently dropped.
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1569-1583
+        line_range: 1583-1597
         method: resolveSummarySetCount
         notes: |
           OI-246 (2026-09-28, round-2 review finding P3 — split from deleteLog's
@@ -350,7 +350,7 @@ concepts:
         method: logExercise
         notes: appends to exercise_log_index_YYYY-MM-DD on every write
       - file: lib/core/services/workout_write_service.dart
-        line_range: 883-1011
+        line_range: 897-1025
         method: moveExerciseLogs
         notes: |
           C2 (e8f4a3) — re-keys partial exlog_<fromDate>_* rows onto the
@@ -410,7 +410,7 @@ concepts:
       key_formula: "'exercise_log_index_${istDateStr(date)}'"
     ist_sites:
       - { file: lib/core/utils/date_utils.dart, line: 27, fn: formatDateKey }
-      - { file: lib/core/services/workout_write_service.dart, line: 1557, fn: wlogKey }
+      - { file: lib/core/services/workout_write_service.dart, line: 1571, fn: wlogKey }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\\.keys.*manually.*date", reason: "O(n) scan — use the index key instead" }
       - { pattern: "DateTime\\.now\\(\\)\\.toIso8601String\\(\\)\\.substring\\(0,\\s*10\\)", reason: "UTC date, disagrees with IST-keyed reader; use istDateStr(DateTime.now())" }
@@ -480,11 +480,11 @@ concepts:
       drain checks ownerChangedSince at each write sink.
     writers:
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1346-1352
+        line_range: 1360-1366
         method: deleteLog
         notes: PendingExlogDeletes.add at local-delete time (count = resolveSummarySetCount)
       - file: lib/core/services/workout_write_service.dart
-        line_range: 902-960
+        line_range: 916-974
         method: moveExerciseLogs
         notes: add for the SOURCE day (both branches), cancelFor the TARGET day
       - file: lib/core/services/workout_write_service.dart
@@ -632,6 +632,7 @@ concepts:
       - { file: lib/core/services/scheduled_workouts_resync_migrator.dart, reason: "one-shot resync sweep over schedule_* keys" }
       - { file: lib/core/services/sync/sync_workout.dart, reason: "cloud sync writer scans schedule_* prefix" }
       - { file: lib/core/services/schedule_hybrid_repair_migrator.dart, reason: "day-swapper + sync-load Task 23 (diagnose b6e1c8) — one-shot per-user hybrid repair sweep over schedule_* keys" }
+      - { file: lib/core/services/l2_custom_append_repair_migrator.dart, reason: "d4b8e1 Batch 0b (diagnose c3e9a4) — one-shot per-user sweep over future schedule_* keys; strips L2's auto-appended customs, writes via upsertScheduled" }
       - { file: lib/core/services/template_identity_migrator.dart, reason: "OI-252 one-shot migrator excludes schedule_*/displaced_* keys while rekeying legacy tmpl_* Hive keys to the new stable-uuid form" }
     regression_test: test/workout_write_service/upsert_scheduled_test.dart
     hive:
@@ -646,7 +647,7 @@ concepts:
     restore_methods: [_restoreScheduledWorkouts, _restoreScheduleCompletions]
     provider_invalidation_set: [currentPlanProvider, calendarWeekProvider, todayWorkoutProvider]
     ist_sites:
-      - { file: lib/core/services/workout_write_service.dart, line: 1586, fn: scheduleKey }
+      - { file: lib/core/services/workout_write_service.dart, line: 1600, fn: scheduleKey }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\.put\('schedule_", reason: "Never write schedule keys directly from a widget — use WorkoutScheduleService" }
     class_constraints: |
@@ -2981,7 +2982,7 @@ concepts:
           never be refetched, because the pull stamps last_community_sync. A pull that
           fills its 10 x 500-row cap emits restore_row_ceiling_hit (community_pull:<table>).
       - file: lib/core/services/sync_flags.dart
-        line_range: 260-280
+        line_range: 276-296
         method: restorePagingFixEnabled
         notes: Opt-out polarity; with the box not open the fix stays ON.
     reader_manifest_complete: false
@@ -3072,7 +3073,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/auth/screens/restoring_screen.dart
-        line_range: 96-125
+        line_range: 97-126
         method: _kickoffRestore
         semantic: awaits-bounded-destination
         fields_read: [PostSignInDestination]
@@ -3084,7 +3085,7 @@ concepts:
           getter throws, which the callback turns into "no evidence", so
           evidence-first would silently never fire).
       - file: lib/features/auth/screens/restoring_screen.dart
-        line_range: 578-640
+        line_range: 580-642
         method: _onContinueAnyway
         semantic: awaits-bounded-guarded-retry
         fields_read: [PostSignInDestination]
@@ -3223,7 +3224,7 @@ concepts:
           switch open, runs CompletedTitleHealer. Every restore return passes
           through the wrapper; nothing in the core changed.
       - file: lib/features/auth/screens/restoring_screen.dart
-        line_range: 60-150
+        line_range: 61-151
         method: RestoringScreen._init / _ensureOwnershipBeforeHome
         semantic: pass-through
         fields_read: []
@@ -3573,7 +3574,7 @@ concepts:
         semantic: flag-check
         fields_read: [onboarding_completed, onboarding_completed_at]
       - file: lib/features/auth/screens/restoring_screen.dart
-        line_range: 86-95
+        line_range: 87-96
         method: RestoringScreen onboarding self-heal
         semantic: flag-check
         fields_read: [onboarding_completed]
@@ -3991,7 +3992,7 @@ concepts:
     restore_methods: [_restoreWorkoutPlan, _restoreScheduledWorkouts, _restoreScheduleCompletions]
     provider_invalidation_set: [currentPlanProvider, calendarWeekProvider, todayWorkoutProvider, streakProvider]
     ist_sites:
-      - { file: lib/core/services/workout_schedule_read_service.dart, line: 366, fn: generateAndScheduleFromDate }
+      - { file: lib/core/services/workout_schedule_read_service.dart, line: 368, fn: generateAndScheduleFromDate }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\\.put.*schedule.*status.*planned", reason: "Never overwrite status=completed; check guard first" }
     class_constraints: |
@@ -4042,7 +4043,7 @@ concepts:
         line_range: 1-9999
         method: createCustomTemplate tool
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1293-1348
+        line_range: 1307-1362
         method: newTemplateKey / upsertTemplate
         notes: |
           Canonical writer scaffolded 2026-05-21 / audit A3. Routes
@@ -4054,7 +4055,7 @@ concepts:
           (train_provider.saveTemplate, template_builder_screen,
           workout_repository's AI multi-day loop) routes through it.
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1412-1451
+        line_range: 1426-1465
         method: deleteTemplate
         notes: |
           OI-252 — the canonical delete writer. Hive-only (layering:
@@ -4994,7 +4995,7 @@ concepts:
           `streak_reckon_withheld` event, then bump `restoreCompletedTick` LAST so
           every tick listener repaints from the already-debited ledger.
       - file: lib/features/auth/screens/restoring/heal_after_restore.dart
-        line_range: 93-101
+        line_range: 107-115
         method: healAfterRestoreWhenSucceeded
         notes: |
           Attaches the post-restore heal + reckon to an in-flight restore for the
@@ -5083,7 +5084,7 @@ concepts:
         method: phaseStartAfterGap
         notes: the ONE start-date rule; pure.
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 2066-2077
+        line_range: 2105-2116
         method: nextPhaseStartDate
         notes: delegates to phaseStartAfterGap (gapStart false = the original rule, used by the graduation unlock).
       - file: lib/shared/services/pro_phase_advance.dart
@@ -5822,7 +5823,7 @@ concepts:
           test/contracts/evidence_first_routing_test.dart (value, push, both
           guards, live default, kept / blank stamp).
       - file: lib/features/auth/screens/restoring_screen.dart
-        line_range: 200-252
+        line_range: 201-253
         method: _goHome (both branches — bg-restore fast path at 242-244 +
           default blocking path at 273-275)
         notes: |
@@ -5841,7 +5842,7 @@ concepts:
           _ensureOwnershipBeforeHome), since _goHome is only reached once
           the destination is already classified "treat as onboarded".
       - file: lib/features/auth/screens/restoring_screen.dart
-        line_range: 491-525
+        line_range: 492-527
         method: _onContinueAnyway (30s CONTINUE timeout escape hatch)
         notes: |
           Diagnose a3f6d9, B-pass round 1 Finding 1 (1dcc14cdbf32-review.md,
@@ -5866,7 +5867,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/auth/screens/restoring_screen.dart
-        line_range: 91-193
+        line_range: 92-194
         method: RestoringScreen._kickoffRestore (post-auth gate)
         semantic: flag-check
         fields_read: [user_id, onboarding_completed_at]
@@ -6825,7 +6826,7 @@ concepts:
         method: deleteAllFilesForCurrentUser
         notes: hard-wipes all Hive boxes for current user on account deletion
       - file: lib/core/services/workout_write_service.dart
-        line_range: 618-697
+        line_range: 618-702
         method: upsertScheduled
         notes: |
           upserts a scheduled workout entry to workoutBox under schedule_
@@ -6834,7 +6835,7 @@ concepts:
           line count further; caught by check_sot_registry_parity.dart
           and fixed opportunistically while touching this file.
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1245-1315
+        line_range: 1259-1329
         method: deleteLog
         notes: removes an exlog_* entry + updates exercise_log_index; fires cloud delete
       - file: lib/core/services/nutrition_write_service.dart
@@ -7730,7 +7731,7 @@ concepts:
           ("8-12" ranges). Judges the write by the stored row
           (customExerciseRowLanded), throwing write_failed only when absent.
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1453-1495
+        line_range: 1467-1509
         method: upsertCustomExercise
         notes: |
           Canonical writer (audit 2026-05-21 / A3). Locks per-key,
@@ -7759,7 +7760,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/shared/repositories/exercise_repository.dart
-        line_range: 427-450
+        line_range: 442-465
         method: getCustomExercises
         semantic: filter
         fields_read: [name, category, logging_type, type]
@@ -8856,7 +8857,7 @@ concepts:
       getCurrentPlanMap, hasPlan, getCurrentCalendarWeek.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 129-2016
+        line_range: 131-2055
         method: WorkoutScheduleReadService
     reader_manifest_complete: false  # progressive caller migration; @Deprecated lint surfaces remaining
     readers:
@@ -8932,7 +8933,7 @@ concepts:
       strings. Asserted directly, not assumed.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 890-915
+        line_range: 929-954
         method: activeHoldWeeks / activeHoldOrdinalFor / weekIdentity — the seam + the single flag gate
       - file: lib/core/services/workout_schedule_write_service.dart
         line_range: 235-353
@@ -9044,7 +9045,7 @@ concepts:
         method: holdWeek → stamps is_hold (bool) + hold_ordinal (int, gap-proof max+1)
     readers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 762-847
+        line_range: 801-886
         method: isDeloadHold / _holdDatesByOrdinal / holdOrdinalForDate / holdWeeks / holdWeekSessionProgress
         semantic: latest
         fields_read: [schedule_<date>.is_hold, schedule_<date>.hold_ordinal, schedule_<date>.status, schedule_<date>.type]
@@ -9675,7 +9676,7 @@ concepts:
         method: generateV4
         notes: CENTRAL normalize - canonicalizes injuries once for every generation caller
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
-        line_range: 828-895
+        line_range: 829-896
         method: _cascadeFill attempt-5 + _isContraindicated
         notes: U2 universal-pool injury filter + safe omission; kill-switch plan_engine_flags.dart
       - file: lib/shared/repositories/plan_engine/warmup_cooldown.dart
@@ -9685,13 +9686,13 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/shared/repositories/exercise_repository.dart
-        line_range: 285-296
+        line_range: 300-311
         method: queryV4 injury match
         semantic: flag-check
         fields_read: [injury_contraindications]
         notes: exact lowercase equality (attempts 1-4) - unchanged, already correct
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
-        line_range: 828-895
+        line_range: 829-896
         method: _cascadeFill attempt-5 _isContraindicated
         semantic: flag-check
         fields_read: [injury_contraindications]
@@ -9956,7 +9957,7 @@ concepts:
       that says LESS the more the user has logged, while still looking present.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1115-1150
+        line_range: 1154-1189
         method: holdSnapshotBlock
         notes: |
           Returns null off a hold day. Reads activeHoldOrdinalFor/activeHoldWeeks
@@ -10848,7 +10849,7 @@ concepts:
       built (terminal: out-of-scope + causally imprecise + breaks pure-compute). No
       migration/restore (Hive-read-only). cascade_tracer `_preferNovelName` +
       generator_matrix UNCHANGED → frozen D3 baseline unmoved. ⚠ L6
-      `_applyHistoryAdjustments` (phase≥2, demoted/customs) may re-add a rotated lift —
+      `_applyHistoryAdjustments` (phase≥2, demoted) may re-add a rotated lift —
       consistent with rung-3 being SOFT.
     writers:
       - file: lib/shared/repositories/plan_engine/plateau_scan.dart
@@ -11458,6 +11459,83 @@ concepts:
         notes: a custom exercise's normalized equipment_needed reaches the Gemini snapshot as a canonical token (benign)
     contract_test_path: test/contracts/equipment_vocab_library_contract_test.dart
 
+  - concept: generator_no_custom_autoadd
+    domain: workout
+    behavioral_test_path: test/contracts/l2_no_custom_autoadd_behavioral_test.dart
+    description: |
+      d4b8e1 (2026-10-21, founder) — the V4 plan generator NEVER adds a user's
+      custom exercise on its own. Lever L2 (2026-05-31) appended every custom
+      whose primary_muscles substring-matched any slot of a day, uncapped, at
+      phase >= 2 (founder's Phase 4: 6 customs on every push day, 56-66 sets).
+      Removed; L6 (demote a swapped-away lift) in the same post-pass stays. A
+      custom reaches a plan only by an explicit user/coach action or as a repeat
+      pin of a custom the previous phase held (buildPinnedDays). Customs L2
+      itself put into an existing plan are removed by Batch 0b (concept
+      l2_custom_autoappend_repair, diagnose c3e9a4): stripped from the repeat
+      pins, and from future planned rows by a one-time repair.
+    writers:
+      - file: lib/shared/repositories/plan_engine/exercise_selector.dart
+        method: pickV4 → _applyHistoryAdjustments (L6 only; gate phase >= 2 && demoted.isNotEmpty)
+        semantic: library picks only; no custom is ever appended
+      - file: lib/shared/repositories/plan_engine/exercise_selector.dart
+        method: buildPinnedDays (custom fallback for a pinned name absent from the library)
+        semantic: the ONLY generator path that can emit a custom — one the previous phase already held and chose deliberately (the repeat pins strip L2's own, c3e9a4)
+    readers:
+      - file: lib/core/services/workout_schedule_read_service.dart
+        method: generateAndSchedule (writes the generated days into schedule_<date> rows)
+      - file: lib/features/train/providers/train_provider.dart
+        method: currentPlanProvider (Train tab day list)
+    contract_test_path: test/contracts/l2_no_custom_autoadd_behavioral_test.dart
+
+  - concept: l2_custom_autoappend_repair
+    domain: workout
+    behavioral_test_path: test/contracts/l2_custom_append_repair_migrator_test.dart
+    description: |
+      c3e9a4 (d4b8e1 Batch 0b, 2026-10-21) — removes the custom exercises the
+      removed generator lever L2 appended to plans generated BEFORE 0a. One
+      predicate (auto_appended_custom.dart isAutoAppendedCustom: no
+      `swapped_via` and no `custom_origin` stamp, name in the user's customs,
+      no exerciseBox row of that name is a library row — isLibraryRow, a
+      community-approved custom is not one; checked over EVERY row of the name
+      by ExerciseRepository.hasExactNameWhere) feeds two readers that can never
+      disagree: the one-time per-user repair of planned rows after today and
+      the repeat-pin read. buildPinnedDays stamps every custom it rebuilds with
+      `custom_origin: 'repeat_pin'` (PlannedExercise.customOrigin), so a
+      deliberate pin survives the strip. Only the founder's
+      account had polluted rows in cloud (46 entries over 16 planned days from
+      2026-10-21, none coach-swapped; query 2026-10-21). Kill switch
+      `disable_l2_custom_strip` (SyncFlags.l2CustomStripEnabled) turns both off.
+    writers:
+      - file: lib/core/services/l2_custom_append_repair_migrator.dart
+        method: L2CustomAppendRepairMigrator.runIfNeeded (via WorkoutWriteService.upsertScheduled, source planGenerator; latch workoutBox['l2_custom_repair_v1_done'])
+        semantic: rows dated AFTER today (type workout, status planned or paused, no template) lose their auto-appended customs; never empties a row; today's row is never rewritten (no latch while it would change); a present arranged_at_ms is re-stamped with the write time; the plan push is issued after every completed scan
+        notes: gates in order — kill switch, latch, customs non-empty, restoreSettledForCurrentUser (re-checked before every write, the push and the latch); write date from the KEY via DaySwapRules.utcDate; each write passes ifUnchangedFrom (the row read), so a row another writer replaced is refused (rowChangedMessage, no latch); latch only when the push was issued and no write failed or met a changed row
+      - file: lib/core/services/workout_write_service.dart
+        method: upsertScheduled ifUnchangedFrom (refuses with rowChangedMessage when the stored row is no longer the object the caller read) + completedDayRefusedMessage (the named planGenerator completed-day refusal the migrator treats as benign)
+      - file: lib/shared/repositories/plan_engine/exercise_selector.dart
+        method: _buildCustomExercise (buildPinnedDays custom fallback) sets customOrigin 'repeat_pin' unless disable_l2_custom_strip is set; models.dart PlannedExercise copyWith carries it, toMap writes custom_origin
+    reader_manifest_complete: true
+    readers:
+      - file: lib/core/services/workout_schedule_read_service.dart
+        method: _buildRepeatPins → _withoutAutoAppendedCustoms (strips the finished phase's week-1/2 rows before repeatPinsFrom; fails OPEN)
+        semantic: pass-through
+        fields_read: [schedule_<date>.exercises via getWeek, exercises[].swapped_via, exercises[].custom_origin]
+      - file: lib/features/auth/screens/restoring/heal_after_restore.dart
+        method: _runL2CustomRepair (called from _healAfterRestoreInBackground and _ensureOwnershipBeforeHome, after PlanIntegrityReconciler)
+        semantic: pass-through
+        fields_read: [none — invokes the migrator]
+    hive:
+      box: workoutBox
+      key_prefix: ""
+      key_formula: |
+        No key of its own beyond the latch `l2_custom_repair_v1_done`. Rewrites
+        existing `schedule_<date>` rows (owned by scheduled_workouts_mutations)
+        through upsertScheduled.
+    cloud:
+      table: user_progress
+      columns: [plan_json]
+    contract_test_path: test/contracts/l2_custom_append_repair_migrator_test.dart
+
   - concept: equipment_exclusion_filter
     domain: workout
     behavioral_test_path: test/contracts/equipment_exclusion_filter_behavioral_test.dart
@@ -11474,8 +11552,8 @@ concepts:
       `Set<String>` to EVERY pick path: queryV4 att1-4 (the drop is BEFORE the
       :268 tier short-circuit + KEPT at att4 since exclusion is a HARD constraint
       unlike the soft tier), the att5 universal-pool skip (mirrors U2's injury
-      skip; the per-pattern bodyweight floor keeps the slot non-empty), the L2
-      custom-append, and the L6 demote-swap. Reads every equipment_needed
+      skip; the per-pattern bodyweight floor keeps the slot non-empty), and the
+      L6 demote-swap (the L2 custom-append was removed 2026-10-21, d4b8e1). Reads every equipment_needed
       crash-safe + normalizing via `EquipmentVocab.fromProfile`, so B1 is correct
       for un-normalized community rows independent of B2. The queryV4 `exclusions`
       param is REQUIRED (compile-time thread enforcement). Scope boundary: the
@@ -11492,7 +11570,7 @@ concepts:
         semantic: drop iff EquipmentVocab.fromProfile(equipment_needed).any(exclusions.contains)
         notes: BEFORE the no-tier :291 return-true short-circuit so community rows are subject; crash-safe read
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
-        method: pickV4/_fillSlots/_cascadeFill (att1-4 + att5 skip) + _applyHistoryAdjustments (L6 + L2 custom filter)
+        method: pickV4/_fillSlots/_cascadeFill (att1-4 + att5 skip) + _applyHistoryAdjustments (L6)
         semantic: exclusions threaded to every pick path; att5 mirrors U2 injury skip
         notes: att4 KEEPS exclusions (hard constraint); att5 floor-sanitize keeps the slot non-empty
       - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
@@ -11566,7 +11644,7 @@ concepts:
           "don't touch" via the RPC's own COALESCE), same value + same
           projection helper, only the transport changed.
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1586-1593
+        line_range: 1625-1632
         method: currentWeekColumnProjection
         notes: pure helper deciding frozen-passthrough (disabled) vs program week (enabled); behaviorally tested.
       - file: lib/features/onboarding/providers/onboarding_provider.dart
@@ -12002,15 +12080,15 @@ concepts:
       That shared walk is the drift guard.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1812-1829
+        line_range: 1851-1868
         method: _scheduleRowsBefore
         semantic: shared-row-walk
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1805-1811
+        line_range: 1844-1850
         method: pastPhaseBlocks
         semantic: strict-set
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1838-1863
+        line_range: 1877-1902
         method: pastPhaseBlocksForDisplay
         semantic: display-recovery
         notes: |
@@ -14122,7 +14200,7 @@ concepts:
         semantic: flag-check
         fields_read: [type]
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1388-1412
+        line_range: 1427-1451
         method: currentPhaseCompletionRate
         semantic: flag-check
         fields_read: [type]
@@ -15459,7 +15537,7 @@ concepts:
           in by the caller. The sheet states ONE pair of caps (freeMax 1, proMax 3) for rule 4
           and the PRO note; a test ties it to the refill's isPro ? 3 : 1.
       - file: lib/features/auth/screens/restoring_screen.dart
-        line_range: 361-526
+        line_range: 362-528
         method: _ensureOwnershipBeforeHome
         semantic: flag-check
         fields_read: [streak_freeze_just_used]

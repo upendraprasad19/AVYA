@@ -31,7 +31,7 @@ Also in this directory:
 - `subscription_service.dart` — entitlement. **Three entry points (`a9c4e1`):** `isPro()` = DECISION path (may WRITE); `proStateSnapshot()` = PURE read, **required in every Riverpod build method**; `evaluateEntitlement()` = enforce at boot/account swap. Gate via `gateAndVerify()`. Kill-switch `disable_cqrs_pure_pro_read`; gate `scripts/check_cqrs_query_naming.dart`.
 - `error_telemetry.dart` — `recordNonFatal` (the helper every catch block must use).
 - `usage_counter_service.dart` — increment-at-API-call counters (post Test #11).
-- Migrators: `exlog_key_migrator.dart`, `nlog_key_migrator.dart`, `hive_field_rename_migrator.dart`, `user_config_migrator.dart`, `body_fat_default_healer.dart` (nulls a legacy fabricated body-fat `18.0` where `body_fat_percent==18.0 && body_fat_assessed_at==null`; clears the CLOUD column FIRST, then local; idempotent; kill-switch `disable_bodyfat_heal`), etc.
+- Migrators: `exlog_key_migrator.dart`, `nlog_key_migrator.dart`, `hive_field_rename_migrator.dart`, `user_config_migrator.dart`, `body_fat_default_healer.dart` (nulls a legacy fabricated body-fat `18.0` where `body_fat_percent==18.0 && body_fat_assessed_at==null`; clears the CLOUD column FIRST, then local; idempotent; kill-switch `disable_bodyfat_heal`), `l2_custom_append_repair_migrator.dart` (c3e9a4: one-time per-user strip of the customs the removed generator lever L2 put into planned rows after today; predicate `auto_appended_custom.dart`, shared with the repeat-pin read; writes through `upsertScheduled(ifUnchangedFrom:)`; post-restore, after `PlanIntegrityReconciler`; kill-switch `disable_l2_custom_strip`), etc.
 
 ## Single-source-of-truth contracts
 
