@@ -6,6 +6,7 @@ import 'package:icanbefitter/core/services/auth_session_bootstrapper.dart';
 import 'package:icanbefitter/core/services/day_rollover_service.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/exlog_key_migrator.dart';
+import 'package:icanbefitter/core/services/l2_custom_append_repair_migrator.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/nlog_key_migrator.dart';
@@ -503,6 +504,7 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
       message:
           'migrator=plan_integrity ms=${swPlanIntegrity.elapsedMilliseconds}',
     ));
+    await _runL2CustomRepair();
 
     // Relocated from splash_screen._runDeferredInit (diagnose dc52a4) --
     // touches userBox, so MUST run AFTER HiveUserSession.openForUser above.

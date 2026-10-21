@@ -51,6 +51,21 @@ class ExerciseRepository {
     return null;
   }
 
+  /// True when some exerciseBox row named [name] (matched like
+  /// [getByExactName]) passes [test]. Unlike [getByExactName] it looks at
+  /// every row of that name, not the first: a community row and a bundled row
+  /// can share one (c3e9a4).
+  bool hasExactNameWhere(String name, bool Function(Map row) test) {
+    final target = name.trim().toLowerCase();
+    if (target.isEmpty) return false;
+    for (final raw in _hive.exerciseBox.values) {
+      if (raw is! Map) continue;
+      final n = (raw['name'] as String?)?.trim().toLowerCase();
+      if (n == target && test(raw)) return true;
+    }
+    return false;
+  }
+
   /// Returns exercises filtered by [category].
   ///
   /// Categories: Push, Pull, Legs, Core, Cardio, Flexibility,
@@ -447,6 +462,18 @@ class ExerciseRepository {
       }
     }
     return results;
+  }
+
+  /// The user's custom exercise names, trimmed and lower-cased. Names only:
+  /// the L2 repair (d4b8e1, Batch 0b) uses it to REMOVE customs the generator
+  /// added on its own, never to offer one.
+  Set<String> customNamesLower() {
+    final names = <String>{};
+    for (final c in getCustomExercises()) {
+      final n = (c['name'] as String?)?.trim().toLowerCase() ?? '';
+      if (n.isNotEmpty) names.add(n);
+    }
+    return names;
   }
 
   /// Returns all distinct categories present in the exercise library.

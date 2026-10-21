@@ -7,7 +7,7 @@
 // NON-VACUOUS target derivation (Round-1 P1-2): the plateaued names are taken from a
 // BASELINE (flag-OFF) plan — not a library scan — so "rotated out" is meaningful, and
 // a broken rotation (avoidNames ignored) yields ON==OFF → RED. Seeds NO swap/custom
-// history so the L6 post-pass (`_applyHistoryAdjustments`, gated on demoted/customs)
+// history so the L6 post-pass (`_applyHistoryAdjustments`, gated on demoted)
 // is SKIPPED → deterministic. Deep-pool `full_gym`/`advanced` persona so siblings
 // exist to rotate to.
 

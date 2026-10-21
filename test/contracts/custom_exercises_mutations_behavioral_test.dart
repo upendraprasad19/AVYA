@@ -330,7 +330,8 @@ void main() {
           List<String>.from((after['equipment_needed'] as List).cast<String>()),
           equals(originalEquipment),
           reason: 'equipment_needed is preserved — re-stamping [] would '
-              'wipe an AI-authored row and re-open the L2 capability hole');
+              'wipe an AI-authored row and re-open the custom capability hole '
+              '(buildPinnedDays repeat pins; L2 itself was removed, d4b8e1)');
       expect(after['source'], equals('edit_sheet'),
           reason: 'the canonical writer re-stamps the source');
       expect(

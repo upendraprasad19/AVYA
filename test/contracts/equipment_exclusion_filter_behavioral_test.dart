@@ -5,7 +5,7 @@
 // (physique_focus_bringup_test.dart:48 "No generateV4 Hive-boot harness exists"):
 // seed the FULL library into exerciseBox, flip the flag in configBox, call the
 // REAL PlanGenerator.instance.generateV4 — so the flag-read + EquipmentVocab
-// normalize + floor-sanitize + the queryV4/att5/L2 drops are all exercised end
+// normalize + floor-sanitize + the queryV4/att5 drops are all exercised end
 // to end, not on source-grep confidence.
 //
 // Proves: (1) NO-OP — flag OFF, or ON+empty, is BYTE-IDENTICAL to no exclusions
@@ -160,8 +160,9 @@ void main() {
         reason: 'flag ON but nothing excluded → the .isNotEmpty guards keep the main '
             'selection byte-identical (empty-set is the no-op signal, not the flag).');
     await setFlag(false);
-    // (B-pass P2-3) The phase≥2-only L2 custom-append + L6 demote-swap use the
-    // SAME `if (exclusions.isNotEmpty)` guard, so their inertness under `{}` is
+    // (B-pass P2-3) The phase≥2-only L6 demote-swap uses the SAME
+    // `if (exclusions.isNotEmpty)` guard (the L2 custom-append that shared it
+    // was removed 2026-10-21, diagnose d4b8e1), so its inertness under `{}` is
     // trivially guard-covered (verified by inspection + the B-pass); a phase≥2
     // byte-identical harness would need the full history/customBox Hive stack for
     // no additional coverage of the guard itself.

@@ -68,6 +68,11 @@ const allowedClasses = <String>{
   // repair of schedule_<date> hybrid rows. Writes schedule_* directly, same
   // shape as every other one-shot *_migrator.dart above.
   'ScheduleHybridRepairMigrator',
+  // d4b8e1 Batch 0b (diagnose c3e9a4) — one-time per-user strip of the customs
+  // lever L2 auto-appended to future planned days. Its row writes go through
+  // WorkoutWriteService.upsertScheduled; the only direct put is its own
+  // workoutBox latch flag.
+  'L2CustomAppendRepairMigrator',
 };
 
 // Files whose top-level scope is OK (e.g. extension files / part files
