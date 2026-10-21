@@ -83,7 +83,8 @@ class CreateCustomExerciseSheet extends StatefulWidget {
   /// (the service back-fills only when absent — dropping it would reset a
   /// years-old row's creation date), `equipment_needed` (the sheet has no
   /// equipment field; re-stamping `[]` would wipe an AI-authored row's
-  /// real requirement and re-open the L2-append capability hole), and
+  /// real requirement and re-open the custom capability hole on the
+  /// repeat-pin path, `buildPinnedDays`), and
   /// `approved_for_library` (re-stamping `false` would demote an approved
   /// community submission and stop fresh installs from pulling it).
   /// `source`/`updated_at`/`_key` are dropped so the service re-stamps.
@@ -104,7 +105,8 @@ class CreateCustomExerciseSheet extends StatefulWidget {
       // B-pass F2: drop the cloud-named twin. Restored rows carry
       // `default_duration_secs`; Hive-canonical writers use
       // `default_duration_seconds`. Preserving BOTH would fork the row —
-      // train_provider's parser and exercise_selector's L2 read different
+      // train_provider's parser and exercise_selector's _buildCustomExercise
+      // (repeat pins) read different
       // keys and would disagree after an edit. The edit CONVERGES the row
       // onto the canonical key.
       ..remove('default_duration_secs')
@@ -490,10 +492,11 @@ class _CreateCustomExerciseSheetState extends State<CreateCustomExerciseSheet> {
             const SizedBox(height: 12),
 
             // Target muscles (optional) — multi-select chips. Tokens are
-            // library-canonical lowercase tokens; they re-arm the
-            // plan-generator's custom-supplement path
-            // (exercise_selector._eligibleCustomExercises), which skips
-            // customs with empty `primary_muscles`.
+            // library-canonical lowercase tokens, read by weak-muscle
+            // detection (TrainingHistoryAnalyzer), repeat-pin rebuilds
+            // (buildPinnedDays) and the picker subtitle. (They once also fed
+            // the generator's custom auto-append, L2 — removed 2026-10-21,
+            // diagnose d4b8e1.)
             _fieldLabel('Target Muscles (optional)'),
             const SizedBox(height: 6),
             Wrap(

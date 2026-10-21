@@ -572,19 +572,20 @@ class ExerciseSelector {
   }) {
     final result = <PopulatedDay>[];
 
-    // 2026-05-31 personalization levers L2 + L6 — read history ONCE per
-    // generation (Phase 2+ only; empty/no-op for Phase 1 or no data). These
-    // feed a SUPPLEMENTARY post-selection adjustment pass (see
-    // `_applyHistoryAdjustments`), deliberately kept OUT of the 5-attempt
-    // cascade so the 0-fallback (attempt3/universalPool/none) target is
-    // preserved — the cascade still picks library exercises first; we only
-    // reshuffle/append afterward.
+    // 2026-05-31 personalization lever L6 — read history ONCE per generation
+    // (Phase 2+ only; empty/no-op for Phase 1 or no data). It feeds a
+    // SUPPLEMENTARY post-selection pass (see `_applyHistoryAdjustments`),
+    // deliberately kept OUT of the 5-attempt cascade so the 0-fallback
+    // (attempt3/universalPool/none) target is preserved — the cascade still
+    // picks library exercises first; we only reshuffle afterward.
+    //
+    // L2 (auto-append the user's custom exercises) was REMOVED 2026-10-21
+    // (founder decision, diagnose d4b8e1): it appended every muscle-matching
+    // custom to every day, uncapped. Customs enter a plan only through an
+    // explicit user/coach action (swap, add, template, coach swapExercise).
     final demoted = phase >= 2
         ? TrainingHistoryAnalyzer.demotedExercises()
         : const <String>{};
-    final customs = phase >= 2
-        ? _eligibleCustomExercises(exerciseRepo)
-        : const <Map<String, dynamic>>[];
 
     for (var i = 0; i < slotDays.length; i++) {
       final day = slotDays[i];
@@ -629,18 +630,18 @@ class ExerciseSelector {
         exercisesB = exercisesA;
       }
 
-      // 2026-05-31 personalization L2/L6 — supplementary post-pass.
-      if (phase >= 2 && (demoted.isNotEmpty || customs.isNotEmpty)) {
+      // 2026-05-31 personalization L6 — supplementary post-pass.
+      if (phase >= 2 && demoted.isNotEmpty) {
         exercisesA = _applyHistoryAdjustments(
           exercisesA, day.slotsA, exerciseRepo, equipmentTier, effectiveExp,
-          phase, injuries, demoted, customs,
+          phase, injuries, demoted,
           exclusions: exclusions,
           capability: capability,
         );
         if (!identical(exercisesB, exercisesA) && day.slotsB != null) {
           exercisesB = _applyHistoryAdjustments(
             exercisesB, day.slotsB!, exerciseRepo, equipmentTier, effectiveExp,
-            phase, injuries, demoted, customs,
+            phase, injuries, demoted,
             exclusions: exclusions,
             capability: capability,
           );
@@ -830,11 +831,10 @@ class ExerciseSelector {
     return result;
   }
 
-  // ── 2026-05-31 personalization levers L2 + L6 ─────────────────────
+  // ── 2026-05-31 personalization lever L6 ───────────────────────────
 
   /// Supplementary post-selection adjustment (runs AFTER the cascade has fully
-  /// populated a day). Two effects, both ADDITIVE / reshuffling — never starves
-  /// the cascade:
+  /// populated a day). Reshuffles only — never starves the cascade, never adds:
   ///
   ///   L6 (demote swapped-out): if a cascade-picked exercise is in [demoted]
   ///   (the user previously swapped away from it) AND a non-demoted alternative
@@ -842,15 +842,14 @@ class ExerciseSelector {
   ///   already picked), swap to the alternative. If no clean alternative exists
   ///   we keep the original — we never drop a slot.
   ///
-  ///   L2 (custom exercises in pool): append the user's matching
-  ///   `custom_exercise_*` entries as SUPPLEMENTARY options for the day when
-  ///   their muscle intent matches a slot on the day. Never replaces a library
-  ///   pick — purely additive at the tail.
+  /// L2 (append the user's matching custom exercises) lived here until
+  /// 2026-10-21 and was removed (diagnose d4b8e1) — the generator never
+  /// auto-adds a custom exercise.
   ///
   /// Implemented as a post-pass (not inside `_cascadeFill`) on purpose: keeping
-  /// L2/L6 out of the cascade guarantees the `sample_plans_report.dart`
-  /// 0-fallback target is unaffected (custom data is empty in that harness, and
-  /// the demote-swap only ever exchanges one library pick for another).
+  /// L6 out of the cascade guarantees the `sample_plans_report.dart`
+  /// 0-fallback target is unaffected (the demote-swap only ever exchanges one
+  /// library pick for another).
   static List<PlannedExercise> _applyHistoryAdjustments(
     List<PlannedExercise> picked,
     List<MuscleSlot> slots,
@@ -859,8 +858,7 @@ class ExerciseSelector {
     String effectiveExp,
     int phase,
     List<String> injuries,
-    Set<String> demoted,
-    List<Map<String, dynamic>> customs, {
+    Set<String> demoted, {
     required Set<String> exclusions, // ⑥ B1 (compile-enforced thread)
     // ⑦ OI-89: capability set, or NULL for 'do not enforce'. REQUIRED so a
     // missed call site fails to COMPILE — a defaulted parameter is exactly
@@ -903,34 +901,6 @@ class ExerciseSelector {
       }
     }
 
-    // L2: append eligible customs that match a slot on this day.
-    if (customs.isNotEmpty) {
-      final dayMuscles = <String>{};
-      for (final s in slots) {
-        dayMuscles.add(s.targetMuscle.toLowerCase());
-        if (s.subFocus != null) dayMuscles.add(s.subFocus!.toLowerCase());
-      }
-      for (final custom in customs) {
-        final name = custom['name'] as String? ?? '';
-        if (name.isEmpty || pickedNames.contains(name)) continue;
-        final cm = _muscleTokens(custom['primary_muscles']);
-        final matches = cm.any(
-          (m) => dayMuscles.any((d) => d.contains(m) || m.contains(d)),
-        );
-        if (!matches) continue;
-        // ⑥ B1: don't auto-append a custom exercise requiring excluded equipment
-        // — a user who excluded 'barbell' shouldn't get their barbell custom
-        // appended (consistency with "I don't have this now"). Empty set → inert.
-        if (exclusions.isNotEmpty &&
-            EquipmentVocab.fromProfile(custom['equipment_needed'])
-                .any(exclusions.contains)) {
-          continue;
-        }
-        result.add(_buildCustomExercise(custom, result.first.variant));
-        pickedNames.add(name);
-      }
-    }
-
     return result;
   }
 
@@ -951,21 +921,6 @@ class ExerciseSelector {
     return slots.isNotEmpty ? slots.first.movementPattern : null;
   }
 
-  /// User custom exercises eligible to supplement a plan (have a name + at
-  /// least one primary muscle). Empty when there are no customs.
-  static List<Map<String, dynamic>> _eligibleCustomExercises(
-    ExerciseRepository repo,
-  ) {
-    final out = <Map<String, dynamic>>[];
-    for (final c in repo.getCustomExercises()) {
-      final name = c['name'] as String? ?? '';
-      if (name.isEmpty) continue;
-      if (_muscleTokens(c['primary_muscles']).isEmpty) continue;
-      out.add(c);
-    }
-    return out;
-  }
-
   static List<String> _muscleTokens(Object? raw) {
     if (raw is List) {
       return raw
@@ -979,8 +934,9 @@ class ExerciseSelector {
     return const [];
   }
 
-  /// Build a PlannedExercise from a user `custom_exercise_*` map (L2). Custom
-  /// maps use `default_logging_type` (sheet field) or `logging_type`.
+  /// Build a PlannedExercise from a user `custom_exercise_*` map — used only by
+  /// `buildPinnedDays` (a repeat pin that names a custom). Custom maps use
+  /// `default_logging_type` (sheet field) or `logging_type`.
   static PlannedExercise _buildCustomExercise(
     Map<String, dynamic> c,
     String variant,

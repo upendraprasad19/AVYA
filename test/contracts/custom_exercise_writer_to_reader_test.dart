@@ -103,8 +103,9 @@ void main() {
     });
 
     test('sheet create passes the chip selection, not an empty list', () {
-      // custom-picker-fix (2026-09-17): the chip selection re-arms the
-      // plan-generator supplement path (_eligibleCustomExercises skips
+      // custom-picker-fix (2026-09-17): the chip selection fed the
+      // plan-generator supplement path (_eligibleCustomExercises, removed
+      // 2026-10-21 with L2, diagnose d4b8e1; it skipped
       // customs with empty primary_muscles). Since d5c2e8 the sheet hands it
       // to the repository as an argument.
       expect(sheetSrc.contains('primaryMuscles: _resolvedMuscles'), isTrue);

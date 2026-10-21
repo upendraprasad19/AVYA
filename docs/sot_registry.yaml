@@ -10848,7 +10848,7 @@ concepts:
       built (terminal: out-of-scope + causally imprecise + breaks pure-compute). No
       migration/restore (Hive-read-only). cascade_tracer `_preferNovelName` +
       generator_matrix UNCHANGED → frozen D3 baseline unmoved. ⚠ L6
-      `_applyHistoryAdjustments` (phase≥2, demoted/customs) may re-add a rotated lift —
+      `_applyHistoryAdjustments` (phase≥2, demoted) may re-add a rotated lift —
       consistent with rung-3 being SOFT.
     writers:
       - file: lib/shared/repositories/plan_engine/plateau_scan.dart
@@ -11458,6 +11458,33 @@ concepts:
         notes: a custom exercise's normalized equipment_needed reaches the Gemini snapshot as a canonical token (benign)
     contract_test_path: test/contracts/equipment_vocab_library_contract_test.dart
 
+  - concept: generator_no_custom_autoadd
+    domain: workout
+    behavioral_test_path: test/contracts/l2_no_custom_autoadd_behavioral_test.dart
+    description: |
+      d4b8e1 (2026-10-21, founder) — the V4 plan generator NEVER adds a user's
+      custom exercise on its own. Lever L2 (2026-05-31) appended every custom
+      whose primary_muscles substring-matched any slot of a day, uncapped, at
+      phase >= 2 (founder's Phase 4: 6 customs on every push day, 56-66 sets).
+      Removed; L6 (demote a swapped-away lift) in the same post-pass stays. A
+      custom reaches a plan only by an explicit user/coach action or as a repeat
+      pin of a custom the previous phase held (buildPinnedDays) — until Batch 0b
+      ships, that includes customs L2 itself put into an existing plan. Existing polluted plans: Batch 0b
+      (docs/plans/2026-10-21-l2-custom-repair.md).
+    writers:
+      - file: lib/shared/repositories/plan_engine/exercise_selector.dart
+        method: pickV4 → _applyHistoryAdjustments (L6 only; gate phase >= 2 && demoted.isNotEmpty)
+        semantic: library picks only; no custom is ever appended
+      - file: lib/shared/repositories/plan_engine/exercise_selector.dart
+        method: buildPinnedDays (custom fallback for a pinned name absent from the library)
+        semantic: the ONLY generator path that can emit a custom — one the previous phase already held (until Batch 0b, possibly one L2 put there)
+    readers:
+      - file: lib/core/services/workout_schedule_read_service.dart
+        method: generateAndSchedule (writes the generated days into schedule_<date> rows)
+      - file: lib/features/train/providers/train_provider.dart
+        method: currentPlanProvider (Train tab day list)
+    contract_test_path: test/contracts/l2_no_custom_autoadd_behavioral_test.dart
+
   - concept: equipment_exclusion_filter
     domain: workout
     behavioral_test_path: test/contracts/equipment_exclusion_filter_behavioral_test.dart
@@ -11474,8 +11501,8 @@ concepts:
       `Set<String>` to EVERY pick path: queryV4 att1-4 (the drop is BEFORE the
       :268 tier short-circuit + KEPT at att4 since exclusion is a HARD constraint
       unlike the soft tier), the att5 universal-pool skip (mirrors U2's injury
-      skip; the per-pattern bodyweight floor keeps the slot non-empty), the L2
-      custom-append, and the L6 demote-swap. Reads every equipment_needed
+      skip; the per-pattern bodyweight floor keeps the slot non-empty), and the
+      L6 demote-swap (the L2 custom-append was removed 2026-10-21, d4b8e1). Reads every equipment_needed
       crash-safe + normalizing via `EquipmentVocab.fromProfile`, so B1 is correct
       for un-normalized community rows independent of B2. The queryV4 `exclusions`
       param is REQUIRED (compile-time thread enforcement). Scope boundary: the
@@ -11492,7 +11519,7 @@ concepts:
         semantic: drop iff EquipmentVocab.fromProfile(equipment_needed).any(exclusions.contains)
         notes: BEFORE the no-tier :291 return-true short-circuit so community rows are subject; crash-safe read
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
-        method: pickV4/_fillSlots/_cascadeFill (att1-4 + att5 skip) + _applyHistoryAdjustments (L6 + L2 custom filter)
+        method: pickV4/_fillSlots/_cascadeFill (att1-4 + att5 skip) + _applyHistoryAdjustments (L6)
         semantic: exclusions threaded to every pick path; att5 mirrors U2 injury skip
         notes: att4 KEEPS exclusions (hard constraint); att5 floor-sanitize keeps the slot non-empty
       - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
