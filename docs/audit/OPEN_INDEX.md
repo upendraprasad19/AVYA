@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**224 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**238 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -232,3 +232,17 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-362 | Active Workout: remove the per-set (OFF) path and the… | OI-348 row A12 (the release-build device… | never | [:6290](open_issues.md#L6290) |
 | OI-363 | Active Workout: the FINISH/CANCEL button row overflows sideways at 320 dp… | none | never | [:6301](open_issues.md#L6301) |
 | OI-364 | Remove the disable_lapse_gap_policy kill switch (client Hive key + server… | founder device check of the PRO gap… | 2026-10-21 - by code read: only READERS… | [:6316](open_issues.md#L6316) |
+| OI-368 | Coach chat: the coach replies 'Roger. Logged.' when nothing was logged (no… | the `coach-log-truth` batch shipping,… | never | [:6327](open_issues.md#L6327) |
+| OI-369 | Coach chat: the coach says 'Logged' while the LOG SET card still waits for… | the `coach-log-truth` batch shipping,… | never | [:6342](open_issues.md#L6342) |
+| OI-370 | Train: the expanded day row does not show a coach-logged exercise until a… | none | never | [:6355](open_issues.md#L6355) |
+| OI-371 | Train: exercise names in the expanded day row are cut to about 4… | none | never | [:6368](open_issues.md#L6368) |
+| OI-373 | Coach: one workout request can produce either a typed logSet card (APPLY)… | none | never | [:6381](open_issues.md#L6381) |
+| OI-374 | Coach: remove the DISABLE_WRITE_CLAIM_RULE kill switch once the… | the `coach-log-truth` batch shipping and… | never | [:6392](open_issues.md#L6392) |
+| OI-375 | Coach: the FC2 queued acknowledgement hard-codes 'Recruit' instead of the… | none | never | [:6403](open_issues.md#L6403) |
+| OI-376 | Workout invalidation: WorkoutWriteService.onInvalidate is a dead hook and… | none | never | [:6414](open_issues.md#L6414) |
+| OI-377 | Train: WorkoutRepository.getExerciseLogsForDate duplicates the canonical… | none | never | [:6425](open_issues.md#L6425) |
+| OI-378 | Riverpod 3.2.1: debug assertion actualPausedCount == expectedPausedCount… | upstream: riverpod above 3.2.1… | never | [:6436](open_issues.md#L6436) |
+| OI-379 | Coach-logged workouts never add to total_workouts_done or run the rank… | none | never | [:6447](open_issues.md#L6447) |
+| OI-380 | Train: the expanded day row shows 'N sets 0 reps X kg' for distance-type… | none | never | [:6458](open_issues.md#L6458) |
+| OI-381 | Set counts read '1 sets' in the remaining renderers (prescriptions,… | none | never | [:6469](open_issues.md#L6469) |
+| OI-382 | WorkoutWriteService.logExercise accepts a negative durationSec (only… | none | never | [:6480](open_issues.md#L6480) |

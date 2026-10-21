@@ -6145,7 +6145,7 @@ How to use: build once from the last merged `main`, install on the phone, sign i
 - A9 PRO phase ensure, Piece A (PR #120, merged be0d8f89): the founder's device check of the build that carries it (the plan names it before the two kill switches are removed). The exact steps are in `docs/plans/` for that branch and the memory note `project_pro_phase_ensure_piece_a_2026_10_16`; no ledger row spells them out, so write them into this row before the walk.
 - A10 `referral-unit-c-client` U2 (Unit C, merged PR #129 7266ea93): (1) as a referrer, Profile > Invite Friends shows the counters block (friends joined, subscribed, PRO days earned, pending) and no friend names; (2) on the first open after an install no credit notice appears (the first run records a silent baseline); after a new credit lands, the next open shows the Home referral credit slot, and a dismissal survives a restart; (3) in "GOT A CODE?", an expired, own or already-redeemed code (and a friend who has paid) shows the server's specific reason, not "Could not apply code"; a valid code shows "+7 days" only once the subscription reads back; (4) the friend disclosure line is on all four code-entry surfaces (welcome, sign-in, the apply sheet, the invite sheet). See PX in section B for the API half.
 - A11 `referral-unit-c-client` W2X (OI-349): on a short phone (about 640 dp tall) set the system font to the largest size and open the onboarding welcome screen; note whether the CTA column is clipped. Under the test font it overflowed 28 px BEFORE Unit C; the real font is unmeasured. The founder then decides whether 2x on that screen is supported.
-- A12 `log-exercise-flip` FLIPPED-BUILD-CHECK (flip precondition 3, amended by the founder 2026-10-20 to run after the merge on the release build; one LOG per exercise is now the default). Accounts: a NEW account (blank blocks, set 1 mirrors faded, LOG, UNDO, `All exercises logged.`, gold FINISH, receipt) and a RETURNING account (faded weights, normal reps, `· PREFILLED` (does it read as a total or a weight?); a tap selects all on Gboard and on the Samsung keyboard; no keyboard flicker on the first keystroke into a faded field; typing one field turns it normal; a WELCOME BACK prefill is faded). RE-OPEN: after more than 5 s; a double tap on LOGGED; on the last exercise; in a superset during the reveal scroll; while another exercise's UNDO toast shows; then `+`/`−`; then FINISH without re-LOG (the re-opened line names it; COMPLETE, then check the receipt); tap LOG on the last exercise, then again at about 1 s and 2 s. FINISH: `+` after LOG (`Partly logged`); one exercise skipped (calm line); nothing logged (COMPLETE disabled, the block line readable at the largest font with the keyboard up, OFF and LOG; CONTINUE and ✕ CANCEL work); all sets warm-up (0%, no crash); a warm-up flagged (header, percent and dialog agree). Coach chat: a workout draft with no sets cannot be confirmed; DISCARD works. Navigation: leave + RESUME keeps logged, typed-unlogged and fade; scroll far away and back with typed values and with a faded value cleared; typing latency in a faded field on a low-end phone; kill the app (the workout is gone, expected); review mode shows no re-open text. Types: timed, cardio (decimal minutes, then scroll away and back), distance, bodyweight, weighted_bodyweight, custom; swap/add/remove then LOG. Environment: a second account on the same device; the coach mid-workout; TalkBack (double-tap activates LOG, LOGGED and UNDO; the LOG toast is read; RE-OPEN announces `<name> re-opened`; a field announces its unit; a faded field says `Prefilled value`; editing a logged set inside the 5 s toast re-announces it, expected); the FINISH duration row on a 360 dp phone at 1.0 font (one line); the largest font on a 320 dp phone (card and FINISH dialog; also 1.3x on 360 dp); bright-light legibility of faded vs normal; web at phone width and a smoke on app.icanbefitter.com right after the deploy (`vercel.json` builds `main`, so web testers see the flip first).
+- A12 `log-exercise-flip` FLIPPED-BUILD-CHECK (flip precondition 3, amended by the founder 2026-10-20 to run after the merge on the release build; one LOG per exercise is now the default). Accounts: a NEW account (blank blocks, set 1 mirrors faded, LOG, UNDO, `All exercises logged.`, gold FINISH, receipt) and a RETURNING account (faded weights, normal reps, `· PREFILLED` (does it read as a total or a weight?); a tap selects all on Gboard and on the Samsung keyboard; no keyboard flicker on the first keystroke into a faded field; typing one field turns it normal; a WELCOME BACK prefill is faded). RE-OPEN: after more than 5 s; a double tap on LOGGED; on the last exercise; in a superset during the reveal scroll; while another exercise's UNDO toast shows; then `+`/`−`; then FINISH without re-LOG (the re-opened line names it; COMPLETE, then check the receipt); tap LOG on the last exercise, then again at about 1 s and 2 s. FINISH: `+` after LOG (`Partly logged`); one exercise skipped (calm line); nothing logged (COMPLETE disabled, the block line readable at the largest font with the keyboard up, OFF and LOG; CONTINUE and ✕ CANCEL work); all sets warm-up (0%, no crash); a warm-up flagged (header, percent and dialog agree). Coach chat: a workout draft with no sets cannot be confirmed; DISCARD works. Navigation: leave + RESUME keeps logged, typed-unlogged and fade; scroll far away and back with typed values and with a faded value cleared; typing latency in a faded field on a low-end phone; kill the app (the workout is gone, expected); review mode shows no re-open text. Types: timed, cardio (decimal minutes, then scroll away and back), distance, bodyweight, weighted_bodyweight, custom; swap/add/remove then LOG. Environment: a second account on the same device; the coach mid-workout; TalkBack (double-tap activates LOG, LOGGED and UNDO; the LOG toast is read; RE-OPEN announces `<name> re-opened`; a field announces its unit; a faded field says `Prefilled value`; editing a logged set inside the 5 s toast re-announces it, expected); the FINISH duration row on a 360 dp phone at 1.0 font (one line); the largest font on a 320 dp phone (card and FINISH dialog; also 1.3x on 360 dp); bright-light legibility of faded vs normal; web at phone width and a smoke on app.icanbefitter.com right after the deploy (`vercel.json` builds `main`, so web testers see the flip first). **Web result 2026-10-21 (founder, app.icanbefitter.com, returning account):** set 1 faded prefill, LOG, and RE-OPEN after LOG passed; FINISH with nothing logged not walked (the founder had already logged; covered by `log_exercise_finish_dialog_test.dart`); the coach workout-draft card is reachable only on the legacy path, covered by tests. Found on the way: OI-368, OI-369 (coach claims a log before the tap), OI-370 (Train row stale after a coach log), OI-371 (names cut in the expanded day row). Still open for the phone: everything Android-only (TalkBack, Gboard/Samsung keyboards, font scale, low-end phone latency, kill-the-app).
 
 ### B. Signed-in session or JWT (dev build, test account or the phone)
 
@@ -6323,3 +6323,169 @@ To do:
 Source: CLAUDE.md section 4.6 step 4 - an old code path kept for later removal is tracked on the board, not as an intention. Plan: `docs/plans/2026-10-18-pro-gap-policy-and-streak.md` (Kill switch section).
 
 Fix: once the device check passes, delete the key, the getter, every `policyEnabled` / `lapseGapPolicyEnabled` branch (old paths: start date `max(today, plan_end + 1)`, streak skip-at-zero, completion rate ignoring blank days, no freeze zero, no `plan_status`), the `countBlankDays` opt-in and env check in `rank_engine.ts` / `evaluate-rank-promotions`, and the kill-switch tests (`lapse_gap_policy_behavioral_test.dart`, `lapse_gap_freeze_reset_advance_test.dart`, `gap_policy_test.dart`, `rank_engine_blank_days_test.ts`). Default-live policy, so the full x2 plan review plus B-pass applies to the removal. Redeploy `evaluate-rank-promotions` (founder go); `ai-proxy` does not read the switch.
+
+## OI-368 — Coach chat: the coach replies 'Roger. Logged.' when nothing was logged (no tool call; it then asks for the sets)
+
+- **Status**: OPEN
+- **Blocked on**: the `coach-log-truth` batch shipping, then its post-deploy measurement (founder live check + next-day read, plan section 5)
+- **Verified**: never
+- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `observations-a12-web`
+
+Found in the founder's A12 web walk 2026-10-21 (app.icanbefitter.com, 13:19 IST). The user typed "log bench press"; the coach replied "Roger. Logged." and then asked for the sets. No tool call ran and no card appeared, so nothing was written (confirmed in the chat and workout rows for that minute). The coach claims a write that never happened.
+
+Mechanism: nothing in `ai-proxy` checks the reply against what was actually queued. The prompt's legacy logging block is headed `FITNESS DATA LOGGING — INSTANT:` (`supabase/functions/ai-proxy/index.ts` prompt assembly), which teaches the model that a log is instant, and the reply text is passed through untouched (`cleanReply`).
+
+Fix: plan `docs/plans/coach-log-truth.md` (branch `coach-log-truth`, blast radius platform, tier L). Founder scope decision 2026-10-21, after two review rounds broke a server-side rewrite of the reply (the server cannot see which cards are on the user's screen): (1) the queued tool response tells the model the write is not saved yet; (2) the prompt header says QUEUED instead of INSTANT and a write-claim rule gives the coach the founder-approved lines (`Nothing logged yet. Send the sets and I'll queue it.` when nothing was proposed); (3) a log-only detector records every reply that still claims a save. Behind the `DISABLE_WRITE_CLAIM_RULE` secret.
+
+Stays OPEN after that batch ships: close only when the founder's live check and the next-day read of `ai_coach_interactions` (plan section 5) find no false claim. If one remains, the next step is a client-side guard: the app, which knows the cards on screen, shows "Not saved yet. Tap APPLY below." under the bubble without rewriting the coach's words.
+
+## OI-369 — Coach chat: the coach says 'Logged' while the LOG SET card still waits for APPLY (false if the user taps DISMISS)
+
+- **Status**: OPEN
+- **Blocked on**: the `coach-log-truth` batch shipping, then its post-deploy measurement (founder live check + next-day read, plan section 5)
+- **Verified**: never
+- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `observations-a12-web`
+
+Found in the founder's A12 web walk 2026-10-21 (13:21 IST). The coach queued a typed `logSet` intent (the LOG SET card with APPLY/DISMISS) and in the same reply said "Logged." The founder tapped DISMISS, so nothing was written, but the coach had already said it was. Same false claim for the legacy cards: `confirm_workout_log` waits for CONFIRM, and water/weight/food/sleep/measurement cards auto-confirm only after 5 s unless the user taps SKIP (`lib/features/ai_coach/widgets/log_confirm_card.dart:34-37`).
+
+Mechanism: the typed intent's tool response is `status: "queued_for_user_confirmation"` (`supabase/functions/_shared/tool-loop.ts:558-601`) with no instruction about wording, and the reply is not checked.
+
+Fix: same plan and same closing rule as OI-368 (`docs/plans/coach-log-truth.md`). Founder-approved lines the prompt rule gives the coach: `Queued. Tap APPLY to log it.` (typed log), `Queued. Tap CONFIRM to log it.` (legacy workout card), `Queued. Tap APPLY to confirm.` (other typed intents), `Queued. It logs in 5 seconds unless you tap SKIP.` (auto-confirm cards).
+
+## OI-370 — Train: the expanded day row does not show a coach-logged exercise until a page reload
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `observations-a12-web`
+
+Found in the founder's A12 web walk 2026-10-21. A Bench Press logged from the coach chat (legacy `WorkoutLogConfirmCard` CONFIRM, row written 13:29:36 IST) did not appear in the Train tab's expanded day row until the page was reloaded. The row write itself was correct.
+
+Mechanism: the Train screen rebuilds on `ref.watch(currentPlanProvider)` (`lib/features/train/screens/train/screen.dart:116`), and the expanded row reads exercise logs straight from the repository on rebuild (`lib/features/train/screens/train/expanded_exercises.dart:7`, `WorkoutRepository.getExerciseLogsForDate`). The coach chat's workout paths never invalidate `currentPlanProvider`: `submitWorkoutDraft` (`lib/features/ai_coach/services/conversational_log_handler.dart:321-328`) invalidates only calendar week, streak and today's workout, and its comment says `WorkoutWriteService.onInvalidate` handles the rest, but that hook is never assigned (`lib/core/services/workout_write_service.dart:86`). The typed-intent path (`ToolDispatcher._invalidateWorkoutProviders`, `lib/features/ai_coach/services/tool_dispatcher.dart:1839-1875`) has the same gap. Reproduced in a widget test (Train visible and offstage).
+
+Fix: plan `docs/plans/train-coach-log-refresh.md` (branch `train-coach-log-refresh`, blast radius account, tier M): one `invalidateWorkoutSurfaces` helper used by all three coach paths, plus a saved state on the workout confirm card (`✓ WORKOUT LOGGED`, about 1.5 s, haptic), founder-approved 2026-10-21.
+
+## OI-371 — Train: exercise names in the expanded day row are cut to about 4 characters at phone width
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `observations-a12-web`
+
+Found in the founder's A12 web walk 2026-10-21 (Train tab screenshot at phone width): names show as "Barb…", "Leg…", "Benc…".
+
+Mechanism: the expanded day row (`lib/features/train/screens/train/expanded_exercises.dart:98-121`) is `Row[Icon, SizedBox(8), Expanded(Text(name, ellipsis)), Text(detail)]`. The detail text ("3 sets 10 reps 60 kg") takes its full width first, so at 320-360 dp the name gets what is left, a few characters, and is cut with an ellipsis on one line.
+
+Fix: same plan as OI-370. The name gets its own line with no line limit and the detail wraps under it (`ExpandedExerciseLogRow`), tested at 320 dp × 1.0/1.3/2.0 text scale with long real names.
+
+## OI-373 — Coach: one workout request can produce either a typed logSet card (APPLY) or a legacy confirm_workout_log card (CONFIRM), two write paths for the same thing
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `observations-a12-web`
+
+Found in the founder's A12 web walk 2026-10-21: the same text ("Log this workout for today: bench press 3 sets of 8 at 60 kg") produced a typed `logSet` intent at 13:21 (`ToolConfirmCard`, APPLY/DISMISS) and a legacy `<ICBF_LOG>` `confirm_workout_log` tag at 13:29 (`WorkoutLogConfirmCard`, CONFIRM/DISCARD). Two cards, two write paths (`ToolDispatcher._executeLogSet`, `lib/features/ai_coach/services/tool_dispatcher.dart:356`, vs `submitWorkoutDraft`, `lib/features/ai_coach/services/conversational_log_handler.dart:282`), two looks, two refresh behaviours (OI-370) for one user intent. The client already suppresses a legacy draft whose exercises are all covered by `log_set` intents (`TypedLogCoverage`, `lib/features/ai_coach/providers/ai_coach_provider.dart:1530-1545`), but the model picks either path freely because both are taught (the ICBF block in `supabase/functions/ai-proxy/index.ts:975-995` and the `logSet` tool).
+
+To do: decide which path the coach uses for workouts (founder product call), then stop teaching the other (prompt + tool offer), keeping the client renderer for history. Found by `docs/plans/coach-log-truth.md` (out of scope there).
+
+## OI-374 — Coach: remove the DISABLE_WRITE_CLAIM_RULE kill switch once the write-claim rule passes its live check
+
+- **Status**: OPEN
+- **Blocked on**: the `coach-log-truth` batch shipping and its live check passing (plan section 5); founder decision on the removal
+- **Verified**: never
+- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `observations-a12-web`
+
+CLAUDE.md section 4.6 step 4: the old path kept behind a kill switch is tracked here, not as an intention. `DISABLE_WRITE_CLAIM_RULE` (server secret, exactly `"true"` disables; default ON) keeps the pre-batch bytes of the ICBF prompt blocks, the queued tool response without its `note`, no write-claim rule and the original `logMealByText` description. Plan: `docs/plans/coach-log-truth.md` section 2.5.
+
+To do once the live check passes: delete `isWriteClaimRuleDisabled`, the `enabled=false` branches of `icbfLogInstructions` / `mediaIcbfLogInstructions` / `writeClaimSuffix` / `applyWriteClaimDescriptions`, the `writeClaimRule` loop option's off branch, the golden fixture `_shared/testdata/icbf_blocks_pre_write_claim.json` and its OFF assertions; remove the secret from `docs/operations/SECRET_INVENTORY.md`; redeploy `ai-proxy` and `ai-media-proxy` (founder go).
+
+## OI-375 — Coach: the FC2 queued acknowledgement hard-codes 'Recruit' instead of the user's rank address
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `observations-a12-web`
+
+`supabase/functions/_shared/tool-loop.ts:645` (FC2, diagnose 7fbe21): when write intents were queued but no terminal text came back, the loop answers "Copy that, Recruit — I've queued that below. Review the details and tap APPLY to confirm." The address is hard-coded: a Lieutenant or Captain is called "Recruit". The coach's normal replies use the user's rank from the snapshot (`current_rank`). Found by the round-1 exposure review of `docs/plans/coach-log-truth.md` (R1B-F9). The same hard-coding sits in `supabase/functions/_shared/day_swap_routing.ts`: the free-user block's canned refusal (`:34`, "…a PRO order, Recruit.") and `PRO_CAPABLE_BLOCK`'s example narration (`:49`, "Aye, Recruit. …"), which the model copies (round-7 exposure review, R7B-P3).
+
+To do: build the FC2 line from the rank in scope (or drop the address), make the two day-swap texts rank-neutral or rank-filled, keep the "queued … tap APPLY" substance, and keep the client's hard-failure apology matcher untouched (this line is not an apology).
+
+## OI-376 — Workout invalidation: WorkoutWriteService.onInvalidate is a dead hook and hand-written copies of the workout invalidation batch remain (edit sheet, completeWorkout, day swap, day rollover, template delete, coach prompt handler)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `observations-a12-web`
+
+`WorkoutWriteService.onInvalidate` (`lib/core/services/workout_write_service.dart:86`) is declared, never assigned anywhere, and checked at 9 sites (`:269, 606, 687, 831, 1116, 1225, 1344, 1414, 1499`); comments in callers claimed it "handles the full batch", which is how OI-370 hid. The coach paths get one helper `invalidateWorkoutSurfaces` in batch `train-coach-log-refresh`; these hand-written copies remain: `edit_workout_log_sheet.dart:293-298`, `train_provider.dart` `completeWorkout` (`:2320-2326`, also invalidates `aiInsightProvider` but never `lastPerformanceProvider`), `day_swap_provider.dart:75-82`, `lib/core/services/day_rollover_service.dart` (~`:274-279`), `TemplatesNotifier` delete (`train_provider.dart:2515-2519`), and the coach completion-prompt handler, which skips every invalidation when unmounted (`lib/features/ai_coach/screens/ai_coach/screen.dart:370`). Also: `exerciseHistoryProvider` (weight sparkline) is refreshed by no coach path; the canonical set differs between `scripts/check_mutation_invalidation_set.dart` (7, with `aiInsightProvider`) and `docs/architecture/sync.md` (6); after the coach path invalidates `lastPerformanceProvider`, an open Active Workout's "LAST" hint re-baselines on today's sets because `logsForExercise` does not exclude today. None of the copies misses `currentPlanProvider`, so no user-visible defect today. Related, same family: the coach chat path (`submitWorkoutDraft`) decides whether to mark the day through `getScheduleForDate`, which hides moved/dropped schedule rows, so a coach log on such a day stamps it completed (class e8f4a3); `_maybeCompleteScheduledDay` (`tool_dispatcher.dart:439-452`) reads the raw row and skips terminal and rest rows. Today's behaviour, unchanged by `train-coach-log-refresh`.
+
+To do: delete the dead hook (platform-tier file), route the copies through the helper (decide `aiInsightProvider` once), and decide what "LAST" means mid-session.
+
+## OI-377 — Train: WorkoutRepository.getExerciseLogsForDate duplicates the canonical exlog reader WorkoutReadService.exerciseLogsForIstDate
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `observations-a12-web`
+
+`WorkoutRepository.getExerciseLogsForDate` (`lib/features/train/repositories/workout_repository.dart:730`, index-first via `formatDateKey == istDateStr`) is a second implementation of the canonical exlog reader `WorkoutReadService.exerciseLogsForIstDate`. It feeds the Train expanded day row (`lib/features/train/screens/train/expanded_exercises.dart:7`). `lib/features/train/CLAUDE.md:55` and `lib/core/services/CLAUDE.md:43` claimed every exlog reader delegates; batch `train-coach-log-refresh` corrects those lines and points here. Same writer/reader-drift class as the SoT concept `exercise_logs_read_path`.
+
+To do: make it delegate (or delete it and call the read service), with a writer-to-reader test.
+
+## OI-378 — Riverpod 3.2.1: debug assertion actualPausedCount == expectedPausedCount when a watched provider is invalidated while its listeners are paused (Train offstage)
+
+- **Status**: OPEN
+- **Blocked on**: upstream: riverpod above 3.2.1 (flutter_riverpod 3.3.1 / riverpod 3.2.1 today); reopen_when: a riverpod release fixes it
+- **Verified**: never
+- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `observations-a12-web`
+
+Debug-only Riverpod assertion `actualPausedCount == expectedPausedCount`, raised when a provider watched by an offstage subtree (paused listeners, e.g. the Train tab under `Offstage` + `TickerMode(false)`) is invalidated and the subtree resumes. Reproduced in pure Riverpod with no app code (about 25 lines, round-1 ground-truth review of `docs/plans/train-coach-log-refresh.md`), so it is upstream. Riverpod reports it through `Zone.current.handleUncaughtError` captured when the container is built (`provider_container.dart:679-688,753`). Release builds are unaffected (asserts are stripped). The coach tool path raises it today; the coach chat path will too once it invalidates `currentPlanProvider` (OI-370 fix).
+
+The `train-coach-log-refresh` behavioural test collects exactly this error in a zone and asserts it fires on the offstage tool path: a tripwire that turns red when a Riverpod upgrade fixes it, which is when this OI closes (delete the collector then).
+
+## OI-379 — Coach-logged workouts never add to total_workouts_done or run the rank promotion check
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `observations-a12-web`
+
+`total_workouts_done` (rank and lifetime stats) is incremented by the Active Workout completion path, but a workout logged from the coach chat (`submitWorkoutDraft` → `WorkoutWriteService.logExercise` + `markCompleted`, or the typed `logSet` path) never increments it and never runs the rank promotion check. Invalidating `userStatsProvider` would not help: nothing writes the count. Found by the round-1 exposure review of `docs/plans/train-coach-log-refresh.md` (R1B-6b). Monotonic field: any new writer must use the only-increment guard (`lib/core/services/CLAUDE.md`, "Writer unconditionally overwrites a lifetime field").
+
+To do: decide whether a coach-logged day counts as a completed workout (founder), then route the count and the rank check through the same writer the Active Workout uses.
+
+## OI-380 — Train: the expanded day row shows 'N sets 0 reps X kg' for distance-type exercises
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `observations-a12-web`
+
+`lib/features/train/screens/train/expanded_exercises.dart:78-96` has branches for timed, cardio, weight and reps-only, but a distance-type exercise falls through to the weight/reps branch and shows `N sets · 0 reps · X kg`. Found by the round-1 exposure review of `docs/plans/train-coach-log-refresh.md` (R1B-10).
+
+To do: a distance branch (`distance_km`, with time if present), using the shared set-count helper from that batch.
+
+## OI-381 — Set counts read '1 sets' in the remaining renderers (prescriptions, workout receipt, preview screen, tool confirm card)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `observations-a12-web`
+
+Batch `train-coach-log-refresh` adds `setCountLabel` / `repCountLabel` (`1 set` / `N sets`, `1 rep` / `N reps`) and uses them in the Train expanded day row and the exercise preview sheet's logged history. These renderers still print `1 sets` for a single set: `lib/features/train/screens/active_workout/exercise_card.dart:753-772`, `lib/features/train/widgets/workout_receipt_card.dart:813-828`, `lib/features/train/screens/preview_workout_screen.dart:400`, `lib/features/train/widgets/exercise_card.dart:59`, `lib/features/train/screens/train/exercise_preview_sheet.dart:336`, `lib/features/ai_coach/widgets/tool_confirm_card.dart:285`, `lib/features/ai_coach/widgets/diff_preview/custom_template_diff.dart:198`.
+
+To do: route each through the helper; one widget test per renderer family for `1 set`.
+
+## OI-382 — WorkoutWriteService.logExercise accepts a negative durationSec (only weight and reps are validated), so a negative duration can reach an exlog row
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `observations-a12-web`
+
+`WorkoutWriteService.logExercise` (`lib/core/services/workout_write_service.dart:119-121`) validates only `weightKg >= 0` and `reps >= 0`; a set with a negative `durationSec` is written to the exlog row. `markCompleted` does reject a negative `durationSec` (`fail('durationSec must be >= 0')`). Found by the round-4 ground-truth review of `docs/plans/train-coach-log-refresh.md` (probe-verified). The coach chat path can produce it from a model-emitted draft; the edit sheet will filter digits only after that batch.
+
+Note: the `train-coach-log-refresh` behavioural test for "sets saved, day not marked done" uses exactly this gap as its seam (a timed set with `durationSecs: -100`). Fixing this OI moves that test to another `markCompleted` failure seam (said in the test comment).
+
+To do: validate `durationSec >= 0` (and `distanceKm >= 0`) in `logExercise` alongside weight and reps; a writer test.
