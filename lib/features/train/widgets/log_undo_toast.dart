@@ -70,19 +70,29 @@ class LogUndoToast extends StatelessWidget {
               child: IgnorePointer(
                 child: Padding(
                   padding: const EdgeInsets.only(left: 12),
-                  child: Text(
-                    text,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.bodySm
-                        .copyWith(color: AppColors.textPrimary),
+                  // A live region: TalkBack reads the toast when it appears
+                  // (flip batch R5B-02); the card that was logged collapses.
+                  child: Semantics(
+                    liveRegion: true,
+                    container: true,
+                    child: Text(
+                      text,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodySm
+                          .copyWith(color: AppColors.textPrimary),
+                    ),
                   ),
                 ),
               ),
             ),
+            // excludeSemantics drops the GestureDetector's tap action, so the
+            // node carries `onTap` itself (flip R4A-01: TalkBack could not
+            // press UNDO).
             Semantics(
               button: true,
               label: WardroomCopy.activeLogUndo,
+              onTap: onUndo,
               excludeSemantics: true,
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,

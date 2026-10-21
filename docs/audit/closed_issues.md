@@ -5528,3 +5528,32 @@ Scope (the FLIP-READY batch): UNDO toast after LOG (snackbar recurrence class `b
 Impact: the HARD flip precondition for `enable_log_exercise_button`; the flag flips after this lands.
 
 **CLOSED 2026-10-20 (`log-exercise-batch2`, plan `docs/plans/log-exercise-batch2.md`, record `docs/plan-reviews/log-exercise-batch2.md`, ledger `docs/audit/log-exercise-batch2.closure.yaml`, diagnose `c7d2a9`):** all three scope items shipped behind `enable_log_exercise_button` (still default OFF). UNDO: an in-tree `LogUndoToast` at the top of the exercise list (not a SnackBar, so the `b4e7f1`/`s1n4c0` class cannot recur), driven by a session-only `LogUndoRecord` and the new writer `ActiveWorkoutNotifier.unlogSets` (unchecks exactly the sets the LOG checked; refuses while `completeWorkout` runs, via `_completing`). MIRROR: set 1's typed weight, duration or distance copies into the blank, untouched fields of the same exercise (`mirrorTargets`, `_mirrorFrom` in `exercise_card.dart`); a hand-edited field stops following. Last-exercise emphasis: "All exercises logged." above FINISH, and FINISH stays outline until every exercise is logged (LOG mode only). Found on the way and filed, not fixed here: OI-358 (a duplicate exercise name crashes the screen). Flip preconditions 2-5 in `docs/ship_dark_pending_review.yaml` remain.
+
+## OI-361 — Completing a workout with zero logged sets must not be allowed
+
+- **Status**: CLOSED · 2026-10-20 · branch `log-exercise-flip` · the commit carrying `closes-oi: OI-361` (`git log --grep='closes-oi: OI-361'`)
+- **Blocked on**: — (resolved)
+- **Verified**: 2026-10-20 - by behavioural, widget and pure tests on the branch (U-E1..U-E5, listed in the closing note); not yet on a device (OI-348 A12)
+- **Identified**: 2026-10-20 · filed via mint_oi.sh from branch `log-exercise-flip`
+
+Founder decision (chat, 2026-10-20): a workout with zero logged working sets must not complete. Today it does, on both flag paths. FINISH -> COMPLETE runs `ActiveWorkoutNotifier.completeWorkout` (one caller, `finish_dialog.dart` COMPLETE). That method skips every exercise with no saved set (`train_provider.dart:2045`, `if (exerciseSets.isEmpty) continue;`), and then, regardless, it:
+- calls `WorkoutWriteService.markCompleted` (`:2068`), which stamps the `schedule_*` day `completed` and writes `wlog_*`;
+- adds 1 to `total_workouts_done` (`:2076`);
+- recomputes the daily streak (`:2089`) and the weekly streak (`:2117`);
+- runs `BadgeService.instance.checkAll()` (`:2170`).
+
+The completion sheet then celebrates `Workout Complete!` / `0 SETS LOGGED` (`completion_sheet.dart:40`). The user earns streak, badge and plan-completion credit for no work: the psychology lens "never show progress the user did not earn" is broken, and the training record is wrong.
+
+"Zero" is what `completeWorkout` would save: no checked, non-warm-up set with values. The flip plan (`docs/plans/log-exercise-flip.md` §3) extracts this as `ActiveWorkoutData.saveableSetIndexes` / `workingSetCounts`. A workout whose only checked sets are warm-ups is zero.
+
+To plan:
+- In the FINISH dialog, COMPLETE is disabled (or replaced) when the saved working count is 0, with honest copy, plus a clear way out: keep training, or discard the session (`cancelWorkout`).
+- A notifier-level guard in `completeWorkout` itself (defence in depth): return without `markCompleted`, streak or badge writes when nothing would be saved.
+- Both flag paths: OFF counts `completedSets`, LOG mode counts `workingSetCounts`.
+- A behavioural test drives the real `completeWorkout` with zero saveable sets and asserts no `wlog_*` row, no schedule status change, an unchanged `total_workouts_done`, and no streak change.
+
+The coach path (`tool_dispatcher._maybeCompleteScheduledDay`) completes a day only after a `logSet`, so it always has a set. Confirm while planning.
+
+This interacts with the flip plan: its §3 keeps COMPLETE enabled with `Nothing logged yet. Completing now saves no sets.` (ledger `ZERO-SET-COMPLETION`). If the founder folds this OI into the flip batch, that row becomes the block.
+
+**CLOSED 2026-10-20 (`log-exercise-flip`, unit U-E of plan `docs/plans/log-exercise-flip.md`, record `docs/plan-reviews/log-exercise-flip.md` round 7, ledger `docs/audit/log-exercise-flip.closure.yaml` rows `ZERO-SET-COMPLETION` and `CHAT-DRAFT-ZERO-SET`, diagnose `e3a6c1`):** one predicate, `ActiveWorkoutData.hasSaveableSet` (over `saveableSetIndexes`, the exact sets `completeWorkout` saves). `completeWorkout` returns on its first line when nothing would be saved (review mode keeps its path), and the FINISH dialog, both flag modes, disables COMPLETE and says "No working sets logged (warm-ups don't count). Log one to complete, or cancel the workout."; it scrolls while blocked and keeps the re-opened / typed lines. Plan review round 7 found the same class on the coach chat path: `submitWorkoutDraft` completed a draft with no sets. Fixed in the same batch: `draftHasLoggableSet` guards the submit and disables the confirm card's CONFIRM. Tests: `test/contracts/log_exercise_flip_behavioral_test.dart` (U-E1, the real awaited `completeWorkout`), `test/contracts/zero_set_completion_behavioral_test.dart` (U-E4/U-E5), `test/features/train/log_exercise/log_exercise_finish_dialog_test.dart` (U-E2, U-E2b, U-E2c, U-D4), `log_exercise_logic_test.dart` (U-E3).

@@ -1239,6 +1239,15 @@ class ActiveWorkoutData {
   // The Red isolation SET-DROP is baked into `exercises` at startWorkout (6-A);
   // this field drives the merged session banner. The Yellow/Red LOAD cut is 6-B.
   final ReadinessLevel? readinessLevel;
+  // One-LOG flow (flag `enable_log_exercise_button`, docs/plans/log-exercise-flip.md
+  // §2): keys '$exIdx-$setIdx-$field' (field: weight|duration|distance) of
+  // fields whose text the APP put there and the user has not typed in. Drives
+  // the faded render (`isFaded`). Session-only; MUST be threaded through
+  // copyWith (the 1×/sec timer).
+  final Set<String> suggestedInputs;
+  // Names of exercises the user RE-OPENED (§1). Never pruned in a session; the
+  // FINISH guard filters it to exercises present now with nothing to save.
+  final Set<String> reopenedExercises;
 
   const ActiveWorkoutData({
     this.workoutDay,
@@ -1254,6 +1263,8 @@ class ActiveWorkoutData {
     this.isSupersetGroupMode = false,
     this.sessionDetrainingFactor = 1.0,
     this.readinessLevel,
+    this.suggestedInputs = const {},
+    this.reopenedExercises = const {},
   });
 
   ActiveWorkoutData copyWith({
@@ -1270,6 +1281,8 @@ class ActiveWorkoutData {
     bool? isSupersetGroupMode,
     double? sessionDetrainingFactor,
     ReadinessLevel? readinessLevel,
+    Set<String>? suggestedInputs,
+    Set<String>? reopenedExercises,
   }) {
     return ActiveWorkoutData(
       workoutDay: workoutDay ?? this.workoutDay,
@@ -1288,6 +1301,8 @@ class ActiveWorkoutData {
       sessionDetrainingFactor:
           sessionDetrainingFactor ?? this.sessionDetrainingFactor,
       readinessLevel: readinessLevel ?? this.readinessLevel,
+      suggestedInputs: suggestedInputs ?? this.suggestedInputs,
+      reopenedExercises: reopenedExercises ?? this.reopenedExercises,
     );
   }
 
@@ -1330,6 +1345,44 @@ class ActiveWorkoutData {
 
   double get progressPercent =>
       totalSets > 0 ? completedSets / totalSets : 0.0;
+
+  /// The ONE save predicate (docs/plans/log-exercise-flip.md §3): a set
+  /// [completeWorkout] writes is checked, not a warm-up, and has captured
+  /// values. The FINISH guard, the working counts and the zero-set block
+  /// (OI-361) read it through [saveableSetIndexes], so they cannot drift from
+  /// the save.
+  bool wouldSaveSet(int exerciseIndex, int setIndex) {
+    final key = '$exerciseIndex-$setIndex';
+    return checkedSets.containsKey(key) &&
+        !warmUpSets.containsKey(key) &&
+        setInputValues[key] != null;
+  }
+
+  /// The set indexes [completeWorkout] saves for [exerciseIndex], in order:
+  /// the template count extended by any checked key beyond it.
+  List<int> saveableSetIndexes(int exerciseIndex) {
+    if (exerciseIndex < 0 || exerciseIndex >= exercises.length) return const [];
+    var maxSetLog = int.tryParse(exercises[exerciseIndex].sets) ?? 3;
+    for (final key in checkedSets.keys) {
+      if (key.startsWith('$exerciseIndex-')) {
+        final s = int.tryParse(key.split('-').last) ?? 0;
+        if (s + 1 > maxSetLog) maxSetLog = s + 1;
+      }
+    }
+    return [
+      for (var s = 0; s < maxSetLog; s++)
+        if (wouldSaveSet(exerciseIndex, s)) s,
+    ];
+  }
+
+  /// At least one set would be saved: [completeWorkout] refuses to run
+  /// without one (OI-361).
+  bool get hasSaveableSet {
+    for (var i = 0; i < exercises.length; i++) {
+      if (saveableSetIndexes(i).isNotEmpty) return true;
+    }
+    return false;
+  }
 
   /// True whenever `startWorkout()` has assigned a day and neither
   /// `completeWorkout()` nor `cancelWorkout()` has run since — i.e. there is
@@ -1522,7 +1575,9 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
   /// ignored, so a stale index can never create a phantom set; when nothing new
   /// is added, or the session is saved/complete, `state` is left untouched.
   void logSets(int exerciseIndex, Set<int> setIndexes) {
-    if (state.isSaved || state.isComplete) return;
+    // While a save runs, a LOG would change `checkedSets` under the save's
+    // reads (completeWorkout reads them per exercise across awaits).
+    if (_completing || state.isSaved || state.isComplete) return;
     if (exerciseIndex < 0 || exerciseIndex >= state.exercises.length) return;
     final numSets = int.tryParse(state.exercises[exerciseIndex].sets) ?? 3;
     final newChecked = Map<String, bool>.from(state.checkedSets);
@@ -1543,8 +1598,12 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
   /// is running or done, the index is out of range, the exercise at that index
   /// is no longer [exerciseName] (a swap or removal moved it), or none of the
   /// sets is checked. Never touches `setInputValues` or `warmUpSets`.
+  ///
+  /// [reopened]: a RE-OPEN of a LOGGED exercise (not an UNDO). The name joins
+  /// `reopenedExercises` in the same state change, so the FINISH guard can
+  /// name an exercise that was logged, re-opened and never logged again.
   bool unlogSets(int exerciseIndex, Set<int> setIndexes,
-      {required String exerciseName}) {
+      {required String exerciseName, bool reopened = false}) {
     if (_completing || state.isSaved || state.isComplete) return false;
     if (exerciseIndex < 0 || exerciseIndex >= state.exercises.length) {
       return false;
@@ -1558,7 +1617,12 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       if (newChecked.remove('$exerciseIndex-$setIndex') != null) removed = true;
     }
     if (!removed) return false;
-    state = state.copyWith(checkedSets: newChecked);
+    state = state.copyWith(
+      checkedSets: newChecked,
+      reopenedExercises: reopened
+          ? {...state.reopenedExercises, exerciseName}
+          : null,
+    );
     return true;
   }
 
@@ -1569,6 +1633,44 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     newValues[key] = values;
     state = state.copyWith(setInputValues: newValues);
   }
+
+  /// The card's one writer per event in LOG mode (docs/plans/log-exercise-flip.md
+  /// §2): captures [values] (set index → values) and marks / clears
+  /// `suggestedInputs` keys ('$exIdx-$setIdx-$field') in ONE state change. No
+  /// write in review mode or when nothing would change: every keystroke goes
+  /// through here and a write rebuilds the screen.
+  void recordCardEdit(
+    int exerciseIndex, {
+    Map<int, SetInputValues> values = const {},
+    Set<String> mark = const {},
+    Set<String> clear = const {},
+  }) {
+    if (state.isSaved) return;
+    Map<String, SetInputValues>? newValues;
+    for (final entry in values.entries) {
+      final key = '$exerciseIndex-${entry.key}';
+      final old = state.setInputValues[key];
+      if (old != null && _sameValues(old, entry.value)) continue;
+      newValues ??= Map<String, SetInputValues>.from(state.setInputValues);
+      newValues[key] = entry.value;
+    }
+    final suggested = state.suggestedInputs;
+    final marksChange = mark.any((k) => !suggested.contains(k)) ||
+        clear.any(suggested.contains);
+    if (newValues == null && !marksChange) return;
+    state = state.copyWith(
+      setInputValues: newValues,
+      suggestedInputs: marksChange
+          ? ({...suggested, ...mark}..removeAll(clear))
+          : null,
+    );
+  }
+
+  static bool _sameValues(SetInputValues a, SetInputValues b) =>
+      a.weight == b.weight &&
+      a.reps == b.reps &&
+      a.durationSeconds == b.durationSeconds &&
+      a.distanceKm == b.distanceKm;
 
   /// Replace the exercise at [exerciseIndex] with [newExercise].
   ///
@@ -1636,6 +1738,14 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       checkedSets: newChecked,
       warmUpSets: newWarmUps,
       setInputValues: newInputValues,
+      suggestedInputs: {
+        for (final k in state.suggestedInputs)
+          if (!k.startsWith(prefix)) k,
+      },
+      // The outgoing exercise's re-open mark leaves with it, so swapping back
+      // to the same name starts unmarked (B-pass finding 4).
+      reopenedExercises: {...state.reopenedExercises}
+        ..remove(state.exercises[exerciseIndex].name),
     );
   }
 
@@ -1684,11 +1794,26 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
         newInputValues['${exIdx - 1}-$setIdx'] = entry.value;
       }
     }
+    // Three-part keys ('$ex-$set-$field'): keep the field suffix.
+    final newSuggested = <String>{};
+    for (final key in state.suggestedInputs) {
+      final parts = key.split('-');
+      if (parts.length != 3) continue;
+      final exIdx = int.tryParse(parts[0]) ?? -1;
+      if (exIdx < exerciseIndex) {
+        newSuggested.add(key);
+      } else if (exIdx > exerciseIndex) {
+        newSuggested.add('${exIdx - 1}-${parts[1]}-${parts[2]}');
+      }
+    }
     state = state.copyWith(
       exercises: newExercises,
       checkedSets: newChecked,
       warmUpSets: newWarmUps,
       setInputValues: newInputValues,
+      suggestedInputs: newSuggested,
+      reopenedExercises: {...state.reopenedExercises}
+        ..remove(state.exercises[exerciseIndex].name),
     );
   }
 
@@ -1724,12 +1849,17 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     final newInputValues = Map<String, SetInputValues>.from(state.setInputValues)
       ..remove(removedKey)
       ..remove(lastSetKey);
+    final removedPrefix = '$removedKey-'; // every field of the removed set
 
     state = state.copyWith(
       exercises: newExercises,
       checkedSets: newChecked,
       warmUpSets: newWarmUps,
       setInputValues: newInputValues,
+      suggestedInputs: {
+        for (final k in state.suggestedInputs)
+          if (!k.startsWith(removedPrefix)) k,
+      },
     );
   }
 
@@ -1838,6 +1968,11 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
   }
 
   Future<void> completeWorkout() async {
+    // OI-361: a workout with nothing to save never completes (no
+    // markCompleted, counters, streaks or badges). First line, so the session
+    // is left exactly as it was. The FINISH dialog already disables COMPLETE;
+    // this is the defence for any other caller. Review mode keeps its path.
+    if (!state.isSaved && !state.hasSaveableSet) return;
     _timer?.cancel();
     _timer = null;
     _workoutStartTime = null;
@@ -1849,7 +1984,18 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       return;
     }
     _completing = true;
+    try {
+      await _persistCompletion();
+    } catch (_) {
+      // A failed save must not leave LOG, UNDO and RE-OPEN dead for the rest
+      // of the session (they refuse while `_completing`; B-pass finding 2).
+      _completing = false;
+      rethrow;
+    }
+  }
 
+  /// The save half of [completeWorkout], run once `_completing` is set.
+  Future<void> _persistCompletion() async {
     final repo = WorkoutRepository.instance;
     final hive = HiveService.instance;
     // `nowWall()` (not DateTime.now()) so the dev/test clock seam reaches the
@@ -1993,24 +2139,14 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
 
       // Aggregate values from per-set input data.
       // Scan checkedSets for dynamically added sets beyond template count.
-      int maxSetLog = int.tryParse(exercise.sets) ?? 3;
-      for (final key in state.checkedSets.keys) {
-        if (key.startsWith('$exIdx-')) {
-          final s = int.tryParse(key.split('-').last) ?? 0;
-          if (s + 1 > maxSetLog) maxSetLog = s + 1;
-        }
-      }
-
-      // Build per-set ExerciseSet list. Skip warm-up sets — they're not
-      // counted toward PRs / volume.
+      // Build per-set ExerciseSet list. `saveableSetIndexes` is the ONE save
+      // predicate (checked, not a warm-up, values captured; the template count
+      // extended by checked keys beyond it), shared with the FINISH guard.
+      // Read on the live `state`, in this synchronous block, before any await.
       final exerciseSets = <ExerciseSet>[];
       final nowMs = DateTime.now().millisecondsSinceEpoch;
-      for (int s = 0; s < maxSetLog; s++) {
-        final key = '$exIdx-$s';
-        if (!state.checkedSets.containsKey(key)) continue;
-        if (state.warmUpSets.containsKey(key)) continue;
-        final vals = state.setInputValues[key];
-        if (vals == null) continue;
+      for (final s in state.saveableSetIndexes(exIdx)) {
+        final vals = state.setInputValues['$exIdx-$s']!;
 
         // APK Test #12.5 / Class 4 — diagnostic. WorkoutWriteService
         // strips phantom durationSec post-resolve, but we want to know

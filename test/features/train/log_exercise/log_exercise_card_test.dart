@@ -44,7 +44,8 @@ void main() {
       // No per-set tile and no 28 px button: the ON stepper is 44 px.
       expect(interactiveCheckTiles, findsNothing);
       expect(find.text('LOG 3 SETS ✓'), findsOneWidget);
-      expect(find.text('1440 KG LIFTED'), findsOneWidget);
+      // History prefill (60 kg) is app-filled: the flip batch's subline.
+      expect(find.text('1440 KG · PREFILLED'), findsOneWidget);
       expect(find.textContaining('0kg'), findsNothing,
           reason: 'LOG mode drops the placeholder weight (OI-352)');
     });
@@ -141,11 +142,17 @@ void main() {
           seed: ActiveWorkoutData(
               exercises: [exercise()],
               isSaved: true,
-              checkedSets: const {'0-0': true, '0-1': true, '0-2': true}),
+              checkedSets: const {'0-0': true, '0-1': true, '0-2': true},
+              // Seeded, so the check is not `null == null` (flip R4A-10).
+              setInputValues: const {
+                '0-0': SetInputValues(weight: 50, reps: 8),
+                '0-1': SetInputValues(weight: 50, reps: 8),
+                '0-2': SetInputValues(weight: 50, reps: 8),
+              }),
           logMode: true);
-      final before = h.state.setInputValues['0-0'];
+      expect(h.state.setInputValues['0-0']?.weight, 50);
       await tester.enterText(fieldAt(0), '99');
-      expect(h.state.setInputValues['0-0']?.weight, before?.weight);
+      expect(h.state.setInputValues['0-0']?.weight, 50);
     });
 
     testWidgets('+ seeds the new set field-for-field and captures it; it '

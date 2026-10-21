@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
@@ -161,6 +162,28 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
     if (undone) _focusExercise(record.exerciseIndex);
   }
 
+  /// RE-OPEN (flip batch §1, founder "amend log"): a tap on LOGGED unchecks the
+  /// exercise through the controller (its guard ignores the "did it register?"
+  /// second tap). Clears a toast for THIS exercise only, focuses the card and
+  /// tells TalkBack. The coach snapshot is left as LOG wrote it (as UNDO).
+  void _onReopenExercise(int exIdx) {
+    final outcome = _logController.reopen(
+      exerciseIndex: exIdx,
+      readState: () => ref.read(activeWorkoutProvider),
+      unlogSets: ref.read(activeWorkoutProvider.notifier).unlogSets,
+    );
+    if (outcome.kind != LogOutcomeKind.reopened) return;
+    if (_logUndo?.exerciseIndex == exIdx) _clearLogUndo();
+    _focusExercise(exIdx);
+    final name = ref.read(activeWorkoutProvider).exercises[exIdx].name;
+    unawaited(SemanticsService.sendAnnouncement(
+      View.of(context),
+      WardroomCopy.activeReopenedAnnouncementTemplate
+          .replaceAll('{exercise}', name),
+      TextDirection.ltr,
+    ));
+  }
+
   /// The exercise list with the UNDO toast over its top edge (LOG mode only).
   Widget _withLogUndoToast(bool logMode, ActiveWorkoutData data, Widget list) {
     final undo =
@@ -319,11 +342,16 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
       return _buildCompleteScreen(context, ref, data);
     }
 
-    final pctInt = (data.progressPercent * 100).round();
     // Read ONCE per build and passed down, so it cannot change between a
     // card's didUpdateWidget and its build within one frame.
     final logMode = LogExerciseFlags.logExerciseButtonEnabled;
     final allLogged = logMode && allExercisesLogged(data);
+    // LOG mode counts what the save writes, warm-ups out of the total too
+    // (flip §3); the per-set path keeps its own getters.
+    final counts = logMode ? workingSetCounts(data) : null;
+    final progress =
+        counts != null ? workingProgress(counts) : data.progressPercent;
+    final pctInt = (progress * 100).round();
 
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -332,10 +360,10 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
           Column(
             children: [
               // Header
-              _buildHeader(context, data),
+              _buildHeader(context, data, counts: counts),
 
               // Progress bar
-              _buildProgressBar(data.progressPercent, pctInt),
+              _buildProgressBar(progress, pctInt),
 
               // ⑦(b) session detraining resume banner — shown when a gap cut is
               // active (sessionDetrainingFactor < 1.0). Non-shaming re-entry copy:
@@ -497,6 +525,9 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                             onLogExercise: logMode
                                 ? (setIdxs) => _onLogExercise(exIdx, setIdxs)
                                 : null,
+                            onReopenExercise: logMode && !data.isSaved
+                                ? () => _onReopenExercise(exIdx)
+                                : null,
                             onToggleSet: (setIdx) {
                               final wasChecked =
                                   data.isSetChecked(exIdx, setIdx);
@@ -623,7 +654,7 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                         onPressed: data.isSaved
                             ? null
                             : () => _showFinishDialog(context, ref, data,
-                                onComplete: _clearLogUndo),
+                                logMode: logMode, onComplete: _clearLogUndo),
                       ),
                     ),
 

@@ -5,7 +5,8 @@ blast_radius: account
 review_rounds: 4
 ground_truth_verified: true
 verdict: converged
-bpass: pending  # B-pass ran 2026-10-20 (docs/reviews/800af61c829a-review.md): 1 P0, 3 P2, all fixed; verdict awaits founder triage
+bpass: accepted
+bpass_review: docs/reviews/800af61c829a-review.md
 ---
 
 # Plan-review record: Active Workout one-LOG-per-exercise, batch 2 (OI-356)

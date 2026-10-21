@@ -3,6 +3,7 @@
 // it; a long exercise name does not overflow at phone width. And the host
 // keeps the list's tree shape when the toast comes and goes (B-pass finding 1).
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/features/train/widgets/log_undo_toast.dart';
 
@@ -101,6 +102,22 @@ void main() {
     await tester.pump();
     expect(h.undo, ['undo'], reason: 'the body is not an UNDO target');
     expect(h.under, ['tap'], reason: 'the body lets the tap through');
+  });
+
+  testWidgets('SM1 (flip): UNDO has a tap action for TalkBack; the text is a '
+      'live region', (tester) async {
+    final handle = tester.ensureSemantics();
+    final h = await pumpHosted(tester, 'Bench Press logged · 3 sets · 1200 KG');
+    final undo = tester.getSemantics(find.text('UNDO')).getSemanticsData();
+    expect(undo.hasAction(SemanticsAction.tap), isTrue);
+    tester.semantics.tap(find.semantics.byLabel('UNDO'));
+    await tester.pump();
+    expect(h.undo, ['undo'], reason: 'the semantics tap runs onUndo once');
+    final body = tester
+        .getSemantics(find.text('Bench Press logged · 3 sets · 1200 KG'))
+        .getSemanticsData();
+    expect(body.flagsCollection.isLiveRegion, isTrue);
+    handle.dispose();
   });
 
   testWidgets('a long name at phone width ellipsises, no overflow',

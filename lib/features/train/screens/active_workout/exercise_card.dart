@@ -44,6 +44,9 @@ class _ExerciseCard extends ConsumerStatefulWidget {
   /// the card in LOG mode: no per-set check taps, a sets stepper + LOG button
   /// row. Null (flag OFF) leaves the per-set path exactly as it was.
   final LogExerciseCallback? onLogExercise;
+  /// LOG mode: the screen's RE-OPEN handler for this exercise (flip batch §1).
+  /// Tapping LOGGED calls it; null in review mode and on the per-set path.
+  final VoidCallback? onReopenExercise;
 
   const _ExerciseCard({
     required this.exerciseIndex,
@@ -63,6 +66,7 @@ class _ExerciseCard extends ConsumerStatefulWidget {
     required this.isExpanded,
     required this.onFocus,
     this.onLogExercise,
+    this.onReopenExercise,
   });
 
   @override
@@ -156,9 +160,27 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
     // Restore any values already captured in the provider (e.g. after widget rebuild).
     // This prevents controller text from resetting to defaults when Riverpod state changes.
     final savedValues = ref.read(activeWorkoutProvider).setInputValues;
+    // Sets with nothing captured yet: this is their FIRST init, so their
+    // prefill is app-filled (marked suggested after the frame, LOG mode).
+    final firstInit = <int>{};
     for (int s = 0; s < n; s++) {
       final captured = savedValues['${widget.exerciseIndex}-$s'];
-      if (captured == null) continue;
+      if (captured == null) {
+        firstInit.add(s);
+        continue;
+      }
+      if (_logMode) {
+        // LOG mode captures every keystroke, so a captured null is a field
+        // the user CLEARED: restore it blank, never the prefill (flip §2).
+        _weightControllers[s].text = captured.weight == null
+            ? ''
+            : formatWeightDisplayValue(captured.weight!);
+        _repsControllers[s].text = captured.reps?.toString() ?? '';
+        _durationControllers[s].text =
+            captured.durationSeconds?.toString() ?? '';
+        _distanceControllers[s].text = captured.distanceKm?.toString() ?? '';
+        continue;
+      }
       if (captured.weight != null) {
         _weightControllers[s].text = formatWeightDisplayValue(captured.weight!);
       }
@@ -176,6 +198,7 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
     // After the restore loop, so the first edit compares against what is shown.
     _mirrored.clear();
     _baselineMirrorSource(ref.read(activeWorkoutProvider));
+    if (_logMode) _reseedMirrorFollowers(ref.read(activeWorkoutProvider));
 
     _resetFocusNodes(n);
 
@@ -185,10 +208,59 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final n = _weightControllers.length;
+      if (_logMode) {
+        // One write: the captures and the first-init suggested marks.
+        ref.read(activeWorkoutProvider.notifier).recordCardEdit(
+          widget.exerciseIndex,
+          values: {for (var s = 0; s < n; s++) s: _valuesOf(s)},
+          mark: {
+            for (final s in firstInit)
+              if (s < n) ..._nonEmptyMirrorKeys(s),
+          },
+        );
+        return;
+      }
       for (int s = 0; s < n; s++) {
         _captureSetValues(s);
       }
     });
+  }
+
+  /// The suggested keys of set [setIdx]'s non-empty rendered (mirror) fields.
+  Set<String> _nonEmptyMirrorKeys(int setIdx) => {
+        for (final f in mirrorFieldsFor(widget.exercise.loggingType))
+          if (_controllersOf(f)[setIdx].text.trim().isNotEmpty)
+            suggestedKey(widget.exerciseIndex, setIdx, f),
+      };
+
+  /// LOG mode, after a re-init (flip §2, R5B-04): `_mirrored` restarts empty,
+  /// so followers the mirror made would stop following. While the source's
+  /// own field is NOT suggested (the user typed it), a later set whose field
+  /// is still suggested and holds the source's text came from the mirror:
+  /// mark it a follower again. A history prefill (source still suggested)
+  /// stays non-following, as before.
+  void _reseedMirrorFollowers(ActiveWorkoutData data) {
+    final source = _lastSourceIndex;
+    if (source == null) return;
+    final warm = _warmUpFlags(data);
+    for (final f in mirrorFieldsFor(widget.exercise.loggingType)) {
+      if (data.suggestedInputs
+          .contains(suggestedKey(widget.exerciseIndex, source, f))) {
+        continue;
+      }
+      final controllers = _controllersOf(f);
+      final text = controllers[source].text;
+      if (text.trim().isEmpty) continue;
+      for (var t = source + 1; t < controllers.length; t++) {
+        if (t < warm.length && warm[t]) continue;
+        if (!data.suggestedInputs
+            .contains(suggestedKey(widget.exerciseIndex, t, f))) {
+          continue;
+        }
+        if (controllers[t].text != text) continue;
+        _mirrored.putIfAbsent(f, () => {})[t] = text;
+      }
+    }
   }
 
   /// Parse a reps string like "6-10" to its midpoint (8), or "10" to 10.
@@ -375,26 +447,56 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      for (var i = oldCount; i < newCount && i < _weightControllers.length; i++) {
-        _captureSetValues(i);
-      }
+      final end = newCount < _weightControllers.length
+          ? newCount
+          : _weightControllers.length;
+      // One write: the appended sets' values and their seeded fields as
+      // suggested (app-filled until the user types).
+      ref.read(activeWorkoutProvider.notifier).recordCardEdit(
+        widget.exerciseIndex,
+        values: {for (var i = oldCount; i < end; i++) i: _valuesOf(i)},
+        mark: {for (var i = oldCount; i < end; i++) ..._nonEmptyMirrorKeys(i)},
+      );
     });
   }
 
-  /// LOG mode: an edit to an already-LOGGED set is recorded on every keystroke
-  /// (no check tile is left to re-capture it, and FINISH does not move focus).
-  /// Only a VALID value is recorded: a cleared or out-of-range field keeps the
-  /// last valid value, so a 0×0 or 61-rep set can never reach completeWorkout.
-  void _onFieldChanged(int setIdx) {
+  /// LOG mode, every keystroke (flip §2): ONE `recordCardEdit` captures the
+  /// edited set and every mirror target, clears the edited field's suggested
+  /// key (the user typed it) and marks or clears each target's.
+  ///
+  /// An edit to an already-LOGGED set records only a VALID value: a cleared or
+  /// out-of-range field keeps the last valid value, so a 0×0 or 61-rep set can
+  /// never reach completeWorkout. An unlogged set records its raw text, so a
+  /// card re-init restores what the user typed (completeWorkout reads only
+  /// checked sets).
+  void _onFieldChanged(int setIdx, SetField field) {
     if (!_logMode || setIdx >= _weightControllers.length) return;
     final data = ref.read(activeWorkoutProvider);
     // Review mode: completeWorkout will not save again, so a capture here would
     // only make the header volume disagree with the saved log.
     if (data.isSaved) return;
-    _mirrorFrom(setIdx, data);
-    if (!data.isSetChecked(widget.exerciseIndex, setIdx)) return;
-    if (!_validationOf(setIdx).isOk) return;
-    _captureSetValues(setIdx);
+    final written = _mirrorFrom(setIdx, data);
+    final ex = widget.exerciseIndex;
+    final values = <int, SetInputValues>{};
+    final mark = <String>{};
+    final clear = <String>{suggestedKey(ex, setIdx, field)};
+    if (!data.isSetChecked(ex, setIdx) || _validationOf(setIdx).isOk) {
+      values[setIdx] = _valuesOf(setIdx);
+    }
+    written.forEach((f, targets) {
+      for (final t in targets) {
+        values[t] = _valuesOf(t);
+        final key = suggestedKey(ex, t, f);
+        if (_controllersOf(f)[t].text.trim().isEmpty) {
+          clear.add(key);
+        } else {
+          mark.add(key);
+        }
+      }
+    });
+    ref
+        .read(activeWorkoutProvider.notifier)
+        .recordCardEdit(ex, values: values, mark: mark, clear: clear);
   }
 
   List<TextEditingController> _controllersOf(SetField field) =>
@@ -426,17 +528,18 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
   /// Copies each source field the user just changed into its followers. The
   /// rebuild after a warm-up toggle normally re-baselines first
   /// (_rebaselineIfSourceMoved); if a keystroke still sees a moved source, it
-  /// re-baselines and copies nothing. Writes controller text only; LOG records
-  /// it.
-  void _mirrorFrom(int setIdx, ActiveWorkoutData data) {
+  /// re-baselines and copies nothing. Writes controller text only and returns
+  /// the sets it wrote, per field (the caller records them).
+  Map<SetField, List<int>> _mirrorFrom(int setIdx, ActiveWorkoutData data) {
+    final written = <SetField, List<int>>{};
     final warm = _warmUpFlags(data);
     final source = mirrorSourceIndex(warm);
-    if (source == null) return;
+    if (source == null) return written;
     if (source != _lastSourceIndex) {
       _baselineMirrorSource(data);
-      return;
+      return written;
     }
-    if (setIdx != source) return;
+    if (setIdx != source) return written;
     final logged = [
       for (var i = 0; i < _weightControllers.length; i++)
         data.isSetChecked(widget.exerciseIndex, i),
@@ -458,7 +561,9 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
         controllers[t].text = text;
         marks[t] = text;
       }
+      if (targets.isNotEmpty) written[field] = targets;
     }
+    return written;
   }
 
   FocusNode? _focusNodeFor(int setIdx, SetField field) {
@@ -531,17 +636,19 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
     );
   }
 
+  SetInputValues _valuesOf(int setIdx) => SetInputValues(
+        weight: double.tryParse(_weightControllers[setIdx].text),
+        reps: int.tryParse(_repsControllers[setIdx].text),
+        durationSeconds: int.tryParse(_durationControllers[setIdx].text),
+        distanceKm: double.tryParse(_distanceControllers[setIdx].text),
+      );
+
   /// Capture current input values and record them into the provider.
   void _captureSetValues(int setIdx) {
     ref.read(activeWorkoutProvider.notifier).recordSetValues(
       widget.exerciseIndex,
       setIdx,
-      SetInputValues(
-        weight: double.tryParse(_weightControllers[setIdx].text),
-        reps: int.tryParse(_repsControllers[setIdx].text),
-        durationSeconds: int.tryParse(_durationControllers[setIdx].text),
-        distanceKm: double.tryParse(_distanceControllers[setIdx].text),
-      ),
+      _valuesOf(setIdx),
     );
   }
 
@@ -771,9 +878,10 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
             onTap: reviewMode ? null : () => _focusFailingField(i, v.field!),
           );
         } else if (toLog.isEmpty) {
-          button = const _LogExerciseButton(
+          button = _LogExerciseButton(
             label: WardroomCopy.activeLoggedLabel,
             style: _LogButtonStyle.logged,
+            onTap: reviewMode ? null : widget.onReopenExercise,
           );
         } else {
           final workingIdx = [
@@ -782,13 +890,27 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                   !data.isSetWarmUp(widget.exerciseIndex, i))
                 i,
           ];
+          final volume = loggedVolumeKg(
+            loggingType: widget.exercise.loggingType,
+            weightTexts: [for (final i in workingIdx) _weightControllers[i].text],
+            repsTexts: [for (final i in workingIdx) _repsControllers[i].text],
+          );
+          // PREFILLED while the mirror source's weight is still app-filled
+          // (flip §2, R4B-07): typing set 1 makes it the user's own number.
+          final source = mirrorSourceIndex(_warmUpFlags(data));
+          final sourcePrefilled = source != null &&
+              isFaded(
+                logMode: true,
+                data: data,
+                exerciseIndex: widget.exerciseIndex,
+                setIndex: source,
+                field: SetField.weight,
+              );
           button = _LogExerciseButton(
             label: logButtonLabel(working),
-            subline: liftedSubline(loggedVolumeKg(
-              loggingType: widget.exercise.loggingType,
-              weightTexts: [for (final i in workingIdx) _weightControllers[i].text],
-              repsTexts: [for (final i in workingIdx) _repsControllers[i].text],
-            )),
+            subline: sourcePrefilled
+                ? prefilledSubline(volume)
+                : liftedSubline(volume),
             style: _LogButtonStyle.ready,
             onTap: reviewMode ? null : _onLogPressed,
           );
@@ -932,8 +1054,12 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                                         letterSpacing: 1.2,
                                       ),
                                     ),
-                                    // Bug #6 — hint when reviewing a completed exercise
-                                    if (widget.isDone && widget.isExpanded)
+                                    // Bug #6 — hint when reviewing a completed exercise.
+                                    // LOG mode: the LOGGED button says what a tap
+                                    // does (TAP TO RE-OPEN), so no second hint.
+                                    if (widget.isDone &&
+                                        widget.isExpanded &&
+                                        !_logMode)
                                       Padding(
                                         padding:
                                             const EdgeInsets.only(top: 2),
@@ -1005,11 +1131,17 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                                       size: 10,
                                       color: AppColors.textDim),
                                   const SizedBox(width: 3),
-                                  Text(
-                                    'LAST: ${lastPerf.lastWeight!.toStringAsFixed(1)}KG × ${lastPerf.lastReps ?? '?'} REPS',
-                                    style: AppTypography.monoXs.copyWith(
-                                      color: AppColors.textDim,
-                                      letterSpacing: 1.2,
+                                  // Flexible + ellipsis: at 320 dp and a large
+                                  // font this line overflowed (flip R4A-03).
+                                  Flexible(
+                                    child: Text(
+                                      'LAST: ${lastPerf.lastWeight!.toStringAsFixed(1)}KG × ${lastPerf.lastReps ?? '?'} REPS',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: AppTypography.monoXs.copyWith(
+                                        color: AppColors.textDim,
+                                        letterSpacing: 1.2,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -1087,7 +1219,18 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                                     repsFocusNode: _logMode ? _focusNodeFor(setIdx, SetField.reps) : null,
                                     durationFocusNode: _logMode ? _focusNodeFor(setIdx, SetField.duration) : null,
                                     distanceFocusNode: _logMode ? _focusNodeFor(setIdx, SetField.distance) : null,
-                                    onChanged: _logMode ? () => _onFieldChanged(setIdx) : null,
+                                    onChanged: _logMode ? (f) => _onFieldChanged(setIdx, f) : null,
+                                    fadedFields: {
+                                      for (final f in mirrorFieldsFor(widget.exercise.loggingType))
+                                        if (isFaded(
+                                          logMode: _logMode,
+                                          data: widget.data,
+                                          exerciseIndex: widget.exerciseIndex,
+                                          setIndex: setIdx,
+                                          field: f,
+                                        ))
+                                          f,
+                                    },
                                     onCheck: _logMode ? null : () {
                                       // If unchecking, allow without validation
                                       final alreadyChecked = widget.data.isSetChecked(
@@ -1253,7 +1396,8 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
 enum _LogButtonStyle { ready, blocked, logged }
 
 /// The LOG button: gold when ready, a neutral gold outline when a field is
-/// missing (approved: never red), muted once every set is logged.
+/// missing (approved: never red), muted once every set is logged. A logged
+/// button with [onTap] RE-OPENS the exercise (flip batch §1) and says so.
 class _LogExerciseButton extends StatelessWidget {
   const _LogExerciseButton({
     required this.label,
@@ -1271,23 +1415,39 @@ class _LogExerciseButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final ready = style == _LogButtonStyle.ready;
     final logged = style == _LogButtonStyle.logged;
-    final enabled = onTap != null && !logged;
+    final enabled = onTap != null;
+    // The logged style shows TAP TO RE-OPEN only when a tap does something
+    // (never in review mode).
+    final shownSubline =
+        logged ? (enabled ? WardroomCopy.activeReopenSubline : null) : subline;
     final Color fg = ready
         ? AppColors.bgDeep
         : logged
             ? AppColors.ok
             : AppColors.accent;
+    // excludeSemantics drops the GestureDetector's own tap action, so the node
+    // carries `onTap` itself (flip R4A-01: without it TalkBack cannot press
+    // LOG). The logged label is "Logged" and the tap hint "Re-open"; TalkBack
+    // adds "double tap to …" itself.
     return Semantics(
       button: true,
       enabled: enabled,
-      label: label,
+      onTap: onTap,
+      onTapHint: logged && enabled ? WardroomCopy.activeReopenHint : null,
+      label: logged
+          ? WardroomCopy.activeLoggedSemantics
+          : (subline == null ? label : '$label. $subline'),
+      excludeSemantics: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: enabled ? onTap : null,
+        onTap: onTap,
         child: Opacity(
           opacity: (onTap == null && !logged) ? 0.4 : 1,
           child: Container(
-            height: 44,
+            // minHeight, not a fixed height: a two-line subline or a large
+            // font grows the button instead of overflowing it.
+            constraints: const BoxConstraints(minHeight: 44),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
             decoration: BoxDecoration(
               color: ready
                   ? AppColors.accent
@@ -1304,24 +1464,31 @@ class _LogExerciseButton extends StatelessWidget {
                     ),
             ),
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  style: (ready || logged
-                          ? AppTypography.mono
-                          : AppTypography.bodySm)
-                      .copyWith(
-                    color: fg,
-                    fontSize: ready || logged ? 12 : 13,
-                    letterSpacing: ready || logged ? 1.6 : 0.2,
-                    fontWeight: FontWeight.w700,
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    textAlign: TextAlign.center,
+                    style: (ready || logged
+                            ? AppTypography.mono
+                            : AppTypography.bodySm)
+                        .copyWith(
+                      color: fg,
+                      fontSize: ready || logged ? 12 : 13,
+                      letterSpacing: ready || logged ? 1.6 : 0.2,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
-                if (subline != null)
+                if (shownSubline != null)
                   Text(
-                    subline!,
+                    shownSubline,
+                    maxLines: 2,
+                    textAlign: TextAlign.center,
                     style: AppTypography.monoXs.copyWith(
                       color: fg.withValues(alpha: 0.75),
                       letterSpacing: 1.4,
@@ -1391,6 +1558,7 @@ Widget debugExerciseCardHostForTest({
   required int exerciseIndex,
   bool isExpanded = true,
   LogExerciseCallback? onLogExercise,
+  VoidCallback? onReopenExercise,
 }) {
   return Consumer(builder: (context, ref, _) {
     final data = ref.watch(activeWorkoutProvider);
@@ -1411,6 +1579,7 @@ Widget debugExerciseCardHostForTest({
       onSwap: () {},
       onLongPressHeader: () {},
       onLogExercise: onLogExercise,
+      onReopenExercise: onReopenExercise,
     );
   });
 }

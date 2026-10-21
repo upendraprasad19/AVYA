@@ -1,11 +1,13 @@
 import 'package:icanbefitter/core/services/hive_service.dart';
 
 /// Kill-switch for the one-LOG-per-exercise Active Workout flow (§4.6;
-/// plan `docs/plans/active-workout-log-exercise.md`).
+/// plans `docs/plans/active-workout-log-exercise.md`,
+/// `docs/plans/log-exercise-flip.md`).
 ///
-/// **Default OFF (ship dark).** `configBox['enable_log_exercise_button'] = true`
-/// turns it on; only the debug-build dev panel writes the key. Flip
-/// preconditions are recorded in `docs/ship_dark_pending_review.yaml`.
+/// **Default ON (LIVE since the flip batch).** A stored `false` is the kill
+/// switch (only the debug-build dev panel writes the key); an absent or
+/// non-bool value is ON. The old per-set path stays reachable behind `false`
+/// until its removal OI closes (`docs/ship_dark_pending_review.yaml`).
 class LogExerciseFlags {
   LogExerciseFlags._();
 
@@ -13,9 +15,10 @@ class LogExerciseFlags {
 
   static bool get logExerciseButtonEnabled {
     try {
-      return HiveService.instance.configBox.get(key) == true;
+      final stored = HiveService.instance.configBox.get(key);
+      return stored is bool ? stored : true;
     } catch (_) {
-      return false; // no Hive (pure unit test) → default: OFF
+      return false; // no Hive (pure unit test) → the old per-set path
     }
   }
 }
