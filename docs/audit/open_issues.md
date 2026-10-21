@@ -6286,7 +6286,6 @@ Fix: move the ownership check above the capture call. Not done in Piece B1 becau
 
 Fix: log `code` / `name` and ids only (same rule as the CLAUDE.md pitfall on Telegram errors carrying the bot token). Not done in Piece B1 because it changes the OFF path that B1 keeps byte-identical to `origin/main`. Catastrophic tier.
 
-
 ## OI-362 — Active Workout: remove the per-set (OFF) path and the enable_log_exercise_button kill switch once A12 passes
 
 - **Status**: OPEN
@@ -6323,3 +6322,37 @@ To do:
 Source: CLAUDE.md section 4.6 step 4 - an old code path kept for later removal is tracked on the board, not as an intention. Plan: `docs/plans/2026-10-18-pro-gap-policy-and-streak.md` (Kill switch section).
 
 Fix: once the device check passes, delete the key, the getter, every `policyEnabled` / `lapseGapPolicyEnabled` branch (old paths: start date `max(today, plan_end + 1)`, streak skip-at-zero, completion rate ignoring blank days, no freeze zero, no `plan_status`), the `countBlankDays` opt-in and env check in `rank_engine.ts` / `evaluate-rank-promotions`, and the kill-switch tests (`lapse_gap_policy_behavioral_test.dart`, `lapse_gap_freeze_reset_advance_test.dart`, `gap_policy_test.dart`, `rank_engine_blank_days_test.ts`). Default-live policy, so the full x2 plan review plus B-pass applies to the removal. Redeploy `evaluate-rank-promotions` (founder go); `ai-proxy` does not read the switch.
+
+## OI-365 — Coach tools and app features do the same jobs through separate code (first proven case: exercise swap): map every coach tool to its app twin and consolidate to one implementation per job
+
+- **Status**: OPEN
+- **Blocked on**: none (founder 2026-10-21: this audit is NOT part of the active-workout swap/move batch)
+- **Verified**: 2026-10-21 - by code read at `origin/main` a909cdb3 (swap-move-design brainstorm and its builder check); not reproduced on device. Facts below are cited file:line; items marked "not traced" are leads, not findings.
+- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `oi-swap-impl-audit`
+
+Source: found while designing the in-workout `⇄` swap + `⇅` move (spec `docs/superpowers/specs/2026-10-21-active-workout-swap-move-design.md`, on branch `swap-move-design`, not yet on main). The founder's reading: the coach uses another implementation for the same job, so audit it.
+
+**Scope (founder 2026-10-21: "we should not be having multiple tools or functions for the same work"):** every AI coach tool, not only swap. The coach's tools are the 21 files under `supabase/functions/_shared/tools/{exercise,nutrition,plan,progress,workout}/` (excluding `index.ts`, `registry.ts`, `types.ts`, `zodToGemini.ts`, `__tests__/`): `getFormCues`; `getNutritionHistory`, `logMealByText`, `suggestMeal`; `createCustomTemplate`, `pausePlan`, `regeneratePlanBlock`, `scheduleTemplate`, `switchGoal`; `getExerciseHistory`, `getPRTimeline`, `getProgressSummary`, `getPromotionStatus`; `createCustomExercise`, `generateHotelWorkout`, `logSet`, `modifyWorkoutForInjury`, `rescheduleWeek`, `shortenWorkout`, `swapExercise`, `swapWorkoutDays`. For each tool the audit records:
+1. its client-side executor, if any (e.g. `SwapService.swapExerciseInDay` for swap) — not yet traced for the other 20;
+2. every app feature that does the same job (screen, service, provider), by file:line;
+3. whether they share one writer/rules source or are separate code, and every field or rule where they disagree (what is written, which Hive key / cloud row, which telemetry, which plan-learning stamps).
+Outcome per job: one implementation that both the coach and the app call (where TS server code and Dart client code must both exist, one of them is the single rules source and the other only delegates or reads its output), plus a test that fails if a second path reappears. Out of scope: read-only display widgets that only render the same data.
+
+**First proven case: exercise swap. The paths (all read):**
+- **Coach / plan path:** `SwapService.swapExerciseInDay` (`lib/core/services/swap_service.dart:411`), reached from `tool_dispatcher.dart:324` and `:653` through `WorkoutScheduleService`. Writes the saved schedule row (`upsertScheduled`, source `schedSwap`); equipment gate `canOfferInPicker`; carries `superset_group` from the outgoing row (`:530-531`) and `category` / `exercise_type` / `equipment_needed` / `target_focus` / `priority_tier` / `coaching_cues` from the NEW library row; stamps `swapped_from` and a hard-coded `swapped_via: 'ai_coach'` (read nowhere).
+- **In-workout path:** `_showSwapSheet` (`lib/features/train/screens/active_workout/swap_sheets.dart:41`) → `ActiveWorkoutNotifier.swapExercise` (`train_provider.dart:1589`). Session-only. The replacement `ExerciseData` (`swap_sheets.dart:60-83`) takes `category: currentExercise.category` (`:80`) and `equipmentNeeded: currentExercise.equipmentNeeded` (`:81`), i.e. the OUTGOING exercise's; it sets no `exerciseType`, no `supersetGroup`, and writes no `swapped_from`.
+- **Custom-exercise auto-swap:** `_openCreateAndAutoSwap` (`swap_sheets.dart:175-183`), a third construction site (category and equipment from the new exercise when present, else the original; no `supersetGroup`).
+
+**Where they disagree:**
+1. **Superset:** the coach path keeps the slot's group; the in-workout swap drops it, so the partner keeps its coloured bar with no partner (`exercise_card.dart` draws the bar whenever the group is non-null).
+2. **Plan learning:** `TrainingHistoryAnalyzer.demotedExercises` (`training_history_analyzer.dart` ~:330-350) reads only `swapped_from`, which only the coach path writes, so exercises a user swaps away inside a workout never influence plan generation.
+3. **Metadata (not traced):** the swapped-in exercise in a workout carries the outgoing exercise's category and equipment and no `exerciseType`; `ActiveWorkoutData` reads `exerciseType == 'compound'` (`train_provider.dart` ~:108). What each missing or wrong field changes downstream is not traced.
+4. **Equipment predicate (not traced):** the swap sheet filters library rows with `canPerform` and customs with `canOfferInPicker(isCustom: true)`; the service uses `canOfferInPicker` for both. Equivalence not checked.
+
+**Not read, may be further paths:** `injury_swap_planner.dart`, `hotel_workout_planner.dart`, `regenerate_plan_planner.dart`, `swap_exercise_coach_sheet.dart` (all matched a "swap" grep).
+
+**Audit scope:** (1) enumerate every code path that replaces one exercise with another, including template apply; (2) a writer/reader table per attribute (§4.1, `docs/sot_registry.yaml`); (3) decide whether the in-workout and coach swaps should share one function, and which attributes follow the SLOT (sets, reps, rest, superset group) versus the NEW exercise (category, type, equipment, cues); (4) founder call: should a swap made inside a workout feed plan learning (finding 2)? Output per §4.10: `docs/audit/<date>_audit_closures.yaml`, every finding with a terminal state.
+
+**Relationship:** the swap-move-design Unit 1 carries `supersetGroup` through the in-workout swap (finding 1 only, a minimal fix on a founder-approved direction); findings 2-4 are not fixed there. Related: OI-358 (duplicate exercise names share one GlobalKey), OI-357 (once-only hints in the active workout).
+
+Impact: finding 1 is a visible glitch; finding 2 is a silent product gap (plan learning blind to in-workout swaps); 3-4 unknown until traced.
