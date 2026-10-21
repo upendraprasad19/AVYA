@@ -631,6 +631,7 @@ class WorkoutWriteService {
     required Map<String, dynamic> entry,
     required WriteSource source,
     WidgetRef? ref,
+    Object? ifUnchangedFrom,
   }) async {
     final dateStr = istDateStr(date);
     final c = await _acquireLock(dateStr);
@@ -662,8 +663,12 @@ class WorkoutWriteService {
         unawaited(ErrorTelemetry.logEvent(
             'upsert_scheduled_skipped_completed_day',
             message: 'date=$dateStr source=${source.code} key=$key'));
-        return WriteResult.fail(
-            'refusing to overwrite completed day from planGenerator');
+        return WriteResult.fail(completedDayRefusedMessage);
+      }
+      // c3e9a4: a caller that built [entry] from a row read BEFORE this lock
+      // passes that row; another writer's put since then replaces the object.
+      if (ifUnchangedFrom != null && !identical(existingRaw, ifUnchangedFrom)) {
+        return WriteResult.fail(rowChangedMessage);
       }
 
       final nowMs = DateTime.now().millisecondsSinceEpoch;
@@ -726,6 +731,15 @@ class WorkoutWriteService {
   /// function refuses (the caller's rules said no), so a refusal is never
   /// mistaken for a write failure.
   static const String daySwapRefusedMessage = 'day_swap_refused';
+
+  /// Written as [WriteResult.errorMessage] when [upsertScheduled] refuses to
+  /// overwrite a completed day from [WriteSource.planGenerator].
+  static const String completedDayRefusedMessage =
+      'refusing to overwrite completed day from planGenerator';
+
+  /// [WriteResult.errorMessage] when [upsertScheduled]'s `ifUnchangedFrom`
+  /// row is no longer the stored one (another writer got there first).
+  static const String rowChangedMessage = 'schedule row changed since read';
 
   static const String _displacedPrefix = 'displaced_';
 

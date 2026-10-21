@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:icanbefitter/core/services/sync_flags.dart';
 import 'package:icanbefitter/core/utils/equipment_vocab.dart';
 
 import '../exercise_repository.dart';
@@ -960,6 +961,11 @@ class ExerciseSelector {
       equipmentNeeded: equipList,
       primaryMuscles: muscles.isEmpty ? null : muscles,
       variant: variant,
+      // c3e9a4: a pinned custom is a deliberate one (the previous phase held
+      // it); the L2 repair predicate keeps an exercise carrying this stamp.
+      // Behind the same kill switch as the strip, so setting it restores the
+      // generator output of the build before.
+      customOrigin: SyncFlags.l2CustomStripEnabled ? 'repeat_pin' : null,
     );
   }
 
