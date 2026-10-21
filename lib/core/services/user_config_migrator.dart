@@ -107,6 +107,9 @@ class UserConfigMigrator {
     // baselined to (or silently miss) the previous account's total. New key,
     // never in configBox - no _flagKey bump.
     'referral_credit_seen_days',
+    // Active-workout ⇄/⇅ first-use hint: seen once per account, device-local,
+    // never synced. New key, never in configBox - no _flagKey bump.
+    'has_seen_swap_move_hint',
   ];
 
   /// Keys that intentionally stay in shared `configBox`.

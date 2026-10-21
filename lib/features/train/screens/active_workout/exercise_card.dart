@@ -48,6 +48,24 @@ class _ExerciseCard extends ConsumerStatefulWidget {
   /// Tapping LOGGED calls it; null in review mode and on the per-set path.
   final VoidCallback? onReopenExercise;
 
+  // ⇄ swap / ⇅ move (docs/plans/active-workout-swap-move.md Task 5). In move
+  // mode the card routes its own taps by [moveRole]: a target's whole header
+  // places, the source's cancels, a done card ignores every tap.
+  final bool moveModeActive;
+  final MoveRole moveRole;
+  /// Target arrow: ↑ when the target sits above the moving exercise.
+  final bool moveTargetAbove;
+  /// Show ⇅ (outside move mode): two or more exercises can still move.
+  final bool canMove;
+  /// ⇅ tap: enter move mode, or cancel it on the moving card.
+  final VoidCallback onMove;
+  /// A target tap: place the moving exercise here.
+  final VoidCallback onMoveHere;
+  /// First-use hint: a gold ring around ⇄ and ⇅.
+  final bool showHintRing;
+  /// Just placed by a move: a short gold border.
+  final bool justMoved;
+
   const _ExerciseCard({
     required this.exerciseIndex,
     required this.exercise,
@@ -67,13 +85,28 @@ class _ExerciseCard extends ConsumerStatefulWidget {
     required this.onFocus,
     this.onLogExercise,
     this.onReopenExercise,
+    required this.onMove,
+    required this.onMoveHere,
+    this.moveModeActive = false,
+    this.moveRole = MoveRole.none,
+    this.moveTargetAbove = false,
+    this.canMove = false,
+    this.showHintRing = false,
+    this.justMoved = false,
   });
 
   @override
   ConsumerState<_ExerciseCard> createState() => _ExerciseCardState();
 }
 
-class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
+/// The OS "remove animations" setting: pulses and rings hold still.
+bool _motionReduced(BuildContext c) => MediaQuery.disableAnimationsOf(c);
+
+class _ExerciseCardState extends ConsumerState<_ExerciseCard>
+    with SingleTickerProviderStateMixin {
+  // Move-mode target glow and first-use hint ring (1.7 s). Created on first
+  // need, runs only while one of them shows and motion is allowed.
+  AnimationController? _pulse;
   // Per-set controllers: index by set number
   late List<TextEditingController> _weightControllers;
   late List<TextEditingController> _repsControllers;
@@ -275,8 +308,31 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncPulse(); // the reduce-motion setting can change while mounted
+  }
+
+  /// Run the 1.7 s pulse only while a target glow or the hint ring shows and
+  /// the OS allows motion; otherwise hold it still (fully lit).
+  void _syncPulse() {
+    final wants = (widget.moveRole == MoveRole.target || widget.showHintRing) &&
+        !_motionReduced(context);
+    if (wants) {
+      final p = _pulse ??= AnimationController(
+          vsync: this, duration: const Duration(milliseconds: 1700));
+      if (!p.isAnimating) p.repeat(reverse: true);
+    } else if (_pulse != null) {
+      _pulse!
+        ..stop()
+        ..value = 1;
+    }
+  }
+
+  @override
   void didUpdateWidget(covariant _ExerciseCard oldWidget) {
     super.didUpdateWidget(oldWidget);
+    _syncPulse();
     final oldCount = int.tryParse(oldWidget.exercise.sets) ?? 3;
     final newCount = int.tryParse(widget.exercise.sets) ?? 3;
 
@@ -338,6 +394,7 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
 
   @override
   void dispose() {
+    _pulse?.dispose();
     _disposeControllers();
     for (final n in [
       ..._weightFocus,
@@ -962,12 +1019,15 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
         : null;
     // Reduce spacing between superset partners
     final bottomPadding = isInSuperset && !widget.isLastInSupersetGroup ? 2.0 : 4.0;
+    final reduced = _motionReduced(context);
+    final isTarget = widget.moveModeActive && widget.moveRole == MoveRole.target;
+    // Move mode: a card that is neither moving nor a target (a done one) dims.
+    final dimmed = widget.moveModeActive && widget.moveRole == MoveRole.none;
 
-    return Padding(
-      padding: EdgeInsets.fromLTRB(16, 0, 16, bottomPadding),
-      child: GestureDetector(
+    Widget card = GestureDetector(
         onTap: widget.isInSupersetGroupMode ? widget.onLongPressHeader : null,
-        child: Container(
+        child: AnimatedContainer(
+          duration: reduced ? Duration.zero : const Duration(milliseconds: 400),
           decoration: BoxDecoration(
             color: widget.isGroupModeSource
                 ? AppColors.accent.withValues(alpha: 0.08)
@@ -976,7 +1036,9 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                     : AppColors.card,
             borderRadius: BorderRadius.circular(AppRadius.card),
             border: Border.all(
-              color: widget.isGroupModeSource
+              color: widget.justMoved
+                  ? AppColors.accent
+                  : widget.isGroupModeSource
                   ? AppColors.accent.withValues(alpha: 0.5)
                   : widget.isInSupersetGroupMode
                       ? AppColors.accent.withValues(alpha: 0.2)
@@ -1013,8 +1075,11 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                         // still triggers superset grouping.
                         GestureDetector(
                           behavior: HitTestBehavior.opaque,
-                          onTap: widget.onFocus,
-                          onLongPress: widget.onLongPressHeader,
+                          onTap: _headerTap,
+                          // Move mode owns the header: no superset pairing.
+                          onLongPress: widget.moveModeActive
+                              ? null
+                              : widget.onLongPressHeader,
                           child: Row(
                             children: [
                               // The plate: what this movement LOOKS like. It
@@ -1026,8 +1091,12 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                               ExercisePlateThumb(
                                 exerciseName: widget.exercise.name,
                                 size: 44,
-                                onTap: () => ExercisePlateSheet.show(
-                                    context, widget.exercise.name),
+                                // Move mode: the plate is part of the header
+                                // tap (null lets it reach the header).
+                                onTap: widget.moveModeActive
+                                    ? null
+                                    : () => ExercisePlateSheet.show(
+                                        context, widget.exercise.name),
                               ),
                               const SizedBox(width: 10),
 
@@ -1075,23 +1144,8 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                                 ),
                               ),
 
-                              // Swap or Done badge
-                              if (widget.isDone)
-                                GestureDetector(
-                                  onTap: widget.onFocus,
-                                  child: const WardChip(
-                                    label: '✓ DONE',
-                                    tone: WardChipTone.ok,
-                                  ),
-                                )
-                              else
-                                GestureDetector(
-                                  onTap: widget.onSwap,
-                                  child: const WardChip(
-                                    label: '⇄ SWAP',
-                                    tone: WardChipTone.neutral,
-                                  ),
-                                ),
+                              // ⇄ / ⇅, the move-mode tag, or Done.
+                              _headerActions(),
 
                               // Bug #15b — Expand/collapse chevron. Rotates
                               // when this card becomes the focused one.
@@ -1384,6 +1438,164 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
             ),
           ),
         ),
+      );
+
+    if (isTarget) {
+      // A move target: dashed gold outline that breathes (static under
+      // reduce motion, where the pulse is held at full).
+      final pulse = _pulse ?? kAlwaysCompleteAnimation;
+      card = AnimatedBuilder(
+        animation: pulse,
+        builder: (_, child) => WardDashedBorder(
+          color: AppColors.accent.withValues(alpha: 0.45 + 0.45 * pulse.value),
+          strokeWidth: 1.5,
+          radius: AppRadius.card,
+          child: child!,
+        ),
+        child: card,
+      );
+    }
+    if (dimmed) card = Opacity(opacity: 0.5, child: card);
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 0, 16, bottomPadding),
+      child: card,
+    );
+  }
+
+  /// The header tap: focus outside move mode; in it, a target places, the
+  /// moving card cancels, anything else (a done card) does nothing.
+  VoidCallback? get _headerTap {
+    if (!widget.moveModeActive) return widget.onFocus;
+    return switch (widget.moveRole) {
+      MoveRole.target => widget.onMoveHere,
+      MoveRole.source => widget.onMove,
+      MoveRole.none => null,
+    };
+  }
+
+  /// Right side of the header, per role (plan Task 5 table).
+  Widget _headerActions() {
+    const done = WardChip(label: '✓ DONE', tone: WardChipTone.ok);
+    if (widget.moveModeActive) {
+      switch (widget.moveRole) {
+        case MoveRole.target:
+          return GestureDetector(
+            onTap: widget.onMoveHere,
+            child: WardChip(
+              label: widget.moveTargetAbove
+                  ? WardroomCopy.activeMoveHereUp
+                  : WardroomCopy.activeMoveHereDown,
+              tone: WardChipTone.gold,
+            ),
+          );
+        case MoveRole.source:
+          return Row(mainAxisSize: MainAxisSize.min, children: [
+            _HeaderIconButton(
+              icon: Icons.swap_horiz,
+              label: WardroomCopy.activeSwapExerciseLabel,
+              onTap: widget.onSwap,
+            ),
+            _HeaderIconButton(
+              icon: Icons.swap_vert,
+              label: WardroomCopy.activeMoveExerciseLabel,
+              onTap: widget.onMove,
+              filled: true,
+            ),
+            const WardChip(
+                label: WardroomCopy.activeMovingTag, tone: WardChipTone.filled),
+          ]);
+        case MoveRole.none:
+          return widget.isDone ? done : const SizedBox.shrink();
+      }
+    }
+    if (widget.isDone) {
+      return GestureDetector(onTap: widget.onFocus, child: done);
+    }
+    final icons = Row(mainAxisSize: MainAxisSize.min, children: [
+      _HeaderIconButton(
+        icon: Icons.swap_horiz,
+        label: WardroomCopy.activeSwapExerciseLabel,
+        onTap: widget.onSwap,
+      ),
+      if (widget.canMove)
+        _HeaderIconButton(
+          icon: Icons.swap_vert,
+          label: WardroomCopy.activeMoveExerciseLabel,
+          onTap: widget.onMove,
+        ),
+    ]);
+    if (!widget.showHintRing) return icons;
+    // First-use hint: a gold ring around the icons (static under reduce motion).
+    final pulse = _pulse ?? kAlwaysCompleteAnimation;
+    return AnimatedBuilder(
+      animation: pulse,
+      builder: (_, child) => DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          border: Border.all(
+            color: AppColors.accent.withValues(alpha: 0.4 + 0.5 * pulse.value),
+            width: 1.5,
+          ),
+        ),
+        child: child,
+      ),
+      child: icons,
+    );
+  }
+}
+
+/// A 30 dp round header icon inside a 44 dp touch box (⇄ swap, ⇅ move). The
+/// long-press tooltip names it; TalkBack reads [label] as a button.
+class _HeaderIconButton extends StatelessWidget {
+  const _HeaderIconButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.filled = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool filled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: label,
+      onTap: onTap,
+      excludeSemantics: true,
+      child: Tooltip(
+        message: label,
+        excludeFromSemantics: true,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: SizedBox(
+            width: 44,
+            height: 44,
+            child: Center(
+              child: Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: filled ? AppColors.accent : AppColors.input,
+                  border: Border.all(
+                    color: filled ? AppColors.accent : AppColors.border,
+                  ),
+                ),
+                child: Icon(
+                  icon,
+                  size: 16,
+                  color: filled ? AppColors.bgDeep : AppColors.accent,
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -1559,6 +1771,18 @@ Widget debugExerciseCardHostForTest({
   bool isExpanded = true,
   LogExerciseCallback? onLogExercise,
   VoidCallback? onReopenExercise,
+  // ⇄ / ⇅ (docs/plans/active-workout-swap-move.md Task 5).
+  VoidCallback? onFocus,
+  VoidCallback? onSwap,
+  VoidCallback? onLongPressHeader,
+  VoidCallback? onMove,
+  VoidCallback? onMoveHere,
+  bool moveModeActive = false,
+  MoveRole moveRole = MoveRole.none,
+  bool moveTargetAbove = false,
+  bool canMove = false,
+  bool showHintRing = false,
+  bool justMoved = false,
 }) {
   return Consumer(builder: (context, ref, _) {
     final data = ref.watch(activeWorkoutProvider);
@@ -1569,15 +1793,23 @@ Widget debugExerciseCardHostForTest({
       isActive: true,
       data: data,
       isExpanded: isExpanded,
-      onFocus: () {},
+      moveModeActive: moveModeActive,
+      moveRole: moveRole,
+      moveTargetAbove: moveTargetAbove,
+      canMove: canMove,
+      showHintRing: showHintRing,
+      justMoved: justMoved,
+      onMove: onMove ?? () {},
+      onMoveHere: onMoveHere ?? () {},
+      onFocus: onFocus ?? () {},
       onToggleSet: (setIdx) => ref
           .read(activeWorkoutProvider.notifier)
           .toggleSet(exerciseIndex, setIdx),
       onToggleWarmUp: (setIdx) => ref
           .read(activeWorkoutProvider.notifier)
           .toggleWarmUp(exerciseIndex, setIdx),
-      onSwap: () {},
-      onLongPressHeader: () {},
+      onSwap: onSwap ?? () {},
+      onLongPressHeader: onLongPressHeader ?? () {},
       onLogExercise: onLogExercise,
       onReopenExercise: onReopenExercise,
     );
