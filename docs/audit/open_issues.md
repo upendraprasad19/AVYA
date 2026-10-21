@@ -6356,3 +6356,34 @@ Outcome per job: one implementation that both the coach and the app call (where 
 **Relationship:** the swap-move-design Unit 1 carries `supersetGroup` through the in-workout swap (finding 1 only, a minimal fix on a founder-approved direction); findings 2-4 are not fixed there. Related: OI-358 (duplicate exercise names share one GlobalKey), OI-357 (once-only hints in the active workout).
 
 Impact: finding 1 is a visible glitch; finding 2 is a silent product gap (plan learning blind to in-workout swaps); 3-4 unknown until traced.
+
+## OI-372 — Weekday exercise swap has no UI: the engine takes any date, but only the AI coach reaches it (Unit 2 of the swap/move spec)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-10-21 (code read on `swap-move-design`, merged with origin/main `7ff9542b`)
+- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `swap-move-design`
+- **Spec**: `docs/superpowers/specs/2026-10-21-active-workout-swap-move-design.md` (Unit 2; Unit 1, the in-workout ⇄/⇅ move, was built on the same branch).
+
+**Problem.** A user cannot replace one exercise on a future planned day (for example, "Thursday's triceps
+pushdown → dips, this date only"). The Train tab's week rows and the preview sheet are read-only.
+
+**Facts (file:line on the branch above).**
+- Engine: `SwapService.swapExerciseInDay({date, fromExerciseId, toExerciseId})`
+  (`lib/core/services/swap_service.dart:411`) takes any date and writes through `upsertScheduled`
+  (per-date lock, Hive-first, `updated_at_ms`, background sync).
+- Its only callers are coach tools, via `WorkoutScheduleService.swapExerciseInDay`
+  (`workout_schedule_service.dart:258`): the exercise-swap tool with `date: today`
+  (`tool_dispatcher.dart:324`) and `modify_workout_for_injury` with each planned swap's date
+  (`tool_dispatcher.dart:653`).
+- It stamps `'swapped_via': 'ai_coach'` unconditionally (`swap_service.dart:543`); a UI caller must
+  pass its own source. `swapped_via` has no reader today (`swapped_from` does).
+- `ExerciseSwapSheet` hides ADD/REMOVE when `onAdd`/`onDelete` are null, so it can be reused as is.
+
+**Decided with the founder (2026-10-21).** Same glyphs as Unit 1 (⇄ swap); this date only; a separate
+build from Unit 1. Relates to OI-365 (one implementation per job): the UI must call the same engine
+the coach calls, not a second swap path.
+
+**Done when.** A ⇄ on each planned-day exercise row (Train preview) swaps that exercise for that date
+only through `swapExerciseInDay`, with the source stamped correctly, plus a behavioural test that
+the stored `schedule_<date>` row changes and other dates do not.
