@@ -268,6 +268,15 @@ pending:
       Piece A items about the helper's PostgREST query no longer apply (that
       query was removed); the first LIVE happy-path call of the function is a
       Piece B2 flip step.
+      THE FLIP, Piece B2a (branch oi341-piece-b2-door, plan
+      docs/plans/oi341-piece-b2-door.md v4.2, built 2026-10-21): the plan took
+      the full x2 review (rounds 3 and 4 on the post-split plan, converged; 0 P0
+      and 0 P1 in round 4) and re-reviewed the B1 ON path it flips; the B-pass
+      and hermes pass run on the B2a diff. The secret itself is set as a live
+      step AFTER the merge (section 4 step 3, its own founder go). This entry
+      moves to `resolved:` with flip_review_record
+      docs/plan-reviews/oi341-piece-b2-door.md and flip_commit = the B2a code
+      commit, in the later commit that adds that record.
 
   - flag: enable_log_exercise_button
     branch: active-workout-log-exercise

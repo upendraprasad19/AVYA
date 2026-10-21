@@ -29,11 +29,29 @@
  *     order.notes — never trust client-supplied user_id.
  *   - Price is derived server-side from the plan + promo lookup — never
  *     trust client-supplied amount.
+ *
+ * The purchase door (OI-341 Piece B2a, docs/plans/oi341-piece-b2-door.md 2.2):
+ *   - ONE guard read of the caller's active, unexpired rows. A read ERROR answers
+ *     500 `subscription_check_unavailable` and creates no order (before B2a a
+ *     failed read created the order: a double-payment hole).
+ *   - Door SHUT (anything but BOTH `ENABLE_TRIAL_PURCHASE` and
+ *     `ENABLE_SUBSCRIPTION_STACKING` exactly "true", read once per request): any
+ *     active row answers today's 409 `already_pro` from the latest-ending row.
+ *   - Door OPEN: a paid (non-`referral_trial`) row answers 409 from the
+ *     latest-ending PAID row; a user with only trial rows (or none) gets the
+ *     order, and the response and the order notes carry `stacks_after` (the
+ *     latest trial end, null when none; dashboard/estimate only, never read back
+ *     for entitlement: the writers compute their own base, payment.md rule 1).
+ *   - The shut response carries no `stacks_after` key.
+ *   - Env is read inside the handler, so importing this module does no I/O;
+ *     `serve()` runs only as the entrypoint.
+ * Catastrophic tier (docs/blast_radius.yaml).
  */
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { encode as base64Encode } from "https://deno.land/std@0.177.0/encoding/base64.ts";
+import { isStackingEnabled, isTrialPurchaseEnabled } from "../_shared/subscription_stacking.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -42,10 +60,8 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const RAZORPAY_KEY_ID = Deno.env.get("RAZORPAY_KEY_ID")!;
-const RAZORPAY_KEY_SECRET = Deno.env.get("RAZORPAY_KEY_SECRET")!;
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+/** The one plan value a trial grant row carries (migration 159 `grant_referral_days`). */
+const REFERRAL_TRIAL_PLAN = "referral_trial";
 
 // Canonical plan prices in paise. Keep in sync with razorpay-webhook +
 // verify-payment + AppConstants in Flutter.
@@ -63,7 +79,35 @@ function err(status: number, message: string, extra: Record<string, unknown> = {
   );
 }
 
-serve(async (req: Request) => {
+type ActiveRow = { plan: string; end_date: string };
+
+/** The row with the latest `end_date` (instants compared as instants), or null. */
+function latestEnding(rows: ActiveRow[]): ActiveRow | null {
+  let best: ActiveRow | null = null;
+  for (const r of rows) {
+    if (best === null || Date.parse(r.end_date) > Date.parse(best.end_date)) best = r;
+  }
+  return best;
+}
+
+function alreadyPro(row: ActiveRow) {
+  return err(
+    409,
+    "You're already a PRO member.",
+    {
+      error_code: "already_pro",
+      current_plan: row.plan,
+      current_expires_at: row.end_date,
+    },
+  );
+}
+
+export async function handler(req: Request): Promise<Response> {
+  const RAZORPAY_KEY_ID = Deno.env.get("RAZORPAY_KEY_ID")!;
+  const RAZORPAY_KEY_SECRET = Deno.env.get("RAZORPAY_KEY_SECRET")!;
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -94,27 +138,42 @@ serve(async (req: Request) => {
     // discovered this by paying 4 times in 24h on 2026-05-06 (each
     // payment created a new active subscription row) — the UI never
     // showed "already PRO" because local isPro was reading false.
+    //
+    // OI-341 Piece B2a (plan 2.2): ONE read of every active unexpired row (a
+    // user has few), decided in code. A read error is checked: it used to be
+    // ignored, so a failed read created the order (fail OPEN).
+    // Both switches are read once per request; the door opens only when both are on.
+    const doorOpen = isTrialPurchaseEnabled() && isStackingEnabled();
+    let stacksAfter: string | null = null;
     {
-      const { data: existing } = await supabase
+      const { data: activeRows, error: guardError } = await supabase
         .from("subscriptions")
-        .select("id, plan, end_date")
+        .select("plan, end_date")
         .eq("user_id", userId)
         .eq("status", "active")
-        .gt("end_date", new Date().toISOString())
-        .order("end_date", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .gt("end_date", new Date().toISOString());
 
-      if (existing && existing.end_date) {
-        return err(
-          409,
-          "You're already a PRO member.",
-          {
-            error_code: "already_pro",
-            current_plan: existing.plan,
-            current_expires_at: existing.end_date,
-          },
+      if (guardError || !Array.isArray(activeRows)) {
+        const requestId = newRequestId();
+        console.error(
+          `[create-razorpay-order] request_id=${requestId} subscription guard read failed code=${
+            (guardError as { code?: string } | null)?.code || "no_rows_array"
+          }`,
         );
+        return err(500, "Could not verify your subscription. Please try again.", {
+          error_code: "subscription_check_unavailable",
+          request_id: requestId,
+        });
+      }
+
+      const rows = (activeRows as ActiveRow[]).filter((r) => r.end_date);
+      if (!doorOpen) {
+        const latest = latestEnding(rows);
+        if (latest) return alreadyPro(latest);
+      } else {
+        const latestPaid = latestEnding(rows.filter((r) => r.plan !== REFERRAL_TRIAL_PLAN));
+        if (latestPaid) return alreadyPro(latestPaid);
+        stacksAfter = latestEnding(rows)?.end_date ?? null;
       }
     }
 
@@ -203,6 +262,9 @@ serve(async (req: Request) => {
           source: "AVYA_app",
           billing_cycle: plan === "monthly" ? "monthly" : "annual",
           ...(appliedPromoCode ? { promo_code: appliedPromoCode } : {}),
+          // Door open with an active trial: the paid days start at this instant.
+          // Dashboard reconciliation only, never read back for entitlement.
+          ...(doorOpen && stacksAfter !== null ? { stacks_after: stacksAfter } : {}),
         },
       }),
     });
@@ -228,6 +290,8 @@ serve(async (req: Request) => {
         plan: plan,
         promo_applied: appliedPromoCode !== null,
         discount_pct: discountPct,
+        // The door-open response always carries the key (null = no trial to stack after); the shut one never does.
+        ...(doorOpen ? { stacks_after: stacksAfter } : {}),
       }),
       {
         status: 200,
@@ -239,4 +303,8 @@ serve(async (req: Request) => {
     console.error(`[create-razorpay-order] request_id=${requestId}`, e);
     return err(500, "Internal server error", { request_id: requestId });
   }
-});
+}
+
+// `serve()` only when run as the entrypoint, so tests can import `handler`
+// without binding a port (the writers' pattern, OI-341 Piece A plan 2.3).
+if (import.meta.main) serve(handler);
