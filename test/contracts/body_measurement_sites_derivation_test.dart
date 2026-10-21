@@ -113,7 +113,8 @@ void main() {
     for (final f in Directory('lib').listSync(recursive: true)) {
       if (f is! File || !f.path.endsWith('.dart')) continue;
       scanned++;
-      if (f.path == _registryPath) continue;
+      // Windows lists paths with backslashes; compare with forward slashes.
+      if (f.path.replaceAll(r'\', '/') == _registryPath) continue;
       for (final lit in multiSiteLiterals(f.readAsStringSync())) {
         offenders.add('${f.path}: ${lit.replaceAll(RegExp(r'\s+'), ' ')}');
       }

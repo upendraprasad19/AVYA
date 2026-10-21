@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### generator_no_custom_autoadd (1 bugs)
+- 2026-10-21 d4b8e1 — Founder (web app, logged in as upendraprasad19, 2026-10-21): today's "Upper push + core" workout listed 14 exercises / 56 sets — 8 library picks plus 6 of his own custom exercises (tuck planche,…
+
 ### active_workout_set_logging (1 bugs)
 - 2026-10-20 c7d2a9 — Prevention record, not a field report. OI-356 asked for an UNDO toast after the one-LOG-per-exercise LOG and assigned it to the snackbar staleness class (b4e7f1: the swap-undo SnackBar outlived…
 
@@ -1597,6 +1600,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-10-21 | d4b8e1 | Founder (web app, logged in as upendraprasad19, 2026-10-21): today's "Upper push + core" workout listed 14 exercises / 56 sets — 8 library picks plus 6 of his own custom exercises (tuck planche,… | generator_no_custom_autoadd | test/contracts/l2_no_custom_autoadd_behavioral_test.dart |
 | 2026-10-20 | c7d2a9 | Prevention record, not a field report. OI-356 asked for an UNDO toast after the one-LOG-per-exercise LOG and assigned it to the snackbar staleness class (b4e7f1: the swap-undo SnackBar outlived… | active_workout_set_logging | test/contracts/active_workout_set_logging_behavioral_test.dart |
 | 2026-10-20 | e3a6c1 | Founder (2026-10-20, OI-361): "zero sets logged should not be allowed". Tapping COMPLETE in the Active Workout FINISH dialog with no saveable set still ran WorkoutWriteService.markCompleted (the… | workout_completion_status | test/contracts/log_exercise_flip_behavioral_test.dart |
 | 2026-10-18 | d7a3e5 | A PRO user who stopped training and came back saw Home "1 DAY" (a streak the user had not earned), the missed weeks never appeared, the freezes were still full, the rank completion rate ignored the… | lapse_gap_policy | test/contracts/lapse_gap_policy_behavioral_test.dart |

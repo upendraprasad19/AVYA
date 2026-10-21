@@ -6,7 +6,9 @@
 //            (Hive-canonical); RESTORE keeps the raw cloud row, whose
 //            column is `default_duration_secs` (sync_community.dart).
 // Readers:   parseTimedDurationSecs (train_provider.dart, active-workout
-//            prefill) and exercise_selector.dart:1002 (L2 append) read
+//            prefill) and exercise_selector.dart _buildCustomExercise
+//            (buildPinnedDays, repeat pins; the L2 append that also read it
+//            was removed 2026-10-21, diagnose d4b8e1) read
 //            DIFFERENT keys.
 //
 // Pinned contract:

@@ -193,7 +193,7 @@ void main() {
     test('exactly ONE .remove( across the function folder, and it is in logic.ts', () {
       final hits = <String>[
         for (final f in _cleanSources())
-          if (_read(f.path).contains('.remove(')) '${f.path} x${_count(_read(f.path), '.remove(')}',
+          if (_read(f.path).contains('.remove(')) '${f.path.replaceAll(r'\', '/')} x${_count(_read(f.path), '.remove(')}',
       ];
       expect(hits, ['$_cleanDir/logic.ts x1'], reason: 'a second door would bypass the PRO decision');
     });

@@ -29,7 +29,7 @@
 //  (8) CARDINALITY — a partial pin (only some day indices) fresh-fills the
 //      unpinned frames; the plan keeps its full day count, every day non-empty.
 //
-// Harness runs at phase 1 (no stage-0 decay / L2-L6 history-box needs) — the
+// Harness runs at phase 1 (no stage-0 decay / L6 history-box needs; L2 removed d4b8e1) — the
 // generateV4 TAIL (Stage-0 resolve + periodization + sequencing) is UNCHANGED by
 // this unit (the branch only swaps how `populated` is built); the phase≥2 decay is
 // covered by the existing progression tests; UNIT 2-int tests the real repeat
