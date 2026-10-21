@@ -17,8 +17,11 @@ import 'package:icanbefitter/shared/widgets/exercise_plate/exercise_plate_thumb.
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import '../../providers/train_provider.dart';
 import '../../services/active_workout_persistence.dart';
+import '../../services/exercise_move_logic.dart';
 import '../../services/log_exercise_flags.dart';
 import '../../services/log_exercise_logic.dart';
+import '../../services/move_mode_controller.dart';
+import '../../services/swap_move_hint.dart';
 import '../../../home/providers/home_provider.dart';
 import '../../widgets/create_custom_exercise_sheet.dart';
 import '../../widgets/log_undo_toast.dart';
@@ -96,6 +99,86 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
   LogUndoRecord? _logUndo;
   int _logUndoGeneration = 0;
   Timer? _logUndoTimer;
+
+  /// ⇄ swap / ⇅ move (docs/plans/active-workout-swap-move.md): which exercise
+  /// is moving, its UNDO, and the once-per-account first-use hint. Every
+  /// decision lives in the controller; this State only wires it.
+  late final MoveModeController _move =
+      MoveModeController(hintSeen: swapMoveHintSeen());
+  Timer? _justMovedTimer;
+  String? _justMovedName;
+
+  /// The hint is retired on the first icon tap, "Got it", or the first
+  /// checked set after it showed; persisted once per account.
+  void _dismissHintAndPersist() {
+    if (_move.dismissHint()) unawaited(markSwapMoveHintSeen());
+  }
+
+  /// ⇅ on a card: start moving it, or stop on the card already moving.
+  void _onMoveTap(int exIdx) {
+    _dismissHintAndPersist();
+    setState(() => _move.enter(ref.read(activeWorkoutProvider), exIdx));
+  }
+
+  /// Place the moving exercise at [target] (session-only), then offer UNDO.
+  void _completeMove(int target) {
+    final notifier = ref.read(activeWorkoutProvider.notifier);
+    final p = _move.place(ref.read(activeWorkoutProvider), target);
+    if (p == null) {
+      setState(() {});
+      return;
+    }
+    final ok = notifier.applyExerciseMove(p.result);
+    if (!ok) {
+      // Saving, review mode, or a stale list: no move, no toast.
+      setState(() {});
+      return;
+    }
+    // Same event as the apply, so no frame can show a stale index-keyed swap
+    // UNDO (swap_sheets.dart) or the warm-up toast against the new order.
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    setState(() {
+      _focusedExerciseIndex = null; // indexes moved: auto-focus decides
+      _justMovedName = p.exerciseName;
+    });
+    _clearLogUndo(); // the LOG undo record is index-keyed
+    _justMovedTimer?.cancel();
+    _justMovedTimer = Timer(const Duration(milliseconds: 1000), () {
+      if (mounted) setState(() => _justMovedName = null);
+    });
+    _swapUndoMessenger = messenger;
+    messenger.showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppColors.card,
+        duration: const Duration(seconds: 5),
+        content: Text(
+          WardroomCopy.activeMovedTemplate
+              .replaceAll('{exercise}', p.exerciseName)
+              .replaceAll('{n}', '${p.to + 1}'),
+          style: AppTypography.bodySm,
+        ),
+        action: SnackBarAction(
+          label: WardroomCopy.activeUndo,
+          textColor: AppColors.accent,
+          onPressed: () {
+            if (!mounted) return;
+            final r = _move.undo(ref.read(activeWorkoutProvider), p);
+            if (r != null &&
+                ref.read(activeWorkoutProvider.notifier).applyExerciseMove(r)) {
+              _clearLogUndo();
+              setState(() {
+                // A move picked since holds an index the undo just shifted.
+                _move.cancel();
+                _focusedExerciseIndex = null;
+              });
+            }
+          },
+        ),
+      ),
+    );
+  }
 
   /// Applies the controller's outcome: clear the manual focus so the next
   /// non-done exercise expands, and reveal a superset partner.
@@ -210,6 +293,7 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
     // without needing to name each one individually.
     _dismissSwapUndoSnackBar();
     _logUndoTimer?.cancel();
+    _justMovedTimer?.cancel();
     // A7: clear mid-workout snapshot on any screen exit (back-button, system
     // nav, or auto-dismiss). Completion/cancellation paths also call this
     // explicitly so the AI coach sees null state immediately rather than
@@ -243,6 +327,9 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
   /// Returns `true` for the focused exercise AND for any superset partner of
   /// the focused exercise (so paired members expand together).
   bool _isExerciseExpanded(int exIdx, ActiveWorkoutData data) {
+    // Move mode shows headers only; the focus is kept, so leaving the mode
+    // without a move re-opens the same card.
+    if (_move.active) return false;
     if (exIdx < 0 || exIdx >= data.exercises.length) return false;
     final focused = _effectiveFocusedIndex(data);
     if (exIdx == focused) return true;
@@ -293,6 +380,7 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
     ref.listen<ActiveWorkoutData>(activeWorkoutProvider, (previous, next) {
       if (next.isComplete && previous?.isComplete != true) {
         _dismissSwapUndoSnackBar();
+        _move.cancel();
         _logUndoTimer?.cancel();
         _logUndo = null;
       }
@@ -353,7 +441,24 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
         counts != null ? workingProgress(counts) : data.progressPercent;
     final pctInt = (progress * 100).round();
 
-    return Scaffold(
+    // The first checked set after the hint showed retires it (once).
+    if (_move.shouldDismissHintOnData(data)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(_dismissHintAndPersist);
+      });
+    }
+    final showHint = _move.showHint(data);
+    final movingIndex = _move.sourceIndex;
+
+    // System back leaves move mode before it leaves the screen. The header's
+    // back arrow (context.pop) bypasses this and simply ends the screen.
+    return PopScope(
+      canPop: !_move.active,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) setState(_move.cancel);
+      },
+      child: Scaffold(
       backgroundColor: AppColors.bg,
       body: Stack(
         children: [
@@ -426,6 +531,38 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                   ),
                 ),
 
+              // Move mode bar: what to do next, and the way out.
+              if (movingIndex != null && movingIndex < data.exercises.length)
+                Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  color: AppColors.accentSoft,
+                  child: Row(
+                    children: [
+                      const Icon(Icons.swap_vert,
+                          size: 14, color: AppColors.accent),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          WardroomCopy.activeMoveBarTemplate.replaceAll(
+                              '{exercise}',
+                              data.exercises[movingIndex].name),
+                          style: AppTypography.bodySm
+                              .copyWith(color: AppColors.accent),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => setState(_move.cancel),
+                        child: const WardChip(
+                          label: WardroomCopy.activeMoveCancel,
+                          tone: WardChipTone.neutral,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
               // Exercise cards list
               Expanded(
                 child: _withLogUndoToast(
@@ -443,6 +580,16 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                         color: AppColors.warn,
                         exercises: data.workoutDay!.warmup,
                         initiallyExpanded: !data.isComplete,
+                      ),
+
+                    // First-use hint: its own list child AFTER the unkeyed
+                    // warm-up section (inserting before it would recreate its
+                    // State) and outside every card's keyed Column (removing
+                    // it there would recreate the card and drop typed input).
+                    if (showHint)
+                      _SwapMoveHint(
+                        key: const ValueKey('swap_move_hint'),
+                        onDismiss: () => setState(_dismissHintAndPersist),
                       ),
 
                     ...data.exercises.asMap().entries.map((entry) {
@@ -587,7 +734,29 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
                                 );
                               }
                             },
-                            onSwap: () => _showSwapSheet(context, ref, exIdx, this),
+                            onSwap: () {
+                              _dismissHintAndPersist();
+                              setState(_move.cancel);
+                              _showSwapSheet(context, ref, exIdx, this);
+                            },
+                            moveModeActive: _move.active,
+                            moveRole:
+                                moveRoleFor(data, movingIndex, exIdx),
+                            moveTargetAbove:
+                                movingIndex != null && exIdx < movingIndex,
+                            // No ⇅ in review mode, while saving, or while
+                            // picking a superset partner.
+                            canMove: hasMoveCandidates(data) &&
+                                canMoveExercise(data, exIdx) &&
+                                !data.isSupersetGroupMode &&
+                                !data.isSaved &&
+                                !ref
+                                    .read(activeWorkoutProvider.notifier)
+                                    .isCompleting,
+                            onMove: () => _onMoveTap(exIdx),
+                            onMoveHere: () => _completeMove(exIdx),
+                            showHintRing: showHint && exIdx == 0,
+                            justMoved: exercise.name == _justMovedName,
                             onLongPressHeader: () {
                               if (data.isSupersetGroupMode) {
                                 ref.read(activeWorkoutProvider.notifier).pairSuperset(exIdx);
@@ -678,6 +847,66 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
           // Rest timer removed — users found the auto-popup disruptive.
           // Timer infrastructure kept in provider for future opt-in use.
         ],
+      ),
+      ),
+    );
+  }
+}
+
+/// First-use hint for the card header's ⇄ / ⇅ (shown once per account; the
+/// matching gold ring sits on the first card's icons). Non-modal: no scrim,
+/// never over the set inputs.
+class _SwapMoveHint extends StatelessWidget {
+  const _SwapMoveHint({super.key, required this.onDismiss});
+
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final line = AppTypography.bodySm.copyWith(color: AppColors.textPrimary);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: AppColors.cardHi,
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          border: Border.all(color: AppColors.accent.withValues(alpha: 0.5)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      WardroomCopy.activeSwapMoveHintTitle,
+                      style: AppTypography.monoXs.copyWith(
+                        color: AppColors.accent,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text('⇄  ${WardroomCopy.activeSwapMoveHintSwap}',
+                        style: line),
+                    const SizedBox(height: 2),
+                    Text('⇅  ${WardroomCopy.activeSwapMoveHintMove}',
+                        style: line),
+                  ],
+                ),
+              ),
+              TextButton(
+                onPressed: onDismiss,
+                child: Text(
+                  WardroomCopy.activeSwapMoveHintDismiss,
+                  style: AppTypography.bodySm
+                      .copyWith(color: AppColors.accent),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -4081,7 +4081,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 2431-2447
+        line_range: 2484-2500
         method: TemplatesNotifier.build
         semantic: pass-through
         fields_read: [type, name, exercises, assigned_days, exercise_count, group_id, group_day_index, group_total_days, last_used_at, created_at, updated_at]
@@ -12812,41 +12812,41 @@ concepts:
       mirrors.
     writers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1561-1570
+        line_range: 1587-1596
         method: toggleSet
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1577-1594
+        line_range: 1603-1620
         method: logSets
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1605-1627
+        line_range: 1631-1653
         method: unlogSets
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1630-1635
+        line_range: 1656-1661
         method: recordSetValues
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1642-1667
+        line_range: 1668-1693
         method: recordCardEdit
       - file: lib/features/train/services/log_exercise_logic.dart
         line_range: 373-454
         method: LogExerciseController.reopen
       - file: lib/features/train/screens/active_workout/exercise_card.dart
-        line_range: 472-500
+        line_range: 529-557
         method: _onFieldChanged
       - file: lib/features/train/screens/active_workout/exercise_card.dart
-        line_range: 533-567
+        line_range: 590-624
         method: _mirrorFrom
       - file: lib/features/train/screens/active_workout/exercise_card.dart
-        line_range: 586-611
+        line_range: 643-668
         method: _onLogPressed
     readers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1342-1344
+        line_range: 1368-1370
         method: completedSets
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1410-1417
+        line_range: 1436-1443
         method: isExerciseDone
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1433-1442
+        line_range: 1459-1468
         method: liveVolumeKg
       - file: lib/features/train/services/log_exercise_logic.dart
         line_range: 373-454
@@ -12864,7 +12864,7 @@ concepts:
         line_range: 580-586
         method: allExercisesLogged
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1354-1385
+        line_range: 1380-1411
         method: wouldSaveSet + saveableSetIndexes + hasSaveableSet
       - file: lib/features/train/services/log_exercise_logic.dart
         line_range: 217-228
@@ -12872,6 +12872,65 @@ concepts:
       - file: lib/features/train/services/log_exercise_logic.dart
         line_range: 592-668
         method: workingSetCounts + workingProgress + finishGuard
+
+  - concept: active_workout_exercise_order
+    domain: workout
+    behavioral_test_path: test/contracts/active_workout_exercise_order_behavioral_test.dart
+    contract_test_path: test/contracts/move_mode_controller_behavioral_test.dart
+    description: |
+      Session-only order of the Active Workout exercise list, changed by the
+      in-workout MOVE (⇅ on a card header, then tap a target;
+      docs/plans/active-workout-swap-move.md). The stored `schedule_<date>`
+      row keeps its order: no Hive key, no cloud column.
+
+      WRITER: `ActiveWorkoutNotifier.applyExerciseMove(ExerciseMoveResult)` is
+      the ONE writer: replaces `exercises` and every index-keyed field in ONE
+      state change and leaves superset-grouping mode (its source index would be
+      stale). Refuses (false, `state` untouched) on a result of another length,
+      while `_completing`, saved or complete. The result comes from the pure
+      `moveExerciseInSession` (slide: the mover ends at the target index, the
+      ones between shift by one; done exercises are neither mover nor target),
+      which remaps `checkedSets`, `warmUpSets`, `setInputValues` ('ex-set') and
+      `suggestedInputs` ('ex-set-field', field kept) by the same permutation.
+      `reopenedExercises` is keyed by NAME and stays. UNDO = the inverse with
+      `requireMovable: false` (the slot it returns to may hold a done exercise
+      the move displaced), only while `moveUndoApplicable` (the mover is still
+      there and not done). Screen decisions: `MoveModeController`.
+
+      READERS: everything index-keyed on `ActiveWorkoutData` (see
+      `active_workout_set_logging`), the card's role-routed header
+      (`exercise_card.dart`), the screen's focus fallback (a move clears
+      `_focusedExerciseIndex` and the index-keyed LOG undo record).
+
+      Superset persist (same batch): `_persistSupersetGroups` writes
+      `superset_group` onto the stored row by IDENTITY
+      (`applySupersetGroupsByIdentity`: ids when both present, else
+      `exercise_name ?? name`; first-to-first for duplicates; unmatched rows
+      untouched), not by index. `swapExercise` keeps the slot's group unless the
+      replacement brings its own (as the coach's `SwapService.swapExerciseInDay`).
+      WARNING: a NEW index-keyed field on `ActiveWorkoutData` MUST join the
+      remap in `moveExerciseInSession` (and in swap/remove), or a move leaves it
+      on the wrong exercise.
+    writers:
+      - file: lib/features/train/providers/train_provider.dart
+        line_range: 1859-1873
+        method: applyExerciseMove
+      - file: lib/features/train/services/exercise_move_logic.dart
+        line_range: 51-98
+        method: moveExerciseInSession
+      - file: lib/features/train/providers/train_provider.dart
+        line_range: 1990-2021
+        method: _persistSupersetGroups
+      - file: lib/features/train/providers/train_provider.dart
+        line_range: 1717-1781
+        method: swapExercise
+    readers:
+      - file: lib/features/train/services/exercise_move_logic.dart
+        line_range: 102-107
+        method: moveUndoApplicable
+      - file: lib/features/train/services/superset_persist_logic.dart
+        line_range: 27-91
+        method: applySupersetGroupsByIdentity
 
   # tech-debt audit 2026-09-02 / Slice A (CODE-8, diagnose e4d1b7) — the
   # weekly-report PRO gate is a genuine cloud writer→reader contract on
