@@ -1,4 +1,4 @@
-@Timeout(Duration(minutes: 5))
+@Timeout(Duration(minutes: 10))
 library;
 
 // Diagnose c7e2a9, addendum A Slice B2 (Unit 5b): the client's LEGACY restore
@@ -53,8 +53,13 @@ String _id(int k) =>
 const _sameInstant = '2026-09-01T10:00:00+00:00';
 
 /// A hang on an unanswered request must fail in minutes, not at the file timeout.
+/// 8 min, under the 10-min per-test @Timeout above. A 50,000-row ceiling test
+/// takes about 11 s alone, but the stub re-sorts all rows for each of its 50
+/// pages; with another full suite loading the machine it passed the old 2-min
+/// guard (merge regression catalog, 2026-10-21; diagnose 7e2b5d). The loaded
+/// time was never measured beyond "over 2 min", so this is a 4x widening.
 Future<void> _within(Future<void> Function() call) =>
-    call().timeout(const Duration(minutes: 2));
+    call().timeout(const Duration(minutes: 8));
 
 /// [n] completions, [perDate] of them sharing each `scheduled_date`, ALL with
 /// the same `completed_at` / `created_at` (the worst case for tie ordering).
