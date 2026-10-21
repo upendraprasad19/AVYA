@@ -47,6 +47,7 @@ Future<void> _healAfterRestoreInBackground() async {
     unawaited(ErrorTelemetry.recordNonFatal(e, st,
         reason: 'bg_heal_plan_integrity'));
   }
+  await _runL2CustomRepair();
   try {
     StreakProgressService.instance.refillIfNewWeek();
   } catch (e, st) {
@@ -76,6 +77,19 @@ Future<void> _healAfterRestoreInBackground() async {
   // `bumpRestoreCompleted()`; the bump is the LAST statement inside it, so the
   // repaint sees the already-debited freeze ledger.
   DayRolloverObserver.instance.reckonAndNotifyAfterRestore();
+}
+
+/// c3e9a4 (d4b8e1 Batch 0b): removes the customs the removed generator lever L2
+/// put into future planned days. Shared by both post-restore paths, after the
+/// plan-integrity heal; withheld by the migrator itself until the restore for
+/// the current account has settled.
+Future<void> _runL2CustomRepair() async {
+  try {
+    await L2CustomAppendRepairMigrator.runIfNeeded();
+  } catch (e, st) {
+    unawaited(ErrorTelemetry.recordNonFatal(e, st,
+        reason: 'bg_heal_l2_custom_repair'));
+  }
 }
 
 /// b4e7a1 (B-pass reviewer C F1) — runs [heal] (the post-restore heal + streak

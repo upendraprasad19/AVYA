@@ -142,6 +142,9 @@ export interface PlanCounts {
  * split reconciles against the active-sub count); anything else falls into
  * `otherActive` so a future unforeseen plan value is visible, never silently
  * dropped. monthlyActive + yearlyActive + trialActive + otherActive == rows.length.
+ * These are ROWS per plan, not users: since OI-341 Piece B2a a referral-trial
+ * user who buys holds a trial row AND a paid row at once (stacking), so the
+ * same person can count under trialActive and monthlyActive/yearlyActive.
  */
 export function bucketActivePlans(
   rows: Array<{ plan: string | null }>,

@@ -3836,7 +3836,7 @@ Unit 2's blocked question — what a regeneration does when the plan window is E
 - **Blocked on**: founder batch scheduling
 - **Verified**: never
 - **Identified**: 2026-09-17 · filed via mint_oi.sh from branch `custom-picker-fix`
-- **Detail** (diagnose `e7b2d4`): the picker-visibility bug was fixed reader-side (canOfferInPicker — customs with unverifiable equipment always offered) because it needs no data migration. The DATA half remains: the creation sheet still stores `equipment_needed: []`, which only works because the picker exempts empty-requirement customs. Root-cause completion: (1) add an equipment multi-select to CreateCustomExerciseSheet writing normalized `EquipmentVocab` tokens; (2) one-time idempotent repair of existing custom_exercise_ rows `[] → ['none']` in Hive AND cloud `user_custom_exercises` (restore path included); (3) then the L2 append's exclusion-only guard becomes capability-checked for customs too. Needs a live cloud apply authorization (§4.3).
+- **Detail** (diagnose `e7b2d4`): the picker-visibility bug was fixed reader-side (canOfferInPicker — customs with unverifiable equipment always offered) because it needs no data migration. The DATA half remains: the creation sheet still stores `equipment_needed: []`, which only works because the picker exempts empty-requirement customs. Root-cause completion: (1) add an equipment multi-select to CreateCustomExerciseSheet writing normalized `EquipmentVocab` tokens; (2) one-time idempotent repair of existing custom_exercise_ rows `[] → ['none']` in Hive AND cloud `user_custom_exercises` (restore path included); (3) then the L2 append's exclusion-only guard becomes capability-checked for customs too — **2026-10-21: L2 was removed (diagnose d4b8e1), so step (3) now applies to the ONE remaining custom emitter, `ExerciseSelector.buildPinnedDays` → `resolve()` (repeat pins), which re-applies only equipment-EXCLUSION + injury to a pinned name (library or custom), not the OI-89 capability check.** Needs a live cloud apply authorization (§4.3).
 
 ## OI-212 — Custom foods unsearchable from the main food search bar (search never reads customBox)
 
@@ -6066,8 +6066,8 @@ Fix shape: handle Razorpay's dispute events in `razorpay-webhook` (a catastrophi
 
 ## OI-341 — A friend on the 7-day referral trial cannot buy: create-razorpay-order answers 409 already_pro for any active subscription row, trial included, so a paid plan cannot be bought until the trial lapses; the founder wants purchase enabled during the trial with the paid cycle starting when the current PRO ends
 
-- **Status**: OPEN · founder decision 2026-10-13: purchase must be enabled during the referral trial, and the paid cycle must start when the current PRO finishes. **Piece A (the server writers) is MERGED (PR #124, 85e8f76a; record repaired by PR #127) and DEPLOYED 2026-10-18 (`verify-payment` v25, `razorpay-webhook` v29), dark**: `verify-payment` and `razorpay-webhook` compute the stored `end_date` through `_shared/subscription_stacking.ts` behind the enabling secret `ENABLE_SUBSCRIPTION_STACKING` (absent = today's value, no extra query), and `verify-payment` rejects a malformed `payment_id` with 400. **Piece B was split (2026-10-20, after three plan-review rounds each found new P1s): Piece B1 is BUILT on branch `oi341-piece-b-door`, dark**: the ON path is now ONE call to `public.record_paid_subscription` (migration 161: per-user lock shared with the referral redeem and job, so concurrent payments and referral grants add up; idempotency; stacked end; insert) and a failed record pages (`payment_record_failed`); with the switch unset nothing changes for anyone. **Piece B2 (the door) is OPEN**: `create-razorpay-order` still answers 409 `already_pro` for a trial, so a trial user still cannot buy; B2 owns the door switch `ENABLE_TRIAL_PURCHASE`, the client copy, both flips and the rollback order (plan `docs/plans/oi341-piece-b-door.md` section 9).
-- **Blocked on**: Piece A: nothing (live, switch unset; the next-payment read is OI-348 row C7). Piece B1: the founder's gos to commit, apply migration 161, probe it and deploy both writers (each its own go). Piece B2: its own plan, branch, two reviews, B-pass and hermes pass, and Piece A being live; the switch flip, the alert-row precondition and the client copy are Piece B's.
+- **Status**: OPEN · founder decision 2026-10-13: purchase must be enabled during the referral trial, and the paid cycle must start when the current PRO finishes. **Piece A (the server writers) is MERGED (PR #124, 85e8f76a; record repaired by PR #127) and DEPLOYED 2026-10-18 (`verify-payment` v25, `razorpay-webhook` v29), dark**: `verify-payment` and `razorpay-webhook` compute the stored `end_date` through `_shared/subscription_stacking.ts` behind the enabling secret `ENABLE_SUBSCRIPTION_STACKING` (absent = today's value, no extra query before the insert; Piece B2a adds one alarm read after the OFF insert), and `verify-payment` rejects a malformed `payment_id` with 400. **Piece B was split (2026-10-20, after three plan-review rounds each found new P1s): Piece B1 is MERGED (PR #133, b8385b6c) and live, dark (migration 161, `verify-payment` v26, `razorpay-webhook` v30)**: the ON path is now ONE call to `public.record_paid_subscription` (migration 161: per-user lock shared with the referral redeem and job, so concurrent payments and referral grants add up; idempotency; stacked end; insert) and a failed record pages (`payment_record_failed`); with the switch unset nothing changes for anyone. **Piece B2 is not finished, split into B2a (server) and B2b (client)**: until B2a's door flip, `create-razorpay-order` still answers 409 `already_pro` for a trial, so a trial user still cannot buy. B2a (plan `docs/plans/oi341-piece-b2-door.md`) is BUILT on branch `oi341-piece-b2-door`: the door switch `ENABLE_TRIAL_PURCHASE`, the switch-mismatch alarm, the replay window, both flips and the rollback order; B2b (the client copy and estimate) follows the door opening.
+- **Blocked on**: Piece A: nothing (live, switch unset; the next-payment read is OI-348 row C7). Piece B1: DONE (PR #133, b8385b6c; migration 161 live, `verify-payment` v26, `razorpay-webhook` v30, switch unset). Piece B2 is SPLIT: **B2a** (server: the door on `create-razorpay-order`, the `stacking_switch_mismatch` alarm, the switch log lines, the 24 h `payment.captured` replay window, both flips; plan `docs/plans/oi341-piece-b2-door.md` v4.2, x2-reviewed and converged) is BUILT on branch `oi341-piece-b2-door` and awaits the founder's commit go, then the live steps of its section 4 (each its own go: deploys, the alarm drill, the stacking flip, the door flip; live mode with one dedicated 90% code and refunds, founder 2026-10-21). **B2b** (the client copy and the paid-end estimate) is planned after B2a's door is open.
 - **Verified**: 2026-10-13 - by reading. `supabase/functions/create-razorpay-order/index.ts:84-116` returns 409 `already_pro` for the newest row with `status = 'active' AND end_date > now()` of ANY plan, `referral_trial` included; the guard exists because the founder paid four times in 24 h on 2026-05-06 when local `isPro` read false (comment at :84-96). Checkout creates one-off Razorpay Orders (`POST /v1/orders`, `payment_capture: 1`, `create-razorpay-order/index.ts:184`), i.e. prepaid periods, not an autopay mandate. `verify-payment/index.ts:550-562` (and `razorpay-webhook/index.ts:577`) INSERT the paid row with `start_date = now` and `end_date = now + plan length`. The client derives PRO from `status = 'active' AND end_date > now()` and does not read `start_date` (`lib/core/services/subscription_service.dart:651`). Migration 159's job treats `start_date` as the payment time (`converted_at = start_date`, window `start_date >= created_at AND <= created_at + 90 days`).
 - **Identified**: 2026-10-13 · filed via mint_oi.sh from branch `referral-pay-on-conversion`
 
@@ -6129,6 +6129,8 @@ Fix options (to be planned, not decided): (a) a `free_access_codes` table (code,
 - **Blocked on**: the final AAB/APK build (founder-initiated, `/build-apk` from CI-green `main`); no code work. Ticking a row here is the founder's report; the agent then records it in the named ledger row and flips the OIs listed under "Flips".
 - **Verified**: 2026-10-17 - by reading every `terminal_state: blocked_on_user` row of `docs/audit/*.closure.yaml` (118 rows) and the OI board, and keeping only the rows that are CHECKS (something to run or observe). Rows that are decisions or go-aheads are not here; they stay on their own OIs. Re-checked 2026-10-20 against `main` 7266ea93: added the shipped Unit C steps (A10, PR #129), the OI-349 look (A11), the OI-341 Piece A payment read (C7, PR #124, deployed v25/v29 with the switch unset), and a note for the dark LOG-per-exercise flag (PR #128), whose device check belongs to its flip.
 - **Identified**: 2026-10-17 · filed via mint_oi.sh from branch `pending-checks-oi` (founder request: "create an OI compiling all the checks pending ever ... after a new aab/apk build at the end")
+
+**Before the build (added 2026-10-21, OI-341 B2a):** the VPS `.env` `RAZORPAY_KEY_ID` must hold the LIVE key ID (`rzp_live_...`, the public half of the pair, from the Razorpay dashboard). Today it holds a `rzp_test_` ID while the server's secrets are the live pair, and the client opens checkout with its own build-time key (`app_constants.dart:193`), so an AAB built as-is would fail at checkout. After the build, also run one real purchase from the phone (90% code, refunded) as part of the B2b checks.
 
 How to use: build once from the last merged `main`, install on the phone, sign in with one FREE and one PRO account (plus one throwaway or lapsed account where a row says so), then walk the sections in order. Section A needs the phone, B needs a signed-in session or JWT (a dev build or test account), C needs no build and can be run any time with the founder's go for live reads.
 
@@ -6286,7 +6288,6 @@ Fix: move the ownership check above the capture call. Not done in Piece B1 becau
 
 Fix: log `code` / `name` and ids only (same rule as the CLAUDE.md pitfall on Telegram errors carrying the bot token). Not done in Piece B1 because it changes the OFF path that B1 keeps byte-identical to `origin/main`. Catastrophic tier.
 
-
 ## OI-362 — Active Workout: remove the per-set (OFF) path and the enable_log_exercise_button kill switch once A12 passes
 
 - **Status**: OPEN
@@ -6323,6 +6324,58 @@ To do:
 Source: CLAUDE.md section 4.6 step 4 - an old code path kept for later removal is tracked on the board, not as an intention. Plan: `docs/plans/2026-10-18-pro-gap-policy-and-streak.md` (Kill switch section).
 
 Fix: once the device check passes, delete the key, the getter, every `policyEnabled` / `lapseGapPolicyEnabled` branch (old paths: start date `max(today, plan_end + 1)`, streak skip-at-zero, completion rate ignoring blank days, no freeze zero, no `plan_status`), the `countBlankDays` opt-in and env check in `rank_engine.ts` / `evaluate-rank-promotions`, and the kill-switch tests (`lapse_gap_policy_behavioral_test.dart`, `lapse_gap_freeze_reset_advance_test.dart`, `gap_policy_test.dart`, `rank_engine_blank_days_test.ts`). Default-live policy, so the full x2 plan review plus B-pass applies to the removal. Redeploy `evaluate-rank-promotions` (founder go); `ai-proxy` does not read the switch.
+
+## OI-365 — Coach tools and app features do the same jobs through separate code (first proven case: exercise swap): map every coach tool to its app twin and consolidate to one implementation per job
+
+- **Status**: OPEN
+- **Blocked on**: none (founder 2026-10-21: this audit is NOT part of the active-workout swap/move batch)
+- **Verified**: 2026-10-21 - by code read at `origin/main` a909cdb3 (swap-move-design brainstorm and its builder check); not reproduced on device. Facts below are cited file:line; items marked "not traced" are leads, not findings.
+- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `oi-swap-impl-audit`
+
+Source: found while designing the in-workout `⇄` swap + `⇅` move (spec `docs/superpowers/specs/2026-10-21-active-workout-swap-move-design.md`, on branch `swap-move-design`, not yet on main). The founder's reading: the coach uses another implementation for the same job, so audit it.
+
+**Scope (founder 2026-10-21: "we should not be having multiple tools or functions for the same work"):** every AI coach tool, not only swap. The coach's tools are the 21 files under `supabase/functions/_shared/tools/{exercise,nutrition,plan,progress,workout}/` (excluding `index.ts`, `registry.ts`, `types.ts`, `zodToGemini.ts`, `__tests__/`): `getFormCues`; `getNutritionHistory`, `logMealByText`, `suggestMeal`; `createCustomTemplate`, `pausePlan`, `regeneratePlanBlock`, `scheduleTemplate`, `switchGoal`; `getExerciseHistory`, `getPRTimeline`, `getProgressSummary`, `getPromotionStatus`; `createCustomExercise`, `generateHotelWorkout`, `logSet`, `modifyWorkoutForInjury`, `rescheduleWeek`, `shortenWorkout`, `swapExercise`, `swapWorkoutDays`. For each tool the audit records:
+1. its client-side executor, if any (e.g. `SwapService.swapExerciseInDay` for swap) — not yet traced for the other 20;
+2. every app feature that does the same job (screen, service, provider), by file:line;
+3. whether they share one writer/rules source or are separate code, and every field or rule where they disagree (what is written, which Hive key / cloud row, which telemetry, which plan-learning stamps).
+Outcome per job: one implementation that both the coach and the app call (where TS server code and Dart client code must both exist, one of them is the single rules source and the other only delegates or reads its output), plus a test that fails if a second path reappears. Out of scope: read-only display widgets that only render the same data.
+
+**First proven case: exercise swap. The paths (all read):**
+- **Coach / plan path:** `SwapService.swapExerciseInDay` (`lib/core/services/swap_service.dart:411`), reached from `tool_dispatcher.dart:324` and `:653` through `WorkoutScheduleService`. Writes the saved schedule row (`upsertScheduled`, source `schedSwap`); equipment gate `canOfferInPicker`; carries `superset_group` from the outgoing row (`:530-531`) and `category` / `exercise_type` / `equipment_needed` / `target_focus` / `priority_tier` / `coaching_cues` from the NEW library row; stamps `swapped_from` and a hard-coded `swapped_via: 'ai_coach'` (read nowhere).
+- **In-workout path:** `_showSwapSheet` (`lib/features/train/screens/active_workout/swap_sheets.dart:41`) → `ActiveWorkoutNotifier.swapExercise` (`train_provider.dart:1589`). Session-only. The replacement `ExerciseData` (`swap_sheets.dart:60-83`) takes `category: currentExercise.category` (`:80`) and `equipmentNeeded: currentExercise.equipmentNeeded` (`:81`), i.e. the OUTGOING exercise's; it sets no `exerciseType`, no `supersetGroup`, and writes no `swapped_from`.
+- **Custom-exercise auto-swap:** `_openCreateAndAutoSwap` (`swap_sheets.dart:175-183`), a third construction site (category and equipment from the new exercise when present, else the original; no `supersetGroup`).
+
+**Where they disagree:**
+1. **Superset:** the coach path keeps the slot's group; the in-workout swap drops it, so the partner keeps its coloured bar with no partner (`exercise_card.dart` draws the bar whenever the group is non-null).
+2. **Plan learning:** `TrainingHistoryAnalyzer.demotedExercises` (`training_history_analyzer.dart` ~:330-350) reads only `swapped_from`, which only the coach path writes, so exercises a user swaps away inside a workout never influence plan generation.
+3. **Metadata (not traced):** the swapped-in exercise in a workout carries the outgoing exercise's category and equipment and no `exerciseType`; `ActiveWorkoutData` reads `exerciseType == 'compound'` (`train_provider.dart` ~:108). What each missing or wrong field changes downstream is not traced.
+4. **Equipment predicate (not traced):** the swap sheet filters library rows with `canPerform` and customs with `canOfferInPicker(isCustom: true)`; the service uses `canOfferInPicker` for both. Equivalence not checked.
+
+**Not read, may be further paths:** `injury_swap_planner.dart`, `hotel_workout_planner.dart`, `regenerate_plan_planner.dart`, `swap_exercise_coach_sheet.dart` (all matched a "swap" grep).
+
+**Audit scope:** (1) enumerate every code path that replaces one exercise with another, including template apply; (2) a writer/reader table per attribute (§4.1, `docs/sot_registry.yaml`); (3) decide whether the in-workout and coach swaps should share one function, and which attributes follow the SLOT (sets, reps, rest, superset group) versus the NEW exercise (category, type, equipment, cues); (4) founder call: should a swap made inside a workout feed plan learning (finding 2)? Output per §4.10: `docs/audit/<date>_audit_closures.yaml`, every finding with a terminal state.
+
+**Relationship:** the swap-move-design Unit 1 carries `supersetGroup` through the in-workout swap (finding 1 only, a minimal fix on a founder-approved direction); findings 2-4 are not fixed there. Related: OI-358 (duplicate exercise names share one GlobalKey), OI-357 (once-only hints in the active workout).
+
+Impact: finding 1 is a visible glitch; finding 2 is a silent product gap (plan learning blind to in-workout swaps); 3-4 unknown until traced.
+
+## OI-366 — create-razorpay-order has no rate limit and honours expired or exhausted promo codes: unlimited live Razorpay orders per account, an unthrottled promo-code oracle, and max_uses / valid_until enforced nowhere (validate-promo checks is_active only)
+
+- **Status**: OPEN
+- **Blocked on**: none for the code; the founder's call on the rate (proposed: 30 orders per hour per user, fail closed with 429, plus a tighter counter on unmatched promo codes) and on the promo rule (proposed: an order honours a code only while it is active, unexpired and not exhausted; the two writers keep their tolerant read so a paid amount is never stranded). A new quota key must also be added to `_shared/founder_digest_content.ts` `DIGEST_KEYS`, which `test/contracts/founder_digest_caps_mirror_test.dart` pins both ways, so the fix touches the founder digest and redeploys it too. Must land before store launch.
+- **Verified**: 2026-10-21 - by reading (hermes pass seat 4 on branch `oi341-piece-b2-door`, re-read by the coordinator): `create-razorpay-order/index.ts` calls no `consume_quota` after `auth.getUser` and returns `promo_applied` / `discount_pct` for any guessed code; its promo block only LOGS `isExpired || isExhausted` (the order gets the discount); `validate-promo/index.ts` rejects only `!is_active`; `increment_promo_used_count` (migration 012) has no ceiling. So `max_uses` and `valid_until` limit nothing anywhere. Pre-existing; OI-341 Piece B2a did not change it, but its door lets referral-trial users reach the same endpoint.
+- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `oi341-piece-b2-door`
+
+Impact: one signed-in account can create unlimited orders on the shared LIVE Razorpay account (risking Razorpay API throttling that 502s real buyers) and can guess promo codes without limit; an expired or used-up marketing code keeps working until someone flips `is_active`. Testing phase: testers only. Fix shape: see Blocked on. B2a's live steps work around it (one random 90% code, deactivated right after step 4; plan `docs/plans/oi341-piece-b2-door.md` step 0 (c)).
+
+## OI-367 — Referral reward can be farmed once the purchase door is open: no minimum paid amount (a 90%-promo payment earns 7 or 30 days) and no clawback after a refund or chargeback that leaves the row active
+
+- **Status**: OPEN
+- **Blocked on**: the founder's product call before store launch (reopen_when: store launch): a minimum net paid amount for a qualifying payment (or non-promo payments only), and/or holding the referrer's credit past the refund and chargeback window, or a clawback on Razorpay refund and dispute events. OI-340's dispute-event handling is the same mechanism.
+- **Verified**: 2026-10-21 - by reading (hermes pass seat 4 on branch `oi341-piece-b2-door`): migration 159's reconcile qualifies ANY active `monthly`/`yearly` row with a payment id, with no amount floor, and neither payment writer handles refund events (`razorpay-webhook` answers 200 "ignored" to every non-payment event). Once B2a's door is OPEN a referee can pay on day 1 of the trial, so the referrer is credited at payment + 7 days.
+- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `oi341-piece-b2-door`
+
+Impact: a ring of throwaway referee accounts, each paying a heavily discounted price (or paying full price and charging back after the vest), earns the referrer 7 days per monthly payment and 30 per yearly one. Testing phase: testers only, so no cost. At launch the cost per farmed day is the promo price, recoverable by chargeback.
 
 ## OI-368 — Coach chat: the coach replies 'Roger. Logged.' when nothing was logged (no tool call; it then asks for the sets)
 
@@ -6377,6 +6430,37 @@ Found in the founder's A12 web walk 2026-10-21 (Train tab screenshot at phone wi
 Mechanism: the expanded day row (`lib/features/train/screens/train/expanded_exercises.dart:98-121`) is `Row[Icon, SizedBox(8), Expanded(Text(name, ellipsis)), Text(detail)]`. The detail text ("3 sets 10 reps 60 kg") takes its full width first, so at 320-360 dp the name gets what is left, a few characters, and is cut with an ellipsis on one line.
 
 Fix: same plan as OI-370. The name gets its own line with no line limit and the detail wraps under it (`ExpandedExerciseLogRow`), tested at 320 dp × 1.0/1.3/2.0 text scale with long real names.
+
+## OI-372 — Weekday exercise swap has no UI: the engine takes any date, but only the AI coach reaches it (Unit 2 of the swap/move spec)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-10-21 (code read on `swap-move-design`, merged with origin/main `d483a800`)
+- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `swap-move-design`
+- **Spec**: `docs/superpowers/specs/2026-10-21-active-workout-swap-move-design.md` (Unit 2; Unit 1, the in-workout ⇄/⇅ move, was built on the same branch).
+
+**Problem.** A user cannot replace one exercise on a future planned day (for example, "Thursday's triceps
+pushdown → dips, this date only"). The Train tab's week rows and the preview sheet are read-only.
+
+**Facts (file:line on the branch above).**
+- Engine: `SwapService.swapExerciseInDay({date, fromExerciseId, toExerciseId})`
+  (`lib/core/services/swap_service.dart:411`) takes any date and writes through `upsertScheduled`
+  (per-date lock, Hive-first, `updated_at_ms`, background sync).
+- Its only callers are coach tools, via `WorkoutScheduleService.swapExerciseInDay`
+  (`workout_schedule_service.dart:258`): the exercise-swap tool with `date: today`
+  (`tool_dispatcher.dart:324`) and `modify_workout_for_injury` with each planned swap's date
+  (`tool_dispatcher.dart:653`).
+- It stamps `'swapped_via': 'ai_coach'` unconditionally (`swap_service.dart:543`); a UI caller must
+  pass its own source. `swapped_via` has no reader today (`swapped_from` does).
+- `ExerciseSwapSheet` hides ADD/REMOVE when `onAdd`/`onDelete` are null, so it can be reused as is.
+
+**Decided with the founder (2026-10-21).** Same glyphs as Unit 1 (⇄ swap); this date only; a separate
+build from Unit 1. Relates to OI-365 (one implementation per job): the UI must call the same engine
+the coach calls, not a second swap path.
+
+**Done when.** A ⇄ on each planned-day exercise row (Train preview) swaps that exercise for that date
+only through `swapExerciseInDay`, with the source stamped correctly, plus a behavioural test that
+the stored `schedule_<date>` row changes and other dates do not.
 
 ## OI-373 — Coach: one workout request can produce either a typed logSet card (APPLY) or a legacy confirm_workout_log card (CONFIRM), two write paths for the same thing
 

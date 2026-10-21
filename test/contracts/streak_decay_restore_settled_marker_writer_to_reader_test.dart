@@ -93,6 +93,10 @@ void main() {
         // PRO post-restore phase ensure (2026-10-16): builds the next phase only
         // behind the settled marker (a third deciding reader, on purpose).
         'lib/shared/services/pro_phase_advance.dart',
+        // L2 custom repair (c3e9a4, 2026-10-21): strips future planned rows
+        // only once the restore for THIS account settled (a fourth deciding
+        // reader, on purpose; re-checked before every write).
+        'lib/core/services/l2_custom_append_repair_migrator.dart',
       },
           reason: 'a new file deciding on the marker must be added here on '
               'purpose (the dev simulator only MENTIONS it, in a comment)');

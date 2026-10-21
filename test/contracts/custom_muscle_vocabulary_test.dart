@@ -4,9 +4,9 @@
 // The creation sheet's muscle chips MUST use tokens that are keys of the
 // canonical library map `_muscleToGroup` (plan_engine/muscle_groups.dart).
 // Non-canonical tokens would be silently ignored by the plan-engine
-// readers (`_muscleTokens` lowercases, `muscleGroupOf` maps — an
-// unmapped token is dropped from titration/coverage and never matches a
-// split slot).
+// readers (`_muscleTokens` lowercases for repeat-pin rebuilds, `muscleGroupOf` maps — an
+// unmapped token is dropped from titration/coverage and weak-muscle
+// detection; split-slot matching died with L2, d4b8e1).
 //
 // `canonicalMuscleTokens` is an ADDITIVE read-only getter; the map
 // content itself stays frozen (D3 scorecard baseline).

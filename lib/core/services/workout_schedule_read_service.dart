@@ -17,7 +17,9 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
 
+import 'auto_appended_custom.dart';
 import 'error_telemetry.dart';
 import 'hive_service.dart';
 import 'migrated_key.dart';
@@ -747,16 +749,53 @@ class WorkoutScheduleReadService {
   }) {
     if (!PlanEngineFlags.adherenceGateEnabled) return null;
     final stored = MigratedKey.read<Map>('last_phase_profile');
+    final weeks = _withoutAutoAppendedCustoms(getWeek(1), getWeek(2));
     return repeatPinsFrom(
       stored: stored, // user-scoped (userBox); null (absent) → fresh
-      week1: getWeek(1), // just-finished phase, variant A (weeks 1/3)
-      week2: getWeek(2), // variant B (weeks 2/4)
+      week1: weeks.week1, // just-finished phase, variant A (weeks 1/3)
+      week2: weeks.week2, // variant B (weeks 2/4)
       currentPlanGoal: FitnessGoals.of(goal).planGoal,
       equipment: equipment,
       daysPerWeek: daysPerWeek,
       newPhaseEffectiveExp:
           PlanGenerator.effectiveLevel(experienceLevel, newPhase),
     );
+  }
+
+  /// Test seam: replaces the custom-name read in [_withoutAutoAppendedCustoms]
+  /// (a throwing override proves the strip fails open). Null in production.
+  @visibleForTesting
+  static Set<String> Function()? debugRepeatPinCustomNames;
+
+  /// d4b8e1 Batch 0b: the just-finished phase's rows can still hold customs the
+  /// removed lever L2 appended, and buildPinnedDays resolves a non-library pin
+  /// through the customs, so a repeat would carry them into the next phase.
+  /// Strips them ([stripRow], the predicate shared with
+  /// L2CustomAppendRepairMigrator). Fails OPEN: on any throw the rows pass
+  /// through unstripped (the pre-repair behaviour), because a strip failure
+  /// must never abort a phase advance. Kill switch `disable_l2_custom_strip`.
+  ({List<Map<String, dynamic>> week1, List<Map<String, dynamic>> week2})
+      _withoutAutoAppendedCustoms(
+    List<Map<String, dynamic>> week1,
+    List<Map<String, dynamic>> week2,
+  ) {
+    if (!SyncFlags.l2CustomStripEnabled) return (week1: week1, week2: week2);
+    try {
+      final customs = (debugRepeatPinCustomNames ??
+          ExerciseRepository.instance.customNamesLower)();
+      if (customs.isEmpty) return (week1: week1, week2: week2);
+      bool libraryHas(String name) =>
+          ExerciseRepository.instance.hasExactNameWhere(name, isLibraryRow);
+      List<Map<String, dynamic>> strip(List<Map<String, dynamic>> week) => [
+            for (final row in week)
+              stripRow(row, customNamesLower: customs, libraryHas: libraryHas),
+          ];
+      return (week1: strip(week1), week2: strip(week2));
+    } catch (e, st) {
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'repeat_pins_custom_strip'));
+      return (week1: week1, week2: week2);
+    }
   }
 
   /// ⑧ 3-b: public entry to [_buildRepeatPins] for the graduation choice sheet's

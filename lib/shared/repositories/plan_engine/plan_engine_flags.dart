@@ -157,7 +157,7 @@ class PlanEngineFlags {
   /// ⚠ **This flag gates TWO behaviours; a reviewer must weigh both.**
   /// 1. `plan_generator.dart:140-142` — the exclusion set is sourced from the
   ///    profile instead of `{}`, so every `.isNotEmpty`-guarded drop (queryV4
-  ///    att1-4 / att5 pool / L2 custom-append / L6 swap) becomes live. Affects
+  ///    att1-4 / att5 pool / L6 swap) becomes live. Affects
   ///    only users who actually set an exclusion.
   /// 2. `plan_generator.dart:298-308` — ⑥ C2's `hasGymOverride` stops being
   ///    `null`. Per diagnose b7a4e2 the fallback predicate it defers to was
