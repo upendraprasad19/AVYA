@@ -163,6 +163,30 @@ class WardroomCopy {
   /// TalkBack announcement after a RE-OPEN.
   static const activeReopenedAnnouncementTemplate = '{exercise} re-opened';
 
+  // Card header ⇄ swap / ⇅ move (founder-approved 2026-10-21;
+  // docs/plans/active-workout-swap-move.md). TalkBack labels + tooltips.
+  static const activeSwapExerciseLabel = 'Swap exercise';
+  static const activeMoveExerciseLabel = 'Move exercise';
+
+  /// Move mode: the tag on the exercise being moved, and on each target card.
+  static const activeMovingTag = 'MOVING';
+  static const activeMoveHereUp = '↑ MOVE HERE';
+  static const activeMoveHereDown = '↓ MOVE HERE';
+
+  /// Move mode bar above the list — `{exercise}` = the one being moved.
+  static const activeMoveBarTemplate = 'Tap where {exercise} goes';
+  static const activeMoveCancel = 'Cancel';
+
+  /// After a move — `{exercise}`, `{n}` = its new 1-based position.
+  static const activeMovedTemplate = 'Moved “{exercise}” to position {n}';
+  static const activeUndo = 'UNDO';
+
+  /// First-use hint for the two icons (shown once per account).
+  static const activeSwapMoveHintTitle = 'On every exercise';
+  static const activeSwapMoveHintSwap = 'Swap — use a different exercise';
+  static const activeSwapMoveHintMove = "Move — change its place in today's order";
+  static const activeSwapMoveHintDismiss = 'Got it';
+
   /// Subline under the LOG button — `{kg}` = projected volume.
   static const activeLiftedSublineTemplate = '{kg} KG LIFTED';
 

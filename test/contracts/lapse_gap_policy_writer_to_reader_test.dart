@@ -24,7 +24,8 @@ void main() {
       if (e is! File || !e.path.endsWith('.dart')) continue;
       if (e.path.endsWith('streak_progress_service.dart')) continue;
       final n = 'resetFreezesAfterGap('.allMatches(_src(e.path)).length;
-      if (n > 0) callers.add('${e.path}:$n');
+      // Windows walks with `\`; the expectation is written with `/`.
+      if (n > 0) callers.add('${e.path.replaceAll(r'\', '/')}:$n');
     }
     expect(callers, ['lib/shared/services/pro_phase_advance.dart:2']);
   });

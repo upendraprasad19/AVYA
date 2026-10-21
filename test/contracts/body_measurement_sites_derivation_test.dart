@@ -113,9 +113,10 @@ void main() {
     for (final f in Directory('lib').listSync(recursive: true)) {
       if (f is! File || !f.path.endsWith('.dart')) continue;
       scanned++;
-      if (f.path == _registryPath) continue;
+      final path = f.path.replaceAll(r'\', '/'); // Windows walks with `\`
+      if (path == _registryPath) continue;
       for (final lit in multiSiteLiterals(f.readAsStringSync())) {
-        offenders.add('${f.path}: ${lit.replaceAll(RegExp(r'\s+'), ' ')}');
+        offenders.add('$path: ${lit.replaceAll(RegExp(r'\s+'), ' ')}');
       }
     }
     expect(scanned, greaterThan(100), reason: 'the walk must see lib/');
