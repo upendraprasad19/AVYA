@@ -88,7 +88,7 @@ void main() {
       // given — so the selection is pinned at the call argument.
       expect(sheetSrc.contains('primaryMuscles: _resolvedMuscles'), isTrue,
           reason: 'the hardcoded empty list was the writer half of the bug — '
-              'the plan-generator supplement path ('
+              'the plan-generator supplement path (the since-removed '
               '_eligibleCustomExercises) never saw a custom');
       expect(sheetSrc.contains("'primary_muscles': <String>[]"), isFalse,
           reason: 'the empty-list hardcode must not return');

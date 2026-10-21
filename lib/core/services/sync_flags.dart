@@ -210,6 +210,22 @@ class SyncFlags {
     }
   }
 
+  /// Kill switch for the L2 custom-exercise strip (d4b8e1 Batch 0b): the
+  /// one-time `L2CustomAppendRepairMigrator`, the repeat-pin strip in
+  /// `WorkoutScheduleReadService._buildRepeatPins`, and the `custom_origin`
+  /// stamp `ExerciseSelector._buildCustomExercise` puts on a pinned custom.
+  /// Opt-OUT polarity: `configBox['disable_l2_custom_strip'] = true` skips all
+  /// three, which is byte-identical to the build before the repair. With the
+  /// box not open the strip stays ON.
+  static bool get l2CustomStripEnabled {
+    try {
+      return HiveService.instance.configBox.get('disable_l2_custom_strip') !=
+          true;
+    } catch (_) {
+      return true;
+    }
+  }
+
   /// Kill switch for the per-account streak-decay gate (diagnose b4e7a1).
   /// Opt-OUT polarity: `configBox['disable_streak_reckon_user_gate'] = true`
   /// makes `WorkoutRepository.reckonStreakDecayAndPersist` use the pre-fix

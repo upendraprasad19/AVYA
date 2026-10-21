@@ -12,6 +12,12 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### coach_write_claim_wording — what the coach is taught about saving, and a log-only label of what it said. (1 bugs)
 - 2026-10-21 90a784 — Founder's A12 web walk 2026-10-21 (app.icanbefitter.com, ai_coach_interactions read-only): at 13:19:59 "log bench press" got "Roger. Logged. I need the specifics…" with nothing proposed or written…
 
+### generator_no_custom_autoadd (1 bugs)
+- 2026-10-21 d4b8e1 — Founder (web app, logged in as upendraprasad19, 2026-10-21): today's "Upper push + core" workout listed 14 exercises / 56 sets — 8 library picks plus 6 of his own custom exercises (tuck planche,…
+
+### l2_custom_autoappend_repair (1 bugs)
+- 2026-10-21 c3e9a4 — After Batch 0a (d4b8e1) stopped the generator auto-adding customs, plans generated BEFORE it still carry them. Cloud user_progress.plan_json.schedules, queried 2026-10-21 for every user with a custom…
+
 ### trial_purchase_door — an order is created only when the subscription read SUCCEEDED and the door's rule allows it. (1 bugs)
 - 2026-10-21 b95d61 — `create-razorpay-order`'s double-payment guard (APK Test #12.2 / Task #6, added after the founder paid four times in 24 h on 2026-05-06) read the caller's latest active unexpired `subscriptions` row…
 
@@ -1608,6 +1614,8 @@ rather than a Hive box. (1 bugs)
 |---|---|---|---|---|
 | 2026-10-21 | c3e7a1 | A CAPTURED Razorpay payment whose amount matches no plan price answered 400 in both payment writers and wrote no subscriptions row and no alert. The usual cause is a promo code deleted or its… | payment_record_failed_alert — every captured payment that a writer cannot record pages the founder. | supabase/functions/razorpay-webhook/index_test.ts |
 | 2026-10-21 | 90a784 | Founder's A12 web walk 2026-10-21 (app.icanbefitter.com, ai_coach_interactions read-only): at 13:19:59 "log bench press" got "Roger. Logged. I need the specifics…" with nothing proposed or written… | coach_write_claim_wording — what the coach is taught about saving, and a log-only label of what it said. | supabase/functions/_shared/write_claim_prompt_test.ts |
+| 2026-10-21 | d4b8e1 | Founder (web app, logged in as upendraprasad19, 2026-10-21): today's "Upper push + core" workout listed 14 exercises / 56 sets — 8 library picks plus 6 of his own custom exercises (tuck planche,… | generator_no_custom_autoadd | test/contracts/l2_no_custom_autoadd_behavioral_test.dart |
+| 2026-10-21 | c3e9a4 | After Batch 0a (d4b8e1) stopped the generator auto-adding customs, plans generated BEFORE it still carry them. Cloud user_progress.plan_json.schedules, queried 2026-10-21 for every user with a custom… | l2_custom_autoappend_repair | test/contracts/l2_custom_append_repair_migrator_test.dart |
 | 2026-10-21 | b95d61 | `create-razorpay-order`'s double-payment guard (APK Test #12.2 / Task #6, added after the founder paid four times in 24 h on 2026-05-06) read the caller's latest active unexpired `subscriptions` row… | trial_purchase_door — an order is created only when the subscription read SUCCEEDED and the door's rule allows it. | supabase/functions/create-razorpay-order/index_test.ts |
 | 2026-10-20 | c7d2a9 | Prevention record, not a field report. OI-356 asked for an UNDO toast after the one-LOG-per-exercise LOG and assigned it to the snackbar staleness class (b4e7f1: the swap-undo SnackBar outlived… | active_workout_set_logging | test/contracts/active_workout_set_logging_behavioral_test.dart |
 | 2026-10-20 | e3a6c1 | Founder (2026-10-20, OI-361): "zero sets logged should not be allowed". Tapping COMPLETE in the Active Workout FINISH dialog with no saveable set still ran WorkoutWriteService.markCompleted (the… | workout_completion_status | test/contracts/log_exercise_flip_behavioral_test.dart |

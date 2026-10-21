@@ -147,6 +147,10 @@ class PlannedExercise {
   // through copyWith so the superset pairer (stage 6, AFTER periodization) doesn't wipe it.
   final int? workingSets;
   final String? workingReps; // matches `reps` (String; may be a range like "8-12")
+  // c3e9a4: provenance of a CUSTOM exercise the generator emitted ('repeat_pin'
+  // from buildPinnedDays), so the L2 repair predicate keeps a deliberate custom.
+  // Null for every library exercise. Threaded through copyWith like workingSets.
+  final String? customOrigin;
 
   const PlannedExercise({
     required this.exerciseId,
@@ -170,6 +174,7 @@ class PlannedExercise {
     this.repRange,
     this.workingSets,
     this.workingReps,
+    this.customOrigin,
   });
 
   PlannedExercise copyWith({
@@ -210,6 +215,7 @@ class PlannedExercise {
       repRange: repRange ?? this.repRange,
       workingSets: workingSets ?? this.workingSets,
       workingReps: workingReps ?? this.workingReps,
+      customOrigin: customOrigin,
     );
   }
 
@@ -235,6 +241,7 @@ class PlannedExercise {
         if (repRange != null) 'rep_range': repRange,
         if (workingSets != null) 'working_sets': workingSets,
         if (workingReps != null) 'working_reps': workingReps,
+        if (customOrigin != null) 'custom_origin': customOrigin,
       };
 }
 
