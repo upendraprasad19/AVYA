@@ -34,9 +34,29 @@ export type EnvReader = (name: string) => string | undefined;
 
 const defaultEnv: EnvReader = (name) => Deno.env.get(name);
 
-/** The ONE switch rule (shared with the purchase door of Piece B2): exactly "true". */
+/**
+ * The ONE switch rule for every payment secret: the variable is exactly the
+ * string "true". " true", "TRUE", "1" and absent are all OFF (OI-341 Piece B2a,
+ * plan 2.1), so the two switches below cannot drift to different readings.
+ */
+export function isEnvExactlyTrue(name: string, env: EnvReader = defaultEnv): boolean {
+  return env(name) === "true";
+}
+
+/** The writers' stacking switch. */
 export function isStackingEnabled(env: EnvReader = defaultEnv): boolean {
-  return env(STACKING_ENABLE_ENV) === "true";
+  return isEnvExactlyTrue(STACKING_ENABLE_ENV, env);
+}
+
+/**
+ * The purchase door's switch (`create-razorpay-order`, OI-341 Piece B2a plan
+ * 2.2): a `referral_trial` user may create an order only when this AND
+ * `isStackingEnabled` are on in the door's own isolate.
+ */
+export const TRIAL_PURCHASE_ENABLE_ENV = "ENABLE_TRIAL_PURCHASE";
+
+export function isTrialPurchaseEnabled(env: EnvReader = defaultEnv): boolean {
+  return isEnvExactlyTrue(TRIAL_PURCHASE_ENABLE_ENV, env);
 }
 
 /**
