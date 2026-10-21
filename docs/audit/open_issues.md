@@ -6145,7 +6145,7 @@ How to use: build once from the last merged `main`, install on the phone, sign i
 - A9 PRO phase ensure, Piece A (PR #120, merged be0d8f89): the founder's device check of the build that carries it (the plan names it before the two kill switches are removed). The exact steps are in `docs/plans/` for that branch and the memory note `project_pro_phase_ensure_piece_a_2026_10_16`; no ledger row spells them out, so write them into this row before the walk.
 - A10 `referral-unit-c-client` U2 (Unit C, merged PR #129 7266ea93): (1) as a referrer, Profile > Invite Friends shows the counters block (friends joined, subscribed, PRO days earned, pending) and no friend names; (2) on the first open after an install no credit notice appears (the first run records a silent baseline); after a new credit lands, the next open shows the Home referral credit slot, and a dismissal survives a restart; (3) in "GOT A CODE?", an expired, own or already-redeemed code (and a friend who has paid) shows the server's specific reason, not "Could not apply code"; a valid code shows "+7 days" only once the subscription reads back; (4) the friend disclosure line is on all four code-entry surfaces (welcome, sign-in, the apply sheet, the invite sheet). See PX in section B for the API half.
 - A11 `referral-unit-c-client` W2X (OI-349): on a short phone (about 640 dp tall) set the system font to the largest size and open the onboarding welcome screen; note whether the CTA column is clipped. Under the test font it overflowed 28 px BEFORE Unit C; the real font is unmeasured. The founder then decides whether 2x on that screen is supported.
-- Not yet a check: `active-workout-log-exercise` (PR #128) ships dark behind `enable_log_exercise_button`, which only a DEBUG build's dev panel can set; its device check is part of the flip after U1b (OI-356), see `docs/ship_dark_pending_review.yaml`.
+- A12 `log-exercise-flip` FLIPPED-BUILD-CHECK (flip precondition 3, amended by the founder 2026-10-20 to run after the merge on the release build; one LOG per exercise is now the default). Accounts: a NEW account (blank blocks, set 1 mirrors faded, LOG, UNDO, `All exercises logged.`, gold FINISH, receipt) and a RETURNING account (faded weights, normal reps, `· PREFILLED` (does it read as a total or a weight?); a tap selects all on Gboard and on the Samsung keyboard; no keyboard flicker on the first keystroke into a faded field; typing one field turns it normal; a WELCOME BACK prefill is faded). RE-OPEN: after more than 5 s; a double tap on LOGGED; on the last exercise; in a superset during the reveal scroll; while another exercise's UNDO toast shows; then `+`/`−`; then FINISH without re-LOG (the re-opened line names it; COMPLETE, then check the receipt); tap LOG on the last exercise, then again at about 1 s and 2 s. FINISH: `+` after LOG (`Partly logged`); one exercise skipped (calm line); nothing logged (COMPLETE disabled, the block line readable at the largest font with the keyboard up, OFF and LOG; CONTINUE and ✕ CANCEL work); all sets warm-up (0%, no crash); a warm-up flagged (header, percent and dialog agree). Coach chat: a workout draft with no sets cannot be confirmed; DISCARD works. Navigation: leave + RESUME keeps logged, typed-unlogged and fade; scroll far away and back with typed values and with a faded value cleared; typing latency in a faded field on a low-end phone; kill the app (the workout is gone, expected); review mode shows no re-open text. Types: timed, cardio (decimal minutes, then scroll away and back), distance, bodyweight, weighted_bodyweight, custom; swap/add/remove then LOG. Environment: a second account on the same device; the coach mid-workout; TalkBack (double-tap activates LOG, LOGGED and UNDO; the LOG toast is read; RE-OPEN announces `<name> re-opened`; a field announces its unit; a faded field says `Prefilled value`; editing a logged set inside the 5 s toast re-announces it, expected); the FINISH duration row on a 360 dp phone at 1.0 font (one line); the largest font on a 320 dp phone (card and FINISH dialog; also 1.3x on 360 dp); bright-light legibility of faded vs normal; web at phone width and a smoke on app.icanbefitter.com right after the deploy (`vercel.json` builds `main`, so web testers see the flip first).
 
 ### B. Signed-in session or JWT (dev build, test account or the phone)
 
@@ -6166,7 +6166,7 @@ How to use: build once from the last merged `main`, install on the phone, sign i
 
 ### Flips (OIs and rows that close or unblock when their checks are recorded)
 
-OI-312 after A4; OI-307 after A4 and C1/B4 (D1-D5); OI-308 after B4 (D1); OI-296 after C1; OI-269 after C1 and the D6 decision; OI-284 and OI-303 after A5 (OI-303 then deletes the `disable_completed_title_heal` kill switch); OI-345 after A3 (then removes the measurements OFF path); OI-336 after A10 and B1; OI-349 gets the founder's decision after A11; the `referral-hardening-migration-160` row PX after B1.
+OI-312 after A4; OI-307 after A4 and C1/B4 (D1-D5); OI-308 after B4 (D1); OI-296 after C1; OI-269 after C1 and the D6 decision; OI-284 and OI-303 after A5 (OI-303 then deletes the `disable_completed_title_heal` kill switch); OI-345 after A3 (then removes the measurements OFF path); the LOG-per-exercise OFF-path removal OI after A12; OI-336 after A10 and B1; OI-349 gets the founder's decision after A11; the `referral-hardening-migration-160` row PX after B1.
 
 ### Decided 2026-10-17, so NOT a check
 
@@ -6249,13 +6249,13 @@ Fix options (to be planned): compute the count from `ref.read(activeWorkoutProvi
 ## OI-357 — Active Workout U2: per-set last values, new-user weight mirror, faded prefill and once-only hints
 
 - **Status**: OPEN
-- **Blocked on**: OI-356 landing and the flag flip; founder sequenced this as batch 3 (2026-10-19)
+- **Blocked on**: the flip batch landing (branch `log-exercise-flip`; OI-356 has landed); founder sequenced this as batch 3 (2026-10-19)
 - **Verified**: never
 - **Identified**: 2026-10-18 · filed via mint_oi.sh from branch `active-workout-log-exercise`
 
 Source: batch 3 of `docs/plans/active-workout-log-exercise.md` (founder 2-+-1 split, 2026-10-19), pre-decisions in its section 9.
 
-Scope (post-flip polish): each set's own last values for returning users, mildly faded (about 62% parchment) prefilled weights with typed/edited solid gold (faded values count on LOG), once-only hints via `MigratedKey` in `UserConfigMigrator.userScopedKeys`, non-superset auto-scroll. The new-user mirror MECHANISM moved to OI-356.
+Scope (post-flip polish): each set's own last values for returning users, once-only hints via `MigratedKey` in `UserConfigMigrator.userScopedKeys`, non-superset auto-scroll. The new-user mirror MECHANISM moved to OI-356. The faded prefill moved to the flip batch (`docs/plans/log-exercise-flip.md` §2, 2026-10-20: faded vs normal only, no gold for typed values, founder decision) and shipped there.
 
 Impact: NOT a flip precondition (founder 2026-10-19); polish after the flag is on.
 
@@ -6285,6 +6285,43 @@ Fix: move the ownership check above the capture call. Not done in Piece B1 becau
 - **Identified**: 2026-10-20 · filed via mint_oi.sh from branch `oi341-piece-b-door`
 
 Fix: log `code` / `name` and ids only (same rule as the CLAUDE.md pitfall on Telegram errors carrying the bot token). Not done in Piece B1 because it changes the OFF path that B1 keeps byte-identical to `origin/main`. Catastrophic tier.
+
+## OI-362 — Active Workout: remove the per-set (OFF) path and the enable_log_exercise_button kill switch once A12 passes
+
+- **Status**: OPEN
+- **Blocked on**: OI-348 row A12 (the release-build device walk of the flip); founder decision 2026-10-20: keep the OFF path as the kill switch until then
+- **Verified**: never
+- **Identified**: 2026-10-20 · filed via mint_oi.sh from branch `log-exercise-flip`
+
+The flip batch (`docs/plans/log-exercise-flip.md`, branch `log-exercise-flip`) made one LOG per exercise the default: `LogExerciseFlags.logExerciseButtonEnabled` reads ON unless a stored `false` (written only by the debug dev panel) kills it. The old per-set path stays reachable behind that `false`, so a release build has no switch and a rollback is a revert plus a new build (web: Vercel "promote previous deployment"). `docs/ship_dark_pending_review.yaml` keeps the flag's entry until this closes (§4.6 step 4).
+
+To do once A12 passes: delete the per-set branches in `exercise_card.dart` (`interactiveCheck`, the check-tile `onCheck`, `_captureSetValues` on toggle, the `Tap to edit values` hint), `toggleSet` if no other caller remains, the `logMode` branches in `screen.dart`, `header.dart` and `finish_dialog.dart` (keep the OI-361 block), the flag file and its dev-panel row; repoint the OFF-path tests (`log_exercise_card_test.dart` "flag OFF" group, P6, U-D5, U-E2, the flags test); move the ship-dark entry to `resolved:`.
+
+## OI-363 — Active Workout: the FINISH/CANCEL button row overflows sideways at 320 dp with 2x system text
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `log-exercise-flip`
+
+Found by the flip batch's dialog layout tests (`test/features/train/log_exercise/log_exercise_finish_dialog_test.dart` U-D3 and the blocked-at-320 dp U-E2 case), which lay out the end of the Active Workout list first and take this report so they check only the dialog. Founder confirmed it on screen 2026-10-21 ("the workout finish cancel button overloads sideways"). Pre-existing: not caused by the flip batch.
+
+Mechanism: `WardButton` (`lib/shared/widgets/wardroom/ward_button.dart:96`) lays its label out in a `Row` whose `Text` is neither `Flexible` nor allowed to wrap. At 320 dp with 2.0 system text, the uppercase label with +2.5 letter-spacing is wider than the button. The test reports two overflows (85 px and 174 px) at the Active Workout list end (`lib/features/train/screens/active_workout/screen.dart`: the `+ ADD EXERCISE`, `✓ FINISH WORKOUT` and `✕ CANCEL` `WardButton`s). Which label owns which overflow is not yet pinned. Release builds clip the label silently, and the debug build paints the overflow stripe.
+
+To do:
+- Make the label fit inside `WardButton`: `Flexible` + `softWrap`/`textAlign: center` (wrap to two lines), or `FittedBox(fit: BoxFit.scaleDown)`. Pick one with the Wardroom soul (`lib/shared/widgets/wardroom/CLAUDE.md`). It is a shared primitive with about 60 call sites under `lib/`, so check the goldens (`test/widgets/wardroom/`) and the `fullWidth: false` (`MainAxisSize.min`) callers, where `Flexible` needs a bounded parent.
+- Regression test: `pumpScreen` + `scrollToFinish` from `test/features/train/log_exercise/card_harness.dart` at 320 dp × 2.0, asserting `tester.takeException()` is null. Then drop the `takeException()` workaround in the two dialog tests above.
+
+## OI-364 — Remove the disable_lapse_gap_policy kill switch (client Hive key + server DISABLE_LAPSE_GAP_POLICY env) and its old code paths after the PRO gap policy passes the device check
+
+- **Status**: OPEN
+- **Blocked on**: founder device check of the PRO gap policy (Piece B, PR #126, merge 3c87b362) in a `/build-apk` build; removal also needs the founder's go to redeploy `evaluate-rank-promotions`
+- **Verified**: 2026-10-21 - by code read: only READERS of the key exist (`lib/core/utils/gap_policy.dart` `lapseGapPolicyEnabled`; `workout_repository.dart` streak walk ~:407 and completion rate ~:527; `ai_snapshot_builder.dart` ~:1354; `workout_schedule_read_service.dart` ~:2066; `streak_progress_service.dart` ~:324; server `_shared/rank_engine.ts` ~:182 env `DISABLE_LAPSE_GAP_POLICY`). No production writer sets the client key.
+- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `kill-switch-removal-oi`
+
+Source: CLAUDE.md section 4.6 step 4 - an old code path kept for later removal is tracked on the board, not as an intention. Plan: `docs/plans/2026-10-18-pro-gap-policy-and-streak.md` (Kill switch section).
+
+Fix: once the device check passes, delete the key, the getter, every `policyEnabled` / `lapseGapPolicyEnabled` branch (old paths: start date `max(today, plan_end + 1)`, streak skip-at-zero, completion rate ignoring blank days, no freeze zero, no `plan_status`), the `countBlankDays` opt-in and env check in `rank_engine.ts` / `evaluate-rank-promotions`, and the kill-switch tests (`lapse_gap_policy_behavioral_test.dart`, `lapse_gap_freeze_reset_advance_test.dart`, `gap_policy_test.dart`, `rank_engine_blank_days_test.ts`). Default-live policy, so the full x2 plan review plus B-pass applies to the removal. Redeploy `evaluate-rank-promotions` (founder go); `ai-proxy` does not read the switch.
 
 ## OI-365 — Coach tools and app features do the same jobs through separate code (first proven case: exercise swap): map every coach tool to its app twin and consolidate to one implementation per job
 

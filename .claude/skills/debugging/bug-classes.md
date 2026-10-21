@@ -1758,3 +1758,22 @@ added, false of the flip being performed.
 - **Test shape:** behavioural, one per outcome the repository returns (a 4xx with a reason, a replay, a fresh success) pumped through each screen; plus a presence pin that the screen does not call the function.
 - **Prior incidents:** d2b9e6 (the first fix), 2.1 (writer/reader field drift), 2.107.
 - **Regression test:** `test/contracts/referral_unit_c_surfaces_test.dart` (group InviteFriendsSheet), `test/contracts/referral_repository_only_test.dart`, `test/contracts/referral_redeem_success_contract_test.dart` (diagnose `a7d3c1`).
+
+
+### 2.109 A completion writer that never asks whether there is anything to complete, and a guard added to one caller of it but not the others (NEW 2026-10-20)
+
+- **Telltale:** "Workout Complete!" with `0 SETS LOGGED`; a streak, badge or plan-completion credit for a session where nothing was saved. The save loop skips every empty unit (`continue`) and the completion call after the loop runs unconditionally.
+- **Root-cause shape:** "nothing saved" and "something saved" are indistinguishable to the code after the loop. The same shape sat in a second writer (`submitWorkoutDraft`: `if (sets.isEmpty) continue;` then `markCompleted`), which the first plan called safe without reading it.
+- **Fix pattern:** extract the save loop's skip conditions into ONE predicate (`wouldSaveSet` / `saveableSetIndexes` / `hasSaveableSet`; `draftExerciseSets` / `draftHasLoggableSet`), make the save iterate it, refuse on its first line when it is empty, and drive the UI's disabled state from the same predicate. Before calling any other caller "untouched", read every caller of the completion writer.
+- **Test shape:** the REAL writer, awaited, through `setUpHiveForTests`: zero / warm-up-only / no-values sessions write no `wlog_`/`exlog_` key and leave the counters, plus a one-saveable control that completes. A timer that reads `DateTime.now()` never ticks in fakeAsync: assert `fa.periodicTimerCount` to pin that the guard runs before the timer cancel.
+- **Prior incidents:** none recorded (OI-361, plan review R7-02 for the second caller).
+- **Regression test:** `test/contracts/log_exercise_flip_behavioral_test.dart` (U-E1), `test/contracts/zero_set_completion_behavioral_test.dart` (U-E4/U-E5), `test/features/train/log_exercise/log_exercise_finish_dialog_test.dart` (diagnose `e3a6c1`).
+
+### 2.110 `TextField.selectAllOnFocus` does not select on a user TAP; plan Flutter focus behaviour only after a spike (NEW 2026-10-20)
+
+- **Telltale:** a plan says "a tap on the prefilled value selects it, so typing replaces it", and on the device the caret lands mid-number and typing appends.
+- **Root-cause shape:** the tap's focus change is flagged internal, and the tap's own selection runs after focus, so `selectAllOnFocus` never wins on a tap (Flutter 3.41.4 source, flip plan R3A-01).
+- **Fix pattern:** `TextField.onTap` sets `TextSelection(baseOffset: 0, extentOffset: text.length)`; it runs after the tap's selection. Consecutive taps inside the double-tap window do not call `onTap`.
+- **Test shape:** a real `tester.tap` on the field, then read `controller.selection`; a second tap after `pump(600 ms)`.
+- **Prior incidents:** none.
+- **Regression test:** `test/features/train/log_exercise/log_exercise_card_flip_test.dart` (P3).

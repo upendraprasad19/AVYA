@@ -264,14 +264,15 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
     _toast('enable_hold_weeks = ${next ? 'ON' : 'OFF'}');
   }
 
-  /// One LOG per exercise (default OFF, ship dark). The Active Workout screen
-  /// reads the flag on every build, so the next timer tick picks it up.
+  /// One LOG per exercise (default ON since the flip batch; this toggle stores
+  /// `false` as the debug-build kill switch). The Active Workout screen reads
+  /// the flag on every build, so the next timer tick picks it up.
   Future<void> _toggleLogExerciseButton() async {
     final next = !LogExerciseFlags.logExerciseButtonEnabled;
     await HiveService.instance.configBox.put(LogExerciseFlags.key, next);
     if (!mounted) return;
     setState(() {});
-    _toast('${LogExerciseFlags.key} = ${next ? 'ON' : 'OFF'}');
+    _toast('${LogExerciseFlags.key} = ${next ? 'ON' : 'KILLED'}');
   }
 
   /// L2b Landing B: the flag of the body-measurements surfaces (default ON since
@@ -493,8 +494,9 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
             children: [
               _kv('enable_hold_weeks',
                   PlanEngineFlags.holdWeeksEnabled ? 'ON' : 'off'),
+              // DEFAULT ON since the flip batch: a stored `false` means killed.
               _kv(LogExerciseFlags.key,
-                  LogExerciseFlags.logExerciseButtonEnabled ? 'ON' : 'off'),
+                  LogExerciseFlags.logExerciseButtonEnabled ? 'ON' : 'KILLED'),
               // DEFAULT ON since 2026-10-16: a stored `false` means killed.
               _kv('enable_body_measurements',
                   MeasurementFlags.bodyMeasurementsEnabled ? 'ON' : 'KILLED'),
