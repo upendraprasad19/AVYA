@@ -1,6 +1,7 @@
 /// UX class — drives which widget renders the confirmation.
 enum ConfirmationClass {
-  /// Inline card, 5s auto-confirm. For low-stakes reversible actions.
+  /// Inline card, explicit APPLY (the 5s countdown was removed, B-4). For
+  /// low-stakes reversible actions.
   trivial,
 
   /// Inline card, explicit confirm only (no countdown). For mid-stakes actions

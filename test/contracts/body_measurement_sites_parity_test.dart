@@ -17,11 +17,15 @@ import 'package:icanbefitter/core/services/sync/measurement_push_rules.dart';
 /// Columns of `body_measurements` that are not sites.
 const _notSites = {'id', 'user_id', 'date', 'notes', 'created_at'};
 
-Set<String> _promptList(String path) {
+/// Every `Measurement types:` list in [path]. Since coach-log-truth both
+/// Edge Function ICBF blocks (ai-proxy and ai-media-proxy) live in
+/// `_shared/write_claim_prompt.ts`, so the file must hold EXACTLY two.
+List<Set<String>> _promptLists(String path) {
   final text = File(path).readAsStringSync();
-  final m = RegExp(r'Measurement types: ([a-z, ]+?)\.').firstMatch(text);
-  expect(m, isNotNull, reason: '$path lost its "Measurement types:" line');
-  return m!.group(1)!.split(',').map((s) => s.trim()).toSet();
+  return RegExp(r'Measurement types: ([a-z, ]+?)\.')
+      .allMatches(text)
+      .map((m) => m.group(1)!.split(',').map((s) => s.trim()).toSet())
+      .toList();
 }
 
 void main() {
@@ -54,8 +58,13 @@ void main() {
   });
 
   test('Dart constant == the Edge Function prompt lists (as sets)', () {
-    expect(_promptList('supabase/functions/ai-proxy/index.ts'), dart);
-    expect(_promptList('supabase/functions/ai-media-proxy/index.ts'), dart);
+    final lists =
+        _promptLists('supabase/functions/_shared/write_claim_prompt.ts');
+    expect(lists, hasLength(2),
+        reason: 'the ai-proxy block and the ai-media-proxy block');
+    for (final l in lists) {
+      expect(l, dart);
+    }
   });
 
   test('Dart constant == the sites in a pushed payload for a full record', () {

@@ -9,6 +9,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### payment_record_failed_alert — every captured payment that a writer cannot record pages the founder. (1 bugs)
 - 2026-10-21 c3e7a1 — A CAPTURED Razorpay payment whose amount matches no plan price answered 400 in both payment writers and wrote no subscriptions row and no alert. The usual cause is a promo code deleted or its…
 
+### coach_write_claim_wording — what the coach is taught about saving, and a log-only label of what it said. (1 bugs)
+- 2026-10-21 90a784 — Founder's A12 web walk 2026-10-21 (app.icanbefitter.com, ai_coach_interactions read-only): at 13:19:59 "log bench press" got "Roger. Logged. I need the specifics…" with nothing proposed or written…
+
 ### trial_purchase_door — an order is created only when the subscription read SUCCEEDED and the door's rule allows it. (1 bugs)
 - 2026-10-21 b95d61 — `create-razorpay-order`'s double-payment guard (APK Test #12.2 / Task #6, added after the founder paid four times in 24 h on 2026-05-06) read the caller's latest active unexpired `subscriptions` row…
 
@@ -1604,6 +1607,7 @@ rather than a Hive box. (1 bugs)
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
 | 2026-10-21 | c3e7a1 | A CAPTURED Razorpay payment whose amount matches no plan price answered 400 in both payment writers and wrote no subscriptions row and no alert. The usual cause is a promo code deleted or its… | payment_record_failed_alert — every captured payment that a writer cannot record pages the founder. | supabase/functions/razorpay-webhook/index_test.ts |
+| 2026-10-21 | 90a784 | Founder's A12 web walk 2026-10-21 (app.icanbefitter.com, ai_coach_interactions read-only): at 13:19:59 "log bench press" got "Roger. Logged. I need the specifics…" with nothing proposed or written… | coach_write_claim_wording — what the coach is taught about saving, and a log-only label of what it said. | supabase/functions/_shared/write_claim_prompt_test.ts |
 | 2026-10-21 | b95d61 | `create-razorpay-order`'s double-payment guard (APK Test #12.2 / Task #6, added after the founder paid four times in 24 h on 2026-05-06) read the caller's latest active unexpired `subscriptions` row… | trial_purchase_door — an order is created only when the subscription read SUCCEEDED and the door's rule allows it. | supabase/functions/create-razorpay-order/index_test.ts |
 | 2026-10-20 | c7d2a9 | Prevention record, not a field report. OI-356 asked for an UNDO toast after the one-LOG-per-exercise LOG and assigned it to the snackbar staleness class (b4e7f1: the swap-undo SnackBar outlived… | active_workout_set_logging | test/contracts/active_workout_set_logging_behavioral_test.dart |
 | 2026-10-20 | e3a6c1 | Founder (2026-10-20, OI-361): "zero sets logged should not be allowed". Tapping COMPLETE in the Active Workout FINISH dialog with no saveable set still ran WorkoutWriteService.markCompleted (the… | workout_completion_status | test/contracts/log_exercise_flip_behavioral_test.dart |
