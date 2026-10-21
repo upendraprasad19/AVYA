@@ -235,9 +235,16 @@ pending:
     branch: active-workout-log-exercise
     build_commit: 344cd2d1
     build_date: 2026-10-19
-    flip_reviewed: false
-    flip_commit: null
+    flip_reviewed: true
+    flip_commit: null  # stamped after the flip batch lands (branch log-exercise-flip)
+    flip_review_record: docs/plan-reviews/log-exercise-flip.md
     note: >
+      FLIPPED to default ON in the flip batch (branch log-exercise-flip,
+      2026-10-20): plan docs/plans/log-exercise-flip.md, 7 context-blind review
+      rounds (converged) plus the B-pass. The entry stays here (not resolved:)
+      until the OFF path is removed: a stored `false` is still the debug kill
+      switch, and the old per-set path stays reachable behind it. Its removal
+      is the OI minted in that batch.
       U1a of docs/plans/active-workout-log-exercise.md: one LOG button + a
       same-row sets stepper per exercise instead of per-set check tiles. NOT the
       lighter 1-round tier: the build plan got 5 context-blind review rounds
@@ -262,6 +269,9 @@ pending:
 #      there; diagnose c7d2a9). Met once that branch is merged to main.
 #   2. Full x2 plan review on the flip commit + /code-review B-pass accepted.
 #   3. Device check on a DEBUG build (the dev toggle is kDebugMode-only).
+#      AMENDED by the founder 2026-10-20 (flip batch): the device check runs
+#      AFTER the merge, on the release build, as OI-348 row A12; the ledger row
+#      FLIPPED-BUILD-CHECK (blocked_on_user) tracks it.
 #   4. The edit-after-LOG test (validated capture on every keystroke) green.
 #   5. Founder's explicit go on the flip.
 

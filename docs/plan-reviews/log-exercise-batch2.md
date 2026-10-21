@@ -6,6 +6,7 @@ review_rounds: 4
 ground_truth_verified: true
 verdict: converged
 bpass: accepted
+bpass_review: docs/reviews/800af61c829a-review.md
 ---
 
 # Plan-review record: Active Workout one-LOG-per-exercise, batch 2 (OI-356)
@@ -89,7 +90,7 @@ test-20 host hit-testing and long-name layout; `logToastText` bounds + shared `f
 record suppression during a save moved into pure `undoRecordFor`; two wording fixes; 18b fixture and seed-index null.
 Verdict: converged after four rounds (review #2..#4 each ran on the post-previous-round plan, §4.12.1).
 
-## B-pass (`/code-review`, fresh read-only Sonnet reviewer, staged diff `8812992b4995`): 1 P0, 3 P2, all accepted and fixed
+## B-pass (`/code-review`, fresh read-only Sonnet reviewer, staged diff `8812992b4995`): 1 P0, 3 P2, all fixed (founder triage pending)
 P0: the list host swapped between a bare `ListView` and a `Stack`, rebuilding the list on every toast show and
 clear (scroll reset, typed values lost in disposed cards). Round 2 had confirmed the plan's always-present Stack;
 the built code did not match it and no test mounted the screen. P2: the first keystroke after a warm-up move only

@@ -236,6 +236,34 @@ class ConversationalLogHandler {
   }
 }
 
+/// The sets [submitWorkoutDraft] writes for one draft exercise: only sets
+/// that carry something (weight, reps or a duration above 0), so an all-blank
+/// set is never written as a 0×0 set. Cardio is one synthetic set carrying the
+/// total duration, when it has a duration or a distance (B-pass finding 1).
+List<ExerciseSet> draftExerciseSets(DraftExercise exercise) {
+  if (exercise.loggingType == 'cardio') {
+    final mins = exercise.durationMins ?? 0;
+    if (mins <= 0 && (exercise.distanceKm ?? 0) <= 0) return const [];
+    return [ExerciseSet(weightKg: 0, reps: 0, durationSec: mins * 60)];
+  }
+  return [
+    for (final s in exercise.sets)
+      if ((s.weightKg ?? 0) > 0 ||
+          (s.reps ?? 0) > 0 ||
+          (s.durationSecs ?? 0) > 0)
+        ExerciseSet(
+          weightKg: s.weightKg ?? 0,
+          reps: s.reps ?? 0,
+          durationSec: s.durationSecs,
+        ),
+  ];
+}
+
+/// OI-361: true when [submitWorkoutDraft] would write at least one set. The
+/// confirm card and the submit share it.
+bool draftHasLoggableSet(WorkoutDraft draft) =>
+    draft.exercises.any((e) => draftExerciseSets(e).isNotEmpty);
+
 /// Submit a confirmed workout draft to Hive workoutBox.
 ///
 /// Called by [WorkoutLogConfirmCard] on user confirmation.
@@ -264,24 +292,12 @@ Future<void> submitWorkoutDraft(WorkoutDraft draft, WidgetRef ref) async {
     return sum;
   });
 
+  // OI-361: a draft with no set to write completes nothing. The card disables
+  // CONFIRM on the same predicate; this is the defence for any other caller.
+  if (!draftHasLoggableSet(draft)) return;
+
   for (final exercise in draft.exercises) {
-    final sets = <ExerciseSet>[];
-    if (exercise.loggingType == 'cardio') {
-      // Cardio: single synthetic set carrying total duration + distance.
-      sets.add(ExerciseSet(
-        weightKg: 0,
-        reps: 0,
-        durationSec: (exercise.durationMins ?? 0) * 60,
-      ));
-    } else {
-      for (final s in exercise.sets) {
-        sets.add(ExerciseSet(
-          weightKg: s.weightKg ?? 0,
-          reps: s.reps ?? 0,
-          durationSec: s.durationSecs,
-        ));
-      }
-    }
+    final sets = draftExerciseSets(exercise);
     if (sets.isEmpty) continue;
 
     await WorkoutWriteService.instance.logExercise(

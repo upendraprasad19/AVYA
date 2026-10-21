@@ -10,7 +10,10 @@ String _getDayType(String name) {
   return name;
 }
 
-Widget _buildHeader(BuildContext context, ActiveWorkoutData data) {
+/// [counts]: LOG mode's working counts (flip §3, warm-ups out of the total);
+/// null keeps the per-set path's `completedSets / totalSets`.
+Widget _buildHeader(BuildContext context, ActiveWorkoutData data,
+    {({int saved, int total})? counts}) {
   return Container(
     padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
     decoration: const BoxDecoration(
@@ -53,7 +56,7 @@ Widget _buildHeader(BuildContext context, ActiveWorkoutData data) {
                 ),
                 const SizedBox(height: 1),
                 Text(
-                  '${data.completedSets} / ${data.totalSets} SETS${data.liveVolumeKg > 0 ? ' · ${data.liveVolumeKg.toStringAsFixed(0)}KG VOLUME' : ''}',
+                  '${counts?.saved ?? data.completedSets} / ${counts?.total ?? data.totalSets} SETS${data.liveVolumeKg > 0 ? ' · ${data.liveVolumeKg.toStringAsFixed(0)}KG VOLUME' : ''}',
                   style: AppTypography.monoXs.copyWith(
                     color: AppColors.textDim,
                     letterSpacing: 1.2,

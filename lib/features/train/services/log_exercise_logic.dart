@@ -197,6 +197,36 @@ String? liftedSubline(double volumeKg) {
       .replaceAll('{kg}', formatKg(volumeKg));
 }
 
+/// `{kg} KG · PREFILLED`: the subline while the mirror source's weight is still
+/// app-filled (docs/plans/log-exercise-flip.md §2). Null without volume.
+String? prefilledSubline(double volumeKg) {
+  if (volumeKg <= 0) return null;
+  return WardroomCopy.activePrefilledSublineTemplate
+      .replaceAll('{kg}', formatKg(volumeKg));
+}
+
+// ── Faded prefill (flip batch, docs/plans/log-exercise-flip.md §2) ─────────
+
+/// The `ActiveWorkoutData.suggestedInputs` key of one field. The provider
+/// stores plain strings (`SetField.name`): this file imports the provider.
+String suggestedKey(int exerciseIndex, int setIndex, SetField field) =>
+    '$exerciseIndex-$setIndex-${field.name}';
+
+/// A field renders faded (app-filled, not yet touched) only in LOG mode, never
+/// in review mode, never on a logged set.
+bool isFaded({
+  required bool logMode,
+  required ActiveWorkoutData data,
+  required int exerciseIndex,
+  required int setIndex,
+  required SetField field,
+}) {
+  if (!logMode || data.isSaved) return false;
+  if (data.isSetChecked(exerciseIndex, setIndex)) return false;
+  return data.suggestedInputs
+      .contains(suggestedKey(exerciseIndex, setIndex, field));
+}
+
 /// A volume rounded to one decimal, with a whole number shown without `.0`
 /// (`1200`, `142.5`). Shared by the LOG subline and the UNDO toast.
 String formatKg(double volumeKg) {
@@ -294,6 +324,15 @@ List<int> mirrorTargets({
 /// ignored.
 const Duration kLogInputGuard = Duration(milliseconds: 400);
 
+/// The window after an advance that SCROLLS: a superset reveal (200 ms delay +
+/// 400 ms `ensureVisible`, screen.dart) or a RE-OPEN's focus scroll (60 + 400
+/// ms). A LOG tap inside it would land on moving content.
+const Duration kRevealGuard = Duration(milliseconds: 700);
+
+/// A RE-OPEN tap this soon after an advancing LOG is ignored: the "did it
+/// register?" second tap on the button that just turned into LOGGED.
+const Duration kReopenGuard = Duration(milliseconds: 1200);
+
 /// [now] and [lastAdvanceAt] come from a MONOTONIC clock (never `nowWall()`,
 /// which is frozen under the dev clock override and would swallow every LOG).
 bool shouldIgnoreLog({
@@ -314,7 +353,7 @@ int? supersetPartnerToReveal(ActiveWorkoutData data, int exerciseIndex) {
   return null;
 }
 
-enum LogOutcomeKind { ignored, logged, noop }
+enum LogOutcomeKind { ignored, logged, reopened, noop }
 
 class LogOutcome {
   const LogOutcome(this.kind, {this.clearFocus = false, this.revealPartner});
@@ -337,13 +376,20 @@ class LogExerciseController {
   final Duration Function() _clock;
   Duration? _lastAdvanceAt;
 
+  /// The LOG guard window after the last advance: [kRevealGuard] when that
+  /// advance scrolled (a superset reveal, a RE-OPEN), else [kLogInputGuard].
+  Duration _lastAdvanceWindow = kLogInputGuard;
+
   LogOutcome log({
     required int exerciseIndex,
     required Set<int> setIndexes,
     required void Function(int exerciseIndex, Set<int> setIndexes) logSets,
     required ActiveWorkoutData Function() readState,
   }) {
-    if (shouldIgnoreLog(now: _clock(), lastAdvanceAt: _lastAdvanceAt)) {
+    if (shouldIgnoreLog(
+        now: _clock(),
+        lastAdvanceAt: _lastAdvanceAt,
+        window: _lastAdvanceWindow)) {
       return const LogOutcome(LogOutcomeKind.ignored);
     }
     final before = readState();
@@ -361,11 +407,49 @@ class LogExerciseController {
       return const LogOutcome(LogOutcomeKind.logged);
     }
     _lastAdvanceAt = _clock();
+    final partner = supersetPartnerToReveal(after, exerciseIndex);
+    _lastAdvanceWindow = partner != null ? kRevealGuard : kLogInputGuard;
     return LogOutcome(
       LogOutcomeKind.logged,
       clearFocus: true,
-      revealPartner: supersetPartnerToReveal(after, exerciseIndex),
+      revealPartner: partner,
     );
+  }
+
+  /// RE-OPEN of a LOGGED exercise (flip batch §1): unchecks every checked set
+  /// of [exerciseIndex] through `unlogSets(reopened: true)`. Ignored within
+  /// [kReopenGuard] of an advancing LOG; `noop` unless the exercise is done
+  /// and `unlogSets` accepts. A successful re-open stamps the guard with the
+  /// [kRevealGuard] window (the screen scrolls to the card).
+  LogOutcome reopen({
+    required int exerciseIndex,
+    required ActiveWorkoutData Function() readState,
+    required bool Function(int exerciseIndex, Set<int> setIndexes,
+            {required String exerciseName, bool reopened})
+        unlogSets,
+  }) {
+    if (shouldIgnoreLog(
+        now: _clock(), lastAdvanceAt: _lastAdvanceAt, window: kReopenGuard)) {
+      return const LogOutcome(LogOutcomeKind.ignored);
+    }
+    final data = readState();
+    if (data.isSaved ||
+        exerciseIndex < 0 ||
+        exerciseIndex >= data.exercises.length ||
+        !data.isExerciseDone(exerciseIndex)) {
+      return const LogOutcome(LogOutcomeKind.noop);
+    }
+    final numSets = int.tryParse(data.exercises[exerciseIndex].sets) ?? 3;
+    final checked = {
+      for (var i = 0; i < numSets; i++)
+        if (data.isSetChecked(exerciseIndex, i)) i,
+    };
+    final ok = unlogSets(exerciseIndex, checked,
+        exerciseName: data.exercises[exerciseIndex].name, reopened: true);
+    if (!ok) return const LogOutcome(LogOutcomeKind.noop);
+    _lastAdvanceAt = _clock();
+    _lastAdvanceWindow = kRevealGuard;
+    return const LogOutcome(LogOutcomeKind.reopened);
   }
 }
 
@@ -499,4 +583,120 @@ bool allExercisesLogged(ActiveWorkoutData data) {
     if (!data.isExerciseDone(i)) return false;
   }
   return true;
+}
+
+// ── FINISH guard + working counts (flip batch §3, OI-361 §3b) ─────────────
+
+/// `(saved, total)` working sets: `saved` is exactly what `completeWorkout`
+/// writes (`saveableSetIndexes`), `total` the template sets minus warm-ups.
+({int saved, int total}) workingSetCounts(ActiveWorkoutData data) {
+  var saved = 0;
+  var total = 0;
+  for (var i = 0; i < data.exercises.length; i++) {
+    saved += data.saveableSetIndexes(i).length;
+    final numSets = int.tryParse(data.exercises[i].sets) ?? 3;
+    for (var s = 0; s < numSets; s++) {
+      if (!data.isSetWarmUp(i, s)) total++;
+    }
+  }
+  return (saved: saved, total: total);
+}
+
+/// The progress fraction for the header bar: 0 with no working sets (every
+/// set a warm-up; `NaN.round()` throws), clamped to 1 (a checked set beyond
+/// the template count).
+double workingProgress(({int saved, int total}) counts) {
+  if (counts.total == 0) return 0.0;
+  return (counts.saved / counts.total).clamp(0.0, 1.0);
+}
+
+/// What the FINISH dialog names (LOG mode), over the exercises present now.
+class FinishGuard {
+  const FinishGuard({
+    this.reopenedUnsaved = const [],
+    this.typedUnsaved = const [],
+    this.skipped = const [],
+    this.partial = const [],
+  });
+
+  /// Logged, re-opened, never logged again: nothing will be saved.
+  final List<String> reopenedUnsaved;
+
+  /// The user typed a value on an unlogged set and never logged it.
+  final List<String> typedUnsaved;
+
+  /// Nothing to save, any other reason (skipped, untouched, all warm-ups).
+  final List<String> skipped;
+
+  /// Some working sets will be saved, not all (`+` after LOG).
+  final List<({String name, int saved, int working})> partial;
+}
+
+FinishGuard finishGuard(ActiveWorkoutData data) {
+  final reopened = <String>[];
+  final typed = <String>[];
+  final skipped = <String>[];
+  final partial = <({String name, int saved, int working})>[];
+  for (var i = 0; i < data.exercises.length; i++) {
+    final exercise = data.exercises[i];
+    final saved = data.saveableSetIndexes(i).length;
+    final numSets = int.tryParse(exercise.sets) ?? 3;
+    if (saved == 0) {
+      if (data.reopenedExercises.contains(exercise.name)) {
+        reopened.add(exercise.name);
+      } else if (_hasTypedUnloggedValue(data, i, exercise.loggingType)) {
+        typed.add(exercise.name);
+      } else {
+        skipped.add(exercise.name);
+      }
+      continue;
+    }
+    var working = 0;
+    for (var s = 0; s < numSets; s++) {
+      if (!data.isSetWarmUp(i, s)) working++;
+    }
+    if (saved < working) {
+      partial.add((name: exercise.name, saved: saved, working: working));
+    }
+  }
+  return FinishGuard(
+    reopenedUnsaved: reopened,
+    typedUnsaved: typed,
+    skipped: skipped,
+    partial: partial,
+  );
+}
+
+/// An UNCHECKED set with a rendered (`mirrorFieldsFor`) value the user typed:
+/// captured non-null and not app-filled (no suggested key). Reps are never
+/// marked, so they cannot tell typed from prefilled and are not read.
+bool _hasTypedUnloggedValue(
+    ActiveWorkoutData data, int exerciseIndex, String loggingType) {
+  final fields = mirrorFieldsFor(loggingType);
+  final numSets = int.tryParse(data.exercises[exerciseIndex].sets) ?? 3;
+  for (var s = 0; s < numSets; s++) {
+    if (data.isSetChecked(exerciseIndex, s)) continue;
+    final v = data.setInputValues['$exerciseIndex-$s'];
+    if (v == null) continue;
+    for (final f in fields) {
+      final present = switch (f) {
+        SetField.weight => v.weight != null,
+        SetField.duration => v.durationSeconds != null,
+        SetField.distance => v.distanceKm != null,
+        SetField.reps => false,
+      };
+      if (present &&
+          !data.suggestedInputs.contains(suggestedKey(exerciseIndex, s, f))) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/// At most [max] names joined with `, `, then ` +N more`.
+String capNames(List<String> names, {int max = 5}) {
+  if (names.length <= max) return names.join(', ');
+  return '${names.take(max).join(', ')}'
+      '${WardroomCopy.activeFinishMoreTemplate.replaceAll('{n}', '${names.length - max}')}';
 }

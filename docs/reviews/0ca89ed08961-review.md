@@ -5,7 +5,7 @@ blast_radius: account
 reviewer: claude-sonnet-via-skill
 lens_set: [writer_reader_drift, function_exception_swallow, blast_radius_mismatch, secrets_in_tree, unawaited_no_error_sink, guard_without_its_mirror, missing_input, asserted_fixture_value]
 findings_count: 6
-verdict: pending  # founder triage; every finding below is already fixed in this staged tree
+verdict: accepted
 ---
 
 # Code Review — active-workout-log-exercise (U1a, one LOG per exercise, ship dark)
@@ -58,4 +58,4 @@ One fresh, context-blind Sonnet reviewer, read-only (exhaustive command list; no
 function_exception_swallow (no `invoke(` in the diff); blast_radius_mismatch (account via `lib/core/copy/wardroom_copy.dart`, matches the record); secrets_in_tree (no credential-shaped literal); unawaited_no_error_sink (un-awaited `writeState` matches the pre-existing `_persistActiveState` pattern; the new `Future.delayed` is `mounted`-guarded); missing_input (all helpers, copy constants, OIs and the mockup exist with the assumed shape); asserted_fixture_value (`1440 KG LIFTED` = 3 x 60 x 8, TextField indices, the 5 OFF tiles = 3 checks + 2 steppers, all recomputed).
 
 ## Founder triage notes
-<all six fixed; set `verdict: accepted` if you agree>
+Founder triage 2026-10-20 (chat: "Accept both"): every finding accepted as written; the fixes already landed in this batch stand.

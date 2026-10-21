@@ -3804,6 +3804,12 @@ concepts:
           method on WorkoutWriteService — ActiveWorkoutNotifier.completeWorkout
           in train_provider.dart routes here, as does the coach's
           tool_dispatcher._maybeCompleteScheduledDay auto-completion path).
+          OI-361 (diagnose e3a6c1): every caller refuses when nothing would be
+          saved — ActiveWorkoutNotifier.completeWorkout returns on its first
+          line when `!isSaved && !hasSaveableSet`, and submitWorkoutDraft
+          returns before any write when `!draftHasLoggableSet` (the FINISH
+          dialog and WorkoutLogConfirmCard disable their buttons on the same
+          predicates). The coach auto/tap paths run only after a logSet.
           Sets status='completed' + completed_at_ms + completed_via together
           in one Map mutation. Never writes the legacy completed_at ISO field
           — see SyncService._restoreScheduledWorkouts below, whose guard
@@ -4026,7 +4032,7 @@ concepts:
       so partial-failure recovery is row-level instead of template-level.
     writers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 2313-2326
+        line_range: 2449-2462
         method: TemplatesNotifier.saveTemplate (single-day; multi-day templates
           land via tool_dispatcher.createCustomTemplate entry below)
       - file: lib/features/train/screens/template_builder_screen.dart
@@ -4075,7 +4081,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 2295-2311
+        line_range: 2431-2447
         method: TemplatesNotifier.build
         semantic: pass-through
         fields_read: [type, name, exercises, assigned_days, exercise_count, group_id, group_day_index, group_total_days, last_used_at, created_at, updated_at]
@@ -12722,8 +12728,9 @@ concepts:
 
       WRITERS: `toggleSet` (per-set path, flag OFF) and `logSets` (flag ON: one
       LOG marks every unchecked set of an exercise in ONE state change; additive
-      only, bounds-checked, no-op on a saved/complete session; deliberately NOT
-      guarded by `_completing`, as LOG during a save is the existing behaviour).
+      only, bounds-checked, no-op on a saved/complete session and, since the flip
+      batch (R5A-08), while `_completing`: a LOG during the un-awaited save would
+      change `checkedSets` under the save's per-exercise reads).
       `unlogSets` (flag ON, batch 2 UNDO): unchecks exactly the sets one LOG
       checked, in ONE state change; returns false and leaves `state` identical
       while `_completing` (set in `completeWorkout` after its review-mode
@@ -12748,6 +12755,20 @@ concepts:
       WITHOUT a checked filter (after an UNDO it shows the logged values again:
       benign).
 
+      FLIP BATCH (docs/plans/log-exercise-flip.md, default ON): RE-OPEN =
+      `LogExerciseController.reopen` -> `unlogSets(reopened: true)`, which adds
+      the name to `reopenedExercises` in the same state change.
+      `recordCardEdit(exIdx, {values, mark, clear})` is the card's ONE writer per
+      event in LOG mode: captures every keystroke (a checked set only when it
+      validates) and marks / clears `suggestedInputs` ('ex-set-field', the
+      app-filled weight/duration/distance; reps never). Readers: `isFaded`,
+      `prefilledSubline`, and the ONE save predicate `wouldSaveSet` /
+      `saveableSetIndexes` / `hasSaveableSet`, which `completeWorkout` iterates
+      and `workingSetCounts`, `workingProgress`, `finishGuard` and the OI-361
+      block read (U-D1b parity test runs the real save).
+      WARNING: `suggestedInputs` and `reopenedExercises` MUST be threaded through
+      `copyWith` (the 1×/sec timer) and re-indexed on swap/remove/removeLastSet
+      with the field suffix kept.
       WARNING: `logSets` must never become a toggle loop (a double tap would
       UNCHECK every set). Mutation-proven by the behavioral test.
       WARNING: the LOG input guard reads a MONOTONIC clock (Stopwatch), never
@@ -12764,51 +12785,66 @@ concepts:
       mirrors.
     writers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1508-1517
+        line_range: 1561-1570
         method: toggleSet
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1524-1539
+        line_range: 1577-1594
         method: logSets
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1546-1563
+        line_range: 1605-1627
         method: unlogSets
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1566-1571
+        line_range: 1630-1635
         method: recordSetValues
+      - file: lib/features/train/providers/train_provider.dart
+        line_range: 1642-1667
+        method: recordCardEdit
+      - file: lib/features/train/services/log_exercise_logic.dart
+        line_range: 373-454
+        method: LogExerciseController.reopen
       - file: lib/features/train/screens/active_workout/exercise_card.dart
-        line_range: 388-398
+        line_range: 472-500
         method: _onFieldChanged
       - file: lib/features/train/screens/active_workout/exercise_card.dart
-        line_range: 431-462
+        line_range: 533-567
         method: _mirrorFrom
       - file: lib/features/train/screens/active_workout/exercise_card.dart
-        line_range: 481-506
+        line_range: 586-611
         method: _onLogPressed
     readers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1327-1329
+        line_range: 1342-1344
         method: completedSets
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1357-1364
+        line_range: 1410-1417
         method: isExerciseDone
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1380-1389
+        line_range: 1433-1442
         method: liveVolumeKg
       - file: lib/features/train/services/log_exercise_logic.dart
-        line_range: 334-370
+        line_range: 373-454
         method: LogExerciseController.log
       - file: lib/features/train/services/log_exercise_logic.dart
-        line_range: 405-430
+        line_range: 489-514
         method: undoRecordFor
       - file: lib/features/train/services/log_exercise_logic.dart
-        line_range: 436-448
+        line_range: 520-532
         method: visibleUndoRecord
       - file: lib/features/train/services/log_exercise_logic.dart
-        line_range: 459-492
+        line_range: 543-576
         method: logToastText
       - file: lib/features/train/services/log_exercise_logic.dart
-        line_range: 496-502
+        line_range: 580-586
         method: allExercisesLogged
+      - file: lib/features/train/providers/train_provider.dart
+        line_range: 1354-1385
+        method: wouldSaveSet + saveableSetIndexes + hasSaveableSet
+      - file: lib/features/train/services/log_exercise_logic.dart
+        line_range: 217-228
+        method: isFaded
+      - file: lib/features/train/services/log_exercise_logic.dart
+        line_range: 592-668
+        method: workingSetCounts + workingProgress + finishGuard
 
   # tech-debt audit 2026-09-02 / Slice A (CODE-8, diagnose e4d1b7) — the
   # weekly-report PRO gate is a genuine cloud writer→reader contract on

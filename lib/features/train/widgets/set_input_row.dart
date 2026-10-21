@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/copy/wardroom_copy.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+
+import '../services/log_exercise_logic.dart' show SetField;
 
 /// Compact inline set row (~40 px tall) for active workout.
 ///
@@ -30,8 +33,14 @@ class SetInputRow extends StatelessWidget {
   final FocusNode? repsFocusNode;
   final FocusNode? durationFocusNode;
   final FocusNode? distanceFocusNode;
-  /// Fires on every keystroke in any of the row's fields.
-  final VoidCallback? onChanged;
+  /// Fires on every keystroke, with the field that changed.
+  final ValueChanged<SetField>? onChanged;
+
+  /// Fields whose text the app put there and the user has not typed in
+  /// (docs/plans/log-exercise-flip.md §2): rendered at 62% parchment, a tap
+  /// selects the whole value, TalkBack hears "Prefilled value". Empty on the
+  /// per-set path.
+  final Set<SetField> fadedFields;
 
   const SetInputRow({
     super.key,
@@ -53,6 +62,7 @@ class SetInputRow extends StatelessWidget {
     this.durationFocusNode,
     this.distanceFocusNode,
     this.onChanged,
+    this.fadedFields = const {},
   });
 
   @override
@@ -141,57 +151,59 @@ class SetInputRow extends StatelessWidget {
     switch (loggingType) {
       case 'weight_reps':
         return [
-          Expanded(child: _compactInput(weightController, 'KG', focusNode: weightFocusNode)),
+          Expanded(child: _compactInput(weightController, 'KG', SetField.weight, focusNode: weightFocusNode)),
           const SizedBox(width: 6),
-          Expanded(child: _compactInput(repsController, 'REPS', isInt: true, focusNode: repsFocusNode)),
+          Expanded(child: _compactInput(repsController, 'REPS', SetField.reps, isInt: true, focusNode: repsFocusNode)),
         ];
 
       case 'bodyweight_reps':
         return [
-          Expanded(child: _compactInput(repsController, 'REPS', isInt: true, focusNode: repsFocusNode)),
+          Expanded(child: _compactInput(repsController, 'REPS', SetField.reps, isInt: true, focusNode: repsFocusNode)),
         ];
 
       case 'weighted_bodyweight':
         return [
-          Expanded(child: _compactInput(weightController, 'KG', focusNode: weightFocusNode)),
+          Expanded(child: _compactInput(weightController, 'KG', SetField.weight, focusNode: weightFocusNode)),
           const SizedBox(width: 6),
-          Expanded(child: _compactInput(repsController, 'REPS', isInt: true, focusNode: repsFocusNode)),
+          Expanded(child: _compactInput(repsController, 'REPS', SetField.reps, isInt: true, focusNode: repsFocusNode)),
         ];
 
       case 'timed':
         return [
-          Expanded(child: _compactInput(durationController, 'SEC', isInt: true, focusNode: durationFocusNode)),
+          Expanded(child: _compactInput(durationController, 'SEC', SetField.duration, isInt: true, focusNode: durationFocusNode)),
         ];
 
       case 'cardio':
         return [
-          Expanded(child: _compactInput(durationController, 'MIN', focusNode: durationFocusNode)),
+          Expanded(child: _compactInput(durationController, 'MIN', SetField.duration, focusNode: durationFocusNode)),
           const SizedBox(width: 6),
-          Expanded(child: _compactInput(distanceController, 'KM', focusNode: distanceFocusNode)),
+          Expanded(child: _compactInput(distanceController, 'KM', SetField.distance, focusNode: distanceFocusNode)),
         ];
 
       case 'distance':
         return [
-          Expanded(child: _compactInput(distanceController, 'KM', focusNode: distanceFocusNode)),
+          Expanded(child: _compactInput(distanceController, 'KM', SetField.distance, focusNode: distanceFocusNode)),
           const SizedBox(width: 6),
-          Expanded(child: _compactInput(weightController, 'KG', focusNode: weightFocusNode)),
+          Expanded(child: _compactInput(weightController, 'KG', SetField.weight, focusNode: weightFocusNode)),
         ];
 
       default:
         return [
-          Expanded(child: _compactInput(weightController, 'KG', focusNode: weightFocusNode)),
+          Expanded(child: _compactInput(weightController, 'KG', SetField.weight, focusNode: weightFocusNode)),
           const SizedBox(width: 6),
-          Expanded(child: _compactInput(repsController, 'REPS', isInt: true, focusNode: repsFocusNode)),
+          Expanded(child: _compactInput(repsController, 'REPS', SetField.reps, isInt: true, focusNode: repsFocusNode)),
         ];
     }
   }
 
   Widget _compactInput(
     TextEditingController controller,
-    String hint, {
+    String hint,
+    SetField field, {
     bool isInt = false,
     FocusNode? focusNode,
   }) {
+    final faded = fadedFields.contains(field);
     // Green border indicates this set's values have been locked in.
     final lockedBorder = OutlineInputBorder(
       borderRadius: BorderRadius.circular(2),
@@ -201,12 +213,27 @@ class SetInputRow extends StatelessWidget {
       ),
     );
 
-    return SizedBox(
+    // The Semantics wrapper is ALWAYS present, faded or not, LOG mode or not:
+    // a wrapper that came and went would remount the TextField (focus and the
+    // keyboard connection) on the first keystroke into a faded field. Only its
+    // properties change. The unit label is null on a blank field, where the
+    // hintText already speaks it.
+    return Semantics(
+      label: controller.text.isEmpty ? null : hint,
+      hint: faded ? WardroomCopy.activePrefilledHint : null,
+      child: SizedBox(
       height: 38,
       child: TextField(
         controller: controller,
         focusNode: focusNode,
-        onChanged: onChanged == null ? null : (_) => onChanged!(),
+        onChanged: onChanged == null ? null : (_) => onChanged!(field),
+        // A tap on an app-filled value selects all of it, so typing replaces
+        // it. `selectAllOnFocus` does not fire on a tap (the tap focus change
+        // is flagged internal); onTap runs after the tap's own selection.
+        onTap: faded
+            ? () => controller.selection = TextSelection(
+                baseOffset: 0, extentOffset: controller.text.length)
+            : null,
         keyboardType: isInt
             ? TextInputType.number
             : const TextInputType.numberWithOptions(decimal: true),
@@ -223,7 +250,9 @@ class SetInputRow extends StatelessWidget {
         style: AppTypography.h2.copyWith(
           fontSize: 15,
           fontWeight: FontWeight.w700,
-          color: AppColors.textPrimary,
+          color: faded
+              ? AppColors.textPrimary.withValues(alpha: 0.62)
+              : AppColors.textPrimary,
           letterSpacing: -0.2,
         ),
         decoration: InputDecoration(
@@ -254,6 +283,7 @@ class SetInputRow extends StatelessWidget {
             borderSide: const BorderSide(color: AppColors.accent, width: 2),
           ),
         ),
+      ),
       ),
     );
   }

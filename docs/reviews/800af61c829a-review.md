@@ -5,7 +5,7 @@ blast_radius: account
 reviewer: claude-sonnet-via-skill
 lens_set: [writer_reader_drift, function_exception_swallow, blast_radius_mismatch, secrets_in_tree, unawaited_no_error_sink, guard_without_its_mirror, missing_input, asserted_fixture_value]
 findings_count: 4
-verdict: pending  # founder triage; every finding below is already fixed in this staged tree
+verdict: accepted
 ---
 
 # Code Review — log-exercise-batch2 (OI-356: UNDO toast, set-1 mirror, last-exercise emphasis; ship dark)
@@ -53,4 +53,4 @@ One fresh, context-blind Sonnet reviewer, read-only (exhaustive command list; no
 R1 `trim()` dropped in `mirrorTargets` -> RED 1; R2 `if (!removed) return false;` deleted -> RED 1; R3 `_mirrorFrom` moved below the `isSetChecked` return -> RED 11; R4 `logToastText` counts warm-ups -> RED 1. R5 duplicates the author's P7. R6 (Timer generation check) and R7 (`onComplete` order) are source pins only: the screen State is not pumped.
 
 ## Founder triage notes
-<filled in by founder during triage>
+Founder triage 2026-10-20 (chat: "Accept both"): every finding accepted as written; the fixes already landed in this batch stand.

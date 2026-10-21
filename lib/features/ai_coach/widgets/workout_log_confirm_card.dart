@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:icanbefitter/core/copy/wardroom_copy.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -42,6 +43,8 @@ class _WorkoutLogConfirmCardState
   Widget build(BuildContext context) {
     final draft = ref.watch(workoutDraftProvider);
     if (draft == null) return const SizedBox.shrink();
+    // OI-361: nothing to write, nothing to confirm (the submit's own guard).
+    final canLog = draftHasLoggableSet(draft);
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
@@ -86,6 +89,14 @@ class _WorkoutLogConfirmCardState
             );
           }),
 
+          if (!canLog) ...[
+            const SizedBox(height: 10),
+            Text(
+              WardroomCopy.coachDraftNoSets,
+              style: AppTypography.bodySm.copyWith(color: AppColors.warn),
+            ),
+          ],
+
           const SizedBox(height: 14),
 
           // Action buttons — sharp 2-px slabs
@@ -93,11 +104,11 @@ class _WorkoutLogConfirmCardState
             children: [
               Expanded(
                 child: GestureDetector(
-                  onTap: _isSubmitting ? null : _submit,
+                  onTap: _isSubmitting || !canLog ? null : _submit,
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 13),
                     decoration: BoxDecoration(
-                      color: _isSubmitting
+                      color: _isSubmitting || !canLog
                           ? AppColors.accent.withValues(alpha: 0.5)
                           : AppColors.accent,
                       borderRadius: BorderRadius.circular(AppRadius.sharp),
