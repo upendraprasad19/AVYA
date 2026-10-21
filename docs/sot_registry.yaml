@@ -15670,9 +15670,11 @@ concepts:
       row survives with a NULL party; a pending row whose referee was deleted matches no payment and is voided; a row
       whose referrer was deleted is excluded; UNIQUE(referee_id) still stops a referee redeeming twice.
       KNOWN LIMITS (stated in the migration header and the plan, section 6): a refund or chargeback that does not touch
-      the `subscriptions` row is invisible; a cancel after the vest has no clawback; the friend cannot buy while on the
-      7-day referral trial (create-razorpay-order answers 409 for any active row), so the reward lands about 14 days
-      after the friend joins; a promo-discounted payment counts whatever the amount.
+      the `subscriptions` row is invisible; a cancel after the vest has no clawback; while the purchase door
+      (trial_purchase_door, OI-341 Piece B2a) is SHUT the friend cannot buy while on the 7-day referral trial
+      (create-razorpay-order answers 409 for any active row) and the reward lands about 14 days after the friend joins;
+      once the door is OPEN a purchase during the trial qualifies at once (start_date = the payment instant), so the
+      referrer is credited at payment + 7 days; a promo-discounted payment counts whatever the amount.
     writers:
       - file: supabase/migrations/160_referral_hardening.sql
         line_range: 56-109
@@ -16097,10 +16099,13 @@ concepts:
     behavioral_test_path_module: supabase/functions/_shared/subscription_stacking_test.ts
     behavioral_test_path_sql: test/sql/record_paid_subscription_local.sh
     description: |
-      OI-341 Piece A (dark) + Piece B1 (dark). The stored end_date of a PAID
+      OI-341 Piece A (dark) + Piece B1 (dark) + Piece B2a (the reviewed flip:
+      the secret is set as a live step after the B2a merge, plan
+      docs/plans/oi341-piece-b2-door.md section 4). The stored end_date of a PAID
       subscriptions row, for both payment writers. Switch OFF (the Edge Function
       secret ENABLE_SUBSCRIPTION_STACKING is not exactly "true"): today's insert
-      with plainEndDate(now, days) = now + plan days, NO extra query. Switch ON
+      with plainEndDate(now, days) = now + plan days, NO extra query before the
+      insert (Piece B2a adds one alarm read after it). Switch ON
       (Piece B1, migration 161): ONE call to public.record_paid_subscription,
       which takes the per-user advisory lock shared with the referral redeem and
       job, checks idempotency (another user's payment id raises P0001), computes
@@ -16110,26 +16115,32 @@ concepts:
       the lock; the referral reward job reads it as the payment time). A failure
       answers the writer's existing 500, logs the reconcile line and pages
       (payment_record_failed_alert). Both writers report the STORED end.
+      Piece B2a: both writers log `stacking_switch=on|off payment_id=` for every
+      payment reaching the insert branch, and the OFF branch, after its own
+      successful insert and the promo, runs the switch-mismatch alarm
+      (payment_record_failed_alert, source stacking_switch_mismatch). The
+      webhook accepts `payment.captured` up to 24 h + 10 min old
+      (`payment.authorized` 300 s; future skew -120 s for both).
     writers:
       - file: supabase/migrations/161_record_paid_subscription.sql
         method: public.record_paid_subscription
         notes: The ON-path writer. Lock, idempotency, base, insert in one transaction; service_role only; VOLATILE, SET search_path, TimeZone UTC, lock_timeout 5s.
       - file: supabase/functions/_shared/subscription_stacking.ts
-        line_range: 83-117
+        line_range: 104-139
         method: recordPaidSubscription
         notes: The one RPC call; ok:false on an error code (empty code = read_error), a thrown rejection, or a malformed answer (bad_rpc_response).
       - file: supabase/functions/_shared/subscription_stacking.ts
-        line_range: 38-51
-        method: isStackingEnabled / plainEndDate
-        notes: The strict "true" switch rule (read once per request) and the OFF-branch arithmetic (setDate, byte-identical to origin/main).
+        line_range: 42-71
+        method: isEnvExactlyTrue / isStackingEnabled / isTrialPurchaseEnabled / plainEndDate
+        notes: The ONE strict "true" switch rule for both secrets (read once per request) and the OFF-branch arithmetic (setDate, byte-identical to origin/main).
       - file: supabase/functions/verify-payment/index.ts
-        line_range: 573-624
+        line_range: 585-718
         method: the insert branch (stackingOn)
-        notes: ON assigns canonicalEndDateIso and weInsertedTheRow from the RPC answer; OFF is today's insert and 23505 arms.
+        notes: ON assigns canonicalEndDateIso and weInsertedTheRow from the RPC answer; OFF is today's insert and 23505 arms, and sets offInserted only on its own successful insert (the alarm's precondition, consumed after the promo).
       - file: supabase/functions/razorpay-webhook/index.ts
-        line_range: 592-637
-        method: the insert branch (isStackingEnabled)
-        notes: ON assigns endDate (returned as expires_at) and alreadyProcessed = !inserted; OFF is today's insert and 23505 arms.
+        line_range: 630-725
+        method: the insert branch (stackingOn)
+        notes: ON assigns endDate (returned as expires_at) and alreadyProcessed = !inserted; OFF is today's insert and 23505 arms, and sets offInserted only on its own successful insert (the alarm's precondition, consumed after the promo).
     readers:
       - file: supabase/functions/_shared/subscription.ts
         line_range: 236-276
@@ -16146,14 +16157,67 @@ concepts:
       payment_record_failed): critical for the first failure of a payment id with
       no unresolved row in 24 hours (pages Telegram via the migration-133
       trigger), warn after that; a failed dedup read pages anyway; both round
-      trips bounded at 3 s; a failed insert never changes the response.
+      trips bounded (3 s default; the webhook passes 1 s since Piece B2a); a
+      failed insert never changes the response.
+      Piece B2a adds a SECOND source through the same dedup-and-insert path:
+      stacking_switch_mismatch, written by the writers' OFF-branch alarm when a
+      paid row was recorded without stacking over an active referral_trial row
+      (the source is a parameter of BOTH the dedup query and the insert, so the
+      two sources never suppress each other). The alarm never changes the row or
+      the response; its read and both round trips are bounded at 1 s.
+      Piece B2a also pages a captured payment whose amount matches no plan
+      (code amount_no_match, both writers) or fails the webhook's cross-check
+      (amount_cross_check); the 400 response is unchanged (diagnose c3e7a1).
     writers:
       - file: supabase/functions/_shared/payment_alert.ts
-        line_range: 55-107
+        line_range: 132-157
         method: reportPaymentRecordFailure
-        notes: Called from both writers' ON-path failure arm only.
+        notes: Called from both writers' ON-path failure arm, and (Piece B2a) from their amount-no-match 400 arms and the webhook's cross-check arm.
+      - file: supabase/functions/_shared/payment_alert.ts
+        line_range: 170-194
+        method: reportStackingMismatch
+        notes: Source stacking_switch_mismatch, critical first then warn, per payment id.
+      - file: supabase/functions/_shared/payment_alert.ts
+        line_range: 218-252
+        method: checkStackingMismatch
+        notes: The OFF-branch alarm (one try/catch, 1 s bound); called from both writers only after their own OFF insert and the promo.
     readers:
       - file: supabase/migrations/133_alert_critical_notify_trigger.sql
         method: private.dispatch_critical_alert_notify (trigger)
         semantic: page-on-critical
         notes: Forwards critical alerts rows to the founder's Telegram; warn rows reach the daily founder digest.
+  - concept: trial_purchase_door
+    domain: subscription
+    behavioral_test_path: supabase/functions/create-razorpay-order/index_test.ts
+    description: |
+      OI-341 Piece B2a (plan docs/plans/oi341-piece-b2-door.md 2.2). Who may
+      create a Razorpay order. create-razorpay-order reads the caller's active,
+      unexpired subscriptions rows ONCE (no limit); a read error answers 500
+      subscription_check_unavailable and creates no order (it used to fail
+      OPEN). The door is OPEN only when ENABLE_TRIAL_PURCHASE AND
+      ENABLE_SUBSCRIPTION_STACKING are both exactly "true" (isEnvExactlyTrue,
+      read once per request in the door's own isolate). SHUT: any active row ->
+      409 already_pro from the latest-ending row, no stacks_after key (golden
+      against origin/main). OPEN: a non-referral_trial row -> 409 from the
+      latest-ending PAID row; else the order is created and the response
+      carries stacks_after (the latest trial end, null when none), also in the
+      order notes when non-null. stacks_after is an ESTIMATE and a
+      reconciliation tag; the writers never read it (they compute their own
+      base, subscription_end_date_stacking).
+    writers:
+      - file: supabase/functions/create-razorpay-order/index.ts
+        line_range: 105-306
+        method: handler (the guard block, doorOpen, stacksAfter)
+        notes: The one guard read, the shut/open decision, and the stacks_after response field and order note.
+    readers:
+      - file: supabase/functions/razorpay-webhook/index.ts
+        line_range: 630-765
+        method: the insert branch (OFF-branch mismatch alarm)
+        semantic: detect-door-on-order-recorded-off
+        notes: Does NOT read stacks_after (payment notes come from the client's checkout options); it reads the database for an active referral_trial row after its own OFF insert.
+      - file: supabase/functions/verify-payment/index.ts
+        line_range: 585-754
+        method: the insert branch (OFF-branch mismatch alarm)
+        semantic: detect-door-on-order-recorded-off
+        notes: Same alarm as the webhook. The client reader of stacks_after (the paid-end estimate) is Piece B2b.
+    regression_test: supabase/functions/create-razorpay-order/index_test.ts

@@ -43,7 +43,7 @@ import {
   plainEndDate,
   recordPaidSubscription,
 } from "../_shared/subscription_stacking.ts";
-import { reportPaymentRecordFailure } from "../_shared/payment_alert.ts";
+import { checkStackingMismatch, reportPaymentRecordFailure } from "../_shared/payment_alert.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -491,6 +491,18 @@ export async function handler(req: Request): Promise<Response> {
         `Amount mismatch: ${actualPaise} paise does not match any plan` +
           (promoCode ? ` (promo: ${promoCode})` : ""),
       );
+      // OI-341 Piece B2a (hermes seat 4 F4): a captured payment of this caller
+      // (ownership is checked above) that no row can record: page it. The
+      // response is unchanged.
+      await reportPaymentRecordFailure(supabase, {
+        fn: "verify-payment",
+        requestId: crypto.randomUUID().split("-")[0],
+        paymentId,
+        userId,
+        plan: "unknown",
+        amountPaise: actualPaise,
+        code: "amount_no_match",
+      });
       return new Response(
         JSON.stringify({
           verified: false,
@@ -571,6 +583,12 @@ export async function handler(req: Request): Promise<Response> {
 
     // OI-341: the stacking switch is read ONCE per request (exactly "true"; absent = OFF).
     const stackingOn = isStackingEnabled();
+    // OI-341 Piece B2a (plan 2.3): which state this isolate read, for every payment that reaches the insert branch.
+    if (paymentSubRow === null) {
+      console.log(`[verify-payment] stacking_switch=${stackingOn ? "on" : "off"} payment_id=${paymentId}`);
+    }
+    // Set only when the OFF branch itself inserted the row: the mismatch alarm's precondition (plan 2.5).
+    let offInserted: { start: string; end: string } | null = null;
 
     if (paymentSubRow === null && stackingOn) {
       // OI-341 Piece B1 ON path: ONE call to public.record_paid_subscription
@@ -619,8 +637,9 @@ export async function handler(req: Request): Promise<Response> {
         `[verify-payment] stacking=on payment_id=${paymentId} inserted=${rec.inserted}`,
       );
     } else if (paymentSubRow === null) {
-      // OFF branch (the default): exactly `now + days`, no extra query; the
-      // insert and its 23505 handling are today's code.
+      // OFF branch (the default): exactly `now + days`; the insert and its 23505
+      // handling are today's code. Its one added request is the mismatch alarm
+      // after the promo (Piece B2a plan 2.5), which never changes the response.
       const storedEnd = plainEndDate(now, plan === "yearly" ? 365 : 30);
       // Seeded BEFORE the insert: if this insert loses a 23505 race and the winner's row cannot be re-read,
       // the response still reports the value this call stored.
@@ -641,6 +660,7 @@ export async function handler(req: Request): Promise<Response> {
 
       if (!insertError) {
         weInsertedTheRow = true;
+        offInserted = { start: now.toISOString(), end: storedEnd.toISOString() };
       } else {
         // 23505 unique-violation = we lost the race to the webhook between the
         // pre-SELECT and the insert. The webhook owns the row AND the promo
@@ -716,6 +736,21 @@ export async function handler(req: Request): Promise<Response> {
         derived.discountPct,
         actualPaise,
       );
+    }
+
+    // OI-341 Piece B2a (plan 2.5): the switch-mismatch alarm, after the promo so
+    // it can never skip it. Only when THIS request's OFF branch inserted the row
+    // (not the existing-row path, not the 23505 race arm, not the ON path). It
+    // detects and pages; it never changes the row or this response.
+    if (offInserted !== null) {
+      await checkStackingMismatch(supabase, {
+        fn: "verify-payment",
+        paymentId,
+        userId,
+        plan,
+        rowStart: offInserted.start,
+        rowEnd: offInserted.end,
+      });
     }
 
     return new Response(
