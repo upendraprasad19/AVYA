@@ -229,4 +229,4 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-358 | Active Workout: adding an exercise already in the session crashes the… | none | never | [:6262](open_issues.md#L6262) |
 | OI-359 | verify-payment calls Razorpay capture before the payment-owner check… | none | 2026-10-20 - by code read (hermes pass… | [:6271](open_issues.md#L6271) |
 | OI-360 | verify-payment and razorpay-webhook log whole PostgREST error objects and… | none | 2026-10-20 - by code read (hermes pass… | [:6280](open_issues.md#L6280) |
-| OI-365 | Exercise swap has several implementations that disagree (coach plan swap… | none (founder 2026-10-21: this audit is… | 2026-10-21 - by code read at… | [:6289](open_issues.md#L6289) |
+| OI-365 | Coach tools and app features do the same jobs through separate code (first… | none (founder 2026-10-21: this audit is… | 2026-10-21 - by code read at… | [:6289](open_issues.md#L6289) |

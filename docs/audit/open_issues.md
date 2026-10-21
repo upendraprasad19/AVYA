@@ -6286,7 +6286,7 @@ Fix: move the ownership check above the capture call. Not done in Piece B1 becau
 
 Fix: log `code` / `name` and ids only (same rule as the CLAUDE.md pitfall on Telegram errors carrying the bot token). Not done in Piece B1 because it changes the OFF path that B1 keeps byte-identical to `origin/main`. Catastrophic tier.
 
-## OI-365 — Exercise swap has several implementations that disagree (coach plan swap vs in-workout swap vs custom auto-swap): audit and consolidate
+## OI-365 — Coach tools and app features do the same jobs through separate code (first proven case: exercise swap): map every coach tool to its app twin and consolidate to one implementation per job
 
 - **Status**: OPEN
 - **Blocked on**: none (founder 2026-10-21: this audit is NOT part of the active-workout swap/move batch)
@@ -6295,7 +6295,13 @@ Fix: log `code` / `name` and ids only (same rule as the CLAUDE.md pitfall on Tel
 
 Source: found while designing the in-workout `⇄` swap + `⇅` move (spec `docs/superpowers/specs/2026-10-21-active-workout-swap-move-design.md`, on branch `swap-move-design`, not yet on main). The founder's reading: the coach uses another implementation for the same job, so audit it.
 
-**The paths (all read):**
+**Scope (founder 2026-10-21: "we should not be having multiple tools or functions for the same work"):** every AI coach tool, not only swap. The coach's tools are the 21 files under `supabase/functions/_shared/tools/{exercise,nutrition,plan,progress,workout}/` (excluding `index.ts`, `registry.ts`, `types.ts`, `zodToGemini.ts`, `__tests__/`): `getFormCues`; `getNutritionHistory`, `logMealByText`, `suggestMeal`; `createCustomTemplate`, `pausePlan`, `regeneratePlanBlock`, `scheduleTemplate`, `switchGoal`; `getExerciseHistory`, `getPRTimeline`, `getProgressSummary`, `getPromotionStatus`; `createCustomExercise`, `generateHotelWorkout`, `logSet`, `modifyWorkoutForInjury`, `rescheduleWeek`, `shortenWorkout`, `swapExercise`, `swapWorkoutDays`. For each tool the audit records:
+1. its client-side executor, if any (e.g. `SwapService.swapExerciseInDay` for swap) — not yet traced for the other 20;
+2. every app feature that does the same job (screen, service, provider), by file:line;
+3. whether they share one writer/rules source or are separate code, and every field or rule where they disagree (what is written, which Hive key / cloud row, which telemetry, which plan-learning stamps).
+Outcome per job: one implementation that both the coach and the app call (where TS server code and Dart client code must both exist, one of them is the single rules source and the other only delegates or reads its output), plus a test that fails if a second path reappears. Out of scope: read-only display widgets that only render the same data.
+
+**First proven case: exercise swap. The paths (all read):**
 - **Coach / plan path:** `SwapService.swapExerciseInDay` (`lib/core/services/swap_service.dart:411`), reached from `tool_dispatcher.dart:324` and `:653` through `WorkoutScheduleService`. Writes the saved schedule row (`upsertScheduled`, source `schedSwap`); equipment gate `canOfferInPicker`; carries `superset_group` from the outgoing row (`:530-531`) and `category` / `exercise_type` / `equipment_needed` / `target_focus` / `priority_tier` / `coaching_cues` from the NEW library row; stamps `swapped_from` and a hard-coded `swapped_via: 'ai_coach'` (read nowhere).
 - **In-workout path:** `_showSwapSheet` (`lib/features/train/screens/active_workout/swap_sheets.dart:41`) → `ActiveWorkoutNotifier.swapExercise` (`train_provider.dart:1589`). Session-only. The replacement `ExerciseData` (`swap_sheets.dart:60-83`) takes `category: currentExercise.category` (`:80`) and `equipmentNeeded: currentExercise.equipmentNeeded` (`:81`), i.e. the OUTGOING exercise's; it sets no `exerciseType`, no `supersetGroup`, and writes no `swapped_from`.
 - **Custom-exercise auto-swap:** `_openCreateAndAutoSwap` (`swap_sheets.dart:175-183`), a third construction site (category and equipment from the new exercise when present, else the original; no `supersetGroup`).
