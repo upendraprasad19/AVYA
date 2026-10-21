@@ -9,6 +9,15 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### payment_record_failed_alert — every captured payment that a writer cannot record pages the founder. (1 bugs)
 - 2026-10-21 c3e7a1 — A CAPTURED Razorpay payment whose amount matches no plan price answered 400 in both payment writers and wrote no subscriptions row and no alert. The usual cause is a promo code deleted or its…
 
+### workout_surface_invalidation — every coach write path refreshes the same workout surfaces through one helper. (1 bugs)
+- 2026-10-21 e2a418 — Founder's A12 web walk 2026-10-21 (app.icanbefitter.com): today was already DONE on Train with two exercises logged in Active Workout. A workout logged from the coach chat (`CONFIRM · LOG WORKOUT` on…
+
+### coach_workout_card_saved_state — the card shows what the submit really did, from draft state the card watches. (1 bugs)
+- 2026-10-21 5aa251 — The chat workout card (`WorkoutLogConfirmCard`, CONFIRM · LOG WORKOUT) cleared itself after every CONFIRM whether anything saved or not: `submitWorkoutDraft` ignored the `WriteResult` of each…
+
+### exercise_logs_read_path — the expanded day's logged-exercise row (ExpandedExerciseLogRow). (1 bugs)
+- 2026-10-21 2e8b8f — Founder's A12 web walk 2026-10-21 at phone width: exercise names in Train's expanded day row were cut to about four characters ("Benc…", "Barb…"), because the name and the long detail ("3 sets · 8…
+
 ### trial_purchase_door — an order is created only when the subscription read SUCCEEDED and the door's rule allows it. (1 bugs)
 - 2026-10-21 b95d61 — `create-razorpay-order`'s double-payment guard (APK Test #12.2 / Task #6, added after the founder paid four times in 24 h on 2026-05-06) read the caller's latest active unexpired `subscriptions` row…
 
@@ -1604,6 +1613,9 @@ rather than a Hive box. (1 bugs)
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
 | 2026-10-21 | c3e7a1 | A CAPTURED Razorpay payment whose amount matches no plan price answered 400 in both payment writers and wrote no subscriptions row and no alert. The usual cause is a promo code deleted or its… | payment_record_failed_alert — every captured payment that a writer cannot record pages the founder. | supabase/functions/razorpay-webhook/index_test.ts |
+| 2026-10-21 | e2a418 | Founder's A12 web walk 2026-10-21 (app.icanbefitter.com): today was already DONE on Train with two exercises logged in Active Workout. A workout logged from the coach chat (`CONFIRM · LOG WORKOUT` on… | workout_surface_invalidation — every coach write path refreshes the same workout surfaces through one helper. | test/contracts/coach_chat_log_train_refresh_behavioral_test.dart |
+| 2026-10-21 | 5aa251 | The chat workout card (`WorkoutLogConfirmCard`, CONFIRM · LOG WORKOUT) cleared itself after every CONFIRM whether anything saved or not: `submitWorkoutDraft` ignored the `WriteResult` of each… | coach_workout_card_saved_state — the card shows what the submit really did, from draft state the card watches. | test/ai_coach/workout_log_confirm_card_saved_signal_test.dart |
+| 2026-10-21 | 2e8b8f | Founder's A12 web walk 2026-10-21 at phone width: exercise names in Train's expanded day row were cut to about four characters ("Benc…", "Barb…"), because the name and the long detail ("3 sets · 8… | exercise_logs_read_path — the expanded day's logged-exercise row (ExpandedExerciseLogRow). | test/features/train/expanded_exercise_log_row_test.dart |
 | 2026-10-21 | b95d61 | `create-razorpay-order`'s double-payment guard (APK Test #12.2 / Task #6, added after the founder paid four times in 24 h on 2026-05-06) read the caller's latest active unexpired `subscriptions` row… | trial_purchase_door — an order is created only when the subscription read SUCCEEDED and the door's rule allows it. | supabase/functions/create-razorpay-order/index_test.ts |
 | 2026-10-20 | c7d2a9 | Prevention record, not a field report. OI-356 asked for an UNDO toast after the one-LOG-per-exercise LOG and assigned it to the snackbar staleness class (b4e7f1: the swap-undo SnackBar outlived… | active_workout_set_logging | test/contracts/active_workout_set_logging_behavioral_test.dart |
 | 2026-10-20 | e3a6c1 | Founder (2026-10-20, OI-361): "zero sets logged should not be allowed". Tapping COMPLETE in the Active Workout FINISH dialog with no saveable set still ran WorkoutWriteService.markCompleted (the… | workout_completion_status | test/contracts/log_exercise_flip_behavioral_test.dart |

@@ -348,7 +348,11 @@ concepts:
       - file: lib/core/services/workout_write_service.dart
         line_range: 1-276
         method: logExercise
-        notes: appends to exercise_log_index_YYYY-MM-DD on every write
+        notes: |
+          appends to exercise_log_index_YYYY-MM-DD on every write. Both coach
+          callers (ToolDispatcher log_set and the chat draft's
+          submitWorkoutDraft) refresh the readers through
+          invalidateWorkoutSurfaces (concept workout_surface_invalidation).
       - file: lib/core/services/workout_write_service.dart
         line_range: 883-1011
         method: moveExerciseLogs
@@ -376,7 +380,11 @@ concepts:
         semantic: aggregated
         fields_read: [exercise_log_index_<dateKey>, exlog_* row maps, exercise_name, id (injected from Hive key)]
         notes: |
-          Canonical reader. Tries O(1) index lookup first; falls back
+          NOT the canonical reader: a duplicate of
+          WorkoutReadService.exerciseLogsForIstDate (OI-377). Its consumers
+          (the Train expanded row among them) refresh when a coach write path
+          invalidates the workout surfaces (concept
+          workout_surface_invalidation). Tries O(1) index lookup first; falls back
           to lazy-built date-keyed secondary index (`_ensureExlogDateIndex`)
           for legacy entries without exercise_log_index_<date>. Injects
           Hive key as `id` field on both paths (Bug F fix — required by
@@ -4388,7 +4396,7 @@ concepts:
         semantic: pass-through
         fields_read: [waterIntakeProvider (invalidate only — no value read)]
       - file: lib/features/ai_coach/services/conversational_log_handler.dart
-        line_range: 50-55
+        line_range: 60-65
         method: _logWater (AI chat → addWater)
         semantic: pass-through
         fields_read: [via waterIntakeProvider.notifier.addWater]
@@ -5396,7 +5404,7 @@ concepts:
         # correct one failed it. B-pass finding 3, 2026-08-30.
         notes: writes sleep_log_<IST-date> key
       - file: lib/features/ai_coach/services/conversational_log_handler.dart
-        line_range: 97-125
+        line_range: 123-160
         method: _logSleep
         notes: writes to legacy 'sleep_logs' list key
     reader_manifest_complete: true
@@ -7500,7 +7508,7 @@ concepts:
           Initial weight write during onboarding routes through
           HealthWriteService.logWeight per the canonical-writer rule.
       - file: lib/features/ai_coach/services/conversational_log_handler.dart
-        line_range: 125-160
+        line_range: 123-199
         method: _logSleep + _logMeasurement
         semantic: pass-through
         fields_read: []
@@ -16104,7 +16112,7 @@ concepts:
         method: body (MeasurementsCardFrame(child: _buildBody()))
         notes: L2b Landing C, E3. One line; the frame owns the flag and the height cap, so a flag-OFF screen returns its own body instance.
       - file: lib/features/ai_coach/screens/ai_coach/screen.dart
-        line_range: 509-516
+        line_range: 479-486
         method: MeasurementChipSlot (the mount line in build)
         notes: L2b Landing C, E4. Between the quick prompts and the input bar, in_app only; the slot owns its flag, prompt, focus and sending checks and is given no send callback; onShown scrolls a chat that was at its bottom back to its bottom (keepBottomAfterChip).
     readers:
@@ -16253,3 +16261,77 @@ concepts:
         semantic: detect-door-on-order-recorded-off
         notes: Same alarm as the webhook. The client reader of stacks_after (the paid-end estimate) is Piece B2b.
     regression_test: supabase/functions/create-razorpay-order/index_test.ts
+  - concept: workout_surface_invalidation
+    domain: workout
+    behavioral_test_path: test/contracts/coach_chat_log_train_refresh_behavioral_test.dart
+    description: |
+      OI-370 (diagnose e2a418). The workout surfaces a coach write refreshes,
+      as ONE list (workoutSurfaceProviders: currentPlanProvider,
+      workoutStatsProvider, calendarWeekProvider, streakProvider,
+      todayWorkoutProvider, allExercisePRsProvider, lastPerformanceProvider)
+      invalidated by ONE helper, each entry guarded and reported as the
+      non-fatal workout_surface_invalidate_<source>. The three coach write
+      paths call it; the chat path passes the container it captured before
+      its first await, so a card unmounted mid-submit still refreshes Train.
+      Other hand-written copies of the batch remain (OI-376).
+    writers:
+      - file: lib/features/train/providers/workout_surface_invalidation.dart
+        line_range: 1-9999
+        method: invalidateWorkoutSurfaces
+        notes: The list and the per-entry guarded loop.
+      - file: lib/features/ai_coach/services/conversational_log_handler.dart
+        line_range: 1-9999
+        method: submitWorkoutDraft
+        notes: "invalidateWorkoutSurfaces(container.invalidate, source: 'chat_draft') when anything saved."
+      - file: lib/features/ai_coach/services/tool_dispatcher.dart
+        line_range: 1-9999
+        method: _invalidateWorkoutProviders
+        notes: "Delegates with source: 'tool_dispatcher'."
+      - file: lib/features/ai_coach/screens/ai_coach/screen.dart
+        line_range: 1-9999
+        method: completion-prompt handler
+        notes: "Delegates with source: 'completion_prompt'."
+    readers:
+      - file: lib/features/train/screens/train/screen.dart
+        line_range: 1-9999
+        method: TrainScreen.build (watches currentPlanProvider)
+        semantic: render
+        notes: The expanded day row is built in this build and reads the day's exlogs (exercise_logs_read_path).
+    regression_test: test/contracts/workout_surface_invalidation_test.dart
+  - concept: coach_workout_card_saved_state
+    domain: workout
+    behavioral_test_path: test/ai_coach/workout_log_confirm_card_saved_signal_test.dart
+    description: |
+      OI-370 B' (diagnose 5aa251). What the chat workout card shows after
+      CONFIRM, as immutable WorkoutDraft state the card watches: isSubmitting,
+      status (pending / saved / savedDayNotMarked / partial / noneSaved),
+      cumulative savedNames and skippedNames, note, failedAttempt,
+      firstAttemptAt (every retry writes to the first attempt's date),
+      hasHeldDraft (derived in _emit), appliedFromHold, dayNotMarked. Every
+      notifier write is draft-id guarded; an auth change rebuilds the notifier,
+      drops a held card and cancels the hold timer. submitWorkoutDraft attempts
+      every exercise by index, skips (and names) one with no usable set, marks
+      the day once anything saved unless it was already done, re-checks the
+      draft id before each write and before the mark, and ends in markSaved or
+      keepFailed.
+    writers:
+      - file: lib/features/ai_coach/services/conversational_log_handler.dart
+        line_range: 1-9999
+        method: submitWorkoutDraft
+        notes: Returns DraftSubmitOutcome; the per-exercise WriteResult decides markSaved / keepFailed.
+      - file: lib/features/ai_coach/providers/ai_coach_provider.dart
+        line_range: 1-9999
+        method: WorkoutDraftNotifier (beginSubmit, endSubmit, markSaved, keepFailed, setDraft, updateSet, discard, consumeHoldAnnouncement)
+        notes: The only writer of the draft state; savedHoldFor 1500 ms, 4000 ms with a day or Skipped line.
+    readers:
+      - file: lib/features/ai_coach/widgets/workout_log_confirm_card.dart
+        line_range: 1-9999
+        method: WorkoutLogConfirmCard.build (cardStateFor)
+        semantic: render
+        notes: Saved row, notes, day line, Skipped line and held notice inside one live region keyed by failedAttempt; the discard confirm; the edit sheet captures the draft id and notifier at open.
+      - file: lib/features/ai_coach/widgets/workout_draft_slot.dart
+        line_range: 1-9999
+        method: WorkoutDraftSlot
+        semantic: render
+        notes: Keys the card by draft id; hasWorkoutDraftSlot feeds the chat's item count; workoutDraftChangeScrolls scrolls only for a new card.
+    regression_test: test/contracts/conversational_log_handler_uses_write_service_test.dart

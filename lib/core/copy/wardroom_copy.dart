@@ -79,6 +79,9 @@ class WardroomCopy {
   /// Plan header subtitle template.
   static const trainWeekSubtitleTemplate = '{done}/{total} done';
 
+  /// TalkBack label of the trophy on a logged exercise row (OI-371).
+  static const personalRecordSemantics = 'Personal record';
+
   /// Today's Workout section eyebrow.
   static const trainTodayWorkoutEyebrow = "TODAY'S WORKOUT";
 
@@ -244,6 +247,35 @@ class WardroomCopy {
   /// set to write.
   static const coachDraftNoSets =
       'No sets to log. Tell the coach your sets, or discard.';
+
+  // Chat workout card saved / partial / held states (founder-approved
+  // 2026-10-21; docs/plans/train-coach-log-refresh.md). `{saved}` / `{names}`
+  // are comma-joined exercise names, at most five then [activeFinishMoreTemplate].
+  static const coachWorkoutLoggedHeader = 'Workout logged';
+  static const coachWorkoutLogged = 'WORKOUT LOGGED';
+  static const coachWorkoutLogPartialTemplate =
+      'Partly logged: {saved}. Not saved: {names}. Fix the sets or tap CONFIRM to retry.';
+  static const coachWorkoutLogFailed =
+      'Not saved. Fix the sets or tap CONFIRM to retry.';
+  static const coachWorkoutDayNotMarked = 'Sets saved. Day not marked done.';
+  static const coachWorkoutDiscardRestTemplate =
+      'Discard the rest? {saved} stays logged.';
+
+  /// Verb agreement only: the same line when two or more names were saved.
+  static const coachWorkoutDiscardRestManyTemplate =
+      'Discard the rest? {saved} stay logged.';
+  static const coachWorkoutKeepLabel = 'KEEP';
+  static const coachWorkoutHeldNotice =
+      'New workout waiting. Confirm or discard this one first.';
+  static const coachWorkoutSkippedTemplate = 'Skipped: {names} (no usable sets).';
+
+  /// TalkBack labels for the chat workout card.
+  static const coachWorkoutEditSemanticsTemplate = 'Edit {name}';
+  static const coachWorkoutConfirmSemantics = 'Confirm and log workout';
+  static const coachWorkoutSavingSemantics = 'Saving workout';
+  static const coachWorkoutDiscardSemantics = 'Discard';
+  static const coachWorkoutDiscardRestSemantics = 'Discard the rest';
+  static const coachWorkoutKeepSemantics = 'Keep';
 
   // ── NUTRITION (Galley) ─────────────────────────────────────────────────
   /// Letterhead eyebrow template — "NUTRITION · TUE 14 APR".

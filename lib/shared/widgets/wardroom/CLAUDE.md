@@ -31,10 +31,10 @@ class AppColors {
   static const accentSoft = Color(0x1AD4B270);  // 10% alpha tint
 
   // Text (4-step ghost ladder)
-  static const textPrimary = Color(0xFFF2EDE4);  // parchment
-  static const textDim     = Color(0xFF8A9BAA);
-  static const textMute    = Color(0xFF4D6070);
-  static const textGhost   = Color(0xFF2A3848);  // placeholder, disabled
+  static const textPrimary = Color(0xFFFFF7E0);  // parchment, colors.dart:99
+  static const textDim     = Color(0xFFB5BDCB);  // colors.dart:103
+  static const textMute    = Color(0xFF5E6B80);  // colors.dart:106
+  static const textGhost   = Color(0xFF3F495A);  // placeholder, disabled, colors.dart:110
 
   // Semantic
   static const ok   = Color(0xFF7FB4A2);  // success, confirmed
@@ -118,7 +118,7 @@ Barrel: `lib/shared/widgets/wardroom/wardroom.dart` — 36 export lines. Counts 
 | WardPhaseBlock | ward_phase_block.dart | Roman numeral circle + title/weeks/description + START chip |
 | WardSessionRow / WardSessionTable | ward_session_row.dart | Set-log row (set# / weight / reps / status) + table shell |
 | WardCategorySidebar | ward_category_sidebar.dart | Vertical 46px `bgDeep` with rotated -90° mono category label (Coach Suggested-Actions, Notifications) |
-| WardSetChips | ward_set_chips.dart | Per-set bracketed chip `Wrap` — SoT for "what was logged" rendering. Used by `WorkoutReceiptCard` + Train expanded view. APK Test #12 / Theme E primitive (docs/diagnoses/INDEX.md entry "Train expanded view + Receipt rendered exercises in different formats"). |
+| WardSetChips | ward_set_chips.dart | Per-set bracketed chip `Wrap` — SoT for "what was logged" rendering. Used by `WorkoutReceiptCard`. The Train expanded view does NOT use it: its rows are `ExpandedExerciseLogRow` (name line + detail line, OI-371). APK Test #12 / Theme E primitive (docs/diagnoses/INDEX.md entry "Train expanded view + Receipt rendered exercises in different formats"). |
 | WardStatusStrip | ward_status_strip.dart | Composes streak / freeze / optional rank chips into one horizontal `Wrap`. Used as `WardLetterhead.trailing` slot on Daily / Train / Profile. |
 | **Badge** | | |
 | WardSealBadge | ward_seal_badge.dart | Seal glyph in 4 `WardSealVariant` (report / subscription / phase / founder) |

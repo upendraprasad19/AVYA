@@ -47,7 +47,7 @@ void main() {
     test('submitWorkoutDraft calls WorkoutWriteService.logExercise', () {
       final src = _src(handlerPath);
       final idx = src.indexOf(
-          'Future<void> submitWorkoutDraft(WorkoutDraft draft, WidgetRef ref)');
+          'Future<DraftSubmitOutcome> submitWorkoutDraft(WorkoutDraft draft, WidgetRef ref)');
       expect(idx, greaterThan(0));
       final end = src.indexOf('\n}\n', idx);
       final body = src.substring(idx, end > idx ? end : src.length);
@@ -71,7 +71,7 @@ void main() {
     test('submitWorkoutDraft calls WorkoutWriteService.markCompleted', () {
       final src = _src(handlerPath);
       final idx = src.indexOf(
-          'Future<void> submitWorkoutDraft(WorkoutDraft draft, WidgetRef ref)');
+          'Future<DraftSubmitOutcome> submitWorkoutDraft(WorkoutDraft draft, WidgetRef ref)');
       final end = src.indexOf('\n}\n', idx);
       final body = src.substring(idx, end > idx ? end : src.length);
       expect(
@@ -88,7 +88,7 @@ void main() {
       () {
         final src = _src(handlerPath);
         final idx = src.indexOf(
-            'Future<void> submitWorkoutDraft(WorkoutDraft draft, WidgetRef ref)');
+            'Future<DraftSubmitOutcome> submitWorkoutDraft(WorkoutDraft draft, WidgetRef ref)');
         final end = src.indexOf('\n}\n', idx);
         final body = src.substring(idx, end > idx ? end : src.length);
 

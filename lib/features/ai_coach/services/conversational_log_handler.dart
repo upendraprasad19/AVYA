@@ -1,16 +1,20 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/body_measurement_sites.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/health_write_service.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/measurement_flags.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/shared/repositories/food_repository.dart';
 import 'package:icanbefitter/features/profile/providers/body_measurements_provider.dart';
+import 'package:icanbefitter/features/train/providers/workout_surface_invalidation.dart';
 import '../providers/ai_coach_provider.dart';
 
 /// Routes AI-detected log actions to existing Riverpod providers.
@@ -264,74 +268,181 @@ List<ExerciseSet> draftExerciseSets(DraftExercise exercise) {
 bool draftHasLoggableSet(WorkoutDraft draft) =>
     draft.exercises.any((e) => draftExerciseSets(e).isNotEmpty);
 
-/// Submit a confirmed workout draft to Hive workoutBox.
-///
-/// Called by [WorkoutLogConfirmCard] on user confirmation.
-///
-/// C-8 (audit-2026-05-11) — routed through [WorkoutWriteService] so
-/// chat-confirmed workouts match the canonical field shape used by
-/// [ActiveWorkoutNotifier.completeWorkout]: `sets[]` per-set array,
-/// `set_number`, IST date stamping, deterministic key, per-exercise
-/// PR rescan, and 3-tier cloud sync (workout_logs +
-/// workout_log_exercises + workout_log_sets). Pre-fix this function
-/// wrote `exlog_<ts>_<hash>` rows with the *legacy* shape
-/// (`sets_completed`, no `sets[]`, no `set_number`) — invisible to the
-/// receipt, AI snapshot `_getThisWeekWorkouts`/`_getPersonalRecords`
-/// readers, and the per-set cloud sync. AI coach silently dropped every
-/// "I did 3x10 squats" message.
-Future<void> submitWorkoutDraft(WorkoutDraft draft, WidgetRef ref) async {
-  final now = DateTime.now();
-  final totalDurationSec = draft.exercises.fold<int>(0, (sum, e) {
-    if (e.loggingType == 'cardio') {
-      return sum + ((e.durationMins ?? 0) * 60);
-    }
-    if (e.loggingType == 'timed') {
-      return sum +
-          e.sets.fold<int>(0, (s, set) => s + (set.durationSecs ?? 0));
-    }
-    return sum;
-  });
+/// Test seams for [submitWorkoutDraft]. Production never sets them.
+class DraftSubmitDebug {
+  /// The clock a first attempt takes its date from.
+  @visibleForTesting
+  static DateTime Function() clock = DateTime.now;
 
+  /// Awaited right after `beginSubmit`, before any write.
+  @visibleForTesting
+  static Completer<void>? debugSubmitGate;
+
+  /// Awaited after the writes, before the day-mark re-check.
+  @visibleForTesting
+  static Completer<void>? debugBeforeMarkGate;
+}
+
+/// What one CONFIRM of the chat workout card did, by exercise index.
+@immutable
+class DraftSubmitOutcome {
+  /// False when the submit was refused (a second tap, a stale card).
+  final bool started;
+
+  /// The OI-361 guard: no exercise had a set to write.
+  final bool nothingToLog;
+  final List<int> savedIndices;
+  final List<int> failedIndices;
+
+  /// No usable set (`draftExerciseSets` is empty): never written, named.
+  final List<int> skippedIndices;
+  final bool dayMarked;
+
+  const DraftSubmitOutcome({
+    this.started = true,
+    this.nothingToLog = false,
+    this.savedIndices = const [],
+    this.failedIndices = const [],
+    this.skippedIndices = const [],
+    this.dayMarked = false,
+  });
+}
+
+int _draftExerciseDurationSec(DraftExercise e) {
+  if (e.loggingType == 'cardio') return (e.durationMins ?? 0) * 60;
+  if (e.loggingType == 'timed') {
+    return e.sets.fold<int>(0, (s, set) => s + (set.durationSecs ?? 0));
+  }
+  return 0;
+}
+
+/// Submit a confirmed workout draft through [WorkoutWriteService].
+///
+/// Called by [WorkoutLogConfirmCard] on CONFIRM. Every exercise is attempted
+/// (by index); one with no usable set is skipped and named. The day is marked
+/// done as soon as anything from this card has saved, unless it was already
+/// done (`markCompleted` replaces `wlog_<date>` wholesale). A retry writes to
+/// the first attempt's date. Failures stay on the card with a note; the card
+/// state lives in [workoutDraftProvider], reached through the container
+/// captured before the first await, because the card can be unmounted
+/// mid-submit (b7f3e2). If the current draft changes mid-submit (an auth
+/// change), the submit stops at once: nothing more is written or marked.
+///
+/// C-8 (audit-2026-05-11): routed through [WorkoutWriteService] so chat
+/// workouts carry the canonical field shape (`sets[]`, `set_number`, IST date,
+/// deterministic key, PR rescan, 3-tier cloud sync).
+Future<DraftSubmitOutcome> submitWorkoutDraft(WorkoutDraft draft, WidgetRef ref) async {
   // OI-361: a draft with no set to write completes nothing. The card disables
   // CONFIRM on the same predicate; this is the defence for any other caller.
-  if (!draftHasLoggableSet(draft)) return;
-
-  for (final exercise in draft.exercises) {
-    final sets = draftExerciseSets(exercise);
-    if (sets.isEmpty) continue;
-
-    await WorkoutWriteService.instance.logExercise(
-      date: now,
-      exerciseName: exercise.name,
-      sets: sets,
-      source: WriteSource.aiCoach,
-      ref: ref,
-    );
+  if (!draftHasLoggableSet(draft)) {
+    return const DraftSubmitOutcome(nothingToLog: true);
   }
 
-  // Mark the day's workout as completed — synthesizes a wlog_<date>
-  // and flips today's schedule status if present.
-  await WorkoutWriteService.instance.markCompleted(
-    date: now,
-    workoutName: kChatWorkoutName,
-    durationSec: totalDurationSec,
-    ref: ref,
-  );
+  final draftId = draft.id;
+  final container = ProviderScope.containerOf(ref.context, listen: false);
+  final notifier = container.read(workoutDraftProvider.notifier);
+  final now = notifier.beginSubmit(draftId, DraftSubmitDebug.clock());
+  if (now == null) return const DraftSubmitOutcome(started: false);
+  bool stillCurrent() => container.read(workoutDraftProvider)?.id == draftId;
 
-  // Cross-screen invalidation. WorkoutWriteService.onInvalidate handles
-  // the full batch when wired (currentPlan / workoutStats / calendar /
-  // streak / today / PRs); we still invalidate the immediate Home
-  // surface here so the chat → confirmation → home transition shows
-  // fresh state even when the optional `onInvalidate` hook isn't set.
-  ref.invalidate(calendarWeekProvider);
-  ref.invalidate(streakProvider);
-  ref.invalidate(todayWorkoutProvider);
+  final saved = <int>[];
+  final failed = <int>[];
+  final skipped = <int>[];
+  try {
+    final gate = DraftSubmitDebug.debugSubmitGate;
+    if (gate != null) await gate.future;
 
-  // Defensive: pushSnapshot may have been triggered already by
-  // WorkoutWriteService; calling it again is cheap (snapshot compile is
-  // idempotent + rate-limited inside SyncService).
-  unawaited(SyncService.instance.pushSnapshot());
+    var savedDurationSec = 0;
+    for (var i = 0; i < draft.exercises.length; i++) {
+      final exercise = draft.exercises[i];
+      final sets = draftExerciseSets(exercise);
+      if (sets.isEmpty) {
+        skipped.add(i);
+        continue;
+      }
+      if (!stillCurrent()) {
+        return DraftSubmitOutcome(savedIndices: saved, failedIndices: failed);
+      }
+      final result = await WorkoutWriteService.instance.logExercise(
+        date: now,
+        exerciseName: exercise.name,
+        sets: sets,
+        source: WriteSource.aiCoach,
+        // No ref: it only feeds the unwired onInvalidate hook, and this ref
+        // may belong to a card disposed mid-submit; the helper below
+        // invalidates through the container (B-pass fb5048e68fae F8).
+      );
+      if (result.success) {
+        saved.add(i);
+        savedDurationSec += _draftExerciseDurationSec(exercise);
+      } else {
+        failed.add(i);
+      }
+    }
 
-  // Clear the draft
-  ref.read(workoutDraftProvider.notifier).clearDraft();
+    final markGate = DraftSubmitDebug.debugBeforeMarkGate;
+    if (markGate != null) await markGate.future;
+    if (!stillCurrent()) {
+      return DraftSubmitOutcome(savedIndices: saved, failedIndices: failed);
+    }
+
+    final savedNames = [for (final i in saved) draft.exercises[i].name];
+    final skippedNames = [for (final i in skipped) draft.exercises[i].name];
+    final everSaved = savedNames.isNotEmpty ||
+        (container.read(workoutDraftProvider)?.savedNames.isNotEmpty ?? false);
+
+    // Mark the day as soon as anything from this card saved: Train shows a
+    // day's logs only once it is done. An already-done day (status completed
+    // AND its wlog_ present) is left alone; a completed status with no wlog_
+    // still gets one, as on origin/main (B-pass fb5048e68fae F5).
+    var dayMarked = true;
+    var markedNow = false;
+    if (everSaved) {
+      var wasCompletedBefore = false;
+      try {
+        wasCompletedBefore = WorkoutScheduleService.instance
+                    .getScheduleForDate(now)?['status'] ==
+                'completed' &&
+            HiveService.instance.workoutBox
+                .get(WorkoutWriteService.wlogKey(now)) is Map;
+      } catch (_) {
+        // The schedule box is unavailable: markCompleted reports its own failure.
+      }
+      if (!wasCompletedBefore) {
+        final result = await WorkoutWriteService.instance.markCompleted(
+          date: now,
+          workoutName: kChatWorkoutName,
+          durationSec: savedDurationSec,
+        );
+        dayMarked = result.success;
+        markedNow = result.success;
+      }
+    }
+
+    // A retry that saves nothing new but marks the day still changes what
+    // Train shows (B-pass fb5048e68fae F1).
+    if (saved.isNotEmpty || markedNow) {
+      invalidateWorkoutSurfaces(container.invalidate, source: 'chat_draft');
+      // Defensive: WorkoutWriteService may already have pushed; the snapshot
+      // compile is idempotent and rate-limited inside SyncService.
+      unawaited(SyncService.instance.pushSnapshot());
+    }
+
+    if (failed.isEmpty) {
+      notifier.markSaved(draftId,
+          dayMarked: dayMarked, skippedNames: skippedNames);
+    } else {
+      notifier.keepFailed(draftId, failed, savedNames,
+          dayMarked: dayMarked, skippedNames: skippedNames);
+    }
+    return DraftSubmitOutcome(
+      savedIndices: saved,
+      failedIndices: failed,
+      skippedIndices: skipped,
+      dayMarked: everSaved && dayMarked,
+    );
+  } finally {
+    // Defensive: no reachable path throws past markSaved / keepFailed.
+    notifier.endSubmit(draftId);
+  }
 }

@@ -81,46 +81,22 @@ extension _ExpandedExercises on _TrainScreenState {
         final tail = secs % 60;
         final dur = '${mins > 0 ? '${mins}m ' : ''}${tail}s';
         detail = sets > 1
-            ? '$sets sets \u00b7 ${hasPerSetBest ? 'best' : 'total'} $dur'
+            ? '${setCountLabel(sets)}$kDetailSeparator${hasPerSetBest ? 'best' : 'total'} $dur'
             : dur;
       } else if (loggingType == 'cardio') {
         final dist = (log['distance_km'] as num?)?.toDouble() ?? 0;
-        detail =
-            '${totalDuration ~/ 60} min \u00b7 ${dist.toStringAsFixed(1)} km';
+        detail = '${totalDuration ~/ 60}${kNbsp}min$kDetailSeparator'
+            '${dist.toStringAsFixed(1)}${kNbsp}km';
       } else if (weight > 0) {
-        detail =
-            '$sets sets \u00b7 $perSetMaxReps reps \u00b7 ${weight.toStringAsFixed(1)} kg';
+        detail = '${setCountLabel(sets)}$kDetailSeparator'
+            '${repCountLabel(perSetMaxReps)}$kDetailSeparator'
+            '${weight.toStringAsFixed(1)}${kNbsp}kg';
       } else {
-        detail = '$sets sets \u00b7 $perSetMaxReps reps';
+        detail = '${setCountLabel(sets)}$kDetailSeparator'
+            '${repCountLabel(perSetMaxReps)}';
       }
 
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 6),
-        child: Row(
-          children: [
-            Icon(
-              isPr ? Icons.emoji_events : Icons.check,
-              size: 13,
-              color: isPr ? AppColors.proGold : AppColors.ok,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                name,
-                style: AppTypography.bodySm.copyWith(fontSize: 11),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            Text(
-              detail,
-              style: AppTypography.monoXs.copyWith(
-                color: AppColors.textDim,
-                letterSpacing: 1.2,
-              ),
-            ),
-          ],
-        ),
-      );
+      return ExpandedExerciseLogRow(name: name, detail: detail, isPr: isPr);
     }).toList();
 
     // "View Workout Card" button — shown when today's workout is saved
@@ -174,4 +150,66 @@ extension _ExpandedExercises on _TrainScreenState {
   }
 
   String _formatDateKey(DateTime d) => istDateStr(d);
+}
+
+/// One logged exercise in the expanded DONE day (OI-371): the name wraps in
+/// full and the detail sits on its own line under it, so neither is cut at
+/// phone width or large text. TalkBack reads it as one node, PR first.
+class ExpandedExerciseLogRow extends StatelessWidget {
+  final String name;
+  final String detail;
+  final bool isPr;
+
+  const ExpandedExerciseLogRow({
+    super.key,
+    required this.name,
+    required this.detail,
+    required this.isPr,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return MergeSemantics(
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Icon(
+                isPr ? Icons.emoji_events : Icons.check,
+                // Scales with the text so it stays on the first line.
+                size: MediaQuery.textScalerOf(context).scale(13),
+                color: isPr ? AppColors.proGold : AppColors.ok,
+                semanticLabel:
+                    isPr ? WardroomCopy.personalRecordSemantics : null,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: AppTypography.bodySm.copyWith(fontSize: 11),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    detail,
+                    style: AppTypography.monoXs.copyWith(
+                      color: AppColors.textDim,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
