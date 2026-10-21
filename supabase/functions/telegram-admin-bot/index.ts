@@ -209,6 +209,9 @@ export async function cmdRevenue(supabase: any): Promise<string> {
     // MAX_PAGES bound (_shared/founder_digest_content.ts) for the same reason.
     { orderBy: "id", label: "telegram-admin-bot cmdRevenue", maxPages: 200 },
   );
+  // ROWS per plan, not users: since OI-341 Piece B2a a referral-trial user who
+  // buys holds a trial row and a paid row at once (stacking), so one person can
+  // appear under two plans. referral_trial contributes nothing to MRR.
   const counts = new Map<string, number>();
   for (const row of data ?? []) {
     counts.set(row.plan, (counts.get(row.plan) ?? 0) + 1);

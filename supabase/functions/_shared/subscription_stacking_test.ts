@@ -5,11 +5,14 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import {
+  isEnvExactlyTrue,
   isStackingEnabled,
+  isTrialPurchaseEnabled,
   isValidPaymentId,
   plainEndDate,
   recordPaidSubscription,
   STACKING_ENABLE_ENV,
+  TRIAL_PURCHASE_ENABLE_ENV,
 } from "./subscription_stacking.ts";
 import { FAKE_ORIGIN, FakeServer, jsonResponse } from "./postgrest_fake_fetch.ts";
 
@@ -269,4 +272,35 @@ Deno.test("recordPaidSubscription: a malformed answer is ok:false 'bad_rpc_respo
   } finally {
     server.restore();
   }
+});
+
+// ── OI-341 Piece B2a: one switch rule for both secrets (plan 2.1) ──────────
+
+const VALUES: Array<[string | undefined, boolean]> = [
+  ["true", true],
+  [undefined, false],
+  ["", false],
+  ["TRUE", false],
+  ["True", false],
+  [" true", false],
+  ["true ", false],
+  ["1", false],
+  ["yes", false],
+  ["false", false],
+];
+
+Deno.test("isEnvExactlyTrue: exactly 'true' for the NAMED variable only", () => {
+  for (const [v, want] of VALUES) {
+    assertEquals(isEnvExactlyTrue("X_FLAG", (n) => (n === "X_FLAG" ? v : undefined)), want, String(v));
+    assertEquals(isEnvExactlyTrue("X_FLAG", (n) => (n === "OTHER" ? v : undefined)), false, "another name never counts");
+  }
+});
+
+Deno.test("isTrialPurchaseEnabled: reads ENABLE_TRIAL_PURCHASE with the same rule, independent of the stacking secret", () => {
+  assertEquals(TRIAL_PURCHASE_ENABLE_ENV, "ENABLE_TRIAL_PURCHASE");
+  for (const [v, want] of VALUES) {
+    assertEquals(isTrialPurchaseEnabled((n) => (n === TRIAL_PURCHASE_ENABLE_ENV ? v : undefined)), want, String(v));
+  }
+  assertEquals(isTrialPurchaseEnabled((n) => (n === STACKING_ENABLE_ENV ? "true" : undefined)), false);
+  assertEquals(isStackingEnabled((n) => (n === TRIAL_PURCHASE_ENABLE_ENV ? "true" : undefined)), false);
 });

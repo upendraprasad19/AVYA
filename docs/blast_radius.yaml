@@ -40,6 +40,9 @@ paths:
   # ----- catastrophic -----
   - { glob: "supabase/functions/razorpay-webhook/**", tier: catastrophic }
   - { glob: "supabase/functions/verify-payment/**", tier: catastrophic }
+  # OI-341 Piece B2a: the purchase door decides who may pay (and, with ENABLE_TRIAL_PURCHASE, sells a stacked purchase to a
+  # referral-trial user); before B2a a failed guard read created the order (fail open). Payment path, so catastrophic.
+  - { glob: "supabase/functions/create-razorpay-order/**", tier: catastrophic }
   - { glob: "supabase/functions/delete-account/**", tier: catastrophic }
   # OI-321 (founder decision 2026-10-11): the one scheduled bulk-delete over user files. docs/operations/CRON_REGISTRY.md
   # calls it the highest-consequence endpoint behind the shared secret, and its f0b6d8 defect would have deleted a PRO

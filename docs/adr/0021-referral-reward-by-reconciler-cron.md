@@ -79,3 +79,14 @@ file set and with the same ACL discipline:
 Accepted unchanged: the credit-batch ORDER (`ORDER BY converted_at, id LIMIT 50`; starvation needs 50 or more stuck rows at once, today 0; ledger N2, `verified_clean`). Plan:
 `docs/plans/referral-hardening-migration-160.md`. Migration: `supabase/migrations/160_referral_hardening.sql`. SoT concepts:
 `referrer_summary`, `referral_reward_on_conversion`.
+
+## Amendment 2026-10-21: the friend can buy during the trial (OI-341 Piece B2a)
+
+The decision above assumed `create-razorpay-order` refuses ANY active row, so a friend could not buy while on the 7-day
+`referral_trial` and the referrer's reward landed about 14 days after the friend joined. OI-341 Piece B2a turns that 409 into a
+door (`docs/architecture/payment.md` rule 10): once both `ENABLE_SUBSCRIPTION_STACKING` and `ENABLE_TRIAL_PURCHASE` are on, a
+trial user can buy and the paid days start at the trial end. The reconciler is unchanged and still reads the paid row as
+specified here, but a purchase made DURING the trial has `start_date` = the payment instant, so it qualifies at once and the
+referrer is credited at payment + 7 days (sooner than the ~14 days the original text implied). The reward amount and the
+qualifying rules do not change. Plan: `docs/plans/oi341-piece-b2-door.md`. SoT concepts: `referral_reward_on_conversion`,
+`trial_purchase_door`.

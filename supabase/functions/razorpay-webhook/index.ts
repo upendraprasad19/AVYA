@@ -48,7 +48,7 @@ import {
   plainEndDate,
   recordPaidSubscription,
 } from "../_shared/subscription_stacking.ts";
-import { reportPaymentRecordFailure } from "../_shared/payment_alert.ts";
+import { checkStackingMismatch, reportPaymentRecordFailure } from "../_shared/payment_alert.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -61,6 +61,10 @@ const RAZORPAY_KEY_ID = Deno.env.get("RAZORPAY_KEY_ID") ?? "";
 const RAZORPAY_KEY_SECRET = Deno.env.get("RAZORPAY_KEY_SECRET")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+// Replay windows per event (OI-341 Piece B2a, plan 2.6; see the replay block in the handler).
+const CAPTURED_MAX_AGE_SEC = 24 * 3600 + 600;
+const AUTHORIZED_MAX_AGE_SEC = 300;
 
 // Canonical plan prices in paise.
 // Keep in sync with verify-payment/index.ts and AppConstants in Flutter.
@@ -321,7 +325,7 @@ export async function handler(req: Request): Promise<Response> {
       );
     }
 
-    // Replay protection — reject webhook DELIVERIES older than 5 minutes.
+    // Replay protection — reject webhook DELIVERIES older than the event's window.
     //
     // Age MUST be measured from the webhook EVENT time (`payload.created_at`),
     // NOT the payment entity's `created_at`. A UPI-collect payment is *created*
@@ -331,12 +335,26 @@ export async function handler(req: Request): Promise<Response> {
     // event. Keying the replay window off it rejected slowly-approved captures
     // FOREVER, so PRO never unlocked via the webhook (F32, audit-2026-06-07).
     //
-    // Razorpay stamps each event (and every 24h retry) with a fresh top-level
-    // `created_at`, so the event time stays current on legitimate deliveries;
-    // anything 5+ minutes stale here is a replay — and the idempotency
-    // (pre-SELECT + 23505 catch) below also neutralises it. Epoch seconds,
-    // Razorpay standard. Missing → skip the check (never fail closed on missing
-    // telemetry).
+    // OI-341 Piece B2a (plan 2.6): the window depends on the event. Razorpay
+    // retries a delivery "for 24 hours after event creation" (its webhook docs),
+    // and nothing shows that a retry re-stamps `created_at`, so a 5-minute window
+    // could reject a legitimate retry of a captured payment for good. So:
+    //   - `payment.captured`: 24 h + 10 min. A stale signed captured event reaches
+    //     only idempotent code (the H-19 pre-SELECT, the second pre-SELECT, the
+    //     B1 function or the OFF 23505 catch; the promo redeems only when
+    //     `!alreadyProcessed`).
+    //   - `payment.authorized`: 5 minutes, because its path calls Razorpay's
+    //     capture API.
+    // Every event keeps the future-skew rejection. Stated residual risks: a signed
+    // captured event up to a day old can re-create a row an operator deleted by
+    // hand (or after a refund) within that day; and a captured event first
+    // DELIVERED late (Razorpay's retries after our outage) records the row from
+    // the delivery time, so the user gets up to that delay in extra days
+    // (bounded by the window, in the user's favour); a captured event for an
+    // account deleted since then fails the insert (FK) and retries for up to the
+    // window (the ON path pages once, deduped). Operators therefore CANCEL a
+    // tester row, never delete it, within the window (plan step 0 (d)). Epoch seconds, Razorpay standard.
+    // Missing → skip the check (never fail closed on missing telemetry).
     const eventCreatedAtSec = payload.created_at as number | undefined;
     if (typeof eventCreatedAtSec === "number" && eventCreatedAtSec > 0) {
       // Review d6b736 F3: signed age — positive = stale (past), negative =
@@ -344,7 +362,8 @@ export async function handler(req: Request): Promise<Response> {
       // timestamp must not masquerade as "fresh". Tolerate <=120s forward skew;
       // reject older than 5 min. (Idempotency pre-SELECT + 23505 is the backstop.)
       const ageSec = Date.now() / 1000 - eventCreatedAtSec;
-      if (ageSec > 300 || ageSec < -120) {
+      const maxAgeSec = event === "payment.captured" ? CAPTURED_MAX_AGE_SEC : AUTHORIZED_MAX_AGE_SEC;
+      if (ageSec > maxAgeSec || ageSec < -120) {
         console.warn(
           `[razorpay-webhook] rejecting replay: payment_id=${paymentEntity.id} event_age=${Math.round(ageSec)}s`,
         );
@@ -516,6 +535,19 @@ export async function handler(req: Request): Promise<Response> {
         `[razorpay-webhook] amount ${actualPaise} paise does not match any plan` +
           (promoCode ? ` (promo: ${promoCode})` : ""),
       );
+      // OI-341 Piece B2a (hermes seat 4 F4): the money is captured and no row
+      // can be written (the promo was edited or deleted between order and
+      // capture, or the amount matches no price), so page it. The response is
+      // unchanged.
+      await reportPaymentRecordFailure(supabaseClient, {
+        fn: "razorpay-webhook",
+        requestId: crypto.randomUUID().split("-")[0],
+        paymentId: razorpayPaymentId,
+        userId,
+        plan: "unknown",
+        amountPaise: actualPaise,
+        code: "amount_no_match",
+      }, { timeoutMs: 1000 });
       return new Response(
         JSON.stringify({ error: "amount_does_not_match_any_plan" }),
         {
@@ -550,6 +582,15 @@ export async function handler(req: Request): Promise<Response> {
         `[razorpay-webhook] cross-check failed: derivePlanFromAmount returned '${plan}' ` +
           `but computeExpectedAmount gives ${expectedPaise} paise, got ${actualPaise}`,
       );
+      await reportPaymentRecordFailure(supabaseClient, {
+        fn: "razorpay-webhook",
+        requestId: crypto.randomUUID().split("-")[0],
+        paymentId: razorpayPaymentId,
+        userId,
+        plan,
+        amountPaise: actualPaise,
+        code: "amount_cross_check",
+      }, { timeoutMs: 1000 });
       return new Response(
         JSON.stringify({ error: "amount_mismatch" }),
         {
@@ -585,11 +626,19 @@ export async function handler(req: Request): Promise<Response> {
       .maybeSingle();
 
     let alreadyProcessed = existing !== null;
+    // OI-341: the stacking switch is read ONCE per request (exactly "true"; absent = OFF).
+    const stackingOn = isStackingEnabled();
+    // OI-341 Piece B2a (plan 2.3): which state this isolate read, for every payment that reaches the insert branch.
+    if (!alreadyProcessed) {
+      console.log(`[razorpay-webhook] stacking_switch=${stackingOn ? "on" : "off"} payment_id=${razorpayPaymentId}`);
+    }
+    // Set only when the OFF branch itself inserted the row: the mismatch alarm's precondition (plan 2.5).
+    let offInserted: { start: string; end: string } | null = null;
     if (alreadyProcessed) {
       console.log(
         `Idempotent webhook: payment ${razorpayPaymentId} already recorded, skipping insert`,
       );
-    } else if (isStackingEnabled()) {
+    } else if (stackingOn) {
       // OI-341 Piece B1 ON path: ONE call to public.record_paid_subscription
       // (migration 161): per-user lock shared with the referral redeem and job,
       // idempotency, stacked end and insert in one transaction. It absorbs the
@@ -617,7 +666,7 @@ export async function handler(req: Request): Promise<Response> {
           plan,
           amountPaise: actualPaise,
           code: rec.code,
-        });
+        }, { timeoutMs: 1000 }); // plan 2.4: two 1 s round trips keep the 500 near Razorpay's 5 s clock
         return new Response(
           JSON.stringify({ error: "Failed to create subscription record" }),
           {
@@ -632,8 +681,9 @@ export async function handler(req: Request): Promise<Response> {
         `[razorpay-webhook] stacking=on payment_id=${razorpayPaymentId} inserted=${rec.inserted}`,
       );
     } else {
-      // OFF branch (the default): exactly `now + days`, no extra query; the
-      // insert and its 23505 handling are today's code.
+      // OFF branch (the default): exactly `now + days`; the insert and its 23505
+      // handling are today's code. Its one added request is the mismatch alarm
+      // after the promo (Piece B2a plan 2.5), which never changes the response.
       endDate = plainEndDate(now, plan === "monthly" ? 30 : 365);
       const { error: insertError } = await supabaseClient
         .from("subscriptions")
@@ -658,6 +708,9 @@ export async function handler(req: Request): Promise<Response> {
       // weInsertedTheRow gate is the mirror of this).
       if (insertError && insertError.code === "23505") {
         alreadyProcessed = true;
+      }
+      if (!insertError) {
+        offInserted = { start: now.toISOString(), end: endDate.toISOString() };
       }
       if (insertError && insertError.code !== "23505") {
         console.error("Failed to insert subscription:", insertError);
@@ -694,6 +747,21 @@ export async function handler(req: Request): Promise<Response> {
         derived.discountPct,
         actualPaise,
       );
+    }
+
+    // OI-341 Piece B2a (plan 2.5): the switch-mismatch alarm, after the promo so
+    // it can never skip it. Only when THIS request's OFF branch inserted the row
+    // (not the skip paths, not the 23505 race arm, not the ON path). It detects
+    // and pages; it never changes the row or this response.
+    if (offInserted !== null) {
+      await checkStackingMismatch(supabaseClient, {
+        fn: "razorpay-webhook",
+        paymentId: razorpayPaymentId,
+        userId,
+        plan,
+        rowStart: offInserted.start,
+        rowEnd: offInserted.end,
+      });
     }
 
     return new Response(
