@@ -105,8 +105,10 @@ const seamAllowlist = <String, SeamEntry>{
   'lib/shared/repositories/plan_engine/cardio_finisher.dart': SeamEntry(1,
       'Seam 10. equipmentNeeded is null on this construction - same problem as '
       'warmup_cooldown.'),
-  'lib/shared/repositories/exercise_repository.dart': SeamEntry(1,
-      'The repository itself - the source the other seams read from.'),
+  'lib/shared/repositories/exercise_repository.dart': SeamEntry(2,
+      'The repository itself - the source the other seams read from. The '
+      'second site is customNamesLower (c3e9a4): names only, used to REMOVE '
+      'customs the generator auto-appended, never to offer one.'),
 };
 
 class SeamEntry {

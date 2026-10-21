@@ -960,6 +960,9 @@ class ExerciseSelector {
       equipmentNeeded: equipList,
       primaryMuscles: muscles.isEmpty ? null : muscles,
       variant: variant,
+      // c3e9a4: a pinned custom is a deliberate one (the previous phase held
+      // it); the L2 repair predicate keeps an exercise carrying this stamp.
+      customOrigin: 'repeat_pin',
     );
   }
 

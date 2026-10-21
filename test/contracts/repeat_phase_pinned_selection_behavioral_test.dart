@@ -297,6 +297,17 @@ void main() {
     expect(names(plan, 0, 0).contains('My Landmine Press'), isTrue,
         reason: 'getByExactName misses (not in library) → the custom fallback '
             'resolves it via getCustomExercises + _buildCustomExercise.');
+    // c3e9a4: the pinned custom carries its provenance through the whole
+    // pipeline (periodization, superset pairer) into the row map, so the L2
+    // repair predicate keeps it; library exercises carry none.
+    for (final e in plan.weekPlans[0].workoutDays[0].exercises) {
+      final m = e.toMap();
+      if (e.exerciseName == 'My Landmine Press') {
+        expect(m['custom_origin'], 'repeat_pin');
+      } else {
+        expect(m.containsKey('custom_origin'), isFalse, reason: e.exerciseName);
+      }
+    }
   });
 
   test('(8) cardinality: a partial pin fresh-fills unpinned frames; full day '
