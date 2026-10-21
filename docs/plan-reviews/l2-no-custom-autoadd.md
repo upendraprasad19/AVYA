@@ -41,7 +41,8 @@ verdict accepted.
 No kill switch: the removed path is the defect itself (founder decision 2026-10-21, "never auto-add
 customs"); a switch would keep it reachable and §4.6 step 4 deletes the old path anyway. Revert = `git
 revert` of the merge. The B-pass (Finding 1) asked that the founder accept this explicitly; asked in chat
-2026-10-21.
+2026-10-21. **Accepted by the founder in chat 2026-10-21** ("yes, accept the waiver — merge #138");
+PR #138 merged as `c54e63ba` the same day.
 
 ## Verification
 - `flutter analyze lib/`: 0 errors, 0 warnings (60 pre-existing infos elsewhere).
