@@ -6312,3 +6312,14 @@ Mechanism: `WardButton` (`lib/shared/widgets/wardroom/ward_button.dart:96`) lays
 To do:
 - Make the label fit inside `WardButton`: `Flexible` + `softWrap`/`textAlign: center` (wrap to two lines), or `FittedBox(fit: BoxFit.scaleDown)`. Pick one with the Wardroom soul (`lib/shared/widgets/wardroom/CLAUDE.md`). It is a shared primitive with about 60 call sites under `lib/`, so check the goldens (`test/widgets/wardroom/`) and the `fullWidth: false` (`MainAxisSize.min`) callers, where `Flexible` needs a bounded parent.
 - Regression test: `pumpScreen` + `scrollToFinish` from `test/features/train/log_exercise/card_harness.dart` at 320 dp × 2.0, asserting `tester.takeException()` is null. Then drop the `takeException()` workaround in the two dialog tests above.
+
+## OI-364 — Remove the disable_lapse_gap_policy kill switch (client Hive key + server DISABLE_LAPSE_GAP_POLICY env) and its old code paths after the PRO gap policy passes the device check
+
+- **Status**: OPEN
+- **Blocked on**: founder device check of the PRO gap policy (Piece B, PR #126, merge 3c87b362) in a `/build-apk` build; removal also needs the founder's go to redeploy `evaluate-rank-promotions`
+- **Verified**: 2026-10-21 - by code read: only READERS of the key exist (`lib/core/utils/gap_policy.dart` `lapseGapPolicyEnabled`; `workout_repository.dart` streak walk ~:407 and completion rate ~:527; `ai_snapshot_builder.dart` ~:1354; `workout_schedule_read_service.dart` ~:2066; `streak_progress_service.dart` ~:324; server `_shared/rank_engine.ts` ~:182 env `DISABLE_LAPSE_GAP_POLICY`). No production writer sets the client key.
+- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `kill-switch-removal-oi`
+
+Source: CLAUDE.md section 4.6 step 4 - an old code path kept for later removal is tracked on the board, not as an intention. Plan: `docs/plans/2026-10-18-pro-gap-policy-and-streak.md` (Kill switch section).
+
+Fix: once the device check passes, delete the key, the getter, every `policyEnabled` / `lapseGapPolicyEnabled` branch (old paths: start date `max(today, plan_end + 1)`, streak skip-at-zero, completion rate ignoring blank days, no freeze zero, no `plan_status`), the `countBlankDays` opt-in and env check in `rank_engine.ts` / `evaluate-rank-promotions`, and the kill-switch tests (`lapse_gap_policy_behavioral_test.dart`, `lapse_gap_freeze_reset_advance_test.dart`, `gap_policy_test.dart`, `rank_engine_blank_days_test.ts`). Default-live policy, so the full x2 plan review plus B-pass applies to the removal. Redeploy `evaluate-rank-promotions` (founder go); `ai-proxy` does not read the switch.
