@@ -55,7 +55,8 @@ reads, read-only git, the five named Deno suites), with no database statement, n
 
 ## Founder triage
 
-Pending the founder's read of this report with the B2a commit go.
+2026-10-21: the founder read the summary with the B2a commit go and answered "ok" to both filed OIs (OI-366, OI-367:
+decisions before store launch, not blocking B2a). No finding was re-triaged; the verdict stands.
 
 ## Action items
 

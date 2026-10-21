@@ -35,8 +35,9 @@ Tier: **catastrophic** (payment writers + a new door on `create-razorpay-order`)
 - 2026-10-21 answers (v4.2):
   - the server secrets hold the **live** key pair, and no test secret exists on the VPS. The live steps therefore run in
     **live mode**: small real payments with ONE dedicated **90%** promo code (allowed by
-    `promo_codes_discount_pct_check` 1..90, migration 160:457; ₹34.90 monthly), at most 5 uses, a short expiry,
-    deactivated after step 4. The founder refunds each payment in the Razorpay dashboard; each row correction is its own
+    `promo_codes_discount_pct_check` 1..90, migration 160:457; ₹34.90 monthly), with `max_uses` 5 and a short
+    `valid_until` set for the record only (neither is enforced anywhere, OI-366; only `is_active` stops the code, step
+    0 (c)), deactivated after step 4. The founder refunds each payment in the Razorpay dashboard; each row correction is its own
     go. The 76.7% break-even rule (OI-342) guards real customers' referral economics and does not bind tester purchases
     that are refunded;
   - the purchases are made on the **web app** (app.icanbefitter.com), assumed to carry the live key ID; no build is

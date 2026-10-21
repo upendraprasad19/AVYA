@@ -231,53 +231,6 @@ pending:
       with the flag under OI-345, after the FLIPPED-BUILD-CHECK row of
       docs/audit/measurements-flag-flip.closure.yaml is recorded.
 
-  - flag: ENABLE_SUBSCRIPTION_STACKING
-    branch: oi341-purchase-in-trial
-    build_commit: 8be9371d
-    build_date: 2026-10-17
-    flip_reviewed: false
-    flip_commit: null
-    note: >
-      OI-341 Piece A (plan docs/plans/oi341-purchase-in-trial.md, v4.1). An
-      ENABLING Edge Function secret (dashboard, not a Hive key): unless the value
-      is exactly the string "true", verify-payment and razorpay-webhook store
-      `now + plan days` as before and issue NO extra query; with "true" they
-      store `max(now, latest active end) + days`. Absent by default; the secret
-      is NOT set by Piece A, and while create-razorpay-order keeps its 409
-      already_pro guard a payment can only be made by a user with no active row,
-      so even an enabled switch computes today's value. Catastrophic tier, so
-      the build took the FULL x2 plan review plus B-pass and hermes (the lighter
-      one-round tier does not apply); this entry exists because the FLIP is a
-      Piece B action: it needs Piece B's own full x2 review and B-pass, the
-      alert row precondition (the read-failure path is a plain log line until
-      then), a check that a dashboard secret change reaches warm isolates
-      without a redeploy, and the first enabled call as the proof that live
-      PostgREST accepts the helper's query (the fetch-level fake proves the
-      string and its SQL semantics, not the live parser). build_commit is
-      Piece A's build commit (merged in PR #124).
-      SECOND BUILD, Piece B1 (branch oi341-piece-b-door, plan
-      docs/plans/oi341-piece-b-door.md v4.1, built 2026-10-20; its build commit
-      is stamped here after the merge): it REPLACED Piece A's ON path (read,
-      then insert) with ONE call to public.record_paid_subscription (migration
-      161: per-user lock, idempotency, stacked end, insert) and added the
-      payment_record_failed alert, which satisfies the alert precondition
-      above. B1 took tier ship_dark_build with review_rounds: 1 (the unsplit
-      unit had three earlier rounds), plus B-pass and hermes. So the flip's
-      full x2 review (Piece B2) must re-review the SQL body of migration 161
-      and the new ON path in both writers, not only the purchase door. The
-      Piece A items about the helper's PostgREST query no longer apply (that
-      query was removed); the first LIVE happy-path call of the function is a
-      Piece B2 flip step.
-      THE FLIP, Piece B2a (branch oi341-piece-b2-door, plan
-      docs/plans/oi341-piece-b2-door.md v4.2, built 2026-10-21): the plan took
-      the full x2 review (rounds 3 and 4 on the post-split plan, converged; 0 P0
-      and 0 P1 in round 4) and re-reviewed the B1 ON path it flips; the B-pass
-      and hermes pass run on the B2a diff. The secret itself is set as a live
-      step AFTER the merge (section 4 step 3, its own founder go). This entry
-      moves to `resolved:` with flip_review_record
-      docs/plan-reviews/oi341-piece-b2-door.md and flip_commit = the B2a code
-      commit, in the later commit that adds that record.
-
   - flag: enable_log_exercise_button
     branch: active-workout-log-exercise
     build_commit: 344cd2d1
@@ -320,6 +273,55 @@ pending:
 # and by the Sunday push.
 
 resolved:
+  - flag: ENABLE_SUBSCRIPTION_STACKING
+    branch: oi341-purchase-in-trial
+    build_commit: 8be9371d
+    build_date: 2026-10-17
+    flip_reviewed: true
+    flip_commit: 6bfbd402
+    flip_review_record: docs/plan-reviews/oi341-piece-b2-door.md
+    note: >
+      OI-341 Piece A (plan docs/plans/oi341-purchase-in-trial.md, v4.1). An
+      ENABLING Edge Function secret (dashboard, not a Hive key): unless the value
+      is exactly the string "true", verify-payment and razorpay-webhook store
+      `now + plan days` as before and issue NO extra query; with "true" they
+      store `max(now, latest active end) + days`. Absent by default; the secret
+      is NOT set by Piece A, and while create-razorpay-order keeps its 409
+      already_pro guard a payment can only be made by a user with no active row,
+      so even an enabled switch computes today's value. Catastrophic tier, so
+      the build took the FULL x2 plan review plus B-pass and hermes (the lighter
+      one-round tier does not apply); this entry exists because the FLIP is a
+      Piece B action: it needs Piece B's own full x2 review and B-pass, the
+      alert row precondition (the read-failure path is a plain log line until
+      then), a check that a dashboard secret change reaches warm isolates
+      without a redeploy, and the first enabled call as the proof that live
+      PostgREST accepts the helper's query (the fetch-level fake proves the
+      string and its SQL semantics, not the live parser). build_commit is
+      Piece A's build commit (merged in PR #124).
+      SECOND BUILD, Piece B1 (branch oi341-piece-b-door, plan
+      docs/plans/oi341-piece-b-door.md v4.1, built 2026-10-20; its build commit
+      is stamped here after the merge): it REPLACED Piece A's ON path (read,
+      then insert) with ONE call to public.record_paid_subscription (migration
+      161: per-user lock, idempotency, stacked end, insert) and added the
+      payment_record_failed alert, which satisfies the alert precondition
+      above. B1 took tier ship_dark_build with review_rounds: 1 (the unsplit
+      unit had three earlier rounds), plus B-pass and hermes. So the flip's
+      full x2 review (Piece B2) must re-review the SQL body of migration 161
+      and the new ON path in both writers, not only the purchase door. The
+      Piece A items about the helper's PostgREST query no longer apply (that
+      query was removed); the first LIVE happy-path call of the function is a
+      Piece B2 flip step.
+      THE FLIP, Piece B2a (branch oi341-piece-b2-door, plan
+      docs/plans/oi341-piece-b2-door.md v4.2, built 2026-10-21): the plan took
+      the full x2 review (rounds 3 and 4 on the post-split plan, converged; 0 P0
+      and 0 P1 in round 4) and re-reviewed the B1 ON path it flips; the B-pass
+      and hermes pass run on the B2a diff. The secret itself is set as a live
+      step AFTER the merge (section 4 step 3, its own founder go). This entry
+      moved to `resolved:` 2026-10-21 with that record (review_rounds 4,
+      converged, bpass and hermes accepted). flip_commit 6bfbd402 is the B2a
+      code commit that makes the flip possible; the secret is still UNSET at
+      merge, and setting it is section 4 step 3.
+
   - flag: enable_exercise_id_history
     branch: workout-idkey-variety-11
     build_commit: d66cd4c1
