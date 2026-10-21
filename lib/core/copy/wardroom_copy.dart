@@ -149,11 +149,28 @@ class WardroomCopy {
   /// LOG button when every unchecked set is a warm-up set.
   static const activeLogCta = 'LOG ✓';
 
-  /// Disabled LOG area once every set of the exercise is logged.
+  /// The LOG area once every set of the exercise is logged. Tapping it
+  /// RE-OPENS the exercise (flip batch, founder "amend log" 2026-10-20).
   static const activeLoggedLabel = 'LOGGED ✓';
+
+  /// Subline under LOGGED when tapping re-opens (not in review mode).
+  static const activeReopenSubline = 'TAP TO RE-OPEN';
+
+  /// TalkBack: the LOGGED button's label and its tap action's hint.
+  static const activeLoggedSemantics = 'Logged';
+  static const activeReopenHint = 'Re-open';
+
+  /// TalkBack announcement after a RE-OPEN.
+  static const activeReopenedAnnouncementTemplate = '{exercise} re-opened';
 
   /// Subline under the LOG button — `{kg}` = projected volume.
   static const activeLiftedSublineTemplate = '{kg} KG LIFTED';
+
+  /// Subline while set 1's weight is still app-filled (founder copy 2026-10-20).
+  static const activePrefilledSublineTemplate = '{kg} KG · PREFILLED';
+
+  /// TalkBack hint on a faded (app-filled, untouched) field.
+  static const activePrefilledHint = 'Prefilled value';
 
   /// Blocked LOG button: a required field is empty.
   static const activeBlockedAddWeight = 'Add weight';
@@ -181,6 +198,28 @@ class WardroomCopy {
 
   /// Above the gold FINISH WORKOUT once every exercise is logged.
   static const activeAllExercisesLogged = 'All exercises logged.';
+
+  // Flip batch (docs/plans/log-exercise-flip.md §3, §3b): the FINISH dialog in
+  // LOG mode. `{names}` = up to five names joined with `, ` then ` +N more`.
+  static const activeFinishCountTemplate = '{saved}/{total} sets logged';
+  static const activeFinishReopenedTemplate =
+      'Re-opened, not logged again. Not saved: {names}';
+  static const activeFinishTypedTemplate =
+      'Typed, not logged. Not saved: {names}';
+  static const activeFinishSkippedTemplate = 'Nothing to save for: {names}';
+  static const activeFinishPartialTemplate = 'Partly logged: {items}';
+  static const activeFinishPartialItemTemplate = '{name} {saved}/{working}';
+  static const activeFinishMoreTemplate = ' +{n} more';
+
+  /// OI-361 (both flag paths): COMPLETE is disabled when nothing would be saved.
+  /// Names warm-ups: an all-warm-up session reads "0/N" (flip R7-04).
+  static const activeFinishZeroSetBlocked =
+      "No working sets logged (warm-ups don't count). Log one to complete, or cancel the workout.";
+
+  /// OI-361: the chat workout card's CONFIRM is disabled when no exercise has a
+  /// set to write.
+  static const coachDraftNoSets =
+      'No sets to log. Tell the coach your sets, or discard.';
 
   // ── NUTRITION (Galley) ─────────────────────────────────────────────────
   /// Letterhead eyebrow template — "NUTRITION · TUE 14 APR".

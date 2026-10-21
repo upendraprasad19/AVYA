@@ -412,4 +412,210 @@ void main() {
           isFalse);
     });
   });
+
+  // ── flip batch (docs/plans/log-exercise-flip.md §6 "Pure") ─────────────
+  const sv = SetInputValues(weight: 60, reps: 8);
+  Map<String, bool> on(int ex, Iterable<int> sets) =>
+      {for (final s in sets) '$ex-$s': true};
+  Map<String, SetInputValues> vals(int ex, Iterable<int> sets,
+          [SetInputValues v = sv]) =>
+      {for (final s in sets) '$ex-$s': v};
+
+  group('isFaded (flip §2)', () {
+    final marked = ActiveWorkoutData(
+        exercises: [exd('A')], suggestedInputs: const {'0-1-weight'});
+    bool f(ActiveWorkoutData d, {bool logMode = true, int set = 1}) => isFaded(
+        logMode: logMode,
+        data: d,
+        exerciseIndex: 0,
+        setIndex: set,
+        field: SetField.weight);
+
+    test('faded only in LOG mode, on a marked, unchecked, unsaved field', () {
+      expect(f(marked), isTrue);
+      expect(f(marked, logMode: false), isFalse);
+      expect(f(marked, set: 0), isFalse, reason: 'no key');
+      expect(f(marked.copyWith(isSaved: true)), isFalse);
+      expect(f(marked.copyWith(checkedSets: on(0, [1]))), isFalse,
+          reason: 'a logged set is never faded');
+      expect(
+          isFaded(
+              logMode: true,
+              data: marked,
+              exerciseIndex: 0,
+              setIndex: 1,
+              field: SetField.duration),
+          isFalse,
+          reason: 'the key is per field');
+    });
+  });
+
+  group('sublines (flip §2)', () {
+    test('PREFILLED and LIFTED share the kg format; null without volume', () {
+      expect(prefilledSubline(1440), '1440 KG · PREFILLED');
+      expect(prefilledSubline(142.5), '142.5 KG · PREFILLED');
+      expect(prefilledSubline(0), isNull);
+      expect(liftedSubline(1440), '1440 KG LIFTED');
+      expect(liftedSubline(0), isNull);
+    });
+  });
+
+  group('capNames (flip §3)', () {
+    test('0, 1, 5 and 7 names', () {
+      expect(capNames(const []), '');
+      expect(capNames(const ['A']), 'A');
+      expect(capNames(const ['A', 'B', 'C', 'D', 'E']), 'A, B, C, D, E');
+      expect(capNames(const ['A', 'B', 'C', 'D', 'E', 'F', 'G']),
+          'A, B, C, D, E +2 more');
+    });
+  });
+
+  group('workingProgress (flip §3, R4B-06)', () {
+    test('0 with no working sets (all warm-up), clamped to 1', () {
+      expect(workingProgress((saved: 0, total: 0)), 0.0);
+      expect(workingProgress((saved: 3, total: 6)), 0.5);
+      expect(workingProgress((saved: 4, total: 3)), 1.0);
+    });
+  });
+
+  group('finishGuard (flip §3)', () {
+    test('reopened, typed, skipped and partial each land in their own list',
+        () {
+      final d = ActiveWorkoutData(
+        exercises: [
+          exd('Logged'),
+          exd('Reopened'),
+          exd('Typed'),
+          exd('Untouched new'),
+          exd('Untouched returning'),
+          exd('Plus after log', sets: '4'),
+          exd('Bodyweight typed', type: 'bodyweight_reps'),
+        ],
+        checkedSets: {...on(0, [0, 1, 2]), ...on(5, [0, 1, 2])},
+        setInputValues: {
+          ...vals(0, [0, 1, 2]),
+          ...vals(1, [0, 1, 2]),
+          ...vals(2, [0]), // typed on an unchecked set, no suggested key
+          // a returning user's prefill: captured, every weight suggested
+          ...vals(4, [0, 1, 2]),
+          ...vals(5, [0, 1, 2]),
+          ...vals(6, [0, 1, 2], const SetInputValues(reps: 12)),
+        },
+        suggestedInputs: const {
+          '1-0-weight', '1-1-weight', '1-2-weight',
+          '4-0-weight', '4-1-weight', '4-2-weight',
+        },
+        reopenedExercises: const {'Reopened'},
+      );
+      final g = finishGuard(d);
+      expect(g.reopenedUnsaved, ['Reopened']);
+      expect(g.typedUnsaved, ['Typed'],
+          reason: 'the returning prefill (suggested) and bodyweight reps are '
+              'not typed');
+      expect(g.skipped,
+          ['Untouched new', 'Untouched returning', 'Bodyweight typed']);
+      expect([for (final p in g.partial) '${p.name} ${p.saved}/${p.working}'],
+          ['Plus after log 3/4']);
+    });
+
+    test('timed and cardio: a typed duration / distance is typed; a '
+        'suggested one is skipped (B-pass 5)', () {
+      final d = ActiveWorkoutData(
+        exercises: [
+          exd('Plank', type: 'timed'),
+          exd('Run', type: 'cardio'),
+          exd('Hold', type: 'timed'),
+        ],
+        setInputValues: {
+          '0-0': const SetInputValues(durationSeconds: 45),
+          '1-0': const SetInputValues(distanceKm: 5),
+          '2-0': const SetInputValues(durationSeconds: 30),
+        },
+        suggestedInputs: const {'2-0-duration'},
+      );
+      final g = finishGuard(d);
+      expect(g.typedUnsaved, ['Plank', 'Run']);
+      expect(g.skipped, ['Hold']);
+    });
+
+    test('a LOGGED all-warm-up exercise is skipped, not typed (R6-03)', () {
+      final d = ActiveWorkoutData(
+        exercises: [exd('Warm')],
+        checkedSets: on(0, [0, 1, 2]),
+        warmUpSets: on(0, [0, 1, 2]),
+        setInputValues: vals(0, [0, 1, 2]),
+      );
+      final g = finishGuard(d);
+      expect(g.typedUnsaved, isEmpty);
+      expect(g.skipped, ['Warm']);
+    });
+
+    test('nothing saved: everything named, no partial', () {
+      final d = ActiveWorkoutData(exercises: [exd('A'), exd('B')]);
+      final g = finishGuard(d);
+      expect(g.skipped, ['A', 'B']);
+      expect(g.partial, isEmpty);
+      expect(workingSetCounts(d), (saved: 0, total: 6));
+    });
+
+    test('a warm-up-flagged set is out of the total and the working count',
+        () {
+      final d = ActiveWorkoutData(
+        exercises: [exd('A')],
+        checkedSets: on(0, [1, 2]),
+        warmUpSets: on(0, [0]),
+        setInputValues: vals(0, [0, 1, 2]),
+      );
+      expect(workingSetCounts(d), (saved: 2, total: 2));
+      expect(finishGuard(d).partial, isEmpty);
+    });
+  });
+
+  group('U-E3: hasSaveableSet truth table (OI-361, R7-06)', () {
+    test('none, warm-up only, no captured values: false', () {
+      expect(ActiveWorkoutData(exercises: [exd('A')]).hasSaveableSet, isFalse);
+      expect(
+          ActiveWorkoutData(
+                  exercises: [exd('A')],
+                  checkedSets: on(0, [0, 1]),
+                  warmUpSets: on(0, [0, 1]),
+                  setInputValues: vals(0, [0, 1]))
+              .hasSaveableSet,
+          isFalse);
+      expect(
+          ActiveWorkoutData(exercises: [exd('A')], checkedSets: on(0, [0]))
+              .hasSaveableSet,
+          isFalse);
+    });
+
+    test('one saveable set: true', () {
+      expect(
+          ActiveWorkoutData(
+                  exercises: [exd('A')],
+                  checkedSets: on(0, [2]),
+                  setInputValues: vals(0, [2]))
+              .hasSaveableSet,
+          isTrue);
+    });
+
+    test('only the SECOND exercise saveable: true', () {
+      expect(
+          ActiveWorkoutData(
+                  exercises: [exd('A'), exd('B')],
+                  checkedSets: on(1, [0]),
+                  setInputValues: vals(1, [0]))
+              .hasSaveableSet,
+          isTrue);
+    });
+
+    test('only a checked key beyond the template count: true', () {
+      expect(
+          ActiveWorkoutData(
+                  exercises: [exd('A')],
+                  checkedSets: on(0, [3]),
+                  setInputValues: vals(0, [3]))
+              .hasSaveableSet,
+          isTrue);
+    });
+  });
 }
