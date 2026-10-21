@@ -79,6 +79,21 @@ export async function withSwitch<T>(value: string | undefined, fn: () => Promise
   }
 }
 
+export const TRIAL_SWITCH = "ENABLE_TRIAL_PURCHASE";
+
+/** Runs `fn` with the purchase-door switch set (or deleted), and always undoes it (Piece B2a). */
+export async function withTrialPurchaseSwitch<T>(value: string | undefined, fn: () => Promise<T>): Promise<T> {
+  const before = Deno.env.get(TRIAL_SWITCH);
+  if (value === undefined) Deno.env.delete(TRIAL_SWITCH);
+  else Deno.env.set(TRIAL_SWITCH, value);
+  try {
+    return await fn();
+  } finally {
+    if (before === undefined) Deno.env.delete(TRIAL_SWITCH);
+    else Deno.env.set(TRIAL_SWITCH, before);
+  }
+}
+
 /** Records console.error / console.warn / console.log lines while `fn` runs. */
 export async function captureConsole<T>(fn: () => Promise<T>): Promise<{ result: T; errors: string[]; all: string[] }> {
   const errors: string[] = [];
@@ -291,7 +306,37 @@ export function subscriptionInserts(server: FakeServer): RecordedRequest[] {
   return server.to("/rest/v1/subscriptions", "POST");
 }
 
-/** The stacking module's own read: the only `subscriptions` GET filtered on `end_date=gt.`. */
+/** The OFF-branch switch-mismatch alarm's read (Piece B2a plan 2.5): `subscriptions` filtered on `plan=eq.referral_trial`. */
+export function isMismatchRead(r: RecordedRequest): boolean {
+  return r.method === "GET" && r.path === "/rest/v1/subscriptions" &&
+    r.query.some(([k, v]) => k === "plan" && v === "eq.referral_trial");
+}
+
+export function mismatchReads(server: FakeServer): RecordedRequest[] {
+  return server.requests.filter(isMismatchRead);
+}
+
+/** Alerts rows of the switch-mismatch source. */
+export function mismatchAlerts(server: FakeServer): RecordedRequest[] {
+  return alertInserts(server).filter((r) => (r.body as Record<string, unknown>)?.source === "stacking_switch_mismatch");
+}
+
+/**
+ * The stacking module's own read (Piece A): a `subscriptions` GET filtered on `end_date=gt.`, other than the
+ * mismatch alarm's read.
+ */
 export function helperReads(server: FakeServer): RecordedRequest[] {
-  return server.to("/rest/v1/subscriptions", "GET").filter((r) => r.query.some(([k, v]) => k === "end_date" && v.startsWith("gt.")));
+  return server.to("/rest/v1/subscriptions", "GET").filter((r) =>
+    !isMismatchRead(r) && r.query.some(([k, v]) => k === "end_date" && v.startsWith("gt."))
+  );
+}
+
+/** The recorded requests with the mismatch alarm's read removed: the OFF golden comparison (plan 2.5, amended goldens). */
+export function withoutMismatchRead(reqs: RecordedRequest[]): RecordedRequest[] {
+  return reqs.filter((r) => !isMismatchRead(r));
+}
+
+/** An active `referral_trial` grant row (NULL payment id), ending `endInDays` from now. */
+export function referralTrialRow(endInDays: number, over: Row = {}): Row {
+  return trialRow(endInDays, { id: "rtrial-1", plan: "referral_trial", ...over });
 }

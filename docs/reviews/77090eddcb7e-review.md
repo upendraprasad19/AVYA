@@ -29,6 +29,9 @@ final staged hash, after the fixes.
   (`exercise_card.dart:626`, `:681`). A session started with no set logged therefore read as
   closed, and the background post-restore heal could rewrite today's row under it. Then
   `_persistSupersetGroups` would have indexed the session's longer list into the shorter stored one.
+  (True at review time. PR #140, merged to `main` the same day, now writes superset groups by
+  exercise identity, `applySupersetGroupsByIdentity`, which removes that consequence. Rewriting
+  a row under a live session is still unwanted, so the today rule stays.)
 - **verification:** `git grep -n "ActiveWorkoutPersistence.writeState" lib`
 - **suggested-fix:** never rewrite today in this pass (no latch), or use an in-memory session flag.
 - **status:** fixed. Today's row is never rewritten. A pass that would have changed it sets

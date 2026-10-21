@@ -13,6 +13,7 @@ import 'package:icanbefitter/features/train/providers/train_provider.dart';
 import 'package:icanbefitter/features/train/screens/active_workout/screen.dart';
 import 'package:icanbefitter/features/train/services/log_exercise_flags.dart';
 import 'package:icanbefitter/features/train/services/log_exercise_logic.dart';
+import 'package:icanbefitter/features/train/services/swap_move_hint.dart';
 
 import '../../../helpers/hive_test_setup.dart';
 
@@ -167,6 +168,9 @@ bool hasFocus(WidgetTester tester, int i) =>
 
 /// The real `ActiveWorkoutScreen` on a seeded session (flip batch S1/U-D/U-E).
 /// [logMode] writes the flag: absent = ON (the flip), `false` = killed.
+/// [hintSeen]: the ⇄/⇅ first-use hint is retired by default — its ring
+/// pulses forever while it shows, so `pumpAndSettle` would never settle. The
+/// hint's own tests (`swap_move_screen_test.dart`) pass `false`.
 class ScreenHarness {
   ScreenHarness(this.container);
   final ProviderContainer container;
@@ -180,6 +184,7 @@ Future<ScreenHarness> pumpScreen(
   required List<ExerciseData> exercises,
   ActiveWorkoutData Function(ActiveWorkoutData base)? seed,
   bool logMode = true,
+  bool? hintSeen = true, // null: leave the stored flag as it is
   LastPerformanceData lastPerf =
       const LastPerformanceData(lastWeight: 60, lastReps: 8),
 }) async {
@@ -190,6 +195,11 @@ Future<ScreenHarness> pumpScreen(
       await box.delete(LogExerciseFlags.key);
     } else {
       await box.put(LogExerciseFlags.key, false);
+    }
+    if (hintSeen == true) {
+      await markSwapMoveHintSeen();
+    } else if (hintSeen == false) {
+      await HiveService.instance.userBox.delete(kSwapMoveHintSeenKey);
     }
   });
   final base = ActiveWorkoutData(

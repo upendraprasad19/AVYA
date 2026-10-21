@@ -163,7 +163,7 @@ library exercises and cloud `plan_json.schedules` no longer lists the customs on
 1. **Write-time re-read:** snapshot only KEYS; per key re-read `workoutBox.get(key)`, re-check `planned` / `workout` / not
    template, recompute `stripRow`, write immediately. Re-check `restoreSettledForCurrentUser` before EACH write (a mid-loop
    account swap would write A's rows into B's box). Skip TODAY's row while `ActiveWorkoutPersistence.readState() != null`
-   (`_persistSupersetGroups` writes by index, train_provider.dart:1950-1966) and do NOT latch when it was skipped.
+   (`_persistSupersetGroups` wrote by index, train_provider.dart:1950-1966, until PR #140 moved it to `applySupersetGroupsByIdentity` the same day) and do NOT latch when it was skipped.
 2. **Registry:** add the migrator to `scheduled_workouts_mutations.reader_allow_files` (sot_registry.yaml ~:634, like
    `schedule_hybrid_repair_migrator.dart`). The new constant in workout_write_service.dart adds ≤ 5 lines above
    `wlogKey` (:1557) / `scheduleKey` (:1586), else re-pin both `ist_sites` cites (sot_registry.yaml :413, :649) in the

@@ -10,6 +10,11 @@ import {
   type Handler,
   alertInserts,
   helperReads,
+  isMismatchRead,
+  mismatchAlerts,
+  mismatchReads,
+  referralTrialRow,
+  withoutMismatchRead,
   importWithEnv,
   loadOriginMainHandler,
   normalizeRequests,
@@ -234,7 +239,9 @@ for (const sw of [undefined, "false", "", "TRUE", " true", "1"]) {
     const now = await run(newHandler, sc(), sw);
     assertEquals(golden.res.status, 200);
     assertEquals(now.res.status, golden.res.status);
-    assertEquals(normalizeRequests(now.server.requests), normalizeRequests(golden.server.requests));
+    // Piece B2a plan 2.5: the ONE deliberate addition is the mismatch alarm's read after the OFF insert.
+    assertEquals(mismatchReads(now.server).length, 1, "exactly one added request: the alarm read");
+    assertEquals(normalizeRequests(withoutMismatchRead(now.server.requests)), normalizeRequests(golden.server.requests));
     assertEquals(stripInstants(now.body), stripInstants(golden.body));
     assertEquals(helperReads(now.server).length, 0);
     const row = subscriptionInserts(now.server)[0].body as Record<string, string>;
@@ -252,7 +259,9 @@ t("OFF golden: yearly, with a promo, and with no row are identical to origin/mai
     const golden = await run(originHandler, make(), undefined);
     const now = await run(newHandler, make(), undefined);
     assertEquals(now.res.status, golden.res.status);
-    assertEquals(normalizeRequests(now.server.requests), normalizeRequests(golden.server.requests));
+    // Piece B2a plan 2.5: the ONE deliberate addition is the mismatch alarm's read after the OFF insert.
+    assertEquals(mismatchReads(now.server).length, 1, "exactly one added request: the alarm read");
+    assertEquals(normalizeRequests(withoutMismatchRead(now.server.requests)), normalizeRequests(golden.server.requests));
     assertEquals(stripInstants(now.body), stripInstants(golden.body));
     assertEquals(now.promoIncrements, golden.promoIncrements);
   }
@@ -336,7 +345,322 @@ t("a malformed payment id on a STALE delivery is rejected as an invalid id, befo
 });
 
 t("a conforming id on a stale delivery still hits the replay window (control)", async () => {
-  const r = await run(newHandler, { rows: [], eventCreatedAt: EVENT_CREATED_AT - 1000 }, undefined);
+  // 25 h: past the payment.captured window (24 h + 10 min, Piece B2a plan 2.6).
+  const r = await run(newHandler, { rows: [], eventCreatedAt: nowSec() - 25 * 3600 }, undefined);
   assertEquals(r.res.status, 400);
   assertEquals(r.body.error, "Webhook too old");
+});
+
+// ── OI-341 Piece B2a: replay window per event (plan 2.6) ────────────────────
+
+function nowSec(): number {
+  return Math.floor(Date.now() / 1000);
+}
+
+/** A webhook request for `event` stamped `ageSec` seconds in the past (negative = future). */
+async function eventRequest(sc: Scenario, event: string, ageSec: number): Promise<Request> {
+  const base = await webhookRequest({ ...sc, eventCreatedAt: nowSec() - ageSec });
+  const body = JSON.parse(await base.text());
+  body.event = event;
+  if (event === "payment.authorized") body.payload.payment.entity.captured = true; // no capture call: the window is under test
+  const raw = JSON.stringify(body);
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode("whsec_harness"), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = [...new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(raw)))]
+    .map((b) => b.toString(16).padStart(2, "0")).join("");
+  return new Request("https://fn.test/razorpay-webhook", {
+    method: "POST",
+    headers: { "x-razorpay-signature": sig, "Content-Type": "application/json" },
+    body: raw,
+  });
+}
+
+async function runEvent(sc: Scenario, event: string, ageSec: number, sw: string | undefined = undefined) {
+  const { server, promoIncrements } = paymentServer(sc);
+  server.install();
+  try {
+    const req = await eventRequest(sc, event, ageSec);
+    const { result: res, all } = await withSwitch(sw, () => captureConsole(() => newHandler(req)));
+    const body = JSON.parse(await res.text());
+    return { res, body, server, promoIncrements, all };
+  } finally {
+    server.restore();
+  }
+}
+
+const done = () => trialRow(33, { id: "done", razorpay_payment_id: PAY });
+
+t("replay window: payment.captured aged 6 min with the row present is an idempotent 200 (was 400 under the 300 s rule)", async () => {
+  const r = await runEvent({ rows: [done()] }, "payment.captured", 6 * 60);
+  assertEquals(r.res.status, 200);
+  assertEquals(r.body.alreadyProcessed, true);
+  assertEquals(subscriptionInserts(r.server).length, 0);
+});
+
+t("replay window: payment.captured aged 6 min with NO row records the row", async () => {
+  const r = await runEvent({ rows: [] }, "payment.captured", 6 * 60);
+  assertEquals(r.res.status, 200);
+  assertEquals(r.body.status, "success");
+  assertEquals(subscriptionInserts(r.server).length, 1);
+});
+
+t("replay window: a stale idempotent payment.captured does not redeem the promo again", async () => {
+  const r = await runEvent({ ...promoScenario([done()]) }, "payment.captured", 6 * 3600);
+  assertEquals(r.res.status, 200);
+  assertEquals(r.promoIncrements.length, 0);
+});
+
+t("replay window: payment.captured boundaries - 24 h 5 min accepted, 24 h 15 min and 25 h rejected", async () => {
+  const ok = await runEvent({ rows: [done()] }, "payment.captured", 24 * 3600 + 5 * 60);
+  assertEquals(ok.res.status, 200, "24 h 5 min is inside 24 h + 10 min");
+  for (const age of [24 * 3600 + 15 * 60, 25 * 3600]) {
+    const r = await runEvent({ rows: [done()] }, "payment.captured", age);
+    assertEquals(r.res.status, 400, `age ${age}`);
+    assertEquals(r.body.error, "Webhook too old");
+  }
+});
+
+t("replay window: payment.authorized keeps 300 s (6 min is rejected; 2 min is accepted)", async () => {
+  const stale = await runEvent({ rows: [done()] }, "payment.authorized", 6 * 60);
+  assertEquals(stale.res.status, 400);
+  assertEquals(stale.body.error, "Webhook too old");
+  const fresh = await runEvent({ rows: [done()] }, "payment.authorized", 2 * 60);
+  assertEquals(fresh.res.status, 200);
+});
+
+t("replay window: a future stamp of -3 min is rejected for BOTH events", async () => {
+  for (const ev of ["payment.captured", "payment.authorized"]) {
+    const r = await runEvent({ rows: [done()] }, ev, -3 * 60);
+    assertEquals(r.res.status, 400, ev);
+    assertEquals(r.body.error, "Webhook too old", ev);
+  }
+});
+
+// ── OI-341 Piece B2a: switch log line (plan 2.3) ────────────────────────────
+
+t("switch log line: OFF prints stacking_switch=off once, ON prints stacking_switch=on once, a replay prints none", async () => {
+  const count = (all: string[], v: string) => all.filter((l) => l === `[razorpay-webhook] stacking_switch=${v} payment_id=${PAY}`).length;
+  const off = await run(newHandler, { rows: [] }, undefined);
+  assertEquals(count(off.all, "off"), 1);
+  assertEquals(count(off.all, "on"), 0);
+  const on = await run(newHandler, withRpc({ rows: [] }), "true");
+  assertEquals(count(on.all, "on"), 1);
+  assertEquals(count(on.all, "off"), 0);
+  const replay = await run(newHandler, { rows: [done()] }, undefined);
+  assertEquals(replay.all.filter((l) => l.includes("stacking_switch=")).length, 0);
+  // The SECOND skip path: the sibling writer's row appears between the H-19 check and the second pre-SELECT.
+  let paymentReads = 0;
+  const sc: Scenario = {
+    rows: [],
+    intercept: (req) => {
+      if (req.method === "GET" && req.path === "/rest/v1/subscriptions" && req.query.some(([k]) => k === "razorpay_payment_id")) {
+        paymentReads++;
+        if (paymentReads === 2) sc.rows!.push(trialRow(33, { id: "verify-row", razorpay_payment_id: PAY }));
+      }
+      return undefined;
+    },
+  };
+  const second = await run(newHandler, sc, undefined);
+  assertEquals(paymentReads, 2, "the scenario reached the second pre-SELECT");
+  assertEquals(second.all.filter((l) => l.includes("stacking_switch=")).length, 0);
+});
+
+// ── OI-341 Piece B2a: the alert round trips are bounded at 1 s here (plan 2.4) ──
+
+t("ON + rpc failure + a HUNG alerts table: the 500 is released within about 2.2 s (two 1 s round trips)", async () => {
+  const r = await run(newHandler, { rows: [], recordPaid: { status: 400, body: { code: "55P03", message: "x" } }, alerts: { dedup: "hang", insert: "hang" } }, "true");
+  assertEquals(r.res.status, 500);
+  const ms = r.after - r.before;
+  assert(ms >= 1900, `two bounded round trips, took ${ms} ms`);
+  assert(ms < 4500, `must be bounded near 2 s (the 3 s default would take 6 s), took ${ms} ms`);
+});
+
+// ── OI-341 Piece B2a: the switch-mismatch alarm (plan 2.5) ──────────────────
+
+const hangMismatch: Scenario["intercept"] = (req) => (isMismatchRead(req) ? new Promise<Response>(() => {}) : undefined);
+const errorMismatch: Scenario["intercept"] = (req) =>
+  isMismatchRead(req) ? new Response(JSON.stringify({ code: "XX000", message: "boom" }), { status: 500, headers: { "Content-Type": "application/json" } }) : undefined;
+
+t("alarm: OFF + an active referral trial outliving the new row: same 200 body and row as origin/main, plus one critical stacking_switch_mismatch alert and log", async () => {
+  const trial = referralTrialRow(5);
+  const sc = () => ({ rows: [{ ...trial }] }) as Scenario;
+  const golden = await run(originHandler, sc(), undefined);
+  const now = await run(newHandler, sc(), undefined);
+  assertEquals(now.res.status, 200);
+  assertEquals(stripInstants(now.body), stripInstants(golden.body));
+  assertEquals(
+    stripInstants(subscriptionInserts(now.server).map((r) => r.body)),
+    stripInstants(subscriptionInserts(golden.server).map((r) => r.body)),
+    "the row is exactly what OFF wrote before B2a",
+  );
+  const alerts = mismatchAlerts(now.server);
+  assertEquals(alerts.length, 1);
+  const row = alerts[0].body as Record<string, any>;
+  assertEquals(row.severity, "critical");
+  assertEquals(row.context_json.fn, "razorpay-webhook");
+  assertEquals(row.context_json.payment_id, PAY);
+  assertEquals(row.context_json.user_id, USER);
+  assertEquals(row.context_json.trial_end, trial.end_date);
+  assertEquals(row.context_json.row_end, (subscriptionInserts(now.server)[0].body as Record<string, string>).end_date);
+  assertEquals(row.context_json.plan, "monthly");
+  assert(String(row.summary).startsWith("razorpay-webhook: paid row recorded without stacking over an active trial"));
+  assert(now.errors.some((e) => e === `[razorpay-webhook] stacking_switch_mismatch payment_id=${PAY} user_id=${USER}`));
+  // The dedup query is keyed on THIS source, not payment_record_failed.
+  const dedup = now.server.to("/rest/v1/alerts", "GET");
+  assertEquals(dedup.length, 1);
+  assert(dedup[0].query.some(([k, v]) => k === "source" && v === "eq.stacking_switch_mismatch"));
+});
+
+t("alarm: OFF + a referral trial that already ENDED, a non-trial grant row, or no row: the read runs, no alert", async () => {
+  for (const rows of [[referralTrialRow(-1)], [trialRow(5)], []]) {
+    const r = await run(newHandler, { rows }, undefined);
+    assertEquals(r.res.status, 200);
+    assertEquals(mismatchReads(r.server).length, 1);
+    assertEquals(mismatchAlerts(r.server).length, 0, JSON.stringify(rows));
+  }
+});
+
+t("alarm: the read is scoped to this user, active rows, referral_trial, end_date > the new row's start, limit 1", async () => {
+  const r = await run(newHandler, { rows: [] }, undefined);
+  const q = mismatchReads(r.server)[0].query;
+  const get = (k: string) => q.filter(([key]) => key === k).map(([, v]) => v);
+  assertEquals(get("user_id"), [`eq.${USER}`]);
+  assertEquals(get("status"), ["eq.active"]);
+  assertEquals(get("plan"), ["eq.referral_trial"]);
+  assertEquals(get("limit"), ["1"]);
+  const start = (subscriptionInserts(r.server)[0].body as Record<string, string>).start_date;
+  assertEquals(get("end_date"), [`gt.${start}`]);
+});
+
+t("alarm: another user's active referral trial does not fire it", async () => {
+  const r = await run(newHandler, { rows: [referralTrialRow(5, { user_id: "33333333-3333-4333-8333-333333333333" })] }, undefined);
+  assertEquals(mismatchAlerts(r.server).length, 0);
+});
+
+for (const [label, intercept] of [["an ERROR", errorMismatch], ["a HANG", hangMismatch]] as const) {
+  t(`alarm: the check read returning ${label}: the same 200, the promo still redeemed, no alert`, async () => {
+    const r = await run(newHandler, { ...promoScenario([referralTrialRow(5)]), intercept }, undefined);
+    assertEquals(r.res.status, 200);
+    assertEquals(r.body.status, "success");
+    assertEquals(r.promoIncrements, ["HALF50"]);
+    assertEquals(mismatchAlerts(r.server).length, 0);
+    assert(r.errors.some((e) => e.startsWith("[razorpay-webhook] stacking mismatch check unavailable")));
+    assert(r.after - r.before < 3500, `bounded at 1 s (a 5 s bound would fail), took ${r.after - r.before} ms`);
+  });
+}
+
+t("alarm: a hit + a HUNG alerts table: the same 200 within about 2.2 s", async () => {
+  const r = await run(newHandler, { rows: [referralTrialRow(5)], alerts: { dedup: "hang", insert: "hang" } }, undefined);
+  assertEquals(r.res.status, 200);
+  const ms = r.after - r.before;
+  assert(ms >= 1900 && ms < 4500, `two 1 s round trips, took ${ms} ms`);
+});
+
+t("alarm: never on the ON path (no check request, even with a referral trial row)", async () => {
+  const r = await run(newHandler, withRpc({ rows: [referralTrialRow(5)] }), "true");
+  assertEquals(r.res.status, 200);
+  assertEquals(mismatchReads(r.server).length, 0);
+});
+
+t("alarm: never on the skip paths (H-19 replay, second pre-SELECT)", async () => {
+  const replay = await run(newHandler, { rows: [done(), referralTrialRow(5)] }, undefined);
+  assertEquals(mismatchReads(replay.server).length, 0);
+  let paymentReads = 0;
+  const sc: Scenario = {
+    rows: [referralTrialRow(5)],
+    intercept: (req) => {
+      if (req.method === "GET" && req.path === "/rest/v1/subscriptions" && req.query.some(([k]) => k === "razorpay_payment_id")) {
+        paymentReads++;
+        if (paymentReads === 2) sc.rows!.push(trialRow(33, { id: "verify-row", razorpay_payment_id: PAY }));
+      }
+      return undefined;
+    },
+  };
+  const second = await run(newHandler, sc, undefined);
+  assertEquals(paymentReads, 2);
+  assertEquals(mismatchReads(second.server).length, 0);
+});
+
+t("alarm: never on the 23505 race arm (the sibling writer won the insert and owns the check)", async () => {
+  const sc: Scenario = {
+    rows: [referralTrialRow(5)],
+    beforeInsert: (table, _row, srv) => {
+      if (table === "subscriptions" && !srv.tables.subscriptions.some((x) => x.razorpay_payment_id === PAY)) {
+        srv.tables.subscriptions.push(trialRow(33, { id: "verify-row", razorpay_payment_id: PAY }));
+      }
+    },
+  };
+  const r = await run(newHandler, sc, undefined);
+  assertEquals(r.res.status, 200);
+  assertEquals(mismatchReads(r.server).length, 0);
+});
+
+t("alarm: never after a failed (non-23505) insert - that is the existing 500", async () => {
+  const sc: Scenario = {
+    rows: [referralTrialRow(5)],
+    intercept: (req) =>
+      req.method === "POST" && req.path === "/rest/v1/subscriptions"
+        ? new Response(JSON.stringify({ code: "23502", message: "null" }), { status: 400, headers: { "Content-Type": "application/json" } })
+        : undefined,
+  };
+  const r = await run(newHandler, sc, undefined);
+  assertEquals(r.res.status, 500);
+  assertEquals(mismatchReads(r.server).length, 0);
+});
+
+// ── OI-341 Piece B2a: a captured payment no row can record is paged (hermes seat 4 F4) ──
+
+t("no-match: a promo payment whose code was DELETED mid-checkout: the same 400, no row, and one critical payment_record_failed alert (amount_no_match)", async () => {
+  const sc: Scenario = { rows: [], amount: 17450, notes: { promo_code: "HALF50" }, promoRows: [] };
+  const r = await run(newHandler, sc, undefined);
+  assertEquals(r.res.status, 400);
+  assertEquals(r.body, { error: "amount_does_not_match_any_plan" });
+  assertEquals(subscriptionInserts(r.server).length, 0);
+  const alerts = alertInserts(r.server);
+  assertEquals(alerts.length, 1);
+  const row = alerts[0].body as Record<string, any>;
+  assertEquals(row.source, "payment_record_failed");
+  assertEquals(row.severity, "critical");
+  assertEquals(row.context_json.code, "amount_no_match");
+  assertEquals(row.context_json.payment_id, PAY);
+  assertEquals(row.context_json.user_id, USER);
+  assertEquals(row.context_json.amount_paise, 17450);
+  assertEquals(row.context_json.plan, "unknown");
+});
+
+t("no-match: a full-price-shaped amount that matches no plan (no promo) is paged too, and a hung alerts table releases the 400 within about 2 s", async () => {
+  const r = await run(newHandler, { rows: [], amount: 12345, alerts: { dedup: "hang", insert: "hang" } }, undefined);
+  assertEquals(r.res.status, 400);
+  assertEquals(alertInserts(r.server).length, 1);
+  const ms = r.after - r.before;
+  assert(ms >= 1900 && ms < 4500, `two 1 s round trips, took ${ms} ms`);
+});
+
+t("cross-check: the promo's discount changed between the two reads: the same 400 amount_mismatch and one alert (amount_cross_check)", async () => {
+  let promoReads = 0;
+  const sc: Scenario = {
+    ...promoScenario([]),
+    intercept: (req) => {
+      if (req.method === "GET" && req.path === "/rest/v1/promo_codes") {
+        promoReads++;
+        if (promoReads === 2) {
+          return new Response(JSON.stringify({ discount_pct: 40, is_active: true, valid_until: "2099-01-01T00:00:00Z", max_uses: null, used_count: 0 }), { status: 200, headers: { "Content-Type": "application/json" } });
+        }
+      }
+      return undefined;
+    },
+  };
+  const r = await run(newHandler, sc, undefined);
+  assertEquals(promoReads, 2);
+  assertEquals(r.res.status, 400);
+  assertEquals(r.body, { error: "amount_mismatch" });
+  const alerts = alertInserts(r.server);
+  assertEquals(alerts.length, 1);
+  assertEquals((alerts[0].body as Record<string, any>).context_json.code, "amount_cross_check");
+  assertEquals((alerts[0].body as Record<string, any>).context_json.plan, "monthly");
+});
+
+t("no-match control: a matching promo payment records the row and writes no alert", async () => {
+  const r = await run(newHandler, promoScenario([]), undefined);
+  assertEquals(r.res.status, 200);
+  assertEquals(alertInserts(r.server).length, 0);
 });

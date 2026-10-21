@@ -9,6 +9,11 @@ import {
   type Handler,
   alertInserts,
   helperReads,
+  isMismatchRead,
+  mismatchAlerts,
+  mismatchReads,
+  referralTrialRow,
+  withoutMismatchRead,
   importWithEnv,
   iso,
   loadOriginMainHandler,
@@ -222,7 +227,9 @@ for (const sw of [undefined, "false", "", "TRUE", " true", "1"]) {
     const now = await run(newHandler, sc(), sw);
     assertEquals(golden.res.status, 200);
     assertEquals(now.res.status, golden.res.status);
-    assertEquals(normalizeRequests(now.server.requests), normalizeRequests(golden.server.requests));
+    // Piece B2a plan 2.5: the ONE deliberate addition is the mismatch alarm's read after the OFF insert.
+    assertEquals(mismatchReads(now.server).length, 1, "exactly one added request: the alarm read");
+    assertEquals(normalizeRequests(withoutMismatchRead(now.server.requests)), normalizeRequests(golden.server.requests));
     assertEquals(stripInstants(now.body), stripInstants(golden.body));
     assertEquals(helperReads(now.server).length, 0);
     const row = subscriptionInserts(now.server)[0].body as Record<string, string>;
@@ -240,7 +247,9 @@ t("OFF golden: yearly, and with a promo, are identical to origin/main too", asyn
     const golden = await run(originHandler, make(), undefined);
     const now = await run(newHandler, make(), undefined);
     assertEquals(now.res.status, golden.res.status);
-    assertEquals(normalizeRequests(now.server.requests), normalizeRequests(golden.server.requests));
+    // Piece B2a plan 2.5: the ONE deliberate addition is the mismatch alarm's read after the OFF insert.
+    assertEquals(mismatchReads(now.server).length, 1, "exactly one added request: the alarm read");
+    assertEquals(normalizeRequests(withoutMismatchRead(now.server.requests)), normalizeRequests(golden.server.requests));
     assertEquals(stripInstants(now.body), stripInstants(golden.body));
     assertEquals(now.promoIncrements, golden.promoIncrements);
   }
@@ -305,4 +314,162 @@ t("an empty payment id keeps its existing 'Missing payment_id' answer; a conform
   const ok = await run(newHandler, { rows: [], paymentId: id }, undefined, id);
   assertEquals(ok.res.status, 200);
   assertEquals(ok.body.verified, true);
+});
+
+// ── OI-341 Piece B2a: switch log line (plan 2.3) ────────────────────────────
+
+t("switch log line: OFF prints stacking_switch=off once, ON prints stacking_switch=on once, an existing row prints none", async () => {
+  const count = (all: string[], v: string) => all.filter((l) => l === `[verify-payment] stacking_switch=${v} payment_id=${PAY}`).length;
+  const off = await run(newHandler, { rows: [] }, undefined);
+  assertEquals(count(off.all, "off"), 1);
+  assertEquals(count(off.all, "on"), 0);
+  const on = await run(newHandler, withRpc({ rows: [] }), "true");
+  assertEquals(count(on.all, "on"), 1);
+  assertEquals(count(on.all, "off"), 0);
+  const cancelled = trialRow(33, { id: "done", razorpay_payment_id: PAY, status: "cancelled" });
+  const existing = await run(newHandler, { rows: [cancelled] }, undefined);
+  assertEquals(existing.all.filter((l) => l.includes("stacking_switch=")).length, 0);
+});
+
+// ── OI-341 Piece B2a: the switch-mismatch alarm (plan 2.5) ──────────────────
+
+const hangMismatch: Scenario["intercept"] = (req) => (isMismatchRead(req) ? new Promise<Response>(() => {}) : undefined);
+const errorMismatch: Scenario["intercept"] = (req) =>
+  isMismatchRead(req) ? new Response(JSON.stringify({ code: "XX000", message: "boom" }), { status: 500, headers: { "Content-Type": "application/json" } }) : undefined;
+
+t("alarm: OFF + an active referral trial outliving the new row: same 200 body and row as origin/main, plus one critical stacking_switch_mismatch alert and log", async () => {
+  const trial = referralTrialRow(5);
+  const sc = () => ({ rows: [{ ...trial }] }) as Scenario;
+  const golden = await run(originHandler, sc(), undefined);
+  const now = await run(newHandler, sc(), undefined);
+  assertEquals(now.res.status, 200);
+  assertEquals(stripInstants(now.body), stripInstants(golden.body));
+  assertEquals(
+    stripInstants(subscriptionInserts(now.server).map((r) => r.body)),
+    stripInstants(subscriptionInserts(golden.server).map((r) => r.body)),
+    "the row is exactly what OFF wrote before B2a",
+  );
+  const alerts = mismatchAlerts(now.server);
+  assertEquals(alerts.length, 1);
+  const row = alerts[0].body as Record<string, any>;
+  assertEquals(row.severity, "critical");
+  assertEquals(row.context_json.fn, "verify-payment");
+  assertEquals(row.context_json.plan, "monthly");
+  assertEquals(row.context_json.payment_id, PAY);
+  assertEquals(row.context_json.user_id, USER);
+  assertEquals(row.context_json.trial_end, trial.end_date);
+  assertEquals(row.context_json.row_end, (subscriptionInserts(now.server)[0].body as Record<string, string>).end_date);
+  assert(String(row.summary).startsWith("verify-payment: paid row recorded without stacking over an active trial"));
+  assert(now.errors.some((e) => e === `[verify-payment] stacking_switch_mismatch payment_id=${PAY} user_id=${USER}`));
+});
+
+t("alarm: OFF + a referral trial that already ENDED, a non-trial grant row, or no row: the read runs, no alert", async () => {
+  for (const rows of [[referralTrialRow(-1)], [trialRow(5)], []]) {
+    const r = await run(newHandler, { rows }, undefined);
+    assertEquals(r.res.status, 200);
+    assertEquals(mismatchReads(r.server).length, 1);
+    assertEquals(mismatchAlerts(r.server).length, 0, JSON.stringify(rows));
+  }
+});
+
+t("alarm: the read is scoped to this user, active rows, referral_trial, end_date > the new row's start, limit 1", async () => {
+  const r = await run(newHandler, { rows: [] }, undefined);
+  const q = mismatchReads(r.server)[0].query;
+  const get = (k: string) => q.filter(([key]) => key === k).map(([, v]) => v);
+  assertEquals(get("user_id"), [`eq.${USER}`]);
+  assertEquals(get("status"), ["eq.active"]);
+  assertEquals(get("plan"), ["eq.referral_trial"]);
+  assertEquals(get("limit"), ["1"]);
+  const start = (subscriptionInserts(r.server)[0].body as Record<string, string>).start_date;
+  assertEquals(get("end_date"), [`gt.${start}`]);
+});
+
+for (const [label, intercept] of [["an ERROR", errorMismatch], ["a HANG", hangMismatch]] as const) {
+  t(`alarm: the check read returning ${label}: the same 200, the promo still redeemed, no alert`, async () => {
+    const r = await run(newHandler, { ...promoScenario([referralTrialRow(5)]), intercept }, undefined);
+    assertEquals(r.res.status, 200);
+    assertEquals(r.body.verified, true);
+    assertEquals(r.promoIncrements, ["HALF50"]);
+    assertEquals(mismatchAlerts(r.server).length, 0);
+    assert(r.errors.some((e) => e.startsWith("[verify-payment] stacking mismatch check unavailable")));
+    assert(r.after - r.before < 3500, `bounded at 1 s (a 5 s bound would fail), took ${r.after - r.before} ms`);
+  });
+}
+
+t("alarm: a hit + a HUNG alerts table: the same 200 within about 2.2 s", async () => {
+  const r = await run(newHandler, { rows: [referralTrialRow(5)], alerts: { dedup: "hang", insert: "hang" } }, undefined);
+  assertEquals(r.res.status, 200);
+  const ms = r.after - r.before;
+  assert(ms >= 1900 && ms < 4500, `two 1 s round trips, took ${ms} ms`);
+});
+
+t("alarm: never on the ON path (no check request, even with a referral trial row)", async () => {
+  const r = await run(newHandler, withRpc({ rows: [referralTrialRow(5)] }), "true");
+  assertEquals(r.res.status, 200);
+  assertEquals(mismatchReads(r.server).length, 0);
+});
+
+t("alarm: never when the payment's row already exists (active early return, or the pre-SELECT arm)", async () => {
+  const active = await run(newHandler, { rows: [trialRow(33, { id: "done", razorpay_payment_id: PAY }), referralTrialRow(5)] }, undefined);
+  assertEquals(mismatchReads(active.server).length, 0);
+  const cancelled = await run(newHandler, { rows: [trialRow(33, { id: "done", razorpay_payment_id: PAY, status: "cancelled" }), referralTrialRow(5)] }, undefined);
+  assertEquals(mismatchReads(cancelled.server).length, 0);
+});
+
+t("alarm: never on the 23505 race arm (weInsertedTheRow false: the webhook won the insert and owns the check)", async () => {
+  const sc: Scenario = {
+    rows: [referralTrialRow(5)],
+    beforeInsert: (table, _row, srv) => {
+      if (table === "subscriptions" && !srv.tables.subscriptions.some((x) => x.razorpay_payment_id === PAY)) {
+        srv.tables.subscriptions.push(trialRow(33, { id: "webhook-row", razorpay_payment_id: PAY }));
+      }
+    },
+  };
+  const r = await run(newHandler, sc, undefined);
+  assertEquals(r.res.status, 200);
+  assertEquals(mismatchReads(r.server).length, 0);
+});
+
+t("alarm: never after a failed (non-23505) insert - that is the existing 500", async () => {
+  const sc: Scenario = {
+    rows: [referralTrialRow(5)],
+    intercept: (req) =>
+      req.method === "POST" && req.path === "/rest/v1/subscriptions"
+        ? new Response(JSON.stringify({ code: "23502", message: "null" }), { status: 400, headers: { "Content-Type": "application/json" } })
+        : undefined,
+  };
+  const r = await run(newHandler, sc, undefined);
+  assertEquals(r.res.status, 500);
+  assertEquals(mismatchReads(r.server).length, 0);
+});
+
+t("ON + rpc failure: verify-payment keeps the DEFAULT 3 s alert bound (only the webhook passes 1000)", async () => {
+  const r = await run(newHandler, { rows: [], recordPaid: { status: 400, body: { code: "55P03", message: "x" } }, alerts: { dedup: "hang" } }, "true");
+  assertEquals(r.res.status, 500);
+  const ms = r.after - r.before;
+  assert(ms >= 2900 && ms < 5500, `one hung 3 s dedup read, took ${ms} ms`);
+});
+
+// ── OI-341 Piece B2a: a captured payment no row can record is paged (hermes seat 4 F4) ──
+
+t("no-match: a promo payment whose code was DELETED mid-checkout: the same 400, no row, and one critical payment_record_failed alert (amount_no_match)", async () => {
+  const sc: Scenario = { rows: [], amount: 17450, notes: { promo_code: "HALF50" }, promoRows: [] };
+  const r = await run(newHandler, sc, undefined);
+  assertEquals(r.res.status, 400);
+  assertEquals(r.body, { verified: false, error: "Payment amount does not match any known plan price" });
+  assertEquals(subscriptionInserts(r.server).length, 0);
+  const alerts = alertInserts(r.server);
+  assertEquals(alerts.length, 1);
+  const row = alerts[0].body as Record<string, any>;
+  assertEquals(row.source, "payment_record_failed");
+  assertEquals(row.context_json.fn, "verify-payment");
+  assertEquals(row.context_json.code, "amount_no_match");
+  assertEquals(row.context_json.payment_id, PAY);
+  assertEquals(row.context_json.amount_paise, 17450);
+});
+
+t("no-match control: a matching promo payment records the row and writes no alert", async () => {
+  const r = await run(newHandler, promoScenario([]), undefined);
+  assertEquals(r.res.status, 200);
+  assertEquals(alertInserts(r.server).length, 0);
 });

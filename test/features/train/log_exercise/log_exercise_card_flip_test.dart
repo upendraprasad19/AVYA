@@ -51,7 +51,9 @@ void main() {
       await type(tester, 0, '62.5');
       await tapWithRealIo(tester, find.text('LOG 3 SETS ✓'));
       expect(find.text(WardroomCopy.activeReopenSubline), findsOneWidget);
-      expect(find.text('⇄ SWAP'), findsNothing);
+      // ⇄ is the header's swap icon since the swap/move batch (it was the
+      // '⇄ SWAP' text chip); a done card shows ✓ DONE instead.
+      expect(find.byIcon(Icons.swap_horiz), findsNothing);
 
       await tester.tap(find.text('LOGGED ✓'));
       await tester.pump();
@@ -60,7 +62,7 @@ void main() {
       expect(h.state.setInputValues['0-0']?.weight, 62.5);
       expect(text(tester, 0), '62.5');
       expect(find.text('LOG 3 SETS ✓'), findsOneWidget);
-      expect(find.text('⇄ SWAP'), findsOneWidget);
+      expect(find.byIcon(Icons.swap_horiz), findsOneWidget);
     });
 
     testWidgets('A3: review mode: no re-open text, not a tappable button, no '

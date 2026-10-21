@@ -30,6 +30,7 @@ import 'package:icanbefitter/core/utils/readiness.dart';
 import 'package:icanbefitter/core/services/health_read_service.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import '../repositories/workout_repository.dart';
+import '../services/superset_persist_logic.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/core/constants/equipment_defaults.dart';
@@ -1215,6 +1216,31 @@ class SetInputValues {
   const SetInputValues({this.weight, this.reps, this.durationSeconds, this.distanceKm});
 }
 
+/// One in-workout MOVE, computed by `moveExerciseInSession`
+/// (`services/exercise_move_logic.dart`) and applied by
+/// [ActiveWorkoutNotifier.applyExerciseMove]: the reordered list plus every
+/// index-keyed field remapped by the same permutation.
+class ExerciseMoveResult {
+  /// The exact state this result was computed from. A result is a full
+  /// snapshot of the index-keyed fields, so applying it to any later state
+  /// (a set toggled, a swap) would silently revert that change.
+  final ActiveWorkoutData basedOn;
+  final List<ExerciseData> exercises;
+  final Map<String, bool> checkedSets;
+  final Map<String, bool> warmUpSets;
+  final Map<String, SetInputValues> setInputValues;
+  final Set<String> suggestedInputs;
+
+  const ExerciseMoveResult({
+    required this.basedOn,
+    required this.exercises,
+    required this.checkedSets,
+    required this.warmUpSets,
+    required this.setInputValues,
+    required this.suggestedInputs,
+  });
+}
+
 class ActiveWorkoutData {
   final WorkoutDayData? workoutDay;
   final List<ExerciseData> exercises;
@@ -1702,8 +1728,12 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
           customLibrary: hive.customBox.toMap(),
         ) ??
         'weight_reps';
+    // The slot keeps its superset group unless the replacement brings its
+    // own (the coach's SwapService.swapExerciseInDay does the same).
+    final group = newExercise.supersetGroup ??
+        state.exercises[exerciseIndex].supersetGroup;
     final resolved = newExercise.loggingType == resolvedLoggingType
-        ? newExercise
+        ? newExercise.copyWith(supersetGroup: () => group)
         : ExerciseData(
             name: newExercise.name,
             sets: newExercise.sets,
@@ -1713,6 +1743,7 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
             loggingType: resolvedLoggingType,
             category: newExercise.category,
             equipmentNeeded: newExercise.equipmentNeeded,
+            supersetGroup: group,
             // W3.3 (Batch 11-A): preserve the swap-in's id (or null → name fallback).
             exerciseId: newExercise.exerciseId,
           );
@@ -1815,6 +1846,30 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
       reopenedExercises: {...state.reopenedExercises}
         ..remove(state.exercises[exerciseIndex].name),
     );
+  }
+
+  /// The ONE writer of an in-workout MOVE (session-only: the stored schedule
+  /// row is never reordered). Replaces the list and every index-keyed field
+  /// from [r] in one state change and leaves superset-grouping mode, whose
+  /// source index a reorder would make stale. `reopenedExercises` is keyed by
+  /// name and stays. Refuses (false, `state` untouched) on a result computed
+  /// from any state but the current one (compute and apply in one event), in
+  /// review mode, after completion, or while [completeWorkout] saves: it
+  /// reads `exercises` and `checkedSets` by index across awaits.
+  bool applyExerciseMove(ExerciseMoveResult r) {
+    if (_completing || state.isSaved || state.isComplete) return false;
+    if (!identical(r.basedOn, state)) return false;
+    if (r.exercises.length != state.exercises.length) return false;
+    state = state.copyWith(
+      exercises: r.exercises,
+      checkedSets: r.checkedSets,
+      warmUpSets: r.warmUpSets,
+      setInputValues: r.setInputValues,
+      suggestedInputs: r.suggestedInputs,
+      isSupersetGroupMode: false,
+      supersetGroupingSourceIndex: () => null,
+    );
+    return true;
   }
 
   /// Add one set to the exercise at [exerciseIndex].
@@ -1946,17 +2001,15 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     final storedExercises = entryMap['exercises'] as List?;
     if (storedExercises == null) return;
 
-    // Update superset_group for each exercise in the stored schedule
-    for (int i = 0; i < storedExercises.length && i < exercises.length; i++) {
-      final exMap = storedExercises[i];
-      if (exMap is Map) {
-        final mutable = Map<String, dynamic>.from(exMap);
-        mutable['superset_group'] = exercises[i].supersetGroup;
-        storedExercises[i] = mutable;
-      }
-    }
-
-    entryMap['exercises'] = storedExercises;
+    // By identity, not index: an in-workout move (session-only) leaves the
+    // session order different from the stored one.
+    entryMap['exercises'] = applySupersetGroupsByIdentity(
+      stored: storedExercises,
+      session: [
+        for (final e in exercises)
+          (exerciseId: e.exerciseId, name: e.name, supersetGroup: e.supersetGroup),
+      ],
+    );
     // Audit 2026-05-20 / A3: route through WorkoutWriteService.upsertScheduled
     // (was direct workoutBox.put). Service handles IST stamping + sync fanout
     // + telemetry pair.
