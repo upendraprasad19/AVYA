@@ -6407,3 +6407,38 @@ the coach calls, not a second swap path.
 **Done when.** A ⇄ on each planned-day exercise row (Train preview) swaps that exercise for that date
 only through `swapExerciseInDay`, with the source stamped correctly, plus a behavioural test that
 the stored `schedule_<date>` row changes and other dates do not.
+
+## OI-385 — Generator: 27 library rows in slot patterns are unreachable on attempts 1-2 (exercise_type has neither compound nor isolation)
+
+- **Status**: OPEN
+- **Blocked on**: Batch B generator rework (spec `docs/superpowers/specs/2026-10-21-exercise-library-comprehensive-design.md` §9 row B). A fix on the live pool would reshape plans outside that batch's ship-dark flag and ×2 review.
+- **Verified**: 2026-10-22 — measured from `assets/data/exercise_library.json` and `split_resolver.dart` during the Batch A investigation (scratchpad `label_gap.json`).
+- **Identified**: 2026-10-22 · filed via mint_oi.sh from branch `library-data-repair`
+
+**The defect.** `queryV4` matches `exercise_type` exactly against the slot's `compound` / `isolation` on attempts 1-2 (`lib/shared/repositories/exercise_repository.dart` ~:365), and every `MuscleSlot` in `split_resolver.dart` asks for one of those two. 27 rows in the 11 slot patterns carry neither: 25 are typed only `calisthenics`, 4 include `cardio`. They include E022 Pull Up, E020, E054, E055, E064, E066, E069, E071-E073, E075, E077, E101-E103, E134-E136, E143, E177, E179, E180 and E193-E197. They are reachable only through the attempt-3 pattern-only fallback. (Counted 2026-10-22; an earlier figure of 57 also included rows outside the slot patterns.)
+
+**Done when.** Batch B's pool selects by `discipline` / core lists, and a behavioural test shows a calisthenics-typed core row filling an on-target slot.
+
+## OI-386 — Generator: 11 of 13 attempt-1 sub-focus strings match 0 rows (slot long_head vs data 'Long Head')
+
+- **Status**: OPEN
+- **Blocked on**: Batch B generator rework (spec `docs/superpowers/specs/2026-10-21-exercise-library-comprehensive-design.md` §9 row B). A fix on the live pool would reshape plans outside that batch's ship-dark flag and ×2 review.
+- **Verified**: 2026-10-22 — measured from `assets/data/exercise_library.json` and `split_resolver.dart` during the Batch A investigation (scratchpad `label_gap.json`).
+- **Identified**: 2026-10-22 · filed via mint_oi.sh from branch `library-data-repair`
+
+**The defect.** Attempt 1 builds the string "<targetMuscle> (<subFocus>)" (`exercise_selector.dart:1088-1090`) from snake_case slot tokens (`long_head`, `short_head`, `lateral_head`…), while the data says "Long Head". Only "Lats (width)" (5 rows) and "Mid Back (thickness)" (16) can ever match, so 11 of 13 attempt-1 strings fall straight through to attempt 2. Humanising the tokens would make attempt 1 live and reshape many plans, which needs the generator batch's review.
+
+**Done when.** Slot sub-focus and row `target_focus` share one vocabulary, attempt 1 matches for every sub-focus that has rows, and the scorecard pick diff is reviewed.
+
+## OI-387 — Library: 6 kept bodyweight rows (E272 E273 E276 E277 E289 E290) invisible to their slot label
+
+- **Status**: OPEN
+- **Blocked on**: Batch B generator rework (spec `docs/superpowers/specs/2026-10-21-exercise-library-comprehensive-design.md` §9 row B). A fix on the live pool would reshape plans outside that batch's ship-dark flag and ×2 review.
+- **Verified**: 2026-10-22 — measured from `assets/data/exercise_library.json` and `split_resolver.dart` during the Batch A investigation (scratchpad `label_gap.json`).
+- **Identified**: 2026-10-22 · filed via mint_oi.sh from branch `library-data-repair`
+
+**The defect.** E272, E273, E289 and E290 carry `target_focus: ["Shoulders"]`, and E276 and E277 carry "Upper Back". Neither is a slot label, and their `primary_muscles` ("Side/Rear Deltoid", "Rhomboids") contain none, so attempts 1-2 never return them. A bodyweight Lateral Delts slot is empty today.
+
+Batch A did NOT relabel them. `_preferNovel` (`exercise_selector.dart:1054-1066`) walks past the first sorted entries whenever `avoidNames` is non-empty, so a Phase 2+ home user's Lateral Delts pool would become [E013, E273, E289] and flip from Lateral Raise to Towel Lateral Raise. E276/E277 would stay inert anyway, because every Mid Back slot is `compound`.
+
+**Done when.** Batch B's equipment-aware pool offers these rows to no-equipment users only, their `target_focus` carries the slot label, and a behavioural test covers the bodyweight hit and the home/gym miss with `previousPhaseByDay` set.
