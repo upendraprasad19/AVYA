@@ -767,6 +767,8 @@ The long-press on the Home calendar strip opens the **shared picker** for that d
 
 - "Aye, Recruit. Friday and Saturday trade places: Legs + Core today, Pull + Core tomorrow. Confirm
   below and it's done."
+  (Changed 2026-10-21 by coach-log-truth: the live example now ends "Tap APPLY below to swap them.",
+  because nothing is swapped before the tap; `_shared/day_swap_routing.ts`.)
 - Card:
   - "Swap Fri 25 and Sat 26"
   - "Pull + Core FRI → SAT"

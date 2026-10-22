@@ -15222,7 +15222,7 @@ concepts:
         line_range: 1-9999
         method: "daySwapRoutingBlock (confirmed :80; daySwapRoutingCase :24-27)"
         semantic: flag-check
-        fields_read: [isPro, capabilities.has('swap_workout_days')]
+        fields_read: [isPro, capabilities.has('swap_workout_days'), ruleOn (coach-log-truth; the PRO_CAPABLE example says APPLY when on, byte-identical when off)]
       - file: supabase/functions/ai-proxy/index.ts
         line_range: 1-9999
         method: "system prompt assembly / promptParts"
@@ -16413,3 +16413,51 @@ concepts:
         semantic: render
         notes: Keys the card by draft id; hasWorkoutDraftSlot feeds the chat's item count; workoutDraftChangeScrolls scrolls only for a new card.
     regression_test: test/contracts/conversational_log_handler_uses_write_service_test.dart
+  - concept: coach_write_claim_wording
+    domain: cross_domain
+    behavioral_test_path: supabase/functions/_shared/write_claim_prompt_test.ts
+    behavioral_test_path_tool_loop: supabase/functions/_shared/tool-loop_write_claim_note_test.ts
+    behavioral_test_path_detector: supabase/functions/_shared/write_claim_detector_test.ts
+    description: |
+      coach-log-truth (OI-368 / OI-369, diagnose 90a784). What the coach is
+      TAUGHT about saving: nothing it proposes is saved when it replies (a
+      tool proposal waits for APPLY, a workout tag for CONFIRM, a
+      water/weight/food/sleep/measurement tag for a 5-second countdown). The
+      prompt pieces live in _shared/write_claim_prompt.ts (the ICBF blocks of
+      both proxies, WRITE_CLAIM_RULE and its media variant, the tool
+      description swaps); the queued functionResponse carries a NOT-saved
+      note; a log-only detector labels claims and prescribed lines
+      ([write-claim-detect]). Kill switch DISABLE_WRITE_CLAIM_RULE (exactly
+      "true"): every piece byte-identical to origin/main (golden). The reply
+      text is never rewritten.
+    writers:
+      - file: supabase/functions/_shared/write_claim_prompt.ts
+        line_range: 1-9999
+        method: icbfLogInstructions / mediaIcbfLogInstructions / writeClaimSuffix / applyWriteClaimDescriptions / QUEUED_NOTE
+        notes: The rule, the two ICBF blocks (header parameterised) and the meal/template description swaps.
+      - file: supabase/functions/_shared/day_swap_routing.ts
+        line_range: 1-9999
+        method: daySwapRoutingBlock (third parameter writeClaimRule)
+        notes: The PRO_CAPABLE example narration says "Tap APPLY below to swap them." when on.
+      - file: supabase/functions/_shared/tool-loop.ts
+        line_range: 1-9999
+        method: runToolLoop (queued functionResponse note; declarations)
+        notes: writeClaimRule undefined = on.
+    readers:
+      - file: supabase/functions/ai-proxy/index.ts
+        line_range: 1-9999
+        method: promptParts / systemPrompt assembly / runToolLoop call / logWriteClaimDetection (2 sites)
+        semantic: pass-through
+        notes: ruleOn read once per request before the dedup read; the size log carries write_claim_rule.
+      - file: supabase/functions/ai-media-proxy/index.ts
+        line_range: 1-9999
+        method: asAuthoredPrompt argument / logWriteClaimDetection
+        semantic: pass-through
+        notes: The media rule names no tool; it sits before the snapshot fence.
+      - file: supabase/functions/_shared/write_claim_detector.ts
+        line_range: 1-9999
+        method: detectWriteClaim / logWriteClaimDetection / replayCtxOf
+        semantic: log-only
+        notes: Labels a reply; never changes it; never logs reply text or the user id.
+    regression_test: test/contracts/coach_write_claim_wiring_test.dart
+

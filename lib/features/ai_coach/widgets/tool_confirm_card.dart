@@ -12,9 +12,9 @@ import 'package:icanbefitter/core/theme/typography.dart';
 
 /// Inline confirmation card for an AI coach tool intent.
 ///
-/// Handles BOTH `trivial` (5s countdown auto-confirm) and `reviewable`
-/// (explicit confirm only) confirmation classes via the intent's
-/// [ConfirmationClass]. Destructive intents use [ToolConfirmSheet] instead.
+/// Handles BOTH `trivial` and `reviewable` confirmation classes via the
+/// intent's [ConfirmationClass]; both wait for APPLY (the trivial-class 5 s
+/// countdown was removed in B-4; coach-log-truth corrected this comment). Destructive intents use [ToolConfirmSheet] instead.
 ///
 /// Borrows visual style from [LogConfirmCard] but operates on
 /// [pendingToolIntentsProvider] + [ToolDispatcher] rather than the legacy

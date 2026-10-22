@@ -64,6 +64,15 @@ import type { ToolContext } from "../_shared/tools/index.ts";
 import { CAPTAIN_MANUAL } from "../_shared/captain_manual.ts";
 import { parseClientCapabilities } from "../_shared/client_capabilities.ts";
 import { daySwapRoutingBlock } from "../_shared/day_swap_routing.ts";
+import {
+  icbfLogInstructions,
+  isWriteClaimRuleDisabled,
+  writeClaimSuffix,
+} from "../_shared/write_claim_prompt.ts";
+import {
+  logWriteClaimDetection,
+  replayCtxOf,
+} from "../_shared/write_claim_detector.ts";
 import { istDateStr } from "../_shared/ist_date.ts";
 import { reportGeminiExhaustion } from "../_shared/gemini_failure_alert.ts";
 import { validateAiProxyInput } from "../_shared/ai_proxy_input_limits.ts";
@@ -807,11 +816,15 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
     // ── isPro gate: chat cap is tier-aware (free 7 / PRO 20), enforced by the trigger. ──
     const isProUser = await checkPro(supabaseClient, userId);
 
+    // coach-log-truth: the write-claim rule, read ONCE per request
+    // (DISABLE_WRITE_CLAIM_RULE exactly "true" disables; OFF = today's bytes).
+    const ruleOn = !isWriteClaimRuleDisabled();
+
     // ── Deduplication: return cached response for same user+message in last 30s ──
     const dedupCutoff = new Date(Date.now() - DEDUP_WINDOW_SECS * 1000).toISOString();
     const { data: recentDup } = await supabaseClient
       .from("ai_coach_interactions")
-      .select("ai_response, model_used, tokens_used")
+      .select("id, ai_response, model_used, tokens_used")
       .eq("user_id", userId)
       .eq("channel", "app")
       .eq("user_message", message)
@@ -849,6 +862,7 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
     if (dedup === "replay_reply" && recentDup) {
       console.log(`[ai-proxy] Dedup hit for user ${userId} — returning cached response`);
       const extracted = extractLogActions(recentDup.ai_response as string);
+      logWriteClaimDetection("ai-proxy", recentDup.id, ruleOn, extracted.reply, () => replayCtxOf(extracted));
       return new Response(
         JSON.stringify({
           reply: extracted.reply,
@@ -971,28 +985,10 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
     // ICBF_LOG embed-tag protocol — preserved from pre-CAPTAIN_MANUAL v48.
     // These are technical instructions for the conversational logging system,
     // NOT persona content. Manual covers identity/voice; this covers the
-    // app-specific tag protocol that the parser at line 101 consumes.
-    const ICBF_LOG_INSTRUCTIONS = `
-FITNESS DATA LOGGING — INSTANT:
-When the user explicitly states they ALREADY completed an action, embed ONE tag at the END of your response:
-<ICBF_LOG>{"action":"log_water","data":{"ml":500}}</ICBF_LOG>
-<ICBF_LOG>{"action":"log_weight","data":{"weight_kg":73.5}}</ICBF_LOG>
-<ICBF_LOG>{"action":"log_food","data":{"food_name":"Dal Rice","meal_type":"lunch","quantity_g":200,"calories_estimate":280,"protein_estimate":9,"carbs_estimate":55,"fat_estimate":3}}</ICBF_LOG>
-<ICBF_LOG>{"action":"log_sleep","data":{"duration_hrs":7,"quality":"good"}}</ICBF_LOG>
-<ICBF_LOG>{"action":"log_measurement","data":{"type":"waist","value_cm":82}}</ICBF_LOG>
-Measurement types: waist, chest, hips, arms. Convert inches to cm (multiply by 2.54).
-Water: 2 glasses=500ml, 1 bottle=750ml, 1 cup=250ml, 1 litre=1000ml.
-RULES:
-- Only for CONFIRMED PAST actions (I drank, I weighed, I ate, I slept, my waist is). NEVER for future plans or questions.
-- The tag is stripped server-side — do not mention it in your visible response.
-- One tag per response maximum.
-
-WORKOUT LOGGING — MULTI-TURN:
-- If user says they finished a workout WITHOUT exercise details, ask them to describe exercises, sets, reps, weights. No tag yet.
-- If user provides exercise details, parse them and emit:
-<ICBF_LOG>{"action":"confirm_workout_log","data":{"exercises":[{"name":"Bench Press","logging_type":"weight_reps","sets":[{"weight_kg":80,"reps":8}]},{"name":"Push-ups","logging_type":"bodyweight_reps","sets":[{"reps":15}]},{"name":"Plank","logging_type":"timed","sets":[{"duration_secs":60}]},{"name":"Running","logging_type":"cardio","duration_mins":30,"distance_km":5}]}}</ICBF_LOG>
-Parse "5x8 at 80kg" as 5 sets of 8 reps at 80kg. logging_type: weight_reps (weight+reps), bodyweight_reps (reps only), timed (duration), cardio (time/distance).
-`;
+    // app-specific tag protocol that the parser at line 101 consumes. The
+    // block lives in _shared/write_claim_prompt.ts (icbfLogInstructions) since
+    // coach-log-truth: its header says nothing is saved when the coach replies
+    // (OI-368/369); with the rule off it returns the old bytes (golden-pinned).
 
     // ── Build system prompt ───────────────────────────────────────
     // Task A2 (APK Test #4, 2026-04-27): replaced the old generic
@@ -1026,13 +1022,13 @@ Parse "5x8 at 80kg" as 5 sets of 8 reps at 80kg. logging_type: weight_reps (weig
     //                             over 10000 chars)
     //   retrievalBlock            ≤ ~1.2 KB (5 × 200 chars + header)
     // Total ceiling ≈ 35 KB, far under Gemini 3.1 Flash Lite's context limit.
-    const promptParts: string[] = [CAPTAIN_MANUAL, ICBF_LOG_INSTRUCTIONS];
+    const promptParts: string[] = [CAPTAIN_MANUAL, icbfLogInstructions(ruleOn)];
     if (isChatChannel) {
       // Unit 3 (day-swapper-sync-load) — deterministic per-request routing
       // block, chosen server-side from isProUser + the parsed client
       // capability set. See _shared/day_swap_routing.ts for why this is not
       // left for the model to infer.
-      promptParts.push(daySwapRoutingBlock(isProUser, capabilities));
+      promptParts.push(daySwapRoutingBlock(isProUser, capabilities, ruleOn));
     }
     if (coachMemoryBlock) {
       // FC7 / Hermes P2-FC7-1: coach_memory is user-derived text (extracted from
@@ -1131,10 +1127,10 @@ data, say so honestly: "I don't have enough data on your Monday pattern
 yet" — never make up a number.
 `;
 
-    systemPrompt = dayInjection + systemPrompt + "\n\n" + antiFabricationRule;
+    systemPrompt = dayInjection + systemPrompt + "\n\n" + antiFabricationRule + writeClaimSuffix(ruleOn);
 
     // Smoke-test log: confirms CAPTAIN_MANUAL is wired in every chat turn.
-    console.log(`[ai-proxy] system_prompt_size=${systemPrompt.length} captain_manual=${systemPrompt.includes("THE CAPTAIN — STATIC MANUAL")}`);
+    console.log(`[ai-proxy] system_prompt_size=${systemPrompt.length} captain_manual=${systemPrompt.includes("THE CAPTAIN — STATIC MANUAL")} write_claim_rule=${ruleOn}`);
 
     // ── Multi-round tool-calling loop (Phase A, 2026-04-19) ────────
     // Replaces the previous single-shot geminiChat() with a 3-round
@@ -1180,6 +1176,7 @@ yet" — never make up a number.
         ctx: toolCtx,
         capabilities,
         model: MODEL_FLASH,
+        writeClaimRule: ruleOn,
       });
     } catch (loopErr) {
       console.error(
@@ -1228,6 +1225,12 @@ yet" — never make up a number.
     // still work end-to-end during the migration.
     const extracted = extractLogActions(loop.text);
     const cleanReply = extracted.reply;
+    logWriteClaimDetection("ai-proxy", chatReservationId, ruleOn, cleanReply, () => ({
+      typedIntentTypes: loop.intents.map((i) => i.type),
+      legacyActions: extracted.actions,
+      replay: false,
+      userAskedQuestion: message.trim().endsWith("?"),
+    }));
 
     // Label from the slug that ACTUALLY answered the last round (so analytics
     // see the real provider), or stamp the failure SENTINEL when the reply is

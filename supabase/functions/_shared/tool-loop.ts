@@ -52,6 +52,10 @@
 
 import { allTools, byName } from "./tools/registry.ts";
 import { toolToFunctionDeclaration } from "./tools/zodToGemini.ts";
+import {
+  applyWriteClaimDescriptions,
+  QUEUED_NOTE,
+} from "./write_claim_prompt.ts";
 import type {
   ToolCallRecord,
   ToolContext,
@@ -127,6 +131,14 @@ export interface ToolLoopOptions {
   model: string;
   /** Optional override for max rounds (default MAX_ROUNDS=3). Used by tests. */
   maxRounds?: number;
+  /**
+   * coach-log-truth: the write-claim rule (DISABLE_WRITE_CLAIM_RULE read
+   * once per request by the handler). `undefined` = enabled. When enabled a
+   * queued tool's functionResponse carries a "NOT saved yet" note and the
+   * meal/template tool descriptions stop claiming a save; when false both
+   * are byte-identical to before.
+   */
+  writeClaimRule?: boolean;
 }
 
 export interface ToolLoopResult {
@@ -298,8 +310,11 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
   // Tier-filtered tool list passed to the model. Pre-converted once
   // (registry is small; conversion is cheap; doing it once avoids
   // re-walking the Zod schemas every round).
-  const visibleTools = allTools(opts.ctx.isPro, opts.capabilities)
-    .map(toolToFunctionDeclaration);
+  const writeClaimRule = opts.writeClaimRule ?? true;
+  const visibleTools = applyWriteClaimDescriptions(
+    allTools(opts.ctx.isPro, opts.capabilities),
+    writeClaimRule,
+  ).map(toolToFunctionDeclaration);
 
   for (let round = 0; round < maxRounds; round++) {
     roundsExecuted = round + 1;
@@ -596,6 +611,7 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
               response: {
                 status: "queued_for_user_confirmation",
                 intent_id: intent.id,
+                ...(writeClaimRule ? { note: QUEUED_NOTE } : {}),
               },
             },
           });

@@ -12,6 +12,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### workout_surface_invalidation — every coach write path refreshes the same workout surfaces through one helper. (1 bugs)
 - 2026-10-21 e2a418 — Founder's A12 web walk 2026-10-21 (app.icanbefitter.com): today was already DONE on Train with two exercises logged in Active Workout. A workout logged from the coach chat (`CONFIRM · LOG WORKOUT` on…
 
+### coach_write_claim_wording — what the coach is taught about saving, and a log-only label of what it said. (1 bugs)
+- 2026-10-21 90a784 — Founder's A12 web walk 2026-10-21 (app.icanbefitter.com, ai_coach_interactions read-only): at 13:19:59 "log bench press" got "Roger. Logged. I need the specifics…" with nothing proposed or written…
+
 ### coach_workout_card_saved_state — the card shows what the submit really did, from draft state the card watches. (1 bugs)
 - 2026-10-21 5aa251 — The chat workout card (`WorkoutLogConfirmCard`, CONFIRM · LOG WORKOUT) cleared itself after every CONFIRM whether anything saved or not: `submitWorkoutDraft` ignored the `WriteResult` of each…
 
@@ -1629,6 +1632,7 @@ rather than a Hive box. (1 bugs)
 |---|---|---|---|---|
 | 2026-10-21 | c3e7a1 | A CAPTURED Razorpay payment whose amount matches no plan price answered 400 in both payment writers and wrote no subscriptions row and no alert. The usual cause is a promo code deleted or its… | payment_record_failed_alert — every captured payment that a writer cannot record pages the founder. | supabase/functions/razorpay-webhook/index_test.ts |
 | 2026-10-21 | e2a418 | Founder's A12 web walk 2026-10-21 (app.icanbefitter.com): today was already DONE on Train with two exercises logged in Active Workout. A workout logged from the coach chat (`CONFIRM · LOG WORKOUT` on… | workout_surface_invalidation — every coach write path refreshes the same workout surfaces through one helper. | test/contracts/coach_chat_log_train_refresh_behavioral_test.dart |
+| 2026-10-21 | 90a784 | Founder's A12 web walk 2026-10-21 (app.icanbefitter.com, ai_coach_interactions read-only): at 13:19:59 "log bench press" got "Roger. Logged. I need the specifics…" with nothing proposed or written… | coach_write_claim_wording — what the coach is taught about saving, and a log-only label of what it said. | supabase/functions/_shared/write_claim_prompt_test.ts |
 | 2026-10-21 | 5aa251 | The chat workout card (`WorkoutLogConfirmCard`, CONFIRM · LOG WORKOUT) cleared itself after every CONFIRM whether anything saved or not: `submitWorkoutDraft` ignored the `WriteResult` of each… | coach_workout_card_saved_state — the card shows what the submit really did, from draft state the card watches. | test/ai_coach/workout_log_confirm_card_saved_signal_test.dart |
 | 2026-10-21 | 2e8b8f | Founder's A12 web walk 2026-10-21 at phone width: exercise names in Train's expanded day row were cut to about four characters ("Benc…", "Barb…"), because the name and the long detail ("3 sets · 8… | exercise_logs_read_path — the expanded day's logged-exercise row (ExpandedExerciseLogRow). | test/features/train/expanded_exercise_log_row_test.dart |
 | 2026-10-21 | d4b8e1 | Founder (web app, logged in as upendraprasad19, 2026-10-21): today's "Upper push + core" workout listed 14 exercises / 56 sets — 8 library picks plus 6 of his own custom exercises (tuck planche,… | generator_no_custom_autoadd | test/contracts/l2_no_custom_autoadd_behavioral_test.dart |
