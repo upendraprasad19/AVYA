@@ -6584,3 +6584,24 @@ Batch A did NOT relabel them. `_preferNovel` (`exercise_selector.dart:1054-1066`
 **The defect.** E268 Self-Resisted Bicep Curl and E270 Self-Resisted Triceps Extension (OI-89 wave 1, `equipment_needed: ["bodyweight"]`) carry `priority_tier: 1`, `is_foundational: true` and every `equipment_tier`, so they sort ahead of Barbell Curl (E031, `priority_tier: 2`) and the cable/dumbbell rows. In the matrix, 150 of 165 full_gym plans and 140 of 150 basic_gym plans hold a bodyweight-only E262+ row: Self-Resisted Bicep Curl 290 picks, Self-Resisted Triceps Extension 234, Single Leg Glute Bridge 28, Standing Single Leg Hinge 16, Prone Y Raise 1 (gym tiers). `test/plan_generator/sample_plans_output.md` shows it for build_muscle full_gym (Pull day: Self-Resisted Bicep Curl, then Barbell Curl).
 
 **Done when.** A gym user's arm slots draw equipment rows first (bodyweight-only rows only when nothing else fits), bodyweight and home users keep their current picks, and a behavioural test covers both sides on the real generator.
+
+## OI-389 — Cardio logs lose their minutes and distance: logExercise zeroes durationSec for every non-timed type and never writes distance_km
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-10-22 · filed via mint_oi.sh from branch `cardio-oi-retros`
+
+Found 2026-10-21 in batch `train-coach-log-refresh`: a cardio fixture ("Rowing Erg") logged through the coach chat card read `0 min` in Train's expanded day row, so that batch's test asserts the cardio format, not the minutes. Confirmed by reading the code on 2026-10-22; not yet checked on a device or against live rows.
+
+Writer: `WorkoutWriteService.logExercise` (`lib/core/services/workout_write_service.dart:92`). `_resolveLoggingType` (`:302`) returns the library type `cardio`. `_normalizeSetsByLoggingType` (`:337`) has two branches: `timed` keeps `durationSec`; every other type (its comment lists `cardio, distance`) rebuilds each set with `durationSec: 0` (`:351-359`). `_stripPhantomFields` (`:374`) leaves `cardio` as it is. The stored row (`entry`, `:222-237`) has no `distance_km`, and `ExerciseSet` (`lib/core/services/write_result.dart:108-112`) has no distance field, so a distance has no path into the row. `lib/features/train/CLAUDE.md` (`hive_field_name_exlog` row) lists `distance_km` among `logExercise`'s fields; that is wrong today.
+
+Callers that pass a real cardio duration and lose it: the active workout `completeWorkout` (`lib/features/train/providers/train_provider.dart:2236`, `durationSec: vals.durationSeconds`), the coach chat card `submitWorkoutDraft` (`lib/features/ai_coach/services/conversational_log_handler.dart:366`; minutes × 60 at `:312`), the coach tool `_executeLogSet` (`lib/features/ai_coach/services/tool_dispatcher.dart:375`), `WorkoutRepository` (`lib/features/train/repositories/workout_repository.dart:1387`).
+
+Readers that then show zero: the Train expanded row (`lib/features/train/screens/train/expanded_exercises.dart:86-89`: `totalDuration ~/ 60` min and `log['distance_km']` km), the best-value formatter and PR value (`workout_repository.dart:49-56`, `:869-885`, whose comment says "writer denormalizes the total"), the exercise preview sheet (`exercise_preview_sheet.dart:154,173`). Only the edit sheet writes `distance_km` (`lib/features/train/widgets/edit_workout_log_sheet.dart:121,164-168`).
+
+History (writer/reader drift class): the zeroing arrived with the `a4c7d1` normalisation (2026-09-22, swap left logged sets in the old format), whose else-branch covers cardio and distance. `d4e7c2` (2026-08-02) is the earlier "receipt shows 0 duration for a timed/cardio exercise" after a restore. Related: OI-380 (distance-type rows read `N sets 0 reps X kg`), OI-382 (negative `durationSec` accepted).
+
+Impact: every cardio exercise saved from the active workout or the coach keeps its set count but loses its minutes and distance; Train, the preview and the cardio PR value read zero. Pre-launch, so test accounts only.
+
+To plan (full diagnose template, recurrence class): keep `durationSec` for `cardio` in the normaliser and decide `distance`; give a set or the row a distance path and write `distance_km` from `logExercise`; a behavioural test that logs a library cardio exercise through `logExercise` and reads minutes and km back from Hive and from the expanded row; a tier-4 audit query on `exercise_logs` for cardio rows with zero duration to size the damage and decide whether stored rows can be repaired (the minutes are not recoverable from the row itself); correct the `train/CLAUDE.md` field list.

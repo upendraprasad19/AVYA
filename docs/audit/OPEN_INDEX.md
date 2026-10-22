@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**244 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**245 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -252,3 +252,4 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-386 | Generator: 11 of 13 attempt-1 sub-focus strings match 0 rows (slot… | Batch B generator rework (spec… | 2026-10-22 — measured from… | [:6553](open_issues.md#L6553) |
 | OI-387 | Library: 6 kept bodyweight rows (E272 E273 E276 E277 E289 E290) invisible… | Batch B generator rework (spec… | 2026-10-22 — measured from… | [:6564](open_issues.md#L6564) |
 | OI-388 | Generator: gym plans serve bodyweight-only self-resisted curls and triceps… | Batch B generator rework (spec… | 2026-10-22 — counted from the… | [:6577](open_issues.md#L6577) |
+| OI-389 | Cardio logs lose their minutes and distance: logExercise zeroes… | none | never | [:6588](open_issues.md#L6588) |
