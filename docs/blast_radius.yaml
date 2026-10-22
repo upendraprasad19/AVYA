@@ -421,6 +421,12 @@ paths:
   # as the `check_writer_reader_drift.dart` citation corrected in
   # lib/CLAUDE.md 2026-08-02, for a gate script that never existed).
   - { glob: "lib/features/train/screens/graduation_screen.dart", tier: account }
+  # workout_surface_invalidation.dart is the ONE list the three account-tier
+  # coach write paths (tool dispatcher, chat draft, completion prompt) refresh
+  # Train through (OI-370). Dropping an entry from it re-opens OI-370, and
+  # lib/features/train/** is feature-tier below, so the single file is pinned
+  # at account (B-pass fb5048e68fae F12a; same one-file argument as above).
+  - { glob: "lib/features/train/providers/workout_surface_invalidation.dart", tier: account }
   # Unit 3c / c8f3d1 (2026-08-01), same one-file argument as the two rules above:
   # pro_phase_advance.dart became THE single writer for the phase advance
   # (commitPhaseAdvance) and owns the shared advance mutex every generating

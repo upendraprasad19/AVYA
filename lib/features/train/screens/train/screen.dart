@@ -15,6 +15,7 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/swap_service.dart';
 import 'package:icanbefitter/core/services/workout_read_service.dart';
+import 'package:icanbefitter/core/copy/wardroom_copy.dart';
 import 'package:icanbefitter/core/utils/hold_week_labels.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/utils/phase_completion.dart';
@@ -36,6 +37,7 @@ import '../../widgets/hold_roadmap_strip.dart';
 import '../../widgets/plan_expired_card.dart';
 import '../../widgets/phase_generating_card.dart';
 import '../../widgets/stats_grid.dart';
+import '../../utils/set_count_label.dart';
 import 'package:icanbefitter/features/home/widgets/streak_explainer_sheet.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
