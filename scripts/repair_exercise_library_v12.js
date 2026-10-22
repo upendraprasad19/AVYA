@@ -64,6 +64,65 @@ function repairText(rows) {
   });
 }
 
+// Stage 2 — mergeDuplicates (Task 2). Seven rows duplicate a kept twin (same
+// movement, same drawing). Each retired row leaves the file; the kept row gains
+// name_aliases += [retired name] and merged_ids += [retired id] (the seed prune
+// deletes merged_ids from every install). When the twins share movement_pattern
+// the kept row also takes the retired row's selection fields, so the slot it
+// filled keeps the same movement: union target_focus and primary_muscles
+// (case-insensitive, kept spelling first), min priority_tier, OR is_foundational.
+// injury_contraindications are NEVER merged (the founder's 13-B carve-out keeps
+// 'v-up' and 'hip abduction machine' untagged). The stretches keep E216/E219/
+// E220 because warmup_cooldown.dart emits those names.
+const MERGES = [
+  ['E241', 'E016'],
+  ['E240', 'E097'],
+  ['E225', 'E107'],
+  ['E249', 'E176'],
+  ['E165', 'E216'],
+  ['E167', 'E219'],
+  ['E168', 'E220'],
+];
+
+function unionCi(kept, extra) {
+  const out = [...(kept || [])];
+  const seen = new Set(out.map((s) => String(s).toLowerCase()));
+  for (const s of extra || []) {
+    if (!seen.has(String(s).toLowerCase())) {
+      out.push(s);
+      seen.add(String(s).toLowerCase());
+    }
+  }
+  return out;
+}
+
+function samePattern(a, b) {
+  const x = [...(a.movement_pattern || [])].sort().join('|');
+  const y = [...(b.movement_pattern || [])].sort().join('|');
+  return x === y;
+}
+
+function mergeDuplicates(rows) {
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const retired = new Set();
+  for (const [retiredId, keptId] of MERGES) {
+    const kept = byId.get(keptId);
+    if (!kept) throw new Error(`kept row ${keptId} missing`);
+    const old = byId.get(retiredId);
+    if (!old) continue; // already merged on an earlier run
+    if (samePattern(old, kept)) {
+      kept.target_focus = unionCi(kept.target_focus, old.target_focus);
+      kept.primary_muscles = unionCi(kept.primary_muscles, old.primary_muscles);
+      kept.priority_tier = Math.min(kept.priority_tier, old.priority_tier);
+      kept.is_foundational = Boolean(kept.is_foundational || old.is_foundational);
+    }
+    kept.name_aliases = unionCi(kept.name_aliases, [old.name]);
+    kept.merged_ids = unionCi(kept.merged_ids, [old.id]);
+    retired.add(retiredId);
+  }
+  return rows.filter((r) => !retired.has(r.id));
+}
+
 // Writes the file in its existing layout: 2-space indent, key order kept, no
 // trailing newline, and met_value / cal_per_set_est always with a decimal point
 // so Dart's jsonDecode keeps typing them as double.
@@ -80,10 +139,13 @@ function main() {
   let rows = JSON.parse(before);
   const shifted = rows.filter(isShifted).length;
   rows = repairText(rows);
+  const beforeMerge = rows.length;
+  rows = mergeDuplicates(rows);
   writeLibrary(rows);
   const after = fs.readFileSync(FILE, 'utf8');
   console.log(
-    `repairText: ${shifted} shifted rows; file ${before === after ? 'unchanged' : 'rewritten'} (${rows.length} rows)`,
+    `repairText: ${shifted} shifted rows; mergeDuplicates: ${beforeMerge - rows.length} retired; ` +
+      `file ${before === after ? 'unchanged' : 'rewritten'} (${rows.length} rows)`,
   );
 }
 

@@ -1110,7 +1110,13 @@
     "priority_tier": 1,
     "rep_range": "5-8",
     "demo_slug": "close-grip-bench-press",
-    "demo_pair": true
+    "demo_pair": true,
+    "name_aliases": [
+      "Close-Grip Bench Press"
+    ],
+    "merged_ids": [
+      "E241"
+    ]
   },
   {
     "id": "E017",
@@ -6627,11 +6633,17 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3,
+    "priority_tier": 2,
     "rep_range": "12-15",
     "is_foundational": false,
     "demo_slug": "overhead-tricep-extension",
-    "demo_pair": true
+    "demo_pair": true,
+    "name_aliases": [
+      "Overhead Cable Extension"
+    ],
+    "merged_ids": [
+      "E240"
+    ]
   },
   {
     "id": "E098",
@@ -7265,7 +7277,8 @@
     ],
     "primary_muscles": [
       "Abductors",
-      "Glutes (medius)"
+      "Glutes (medius)",
+      "Glutes"
     ],
     "secondary_muscles": [],
     "equipment_needed": [
@@ -7305,17 +7318,24 @@
     "is_bilateral": true,
     "cns_demand": 2,
     "target_focus": [
-      "Hip"
+      "Hip",
+      "Glutes"
     ],
     "equipment_tier": [
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3,
+    "priority_tier": 2,
     "rep_range": "12-15",
-    "is_foundational": false,
+    "is_foundational": true,
     "demo_slug": "hip-abduction-machine",
-    "demo_pair": true
+    "demo_pair": true,
+    "name_aliases": [
+      "Hip Abductor Machine"
+    ],
+    "merged_ids": [
+      "E225"
+    ]
   },
   {
     "id": "E108",
@@ -11230,74 +11250,6 @@
     "is_foundational": false
   },
   {
-    "id": "E165",
-    "name": "Quad Stretch",
-    "category": "flexibility",
-    "movement_pattern": [
-      "flexibility"
-    ],
-    "exercise_type": [
-      "flexibility"
-    ],
-    "primary_muscles": [
-      "Quads",
-      "Hip Flexors"
-    ],
-    "secondary_muscles": [],
-    "equipment_needed": [
-      "bodyweight"
-    ],
-    "logging_type": "timed",
-    "difficulty_level": "beginner",
-    "suitable_for": [
-      "Beginner",
-      "Intermediate",
-      "Advanced"
-    ],
-    "default_sets": 3,
-    "default_reps": "30-45 sec each",
-    "default_rest_secs": 15,
-    "tempo": "",
-    "met_value": 1.5,
-    "cal_per_set_est": 1.0,
-    "breathing_cue": "Deep slow breathing",
-    "coaching_cues": [
-      "Standing",
-      "hold ankle",
-      "knee pointing down",
-      "slight posterior pelvic tilt"
-    ],
-    "common_mistakes": [
-      "Arching lower back",
-      "knee pointing outward",
-      "rushing"
-    ],
-    "warmup_protocol": "",
-    "pro_tip": "",
-    "is_indian_context": false,
-    "indian_alternative": "",
-    "source": "",
-    "is_active": true,
-    "injury_contraindications": [],
-    "is_bilateral": true,
-    "cns_demand": 1,
-    "target_focus": [
-      "Quads"
-    ],
-    "equipment_tier": [
-      "bodyweight",
-      "home_dumbbells",
-      "basic_gym",
-      "full_gym"
-    ],
-    "standard_swap": "",
-    "priority_tier": 3,
-    "rep_range": "30-60",
-    "is_foundational": false,
-    "demo_slug": "standing-quad-stretch",
-    "demo_pair": false
-  },
-  {
     "id": "E166",
     "name": "Hamstring Stretch (Standing)",
     "category": "flexibility",
@@ -11363,145 +11315,6 @@
     "rep_range": "30-60",
     "is_foundational": false,
     "demo_slug": "hamstring-stretch",
-    "demo_pair": false
-  },
-  {
-    "id": "E167",
-    "name": "Cross Body Shoulder Stretch",
-    "category": "flexibility",
-    "movement_pattern": [
-      "flexibility"
-    ],
-    "exercise_type": [
-      "flexibility"
-    ],
-    "primary_muscles": [
-      "Rear Deltoid",
-      "Rhomboids"
-    ],
-    "secondary_muscles": [],
-    "equipment_needed": [
-      "bodyweight"
-    ],
-    "logging_type": "timed",
-    "difficulty_level": "beginner",
-    "suitable_for": [
-      "Beginner",
-      "Intermediate",
-      "Advanced"
-    ],
-    "default_sets": 3,
-    "default_reps": "30 sec each",
-    "default_rest_secs": 15,
-    "tempo": "",
-    "met_value": 1.5,
-    "cal_per_set_est": 1.0,
-    "breathing_cue": "Deep breathing",
-    "coaching_cues": [
-      "Pull arm across body",
-      "use other arm to deepen",
-      "keep shoulder down"
-    ],
-    "common_mistakes": [
-      "Elevating shoulder",
-      "rushing",
-      "not pulling far enough"
-    ],
-    "warmup_protocol": "",
-    "pro_tip": "",
-    "is_indian_context": false,
-    "indian_alternative": "",
-    "source": "",
-    "is_active": true,
-    "injury_contraindications": [],
-    "is_bilateral": true,
-    "cns_demand": 1,
-    "target_focus": [
-      "Mid Back (Thickness)",
-      "Rear Delts"
-    ],
-    "equipment_tier": [
-      "bodyweight",
-      "home_dumbbells",
-      "basic_gym",
-      "full_gym"
-    ],
-    "standard_swap": "",
-    "priority_tier": 3,
-    "rep_range": "30-60",
-    "is_foundational": false,
-    "demo_slug": "cross-body-shoulder-stretch",
-    "demo_pair": false
-  },
-  {
-    "id": "E168",
-    "name": "Doorway Chest Stretch",
-    "category": "flexibility",
-    "movement_pattern": [
-      "flexibility"
-    ],
-    "exercise_type": [
-      "flexibility"
-    ],
-    "primary_muscles": [
-      "Chest",
-      "Front Deltoid",
-      "Biceps"
-    ],
-    "secondary_muscles": [],
-    "equipment_needed": [
-      "doorway"
-    ],
-    "logging_type": "timed",
-    "difficulty_level": "beginner",
-    "suitable_for": [
-      "Beginner",
-      "Intermediate",
-      "Advanced"
-    ],
-    "default_sets": 3,
-    "default_reps": "30-45 sec",
-    "default_rest_secs": 15,
-    "tempo": "",
-    "met_value": 1.5,
-    "cal_per_set_est": 1.0,
-    "breathing_cue": "Deep breathing, exhale to deepen stretch",
-    "coaching_cues": [
-      "Arms at 90° on doorframe",
-      "step through",
-      "feel chest stretch",
-      "slight forward lean"
-    ],
-    "common_mistakes": [
-      "Arms too high (shoulder impingement)",
-      "forcing stretch",
-      "twisting"
-    ],
-    "warmup_protocol": "",
-    "pro_tip": "",
-    "is_indian_context": false,
-    "indian_alternative": "",
-    "source": "",
-    "is_active": true,
-    "injury_contraindications": [],
-    "is_bilateral": true,
-    "cns_demand": 1,
-    "target_focus": [
-      "Biceps",
-      "Front Delts",
-      "Mid Chest"
-    ],
-    "equipment_tier": [
-      "bodyweight",
-      "home_dumbbells",
-      "basic_gym",
-      "full_gym"
-    ],
-    "standard_swap": "",
-    "priority_tier": 3,
-    "rep_range": "30-60",
-    "is_foundational": false,
-    "demo_slug": "doorway-chest-stretch",
     "demo_pair": false
   },
   {
@@ -11992,7 +11805,8 @@
     ],
     "primary_muscles": [
       "Abs",
-      "Hip Flexors"
+      "Hip Flexors",
+      "Core"
     ],
     "secondary_muscles": [],
     "equipment_needed": [
@@ -12041,11 +11855,17 @@
       "full_gym"
     ],
     "standard_swap": "",
-    "priority_tier": 3,
+    "priority_tier": 2,
     "rep_range": "12-20",
     "is_foundational": false,
     "demo_slug": "v-up",
-    "demo_pair": true
+    "demo_pair": true,
+    "name_aliases": [
+      "V-Ups"
+    ],
+    "merged_ids": [
+      "E249"
+    ]
   },
   {
     "id": "E177",
@@ -14781,7 +14601,13 @@
     "rep_range": "30-60",
     "is_foundational": false,
     "demo_slug": "standing-quad-stretch",
-    "demo_pair": false
+    "demo_pair": false,
+    "name_aliases": [
+      "Quad Stretch"
+    ],
+    "merged_ids": [
+      "E165"
+    ]
   },
   {
     "id": "E217",
@@ -14986,7 +14812,13 @@
     "rep_range": "30-60",
     "is_foundational": false,
     "demo_slug": "cross-body-shoulder-stretch",
-    "demo_pair": false
+    "demo_pair": false,
+    "name_aliases": [
+      "Cross Body Shoulder Stretch"
+    ],
+    "merged_ids": [
+      "E167"
+    ]
   },
   {
     "id": "E220",
@@ -15057,7 +14889,13 @@
     "rep_range": "30-60",
     "is_foundational": false,
     "demo_slug": "doorway-chest-stretch",
-    "demo_pair": false
+    "demo_pair": false,
+    "name_aliases": [
+      "Doorway Chest Stretch"
+    ],
+    "merged_ids": [
+      "E168"
+    ]
   },
   {
     "id": "E221",
@@ -15336,76 +15174,6 @@
     "rep_range": "8-12",
     "id": "E224",
     "demo_slug": "cable-pull-through",
-    "demo_pair": true
-  },
-  {
-    "name": "Hip Abductor Machine",
-    "category": "legs",
-    "movement_pattern": [
-      "hip_isolation"
-    ],
-    "exercise_type": [
-      "isolation"
-    ],
-    "primary_muscles": [
-      "Glutes"
-    ],
-    "secondary_muscles": [
-      "Hip Abductors"
-    ],
-    "equipment_needed": [
-      "machines"
-    ],
-    "logging_type": "weight_reps",
-    "difficulty_level": "beginner",
-    "suitable_for": [
-      "Beginner",
-      "Intermediate",
-      "Advanced"
-    ],
-    "default_sets": 3,
-    "default_reps": "15-20",
-    "default_rest_secs": 60,
-    "tempo": "2-1-2-0",
-    "met_value": 3.5,
-    "cal_per_set_est": 5.0,
-    "breathing_cue": "Exhale on the push outward",
-    "coaching_cues": [
-      "Sit tall",
-      "keep core braced",
-      "avoid rocking the torso",
-      "Full ROM — push as wide as the machine allows",
-      "Controlled return — don't let the weights slam"
-    ],
-    "common_mistakes": [
-      "Using momentum — slow and controlled every rep",
-      "Tilting the torso to compensate for limited ROM",
-      "Skipping the hold at full abduction"
-    ],
-    "warmup_protocol": "1×20 light before working sets",
-    "pro_tip": "Finish with a 30-second isometric hold at full abduction — nasty glute burn and great for hypertrophy",
-    "is_indian_context": false,
-    "indian_alternative": "",
-    "source": "Exercise science",
-    "is_active": true,
-    "is_foundational": true,
-    "injury_contraindications": [
-      "hip"
-    ],
-    "is_bilateral": true,
-    "cns_demand": 1,
-    "target_focus": [
-      "Glutes",
-      "Hip"
-    ],
-    "equipment_tier": [
-      "full_gym"
-    ],
-    "standard_swap": "Banded Lateral Walk",
-    "priority_tier": 2,
-    "rep_range": "12-15",
-    "id": "E225",
-    "demo_slug": "hip-abduction-machine",
     "demo_pair": true
   },
   {
@@ -16370,146 +16138,6 @@
     "demo_pair": true
   },
   {
-    "name": "Overhead Cable Extension",
-    "category": "push",
-    "movement_pattern": [
-      "elbow_extension"
-    ],
-    "exercise_type": [
-      "isolation"
-    ],
-    "primary_muscles": [
-      "Triceps (Long Head)"
-    ],
-    "secondary_muscles": [],
-    "equipment_needed": [
-      "cables"
-    ],
-    "logging_type": "weight_reps",
-    "difficulty_level": "beginner",
-    "suitable_for": [
-      "Beginner",
-      "Intermediate",
-      "Advanced"
-    ],
-    "default_sets": 3,
-    "default_reps": "12-15",
-    "default_rest_secs": 60,
-    "tempo": "3-1-2-0",
-    "met_value": 3.5,
-    "cal_per_set_est": 5.0,
-    "breathing_cue": "Inhale on the stretch overhead, exhale on extension",
-    "coaching_cues": [
-      "Face away from the stack",
-      "grab rope overhead with both hands behind the head",
-      "Keep elbows pointing directly upward — don't let them flare outward",
-      "Full extension above the head",
-      "feel the long head stretch at the bottom"
-    ],
-    "common_mistakes": [
-      "Elbows flaring out wide — removes long-head focus",
-      "Arching the lower back — engage core tightly",
-      "Using too much weight and sacrificing the stretch at the bottom"
-    ],
-    "warmup_protocol": "1×15 very light to warm up elbow and shoulder",
-    "pro_tip": "The overhead position maximally stretches the long head of the tricep — 30% more growth stimulus than pushdowns for the same reps according to recent research",
-    "is_indian_context": false,
-    "indian_alternative": "",
-    "source": "Exercise science",
-    "is_active": true,
-    "is_foundational": false,
-    "injury_contraindications": [
-      "elbow",
-      "shoulder"
-    ],
-    "is_bilateral": true,
-    "cns_demand": 1,
-    "target_focus": [
-      "Triceps (Long Head)"
-    ],
-    "equipment_tier": [
-      "basic_gym",
-      "full_gym"
-    ],
-    "standard_swap": "Overhead Dumbbell Extension",
-    "priority_tier": 2,
-    "rep_range": "12-15",
-    "id": "E240",
-    "demo_slug": "overhead-tricep-extension",
-    "demo_pair": true
-  },
-  {
-    "name": "Close-Grip Bench Press",
-    "category": "push",
-    "movement_pattern": [
-      "elbow_extension"
-    ],
-    "exercise_type": [
-      "compound"
-    ],
-    "primary_muscles": [
-      "Triceps"
-    ],
-    "secondary_muscles": [
-      "Chest",
-      "Front Deltoid"
-    ],
-    "equipment_needed": [
-      "barbell",
-      "bench"
-    ],
-    "logging_type": "weight_reps",
-    "difficulty_level": "intermediate",
-    "suitable_for": [
-      "Intermediate",
-      "Advanced"
-    ],
-    "default_sets": 4,
-    "default_reps": "8-12",
-    "default_rest_secs": 90,
-    "tempo": "3-1-2-0",
-    "met_value": 4.8,
-    "cal_per_set_est": 9.0,
-    "breathing_cue": "Inhale on the descent, exhale hard on the press",
-    "coaching_cues": [
-      "Grip just inside shoulder width — narrower than bench press but NOT touching",
-      "Elbows track close to the torso",
-      "elbow angle 20-30° from the body",
-      "Bar touches lower chest — NOT the same touch point as bench press"
-    ],
-    "common_mistakes": [
-      "Grip too narrow — wrist strain and reduced force output",
-      "Elbows flaring wide — converts to a chest exercise",
-      "Partial reps at the top — full lockout is where tricep finishes the rep"
-    ],
-    "warmup_protocol": "2×10 at 50% working weight",
-    "pro_tip": "One of the best strength builders for the tricep — can carry over 10-15kg to regular bench press by fixing a tricep-weak lockout",
-    "is_indian_context": false,
-    "indian_alternative": "",
-    "source": "Exercise science",
-    "is_active": true,
-    "is_foundational": false,
-    "injury_contraindications": [
-      "shoulder",
-      "wrist"
-    ],
-    "is_bilateral": true,
-    "cns_demand": 3,
-    "target_focus": [
-      "Triceps"
-    ],
-    "equipment_tier": [
-      "basic_gym",
-      "full_gym"
-    ],
-    "standard_swap": "Tricep Dips",
-    "priority_tier": 2,
-    "rep_range": "5-8",
-    "id": "E241",
-    "demo_slug": "close-grip-bench-press",
-    "demo_pair": true
-  },
-  {
     "name": "Rope Hammer Curl",
     "category": "pull",
     "movement_pattern": [
@@ -16989,78 +16617,6 @@
     "priority_tier": 2,
     "rep_range": "12-20",
     "id": "E248"
-  },
-  {
-    "name": "V-Ups",
-    "category": "core",
-    "movement_pattern": [
-      "core"
-    ],
-    "exercise_type": [
-      "isolation",
-      "calisthenics"
-    ],
-    "primary_muscles": [
-      "Core"
-    ],
-    "secondary_muscles": [
-      "Hip Flexors"
-    ],
-    "equipment_needed": [
-      "bodyweight"
-    ],
-    "logging_type": "bodyweight_reps",
-    "difficulty_level": "intermediate",
-    "suitable_for": [
-      "Intermediate",
-      "Advanced"
-    ],
-    "default_sets": 3,
-    "default_reps": "12-15",
-    "default_rest_secs": 60,
-    "tempo": "1-1-1-0",
-    "met_value": 3.5,
-    "cal_per_set_est": 5.0,
-    "breathing_cue": "Exhale sharply as you fold up into the V position",
-    "coaching_cues": [
-      "Start lying flat",
-      "simultaneously raise straight legs and straight arms to meet",
-      "Reach fingers toward toes at the peak",
-      "spine should form a deep C-curve",
-      "Control the return — do NOT slam back to the floor"
-    ],
-    "common_mistakes": [
-      "Bending the knees — makes the exercise significantly easier, removes load",
-      "Using momentum to swing up rather than a controlled abdominal crunch",
-      "Dropping back fast — the eccentric is where abdominal strength is built"
-    ],
-    "warmup_protocol": "1×10 regular crunches to activate abs first",
-    "pro_tip": "Harder than it looks — if lower back arches or you cannot keep legs straight, regress to tuck V-ups first",
-    "is_indian_context": false,
-    "indian_alternative": "",
-    "source": "Exercise science",
-    "is_active": true,
-    "is_foundational": false,
-    "injury_contraindications": [
-      "lower_back"
-    ],
-    "is_bilateral": true,
-    "cns_demand": 1,
-    "target_focus": [
-      "Core"
-    ],
-    "equipment_tier": [
-      "bodyweight",
-      "home_dumbbells",
-      "basic_gym",
-      "full_gym"
-    ],
-    "standard_swap": "Sit-Up",
-    "priority_tier": 2,
-    "rep_range": "12-20",
-    "id": "E249",
-    "demo_slug": "v-up",
-    "demo_pair": true
   },
   {
     "name": "Flutter Kicks",

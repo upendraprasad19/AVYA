@@ -32,15 +32,15 @@ void main() {
     final src = File('lib/core/services/seed_service.dart').readAsStringSync();
     final m = RegExp(r'_exerciseLibraryVersion\s*=\s*(\d+)').firstMatch(src);
     expect(m, isNotNull, reason: 'version constant not found');
-    expect(int.parse(m!.group(1)!), greaterThanOrEqualTo(11),
-        reason: 'v10 shipped with the OI-89 re-seed; new fields need 11+');
+    expect(int.parse(m!.group(1)!), greaterThanOrEqualTo(12),
+        reason: 'v11 shipped the plates; the Batch A repair (merges, text, plate swaps) needs 12+');
   });
 
-  test('the library is still 292 rows — this batch removes none', () {
+  test('the library is 285 rows — Batch A retired 7 duplicates, nothing else', () {
     // Donkey Calf Raise stays. Its removal is OI-147, split out after review
     // round 2: it touches the cloud seed migration, a live prod apply and the
     // frozen generator baseline, none of which plates touches.
-    expect(lib.length, 292);
+    expect(lib.length, 285);
     expect(lib.any((e) => e['name'] == 'Donkey Calf Raise'), isTrue);
   });
 
@@ -54,12 +54,12 @@ void main() {
     }
   });
 
-  test('exactly 165 rows carry artwork and 127 do not', () {
+  test('exactly 158 rows carry artwork and 127 do not', () {
     final withArt = lib.where((e) {
       final s = e['demo_slug'];
       return s is String && s.isNotEmpty;
     }).toList();
-    expect(withArt.length, 165);
+    expect(withArt.length, 158);
     expect(lib.length - withArt.length, 127);
     for (final e in withArt) {
       expect(e['demo_pair'], isA<bool>(),
@@ -85,7 +85,7 @@ void main() {
       }
     }
     expect(bad, isEmpty, reason: 'omit BOTH keys on an artwork-less row: $bad');
-    expect(lib.where((e) => e.containsKey('demo_slug')).length, 165);
+    expect(lib.where((e) => e.containsKey('demo_slug')).length, 158);
   });
 
   test('the dead image fields are gone from the library', () {

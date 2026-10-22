@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show compute, debugPrint;
+import 'package:flutter/foundation.dart'
+    show compute, debugPrint, visibleForTesting;
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:hive_flutter/hive_flutter.dart' show Box;
 
 import 'error_telemetry.dart';
 import 'hive_service.dart';
@@ -94,7 +96,12 @@ class SeedService {
   //   point: Chin Up keeps shipping to bodyweight users off the stale box.
   // v11 (exercise plates): demo_slug + demo_pair on 165 rows; the three dead
   // image URL fields removed. Re-seed rewrites every row in place via putAll.
-  static const int _exerciseLibraryVersion = 11;
+  // v12 (Batch A library data repair, docs/plans/2026-10-22-library-data-repair.md):
+  //   136 coaching-text rows un-shifted (OI-149) and every cue list split into
+  //   one cue per item; 7 duplicate rows retired into their twins (name_aliases
+  //   + merged_ids, and the prune below deletes them from existing installs);
+  //   E172/E163 label typos; 19 start/end plate swaps; 2 wrong drawings removed.
+  static const int _exerciseLibraryVersion = 12;
   static const String _exerciseVersionKey = 'exercise_library_version';
 
   /// Bump this integer whenever the bundled food_database.json changes
@@ -188,14 +195,32 @@ class SeedService {
     }
   }
 
+  /// The ids every bundled row lists in `merged_ids`: library rows retired into
+  /// a kept twin, which must no longer exist in exerciseBox.
+  @visibleForTesting
+  static Set<String> retiredLibraryIds(Iterable<Object?> rows) => {
+        for (final row in rows)
+          if (row is Map && row['merged_ids'] is List)
+            for (final id in row['merged_ids'] as List) id.toString(),
+      };
+
+  /// Deletes exactly [ids] from [box]. Only E-ids listed in `merged_ids` are
+  /// ever passed, so community rows (UUID keys) are never touched.
+  @visibleForTesting
+  static Future<void> pruneRetired(Box<dynamic> box, Set<String> ids) =>
+      box.deleteAll(ids.where(box.containsKey).toList());
+
   /// Reads [_exerciseAssetPath] from the asset bundle, parses it in a
   /// background isolate, then writes every exercise into exerciseBox keyed
-  /// by its `id`.
+  /// by its `id`, and prunes the retired ids.
   Future<void> _seedExercises() async {
     try {
       final jsonString = await rootBundle.loadString(_exerciseAssetPath);
       final entries = await compute(_parseJsonToIdMap, jsonString);
       await _hive.exerciseBox.putAll(entries);
+      // putAll never deletes: a row retired into its twin would otherwise live
+      // on in every existing install and keep being offered.
+      await pruneRetired(_hive.exerciseBox, retiredLibraryIds(entries.values));
       await _hive.configBox.put(_exercisesSeededKey, true);
       await _hive.configBox.put(_exerciseVersionKey, _exerciseLibraryVersion);
       debugPrint('[SeedService] Exercises seeded: ${entries.length} items (v$_exerciseLibraryVersion)');
