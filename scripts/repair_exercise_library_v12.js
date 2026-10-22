@@ -123,6 +123,24 @@ function mergeDuplicates(rows) {
   return rows.filter((r) => !retired.has(r.id));
 }
 
+// Stage 3 — relabel (Task 3). Two rows were labelled 'Lats' by a typo: E172
+// Dumbbell Side Bend (a core row, so no Core slot could ever offer it) and E163
+// Foam Roll IT Band (lateral thigh). Keyed off the typo itself, so a later
+// deliberate edit to either row is left alone.
+const RELABELS = [
+  ['E172', ['Lats'], ['Core']],
+  ['E163', ['Lats'], ['Legs']],
+];
+
+function relabel(rows) {
+  for (const [id, from, to] of RELABELS) {
+    const row = rows.find((r) => r.id === id);
+    if (!row) throw new Error(`relabel row ${id} missing`);
+    if (JSON.stringify(row.target_focus) === JSON.stringify(from)) row.target_focus = [...to];
+  }
+  return rows;
+}
+
 // Writes the file in its existing layout: 2-space indent, key order kept, no
 // trailing newline, and met_value / cal_per_set_est always with a decimal point
 // so Dart's jsonDecode keeps typing them as double.
@@ -141,6 +159,7 @@ function main() {
   rows = repairText(rows);
   const beforeMerge = rows.length;
   rows = mergeDuplicates(rows);
+  rows = relabel(rows);
   writeLibrary(rows);
   const after = fs.readFileSync(FILE, 'utf8');
   console.log(

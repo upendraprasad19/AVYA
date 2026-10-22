@@ -6,8 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
-### exercise_library_schema (3 bugs)
+### exercise_library_schema (4 bugs)
 - 2026-10-22 46fc99 — Seven bundled library rows duplicated a kept twin: the same movement under a second name, usually with the same drawing. E241 Close-Grip Bench Press / E016 Close Grip Bench Press, E240 Overhead Cable…
+- 2026-10-22 2390f5 — E172 Dumbbell Side Bend, a core row, carried target_focus ["Lats"] and nothing else, so queryV4's target-muscle filter never offered it to a Core slot: a Phase-1 home_dumbbells Core/isolation query…
 - 2026-10-22 b7d3e1 — On 136 of the 292 bundled library rows every text field from met_value to source sat one column to the right. The app showed a number as the breathing cue (suppressed by a guard, so the section simply…
 - 2026-07-19 e1a7c4 — 9 exercises E252-E260 (Wall Sit, Bodyweight Good Morning, Doorframe Curl, Towel Row, Negative Pull Up, Glute Kickback, Dumbbell Calf Raise, Split Squat, Incline Dumbbell Press) used a DIFFERENT…
 
@@ -1612,6 +1613,7 @@ rather than a Hive box. (1 bugs)
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
 | 2026-10-22 | 46fc99 | Seven bundled library rows duplicated a kept twin: the same movement under a second name, usually with the same drawing. E241 Close-Grip Bench Press / E016 Close Grip Bench Press, E240 Overhead Cable… | exercise_library_schema | test/contracts/exercise_library_merge_contract_test.dart |
+| 2026-10-22 | 2390f5 | E172 Dumbbell Side Bend, a core row, carried target_focus ["Lats"] and nothing else, so queryV4's target-muscle filter never offered it to a Core slot: a Phase-1 home_dumbbells Core/isolation query… | exercise_library_schema | test/contracts/library_label_typo_behavioral_test.dart |
 | 2026-10-22 | b7d3e1 | On 136 of the 292 bundled library rows every text field from met_value to source sat one column to the right. The app showed a number as the breathing cue (suppressed by a guard, so the section simply… | exercise_library_schema | test/contracts/exercise_library_text_shape_contract_test.dart |
 | 2026-10-21 | c3e7a1 | A CAPTURED Razorpay payment whose amount matches no plan price answered 400 in both payment writers and wrote no subscriptions row and no alert. The usual cause is a promo code deleted or its… | payment_record_failed_alert — every captured payment that a writer cannot record pages the founder. | supabase/functions/razorpay-webhook/index_test.ts |
 | 2026-10-21 | d4b8e1 | Founder (web app, logged in as upendraprasad19, 2026-10-21): today's "Upper push + core" workout listed 14 exercises / 56 sets — 8 library picks plus 6 of his own custom exercises (tuck planche,… | generator_no_custom_autoadd | test/contracts/l2_no_custom_autoadd_behavioral_test.dart |

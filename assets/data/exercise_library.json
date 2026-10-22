@@ -11169,7 +11169,7 @@
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
-      "Lats"
+      "Legs"
     ],
     "equipment_tier": [
       "bodyweight",
@@ -11576,7 +11576,7 @@
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
-      "Lats"
+      "Core"
     ],
     "equipment_tier": [
       "home_dumbbells",
