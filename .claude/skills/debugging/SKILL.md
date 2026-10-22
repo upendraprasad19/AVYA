@@ -234,6 +234,7 @@ Per CLAUDE.md rules 21 + 22:
 | 2.110 | `TextField.selectAllOnFocus` does not select on a user TAP | a plan says a tap on a prefilled value selects it, and on the device typing appends mid-number | test/features/train/log_exercise/log_exercise_card_flip_test.dart |
 | 2.111 | A test compares `FileSystemEntity.path` to a `/`-literal: red only on Windows, invisible to Linux CI | a local Windows full suite fails with Expected/Actual differing only by `\` vs `/`, while CI is green | test/contracts/lapse_gap_policy_writer_to_reader_test.dart |
 | 2.112 | A floating version in a dependency we do not own (a plugin x.y.+, a POM LATEST) fails builds and silently changes the shipped bytes | Build Check fails with "Could not find any matches for ...:x.y.+" on a commit that touched no build file, and a re-run passes | test/contracts/android_dynamic_dependency_pin_test.dart |
+| 2.113 | A harness hook that cannot start reads as a hook that allowed the call (relative script path vs the session's moving cwd) | a guard did not block and printed nothing; a stray `<subdir>/.dart_tool/` blocks worktree retirement | test/scripts/claude_hooks_cwd_independent_test.dart |
 
 ---
 

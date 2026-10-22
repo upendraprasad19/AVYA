@@ -306,4 +306,68 @@ void main() {
       expect(result.exitCode, 0);
     }, timeout: const Timeout(Duration(minutes: 3)));
   });
+
+  // Diagnose 8f3e35 (OI-384): the advisory plan-review precheck built
+  // `$cwd/scripts/...` from the PAYLOAD cwd, which is a subdirectory whenever
+  // the session shell has `cd`-ed into one, so the precheck was silently
+  // skipped there. It now resolves the checkout root (precheckRoot). Before
+  // this group nothing exercised the precheck at all.
+  group('plan-review precheck runs from the checkout root', () {
+    late Directory repo;
+    late String resolvedRoot;
+
+    setUp(() {
+      // A space in the path: the founder's Windows clone lives under
+      // `C:\Upendra\Claude Code\...`.
+      repo = Directory.systemTemp.createTempSync('git safety precheck ');
+      resolvedRoot = repo.resolveSymbolicLinksSync();
+      final init = runSpawn('git', ['init', '-q'],
+          why: 'git init the precheck temp repo',
+          workingDirectory: repo.path,
+          runInShell: true);
+      expect(init.exitCode, 0, reason: 'temp repo init failed');
+      Directory('${repo.path}/sub').createSync();
+      // A stub precheck: prints the directory it was run from, exits 1 so
+      // the hook surfaces its output as additionalContext.
+      File('${repo.path}/scripts/check_plan_review_record_exists.dart')
+        ..createSync(recursive: true)
+        ..writeAsStringSync(
+            "import 'dart:io';\n"
+            'void main() {\n'
+            "  stdout.writeln('ROOT=\${Directory.current.path}');\n"
+            '  exit(1);\n'
+            '}\n');
+    });
+
+    tearDown(() {
+      if (repo.existsSync()) repo.deleteSync(recursive: true);
+    });
+
+    Future<void> expectPrecheckRanAtRoot(String cwd) async {
+      final result = await runHook(payload('sh scripts/safe_push.sh', cwd: cwd));
+      expect(result.exitCode, 0,
+          reason: 'the precheck is advisory: a push is never blocked by it');
+      expect(result.stdout.trim(), isNotEmpty,
+          reason: 'no additionalContext at all means the precheck was SKIPPED '
+              '(the pre-fix behaviour from a subdirectory)');
+      final out = jsonDecode(result.stdout) as Map<String, dynamic>;
+      final hso = out['hookSpecificOutput'] as Map<String, dynamic>;
+      // End-of-line anchored: `ROOT=<repo>/sub` must NOT satisfy it (B-pass
+      // 2026-10-21: a bare contains() could not tell the root from sub/).
+      expect(hso['additionalContext'] as String,
+          matches(RegExp('ROOT=${RegExp.escape(resolvedRoot)}(?:\n|\$)')),
+          reason: 'the precheck must run from the checkout root, not from the '
+              'payload cwd ($cwd)');
+    }
+
+    test('from a SUBDIRECTORY the precheck still runs, at the root', () async {
+      await expectPrecheckRanAtRoot('${repo.path}/sub');
+    }, timeout: const Timeout(Duration(minutes: 3)));
+
+    test('from the root itself it runs there too', () async {
+      await expectPrecheckRanAtRoot(repo.path);
+    }, timeout: const Timeout(Duration(minutes: 3)));
+  }, skip: Platform.isWindows
+      ? 'git prints C:/ paths and the temp dir may be an 8.3 short name'
+      : false);
 }
