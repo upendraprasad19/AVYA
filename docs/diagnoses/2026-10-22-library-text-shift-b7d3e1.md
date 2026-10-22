@@ -81,7 +81,8 @@ impact_analysis: >
 touched_layers_checked:
   - { layer: client_code, status: fixed_in_this_batch, evidence: "two stale OI-149 comments rewritten; guards unchanged; 31 tests green across the Task 1 set" }
   - { layer: hive_local_state, status: fixed_in_this_batch, evidence: "bundled JSON repaired; the v12 seed bump (same batch) rewrites every install's exerciseBox via putAll" }
-  - { layer: postgres_data, status: verified, evidence: "2026-10-22 read-only query: cloud E013 coaching_cues = ['Natural breathing'], common_mistakes = the real cues; E001 packed. Fixed by the batch's cloud re-seed migration (Task 6)" }
+  - { layer: postgres_data, status: fixed_in_this_batch, evidence: "pre-apply 2026-10-22: cloud E013 coaching_cues = ['Natural breathing'] (the shift), 292 rows, 0 inactive, 0 aliases. Migration 162 applied 2026-10-22 11:38 IST; post-apply checks by UUID v5: 285 kept rows active, 7 retired inactive, 7 with name_aliases, E013 cues = bundled, E165 cues = E216's, E260 {dumbbells,bench} kept" }
+  - { layer: migrations_applied, status: fixed_in_this_batch, evidence: "162_reseed_exercise_library.sql rehearsed on prod inside BEGIN/ROLLBACK (same checks, all true; live unchanged after), then applied via .claude/apply_migration_via_api.js (HTTP 201); backups/applied_migrations.json entry 162 with the file's sha256, same commit as the .sql" }
   - { layer: edge_function_deploy, status: not_applicable, evidence: "getFormCues reads columns; no code change, no deploy" }
 ---
 
