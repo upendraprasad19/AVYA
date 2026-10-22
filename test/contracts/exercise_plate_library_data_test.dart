@@ -54,13 +54,13 @@ void main() {
     }
   });
 
-  test('exactly 158 rows carry artwork and 127 do not', () {
+  test('exactly 156 rows carry artwork and 129 do not', () {
     final withArt = lib.where((e) {
       final s = e['demo_slug'];
       return s is String && s.isNotEmpty;
     }).toList();
-    expect(withArt.length, 158);
-    expect(lib.length - withArt.length, 127);
+    expect(withArt.length, 156);
+    expect(lib.length - withArt.length, 129);
     for (final e in withArt) {
       expect(e['demo_pair'], isA<bool>(),
           reason: '${e['name']}: demo_slug without demo_pair');
@@ -70,7 +70,7 @@ void main() {
   });
 
   test('an artwork-less row carries NEITHER key — never a null or empty one', () {
-    // Not vacuous: it fails if the writer emits demo_slug: null on 127 rows,
+    // Not vacuous: it fails if the writer emits demo_slug: null on 129 rows,
     // which is the obvious way to write the transform wrong.
     final bad = <String>[];
     for (final e in lib) {
@@ -85,7 +85,7 @@ void main() {
       }
     }
     expect(bad, isEmpty, reason: 'omit BOTH keys on an artwork-less row: $bad');
-    expect(lib.where((e) => e.containsKey('demo_slug')).length, 158);
+    expect(lib.where((e) => e.containsKey('demo_slug')).length, 156);
   });
 
   test('the dead image fields are gone from the library', () {

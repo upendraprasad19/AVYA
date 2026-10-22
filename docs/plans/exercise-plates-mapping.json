@@ -690,12 +690,6 @@
     "pair": false
   },
   {
-    "id": "E179",
-    "name": "Toes to Bar",
-    "slug": "hanging-leg-raise",
-    "pair": true
-  },
-  {
     "id": "E188",
     "name": "Banded Squat",
     "slug": "banded-squat",
@@ -735,12 +729,6 @@
     "id": "E205",
     "name": "Arm Circles",
     "slug": "arm-circles",
-    "pair": true
-  },
-  {
-    "id": "E207",
-    "name": "Torso Twists",
-    "slug": "torso-twist-stretch",
     "pair": true
   },
   {

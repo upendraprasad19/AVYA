@@ -141,6 +141,23 @@ function relabel(rows) {
   return rows;
 }
 
+// Stage 4 — dropPlates (Task 4). Two rows point at a drawing of a different
+// movement: E207 Torso Twists at a standing stretch ('torso-twist-stretch', its
+// only user, so those two SVGs are deleted too) and E179 Toes to Bar at the
+// hanging leg raise it shares with E057. Both lose demo_slug and demo_pair and
+// render the artwork-less plate until a real drawing exists.
+const DROP_PLATES = ['E207', 'E179'];
+
+function dropPlates(rows) {
+  for (const id of DROP_PLATES) {
+    const row = rows.find((r) => r.id === id);
+    if (!row) throw new Error(`dropPlates row ${id} missing`);
+    delete row.demo_slug;
+    delete row.demo_pair;
+  }
+  return rows;
+}
+
 // Writes the file in its existing layout: 2-space indent, key order kept, no
 // trailing newline, and met_value / cal_per_set_est always with a decimal point
 // so Dart's jsonDecode keeps typing them as double.
@@ -160,6 +177,7 @@ function main() {
   const beforeMerge = rows.length;
   rows = mergeDuplicates(rows);
   rows = relabel(rows);
+  rows = dropPlates(rows);
   writeLibrary(rows);
   const after = fs.readFileSync(FILE, 'utf8');
   console.log(

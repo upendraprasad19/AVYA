@@ -12073,9 +12073,7 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "12-20",
-    "is_foundational": false,
-    "demo_slug": "hanging-leg-raise",
-    "demo_pair": true
+    "is_foundational": false
   },
   {
     "id": "E180",
@@ -13987,9 +13985,7 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false,
-    "demo_slug": "torso-twist-stretch",
-    "demo_pair": true
+    "is_foundational": false
   },
   {
     "id": "E208",

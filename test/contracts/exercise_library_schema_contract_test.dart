@@ -80,7 +80,7 @@ void main() {
           reason: 'Rows deviating from the 35-key canonical schema:\n${offenders.join('\n')}');
     });
 
-    test('demo_slug and demo_pair travel together, on exactly 158 rows', () {
+    test('demo_slug and demo_pair travel together, on exactly 156 rows', () {
       // The pair is what the asset pipeline and the resolver both key on; one
       // without the other is a half-written row, not a valid state.
       final lonely = rows
@@ -88,8 +88,9 @@ void main() {
           .map((r) => r['id'])
           .toList();
       expect(lonely, isEmpty, reason: 'rows with one plate key but not the other: $lonely');
-      // 165 -> 158: Batch A retired 7 plated duplicates into their twins.
-      expect(rows.where((r) => r.containsKey('demo_slug')).length, 158);
+      // 165 -> 158: Batch A retired 7 plated duplicates into their twins;
+      // 158 -> 156: E207 and E179 pointed at another movement's drawing.
+      expect(rows.where((r) => r.containsKey('demo_slug')).length, 156);
     });
 
     test('no row is MISSING a List injury_contraindications (the E252 live hole)', () {
