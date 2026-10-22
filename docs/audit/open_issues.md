@@ -6100,7 +6100,7 @@ Fix options (to be planned, not decided): (a) a `free_access_codes` table (code,
 
 **Before the build (added 2026-10-21, OI-341 B2a):** the VPS `.env` `RAZORPAY_KEY_ID` must hold the LIVE key ID (`rzp_live_...`, the public half of the pair, from the Razorpay dashboard). Today it holds a `rzp_test_` ID while the server's secrets are the live pair, and the client opens checkout with its own build-time key (`app_constants.dart:193`), so an AAB built as-is would fail at checkout. After the build, also run one real purchase from the phone (90% code, refunded) as part of the B2b checks.
 
-How to use: build once from the last merged `main`, install on the phone, sign in with one FREE and one PRO account (plus one throwaway or lapsed account where a row says so), then walk the sections in order. Section A needs the phone, B needs a signed-in session or JWT (a dev build or test account), C needs no build and can be run any time with the founder's go for live reads.
+How to use: build once from the last merged `main`, install on the phone, sign in with one FREE and one PRO account (plus one throwaway or lapsed account where a row says so), then walk the sections in order. Section A needs the phone, B needs a signed-in session or JWT (a dev build or test account), C needs no build and can be run any time with the founder's go for live reads. W runs on the founder's Windows clone, no build.
 
 ### A. On the phone (release build)
 
@@ -6133,6 +6133,10 @@ How to use: build once from the last merged `main`, install on the phone, sign i
 - C5 `referral-pay-on-conversion` N6: look in the Razorpay dashboard for any payment flow where the payer controls the notes (a Payment Page or Button with a custom field, or a website checkout), at one of the plan amounts.
 - C6 `coach-measurement-bounds` REJECTION-REVIEW: after the build is in use, read live `client_errors` for the rejection rows and adjust the bounds table (D5) if needed.
 - C7 `oi341-purchase-in-trial` (Piece A, PR #124; `verify-payment` v25, `razorpay-webhook` v29; `ENABLE_SUBSCRIPTION_STACKING` unset): after the next real payment, read its `subscriptions` row: `start_date` = the payment time and `end_date` = `start_date` + 30 or 365 days (the unstacked value, since the switch is off); the function logs carry no `reconcile` line. Needs no build.
+
+### W. On the founder's Windows clone (no build)
+
+- W1 `hook-cwd-fail-open` OI-384 WINDOWS-HOOKS: on the Windows clone, after pulling the merge, start a Claude Code session, `cd supabase/functions` in one Bash call, then run `git commit --dry-run -m probe` in the next. PASS = `[git-safety] BLOCKED`. A non-blocking hook error instead means Claude Code fell back to PowerShell (Git Bash not found): install Git for Windows or set `CLAUDE_CODE_GIT_BASH_PATH`. The hook commands need a POSIX shell (`docs/architecture/hooks.md`, diagnose `8f3e35`).
 
 ### Flips (OIs and rows that close or unblock when their checks are recorded)
 

@@ -9,7 +9,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "dart run scripts/check_alerts.dart"
+            "command": "r=$(git rev-parse --show-toplevel 2>/dev/null); [ -n \"$r\" ] && [ -f \"$r/scripts/check_alerts.dart\" ] || r=\"${CLAUDE_PROJECT_DIR:-.}\"; cd \"$r\" || exit 1; dart run scripts/check_alerts.dart"
           }
         ]
       },
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "dart run --verbosity=error scripts/discipline_hook.dart"
+            "command": "r=$(git rev-parse --show-toplevel 2>/dev/null); [ -n \"$r\" ] && [ -f \"$r/scripts/discipline_hook.dart\" ] || r=\"${CLAUDE_PROJECT_DIR:-.}\"; cd \"$r\" || exit 1; dart run --verbosity=error scripts/discipline_hook.dart"
           }
         ]
       },
@@ -25,7 +25,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "dart run --verbosity=error scripts/reconcile_ci.dart"
+            "command": "r=$(git rev-parse --show-toplevel 2>/dev/null); [ -n \"$r\" ] && [ -f \"$r/scripts/reconcile_ci.dart\" ] || r=\"${CLAUDE_PROJECT_DIR:-.}\"; cd \"$r\" || exit 1; dart run --verbosity=error scripts/reconcile_ci.dart"
           }
         ]
       }
@@ -35,7 +35,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "dart run --verbosity=error scripts/discipline_hook.dart"
+            "command": "r=$(git rev-parse --show-toplevel 2>/dev/null); [ -n \"$r\" ] && [ -f \"$r/scripts/discipline_hook.dart\" ] || r=\"${CLAUDE_PROJECT_DIR:-.}\"; cd \"$r\" || exit 1; dart run --verbosity=error scripts/discipline_hook.dart"
           }
         ]
       }
@@ -46,7 +46,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "dart run --verbosity=error scripts/discipline_hook.dart"
+            "command": "r=$(git rev-parse --show-toplevel 2>/dev/null); [ -n \"$r\" ] && [ -f \"$r/scripts/discipline_hook.dart\" ] || r=\"${CLAUDE_PROJECT_DIR:-.}\"; cd \"$r\" || exit 1; dart run --verbosity=error scripts/discipline_hook.dart"
           }
         ]
       },
@@ -55,7 +55,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "dart run --verbosity=error scripts/git_safety_hook.dart"
+            "command": "r=$(git rev-parse --show-toplevel 2>/dev/null); [ -n \"$r\" ] && [ -f \"$r/scripts/git_safety_hook.dart\" ] || r=\"${CLAUDE_PROJECT_DIR:-.}\"; cd \"$r\" || exit 1; dart run --verbosity=error scripts/git_safety_hook.dart"
           }
         ]
       },
@@ -64,7 +64,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "dart run --verbosity=error scripts/memory_write_guard_hook.dart"
+            "command": "r=$(git rev-parse --show-toplevel 2>/dev/null); [ -n \"$r\" ] && [ -f \"$r/scripts/memory_write_guard_hook.dart\" ] || r=\"${CLAUDE_PROJECT_DIR:-.}\"; cd \"$r\" || exit 1; dart run --verbosity=error scripts/memory_write_guard_hook.dart"
           }
         ]
       }
@@ -74,7 +74,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "dart run --verbosity=error scripts/batch_close_hook.dart"
+            "command": "r=$(git rev-parse --show-toplevel 2>/dev/null); [ -n \"$r\" ] && [ -f \"$r/scripts/batch_close_hook.dart\" ] || r=\"${CLAUDE_PROJECT_DIR:-.}\"; cd \"$r\" || exit 1; dart run --verbosity=error scripts/batch_close_hook.dart"
           }
         ]
       }
@@ -84,7 +84,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "dart run --verbosity=error scripts/session_release.dart"
+            "command": "r=$(git rev-parse --show-toplevel 2>/dev/null); [ -n \"$r\" ] && [ -f \"$r/scripts/session_release.dart\" ] || r=\"${CLAUDE_PROJECT_DIR:-.}\"; cd \"$r\" || exit 1; dart run --verbosity=error scripts/session_release.dart"
           }
         ]
       }

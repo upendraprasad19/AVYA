@@ -260,6 +260,7 @@ Titles below are condensed. Full original rows (incident, measurements, second-o
 | **A file whose own SUBJECT is invisible/separator characters (U+2028, U+2029, U+0085, ESC, …)** | Build them from `String.fromCharCode`/hex literals, even in comments; scan for non-ASCII after. | f4a9c2, 125b81 |
 | **After a GitHub-PR merge, PRIMARY's local `main` lags `origin/main` — `retire_worktree.dart` reports `[branch not merged]`** | `git fetch origin main && git merge --ff-only origin/main`, re-run the dry-run. | 2026-09-29 |
 | **A merge of two long-lived branches into a shared self-numbered file (bug-class index, tuning history) can silently produce a numbering COLLISION** | After ANY merge touching such a file: `grep -oE "^### [0-9]+\.[0-9]+" <file> \| sort \| uniq -d` vs each parent. | 2026-09-29 |
+| **A Claude Code hook with a relative script path silently does not run after the shell `cd`s into a subdirectory** (exit 255 = non-blocking) | Use the root-resolving hook template (`docs/architecture/hooks.md`); a guard that "did not fire" may never have STARTED. | 8f3e35 |
 
 ---
 
