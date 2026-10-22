@@ -384,6 +384,26 @@ void main() {
       expect(isRegenerableIgnored('.claude/.gate_failures'), isFalse);
     });
 
+    test('the dartdev cache under supabase/functions is regenerable, and ONLY '
+        'that nested .dart_tool/', () {
+      // Diagnose 8f3e35 (OI-384), the class's latest instance after the
+      // gate-failure log above: a `dart run` writes
+      // `<cwd>/.dart_tool/native_assets.yaml`, and Claude Code hooks fired from
+      // supabase/functions (where sessions cd for the Deno tests) wrote it
+      // into the oi341-piece-b2-door worktree, which then could not retire.
+      // git collapses the ignored directory to this one entry.
+      expect(isRegenerableIgnored('supabase/functions/.dart_tool/'), isTrue);
+      // Exact match: no other nested cache, no file inside it, no sibling.
+      expect(isRegenerableIgnored('supabase/.dart_tool/'), isFalse);
+      expect(isRegenerableIgnored('supabase/functions/x/.dart_tool/'), isFalse);
+      expect(
+          isRegenerableIgnored(
+              'supabase/functions/.dart_tool/native_assets.yaml'),
+          isFalse);
+      expect(isRegenerableIgnored('supabase/functions/.dart_tool'), isFalse);
+      expect(isRegenerableIgnored('vendor/.dart_tool/'), isFalse);
+    });
+
     test('handles Windows backslashes', () {
       expect(isRegenerableIgnored(r'android\local.properties'), isTrue);
       expect(isRegenerableIgnored(r'secrets\creds.txt'), isFalse);

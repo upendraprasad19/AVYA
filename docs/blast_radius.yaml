@@ -340,6 +340,13 @@ paths:
   - { glob: "scripts/safe_pr_merge.sh", tier: platform }
   - { glob: "scripts/safe_pr_merge.dart", tier: platform }
   - { glob: "scripts/safe_pr_merge_lib.dart", tier: platform }
+  # OI-384 B-pass (2026-10-21): retire_worktree DELETES a worktree directory, and
+  # its exact-match regenerableIgnoredPaths list is all that keeps precious
+  # gitignored files (.env, keystores) from going with it: three review rounds
+  # each found a P0 from looser matching (d7b3e9). Unpinned, an edit loosening
+  # the matcher fell through to the scripts/** feature tier and cleared no review.
+  - { glob: "scripts/retire_worktree.dart", tier: platform }
+  - { glob: "scripts/retire_worktree_lib.dart", tier: platform }
   # OI-275 batch B3 (2026-10-11): ci_test_partition decides WHICH test files each CI
   # unit-test shard runs. An edit that dropped or duplicated a file would leave a test
   # running nowhere (or twice) under an all-green Unit Tests check, so it is pinned to
