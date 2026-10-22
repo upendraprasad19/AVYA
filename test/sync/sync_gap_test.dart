@@ -42,9 +42,10 @@ void main() {
       // fires `unawaited(SyncService.instance.syncWorkoutData())` +
       // `unawaited(SyncService.instance.pushSnapshot())` internally.
       // The handler keeps an additional defensive `pushSnapshot()`
-      // call so the chat → confirmation → home transition has fresh
-      // AI snapshot even when the WriteService onInvalidate hook
-      // isn't wired.
+      // call when anything saved, so the chat → confirmation → home
+      // transition has a fresh AI snapshot. (The WriteService
+      // `onInvalidate` hook is never assigned; the coach paths refresh
+      // through `invalidateWorkoutSurfaces`, OI-370 / OI-376.)
       final handlerSrc = _src(
           'lib/features/ai_coach/services/conversational_log_handler.dart');
       expect(

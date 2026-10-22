@@ -18,6 +18,7 @@ import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import '../copy/coach_replies.dart';
+import '../copy/workout_draft_copy.dart';
 import '../repositories/ai_coach_repository.dart';
 import '../repositories/coach_interaction_repository.dart';
 import 'pending_tool_intents_provider.dart';
@@ -1738,46 +1739,274 @@ class DraftExercise {
   });
 }
 
-/// A complete workout draft awaiting user confirmation.
+/// Where the chat workout card is after its last CONFIRM (B',
+/// docs/plans/train-coach-log-refresh.md).
+enum DraftCardStatus { pending, saved, savedDayNotMarked, partial, noneSaved }
+
+/// True for the two states that show `Workout logged`.
+bool isSavedDraftStatus(DraftCardStatus s) =>
+    s == DraftCardStatus.saved || s == DraftCardStatus.savedDayNotMarked;
+
+/// A complete workout draft awaiting user confirmation. Immutable: every
+/// change goes through [WorkoutDraftNotifier], which the card watches.
 class WorkoutDraft {
   final String id;
   final List<DraftExercise> exercises;
-  final DateTime date;
-  bool isSubmitted;
-  bool isCancelled;
 
-  WorkoutDraft({
+  /// When the draft was created. The submit writes to [firstAttemptAt].
+  final DateTime date;
+  final bool isSubmitting;
+  final DraftCardStatus status;
+
+  /// Every exercise saved from this card, across attempts.
+  final List<String> savedNames;
+
+  /// Every exercise skipped for having no usable set, across attempts.
+  final List<String> skippedNames;
+
+  /// The partial / none-saved line, or null (an edit clears it).
+  final String? note;
+  final int failedAttempt;
+
+  /// The date the first CONFIRM wrote to; every retry reuses it.
+  final DateTime? firstAttemptAt;
+  final bool hasHeldDraft;
+  final bool appliedFromHold;
+
+  /// A partial card whose day mark failed shows the day line.
+  final bool dayNotMarked;
+
+  const WorkoutDraft({
     required this.id,
     required this.exercises,
     required this.date,
-    this.isSubmitted = false,
-    this.isCancelled = false,
+    this.isSubmitting = false,
+    this.status = DraftCardStatus.pending,
+    this.savedNames = const [],
+    this.skippedNames = const [],
+    this.note,
+    this.failedAttempt = 0,
+    this.firstAttemptAt,
+    this.hasHeldDraft = false,
+    this.appliedFromHold = false,
+    this.dayNotMarked = false,
   });
+
+  static const Object _keep = Object();
+
+  WorkoutDraft copyWith({
+    List<DraftExercise>? exercises,
+    bool? isSubmitting,
+    DraftCardStatus? status,
+    List<String>? savedNames,
+    List<String>? skippedNames,
+    Object? note = _keep,
+    int? failedAttempt,
+    DateTime? firstAttemptAt,
+    bool? hasHeldDraft,
+    bool? appliedFromHold,
+    bool? dayNotMarked,
+  }) =>
+      WorkoutDraft(
+        id: id,
+        exercises: exercises ?? this.exercises,
+        date: date,
+        isSubmitting: isSubmitting ?? this.isSubmitting,
+        status: status ?? this.status,
+        savedNames: savedNames ?? this.savedNames,
+        skippedNames: skippedNames ?? this.skippedNames,
+        note: identical(note, _keep) ? this.note : note as String?,
+        failedAttempt: failedAttempt ?? this.failedAttempt,
+        firstAttemptAt: firstAttemptAt ?? this.firstAttemptAt,
+        hasHeldDraft: hasHeldDraft ?? this.hasHeldDraft,
+        appliedFromHold: appliedFromHold ?? this.appliedFromHold,
+        dayNotMarked: dayNotMarked ?? this.dayNotMarked,
+      );
 }
 
+List<String> _unionNames(List<String> a, List<String> b) =>
+    [...a, ...b.where((n) => !a.contains(n))];
+
 class WorkoutDraftNotifier extends Notifier<WorkoutDraft?> {
+  static int _idSeq = 0;
+
+  /// How long the saved card stays before it clears (or the held card shows).
+  @visibleForTesting
+  static Duration Function(bool hasNote) savedHoldFor = defaultSavedHoldFor;
+  static Duration defaultSavedHoldFor(bool hasNote) =>
+      Duration(milliseconds: hasNote ? 4000 : 1500);
+
+  /// A coach card that arrived while this one was saving or had failed.
+  Map<String, dynamic>? _heldDraftData;
+  Timer? _holdTimer;
+
   @override
   WorkoutDraft? build() {
     ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // The instance is reused across rebuilds (riverpod 3.2.1), so private
+    // state is reset here: a held card never crosses accounts. The hold
+    // timer is cancelled by the dispose hook, which a rebuild runs first.
+    _heldDraftData = null;
+    ref.onDispose(_cancelTimer);
     return null;
   }
 
-  void setDraft(Map<String, dynamic> data) {
+  @visibleForTesting
+  bool get hasPendingClear => _holdTimer?.isActive ?? false;
+
+  void _cancelTimer() {
+    _holdTimer?.cancel();
+    _holdTimer = null;
+  }
+
+  /// Every state write: the held-card flag is derived, so no transition can
+  /// drop the notice.
+  void _emit(WorkoutDraft? d) {
+    state = d?.copyWith(hasHeldDraft: _heldDraftData != null);
+  }
+
+  WorkoutDraft? _parseDraft(Map<String, dynamic> data) {
     final rawExercises = data['exercises'] as List? ?? [];
     final exercises =
         rawExercises.map(_parseExercise).whereType<DraftExercise>().toList();
-    if (exercises.isEmpty) return;
-
-    state = WorkoutDraft(
-      id: 'wdraft_${DateTime.now().millisecondsSinceEpoch}',
+    if (exercises.isEmpty) return null;
+    final now = DateTime.now();
+    return WorkoutDraft(
+      // The counter keeps two drafts from one response distinct.
+      id: 'wdraft_${now.millisecondsSinceEpoch}_${_idSeq++}',
       exercises: exercises,
-      date: DateTime.now(),
+      date: now,
     );
   }
 
-  void updateSet(int exerciseIndex, int setIndex, DraftSet updated) {
-    if (state == null) return;
-    final exercises = List<DraftExercise>.from(state!.exercises);
+  /// A new coach card. It replaces the current one only while that one is
+  /// untouched (pending, never tried); otherwise it is HELD until the current
+  /// card resolves (a later arrival replaces an earlier held one).
+  void setDraft(Map<String, dynamic> data) {
+    final cur = state;
+    final untouched = cur == null ||
+        (cur.status == DraftCardStatus.pending &&
+            cur.failedAttempt == 0 &&
+            cur.savedNames.isEmpty &&
+            !cur.isSubmitting);
+    if (!untouched) {
+      if (_parseDraft(data) == null) return;
+      _heldDraftData = data;
+      _emit(cur);
+      return;
+    }
+    final d = _parseDraft(data);
+    if (d == null) return;
+    _emit(d);
+  }
+
+  /// Starts a submit of draft [id]. Returns the date to write to (the first
+  /// attempt's date on a retry), or null when [id] is not the current draft,
+  /// a submit is already running, or the card is saved.
+  DateTime? beginSubmit(String id, DateTime now) {
+    final cur = state;
+    if (cur == null || cur.id != id || cur.isSubmitting) return null;
+    if (isSavedDraftStatus(cur.status)) return null;
+    final at = cur.firstAttemptAt ?? now;
+    _emit(cur.copyWith(isSubmitting: true, firstAttemptAt: at));
+    return at;
+  }
+
+  /// Clears the submitting flag if a submit ended without a result.
+  void endSubmit(String id) {
+    final cur = state;
+    if (cur == null || cur.id != id || !cur.isSubmitting) return;
+    _emit(cur.copyWith(isSubmitting: false));
+  }
+
+  /// Every exercise saved (or was skipped): the card shows `Workout logged`
+  /// for the hold, then clears or shows the held card.
+  void markSaved(
+    String id, {
+    required bool dayMarked,
+    List<String> skippedNames = const [],
+  }) {
+    final cur = state;
+    if (cur == null || cur.id != id) return;
+    final skipped = _unionNames(cur.skippedNames, skippedNames);
+    _emit(cur.copyWith(
+      isSubmitting: false,
+      status: dayMarked
+          ? DraftCardStatus.saved
+          : DraftCardStatus.savedDayNotMarked,
+      skippedNames: skipped,
+      note: null,
+      dayNotMarked: false,
+    ));
+    _cancelTimer();
+    final hasNote = !dayMarked || skipped.isNotEmpty;
+    _holdTimer = Timer(savedHoldFor(hasNote), () => _onHoldEnd(id));
+  }
+
+  /// Some exercises failed: the card keeps only those, by index, and names
+  /// what was saved so far. [dayMarked] is false only when something was
+  /// saved and the day could not be marked.
+  void keepFailed(
+    String id,
+    List<int> failedIndices,
+    List<String> savedThisAttempt, {
+    required bool dayMarked,
+    List<String> skippedNames = const [],
+  }) {
+    final cur = state;
+    if (cur == null || cur.id != id) return;
+    final kept = [
+      for (final i in failedIndices)
+        if (i >= 0 && i < cur.exercises.length) cur.exercises[i],
+    ];
+    final saved = _unionNames(cur.savedNames, savedThisAttempt);
+    _emit(cur.copyWith(
+      exercises: kept,
+      isSubmitting: false,
+      status: saved.isEmpty
+          ? DraftCardStatus.noneSaved
+          : DraftCardStatus.partial,
+      savedNames: saved,
+      skippedNames: _unionNames(cur.skippedNames, skippedNames),
+      note: formatDraftNote(
+        savedNames: saved,
+        failedNames: [for (final e in kept) e.name],
+      ),
+      failedAttempt: cur.failedAttempt + 1,
+      dayNotMarked: !dayMarked,
+    ));
+  }
+
+  void _onHoldEnd(String id) {
+    if (!ref.mounted) return;
+    final cur = state;
+    if (cur == null || cur.id != id) return;
+    _holdTimer = null;
+    _applyHeldOrClear();
+  }
+
+  void _applyHeldOrClear() {
+    final held = _heldDraftData;
+    _heldDraftData = null;
+    final next = held == null ? null : _parseDraft(held);
+    _emit(next?.copyWith(appliedFromHold: true));
+  }
+
+  /// The card's announcement of a held card has been sent.
+  void consumeHoldAnnouncement(String id) {
+    final cur = state;
+    if (cur == null || cur.id != id || !cur.appliedFromHold) return;
+    _emit(cur.copyWith(appliedFromHold: false));
+  }
+
+  /// An edit from the sheet opened on draft [draftId]. A sheet left open
+  /// across a new draft, a running submit, or a saved card changes nothing.
+  void updateSet(
+      String draftId, int exerciseIndex, int setIndex, DraftSet updated) {
+    final cur = state;
+    if (cur == null || cur.id != draftId) return;
+    if (cur.isSubmitting || isSavedDraftStatus(cur.status)) return;
+    final exercises = List<DraftExercise>.from(cur.exercises);
     if (exerciseIndex >= exercises.length) return;
     final sets = List<DraftSet>.from(exercises[exerciseIndex].sets);
     if (setIndex >= sets.length) return;
@@ -1789,14 +2018,14 @@ class WorkoutDraftNotifier extends Notifier<WorkoutDraft?> {
       durationMins: exercises[exerciseIndex].durationMins,
       distanceKm: exercises[exerciseIndex].distanceKm,
     );
-    state = WorkoutDraft(
-      id: state!.id,
-      exercises: exercises,
-      date: state!.date,
-    );
+    _emit(cur.copyWith(exercises: exercises, note: null));
   }
 
-  void clearDraft() => state = null;
+  /// DISCARD: drops the card, then shows the held card if one is waiting.
+  void discard() {
+    _cancelTimer();
+    _applyHeldOrClear();
+  }
 
   DraftExercise? _parseExercise(dynamic raw) {
     if (raw is! Map) return null;

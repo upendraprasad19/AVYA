@@ -14,10 +14,7 @@ import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
-import 'package:icanbefitter/features/home/providers/home_provider.dart'
-    show calendarWeekProvider, streakProvider, todayWorkoutProvider;
-import 'package:icanbefitter/features/train/providers/train_provider.dart'
-    show currentPlanProvider, workoutStatsProvider;
+import 'package:icanbefitter/features/train/providers/workout_surface_invalidation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FileOptions;
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
@@ -32,7 +29,7 @@ import '../../widgets/completion_prompt_card.dart';
 import '../../widgets/prompt_chip.dart';
 import '../../widgets/log_confirm_card.dart';
 import '../../widgets/measurement_chip_slot.dart';
-import '../../widgets/workout_log_confirm_card.dart';
+import '../../widgets/workout_draft_slot.dart';
 import '../../widgets/coach_insight_section.dart';
 import '../../widgets/coach_suggested_actions.dart';
 import '../../widgets/coach_patterns_card.dart';
@@ -370,35 +367,8 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
           .completeWorkoutFromPrompt(date);
       if (!mounted) return;
       if (result.success) {
-        // Refresh every reader of schedule_<date>.status. Unrolled + each
-        // independently guarded (Riverpod providers are a sealed family with
-        // no shared upper bound `invalidate` accepts in a list literal —
-        // mirrors ToolDispatcher._invalidateWorkoutProviders).
-        try {
-          ref.invalidate(calendarWeekProvider);
-        } catch (e, st) {
-          debugPrint('[ai_coach] invalidate calendarWeekProvider failed: $e\n$st');
-        }
-        try {
-          ref.invalidate(todayWorkoutProvider);
-        } catch (e, st) {
-          debugPrint('[ai_coach] invalidate todayWorkoutProvider failed: $e\n$st');
-        }
-        try {
-          ref.invalidate(streakProvider);
-        } catch (e, st) {
-          debugPrint('[ai_coach] invalidate streakProvider failed: $e\n$st');
-        }
-        try {
-          ref.invalidate(currentPlanProvider);
-        } catch (e, st) {
-          debugPrint('[ai_coach] invalidate currentPlanProvider failed: $e\n$st');
-        }
-        try {
-          ref.invalidate(workoutStatsProvider);
-        } catch (e, st) {
-          debugPrint('[ai_coach] invalidate workoutStatsProvider failed: $e\n$st');
-        }
+        // Refresh every reader of schedule_<date>.status.
+        invalidateWorkoutSurfaces(ref.invalidate, source: 'completion_prompt');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -451,8 +421,8 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
     ref.listen(chatHistoryProvider, (_, _) => _scrollToBottom());
     ref.listen(pendingLogActionsProvider, (_, _) => _scrollToBottom());
     ref.listen(pendingToolIntentsProvider, (_, _) => _scrollToBottom());
-    ref.listen(workoutDraftProvider, (_, next) {
-      if (next != null) _scrollToBottom();
+    ref.listen(workoutDraftProvider, (prev, next) {
+      if (workoutDraftChangeScrolls(prev, next)) _scrollToBottom();
     });
     // OI-232 — switching to Telegram and back unmounts/remounts the chat
     // subtree (channel == 'in_app' ? _buildChatArea(...) : _buildTelegramView

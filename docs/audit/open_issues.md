@@ -6405,32 +6405,6 @@ Mechanism: the typed intent's tool response is `status: "queued_for_user_confirm
 
 Fix: same plan and same closing rule as OI-368 (`docs/plans/coach-log-truth.md`). Founder-approved lines the prompt rule gives the coach: `Queued. Tap APPLY to log it.` (typed log), `Queued. Tap CONFIRM to log it.` (legacy workout card), `Queued. Tap APPLY to confirm.` (other typed intents), `Queued. It logs in 5 seconds unless you tap SKIP.` (auto-confirm cards).
 
-## OI-370 — Train: the expanded day row does not show a coach-logged exercise until a page reload
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `observations-a12-web`
-
-Found in the founder's A12 web walk 2026-10-21. A Bench Press logged from the coach chat (legacy `WorkoutLogConfirmCard` CONFIRM, row written 13:29:36 IST) did not appear in the Train tab's expanded day row until the page was reloaded. The row write itself was correct.
-
-Mechanism: the Train screen rebuilds on `ref.watch(currentPlanProvider)` (`lib/features/train/screens/train/screen.dart:116`), and the expanded row reads exercise logs straight from the repository on rebuild (`lib/features/train/screens/train/expanded_exercises.dart:7`, `WorkoutRepository.getExerciseLogsForDate`). The coach chat's workout paths never invalidate `currentPlanProvider`: `submitWorkoutDraft` (`lib/features/ai_coach/services/conversational_log_handler.dart:321-328`) invalidates only calendar week, streak and today's workout, and its comment says `WorkoutWriteService.onInvalidate` handles the rest, but that hook is never assigned (`lib/core/services/workout_write_service.dart:86`). The typed-intent path (`ToolDispatcher._invalidateWorkoutProviders`, `lib/features/ai_coach/services/tool_dispatcher.dart:1839-1875`) has the same gap. Reproduced in a widget test (Train visible and offstage).
-
-Fix: plan `docs/plans/train-coach-log-refresh.md` (branch `train-coach-log-refresh`, blast radius account, tier M): one `invalidateWorkoutSurfaces` helper used by all three coach paths, plus a saved state on the workout confirm card (`✓ WORKOUT LOGGED`, about 1.5 s, haptic), founder-approved 2026-10-21.
-
-## OI-371 — Train: exercise names in the expanded day row are cut to about 4 characters at phone width
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `observations-a12-web`
-
-Found in the founder's A12 web walk 2026-10-21 (Train tab screenshot at phone width): names show as "Barb…", "Leg…", "Benc…".
-
-Mechanism: the expanded day row (`lib/features/train/screens/train/expanded_exercises.dart:98-121`) is `Row[Icon, SizedBox(8), Expanded(Text(name, ellipsis)), Text(detail)]`. The detail text ("3 sets 10 reps 60 kg") takes its full width first, so at 320-360 dp the name gets what is left, a few characters, and is cut with an ellipsis on one line.
-
-Fix: same plan as OI-370. The name gets its own line with no line limit and the detail wraps under it (`ExpandedExerciseLogRow`), tested at 320 dp × 1.0/1.3/2.0 text scale with long real names.
-
 ## OI-372 — Weekday exercise swap has no UI: the engine takes any date, but only the AI coach reaches it (Unit 2 of the swap/move spec)
 
 - **Status**: OPEN

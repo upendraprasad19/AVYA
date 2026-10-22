@@ -175,9 +175,10 @@ extension _ExercisePreviewSheet on _TrainScreenState {
                                 '${duration ~/ 60} min · ${dist.toStringAsFixed(1)} km';
                           } else if (weight > 0) {
                             fallbackLabel =
-                                '$sets sets · $reps reps · ${weight.toStringAsFixed(1)} kg';
+                                '${setCountLabel(sets)}$kDetailSeparator${repCountLabel(reps)}$kDetailSeparator${weight.toStringAsFixed(1)}${kNbsp}kg';
                           } else {
-                            fallbackLabel = '$sets sets · $reps reps';
+                            fallbackLabel =
+                                '${setCountLabel(sets)}$kDetailSeparator${repCountLabel(reps)}';
                           }
 
                           return Padding(

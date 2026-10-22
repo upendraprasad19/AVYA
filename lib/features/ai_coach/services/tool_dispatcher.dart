@@ -22,13 +22,7 @@ import '../../../core/services/workout_schedule_service.dart';
 import '../../../core/services/workout_write_service.dart';
 import '../../../core/services/write_result.dart';
 import '../../home/providers/home_provider.dart'
-    show
-        calendarWeekProvider,
-        streakProvider,
-        todayWorkoutProvider,
-        allExercisePRsProvider,
-        nutritionSummaryProvider,
-        recentFoodLogsProvider;
+    show nutritionSummaryProvider, recentFoodLogsProvider;
 import '../../nutrition/providers/nutrition_provider.dart'
     show
         aiTextLogRemainingProvider,
@@ -39,13 +33,10 @@ import '../../profile/services/profile_write_service.dart';
 import '../../profile/providers/profile_provider.dart'
     show userProfileProvider, userStatsProvider;
 import '../../train/providers/train_provider.dart'
-    show
-        currentPlanProvider,
-        templatesProvider,
-        workoutStatsProvider,
-        activeWorkoutProvider;
+    show templatesProvider, activeWorkoutProvider;
 import '../../train/providers/day_swap_provider.dart'
     show daySwapWeekProvider, daySwapAllowanceProvider, inProgressDateOf;
+import '../../train/providers/workout_surface_invalidation.dart';
 import '../../train/repositories/workout_repository.dart';
 import '../providers/ai_coach_provider.dart' show chatHistoryProvider;
 import '../models/tool_intent.dart';
@@ -1837,42 +1828,10 @@ class ToolDispatcher {
   }
 
   void _invalidateWorkoutProviders(Ref ref) {
-    // docs/architecture/sync.md mandatory batch.
-    // Each invalidation is independently try/caught — a missing provider
-    // shouldn't prevent the rest from refreshing. Unrolled (vs. iterating
-    // a list) because providers are a sealed family and don't share a
-    // common upper bound that ref.invalidate accepts.
-    try {
-      ref.invalidate(currentPlanProvider);
-    } catch (e, st) {
-      debugPrint('[tool_dispatcher] invalidate currentPlanProvider failed: $e\n$st');
-    }
-    try {
-      ref.invalidate(workoutStatsProvider);
-    } catch (e, st) {
-      debugPrint('[tool_dispatcher] invalidate workoutStatsProvider failed: $e\n$st');
-    }
-    try {
-      ref.invalidate(calendarWeekProvider);
-    } catch (e, st) {
-      debugPrint('[tool_dispatcher] invalidate calendarWeekProvider failed: $e\n$st');
-    }
-    try {
-      ref.invalidate(streakProvider);
-    } catch (e, st) {
-      debugPrint('[tool_dispatcher] invalidate streakProvider failed: $e\n$st');
-    }
-    try {
-      ref.invalidate(todayWorkoutProvider);
-    } catch (e, st) {
-      debugPrint('[tool_dispatcher] invalidate todayWorkoutProvider failed: $e\n$st');
-    }
-    try {
-      ref.invalidate(allExercisePRsProvider);
-    } catch (e, st) {
-      debugPrint('[tool_dispatcher] invalidate allExercisePRsProvider failed: $e\n$st');
-    }
+    // docs/architecture/sync.md: the shared workout batch, each entry guarded.
+    invalidateWorkoutSurfaces(ref.invalidate, source: 'tool_dispatcher');
   }
+
 
   String _todayDateString() => istTodayStr();
 
