@@ -484,4 +484,48 @@ void main() {
           '0');
     });
   });
+
+  // Diagnose 8f3e35 (OI-384): the precheck's directory, from the payload cwd.
+  group('precheckRoot', () {
+    const script = 'scripts/check_plan_review_record_exists.dart';
+
+    test('a subdirectory resolves to the checkout root that holds the script',
+        () {
+      expect(
+          precheckRoot('/repo/sub',
+              scriptPath: script,
+              toplevel: (_) => '/repo',
+              fileExists: (p) => p == '/repo/$script'),
+          '/repo');
+    });
+
+    test('a toplevel WITHOUT the script keeps the cwd (e.g. a nested repo)',
+        () {
+      expect(
+          precheckRoot('/repo/vendor/x',
+              scriptPath: script,
+              toplevel: (_) => '/repo/vendor/x',
+              fileExists: (_) => false),
+          '/repo/vendor/x');
+    });
+
+    test('git cannot answer (null) keeps the cwd', () {
+      expect(
+          precheckRoot('/tmp/x',
+              scriptPath: script,
+              toplevel: (_) => null,
+              fileExists: (_) => true),
+          '/tmp/x');
+    });
+
+    test('an EMPTY toplevel keeps the cwd, never `/scripts/...` at the '
+        'filesystem root', () {
+      expect(
+          precheckRoot('/tmp/x',
+              scriptPath: script,
+              toplevel: (_) => '',
+              fileExists: (_) => true),
+          '/tmp/x');
+    });
+  });
 }
