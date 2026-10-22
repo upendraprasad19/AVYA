@@ -6573,3 +6573,26 @@ To do: route each through the helper; one widget test per renderer family for `1
 Note: the `train-coach-log-refresh` behavioural test for "sets saved, day not marked done" uses exactly this gap as its seam (a timed set with `durationSecs: -100`). Fixing this OI moves that test to another `markCompleted` failure seam (said in the test comment).
 
 To do: validate `durationSec >= 0` (and `distanceKm >= 0`) in `logExercise` alongside weight and reps; a writer test.
+
+## OI-383 — Razorpay Android SDK is pinned (checkout 1.6.41, standard-core 1.7.19) and nothing tells us when Razorpay ships a new or security release: review and bump deliberately with a device payment test
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-10-21 (Maven Central: checkout latest 1.6.41; standard-core latest 1.7.20, published 2026-10-14)
+- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `build-pin-and-test-closeout`
+- **Diagnose**: `docs/diagnoses/2026-10-21-razorpay-sdk-floating-versions-a6c3e9.md`
+
+**Problem.** `android/build.gradle.kts` now pins `com.razorpay:checkout` 1.6.41 and
+`com.razorpay:standard-core` 1.7.19. Before the pin, the plugin's `1.6.+` and the POM's `LATEST`
+floated, so new SDK releases arrived silently. Now none arrive, and nothing reports when one is
+published, security fixes included. Dependabot has no `gradle` ecosystem configured, and
+`test/contracts/android_dynamic_dependency_pin_test.dart` only fires when `razorpay_flutter` itself
+changes.
+
+**Already pending.** standard-core 1.7.20 (with core 1.0.20) was published 2026-10-14 and has
+never been in a built AAB.
+
+**Done when.** Either a check reports a newer `checkout` or `standard-core` on Maven Central (for
+example a dated audit row, or Dependabot's gradle ecosystem limited to these coordinates), or the
+founder decides the review cadence. Each bump: change the pin map and `_expectedPins`, run a test
+payment on a device, and record the new version.

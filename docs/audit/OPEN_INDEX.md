@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**242 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**243 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -250,3 +250,4 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-380 | Train: the expanded day row shows 'N sets 0 reps X kg' for distance-type… | none | never | [:6542](open_issues.md#L6542) |
 | OI-381 | Set counts read '1 sets' in the remaining renderers (prescriptions,… | none | never | [:6553](open_issues.md#L6553) |
 | OI-382 | WorkoutWriteService.logExercise accepts a negative durationSec (only… | none | never | [:6564](open_issues.md#L6564) |
+| OI-383 | Razorpay Android SDK is pinned (checkout 1.6.41, standard-core 1.7.19) and… | none | 2026-10-21 (Maven Central: checkout… | [:6577](open_issues.md#L6577) |
