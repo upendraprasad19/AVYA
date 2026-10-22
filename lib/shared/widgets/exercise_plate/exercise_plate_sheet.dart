@@ -99,10 +99,9 @@ class ExercisePlateSheet extends StatelessWidget {
     final row = ExerciseRepository.instance.getByExactName(exerciseName);
     final cues = _cues(row);
     final breathing = _clean(row?['breathing_cue']);
-    // 136 of 292 rows carry a bare number here — a spreadsheet column shift that
-    // put met_value into breathing_cue. Suppress rather than print
-    // "BREATHING / 5". coaching_content_panel applies the identical guard; the
-    // data repair is OI-149, blocked on 136 cues having to be re-authored.
+    // A bare number here is the fingerprint of a spreadsheet column shift (136
+    // rows had it until the OI-149 repair, 2026-10-22). Suppress rather than
+    // print "BREATHING / 5". coaching_content_panel applies the identical guard.
     final showBreathing =
         breathing != null && !RegExp(r'^\d+(\.\d+)?$').hasMatch(breathing);
 

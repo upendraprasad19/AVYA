@@ -6,6 +6,10 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### exercise_library_schema (2 bugs)
+- 2026-10-22 b7d3e1 — On 136 of the 292 bundled library rows every text field from met_value to source sat one column to the right. The app showed a number as the breathing cue (suppressed by a guard, so the section simply…
+- 2026-07-19 e1a7c4 — 9 exercises E252-E260 (Wall Sit, Bodyweight Good Morning, Doorframe Curl, Towel Row, Negative Pull Up, Glute Kickback, Dumbbell Calf Raise, Split Squat, Incline Dumbbell Press) used a DIFFERENT…
+
 ### payment_record_failed_alert — every captured payment that a writer cannot record pages the founder. (1 bugs)
 - 2026-10-21 c3e7a1 — A CAPTURED Razorpay payment whose amount matches no plan price answered 400 in both payment writers and wrote no subscriptions row and no alert. The usual cause is a promo code deleted or its…
 
@@ -909,9 +913,6 @@ rather than a Hive box. (1 bugs)
 ### program_week_projection (1 bugs)
 - 2026-07-21 c9f4a2 — `user_progress.current_week` is a dead constant. Every writer sets the literal `1` (user_repository.dart:136, onboarding_provider.dart:473/786, graduation_screen.dart:673, pro_phase_advance.dart:107,…
 
-### exercise_library_schema (1 bugs)
-- 2026-07-19 e1a7c4 — 9 exercises E252-E260 (Wall Sit, Bodyweight Good Morning, Doorframe Curl, Towel Row, Negative Pull Up, Glute Kickback, Dumbbell Calf Raise, Split Squat, Incline Dumbbell Press) used a DIFFERENT…
-
 ### exercise_injury_tags (1 bugs)
 - 2026-07-19 f4c1e8 — The always-on queryV4 injury filter (exercise_repository.dart:335-345) excludes an exercise for an injured user ONLY when the exercise's injury_contraindications list CONTAINS the user's injury token;…
 
@@ -1609,6 +1610,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-10-22 | b7d3e1 | On 136 of the 292 bundled library rows every text field from met_value to source sat one column to the right. The app showed a number as the breathing cue (suppressed by a guard, so the section simply… | exercise_library_schema | test/contracts/exercise_library_text_shape_contract_test.dart |
 | 2026-10-21 | c3e7a1 | A CAPTURED Razorpay payment whose amount matches no plan price answered 400 in both payment writers and wrote no subscriptions row and no alert. The usual cause is a promo code deleted or its… | payment_record_failed_alert — every captured payment that a writer cannot record pages the founder. | supabase/functions/razorpay-webhook/index_test.ts |
 | 2026-10-21 | d4b8e1 | Founder (web app, logged in as upendraprasad19, 2026-10-21): today's "Upper push + core" workout listed 14 exercises / 56 sets — 8 library picks plus 6 of his own custom exercises (tuck planche,… | generator_no_custom_autoadd | test/contracts/l2_no_custom_autoadd_behavioral_test.dart |
 | 2026-10-21 | c3e9a4 | After Batch 0a (d4b8e1) stopped the generator auto-adding customs, plans generated BEFORE it still carry them. Cloud user_progress.plan_json.schedules, queried 2026-10-21 for every user with a custom… | l2_custom_autoappend_repair | test/contracts/l2_custom_append_repair_migrator_test.dart |

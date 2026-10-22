@@ -5557,3 +5557,36 @@ The coach path (`tool_dispatcher._maybeCompleteScheduledDay`) completes a day on
 This interacts with the flip plan: its §3 keeps COMPLETE enabled with `Nothing logged yet. Completing now saves no sets.` (ledger `ZERO-SET-COMPLETION`). If the founder folds this OI into the flip batch, that row becomes the block.
 
 **CLOSED 2026-10-20 (`log-exercise-flip`, unit U-E of plan `docs/plans/log-exercise-flip.md`, record `docs/plan-reviews/log-exercise-flip.md` round 7, ledger `docs/audit/log-exercise-flip.closure.yaml` rows `ZERO-SET-COMPLETION` and `CHAT-DRAFT-ZERO-SET`, diagnose `e3a6c1`):** one predicate, `ActiveWorkoutData.hasSaveableSet` (over `saveableSetIndexes`, the exact sets `completeWorkout` saves). `completeWorkout` returns on its first line when nothing would be saved (review mode keeps its path), and the FINISH dialog, both flag modes, disables COMPLETE and says "No working sets logged (warm-ups don't count). Log one to complete, or cancel the workout."; it scrolls while blocked and keeps the re-opened / typed lines. Plan review round 7 found the same class on the coach chat path: `submitWorkoutDraft` completed a draft with no sets. Fixed in the same batch: `draftHasLoggableSet` guards the submit and disables the confirm card's CONFIRM. Tests: `test/contracts/log_exercise_flip_behavioral_test.dart` (U-E1, the real awaited `completeWorkout`), `test/contracts/zero_set_completion_behavioral_test.dart` (U-E4/U-E5), `test/features/train/log_exercise/log_exercise_finish_dialog_test.dart` (U-E2, U-E2b, U-E2c, U-D4), `log_exercise_logic_test.dart` (U-E3).
+
+## OI-149 — breathing_cue holds a bare number on 136 of 292 rows; the original text is unrecoverable (P2)
+
+- **Status**: CLOSED · 2026-10-22 · branch `library-data-repair` · the commit carrying `closes-oi: OI-149` (`git log --grep='closes-oi: OI-149'`)
+- **Blocked on**: **the founder** — 136 replacement cues have to be authored, because the original
+  text exists nowhere. This is a copy-writing task, not an engineering one.
+- **Verified**: 2026-08-29 — counted, and the recovery paths exhausted (below).
+
+**The defect, measured:** exactly **136** of 292 rows match `^\d+(\.\d+)?$` in `breathing_cue`,
+and exactly **136** carry a null `met_value`. The intersection is 136 and neither side has a
+row the other lacks — a spreadsheet column shift dropped `met_value` into `breathing_cue` and left
+its own column empty. `met_value` is read nowhere in `lib/`, so only the breathing copy was lost.
+
+**Both recovery paths were checked and both are dead:**
+
+1. **The cloud seed migrations do not carry the field.** `074_seed_exercise_library.sql` and
+   `125_reseed_exercise_library.sql` insert **20 columns**, and `breathing_cue` is not among them —
+   `125`'s own header comment lists it under *"JSON-only fields"*.
+2. **Git history never had it.** All **19** revisions of `assets/data/exercise_library.json` back to
+   2026-04-14 carry `Lateral Raise` with `breathing_cue: "5"`. The shift predates the file's entry
+   into the repo, so `git show <rev>:` recovers nothing.
+
+**Shipped state after `exercise-plates`:** BOTH surfaces that render this field now suppress a
+numeric value rather than printing "BREATHING / 5" —
+`lib/shared/widgets/exercise_plate/exercise_plate_sheet.dart` and
+`lib/features/train/screens/active_workout/coaching_content_panel.dart`, pinned together by
+`test/contracts/breathing_cue_numeric_suppressed_test.dart`. So the symptom is gone and 136
+exercises simply show no BREATHING section.
+
+⚠ **That makes this LESS likely to be noticed, not more** — which is exactly why it is filed rather
+than left to the guards. The fix is 136 lines of coaching copy.
+
+**CLOSED 2026-10-22 (`library-data-repair`, Batch A Task 1 of plan `docs/plans/2026-10-22-library-data-repair.md`, diagnose `b7d3e1`):** the premise above was wrong. The text was never lost, only SHIFTED: on the 136 rows every field from `met_value` to `source` sat one column right in file key order, so the breathing text was in `coaching_cues`, the cues in `common_mistakes`, the mistakes in `warmup_protocol` and the warm-up in `pro_tip`. Only the original `pro_tip` and `source` fell into boolean columns and are lost. `scripts/repair_exercise_library_v12.js` (`repairText`) moved every value back and split every cue list into one cue per item; nothing had to be re-authored. Test: `test/contracts/exercise_library_text_shape_contract_test.dart`. The cloud copy is re-seeded by the same batch.
