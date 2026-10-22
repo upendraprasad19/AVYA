@@ -11299,7 +11299,19 @@ concepts:
   - concept: exercise_library_schema
     domain: workout
     behavioral_test_path: test/contracts/exercise_library_schema_contract_test.dart
+    behavioral_test_path_prune: test/contracts/library_seed_prune_behavioral_test.dart  # Batch A 46fc99: real Hive box, retired id deleted, kept + community keys survive, a shipped id is never pruned
+    behavioral_test_path_alias: test/contracts/exercise_alias_lookup_behavioral_test.dart  # Batch A 46fc99: retired names resolve via name_aliases, exact name wins (mirror), queryV4 serves the kept twin
+    behavioral_test_path_panel: test/contracts/coaching_panel_numeric_breathing_behavioral_test.dart  # Batch A b7d3e1: rendered panel suppresses a numeric breathing_cue, Surya Namaskar mirror renders it
     description: |
+      Library v12 (Batch A, 2026-10-22; diagnoses b7d3e1 46fc99 2390f5 e7f118): 285 rows.
+      Two OPTIONAL keys join demo_slug/demo_pair: `name_aliases` (non-empty string list; the
+      old names of duplicates retired into this row, read by search and by the exact-name
+      fallback) and `merged_ids` (the retired E-ids; SeedService prunes them from exerciseBox
+      after putAll, never an id the bundle still ships). seed_prune_wired_test.dart is
+      PRESENCE ONLY (the call site sits inside the asset-loading _seedExercises); the prune's
+      behaviour is the _prune path above. Cloud: migration 162 re-seeded 285 rows with
+      name_aliases and set is_active=false on the 7 retired rows (copying the kept cues).
+
       Batch 13-A (e1a7c4) — every exercise_library row carries EXACTLY the 38 canonical
       keys. The 9 stubs E252-E260 used a malformed schema (muscle_primary/is_compound/
       sets_default…) + were MISSING injury_contraindications, so E252 Wall Sit
@@ -11318,14 +11330,28 @@ concepts:
       - file: supabase/migrations/074_seed_exercise_library.sql
         method: regenerated (259 tuples, ON CONFLICT DO UPDATE)
         notes: heals cloud stubs' NULL primary_muscles/difficulty_level (getFormCues reads them)
+      - file: assets/data/exercise_library.json
+        method: scripts/repair_exercise_library_v12.js (repairText, mergeDuplicates, relabel, dropPlates)
+        notes: v12 (Batch A) — 136 un-shifted text rows, cues one per item, 7 duplicates retired (name_aliases + merged_ids on the kept row), E172/E163 labels, E207/E179 plate keys dropped
+      - file: lib/core/services/seed_service.dart
+        line_range: 203-232
+        method: _exerciseLibraryVersion (11→12) + retiredLibraryIds + pruneRetired after putAll in _seedExercises
+        notes: putAll never deletes, so the prune is what removes a retired row from an existing install
+      - file: supabase/migrations/162_reseed_exercise_library.sql
+        method: re-seed (285 tuples incl. name_aliases) + 7 is_active=false UPDATEs copying the kept cues
+        notes: applied live 2026-10-22 (backups/applied_migrations.json entry 162)
     readers:
       - file: lib/shared/repositories/exercise_repository.dart
         method: queryV4 injury filter (:335-345) + primary_muscles read (:270-282)
         semantic: a missing injury field = never excluded; muscle_primary was invisible
         notes: the E252 knee safety hole + muscle-invisibility
+      - file: lib/shared/repositories/exercise_repository.dart
+        line_range: 48-111
+        method: getByExactName / hasExactNameWhere (exact loop, then name_aliases) + search (name or alias substring)
+        semantic: a retired name resolves to its kept twin; an exact name always wins over an alias
       - file: supabase/functions/_shared/tools/exercise/getFormCues.ts
         method: reads primary_muscles/secondary_muscles/difficulty_level (:60-61)
-        semantic: AI-coach form cues; was NULL for the 9 stubs pre-batch
+        semantic: AI-coach form cues; was NULL for the 9 stubs pre-batch; exact-name match with no is_active filter (why 162 copies the kept cues onto the retired rows)
     contract_test_path: test/contracts/exercise_library_schema_contract_test.dart
 
   - concept: exercise_injury_tags
