@@ -80,7 +80,8 @@ class _CoachingContentPanelState extends State<CoachingContentPanel> {
   }
 
   /// String fields (breathing_cue / warmup_protocol) — null OR empty-string
-  /// (45 warmup_protocol rows are "") both suppress the section.
+  /// (113 of 285 warmup_protocol values are "" in library v12) both suppress
+  /// the section.
   String? _cleanString(Object? v) {
     final s = (v is String) ? v.trim() : '';
     return s.isEmpty ? null : s;

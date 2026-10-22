@@ -102,3 +102,13 @@ the file in its own layout. The cloud copy is regenerated from the repaired JSON
 
 Contract test 6/6 (RED 5/6 first), the Task 1 set 31/31, the equipment audit PASS, mutation
 reddened. The live cloud shift was confirmed before the fix.
+
+## B-pass hardening (2026-10-22)
+
+`docs/reviews/library-data-repair-bpass.md` Findings 1, 2, 3 and 5. Migration 162's header now
+says `Destructive?: yes` (it rewrites rows) and carries an inline rollback: re-apply 125, then 126
+(125 predates that fix to E260), then clear `name_aliases` (125 never wrote it). The cloud-seeded
+test pins the header and that the retire UPDATEs run after the upsert. The active-workout panel's
+numeric-breathing guard, until now pinned only by a source-grep, has a rendered-widget test
+(`coaching_panel_numeric_breathing_behavioral_test.dart`, synthetic row plus Surya Namaskar mirror;
+mutation: guard replaced by `false` reddens the synthetic case only).

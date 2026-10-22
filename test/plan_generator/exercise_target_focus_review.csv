@@ -47,7 +47,7 @@ Cable Crunch,core,isolation,Core,Abs,Core,"basic_gym, full_gym","Beginner, Inter
 Captain's Chair Leg Raise,core,isolation,Core,Core,Core,"basic_gym, full_gym","Intermediate, Advanced",2
 Crunches,core,isolation,Core,Abs,Core,"bodyweight, full_gym","Beginner, Intermediate, Advanced",2
 Decline Sit Up,core,isolation,Core,Abs,Core,full_gym,"Beginner, Intermediate, Advanced",3
-Dumbbell Side Bend,core,isolation,Lats,Obliques (lateral flexion),Lats,"home_dumbbells, basic_gym, full_gym","Beginner, Intermediate, Advanced",3
+Dumbbell Side Bend,core,isolation,Core,Obliques (lateral flexion),Core,"home_dumbbells, basic_gym, full_gym","Beginner, Intermediate, Advanced",3
 Flutter Kicks,core,isolation,Core,Core,Core,"bodyweight, home_dumbbells, basic_gym, full_gym","Beginner, Intermediate, Advanced",2
 Janda Sit Up,core,isolation,Core,Abs,Core,"bodyweight, home_dumbbells, basic_gym, full_gym","Intermediate, Advanced",3
 Pallof Press,core,isolation,Core,Core (anti-rotation),Core,"basic_gym, full_gym","Beginner, Intermediate, Advanced",2
@@ -83,7 +83,7 @@ Cat-Cow Stretch,flexibility,flexibility,spine,Spine,spine,"bodyweight, full_gym"
 Chest Opener,flexibility,flexibility,Mid Chest,"Chest, Front Deltoid, Biceps","Biceps, Front Delts, Mid Chest","bodyweight, full_gym","Beginner, Intermediate, Advanced",3
 Child's Pose,flexibility,flexibility,Lower Back,"Lower Back, Lats, Hips","Lats, Lower Back","bodyweight, full_gym","Beginner, Intermediate, Advanced",2
 Downward Dog,flexibility,flexibility,Hamstrings,"Hamstrings, Calves, Thoracic","Calves, Hamstrings","bodyweight, full_gym","Beginner, Intermediate, Advanced",2
-Foam Roll IT Band,flexibility,flexibility,Lats,IT Band (lateral thigh),Lats,full_gym,"Intermediate, Advanced",3
+Foam Roll IT Band,flexibility,flexibility,Legs,IT Band (lateral thigh),Legs,full_gym,"Intermediate, Advanced",3
 Foam Roll Upper Back,flexibility,flexibility,thoracic spine,"Thoracic Spine, Rhomboids",thoracic spine,full_gym,"Beginner, Intermediate, Advanced",3
 Hamstring Stretch (Standing),flexibility,flexibility,Hamstrings,Hamstrings,Hamstrings,"bodyweight, home_dumbbells, basic_gym, full_gym","Beginner, Intermediate, Advanced",3
 Hip Flexor Stretch,flexibility,flexibility,Hip,Hip Flexors,Hip,"bodyweight, full_gym","Beginner, Intermediate, Advanced",2

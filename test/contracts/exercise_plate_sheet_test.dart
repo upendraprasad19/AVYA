@@ -158,6 +158,9 @@ void main() {
     // the 136 shifted rows had before the OI-149 repair (met_value pushed into
     // the field). Only the number differs from the real row below.
     await open(t, 'Synthetic Numeric Breathing');
+    // Positive control: the synthetic row resolved (its cue renders), so the
+    // missing heading is the guard's doing, not a failed lookup.
+    expect(find.text('12 positions with coordinated breath'), findsOneWidget);
     expect(find.text('BREATHING'), findsNothing);
   });
 

@@ -37,9 +37,10 @@ class ExercisePlateSheet extends StatelessWidget {
     );
   }
 
-  /// Cues arrive in three shapes across the 292 rows, counted 2026-08-29: a
-  /// single string packed with semicolons (84), a real array (100), or one
-  /// plain cue (108). Splitting on ';' renders all three as lines.
+  /// Since library v12 (Batch A, 2026-10-22) every row stores one cue per list
+  /// item. Before it, 84 rows packed several cues into one string joined by
+  /// semicolons; the split on ';' stays so a community row or an install still
+  /// on an older seed renders as lines too.
   List<String> _cues(Map<String, dynamic>? row) {
     final raw = row?['coaching_cues'];
     if (raw is! List) return const [];

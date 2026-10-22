@@ -92,6 +92,22 @@ void main() {
     test('different-pattern twins carry nothing but aliases', () {
       expect(byId['E016']!['movement_pattern'], ['horizontal_push']);
       expect(byId['E216']!['movement_pattern'], ['cooldown']);
+      // Selection fields stay exactly as they were before the merge (values
+      // read from the pre-merge file, fcbe6840). A wrong samePattern() would
+      // hand E219 "Mid Back (Thickness)" and E220 "Biceps" from their twins.
+      const before = <String, Map<String, Object>>{
+        'E016': {'tf': ['Triceps'], 'pm': ['Triceps'], 'pt': 1, 'f': true},
+        'E216': {'tf': ['Quads', 'Legs'], 'pm': ['Quads'], 'pt': 3, 'f': false},
+        'E219': {'tf': ['Rear Delts', 'Shoulders'], 'pm': ['Rear Deltoid'], 'pt': 3, 'f': false},
+        'E220': {'tf': ['Mid Chest', 'chest'], 'pm': ['Chest'], 'pt': 3, 'f': false},
+      };
+      for (final entry in before.entries) {
+        final row = byId[entry.key]!;
+        expect(strings(row['target_focus']), entry.value['tf'], reason: '${entry.key} target_focus');
+        expect(strings(row['primary_muscles']), entry.value['pm'], reason: '${entry.key} primary_muscles');
+        expect(row['priority_tier'], entry.value['pt'], reason: '${entry.key} priority_tier');
+        expect(row['is_foundational'], entry.value['f'], reason: '${entry.key} is_foundational');
+      }
     });
 
     test('injury tags are never merged (founder 13-B carve-out)', () {

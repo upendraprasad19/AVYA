@@ -196,13 +196,22 @@ class SeedService {
   }
 
   /// The ids every bundled row lists in `merged_ids`: library rows retired into
-  /// a kept twin, which must no longer exist in exerciseBox.
+  /// a kept twin, which must no longer exist in exerciseBox. An id the bundle
+  /// still ships is never returned, so a bad edit cannot make the prune delete
+  /// a row putAll has just written.
   @visibleForTesting
-  static Set<String> retiredLibraryIds(Iterable<Object?> rows) => {
-        for (final row in rows)
-          if (row is Map && row['merged_ids'] is List)
-            for (final id in row['merged_ids'] as List) id.toString(),
-      };
+  static Set<String> retiredLibraryIds(Iterable<Object?> rows) {
+    final merged = <String>{};
+    final shipped = <String>{};
+    for (final row in rows) {
+      if (row is! Map) continue;
+      final id = row['id'];
+      if (id != null) shipped.add(id.toString());
+      final ids = row['merged_ids'];
+      if (ids is List) merged.addAll(ids.map((e) => e.toString()));
+    }
+    return merged.difference(shipped);
+  }
 
   /// Deletes exactly [ids] from [box]. Only E-ids listed in `merged_ids` are
   /// ever passed, so community rows (UUID keys) are never touched.

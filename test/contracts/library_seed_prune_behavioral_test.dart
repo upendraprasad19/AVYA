@@ -56,6 +56,27 @@ void main() {
     await box.close();
   });
 
+  test('a row the bundle still ships is never pruned, even if merged_ids names it',
+      () async {
+    // The merge contract forbids a live id in merged_ids, but only at build
+    // time. The prune runs right after putAll wrote every bundled row, so a bad
+    // edit would otherwise write a row and delete it on every install.
+    final rows = [
+      {'id': 'E016', 'merged_ids': ['E241', 'E097']},
+      {'id': 'E097', 'name': 'Overhead Tricep Cable Extension'},
+    ];
+    expect(SeedService.retiredLibraryIds(rows), {'E241'});
+    final box = await Hive.openBox('prune_live_id');
+    await box.putAll({
+      'E016': {'id': 'E016'},
+      'E097': {'id': 'E097'},
+      'E241': {'id': 'E241'},
+    });
+    await SeedService.pruneRetired(box, SeedService.retiredLibraryIds(rows));
+    expect(box.keys.toSet(), {'E016', 'E097'});
+    await box.close();
+  });
+
   test('a fresh box is left untouched', () async {
     final box = await Hive.openBox('prune_fresh');
     await SeedService.pruneRetired(box, SeedService.retiredLibraryIds(bundled));

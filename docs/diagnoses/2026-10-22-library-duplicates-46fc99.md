@@ -151,3 +151,12 @@ synonym and regenerating (69.2 -> 69.3), then restoring.
 Surfaced, not caused, by this batch: 150 of 165 full_gym and 140 of 150 basic_gym plans hold
 a bodyweight-only Self-Resisted curl or triceps extension (same counts before and after).
 Filed as OI-388, blocked on Batch B's core-list pool.
+
+## B-pass hardening (2026-10-22)
+
+`docs/reviews/library-data-repair-bpass.md` Finding 6: the prune trusted a build-time invariant
+(no shipped id in any `merged_ids`). `SeedService.retiredLibraryIds` now returns the union of
+`merged_ids` minus the ids the bundle ships, so a bad edit can never make the seed write a row and
+then delete it. New case in `library_seed_prune_behavioral_test.dart` (RED first: {E241, E097});
+mutation (subtraction removed) reddens it. Finding 4 pinned E016/E216/E219/E220's selection fields
+to their pre-merge values in the merge contract.

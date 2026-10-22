@@ -5,14 +5,15 @@ blast_radius: platform
 review_rounds: 2
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
+bpass_review: docs/reviews/library-data-repair-bpass.md
 ---
 
 # Plan-review record — Batch A: library data repair (platform)
 
 Keystone record for the §4.12 merge gate (`check_plan_review_record_exists.dart`).
 
-**Tier `platform`, EXPECTED.** The diff touches `lib/core/services/seed_service.dart`, `lib/shared/repositories/exercise_repository.dart`, the bundled library and a migration. The tier is recomputed by `scripts/pre-commit.sh` on the first staged diff, and this line is corrected if it differs. `bpass` becomes `accepted` with the review file once Task 6 Step 4 runs.
+**Tier `platform`, EXPECTED.** The diff touches `lib/core/services/seed_service.dart`, `lib/shared/repositories/exercise_repository.dart`, the bundled library and a migration. The tier is recomputed by `scripts/pre-commit.sh` on the first staged diff, and this line is corrected if it differs. Confirmed `platform` on 2026-10-22 over the whole branch plus migration 162 (`blast_radius_from_diff.dart`). B-pass ran at Task 6 Step 4: see below.
 
 ## Plan
 `docs/plans/2026-10-22-library-data-repair.md` implements spec `docs/superpowers/specs/2026-10-21-exercise-library-comprehensive-design.md` §9 row A.
@@ -41,3 +42,7 @@ Keystone record for the §4.12 merge gate (`check_plan_review_record_exists.dart
 - §4.6 waiver (a seed rewrite has no kill switch; rollback = revert JSON + v13 + re-run 125): **ACCEPTED** by the founder in chat, 2026-10-22.
 - Execution mode: **INLINE**, confirmed by the founder, 2026-10-22.
 - Go for the Task 6 rehearsal and live apply: pending, asked at Task 6.
+
+## B-pass (Task 6 Step 4, 2026-10-22)
+
+`docs/reviews/library-data-repair-bpass.md`: 0 P0, 0 P1, 7 P2, all accepted and fixed in this batch with mutation-proven tests. One finding reverses round 1's label call: `supabase/migrations/CLAUDE.md` counts "rewrites rows" as `Destructive?: yes`, so migration 162 now says yes. The template then asks for a Supabase-branch dry-run plus founder sign-off; the founder is asked at the live-apply go whether the prod rehearsal inside `BEGIN … ROLLBACK` stands in for the branch. The rollback header is now an inline three-step block (125, then 126, then clear `name_aliases`).

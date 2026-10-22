@@ -5,7 +5,8 @@
 //
 // An APPLIED seed migration is IMMUTABLE, so a library change does NOT rewrite the
 // last one -- it mints the next number and CURRENT_SEED moves to it. 074 seeded the
-// original 259 rows; 125 re-seeds the 271 that OI-89 produced. Rewriting 074 in
+// original 259 rows; 125 re-seeds the 271 that OI-89 produced; 162 re-seeds the 285 of
+// library v12 (Batch A) and deactivates the 7 retired duplicates. Rewriting 074 in
 // place would have made the applied ledger describe a file that no longer matches
 // what ran.
 // Idempotent: uses ON CONFLICT (id) DO UPDATE so re-runs are safe.
@@ -20,7 +21,7 @@ const crypto = require('crypto');
 
 const ROOT = path.resolve(__dirname, '..');
 const JSON_PATH = path.join(ROOT, 'assets', 'data', 'exercise_library.json');
-const CURRENT_SEED = '125_reseed_exercise_library.sql';
+const CURRENT_SEED = '162_reseed_exercise_library.sql';
 const OUTPUT_SQL = path.join(
   ROOT, 'supabase', 'migrations', process.argv[2] || CURRENT_SEED);
 
@@ -50,6 +51,12 @@ function sqlTextArray(arr) {
   return `ARRAY[${escaped}]::text[]`;
 }
 
+// name_aliases is NULL, not an empty array, on a row with no alias: cloud rows
+// seeded before v12 hold NULL there, and NULL is what "no alias" has always meant.
+function sqlTextArrayOrNull(arr) {
+  return Array.isArray(arr) && arr.length > 0 ? sqlTextArray(arr) : 'NULL';
+}
+
 function firstOrNull(arr) {
   // DB schema: movement_pattern + exercise_type are TEXT (not ARRAY).
   // JSON ships them as arrays — flatten to first element.
@@ -67,13 +74,32 @@ console.log(`Loaded ${data.length} exercises from ${JSON_PATH}`);
 const valuesRows = data.map(item => {
   const uuid = uuidv5(`exercise_library|${item.id}`, NAMESPACE);
   // Single-line per row keeps the generated file under MCP / read limits.
-  return `(${sqlEscape(uuid)}, ${sqlEscape(item.name)}, ${sqlEscape(item.category)}, ${sqlEscape(firstOrNull(item.movement_pattern))}, ${sqlEscape(firstOrNull(item.exercise_type))}, ${sqlTextArray(item.primary_muscles)}, ${sqlTextArray(item.secondary_muscles)}, ${sqlTextArray(item.equipment_needed)}, ${sqlEscape(item.logging_type ?? 'weight_reps')}, ${sqlEscape(item.difficulty_level)}, ${sqlTextArray(item.suitable_for)}, ${sqlTextArray(item.coaching_cues)}, ${sqlTextArray(item.common_mistakes)}, ${num(item.default_sets)}, ${sqlEscape(item.default_reps)}, ${num(item.default_rest_secs)}, ${sqlEscape(item.source ?? 'icanbefitter_seed')}, ${sqlEscape(item.is_active ?? true)}, ${sqlEscape(item.is_indian_context ?? false)}, now())`;
+  return `(${sqlEscape(uuid)}, ${sqlEscape(item.name)}, ${sqlEscape(item.category)}, ${sqlEscape(firstOrNull(item.movement_pattern))}, ${sqlEscape(firstOrNull(item.exercise_type))}, ${sqlTextArray(item.primary_muscles)}, ${sqlTextArray(item.secondary_muscles)}, ${sqlTextArray(item.equipment_needed)}, ${sqlEscape(item.logging_type ?? 'weight_reps')}, ${sqlEscape(item.difficulty_level)}, ${sqlTextArray(item.suitable_for)}, ${sqlTextArray(item.coaching_cues)}, ${sqlTextArray(item.common_mistakes)}, ${num(item.default_sets)}, ${sqlEscape(item.default_reps)}, ${num(item.default_rest_secs)}, ${sqlEscape(item.source ?? 'icanbefitter_seed')}, ${sqlEscape(item.is_active ?? true)}, ${sqlEscape(item.is_indian_context ?? false)}, ${sqlTextArrayOrNull(item.name_aliases)}, now())`;
 }).join(',\n');
 
-const sql = `-- Intent: Seed cloud exercise_library from bundled assets/data/exercise_library.json (${data.length} exercises). Mirrors 030_seed_food_database — base seed for the canonical library that user_custom_exercises promotions accrete onto via promote-community-item Edge Function.
--- Destructive?: no   -- INSERT...ON CONFLICT DO UPDATE; no row deletion, no constraint change
--- Rollback strategy: inline   -- TRUNCATE TABLE exercise_library; only safe if no promotions have landed (always true at first apply)
--- Linked diagnose-doc: 2026-05-27-exercise-library-cloud-empty-ada3fb
+// Library v12 (Batch A): a row retired into its twin leaves the bundled JSON, and
+// the kept row lists it in merged_ids. Nothing deletes in cloud (promotions and
+// logs may point at the row), so the retired row is deactivated instead, and it
+// takes the kept row's cues because getFormCues matches by exact name with no
+// is_active filter. One statement per pair, never starting with "(", so the
+// VALUES-tuple count in exercise_library_cloud_seeded_test stays exact.
+const idOf = (libraryId) => uuidv5(`exercise_library|${libraryId}`, NAMESPACE);
+// 125 predates name_aliases, so re-applying it leaves the kept rows' aliases in
+// place; the inline rollback clears them explicitly.
+const aliasHolderIds = data
+  .filter((item) => Array.isArray(item.name_aliases) && item.name_aliases.length > 0)
+  .map((item) => `'${idOf(item.id)}'`)
+  .join(', ');
+const retireStatements = data
+  .filter((item) => Array.isArray(item.merged_ids))
+  .flatMap((kept) => kept.merged_ids.map((retired) =>
+    `UPDATE exercise_library r SET is_active = false, coaching_cues = k.coaching_cues, common_mistakes = k.common_mistakes FROM exercise_library k WHERE r.id = '${idOf(retired)}' AND k.id = '${idOf(kept.id)}';`))
+  .join('\n');
+
+const sql = `-- Intent: RE-SEED cloud exercise_library from bundled assets/data/exercise_library.json (${data.length} exercises, library v12, Batch A data repair): the 136 un-shifted coaching-text rows with one cue per list item, name_aliases on the 7 rows that absorbed a duplicate, and the 7 retired duplicates deactivated with their kept twin's cues.
+-- Destructive?: yes   -- REWRITES ROWS (supabase/migrations/CLAUDE.md): coaching_cues / common_mistakes / name_aliases on the re-seeded rows and is_active + cues on the 7 retired rows. No DELETE, DROP, TRUNCATE or constraint change; every prior value is restored by the inline rollback below.
+-- Rollback strategy: inline   -- re-apply 125_reseed_exercise_library.sql, then 126_fix_incline_dumbbell_press_equipment.sql (125 predates that fix), then clear name_aliases (125 never wrote it); commented block at the end of this file. NOT a TRUNCATE: promote-community-item rows may have accreted.
+-- Linked diagnose-doc: 2026-10-22-library-text-shift-b7d3e1
 
 -- Source: ${data.length} exercises from assets/data/exercise_library.json.
 -- Deterministic UUIDs v5 from (namespace, "exercise_library|<json_id>") so re-runs are idempotent.
@@ -81,7 +107,8 @@ const sql = `-- Intent: Seed cloud exercise_library from bundled assets/data/exe
 --
 -- Schema mapping notes:
 --   * movement_pattern + exercise_type are TEXT in DB but arrays in JSON — flatten to first element.
---   * DB columns not in JSON (name_aliases, instructions, alternative_ids, regression_id,
+--   * name_aliases comes from the JSON since library v12 (NULL on a row without one).
+--   * DB columns not in JSON (instructions, alternative_ids, regression_id,
 --     progression_id, default_duration_secs) are intentionally NULL on first apply.
 --   * JSON-only fields (tempo, met_value, cal_per_set_est, breathing_cue, warmup_protocol,
 --     pro_tip, image_*, gif_url, equipment_tier, cns_demand, target_focus, priority_tier,
@@ -96,7 +123,7 @@ INSERT INTO exercise_library (
   logging_type, difficulty_level, suitable_for,
   coaching_cues, common_mistakes,
   default_sets, default_reps, default_rest_secs,
-  source, is_active, is_indian_context, created_at
+  source, is_active, is_indian_context, name_aliases, created_at
 ) VALUES
 ${valuesRows}
 ON CONFLICT (id) DO UPDATE SET
@@ -117,10 +144,16 @@ ON CONFLICT (id) DO UPDATE SET
   default_rest_secs = EXCLUDED.default_rest_secs,
   source = EXCLUDED.source,
   is_active = EXCLUDED.is_active,
-  is_indian_context = EXCLUDED.is_indian_context;
+  is_indian_context = EXCLUDED.is_indian_context,
+  name_aliases = EXCLUDED.name_aliases;
 
--- Rollback (commented):
--- TRUNCATE TABLE exercise_library;
+-- Retired duplicates (library v12): deactivate, and copy the kept twin's cues.
+${retireStatements}
+
+-- Rollback (inline, run in this order):
+--   1. re-apply supabase/migrations/125_reseed_exercise_library.sql (pre-v12 text; is_active true on the 7 retired rows)
+--   2. re-apply supabase/migrations/126_fix_incline_dumbbell_press_equipment.sql (125 reverts its E260 fix)
+--   3. UPDATE exercise_library SET name_aliases = NULL WHERE id IN (${aliasHolderIds});
 `;
 
 fs.mkdirSync(path.dirname(OUTPUT_SQL), { recursive: true });

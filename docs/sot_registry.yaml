@@ -12753,7 +12753,7 @@ concepts:
     contract_test_path: test/contracts/exercise_plate_assets_present_test.dart
     description: |
       Exercise plates. WRITER: `assets/data/exercise_library.json` - `demo_slug`
-      (nullable, 165 populated) and `demo_pair` (nullable bool, the plate SHAPE),
+      (nullable, 156 populated in library v12) and `demo_pair` (nullable bool, the plate SHAPE),
       both sourced from `docs/plans/exercise-plates-mapping.json`. Delivered to
       existing installs ONLY by `_exerciseLibraryVersion`: seed_service re-seeds
       iff stored < constant, so a bump is the only thing that ships a new field.
@@ -12770,8 +12770,10 @@ concepts:
       both frames and a hold to frame 1's own bounds. Moving it into a Dart
       constant re-creates a cross-language drift with no gate.
 
-      WARNING: 165 exercises share 153 slugs - a per-exercise count and a
-      per-slug count are different numbers. 292 SVGs ship (139 pair x2 + 14).
+      WARNING: 156 exercises share 152 slugs (library v12) - a per-exercise count
+      and a per-slug count are different numbers. 290 SVGs ship (138 pair x2 + 14).
+      19 pairs are drawn END-first upstream; build_exercise_plates.py SWAP_FRAMES
+      writes them swapped so <slug>-1.svg is always START.
 
       WARNING: an artwork-less row carries NEITHER key. A `demo_slug: null`
       would read as present to the schema contract's exact key match.
