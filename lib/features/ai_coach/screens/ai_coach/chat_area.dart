@@ -26,7 +26,7 @@ extension _ChatArea on _AiCoachScreenState {
         .where((a) => !a.isDismissed)
         .toList();
     // Workout draft (multi-turn workout confirmation)
-    final hasWorkoutDraft = ref.watch(workoutDraftProvider) != null;
+    final hasWorkoutDraft = hasWorkoutDraftSlot(ref.watch(workoutDraftProvider));
 
     // Phase A.11 — typed tool intents (pending + recently-settled, kept by prune)
     // C-6: secondary filter on the Hive `intent_<id>_dispatched_at` marker.
@@ -136,7 +136,7 @@ extension _ChatArea on _AiCoachScreenState {
         // Workout draft confirm card (after legacy log actions)
         var afterActions = offset - pendingActions.length;
         if (hasWorkoutDraft && afterActions == 0) {
-          return const WorkoutLogConfirmCard();
+          return const WorkoutDraftSlot();
         }
         if (hasWorkoutDraft) afterActions -= 1;
 

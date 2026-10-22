@@ -7,7 +7,8 @@
 /// device-only). The TS twin is `supabase/functions/_shared/
 /// body_measurement_sites.ts`; `test/contracts/body_measurement_sites_parity_test.dart`
 /// pins the Dart list, the twin, `backups/live_schema_columns.json` and the
-/// Edge Function prompt lists to one set.
+/// two prompt lists in `supabase/functions/_shared/write_claim_prompt.ts`
+/// (the ai-proxy and ai-media-proxy ICBF blocks) to one set.
 ///
 /// Tokens only. Labels, guide lines and bounds belong to the L2b sheet. NOT the
 /// keys of `user_stat_snapshots.measurements` (`arms_l`, `arms_r`, `thighs_*`).

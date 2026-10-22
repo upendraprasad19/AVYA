@@ -230,6 +230,10 @@ Per CLAUDE.md rules 21 + 22:
 | 2.106 | `Semantics(excludeSemantics: true)` over an `InkWell` makes the declared `onTap` the only way a screen reader reaches the control | a single-node control passes a label-and-role test; deleting the Semantics `onTap:` line leaves every test green | test/ai_coach/measurement_chip_slot_test.dart |
 | 2.107 | A test observes the reported value or the source text while the bug lives in the state the user sees or in the wiring | a clamp, ceiling or version-label change is green and a reviewer's one-line deletion (wheel resync, call-site constant, ceiling expression) reddens nothing | test/widgets/scroll_date_picker_clamp_test.dart |
 | 2.108 | A pin written to protect one reader of a contract freezes a second, private parser of the same writer in place | a screen shows a generic failure where a sibling screen shows the server's specific reason, and an older contract test asserts the broken screen's old parsing | test/contracts/referral_unit_c_surfaces_test.dart |
+| 2.109 | A completion writer that never asks whether there is anything to complete, and a guard added to one caller of it but not the others | "Workout Complete!" with 0 SETS LOGGED, or completion credit for a session where nothing was saved | test/contracts/zero_set_completion_behavioral_test.dart |
+| 2.110 | `TextField.selectAllOnFocus` does not select on a user TAP | a plan says a tap on a prefilled value selects it, and on the device typing appends mid-number | test/features/train/log_exercise/log_exercise_card_flip_test.dart |
+| 2.111 | A test compares `FileSystemEntity.path` to a `/`-literal: red only on Windows, invisible to Linux CI | a local Windows full suite fails with Expected/Actual differing only by `\` vs `/`, while CI is green | test/contracts/lapse_gap_policy_writer_to_reader_test.dart |
+| 2.112 | A floating version in a dependency we do not own (a plugin x.y.+, a POM LATEST) fails builds and silently changes the shipped bytes | Build Check fails with "Could not find any matches for ...:x.y.+" on a commit that touched no build file, and a re-run passes | test/contracts/android_dynamic_dependency_pin_test.dart |
 
 ---
 

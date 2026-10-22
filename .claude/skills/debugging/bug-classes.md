@@ -1777,3 +1777,21 @@ added, false of the flip being performed.
 - **Test shape:** a real `tester.tap` on the field, then read `controller.selection`; a second tap after `pump(600 ms)`.
 - **Prior incidents:** none.
 - **Regression test:** `test/features/train/log_exercise/log_exercise_card_flip_test.dart` (P3).
+
+### 2.111 A test compares `FileSystemEntity.path` to a `/`-literal: red only on Windows, invisible to Linux CI (NEW 2026-10-21, 3rd instance)
+
+- **Telltale:** a local Windows full suite fails a test whose Expected/Actual differ only by `\` vs `/`, or a "skip the registry file" equality (`f.path == 'lib/...'`) never matches, so the file reports itself as an offender. CI on `main` is green for the same test.
+- **Root-cause shape:** `Directory.listSync` returns backslash paths on Windows. The test turns `.path` into a string and compares it, or uses it as a key, against a literal written with `/`. Building a path (`'${dir.path}/x'`) is fine; COMPARING one is the bug.
+- **Fix pattern:** normalise at the point the string is made: `.path.replaceAll(r'\', '/')` (the repo's existing inline idiom, e.g. `test/contracts/age_floor_pickers_test.dart:86`), or match on `f.uri.pathSegments`. Never loosen the expected literal.
+- **Test shape:** none can catch it on Linux CI. Proof is a Windows run with the normalisation reverted (confirm the revert by `git diff`, not by a grep).
+- **Prior incidents:** `2026-09-27-alert-threshold-test-windows-path-separator-d4a7c1.md`, `2026-09-30-migration-ledger-057-forward-slash-windows-path-d4e7c2.md` (id d4e7c2 is shared with an unrelated doc, so cite the filename), `9b1621` (2026-10-21, three contract tests).
+- **Regression test:** `test/contracts/lapse_gap_policy_writer_to_reader_test.dart`, `body_measurement_sites_derivation_test.dart`, `clean_orphan_media_pro_recheck_test.dart`.
+
+### 2.112 A floating version in a dependency we do not own (a plugin's `x.y.+`, a POM's LATEST) fails builds and silently changes the shipped bytes (NEW 2026-10-21)
+
+- **Telltale:** CI Build Check fails with "Could not find any matches for <group>:<name>:x.y.+ as no versions ... are available" on a commit that touched no build file, and a re-run passes. Or the dependency report shows `latest.integration ->` or `x.y.+ ->` for a payment, auth or analytics SDK.
+- **Root-cause shape:** a Flutter plugin's own `android/build.gradle` (pub cache) or a transitive POM declares a dynamic selector. Every resolution fetches that module's `maven-metadata.xml`; an empty listing fails the build, and a new upstream release changes what the next AAB ships, with no diff in this repo.
+- **Fix pattern:** pin each floating coordinate in `android/build.gradle.kts` with `subprojects { configurations.configureEach { resolutionStrategy.eachDependency { ... useVersion(...) } } }` to the version the last built AAB used (dates of `~/.gradle/caches/modules-2/files-2.1/<group>/<name>/<ver>/` against `backups/built_versioncodes.json`). Walk the WHOLE subtree: fetch every POM and look for `+`, `LATEST`, `RELEASE` and ranges. Pinning only the first selector you see leaves the next one. Do NOT pin a range that carries a preferred version (`{require [a, b]; prefer x}`): its result is already deterministic, and a pin would override a higher version a later dependency legitimately needs.
+- **Test shape:** presence test on the pin map (exact x.y.z per coordinate) plus a lock-version check on the plugin, so a plugin bump fails with a re-audit recipe. The behavioural proof is Gradle, outside `flutter test`: count `<group>/*/maven-metadata.xml` references in `dependencies --refresh-dependencies --debug` before and after (must be 0 after).
+- **Prior incidents:** none recorded (`a6c3e9`).
+- **Regression test:** `test/contracts/android_dynamic_dependency_pin_test.dart`.

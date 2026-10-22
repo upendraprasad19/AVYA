@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**231 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**244 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -234,8 +234,21 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-365 | Coach tools and app features do the same jobs through separate code (first… | none (founder 2026-10-21: this audit is… | 2026-10-21 - by code read at… | [:6296](open_issues.md#L6296) |
 | OI-366 | create-razorpay-order has no rate limit and honours expired or exhausted… | none for the code; the founder's call on… | 2026-10-21 - by reading (hermes pass… | [:6330](open_issues.md#L6330) |
 | OI-367 | Referral reward can be farmed once the purchase door is open: no minimum… | the founder's product call before store… | 2026-10-21 - by reading (hermes pass… | [:6339](open_issues.md#L6339) |
-| OI-372 | Weekday exercise swap has no UI: the engine takes any date, but only the… | none | 2026-10-21 (code read on… | [:6348](open_issues.md#L6348) |
-| OI-385 | Generator: 27 library rows in slot patterns are unreachable on attempts… | Batch B generator rework (spec… | 2026-10-22 — measured from… | [:6379](open_issues.md#L6379) |
-| OI-386 | Generator: 11 of 13 attempt-1 sub-focus strings match 0 rows (slot… | Batch B generator rework (spec… | 2026-10-22 — measured from… | [:6390](open_issues.md#L6390) |
-| OI-387 | Library: 6 kept bodyweight rows (E272 E273 E276 E277 E289 E290) invisible… | Batch B generator rework (spec… | 2026-10-22 — measured from… | [:6401](open_issues.md#L6401) |
-| OI-388 | Generator: gym plans serve bodyweight-only self-resisted curls and triceps… | Batch B generator rework (spec… | 2026-10-22 — counted from the… | [:6414](open_issues.md#L6414) |
+| OI-368 | Coach chat: the coach replies 'Roger. Logged.' when nothing was logged (no… | the `ai-proxy` + `ai-media-proxy` deploy… | never | [:6348](open_issues.md#L6348) |
+| OI-369 | Coach chat: the coach says 'Logged' while the LOG SET card still waits for… | the `ai-proxy` + `ai-media-proxy` deploy… | never | [:6363](open_issues.md#L6363) |
+| OI-372 | Weekday exercise swap has no UI: the engine takes any date, but only the… | none | 2026-10-21 (code read on… | [:6376](open_issues.md#L6376) |
+| OI-373 | Coach: one workout request can produce either a typed logSet card (APPLY)… | none | never | [:6407](open_issues.md#L6407) |
+| OI-374 | Coach: remove the DISABLE_WRITE_CLAIM_RULE kill switch once the… | the `coach-log-truth` batch shipping and… | never | [:6418](open_issues.md#L6418) |
+| OI-375 | Coach: the FC2 queued acknowledgement hard-codes 'Recruit' instead of the… | none | never | [:6429](open_issues.md#L6429) |
+| OI-376 | Workout invalidation: WorkoutWriteService.onInvalidate is a dead hook and… | none | never | [:6440](open_issues.md#L6440) |
+| OI-377 | Train: WorkoutRepository.getExerciseLogsForDate duplicates the canonical… | none | never | [:6451](open_issues.md#L6451) |
+| OI-378 | Riverpod 3.2.1: debug assertion actualPausedCount == expectedPausedCount… | upstream: riverpod above 3.2.1… | never | [:6462](open_issues.md#L6462) |
+| OI-379 | Coach-logged workouts never add to total_workouts_done or run the rank… | none | never | [:6473](open_issues.md#L6473) |
+| OI-380 | Train: the expanded day row shows 'N sets 0 reps X kg' for distance-type… | none | never | [:6484](open_issues.md#L6484) |
+| OI-381 | Set counts read '1 sets' in the remaining renderers (prescriptions,… | none | never | [:6495](open_issues.md#L6495) |
+| OI-382 | WorkoutWriteService.logExercise accepts a negative durationSec (only… | none | never | [:6506](open_issues.md#L6506) |
+| OI-383 | Razorpay Android SDK is pinned (checkout 1.6.41, standard-core 1.7.19) and… | none | 2026-10-21 (Maven Central: checkout… | [:6519](open_issues.md#L6519) |
+| OI-385 | Generator: 27 library rows in slot patterns are unreachable on attempts… | Batch B generator rework (spec… | 2026-10-22 — measured from… | [:6542](open_issues.md#L6542) |
+| OI-386 | Generator: 11 of 13 attempt-1 sub-focus strings match 0 rows (slot… | Batch B generator rework (spec… | 2026-10-22 — measured from… | [:6553](open_issues.md#L6553) |
+| OI-387 | Library: 6 kept bodyweight rows (E272 E273 E276 E277 E289 E290) invisible… | Batch B generator rework (spec… | 2026-10-22 — measured from… | [:6564](open_issues.md#L6564) |
+| OI-388 | Generator: gym plans serve bodyweight-only self-resisted curls and triceps… | Batch B generator rework (spec… | 2026-10-22 — counted from the… | [:6577](open_issues.md#L6577) |

@@ -5590,3 +5590,33 @@ exercises simply show no BREATHING section.
 than left to the guards. The fix is 136 lines of coaching copy.
 
 **CLOSED 2026-10-22 (`library-data-repair`, Batch A Task 1 of plan `docs/plans/2026-10-22-library-data-repair.md`, diagnose `b7d3e1`):** the premise above was wrong. The text was never lost, only SHIFTED: on the 136 rows every field from `met_value` to `source` sat one column right in file key order, so the breathing text was in `coaching_cues`, the cues in `common_mistakes`, the mistakes in `warmup_protocol` and the warm-up in `pro_tip`. Only the original `pro_tip` and `source` fell into boolean columns and are lost. `scripts/repair_exercise_library_v12.js` (`repairText`) moved every value back and split every cue list into one cue per item; nothing had to be re-authored. Test: `test/contracts/exercise_library_text_shape_contract_test.dart`. The cloud copy is re-seeded by the same batch.
+
+## OI-370 — Train: the expanded day row does not show a coach-logged exercise until a page reload
+
+- **Status**: CLOSED · 2026-10-22 · branch `train-coach-log-refresh` (PR #144) · the commit carrying `closes-oi: OI-370` (`git log --grep='closes-oi: OI-370'`)
+- **Blocked on**: — (resolved)
+- **Verified**: 2026-10-22 - by behavioural and widget tests on the branch (listed in the closing note); not yet on a device or on the web build
+- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `observations-a12-web`
+
+Found in the founder's A12 web walk 2026-10-21. A Bench Press logged from the coach chat (legacy `WorkoutLogConfirmCard` CONFIRM, row written 13:29:36 IST) did not appear in the Train tab's expanded day row until the page was reloaded. The row write itself was correct.
+
+Mechanism: the Train screen rebuilds on `ref.watch(currentPlanProvider)` (`lib/features/train/screens/train/screen.dart:116`), and the expanded row reads exercise logs straight from the repository on rebuild (`lib/features/train/screens/train/expanded_exercises.dart:7`, `WorkoutRepository.getExerciseLogsForDate`). The coach chat's workout paths never invalidate `currentPlanProvider`: `submitWorkoutDraft` (`lib/features/ai_coach/services/conversational_log_handler.dart:321-328`) invalidates only calendar week, streak and today's workout, and its comment says `WorkoutWriteService.onInvalidate` handles the rest, but that hook is never assigned (`lib/core/services/workout_write_service.dart:86`). The typed-intent path (`ToolDispatcher._invalidateWorkoutProviders`, `lib/features/ai_coach/services/tool_dispatcher.dart:1839-1875`) has the same gap. Reproduced in a widget test (Train visible and offstage).
+
+Fix: plan `docs/plans/train-coach-log-refresh.md` (branch `train-coach-log-refresh`, blast radius account, tier M): one `invalidateWorkoutSurfaces` helper used by all three coach paths, plus a saved state on the workout confirm card (`✓ WORKOUT LOGGED`, about 1.5 s, haptic), founder-approved 2026-10-21.
+
+**CLOSED 2026-10-22 (`train-coach-log-refresh`, PR #144, plan `docs/plans/train-coach-log-refresh.md` rev 11, record `docs/plan-reviews/train-coach-log-refresh.md`, ledger `docs/audit/train-coach-log-refresh.closure.yaml`, diagnose `e2a418` / `5aa251`):** the three coach write paths (tool dispatcher, chat draft `submitWorkoutDraft`, completion prompt) call one helper, `invalidateWorkoutSurfaces` (`lib/features/train/providers/workout_surface_invalidation.dart`, 7 providers including `currentPlanProvider`), through the container captured before the first await, so a card disposed mid-submit still refreshes Train. The chat workout card now reports saved / day-not-marked / partial / none-saved instead of success on a failed write. Tests: `test/contracts/workout_surface_invalidation_test.dart`, `test/ai_coach/workout_log_confirm_card_saved_signal_test.dart`. Device and web check still owed (OI-348 A12).
+
+## OI-371 — Train: exercise names in the expanded day row are cut to about 4 characters at phone width
+
+- **Status**: CLOSED · 2026-10-22 · branch `train-coach-log-refresh` (PR #144) · the commit carrying `closes-oi: OI-371` (`git log --grep='closes-oi: OI-371'`)
+- **Blocked on**: — (resolved)
+- **Verified**: 2026-10-22 - by behavioural and widget tests on the branch (listed in the closing note); not yet on a device or on the web build
+- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `observations-a12-web`
+
+Found in the founder's A12 web walk 2026-10-21 (Train tab screenshot at phone width): names show as "Barb…", "Leg…", "Benc…".
+
+Mechanism: the expanded day row (`lib/features/train/screens/train/expanded_exercises.dart:98-121`) is `Row[Icon, SizedBox(8), Expanded(Text(name, ellipsis)), Text(detail)]`. The detail text ("3 sets 10 reps 60 kg") takes its full width first, so at 320-360 dp the name gets what is left, a few characters, and is cut with an ellipsis on one line.
+
+Fix: same plan as OI-370. The name gets its own line with no line limit and the detail wraps under it (`ExpandedExerciseLogRow`), tested at 320 dp × 1.0/1.3/2.0 text scale with long real names.
+
+**CLOSED 2026-10-22 (`train-coach-log-refresh`, PR #144, same plan and ledger, diagnose `2e8b8f`):** the expanded day row (`ExpandedExerciseLogRow`) gives the name its own line with no line limit and wraps the detail under it; counts read `1 set` / `N sets`, numbers stay with their units (NBSP). Tested at 320 dp × 1.0/1.3/2.0 text scale with long real names in `test/features/train/expanded_exercise_log_row_test.dart`. Cardio minutes read 0 because of a separate pre-existing bug in `logExercise` (filed separately). Device and web check still owed (OI-348 A12).

@@ -50,6 +50,14 @@ Example narration: "Aye, Recruit. Friday and Saturday trade places: Legs +
 Core today, Pull + Core tomorrow. Confirm below and it's done."
 `;
 
+// coach-log-truth (founder 2026-10-21): the example no longer narrates the
+// swap as done before the tap; the card's button is APPLY. With the write
+// claim rule off the block is byte-identical to the one above.
+const PRO_CAPABLE_BLOCK_WRITE_CLAIM = PRO_CAPABLE_BLOCK.replace(
+  "Confirm below and it's done.",
+  "Tap APPLY below to swap them.",
+);
+
 const FREE_BLOCK = `
 ## DAY SWAP ROUTING — FREE user
 Swapping days is a PRO feature. For a request to swap, exchange or trade two
@@ -80,10 +88,11 @@ rescheduleWeek. Reply with exactly this line:
 export function daySwapRoutingBlock(
   isPro: boolean,
   capabilities: Set<string>,
+  writeClaimRule = true,
 ): string {
   switch (daySwapRoutingCase(isPro, capabilities)) {
     case "pro_capable":
-      return PRO_CAPABLE_BLOCK;
+      return writeClaimRule ? PRO_CAPABLE_BLOCK_WRITE_CLAIM : PRO_CAPABLE_BLOCK;
     case "pro_old_app":
       return PRO_OLD_APP_BLOCK;
     case "free":

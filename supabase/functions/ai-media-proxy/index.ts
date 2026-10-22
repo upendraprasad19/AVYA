@@ -6,6 +6,12 @@ import { reportGeminiExhaustion } from "../_shared/gemini_failure_alert.ts";
 import { COACH_REPLIES } from "../_shared/coach_replies.ts";
 import { istDayStartIso } from "../_shared/ist_date.ts";
 import {
+  isWriteClaimRuleDisabled,
+  mediaIcbfLogInstructions,
+  writeClaimSuffix,
+} from "../_shared/write_claim_prompt.ts";
+import { logWriteClaimDetection } from "../_shared/write_claim_detector.ts";
+import {
   asAuthoredPrompt,
   asPrincipalMessage,
   fenceAsData,
@@ -711,6 +717,10 @@ export async function handleRequest(req: Request): Promise<Response> {
     // deliberately not a read-then-decide gate at this point: only the atomic
     // check-and-increment bounds spend under concurrency.
 
+    // coach-log-truth: the write-claim rule, read ONCE per request
+    // (DISABLE_WRITE_CLAIM_RULE exactly "true" disables; OFF = today's bytes).
+    const ruleOn = !isWriteClaimRuleDisabled();
+
     // Build system prompt (same as ai-proxy-pro + image analysis instructions)
     let systemPrompt = asAuthoredPrompt(
       "You are ICANBEFITTER PRO AI Coach, an elite fitness and nutrition coach " +
@@ -725,24 +735,7 @@ export async function handleRequest(req: Request): Promise<Response> {
       "\n- If it's a grocery/ingredient photo: identify items, suggest meal ideas, note macro-friendly options." +
       "\n- If it's a nutrition label: parse the label and assess if it fits the user's goals." +
       "\n- For any other photo: relate your analysis to the user's fitness journey." +
-      "\n\nFITNESS DATA LOGGING — INSTANT:" +
-      "\nWhen the user explicitly states they ALREADY completed an action, embed ONE tag at the END of your response:" +
-      '\n<ICBF_LOG>{"action":"log_water","data":{"ml":500}}</ICBF_LOG>' +
-      '\n<ICBF_LOG>{"action":"log_weight","data":{"weight_kg":73.5}}</ICBF_LOG>' +
-      '\n<ICBF_LOG>{"action":"log_food","data":{"food_name":"Dal Rice","meal_type":"lunch","quantity_g":200,"calories_estimate":280,"protein_estimate":9,"carbs_estimate":55,"fat_estimate":3}}</ICBF_LOG>' +
-      '\n<ICBF_LOG>{"action":"log_sleep","data":{"duration_hrs":7,"quality":"good"}}</ICBF_LOG>' +
-      '\n<ICBF_LOG>{"action":"log_measurement","data":{"type":"waist","value_cm":82}}</ICBF_LOG>' +
-      "\nMeasurement types: waist, chest, hips, arms. Convert inches to cm (multiply by 2.54)." +
-      "\nWater: 2 glasses=500ml, 1 bottle=750ml, 1 cup=250ml, 1 litre=1000ml." +
-      "\nRULES:" +
-      "\n- Only for CONFIRMED PAST actions (I drank, I weighed, I ate, I slept, my waist is). NEVER for future plans or questions." +
-      "\n- The tag is stripped server-side — do not mention it in your visible response." +
-      "\n- One tag per response maximum." +
-      "\n\nWORKOUT LOGGING — MULTI-TURN:" +
-      "\n- If user says they finished a workout WITHOUT exercise details, ask them to describe exercises, sets, reps, weights. No tag yet." +
-      "\n- If user provides exercise details, parse them and emit:" +
-      '\n<ICBF_LOG>{"action":"confirm_workout_log","data":{"exercises":[{"name":"Bench Press","logging_type":"weight_reps","sets":[{"weight_kg":80,"reps":8}]},{"name":"Push-ups","logging_type":"bodyweight_reps","sets":[{"reps":15}]},{"name":"Plank","logging_type":"timed","sets":[{"duration_secs":60}]},{"name":"Running","logging_type":"cardio","duration_mins":30,"distance_km":5}]}}</ICBF_LOG>' +
-      '\nParse "5x8 at 80kg" as 5 sets of 8 reps at 80kg. logging_type: weight_reps (weight+reps), bodyweight_reps (reps only), timed (duration), cardio (time/distance).');
+      mediaIcbfLogInstructions(ruleOn) + writeClaimSuffix(ruleOn, { tools: false }));
 
     if (snapshot_json) {
       // OI-47. `ai-proxy` hardened exactly this concatenation under FC7
@@ -969,6 +962,14 @@ export async function handleRequest(req: Request): Promise<Response> {
 
     // Extract structured log actions from AI reply
     const extracted = extractLogActions(rawReply);
+    // The media row is inserted below without returning its id, so the line
+    // carries interaction_id null and is joined to the row by time.
+    logWriteClaimDetection("ai-media-proxy", null, ruleOn, extracted.reply, () => ({
+      typedIntentTypes: [],
+      legacyActions: extracted.actions,
+      replay: false,
+      userAskedQuestion: (typeof message === "string" ? message : "").trim().endsWith("?"),
+    }));
 
     // Fetch latest snapshot_id for logging
     const { data: snapshotData } = await supabaseClient
