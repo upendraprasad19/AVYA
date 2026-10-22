@@ -6380,7 +6380,7 @@ Impact: a ring of throwaway referee accounts, each paying a heavily discounted p
 ## OI-368 — Coach chat: the coach replies 'Roger. Logged.' when nothing was logged (no tool call; it then asks for the sets)
 
 - **Status**: OPEN
-- **Blocked on**: the `coach-log-truth` batch shipping, then its post-deploy measurement (founder live check + next-day read, plan section 5)
+- **Blocked on**: the `ai-proxy` + `ai-media-proxy` deploy of `coach-log-truth` (merged via PR #145; the deploy needs the founder's explicit go), then its post-deploy measurement (founder live check + next-day read of `ai_coach_interactions`, plan §5.7)
 - **Verified**: never
 - **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `observations-a12-web`
 
@@ -6395,7 +6395,7 @@ Stays OPEN after that batch ships: close only when the founder's live check and 
 ## OI-369 — Coach chat: the coach says 'Logged' while the LOG SET card still waits for APPLY (false if the user taps DISMISS)
 
 - **Status**: OPEN
-- **Blocked on**: the `coach-log-truth` batch shipping, then its post-deploy measurement (founder live check + next-day read, plan section 5)
+- **Blocked on**: the `ai-proxy` + `ai-media-proxy` deploy of `coach-log-truth` (merged via PR #145; the deploy needs the founder's explicit go), then its post-deploy measurement (founder live check + next-day read of `ai_coach_interactions`, plan §5.7)
 - **Verified**: never
 - **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `observations-a12-web`
 

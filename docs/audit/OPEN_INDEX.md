@@ -235,8 +235,8 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-365 | Coach tools and app features do the same jobs through separate code (first… | none (founder 2026-10-21: this audit is… | 2026-10-21 - by code read at… | [:6328](open_issues.md#L6328) |
 | OI-366 | create-razorpay-order has no rate limit and honours expired or exhausted… | none for the code; the founder's call on… | 2026-10-21 - by reading (hermes pass… | [:6362](open_issues.md#L6362) |
 | OI-367 | Referral reward can be farmed once the purchase door is open: no minimum… | the founder's product call before store… | 2026-10-21 - by reading (hermes pass… | [:6371](open_issues.md#L6371) |
-| OI-368 | Coach chat: the coach replies 'Roger. Logged.' when nothing was logged (no… | the `coach-log-truth` batch shipping,… | never | [:6380](open_issues.md#L6380) |
-| OI-369 | Coach chat: the coach says 'Logged' while the LOG SET card still waits for… | the `coach-log-truth` batch shipping,… | never | [:6395](open_issues.md#L6395) |
+| OI-368 | Coach chat: the coach replies 'Roger. Logged.' when nothing was logged (no… | the `ai-proxy` + `ai-media-proxy` deploy… | never | [:6380](open_issues.md#L6380) |
+| OI-369 | Coach chat: the coach says 'Logged' while the LOG SET card still waits for… | the `ai-proxy` + `ai-media-proxy` deploy… | never | [:6395](open_issues.md#L6395) |
 | OI-370 | Train: the expanded day row does not show a coach-logged exercise until a… | none | never | [:6408](open_issues.md#L6408) |
 | OI-371 | Train: exercise names in the expanded day row are cut to about 4… | none | never | [:6421](open_issues.md#L6421) |
 | OI-372 | Weekday exercise swap has no UI: the engine takes any date, but only the… | none | 2026-10-21 (code read on… | [:6434](open_issues.md#L6434) |
