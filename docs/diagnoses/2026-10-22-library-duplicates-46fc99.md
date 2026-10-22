@@ -121,3 +121,33 @@ the alias so a plan written before v12 still finds its cues and drawings.
 
 Four new test files (20 tests), RED first; the wider set 113/113; equipment audit PASS over
 285 rows; five mutations each reddened their test.
+
+## Generator verification (batch Task 5)
+
+`dump_all_picks.dart` over the 606-persona matrix, before (pre-batch library) and after
+(all four data tasks): 203 personas changed, 238 picks, every one in an expected class.
+
+| Class | Picks | What it is |
+|---|---|---|
+| Retired name -> kept twin, same slot | 202 | V-Ups -> V-Up 102, Hip Abductor Machine -> Hip Abduction Machine 100 |
+| Downstream reshuffle | 35 | Hip Abduction Machine -> Hip Adduction Machine on a later day. These are exactly the 35 plans that served BOTH hip machines before (the same movement twice); after the merge 0 plans do |
+| Same pick, provenance only | 1 | build_muscle/full_gym/4d/advanced/p1/inj:hip: Hip Abduction Machine moves from attempt2DropSubFocus to attempt1Exact, because E107 now carries E225's `is_foundational` |
+| E172 newly picked | 0 | Task 3 makes E172 reachable (its test proves the Core query returns it), but it sorts after the rows already picked, so no first pick changes |
+
+The harness runs without `avoidNames`, so cross-phase `_preferNovel` effects are outside it;
+the merges add no row to any pool, so they cannot create a new novelty candidate.
+
+Scorecard gate PASS against the frozen baseline: 0 missing / unsafe / equipment violations,
+2,862 fallback picks (= baseline), overall mean 86.2 (= baseline). The volume dimension mean
+moved 69.6 -> 69.2. Attributed per persona: -220.7 of the -253.1 total is the 102 V-Up
+plans (the kept E176 prescribes 4 sets with Hip Flexors as a PRIMARY muscle, scored as the
+Glutes group, where E249 had 3 sets with Hip Flexors secondary) and -32.4 the 63 hip-machine
+plans. About 0.1 of the 0.4 is the merge adding 'Core' to E176 next to 'Abs': both map to
+the Core group and the test scorer's `_volume` sums per muscle token, while the production
+readers (`volume_titration.dart` `_groupsForRow`, `plateau_scan.dart` `_groupsFor`) collect
+a SET of groups per row, so production does not double count. Measured by removing the
+synonym and regenerating (69.2 -> 69.3), then restoring.
+
+Surfaced, not caused, by this batch: 150 of 165 full_gym and 140 of 150 basic_gym plans hold
+a bodyweight-only Self-Resisted curl or triceps extension (same counts before and after).
+Filed as OI-388, blocked on Batch B's core-list pool.

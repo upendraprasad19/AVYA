@@ -6410,3 +6410,14 @@ the stored `schedule_<date>` row changes and other dates do not.
 Batch A did NOT relabel them. `_preferNovel` (`exercise_selector.dart:1054-1066`) walks past the first sorted entries whenever `avoidNames` is non-empty, so a Phase 2+ home user's Lateral Delts pool would become [E013, E273, E289] and flip from Lateral Raise to Towel Lateral Raise. E276/E277 would stay inert anyway, because every Mid Back slot is `compound`.
 
 **Done when.** Batch B's equipment-aware pool offers these rows to no-equipment users only, their `target_focus` carries the slot label, and a behavioural test covers the bodyweight hit and the home/gym miss with `previousPhaseByDay` set.
+
+## OI-388 — Generator: gym plans serve bodyweight-only self-resisted curls and triceps extensions (150 of 165 full_gym and 140 of 150 basic_gym matrix plans)
+
+- **Status**: OPEN
+- **Blocked on**: Batch B generator rework (spec `docs/superpowers/specs/2026-10-21-exercise-library-comprehensive-design.md` §4.1 core-list pool, §9 row B). Re-ordering these rows on the live pool reshapes about 290 gym plans outside that batch's ship-dark flag and ×2 review.
+- **Verified**: 2026-10-22 — counted from the 606-persona pick dump (`dart run test/plan_generator/dump_all_picks.dart`) during Batch A Task 5; the count is the same before and after Batch A.
+- **Identified**: 2026-10-22 · filed via mint_oi.sh from branch `library-data-repair`
+
+**The defect.** E268 Self-Resisted Bicep Curl and E270 Self-Resisted Triceps Extension (OI-89 wave 1, `equipment_needed: ["bodyweight"]`) carry `priority_tier: 1`, `is_foundational: true` and every `equipment_tier`, so they sort ahead of Barbell Curl (E031, `priority_tier: 2`) and the cable/dumbbell rows. In the matrix, 150 of 165 full_gym plans and 140 of 150 basic_gym plans hold a bodyweight-only E262+ row: Self-Resisted Bicep Curl 290 picks, Self-Resisted Triceps Extension 234, Single Leg Glute Bridge 28, Standing Single Leg Hinge 16, Prone Y Raise 1 (gym tiers). `test/plan_generator/sample_plans_output.md` shows it for build_muscle full_gym (Pull day: Self-Resisted Bicep Curl, then Barbell Curl).
+
+**Done when.** A gym user's arm slots draw equipment rows first (bodyweight-only rows only when nothing else fits), bodyweight and home users keep their current picks, and a behavioural test covers both sides on the real generator.

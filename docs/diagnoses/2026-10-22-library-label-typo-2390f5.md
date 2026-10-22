@@ -57,7 +57,8 @@ regression_test_planned: >
 impact_analysis: >
   Every Core slot at every tier that allows dumbbells can now draw the side bend (it is not
   foundational, so Phase 1's foundationalOnly slots are unchanged). The batch's Task 5 pick
-  diff over the 606-persona matrix measures the plan change and classifies it. E163 is a
+  diff over the 606-persona matrix found 0 changed picks from it: E172 sorts after the rows
+  already picked, so it is now a candidate (swap, rotation) without displacing anything. E163 is a
   flexibility row with no 'Legs' slot query, so its relabel changes only its display label.
 touched_layers_checked:
   - { layer: client_code, status: fixed_in_this_batch, evidence: "bundled JSON relabelled; library_label_typo_behavioral_test 2/2 over the real queryV4" }
