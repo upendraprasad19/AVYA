@@ -6591,3 +6591,22 @@ History (writer/reader drift class): the zeroing arrived with the `a4c7d1` norma
 Impact: every cardio exercise saved from the active workout or the coach keeps its set count but loses its minutes and distance; Train, the preview and the cardio PR value read zero. Pre-launch, so test accounts only.
 
 To plan (full diagnose template, recurrence class): keep `durationSec` for `cardio` in the normaliser and decide `distance`; give a set or the row a distance path and write `distance_km` from `logExercise`; a behavioural test that logs a library cardio exercise through `logExercise` and reads minutes and km back from Hive and from the expanded row; a tier-4 audit query on `exercise_logs` for cardio rows with zero duration to size the damage and decide whether stored rows can be repaired (the minutes are not recoverable from the row itself); correct the `train/CLAUDE.md` field list.
+
+## OI-390 — Coach and Home say 'You skip Sunday workouts 100% of the time' for a rest day: getDayOfWeekCompletionRates returns 0 for a weekday with nothing scheduled and the day-of-week pattern reads it as 0% completion
+
+- **Status**: OPEN
+- **Blocked on**: founder scheduling: pick up after the current batch (coach-log-truth deploy and live check) completes (founder, 2026-10-22)
+- **Verified**: never
+- **Identified**: 2026-10-22 · filed via mint_oi.sh from branch `dow-skip-oi`
+
+Found by the founder on 2026-10-22 (web, PRO test account): the coach's reply to `Status check.` (the coach-log-truth S0 smoke) listed under "Notices": "You have a 100% skip rate on Sunday workouts". Sunday is a rest day on that plan, so there is no Sunday workout to skip.
+
+Writer: `WorkoutRepository.getDayOfWeekCompletionRates` (`lib/features/train/repositories/workout_repository.dart:1246`) walks the last 8 weeks, counts `schedule['type'] == 'workout'` days per weekday and the `completed` ones, and returns `rates[name] = total > 0 ? done / total : 0;` (`:1283-1287`). A weekday with NOTHING scheduled gets `0`, the same value as "scheduled and never done". The walk starts at `i = 0`, today, so a workout planned for today and not yet done also counts as missed (`:1267-1268`).
+
+Reader: `PatternDetector._dayOfWeekPattern` (`lib/features/ai_coach/services/pattern_detector.dart:405-428`) picks the worst day with a rate `< 0.5` and emits `coachNotice` "Skips <day> workouts <100-pct>% of the time." and `userMessage` "You tend to skip <day> workouts (only <pct>% completion). Consider swapping that day." Its own comment says "with enough data (at least some scheduled)", but the rate map cannot say "none scheduled". Severity medium, so `AiSnapshotBuilder._getCoachNotices` (`lib/features/ai_coach/services/ai_snapshot_builder.dart:998-1005`, drops only low, top 5) sends it to the model, and the Home insight card (`lib/features/home/widgets/insight_card.dart:84`) and the deep-analysis card (`lib/features/ai_coach/widgets/deep_analysis_card.dart:48`) can show the user message.
+
+Who gets it: the default day patterns never schedule Sunday (`lib/core/services/workout_schedule_read_service.dart:2189-2201`: 3/4/5/6 days), so every user below 7 days a week has at least one weekday with nothing scheduled, and the pattern fires on the first such day in Monday-to-Sunday order (a 3-day user is told they skip Tuesday). It shows whenever no higher-severity insight crowds it out of the top 5. A user who chose their own days (`preferredDays`) or swapped a workout onto a weekday gets real rates for that day.
+
+Class: writer/reader drift on a value's meaning (`0` = "no data" to the writer, "0% done" to the reader). Not a recurrence of an indexed bug (`docs/diagnoses/INDEX.md` has no day-of-week or skip-rate entry).
+
+To plan (tier M: Train + coach files): the rate map omits weekdays with nothing scheduled (or carries the counts), the pattern needs a minimum sample (about 3 scheduled sessions on that weekday) before it can fire, and the window ends yesterday (today is never a miss). Behavioural tests: a 6-day plan over 8 weeks never names Sunday; a 3-day plan never names Tuesday/Thursday/Saturday/Sunday; a real 0-of-4 Monday still fires; today's unfinished workout is not counted. Check the other readers of `getDayOfWeekCompletionRates` (none today besides the pattern) and the weekend-nutrition pattern for the same "empty means zero" shape while there.
