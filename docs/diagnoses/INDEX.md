@@ -6,6 +6,13 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### exercise_library_schema (5 bugs)
+- 2026-10-22 46fc99 — Seven bundled library rows duplicated a kept twin: the same movement under a second name, usually with the same drawing. E241 Close-Grip Bench Press / E016 Close Grip Bench Press, E240 Overhead Cable…
+- 2026-10-22 2390f5 — E172 Dumbbell Side Bend, a core row, carried target_focus ["Lats"] and nothing else, so queryV4's target-muscle filter never offered it to a Core slot: a Phase-1 home_dumbbells Core/isolation query…
+- 2026-10-22 e7f118 — On 19 paired exercise plates the sheet's START panel showed where the rep ENDS and the END panel where it starts: Pike Push Up opened head-down, Pull Up opened with the chin over the bar (founder…
+- 2026-10-22 b7d3e1 — On 136 of the 292 bundled library rows every text field from met_value to source sat one column to the right. The app showed a number as the breathing cue (suppressed by a guard, so the section simply…
+- 2026-07-19 e1a7c4 — 9 exercises E252-E260 (Wall Sit, Bodyweight Good Morning, Doorframe Curl, Towel Row, Negative Pull Up, Glute Kickback, Dumbbell Calf Raise, Split Squat, Incline Dumbbell Press) used a DIFFERENT…
+
 ### payment_record_failed_alert — every captured payment that a writer cannot record pages the founder. (1 bugs)
 - 2026-10-21 c3e7a1 — A CAPTURED Razorpay payment whose amount matches no plan price answered 400 in both payment writers and wrote no subscriptions row and no alert. The usual cause is a promo code deleted or its…
 
@@ -930,9 +937,6 @@ rather than a Hive box. (1 bugs)
 ### program_week_projection (1 bugs)
 - 2026-07-21 c9f4a2 — `user_progress.current_week` is a dead constant. Every writer sets the literal `1` (user_repository.dart:136, onboarding_provider.dart:473/786, graduation_screen.dart:673, pro_phase_advance.dart:107,…
 
-### exercise_library_schema (1 bugs)
-- 2026-07-19 e1a7c4 — 9 exercises E252-E260 (Wall Sit, Bodyweight Good Morning, Doorframe Curl, Towel Row, Negative Pull Up, Glute Kickback, Dumbbell Calf Raise, Split Squat, Incline Dumbbell Press) used a DIFFERENT…
-
 ### exercise_injury_tags (1 bugs)
 - 2026-07-19 f4c1e8 — The always-on queryV4 injury filter (exercise_repository.dart:335-345) excludes an exercise for an injured user ONLY when the exercise's injury_contraindications list CONTAINS the user's injury token;…
 
@@ -1630,6 +1634,10 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-10-22 | 46fc99 | Seven bundled library rows duplicated a kept twin: the same movement under a second name, usually with the same drawing. E241 Close-Grip Bench Press / E016 Close Grip Bench Press, E240 Overhead Cable… | exercise_library_schema | test/contracts/exercise_library_merge_contract_test.dart |
+| 2026-10-22 | 2390f5 | E172 Dumbbell Side Bend, a core row, carried target_focus ["Lats"] and nothing else, so queryV4's target-muscle filter never offered it to a Core slot: a Phase-1 home_dumbbells Core/isolation query… | exercise_library_schema | test/contracts/library_label_typo_behavioral_test.dart |
+| 2026-10-22 | e7f118 | On 19 paired exercise plates the sheet's START panel showed where the rep ENDS and the END panel where it starts: Pike Push Up opened head-down, Pull Up opened with the chin over the bar (founder… | exercise_library_schema | test/contracts/exercise_plate_swap_record_test.dart |
+| 2026-10-22 | b7d3e1 | On 136 of the 292 bundled library rows every text field from met_value to source sat one column to the right. The app showed a number as the breathing cue (suppressed by a guard, so the section simply… | exercise_library_schema | test/contracts/exercise_library_text_shape_contract_test.dart |
 | 2026-10-21 | c3e7a1 | A CAPTURED Razorpay payment whose amount matches no plan price answered 400 in both payment writers and wrote no subscriptions row and no alert. The usual cause is a promo code deleted or its… | payment_record_failed_alert — every captured payment that a writer cannot record pages the founder. | supabase/functions/razorpay-webhook/index_test.ts |
 | 2026-10-21 | e2a418 | Founder's A12 web walk 2026-10-21 (app.icanbefitter.com): today was already DONE on Train with two exercises logged in Active Workout. A workout logged from the coach chat (`CONFIRM · LOG WORKOUT` on… | workout_surface_invalidation — every coach write path refreshes the same workout surfaces through one helper. | test/contracts/coach_chat_log_train_refresh_behavioral_test.dart |
 | 2026-10-21 | 90a784 | Founder's A12 web walk 2026-10-21 (app.icanbefitter.com, ai_coach_interactions read-only): at 13:19:59 "log bench press" got "Roger. Logged. I need the specifics…" with nothing proposed or written… | coach_write_claim_wording — what the coach is taught about saving, and a log-only label of what it said. | supabase/functions/_shared/write_claim_prompt_test.ts |

@@ -648,27 +648,9 @@
     "pair": false
   },
   {
-    "id": "E165",
-    "name": "Quad Stretch",
-    "slug": "standing-quad-stretch",
-    "pair": false
-  },
-  {
     "id": "E166",
     "name": "Hamstring Stretch (Standing)",
     "slug": "hamstring-stretch",
-    "pair": false
-  },
-  {
-    "id": "E167",
-    "name": "Cross Body Shoulder Stretch",
-    "slug": "cross-body-shoulder-stretch",
-    "pair": false
-  },
-  {
-    "id": "E168",
-    "name": "Doorway Chest Stretch",
-    "slug": "doorway-chest-stretch",
     "pair": false
   },
   {
@@ -706,12 +688,6 @@
     "name": "Hollow Body Hold",
     "slug": "hollow-body-hold",
     "pair": false
-  },
-  {
-    "id": "E179",
-    "name": "Toes to Bar",
-    "slug": "hanging-leg-raise",
-    "pair": true
   },
   {
     "id": "E188",
@@ -753,12 +729,6 @@
     "id": "E205",
     "name": "Arm Circles",
     "slug": "arm-circles",
-    "pair": true
-  },
-  {
-    "id": "E207",
-    "name": "Torso Twists",
-    "slug": "torso-twist-stretch",
     "pair": true
   },
   {
@@ -810,12 +780,6 @@
     "pair": true
   },
   {
-    "id": "E225",
-    "name": "Hip Abductor Machine",
-    "slug": "hip-abduction-machine",
-    "pair": true
-  },
-  {
     "id": "E226",
     "name": "Frog Pumps",
     "slug": "frog-pump",
@@ -858,18 +822,6 @@
     "pair": true
   },
   {
-    "id": "E240",
-    "name": "Overhead Cable Extension",
-    "slug": "overhead-tricep-extension",
-    "pair": true
-  },
-  {
-    "id": "E241",
-    "name": "Close-Grip Bench Press",
-    "slug": "close-grip-bench-press",
-    "pair": true
-  },
-  {
     "id": "E242",
     "name": "Rope Hammer Curl",
     "slug": "rope-hammer-curl",
@@ -891,12 +843,6 @@
     "id": "E247",
     "name": "Straight-Arm Pulldown",
     "slug": "straight-arm-pulldown",
-    "pair": true
-  },
-  {
-    "id": "E249",
-    "name": "V-Ups",
-    "slug": "v-up",
     "pair": true
   },
   {

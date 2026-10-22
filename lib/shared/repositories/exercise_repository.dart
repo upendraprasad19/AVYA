@@ -40,6 +40,11 @@ class ExerciseRepository {
   /// no id) can safely fetch the full library map — coaching cues, common
   /// mistakes, breathing/warm-up, etc. Returns null for swapped/custom
   /// exercises absent from the library (caller renders nothing).
+  ///
+  /// A name no row carries falls back to a row listing it in `name_aliases`:
+  /// the old name of a duplicate retired into that row (Batch A, seed v12), which
+  /// a plan or log written before the merge can still hold. An exact name
+  /// always wins over an alias.
   Map<String, dynamic>? getByExactName(String name) {
     final target = name.trim().toLowerCase();
     if (target.isEmpty) return null;
@@ -48,13 +53,19 @@ class ExerciseRepository {
       final n = (raw['name'] as String?)?.trim().toLowerCase();
       if (n == target) return Map<String, dynamic>.from(raw);
     }
+    for (final raw in _hive.exerciseBox.values) {
+      if (raw is Map && _hasAlias(raw, target)) {
+        return Map<String, dynamic>.from(raw);
+      }
+    }
     return null;
   }
 
   /// True when some exerciseBox row named [name] (matched like
   /// [getByExactName]) passes [test]. Unlike [getByExactName] it looks at
   /// every row of that name, not the first: a community row and a bundled row
-  /// can share one (c3e9a4).
+  /// can share one (c3e9a4). Rows that list [name] in `name_aliases` are
+  /// checked after the named rows.
   bool hasExactNameWhere(String name, bool Function(Map row) test) {
     final target = name.trim().toLowerCase();
     if (target.isEmpty) return false;
@@ -63,7 +74,17 @@ class ExerciseRepository {
       final n = (raw['name'] as String?)?.trim().toLowerCase();
       if (n == target && test(raw)) return true;
     }
+    for (final raw in _hive.exerciseBox.values) {
+      if (raw is Map && _hasAlias(raw, target) && test(raw)) return true;
+    }
     return false;
+  }
+
+  /// [target] is already trimmed and lower-cased.
+  static bool _hasAlias(Map row, String target) {
+    final aliases = row['name_aliases'];
+    if (aliases is! List) return false;
+    return aliases.any((a) => a.toString().trim().toLowerCase() == target);
   }
 
   /// Returns exercises filtered by [category].

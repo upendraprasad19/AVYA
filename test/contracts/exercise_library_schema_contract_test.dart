@@ -26,12 +26,16 @@ const _canonicalKeys = <String>{
   'equipment_tier', 'standard_swap', 'priority_tier', 'rep_range',
 };
 
-// Exercise plates (library v11): present on the 165 rows that have a drawing,
-// absent on the other 127. They CANNOT join _canonicalKeys -- `missing` would
+// Exercise plates (library v11): present on the rows that have a drawing,
+// absent on the rest. They CANNOT join _canonicalKeys -- `missing` would
 // then fire on every artwork-less row -- and they cannot simply be ignored
 // either, or a typo'd key would slip through `extra`. Hence a second set, and a
 // union on the `extra` side only.
-const _optionalKeys = <String>{'demo_slug', 'demo_pair'};
+// Duplicate merges (library v12, Batch A): `name_aliases` and `merged_ids` sit
+// only on the 7 rows that absorbed a retired twin.
+const _optionalKeys = <String>{
+  'demo_slug', 'demo_pair', 'name_aliases', 'merged_ids',
+};
 
 void main() {
   final rows = (jsonDecode(
@@ -39,14 +43,29 @@ void main() {
   ) as List).cast<Map<String, dynamic>>();
 
   group('exercise_library schema contract (Batch 13-A D-1)', () {
-    test('the canonical schema is 35 required keys plus 2 optional', () {
+    test('the canonical schema is 35 required keys plus 4 optional', () {
       expect(_canonicalKeys.length, 35);
-      expect(_optionalKeys.length, 2);
+      expect(_optionalKeys.length, 4);
       expect(_canonicalKeys.intersection(_optionalKeys), isEmpty);
     });
 
+    test('name_aliases and merged_ids, when present, are non-empty string lists',
+        () {
+      final bad = <String>[];
+      for (final r in rows) {
+        for (final key in ['name_aliases', 'merged_ids']) {
+          if (!r.containsKey(key)) continue;
+          final v = r[key];
+          if (v is! List || v.isEmpty || v.any((e) => e is! String || e.trim().isEmpty)) {
+            bad.add('${r['id']}.$key=$v');
+          }
+        }
+      }
+      expect(bad, isEmpty);
+    });
+
     test('every row carries EXACTLY the 35 required keys and nothing outside '
-        'the union with the optional two (blocks stub-shaped rows)', () {
+        'the union with the optional four (blocks stub-shaped rows)', () {
       final offenders = <String>[];
       final allowed = _canonicalKeys.union(_optionalKeys);
       for (final r in rows) {
@@ -61,7 +80,7 @@ void main() {
           reason: 'Rows deviating from the 35-key canonical schema:\n${offenders.join('\n')}');
     });
 
-    test('demo_slug and demo_pair travel together, on exactly 165 rows', () {
+    test('demo_slug and demo_pair travel together, on exactly 156 rows', () {
       // The pair is what the asset pipeline and the resolver both key on; one
       // without the other is a half-written row, not a valid state.
       final lonely = rows
@@ -69,7 +88,9 @@ void main() {
           .map((r) => r['id'])
           .toList();
       expect(lonely, isEmpty, reason: 'rows with one plate key but not the other: $lonely');
-      expect(rows.where((r) => r.containsKey('demo_slug')).length, 165);
+      // 165 -> 158: Batch A retired 7 plated duplicates into their twins;
+      // 158 -> 156: E207 and E179 pointed at another movement's drawing.
+      expect(rows.where((r) => r.containsKey('demo_slug')).length, 156);
     });
 
     test('no row is MISSING a List injury_contraindications (the E252 live hole)', () {
@@ -91,8 +112,10 @@ void main() {
       expect(offenders, isEmpty, reason: 'Rows with empty/absent primary_muscles: $offenders');
     });
 
-    test('292 rows, ids unique (E262-E294 added by OI-89)', () {
-      // 259 -> 292, in two waves with different jobs.
+    test('285 rows, ids unique (E262-E294 added by OI-89; 7 retired in v12)', () {
+      // 259 -> 292, in two waves with different jobs, then 292 -> 285 when Batch A
+      // (seed v12) retired 7 duplicates into their twins (merged_ids).
+      //
       //
       // Wave 1 (E262-E273, 12 rows) closed a CORRECTNESS deficit the OI-89
       // restore + audit left: vertical_pull had ZERO baseline rows, and
@@ -107,8 +130,8 @@ void main() {
       // taken to 3. Calibrated against the two patterns that already worked:
       // horizontal_push had 6 baseline rows and zero missing, hip_isolation 5 and
       // zero. Six to seven is the working number; three is not.
-      expect(rows.length, 292);
-      expect(rows.map((r) => r['id']).toSet().length, 292);
+      expect(rows.length, 285);
+      expect(rows.map((r) => r['id']).toSet().length, 285);
       expect(rows.any((r) => r['id'] == 'E261'), isTrue);
       expect(rows.any((r) => r['id'] == 'E294'), isTrue);
     });
