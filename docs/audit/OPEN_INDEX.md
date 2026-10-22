@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**241 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**242 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -249,3 +249,4 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-381 | Set counts read '1 sets' in the remaining renderers (prescriptions,… | none | never | [:6527](open_issues.md#L6527) |
 | OI-382 | WorkoutWriteService.logExercise accepts a negative durationSec (only… | none | never | [:6538](open_issues.md#L6538) |
 | OI-383 | Razorpay Android SDK is pinned (checkout 1.6.41, standard-core 1.7.19) and… | none | 2026-10-21 (Maven Central: checkout… | [:6551](open_issues.md#L6551) |
+| OI-389 | Cardio logs lose their minutes and distance: logExercise zeroes… | none | never | [:6574](open_issues.md#L6574) |
