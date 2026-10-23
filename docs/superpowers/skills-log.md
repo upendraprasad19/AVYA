@@ -386,3 +386,4 @@
   deleted, 0 tracked changes of this session. The preserve list carried the founder answers
   and the two housekeeping items (this line, and the nested-`.dart_tool` OI).
   → Logged from the `library-injury-recheck` worktree, riding with that batch (one push).
+- 2026-10-23 IST — trigger: explicit (/strategic-compact) at OI-389 1a complete-but-uncommitted boundary; founder decision pending

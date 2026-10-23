@@ -265,13 +265,12 @@ void main() {
       expect(find.text('3${nb}sets$nb· 12${nb}reps'), findsOneWidget);
       expect(find.text('1${nb}set$nb· 1${nb}rep'), findsOneWidget);
       expect(find.text('3${nb}sets$nb· best 45s'), findsOneWidget);
-      // The cardio minutes are not asserted: logExercise zeroes durationSec
-      // for every non-timed type (workout_write_service.dart
-      // _normalizeSetsByLoggingType), filed separately; this pins the format.
+      // OI-389 / OI-380: cardio keeps its seconds through logExercise and
+      // the row shows minutes, with no km part when no km was logged.
       final cardio = tester
           .widgetList<ExpandedExerciseLogRow>(find.byType(ExpandedExerciseLogRow))
           .singleWhere((r) => r.name == 'Rowing Erg');
-      expect(cardio.detail, matches(RegExp('^\\d+${nb}min$nb· \\d+\\.\\d${nb}km\$')));
+      expect(cardio.detail, '20${nb}min');
       expect(find.byType(ExpandedExerciseLogRow), findsNWidgets(6));
 
       await tester.pumpWidget(const SizedBox());

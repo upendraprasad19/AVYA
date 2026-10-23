@@ -5629,3 +5629,52 @@ Fix: same plan as OI-370. The name gets its own line with no line limit and the 
 - **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `hook-cwd-fail-open`
 
 How closed: (1) all nine `.claude/settings.json` hook commands resolve the checkout root (git toplevel holding the script, else `CLAUDE_PROJECT_DIR`, else `.`) and `cd "$r" || exit 1` before `dart run`; (2) `git_safety_hook.dart`'s plan-review precheck resolves its root through the pure `precheckRoot` instead of the payload cwd; (3) `supabase/functions/.dart_tool/` joins `regenerableIgnoredPaths` as one exact entry. Transcript audit: 253 Bash calls ran from a subdirectory across 19 transcripts; no raw git landed through the gap. Plan `docs/plans/hook-cwd-fail-open.md`.
+
+## OI-380 — Train: the expanded day row shows 'N sets 0 reps X kg' for distance-type exercises
+
+- **Status**: CLOSED · 2026-10-22 · branch `cardio-duration-distance` · the commit carrying `closes-oi: OI-380`
+- **Blocked on**: — (resolved)
+- **Verified**: 2026-10-22 - by behavioural tests on the branch (listed in the closing note); not yet on a device
+- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `observations-a12-web`
+
+`lib/features/train/screens/train/expanded_exercises.dart:78-96` has branches for timed, cardio, weight and reps-only, but a distance-type exercise falls through to the weight/reps branch and shows `N sets · 0 reps · X kg`. Found by the round-1 exposure review of `docs/plans/train-coach-log-refresh.md` (R1B-10).
+
+To do: a distance branch (`distance_km`, with time if present), using the shared set-count helper from that batch.
+
+**CLOSED 2026-10-22 (`cardio-duration-distance`, OI-389 Batch 1a, plan `docs/plans/cardio-duration-distance.md` rev 12, record `docs/plan-reviews/cardio-duration-distance.md`, ledger `docs/audit/cardio-duration-distance.closure.yaml`, diagnose `e7240a`).** `exerciseLogDetail` (`lib/features/train/utils/exercise_log_detail.dart`) has a distance branch through `cardioDistanceDetail`: `1 set · 40 m · 40.0 kg`, `1 set · 1.2 km · 40.0 kg`, a reps-rule row `4 sets · 40 reps · 40.0 kg`; a zero part is omitted. Tests T4, T23 in `test/contracts/cardio_duration_distance_writer_to_reader_test.dart`; mutant M20 red.
+
+## OI-382 — WorkoutWriteService.logExercise accepts a negative durationSec (only weight and reps are validated), so a negative duration can reach an exlog row
+
+- **Status**: CLOSED · 2026-10-22 · branch `cardio-duration-distance` · the commit carrying `closes-oi: OI-382`
+- **Blocked on**: — (resolved)
+- **Verified**: 2026-10-22 - by behavioural tests on the branch (listed in the closing note); not yet on a device
+- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `observations-a12-web`
+
+`WorkoutWriteService.logExercise` (`lib/core/services/workout_write_service.dart:119-121`) validates only `weightKg >= 0` and `reps >= 0`; a set with a negative `durationSec` is written to the exlog row. `markCompleted` does reject a negative `durationSec` (`fail('durationSec must be >= 0')`). Found by the round-4 ground-truth review of `docs/plans/train-coach-log-refresh.md` (probe-verified). The coach chat path can produce it from a model-emitted draft; the edit sheet will filter digits only after that batch.
+
+Note: the `train-coach-log-refresh` behavioural test for "sets saved, day not marked done" uses exactly this gap as its seam (a timed set with `durationSecs: -100`). Fixing this OI moves that test to another `markCompleted` failure seam (said in the test comment).
+
+To do: validate `durationSec >= 0` (and `distanceKm >= 0`) in `logExercise` alongside weight and reps; a writer test.
+
+**CLOSED 2026-10-22 (`cardio-duration-distance`, OI-389 Batch 1a, diagnose `e7240a`).** `logExercise` and `editLog` (per set, after the `sets_detail` translation; a legacy top-level total bounded × the set count) refuse a duration outside 0..21600 s or a km outside 0..300 with `WriteResult.invalid('duration_out_of_range' | 'distance_out_of_range')`, reading the RAW values; `validateSetInputs` blocks LOG at 360 MIN / 21600 SEC / 300 KM. The chat-card fixture that used the gap (`badPlank`) now pairs a valid 60 s set with the filtered -100 s set (T22). Tests T18 in `test/contracts/cardio_duration_distance_writer_to_reader_test.dart`; mutants M18, M19, M29, M42 red.
+
+## OI-390 — Coach and Home say 'You skip Sunday workouts 100% of the time' for a rest day: getDayOfWeekCompletionRates returns 0 for a weekday with nothing scheduled and the day-of-week pattern reads it as 0% completion
+
+- **Status**: CLOSED · 2026-10-23 · branch `dow-skip-rate` · the commit carrying `closes-oi: OI-390`
+- **Blocked on**: — (resolved)
+- **Verified**: 2026-10-23 - by behavioural tests on the branch (listed in the closing note); not yet on a device
+- **Identified**: 2026-10-22 · filed via mint_oi.sh from branch `dow-skip-oi`
+
+Found by the founder on 2026-10-22 (web, PRO test account): the coach's reply to `Status check.` (the coach-log-truth S0 smoke) listed under "Notices": "You have a 100% skip rate on Sunday workouts". Sunday is a rest day on that plan, so there is no Sunday workout to skip.
+
+Writer: `WorkoutRepository.getDayOfWeekCompletionRates` (`lib/features/train/repositories/workout_repository.dart:1246`) walks the last 8 weeks, counts `schedule['type'] == 'workout'` days per weekday and the `completed` ones, and returns `rates[name] = total > 0 ? done / total : 0;` (`:1283-1287`). A weekday with NOTHING scheduled gets `0`, the same value as "scheduled and never done". The walk starts at `i = 0`, today, so a workout planned for today and not yet done also counts as missed (`:1267-1268`).
+
+Reader: `PatternDetector._dayOfWeekPattern` (`lib/features/ai_coach/services/pattern_detector.dart:405-428`) picks the worst day with a rate `< 0.5` and emits `coachNotice` "Skips <day> workouts <100-pct>% of the time." and `userMessage` "You tend to skip <day> workouts (only <pct>% completion). Consider swapping that day." Its own comment says "with enough data (at least some scheduled)", but the rate map cannot say "none scheduled". Severity medium, so `AiSnapshotBuilder._getCoachNotices` (`lib/features/ai_coach/services/ai_snapshot_builder.dart:998-1005`, drops only low, top 5) sends it to the model, and the Home insight card (`lib/features/home/widgets/insight_card.dart:84`) and the deep-analysis card (`lib/features/ai_coach/widgets/deep_analysis_card.dart:48`) can show the user message.
+
+Who gets it: the default day patterns never schedule Sunday (`lib/core/services/workout_schedule_read_service.dart:2189-2201`: 3/4/5/6 days), so every user below 7 days a week has at least one weekday with nothing scheduled, and the pattern fires on the first such day in Monday-to-Sunday order (a 3-day user is told they skip Tuesday). It shows whenever no higher-severity insight crowds it out of the top 5. A user who chose their own days (`preferredDays`) or swapped a workout onto a weekday gets real rates for that day.
+
+Class: writer/reader drift on a value's meaning (`0` = "no data" to the writer, "0% done" to the reader). Not a recurrence of an indexed bug (`docs/diagnoses/INDEX.md` has no day-of-week or skip-rate entry).
+
+To plan (tier M: Train + coach files): the rate map omits weekdays with nothing scheduled (or carries the counts), the pattern needs a minimum sample (about 3 scheduled sessions on that weekday) before it can fire, and the window ends yesterday (today is never a miss). Behavioural tests: a 6-day plan over 8 weeks never names Sunday; a 3-day plan never names Tuesday/Thursday/Saturday/Sunday; a real 0-of-4 Monday still fires; today's unfinished workout is not counted. Check the other readers of `getDayOfWeekCompletionRates` (none today besides the pattern) and the weekend-nutrition pattern for the same "empty means zero" shape while there.
+
+**CLOSED 2026-10-23 (`dow-skip-rate`, Batch A, plan `docs/plans/dow-skip-rate.md` rev 5, approved by the founder 2026-10-23, record `docs/plan-reviews/dow-skip-rate.md`, ledger `docs/audit/dow-skip-rate.closure.yaml`, diagnose `132315`).** `getDayOfWeekCompletionStats` replaces the rate map: one IST walk (`_eligibleDaysBack`) from yesterday back, anchored, through `classifyScheduleDay` (`lib/core/utils/schedule_day_eligibility.dart`), so a weekday with nothing due has no entry and travel / paused / pre-onboarding days are not misses while `custom_template` and `logged` completions count. The pattern fires only for a singled-out weekday (eligible ≥ 3, rate < 0.5, ≥ 2 isolated misses, recent) and says `Missed N of M scheduled <Day> workouts since <date>.`; `getWorkoutAdherence` shares the walk and omits `rate_percent` when nothing was due. Live: 0 accounts fire (22 under the old rule); upendra names no day. Tests `test/contracts/day_of_week_completion_writer_to_reader_test.dart` (T1–T16, T7/T14 on upendra's live rows) and `test/features/dev/sim_skips_day_test.dart`; 18 of 18 mutants red. Split out: OI-397 (Batch B, IST throughout), OI-398 (rolling-context re-embeds), OI-399 (`getProgressSummary` adherence). The stale-claim deletes (D3) wait for the fixed build on device (ledger). Device check: the U6 seeded account (dev button "Sim +4 wk, skip Mondays").

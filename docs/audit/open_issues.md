@@ -6035,7 +6035,7 @@ Fix shape: handle Razorpay's dispute events in `razorpay-webhook` (a catastrophi
 ## OI-341 — A friend on the 7-day referral trial cannot buy: create-razorpay-order answers 409 already_pro for any active subscription row, trial included, so a paid plan cannot be bought until the trial lapses; the founder wants purchase enabled during the trial with the paid cycle starting when the current PRO ends
 
 - **Status**: OPEN · founder decision 2026-10-13: purchase must be enabled during the referral trial, and the paid cycle must start when the current PRO finishes. **Piece A (the server writers) is MERGED (PR #124, 85e8f76a; record repaired by PR #127) and DEPLOYED 2026-10-18 (`verify-payment` v25, `razorpay-webhook` v29), dark**: `verify-payment` and `razorpay-webhook` compute the stored `end_date` through `_shared/subscription_stacking.ts` behind the enabling secret `ENABLE_SUBSCRIPTION_STACKING` (absent = today's value, no extra query before the insert; Piece B2a adds one alarm read after the OFF insert), and `verify-payment` rejects a malformed `payment_id` with 400. **Piece B was split (2026-10-20, after three plan-review rounds each found new P1s): Piece B1 is MERGED (PR #133, b8385b6c) and live, dark (migration 161, `verify-payment` v26, `razorpay-webhook` v30)**: the ON path is now ONE call to `public.record_paid_subscription` (migration 161: per-user lock shared with the referral redeem and job, so concurrent payments and referral grants add up; idempotency; stacked end; insert) and a failed record pages (`payment_record_failed`); with the switch unset nothing changes for anyone. **Piece B2 is not finished, split into B2a (server) and B2b (client)**: until B2a's door flip, `create-razorpay-order` still answers 409 `already_pro` for a trial, so a trial user still cannot buy. B2a (plan `docs/plans/oi341-piece-b2-door.md`) is BUILT on branch `oi341-piece-b2-door`: the door switch `ENABLE_TRIAL_PURCHASE`, the switch-mismatch alarm, the replay window, both flips and the rollback order; B2b (the client copy and estimate) follows the door opening.
-- **Blocked on**: Piece A: nothing (live, switch unset; the next-payment read is OI-348 row C7). Piece B1: DONE (PR #133, b8385b6c; migration 161 live, `verify-payment` v26, `razorpay-webhook` v30, switch unset). Piece B2 is SPLIT: **B2a** (server: the door on `create-razorpay-order`, the `stacking_switch_mismatch` alarm, the switch log lines, the 24 h `payment.captured` replay window, both flips; plan `docs/plans/oi341-piece-b2-door.md` v4.2, x2-reviewed and converged) is BUILT on branch `oi341-piece-b2-door` and awaits the founder's commit go, then the live steps of its section 4 (each its own go: deploys, the alarm drill, the stacking flip, the door flip; live mode with one dedicated 90% code and refunds, founder 2026-10-21). **B2b** (the client copy and the paid-end estimate) is planned after B2a's door is open.
+- **Blocked on**: Piece A: nothing (live, switch unset; the next-payment read is OI-348 row C7). Piece B1: DONE (PR #133, b8385b6c; migration 161 live, `verify-payment` v26, `razorpay-webhook` v30, switch unset). Piece B2 is SPLIT: **B2a** (server: the door on `create-razorpay-order`, the `stacking_switch_mismatch` alarm, the switch log lines, the 24 h `payment.captured` replay window, both flips; plan `docs/plans/oi341-piece-b2-door.md` v4.2, x2-reviewed and converged) is MERGED (PR #139, d483a800) and NOT deployed; it awaits the live steps of its section 4 (each its own go: deploys, the alarm drill, the stacking flip, the door flip; live mode with one dedicated 90% code and refunds, founder 2026-10-21). **B2b** (the client: per-order paid-end estimate, paywall and checkout notice, trial 409 copy, EST seal) is BUILT on branch `oi341-piece-b2b-client` (plan `docs/plans/oi341-piece-b2b-client.md` v3, x2 converged; founder order 2026-10-21) and merges ONLY in the live session, after step 4a opens the door; step 4b, the stacked trial purchase, then runs through the new web client.
 - **Verified**: 2026-10-13 - by reading. `supabase/functions/create-razorpay-order/index.ts:84-116` returns 409 `already_pro` for the newest row with `status = 'active' AND end_date > now()` of ANY plan, `referral_trial` included; the guard exists because the founder paid four times in 24 h on 2026-05-06 when local `isPro` read false (comment at :84-96). Checkout creates one-off Razorpay Orders (`POST /v1/orders`, `payment_capture: 1`, `create-razorpay-order/index.ts:184`), i.e. prepaid periods, not an autopay mandate. `verify-payment/index.ts:550-562` (and `razorpay-webhook/index.ts:577`) INSERT the paid row with `start_date = now` and `end_date = now + plan length`. The client derives PRO from `status = 'active' AND end_date > now()` and does not read `start_date` (`lib/core/services/subscription_service.dart:651`). Migration 159's job treats `start_date` as the payment time (`converted_at = start_date`, window `start_date >= created_at AND <= created_at + 90 days`).
 - **Identified**: 2026-10-13 · filed via mint_oi.sh from branch `referral-pay-on-conversion`
 
@@ -6116,6 +6116,7 @@ How to use: build once from the last merged `main`, install on the phone, sign i
 - A10 `referral-unit-c-client` U2 (Unit C, merged PR #129 7266ea93): (1) as a referrer, Profile > Invite Friends shows the counters block (friends joined, subscribed, PRO days earned, pending) and no friend names; (2) on the first open after an install no credit notice appears (the first run records a silent baseline); after a new credit lands, the next open shows the Home referral credit slot, and a dismissal survives a restart; (3) in "GOT A CODE?", an expired, own or already-redeemed code (and a friend who has paid) shows the server's specific reason, not "Could not apply code"; a valid code shows "+7 days" only once the subscription reads back; (4) the friend disclosure line is on all four code-entry surfaces (welcome, sign-in, the apply sheet, the invite sheet). See PX in section B for the API half.
 - A11 `referral-unit-c-client` W2X (OI-349): on a short phone (about 640 dp tall) set the system font to the largest size and open the onboarding welcome screen; note whether the CTA column is clipped. Under the test font it overflowed 28 px BEFORE Unit C; the real font is unmeasured. The founder then decides whether 2x on that screen is supported.
 - A12 `log-exercise-flip` FLIPPED-BUILD-CHECK (flip precondition 3, amended by the founder 2026-10-20 to run after the merge on the release build; one LOG per exercise is now the default). Accounts: a NEW account (blank blocks, set 1 mirrors faded, LOG, UNDO, `All exercises logged.`, gold FINISH, receipt) and a RETURNING account (faded weights, normal reps, `· PREFILLED` (does it read as a total or a weight?); a tap selects all on Gboard and on the Samsung keyboard; no keyboard flicker on the first keystroke into a faded field; typing one field turns it normal; a WELCOME BACK prefill is faded). RE-OPEN: after more than 5 s; a double tap on LOGGED; on the last exercise; in a superset during the reveal scroll; while another exercise's UNDO toast shows; then `+`/`−`; then FINISH without re-LOG (the re-opened line names it; COMPLETE, then check the receipt); tap LOG on the last exercise, then again at about 1 s and 2 s. FINISH: `+` after LOG (`Partly logged`); one exercise skipped (calm line); nothing logged (COMPLETE disabled, the block line readable at the largest font with the keyboard up, OFF and LOG; CONTINUE and ✕ CANCEL work); all sets warm-up (0%, no crash); a warm-up flagged (header, percent and dialog agree). Coach chat: a workout draft with no sets cannot be confirmed; DISCARD works. Navigation: leave + RESUME keeps logged, typed-unlogged and fade; scroll far away and back with typed values and with a faded value cleared; typing latency in a faded field on a low-end phone; kill the app (the workout is gone, expected); review mode shows no re-open text. Types: timed, cardio (decimal minutes, then scroll away and back), distance, bodyweight, weighted_bodyweight, custom; swap/add/remove then LOG. Environment: a second account on the same device; the coach mid-workout; TalkBack (double-tap activates LOG, LOGGED and UNDO; the LOG toast is read; RE-OPEN announces `<name> re-opened`; a field announces its unit; a faded field says `Prefilled value`; editing a logged set inside the 5 s toast re-announces it, expected); the FINISH duration row on a 360 dp phone at 1.0 font (one line); the largest font on a 320 dp phone (card and FINISH dialog; also 1.3x on 360 dp); bright-light legibility of faded vs normal; web at phone width and a smoke on app.icanbefitter.com right after the deploy (`vercel.json` builds `main`, so web testers see the flip first). **Web result 2026-10-21 (founder, app.icanbefitter.com, returning account):** set 1 faded prefill, LOG, and RE-OPEN after LOG passed; FINISH with nothing logged not walked (the founder had already logged; covered by `log_exercise_finish_dialog_test.dart`); the coach workout-draft card is reachable only on the legacy path, covered by tests. Found on the way: OI-368, OI-369 (coach claims a log before the tap), OI-370 (Train row stale after a coach log), OI-371 (names cut in the expanded day row). Still open for the phone: everything Android-only (TalkBack, Gboard/Samsung keyboards, font scale, low-end phone latency, kill-the-app).
+- A13 `oi341-piece-b2b-client` B2B-DEVICE-CHECK (after the live session's merge and the AAB with the live key ID): as a referral-trial tester with under 7 days left and the Home expiry banner not dismissed today, tap RENEW; the paywall shows "Your paid plan starts when your free days end." under the price cards and the Razorpay checkout description carries the same sentence; buy (90% code); afterwards the Profile PRO card shows the stacked end (trial end + 30) and today's EST date. With the door shut, the same tap shows "Your free PRO days are still running. You can subscribe once they end." and opens no checkout.
 
 ### B. Signed-in session or JWT (dev build, test account or the phone)
 
@@ -6485,17 +6486,6 @@ The `train-coach-log-refresh` behavioural test collects exactly this error in a 
 
 To do: decide whether a coach-logged day counts as a completed workout (founder), then route the count and the rank check through the same writer the Active Workout uses.
 
-## OI-380 — Train: the expanded day row shows 'N sets 0 reps X kg' for distance-type exercises
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `observations-a12-web`
-
-`lib/features/train/screens/train/expanded_exercises.dart:78-96` has branches for timed, cardio, weight and reps-only, but a distance-type exercise falls through to the weight/reps branch and shows `N sets · 0 reps · X kg`. Found by the round-1 exposure review of `docs/plans/train-coach-log-refresh.md` (R1B-10).
-
-To do: a distance branch (`distance_km`, with time if present), using the shared set-count helper from that batch.
-
 ## OI-381 — Set counts read '1 sets' in the remaining renderers (prescriptions, workout receipt, preview screen, tool confirm card)
 
 - **Status**: OPEN
@@ -6506,19 +6496,6 @@ To do: a distance branch (`distance_km`, with time if present), using the shared
 Batch `train-coach-log-refresh` adds `setCountLabel` / `repCountLabel` (`1 set` / `N sets`, `1 rep` / `N reps`) and uses them in the Train expanded day row and the exercise preview sheet's logged history. These renderers still print `1 sets` for a single set: `lib/features/train/screens/active_workout/exercise_card.dart:753-772`, `lib/features/train/widgets/workout_receipt_card.dart:813-828`, `lib/features/train/screens/preview_workout_screen.dart:400`, `lib/features/train/widgets/exercise_card.dart:59`, `lib/features/train/screens/train/exercise_preview_sheet.dart:336`, `lib/features/ai_coach/widgets/tool_confirm_card.dart:285`, `lib/features/ai_coach/widgets/diff_preview/custom_template_diff.dart:198`.
 
 To do: route each through the helper; one widget test per renderer family for `1 set`.
-
-## OI-382 — WorkoutWriteService.logExercise accepts a negative durationSec (only weight and reps are validated), so a negative duration can reach an exlog row
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `observations-a12-web`
-
-`WorkoutWriteService.logExercise` (`lib/core/services/workout_write_service.dart:119-121`) validates only `weightKg >= 0` and `reps >= 0`; a set with a negative `durationSec` is written to the exlog row. `markCompleted` does reject a negative `durationSec` (`fail('durationSec must be >= 0')`). Found by the round-4 ground-truth review of `docs/plans/train-coach-log-refresh.md` (probe-verified). The coach chat path can produce it from a model-emitted draft; the edit sheet will filter digits only after that batch.
-
-Note: the `train-coach-log-refresh` behavioural test for "sets saved, day not marked done" uses exactly this gap as its seam (a timed set with `durationSecs: -100`). Fixing this OI moves that test to another `markCompleted` failure seam (said in the test comment).
-
-To do: validate `durationSec >= 0` (and `distanceKm >= 0`) in `logExercise` alongside weight and reps; a writer test.
 
 ## OI-383 — Razorpay Android SDK is pinned (checkout 1.6.41, standard-core 1.7.19) and nothing tells us when Razorpay ships a new or security release: review and bump deliberately with a device payment test
 
@@ -6592,7 +6569,7 @@ Batch A did NOT relabel them. `_preferNovel` (`exercise_selector.dart:1054-1066`
 ## OI-389 — Cardio logs lose their minutes and distance: logExercise zeroes durationSec for every non-timed type and never writes distance_km
 
 - **Status**: OPEN
-- **Blocked on**: none
+- **Blocked on**: Batch 1b (coach paths; plan to be written after 1a lands, D10 2026-10-22), then OI-391 (Batch 2, cloud cap: a live migration apply needs the founder's go) and OI-392 (Batch 3, coach logCardio: an ai-proxy deploy needs the founder's go). Batch 1a (`cardio-duration-distance`) fixed the active workout, the edit sheet, the move merge and every reader; the AI snapshot cardio fields wait on founder D4
 - **Verified**: never
 - **Identified**: 2026-10-22 · filed via mint_oi.sh from branch `cardio-oi-retros`
 
@@ -6609,25 +6586,6 @@ History (writer/reader drift class): the zeroing arrived with the `a4c7d1` norma
 Impact: every cardio exercise saved from the active workout or the coach keeps its set count but loses its minutes and distance; Train, the preview and the cardio PR value read zero. Pre-launch, so test accounts only.
 
 To plan (full diagnose template, recurrence class): keep `durationSec` for `cardio` in the normaliser and decide `distance`; give a set or the row a distance path and write `distance_km` from `logExercise`; a behavioural test that logs a library cardio exercise through `logExercise` and reads minutes and km back from Hive and from the expanded row; a tier-4 audit query on `exercise_logs` for cardio rows with zero duration to size the damage and decide whether stored rows can be repaired (the minutes are not recoverable from the row itself); correct the `train/CLAUDE.md` field list.
-
-## OI-390 — Coach and Home say 'You skip Sunday workouts 100% of the time' for a rest day: getDayOfWeekCompletionRates returns 0 for a weekday with nothing scheduled and the day-of-week pattern reads it as 0% completion
-
-- **Status**: OPEN
-- **Blocked on**: founder scheduling: pick up after the current batch (coach-log-truth deploy and live check) completes (founder, 2026-10-22)
-- **Verified**: never
-- **Identified**: 2026-10-22 · filed via mint_oi.sh from branch `dow-skip-oi`
-
-Found by the founder on 2026-10-22 (web, PRO test account): the coach's reply to `Status check.` (the coach-log-truth S0 smoke) listed under "Notices": "You have a 100% skip rate on Sunday workouts". Sunday is a rest day on that plan, so there is no Sunday workout to skip.
-
-Writer: `WorkoutRepository.getDayOfWeekCompletionRates` (`lib/features/train/repositories/workout_repository.dart:1246`) walks the last 8 weeks, counts `schedule['type'] == 'workout'` days per weekday and the `completed` ones, and returns `rates[name] = total > 0 ? done / total : 0;` (`:1283-1287`). A weekday with NOTHING scheduled gets `0`, the same value as "scheduled and never done". The walk starts at `i = 0`, today, so a workout planned for today and not yet done also counts as missed (`:1267-1268`).
-
-Reader: `PatternDetector._dayOfWeekPattern` (`lib/features/ai_coach/services/pattern_detector.dart:405-428`) picks the worst day with a rate `< 0.5` and emits `coachNotice` "Skips <day> workouts <100-pct>% of the time." and `userMessage` "You tend to skip <day> workouts (only <pct>% completion). Consider swapping that day." Its own comment says "with enough data (at least some scheduled)", but the rate map cannot say "none scheduled". Severity medium, so `AiSnapshotBuilder._getCoachNotices` (`lib/features/ai_coach/services/ai_snapshot_builder.dart:998-1005`, drops only low, top 5) sends it to the model, and the Home insight card (`lib/features/home/widgets/insight_card.dart:84`) and the deep-analysis card (`lib/features/ai_coach/widgets/deep_analysis_card.dart:48`) can show the user message.
-
-Who gets it: the default day patterns never schedule Sunday (`lib/core/services/workout_schedule_read_service.dart:2189-2201`: 3/4/5/6 days), so every user below 7 days a week has at least one weekday with nothing scheduled, and the pattern fires on the first such day in Monday-to-Sunday order (a 3-day user is told they skip Tuesday). It shows whenever no higher-severity insight crowds it out of the top 5. A user who chose their own days (`preferredDays`) or swapped a workout onto a weekday gets real rates for that day.
-
-Class: writer/reader drift on a value's meaning (`0` = "no data" to the writer, "0% done" to the reader). Not a recurrence of an indexed bug (`docs/diagnoses/INDEX.md` has no day-of-week or skip-rate entry).
-
-To plan (tier M: Train + coach files): the rate map omits weekdays with nothing scheduled (or carries the counts), the pattern needs a minimum sample (about 3 scheduled sessions on that weekday) before it can fire, and the window ends yesterday (today is never a miss). Behavioural tests: a 6-day plan over 8 weeks never names Sunday; a 3-day plan never names Tuesday/Thursday/Saturday/Sunday; a real 0-of-4 Monday still fires; today's unfinished workout is not counted. Check the other readers of `getDayOfWeekCompletionRates` (none today besides the pattern) and the weekend-nutrition pattern for the same "empty means zero" shape while there.
 
 ## OI-395 — beat-my-coach: challenge query filters on capitalised categories, so every challenge comes from the fallback list
 
@@ -6654,6 +6612,90 @@ To plan (tier M: Train + coach files): the rate map omits weekdays with nothing 
 **Founder decision (2026-10-22).** Show it after the main lifts, injury-safe: an injured user gets Stationary Bike Sprints in a gym and no finisher at home.
 
 **Done when.** The finisher renders after the main lifts; `CardioFinisher.attach` receives the user's injuries through a `plan_generator.dart` pass-through (needs the rule-14 OK) and applies the rule above; B2's `SessionBudgetContext.finisherSeconds` is set from the finisher it attaches (B2 reserves 0 today, Ruling 6); a behavioural test covers an injured gym user, an injured home user and an uninjured user.
+
+## OI-391 — Cardio duration cap: workout_log_sets duration_secs CHECK widened from 3600 to 21600 and the push clamp aligned (OI-389 Batch 2; needs founder go for the live migration apply)
+
+- **Status**: OPEN
+- **Blocked on**: founder go for the live migration apply (Batch 2 of OI-389, order ratified 2026-10-22 D10); after OI-389 Batch 1a and 1b land
+- **Verified**: never
+- **Identified**: 2026-10-22 · filed via mint_oi.sh from branch `cardio-duration-distance`
+- **Notes**: Plan inputs: `docs/plans/cardio-duration-distance.md` §9.2. Until this lands, a single cardio set over 60 min is clamped to 3600 s in the cloud per-set row, so another device reads 60 min (founder accepted, D8).
+
+## OI-392 — Coach logCardio tool: a dedicated AI-coach tool for cardio minutes and km (OI-389 Batch 3; needs founder go for the ai-proxy deploy)
+
+- **Status**: OPEN
+- **Blocked on**: founder go for the ai-proxy deploy (Batch 3 of OI-389, order ratified 2026-10-22 D10); after Batch 2
+- **Verified**: never
+- **Identified**: 2026-10-22 · filed via mint_oi.sh from branch `cardio-duration-distance`
+- **Notes**: Plan inputs: `docs/plans/cardio-duration-distance.md` §9.3. Also owns deleting the old snapshot path behind `disable_snapshot_cardio_fields` (§4.6 step 4).
+
+## OI-393 — A set logged or moved on top of a restore-shaped or F5 exlog row resets its totals (set count, reps, weight, volume, duration, km)
+
+- **Status**: OPEN
+- **Blocked on**: founder-sequenced follow-on (D10, 2026-10-22); planned on its own branch after OI-389 Batch 1a
+- **Verified**: never
+- **Identified**: 2026-10-22 · filed via mint_oi.sh from branch `cardio-duration-distance`
+- **Notes**: Split out of OI-389 Batch 1a under §4.12.1 (plan rev 6). Today `logExercise` rebuilds the entry from the merged sets, so a restore-shaped row's top-level aggregates reset; the move merge's mixed shape (restore-shaped side with km beside a per-set side with km) loses the restore-shaped side's km; restored per-set entries get `logged_at_ms = now` on first rewrite. 0 live restore-shaped rows (2026-10-22).
+
+## OI-394 — Exlog type heal is dead on disk rows: fix the cast in _healMismatchedExerciseLogs behind kill switch disable_exlog_type_heal, with aggregate recompute, sets_detail, updated_at_ms
+
+- **Status**: OPEN
+- **Blocked on**: founder-sequenced follow-on (D10, 2026-10-22); planned on its own branch after OI-389 Batch 1a
+- **Verified**: never
+- **Identified**: 2026-10-22 · filed via mint_oi.sh from branch `cardio-duration-distance`
+- **Notes**: Split out of OI-389 Batch 1a under §4.12.1 (plan rev 6). `.cast<Map<String, dynamic>>()` at `auth_session_bootstrapper.dart:1210` throws on Hive maps, so the heal never runs on disk rows. Making it live needs: kill switch `disable_exlog_type_heal` with a pinned off-state no-op, aggregate recompute, `sets_detail` rewrite, `updated_at_ms`, `keys.toList()`, and a SoT writer entry. Footprint today: 0 cloud-backed mismatched rows.
+
+## OI-397 — Batch B: IST-throughout for workout dates (OI-390 §1 'Not changed' inventory: streak anchor, _earliestUserAnchor, lapseFacts walk, _getPlanStatus, getDaysSinceLastWorkout, generator keys, DateTime.now() sites, blankGapBeforePlan)
+
+- **Status**: OPEN
+- **Blocked on**: OI-390 landing first (founder order 2026-10-23: planned and ×2-reviewed on its own, right after OI-390)
+- **Verified**: never
+- **Identified**: 2026-10-23 · filed via mint_oi.sh from branch `dow-skip-rate`
+
+Class (b) of OI-390: a workout date derived outside IST. Inventory (OI-390 plan `docs/plans/dow-skip-rate.md` §1 "Not changed"): streak anchor stop `workout_repository.dart:387-389`; `_earliestUserAnchor` `wlog_` source parsed as local midnight `:174-186`; `lapseFacts` walk `workout_schedule_read_service.dart:2155-2159`; `_getPlanStatus` `since`/`sinceStart` `ai_snapshot_builder.dart:1361-1376`; `getDaysSinceLastWorkout` `workout_repository.dart:1298-1322`; generator keys local midnights through `istDateStr` `workout_schedule_read_service.dart:238,271-276` → `workout_write_service.dart:1600`; `DateTime.now()` at `workout_repository.dart:1024,1118,1218,1328` and `pattern_detector.dart:84,118,168,359`; `blankGapBeforePlan` local `inDays`. Exposure today: none (users in IST, pre-launch). Acceptance case: DOW notice weekday under `TZ=Asia/Tokyo` with device-generated rows.
+
+## OI-398 — rolling-context re-embeds the same coach interaction on several nights (no dedupe on original_interaction_id; 31 repeats in the week of 10-12)
+
+- **Status**: OPEN
+- **Blocked on**: its own plan + catastrophic-tier review and a separate EF deploy go (§4.3)
+- **Verified**: never
+- **Identified**: 2026-10-23 · filed via mint_oi.sh from branch `dow-skip-rate`
+
+`rolling-context` re-embeds the same `ai_coach_interactions` row on several nights: no dedupe on `original_interaction_id` (31 repeats in the week of 10-12, found during OI-390). Catastrophic-tier Edge Function; not OI-390's class.
+
+## OI-399 — getProgressSummary adherence_pct reports 0 when nothing planned, counts today before done, counts travel days (getProgressSummary.ts:63-65,138-140)
+
+- **Status**: OPEN
+- **Blocked on**: its own L-tier batch (Edge Function) and a deploy go (§4.3)
+- **Verified**: never
+- **Identified**: 2026-10-23 · filed via mint_oi.sh from branch `dow-skip-rate`
+
+Server coach tool `supabase/functions/_shared/tools/progress/getProgressSummary.ts:63-65,138-140` `adherence_pct`: reports 0 when nothing was planned (OI-390 class (a), empty means zero), counts today before it is done, counts travel days (`_shared/workout_statuses.ts`). FREE tool answering "how am I tracking". Live exposure: none of 357 interactions mention adherence. Found by the sweep `(adherence|rate)_?(pct|percent)` with `> 0 ? … : 0` (OI-390 round 4 B P2-1).
+
+## OI-402 — Delete the stale 'you skip <weekday> 100%' coach claims from live tables (OI-390 D3): 3 ai_coach_interactions rows + 10 memory_embeddings rows, after the fixed build is on device
+
+- **Status**: OPEN
+- **Blocked on**: the fixed build (OI-390, merged 2026-10-23 as PR #152) installed on upendra's device AND at least 8 coach exchanges on it (the device replays its own Hive history, which no cloud delete can reach); then a separate founder go for the live deletes (§4.3: every live prod write needs its own go). Founder approved the deletes in principle on 2026-10-23 (OI-390 D3).
+- **Verified**: never
+- **Identified**: 2026-10-23 · filed via mint_oi.sh from branch `d3-stale-claims`
+
+Split out of OI-390 (diagnose `132315`, plan `docs/plans/dow-skip-rate.md` §0 and §5 D3, ledger `docs/audit/dow-skip-rate.closure.yaml` D3-STALE-CLAIMS). The writer bug is fixed; these live rows still carry the false "you skip <weekday> 100%" claim and can be quoted back by the coach.
+
+**Rows (project `dedsavbjuwgarrhphgnl` only):**
+- `memory_embeddings`, exactly 10 rows:
+  - upendra Sunday: `abcea8e9-ee4f-420a-a139-c47921da45df` (live-embedded by `ai-proxy` 4 s after the reply);
+  - upendra Monday (from interactions that no longer exist): `6a02dd2e-4190-4885-a3e0-63529324cd39`, `39c37011-9d46-4dbf-901a-d8118b1aea21`, `4562997e-d9af-4e09-80fb-92982f989508`, `94816c78-353e-44a0-98d9-616753549789`, `cb5f1afe-e9b3-4a5a-b94b-7e3dba20f762`, `10f082af-45d0-445b-a7a5-3f028515fce5`, `406058e1-37b5-48a7-8404-edcec53cfb7d`, `172b13a7-9e4f-4e19-b7f7-7d197c6f32b3`;
+  - shabaaadh: `59038339-fb3d-4f64-8f3f-d9a10e2fa258`.
+- `ai_coach_interactions`, exactly 3 rows (claim in `ai_response`): upendra `1dcf5d22…` (his newest at 2026-10-22), shabaaadh `17d62b49…`, shabaaadh `1ecefd07…` (a v5 id an old build could upsert again, OI-204). Resolve the full ids with the read-only SELECT below before deleting.
+
+**Sequence:**
+1. The fixed build on upendra's device (until then every Status check recreates the claim: `ai-proxy` embeds each reply live).
+2. 8 or more coach exchanges on it, so the old reply leaves the 8-exchange Hive history window (`ai_coach_repository.dart:175-178`).
+3. Read-only check first: `SELECT id, user_id, left(ai_response, 120) FROM ai_coach_interactions WHERE ai_response ~* 'skip(s|ping)? .{0,20}(monday|tuesday|wednesday|thursday|friday|saturday|sunday)' AND ai_response ~ '100 ?%';` and the same phrase sweep over `memory_embeddings.content`; confirm the ids above (plus any new hits).
+4. With the founder's go: delete those 3 + 10 rows, inside `BEGIN; … COMMIT;` with the exact ids, and record the counts here.
+5. A day later, re-run the full phrase sweep (not only these ids); any new hits are deleted under the same go.
+
+Past `user_daily_snapshots` stay (nothing reads a past day's `coach_notices`). Done when the sweep returns 0 rows a day after the delete.
 
 ## OI-400 — retire_worktree: a nested dartdev-only .dart_tool/ (native_assets.yaml, no pubspec.yaml beside it) makes a worktree unretirable
 

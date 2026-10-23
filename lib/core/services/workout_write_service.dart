@@ -12,6 +12,7 @@ import 'pending_exlog_deletes.dart';
 import 'pending_template_deletes.dart';
 import 'sync_service.dart';
 import 'template_identity.dart';
+import 'workout_read_service.dart';
 import 'write_result.dart';
 
 /// The ONE writer for workout_logs / workout_log_exercises /
@@ -69,6 +70,48 @@ const String kChatWorkoutName = 'Chat Workout';
 /// `markCompleted` call sites.
 const Set<String> kPlaceholderWorkoutNames = {'workout', 'chat workout'};
 
+/// OI-389 / OI-382: the most one set may hold. 6 hours (360 min) of duration,
+/// 300 km of distance. The cloud per-set CHECK is still 0..3600 until OI-391.
+const int kMaxSetDurationSec = 21600;
+const double kMaxSetDistanceKm = 300;
+
+/// Which fields a set of [type] clears (OI-389 U2). ONE table, read by the
+/// writer's normaliser and by the boot heal (`healedExlog`), so they cannot
+/// drift. [hasDuration] / [hasKm]: the set carries a duration / km above 0.
+///
+/// | type | keeps | clears |
+/// |---|---|---|
+/// | timed | duration | weight, reps, distance |
+/// | cardio | duration, distance, weight | reps, only when it has a duration or a km |
+/// | distance | distance, weight, duration | reps, only when it has a km |
+/// | weight types (and unknown) | weight, reps | duration, distance |
+///
+/// The reps rule: a cardio or distance set WITHOUT its type's own field keeps
+/// its weight and reps, as the old else-branch did. Coach logSet,
+/// LogWorkoutSheet and the chat card send exactly that set for Farmers Carry or
+/// Sled Push; clearing it would erase the only figure the user gave.
+({bool weight, bool reps, bool duration, bool distance}) fieldsClearedFor(
+  String type, {
+  required bool hasDuration,
+  required bool hasKm,
+}) {
+  switch (type) {
+    case 'timed':
+      return (weight: true, reps: true, duration: false, distance: true);
+    case 'cardio':
+      return (
+        weight: false,
+        reps: hasDuration || hasKm,
+        duration: false,
+        distance: false,
+      );
+    case 'distance':
+      return (weight: false, reps: hasKm, duration: false, distance: false);
+    default:
+      return (weight: false, reps: false, duration: true, distance: true);
+  }
+}
+
 class WorkoutWriteService {
   WorkoutWriteService._();
   static final WorkoutWriteService instance = WorkoutWriteService._();
@@ -108,6 +151,10 @@ class WorkoutWriteService {
     /// non-null + STICKY (a null-id re-log keeps a prior id). NEVER reaches the
     /// cloud sync onConflict key (name-derived) — Hive-local id matching only.
     String? exerciseId,
+    /// OI-389 U3: the logging type of the slot whose boxes the user filled
+    /// (active workout). Consulted only when the library misses AND it is
+    /// `cardio` or `distance`, so a custom cardio exercise stays cardio.
+    String? loggingTypeHint,
   }) async {
     // 1. Validate
     if (exerciseName.trim().isEmpty) {
@@ -119,6 +166,10 @@ class WorkoutWriteService {
     for (final s in sets) {
       if (s.weightKg < 0) return WriteResult.fail('weightKg must be >= 0');
       if (s.reps < 0) return WriteResult.fail('reps must be >= 0');
+      // OI-382: read the RAW values, before a km <= 0 is canonicalised away,
+      // so a negative value is refused rather than silently dropped.
+      final bound = setBoundViolation(s.durationSec, s.distanceKm);
+      if (bound != null) return bound;
     }
 
     final dateStr = istDateStr(date);
@@ -134,69 +185,58 @@ class WorkoutWriteService {
       final resolvedExerciseId = exerciseId ??
           ((existing is Map) ? existing['exercise_id'] as String? : null);
 
-      // 2. Build merged sets[] list with 60s dedup
-      final List<ExerciseSet> mergedSets;
-      if (existing != null) {
-        final m = (existing as Map).cast<String, dynamic>();
-        final existingSets = (m['sets'] as List? ?? const [])
-            .cast<Map>()
-            .map((e) => ExerciseSet.fromMap(e))
-            .toList();
-
-        final List<ExerciseSet> additions = [];
-        for (final candidate in sets) {
-          // Stamp loggedAtMs if caller didn't.
-          final stamped = candidate.loggedAtMs == null
-              ? ExerciseSet(
-                  weightKg: candidate.weightKg,
-                  reps: candidate.reps,
-                  durationSec: candidate.durationSec,
-                  loggedAtMs: DateTime.now().millisecondsSinceEpoch,
-                )
-              : candidate;
-
-          // Dedup against existing sets (60s window).
-          final isDup = existingSets.any((existing) =>
-              stamped.isDuplicateWithin(existing, windowMs: kDedupWindowMs));
-          if (!isDup) additions.add(stamped);
-        }
-
-        mergedSets = [...existingSets, ...additions];
-      } else {
-        mergedSets = sets
-            .map((s) => s.loggedAtMs == null
-                ? ExerciseSet(
-                    weightKg: s.weightKg,
-                    reps: s.reps,
-                    durationSec: s.durationSec,
-                    loggedAtMs: DateTime.now().millisecondsSinceEpoch,
-                  )
-                : s)
-            .toList();
-      }
+      // 2. OI-389 U3 order: resolve the type over existing ∪ incoming →
+      // normalise + strip BOTH sides by it → dedup (60s) → merge → recompute.
+      // Both sides are in the same shape before dedup, so a phantom field on
+      // one side cannot hide a real duplicate. Existing sets already went
+      // through the normaliser on every re-log (they were part of mergedSets),
+      // so normalising them first changes no stored row by itself.
+      final existingMap =
+          (existing is Map) ? existing.cast<String, dynamic>() : null;
+      final existingSets = existingMap == null
+          ? <ExerciseSet>[]
+          : (existingMap['sets'] as List? ?? const [])
+              .cast<Map>()
+              .map((e) => ExerciseSet.fromMap(e))
+              .toList();
+      final stampedIncoming = sets
+          .map((s) => s.loggedAtMs == null
+              ? s.copyWith(loggedAtMs: DateTime.now().millisecondsSinceEpoch)
+              : s)
+          .toList();
 
       // APK Test #12.5 / Class 1a-1b — library-aware logging_type +
-      // phantom-durationSec stripping.
-      //
-      // Pre-fix `_inferLoggingType` was data-shape-only: it returned
-      // `'timed'` whenever any set had durationSec>0 AND no weight.
-      // The active workout UI's `_durationControllers` could be hot
-      // even for bodyweight slots (post-swap state retention or input
-      // bleed), stuffing durationSec onto Push Up / Hanging Leg Raise
-      // sets and wrongly stamping them as timed. Receipt then rendered
-      // "× 540 reps" / "0s" depending on the renderer.
-      //
-      // Fix: consult exerciseBox first. Library type wins for known
-      // exercises; data-shape fallback only for custom exercises.
-      // When resolved type ≠ 'timed', strip durationSec from per-set
-      // entries so downstream renderers and the cloud projection don't
-      // carry phantom values.
-      final resolvedType = _resolveLoggingType(exerciseName, mergedSets);
+      // phantom-durationSec stripping. Library type wins for known
+      // exercises; OI-389 adds the caller's hint (cardio/distance only) and
+      // the existing row's stored cardio/distance type before the data-shape
+      // fallback for custom exercises.
+      final resolvedType = _resolveLoggingType(
+        exerciseName,
+        [...existingSets, ...stampedIncoming],
+        hint: loggingTypeHint,
+        storedType: existingMap?['logging_type'] as String?,
+      );
       // a4c7d1: Normalize all sets to match the resolved logging type.
       // When swapping exercises, in-flight logged sets may carry the OLD
       // format; ensure they're cleared when persisted with a NEW type.
-      final normalizedSets = _normalizeSetsByLoggingType(mergedSets, resolvedType);
-      final cleanedSets = _stripPhantomFields(normalizedSets, resolvedType);
+      List<ExerciseSet> clean(List<ExerciseSet> list) => _stripPhantomFields(
+          _normalizeSetsByLoggingType(list, resolvedType), resolvedType);
+      final cleanExisting = clean(existingSets);
+      final cleanIncoming = clean(stampedIncoming);
+
+      final List<ExerciseSet> cleanedSets;
+      if (existingMap != null) {
+        final List<ExerciseSet> additions = [];
+        for (final candidate in cleanIncoming) {
+          // Dedup against existing sets (60s window).
+          final isDup = cleanExisting.any((existing) =>
+              candidate.isDuplicateWithin(existing, windowMs: kDedupWindowMs));
+          if (!isDup) additions.add(candidate);
+        }
+        cleanedSets = [...cleanExisting, ...additions];
+      } else {
+        cleanedSets = cleanIncoming;
+      }
 
       // 3. Recompute aggregates — from `cleanedSets` (POST-normalization),
       // never `mergedSets`. Bug e8f95e: computing these from mergedSets let
@@ -212,6 +252,8 @@ class WorkoutWriteService {
           0.0, (a, s) => s.weightKg > a ? s.weightKg : a);
       final volume = cleanedSets.fold<double>(
           0.0, (a, s) => a + (s.weightKg * s.reps));
+      final totalKm = roundKm(
+          cleanedSets.fold<double>(0.0, (a, s) => a + (s.distanceKm ?? 0)));
 
       // APK Test #12 / Task A-2 — workout session id. Defaults to
       // `wlog_<date>` (one workout per IST date). Multi-session days
@@ -230,6 +272,13 @@ class WorkoutWriteService {
         'reps_completed': totalReps,
         'weight_kg': maxWeight,
         'volume_kg': volume,
+        // OI-389 U3: the km total is the sum over the stored sets, so a
+        // retry within the dedup window adds no km. Written only for cardio /
+        // distance and only when > 0, so the cloud keeps NULL (not 0) when no
+        // km was entered.
+        if ((resolvedType == 'cardio' || resolvedType == 'distance') &&
+            totalKm > 0)
+          'distance_km': totalKm,
         'logging_type': resolvedType,
         'source': source.code,
         'notes': ?notes,
@@ -299,7 +348,12 @@ class WorkoutWriteService {
   ///
   /// Custom exercises (not in the library) fall back to data-shape
   /// inference — same logic the old `_inferLoggingType` used.
-  String _resolveLoggingType(String exerciseName, List<ExerciseSet> sets) {
+  String _resolveLoggingType(
+    String exerciseName,
+    List<ExerciseSet> sets, {
+    String? hint,
+    String? storedType,
+  }) {
     // Library lookup. Tolerate missing/uninitialized exerciseBox —
     // fall back to data inference rather than throw.
     try {
@@ -319,6 +373,12 @@ class WorkoutWriteService {
       // Box not open / not seeded — data-driven fallback.
     }
 
+    // OI-389 U3: the slot the user filled, then the row already stored —
+    // cardio / distance only. A data-shape guess cannot tell a custom cardio
+    // set (minutes, no weight) from a timed one, and `timed` clears its km.
+    if (hint == 'cardio' || hint == 'distance') return hint!;
+    if (storedType == 'cardio' || storedType == 'distance') return storedType!;
+
     // Data-shape inference (custom exercise path).
     final hasDur = sets.any((s) => s.durationSec != null && s.durationSec! > 0);
     final hasWeight = sets.any((s) => s.weightKg > 0);
@@ -331,33 +391,27 @@ class WorkoutWriteService {
   ///
   /// When an exercise is swapped mid-workout (e.g., timed → weight/reps),
   /// the in-session values may carry the OLD type's format. This method
-  /// clears incompatible fields before persistence:
-  /// - For timed: zero weight/reps
-  /// - For weight-based: zero durationSec
+  /// clears the fields [fieldsClearedFor] lists for the type (OI-389 U2: the
+  /// old else-branch zeroed every non-timed duration, cardio's minutes
+  /// included) and stores a km <= 0 as absent.
   List<ExerciseSet> _normalizeSetsByLoggingType(
     List<ExerciseSet> sets,
     String loggingType,
   ) {
-    if (loggingType == 'timed') {
-      return sets
-          .map((s) => ExerciseSet(
-                durationSec: s.durationSec,
-                loggedAtMs: s.loggedAtMs,
-                weightKg: 0.0,
-                reps: 0,
-              ))
-          .toList();
-    } else {
-      // weight_reps, bodyweight_reps, weighted_bodyweight, cardio, distance
-      return sets
-          .map((s) => ExerciseSet(
-                weightKg: s.weightKg,
-                reps: s.reps,
-                loggedAtMs: s.loggedAtMs,
-                durationSec: 0,
-              ))
-          .toList();
-    }
+    return sets.map((s) {
+      final cleared = fieldsClearedFor(
+        loggingType,
+        hasDuration: (s.durationSec ?? 0) > 0,
+        hasKm: (s.distanceKm ?? 0) > 0,
+      );
+      final km = ExerciseSet.canonicalKm(s.distanceKm);
+      return s.copyWith(
+        weightKg: cleared.weight ? 0.0 : null,
+        reps: cleared.reps ? 0 : null,
+        clearDuration: cleared.duration,
+        clearDistance: cleared.distance || km == null,
+      );
+    }).toList();
   }
 
   /// APK Test #12.5 / Class 1b — strip phantom fields when the
@@ -370,38 +424,46 @@ class WorkoutWriteService {
   ///
   /// Per-set entries that would surface as "18 secs" for a bodyweight
   /// chip get cleaned here before persistence so every reader (receipt,
-  /// train calendar, cloud projection) sees consistent data.
+  /// train calendar, cloud projection) sees consistent data. OI-389: reads the
+  /// same [fieldsClearedFor] table as the normaliser.
   List<ExerciseSet> _stripPhantomFields(
     List<ExerciseSet> sets,
     String resolvedType,
-  ) {
-    switch (resolvedType) {
-      case 'bodyweight_reps':
-      case 'weight_reps':
-      case 'weighted_bodyweight':
-        // Duration doesn't apply.
-        return sets
-            .map((s) => ExerciseSet(
-                  weightKg: s.weightKg,
-                  reps: s.reps,
-                  durationSec: null,
-                  loggedAtMs: s.loggedAtMs,
-                ))
-            .toList();
-      case 'timed':
-        // Weight + reps don't apply for pure-timed.
-        return sets
-            .map((s) => ExerciseSet(
-                  weightKg: 0.0,
-                  reps: 0,
-                  durationSec: s.durationSec,
-                  loggedAtMs: s.loggedAtMs,
-                ))
-            .toList();
-      default:
-        return sets;
+  ) =>
+      _normalizeSetsByLoggingType(sets, resolvedType);
+
+  /// OI-382: the per-set bounds, read from RAW values. Null when within
+  /// bounds; otherwise the refusal to return.
+  static WriteResult? setBoundViolation(int? durationSec, double? distanceKm) {
+    if (durationSec != null &&
+        (durationSec < 0 || durationSec > kMaxSetDurationSec)) {
+      return WriteResult.invalid('duration_out_of_range',
+          'durationSec must be 0..$kMaxSetDurationSec');
     }
+    if (distanceKm != null &&
+        (distanceKm < 0 || distanceKm > kMaxSetDistanceKm)) {
+      return WriteResult.invalid('distance_out_of_range',
+          'distanceKm must be 0..$kMaxSetDistanceKm');
+    }
+    return null;
   }
+
+  /// A km total rounded to 0.001, the cloud column's scale (`numeric(8,3)`).
+  static double roundKm(double km) => (km * 1000).round() / 1000;
+
+  /// OI-389: a row's per-set entries as the readers resolve them
+  /// ([WorkoutReadService.perSetList]: the longer of `sets` / `sets_detail`),
+  /// copied, with a legacy `duration_seconds` translated to `duration_sec` as
+  /// [editLog] does.
+  static List<Map<String, dynamic>> _perSetMaps(Map<String, dynamic> log) =>
+      WorkoutReadService.perSetList(log).map((e) {
+        final m = Map<String, dynamic>.from(e);
+        if (m.containsKey('duration_seconds') &&
+            !m.containsKey('duration_sec')) {
+          m['duration_sec'] = m['duration_seconds'];
+        }
+        return m;
+      }).toList();
 
   bool _rescanPrFor(
     Box box,
@@ -967,14 +1029,13 @@ class WorkoutWriteService {
         final existing = box.get(newKey);
         if (existing is Map) {
           // Collision merge — see the doc comment above.
-          final existingSets = (existing['sets'] as List? ?? const [])
-              .cast<Map>()
-              .map((e) => Map<String, dynamic>.from(e))
-              .toList();
-          final movedSets = (row['sets'] as List? ?? const [])
-              .cast<Map>()
-              .map((e) => Map<String, dynamic>.from(e))
-              .toList();
+          // OI-389: each side's list is the readers' own resolution (the
+          // longer of `sets` / `sets_detail`, duration_seconds translated as
+          // editLog does), so a `sets_detail`-only legacy side is merged
+          // rather than dropped when `sets_detail` is removed below.
+          final existingMap = Map<String, dynamic>.from(existing);
+          final existingSets = _perSetMaps(existingMap);
+          final movedSets = _perSetMaps(row);
           final mergedSets = [...existingSets, ...movedSets];
 
           // Review round 2 (e8f4a3 B1) — preserve-don't-shrink. The restore
@@ -1036,6 +1097,31 @@ class WorkoutWriteService {
           // empty `sets[]` onto the surviving row.
           if (mergedSets.isNotEmpty) {
             merged['sets'] = mergedSets;
+            // OI-389: the sheet leaves `sets_detail` on a row and the push
+            // prefers it (sync_service _resolvePerSetList), so a stale copy
+            // would push only the destination side's per-set rows. `sets`
+            // already holds every set of both sides.
+            merged.remove('sets_detail');
+          }
+          // OI-389: the km the readers show and the summary pushes must agree.
+          // The reader takes the per-set sum when > 0, else the top level.
+          double perSetKm(List<Map<String, dynamic>> l) => l.fold<double>(
+              0.0,
+              (a, e) =>
+                  a + (((e['distance_km'] as num?)?.toDouble() ?? 0) > 0
+                      ? (e['distance_km'] as num).toDouble()
+                      : 0));
+          final mergedKm = perSetKm(mergedSets);
+          final km = mergedKm > 0
+              ? roundKm(mergedKm)
+              // No per-set km on either side: each side's own top level
+              // (restore-shaped or F5), which the reader falls through to.
+              : roundKm(WorkoutReadService.aggregateDistanceKm(existingMap) +
+                  WorkoutReadService.aggregateDistanceKm(row));
+          if (km > 0) {
+            merged['distance_km'] = km;
+          } else {
+            merged.remove('distance_km');
           }
           merged['set_number'] =
               sideSetCount(existing, existingSets) +
@@ -1206,6 +1292,37 @@ class WorkoutWriteService {
         }
       }
 
+      // OI-389 / OI-382: bounds, AFTER the sets_detail → sets translation so
+      // a value arriving through sets_detail is checked too, and on RAW map
+      // values so a negative km is refused rather than canonicalised away.
+      // Per set only: the sheet always sends top-level TOTALS alongside its
+      // per-set list, and 2 × 210 min must save. A legacy top-level-only
+      // update is bounded at the per-set limit × the row's set count.
+      final updatedSetsRaw = normalizedUpdates['sets'];
+      if (updatedSetsRaw is List) {
+        for (final e in updatedSetsRaw.whereType<Map>()) {
+          final bound = setBoundViolation(
+            ((e['duration_sec'] ?? e['duration_seconds']) as num?)?.toInt(),
+            (e['distance_km'] as num?)?.toDouble(),
+          );
+          if (bound != null) return bound;
+        }
+      } else {
+        final setCount = WorkoutReadService.aggregateSetCount(
+            <String, dynamic>{...m, ...normalizedUpdates});
+        final n = setCount < 1 ? 1 : setCount;
+        final dur = (normalizedUpdates['duration_seconds'] as num?)?.toInt();
+        final km = (normalizedUpdates['distance_km'] as num?)?.toDouble();
+        if (dur != null && (dur < 0 || dur > kMaxSetDurationSec * n)) {
+          return WriteResult.invalid('duration_out_of_range',
+              'duration_seconds must be 0..${kMaxSetDurationSec * n}');
+        }
+        if (km != null && (km < 0 || km > kMaxSetDistanceKm * n)) {
+          return WriteResult.invalid('distance_out_of_range',
+              'distance_km must be 0..${kMaxSetDistanceKm * n}');
+        }
+      }
+
       // Apply updates
       final updated = <String, dynamic>{...m, ...normalizedUpdates};
 
@@ -1214,6 +1331,23 @@ class WorkoutWriteService {
         final newSets = (normalizedUpdates['sets'] as List).cast<Map>().map((e) {
           return ExerciseSet.fromMap(e);
         }).toList();
+        // OI-389: `distance_km` = the per-set sum when the edited sets, or
+        // the sets before the edit, carry any km (removed at 0, so clearing
+        // every km clears the total). Otherwise the top-level value is left
+        // as it is: a row whose sets lack km beside a top-level total (the
+        // OI-50 F5 shape) keeps it through an unrelated edit.
+        final priorCarriedKm = WorkoutReadService.perSetList(m).any(
+            (e) => ((e['distance_km'] as num?)?.toDouble() ?? 0) > 0);
+        final editedCarriesKm = newSets.any((s) => s.distanceKm != null);
+        if (priorCarriedKm || editedCarriesKm) {
+          final sumKm = roundKm(newSets.fold<double>(
+              0.0, (a, s) => a + (s.distanceKm ?? 0)));
+          if (sumKm > 0) {
+            updated['distance_km'] = sumKm;
+          } else {
+            updated.remove('distance_km');
+          }
+        }
         updated['sets'] = newSets.map((s) => s.toMap()).toList();
         updated['set_number'] = newSets.length;
         updated['reps_completed'] =

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/core/copy/payment_copy.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -11,6 +12,7 @@ import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
+import 'package:icanbefitter/features/profile/providers/profile_provider.dart' show subscriptionInfoProvider;
 
 /// Shows the single, reusable paywall bottom sheet.
 ///
@@ -385,6 +387,8 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
     // render exactly as before.
     final monthlyPrice = _formatPriceFromPaise(_discountedPaise(monthlyBase));
     final yearlyPrice = _formatPriceFromPaise(_discountedPaise(yearlyBase));
+    final isReferralTrial = ref
+        .watch(subscriptionInfoProvider.select((s) => s.isReferralTrial));
     final monthlyCostOfYearly = (yearlyFinal / 12).round();
     final savingsPercent = (((monthlyFinal * 12 - yearlyFinal) /
                 (monthlyFinal * 12)) *
@@ -532,6 +536,18 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
                   ),
                 ],
               ),
+
+              // OI-341 Piece B2b — a referral-trial user's paid days start
+              // when the free days end (copy only; gates nothing).
+              if (isReferralTrial) ...[
+                const SizedBox(height: AppSpacing.stackS),
+                Text(
+                  PaymentCopy.trialStackingNotice,
+                  key: const ValueKey('paywall-trial-stacking-notice'),
+                  textAlign: TextAlign.center,
+                  style: AppTypography.bodySm.copyWith(color: AppColors.textDim),
+                ),
+              ],
 
               const SizedBox(height: AppSpacing.stackM),
 

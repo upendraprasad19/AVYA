@@ -81,10 +81,14 @@ DraftExercise bad(String name) => DraftExercise(
 DraftExercise emptyPlank() =>
     DraftExercise(name: 'Plank', loggingType: 'timed', sets: []);
 
+// OI-389 T22 (OI-382 seam move): logExercise now refuses a negative duration,
+// so the set that saves is a valid 60 s one; the -100 s set is filtered by
+// draftExerciseSets and still makes the day's duration (and markCompleted)
+// fail.
 DraftExercise badPlank() => DraftExercise(
     name: 'Plank',
     loggingType: 'timed',
-    sets: [DraftSet(reps: 8, durationSecs: -100)]);
+    sets: [DraftSet(durationSecs: 60), DraftSet(durationSecs: -100)]);
 
 WorkoutDraft draftOf(List<DraftExercise> ex, {String id = 'wdraft_a'}) =>
     WorkoutDraft(id: id, exercises: ex, date: DateTime.now());

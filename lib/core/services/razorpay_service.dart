@@ -10,7 +10,9 @@ import 'package:icanbefitter/core/constants/payment_timing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/copy/payment_copy.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
+import 'package:icanbefitter/core/services/payment_end_estimate.dart';
 import 'package:icanbefitter/core/services/payment_retry_attempt.dart';
 import 'package:icanbefitter/core/services/razorpay_web_checkout.dart';
 import 'package:icanbefitter/core/services/singleton_lifecycle_registry.dart';
@@ -45,6 +47,11 @@ class RazorpayService {
   VoidCallback? _onFailure;
   String? _pendingPlan;
 
+  /// OI-341 Piece B2b — what each order was opened with (plan + the server's
+  /// `stacks_after`), keyed by order id so a payment confirmed after a LATER
+  /// checkout started still reads its own record. Cleared on user change.
+  final PendingCheckouts _pendingCheckouts = PendingCheckouts();
+
   /// Tech-debt audit 2026-05-20 / A7 — register cross-account reset
   /// hook so an abandoned checkout (user signs out mid-payment) does
   /// not fire the previous user's [_onSuccess] / [_onFailure] callback
@@ -61,6 +68,7 @@ class RazorpayService {
     _onSuccess = null;
     _onFailure = null;
     _pendingPlan = null;
+    _pendingCheckouts.clear();
   }
 
   /// Global navigator key for showing snackbars after checkout.
@@ -145,6 +153,7 @@ class RazorpayService {
     // (client never dictates amount), returns order_id + key_id.
     int amountPaise = 0;
     String? orderId;
+    DateTime? stacksAfter;
     try {
       final resp = await SupabaseService.instance.callFunction(
         'create-razorpay-order',
@@ -168,10 +177,20 @@ class RazorpayService {
         final data = resp.data is Map
             ? resp.data as Map<String, dynamic>
             : <String, dynamic>{};
-        if (data['error_code'] == 'already_pro') {
-          await _handleAlreadyProResponse(data);
-          onSuccess?.call(); // treat as success — user IS PRO
-          return;
+        switch (classifyOrderConflict(data)) {
+          case OrderConflict.trialUpgradeUnavailable:
+            // OI-341 Piece B2b — door shut, trial user: same heal, no
+            // "already PRO" claim, no checkout.
+            await _handleAlreadyProResponse(data,
+                trialUpgradeUnavailable: true);
+            onFailure?.call();
+            return;
+          case OrderConflict.alreadyPro:
+            await _handleAlreadyProResponse(data);
+            onSuccess?.call(); // treat as success — user IS PRO
+            return;
+          case OrderConflict.other:
+            break;
         }
       }
       if (resp.status != 200 || resp.data == null) {
@@ -194,6 +213,15 @@ class RazorpayService {
         onFailure?.call();
         return;
       }
+      // OI-341 Piece B2b — present only when the server's door is open; an
+      // estimate input, never entitlement (payment_end_estimate.dart).
+      stacksAfter = parseStacksAfter(data['stacks_after'], now: DateTime.now());
+      // Not across an account switch during the order await: _onUserChanged
+      // has already cleared the store for the new user.
+      if (SupabaseService.instance.currentUser?.id == user.id) {
+        _pendingCheckouts.record(
+            orderId, PendingCheckout(plan: plan, stacksAfter: stacksAfter));
+      }
     } catch (e, st) {
       // APK Test #12.5 / Class 2a — handle FunctionException from
       // supabase_flutter ^2.12.0. invoke() throws on non-2xx; the
@@ -209,8 +237,17 @@ class RazorpayService {
         final details = e.details;
         if (status == 409 && details is Map) {
           final m = Map<String, dynamic>.from(details);
-          if (m['error_code'] == 'already_pro') {
+          final conflict = classifyOrderConflict(m);
+          if (conflict != OrderConflict.other) {
             try {
+              if (conflict == OrderConflict.trialUpgradeUnavailable) {
+                // OI-341 Piece B2b — door shut, trial user: same heal, no
+                // "already PRO" claim, no checkout.
+                await _handleAlreadyProResponse(m,
+                    trialUpgradeUnavailable: true);
+                onFailure?.call();
+                return;
+              }
               await _handleAlreadyProResponse(m);
               onSuccess?.call();
               return;
@@ -224,7 +261,13 @@ class RazorpayService {
         debugPrint(
             'RazorpayService: create-razorpay-order FunctionException '
             'status=$status details=$details');
-        _showOrderCreationFailure(serverError: _extractServerError(details));
+        // OI-341 Piece B2b — a trial row's 409 whose heal threw must not fall
+        // through to the server's "You're already a PRO member." text.
+        final trialRefusal = isTrialRefusal(status: status, details: details);
+        _showOrderCreationFailure(
+            serverError: trialRefusal
+                ? PaymentCopy.trialUpgradeUnavailable
+                : _extractServerError(details));
         onFailure?.call();
         return;
       }
@@ -256,6 +299,7 @@ class RazorpayService {
       plan: plan,
       email: user.email ?? '',
       notes: notes,
+      stacksAfter: stacksAfter,
     );
 
     if (kIsWeb) {
@@ -321,13 +365,14 @@ class RazorpayService {
     required String plan,
     required String email,
     required Map<String, String> notes,
+    DateTime? stacksAfter,
   }) {
     return {
       'key': keyId,
       'order_id': orderId,
       'amount': amountPaise,
       'name': AppConstants.appName,
-      'description': 'PRO ${plan == 'yearly' ? 'Yearly' : 'Monthly'} Plan',
+      'description': checkoutDescription(plan: plan, stacksAfter: stacksAfter),
       'currency': 'INR',
       'prefill': {
         'email': email,
@@ -341,10 +386,10 @@ class RazorpayService {
 
   /// APK Test #12.2 / Task #6 — shown when the server-side double-pay
   /// guard rejects the order create with 409 + already_pro. The user
-  /// thought they were free; truth is they're PRO until [endLabel]. This
+  /// thought they were free; truth is they're PRO until the end date in [message]. This
   /// fires both a toast AND triggers the cascade of provider invalidations
   /// that was supposed to happen on the original payment.
-  void _showAlreadyProFeedback(String endLabel) {
+  void _showAlreadyProFeedback(String message) {
     final ctx = navigatorKey?.currentContext;
     if (ctx == null) return;
     ScaffoldMessenger.of(ctx).showSnackBar(
@@ -355,7 +400,7 @@ class RazorpayService {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                'You\'re already PRO — active until $endLabel',
+                message,
                 style: AppTypography.bodySm.copyWith(
                   fontWeight: FontWeight.w600,
                   color: Colors.white,
@@ -405,7 +450,14 @@ class RazorpayService {
   /// Force-trusts the server's truth: writes active subscription
   /// state locally so subsequent reads (subscriptionInfoProvider,
   /// gate(), profile dossier) are correct.
-  Future<void> _handleAlreadyProResponse(Map<String, dynamic> data) async {
+  ///
+  /// OI-341 Piece B2b — [trialUpgradeUnavailable]: the door is shut and the
+  /// caller's latest row is a referral trial. The heal is identical; only the
+  /// message differs (no "already PRO" claim).
+  Future<void> _handleAlreadyProResponse(
+    Map<String, dynamic> data, {
+    bool trialUpgradeUnavailable = false,
+  }) async {
     final endIso = data['current_expires_at'] as String?;
     final endDate = endIso != null ? DateTime.tryParse(endIso) : null;
     final endLabel = endDate != null
@@ -422,7 +474,8 @@ class RazorpayService {
         _invalidateSubscriptionProviders();
       } catch (_) {}
     }
-    _showAlreadyProFeedback(endLabel);
+    _showAlreadyProFeedback(orderConflictMessage(
+        trialUpgradeUnavailable: trialUpgradeUnavailable, endLabel: endLabel));
   }
 
   /// APK Test #12.5 / Class 2b — pulls a user-readable error message
@@ -464,6 +517,20 @@ class RazorpayService {
     final ctx = navigatorKey?.currentContext;
     final messenger = ctx != null ? ScaffoldMessenger.maybeOf(ctx) : null;
 
+    // OI-341 Piece B2b — resolve THIS order's plan and stacks-after BEFORE the
+    // first await: a later openCheckout can change _pendingPlan at any await.
+    final resolved = resolveConfirmedCheckout(
+      store: _pendingCheckouts,
+      confirmedOrderId: orderId,
+      pendingPlan: _pendingPlan,
+    );
+    if (!resolved.matched && !_pendingCheckouts.isEmpty) {
+      unawaited(ErrorTelemetry.logEvent('razorpay_checkout_record_unmatched',
+          message: 'has_order_id=${orderId != null && orderId.isNotEmpty}'));
+    }
+    final checkoutPlan = resolved.plan;
+    final stacksAfter = resolved.stacksAfter;
+
     // Force-refresh Supabase JWT. The app was backgrounded during Razorpay
     // WebView checkout, so the access token may have expired. Without this,
     // subsequent Edge Function calls (AI chat, food analysis) fail with 401.
@@ -501,8 +568,9 @@ class RazorpayService {
     // end of _pollAndActivate) — leaving the user stuck without PRO even
     // though their payment went through. Now Phase 3 runs first + poll
     // confirms it afterwards.
-    final fallbackPlan = _pendingPlan ?? 'monthly';
-    final optimisticEndDate = _computeEndDate(fallbackPlan);
+    final fallbackPlan = checkoutPlan;
+    final optimisticEndDate = estimatePaidEndDate(
+        plan: fallbackPlan, stacksAfter: stacksAfter, now: DateTime.now());
     // APK Test #12.2 / Task #5 — independent try/catch per write so a
     // single failure can't block the others. Pre-fix one shared try
     // around 3 awaited writes meant a throw in writeSubscriptionState
@@ -563,6 +631,8 @@ class RazorpayService {
         paymentId: paymentId,
         orderId: orderId ?? '',
         signature: signature ?? '',
+        checkoutPlan: checkoutPlan,
+        stacksAfter: stacksAfter,
       );
     } catch (e, st) {
       debugPrint('RazorpayService: _pollAndActivate threw: $e');
@@ -670,15 +740,6 @@ class RazorpayService {
     } catch (_) {}
   }
 
-  /// Computes a valid end date for a plan, used when webhook row has
-  /// no end_date or as fallback when polling exhausts.
-  String _computeEndDate(String plan) {
-    final end = plan == 'yearly'
-        ? DateTime.now().add(const Duration(days: 365))
-        : DateTime.now().add(const Duration(days: 30));
-    return end.toIso8601String();
-  }
-
   /// Polls Supabase subscriptions table for confirmation from the
   /// razorpay-webhook Edge Function.
   ///
@@ -689,11 +750,17 @@ class RazorpayService {
     required String paymentId,
     required String orderId,
     required String signature,
+    required String checkoutPlan,
+    required DateTime? stacksAfter,
   }) async {
     final userId = SupabaseService.instance.currentUser?.id;
     if (userId == null) return;
 
-    final fallbackPlan = _pendingPlan ?? 'monthly';
+    final fallbackPlan = checkoutPlan;
+    // OI-341 Piece B2b — the estimate for a reply with no end_date, over the
+    // values captured at confirmation (never a field re-read).
+    String fallbackEndDate(String plan) => estimatePaidEndDate(
+        plan: plan, stacksAfter: stacksAfter, now: DateTime.now());
 
     // Phase 1: Poll Supabase with exponential backoff (15 attempts).
     // Attempts 0-11: exact match on razorpay_payment_id (this specific payment).
@@ -780,7 +847,7 @@ class RazorpayService {
 
           await SubscriptionService.instance.writeSubscriptionState(
             isPro: true,
-            expiresAt: (endDate != null && endDate.isNotEmpty) ? endDate : _computeEndDate(plan),
+            expiresAt: (endDate != null && endDate.isNotEmpty) ? endDate : fallbackEndDate(plan),
             plan: plan,
           );
           // APK Test #12 / Task C-1 — webhook confirmed, close grace window
@@ -850,7 +917,7 @@ class RazorpayService {
             final plan = data['plan'] as String? ?? fallbackPlan;
             await SubscriptionService.instance.writeSubscriptionState(
               isPro: true,
-              expiresAt: (endDate != null && endDate.isNotEmpty) ? endDate : _computeEndDate(plan),
+              expiresAt: (endDate != null && endDate.isNotEmpty) ? endDate : fallbackEndDate(plan),
               plan: plan,
             );
             await SubscriptionService.instance.clearPaymentInFlight();
@@ -881,6 +948,7 @@ class RazorpayService {
       orderId: orderId,
       plan: fallbackPlan,
       userId: userId,
+      stacksAfter: stacksAfter,
     );
 
     // Also refresh from Supabase a few times in case the webhook arrives late.
@@ -917,6 +985,7 @@ class RazorpayService {
     required String orderId,
     required String plan,
     required String userId,
+    required DateTime? stacksAfter,
   }) {
     scheduleVerificationRetries(
       delays: kVerificationRetryDelays,
@@ -954,7 +1023,9 @@ class RazorpayService {
       inFlightOrderId: () =>
           SubscriptionService.instance.paymentInFlightOrderId,
       fallbackPlan: plan,
-      fallbackEndDate: _computeEndDate,
+      // OI-341 Piece B2b — over the stacks-after captured at confirmation.
+      fallbackEndDate: (p) => estimatePaidEndDate(
+          plan: p, stacksAfter: stacksAfter, now: DateTime.now()),
       writeState: ({required String expiresAt, required String plan}) =>
           SubscriptionService.instance.writeSubscriptionState(
             isPro: true,

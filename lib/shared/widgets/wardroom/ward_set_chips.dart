@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/typography.dart';
+import '../../../core/utils/cardio_format.dart';
 
 /// Per-set bracketed chip Wrap — the single source of truth for "what
 /// was logged for this exercise" rendering.
@@ -16,8 +17,11 @@ import '../../../core/theme/typography.dart';
 ///   bodyweight_reps     : "× 10 reps"
 ///   weighted_bodyweight : "+10 kg × 8 reps"
 ///   timed               : "60 secs"
-///   cardio              : "15s · 2 km"
-///   distance            : "2 km · 10 kg"
+///   cardio              : "20 min · 5.0 km" ("15s" under a minute)
+///   distance            : "40 m · 10.0 kg"
+/// Cardio / distance chips go through `cardioDistanceDetail` (OI-389 U7):
+/// decimal minutes, metres under 1 km, a reps part when the writer kept reps,
+/// zero parts omitted, `—` when nothing is left.
 ///
 /// Single-chip fallback: when [perSetBreakdown] is empty (legacy logs
 /// or train-screen aggregate), the [fallbackLabel] is rendered as a
@@ -88,15 +92,15 @@ class WardSetChips extends StatelessWidget {
       case 'timed':
         return '${d ?? 0} secs';
       case 'cardio':
-        final parts = <String>[];
-        if (d != null && d > 0) parts.add('${d}s');
-        if (dist != null && dist > 0) parts.add('${dist.toStringAsFixed(1)} km');
-        return parts.isNotEmpty ? parts.join(' · ') : '—';
       case 'distance':
-        final parts = <String>[];
-        if (dist != null && dist > 0) parts.add('${dist.toStringAsFixed(1)} km');
-        if (w != null && w > 0) parts.add(fmtKg(w));
-        return parts.isNotEmpty ? parts.join(' · ') : '—';
+        return cardioDistanceDetail(
+          loggingType: loggingType,
+          sets: 0, // a chip is one set: never a count
+          durationSec: d ?? 0,
+          km: dist ?? 0,
+          reps: r ?? 0,
+          weightKg: w ?? 0,
+        );
       default:
         return r != null && r > 0 ? '$r reps' : '—';
     }

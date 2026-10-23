@@ -8,6 +8,9 @@
 ///   "you skip Mondays 100% of the time" against an account with only
 ///   8 days of data. Impossible to derive a "100% Monday skip rate" from
 ///   that corpus.
+///   OI-390 (diagnose 132315): the "skip Mondays 100%" line came from the
+///   writer, getDayOfWeekCompletionRates, via coach_notices, not the model.
+///   See test/contracts/day_of_week_completion_writer_to_reader_test.dart.
 ///
 /// OBS-4: same session, coach said "your protein intake has been 0g for
 ///   the last 90 days" — account had only ~14 nutrition logs total.

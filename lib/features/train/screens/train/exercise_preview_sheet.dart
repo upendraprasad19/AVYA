@@ -169,10 +169,18 @@ extension _ExercisePreviewSheet on _TrainScreenState {
                             fallbackLabel = sets > 1
                                 ? '$sets sets · ${mins > 0 ? '${mins}m ' : ''}${secs}s'
                                 : '${mins > 0 ? '${mins}m ' : ''}${secs}s';
-                          } else if (loggingType == 'cardio') {
-                            final dist = (log['distance_km'] as num?)?.toDouble() ?? 0;
-                            fallbackLabel =
-                                '${duration ~/ 60} min · ${dist.toStringAsFixed(1)} km';
+                          } else if (loggingType == 'cardio' ||
+                              loggingType == 'distance') {
+                            // OI-389 U7: the shared cardio / distance rule,
+                            // plain spaces as this sheet always used.
+                            fallbackLabel = cardioDistanceDetail(
+                              loggingType: loggingType,
+                              sets: sets,
+                              durationSec: duration,
+                              km: WorkoutReadService.aggregateDistanceKm(log),
+                              reps: WorkoutReadService.bestPerSetReps(log),
+                              weightKg: weight,
+                            );
                           } else if (weight > 0) {
                             fallbackLabel =
                                 '${setCountLabel(sets)}$kDetailSeparator${repCountLabel(reps)}$kDetailSeparator${weight.toStringAsFixed(1)}${kNbsp}kg';

@@ -28,6 +28,7 @@ import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/rank_ladder_data.dart';
 import 'package:icanbefitter/core/services/rank_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
+import 'package:icanbefitter/core/services/workout_read_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/utils/gap_policy.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
@@ -1171,31 +1172,11 @@ class AiSnapshotBuilder {
       for (final key in logIndex) {
         final raw = _hive.workoutBox.get(key);
         if (raw is! Map) continue;
-        final log = Map<String, dynamic>.from(raw);
-        final sets = (log['sets'] as List?) ?? const [];
-        final totalReps = sets.fold<int>(
-          0,
-          (a, s) =>
-              a + (((s is Map ? s['reps'] : null) as num?)?.toInt() ?? 0),
-        );
-        final loggingType = log['logging_type'] as String?;
-        final isWeighted = loggingType == 'weight_reps' ||
-            loggingType == 'weighted_bodyweight';
-        final double? topWeight = isWeighted
-            ? sets
-                .map((s) =>
-                    (((s is Map ? s['weight_kg'] : null) as num?) ?? 0)
-                        .toDouble())
-                .fold<double>(0, (a, b) => b > a ? b : a)
-            : null;
-        logged.add({
-          'name': log['exercise_name'] ?? 'Unknown',
-          'sets': sets.length,
-          'reps_total': totalReps,
-          'top_set_weight_kg': ?topWeight,
-          'logging_type': loggingType,
-          'is_pr': log['is_pr'] ?? false,
-        });
+        logged.add(snapshotLoggedExercise(
+          Map<String, dynamic>.from(raw),
+          cardioFields:
+              _hive.configBox.get('disable_snapshot_cardio_fields') != true,
+        ));
       }
     }
 
@@ -1230,6 +1211,65 @@ class AiSnapshotBuilder {
         'total_logged': totalLogged,
         'all_logged': allLogged,
       },
+    };
+  }
+
+  /// One `exlog_*` row as the coach sees it in `today_workout` /
+  /// `yesterday_workout.exercises[]`.
+  ///
+  /// OI-389 D4 (founder yes, 2026-10-23): a cardio or distance row also carries
+  /// `duration_min` (one decimal, 750 s → 12.5, matching the screen) and
+  /// `distance_km`, read through [WorkoutReadService.aggregateDurationSeconds] /
+  /// [WorkoutReadService.aggregateDistanceKm], plus `top_set_weight_kg` for
+  /// distance; each is omitted when 0. Such a row's `sets` and weight read the
+  /// same set list as the aggregates. [cardioFields] false (kill switch
+  /// `disable_snapshot_cardio_fields`, no in-app writer: set by debug tooling)
+  /// returns the pre-D4 map byte-identically.
+  @visibleForTesting
+  static Map<String, dynamic> snapshotLoggedExercise(
+    Map<String, dynamic> log, {
+    required bool cardioFields,
+  }) {
+    final sets = (log['sets'] as List?) ?? const [];
+    final totalReps = sets.fold<int>(
+      0,
+      (a, s) => a + (((s is Map ? s['reps'] : null) as num?)?.toInt() ?? 0),
+    );
+    final loggingType = log['logging_type'] as String?;
+    final isWeighted =
+        loggingType == 'weight_reps' || loggingType == 'weighted_bodyweight';
+    double topWeightOf() => sets
+        .map((s) =>
+            (((s is Map ? s['weight_kg'] : null) as num?) ?? 0).toDouble())
+        .fold<double>(0, (a, b) => b > a ? b : a);
+    final cardio = cardioFields &&
+        (loggingType == 'cardio' || loggingType == 'distance');
+    final secs =
+        cardio ? WorkoutReadService.aggregateDurationSeconds(log) ?? 0 : 0;
+    final durationMin = (secs / 6).round() / 10;
+    final km = cardio ? WorkoutReadService.aggregateDistanceKm(log) : 0.0;
+    // A cardio / distance row reads its sets the way the aggregates do
+    // (perSetList: the longer of sets[] / sets_detail[]), so a legacy
+    // sets_detail-only row never shows km with 0 sets (B-pass c1e011 F1).
+    final distanceWeight = cardio && loggingType == 'distance'
+        ? WorkoutReadService.perSetList(log)
+            .map((s) => ((s['weight_kg'] as num?) ?? 0).toDouble())
+            .fold<double>(0, (a, b) => b > a ? b : a)
+        : 0.0;
+    final double? topWeight = isWeighted
+        ? topWeightOf()
+        : (distanceWeight > 0 ? distanceWeight : null);
+    return {
+      'name': log['exercise_name'] ?? 'Unknown',
+      'sets': cardio
+          ? WorkoutReadService.aggregateSetCount(log)
+          : sets.length,
+      'reps_total': totalReps,
+      'top_set_weight_kg': ?topWeight,
+      'logging_type': loggingType,
+      'is_pr': log['is_pr'] ?? false,
+      if (durationMin > 0) 'duration_min': durationMin,
+      if (km > 0) 'distance_km': km,
     };
   }
 

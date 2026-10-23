@@ -10,10 +10,12 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/singleton_lifecycle_registry.dart';
 import 'package:icanbefitter/core/services/workout_read_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
+import 'package:icanbefitter/core/utils/cardio_format.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
 import 'package:icanbefitter/shared/widgets/shareable_card.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import '../providers/train_provider.dart';
+import '../services/log_exercise_logic.dart';
 import '../services/quote_picker.dart';
 
 // ── Category-specific taglines ───────────────────────────────────
@@ -220,11 +222,18 @@ class WorkoutReceiptData {
         if (!data.checkedSets.containsKey(key)) continue;
         if (data.warmUpSets.containsKey(key)) continue; // warm-ups excluded
         completedSets++;
-        final vals = data.setInputValues[key];
-        final reps = vals?.reps ?? 0;
-        final weight = vals?.weight ?? 0.0;
-        final dur = vals?.durationSeconds ?? 0;
-        final dist = vals?.distanceKm ?? 0.0;
+        // OI-389 U5: the set the boxes stand for, by the slot's type — the
+        // same function `completeWorkout` saves through, so the receipt's
+        // volume equals the stored row (no phantom reps on a distance slot,
+        // minutes already seconds since capture).
+        final set = exerciseSetFromInput(
+            data.setInputValues[key] ?? const SetInputValues(),
+            ex.loggingType,
+            0);
+        final reps = set.reps;
+        final weight = set.weightKg;
+        final dur = set.durationSec ?? 0;
+        final dist = set.distanceKm ?? 0.0;
         totalReps += reps;
         totalDuration += dur;
         totalDistance += dist;
@@ -234,6 +243,7 @@ class WorkoutReceiptData {
           weightKg: weight > 0 ? weight : null,
           reps: reps > 0 ? reps : null,
           durationSeconds: dur > 0 ? dur : null,
+          distanceKm: dist > 0 ? dist : null,
         ));
       }
 
@@ -413,7 +423,8 @@ class WorkoutReceiptData {
             message: 'source=receipt date=$dateKey type=$loggingType '
                 'set_signal=${!noSetSignal} duration_signal=${!noDurationSignal}');
       }
-      final distance = (log['distance_km'] as num?)?.toDouble() ?? 0.0;
+      // OI-389: per-set sum first, then the top level (restored rows).
+      final distance = WorkoutReadService.aggregateDistanceKm(typedLog);
       final isPr = log['is_pr'] as bool? ?? false;
 
       // F13 · Volume math — prefer exact sum of per-set volumes over the
@@ -437,11 +448,13 @@ class WorkoutReceiptData {
           final d = (s['duration_sec'] as num?)?.toInt()
               ?? (s['duration_seconds'] as num?)?.toInt()
               ?? 0;
+          final km = (s['distance_km'] as num?)?.toDouble() ?? 0;
           sum += w * r;
           perSetBreakdown.add(ReceiptSet(
             weightKg: w > 0 ? w : null,
             reps: r > 0 ? r : null,
             durationSeconds: d > 0 ? d : null,
+            distanceKm: km > 0 ? km : null,
           ));
         }
         exerciseVolume = sum;
@@ -560,8 +573,11 @@ class ReceiptSet {
   final double? weightKg;
   final int? reps;
   final int? durationSeconds;
+  /// OI-389: per-set km for cardio / distance sets.
+  final double? distanceKm;
 
-  const ReceiptSet({this.weightKg, this.reps, this.durationSeconds});
+  const ReceiptSet(
+      {this.weightKg, this.reps, this.durationSeconds, this.distanceKm});
 }
 
 /// Per-exercise aggregated summary. Fields are already totals across all
@@ -787,12 +803,13 @@ class WorkoutReceiptCard extends StatelessWidget {
               weightKg: s.weightKg,
               reps: s.reps,
               durationSeconds: s.durationSeconds,
+              distanceKm: s.distanceKm,
             ))
         .toList();
     return WardSetChips(
       loggingType: ex.loggingType,
       perSetBreakdown: ward,
-      fallbackLabel: ward.isEmpty ? _exerciseDetail(ex) : null,
+      fallbackLabel: ward.isEmpty ? exerciseDetail(ex) : null,
     );
   }
 
@@ -807,7 +824,8 @@ class WorkoutReceiptCard extends StatelessWidget {
 
   /// Build the per-exercise summary string. Rules per logging type are the
   /// single source of truth — the same logic backs every view of a workout.
-  String _exerciseDetail(ReceiptExercise ex) {
+  @visibleForTesting
+  static String exerciseDetail(ReceiptExercise ex) {
     switch (ex.loggingType) {
       case 'bodyweight_reps':
         return '${ex.sets} sets \u00b7 ${ex.totalReps} reps';
@@ -816,13 +834,18 @@ class WorkoutReceiptCard extends StatelessWidget {
       case 'timed':
         return '${ex.sets} sets \u00b7 ${_formatDuration(ex.totalDurationSeconds)}';
       case 'cardio':
-        final mins = ex.totalDurationSeconds ~/ 60;
-        return '$mins min \u00b7 ${ex.totalDistanceKm.toStringAsFixed(1)} km';
       case 'distance':
-        final dist = '${ex.totalDistanceKm.toStringAsFixed(1)} km';
-        return ex.maxWeightKg > 0
-            ? '$dist \u00b7 ${ex.maxWeightKg.toStringAsFixed(0)}kg'
-            : dist;
+        // OI-389 U7: the same per-type rule as the Train expanded row (minutes,
+        // metres under 1 km, zero parts omitted) — a restored row with no km
+        // no longer reads "30 min · 0.0 km".
+        return cardioDistanceDetail(
+          loggingType: ex.loggingType,
+          sets: ex.sets,
+          durationSec: ex.totalDurationSeconds,
+          km: ex.totalDistanceKm,
+          reps: ex.totalReps,
+          weightKg: ex.maxWeightKg,
+        );
       default: // weight_reps
         if (ex.maxWeightKg > 0) {
           return '${ex.sets} sets \u00b7 ${ex.totalReps} reps \u00b7 ${ex.maxWeightKg.toStringAsFixed(0)}kg';

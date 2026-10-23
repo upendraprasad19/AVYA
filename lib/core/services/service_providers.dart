@@ -163,7 +163,7 @@ final aiServiceProvider = Provider<AiService>((ref) {
 /// Provider for [RazorpayService] — checkout flow + payment webhook
 /// polling.
 ///
-/// Reset behavior: nulls `_onSuccess`, `_onFailure`, and `_pendingPlan`
+/// Reset behavior: nulls `_onSuccess`, `_onFailure`, `_pendingPlan` and clears `_pendingCheckouts`
 /// so an abandoned-checkout callback from the previous user cannot fire
 /// against the new user's UI.
 final razorpayServiceProvider = Provider<RazorpayService>((ref) {

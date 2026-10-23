@@ -1,7 +1,10 @@
 // One LOG per exercise (flag `enable_log_exercise_button`): the pure decision
 // logic behind the LOG button, kept out of the private `part of` widgets so it
 // is unit-testable. Plan: docs/plans/active-workout-log-exercise.md §5.
+import 'package:icanbefitter/core/copy/set_log_copy.dart';
 import 'package:icanbefitter/core/copy/wardroom_copy.dart';
+import 'package:icanbefitter/core/services/workout_write_service.dart';
+import 'package:icanbefitter/core/services/write_result.dart';
 
 import '../providers/train_provider.dart';
 
@@ -9,7 +12,8 @@ import '../providers/train_provider.dart';
 enum SetField { weight, reps, duration, distance }
 
 /// `empty`: nothing usable typed (label "Add …"). `outOfRange`: a value is
-/// present but rejected, e.g. reps above 60 or "12.5" minutes (label "Fix …").
+/// present but rejected, e.g. reps above 60 or more than 360 minutes
+/// (label "Fix …").
 enum SetFailureKind { empty, outOfRange }
 
 class SetValidation {
@@ -25,6 +29,54 @@ class SetValidation {
   final String? message;
 
   bool get isOk => field == null;
+}
+
+/// OI-389 (D2): cardio minutes as typed ("12.5", "12.", ".5") → whole
+/// seconds, `(min × 60).round()`. Null when the text does not parse ("."
+/// or "1.2.3"). The ONE parser: the validator, the workout card's capture
+/// and the edit sheet all use it, so `SetInputValues.durationSeconds` holds
+/// true seconds for every type.
+int? cardioMinutesToSeconds(String text) {
+  final minutes = double.tryParse(text.trim());
+  if (minutes == null || minutes.isNaN || minutes.isInfinite) return null;
+  return (minutes * 60).round();
+}
+
+/// The box text for [secs] of cardio: decimal minutes with at most 2
+/// decimals, trailing zeros trimmed (750 → "12.5", 735 → "12.25",
+/// 30 → "0.5", 1800 → "30"). Two decimals round-trip exactly through
+/// [cardioMinutesToSeconds].
+String secondsToMinutesInput(int secs) {
+  var t = (secs / 60).toStringAsFixed(2);
+  if (t.contains('.')) {
+    t = t.replaceFirst(RegExp(r'0+$'), '');
+    if (t.endsWith('.')) t = t.substring(0, t.length - 1);
+  }
+  return t;
+}
+
+/// The set a captured row of boxes stands for (OI-389 U5), for the one
+/// logging type the slot shows: [fieldsClearedFor]'s table, a km <= 0 stored
+/// as absent. [v]'s duration is already seconds (converted at capture).
+ExerciseSet exerciseSetFromInput(
+  SetInputValues v,
+  String loggingType,
+  int loggedAtMs,
+) {
+  final dur = v.durationSeconds;
+  final km = ExerciseSet.canonicalKm(v.distanceKm);
+  final cleared = fieldsClearedFor(
+    loggingType,
+    hasDuration: (dur ?? 0) > 0,
+    hasKm: km != null,
+  );
+  return ExerciseSet(
+    weightKg: cleared.weight ? 0 : (v.weight ?? 0),
+    reps: cleared.reps ? 0 : (v.reps ?? 0),
+    durationSec: cleared.duration ? null : dur,
+    distanceKm: cleared.distance ? null : km,
+    loggedAtMs: loggedAtMs,
+  );
 }
 
 /// Same bounds as `exercise_card.dart` `_repsMin`/`_repsMax` (the cloud CHECK
@@ -46,9 +98,13 @@ const String kEnterDistanceMessage = 'Enter distance before marking complete';
 /// order, same messages, plus WHICH field failed and HOW, so the LOG button
 /// can label itself and focus that field.
 ///
-/// The `kind` is new: a duration that is present but not a whole number (the
-/// cardio field takes decimals, the validator `int.tryParse`s) is
-/// `outOfRange`, where the OFF validator reports it as missing.
+/// The `kind` is new: a value that is present but unusable (an unparseable
+/// duration, or one past a set's bound) is `outOfRange`, where the OFF
+/// validator reports it as missing.
+///
+/// OI-389 (D2): cardio minutes take decimals ("12.5" = 750 s) through
+/// [cardioMinutesToSeconds]; timed seconds stay whole. Bounds (OI-382): a set
+/// holds at most 21600 s (360 min) and 300 km.
 SetValidation validateSetInputs({
   required String loggingType,
   String weightText = '',
@@ -71,6 +127,31 @@ SetValidation validateSetInputs({
 
   SetValidation duration() {
     final t = durationText.trim();
+    if (loggingType == 'cardio') {
+      if (t.isEmpty) {
+        return const SetValidation.failure(
+            SetField.duration, SetFailureKind.empty, kEnterDurationMessage);
+      }
+      final minutes = double.tryParse(t);
+      final secs = cardioMinutesToSeconds(t);
+      if (minutes == null || secs == null) {
+        return const SetValidation.failure(
+            SetField.duration, SetFailureKind.outOfRange, kEnterDurationMessage);
+      }
+      if (minutes <= 0) {
+        return const SetValidation.failure(
+            SetField.duration, SetFailureKind.empty, kEnterDurationMessage);
+      }
+      if (secs < 1) {
+        return const SetValidation.failure(SetField.duration,
+            SetFailureKind.outOfRange, kSetMinimumSecondMessage);
+      }
+      if (secs > kMaxSetDurationSec) {
+        return const SetValidation.failure(
+            SetField.duration, SetFailureKind.outOfRange, kSetMinutesMaxMessage);
+      }
+      return const SetValidation.ok();
+    }
     final d = int.tryParse(t);
     if (d == null && t.isNotEmpty) {
       return const SetValidation.failure(
@@ -80,7 +161,20 @@ SetValidation validateSetInputs({
       return const SetValidation.failure(
           SetField.duration, SetFailureKind.empty, kEnterDurationMessage);
     }
+    if (d! > kMaxSetDurationSec) {
+      return const SetValidation.failure(
+          SetField.duration, SetFailureKind.outOfRange, kSetSecondsMaxMessage);
+    }
     return const SetValidation.ok();
+  }
+
+  /// OI-382: a km above 300 is refused wherever a KM box exists.
+  SetValidation? kmTooFar() {
+    final km = double.tryParse(distanceText.trim()) ?? 0;
+    return km > kMaxSetDistanceKm
+        ? const SetValidation.failure(
+            SetField.distance, SetFailureKind.outOfRange, kSetKmMaxMessage)
+        : null;
   }
 
   switch (loggingType) {
@@ -95,15 +189,18 @@ SetValidation validateSetInputs({
     case 'weighted_bodyweight':
       return reps();
     case 'timed':
-    case 'cardio':
       return duration();
+    case 'cardio':
+      final d = duration();
+      if (!d.isOk) return d;
+      return kmTooFar() ?? const SetValidation.ok();
     case 'distance':
       final distance = double.tryParse(distanceText.trim()) ?? 0;
       if (distance <= 0) {
         return const SetValidation.failure(
             SetField.distance, SetFailureKind.empty, kEnterDistanceMessage);
       }
-      return const SetValidation.ok();
+      return kmTooFar() ?? const SetValidation.ok();
     default:
       return const SetValidation.ok();
   }
