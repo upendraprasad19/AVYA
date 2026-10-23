@@ -465,6 +465,21 @@ class PlanEngineFlags {
     }
   }
 
+  /// Batch B1 (docs/plans/2026-10-22-library-core-list-pool.md): pick strength
+  /// exercises from the per-level CORE LIST (`CoreListSelector`) instead of the
+  /// 5-attempt cascade. Ship-dark DEFAULT OFF (§4.6 — changes what is
+  /// prescribed); OFF → `pickV4`'s cascade runs verbatim (the generator golden
+  /// proves it). Also inert while the library carries no `core_levels` (a v12
+  /// Hive box). Set `configBox['enable_core_list_pool'] = true` to enable.
+  static bool get coreListPoolEnabled {
+    try {
+      return HiveService.instance.configBox.get('enable_core_list_pool') ==
+          true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// OI-126: a `type: 'logged'` schedule row (AI-coach-only log, or a
   /// cloud-restore synthesize row) currently counts as a training day for the
   /// weekly streak (`isTrainingDayType`, exclusion-shaped) but as REST for

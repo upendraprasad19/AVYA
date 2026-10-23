@@ -5,9 +5,11 @@ import 'package:icanbefitter/core/services/sync_flags.dart';
 import 'package:icanbefitter/core/utils/equipment_vocab.dart';
 
 import '../exercise_repository.dart';
+import 'core_list_selector.dart';
 import 'equipment_capability.dart';
 import 'injury_substitutes.dart';
 import 'models.dart';
+import 'plan_engine_flags.dart';
 import 'training_history_analyzer.dart';
 
 /// Stage 2: Constraint-based exercise picker.
@@ -575,6 +577,30 @@ class ExerciseSelector {
     // Default `{}` → union no-op → byte-identical. Only generateV4 passes it.
     Set<String> plateauAvoidNames = const {},
   }) {
+    // Batch B1: the core-list pool, ship-dark (`enable_core_list_pool`). OFF, or
+    // a library with no `core_levels` (a v12 Hive box), runs the cascade below
+    // verbatim.
+    if (PlanEngineFlags.coreListPoolEnabled) {
+      final rows = exerciseRepo.getAll();
+      if (CoreListSelector.hasCoreFields(rows)) {
+        return _pickCoreList(
+          rows: rows,
+          slotDays: slotDays,
+          exerciseRepo: exerciseRepo,
+          equipmentTier: equipmentTier,
+          effectiveExp: effectiveExp,
+          phase: phase,
+          goal: goal,
+          injuries: injuries,
+          applyInjuryUniversalFilter: applyInjuryUniversalFilter,
+          applyInjurySubstitutePreference: applyInjurySubstitutePreference,
+          exclusions: exclusions,
+          capability: capability,
+          previousPhaseByDay: previousPhaseByDay,
+          plateauAvoidNames: plateauAvoidNames,
+        );
+      }
+    }
     final result = <PopulatedDay>[];
 
     // 2026-05-31 personalization lever L6 — read history ONCE per generation
@@ -659,6 +685,184 @@ class ExerciseSelector {
         name: day.name, focus: day.focus,
         dayType: day.dayType, intensity: day.intensity,
         exercisesA: exercisesA, exercisesB: exercisesB,
+      ));
+    }
+    return result;
+  }
+
+  /// Batch B1: the ON path of [pickV4] (plan Task 3). Each slot takes the top
+  /// of [CoreListSelector.rankedPool] through [_selectCandidate]. Variant B
+  /// SOFT-avoids A's names (they sort last instead of being excluded, unlike
+  /// OFF), so a slot whose only core rows A used repeats A rather than drop.
+  /// An emptied variant copies the other; a day with both variants empty takes
+  /// core rows of any level (Ruling 12), and only then the OFF cascade.
+  /// The OFF L6 post-pass is not run: it queries queryV4 and would swap in
+  /// non-core rows, so L6 is a partition inside rankedPool instead.
+  static List<PopulatedDay> _pickCoreList({
+    required List<Map<String, dynamic>> rows,
+    required List<MuscleSlotDay> slotDays,
+    required ExerciseRepository exerciseRepo,
+    required String equipmentTier,
+    required String effectiveExp,
+    required int phase,
+    required String goal,
+    required List<String> injuries,
+    required bool applyInjuryUniversalFilter,
+    required bool applyInjurySubstitutePreference,
+    required Set<String> exclusions,
+    required Set<String>? capability,
+    required Map<int, ({List<String> a, List<String> b})>? previousPhaseByDay,
+    required Set<String> plateauAvoidNames,
+  }) {
+    // ignore: invalid_use_of_visible_for_testing_member
+    final trace = CoreListSelector.debugTrace;
+    trace?.delegations++;
+    // L6: original-case names, compared exactly (as _applyHistoryAdjustments).
+    final demoted = phase >= 2
+        ? TrainingHistoryAnalyzer.demotedExercises()
+        : const <String>{};
+    final demotedLower = {for (final n in demoted) n.toLowerCase()};
+    final result = <PopulatedDay>[];
+
+    for (var i = 0; i < slotDays.length; i++) {
+      final day = slotDays[i];
+      final hasB = day.slotsB != null;
+      final avoidA = {
+        ...(previousPhaseByDay?[i]?.a ?? const <String>[]),
+        ...plateauAvoidNames,
+      };
+      final avoidB = {
+        ...(previousPhaseByDay?[i]?.b ?? const <String>[]),
+        ...plateauAvoidNames,
+      };
+
+      List<PlannedExercise> fill(
+        List<MuscleSlot> slots,
+        String variant,
+        Set<String> avoid,
+        Set<String> softAvoid, {
+        bool anyCoreLevel = false,
+      }) {
+        final out = <PlannedExercise>[];
+        final picked = <String>{};
+        // The curated injury-substitute narrowing inside _selectCandidate
+        // re-sorts the pool, so the soft avoid and L6 must ALSO be avoid
+        // names there, or injured users bypass them.
+        final avoidNames = {
+          ...avoid,
+          for (final n in softAvoid) n.toLowerCase(),
+          ...demotedLower,
+        };
+        for (final slot in slots) {
+          for (var k = 0; k < slot.count; k++) {
+            final r = CoreListSelector.rankedPool(
+              rows: rows,
+              slot: slot,
+              level: effectiveExp,
+              phase: phase,
+              equipmentTier: equipmentTier,
+              capability: capability,
+              exclusions: exclusions,
+              isContraindicated: (row) => _isContraindicated(row, injuries),
+              pickedNames: picked,
+              demotedNames: demoted,
+              softAvoidNames: softAvoid,
+              anyCoreLevel: anyCoreLevel,
+            );
+            Map<String, dynamic>? chosen;
+            if (r.source != 'drop') {
+              chosen = _selectCandidate(r.ordered,
+                  injuries: injuries,
+                  applyInjurySubstitutePreference:
+                      applyInjurySubstitutePreference,
+                  avoidNames: avoidNames);
+              out.add(_buildExercise(chosen,
+                  typeOverride: CoreListSelector.typeFor(chosen, slot)));
+              picked.add(chosen['name'] as String? ?? '');
+            }
+            trace?.slots.add(CoreListTraceSlot(
+              day: i,
+              variant: variant,
+              slot: slot,
+              level: effectiveExp,
+              source: anyCoreLevel && r.source != 'drop' ? 'emergency' : r.source,
+              pickedId: chosen?['id'] as String?,
+              poolSize: r.ordered.length,
+              improvisedRemoved: r.improvisedRemoved,
+              nonImprovisedInPool: r.nonImprovisedInPool,
+              families: r.families,
+              pickedFamily: chosen?['variant_family'] as String?,
+            ));
+          }
+        }
+        return out;
+      }
+
+      Set<String> softFor(List<PlannedExercise> a) => goal == 'strength'
+          ? const <String>{}
+          : {for (final e in a) e.exerciseName};
+
+      var a = fill(day.slotsA, 'A', avoidA, const {});
+      var b = hasB ? fill(day.slotsB!, 'B', avoidB, softFor(a)) : a;
+
+      // An emptied variant copies the other (one trace entry per variant).
+      void copyIfOneEmpty() {
+        if (!hasB) return;
+        if (a.isEmpty && b.isNotEmpty) {
+          a = b;
+          trace?.copied.add((day: i, variant: 'A'));
+        } else if (b.isEmpty && a.isNotEmpty) {
+          b = a;
+          trace?.copied.add((day: i, variant: 'B'));
+        }
+      }
+
+      copyIfOneEmpty();
+      if (a.isEmpty && b.isEmpty) {
+        a = fill(day.slotsA, 'A', avoidA, const {}, anyCoreLevel: true);
+        trace?.emergencyAnyLevel.add((day: i, variant: 'A'));
+        if (hasB) {
+          b = fill(day.slotsB!, 'B', avoidB, softFor(a), anyCoreLevel: true);
+          trace?.emergencyAnyLevel.add((day: i, variant: 'B'));
+        } else {
+          b = a;
+        }
+        copyIfOneEmpty();
+      }
+      if (a.isEmpty && b.isEmpty) {
+        // Last resort: what OFF brings today, so never a regression versus OFF.
+        a = _fillSlots(
+          day.slotsA, exerciseRepo, equipmentTier, effectiveExp, phase,
+          injuries: injuries, excludeNames: {},
+          applyInjuryUniversalFilter: applyInjuryUniversalFilter,
+          applyInjurySubstitutePreference: applyInjurySubstitutePreference,
+          avoidNames: avoidA,
+          exclusions: exclusions,
+          capability: capability,
+        );
+        trace?.refilled.add((day: i, variant: 'A'));
+        if (hasB) {
+          final aNames = a.map((e) => e.exerciseName).toSet();
+          b = _fillSlots(
+            day.slotsB!, exerciseRepo, equipmentTier, effectiveExp, phase,
+            injuries: injuries,
+            excludeNames: goal == 'strength' ? {} : aNames,
+            applyInjuryUniversalFilter: applyInjuryUniversalFilter,
+            applyInjurySubstitutePreference: applyInjurySubstitutePreference,
+            avoidNames: avoidB,
+            exclusions: exclusions,
+            capability: capability,
+          );
+          trace?.refilled.add((day: i, variant: 'B'));
+        } else {
+          b = a;
+        }
+      }
+
+      result.add(PopulatedDay(
+        name: day.name, focus: day.focus,
+        dayType: day.dayType, intensity: day.intensity,
+        exercisesA: a, exercisesB: b,
       ));
     }
     return result;
@@ -1269,7 +1473,10 @@ class ExerciseSelector {
     return field as String?;
   }
 
-  static PlannedExercise _buildExercise(Map<String, dynamic> ex) {
+  /// [typeOverride] (B1, OI-385): the core-list path passes
+  /// `CoreListSelector.typeFor`; null keeps the first `exercise_type` entry.
+  static PlannedExercise _buildExercise(Map<String, dynamic> ex,
+      {String? typeOverride}) {
     final equipRaw = ex['equipment_needed'];
     final equipList = equipRaw is List
         ? equipRaw.map((e) => e.toString()).toList()
@@ -1295,7 +1502,7 @@ class ExerciseSelector {
       restSeconds: ex['default_rest_secs'] as int? ?? 60,
       durationSeconds: ex['default_duration_secs'] as int?,
       notes: notes,
-      exerciseType: _extractFirst(ex['exercise_type']),
+      exerciseType: typeOverride ?? _extractFirst(ex['exercise_type']),
       category: ex['category'] as String?,
       equipmentNeeded: equipList,
       primaryMuscles: muscles,

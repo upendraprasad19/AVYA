@@ -282,6 +282,23 @@ pending:
 # is currently UNFIXED. A holder today would be told a falsehood by the coach
 # and by the Sunday push.
 
+  - flag: enable_core_list_pool
+    branch: library-batch-b
+    build_commit: null  # resolved in the Task 6 docs commit
+    build_date: 2026-10-22
+    flip_reviewed: false
+    flip_commit: null
+    note: >
+      Batch B1 core-list pool (docs/plans/2026-10-22-library-core-list-pool.md).
+      DEFAULT OFF; OFF is byte-identical (test/plan_generator/generator_golden_test.dart,
+      998 personas). Flip criteria, from Task 4's "reported, not gated" block:
+      emergencyAnyLevel == 0 after Batch C (Ruling 12 — any-level core rows on a
+      day whose two variants both empty, today only injured bodyweight users),
+      plus the founder's call on promoted and injured thin sessions (D6 gaps).
+      The flip commit copies slot_focus / slot_pattern into target_focus /
+      movement_pattern and deletes them (Ruling 4), and needs the full x2
+      review + bpass.
+
 resolved:
   - flag: ENABLE_SUBSCRIPTION_STACKING
     branch: oi341-purchase-in-trial
