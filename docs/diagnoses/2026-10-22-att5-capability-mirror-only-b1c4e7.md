@@ -132,6 +132,13 @@ six are the only golden keys that changed (re-recorded in this commit).
   done it, so it is kept. A custom that RECORDS kit the user lacks (for example
   one the AI coach authored) is now dropped. **This changes live behaviour for
   such customs**, deliberately: the same rule as a library row.
+- What a dropped pin leaves (B-pass F6): the variant is refilled through
+  `pickV4` only when EVERY pin dropped. Beside a performable pin, an
+  unperformable library pin, a community row whose `equipment_needed`
+  normalises to `[]` (`canPerform` fails closed and it is not a custom) or a
+  custom recording kit the user lacks just shortens that day by one exercise.
+  That is the shape of today's exclusion and injury pin drops. Pinned by the
+  two-pin test in `universal_pool_capability_behavioral_test.dart`.
 - The kill switch is the existing `disable_equipment_capability_floor`: it
   makes `capability` null, which skips both checks.
 

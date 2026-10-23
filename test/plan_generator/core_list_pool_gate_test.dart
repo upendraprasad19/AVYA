@@ -40,6 +40,19 @@ const _suitableDisagreeIds = {'E010', 'E020', 'E045', 'E134', 'E255'};
 List<String> _strs(Object? v) =>
     v is List ? [for (final e in v) e.toString()] : const <String>[];
 
+bool _retired(Map<String, dynamic> r) =>
+    _strs(r['core_levels']).isEmpty && r['variant_family'] == null;
+
+bool _skill(Map<String, dynamic> r) =>
+    r['discipline'] == 'calisthenics_skill' || r['discipline'] == 'olympic';
+
+/// Every main-lift id the phase actually serves, both variants, every week.
+Iterable<String> builtIds(Phase p) => [
+      for (final w in p.weekPlans)
+        for (final d in w.workoutDays)
+          for (final e in d.exercises) e.exerciseId
+    ];
+
 class _Persona {
   final String kind, tier, level;
   final int phase;
@@ -244,6 +257,10 @@ void main() {
     if (trace.emergencyAnyLevel.isNotEmpty) emergencyKeys.add(p.key);
     final sizes = strengthSizes(phase);
     if (sizes.any((n) => n == 0)) bad.add('empty day: ${p.key} $sizes');
+    for (final id in builtIds(phase)) {
+      final r = byId[id];
+      if (r != null && (_retired(r) || _skill(r))) bad.add('built: ${p.key} $id');
+    }
     cell.onSizes.addAll(sizes);
     return bad;
   }
@@ -276,6 +293,7 @@ void main() {
     const injuries = ['knee', 'shoulder', 'lower_back', 'wrist'];
     var runs = 0, sweepEmergency = 0, sweepRefilled = 0;
     final sweepRetired = <String>{};
+    final sweepSkill = <String>{};
     for (final tier in goldenTiers) {
       for (final level in ['beginner', 'intermediate', 'advanced']) {
         for (final days in [3, 4, 5, 6]) {
@@ -284,7 +302,7 @@ void main() {
               for (var j = i + 1; j < injuries.length; j++) {
                 final trace = CoreListTrace();
                 CoreListSelector.debugTrace = trace;
-                PlanGenerator.instance.generateV4(
+                final out = PlanGenerator.instance.generateV4(
                   goal: 'build_muscle',
                   equipment: tier,
                   daysPerWeek: days,
@@ -297,13 +315,14 @@ void main() {
                 runs++;
                 if (trace.emergencyAnyLevel.isNotEmpty) sweepEmergency++;
                 if (trace.refilled.isNotEmpty) sweepRefilled++;
-                for (final s in trace.slots) {
-                  final r = s.pickedId == null ? null : byId[s.pickedId];
-                  if (r != null &&
-                      _strs(r['core_levels']).isEmpty &&
-                      r['variant_family'] == null) {
-                    sweepRetired.add(s.pickedId!);
-                  }
+                // The BUILT lists, not the trace: a refilled variant runs the
+                // OFF cascade (universal pool included), whose picks the
+                // trace never sees (B-pass F1).
+                for (final id in builtIds(out)) {
+                  final r = byId[id];
+                  if (r == null) continue;
+                  if (_retired(r)) sweepRetired.add(id);
+                  if (_skill(r)) sweepSkill.add(id);
                 }
               }
             }
@@ -386,7 +405,8 @@ void main() {
           '${injuredMulti.length} ${injuredMulti.isEmpty ? '' : '(${injuredMulti.join(', ')})'}')
       ..writeln('- multi-injury sweep ($runs runs, every pair of '
           '${injuries.join('/')}): emergencyAnyLevel in $sweepEmergency, '
-          'refilled in $sweepRefilled, retired picks ${sweepRetired.isEmpty ? 'none' : sweepRetired.join(', ')}')
+          'refilled in $sweepRefilled; built lists: retired picks ${sweepRetired.isEmpty ? 'none' : sweepRetired.join(', ')}, '
+          'skill/olympic picks ${sweepSkill.isEmpty ? 'none' : sweepSkill.join(', ')}')
       ..writeln('- core-vs-suitable_for disagreements picked: '
           '${disagree.isEmpty ? 'none' : top(disagree, 10)}')
       ..writeln('- high-impact picks: ${highImpact.isEmpty ? 'none' : top(highImpact, 20)}')

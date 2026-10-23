@@ -124,10 +124,12 @@ void main() {
       .first
       .exercisesA;
 
-  List<PopulatedDay> pinned(String name, Set<String>? capability) =>
+  List<PopulatedDay> pinned(Object pins, Set<String>? capability) =>
       ExerciseSelector.buildPinnedDays(
         frames: [day([slot('elbow_flexion', 'Biceps')])],
-        pinnedByDay: {0: (a: [name], b: const <String>[])},
+        pinnedByDay: {
+          0: (a: pins is List<String> ? pins : [pins as String], b: const <String>[])
+        },
         exerciseRepo: ExerciseRepository.instance,
         equipmentTier: 'bodyweight',
         effectiveExp: 'intermediate',
@@ -171,7 +173,8 @@ void main() {
     expect(att5Picks(null).first.exerciseName, 'Pull Up');
   });
 
-  test('a library pin the user cannot perform is dropped and refilled',
+  test('a lone library pin the user cannot perform is dropped; the emptied '
+      'variant is refilled',
       () async {
     await seedFullLibrary();
     final capability = bodyweight()!;
@@ -185,6 +188,17 @@ void main() {
           isTrue,
           reason: '${e.exerciseName} needs ${e.equipmentNeeded}');
     }
+  });
+
+  // B-pass F6: the refill fires only when the WHOLE variant empties. With a
+  // performable pin beside it, an unperformable pin just shortens the day by
+  // one, the same shape as today's exclusion / injury pin drops.
+  test('next to a performable pin, an unperformable one shortens the day by one',
+      () async {
+    await seedFullLibrary();
+    final days =
+        pinned(['Barbell Curl', 'Self-Resisted Bicep Curl'], bodyweight());
+    expect(names(days.first.exercisesA), ['Self-Resisted Bicep Curl']);
   });
 
   test('a custom pin with no recorded equipment is kept', () async {

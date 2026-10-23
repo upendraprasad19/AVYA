@@ -10704,10 +10704,10 @@ concepts:
       - file: test/contracts/cross_phase_variety_behavioral_test.dart
         method_or_widget: drives real generateV4 (full_gym/advanced) — variety changes the SET, null=deterministic, bounded, injury-safe
         semantic: behavioral
-    contract_test_path: test/contracts/cross_phase_variety_behavioral_test.dart
       - file: lib/shared/repositories/plan_engine/core_list_selector.dart
-        method: CoreListSelector.rankedPool (enable_core_list_pool ON, Batch B1)
+        method_or_widget: CoreListSelector.rankedPool (enable_core_list_pool ON, Batch B1)
         semantic: _pickCoreList passes the previous phase names to _selectCandidate as avoidNames (soft, as OFF)
+    contract_test_path: test/contracts/cross_phase_variety_behavioral_test.dart
 
   - concept: volume_titration
     domain: workout
@@ -10890,10 +10890,10 @@ concepts:
       - file: test/contracts/plateau_rotation_behavioral_test.dart
         method_or_widget: seeds exlog_* flat plateaus for the baseline plan's compounds → rotation (non-vacuous) + independence + ship-dark + slot-count-invariance + bounded + injury-safe + fatigued-no-rotation + gates
         semantic: behavioral
-    contract_test_path: test/contracts/plateau_rotation_behavioral_test.dart
       - file: lib/shared/repositories/plan_engine/core_list_selector.dart
-        method: CoreListSelector.rankedPool (enable_core_list_pool ON, Batch B1)
+        method_or_widget: CoreListSelector.rankedPool (enable_core_list_pool ON, Batch B1)
         semantic: _pickCoreList unions plateauAvoidNames into avoidNames (soft, as OFF)
+    contract_test_path: test/contracts/plateau_rotation_behavioral_test.dart
 
   - concept: repeat_content_scheduling
     domain: workout
@@ -11240,10 +11240,10 @@ concepts:
         method: buildAiContext ('equipment_effective', flag-gated, key omitted when OFF)
         semantic: advisory
         notes: decision 7 — the coach was given the tier LABEL and had to guess what it contained
-    contract_test_path: test/contracts/bodyweight_capability_leak_test.dart
       - file: lib/shared/repositories/plan_engine/core_list_selector.dart
         method: CoreListSelector.rankedPool (enable_core_list_pool ON, Batch B1)
         semantic: hard filter F requires EquipmentCapability.canPerform when capability != null, else the queryV4 tier rule; needsImplementPreference is keyed on the capability set, never the tier label
+    contract_test_path: test/contracts/bodyweight_capability_leak_test.dart
 
   - concept: equipment_needed_shape
     domain: workout
@@ -11418,10 +11418,10 @@ concepts:
         method: preferredFor re-rank (post-injury-filter)
         semantic: the curated safe-sub lists stay coherent with the new tags (≥1 shoulder sub stays safe)
         notes: warmup mirror _moveInjuries value-agreement guarded by warmup_library_injury_mirror_test
-    contract_test_path: test/contracts/injury_undertag_13b_contract_test.dart
       - file: lib/shared/repositories/plan_engine/core_list_selector.dart
         method: CoreListSelector.rankedPool (enable_core_list_pool ON, Batch B1)
         semantic: hard filter F drops a row whose injury_contraindications contains a user token, through the shared ExerciseSelector._isContraindicated passed in as isContraindicated (ungated, as attempts 1-4)
+    contract_test_path: test/contracts/injury_undertag_13b_contract_test.dart
 
   - concept: core_list_pool
     domain: workout
@@ -11432,7 +11432,7 @@ concepts:
       delegates to _pickCoreList, which picks each slot from CoreListSelector.rankedPool: core
       rows for the effective level, else a same-variant_family row core only at a HIGHER level
       (never lower, D6), else drop. Variant B soft-avoids A; an emptied variant copies the other;
-      a doubly-empty day takes any-level core rows (Ruling 12), then the OFF cascade. OFF (flag
+      a doubly-empty day takes easier-or-equal core rows, nearest level first (Ruling 12), then the OFF cascade. OFF (flag
       absent) or a v12 box runs the cascade verbatim (test/plan_generator/generator_golden_test.dart,
       998 personas). ON-world gate test/plan_generator/core_list_pool_gate_test.dart (hard zeros
       over the same personas; report test/plan_generator/core_list_pool_report.md). The
@@ -11698,10 +11698,10 @@ concepts:
         method: the generated Phase (selection reflects the exclusions)
         semantic: no exercise requires an excluded item
         notes: consumed by Train screen / active workout; ⑥ C1 wired the equipment_exclusions profile central-read (TrainingHistoryAnalyzer.resolveEquipmentExclusions @ generateV4 :100)
-    contract_test_path: test/contracts/equipment_exclusion_filter_behavioral_test.dart
       - file: lib/shared/repositories/plan_engine/core_list_selector.dart
         method: CoreListSelector.rankedPool (enable_core_list_pool ON, Batch B1)
         semantic: hard filter F drops a row needing any excluded token, independently of capability (two kill switches, as queryV4)
+    contract_test_path: test/contracts/equipment_exclusion_filter_behavioral_test.dart
 
   - concept: program_week_projection
     domain: cross_domain

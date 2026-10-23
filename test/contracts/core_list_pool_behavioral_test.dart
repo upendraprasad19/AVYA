@@ -31,7 +31,7 @@ const _rank = {'beginner': 0, 'intermediate': 1, 'advanced': 2};
 const _skillIds = {
   'E069', 'E070', 'E071', 'E072', 'E073', 'E074', 'E086', 'E101', 'E179', 'E180',
 };
-const _improvisedShoulder = {'E272', 'E273', 'E276', 'E277', 'E289', 'E290'};
+const _improvisedShoulder = {'E272', 'E273', 'E274', 'E276', 'E277', 'E289', 'E290'};
 
 List<String> _strs(Object? v) =>
     v is List ? [for (final e in v) e.toString()] : const <String>[];
@@ -231,6 +231,7 @@ void main() {
     MuscleSlot s, {
     String level = 'intermediate',
     Set<String>? capability,
+    bool anyCoreLevel = false,
   }) =>
       CoreListSelector.rankedPool(
         rows: rows,
@@ -245,6 +246,7 @@ void main() {
         isContraindicated: (_) => false,
         pickedNames: const {},
         demotedNames: const {},
+        anyCoreLevel: anyCoreLevel,
       );
 
   test('OFF is the golden', () async {
@@ -593,6 +595,27 @@ void main() {
     expect(names(d.exercisesB), ['Lower Core']);
     expect(trace.emergencyAnyLevel.map((e) => e.day), contains(0));
     expect(trace.refilled, isEmpty);
+  });
+
+  group('any-level emergency gives easier core moves only (Ruling 12)', () {
+    test('nearest easier level first', () {
+      final rows = [
+        _row('A_BEG', 'Easy', levels: ['beginner']),
+        _row('B_INT', 'Mid', levels: ['intermediate']),
+      ];
+      final r = pool(rows, slot('Glutes', 'hip_dominant'),
+          level: 'advanced', anyCoreLevel: true);
+      expect([for (final x in r.ordered) x['id']], ['B_INT', 'A_BEG']);
+    });
+
+    test('never a harder-only row', () {
+      final rows = [
+        _row('A_ADV', 'Hard', levels: ['advanced']),
+        _row('B_BEG', 'Easy', levels: ['beginner']),
+      ];
+      final r = pool(rows, slot('Glutes', 'hip_dominant'), anyCoreLevel: true);
+      expect([for (final x in r.ordered) x['id']], ['B_BEG']);
+    });
   });
 
   test('OFF cascade only as the last resort', () async {

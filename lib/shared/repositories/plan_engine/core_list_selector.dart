@@ -134,8 +134,9 @@ class CoreListSelector {
 
   /// The ranked candidate list for one slot (plan Task 3, "The rankedPool
   /// algorithm"). `ordered` is empty iff `source == 'drop'`. [anyCoreLevel]
-  /// admits core rows of any level and skips family fill (the empty-day
-  /// emergency, Ruling 12); a row with `core_levels: []` never enters.
+  /// admits core rows of an EASIER or equal level only, nearest level first,
+  /// and skips family fill (the empty-day emergency, Ruling 12: "easier core
+  /// moves"); a row with `core_levels: []` never enters.
   static ({
     List<Map<String, dynamic>> ordered,
     String source,
@@ -168,6 +169,16 @@ class CoreListSelector {
             .any((l) => l.toLowerCase().contains(muscle)) ||
         _strs(r['primary_muscles']).any((m) => m.toLowerCase().contains(muscle));
     List<String> levels(Map<String, dynamic> r) => _strs(r['core_levels']);
+    // Emergency only: levels between the user's and the row's nearest
+    // easier-or-equal core level; null = core only at a harder level.
+    int? easierGap(Map<String, dynamic> r) {
+      int? gap;
+      for (final l in levels(r)) {
+        final d = levelRank - (_rank[l] ?? 0);
+        if (d >= 0 && (gap == null || d < gap)) gap = d;
+      }
+      return gap;
+    }
 
     // 1. Hard filter F.
     bool passes(Map<String, dynamic> r) {
@@ -205,7 +216,7 @@ class CoreListSelector {
       for (final r in rows)
         if (passes(r) &&
             target(r) &&
-            (anyCoreLevel ? levels(r).isNotEmpty : levels(r).contains(level)))
+            (anyCoreLevel ? easierGap(r) != null : levels(r).contains(level)))
           r
     ];
     if (pool.isEmpty && !anyCoreLevel) {
@@ -261,6 +272,7 @@ class CoreListSelector {
     List<int> keys(Map<String, dynamic> r) => [
           demotedNames.contains(r['name']) ? 1 : 0,
           softAvoidNames.contains(r['name']) ? 1 : 0,
+          anyCoreLevel ? easierGap(r)! : 0,
           phase == 1 && !foundational(r) ? 1 : 0,
           sub != null && !subFocusMatches(r, slot) ? 1 : 0,
           _strs(r['exercise_type']).any((t) => t.toLowerCase() == type) ? 0 : 1,

@@ -103,7 +103,7 @@ findings:
   - id: R5
     title: "No universal pool in the ON path"
     terminal_state: verified_clean
-    evidence: "_pickCoreList never calls the attempt-5 pool (empty slot → family fill → drop → copy → any-level → OFF cascade last); the gate's refilled count is 0 over 998 personas, so the OFF pool is not reached there."
+    evidence: "_pickCoreList never calls the attempt-5 pool itself (empty slot → family fill → drop → copy → easier-level emergency → OFF cascade last). Over the 998 personas the gate's refilled count is 0, so the OFF pool is not reached. The multi-injury sweep has 22 refills that run the OFF cascade and serve retired E261 and E234 (B-pass F1); that is a flip criterion."
 
   - id: R6
     title: "Warm-up / cool-down repoint moves to Batch C"
@@ -141,7 +141,7 @@ findings:
     reopen_when: "B2 Task 6."
 
   - id: R12
-    title: "Empty-day emergency: any-level core before the OFF cascade (founder 2026-10-23)"
+    title: "Empty-day emergency: easier-or-equal core rows before the OFF cascade (founder 2026-10-23)"
     terminal_state: upstream_blocked
     blocker: "Today 2 golden personas (shoulder-injured bodyweight intermediate p1/p2) and 54 of 576 multi-injury sweep runs reach it; only Batch C's 84 extra core rows can bring it to 0."
     reopen_when: "Batch C lands, then at the enable_core_list_pool flip (the flip needs 0)."
@@ -207,5 +207,47 @@ findings:
     terminal_state: blocked_on_user
     reason: "Founder confirms the two tags (applied per the 2026-10-22 decision naming all five) or reverts them; revert is one line in scripts/data/library_injury_additions_v13.json (diagnose c2d5e8)."
 
-total_findings: 33
-closed_count: 33
+  # ── B-pass (docs/reviews/library-batch-b-bpass.md) ──────────────
+  - id: BPASS-F1
+    title: "Gate measured retired/skill picks over the trace only; OFF-cascade refills were never inspected"
+    terminal_state: closed_in_commit
+    commit: library-batch-b@branch
+    verification: "core_list_pool_gate_test.dart builtIds(): hard class 'built:' over the 998 personas (0) and the sweep's built lists reported (retired E261, E234; skill none, where the old trace loop said 'none'); flip criteria in docs/ship_dark_pending_review.yaml widened."
+
+  - id: BPASS-F1-SWEEP
+    title: "Multi-injury sweep refills (22 of 576) serve retired E261 / E234 through the OFF cascade"
+    terminal_state: upstream_blocked
+    blocker: "ON is dark; the refill is the OFF cascade users get today. Only Batch C's extra core rows remove the refills."
+    reopen_when: "Batch C lands, then at the enable_core_list_pool flip (the flip needs refilled == 0 and no retired id)."
+
+  - id: BPASS-F2
+    title: "Any-level emergency admitted harder-only core rows (Ruling 12 says easier)"
+    terminal_state: closed_in_commit
+    commit: library-batch-b@branch
+    verification: "core_list_selector.dart easierGap(): easier-or-equal only, nearest first; two unit tests red then green; mutations (admit any level, drop the gap key) each redden one test; gate report cells unchanged."
+
+  - id: BPASS-F3
+    title: "Five core_list_selector reader blocks sat after contract_test_path, outside readers:"
+    terminal_state: closed_in_commit
+    commit: library-batch-b@branch
+    verification: "Blocks moved; test/contracts/sot_registry_list_nesting_test.dart red on exactly lines 10708/10894/11244/11422/11702 of the pre-fix registry, green now; check_sot_registry_parity PASS."
+
+  - id: BPASS-F4
+    title: "Plan-review record forward-references the B-pass file"
+    terminal_state: verified_clean
+    evidence: "By design: the record lands in its own commit after the review file (code-review skill, plan-review hash fixed point)."
+
+  - id: BPASS-F5
+    title: "OI-387 test literal omitted E274"
+    terminal_state: closed_in_commit
+    commit: library-batch-b@branch
+    verification: "E274 added to _improvisedShoulder in core_list_pool_behavioral_test.dart; 33/33."
+
+  - id: BPASS-F6
+    title: "A dropped pin is refilled only when the whole variant empties"
+    terminal_state: closed_in_commit
+    commit: library-batch-b@branch
+    verification: "Two-pin test pins the one-shorter day (mutation removing the capability check reddens it); the single-pin title now says the refill needs an emptied variant; diagnose b1c4e7 names the effect."
+
+total_findings: 40
+closed_count: 40

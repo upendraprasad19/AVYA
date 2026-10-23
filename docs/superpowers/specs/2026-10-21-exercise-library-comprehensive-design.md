@@ -70,7 +70,7 @@ For a slot (pattern + target muscle) the candidate pool is: rows whose `core_lev
 ### 4.2 Empty slot (within the same level only — D6)
 1. Non-core rows of the **same `variant_family`** whose `suitable_for` includes the level and whose equipment the user has.
 2. Otherwise the slot is **dropped** and the session is shorter. Never a lower level's core pick, with one exception:
-3. **Empty-day emergency (founder 2026-10-23, B1 plan Ruling 12).** A day whose two variants BOTH end empty takes core rows of ANY level before the OFF cascade. It is the only place a lower level's core row may appear, and never a retired row (`core_levels: []`). D6 accepts gaps, not empty strength days. Counted by the B1 gate; the flip needs 0 after Batch C.
+3. **Empty-day emergency (founder 2026-10-23, B1 plan Ruling 12).** A day whose two variants BOTH end empty takes core rows of an EASIER or equal level, nearest level first, before the OFF cascade; a row core only at a harder level never enters (B1 B-pass F2). It is the only place a lower level's core row may appear, and never a retired row (`core_levels: []`). D6 accepts gaps, not empty strength days. Counted by the B1 gate; the flip needs 0 after Batch C.
 
 ### 4.3 Assumed setups
 | Level | Assumed setup | Coverage (founder-approved core lists) |

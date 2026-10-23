@@ -321,7 +321,7 @@ Plan `docs/plans/2026-10-22-library-core-list-pool.md`; spec `docs/superpowers/s
 
 The pick goes through `_selectCandidate` with previous-phase, plateau, soft-avoid and demoted names as avoid names, because its curated injury-substitute narrowing re-sorts the pool. `typeFor` types a `["calisthenics","compound"]` row as compound (OI-385).
 
-**Empty variants (Ruling 12).** An emptied variant copies the other. If both are empty, the day re-runs with core rows of ANY level (never a `core_levels: []` row), copies again, and only then falls back to the OFF cascade. On shipped data only the 2 shoulder-injured bodyweight intermediate personas reach the any-level step; the flip needs 0 after Batch C.
+**Empty variants (Ruling 12).** An emptied variant copies the other. If both are empty, the day re-runs with core rows of an EASIER or equal level, nearest first (never a harder-only row, never a `core_levels: []` row; B-pass F2), copies again, and only then falls back to the OFF cascade. On shipped data only the 2 shoulder-injured bodyweight intermediate personas reach the any-level step; the flip needs 0 after Batch C.
 
 **Evidence.** OFF identity: `test/plan_generator/generator_golden_test.dart` (998 personas). Behaviour: `test/contracts/core_list_pool_behavioral_test.dart` (31 tests; 18 mutations, each reddening its named test). ON world: `test/plan_generator/core_list_pool_gate_test.dart`, hard zeros over the 998 personas, report `test/plan_generator/core_list_pool_report.md`. Known cost, accepted by D6 and a flip criterion: promoted bodyweight users get thin ON sessions (intermediate min 1 exercise/day vs 3 OFF; advanced mean 4.67 vs 8.56) until Batch C adds 84 core rows.
 
