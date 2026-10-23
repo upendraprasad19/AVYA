@@ -5,6 +5,8 @@ blast_radius: account
 review_rounds: 4
 ground_truth_verified: true
 verdict: converged
+bpass: accepted
+bpass_review: docs/reviews/08b042b6d599-review.md
 ---
 
 # Plan-review record: the coach stops naming a weekday the user never trains or never singled out (OI-390)
@@ -53,3 +55,8 @@ OIs and schedule the work:
 - **Batch B:** IST-throughout for workout dates.
 - **`rolling-context` re-embedding** (catastrophic-tier EF).
 - **`getProgressSummary` `adherence_pct`** (EF, L).
+
+## Founder approval and B-pass (2026-10-23)
+
+- Founder approved the plan as written (D1 recommended rule, D2 keep), the D3 deletes (sequenced after the fixed build is on device) and the D4 OIs (minted OI-397, OI-398, OI-399).
+- `docs/reviews/08b042b6d599-review.md` (accepted): 0 P0, 0 P1, 0 P2, 2 P3 (F1 pinned by the T3f pair; F2 false alarm).
