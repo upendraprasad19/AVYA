@@ -49,14 +49,14 @@ every exercise, and a library deep enough that a swap always has a sensible opti
 | `requires_coaching`, `high_impact` | bool | gating (Olympic, plyometrics) |
 | `media_slug`, `media_version`, `media_source` | string / int / provenance | animation delivery (§7), D9 |
 
-Vocabulary changes: `difficulty_level` gains `elite`; `suitable_for` gains `Calisthenics`.
-`target_focus` is normalised to the slot vocabulary (`Shoulders` → `Lateral Delts`, …) so substring matching in `queryV4` finds the row. This happens in Batch B, with the equipment-aware pool. `primary_muscles` is never renamed: it feeds the frozen muscle-group map, superset pairing, titration and the scorecard. On today's pool, making the towel rows visible would let cross-phase novelty hand them to home and gym users (Batch A evidence, 2026-10-22).
+Vocabulary changes: `difficulty_level` gains `elite`; `suitable_for` gains `Calisthenics`. **Not applied in Batch B1** (B1 plan Ruling 3(d)): both touch only discipline-excluded skill rows, which the core-list pool never selects, and `queryV4` compares `suitable_for` on the OFF path.
+`target_focus` is normalised to the slot vocabulary (`Shoulders` → `Lateral Delts`, …) so substring matching in `queryV4` finds the row. In Batch B1 this is an ON-only OVERLAY (B1 plan Rulings 3(a) and 4): `slot_focus` (19 rows) and `slot_pattern` (12 rows), read by the core-list pool as `slot_focus ?? target_focus` and `slot_pattern ?? movement_pattern`. `target_focus` and `movement_pattern` stay as shipped because `queryV4` (OFF) and the exercise display read them; the flip commit copies the overlays into those fields and deletes them. `primary_muscles` is never renamed: it feeds the frozen muscle-group map, superset pairing, titration and the scorecard. On today's pool, making the towel rows visible would let cross-phase novelty hand them to home and gym users (Batch A evidence, 2026-10-22).
 
 ### 3.2 Equipment vocabulary (`lib/core/utils/equipment_vocab.dart`)
-New tokens: weight plate, dip belt, weighted vest, gymnastic rings, trap bar, landmine, stability ball, balance board, sled, grip trainer, wrist roller, yoga strap, foam roller, sandbag, yoke. The single `machines` token keeps meaning "standard selectorised machines"; well-equipped / specialty items are their own tokens so a user can say they have them.
+New tokens: weight plate, dip belt, weighted vest, gymnastic rings, trap bar, landmine, stability ball, balance board, sled, grip trainer, wrist roller, yoga strap, foam roller, sandbag, yoke. The single `machines` token keeps meaning "standard selectorised machines"; well-equipped / specialty items are their own tokens so a user can say they have them. **Moved to Batch D** (B1 plan Ruling 1): a user cannot own new kit until D's gym-extras checklist, six of the tokens are aliases today (making them canonical changes custom/community normalisation), and `yoke` would make E182 unperformable.
 
 ### 3.3 Cloud + local
-- `assets/data/exercise_library.json` (Hive seed) and cloud `exercise_library` table carry the same rows and columns; seed version bump forces a local re-seed. Both change in the same release (the AI coach reads the cloud copy).
+- `assets/data/exercise_library.json` (Hive seed) and cloud `exercise_library` table carry the same rows; the cloud carries a SUBSET of the columns (20 of the 39 pre-v13 JSON keys, `scripts/seed_exercise_library.js:119-127`). No Edge Function reads the core-list fields, so Batch B1 adds no cloud migration (B1 plan Ruling 2). A seed version bump forces a local re-seed. Both change in the same release (the AI coach reads the cloud copy).
 - **Aliases:** a merged exercise's old name goes into the kept row's `name_aliases`, which search and the exact-name lookup read, and its id into `merged_ids`, which the seed prunes from Hive. In cloud the retired row stays with `is_active = false`.
 
 ### 3.4 Current numbers (2026-10-21)
@@ -65,11 +65,12 @@ New tokens: weight plate, dip belt, weighted vest, gymnastic rings, trap bar, la
 ## 4. Generator selection
 
 ### 4.1 Pool
-For a slot (pattern + target muscle) the candidate pool is: rows whose `core_levels` contains the user's **effective level**, `discipline` ∉ {calisthenics_skill, olympic}, equipment the user can perform (`EquipmentCapability.canPerform`, fail-closed), no injury contraindication, minus exclusions. Existing ordering (compound-first, `priority_tier`, foundational) and variety levers (previous-phase avoid, plateau rotation, L6 demote-swap) keep working on this pool. Phase 1 stays free and foundational-only.
+For a slot (pattern + target muscle) the candidate pool is: rows whose `core_levels` contains the user's **effective level**, `discipline` ∉ {calisthenics_skill, olympic}, equipment the user can perform (`EquipmentCapability.canPerform`, fail-closed), no injury contraindication, minus exclusions. Existing ordering (compound-first, `priority_tier`, foundational) and variety levers (previous-phase avoid, plateau rotation, L6 demote-swap) keep working on this pool. Phase 1 stays free; foundational rows rank FIRST there — a preference, not a filter (founder 2026-10-22, B1 plan Ruling 7), because a hard filter would drop more Phase 1 slots, and today's cascade already relaxes it at attempt 2.
 
 ### 4.2 Empty slot (within the same level only — D6)
 1. Non-core rows of the **same `variant_family`** whose `suitable_for` includes the level and whose equipment the user has.
-2. Otherwise the slot is **dropped** and the session is shorter. Never a lower level's core pick.
+2. Otherwise the slot is **dropped** and the session is shorter. Never a lower level's core pick, with one exception:
+3. **Empty-day emergency (founder 2026-10-23, B1 plan Ruling 12).** A day whose two variants BOTH end empty takes core rows of an EASIER or equal level, nearest level first, before the OFF cascade; a row core only at a harder level never enters (B1 B-pass F2). It is the only place a lower level's core row may appear, and never a retired row (`core_levels: []`). D6 accepts gaps, not empty strength days. Counted by the B1 gate; the flip needs 0 after Batch C.
 
 ### 4.3 Assumed setups
 | Level | Assumed setup | Coverage (founder-approved core lists) |
@@ -82,7 +83,7 @@ For a slot (pattern + target muscle) the candidate pool is: rows whose `core_lev
 Today: 8 exercises/day fixed; phase 4 for the founder = 32–46 working sets/session (6 days, 90 min).
 **Proposed rule** (calibrated in Batch B's plan, evidence-based):
 - **Per muscle per week:** 10–20 hard sets for hypertrophy goals (Schoenfeld, Ogborn & Krieger 2017 dose-response meta-analysis), fewer for beginners.
-- **Per muscle per session:** cap around 8–10 hard sets; benefit per session plateaus beyond roughly that range (Pelland et al. 2024 meta-regression, preprint).
+- **Per muscle per session:** cap around 8–10 hard sets; benefit per session plateaus beyond roughly that range (Remmert, Pelland et al. 2025, SportRxiv preprint).
 - **Per session:** the set budget comes from the user's minutes: ≈ (minutes − warm-up − cool-down) ÷ (average set time + rest). Exercises are added until the budget is spent, not to a fixed count.
 - Customs never count (D8).
 
@@ -106,11 +107,12 @@ Skill rows carry `skill_track`/`skill_step`/`regression_to`/`progression_to` (pl
 | # | Batch | Content | Notes |
 |---|---|---|---|
 | 0 | Stop auto-adding customs | Remove L2; one-time repair of planned days; regression test | **SHIPPED** 10-21: PR #138 `c54e63ba`, PR #141 `fcbe6840` |
-| A | Library data repair | Un-shift the 136 coaching-text rows (corrects OI-149: the text is recoverable, only `pro_tip` was lost) and store cues as real lists; retire 7 duplicate rows into their twins with aliases; fix the E172/E163 "Lats" label typos; flip 19 founder-flagged start/end pictures; remove 2 wrong drawings | Fixes a live user-visible bug |
+| A | Library data repair | Un-shift the 136 coaching-text rows (corrects OI-149: the text is recoverable, only `pro_tip` was lost) and store cues as real lists; retire 7 duplicate rows into their twins with aliases; fix the E172/E163 "Lats" label typos; flip 19 founder-flagged start/end pictures; remove 2 wrong drawings | **SHIPPED** 10-22: PR #147 `08c077d1`. Fixes a live user-visible bug |
 | M | Media | Upload 720 px set + provenance, `media_slug`, cache/prefetch/fallback in app; **create animations for the 40 core rows that have none** (34 plates / 6 monograms until then — Q3) | Needs Pro before launch |
-| B | Schema + generator | New fields + vocab tokens, core-list pool, within-family fill, discipline exclusion, session-size budget; `target_focus` for the 6 invisible bodyweight rows (E272 E273 E276 E277 E289 E290); universal-pool and warmup/cooldown names repointed to kept rows; E261/E274 (one movement) resolved; the exercise_type `calisthenics` and sub-focus string gaps (OIs filed 2026-10-22) | Ship-dark behind a flag (§4.6); ×2 review again on flip |
-| C | New rows | ~760 rows (data + animations) incl. coaching-text quality pass on core rows; remove the 66 remaining discarded library rows (incl. E075, E261), then relabel E274 `target_focus` → Mid Back | Cloud + local same release |
-| D | UX | Gym-extras checklist, "Not at my gym" swap, band/pull-up-bar nudge | Wardroom copy |
+| B1 | Schema + core-list pool | Core-list fields on every library row (seed v13); core-list pool with within-family fill and discipline exclusion; implement preference keyed on capability (OI-387/388); calisthenics-typed rows typed by `exercise_type` content (OI-385); one sub-focus vocabulary (OI-386); the 6 invisible bodyweight rows via the `slot_focus` overlay; E261/E274 resolved by core levels (E261 is never picked ON, E274 is the beginner core row). **No universal pool in the ON path** (B1 plan Ruling 5): an empty slot takes family fill, then drops; the OFF pool stays verbatim for OFF. Also two live safety fixes: equipment capability on the attempt-5 pool and repeat pins, and five safety-direction injury tags | Ship-dark `enable_core_list_pool` (§4.6); ×2 review again on flip. Plan `docs/plans/2026-10-22-library-core-list-pool.md` |
+| B2 | Session set budget | The session-size set budget (§5) | Ship-dark; plan `docs/plans/2026-10-22-session-set-budget.md` |
+| C | New rows | ~760 rows (data + animations) incl. coaching-text quality pass on core rows; remove the 66 remaining discarded library rows (incl. E075, E261), then relabel E274 `target_focus` → Mid Back; warm-up / cool-down names repointed to kept rows (moved from B, B1 plan Ruling 6: the kept replacements are Batch C rows) | Cloud + local same release |
+| D | UX | Gym-extras checklist, "Not at my gym" swap, band/pull-up-bar nudge; the 15 new equipment tokens (§3.2, moved from B) | Wardroom copy |
 
 Each batch: plan → two context-blind reviews → worktree → tests (mutation-proven) → B-pass → PR → founder device check.
 

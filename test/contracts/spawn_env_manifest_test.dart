@@ -50,6 +50,8 @@ const _stripped = <String>{
   'SUPABASE_ACCESS_TOKEN', 'SUPABASE_ACCESS_TOKEN_FITNESS', 'SUPABASE_SERVICE_ROLE_KEY',
   'SUPABASE_URL', 'SUPABASE_ANON_KEY', 'RAZORPAY_KEY_ID', 'USDA_API_KEY',
   '_SKIP_RENDER_CHECK', 'ANDROID_DEVICE_ID',
+  // test fixture / report re-record switches (generator golden, frozen library reference, B1 gate report)
+  'RECORD_GENERATOR_GOLDEN', 'RECORD_LIBRARY_REFERENCE', 'RECORD_LIBRARY_REFERENCE_IDS', 'WRITE_CORE_LIST_REPORT',
 };
 
 /// Read by an EXTERNAL tool only (git's author-identity fallback; d9e4b1): stripped,

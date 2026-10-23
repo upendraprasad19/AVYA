@@ -13,7 +13,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 // 38 - 3 dead image URL fields (image_start_url / image_end_url / gif_url,
 // removed by the exercise-plates batch: every populated URL 404'd and the only
-// reader was a copy-through in swap_service that nothing rendered) = 35 keys
+// reader was a copy-through in swap_service that nothing rendered) = 35 keys (+5 core-list keys in v13 = 40)
 // REQUIRED on every row.
 const _canonicalKeys = <String>{
   'id', 'name', 'category', 'movement_pattern', 'exercise_type', 'primary_muscles',
@@ -24,6 +24,10 @@ const _canonicalKeys = <String>{
   'is_active', 'is_foundational',
   'injury_contraindications', 'is_bilateral', 'cns_demand', 'target_focus',
   'equipment_tier', 'standard_swap', 'priority_tier', 'rep_range',
+  // Core-list selection fields (library v13, Batch B1 Task 2) — on every row;
+  // values pinned by exercise_library_core_fields_contract_test.dart.
+  'core_levels', 'discipline', 'gym_availability', 'requires_coaching',
+  'high_impact',
 };
 
 // Exercise plates (library v11): present on the rows that have a drawing,
@@ -33,8 +37,13 @@ const _canonicalKeys = <String>{
 // union on the `extra` side only.
 // Duplicate merges (library v12, Batch A): `name_aliases` and `merged_ids` sit
 // only on the 7 rows that absorbed a retired twin.
+// Core-list (library v13, Batch B1 Task 2): `variant_family` is absent on the
+// 66 discarded rows; `slot_focus` / `slot_pattern` are ON-only overlays on 19 /
+// 12 rows; the skill-ladder keys sit only on skill rows.
 const _optionalKeys = <String>{
   'demo_slug', 'demo_pair', 'name_aliases', 'merged_ids',
+  'variant_family', 'slot_focus', 'slot_pattern', 'skill_track', 'skill_step',
+  'regression_to', 'progression_to',
 };
 
 void main() {
@@ -43,9 +52,9 @@ void main() {
   ) as List).cast<Map<String, dynamic>>();
 
   group('exercise_library schema contract (Batch 13-A D-1)', () {
-    test('the canonical schema is 35 required keys plus 4 optional', () {
-      expect(_canonicalKeys.length, 35);
-      expect(_optionalKeys.length, 4);
+    test('the canonical schema is 40 required keys plus 11 optional', () {
+      expect(_canonicalKeys.length, 40);
+      expect(_optionalKeys.length, 11);
       expect(_canonicalKeys.intersection(_optionalKeys), isEmpty);
     });
 
@@ -64,8 +73,8 @@ void main() {
       expect(bad, isEmpty);
     });
 
-    test('every row carries EXACTLY the 35 required keys and nothing outside '
-        'the union with the optional four (blocks stub-shaped rows)', () {
+    test('every row carries EXACTLY the 40 required keys and nothing outside '
+        'the union with the optional set (blocks stub-shaped rows)', () {
       final offenders = <String>[];
       final allowed = _canonicalKeys.union(_optionalKeys);
       for (final r in rows) {
@@ -77,7 +86,7 @@ void main() {
         }
       }
       expect(offenders, isEmpty,
-          reason: 'Rows deviating from the 35-key canonical schema:\n${offenders.join('\n')}');
+          reason: 'Rows deviating from the 40-key canonical schema:\n${offenders.join('\n')}');
     });
 
     test('demo_slug and demo_pair travel together, on exactly 156 rows', () {

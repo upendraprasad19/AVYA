@@ -385,9 +385,11 @@ class PlanEngineFlags {
   /// the capability fix each close a hole the other cannot reach.
   ///
   /// **Fail-OPEN on the way in, fail-CLOSED on the way through:**
-  /// `resolveCapability` returns null (do not enforce) on a Hive error, an
-  /// unknown tier, or any tier above `bodyweight` — so a storage fault can never
-  /// empty a plan. `EquipmentCapability.canPerform` then fails CLOSED on an
+  /// `resolveCapability` returns null (do not enforce) only when this flag is
+  /// off or Hive is unreadable — so a storage fault can never empty a plan. It
+  /// answers at EVERY tier since OI-144, and an unknown tier resolves to
+  /// `bodyweight`. Since B1 Task 1 the attempt-5 pool and repeat pins check it
+  /// too (they had been unchecked; only the diagnostic mirror did). `EquipmentCapability.canPerform` then fails CLOSED on an
   /// unreadable requirement, which is why warm-up and finisher moves had to have
   /// `equipmentNeeded` POPULATED before this could be switched on at all.
   ///
@@ -457,6 +459,21 @@ class PlanEngineFlags {
     try {
       return HiveService.instance.configBox
               .get('enable_plateau_escalation') ==
+          true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Batch B1 (docs/plans/2026-10-22-library-core-list-pool.md): pick strength
+  /// exercises from the per-level CORE LIST (`CoreListSelector`) instead of the
+  /// 5-attempt cascade. Ship-dark DEFAULT OFF (§4.6 — changes what is
+  /// prescribed); OFF → `pickV4`'s cascade runs verbatim (the generator golden
+  /// proves it). Also inert while the library carries no `core_levels` (a v12
+  /// Hive box). Set `configBox['enable_core_list_pool'] = true` to enable.
+  static bool get coreListPoolEnabled {
+    try {
+      return HiveService.instance.configBox.get('enable_core_list_pool') ==
           true;
     } catch (_) {
       return false;

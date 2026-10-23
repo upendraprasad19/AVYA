@@ -101,7 +101,13 @@ class SeedService {
   //   one cue per item; 7 duplicate rows retired into their twins (name_aliases
   //   + merged_ids, and the prune below deletes them from existing installs);
   //   E172/E163 label typos; 19 start/end plate swaps; 2 wrong drawings removed.
-  static const int _exerciseLibraryVersion = 12;
+  // v13 (Batch B1, docs/plans/2026-10-22-library-core-list-pool.md): core-list
+  //   selection fields added to every row (core_levels, discipline,
+  //   gym_availability, requires_coaching, high_impact; optional variant_family,
+  //   slot_focus, slot_pattern, skill ladder keys); five safety-direction injury
+  //   tags (Task 1b). New keys only, read by CoreListSelector behind
+  //   enable_core_list_pool; no cloud column (plan Ruling 2).
+  static const int _exerciseLibraryVersion = 13;
   static const String _exerciseVersionKey = 'exercise_library_version';
 
   /// Bump this integer whenever the bundled food_database.json changes

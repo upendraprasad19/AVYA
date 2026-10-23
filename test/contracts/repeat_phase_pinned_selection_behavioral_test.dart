@@ -22,7 +22,8 @@
 //      `disable_injury_universal_filter` governs only the att-5 pool; the emptied
 //      variant FRESH-FILLS.
 //  (5) TIER KEPT — a pin whose equipment_tier omits the user's tier is KEPT (tier
-//      is a soft att4-relaxed heuristic; the caller guarantees same-tier).
+//      is a soft att4-relaxed heuristic; the caller guarantees same-tier). The
+//      pin's equipment is performable; capability is the hard check (B1 Task 1).
 //  (6) ABSENT NAME — a renamed/deleted pin is dropped; the variant fresh-fills.
 //  (7) CUSTOM RESOLVE — a pinned name absent from the library resolves via the
 //      user's custom_exercise_* rows.
@@ -252,7 +253,11 @@ void main() {
       'default_sets': 3,
       'default_reps': '10',
       'rep_range': '8-12',
-      'equipment_needed': ['machines'],
+      // Performable at bodyweight, so the capability check (B1 Task 1) keeps
+      // it; only the TIER disagrees. No shipped row has this shape (0 of 285),
+      // hence the synthetic row. A ['machines'] row is now correctly DROPPED —
+      // universal_pool_capability_behavioral_test pins that side.
+      'equipment_needed': ['bodyweight'],
     });
     addTearDown(() => exBox.delete('pin_gymonly'));
 

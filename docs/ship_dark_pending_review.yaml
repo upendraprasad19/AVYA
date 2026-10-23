@@ -282,6 +282,26 @@ pending:
 # is currently UNFIXED. A holder today would be told a falsehood by the coach
 # and by the Sunday push.
 
+  - flag: enable_core_list_pool
+    branch: library-batch-b
+    build_commit: 06c02bed  # the commit that adds PlanEngineFlags.coreListPoolEnabled
+    build_date: 2026-10-22
+    flip_reviewed: false
+    flip_commit: null
+    note: >
+      Batch B1 core-list pool (docs/plans/2026-10-22-library-core-list-pool.md).
+      DEFAULT OFF; OFF is byte-identical (test/plan_generator/generator_golden_test.dart,
+      998 personas). Flip criteria, from Task 4's "reported, not gated" block:
+      emergencyAnyLevel == 0 after Batch C (Ruling 12 — easier-or-equal core rows
+      on a day whose two variants both empty, today only injured bodyweight users);
+      refilled == 0 and no retired or skill/olympic id in the BUILT lists over the
+      multi-injury sweep too, not only the 998 personas (B-pass F1: a refill runs
+      the OFF cascade, universal pool included); plus the founder's call on
+      promoted and injured thin sessions (D6 gaps).
+      The flip commit copies slot_focus / slot_pattern into target_focus /
+      movement_pattern and deletes them (Ruling 4), and needs the full x2
+      review + bpass.
+
 resolved:
   - flag: ENABLE_SUBSCRIPTION_STACKING
     branch: oi341-purchase-in-trial
