@@ -6670,3 +6670,28 @@ Class (b) of OI-390: a workout date derived outside IST. Inventory (OI-390 plan 
 - **Identified**: 2026-10-23 · filed via mint_oi.sh from branch `dow-skip-rate`
 
 Server coach tool `supabase/functions/_shared/tools/progress/getProgressSummary.ts:63-65,138-140` `adherence_pct`: reports 0 when nothing was planned (OI-390 class (a), empty means zero), counts today before it is done, counts travel days (`_shared/workout_statuses.ts`). FREE tool answering "how am I tracking". Live exposure: none of 357 interactions mention adherence. Found by the sweep `(adherence|rate)_?(pct|percent)` with `> 0 ? … : 0` (OI-390 round 4 B P2-1).
+
+## OI-402 — Delete the stale 'you skip <weekday> 100%' coach claims from live tables (OI-390 D3): 3 ai_coach_interactions rows + 10 memory_embeddings rows, after the fixed build is on device
+
+- **Status**: OPEN
+- **Blocked on**: the fixed build (OI-390, merged 2026-10-23 as PR #152) installed on upendra's device AND at least 8 coach exchanges on it (the device replays its own Hive history, which no cloud delete can reach); then a separate founder go for the live deletes (§4.3: every live prod write needs its own go). Founder approved the deletes in principle on 2026-10-23 (OI-390 D3).
+- **Verified**: never
+- **Identified**: 2026-10-23 · filed via mint_oi.sh from branch `d3-stale-claims`
+
+Split out of OI-390 (diagnose `132315`, plan `docs/plans/dow-skip-rate.md` §0 and §5 D3, ledger `docs/audit/dow-skip-rate.closure.yaml` D3-STALE-CLAIMS). The writer bug is fixed; these live rows still carry the false "you skip <weekday> 100%" claim and can be quoted back by the coach.
+
+**Rows (project `dedsavbjuwgarrhphgnl` only):**
+- `memory_embeddings`, exactly 10 rows:
+  - upendra Sunday: `abcea8e9-ee4f-420a-a139-c47921da45df` (live-embedded by `ai-proxy` 4 s after the reply);
+  - upendra Monday (from interactions that no longer exist): `6a02dd2e-4190-4885-a3e0-63529324cd39`, `39c37011-9d46-4dbf-901a-d8118b1aea21`, `4562997e-d9af-4e09-80fb-92982f989508`, `94816c78-353e-44a0-98d9-616753549789`, `cb5f1afe-e9b3-4a5a-b94b-7e3dba20f762`, `10f082af-45d0-445b-a7a5-3f028515fce5`, `406058e1-37b5-48a7-8404-edcec53cfb7d`, `172b13a7-9e4f-4e19-b7f7-7d197c6f32b3`;
+  - shabaaadh: `59038339-fb3d-4f64-8f3f-d9a10e2fa258`.
+- `ai_coach_interactions`, exactly 3 rows (claim in `ai_response`): upendra `1dcf5d22…` (his newest at 2026-10-22), shabaaadh `17d62b49…`, shabaaadh `1ecefd07…` (a v5 id an old build could upsert again, OI-204). Resolve the full ids with the read-only SELECT below before deleting.
+
+**Sequence:**
+1. The fixed build on upendra's device (until then every Status check recreates the claim: `ai-proxy` embeds each reply live).
+2. 8 or more coach exchanges on it, so the old reply leaves the 8-exchange Hive history window (`ai_coach_repository.dart:175-178`).
+3. Read-only check first: `SELECT id, user_id, left(ai_response, 120) FROM ai_coach_interactions WHERE ai_response ~* 'skip(s|ping)? .{0,20}(monday|tuesday|wednesday|thursday|friday|saturday|sunday)' AND ai_response ~ '100 ?%';` and the same phrase sweep over `memory_embeddings.content`; confirm the ids above (plus any new hits).
+4. With the founder's go: delete those 3 + 10 rows, inside `BEGIN; … COMMIT;` with the exact ids, and record the counts here.
+5. A day later, re-run the full phrase sweep (not only these ids); any new hits are deleted under the same go.
+
+Past `user_daily_snapshots` stay (nothing reads a past day's `coach_notices`). Done when the sweep returns 0 rows a day after the delete.
