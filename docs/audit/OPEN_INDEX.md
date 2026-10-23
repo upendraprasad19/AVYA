@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**246 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**248 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -248,9 +248,11 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-381 | Set counts read '1 sets' in the remaining renderers (prescriptions,… | none | never | [:6499](open_issues.md#L6499) |
 | OI-382 | WorkoutWriteService.logExercise accepts a negative durationSec (only… | none | never | [:6510](open_issues.md#L6510) |
 | OI-383 | Razorpay Android SDK is pinned (checkout 1.6.41, standard-core 1.7.19) and… | none | 2026-10-21 (Maven Central: checkout… | [:6523](open_issues.md#L6523) |
-| OI-385 | Generator: 27 library rows in slot patterns are unreachable on attempts… | Batch B generator rework (spec… | 2026-10-22 — measured from… | [:6546](open_issues.md#L6546) |
-| OI-386 | Generator: 11 of 13 attempt-1 sub-focus strings match 0 rows (slot… | Batch B generator rework (spec… | 2026-10-22 — measured from… | [:6557](open_issues.md#L6557) |
-| OI-387 | Library: 6 kept bodyweight rows (E272 E273 E276 E277 E289 E290) invisible… | Batch B generator rework (spec… | 2026-10-22 — measured from… | [:6568](open_issues.md#L6568) |
-| OI-388 | Generator: gym plans serve bodyweight-only self-resisted curls and triceps… | Batch B generator rework (spec… | 2026-10-22 — counted from the… | [:6581](open_issues.md#L6581) |
+| OI-385 | Generator: 27 library rows in slot patterns are unreachable on attempts… | the flip of `enable_core_list_pool`… | 2026-10-23 — with the flag ON,… | [:6546](open_issues.md#L6546) |
+| OI-386 | Generator: 11 of 13 attempt-1 sub-focus strings match 0 rows (slot… | the flip of `enable_core_list_pool`… | 2026-10-23 — with the flag ON,… | [:6557](open_issues.md#L6557) |
+| OI-387 | Library: 6 kept bodyweight rows (E272 E273 E276 E277 E289 E290) invisible… | the flip of `enable_core_list_pool`… | 2026-10-23 — with the flag ON,… | [:6568](open_issues.md#L6568) |
+| OI-388 | Generator: gym plans serve bodyweight-only self-resisted curls and triceps… | the flip of `enable_core_list_pool`… | 2026-10-23 — with the flag ON,… | [:6581](open_issues.md#L6581) |
 | OI-389 | Cardio logs lose their minutes and distance: logExercise zeroes… | none | never | [:6592](open_issues.md#L6592) |
 | OI-390 | Coach and Home say 'You skip Sunday workouts 100% of the time' for a rest… | founder scheduling: pick up after the… | never | [:6613](open_issues.md#L6613) |
+| OI-395 | beat-my-coach: challenge query filters on capitalised categories, so every… | founder decision between (a) and (b)… | 2026-10-23 —… | [:6632](open_issues.md#L6632) |
+| OI-396 | Cardio finisher is generated but no screen shows it | Batch B1 and B2 landing first (founder… | 2026-10-23 — `CardioFinisher.attach`… | [:6645](open_issues.md#L6645) |
