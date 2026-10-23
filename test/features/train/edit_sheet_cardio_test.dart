@@ -7,6 +7,8 @@
 @Timeout(Duration(minutes: 4))
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -64,10 +66,11 @@ Future<ProviderContainer> _pumpSheet(WidgetTester tester) async {
     container: c,
     child: MaterialApp(navigatorKey: nav, home: const Scaffold()),
   ));
-  nav.currentState!.push(MaterialPageRoute<void>(
+  // The push's future completes only on pop, so it is not awaited.
+  unawaited(nav.currentState!.push(MaterialPageRoute<void>(
       builder: (_) => Scaffold(
             body: SingleChildScrollView(child: EditWorkoutLogSheet(date: _day)),
-          )));
+          ))));
   await tester.pump();
   await tester.pump(const Duration(seconds: 1));
   return c;
