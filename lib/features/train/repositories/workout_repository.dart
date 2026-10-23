@@ -12,6 +12,7 @@ import 'package:icanbefitter/core/services/workout_schedule_read_service.dart'
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
+import 'package:icanbefitter/core/utils/cardio_format.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
 import 'package:icanbefitter/core/utils/equipment_vocab.dart';
 import 'package:icanbefitter/core/utils/gap_policy.dart';
@@ -23,39 +24,60 @@ import 'package:uuid/uuid.dart';
 class ExercisePR {
   final String exerciseName;
   final String loggingType; // weight_reps | bodyweight_reps | timed | cardio | distance
-  final double bestValue;   // kg / reps / secs / km depending on type
+  final double bestValue;   // in [unit]
   final DateTime date;      // date of the log that achieved this best
+
+  /// OI-389: the unit [bestValue] is in. Stated, never guessed from the
+  /// magnitude (the old guess printed an 1800 s cardio PR as "1800 km" on
+  /// StatsGrid). `kg` / `reps` / `sec` / `km`.
+  final String? _unit;
 
   const ExercisePR({
     required this.exerciseName,
     required this.loggingType,
     required this.bestValue,
     required this.date,
-  });
+    String? unit,
+  }) : _unit = unit;
 
-  /// Human-readable best value label (e.g. "80 kg", "15 reps", "2m 30s").
-  String get formattedValue {
+  String get unit => _unit ?? defaultUnitFor(loggingType);
+
+  /// The unit a type's PR is in when none is stated.
+  static String defaultUnitFor(String loggingType) {
     switch (loggingType) {
       case 'bodyweight_reps':
-        return '${bestValue.toInt()} reps';
+        return 'reps';
       case 'timed':
+        return 'sec';
+      case 'cardio':
+      case 'distance':
+        return 'km';
+      default:
+        return 'kg';
+    }
+  }
+
+  /// Human-readable best value label (e.g. "80 kg", "15 reps", "2m 30s",
+  /// "12.5 min", "40 m"). One token before the unit for cardio / distance, so
+  /// the Home PR tile's split on a space stays correct.
+  String get formattedValue {
+    switch (unit) {
+      case 'reps':
+        return '${bestValue.toInt()} reps';
+      case 'sec':
         final secs = bestValue.toInt();
+        if (loggingType == 'cardio' || loggingType == 'distance') {
+          return formatSetDuration(secs);
+        }
         if (secs >= 60) {
           final m = secs ~/ 60;
           final s = secs % 60;
           return s > 0 ? '${m}m ${s}s' : '${m}m';
         }
         return '${secs}s';
-      case 'cardio':
-      case 'distance':
-        // cardio bestValue is distance_km when > 0, else duration_seconds.
-        // Values < 10 are km (e.g. 5.2 km); >= 60 are seconds (e.g. 1800 → 30 min).
-        if (loggingType == 'cardio' && bestValue < 10) {
-          return '${bestValue.toStringAsFixed(1)} km';
-        }
-        if (bestValue >= 60) return '${(bestValue / 60).round()} min';
-        return '${bestValue.toStringAsFixed(1)} km';
-      default: // weight_reps, weighted_bodyweight
+      case 'km':
+        return formatDistance(bestValue);
+      default: // kg
         final kg = bestValue;
         return kg == kg.roundToDouble()
             ? '${kg.toInt()} kg'
@@ -831,6 +853,23 @@ class WorkoutRepository {
     final bestMap = <String, ExercisePR>{};
 
     final entries = _hive.workoutBox.toMap();
+
+    // OI-389 pass 1: which cardio exercises have ANY km logged. Their PR is
+    // in km; the rest in seconds. One unit per exercise, so a 5 km log and a
+    // later 1800 s log are never compared (1800 > 5).
+    final cardioWithKm = <String>{};
+    for (final entry in entries.entries) {
+      if (!entry.key.toString().startsWith('exlog_')) continue;
+      final raw = entry.value;
+      if (raw is! Map) continue;
+      final log = Map<String, dynamic>.from(raw);
+      if ((log['logging_type'] as String?) != 'cardio') continue;
+      final n = (log['exercise_name'] as String? ?? '').trim().toLowerCase();
+      if (n.isNotEmpty && WorkoutReadService.aggregateDistanceKm(log) > 0) {
+        cardioWithKm.add(n);
+      }
+    }
+
     for (final entry in entries.entries) {
       final keyStr = entry.key.toString();
       if (!keyStr.startsWith('exlog_')) continue;
@@ -855,6 +894,7 @@ class WorkoutRepository {
       // Pre-fix the math was inline here AND duplicated in
       // train_screen.dart `_bestPerSetReps`/`_bestPerSetDuration`.
       double value;
+      String? unit;
       switch (loggingType) {
         case 'weight_reps':
         case 'weighted_bodyweight':
@@ -867,22 +907,21 @@ class WorkoutRepository {
           value = WorkoutReadService.bestPerSetDuration(log).toDouble();
           break;
         case 'cardio':
-          // Cardio: cumulative distance IS the meaningful metric.
-          // Read top-level `distance_km` (writer denormalizes the total).
-          //
-          // Drift-fix 2026-05-24 / T6 — the duration fallback now goes
-          // through `WorkoutReadService.bestPerSetDuration` because
-          // `WorkoutWriteService` does NOT emit top-level
-          // `duration_seconds` on exlog rows (per-set lives at
-          // `sets[].duration_sec`). The helper returns max-per-set,
-          // sufficient for the PR `value` slot when distance is zero.
-          final dist = (log['distance_km'] as num?)?.toDouble() ?? 0;
-          final dur =
-              WorkoutReadService.bestPerSetDuration(log).toDouble();
-          value = dist > 0 ? dist : dur;
+          // Cardio: cumulative distance IS the meaningful metric when the
+          // exercise has km at all (pass 1); otherwise the best set's
+          // duration (Drift-fix 2026-05-24 / T6: per-set, via the helper).
+          // OI-389: km through the reader, in ONE unit per exercise.
+          if (cardioWithKm.contains(nameKey)) {
+            value = WorkoutReadService.aggregateDistanceKm(log);
+            unit = 'km';
+          } else {
+            value = WorkoutReadService.bestPerSetDuration(log).toDouble();
+            unit = 'sec';
+          }
           break;
         case 'distance':
-          value = (log['distance_km'] as num?)?.toDouble() ?? 0;
+          value = WorkoutReadService.aggregateDistanceKm(log);
+          unit = 'km';
           break;
         default:
           value = (log['weight_kg'] as num?)?.toDouble() ?? 0;
@@ -897,6 +936,7 @@ class WorkoutRepository {
           loggingType: loggingType,
           bestValue: value,
           date: date,
+          unit: unit,
         );
       }
     }

@@ -1795,3 +1795,22 @@ added, false of the flip being performed.
 - **Test shape:** presence test on the pin map (exact x.y.z per coordinate) plus a lock-version check on the plugin, so a plugin bump fails with a re-audit recipe. The behavioural proof is Gradle, outside `flutter test`: count `<group>/*/maven-metadata.xml` references in `dependencies --refresh-dependencies --debug` before and after (must be 0 after).
 - **Prior incidents:** none recorded (`a6c3e9`).
 - **Regression test:** `test/contracts/android_dynamic_dependency_pin_test.dart`.
+
+### 2.113 A per-type normaliser's else-branch silently claims every type added after it (NEW 2026-10-22)
+
+- **Telltale:** a value the user typed reads 0 or vanishes for ONE logging type while the others are fine, and the writer has a two-branch type switch (`if (type == 'timed') ... else ...`) whose else clears that field.
+- **Root-cause shape:** a normaliser written for one bug (a4c7d1: swap left logged sets in the old format) clears a field for "everything else"; a type that legitimately carries the field (cardio minutes, distance km) falls into the else and loses it on every save. The fix it was written for keeps working, so nothing looks broken in review.
+- **Fix pattern:** one table that names every type and what each keeps (`fieldsClearedFor` in `workout_write_service.dart`), read by every writer and the heal: never a second copy. The default case is the weight types, named.
+- **Test shape:** a writer → reader round-trip per type that asserts the field each type KEEPS, not only what it clears; mutate the table entry and watch the round-trip redden.
+- **Prior incidents:** a4c7d1 (the else-branch), `e7240a` (OI-389, the month of zeroed cardio).
+- **Regression test:** `test/contracts/cardio_duration_distance_writer_to_reader_test.dart` (T1, T3, T23).
+
+### 2.114 A lazy `.cast<Map<String, dynamic>>()` over a list read from Hive throws on first touch, and a catch makes the code dead (NEW 2026-10-22)
+
+- **Telltale:** a migrator or heal "never seems to do anything" on real devices, but its unit test (built with `Map<String, dynamic>` literals) passes.
+- **Root-cause shape:** Hive returns `Map<dynamic, dynamic>` for nested maps; `List.cast<T>()` is lazy and throws a `TypeError` when the first element is read; a surrounding `try/catch` (non-fatal by design) swallows it, so the loop ends on the first disk row with any element.
+- **Fix pattern:** convert with `Map<String, dynamic>.from(e)` when the code must run. When its current footprint must be kept (a live heal needs a kill switch first), keep the cast and pin the footprint.
+- **Test shape:** a fixture written as `<dynamic, dynamic>{...}` with nested `<dynamic, dynamic>` sets, the way Hive hands it back, never only typed literals.
+- **Prior incidents:** `e7240a` (`_healMismatchedExerciseLogs` dead on disk rows since written; live heal OI-394).
+- **Regression test:** `test/contracts/cardio_duration_distance_writer_to_reader_test.dart` (T10b).
+

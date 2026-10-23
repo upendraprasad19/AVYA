@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### hive_field_name_exlog — a cardio / distance set's duration (seconds) and km survive every writer and every reader resolves them through WorkoutReadService. (1 bugs)
+- 2026-10-22 e7240a — A cardio exercise logged in the active workout (e.g. "Running (Treadmill)" 30 MIN 4 KM) was stored with 0 minutes and no km: `_normalizeSetsByLoggingType` zeroed `durationSec` for every non-`timed`…
+
 ### payment_record_failed_alert — every captured payment that a writer cannot record pages the founder. (1 bugs)
 - 2026-10-21 c3e7a1 — A CAPTURED Razorpay payment whose amount matches no plan price answered 400 in both payment writers and wrote no subscriptions row and no alert. The usual cause is a promo code deleted or its…
 
@@ -1630,6 +1633,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-10-22 | e7240a | A cardio exercise logged in the active workout (e.g. "Running (Treadmill)" 30 MIN 4 KM) was stored with 0 minutes and no km: `_normalizeSetsByLoggingType` zeroed `durationSec` for every non-`timed`… | hive_field_name_exlog — a cardio / distance set's duration (seconds) and km survive every writer and every reader resolves them through WorkoutReadService. | test/contracts/cardio_duration_distance_writer_to_reader_test.dart |
 | 2026-10-21 | c3e7a1 | A CAPTURED Razorpay payment whose amount matches no plan price answered 400 in both payment writers and wrote no subscriptions row and no alert. The usual cause is a promo code deleted or its… | payment_record_failed_alert — every captured payment that a writer cannot record pages the founder. | supabase/functions/razorpay-webhook/index_test.ts |
 | 2026-10-21 | e2a418 | Founder's A12 web walk 2026-10-21 (app.icanbefitter.com): today was already DONE on Train with two exercises logged in Active Workout. A workout logged from the coach chat (`CONFIRM · LOG WORKOUT` on… | workout_surface_invalidation — every coach write path refreshes the same workout surfaces through one helper. | test/contracts/coach_chat_log_train_refresh_behavioral_test.dart |
 | 2026-10-21 | 90a784 | Founder's A12 web walk 2026-10-21 (app.icanbefitter.com, ai_coach_interactions read-only): at 13:19:59 "log bench press" got "Roger. Logged. I need the specifics…" with nothing proposed or written… | coach_write_claim_wording — what the coach is taught about saving, and a log-only label of what it said. | supabase/functions/_shared/write_claim_prompt_test.ts |

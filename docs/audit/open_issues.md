@@ -6513,17 +6513,6 @@ The `train-coach-log-refresh` behavioural test collects exactly this error in a 
 
 To do: decide whether a coach-logged day counts as a completed workout (founder), then route the count and the rank check through the same writer the Active Workout uses.
 
-## OI-380 — Train: the expanded day row shows 'N sets 0 reps X kg' for distance-type exercises
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `observations-a12-web`
-
-`lib/features/train/screens/train/expanded_exercises.dart:78-96` has branches for timed, cardio, weight and reps-only, but a distance-type exercise falls through to the weight/reps branch and shows `N sets · 0 reps · X kg`. Found by the round-1 exposure review of `docs/plans/train-coach-log-refresh.md` (R1B-10).
-
-To do: a distance branch (`distance_km`, with time if present), using the shared set-count helper from that batch.
-
 ## OI-381 — Set counts read '1 sets' in the remaining renderers (prescriptions, workout receipt, preview screen, tool confirm card)
 
 - **Status**: OPEN
@@ -6534,19 +6523,6 @@ To do: a distance branch (`distance_km`, with time if present), using the shared
 Batch `train-coach-log-refresh` adds `setCountLabel` / `repCountLabel` (`1 set` / `N sets`, `1 rep` / `N reps`) and uses them in the Train expanded day row and the exercise preview sheet's logged history. These renderers still print `1 sets` for a single set: `lib/features/train/screens/active_workout/exercise_card.dart:753-772`, `lib/features/train/widgets/workout_receipt_card.dart:813-828`, `lib/features/train/screens/preview_workout_screen.dart:400`, `lib/features/train/widgets/exercise_card.dart:59`, `lib/features/train/screens/train/exercise_preview_sheet.dart:336`, `lib/features/ai_coach/widgets/tool_confirm_card.dart:285`, `lib/features/ai_coach/widgets/diff_preview/custom_template_diff.dart:198`.
 
 To do: route each through the helper; one widget test per renderer family for `1 set`.
-
-## OI-382 — WorkoutWriteService.logExercise accepts a negative durationSec (only weight and reps are validated), so a negative duration can reach an exlog row
-
-- **Status**: OPEN
-- **Blocked on**: none
-- **Verified**: never
-- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `observations-a12-web`
-
-`WorkoutWriteService.logExercise` (`lib/core/services/workout_write_service.dart:119-121`) validates only `weightKg >= 0` and `reps >= 0`; a set with a negative `durationSec` is written to the exlog row. `markCompleted` does reject a negative `durationSec` (`fail('durationSec must be >= 0')`). Found by the round-4 ground-truth review of `docs/plans/train-coach-log-refresh.md` (probe-verified). The coach chat path can produce it from a model-emitted draft; the edit sheet will filter digits only after that batch.
-
-Note: the `train-coach-log-refresh` behavioural test for "sets saved, day not marked done" uses exactly this gap as its seam (a timed set with `durationSecs: -100`). Fixing this OI moves that test to another `markCompleted` failure seam (said in the test comment).
-
-To do: validate `durationSec >= 0` (and `distanceKm >= 0`) in `logExercise` alongside weight and reps; a writer test.
 
 ## OI-383 — Razorpay Android SDK is pinned (checkout 1.6.41, standard-core 1.7.19) and nothing tells us when Razorpay ships a new or security release: review and bump deliberately with a device payment test
 
@@ -6574,7 +6550,7 @@ payment on a device, and record the new version.
 ## OI-389 — Cardio logs lose their minutes and distance: logExercise zeroes durationSec for every non-timed type and never writes distance_km
 
 - **Status**: OPEN
-- **Blocked on**: none
+- **Blocked on**: Batch 1b (coach paths; plan to be written after 1a lands, D10 2026-10-22), then OI-391 (Batch 2, cloud cap: a live migration apply needs the founder's go) and OI-392 (Batch 3, coach logCardio: an ai-proxy deploy needs the founder's go). Batch 1a (`cardio-duration-distance`) fixed the active workout, the edit sheet, the move merge and every reader; the AI snapshot cardio fields wait on founder D4
 - **Verified**: never
 - **Identified**: 2026-10-22 · filed via mint_oi.sh from branch `cardio-oi-retros`
 
@@ -6610,3 +6586,35 @@ Who gets it: the default day patterns never schedule Sunday (`lib/core/services/
 Class: writer/reader drift on a value's meaning (`0` = "no data" to the writer, "0% done" to the reader). Not a recurrence of an indexed bug (`docs/diagnoses/INDEX.md` has no day-of-week or skip-rate entry).
 
 To plan (tier M: Train + coach files): the rate map omits weekdays with nothing scheduled (or carries the counts), the pattern needs a minimum sample (about 3 scheduled sessions on that weekday) before it can fire, and the window ends yesterday (today is never a miss). Behavioural tests: a 6-day plan over 8 weeks never names Sunday; a 3-day plan never names Tuesday/Thursday/Saturday/Sunday; a real 0-of-4 Monday still fires; today's unfinished workout is not counted. Check the other readers of `getDayOfWeekCompletionRates` (none today besides the pattern) and the weekend-nutrition pattern for the same "empty means zero" shape while there.
+
+## OI-391 — Cardio duration cap: workout_log_sets duration_secs CHECK widened from 3600 to 21600 and the push clamp aligned (OI-389 Batch 2; needs founder go for the live migration apply)
+
+- **Status**: OPEN
+- **Blocked on**: founder go for the live migration apply (Batch 2 of OI-389, order ratified 2026-10-22 D10); after OI-389 Batch 1a and 1b land
+- **Verified**: never
+- **Identified**: 2026-10-22 · filed via mint_oi.sh from branch `cardio-duration-distance`
+- **Notes**: Plan inputs: `docs/plans/cardio-duration-distance.md` §9.2. Until this lands, a single cardio set over 60 min is clamped to 3600 s in the cloud per-set row, so another device reads 60 min (founder accepted, D8).
+
+## OI-392 — Coach logCardio tool: a dedicated AI-coach tool for cardio minutes and km (OI-389 Batch 3; needs founder go for the ai-proxy deploy)
+
+- **Status**: OPEN
+- **Blocked on**: founder go for the ai-proxy deploy (Batch 3 of OI-389, order ratified 2026-10-22 D10); after Batch 2
+- **Verified**: never
+- **Identified**: 2026-10-22 · filed via mint_oi.sh from branch `cardio-duration-distance`
+- **Notes**: Plan inputs: `docs/plans/cardio-duration-distance.md` §9.3. Also owns deleting the old snapshot path behind `disable_snapshot_cardio_fields` (§4.6 step 4).
+
+## OI-393 — A set logged or moved on top of a restore-shaped or F5 exlog row resets its totals (set count, reps, weight, volume, duration, km)
+
+- **Status**: OPEN
+- **Blocked on**: founder-sequenced follow-on (D10, 2026-10-22); planned on its own branch after OI-389 Batch 1a
+- **Verified**: never
+- **Identified**: 2026-10-22 · filed via mint_oi.sh from branch `cardio-duration-distance`
+- **Notes**: Split out of OI-389 Batch 1a under §4.12.1 (plan rev 6). Today `logExercise` rebuilds the entry from the merged sets, so a restore-shaped row's top-level aggregates reset; the move merge's mixed shape (restore-shaped side with km beside a per-set side with km) loses the restore-shaped side's km; restored per-set entries get `logged_at_ms = now` on first rewrite. 0 live restore-shaped rows (2026-10-22).
+
+## OI-394 — Exlog type heal is dead on disk rows: fix the cast in _healMismatchedExerciseLogs behind kill switch disable_exlog_type_heal, with aggregate recompute, sets_detail, updated_at_ms
+
+- **Status**: OPEN
+- **Blocked on**: founder-sequenced follow-on (D10, 2026-10-22); planned on its own branch after OI-389 Batch 1a
+- **Verified**: never
+- **Identified**: 2026-10-22 · filed via mint_oi.sh from branch `cardio-duration-distance`
+- **Notes**: Split out of OI-389 Batch 1a under §4.12.1 (plan rev 6). `.cast<Map<String, dynamic>>()` at `auth_session_bootstrapper.dart:1210` throws on Hive maps, so the heal never runs on disk rows. Making it live needs: kill switch `disable_exlog_type_heal` with a pinned off-state no-op, aggregate recompute, `sets_detail` rewrite, `updated_at_ms`, `keys.toList()`, and a SoT writer entry. Footprint today: 0 cloud-backed mismatched rows.

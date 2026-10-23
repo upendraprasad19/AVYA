@@ -162,7 +162,10 @@ class WorkoutReadService {
   /// legacy array. The receipt's pre-Unit-7 code measured both lengths
   /// independently and MAXed them, and the two remaining train-screen
   /// readers still do; taking the longer preserves that exactly.
-  static List<Map> _perSetList(Map<String, dynamic> log) {
+  ///
+  /// Public since OI-389: the move merge builds each side's list with it, so
+  /// a `sets_detail`-only legacy side is merged rather than dropped.
+  static List<Map> perSetList(Map<String, dynamic> log) {
     final canonical = log['sets'];
     final legacy = log['sets_detail'];
     final a = canonical is List ? canonical.whereType<Map>().toList() : const <Map>[];
@@ -187,7 +190,7 @@ class WorkoutReadService {
     final candidates = <int>[
       (log['set_number'] as num?)?.toInt() ?? 0,
       (log['sets_completed'] as num?)?.toInt() ?? 0,
-      _perSetList(log).length,
+      perSetList(log).length,
     ];
     return candidates.reduce((a, b) => a > b ? a : b);
   }
@@ -202,7 +205,7 @@ class WorkoutReadService {
   static bool hasAggregateSetCount(Map<String, dynamic> log) =>
       log['set_number'] is num ||
       log['sets_completed'] is num ||
-      _perSetList(log).isNotEmpty;
+      perSetList(log).isNotEmpty;
 
   /// TOTAL duration in seconds for an `exlog_*` row, or `null` when the
   /// row carries no duration signal at all.
@@ -226,7 +229,7 @@ class WorkoutReadService {
   /// the summary row still holds the true total.
   static int? aggregateDurationSeconds(Map<String, dynamic> log) {
     var sum = 0;
-    for (final s in _perSetList(log)) {
+    for (final s in perSetList(log)) {
       sum += (s['duration_sec'] as num?)?.toInt() ??
           (s['duration_seconds'] as num?)?.toInt() ??
           0;
@@ -235,6 +238,29 @@ class WorkoutReadService {
     final topLevel = (log['duration_seconds'] as num?)?.toInt();
     if (topLevel != null && topLevel > 0) return topLevel;
     return null;
+  }
+
+  /// TOTAL distance in km for an `exlog_*` row (OI-389), mirroring
+  /// [aggregateDurationSeconds]:
+  ///   1. SUM of per-set `distance_km` over [perSetList] (the longer of
+  ///      `sets[]` / `sets_detail[]`) when it is above 0 — canonical;
+  ///   2. else the top-level `distance_km` — a restored or legacy row no writer
+  ///      has touched, or the OI-50 F5 shape whose per-set entries lack the
+  ///      field beside a summary total;
+  ///   3. else 0.
+  /// Rounded to 0.001, the cloud column's scale (`numeric(8,3)`), so
+  /// 0.1 + 0.2 reads 0.3. Never read top-level `log['distance_km']` directly
+  /// (gate `no_top_level_distance_km_reads_test.dart`).
+  static double aggregateDistanceKm(Map<String, dynamic> log) {
+    var sum = 0.0;
+    for (final s in perSetList(log)) {
+      final km = (s['distance_km'] as num?)?.toDouble() ?? 0;
+      if (km > 0) sum += km;
+    }
+    if (sum > 0) return (sum * 1000).round() / 1000;
+    final topLevel = (log['distance_km'] as num?)?.toDouble() ?? 0;
+    if (topLevel > 0) return (topLevel * 1000).round() / 1000;
+    return 0;
   }
 
   /// Extracts the IST date (`YYYY-MM-DD`) for an `exlog_*` Hive row.

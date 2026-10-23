@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/utils/cardio_format.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/services/workout_read_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
@@ -823,6 +824,43 @@ class _PastDayRowState extends State<_PastDayRow> {
   }
 }
 
+/// The compact summary of one logged exercise on an expanded past-day row,
+/// extracted pure so it is testable (OI-389 T26): `N sets · W kg · time · km`.
+@visibleForTesting
+String weekExerciseLineDetail(Map<String, dynamic> log) {
+  // Unit 7 / OI-50 — shared aggregate reader. This read only `set_number`,
+  // missing the 4-source MAX the receipt has had since APK Test #12.2, so a
+  // row with set_number == 0 and a populated per-set array rendered "0 sets".
+  final sets = WorkoutReadService.aggregateSetCount(log);
+  final weight = (log['weight_kg'] as num?)?.toDouble() ?? 0;
+  // Unit 7 / OI-50 — was `bestPerSetDuration`, a per-set MAX, for a value
+  // rendered beside a SET COUNT (so it reads as the session total) and
+  // formatted as whole minutes. On a cloud-restored row that MAX returns 0
+  // (its top-level fallback is gated on setCount <= 1), so the duration
+  // disappeared from the line entirely while the receipt showed the real
+  // total. Both surfaces now share one reader.
+  final durationSec = WorkoutReadService.aggregateDurationSeconds(log) ?? 0;
+  // OI-389 U3/U7: km through the reader (per-set first, then top level);
+  // cardio / distance minutes and km through the formatter pair. Timed and
+  // weight rows keep their old minute expression.
+  final distanceKm = WorkoutReadService.aggregateDistanceKm(log);
+  final loggingType = log['logging_type'] as String? ?? 'weight_reps';
+  final isCardioLike = loggingType == 'cardio' || loggingType == 'distance';
+
+  final parts = <String>[];
+  if (sets > 0) parts.add('$sets ${sets == 1 ? "set" : "sets"}');
+  if (weight > 0) {
+    parts.add('${weight % 1 == 0 ? weight.toInt() : weight} kg');
+  }
+  if (durationSec > 0) {
+    parts.add(isCardioLike
+        ? formatSetDuration(durationSec)
+        : '${(durationSec / 60).round()} min');
+  }
+  if (distanceKm > 0) parts.add(formatDistance(distanceKm));
+  return parts.join(' · ');
+}
+
 /// One logged exercise inside an expanded past-day row: name + a compact
 /// "N sets · W kg" summary built from the exlog top-level fields, with a
 /// PR marker. Time/distance exercises show their duration/distance instead.
@@ -833,29 +871,8 @@ class _ExerciseLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final name = (log['exercise_name'] as String?) ?? 'Exercise';
-    // Unit 7 / OI-50 — shared aggregate reader. This read only `set_number`,
-    // missing the 4-source MAX the receipt has had since APK Test #12.2, so a
-    // row with set_number == 0 and a populated per-set array rendered "0 sets".
-    final sets = WorkoutReadService.aggregateSetCount(log);
-    final weight = (log['weight_kg'] as num?)?.toDouble() ?? 0;
-    // Unit 7 / OI-50 — was `bestPerSetDuration`, a per-set MAX, for a value
-    // rendered beside a SET COUNT (so it reads as the session total) and
-    // formatted as whole minutes. On a cloud-restored row that MAX returns 0
-    // (its top-level fallback is gated on setCount <= 1), so the duration
-    // disappeared from the line entirely while the receipt showed the real
-    // total. Both surfaces now share one reader.
-    final durationSec = WorkoutReadService.aggregateDurationSeconds(log) ?? 0;
-    final distanceKm = (log['distance_km'] as num?)?.toDouble() ?? 0;
     final isPr = log['is_pr'] == true;
-
-    final parts = <String>[];
-    if (sets > 0) parts.add('$sets ${sets == 1 ? "set" : "sets"}');
-    if (weight > 0) {
-      parts.add('${weight % 1 == 0 ? weight.toInt() : weight} kg');
-    }
-    if (durationSec > 0) parts.add('${(durationSec / 60).round()} min');
-    if (distanceKm > 0) parts.add('$distanceKm km');
-    final detail = parts.join(' · ');
+    final detail = weekExerciseLineDetail(log);
 
     return Padding(
       padding: const EdgeInsets.only(top: 8),

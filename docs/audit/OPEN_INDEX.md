@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**243 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**245 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -245,9 +245,11 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-377 | Train: WorkoutRepository.getExerciseLogsForDate duplicates the canonical… | none | never | [:6483](open_issues.md#L6483) |
 | OI-378 | Riverpod 3.2.1: debug assertion actualPausedCount == expectedPausedCount… | upstream: riverpod above 3.2.1… | never | [:6494](open_issues.md#L6494) |
 | OI-379 | Coach-logged workouts never add to total_workouts_done or run the rank… | none | never | [:6505](open_issues.md#L6505) |
-| OI-380 | Train: the expanded day row shows 'N sets 0 reps X kg' for distance-type… | none | never | [:6516](open_issues.md#L6516) |
-| OI-381 | Set counts read '1 sets' in the remaining renderers (prescriptions,… | none | never | [:6527](open_issues.md#L6527) |
-| OI-382 | WorkoutWriteService.logExercise accepts a negative durationSec (only… | none | never | [:6538](open_issues.md#L6538) |
-| OI-383 | Razorpay Android SDK is pinned (checkout 1.6.41, standard-core 1.7.19) and… | none | 2026-10-21 (Maven Central: checkout… | [:6551](open_issues.md#L6551) |
-| OI-389 | Cardio logs lose their minutes and distance: logExercise zeroes… | none | never | [:6574](open_issues.md#L6574) |
-| OI-390 | Coach and Home say 'You skip Sunday workouts 100% of the time' for a rest… | founder scheduling: pick up after the… | never | [:6595](open_issues.md#L6595) |
+| OI-381 | Set counts read '1 sets' in the remaining renderers (prescriptions,… | none | never | [:6516](open_issues.md#L6516) |
+| OI-383 | Razorpay Android SDK is pinned (checkout 1.6.41, standard-core 1.7.19) and… | none | 2026-10-21 (Maven Central: checkout… | [:6527](open_issues.md#L6527) |
+| OI-389 | Cardio logs lose their minutes and distance: logExercise zeroes… | Batch 1b (coach paths; plan to be… | never | [:6550](open_issues.md#L6550) |
+| OI-390 | Coach and Home say 'You skip Sunday workouts 100% of the time' for a rest… | founder scheduling: pick up after the… | never | [:6571](open_issues.md#L6571) |
+| OI-391 | Cardio duration cap: workout_log_sets duration_secs CHECK widened from… | founder go for the live migration apply… | never | [:6590](open_issues.md#L6590) |
+| OI-392 | Coach logCardio tool: a dedicated AI-coach tool for cardio minutes and km… | founder go for the ai-proxy deploy… | never | [:6598](open_issues.md#L6598) |
+| OI-393 | A set logged or moved on top of a restore-shaped or F5 exlog row resets… | founder-sequenced follow-on (D10,… | never | [:6606](open_issues.md#L6606) |
+| OI-394 | Exlog type heal is dead on disk rows: fix the cast in… | founder-sequenced follow-on (D10,… | never | [:6614](open_issues.md#L6614) |

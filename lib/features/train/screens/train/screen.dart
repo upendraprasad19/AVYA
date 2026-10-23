@@ -38,6 +38,8 @@ import '../../widgets/plan_expired_card.dart';
 import '../../widgets/phase_generating_card.dart';
 import '../../widgets/stats_grid.dart';
 import '../../utils/set_count_label.dart';
+import '../../utils/exercise_log_detail.dart';
+import 'package:icanbefitter/core/utils/cardio_format.dart';
 import 'package:icanbefitter/features/home/widgets/streak_explainer_sheet.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
