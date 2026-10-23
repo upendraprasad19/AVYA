@@ -67,7 +67,16 @@
     "priority_tier": 1,
     "rep_range": "5-8",
     "demo_slug": "bench-press",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "bench_press"
   },
   {
     "id": "E002",
@@ -135,7 +144,17 @@
     "priority_tier": 1,
     "rep_range": "8-12",
     "demo_slug": "dumbbell-bench-press",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "bench_press"
   },
   {
     "id": "E003",
@@ -205,7 +224,16 @@
     "priority_tier": 1,
     "rep_range": "5-8",
     "demo_slug": "incline-bench-press",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "incline_press"
   },
   {
     "id": "E004",
@@ -274,7 +302,16 @@
     "rep_range": "5-8",
     "is_foundational": false,
     "demo_slug": "decline-bench-press",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "bench_press"
   },
   {
     "id": "E005",
@@ -348,7 +385,19 @@
     "priority_tier": 1,
     "rep_range": "8-12",
     "demo_slug": "push-up",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "push_up",
+    "skill_track": "push_up",
+    "skill_step": 4,
+    "progression_to": "Decline Push Up"
   },
   {
     "id": "E006",
@@ -415,7 +464,17 @@
     "priority_tier": 2,
     "rep_range": "12-15",
     "demo_slug": "dumbbell-fly",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "chest_fly"
   },
   {
     "id": "E007",
@@ -481,7 +540,13 @@
     "rep_range": "12-15",
     "is_foundational": false,
     "demo_slug": "cable-fly",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "chest_fly"
   },
   {
     "id": "E008",
@@ -549,7 +614,18 @@
     "priority_tier": 1,
     "rep_range": "8-12",
     "demo_slug": "chest-dip",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "dip",
+    "skill_track": "dip",
+    "skill_step": 3
   },
   {
     "id": "E009",
@@ -614,7 +690,16 @@
     "priority_tier": 1,
     "rep_range": "8-12",
     "demo_slug": "machine-chest-press",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "bench_press"
   },
   {
     "id": "E010",
@@ -689,7 +774,19 @@
     "priority_tier": 1,
     "rep_range": "8-12",
     "demo_slug": "pike-push-up",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "push_up",
+    "skill_track": "handstand_push_up",
+    "skill_step": 1,
+    "progression_to": "Elevated Pike Push Up"
   },
   {
     "id": "E011",
@@ -761,7 +858,16 @@
     "priority_tier": 1,
     "rep_range": "5-8",
     "demo_slug": "overhead-press",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "shoulder_press"
   },
   {
     "id": "E012",
@@ -832,7 +938,16 @@
     "priority_tier": 1,
     "rep_range": "8-12",
     "demo_slug": "standing-dumbbell-press",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "shoulder_press"
   },
   {
     "id": "E013",
@@ -902,7 +1017,17 @@
     "priority_tier": 2,
     "rep_range": "12-15",
     "demo_slug": "lateral-raise",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "lateral_raise"
   },
   {
     "id": "E014",
@@ -971,7 +1096,17 @@
     "priority_tier": 2,
     "rep_range": "12-15",
     "demo_slug": "face-pull",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "face_pull"
   },
   {
     "id": "E015",
@@ -1040,7 +1175,20 @@
     "priority_tier": 2,
     "rep_range": "12-15",
     "demo_slug": "front-raise",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "front_raise",
+    "slot_pattern": [
+      "shoulder_isolation"
+    ]
   },
   {
     "id": "E016",
@@ -1116,7 +1264,16 @@
     ],
     "merged_ids": [
       "E241"
-    ]
+    ],
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "bench_press"
   },
   {
     "id": "E017",
@@ -1180,7 +1337,17 @@
     "priority_tier": 2,
     "rep_range": "12-15",
     "demo_slug": "tricep-pushdown",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "triceps_pushdown"
   },
   {
     "id": "E018",
@@ -1245,7 +1412,16 @@
     "priority_tier": 2,
     "rep_range": "12-15",
     "demo_slug": "skull-crusher",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "triceps_extension"
   },
   {
     "id": "E019",
@@ -1312,7 +1488,16 @@
     "priority_tier": 2,
     "rep_range": "12-15",
     "demo_slug": "dumbbell-overhead-tricep-extension",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "triceps_extension"
   },
   {
     "id": "E020",
@@ -1384,7 +1569,19 @@
     "priority_tier": 1,
     "rep_range": "8-12",
     "demo_slug": "diamond-push-up",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "push_up",
+    "skill_track": "push_up",
+    "skill_step": 6,
+    "regression_to": "Decline Push Up"
   },
   {
     "id": "E021",
@@ -1460,7 +1657,16 @@
     "priority_tier": 1,
     "rep_range": "5-8",
     "demo_slug": "deadlift",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "deadlift"
   },
   {
     "id": "E022",
@@ -1533,7 +1739,18 @@
     "priority_tier": 1,
     "rep_range": "8-12",
     "demo_slug": "pull-up",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "pull_up",
+    "skill_track": "pull_up",
+    "skill_step": 3
   },
   {
     "id": "E023",
@@ -1604,7 +1821,16 @@
     "priority_tier": 1,
     "rep_range": "5-8",
     "demo_slug": "barbell-row",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "row"
   },
   {
     "id": "E024",
@@ -1676,7 +1902,17 @@
     "priority_tier": 1,
     "rep_range": "8-12",
     "demo_slug": "one-arm-dumbbell-row",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "row"
   },
   {
     "id": "E025",
@@ -1745,7 +1981,17 @@
     "priority_tier": 1,
     "rep_range": "8-12",
     "demo_slug": "lat-pulldown",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "lat_pulldown"
   },
   {
     "id": "E026",
@@ -1816,7 +2062,16 @@
     "priority_tier": 1,
     "rep_range": "8-12",
     "demo_slug": "seated-row",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "row"
   },
   {
     "id": "E027",
@@ -1889,7 +2144,16 @@
     "rep_range": "5-8",
     "is_foundational": false,
     "demo_slug": "t-bar-row",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "well_equipped_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "row"
   },
   {
     "id": "E029",
@@ -1958,7 +2222,16 @@
     "rep_range": "12-15",
     "is_foundational": false,
     "demo_slug": "back-extension",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate"
+    ],
+    "discipline": "strength",
+    "gym_availability": "well_equipped_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "back_extension"
   },
   {
     "id": "E030",
@@ -2026,7 +2299,16 @@
     ],
     "standard_swap": "E026",
     "priority_tier": 1,
-    "rep_range": "8-12"
+    "rep_range": "8-12",
+    "core_levels": [
+      "beginner",
+      "intermediate"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "row"
   },
   {
     "id": "E031",
@@ -2097,7 +2379,16 @@
     "priority_tier": 2,
     "rep_range": "12-15",
     "demo_slug": "ez-bar-curl",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "biceps_curl"
   },
   {
     "id": "E032",
@@ -2164,7 +2455,17 @@
     "priority_tier": 2,
     "rep_range": "12-15",
     "demo_slug": "bicep-curl",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "biceps_curl"
   },
   {
     "id": "E033",
@@ -2231,7 +2532,17 @@
     "priority_tier": 2,
     "rep_range": "12-15",
     "demo_slug": "hammer-curl",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "hammer_curl"
   },
   {
     "id": "E034",
@@ -2296,7 +2607,13 @@
     "priority_tier": 2,
     "rep_range": "12-15",
     "demo_slug": "concentration-curl",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "biceps_curl"
   },
   {
     "id": "E035",
@@ -2362,7 +2679,16 @@
     "priority_tier": 2,
     "rep_range": "12-15",
     "demo_slug": "cable-curl",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "biceps_curl"
   },
   {
     "id": "E036",
@@ -2437,7 +2763,16 @@
     "priority_tier": 1,
     "rep_range": "5-8",
     "demo_slug": "squat",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "squat"
   },
   {
     "id": "E037",
@@ -2510,7 +2845,15 @@
     "priority_tier": 1,
     "rep_range": "5-8",
     "demo_slug": "front-squat",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "front_squat"
   },
   {
     "id": "E038",
@@ -2583,7 +2926,16 @@
     "priority_tier": 1,
     "rep_range": "8-12",
     "demo_slug": "goblet-squat",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "squat"
   },
   {
     "id": "E039",
@@ -2652,7 +3004,17 @@
     "priority_tier": 1,
     "rep_range": "8-12",
     "demo_slug": "leg-press",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "leg_press"
   },
   {
     "id": "E040",
@@ -2721,7 +3083,16 @@
     "rep_range": "8-12",
     "is_foundational": false,
     "demo_slug": "hack-squat",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "well_equipped_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "hack_squat"
   },
   {
     "id": "E041",
@@ -2793,7 +3164,16 @@
     "priority_tier": 1,
     "rep_range": "5-8",
     "demo_slug": "bulgarian-split-squat",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "split_squat"
   },
   {
     "id": "E042",
@@ -2867,7 +3247,16 @@
     ],
     "standard_swap": "",
     "priority_tier": 1,
-    "rep_range": "8-12"
+    "rep_range": "8-12",
+    "core_levels": [
+      "beginner",
+      "intermediate"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "lunge"
   },
   {
     "id": "E043",
@@ -2933,7 +3322,17 @@
     "priority_tier": 2,
     "rep_range": "12-15",
     "demo_slug": "leg-extension",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "leg_extension"
   },
   {
     "id": "E044",
@@ -3006,7 +3405,16 @@
     "priority_tier": 1,
     "rep_range": "8-12",
     "demo_slug": "step-up",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "step_up"
   },
   {
     "id": "E045",
@@ -3078,7 +3486,17 @@
     "priority_tier": 1,
     "rep_range": "5-8",
     "demo_slug": "dumbbell-romanian-deadlift",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "romanian_deadlift"
   },
   {
     "id": "E046",
@@ -3145,7 +3563,18 @@
     "rep_range": "12-15",
     "is_foundational": false,
     "demo_slug": "nordic-hamstring-curl",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "leg_curl",
+    "slot_pattern": [
+      "knee_dominant"
+    ],
+    "skill_track": "nordic_curl",
+    "skill_step": 2
   },
   {
     "id": "E047",
@@ -3215,7 +3644,16 @@
     "priority_tier": 1,
     "rep_range": "8-12",
     "demo_slug": "hip-thrust",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "hip_thrust"
   },
   {
     "id": "E048",
@@ -3284,7 +3722,18 @@
     "priority_tier": 2,
     "rep_range": "12-15",
     "demo_slug": "glute-bridge",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "glute_bridge",
+    "slot_pattern": [
+      "hip_dominant"
+    ]
   },
   {
     "id": "E049",
@@ -3350,7 +3799,16 @@
     "priority_tier": 2,
     "rep_range": "12-15",
     "demo_slug": "lying-leg-curl",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "leg_curl"
   },
   {
     "id": "E050",
@@ -3424,7 +3882,19 @@
     "priority_tier": 1,
     "rep_range": "5-8",
     "demo_slug": "sumo-deadlift",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "deadlift",
+    "slot_pattern": [
+      "hip_dominant"
+    ]
   },
   {
     "id": "E051",
@@ -3490,7 +3960,16 @@
     ],
     "standard_swap": "Bodyweight Calf Raise",
     "priority_tier": 2,
-    "rep_range": "12-15"
+    "rep_range": "12-15",
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "calf_raise"
   },
   {
     "id": "E052",
@@ -3556,7 +4035,17 @@
     "priority_tier": 2,
     "rep_range": "12-15",
     "demo_slug": "seated-calf-raise",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "calf_raise"
   },
   {
     "id": "E053",
@@ -3622,7 +4111,13 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "12-15",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "calf_raise"
   },
   {
     "id": "E054",
@@ -3696,7 +4191,16 @@
     "priority_tier": 1,
     "rep_range": "30-60",
     "demo_slug": "plank",
-    "demo_pair": false
+    "demo_pair": false,
+    "core_levels": [
+      "beginner",
+      "intermediate"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "plank"
   },
   {
     "id": "E055",
@@ -3765,7 +4269,15 @@
     "priority_tier": 1,
     "rep_range": "30-60",
     "demo_slug": "dead-bug",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "dead_bug"
   },
   {
     "id": "E056",
@@ -3830,7 +4342,16 @@
     "priority_tier": 2,
     "rep_range": "12-20",
     "demo_slug": "cable-crunch",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "crunch"
   },
   {
     "id": "E057",
@@ -3902,7 +4423,16 @@
     "priority_tier": 1,
     "rep_range": "12-20",
     "demo_slug": "hanging-leg-raise",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "leg_raise"
   },
   {
     "id": "E058",
@@ -3975,7 +4505,15 @@
     "priority_tier": 1,
     "rep_range": "12-20",
     "demo_slug": "ab-wheel",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "well_equipped_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "rollout"
   },
   {
     "id": "E059",
@@ -4044,7 +4582,16 @@
     "priority_tier": 2,
     "rep_range": "12-20",
     "demo_slug": "russian-twist",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "rotation_core"
   },
   {
     "id": "E060",
@@ -4110,7 +4657,16 @@
     "priority_tier": 2,
     "rep_range": "12-20",
     "demo_slug": "reverse-crunch",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "crunch"
   },
   {
     "id": "E061",
@@ -4181,7 +4737,17 @@
     "priority_tier": 2,
     "rep_range": "20-30",
     "demo_slug": "running",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "cardio",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "cardio_treadmill"
   },
   {
     "id": "E062",
@@ -4250,7 +4816,13 @@
     "priority_tier": 2,
     "rep_range": "20-30",
     "demo_slug": "cycling",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "cardio",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "cardio_bike"
   },
   {
     "id": "E063",
@@ -4324,7 +4896,13 @@
     "priority_tier": 2,
     "rep_range": "30-60",
     "demo_slug": "jump-rope",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "cardio",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": true,
+    "variant_family": "cardio_jump_rope"
   },
   {
     "id": "E064",
@@ -4396,7 +4974,20 @@
     "priority_tier": 2,
     "rep_range": "20-30",
     "demo_slug": "rowing",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "cardio",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "cardio_rower",
+    "slot_focus": [
+      "Full Body",
+      "Mid Back"
+    ],
+    "slot_pattern": [
+      "cardio"
+    ]
   },
   {
     "id": "E065",
@@ -4470,7 +5061,13 @@
     "priority_tier": 2,
     "rep_range": "20-30",
     "demo_slug": "burpee",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "conditioning",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": true,
+    "variant_family": "burpee"
   },
   {
     "id": "E066",
@@ -4542,7 +5139,15 @@
     ],
     "standard_swap": "",
     "priority_tier": 1,
-    "rep_range": "20-30"
+    "rep_range": "20-30",
+    "core_levels": [
+      "intermediate"
+    ],
+    "discipline": "plyometric",
+    "gym_availability": "well_equipped_gym",
+    "requires_coaching": false,
+    "high_impact": true,
+    "variant_family": "jump"
   },
   {
     "id": "E067",
@@ -4614,7 +5219,17 @@
     "priority_tier": 1,
     "rep_range": "20-30",
     "demo_slug": "mountain-climber",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "conditioning",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "mountain_climber"
   },
   {
     "id": "E068",
@@ -4680,7 +5295,13 @@
     "rep_range": "20-30",
     "is_foundational": false,
     "demo_slug": "assault-bike",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "cardio",
+    "gym_availability": "specialty",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "cardio_assault_bike"
   },
   {
     "id": "E069",
@@ -4750,7 +5371,15 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "calisthenics_skill",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "muscle_up",
+    "skill_track": "muscle_up",
+    "skill_step": 5
   },
   {
     "id": "E070",
@@ -4821,7 +5450,15 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "calisthenics_skill",
+    "gym_availability": "standard_gym",
+    "requires_coaching": true,
+    "high_impact": false,
+    "variant_family": "front_lever",
+    "skill_track": "front_lever",
+    "skill_step": 5
   },
   {
     "id": "E071",
@@ -4895,7 +5532,15 @@
     "rep_range": "30-60",
     "is_foundational": false,
     "demo_slug": "l-sit-hold",
-    "demo_pair": false
+    "demo_pair": false,
+    "core_levels": [],
+    "discipline": "calisthenics_skill",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "l_sit",
+    "skill_track": "l_sit",
+    "skill_step": 3
   },
   {
     "id": "E072",
@@ -4965,7 +5610,15 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "calisthenics_skill",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "handstand",
+    "skill_track": "handstand",
+    "skill_step": 3
   },
   {
     "id": "E073",
@@ -5037,7 +5690,15 @@
     "rep_range": "8-12",
     "is_foundational": false,
     "demo_slug": "pistol-squat",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "calisthenics_skill",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "pistol_squat",
+    "skill_track": "pistol_squat",
+    "skill_step": 3
   },
   {
     "id": "E074",
@@ -5111,7 +5772,13 @@
     "rep_range": "12-20",
     "is_foundational": false,
     "demo_slug": "dragon-flag",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "calisthenics_skill",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "leg_raise"
   },
   {
     "id": "E075",
@@ -5181,7 +5848,14 @@
     "rep_range": "8-12",
     "is_foundational": false,
     "demo_slug": "dip",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "skill_track": "dip",
+    "skill_step": 3
   },
   {
     "id": "E076",
@@ -5261,7 +5935,16 @@
     "rep_range": "8-12",
     "is_foundational": false,
     "demo_slug": "hindu-push-up",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "conditioning",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "push_up"
   },
   {
     "id": "E077",
@@ -5337,7 +6020,13 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "conditioning",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "squat"
   },
   {
     "id": "E078",
@@ -5403,7 +6092,13 @@
     ],
     "standard_swap": "",
     "priority_tier": 1,
-    "rep_range": "10-15"
+    "rep_range": "10-15",
+    "core_levels": [],
+    "discipline": "yoga",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "mobility_full_body"
   },
   {
     "id": "E080",
@@ -5470,7 +6165,13 @@
     ],
     "standard_swap": "",
     "priority_tier": 2,
-    "rep_range": "30-60"
+    "rep_range": "30-60",
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "stretch_hip_flexor"
   },
   {
     "id": "E081",
@@ -5535,7 +6236,12 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E082",
@@ -5602,7 +6308,12 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E083",
@@ -5673,7 +6384,13 @@
     "priority_tier": 2,
     "rep_range": "30-60",
     "demo_slug": "worlds-greatest-stretch",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "mobility_hip"
   },
   {
     "id": "E084",
@@ -5739,7 +6456,12 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E085",
@@ -5808,7 +6530,13 @@
     "priority_tier": 2,
     "rep_range": "30-60",
     "demo_slug": "cat-cow-stretch",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "mobility_spine"
   },
   {
     "id": "E086",
@@ -5874,7 +6602,13 @@
     "standard_swap": "",
     "priority_tier": 1,
     "rep_range": "5-8",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "olympic",
+    "gym_availability": "well_equipped_gym",
+    "requires_coaching": true,
+    "high_impact": false,
+    "variant_family": "olympic_clean"
   },
   {
     "id": "E087",
@@ -5949,7 +6683,16 @@
     "rep_range": "5-8",
     "is_foundational": false,
     "demo_slug": "trap-bar-deadlift",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "well_equipped_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "deadlift"
   },
   {
     "id": "E088",
@@ -6022,7 +6765,13 @@
     "standard_swap": "",
     "priority_tier": 1,
     "rep_range": "5-8",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "squat"
   },
   {
     "id": "E089",
@@ -6094,7 +6843,16 @@
     "rep_range": "12-20",
     "is_foundational": false,
     "demo_slug": "farmer-carry",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "carry"
   },
   {
     "id": "E090",
@@ -6163,7 +6921,21 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "12-20",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [
+      "beginner",
+      "intermediate"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "carry",
+    "slot_focus": [
+      "Core",
+      "Core/Obliques",
+      "Forearms"
+    ]
   },
   {
     "id": "E091",
@@ -6236,7 +7008,15 @@
     "rep_range": "5-8",
     "is_foundational": false,
     "demo_slug": "single-leg-romanian-deadlift",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "romanian_deadlift"
   },
   {
     "id": "E092",
@@ -6307,7 +7087,15 @@
     "rep_range": "8-12",
     "is_foundational": false,
     "demo_slug": "good-morning",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "good_morning"
   },
   {
     "id": "E093",
@@ -6378,7 +7166,15 @@
     "priority_tier": 2,
     "rep_range": "12-15",
     "demo_slug": "band-pull-apart",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner"
+    ],
+    "discipline": "prehab",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "rear_delt_fly"
   },
   {
     "id": "E094",
@@ -6442,7 +7238,15 @@
     "rep_range": "12-15",
     "is_foundational": false,
     "demo_slug": "incline-dumbbell-curl",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "biceps_curl"
   },
   {
     "id": "E095",
@@ -6507,7 +7311,15 @@
     "priority_tier": 2,
     "rep_range": "12-15",
     "demo_slug": "preacher-curl",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate"
+    ],
+    "discipline": "strength",
+    "gym_availability": "well_equipped_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "preacher_curl"
   },
   {
     "id": "E096",
@@ -6570,7 +7382,13 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "12-15",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "triceps_kickback"
   },
   {
     "id": "E097",
@@ -6643,7 +7461,16 @@
     ],
     "merged_ids": [
       "E240"
-    ]
+    ],
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "triceps_extension"
   },
   {
     "id": "E098",
@@ -6712,7 +7539,17 @@
     "rep_range": "12-15",
     "is_foundational": false,
     "demo_slug": "rear-delt-fly",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "rear_delt_fly"
   },
   {
     "id": "E099",
@@ -6777,7 +7614,13 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "12-15",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "wrist_curl"
   },
   {
     "id": "E100",
@@ -6844,7 +7687,13 @@
     "rep_range": "12-15",
     "is_foundational": false,
     "demo_slug": "wrist-extension",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "reverse_wrist_curl"
   },
   {
     "id": "E101",
@@ -6913,7 +7762,14 @@
     "rep_range": "8-12",
     "is_foundational": false,
     "demo_slug": "pull-up",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "calisthenics_skill",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "skill_track": "pull_up",
+    "skill_step": 5
   },
   {
     "id": "E102",
@@ -6984,7 +7840,18 @@
     "rep_range": "8-12",
     "is_foundational": false,
     "demo_slug": "incline-push-up",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "push_up",
+    "skill_track": "push_up",
+    "skill_step": 2,
+    "regression_to": "Wall Push Up"
   },
   {
     "id": "E103",
@@ -7056,7 +7923,20 @@
     "rep_range": "8-12",
     "is_foundational": false,
     "demo_slug": "decline-push-up",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "push_up",
+    "skill_track": "push_up",
+    "skill_step": 5,
+    "regression_to": "Push Up",
+    "progression_to": "Diamond Push Up"
   },
   {
     "id": "E104",
@@ -7127,7 +8007,16 @@
     "priority_tier": 1,
     "rep_range": "8-12",
     "demo_slug": "arnold-press",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "shoulder_press"
   },
   {
     "id": "E105",
@@ -7196,7 +8085,16 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "upright_row"
   },
   {
     "id": "E106",
@@ -7263,7 +8161,17 @@
     "priority_tier": 2,
     "rep_range": "12-15",
     "demo_slug": "dumbbell-shrug",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "shrug"
   },
   {
     "id": "E107",
@@ -7335,7 +8243,13 @@
     ],
     "merged_ids": [
       "E225"
-    ]
+    ],
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "well_equipped_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "hip_abduction"
   },
   {
     "id": "E108",
@@ -7397,7 +8311,13 @@
     "rep_range": "12-15",
     "is_foundational": false,
     "demo_slug": "hip-adduction-machine",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "well_equipped_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "hip_adduction"
   },
   {
     "id": "E109",
@@ -7464,7 +8384,16 @@
     "rep_range": "12-15",
     "is_foundational": false,
     "demo_slug": "cable-kickback",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "glute_kickback"
   },
   {
     "id": "E110",
@@ -7531,7 +8460,16 @@
     "rep_range": "12-15",
     "is_foundational": false,
     "demo_slug": "banded-lateral-walk",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "hip_abduction"
   },
   {
     "id": "E111",
@@ -7597,7 +8535,12 @@
     "rep_range": "12-15",
     "is_foundational": false,
     "demo_slug": "sissy-squat",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E112",
@@ -7669,7 +8612,13 @@
     ],
     "standard_swap": "",
     "priority_tier": 1,
-    "rep_range": "5-8"
+    "rep_range": "5-8",
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "well_equipped_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "squat"
   },
   {
     "id": "E113",
@@ -7737,7 +8686,16 @@
     ],
     "standard_swap": "",
     "priority_tier": 1,
-    "rep_range": "8-12"
+    "rep_range": "8-12",
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "bench_press"
   },
   {
     "id": "E114",
@@ -7808,7 +8766,18 @@
     "rep_range": "8-12",
     "is_foundational": false,
     "demo_slug": "landmine-press",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "well_equipped_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "shoulder_press",
+    "slot_focus": [
+      "Shoulders",
+      "Front Delts",
+      "Upper Chest"
+    ]
   },
   {
     "id": "E115",
@@ -7877,7 +8846,12 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E116",
@@ -7949,7 +8923,12 @@
     "rep_range": "8-12",
     "is_foundational": false,
     "demo_slug": "meadows-row",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "well_equipped_gym",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E117",
@@ -8016,7 +8995,13 @@
     "rep_range": "12-15",
     "is_foundational": false,
     "demo_slug": "cable-fly",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "chest_fly"
   },
   {
     "id": "E118",
@@ -8082,7 +9067,16 @@
     "rep_range": "12-15",
     "is_foundational": false,
     "demo_slug": "pec-deck",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "chest_fly",
+    "slot_focus": [
+      "Mid Chest"
+    ]
   },
   {
     "id": "E119",
@@ -8146,7 +9140,12 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E120",
@@ -8208,7 +9207,13 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "12-15",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "chest_fly"
   },
   {
     "id": "E121",
@@ -8280,7 +9285,16 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "row"
   },
   {
     "id": "E122",
@@ -8345,7 +9359,16 @@
     "rep_range": "12-15",
     "is_foundational": false,
     "demo_slug": "spider-curl",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "biceps_curl",
+    "slot_focus": [
+      "Biceps (Short Head)"
+    ]
   },
   {
     "id": "E123",
@@ -8416,7 +9439,18 @@
     "priority_tier": 1,
     "rep_range": "8-12",
     "demo_slug": "chin-up",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "chin_up",
+    "skill_track": "pull_up",
+    "skill_step": 3
   },
   {
     "id": "E124",
@@ -8483,7 +9517,16 @@
     ],
     "standard_swap": "",
     "priority_tier": 1,
-    "rep_range": "5-8"
+    "rep_range": "5-8",
+    "core_levels": [
+      "beginner",
+      "intermediate"
+    ],
+    "discipline": "strength",
+    "gym_availability": "well_equipped_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "inverted_row"
   },
   {
     "id": "E125",
@@ -8551,7 +9594,12 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "well_equipped_gym",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E126",
@@ -8619,7 +9667,12 @@
     "standard_swap": "",
     "priority_tier": 1,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E127",
@@ -8686,7 +9739,16 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "12-15",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "back_extension",
+    "slot_pattern": [
+      "hip_dominant"
+    ]
   },
   {
     "id": "E128",
@@ -8755,7 +9817,12 @@
     "standard_swap": "",
     "priority_tier": 1,
     "rep_range": "5-8",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "well_equipped_gym",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E129",
@@ -8828,7 +9895,13 @@
     "rep_range": "8-12",
     "is_foundational": false,
     "demo_slug": "rack-pull",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "deadlift"
   },
   {
     "id": "E130",
@@ -8895,7 +9968,12 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "10-15",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E131",
@@ -8956,7 +10034,13 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "12-20",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "sit_up"
   },
   {
     "id": "E132",
@@ -9022,7 +10106,15 @@
     "priority_tier": 2,
     "rep_range": "12-20",
     "demo_slug": "pallof-press",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "anti_rotation"
   },
   {
     "id": "E133",
@@ -9091,7 +10183,17 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "12-20",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "well_equipped_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "rotation_core",
+    "slot_focus": [
+      "Core",
+      "Core/Obliques"
+    ]
   },
   {
     "id": "E134",
@@ -9164,7 +10266,16 @@
     "rep_range": "30-60",
     "is_foundational": false,
     "demo_slug": "copenhagen-plank",
-    "demo_pair": false
+    "demo_pair": false,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "well_equipped_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "side_plank"
   },
   {
     "id": "E135",
@@ -9241,7 +10352,13 @@
     "rep_range": "30-60",
     "is_foundational": false,
     "demo_slug": "bear-crawl",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "conditioning",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "crawl"
   },
   {
     "id": "E136",
@@ -9322,7 +10439,13 @@
     "rep_range": "30-60",
     "is_foundational": false,
     "demo_slug": "crab-walk",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "conditioning",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "crab_walk"
   },
   {
     "id": "E137",
@@ -9384,7 +10507,12 @@
     "standard_swap": "",
     "priority_tier": 1,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "conditioning",
+    "gym_availability": "specialty",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E138",
@@ -9454,7 +10582,12 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "20-30",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "conditioning",
+    "gym_availability": "specialty",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E139",
@@ -9528,7 +10661,13 @@
     "rep_range": "30-60",
     "is_foundational": false,
     "demo_slug": "battle-ropes",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "conditioning",
+    "gym_availability": "well_equipped_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "battle_ropes"
   },
   {
     "id": "E140",
@@ -9600,7 +10739,15 @@
     "rep_range": "8-12",
     "is_foundational": false,
     "demo_slug": "kettlebell-swing",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate"
+    ],
+    "discipline": "strength",
+    "gym_availability": "well_equipped_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "kettlebell_swing"
   },
   {
     "id": "E141",
@@ -9665,7 +10812,13 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "12-20",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "well_equipped_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "turkish_get_up"
   },
   {
     "id": "E142",
@@ -9734,7 +10887,13 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "conditioning",
+    "gym_availability": "well_equipped_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "slam"
   },
   {
     "id": "E143",
@@ -9808,7 +10967,15 @@
     "rep_range": "8-12",
     "is_foundational": false,
     "demo_slug": "skater-squat",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "single_leg_squat",
+    "skill_track": "pistol_squat",
+    "skill_step": 1
   },
   {
     "id": "E144",
@@ -9880,7 +11047,12 @@
     ],
     "standard_swap": "",
     "priority_tier": 1,
-    "rep_range": "8-12"
+    "rep_range": "8-12",
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E145",
@@ -9956,7 +11128,15 @@
     "priority_tier": 1,
     "rep_range": "8-12",
     "demo_slug": "lateral-lunge",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "lunge"
   },
   {
     "id": "E146",
@@ -10029,7 +11209,12 @@
     "rep_range": "12-15",
     "is_foundational": false,
     "demo_slug": "curtsy-lunge",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E147",
@@ -10103,7 +11288,15 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [
+      "beginner"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "squat"
   },
   {
     "id": "E148",
@@ -10167,7 +11360,12 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "12-15",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E149",
@@ -10238,7 +11436,13 @@
     "standard_swap": "",
     "priority_tier": 1,
     "rep_range": "5-8",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": true,
+    "high_impact": false,
+    "variant_family": "squat"
   },
   {
     "id": "E150",
@@ -10302,7 +11506,12 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E151",
@@ -10375,7 +11584,13 @@
     "priority_tier": 2,
     "rep_range": "10-15",
     "demo_slug": "inchworm",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "mobility_full_body"
   },
   {
     "id": "E152",
@@ -10442,7 +11657,13 @@
     ],
     "standard_swap": "",
     "priority_tier": 2,
-    "rep_range": "10-15"
+    "rep_range": "10-15",
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "mobility_hip"
   },
   {
     "id": "E153",
@@ -10508,7 +11729,12 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E154",
@@ -10572,7 +11798,12 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E155",
@@ -10643,7 +11874,13 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "stretch_chest"
   },
   {
     "id": "E156",
@@ -10713,7 +11950,12 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "10-15",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E157",
@@ -10780,7 +12022,12 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "10-15",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "prehab",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E158",
@@ -10846,7 +12093,12 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E159",
@@ -10916,7 +12168,13 @@
     "priority_tier": 2,
     "rep_range": "30-60",
     "demo_slug": "childs-pose",
-    "demo_pair": false
+    "demo_pair": false,
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "stretch_back"
   },
   {
     "id": "E160",
@@ -10984,7 +12242,12 @@
     ],
     "standard_swap": "",
     "priority_tier": 2,
-    "rep_range": "30-60"
+    "rep_range": "30-60",
+    "core_levels": [],
+    "discipline": "yoga",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E161",
@@ -11052,7 +12315,13 @@
     "rep_range": "30-60",
     "is_foundational": false,
     "demo_slug": "wall-calf-stretch",
-    "demo_pair": false
+    "demo_pair": false,
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "stretch_calf"
   },
   {
     "id": "E162",
@@ -11117,7 +12386,12 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E163",
@@ -11180,7 +12454,12 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E164",
@@ -11247,7 +12526,12 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E166",
@@ -11315,7 +12599,13 @@
     "rep_range": "30-60",
     "is_foundational": false,
     "demo_slug": "hamstring-stretch",
-    "demo_pair": false
+    "demo_pair": false,
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "stretch_hamstring"
   },
   {
     "id": "E169",
@@ -11382,7 +12672,12 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E170",
@@ -11451,7 +12746,12 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "10-15",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E171",
@@ -11520,7 +12820,13 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "pullover"
   },
   {
     "id": "E172",
@@ -11588,7 +12894,16 @@
     "rep_range": "12-20",
     "is_foundational": false,
     "demo_slug": "dumbbell-side-bend",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "side_bend",
+    "slot_focus": [
+      "Core/Obliques"
+    ]
   },
   {
     "id": "E173",
@@ -11655,7 +12970,16 @@
     "rep_range": "12-20",
     "is_foundational": false,
     "demo_slug": "decline-sit-up",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "sit_up"
   },
   {
     "id": "E174",
@@ -11722,7 +13046,16 @@
     "priority_tier": 2,
     "rep_range": "12-20",
     "demo_slug": "crunch",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "crunch"
   },
   {
     "id": "E175",
@@ -11790,7 +13123,19 @@
     "priority_tier": 2,
     "rep_range": "12-20",
     "demo_slug": "bicycle-crunch",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "crunch",
+    "slot_focus": [
+      "Core/Obliques"
+    ]
   },
   {
     "id": "E176",
@@ -11865,7 +13210,15 @@
     ],
     "merged_ids": [
       "E249"
-    ]
+    ],
+    "core_levels": [
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "sit_up"
   },
   {
     "id": "E177",
@@ -11934,7 +13287,16 @@
     "priority_tier": 1,
     "rep_range": "30-60",
     "demo_slug": "hollow-body-hold",
-    "demo_pair": false
+    "demo_pair": false,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "plank"
   },
   {
     "id": "E178",
@@ -12003,7 +13365,12 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "12-20",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "well_equipped_gym",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E179",
@@ -12073,7 +13440,12 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "12-20",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "calisthenics_skill",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E180",
@@ -12141,7 +13513,13 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "12-20",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "calisthenics_skill",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "leg_raise"
   },
   {
     "id": "E181",
@@ -12205,7 +13583,13 @@
     "standard_swap": "",
     "priority_tier": 1,
     "rep_range": "12-20",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "carry"
   },
   {
     "id": "E182",
@@ -12269,7 +13653,13 @@
     "standard_swap": "",
     "priority_tier": 1,
     "rep_range": "12-20",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "conditioning",
+    "gym_availability": "specialty",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "carry"
   },
   {
     "id": "E183",
@@ -12338,7 +13728,12 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "20-30",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "conditioning",
+    "gym_availability": "specialty",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E184",
@@ -12404,7 +13799,12 @@
     "standard_swap": "",
     "priority_tier": 1,
     "rep_range": "5-8",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "conditioning",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E185",
@@ -12471,7 +13871,13 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "well_equipped_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "shoulder_press"
   },
   {
     "id": "E186",
@@ -12536,7 +13942,19 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "well_equipped_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "shoulder_press",
+    "slot_focus": [
+      "Front Delts",
+      "Shoulders",
+      "Mid Chest",
+      "Triceps"
+    ]
   },
   {
     "id": "E187",
@@ -12604,7 +14022,13 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "well_equipped_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "row"
   },
   {
     "id": "E188",
@@ -12676,7 +14100,13 @@
     "rep_range": "8-12",
     "is_foundational": false,
     "demo_slug": "banded-squat",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "squat"
   },
   {
     "id": "E189",
@@ -12746,7 +14176,13 @@
     "rep_range": "8-12",
     "is_foundational": false,
     "demo_slug": "banded-hip-thrust",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "hip_thrust"
   },
   {
     "id": "E190",
@@ -12813,7 +14249,13 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "well_equipped_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "inverted_row"
   },
   {
     "id": "E191",
@@ -12879,7 +14321,13 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "well_equipped_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "push_up"
   },
   {
     "id": "E192",
@@ -12950,7 +14398,12 @@
     "rep_range": "30-60",
     "is_foundational": false,
     "demo_slug": "battle-ropes",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "conditioning",
+    "gym_availability": "well_equipped_gym",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E193",
@@ -13025,7 +14478,16 @@
     "rep_range": "8-12",
     "is_foundational": false,
     "demo_slug": "jump-squat",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "plyometric",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": true,
+    "variant_family": "jump"
   },
   {
     "id": "E194",
@@ -13089,7 +14551,12 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "plyometric",
+    "gym_availability": "well_equipped_gym",
+    "requires_coaching": false,
+    "high_impact": true
   },
   {
     "id": "E195",
@@ -13163,7 +14630,12 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "plyometric",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": true
   },
   {
     "id": "E196",
@@ -13236,7 +14708,12 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "plyometric",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": true
   },
   {
     "id": "E197",
@@ -13306,7 +14783,12 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "plyometric",
+    "gym_availability": "well_equipped_gym",
+    "requires_coaching": false,
+    "high_impact": true
   },
   {
     "id": "E198",
@@ -13378,7 +14860,23 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "12-20",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [
+      "intermediate"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "lunge",
+    "slot_focus": [
+      "Glutes",
+      "Quads",
+      "Core/Obliques"
+    ],
+    "slot_pattern": [
+      "knee_dominant"
+    ]
   },
   {
     "id": "E199",
@@ -13445,7 +14943,12 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "12-20",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E200",
@@ -13509,7 +15012,13 @@
     "standard_swap": "",
     "priority_tier": 2,
     "rep_range": "10-15",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "yoga",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "mobility_full_body"
   },
   {
     "id": "E201",
@@ -13575,7 +15084,13 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "cardio",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "cardio_jog"
   },
   {
     "id": "E202",
@@ -13643,7 +15158,13 @@
     "rep_range": "30-60",
     "is_foundational": false,
     "demo_slug": "jumping-jack",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "cardio",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": true,
+    "variant_family": "jump"
   },
   {
     "id": "E203",
@@ -13714,7 +15235,13 @@
     "rep_range": "30-60",
     "is_foundational": false,
     "demo_slug": "high-knees",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "conditioning",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": true,
+    "variant_family": "warmup_cardio"
   },
   {
     "id": "E204",
@@ -13781,7 +15308,12 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E205",
@@ -13849,7 +15381,13 @@
     "rep_range": "30-60",
     "is_foundational": false,
     "demo_slug": "arm-circles",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "mobility_shoulder"
   },
   {
     "id": "E206",
@@ -13917,7 +15455,13 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "mobility_neck"
   },
   {
     "id": "E207",
@@ -13985,7 +15529,13 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "mobility_spine"
   },
   {
     "id": "E208",
@@ -14053,7 +15603,12 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E209",
@@ -14125,7 +15680,13 @@
     "rep_range": "30-60",
     "is_foundational": false,
     "demo_slug": "leg-swings-stretch",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "mobility_hip"
   },
   {
     "id": "E210",
@@ -14188,7 +15749,12 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E211",
@@ -14251,7 +15817,12 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E212",
@@ -14319,7 +15890,16 @@
     "rep_range": "10-15",
     "is_foundational": false,
     "demo_slug": "wall-push-up",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "push_up",
+    "skill_track": "push_up",
+    "skill_step": 1,
+    "progression_to": "Incline Push Up"
   },
   {
     "id": "E213",
@@ -14388,7 +15968,15 @@
     "rep_range": "30-60",
     "is_foundational": false,
     "demo_slug": "dead-hang",
-    "demo_pair": false
+    "demo_pair": false,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "dead_hang",
+    "skill_track": "pull_up",
+    "skill_step": 1
   },
   {
     "id": "E214",
@@ -14455,7 +16043,13 @@
     "rep_range": "30-60",
     "is_foundational": false,
     "demo_slug": "walking",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "cardio",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "cardio_walk"
   },
   {
     "id": "E215",
@@ -14525,7 +16119,13 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "stretch_hamstring"
   },
   {
     "id": "E216",
@@ -14603,7 +16203,13 @@
     ],
     "merged_ids": [
       "E165"
-    ]
+    ],
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "stretch_quad"
   },
   {
     "id": "E217",
@@ -14671,7 +16277,13 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "stretch_shoulder"
   },
   {
     "id": "E218",
@@ -14738,7 +16350,12 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E219",
@@ -14814,7 +16431,13 @@
     ],
     "merged_ids": [
       "E167"
-    ]
+    ],
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "stretch_shoulder"
   },
   {
     "id": "E220",
@@ -14891,7 +16514,13 @@
     ],
     "merged_ids": [
       "E168"
-    ]
+    ],
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "stretch_chest"
   },
   {
     "id": "E221",
@@ -14960,7 +16589,12 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "30-60",
-    "is_foundational": false
+    "is_foundational": false,
+    "core_levels": [],
+    "discipline": "mobility",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "name": "Kas Glute Bridge",
@@ -15030,7 +16664,16 @@
     "standard_swap": "Hip Thrust",
     "priority_tier": 2,
     "rep_range": "12-15",
-    "id": "E222"
+    "id": "E222",
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "glute_bridge",
+    "slot_pattern": [
+      "hip_dominant"
+    ]
   },
   {
     "name": "B-Stance RDL",
@@ -15099,7 +16742,12 @@
     "standard_swap": "Romanian Deadlift",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "id": "E223"
+    "id": "E223",
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "name": "Cable Pull-Through",
@@ -15170,7 +16818,15 @@
     "rep_range": "8-12",
     "id": "E224",
     "demo_slug": "cable-pull-through",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "pull_through"
   },
   {
     "name": "Frog Pumps",
@@ -15240,7 +16896,13 @@
     "rep_range": "12-15",
     "id": "E226",
     "demo_slug": "frog-pump",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "glute_bridge"
   },
   {
     "name": "High Box Step-Up",
@@ -15310,7 +16972,12 @@
     "standard_swap": "Bulgarian Split Squat",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "id": "E227"
+    "id": "E227",
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "name": "Deficit Reverse Lunge",
@@ -15380,7 +17047,12 @@
     "standard_swap": "Reverse Lunge",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "id": "E228"
+    "id": "E228",
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "name": "Stiff-Legged Deadlift",
@@ -15451,7 +17123,13 @@
     "rep_range": "5-8",
     "id": "E229",
     "demo_slug": "romanian-deadlift",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "romanian_deadlift"
   },
   {
     "name": "Standing Single Leg Curl",
@@ -15517,7 +17195,13 @@
     "standard_swap": "Prone Leg Curl",
     "priority_tier": 2,
     "rep_range": "12-15",
-    "id": "E230"
+    "id": "E230",
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "leg_curl"
   },
   {
     "name": "Decline Dumbbell Press",
@@ -15587,7 +17271,13 @@
     "rep_range": "8-12",
     "id": "E231",
     "demo_slug": "decline-dumbbell-press",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "bench_press"
   },
   {
     "name": "Incline Dumbbell Fly",
@@ -15654,7 +17344,16 @@
     "standard_swap": "Cable Fly",
     "priority_tier": 2,
     "rep_range": "12-15",
-    "id": "E232"
+    "id": "E232",
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "chest_fly"
   },
   {
     "name": "Deficit Push-Up",
@@ -15723,7 +17422,12 @@
     "standard_swap": "Push-Up",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "id": "E233"
+    "id": "E233",
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "name": "Floor Press",
@@ -15791,7 +17495,12 @@
     "standard_swap": "Dumbbell Bench Press",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "id": "E234"
+    "id": "E234",
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "name": "Machine Lateral Raise",
@@ -15856,7 +17565,16 @@
     "rep_range": "12-15",
     "id": "E235",
     "demo_slug": "machine-lateral-raise",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "lateral_raise"
   },
   {
     "name": "Cable Front Raise",
@@ -15926,7 +17644,13 @@
     "rep_range": "12-15",
     "id": "E236",
     "demo_slug": "cable-front-raise",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "front_raise"
   },
   {
     "name": "Egyptian Lateral Raise",
@@ -15990,7 +17714,12 @@
     "standard_swap": "Dumbbell Lateral Raise",
     "priority_tier": 2,
     "rep_range": "12-15",
-    "id": "E237"
+    "id": "E237",
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "name": "Bench Dips",
@@ -16064,7 +17793,18 @@
     "rep_range": "8-12",
     "id": "E238",
     "demo_slug": "bench-dip",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "dip",
+    "skill_track": "dip",
+    "skill_step": 1
   },
   {
     "name": "Dumbbell Kickback",
@@ -16131,7 +17871,16 @@
     "rep_range": "12-15",
     "id": "E239",
     "demo_slug": "tricep-kickback",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "triceps_kickback"
   },
   {
     "name": "Rope Hammer Curl",
@@ -16203,7 +17952,13 @@
     "rep_range": "12-15",
     "id": "E242",
     "demo_slug": "rope-hammer-curl",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "hammer_curl"
   },
   {
     "name": "High Cable Curl",
@@ -16268,7 +18023,12 @@
     "standard_swap": "Barbell Curl",
     "priority_tier": 2,
     "rep_range": "12-15",
-    "id": "E243"
+    "id": "E243",
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "name": "Pendlay Row",
@@ -16339,7 +18099,13 @@
     "rep_range": "8-12",
     "id": "E244",
     "demo_slug": "pendlay-row",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "row"
   },
   {
     "name": "Machine High Row",
@@ -16405,7 +18171,13 @@
     "standard_swap": "Lat Pulldown",
     "priority_tier": 2,
     "rep_range": "8-12",
-    "id": "E245"
+    "id": "E245",
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "lat_pulldown"
   },
   {
     "name": "Machine Low Row",
@@ -16473,7 +18245,15 @@
     "rep_range": "8-12",
     "id": "E246",
     "demo_slug": "machine-row",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "row"
   },
   {
     "name": "Straight-Arm Pulldown",
@@ -16543,7 +18323,13 @@
     "rep_range": "12-15",
     "id": "E247",
     "demo_slug": "straight-arm-pulldown",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "pullover"
   },
   {
     "name": "Captain's Chair Leg Raise",
@@ -16612,7 +18398,16 @@
     "standard_swap": "Hanging Leg Raise",
     "priority_tier": 2,
     "rep_range": "12-20",
-    "id": "E248"
+    "id": "E248",
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "leg_raise"
   },
   {
     "name": "Flutter Kicks",
@@ -16685,7 +18480,15 @@
     "rep_range": "30-60",
     "id": "E250",
     "demo_slug": "flutter-kick",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "leg_raise"
   },
   {
     "name": "Side Plank",
@@ -16762,7 +18565,16 @@
     "rep_range": "30-60",
     "id": "E251",
     "demo_slug": "side-plank",
-    "demo_pair": false
+    "demo_pair": false,
+    "core_levels": [
+      "beginner",
+      "intermediate"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "side_plank"
   },
   {
     "id": "E252",
@@ -16833,7 +18645,15 @@
     "priority_tier": 2,
     "rep_range": "30-60s",
     "demo_slug": "wall-sit",
-    "demo_pair": false
+    "demo_pair": false,
+    "core_levels": [
+      "beginner"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "wall_sit"
   },
   {
     "id": "E253",
@@ -16905,7 +18725,15 @@
     ],
     "standard_swap": "Romanian Deadlift",
     "priority_tier": 1,
-    "rep_range": "12-15"
+    "rep_range": "12-15",
+    "core_levels": [
+      "beginner"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "good_morning"
   },
   {
     "id": "E254",
@@ -16976,7 +18804,12 @@
     ],
     "standard_swap": "Hammer Curl",
     "priority_tier": 2,
-    "rep_range": "8-12"
+    "rep_range": "8-12",
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E255",
@@ -17050,7 +18883,15 @@
     "priority_tier": 1,
     "rep_range": "8-12",
     "demo_slug": "towel-row",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "inverted_row"
   },
   {
     "id": "E256",
@@ -17123,7 +18964,15 @@
     "priority_tier": 1,
     "rep_range": "5-8",
     "demo_slug": "negative-pull-up",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "skill_track": "pull_up",
+    "skill_step": 2,
+    "progression_to": "Pull Up"
   },
   {
     "id": "E257",
@@ -17196,7 +19045,16 @@
     "priority_tier": 2,
     "rep_range": "12-15",
     "demo_slug": "donkey-kick",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "glute_kickback"
   },
   {
     "id": "E258",
@@ -17264,7 +19122,16 @@
     ],
     "standard_swap": "Standing Calf Raise",
     "priority_tier": 2,
-    "rep_range": "15-20"
+    "rep_range": "15-20",
+    "core_levels": [
+      "beginner",
+      "intermediate"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "calf_raise"
   },
   {
     "id": "E259",
@@ -17337,7 +19204,15 @@
     ],
     "standard_swap": "Bulgarian Split Squat",
     "priority_tier": 2,
-    "rep_range": "10-12"
+    "rep_range": "10-12",
+    "core_levels": [
+      "beginner"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "split_squat"
   },
   {
     "id": "E260",
@@ -17409,7 +19284,17 @@
     "priority_tier": 1,
     "rep_range": "8-12",
     "demo_slug": "incline-dumbbell-press",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate",
+      "advanced"
+    ],
+    "discipline": "strength",
+    "gym_availability": "standard_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "incline_press"
   },
   {
     "id": "E261",
@@ -17479,7 +19364,12 @@
     "priority_tier": 2,
     "rep_range": "12-15",
     "demo_slug": "prone-t-raise",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E262",
@@ -17554,7 +19444,19 @@
     "priority_tier": 1,
     "rep_range": "8-12",
     "demo_slug": "feet-elevated-pike-push-up",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "advanced",
+      "intermediate"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "shoulder_press",
+    "skill_track": "handstand_push_up",
+    "skill_step": 2,
+    "regression_to": "Pike Push Up"
   },
   {
     "id": "E263",
@@ -17627,7 +19529,12 @@
     "priority_tier": 1,
     "rep_range": "12-15",
     "demo_slug": "reverse-snow-angel",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E264",
@@ -17699,7 +19606,19 @@
     ],
     "standard_swap": "Inverted Row",
     "priority_tier": 1,
-    "rep_range": "8-12"
+    "rep_range": "8-12",
+    "core_levels": [
+      "beginner"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "inverted_row",
+    "slot_focus": [
+      "Lats",
+      "Mid Back"
+    ]
   },
   {
     "id": "E265",
@@ -17770,7 +19689,12 @@
     ],
     "standard_swap": "Prone Reverse Snow Angel",
     "priority_tier": 1,
-    "rep_range": "12-15"
+    "rep_range": "12-15",
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E266",
@@ -17842,7 +19766,13 @@
     ],
     "standard_swap": "Prone Lat Pull",
     "priority_tier": 2,
-    "rep_range": "10-12"
+    "rep_range": "10-12",
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "lat_pulldown"
   },
   {
     "id": "E267",
@@ -17914,7 +19844,15 @@
     ],
     "standard_swap": "Prone Lat Pull",
     "priority_tier": 2,
-    "rep_range": "20-30s"
+    "rep_range": "20-30s",
+    "core_levels": [
+      "beginner"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "lat_pulldown"
   },
   {
     "id": "E268",
@@ -17984,7 +19922,15 @@
     ],
     "standard_swap": "Doorframe Curl",
     "priority_tier": 1,
-    "rep_range": "10-12"
+    "rep_range": "10-12",
+    "core_levels": [
+      "beginner"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "biceps_curl"
   },
   {
     "id": "E269",
@@ -18055,7 +20001,15 @@
     ],
     "standard_swap": "Self-Resisted Bicep Curl",
     "priority_tier": 2,
-    "rep_range": "10-12"
+    "rep_range": "10-12",
+    "core_levels": [
+      "beginner"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "biceps_curl"
   },
   {
     "id": "E270",
@@ -18126,7 +20080,15 @@
     ],
     "standard_swap": "Bench Dips",
     "priority_tier": 1,
-    "rep_range": "10-12"
+    "rep_range": "10-12",
+    "core_levels": [
+      "beginner"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "triceps_extension"
   },
   {
     "id": "E271",
@@ -18199,7 +20161,12 @@
     ],
     "standard_swap": "Self-Resisted Triceps Extension",
     "priority_tier": 2,
-    "rep_range": "12-15"
+    "rep_range": "12-15",
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E272",
@@ -18273,7 +20240,17 @@
     "priority_tier": 2,
     "rep_range": "12-15",
     "demo_slug": "prone-y-raise",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "y_raise",
+    "slot_focus": [
+      "Shoulders",
+      "Rear Delts"
+    ]
   },
   {
     "id": "E273",
@@ -18343,7 +20320,19 @@
     ],
     "standard_swap": "Prone Y Raise",
     "priority_tier": 2,
-    "rep_range": "20-30s"
+    "rep_range": "20-30s",
+    "core_levels": [
+      "beginner"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "lateral_raise",
+    "slot_focus": [
+      "Lateral Delts",
+      "Shoulders"
+    ]
   },
   {
     "id": "E274",
@@ -18417,7 +20406,22 @@
     "priority_tier": 2,
     "rep_range": "12-15",
     "demo_slug": "prone-t-raise",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "rear_delt_fly",
+    "slot_focus": [
+      "Mid Back",
+      "Rear Delts"
+    ],
+    "slot_pattern": [
+      "shoulder_isolation"
+    ]
   },
   {
     "id": "E275",
@@ -18491,7 +20495,17 @@
     "priority_tier": 2,
     "rep_range": "20-30s",
     "demo_slug": "doorway-row",
-    "demo_pair": false
+    "demo_pair": false,
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "row",
+    "slot_focus": [
+      "Lats",
+      "Mid Back"
+    ]
   },
   {
     "id": "E276",
@@ -18562,7 +20576,22 @@
     ],
     "standard_swap": "Prone T Raise",
     "priority_tier": 2,
-    "rep_range": "15-20"
+    "rep_range": "15-20",
+    "core_levels": [
+      "beginner"
+    ],
+    "discipline": "prehab",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "rear_delt_fly",
+    "slot_focus": [
+      "Rear Delts",
+      "Mid Back"
+    ],
+    "slot_pattern": [
+      "shoulder_isolation"
+    ]
   },
   {
     "id": "E277",
@@ -18633,7 +20662,22 @@
     ],
     "standard_swap": "Prone T Raise",
     "priority_tier": 2,
-    "rep_range": "12-15"
+    "rep_range": "12-15",
+    "core_levels": [
+      "beginner"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "rotator_cuff",
+    "slot_focus": [
+      "Mid Back",
+      "Rear Delts"
+    ],
+    "slot_pattern": [
+      "shoulder_isolation"
+    ]
   },
   {
     "id": "E278",
@@ -18704,7 +20748,15 @@
     ],
     "standard_swap": "Prone Lat Pull",
     "priority_tier": 2,
-    "rep_range": "12-15"
+    "rep_range": "12-15",
+    "core_levels": [
+      "beginner"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "lat_pulldown"
   },
   {
     "id": "E279",
@@ -18775,7 +20827,12 @@
     ],
     "standard_swap": "Prone Lat Pull",
     "priority_tier": 2,
-    "rep_range": "20-30s"
+    "rep_range": "20-30s",
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E280",
@@ -18845,7 +20902,15 @@
     ],
     "standard_swap": "Prone Lat Pull",
     "priority_tier": 2,
-    "rep_range": "20-30s"
+    "rep_range": "20-30s",
+    "core_levels": [
+      "beginner"
+    ],
+    "discipline": "prehab",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "lat_pulldown"
   },
   {
     "id": "E281",
@@ -18915,7 +20980,12 @@
     ],
     "standard_swap": "Towel Bicep Curl",
     "priority_tier": 2,
-    "rep_range": "10-12"
+    "rep_range": "10-12",
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E282",
@@ -18985,7 +21055,15 @@
     ],
     "standard_swap": "Self-Resisted Bicep Curl",
     "priority_tier": 2,
-    "rep_range": "20-30s"
+    "rep_range": "20-30s",
+    "core_levels": [
+      "beginner"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "biceps_curl"
   },
   {
     "id": "E283",
@@ -19057,7 +21135,13 @@
     ],
     "standard_swap": "Doorframe Curl",
     "priority_tier": 2,
-    "rep_range": "8-12"
+    "rep_range": "8-12",
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "biceps_curl"
   },
   {
     "id": "E284",
@@ -19128,7 +21212,15 @@
     ],
     "standard_swap": "Self-Resisted Triceps Extension",
     "priority_tier": 2,
-    "rep_range": "10-12"
+    "rep_range": "10-12",
+    "core_levels": [
+      "beginner"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "triceps_extension"
   },
   {
     "id": "E285",
@@ -19202,7 +21294,12 @@
     ],
     "standard_swap": "Bench Dips",
     "priority_tier": 1,
-    "rep_range": "10-15"
+    "rep_range": "10-15",
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E286",
@@ -19273,7 +21370,15 @@
     ],
     "standard_swap": "Wall Triceps Extension",
     "priority_tier": 2,
-    "rep_range": "20-30s"
+    "rep_range": "20-30s",
+    "core_levels": [
+      "beginner"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "triceps_extension"
   },
   {
     "id": "E287",
@@ -19343,7 +21448,12 @@
     ],
     "standard_swap": "Towel Lateral Raise",
     "priority_tier": 2,
-    "rep_range": "12-15"
+    "rep_range": "12-15",
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E288",
@@ -19416,7 +21526,12 @@
     ],
     "standard_swap": "Prone Y Raise",
     "priority_tier": 2,
-    "rep_range": "10-12"
+    "rep_range": "10-12",
+    "core_levels": [],
+    "discipline": "prehab",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E289",
@@ -19486,7 +21601,19 @@
     ],
     "standard_swap": "Towel Lateral Raise",
     "priority_tier": 2,
-    "rep_range": "20-30s"
+    "rep_range": "20-30s",
+    "core_levels": [
+      "beginner"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "lateral_raise",
+    "slot_focus": [
+      "Lateral Delts",
+      "Shoulders"
+    ]
   },
   {
     "id": "E290",
@@ -19557,7 +21684,17 @@
     ],
     "standard_swap": "Bodyweight Rear Delt Raise",
     "priority_tier": 2,
-    "rep_range": "12-15"
+    "rep_range": "12-15",
+    "core_levels": [],
+    "discipline": "prehab",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "rear_delt_fly",
+    "slot_focus": [
+      "Shoulders",
+      "Rear Delts"
+    ]
   },
   {
     "id": "E291",
@@ -19631,7 +21768,16 @@
     "priority_tier": 1,
     "rep_range": "10-15",
     "demo_slug": "single-leg-glute-bridge",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner",
+      "intermediate"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "glute_bridge"
   },
   {
     "id": "E292",
@@ -19706,7 +21852,18 @@
     "priority_tier": 1,
     "rep_range": "8-12",
     "demo_slug": "towel-hamstring-curl",
-    "demo_pair": true
+    "demo_pair": true,
+    "core_levels": [
+      "beginner"
+    ],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "leg_curl",
+    "slot_pattern": [
+      "knee_dominant"
+    ]
   },
   {
     "id": "E293",
@@ -19779,7 +21936,12 @@
     ],
     "standard_swap": "Single Leg Glute Bridge",
     "priority_tier": 1,
-    "rep_range": "10-12"
+    "rep_range": "10-12",
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   },
   {
     "id": "E294",
@@ -19851,6 +22013,11 @@
     ],
     "standard_swap": "Bodyweight Good Morning",
     "priority_tier": 1,
-    "rep_range": "10-12"
+    "rep_range": "10-12",
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false
   }
 ]
