@@ -10,7 +10,7 @@ Re-run: `dart run scripts/build_bug_index.dart`
 - 2026-10-23 "132315" — The coach's "Status check" reply told upendra "100% skip rate on Sunday workouts". Sunday is always a rest day on his plan. getDayOfWeekCompletionRates returned 0 for a weekday with nothing scheduled,…
 
 ### exercise_injury_tags (3 bugs)
-- 2026-10-23 d30de7 — 102 of the 285 library rows loaded a joint with no matching injury_contraindications token, so the injury filter handed them to an injured user. The founder named the cases: a bicycle crunch, a V-up…
+- 2026-10-23 d30de7 — 104 of the 285 library rows loaded a joint with no matching injury_contraindications token, so the injury filter handed them to an injured user. The founder named the cases: a bicycle crunch, a V-up…
 - 2026-10-22 c2d5e8 — Five library rows were missing a safety-direction injury tag, so the queryV4 injury filter could hand them to a user with that injury: Renegade Row (E121) to a shoulder- or wrist-injured user, Running…
 - 2026-07-19 f4c1e8 — The always-on queryV4 injury filter (exercise_repository.dart:335-345) excludes an exercise for an injured user ONLY when the exercise's injury_contraindications list CONTAINS the user's injury token;…
 
@@ -1647,7 +1647,7 @@ rather than a Hive box. (1 bugs)
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
 | 2026-10-23 | "132315" | The coach's "Status check" reply told upendra "100% skip rate on Sunday workouts". Sunday is always a rest day on his plan. getDayOfWeekCompletionRates returned 0 for a weekday with nothing scheduled,… | day_of_week_completion — a weekday's completion counts only days that were due (classifyScheduleDay), and the coach is told a weekday is skipped only when it is genuinely singled out. | test/contracts/day_of_week_completion_writer_to_reader_test.dart |
-| 2026-10-23 | d30de7 | 102 of the 285 library rows loaded a joint with no matching injury_contraindications token, so the injury filter handed them to an injured user. The founder named the cases: a bicycle crunch, a V-up… | exercise_injury_tags | test/contracts/injury_recheck_v14_contract_test.dart |
+| 2026-10-23 | d30de7 | 104 of the 285 library rows loaded a joint with no matching injury_contraindications token, so the injury filter handed them to an injured user. The founder named the cases: a bicycle crunch, a V-up… | exercise_injury_tags | test/contracts/injury_recheck_v14_contract_test.dart |
 | 2026-10-22 | b1c4e7 | The equipment capability floor (OI-89) did not apply on the two pick paths that resolve an exercise by NAME and bypass queryV4: the attempt-5 universal pool and repeat-phase pins. A shoulder-injured… | equipment_capability_floor | test/contracts/universal_pool_capability_behavioral_test.dart |
 | 2026-10-22 | e7240a | A cardio exercise logged in the active workout (e.g. "Running (Treadmill)" 30 MIN 4 KM) was stored with 0 minutes and no km: `_normalizeSetsByLoggingType` zeroed `durationSec` for every non-`timed`… | hive_field_name_exlog — a cardio / distance set's duration (seconds) and km survive every writer and every reader resolves them through WorkoutReadService. | test/contracts/cardio_duration_distance_writer_to_reader_test.dart |
 | 2026-10-22 | 46fc99 | Seven bundled library rows duplicated a kept twin: the same movement under a second name, usually with the same drawing. E241 Close-Grip Bench Press / E016 Close Grip Bench Press, E240 Overhead Cable… | exercise_library_schema | test/contracts/exercise_library_merge_contract_test.dart |

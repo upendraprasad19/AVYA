@@ -108,8 +108,8 @@ class SeedService {
   //   tags (Task 1b). New keys only, read by CoreListSelector behind
   //   enable_core_list_pool; no cloud column (plan Ruling 2).
   // v14 (injury re-check, docs/plans/2026-10-23-library-injury-recheck.md, d30de7):
-  //   the founder rejected the 13-B "kept safe for variety" carve-out, so 102 rows
-  //   gained 146 injury_contraindications tokens (additions only; Push Up is now
+  //   the founder rejected the 13-B "kept safe for variety" carve-out, so 104 rows
+  //   gained 148 injury_contraindications tokens (additions only; Push Up is now
   //   wrist + shoulder, Chin Up elbow only). injury_contraindications is NOT a
   //   cloud column -> no migration. Without this bump the tags are inert for every
   //   existing install (library_seed_v14_upgrade_behavioral_test.dart).

@@ -2,7 +2,7 @@
 // diagnose docs/diagnoses/2026-10-23-library-injury-recheck-d30de7.md.
 //
 // Founder decision 2026-10-23: the 13-B "kept safe for variety" principle is
-// rejected; 102 library rows gain 146 injury tags (additions only). This file
+// rejected; 104 library rows gain 148 injury tags (additions only). This file
 // pins, in three layers:
 //  (A) DATA — every founder call as a literal on a name, the closed vocabulary,
 //      the table the applier reads, the 33-row safe pool (and nothing else
@@ -92,9 +92,9 @@ void main() {
 
   // ---------------------------------------------------------------- (A) DATA
   group('(A) v14 data contract', () {
-    test('the table: 102 rows, 146 tokens, canonical tokens, known ids', () {
+    test('the table: 104 rows, 148 tokens, canonical tokens, known ids', () {
       final additions = Map<String, dynamic>.from(table['additions'] as Map);
-      expect(additions.length, 102);
+      expect(additions.length, 104);
       var tokens = 0;
       for (final e in additions.entries) {
         expect(tagsById.containsKey(e.key), isTrue, reason: '${e.key} unknown id');
@@ -104,7 +104,7 @@ void main() {
             reason: '${e.key} has a non-canonical token: $t');
         tokens += t.length;
       }
-      expect(tokens, 146);
+      expect(tokens, 148);
       expect((table['reasons'] as Map).keys.toSet(), additions.keys.toSet(),
           reason: 'every added row carries a one-line reason');
     });
@@ -137,6 +137,11 @@ void main() {
       expect(tagsOf('Chin Up'), isNot(contains('shoulder')));
       // "wrist and shoulders".
       expect(tagsOf('Push Up'), {'shoulder', 'wrist'});
+      // B-pass F1 (2026-10-24): plan Ruling 2 had kept Diamond and Incline Push Up
+      // shoulder-free to avoid thin days, which is the 'kept safe for variety'
+      // reasoning the founder rejected. A push-up is a push-up.
+      expect(tagsOf('Diamond Push Up'), contains('shoulder'));
+      expect(tagsOf('Incline Push Up'), contains('shoulder'));
       expect(tagsOf('Hollow Body Hold'), contains('lower_back'));
       expect(tagsOf('Hip Abduction Machine'), contains('hip'));
       expect(tagsOf('Hip Adduction Machine'), contains('hip'));
@@ -150,6 +155,16 @@ void main() {
       // injured user."
       for (final n in ['Crunches', 'Bicycle Crunch', 'V-Up', 'Russian Twist']) {
         expect(tagsOf(n), contains('lower_back'), reason: n);
+      }
+    });
+
+    test('every push-up variant carries shoulder (no variant is shoulder-free)', () {
+      final rows = library.where((r) =>
+          RegExp(r'push[- ]?up', caseSensitive: false).hasMatch(r['name'] as String));
+      expect(rows.length, 11, reason: 'denominator: push-up-named rows in the library');
+      for (final r in rows) {
+        expect((r['injury_contraindications'] as List), contains('shoulder'),
+            reason: '${r['id']} ${r['name']} is a push-up but is shoulder-free');
       }
     });
 
@@ -250,6 +265,8 @@ void main() {
 
     const pairs = <(String, String, String)>[
       ('Kettlebell Goblet Press', 'vertical_push', 'shoulder'),
+      ('Diamond Push Up', 'horizontal_push', 'shoulder'),
+      ('Incline Push Up', 'horizontal_push', 'shoulder'),
       ('V-Up', 'core', 'lower_back'),
       ('Hollow Body Hold', 'core', 'lower_back'),
       ('Burpee', 'cardio', 'shoulder'),

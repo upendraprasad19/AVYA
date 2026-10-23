@@ -479,6 +479,14 @@ paths:
   - { glob: "lib/features/nutrition/**", tier: feature }
   - { glob: "lib/features/home/**", tier: feature }
   - { glob: "lib/shared/widgets/**", tier: feature }
+  # The exercise library decides which movements an injured user is handed: its
+  # injury_contraindications tags are the only thing the generator, the warm-up picker and the
+  # curated substitutes filter on. A data-only retag (13-B, c2d5e8, d30de7) is therefore a SAFETY
+  # change, and under the `assets/**` / `scripts/**` feature defaults below it would classify as
+  # `feature` and skip the B-pass and the plan-review record (d30de7 B-pass F6). account, not
+  # platform: platform also requires a feature_flag, which plain data edits do not carry.
+  - { glob: "assets/data/exercise_library.json", tier: account }
+  - { glob: "scripts/data/library_injury_additions_*.json", tier: account }
   - { glob: "docs/**", tier: feature }
   - { glob: "scripts/**", tier: feature }
   - { glob: "test/**", tier: feature }

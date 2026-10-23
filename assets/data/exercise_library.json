@@ -1564,6 +1564,7 @@
     "is_foundational": true,
     "injury_contraindications": [
       "elbow",
+      "shoulder",
       "wrist"
     ],
     "is_bilateral": true,
@@ -7903,6 +7904,7 @@
     "source": "",
     "is_active": true,
     "injury_contraindications": [
+      "shoulder",
       "wrist"
     ],
     "is_bilateral": true,

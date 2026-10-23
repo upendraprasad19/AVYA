@@ -17,8 +17,8 @@
 
 - **Unsafe plans (contraindicated exercise present): 0** (HARD invariant — must be 0)
 - **Equipment-violating plans: 0** (HARD invariant — must be 0)
-- Plans with ≥1 fallback pick: 369 / total fallback picks: 2866
-- Fallback picks by tier (baseline — shallow bodyweight pool; no-regression tracked): `{bodyweight: 1630, home_dumbbells: 1099, basic_gym: 81, full_gym: 56}`
+- Plans with ≥1 fallback pick: 368 / total fallback picks: 2864
+- Fallback picks by tier (baseline — shallow bodyweight pool; no-regression tracked): `{bodyweight: 1630, home_dumbbells: 1099, basic_gym: 81, full_gym: 54}`
 
 ## Curated plans (human face-validity)
 ---

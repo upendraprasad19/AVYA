@@ -1,11 +1,11 @@
 {
   "_meta": {
-    "decision": "Founder decision 2026-10-23: rejects the 13-B \"kept safe for variety\" principle (\"We cannot give a bicycle crunch or a V-up or a Russian twist to a injured user\") and approves this per-row table with three edits: Lat Pulldown +shoulder; Chin Up = elbow only (\"chinup is elbow\"); Push Up = wrist + shoulder. Additions only; existing tags are never removed. Ships live (no flag), as the five v13 tags did on 2026-10-22.",
+    "decision": "Founder decision 2026-10-23: rejects the 13-B \"kept safe for variety\" principle (\"We cannot give a bicycle crunch or a V-up or a Russian twist to a injured user\") and approves this per-row table with three edits: Lat Pulldown +shoulder; Chin Up = elbow only (\"chinup is elbow\"); Push Up = wrist + shoulder. Additions only; existing tags are never removed. Ships live (no flag), as the five v13 tags did on 2026-10-22. B-pass 2026-10-24: Incline Push Up and Diamond Push Up also +shoulder (plan Ruling 2 reversed: the push-up variants are push-ups).",
     "plan": "docs/plans/2026-10-23-library-injury-recheck.md",
     "diagnose": "docs/diagnoses/2026-10-23-library-injury-recheck-d30de7.md",
     "counts": {
-      "rows": 102,
-      "tokens": 146
+      "rows": 104,
+      "tokens": 148
     }
   },
   "additions": {
@@ -32,6 +32,9 @@
     ],
     "E017": [
       "elbow"
+    ],
+    "E020": [
+      "shoulder"
     ],
     "E021": [
       "hamstring"
@@ -153,6 +156,9 @@
     ],
     "E101": [
       "elbow"
+    ],
+    "E102": [
+      "shoulder"
     ],
     "E103": [
       "shoulder"
@@ -369,6 +375,7 @@
     "E011": "add to shoulder: standing barbell press arches the lower back",
     "E016": "add to elbow, shoulder: narrow grip bends the wrist under load",
     "E017": "loads the triceps tendon at the elbow (other triceps moves are tagged)",
+    "E020": "diamond push-up is a push-up: the hands-together press loads the shoulder as Push Up does (B-pass F1, Ruling 2 reversed)",
     "E021": "add to lower_back: heavy pull loads the hamstrings (RDL is tagged)",
     "E022": "add to shoulder: hanging pull loads the elbow (matches Negative Pull Up)",
     "E025": "overhead pulling position",
@@ -405,6 +412,7 @@
     "E099": "add to wrist: forearm flexors pull on the inner elbow",
     "E100": "add to wrist: forearm extensors pull on the outer elbow",
     "E101": "add to shoulder: hanging pull loads the elbow",
+    "E102": "incline push-up is a push-up: a lighter angle, same press through the shoulder (B-pass F1, Ruling 2 reversed)",
     "E103": "feet-high push-up shifts load onto the shoulders",
     "E106": "heavy shrugs load the upper traps and neck",
     "E107": "loads the hip directly; 13-B kept hip machines safe",

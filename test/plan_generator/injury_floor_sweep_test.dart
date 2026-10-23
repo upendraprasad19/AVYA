@@ -4,24 +4,32 @@ library;
 // Injury re-check sweep — docs/plans/2026-10-23-library-injury-recheck.md.
 //
 // The REAL PlanGenerator.instance.generateV4, flag OFF (the path users get),
-// over every injury x equipment tier x goal x level x days, in three separate
-// tests so each has its own timeout and wall time:
-//   singles — the 9 injuries one at a time, phases 1 and 3;
+// over every injury x equipment tier x goal x level x days, in five separate
+// tests so each has its own timeout and wall time. All four day counts the
+// product offers (3, 4, 5, 6) are swept (B-pass F3: 4 and 6 were missing):
+//   singles — the 9 injuries one at a time: 3 and 5 days at phases 1 and 3,
+//             then 4 and 6 days at phase 1;
 //   pairs   — all 15 pairs of knee/shoulder/lower_back/wrist/elbow/hip (the six
-//             injuries with the most v14 tags), phase 1;
+//             injuries with the most v14 tags), phase 1: 3 and 5 days, then 4
+//             and 6 days;
 //   repeat  — phase 1 generated uninjured, then phase 2 with the injury and that
-//             plan's names pinned (the repeat-phase path, where a now-unsafe pin
-//             is dropped with no refill, exercise_selector.dart buildPinnedDays).
+//             plan's names pinned, at 3, 4, 5 and 6 days (the repeat-phase path,
+//             where a now-unsafe pin is dropped with no refill,
+//             exercise_selector.dart buildPinnedDays).
 //
 // GATED in every block: no unsafe main pick, no unsafe warm-up / cool-down
 // pick, and no pick whose name is not a library row (such a pick would be
 // skipped silently by the tag lookup, so `unsafe == 0` could hide it).
-// GATED in singles: no empty day. GATED in pairs: no MORE empty days than
+// GATED in singles (3/5 days) and repeat: no empty day. GATED in every block: the scan saw
+// days and picks at all (B-pass F2: a run that generated nothing would otherwise
+// pass every zero above). GATED in pairs: no MORE empty days than
 // kPairsEmptyBaseline (4). Two injuries at once left 2 days empty on the v13
 // library (knee+hip and knee+lower_back, week-2 leg day, bodyweight intermediate)
 // and the v14 tags add 2 (lower_back+hip, same day, 3 and 5 days: Deficit Reverse
 // Lunge is now hip-tagged). The founder accepted that on 2026-10-23 (plan Ruling
-// E5); OI-401 (thin-day top-up) closes all 4 and lowers the ceiling to 0.
+// E5); OI-401 (thin-day top-up) closes all 4 and lowers the ceiling to 0. The 4/6-day
+// blocks (B-pass F3) have their own ratchets, kSingles46EmptyBaseline (1) and
+// kPairs46EmptyBaseline (6), for the same reason and with the same owner.
 // REPORTED, not gated: days under 3 exercises ("thin"); OI-401 owns the top-up.
 // Out of scope: the cardio finisher (WorkoutDay.finisher). It takes no injuries
 // and no screen shows it (OI-396).
@@ -57,8 +65,17 @@ const _levels = ['beginner', 'intermediate', 'advanced'];
 /// it was 2 on the v13 library). A ratchet, not a target: OI-401 takes it to 0.
 const kPairsEmptyBaseline = 4;
 
+/// The same ratchet for the 4- and 6-day pairs block, set from its first measurement.
+const kPairs46EmptyBaseline = 6;
+
+/// Single injuries at 4 and 6 days: one empty day with the push-up variants tagged
+/// (shoulder, bodyweight, build_muscle, advanced, 4-day: Chest, shoulders, triceps;
+/// every bodyweight push-up variant loads the shoulder, so no safe press remains).
+/// The 3/5-day singles block stays at exactly 0. OI-401 takes this to 0.
+const kSingles46EmptyBaseline = 1;
+
 class _Tally {
-  int runs = 0, days = 0, empty = 0, thin = 0, unsafeMain = 0, unsafeWarm = 0;
+  int runs = 0, days = 0, picks = 0, empty = 0, thin = 0, unsafeMain = 0, unsafeWarm = 0;
   int unresolvedMain = 0, unresolvedWarm = 0;
   final sizes = <int, int>{};
   final thinBy = <String, int>{};
@@ -152,6 +169,7 @@ void main() {
         }
         void check(Iterable<PlannedExercise> list, bool main) {
           for (final e in list) {
+            t.picks++;
             final tags = tagsByName[e.exerciseName.toLowerCase()];
             if (tags == null) {
               if (main) {
@@ -193,6 +211,10 @@ void main() {
   }
 
   void expectSafe(_Tally t) {
+    // Non-vacuity: 3-day plans are the shortest (2 weeks x 3 days = 6 days a run).
+    expect(t.days, greaterThanOrEqualTo(t.runs * 6),
+        reason: 'the scan saw too few days; every zero below would pass on an empty scan');
+    expect(t.picks, greaterThan(0), reason: 'the scan saw no exercise at all');
     expect(t.unsafeMain, 0, reason: 'unsafe main picks: ${t.unsafe}');
     expect(t.unsafeWarm, 0, reason: 'unsafe warm-up / cool-down picks: ${t.unsafe}');
     expect(t.unresolvedMain, 0, reason: 'main picks that are not library rows: ${t.unresolved}');
@@ -200,15 +222,13 @@ void main() {
         reason: 'warm-up / cool-down picks that are not library rows: ${t.unresolved}');
   }
 
-  test('singles: 9 injuries x tiers x goals x levels x 3/5 days x phases 1,3', () {
-    final sw = Stopwatch()..start();
-    final t = _Tally();
+  void runSingles(_Tally t, List<int> days, List<int> phases) {
     for (final injury in _injuries) {
       for (final tier in _tiers) {
         for (final goal in _goals) {
           for (final level in _levels) {
-            for (final d in const [3, 5]) {
-              for (final phase in const [1, 3]) {
+            for (final d in days) {
+              for (final phase in phases) {
                 scan(
                   t,
                   gen(tier: tier, goal: goal, level: level, days: d, phase: phase,
@@ -222,22 +242,16 @@ void main() {
         }
       }
     }
-    report('singles', t, sw);
-    expect(t.runs, 1728);
-    expectSafe(t);
-    expect(t.empty, 0, reason: 'a day with no exercise at all');
-  });
+  }
 
-  test('pairs: all 15 pairs of knee/shoulder/lower_back/wrist/elbow/hip, phase 1', () {
-    final sw = Stopwatch()..start();
-    final t = _Tally();
+  void runPairs(_Tally t, List<int> days) {
     for (var i = 0; i < _pairInjuries.length; i++) {
       for (var j = i + 1; j < _pairInjuries.length; j++) {
         final pair = [_pairInjuries[i], _pairInjuries[j]];
         for (final tier in _tiers) {
           for (final goal in _goals) {
             for (final level in _levels) {
-              for (final d in const [3, 5]) {
+              for (final d in days) {
                 scan(
                   t,
                   gen(tier: tier, goal: goal, level: level, days: d, phase: 1,
@@ -251,6 +265,57 @@ void main() {
         }
       }
     }
+  }
+
+  void runRepeat(_Tally t, List<int> days) {
+    for (final injury in _injuries) {
+      for (final tier in _tiers) {
+        for (final goal in _goals) {
+          for (final level in _levels) {
+            for (final d in days) {
+              final first = gen(
+                  tier: tier, goal: goal, level: level, days: d, phase: 1,
+                  injuries: const []);
+              final pins = namesByDay(first);
+              scan(
+                t,
+                gen(tier: tier, goal: goal, level: level, days: d, phase: 2,
+                    injuries: [injury], pins: pins),
+                [injury],
+                '$injury|$tier|$goal|$level|${d}d|p2-pinned',
+              );
+            }
+          }
+        }
+      }
+    }
+  }
+
+  test('singles: 9 injuries x tiers x goals x levels x 3/5 days x phases 1,3', () {
+    final sw = Stopwatch()..start();
+    final t = _Tally();
+    runSingles(t, const [3, 5], const [1, 3]);
+    report('singles', t, sw);
+    expect(t.runs, 1728);
+    expectSafe(t);
+    expect(t.empty, 0, reason: 'a day with no exercise at all');
+  });
+
+  test('singles 4/6 days: 9 injuries x tiers x goals x levels x 4/6 days x phase 1', () {
+    final sw = Stopwatch()..start();
+    final t = _Tally();
+    runSingles(t, const [4, 6], const [1]);
+    report('singles46', t, sw);
+    expect(t.runs, 864);
+    expectSafe(t);
+    expect(t.empty, lessThanOrEqualTo(kSingles46EmptyBaseline),
+        reason: 'more empty days than the accepted baseline: ${t.emptyDays}');
+  });
+
+  test('pairs: all 15 pairs of knee/shoulder/lower_back/wrist/elbow/hip, 3/5 days, phase 1', () {
+    final sw = Stopwatch()..start();
+    final t = _Tally();
+    runPairs(t, const [3, 5]);
     report('pairs', t, sw);
     expect(t.runs, 1440);
     expectSafe(t);
@@ -258,31 +323,24 @@ void main() {
         reason: 'more empty days than the accepted baseline: ${t.emptyDays}');
   });
 
-  test('repeat: phase 1 uninjured, then phase 2 with the injury and those pins', () {
+  test('pairs 4/6 days: all 15 pairs of knee/shoulder/lower_back/wrist/elbow/hip, phase 1', () {
     final sw = Stopwatch()..start();
     final t = _Tally();
-    for (final injury in _injuries) {
-      for (final tier in _tiers) {
-        for (final goal in _goals) {
-          for (final level in _levels) {
-            const d = 4;
-            final first = gen(
-                tier: tier, goal: goal, level: level, days: d, phase: 1,
-                injuries: const []);
-            final pins = namesByDay(first);
-            scan(
-              t,
-              gen(tier: tier, goal: goal, level: level, days: d, phase: 2,
-                  injuries: [injury], pins: pins),
-              [injury],
-              '$injury|$tier|$goal|$level|${d}d|p2-pinned',
-            );
-          }
-        }
-      }
-    }
-    report('repeat', t, sw);
-    expect(t.runs, 432);
+    runPairs(t, const [4, 6]);
+    report('pairs46', t, sw);
+    expect(t.runs, 1440);
     expectSafe(t);
+    expect(t.empty, lessThanOrEqualTo(kPairs46EmptyBaseline),
+        reason: 'more empty days than the accepted baseline: ${t.emptyDays}');
+  });
+
+  test('repeat: phase 1 uninjured, then phase 2 with the injury and those pins, 3/4/5/6 days', () {
+    final sw = Stopwatch()..start();
+    final t = _Tally();
+    runRepeat(t, const [3, 4, 5, 6]);
+    report('repeat', t, sw);
+    expect(t.runs, 1728);
+    expectSafe(t);
+    expect(t.empty, 0, reason: 'a repeat-phase day with no exercise at all');
   });
 }

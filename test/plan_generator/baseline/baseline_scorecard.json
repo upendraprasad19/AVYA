@@ -14,13 +14,13 @@
     },
     "unsafe_plan_count": 0,
     "equipment_violation_plan_count": 0,
-    "plans_with_fallback_pick": 369,
-    "total_fallback_picks": 2866,
+    "plans_with_fallback_pick": 368,
+    "total_fallback_picks": 2864,
     "fallback_by_tier": {
       "bodyweight": 1630,
       "home_dumbbells": 1099,
       "basic_gym": 81,
-      "full_gym": 56
+      "full_gym": 54
     }
   },
   "personas": [
@@ -6962,14 +6962,14 @@
     },
     {
       "id": "build_muscle | full_gym | 4d | beginner | p1 | inj:shoulder",
-      "coverage": 80.0,
-      "balance": 42.5,
-      "volume": 91.1,
+      "coverage": 70.0,
+      "balance": 32.5,
+      "volume": 82.8,
       "progression": 100.0,
       "personalization": 100.0,
       "safety": 100.0,
-      "realism": 94.4,
-      "overall": 84.7,
+      "realism": 100.0,
+      "overall": 80.9,
       "violations": []
     },
     {
@@ -7010,14 +7010,14 @@
     },
     {
       "id": "build_muscle | full_gym | 4d | beginner | p1 | inj:shoulder+knee",
-      "coverage": 80.0,
-      "balance": 42.5,
-      "volume": 76.9,
+      "coverage": 70.0,
+      "balance": 32.5,
+      "volume": 68.6,
       "progression": 100.0,
       "personalization": 100.0,
       "safety": 100.0,
-      "realism": 72.2,
-      "overall": 78.6,
+      "realism": 76.5,
+      "overall": 74.6,
       "violations": []
     },
     {
