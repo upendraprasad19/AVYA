@@ -52,7 +52,7 @@ const Map<String, List<String>> k13bExpected = {
   'E148': ['knee'], // Reverse Nordic Curl (correction: QUAD/knee, not hamstring/lower_back)
   // horizontal_pull — free bent-over
   'E116': ['lower_back'], // Meadows Row
-  'E121': ['lower_back'], // Renegade Row
+  'E121': ['lower_back', 'shoulder', 'wrist'], // Renegade Row (B1 Task 1b, founder 2026-10-22: +shoulder +wrist)
   'E187': ['lower_back'], // Kettlebell Row
   // knee_dominant
   'E049': ['hamstring'], // Leg Curl (Lying)

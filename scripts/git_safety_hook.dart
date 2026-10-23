@@ -203,12 +203,21 @@ void main() async {
     // review regardless of what happens on this local pass.
     if (commandIsPushShaped(command)) {
       final scriptPath = 'scripts/check_plan_review_record_exists.dart';
-      if (File('$cwd/$scriptPath').existsSync()) {
+      // The checkout root, not the payload cwd: from a subdirectory the
+      // cwd-relative path below did not exist and the precheck was silently
+      // skipped (diagnose 8f3e35, OI-384).
+      final root = precheckRoot(
+        cwd,
+        scriptPath: scriptPath,
+        toplevel: _gitToplevel,
+        fileExists: (path) => File(path).existsSync(),
+      );
+      if (File('$root/$scriptPath').existsSync()) {
         try {
           final result = Process.runSync(
             'dart',
             ['run', scriptPath],
-            workingDirectory: cwd,
+            workingDirectory: root,
           );
           if (result.exitCode != 0) {
             // additionalContext, not stderr -- see _allowWithContext's
@@ -231,5 +240,18 @@ void main() async {
   } catch (_) {
     // Fail OPEN -- a bug in this hook must never wedge an unrelated tool call.
     exit(0);
+  }
+}
+
+/// `git rev-parse --show-toplevel` of [cwd], or null when git cannot answer
+/// (not a repository, git missing, or a deleted cwd -> ProcessException).
+String? _gitToplevel(String cwd) {
+  try {
+    final r = Process.runSync('git', ['rev-parse', '--show-toplevel'],
+        workingDirectory: cwd);
+    if (r.exitCode != 0) return null;
+    return (r.stdout as String).trim();
+  } catch (_) {
+    return null;
   }
 }

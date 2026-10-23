@@ -47,7 +47,7 @@ Cable Crunch,core,isolation,Core,Abs,Core,"basic_gym, full_gym","Beginner, Inter
 Captain's Chair Leg Raise,core,isolation,Core,Core,Core,"basic_gym, full_gym","Intermediate, Advanced",2
 Crunches,core,isolation,Core,Abs,Core,"bodyweight, full_gym","Beginner, Intermediate, Advanced",2
 Decline Sit Up,core,isolation,Core,Abs,Core,full_gym,"Beginner, Intermediate, Advanced",3
-Dumbbell Side Bend,core,isolation,Lats,Obliques (lateral flexion),Lats,"home_dumbbells, basic_gym, full_gym","Beginner, Intermediate, Advanced",3
+Dumbbell Side Bend,core,isolation,Core,Obliques (lateral flexion),Core,"home_dumbbells, basic_gym, full_gym","Beginner, Intermediate, Advanced",3
 Flutter Kicks,core,isolation,Core,Core,Core,"bodyweight, home_dumbbells, basic_gym, full_gym","Beginner, Intermediate, Advanced",2
 Janda Sit Up,core,isolation,Core,Abs,Core,"bodyweight, home_dumbbells, basic_gym, full_gym","Intermediate, Advanced",3
 Pallof Press,core,isolation,Core,Core (anti-rotation),Core,"basic_gym, full_gym","Beginner, Intermediate, Advanced",2
@@ -55,12 +55,9 @@ Reverse Crunch,core,isolation,Core,Lower Abs,Core,"bodyweight, full_gym","Beginn
 Russian Twist,core,isolation,Core,Obliques,Core,"bodyweight, full_gym","Beginner, Intermediate, Advanced",2
 Side Plank,core,isolation,Core/Obliques,"Core, Obliques","Core, Core/Obliques","bodyweight, home_dumbbells, basic_gym, full_gym","Beginner, Intermediate, Advanced",2
 V-Up,core,isolation,Core,"Abs, Hip Flexors",Core,"bodyweight, full_gym","Intermediate, Advanced",3
-V-Ups,core,isolation,Core,Core,Core,"bodyweight, home_dumbbells, basic_gym, full_gym","Intermediate, Advanced",2
 Bench Dips,elbow_extension,compound,Triceps,Triceps,Triceps,"bodyweight, home_dumbbells, basic_gym, full_gym","Beginner, Intermediate",2
-Close-Grip Bench Press,elbow_extension,compound,Triceps,Triceps,Triceps,"basic_gym, full_gym","Intermediate, Advanced",2
 Cable Tricep Kickback,elbow_extension,isolation,Triceps,Triceps,Triceps,"basic_gym, full_gym","Beginner, Intermediate, Advanced",3
 Dumbbell Kickback,elbow_extension,isolation,Triceps,Triceps,Triceps,"home_dumbbells, basic_gym, full_gym","Beginner, Intermediate, Advanced",2
-Overhead Cable Extension,elbow_extension,isolation,Triceps (Long Head),Triceps (Long Head),Triceps (Long Head),"basic_gym, full_gym","Beginner, Intermediate, Advanced",2
 Overhead Tricep Cable Extension,elbow_extension,isolation,Triceps (Long Head),Triceps (long head),Triceps (Long Head),"basic_gym, full_gym","Beginner, Intermediate, Advanced",3
 Overhead Tricep Extension,elbow_extension,isolation,Triceps (Long Head),Triceps (long head),Triceps (Long Head),"home_dumbbells, basic_gym, full_gym","Beginner, Intermediate, Advanced",2
 Skull Crusher,elbow_extension,isolation,Triceps,Triceps,Triceps,"basic_gym, full_gym","Intermediate, Advanced",2
@@ -85,10 +82,8 @@ Calf Stretch (Wall),flexibility,flexibility,Calves,"Calves, Achilles",Calves,"bo
 Cat-Cow Stretch,flexibility,flexibility,spine,Spine,spine,"bodyweight, full_gym","Beginner, Intermediate, Advanced",2
 Chest Opener,flexibility,flexibility,Mid Chest,"Chest, Front Deltoid, Biceps","Biceps, Front Delts, Mid Chest","bodyweight, full_gym","Beginner, Intermediate, Advanced",3
 Child's Pose,flexibility,flexibility,Lower Back,"Lower Back, Lats, Hips","Lats, Lower Back","bodyweight, full_gym","Beginner, Intermediate, Advanced",2
-Cross Body Shoulder Stretch,flexibility,flexibility,Rear Delts,"Rear Deltoid, Rhomboids",Rear Delts,"bodyweight, home_dumbbells, basic_gym, full_gym","Beginner, Intermediate, Advanced",3
-Doorway Chest Stretch,flexibility,flexibility,Mid Chest,"Chest, Front Deltoid, Biceps","Biceps, Front Delts, Mid Chest",full_gym,"Beginner, Intermediate, Advanced",3
 Downward Dog,flexibility,flexibility,Hamstrings,"Hamstrings, Calves, Thoracic","Calves, Hamstrings","bodyweight, full_gym","Beginner, Intermediate, Advanced",2
-Foam Roll IT Band,flexibility,flexibility,Lats,IT Band (lateral thigh),Lats,full_gym,"Intermediate, Advanced",3
+Foam Roll IT Band,flexibility,flexibility,Legs,IT Band (lateral thigh),Legs,full_gym,"Intermediate, Advanced",3
 Foam Roll Upper Back,flexibility,flexibility,thoracic spine,"Thoracic Spine, Rhomboids",thoracic spine,full_gym,"Beginner, Intermediate, Advanced",3
 Hamstring Stretch (Standing),flexibility,flexibility,Hamstrings,Hamstrings,Hamstrings,"bodyweight, home_dumbbells, basic_gym, full_gym","Beginner, Intermediate, Advanced",3
 Hip Flexor Stretch,flexibility,flexibility,Hip,Hip Flexors,Hip,"bodyweight, full_gym","Beginner, Intermediate, Advanced",2
@@ -97,7 +92,6 @@ Jefferson Curl,flexibility,flexibility,Lower Back,"Lower Back, Hamstrings, Spine
 Lat Stretch,flexibility,flexibility,Lats,"Lats, Thoracic Spine",Lats,full_gym,"Beginner, Intermediate, Advanced",3
 Pigeon Pose,flexibility,flexibility,Glutes,"Glutes, Hip External Rotators",Glutes,"bodyweight, full_gym","Beginner, Intermediate, Advanced",3
 Piriformis Stretch,flexibility,flexibility,piriformis,"Piriformis, Deep Hip Rotators",piriformis,"bodyweight, full_gym","Beginner, Intermediate, Advanced",3
-Quad Stretch,flexibility,flexibility,Quads,"Quads, Hip Flexors",Quads,"bodyweight, home_dumbbells, basic_gym, full_gym","Beginner, Intermediate, Advanced",3
 Seated Piriformis Stretch,flexibility,flexibility,piriformis,"Piriformis, Glutes","Glutes, piriformis",full_gym,"Beginner, Intermediate, Advanced",3
 Shoulder Dislocate,flexibility,flexibility,Shoulders,"Shoulders, Chest, Thoracic","Front Delts, Mid Chest, Shoulders",full_gym,"Beginner, Intermediate, Advanced",3
 Squat to Stand,flexibility,flexibility,Hamstrings,"Hamstrings, Hip Flexors, Thoracic",Hamstrings,"bodyweight, home_dumbbells, basic_gym, full_gym","Beginner, Intermediate, Advanced",2
@@ -135,7 +129,6 @@ Frog Pumps,hip_isolation,isolation,Glutes,Glutes,Glutes,"bodyweight, home_dumbbe
 Glute Bridge,hip_isolation,isolation,Glutes,Glutes,Glutes,"bodyweight, full_gym","Beginner, Intermediate, Advanced",2
 Glute Kickback (Cable),hip_isolation,isolation,Glutes,Glutes,Glutes,full_gym,"Beginner, Intermediate, Advanced",3
 Hip Abduction Machine,hip_isolation,isolation,Hip,"Abductors, Glutes (medius)",Hip,full_gym,"Beginner, Intermediate, Advanced",3
-Hip Abductor Machine,hip_isolation,isolation,Glutes,Glutes,Glutes,"basic_gym, full_gym","Beginner, Intermediate, Advanced",2
 Hip Adduction Machine,hip_isolation,isolation,Hip,Adductors,Hip,full_gym,"Beginner, Intermediate, Advanced",3
 Kas Glute Bridge,hip_isolation,isolation,Glutes,Glutes,Glutes,"bodyweight, home_dumbbells, basic_gym, full_gym","Beginner, Intermediate, Advanced",2
 Lateral Band Walk,hip_isolation,isolation,Glutes,"Glutes (medius), Abductors",Glutes,"home_dumbbells, basic_gym, full_gym","Beginner, Intermediate, Advanced",3

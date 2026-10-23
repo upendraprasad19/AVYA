@@ -56,12 +56,11 @@ class _CoachingContentPanelState extends State<CoachingContentPanel> {
     _cues = _stringList(map?['coaching_cues']);
     _mistakes = _stringList(map?['common_mistakes']);
     final rawBreathing = _cleanString(map?['breathing_cue']);
-    // 136 of the 292 library rows carry a bare NUMBER here — a spreadsheet
-    // column shift dropped met_value into breathing_cue and left its own column
-    // null. Suppress rather than render "BREATHING / 5". The plate sheet applies
-    // the identical guard and test/contracts/breathing_cue_numeric_suppressed_test
-    // pins them together; the data repair is OI-149, blocked on 136 cues having
-    // to be re-authored because the original text exists nowhere.
+    // A bare NUMBER here is the fingerprint of a spreadsheet column shift
+    // (136 rows had it until the OI-149 repair, 2026-10-22). Suppress rather
+    // than render "BREATHING / 5". The plate sheet applies the identical guard
+    // and test/contracts/breathing_cue_numeric_suppressed_test pins them
+    // together.
     _breathing = (rawBreathing != null &&
             RegExp(r'^\d+(\.\d+)?$').hasMatch(rawBreathing))
         ? null
@@ -81,7 +80,8 @@ class _CoachingContentPanelState extends State<CoachingContentPanel> {
   }
 
   /// String fields (breathing_cue / warmup_protocol) — null OR empty-string
-  /// (45 warmup_protocol rows are "") both suppress the section.
+  /// (113 of 285 warmup_protocol values are "" in library v12) both suppress
+  /// the section.
   String? _cleanString(Object? v) {
     final s = (v is String) ? v.trim() : '';
     return s.isEmpty ? null : s;

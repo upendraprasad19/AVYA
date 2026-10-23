@@ -10617,7 +10617,10 @@ concepts:
         method: ExerciseSelector.buildPinnedDays
         notes: >
           per frame-INDEX: resolve pinned names (getByExactName → getCustomExercises → drop);
-          re-apply equip-exclusion (:282-285 mirror) + UNGATED _isContraindicated (:324-334
+          re-apply capability (B1 Task 1, b1c4e7: EquipmentCapability.canOfferInPicker —
+          a `[]` custom is kept, a custom recording kit the user lacks is dropped; proof
+          test/contracts/universal_pool_capability_behavioral_test.dart) +
+          equip-exclusion (:282-285 mirror) + UNGATED _isContraindicated (:324-334
           mirror, NOT att-5 gated); tier NOT re-applied (soft/att4-relaxed; caller gates
           same-tier); per-variant resolve(a)→exercisesA, resolve(b)→exercisesB via
           _buildExercise/_buildCustomExercise; empty variant → pickV4([frame]) fresh-fill (A)
@@ -10724,6 +10727,9 @@ concepts:
       - file: test/contracts/cross_phase_variety_behavioral_test.dart
         method_or_widget: drives real generateV4 (full_gym/advanced) — variety changes the SET, null=deterministic, bounded, injury-safe
         semantic: behavioral
+      - file: lib/shared/repositories/plan_engine/core_list_selector.dart
+        method_or_widget: CoreListSelector.rankedPool (enable_core_list_pool ON, Batch B1)
+        semantic: _pickCoreList passes the previous phase names to _selectCandidate as avoidNames (soft, as OFF)
     contract_test_path: test/contracts/cross_phase_variety_behavioral_test.dart
 
   - concept: volume_titration
@@ -10907,6 +10913,9 @@ concepts:
       - file: test/contracts/plateau_rotation_behavioral_test.dart
         method_or_widget: seeds exlog_* flat plateaus for the baseline plan's compounds → rotation (non-vacuous) + independence + ship-dark + slot-count-invariance + bounded + injury-safe + fatigued-no-rotation + gates
         semantic: behavioral
+      - file: lib/shared/repositories/plan_engine/core_list_selector.dart
+        method_or_widget: CoreListSelector.rankedPool (enable_core_list_pool ON, Batch B1)
+        semantic: _pickCoreList unions plateauAvoidNames into avoidNames (soft, as OFF)
     contract_test_path: test/contracts/plateau_rotation_behavioral_test.dart
 
   - concept: repeat_content_scheduling
@@ -11237,7 +11246,7 @@ concepts:
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
         method: pickV4 / _fillSlots / _cascadeFill / buildPinnedDays / _applyHistoryAdjustments
         semantic: hard-filter
-        notes: `required Set<String>? capability` on all five — required-not-defaulted, so the compiler enumerates call sites
+        notes: `required Set<String>? capability` on all five — required-not-defaulted, so the compiler enumerates call sites. The two NAME-resolving paths that bypass queryV4 — _cascadeFill attempt 5 (canPerform) and buildPinnedDays.resolve (canOfferInPicker) — apply it themselves since B1 Task 1 (b1c4e7); before that only the cascade_tracer mirror did. Production-path proof test/contracts/universal_pool_capability_behavioral_test.dart
       - file: lib/shared/repositories/plan_engine/warmup_cooldown.dart
         method: attach (all three pools, under the existing injury floor)
         semantic: hard-filter
@@ -11254,6 +11263,9 @@ concepts:
         method: buildAiContext ('equipment_effective', flag-gated, key omitted when OFF)
         semantic: advisory
         notes: decision 7 — the coach was given the tier LABEL and had to guess what it contained
+      - file: lib/shared/repositories/plan_engine/core_list_selector.dart
+        method: CoreListSelector.rankedPool (enable_core_list_pool ON, Batch B1)
+        semantic: hard filter F requires EquipmentCapability.canPerform when capability != null, else the queryV4 tier rule; needsImplementPreference is keyed on the capability set, never the tier label
     contract_test_path: test/contracts/bodyweight_capability_leak_test.dart
 
   - concept: equipment_needed_shape
@@ -11330,7 +11342,25 @@ concepts:
   - concept: exercise_library_schema
     domain: workout
     behavioral_test_path: test/contracts/exercise_library_schema_contract_test.dart
+    behavioral_test_path_prune: test/contracts/library_seed_prune_behavioral_test.dart  # Batch A 46fc99: real Hive box, retired id deleted, kept + community keys survive, a shipped id is never pruned
+    behavioral_test_path_alias: test/contracts/exercise_alias_lookup_behavioral_test.dart  # Batch A 46fc99: retired names resolve via name_aliases, exact name wins (mirror), queryV4 serves the kept twin
+    behavioral_test_path_panel: test/contracts/coaching_panel_numeric_breathing_behavioral_test.dart  # Batch A b7d3e1: rendered panel suppresses a numeric breathing_cue, Surya Namaskar mirror renders it
     description: |
+      Library v13 (Batch B1, 2026-10-23): 40 required keys (+ core_levels, discipline,
+      gym_availability, requires_coaching, high_impact) and 11 optional (+ variant_family,
+      slot_focus, slot_pattern, skill_track, skill_step, regression_to, progression_to);
+      values pinned by test/contracts/exercise_library_core_fields_contract_test.dart, every
+      pre-existing key frozen by test/contracts/exercise_library_frozen_reference_test.dart.
+      Concept core_list_pool owns their reader.
+      Library v12 (Batch A, 2026-10-22; diagnoses b7d3e1 46fc99 2390f5 e7f118): 285 rows.
+      Two OPTIONAL keys join demo_slug/demo_pair: `name_aliases` (non-empty string list; the
+      old names of duplicates retired into this row, read by search and by the exact-name
+      fallback) and `merged_ids` (the retired E-ids; SeedService prunes them from exerciseBox
+      after putAll, never an id the bundle still ships). seed_prune_wired_test.dart is
+      PRESENCE ONLY (the call site sits inside the asset-loading _seedExercises); the prune's
+      behaviour is the _prune path above. Cloud: migration 162 re-seeded 285 rows with
+      name_aliases and set is_active=false on the 7 retired rows (copying the kept cues).
+
       Batch 13-A (e1a7c4) — every exercise_library row carries EXACTLY the 38 canonical
       keys. The 9 stubs E252-E260 used a malformed schema (muscle_primary/is_compound/
       sets_default…) + were MISSING injury_contraindications, so E252 Wall Sit
@@ -11349,14 +11379,28 @@ concepts:
       - file: supabase/migrations/074_seed_exercise_library.sql
         method: regenerated (259 tuples, ON CONFLICT DO UPDATE)
         notes: heals cloud stubs' NULL primary_muscles/difficulty_level (getFormCues reads them)
+      - file: assets/data/exercise_library.json
+        method: scripts/repair_exercise_library_v12.js (repairText, mergeDuplicates, relabel, dropPlates)
+        notes: v12 (Batch A) — 136 un-shifted text rows, cues one per item, 7 duplicates retired (name_aliases + merged_ids on the kept row), E172/E163 labels, E207/E179 plate keys dropped
+      - file: lib/core/services/seed_service.dart
+        line_range: 203-232
+        method: _exerciseLibraryVersion (11→12) + retiredLibraryIds + pruneRetired after putAll in _seedExercises
+        notes: putAll never deletes, so the prune is what removes a retired row from an existing install
+      - file: supabase/migrations/162_reseed_exercise_library.sql
+        method: re-seed (285 tuples incl. name_aliases) + 7 is_active=false UPDATEs copying the kept cues
+        notes: applied live 2026-10-22 (backups/applied_migrations.json entry 162)
     readers:
       - file: lib/shared/repositories/exercise_repository.dart
         method: queryV4 injury filter (:335-345) + primary_muscles read (:270-282)
         semantic: a missing injury field = never excluded; muscle_primary was invisible
         notes: the E252 knee safety hole + muscle-invisibility
+      - file: lib/shared/repositories/exercise_repository.dart
+        line_range: 48-111
+        method: getByExactName / hasExactNameWhere (exact loop, then name_aliases) + search (name or alias substring)
+        semantic: a retired name resolves to its kept twin; an exact name always wins over an alias
       - file: supabase/functions/_shared/tools/exercise/getFormCues.ts
         method: reads primary_muscles/secondary_muscles/difficulty_level (:60-61)
-        semantic: AI-coach form cues; was NULL for the 9 stubs pre-batch
+        semantic: AI-coach form cues; was NULL for the 9 stubs pre-batch; exact-name match with no is_active filter (why 162 copies the kept cues onto the retired rows)
     contract_test_path: test/contracts/exercise_library_schema_contract_test.dart
 
   - concept: exercise_injury_tags
@@ -11385,6 +11429,9 @@ concepts:
       - file: lib/shared/repositories/plan_engine/injury_substitutes.dart
         method: curated-sub coherence — removed Front Raise (now shoulder-tagged) + stale Wall Sit (knee)
         notes: Goblet Press retained as the sole shoulder-safe overhead-press sub
+      - file: scripts/add_library_core_fields_v13.js
+        method: addInjuryTags — UNIONs scripts/data/library_injury_additions_v13.json into injury_contraindications (sorted, canonical tokens only)
+        notes: B1 Task 1b (c2d5e8, founder 2026-10-22) — E061 +knee, E070 +shoulder +elbow, E121 +wrist +shoulder, E127 +lower_back, E173 +lower_back; re-seeded by SeedService v13; behavioural proof test/contracts/injury_safety_tags_v13_behavioral_test.dart
     readers:
       - file: lib/shared/repositories/exercise_repository.dart
         method: queryV4 injury filter (:335-345, match :340)
@@ -11394,7 +11441,42 @@ concepts:
         method: preferredFor re-rank (post-injury-filter)
         semantic: the curated safe-sub lists stay coherent with the new tags (≥1 shoulder sub stays safe)
         notes: warmup mirror _moveInjuries value-agreement guarded by warmup_library_injury_mirror_test
+      - file: lib/shared/repositories/plan_engine/core_list_selector.dart
+        method: CoreListSelector.rankedPool (enable_core_list_pool ON, Batch B1)
+        semantic: hard filter F drops a row whose injury_contraindications contains a user token, through the shared ExerciseSelector._isContraindicated passed in as isContraindicated (ungated, as attempts 1-4)
     contract_test_path: test/contracts/injury_undertag_13b_contract_test.dart
+
+  - concept: core_list_pool
+    domain: workout
+    behavioral_test_path: test/contracts/core_list_pool_behavioral_test.dart
+    description: |
+      Batch B1 (docs/plans/2026-10-22-library-core-list-pool.md), ship-dark: with configBox
+      enable_core_list_pool == true AND a library carrying core_levels, ExerciseSelector.pickV4
+      delegates to _pickCoreList, which picks each slot from CoreListSelector.rankedPool: core
+      rows for the effective level, else a same-variant_family row core only at a HIGHER level
+      (never lower, D6), else drop. Variant B soft-avoids A; an emptied variant copies the other;
+      a doubly-empty day takes easier-or-equal core rows, nearest level first (Ruling 12), then the OFF cascade. OFF (flag
+      absent) or a v12 box runs the cascade verbatim (test/plan_generator/generator_golden_test.dart,
+      998 personas). ON-world gate test/plan_generator/core_list_pool_gate_test.dart (hard zeros
+      over the same personas; report test/plan_generator/core_list_pool_report.md). The
+      slot_focus / slot_pattern overlays are read ONLY here; the flip copies them into
+      target_focus / movement_pattern and deletes them.
+    writers:
+      - file: scripts/add_library_core_fields_v13.js
+        method: main (applies scripts/data/library_core_fields_v13.json)
+        notes: idempotent; refuses an id mismatch; checks the byte round-trip before writing
+      - file: assets/data/exercise_library.json
+        method: core_levels / discipline / gym_availability / requires_coaching / high_impact (+ optional variant_family, slot_focus, slot_pattern, skill keys)
+      - file: lib/core/services/seed_service.dart
+        method: _exerciseLibraryVersion (12→13)
+        notes: re-seeds the new keys into exerciseBox by id
+    readers:
+      - file: lib/shared/repositories/plan_engine/core_list_selector.dart
+        method: CoreListSelector.rankedPool / hasCoreFields / typeFor / subFocusMatches
+        semantic: the ON pool, pure; every Hive list field mapped toString before comparing
+      - file: lib/shared/repositories/plan_engine/exercise_selector.dart
+        method: pickV4 (first-statement delegation) + _pickCoreList
+        semantic: gated on PlanEngineFlags.coreListPoolEnabled AND CoreListSelector.hasCoreFields
 
   - concept: universal_pool_fallback
     domain: workout
@@ -11639,6 +11721,9 @@ concepts:
         method: the generated Phase (selection reflects the exclusions)
         semantic: no exercise requires an excluded item
         notes: consumed by Train screen / active workout; ⑥ C1 wired the equipment_exclusions profile central-read (TrainingHistoryAnalyzer.resolveEquipmentExclusions @ generateV4 :100)
+      - file: lib/shared/repositories/plan_engine/core_list_selector.dart
+        method: CoreListSelector.rankedPool (enable_core_list_pool ON, Batch B1)
+        semantic: hard filter F drops a row needing any excluded token, independently of capability (two kill switches, as queryV4)
     contract_test_path: test/contracts/equipment_exclusion_filter_behavioral_test.dart
 
   - concept: program_week_projection
@@ -12784,7 +12869,7 @@ concepts:
     contract_test_path: test/contracts/exercise_plate_assets_present_test.dart
     description: |
       Exercise plates. WRITER: `assets/data/exercise_library.json` - `demo_slug`
-      (nullable, 165 populated) and `demo_pair` (nullable bool, the plate SHAPE),
+      (nullable, 156 populated in library v12) and `demo_pair` (nullable bool, the plate SHAPE),
       both sourced from `docs/plans/exercise-plates-mapping.json`. Delivered to
       existing installs ONLY by `_exerciseLibraryVersion`: seed_service re-seeds
       iff stored < constant, so a bump is the only thing that ships a new field.
@@ -12801,8 +12886,10 @@ concepts:
       both frames and a hold to frame 1's own bounds. Moving it into a Dart
       constant re-creates a cross-language drift with no gate.
 
-      WARNING: 165 exercises share 153 slugs - a per-exercise count and a
-      per-slug count are different numbers. 292 SVGs ship (139 pair x2 + 14).
+      WARNING: 156 exercises share 152 slugs (library v12) - a per-exercise count
+      and a per-slug count are different numbers. 290 SVGs ship (138 pair x2 + 14).
+      19 pairs are drawn END-first upstream; build_exercise_plates.py SWAP_FRAMES
+      writes them swapped so <slug>-1.svg is always START.
 
       WARNING: an artwork-less row carries NEITHER key. A `demo_slug: null`
       would read as present to the schema contract's exact key match.
@@ -12813,7 +12900,7 @@ concepts:
         line_range: 1-2
         method: demo_slug + demo_pair fields
       - file: lib/core/services/seed_service.dart
-        line_range: 97-97
+        line_range: 110-110
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/plate_resolver.dart
@@ -14220,7 +14307,7 @@ concepts:
         fields_read: [type]
         notes: whitelist shape, widened to include 'logged' by this batch
       - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
-        line_range: 499-504
+        line_range: 516-521
         method: isRestDayConsideringLogged
         semantic: flag-check
         fields_read: [type]

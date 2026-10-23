@@ -5558,6 +5558,39 @@ This interacts with the flip plan: its §3 keeps COMPLETE enabled with `Nothing 
 
 **CLOSED 2026-10-20 (`log-exercise-flip`, unit U-E of plan `docs/plans/log-exercise-flip.md`, record `docs/plan-reviews/log-exercise-flip.md` round 7, ledger `docs/audit/log-exercise-flip.closure.yaml` rows `ZERO-SET-COMPLETION` and `CHAT-DRAFT-ZERO-SET`, diagnose `e3a6c1`):** one predicate, `ActiveWorkoutData.hasSaveableSet` (over `saveableSetIndexes`, the exact sets `completeWorkout` saves). `completeWorkout` returns on its first line when nothing would be saved (review mode keeps its path), and the FINISH dialog, both flag modes, disables COMPLETE and says "No working sets logged (warm-ups don't count). Log one to complete, or cancel the workout."; it scrolls while blocked and keeps the re-opened / typed lines. Plan review round 7 found the same class on the coach chat path: `submitWorkoutDraft` completed a draft with no sets. Fixed in the same batch: `draftHasLoggableSet` guards the submit and disables the confirm card's CONFIRM. Tests: `test/contracts/log_exercise_flip_behavioral_test.dart` (U-E1, the real awaited `completeWorkout`), `test/contracts/zero_set_completion_behavioral_test.dart` (U-E4/U-E5), `test/features/train/log_exercise/log_exercise_finish_dialog_test.dart` (U-E2, U-E2b, U-E2c, U-D4), `log_exercise_logic_test.dart` (U-E3).
 
+## OI-149 — breathing_cue holds a bare number on 136 of 292 rows; the original text is unrecoverable (P2)
+
+- **Status**: CLOSED · 2026-10-22 · branch `library-data-repair` · the commit carrying `closes-oi: OI-149` (`git log --grep='closes-oi: OI-149'`)
+- **Blocked on**: **the founder** — 136 replacement cues have to be authored, because the original
+  text exists nowhere. This is a copy-writing task, not an engineering one.
+- **Verified**: 2026-08-29 — counted, and the recovery paths exhausted (below).
+
+**The defect, measured:** exactly **136** of 292 rows match `^\d+(\.\d+)?$` in `breathing_cue`,
+and exactly **136** carry a null `met_value`. The intersection is 136 and neither side has a
+row the other lacks — a spreadsheet column shift dropped `met_value` into `breathing_cue` and left
+its own column empty. `met_value` is read nowhere in `lib/`, so only the breathing copy was lost.
+
+**Both recovery paths were checked and both are dead:**
+
+1. **The cloud seed migrations do not carry the field.** `074_seed_exercise_library.sql` and
+   `125_reseed_exercise_library.sql` insert **20 columns**, and `breathing_cue` is not among them —
+   `125`'s own header comment lists it under *"JSON-only fields"*.
+2. **Git history never had it.** All **19** revisions of `assets/data/exercise_library.json` back to
+   2026-04-14 carry `Lateral Raise` with `breathing_cue: "5"`. The shift predates the file's entry
+   into the repo, so `git show <rev>:` recovers nothing.
+
+**Shipped state after `exercise-plates`:** BOTH surfaces that render this field now suppress a
+numeric value rather than printing "BREATHING / 5" —
+`lib/shared/widgets/exercise_plate/exercise_plate_sheet.dart` and
+`lib/features/train/screens/active_workout/coaching_content_panel.dart`, pinned together by
+`test/contracts/breathing_cue_numeric_suppressed_test.dart`. So the symptom is gone and 136
+exercises simply show no BREATHING section.
+
+⚠ **That makes this LESS likely to be noticed, not more** — which is exactly why it is filed rather
+than left to the guards. The fix is 136 lines of coaching copy.
+
+**CLOSED 2026-10-22 (`library-data-repair`, Batch A Task 1 of plan `docs/plans/2026-10-22-library-data-repair.md`, diagnose `b7d3e1`):** the premise above was wrong. The text was never lost, only SHIFTED: on the 136 rows every field from `met_value` to `source` sat one column right in file key order, so the breathing text was in `coaching_cues`, the cues in `common_mistakes`, the mistakes in `warmup_protocol` and the warm-up in `pro_tip`. Only the original `pro_tip` and `source` fell into boolean columns and are lost. `scripts/repair_exercise_library_v12.js` (`repairText`) moved every value back and split every cue list into one cue per item; nothing had to be re-authored. Test: `test/contracts/exercise_library_text_shape_contract_test.dart`. The cloud copy is re-seeded by the same batch.
+
 ## OI-370 — Train: the expanded day row does not show a coach-logged exercise until a page reload
 
 - **Status**: CLOSED · 2026-10-22 · branch `train-coach-log-refresh` (PR #144) · the commit carrying `closes-oi: OI-370` (`git log --grep='closes-oi: OI-370'`)
@@ -5587,6 +5620,15 @@ Mechanism: the expanded day row (`lib/features/train/screens/train/expanded_exer
 Fix: same plan as OI-370. The name gets its own line with no line limit and the detail wraps under it (`ExpandedExerciseLogRow`), tested at 320 dp × 1.0/1.3/2.0 text scale with long real names.
 
 **CLOSED 2026-10-22 (`train-coach-log-refresh`, PR #144, same plan and ledger, diagnose `2e8b8f`):** the expanded day row (`ExpandedExerciseLogRow`) gives the name its own line with no line limit and wraps the detail under it; counts read `1 set` / `N sets`, numbers stay with their units (NBSP). Tested at 320 dp × 1.0/1.3/2.0 text scale with long real names in `test/features/train/expanded_exercise_log_row_test.dart`. Cardio minutes read 0 because of a separate pre-existing bug in `logExercise` (filed separately). Device and web check still owed (OI-348 A12).
+
+## OI-384 — Claude Code hooks fail open when the session shell sits in a subdirectory: relative 'dart run scripts/<hook>.dart' exits 255 (non-blocking), so git-safety, memory-guard, discipline and Stop hooks do not run, and the stray <subdir>/.dart_tool/ blocks worktree retirement
+
+- **Status**: CLOSED · 2026-10-21 · diagnose `8f3e35` · branch `hook-cwd-fail-open` · the commit carrying `closes-oi: OI-384` (`git log --grep='closes-oi: OI-384'`)
+- **Blocked on**: — (resolved)
+- **Verified**: 2026-10-21 - by `test/scripts/claude_hooks_cwd_independent_test.dart` (every real hook command run from subdirectories, a linked worktree, a nested repo and outside any repo, under dash and bash; C11 runs the real git-safety guard from `supabase/functions` and sees it block a raw commit) plus the `precheckRoot` and retirement tests; 18/18 mutants red. Two live checks remain and are tracked, not dropped: the post-merge probe (plan 3.5: from a subdirectory, a raw `git commit --dry-run` must print `[git-safety] BLOCKED`) is run by the merging session on the VPS, and the Windows check is OI-348 W1 (same precedent as OI-361, closed with its device check on OI-348 A12).
+- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `hook-cwd-fail-open`
+
+How closed: (1) all nine `.claude/settings.json` hook commands resolve the checkout root (git toplevel holding the script, else `CLAUDE_PROJECT_DIR`, else `.`) and `cd "$r" || exit 1` before `dart run`; (2) `git_safety_hook.dart`'s plan-review precheck resolves its root through the pure `precheckRoot` instead of the payload cwd; (3) `supabase/functions/.dart_tool/` joins `regenerableIgnoredPaths` as one exact entry. Transcript audit: 253 Bash calls ran from a subdirectory across 19 transcripts; no raw git landed through the gap. Plan `docs/plans/hook-cwd-fail-open.md`.
 
 ## OI-390 — Coach and Home say 'You skip Sunday workouts 100% of the time' for a rest day: getDayOfWeekCompletionRates returns 0 for a weekday with nothing scheduled and the day-of-week pattern reads it as 0% completion
 

@@ -11,4 +11,4 @@ prompt-side as model fabrication; the claim kept coming back because `PatternDet
 `snapshot.coach_notices`, which the anti-fabrication rule explicitly allows the model to cite. Before calling a coach
 statement fabricated, grep the snapshot (`coach_notices`, `workout_adherence`, …) for it.
 
-Refs: OI-390, diagnose `132315`, `test/contracts/day_of_week_completion_writer_to_reader_test.dart`, debugging §2.115.
+Refs: OI-390, diagnose `132315`, `test/contracts/day_of_week_completion_writer_to_reader_test.dart`, debugging §2.116.

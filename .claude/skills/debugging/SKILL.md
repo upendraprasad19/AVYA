@@ -234,7 +234,8 @@ Per CLAUDE.md rules 21 + 22:
 | 2.110 | `TextField.selectAllOnFocus` does not select on a user TAP | a plan says a tap on a prefilled value selects it, and on the device typing appends mid-number | test/features/train/log_exercise/log_exercise_card_flip_test.dart |
 | 2.111 | A test compares `FileSystemEntity.path` to a `/`-literal: red only on Windows, invisible to Linux CI | a local Windows full suite fails with Expected/Actual differing only by `\` vs `/`, while CI is green | test/contracts/lapse_gap_policy_writer_to_reader_test.dart |
 | 2.112 | A floating version in a dependency we do not own (a plugin x.y.+, a POM LATEST) fails builds and silently changes the shipped bytes | Build Check fails with "Could not find any matches for ...:x.y.+" on a commit that touched no build file, and a re-run passes | test/contracts/android_dynamic_dependency_pin_test.dart |
-| 2.115 | An absent denominator reported as 0% (a rate map entry for a bucket with nothing due) | the coach or a card states "100% skipped" / "0%" about something the user never had scheduled; a `total > 0 ? done / total : 0` in the writer | test/contracts/day_of_week_completion_writer_to_reader_test.dart |
+| 2.113 | A harness hook that cannot start reads as a hook that allowed the call (relative script path vs the session's moving cwd) | a guard did not block and printed nothing; a stray `<subdir>/.dart_tool/` blocks worktree retirement | test/scripts/claude_hooks_cwd_independent_test.dart |
+| 2.116 | An absent denominator reported as 0% (a rate map entry for a bucket with nothing due) | the coach or a card states "100% skipped" / "0%" about something the user never had scheduled; a `total > 0 ? done / total : 0` in the writer | test/contracts/day_of_week_completion_writer_to_reader_test.dart |
 
 ---
 
@@ -269,8 +270,8 @@ Borrowing from `superpowers:using-superpowers`, `superpowers:systematic-debuggin
 - **"The suite is running, I'll just check one thing with `dart run`."** That is load — the dart wrapper serializes on the SDK lock. See §2.55.
 - **"The trigger only renames the key on INSERT — the upsert will still find its row."** It will not: BEFORE INSERT row triggers run before the ON CONFLICT arbiter, so a rewritten key column never conflicts. Test the writer's real upsert against an EXISTING row, not only against an empty key. See §2.4 mode C (`bd79b1`).
 - **"An AFTER trigger will clean up the superseded row on every push."** Not on an identical re-push: migration 149's `trg_suppress_redundant_updates` cancels the UPDATE and an AFTER trigger never fires on a suppressed update. Use BEFORE INSERT, which fires on every PostgREST upsert. See §2.4 mode C (`4b5c38`).
-- **"The coach fabricated that statistic."** First grep `coach_notices` and the snapshot for it: a "fabrication" the coach can quote is a WRITER bug (§2.115, OI-390; Bug C and OBS-3 were fixed prompt-side while the writer kept emitting it).
-- **"`x > 0 ? a / x : 0` is a safe default."** Not when a reader treats the 0 as a measurement: omit the key, or return null (§2.115).
+- **"The coach fabricated that statistic."** First grep `coach_notices` and the snapshot for it: a "fabrication" the coach can quote is a WRITER bug (§2.116, OI-390; Bug C and OBS-3 were fixed prompt-side while the writer kept emitting it).
+- **"`x > 0 ? a / x : 0` is a safe default."** Not when a reader treats the 0 as a measurement: omit the key, or return null (§2.116).
 - **"I'll bump `restoreCompletedTick` so the UI refreshes after my restore change."** STOP — until b4e7a1 it also gated streak decay; that gate is now the per-account `SyncService.restoreSettledForCurrentUser`. Grep every reader of a tick before reusing it, and never use a process-wide counter as an "this account is ready" gate. See §2.88, §2.91.
 - **"This bug class is novel — I don't need to update the catalog."** Wrong. §5 self-evolution rule below applies.
 
@@ -330,7 +331,7 @@ Append-only by default. If you must REWRITE an existing entry (e.g. the fix patt
 
 ## Changelog
 
-- **2026-10-23 (dow-skip-rate, OI-390, 132315)** — Self-evolution. §2.115 NEW — an absent denominator reported as 0% (the day-of-week rate map; getWorkoutAdherence rate_percent); 2 red flags (a coach "fabrication" it can quote is a writer bug; the `: 0` default).
+- **2026-10-23 (dow-skip-rate, OI-390, 132315)** — Self-evolution. §2.116 NEW — an absent denominator reported as 0% (the day-of-week rate map; getWorkoutAdherence rate_percent); 2 red flags (a coach "fabrication" it can quote is a writer bug; the `: 0` default).
 - **2026-10-06 (coach-history-correctness-sync, L1a-1)** — Self-evolution. §2.4 mode C NEW — a BEFORE INSERT trigger rewriting an ON CONFLICT key column defeats the arbiter (OI-312, `bd79b1`, recurrence of `e1c8b4`), and a key column that changes on edit leaves superseded rows live (OI-307, `4b5c38`). Two red flags in §3. Regression tests: `test/sql/workout_log_exercises_delete_final_rename_live_verify.sql` (C5), `test/sql/wle_single_live_summary_live_verify.sql`, harness `test/sql/wle_single_live_summary_dryrun_harness.sql`; 10 mutants, all caught (local PG 17.6).
 - **2026-10-07 (issue #78 close-out, d7b2e5)** — Self-evolution. §2.94 NEW — a shared in-flight flag is its own mirror (round 1's `ref.listen` fix created round 2's double-call finding; round 2's `static bool` created round 3's "second screen never wakes + no timeout" finding). Class rule: when a finding is fixed by ADDING a caller/trigger, list every path that now reaches the guarded call and ask when the guard's state is written. Written at batch close-out rather than in the discovering commit (§5.1 asks for the same commit); the close-out itself had been skipped and was corrected by the founder, see `memory/feedback_section5_closeout_is_discipline.md`. Regression test: `test/contracts/weekly_report_video_and_refresh_issue78_test.dart`.
 

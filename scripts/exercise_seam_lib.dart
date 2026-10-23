@@ -56,12 +56,15 @@ const seamAllowlist = <String, SeamEntry>{
       'row the user just authored in this sheet (matched by its id) and hands '
       'it to onCreated. No capability filter: the user explicitly chose to '
       'create and add it, and it carries equipment_needed [] by design.'),
-  'lib/shared/repositories/plan_engine/exercise_selector.dart': SeamEntry(15,
+  'lib/shared/repositories/plan_engine/exercise_selector.dart': SeamEntry(16,
       'The cascade itself. Attempts 1-5, buildPinnedDays and '
       '_applyHistoryAdjustments all take the capability set as a REQUIRED '
       'parameter, so a missed call site fails to compile. 16 -> 15 on '
       '2026-10-21: the L2 custom auto-append (_eligibleCustomExercises) was '
-      'removed (d4b8e1); the only custom read left is buildPinnedDays.'),
+      'removed (d4b8e1); the only custom read left is buildPinnedDays. 15 -> 16 '
+      'on 2026-10-23 (Batch B1): pickV4 reads exerciseRepo.getAll() once for '
+      'the core-list pool; CoreListSelector.rankedPool applies canPerform '
+      'when capability is non-null, else the queryV4 tier rule.'),
   'lib/features/train/screens/template_builder_screen.dart': SeamEntry(3,
       'Seam 7. customs via doableCustom (canOfferInPicker — unverifiable-'
       'equipment customs stay visible), the default empty-query '

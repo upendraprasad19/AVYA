@@ -397,3 +397,25 @@ bool commandUsesWrapper(String command, String wrapperBasename) {
 bool commandIsPushShaped(String command) =>
     commandInvokesGitSubcommand(command, 'push') ||
     commandUsesWrapper(command, 'safe_push.sh');
+
+/// The directory the plan-review precheck runs from: the checkout root of
+/// [cwd] when that root holds [scriptPath], else [cwd] unchanged.
+///
+/// [cwd] is the PreToolUse payload's `cwd`, the session's current directory,
+/// which is a SUBDIRECTORY whenever the shell has `cd`-ed into one. Before
+/// this (diagnose 8f3e35, OI-384) the hook built `$cwd/$scriptPath` straight
+/// from it, so from `supabase/functions` the advisory precheck was silently
+/// skipped. Both the git call and the file check are injected, keeping this
+/// library git-free. An empty or null [toplevel] means git could not answer;
+/// an empty one is rejected explicitly, or `'' + '/scripts/…'` would test a
+/// path at the filesystem root.
+String precheckRoot(
+  String cwd, {
+  required String scriptPath,
+  required String? Function(String cwd) toplevel,
+  required bool Function(String path) fileExists,
+}) {
+  final root = toplevel(cwd);
+  if (root == null || root.isEmpty) return cwd;
+  return fileExists('$root/$scriptPath') ? root : cwd;
+}

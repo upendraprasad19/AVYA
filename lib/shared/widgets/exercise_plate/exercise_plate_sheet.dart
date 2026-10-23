@@ -37,9 +37,10 @@ class ExercisePlateSheet extends StatelessWidget {
     );
   }
 
-  /// Cues arrive in three shapes across the 292 rows, counted 2026-08-29: a
-  /// single string packed with semicolons (84), a real array (100), or one
-  /// plain cue (108). Splitting on ';' renders all three as lines.
+  /// Since library v12 (Batch A, 2026-10-22) every row stores one cue per list
+  /// item. Before it, 84 rows packed several cues into one string joined by
+  /// semicolons; the split on ';' stays so a community row or an install still
+  /// on an older seed renders as lines too.
   List<String> _cues(Map<String, dynamic>? row) {
     final raw = row?['coaching_cues'];
     if (raw is! List) return const [];
@@ -99,10 +100,9 @@ class ExercisePlateSheet extends StatelessWidget {
     final row = ExerciseRepository.instance.getByExactName(exerciseName);
     final cues = _cues(row);
     final breathing = _clean(row?['breathing_cue']);
-    // 136 of 292 rows carry a bare number here — a spreadsheet column shift that
-    // put met_value into breathing_cue. Suppress rather than print
-    // "BREATHING / 5". coaching_content_panel applies the identical guard; the
-    // data repair is OI-149, blocked on 136 cues having to be re-authored.
+    // A bare number here is the fingerprint of a spreadsheet column shift (136
+    // rows had it until the OI-149 repair, 2026-10-22). Suppress rather than
+    // print "BREATHING / 5". coaching_content_panel applies the identical guard.
     final showBreathing =
         breathing != null && !RegExp(r'^\d+(\.\d+)?$').hasMatch(breathing);
 

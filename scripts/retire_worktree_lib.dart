@@ -227,8 +227,9 @@ List<WorktreeRecord> parseWorktreePorcelain(String stdout) {
 ///             suite had locked the bug in.
 ///
 /// So: exact match only. No prefix, no basename, no `contains`. A worktree's
-/// entire real ignored set here is six entries, so exactness costs NOTHING in
-/// retirability while making every path above non-regenerable. If this list
+/// real ignored set is small and every member is enumerated below, so
+/// exactness costs NOTHING in retirability while making every path above
+/// non-regenerable. If this list
 /// ever needs a pattern, that is the signal to keep the worktree instead —
 /// inertness is recoverable, a deleted credentials file is not.
 ///
@@ -246,6 +247,13 @@ const regenerableIgnoredPaths = <String>[
   // Flutter/Dart build products, all reproduced by `flutter pub get` + a build.
   '.dart_tool/',
   'build/',
+  // dartdev's per-directory cache (diagnose 8f3e35, OI-384): any `dart run`
+  // writes `<cwd>/.dart_tool/native_assets.yaml`, and sessions `cd` into
+  // supabase/functions for the Deno tests. Before the hook-cwd fix every
+  // Claude Code hook fired from there wrote it too. 171 bytes plus an empty
+  // `native_assets/`; no pubspec.yaml lives in that directory. THIS path only:
+  // `vendor/.dart_tool/` and every other nested `.dart_tool/` stay precious.
+  'supabase/functions/.dart_tool/', // .gitignore:29 (`.dart_tool/`)
   // FVM's per-project SDK symlink/cache (.gitignore, added 2026-09-24), fully
   // reproduced from the committed `.fvmrc` by `fvm use <ver>` / `fvm install`.
   '.fvm/',
