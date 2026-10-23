@@ -627,7 +627,7 @@ void main() {
   test('injured user keeps the soft avoid and L6', () async {
     final rows = [
       _row('C1', 'Machine Chest Press', pattern: 'horizontal_push', focus: ['Chest']),
-      _row('C2', 'Dumbbell Bench Press', pattern: 'horizontal_push', focus: ['Chest']),
+      _row('C2', 'Floor Press', pattern: 'horizontal_push', focus: ['Chest']),
       _row('C3', 'Push Up', pattern: 'horizontal_push', focus: ['Chest']),
       _row('C4', 'Other Press', pattern: 'horizontal_push', focus: ['Chest']),
     ];
@@ -636,11 +636,11 @@ void main() {
             [slot('Chest', 'horizontal_push')])],
         injuries: ['shoulder'], subPref: true).single;
     expect(names(d.exercisesA), ['Machine Chest Press']);
-    expect(names(d.exercisesB), ['Dumbbell Bench Press']);
+    expect(names(d.exercisesB), ['Floor Press']);
     await demote('Machine Chest Press');
     final d2 = pick([day([slot('Chest', 'horizontal_push')])],
         injuries: ['shoulder'], subPref: true, phase: 2).single;
-    expect(names(d2.exercisesA), ['Dumbbell Bench Press']);
+    expect(names(d2.exercisesA), ['Floor Press']);
   });
 
   test('cables sub-focus', () {

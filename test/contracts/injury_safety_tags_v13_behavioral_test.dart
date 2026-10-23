@@ -68,7 +68,9 @@ void main() {
               ['injury_contraindications'] as List)
             t as String
         };
-    expect(tags('E061'), {'ankle', 'knee'});
+    // E061 also carries the v14 +hip (founder table 2026-10-23, aligned with the
+    // warm-up list's Running (Treadmill) = {knee, ankle, hip}); +knee is v13's.
+    expect(tags('E061'), {'ankle', 'hip', 'knee'});
     expect(tags('E070'), {'elbow', 'shoulder', 'wrist'});
     expect(tags('E121'), {'lower_back', 'shoulder', 'wrist'});
     expect(tags('E127'), {'lower_back'});

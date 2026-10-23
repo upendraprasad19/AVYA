@@ -10634,8 +10634,9 @@ concepts:
       (PlanEngineFlags.injurySubstitutePreferenceEnabled) → verbatim
       candidates.first (byte-identical). Resolved ONCE in generateV4 →
       applyInjurySubstitutePreference bool threaded pickV4/buildPinnedDays → _fillSlots →
-      _cascadeFill (mirrors applyInjuryUniversalFilter). Curated map covers 6 of 9
-      InjuryVocab tokens (ankle/neck/hamstring → no subs → fallthrough). NO migration
+      _cascadeFill (mirrors applyInjuryUniversalFilter). Curated map covers 5 of 9
+      InjuryVocab tokens (ankle/elbow/hamstring/neck → no subs → fallthrough; v14 tagged
+      every elbow-pattern row). NO migration
       (const map + config flag). NOTE: L6 _applyHistoryAdjustments (phase≥2) can re-swap a
       curated pick if it is in the user's `demoted` set — NOT a safety issue (L6's
       replacement stays injuryExclusions-filtered) and arguably correct (explicit user
@@ -11382,11 +11383,11 @@ concepts:
 
   - concept: exercise_injury_tags
     domain: workout
-    behavioral_test_path: test/contracts/injury_undertag_13b_contract_test.dart
+    behavioral_test_path: test/contracts/injury_recheck_v14_contract_test.dart
     description: |
       Batch 13-B (f4c1e8) — each exercise's library `injury_contraindications` array lists
       the InjuryVocab tokens the movement is contraindicated for. The always-on queryV4
-      filter (exercise_repository.dart:335-345, exact lowercase match at :340) excludes a
+      filter (exercise_repository.dart:411-420, exact lowercase match at :416) excludes a
       row for an injured user iff its list CONTAINS the user's token; an empty/missing list
       is never excluded. 13-A closed the field-MISSING rows (e1a7c4); 13-B tags the 26
       empty-[] strength rows (hinges/rows/overhead/loaded-core) + deepens 2 under-tagged
@@ -11396,6 +11397,12 @@ concepts:
       hip machines stay safe; Goblet Press is the one shoulder-safe overhead press. Tokens
       stay closed to the 9-token InjuryVocab set. NOT a cloud column (excluded from migration
       074) → no prod re-apply. Recurrence of e1a7c4 / a1f6c3.
+      v14 injury re-check (d30de7, founder 2026-10-23): the founder REJECTED the 13-B
+      'kept safe for variety' carve-out above ("we cannot give a bicycle crunch or a V-up
+      or a Russian twist to an injured user"). 102 rows gained 146 tokens (additions only);
+      only a 33-row low-load / rehab pool (test/helpers/injury_safe_pool.dart) stays
+      untagged. Push Up = wrist + shoulder; Chin Up = elbow only. The curated substitutes and
+      the warm-up list were realigned (every _moveInjuries key == its library tags).
     writers:
       - file: assets/data/exercise_library.json
         method: injury_contraindications field (26 rows tagged + 2 deepened, UNION with existing)
@@ -11409,14 +11416,26 @@ concepts:
       - file: scripts/add_library_core_fields_v13.js
         method: addInjuryTags — UNIONs scripts/data/library_injury_additions_v13.json into injury_contraindications (sorted, canonical tokens only)
         notes: B1 Task 1b (c2d5e8, founder 2026-10-22) — E061 +knee, E070 +shoulder +elbow, E121 +wrist +shoulder, E127 +lower_back, E173 +lower_back; re-seeded by SeedService v13; behavioural proof test/contracts/injury_safety_tags_v13_behavioral_test.dart
+      - file: scripts/add_library_injury_tags_v14.js
+        method: UNIONs scripts/data/library_injury_additions_v14.json into injury_contraindications (sorted, canonical tokens only, refuses to remove a tag)
+        notes: v14 injury re-check (d30de7, founder 2026-10-23) — 102 rows, 146 tokens; re-seeded by SeedService v14; behavioural proof test/contracts/injury_recheck_v14_contract_test.dart + library_seed_v14_upgrade_behavioral_test.dart + the injury sweep test/plan_generator/injury_floor_sweep_test.dart
+      - file: lib/shared/repositories/plan_engine/warmup_cooldown.dart
+        method: _moveInjuries — Push Up {wrist, shoulder}
+        notes: the warm-up/cool-down list is a separate hard-coded copy; v14 pins ALL 27 keys == the library tags (warmup_library_injury_mirror_test.dart)
     readers:
       - file: lib/shared/repositories/exercise_repository.dart
-        method: queryV4 injury filter (:335-345, match :340)
+        method: queryV4 injury filter (:411-420, match :416)
         semantic: a row is excluded for an injured user iff injury_contraindications contains the token
-        notes: empty/missing list = never excluded (the under-tagging hole 13-B closes)
+        notes: empty/missing list = never excluded (the under-tagging hole 13-B and v14 close)
+      - file: lib/shared/repositories/plan_engine/exercise_selector.dart
+        method: V3 injury filter (:470-482) and _isContraindicated (:1456-1468, attempt 5 and repeat pins)
+        semantic: the same exact-lowercase intersection as queryV4
+      - file: lib/shared/repositories/plan_engine/warmup_cooldown.dart
+        method: attach (_moveIsContra) — reads its OWN _moveInjuries table, not the library field
+        semantic: drops a warm-up/cool-down move whose mapped tags intersect the user's injuries
       - file: lib/shared/repositories/plan_engine/injury_substitutes.dart
         method: preferredFor re-rank (post-injury-filter)
-        semantic: the curated safe-sub lists stay coherent with the new tags (≥1 shoulder sub stays safe)
+        semantic: every curated sub is a library row NOT tagged for its own injury (injury_recheck_v14_contract_test.dart); v14 removed the names it tagged and added Floor Press, Chest Squeeze Press and Machine High Row to shoulder
         notes: warmup mirror _moveInjuries value-agreement guarded by warmup_library_injury_mirror_test
       - file: lib/shared/repositories/plan_engine/core_list_selector.dart
         method: CoreListSelector.rankedPool (enable_core_list_pool ON, Batch B1)
@@ -12877,7 +12896,7 @@ concepts:
         line_range: 1-2
         method: demo_slug + demo_pair fields
       - file: lib/core/services/seed_service.dart
-        line_range: 110-110
+        line_range: 116-116
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/plate_resolver.dart

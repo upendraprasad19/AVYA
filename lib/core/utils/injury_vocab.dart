@@ -2,7 +2,7 @@
 ///
 /// These are the EXACT tokens the exercise library's `injury_contraindications`
 /// field uses (verified against `assets/data/exercise_library.json`: 9 distinct
-/// tokens across 150 of 259 rows as of Batch 13-B — the per-token counts drift as
+/// tokens across 252 of 285 rows as of the v14 injury re-check — the per-token counts drift as
 /// the library grows; `injury_vocab_library_contract_test` pins the live token SET).
 ///
 /// The engine matches injuries by **exact lowercase equality**

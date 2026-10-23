@@ -19,9 +19,10 @@ import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_generator.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/warmup_cooldown.dart';
 
-// Specific shoulder-LOADING warmup/cooldown moves (Push Up is library wrist-only
-// → intentionally NOT here; it must survive a shoulder filter).
+// Specific shoulder-LOADING warmup/cooldown moves. Push Up is here since the v14
+// injury re-check (founder 2026-10-23: Push Up is wrist AND shoulder).
 const _shoulderMoves = {
+  'Push Up',
   'Dead Hang',
   'Wall Push Up',
   'Chest Doorway Stretch',
@@ -107,16 +108,20 @@ void main() {
         reason: 'baseline must contain shoulder-loading warmup/cooldown moves, '
             'else the shoulder test below is vacuous');
     expect(names.intersection(_kneeMoves), isNotEmpty);
+    // Positive control for the Push Up absence asserted below: the same persona,
+    // uninjured, IS handed Push Up in its warm-up.
+    expect(names, contains('Push Up'));
   });
 
   test('shoulder injury DROPS shoulder-loading warmup/cooldown moves (U3)', () {
     final names = warmupCooldownNames(gen(injuries: const ['shoulder']));
     expect(names.intersection(_shoulderMoves), isEmpty,
         reason: 'no shoulder-loading warmup/cooldown move for a shoulder injury');
-    // Push Up is library wrist-only (main-selectable) → must STAY (consistent
-    // with the main cascade, which also keeps it for a shoulder injury).
-    expect(names, contains('Push Up'),
-        reason: 'Push Up (library wrist-only) must not be dropped for shoulder — '
+    // Push Up is library wrist+shoulder (founder 2026-10-23, "wrist and
+    // shoulders") → dropped for a shoulder injury, consistent with the main
+    // cascade, which also drops it.
+    expect(names, isNot(contains('Push Up')),
+        reason: 'Push Up (library wrist+shoulder) must be dropped for shoulder — '
             'main+warmup stay consistent');
   });
 

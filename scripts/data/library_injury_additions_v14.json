@@ -1,0 +1,467 @@
+{
+  "_meta": {
+    "decision": "Founder decision 2026-10-23: rejects the 13-B \"kept safe for variety\" principle (\"We cannot give a bicycle crunch or a V-up or a Russian twist to a injured user\") and approves this per-row table with three edits: Lat Pulldown +shoulder; Chin Up = elbow only (\"chinup is elbow\"); Push Up = wrist + shoulder. Additions only; existing tags are never removed. Ships live (no flag), as the five v13 tags did on 2026-10-22.",
+    "plan": "docs/plans/2026-10-23-library-injury-recheck.md",
+    "diagnose": "docs/diagnoses/2026-10-23-library-injury-recheck-d30de7.md",
+    "counts": {
+      "rows": 102,
+      "tokens": 146
+    }
+  },
+  "additions": {
+    "E002": [
+      "shoulder"
+    ],
+    "E005": [
+      "shoulder"
+    ],
+    "E006": [
+      "shoulder"
+    ],
+    "E007": [
+      "shoulder"
+    ],
+    "E008": [
+      "elbow"
+    ],
+    "E011": [
+      "lower_back"
+    ],
+    "E016": [
+      "wrist"
+    ],
+    "E017": [
+      "elbow"
+    ],
+    "E021": [
+      "hamstring"
+    ],
+    "E022": [
+      "elbow"
+    ],
+    "E025": [
+      "shoulder"
+    ],
+    "E032": [
+      "elbow"
+    ],
+    "E033": [
+      "elbow"
+    ],
+    "E034": [
+      "elbow"
+    ],
+    "E035": [
+      "elbow"
+    ],
+    "E039": [
+      "knee",
+      "lower_back"
+    ],
+    "E050": [
+      "hip"
+    ],
+    "E056": [
+      "lower_back",
+      "neck"
+    ],
+    "E057": [
+      "hip"
+    ],
+    "E058": [
+      "lower_back",
+      "shoulder"
+    ],
+    "E059": [
+      "lower_back"
+    ],
+    "E060": [
+      "lower_back"
+    ],
+    "E061": [
+      "hip"
+    ],
+    "E063": [
+      "knee",
+      "wrist"
+    ],
+    "E065": [
+      "knee",
+      "shoulder",
+      "wrist"
+    ],
+    "E067": [
+      "shoulder",
+      "wrist"
+    ],
+    "E069": [
+      "elbow",
+      "wrist"
+    ],
+    "E074": [
+      "shoulder"
+    ],
+    "E075": [
+      "elbow"
+    ],
+    "E076": [
+      "lower_back",
+      "shoulder"
+    ],
+    "E078": [
+      "lower_back",
+      "shoulder",
+      "wrist"
+    ],
+    "E080": [
+      "knee"
+    ],
+    "E081": [
+      "hip",
+      "knee"
+    ],
+    "E083": [
+      "hip"
+    ],
+    "E084": [
+      "ankle"
+    ],
+    "E086": [
+      "wrist"
+    ],
+    "E088": [
+      "elbow"
+    ],
+    "E089": [
+      "wrist"
+    ],
+    "E090": [
+      "wrist"
+    ],
+    "E094": [
+      "elbow",
+      "shoulder"
+    ],
+    "E096": [
+      "elbow"
+    ],
+    "E099": [
+      "elbow"
+    ],
+    "E100": [
+      "elbow"
+    ],
+    "E101": [
+      "elbow"
+    ],
+    "E103": [
+      "shoulder"
+    ],
+    "E106": [
+      "neck"
+    ],
+    "E107": [
+      "hip"
+    ],
+    "E108": [
+      "hip"
+    ],
+    "E109": [
+      "hip",
+      "lower_back"
+    ],
+    "E112": [
+      "lower_back"
+    ],
+    "E113": [
+      "shoulder"
+    ],
+    "E117": [
+      "shoulder"
+    ],
+    "E118": [
+      "shoulder"
+    ],
+    "E122": [
+      "elbow"
+    ],
+    "E123": [
+      "elbow"
+    ],
+    "E130": [
+      "hamstring"
+    ],
+    "E131": [
+      "lower_back"
+    ],
+    "E135": [
+      "shoulder"
+    ],
+    "E149": [
+      "lower_back"
+    ],
+    "E151": [
+      "hamstring",
+      "lower_back",
+      "shoulder",
+      "wrist"
+    ],
+    "E152": [
+      "hip",
+      "knee",
+      "lower_back"
+    ],
+    "E153": [
+      "ankle"
+    ],
+    "E154": [
+      "elbow",
+      "shoulder",
+      "wrist"
+    ],
+    "E155": [
+      "shoulder"
+    ],
+    "E157": [
+      "hip"
+    ],
+    "E158": [
+      "lower_back",
+      "shoulder",
+      "wrist"
+    ],
+    "E159": [
+      "knee"
+    ],
+    "E160": [
+      "shoulder",
+      "wrist"
+    ],
+    "E161": [
+      "ankle"
+    ],
+    "E162": [
+      "hip"
+    ],
+    "E166": [
+      "hamstring",
+      "lower_back"
+    ],
+    "E169": [
+      "hip"
+    ],
+    "E170": [
+      "shoulder"
+    ],
+    "E174": [
+      "lower_back",
+      "neck"
+    ],
+    "E175": [
+      "lower_back",
+      "neck"
+    ],
+    "E176": [
+      "hip",
+      "lower_back"
+    ],
+    "E177": [
+      "lower_back"
+    ],
+    "E181": [
+      "elbow",
+      "lower_back"
+    ],
+    "E186": [
+      "shoulder"
+    ],
+    "E191": [
+      "shoulder",
+      "wrist"
+    ],
+    "E198": [
+      "lower_back"
+    ],
+    "E200": [
+      "lower_back",
+      "shoulder",
+      "wrist"
+    ],
+    "E201": [
+      "knee"
+    ],
+    "E202": [
+      "ankle",
+      "knee"
+    ],
+    "E203": [
+      "ankle",
+      "hip",
+      "knee"
+    ],
+    "E204": [
+      "hamstring",
+      "knee"
+    ],
+    "E207": [
+      "lower_back"
+    ],
+    "E208": [
+      "hip"
+    ],
+    "E209": [
+      "hamstring",
+      "hip"
+    ],
+    "E210": [
+      "wrist"
+    ],
+    "E211": [
+      "ankle"
+    ],
+    "E212": [
+      "elbow",
+      "shoulder",
+      "wrist"
+    ],
+    "E213": [
+      "elbow",
+      "shoulder",
+      "wrist"
+    ],
+    "E215": [
+      "hamstring",
+      "lower_back"
+    ],
+    "E216": [
+      "ankle",
+      "knee"
+    ],
+    "E217": [
+      "shoulder"
+    ],
+    "E218": [
+      "lower_back"
+    ],
+    "E219": [
+      "shoulder"
+    ],
+    "E220": [
+      "shoulder"
+    ],
+    "E227": [
+      "hip"
+    ],
+    "E228": [
+      "hip"
+    ],
+    "E238": [
+      "elbow",
+      "wrist"
+    ]
+  },
+  "reasons": {
+    "E002": "pressing to full depth loads the front of the shoulder (barbell bench is already tagged)",
+    "E005": "founder 2026-10-23: push up loads the shoulder (adds to wrist)",
+    "E006": "end-range stretch of the front shoulder under load",
+    "E007": "end-range stretch of the front shoulder under load",
+    "E008": "add to shoulder: deep dips load the elbow",
+    "E011": "add to shoulder: standing barbell press arches the lower back",
+    "E016": "add to elbow, shoulder: narrow grip bends the wrist under load",
+    "E017": "loads the triceps tendon at the elbow (other triceps moves are tagged)",
+    "E021": "add to lower_back: heavy pull loads the hamstrings (RDL is tagged)",
+    "E022": "add to shoulder: hanging pull loads the elbow (matches Negative Pull Up)",
+    "E025": "overhead pulling position",
+    "E032": "loads the biceps tendon at the elbow (Barbell Curl is tagged)",
+    "E033": "neutral-grip curl loads the outer elbow",
+    "E034": "loads the biceps tendon at the elbow",
+    "E035": "loads the biceps tendon at the elbow",
+    "E039": "loaded knee bend; deep reps round the lower back",
+    "E050": "add to lower_back: wide stance loads the hip and groin",
+    "E056": "loaded spinal flexion",
+    "E057": "add to lower_back, shoulder: hip flexors do the lifting (matches Captain's Chair)",
+    "E058": "add to wrist: long lever pulls the lower back into an arch; arms overhead",
+    "E059": "twisting while the spine is flexed",
+    "E060": "curls the lower spine off the floor",
+    "E061": "add to ankle, knee: matches the warm-up list (impact on the hip)",
+    "E063": "add to ankle: matches the warm-up list",
+    "E065": "add to ankle: jump, floor drop and push-up",
+    "E067": "plank position on the hands",
+    "E069": "add to shoulder: the transition loads elbow and wrist",
+    "E074": "add to lower_back: body weight held through the shoulders on the bench",
+    "E075": "add to shoulder: deep dips load the elbow",
+    "E076": "add to wrist: dive-bomber push arches the back and loads the shoulder",
+    "E078": "flow through plank, cobra and forward fold",
+    "E080": "kneeling on the knee",
+    "E081": "deep hip rotation twists the knee",
+    "E083": "deep lunge stretch",
+    "E084": "matches Ankle Rotations in the warm-up list",
+    "E086": "add to lower_back: catching the bar bends the wrist back",
+    "E088": "add to hip, knee, lower_back: bar held in the elbow crease",
+    "E089": "heavy grip for distance loads the wrist",
+    "E090": "heavy one-hand grip loads the wrist",
+    "E094": "stretched-arm curl loads elbow and front shoulder",
+    "E096": "loads the triceps tendon at the elbow",
+    "E099": "add to wrist: forearm flexors pull on the inner elbow",
+    "E100": "add to wrist: forearm extensors pull on the outer elbow",
+    "E101": "add to shoulder: hanging pull loads the elbow",
+    "E103": "feet-high push-up shifts load onto the shoulders",
+    "E106": "heavy shrugs load the upper traps and neck",
+    "E107": "loads the hip directly; 13-B kept hip machines safe",
+    "E108": "loads the groin and inner hip directly; 13-B kept hip machines safe",
+    "E109": "kicking back arches the lower back (bodyweight kickback is tagged hip)",
+    "E112": "add to hip, knee: barbell on the back (Back Squat is tagged)",
+    "E113": "one-arm press to full depth, same as the two-arm press",
+    "E117": "end-range stretch of the front shoulder under load",
+    "E118": "end-range stretch of the front shoulder under load",
+    "E122": "loads the biceps tendon at the elbow",
+    "E123": "founder 2026-10-23: chin up is an elbow load (palms-up grip), not shoulder",
+    "E130": "add to lower_back: loaded forward fold stretches the hamstrings",
+    "E131": "full sit-up",
+    "E135": "add to wrist: crawling bears weight through the shoulders",
+    "E149": "add to hip, knee: straddle lift, twisted load on the back",
+    "E151": "walks out to a plank from a forward fold",
+    "E152": "deep squat holding the toes",
+    "E153": "loads the ankle at end range",
+    "E154": "hanging from the bar (matches Dead Hang)",
+    "E155": "end-range shoulder stretch",
+    "E157": "hip flexion against a band",
+    "E158": "side-lying twist supported on one arm",
+    "E159": "deep knee bend",
+    "E160": "weight on the hands, arms overhead",
+    "E161": "loads the ankle at end range",
+    "E162": "deep hip rotation",
+    "E166": "forward fold (matches Standing Toe Touch)",
+    "E169": "deep hip rotation",
+    "E170": "arms overhead against the wall",
+    "E174": "spinal flexion; pulls on the neck",
+    "E175": "spinal flexion plus twist; pulls on the neck",
+    "E176": "fast full flexion; hip flexors pull on the lower back",
+    "E177": "judgement call: if the lower back lifts, the hold strains it",
+    "E181": "bar held in the elbow crease; front load pulls on the lower back",
+    "E186": "overhead press; 13-B kept it as the one shoulder-safe overhead press",
+    "E191": "unstable push-up: shoulder must stabilise, wrists bear load",
+    "E198": "add to hip, knee: twisting in a lunge",
+    "E200": "flow through plank, cobra and downward dog",
+    "E201": "add to ankle: matches the warm-up list",
+    "E202": "impact; matches the warm-up list",
+    "E203": "impact; matches the warm-up list",
+    "E204": "matches the warm-up list",
+    "E207": "spinal twist; matches the warm-up list",
+    "E208": "matches the warm-up list",
+    "E209": "matches the warm-up list",
+    "E210": "matches the warm-up list",
+    "E211": "matches the warm-up list",
+    "E212": "matches the warm-up list",
+    "E213": "hanging; matches the warm-up list",
+    "E215": "forward fold; matches the cool-down list",
+    "E216": "matches the cool-down list",
+    "E217": "arms overhead; matches the cool-down list",
+    "E218": "side bend; matches the cool-down list",
+    "E219": "matches the cool-down list",
+    "E220": "matches the cool-down list",
+    "E227": "add to knee: step-ups load the hip (other step-ups are tagged)",
+    "E228": "add to knee: deep lunge loads the hip (other lunges are tagged)",
+    "E238": "add to shoulder: bench dips load elbow and bent wrist"
+  }
+}
