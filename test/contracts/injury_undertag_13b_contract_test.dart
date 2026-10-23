@@ -37,7 +37,8 @@ import '../helpers/injury_safe_pool.dart';
 const Map<String, List<String>> k13bExpected = {
   // cardio
   'E064': ['lower_back'], // Rowing Machine
-  // core — advanced / loaded / support / hang (bodyweight crunch+sit-up family kept SAFE)
+  // core — advanced / loaded / support / hang (13-B kept the bodyweight crunch+sit-up
+  // family safe; v14 tagged most of it, pinned in injury_recheck_v14_contract_test.dart)
   'E057': ['hip', 'lower_back', 'shoulder'], // Hanging Leg Raise (v14 +hip)
   'E071': ['shoulder', 'wrist'], // L-Sit Hold
   'E074': ['lower_back', 'shoulder'], // Dragon Flag (v14 +shoulder)

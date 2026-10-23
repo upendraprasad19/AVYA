@@ -1,0 +1,105 @@
+# Closure ledger — library-injury-recheck (exercise library programme, T1 of the founder order)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per item; no
+# `deferred:` key. Plan docs/plans/2026-10-23-library-injury-recheck.md, executed
+# inline on branch library-injury-recheck; `library-injury-recheck@branch` is the
+# in-branch commit form for commits after the first.
+
+batch: library-injury-recheck
+plan_review_record: docs/plan-reviews/library-injury-recheck.md
+diagnose_docs:
+  - docs/diagnoses/2026-10-23-library-injury-recheck-d30de7.md
+
+findings:
+  # ── Tasks ────────────────────────────────────────────────────────
+  - id: T1
+    title: "Failing tests first: data contract, real-generator personas, substitute safety"
+    terminal_state: closed_in_commit
+    commit: 220808e9
+    verification: "test/contracts/injury_recheck_v14_contract_test.dart ran RED (23 fail, 2 pass) before any library byte changed, then 25/25 green."
+
+  - id: T2
+    title: "102 rows gain 146 injury tags from the committed table; seed v14"
+    terminal_state: closed_in_commit
+    commit: 220808e9
+    verification: "scripts/add_library_injury_tags_v14.js (idempotent, --check round-trips, refuses removal and non-canonical tokens): 0 tags removed, 0 other keys changed, 285 rows, 33 untagged. library_seed_v14_upgrade_behavioral_test (v13 box to v14 through seedIfNeeded); seed constant back to 13 reddens it."
+
+  - id: T3
+    title: "Warm-up table mirror: Push Up gains shoulder; all 27 _moveInjuries keys pinned against the library"
+    terminal_state: closed_in_commit
+    commit: 220808e9
+    verification: "warmup_library_injury_mirror_test (new all-27-keys test) and warmup_injury_filter_behavioral_test (Push Up dropped for shoulder, uninjured positive control); reverting Push Up in _moveInjuries reddens 4 tests and the repeat sweep (unsafe-warm/cool 160)."
+
+  - id: T4
+    title: "Curated substitutes re-verified against the new tags"
+    terminal_state: closed_in_commit
+    commit: 220808e9
+    verification: "Shoulder list takes Floor Press, Chest Squeeze Press, Machine High Row (founder yes 2026-10-23); knee list drops Leg Press; elbow key removed. Measured: 224 of 864 personas change with the re-rank on (shoulder 60, lower_back 72, wrist 68, knee 22, hip 2, elbow 0). Re-adding Push Up to the shoulder list reddens 2 tests."
+
+  - id: T5
+    title: "Sweep on the real generator: singles, pairs, repeat phase"
+    terminal_state: closed_in_commit
+    commit: 220808e9
+    verification: "test/plan_generator/injury_floor_sweep_test.dart: 1,728 + 1,440 + 432 runs, 0 unsafe main, 0 unsafe warm/cool, 0 unresolved names in every block; singles 0 empty; pairs 4 empty (ceiling 4, founder 'Ship, allow 4'); repeat 0 empty. Before and after tables in the diagnose doc."
+
+  - id: T6
+    title: "Generator golden re-recorded"
+    terminal_state: closed_in_commit
+    commit: 220808e9
+    verification: "RECORD_GENERATOR_GOLDEN=1: 18 of 999 keys changed, all injury| (knee x full_gym; lower_back and shoulder x 4 tiers; p1 and p2); 0 of the 975 non-injury keys."
+
+  - id: T7
+    title: "Scorecard baseline refreshed (and the stale one it replaced)"
+    terminal_state: closed_in_commit
+    commit: 220808e9
+    verification: "generate_baseline.dart: fresh v13 vs fresh v14 moves 12 of 606 personas, all injured, 0 of 576 uninjured; ceilings untouched. The committed baseline (2026-08-28) already differed from a fresh run in 165 personas; the refresh clears that drift."
+
+  - id: T8
+    title: "B1 gate report regenerated"
+    terminal_state: closed_in_commit
+    commit: 220808e9
+    verification: "WRITE_CORE_LIST_REPORT=1 core_list_pool_gate_test.dart 6/6; hard counts stay 0; only injured-persona cells moved."
+
+  - id: T9
+    title: "Four mutations, each applied, run, restored"
+    terminal_state: closed_in_commit
+    commit: 220808e9
+    verification: "Push Up loses shoulder (7 tests red), _moveInjuries Push Up reverted (4 red plus the repeat sweep), seed 14 to 13 (1 red), Push Up re-added to shoulder subs (2 red); every file restored to its pre-mutation sha1."
+
+  - id: T10
+    title: "Registry, nested docs and stale wording"
+    terminal_state: closed_in_commit
+    commit: library-injury-recheck@branch
+    verification: "sot_registry exercise_injury_tags updated and its seed_service line range moved 110 to 116 (check_sot_registry_parity PASS); the 13-B carve-out sentences marked superseded; plan-engine-detail and injury_vocab counts updated; stale-wording grep over docs, lib, test, scripts and skills leaves only dated historical plans, reviews and ledgers."
+
+  # ── Decisions and carried items ──────────────────────────────────
+  - id: CARVEOUT-E173-E127
+    title: "Decline Sit Up (E173) and Reverse Hyper (E127) keep lower_back"
+    terminal_state: closed_in_commit
+    commit: 220808e9
+    verification: "Founder 2026-10-23: keep both. The v14 table carries them and the contract test pins both; the B1 ledger entry of the same id is closed with this one."
+
+  - id: PICKER-UNFILTERED
+    title: "Exercise picker, swap and add sheets stay unfiltered"
+    terminal_state: verified_clean
+    evidence: "Founder 2026-10-23: 'user should be able select, add, swap all the exercises'. grep over lib/: injury_contraindications is read only by exercise_repository.queryV4 and plan_engine (exercise_selector, core_list_selector, warmup_cooldown, injury_substitutes); no lib/features file reads it, so no UI list is filtered."
+
+  - id: PAIRS-EMPTY-DAYS
+    title: "4 empty days for two injuries at once (2 before this change)"
+    terminal_state: upstream_blocked
+    blocker: "OI-401 (thin-day top-up). The two new empties follow from Deficit Reverse Lunge being hip-tagged; removing the tag would restore the rejected 'kept safe' principle."
+    reopen_when: "OI-401 merges; its sweep takes kPairsEmptyBaseline to 0."
+
+  - id: THIN-DAYS
+    title: "Thin and one-exercise days for injured users (singles 28 to 44 thin, 0 to 11 one-exercise)"
+    terminal_state: upstream_blocked
+    blocker: "OI-401 (founder option b, 2026-10-23): its own plan, two reviews and PR, next in the founder order."
+    reopen_when: "OI-401 merges and the sweep shows 0 one-exercise days."
+
+  - id: FINISHER-INJURIES
+    title: "The cardio finisher takes no injuries and no screen shows it"
+    terminal_state: upstream_blocked
+    blocker: "OI-396 needs a separate rule-14 OK to touch plan_generator.dart."
+    reopen_when: "OI-396 is scheduled."
+
+total_findings: 15
+closed_count: 15

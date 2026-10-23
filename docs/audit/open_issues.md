@@ -6654,3 +6654,31 @@ To plan (tier M: Train + coach files): the rate map omits weekdays with nothing 
 **Founder decision (2026-10-22).** Show it after the main lifts, injury-safe: an injured user gets Stationary Bike Sprints in a gym and no finisher at home.
 
 **Done when.** The finisher renders after the main lifts; `CardioFinisher.attach` receives the user's injuries through a `plan_generator.dart` pass-through (needs the rule-14 OK) and applies the rule above; B2's `SessionBudgetContext.finisherSeconds` is set from the finisher it attaches (B2 reserves 0 today, Ruling 6); a behavioural test covers an injured gym user, an injured home user and an uninjured user.
+
+## OI-400 — retire_worktree: a nested dartdev-only .dart_tool/ (native_assets.yaml, no pubspec.yaml beside it) makes a worktree unretirable
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-10-23 — `scripts/retire_worktree_lib.dart:248-256` lists only the root `.dart_tool/` and `supabase/functions/.dart_tool/` as regenerable; its comment keeps every other nested `.dart_tool/` precious on purpose (OI-384). The retire dry-run for `library-batch-b` printed KEEP on `lib/shared/repositories/plan_engine/.dart_tool/native_assets.yaml`.
+- **Identified**: 2026-10-23 · filed via mint_oi.sh from branch `library-injury-recheck`
+
+**The defect.** Any `dart run` from a directory without a `pubspec.yaml` writes dartdev's cache (`.dart_tool/native_assets.yaml` plus an empty `native_assets/`) into that directory. Leg 3 of the retire tool then keeps the worktree, and the session has to delete the cache by hand before retiring.
+
+**Fix shape.** Treat a nested `.dart_tool/` as regenerable only when it holds nothing but that dartdev shape and no `pubspec.yaml` sits beside it. `vendor/.dart_tool/` and any nested package's cache stay precious.
+
+**Done when.** `retire_worktree_lib_test.dart` covers both sides: the dartdev-only shape is regenerable, and a `.dart_tool/` with any other file, or one next to a `pubspec.yaml`, is still kept.
+
+## OI-401 — Thin-day top-up: a generated day left with fewer than 3 exercises by injury filtering gets safe moves for its own muscles, then safe core (founder option b, 2026-10-23)
+
+- **Status**: OPEN
+- **Blocked on**: the v14 injury re-check (`docs/plans/2026-10-23-library-injury-recheck.md`) merging first (founder order 2026-10-23: tags, then this, then B2).
+- **Verified**: 2026-10-23 — `test/plan_generator/injury_floor_sweep_test.dart` over 1,728 single-injury plans (13,824 days, flag OFF): today 28 days have fewer than 3 exercises and none has 1; with the v14 tags, 44 do and 11 have exactly one (wrist, at home, beginner 5-day push day = Bodyweight Rear Delt Raise only; hip, at home, 3-day leg day = Sliding Leg Curl only).
+- **Identified**: 2026-10-23 · filed via mint_oi.sh from branch `library-injury-recheck`
+
+**Measured AFTER the v14 tags (2026-10-23, the same sweep, flag OFF):** singles 44 thin / 11 one-exercise / 0 empty (was 28 / 0 / 0); pairs of knee, shoulder, lower_back, wrist, elbow, hip (1,440 runs) 399 thin / 157 one-exercise / 4 empty (was 219 / 51 / 2); repeat phase (432 runs) 109 thin / 32 one-exercise / 0 empty (was 47 / 20 / 0). The 4 empty days are the week-2 leg day of a bodyweight build_muscle intermediate plan for knee+hip, knee+lower_back (both empty before) and lower_back+hip at 3 and 5 days (new: Deficit Reverse Lunge is now hip-tagged). The sweep's pairs gate holds `empty <= 4` (`kPairsEmptyBaseline`) until this lands, then 0.
+
+**The defect.** Injury filtering can leave a generated day with one or two exercises. `_cascadeFill` drops a slot when no safe candidate exists (the safe-omission rule), and nothing refills the day afterwards. A repeat phase also drops now-contraindicated pins with no refill (`exercise_selector.dart:994`).
+
+**Founder decision (2026-10-23, option b).** When a day ends up with fewer than 3 exercises, top it up with safe moves for that day's own muscles from a neighbouring movement type, then with safe core moves, then stop. Industry check given at the time: Fitbod sizes a session by duration and fills it with what remains.
+
+**Done when.** Its own plan, ×2 review and PR land. A behavioural sweep then shows 0 one-exercise days and no unsafe pick, for single injuries, pairs and repeat phases. B2's set budget counts the added moves.

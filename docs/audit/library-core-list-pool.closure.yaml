@@ -204,8 +204,9 @@ findings:
 
   - id: CARVEOUT-E173-E127
     title: "E173 Decline Sit Up / E127 Reverse Hyper +lower_back sit inside the 13-B 'sit-up family + hip machines stay safe' carve-out"
-    terminal_state: blocked_on_user
-    reason: "Founder confirms the two tags (applied per the 2026-10-22 decision naming all five) or reverts them; revert is one line in scripts/data/library_injury_additions_v13.json (diagnose c2d5e8)."
+    terminal_state: closed_in_commit
+    commit: 220808e9
+    verification: "Founder 2026-10-23: keep both tags. Closed in docs/audit/library-injury-recheck.closure.yaml (same id); the v14 table carries them."
 
   # ── B-pass (docs/reviews/library-batch-b-bpass.md) ──────────────
   - id: BPASS-F1

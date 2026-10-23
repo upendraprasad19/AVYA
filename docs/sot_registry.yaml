@@ -11393,8 +11393,10 @@ concepts:
       empty-[] strength rows (hinges/rows/overhead/loaded-core) + deepens 2 under-tagged
       rows (GHD Sit Up +lower_back, Good Morning +hamstring), clinically-nuanced (tag the
       provocative pattern; keep the controlled/machine/rehab variant safe → no injured user
-      loses a whole movement category). Founder carve-outs: carries + crunch/sit-up family +
-      hip machines stay safe; Goblet Press is the one shoulder-safe overhead press. Tokens
+      loses a whole movement category). 13-B founder carve-outs, ALL SUPERSEDED by the v14
+      paragraph below (the crunch/sit-up family and hip machines are tagged now; Goblet
+      Press is shoulder-tagged): carries + crunch/sit-up family + hip machines stay safe;
+      Goblet Press is the one shoulder-safe overhead press. Tokens
       stay closed to the 9-token InjuryVocab set. NOT a cloud column (excluded from migration
       074) → no prod re-apply. Recurrence of e1a7c4 / a1f6c3.
       v14 injury re-check (d30de7, founder 2026-10-23): the founder REJECTED the 13-B
@@ -11412,7 +11414,7 @@ concepts:
         notes: idempotent putAll re-seeds the new tags into exerciseBox
       - file: lib/shared/repositories/plan_engine/injury_substitutes.dart
         method: curated-sub coherence — removed Front Raise (now shoulder-tagged) + stale Wall Sit (knee)
-        notes: Goblet Press retained as the sole shoulder-safe overhead-press sub
+        notes: 13-B kept Goblet Press as the sole shoulder-safe overhead-press sub; v14 tagged it shoulder, so no shoulder-safe overhead press remains in the list
       - file: scripts/add_library_core_fields_v13.js
         method: addInjuryTags — UNIONs scripts/data/library_injury_additions_v13.json into injury_contraindications (sorted, canonical tokens only)
         notes: B1 Task 1b (c2d5e8, founder 2026-10-22) — E061 +knee, E070 +shoulder +elbow, E121 +wrist +shoulder, E127 +lower_back, E173 +lower_back; re-seeded by SeedService v13; behavioural proof test/contracts/injury_safety_tags_v13_behavioral_test.dart
