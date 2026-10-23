@@ -10,8 +10,11 @@
 // (one entry per shipped id). New keys go after the last existing key; a key
 // already present is rewritten in place, so the script is IDEMPOTENT. It
 // REFUSES a table that misses a shipped id or names an id the library lacks.
-// Existing keys are never touched: test/contracts/exercise_library_frozen_reference_test.dart
-// fails if any of them changes.
+// Existing keys are never touched, with ONE exception: the five safety-direction
+// tags in scripts/data/library_injury_additions_v13.json (Task 1b, founder
+// decision 2026-10-22) are UNIONED into injury_contraindications, never
+// removing a tag, and the result is sorted. test/contracts/exercise_library_frozen_reference_test.dart
+// fails if any other existing key changes.
 //
 // Before writing, it checks that re-serialising the UNCHANGED rows reproduces
 // the shipped bytes; if not, the formatter is wrong and nothing is written.
@@ -21,6 +24,24 @@ const path = require('path');
 
 const FILE = path.join(__dirname, '..', 'assets', 'data', 'exercise_library.json');
 const TABLE = path.join(__dirname, 'data', 'library_core_fields_v13.json');
+const INJURY_ADDITIONS = path.join(__dirname, 'data', 'library_injury_additions_v13.json');
+// InjuryVocab.canonicalTokens (lib/core/utils/injury_vocab.dart).
+const INJURY_TOKENS = new Set([
+  'ankle', 'elbow', 'hamstring', 'hip', 'knee', 'lower_back', 'neck', 'shoulder', 'wrist',
+]);
+
+function addInjuryTags(rows) {
+  const additions = JSON.parse(fs.readFileSync(INJURY_ADDITIONS, 'utf8')).additions;
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  for (const [id, tokens] of Object.entries(additions)) {
+    const row = byId.get(id);
+    if (!row) throw new Error(`injury addition names an unknown id: ${id}`);
+    const bad = tokens.filter((t) => !INJURY_TOKENS.has(t));
+    if (bad.length) throw new Error(`${id}: non-canonical injury token(s) ${bad}`);
+    row.injury_contraindications = [...new Set([...row.injury_contraindications, ...tokens])].sort();
+  }
+  return rows;
+}
 
 // Same layout as repair_exercise_library_v12.js:writeLibrary — 2-space indent,
 // key order kept, no trailing newline, and met_value / cal_per_set_est always
@@ -49,7 +70,7 @@ function main() {
   if (missing.length || extra.length) {
     throw new Error(`table/library id mismatch: missing ${missing}, extra ${extra}`);
   }
-  const out = rows.map((r) => ({ ...r, ...table[r.id] }));
+  const out = addInjuryTags(rows.map((r) => ({ ...r, ...table[r.id] })));
   fs.writeFileSync(FILE, format(out));
   const after = fs.readFileSync(FILE, 'utf8');
   console.log(`file ${before === after ? 'unchanged' : 'rewritten'} (${out.length} rows)`);

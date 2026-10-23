@@ -4722,7 +4722,8 @@
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
-      "ankle"
+      "ankle",
+      "knee"
     ],
     "is_bilateral": true,
     "cns_demand": 1,
@@ -5435,6 +5436,8 @@
     "source": "",
     "is_active": true,
     "injury_contraindications": [
+      "elbow",
+      "shoulder",
       "wrist"
     ],
     "is_bilateral": true,
@@ -9268,7 +9271,9 @@
     "source": "",
     "is_active": true,
     "injury_contraindications": [
-      "lower_back"
+      "lower_back",
+      "shoulder",
+      "wrist"
     ],
     "is_bilateral": false,
     "cns_demand": 3,
@@ -9724,7 +9729,9 @@
     "indian_alternative": "",
     "source": "",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "lower_back"
+    ],
     "is_bilateral": true,
     "cns_demand": 2,
     "target_focus": [
@@ -12955,7 +12962,9 @@
     "indian_alternative": "",
     "source": "",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "lower_back"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [

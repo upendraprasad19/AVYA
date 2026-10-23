@@ -4,8 +4,12 @@
 // key's value changes or disappears. It replaces a `git show <sha>:` comparison,
 // which CI's depth-1 checkout cannot run (.github/workflows/test.yml:128).
 //
-// Re-record only in a commit whose diagnose doc names each changed id:
-//   RECORD_LIBRARY_REFERENCE=1 flutter test test/contracts/exercise_library_frozen_reference_test.dart
+// Re-record only in a commit whose diagnose doc names each changed id, and only
+// those ids — each is re-hashed over its RECORDED key set, so keys added later
+// (v13's core-list fields) never enter the reference:
+//   RECORD_LIBRARY_REFERENCE_IDS=E061,E070 flutter test test/contracts/exercise_library_frozen_reference_test.dart
+// RECORD_LIBRARY_REFERENCE=1 re-records every row over its CURRENT keys; it was
+// used once, on the pre-B1 tree.
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
@@ -35,9 +39,23 @@ void main() {
       File(_fixturePath).writeAsStringSync(
           '${const JsonEncoder.withIndent('  ').convert(out)}\n');
     }
+    final byId = {for (final r in rows) r['id'] as String: r};
+    final recordIds = Platform.environment['RECORD_LIBRARY_REFERENCE_IDS'];
+    if (recordIds != null && recordIds.isNotEmpty) {
+      final ref = jsonDecode(File(_fixturePath).readAsStringSync())
+          as Map<String, dynamic>;
+      for (final id in recordIds.split(',').map((s) => s.trim())) {
+        final entry = ref[id] as Map<String, dynamic>?;
+        final row = byId[id];
+        if (entry == null || row == null) fail('unknown id $id');
+        final keys = (entry['keys'] as List).cast<String>();
+        entry['sha256'] = _rowHash(row, keys);
+      }
+      File(_fixturePath).writeAsStringSync(
+          '${const JsonEncoder.withIndent('  ').convert(ref)}\n');
+    }
     final ref = jsonDecode(File(_fixturePath).readAsStringSync())
         as Map<String, dynamic>;
-    final byId = {for (final r in rows) r['id'] as String: r};
     final bad = <String>[];
     for (final e in ref.entries) {
       final row = byId[e.key];

@@ -11391,6 +11391,9 @@ concepts:
       - file: lib/shared/repositories/plan_engine/injury_substitutes.dart
         method: curated-sub coherence — removed Front Raise (now shoulder-tagged) + stale Wall Sit (knee)
         notes: Goblet Press retained as the sole shoulder-safe overhead-press sub
+      - file: scripts/add_library_core_fields_v13.js
+        method: addInjuryTags — UNIONs scripts/data/library_injury_additions_v13.json into injury_contraindications (sorted, canonical tokens only)
+        notes: B1 Task 1b (c2d5e8, founder 2026-10-22) — E061 +knee, E070 +shoulder +elbow, E121 +wrist +shoulder, E127 +lower_back, E173 +lower_back; re-seeded by SeedService v13; behavioural proof test/contracts/injury_safety_tags_v13_behavioral_test.dart
     readers:
       - file: lib/shared/repositories/exercise_repository.dart
         method: queryV4 injury filter (:335-345, match :340)

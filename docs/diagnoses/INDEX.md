@@ -18,6 +18,10 @@ Re-run: `dart run scripts/build_bug_index.dart`
 - 2026-10-22 b7d3e1 — On 136 of the 292 bundled library rows every text field from met_value to source sat one column to the right. The app showed a number as the breathing cue (suppressed by a guard, so the section simply…
 - 2026-07-19 e1a7c4 — 9 exercises E252-E260 (Wall Sit, Bodyweight Good Morning, Doorframe Curl, Towel Row, Negative Pull Up, Glute Kickback, Dumbbell Calf Raise, Split Squat, Incline Dumbbell Press) used a DIFFERENT…
 
+### exercise_injury_tags (2 bugs)
+- 2026-10-22 c2d5e8 — Five library rows were missing a safety-direction injury tag, so the queryV4 injury filter could hand them to a user with that injury: Renegade Row (E121) to a shoulder- or wrist-injured user, Running…
+- 2026-07-19 f4c1e8 — The always-on queryV4 injury filter (exercise_repository.dart:335-345) excludes an exercise for an injured user ONLY when the exercise's injury_contraindications list CONTAINS the user's injury token;…
+
 ### payment_record_failed_alert — every captured payment that a writer cannot record pages the founder. (1 bugs)
 - 2026-10-21 c3e7a1 — A CAPTURED Razorpay payment whose amount matches no plan price answered 400 in both payment writers and wrote no subscriptions row and no alert. The usual cause is a promo code deleted or its…
 
@@ -941,9 +945,6 @@ rather than a Hive box. (1 bugs)
 ### program_week_projection (1 bugs)
 - 2026-07-21 c9f4a2 — `user_progress.current_week` is a dead constant. Every writer sets the literal `1` (user_repository.dart:136, onboarding_provider.dart:473/786, graduation_screen.dart:673, pro_phase_advance.dart:107,…
 
-### exercise_injury_tags (1 bugs)
-- 2026-07-19 f4c1e8 — The always-on queryV4 injury filter (exercise_repository.dart:335-345) excludes an exercise for an injured user ONLY when the exercise's injury_contraindications list CONTAINS the user's injury token;…
-
 ### universal_pool_fallback (1 bugs)
 - 2026-07-19 c3f9b2 — The V4 last-resort fallback pool `universalPoolV4` (attempt-5 of the cascade) had duplicate + wrong-pattern entries: horizontal_pull = ['Inverted Row','TRX Row', 'Inverted Row','Dead Bug'] (Inverted…
 
@@ -1640,6 +1641,7 @@ rather than a Hive box. (1 bugs)
 |---|---|---|---|---|
 | 2026-10-22 | b1c4e7 | The equipment capability floor (OI-89) did not apply on the two pick paths that resolve an exercise by NAME and bypass queryV4: the attempt-5 universal pool and repeat-phase pins. A shoulder-injured… | equipment_capability_floor | test/contracts/universal_pool_capability_behavioral_test.dart |
 | 2026-10-22 | 46fc99 | Seven bundled library rows duplicated a kept twin: the same movement under a second name, usually with the same drawing. E241 Close-Grip Bench Press / E016 Close Grip Bench Press, E240 Overhead Cable… | exercise_library_schema | test/contracts/exercise_library_merge_contract_test.dart |
+| 2026-10-22 | c2d5e8 | Five library rows were missing a safety-direction injury tag, so the queryV4 injury filter could hand them to a user with that injury: Renegade Row (E121) to a shoulder- or wrist-injured user, Running… | exercise_injury_tags | test/contracts/injury_safety_tags_v13_behavioral_test.dart |
 | 2026-10-22 | 2390f5 | E172 Dumbbell Side Bend, a core row, carried target_focus ["Lats"] and nothing else, so queryV4's target-muscle filter never offered it to a Core slot: a Phase-1 home_dumbbells Core/isolation query… | exercise_library_schema | test/contracts/library_label_typo_behavioral_test.dart |
 | 2026-10-22 | e7f118 | On 19 paired exercise plates the sheet's START panel showed where the rep ENDS and the END panel where it starts: Pike Push Up opened head-down, Pull Up opened with the chin over the bar (founder… | exercise_library_schema | test/contracts/exercise_plate_swap_record_test.dart |
 | 2026-10-22 | b7d3e1 | On 136 of the 292 bundled library rows every text field from met_value to source sat one column to the right. The app showed a number as the breathing cue (suppressed by a guard, so the section simply… | exercise_library_schema | test/contracts/exercise_library_text_shape_contract_test.dart |
