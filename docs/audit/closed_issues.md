@@ -5630,6 +5630,34 @@ Fix: same plan as OI-370. The name gets its own line with no line limit and the 
 
 How closed: (1) all nine `.claude/settings.json` hook commands resolve the checkout root (git toplevel holding the script, else `CLAUDE_PROJECT_DIR`, else `.`) and `cd "$r" || exit 1` before `dart run`; (2) `git_safety_hook.dart`'s plan-review precheck resolves its root through the pure `precheckRoot` instead of the payload cwd; (3) `supabase/functions/.dart_tool/` joins `regenerableIgnoredPaths` as one exact entry. Transcript audit: 253 Bash calls ran from a subdirectory across 19 transcripts; no raw git landed through the gap. Plan `docs/plans/hook-cwd-fail-open.md`.
 
+## OI-380 — Train: the expanded day row shows 'N sets 0 reps X kg' for distance-type exercises
+
+- **Status**: CLOSED · 2026-10-22 · branch `cardio-duration-distance` · the commit carrying `closes-oi: OI-380`
+- **Blocked on**: — (resolved)
+- **Verified**: 2026-10-22 - by behavioural tests on the branch (listed in the closing note); not yet on a device
+- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `observations-a12-web`
+
+`lib/features/train/screens/train/expanded_exercises.dart:78-96` has branches for timed, cardio, weight and reps-only, but a distance-type exercise falls through to the weight/reps branch and shows `N sets · 0 reps · X kg`. Found by the round-1 exposure review of `docs/plans/train-coach-log-refresh.md` (R1B-10).
+
+To do: a distance branch (`distance_km`, with time if present), using the shared set-count helper from that batch.
+
+**CLOSED 2026-10-22 (`cardio-duration-distance`, OI-389 Batch 1a, plan `docs/plans/cardio-duration-distance.md` rev 12, record `docs/plan-reviews/cardio-duration-distance.md`, ledger `docs/audit/cardio-duration-distance.closure.yaml`, diagnose `e7240a`).** `exerciseLogDetail` (`lib/features/train/utils/exercise_log_detail.dart`) has a distance branch through `cardioDistanceDetail`: `1 set · 40 m · 40.0 kg`, `1 set · 1.2 km · 40.0 kg`, a reps-rule row `4 sets · 40 reps · 40.0 kg`; a zero part is omitted. Tests T4, T23 in `test/contracts/cardio_duration_distance_writer_to_reader_test.dart`; mutant M20 red.
+
+## OI-382 — WorkoutWriteService.logExercise accepts a negative durationSec (only weight and reps are validated), so a negative duration can reach an exlog row
+
+- **Status**: CLOSED · 2026-10-22 · branch `cardio-duration-distance` · the commit carrying `closes-oi: OI-382`
+- **Blocked on**: — (resolved)
+- **Verified**: 2026-10-22 - by behavioural tests on the branch (listed in the closing note); not yet on a device
+- **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `observations-a12-web`
+
+`WorkoutWriteService.logExercise` (`lib/core/services/workout_write_service.dart:119-121`) validates only `weightKg >= 0` and `reps >= 0`; a set with a negative `durationSec` is written to the exlog row. `markCompleted` does reject a negative `durationSec` (`fail('durationSec must be >= 0')`). Found by the round-4 ground-truth review of `docs/plans/train-coach-log-refresh.md` (probe-verified). The coach chat path can produce it from a model-emitted draft; the edit sheet will filter digits only after that batch.
+
+Note: the `train-coach-log-refresh` behavioural test for "sets saved, day not marked done" uses exactly this gap as its seam (a timed set with `durationSecs: -100`). Fixing this OI moves that test to another `markCompleted` failure seam (said in the test comment).
+
+To do: validate `durationSec >= 0` (and `distanceKm >= 0`) in `logExercise` alongside weight and reps; a writer test.
+
+**CLOSED 2026-10-22 (`cardio-duration-distance`, OI-389 Batch 1a, diagnose `e7240a`).** `logExercise` and `editLog` (per set, after the `sets_detail` translation; a legacy top-level total bounded × the set count) refuse a duration outside 0..21600 s or a km outside 0..300 with `WriteResult.invalid('duration_out_of_range' | 'distance_out_of_range')`, reading the RAW values; `validateSetInputs` blocks LOG at 360 MIN / 21600 SEC / 300 KM. The chat-card fixture that used the gap (`badPlank`) now pairs a valid 60 s set with the filtered -100 s set (T22). Tests T18 in `test/contracts/cardio_duration_distance_writer_to_reader_test.dart`; mutants M18, M19, M29, M42 red.
+
 ## OI-390 — Coach and Home say 'You skip Sunday workouts 100% of the time' for a rest day: getDayOfWeekCompletionRates returns 0 for a weekday with nothing scheduled and the day-of-week pattern reads it as 0% completion
 
 - **Status**: CLOSED · 2026-10-23 · branch `dow-skip-rate` · the commit carrying `closes-oi: OI-390`

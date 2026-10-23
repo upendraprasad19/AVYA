@@ -47,24 +47,6 @@ class StatsGrid extends ConsumerWidget {
     );
   }
 
-  /// Derive display unit from exercise logging type.
-  static String _unitForLoggingType(String loggingType) {
-    switch (loggingType) {
-      case 'weight_reps':
-      case 'weighted_bodyweight':
-        return 'kg';
-      case 'bodyweight_reps':
-        return 'reps';
-      case 'timed':
-        return 's';
-      case 'cardio':
-      case 'distance':
-        return 'km';
-      default:
-        return 'kg';
-    }
-  }
-
   /// Build adaptive grid from the PR map — adapts to 1-4 exercises.
   /// Keys may be standard lift names (bench, squat) or actual exercise names.
   Widget _buildDynamicGrid(Map<String, _PRData> prs) {
@@ -189,10 +171,13 @@ class StatsGrid extends ConsumerWidget {
     // Build a dynamic map using exercise names as keys, with correct unit
     final result = <String, _PRData>{};
     for (final pr in top4) {
+      // OI-389: the PR's own formatted value and unit — the old
+      // per-type unit table printed an 1800 s cardio PR as "1800 km".
       result[pr.exerciseName] = _PRData(
         current: pr.bestValue,
         previous: 0,
-        unit: _unitForLoggingType(pr.loggingType),
+        unit: pr.unit,
+        display: pr.formattedValue,
       );
     }
     return result;
@@ -342,10 +327,17 @@ class StatsGrid extends ConsumerWidget {
 class _PRData {
   final double current;
   final double previous;
-  final String unit; // kg, reps, s, km
+  final String unit; // kg, reps, sec, km
+
+  /// OI-389: the full value text when it comes from `ExercisePR.formattedValue`
+  /// (all-exercise fallback); null for the key-lift grid (kg numbers).
+  final String? display;
 
   const _PRData(
-      {required this.current, required this.previous, this.unit = 'kg'});
+      {required this.current,
+      required this.previous,
+      this.unit = 'kg',
+      this.display});
 
   String get changeText {
     if (current <= 0) return 'No data yet';
@@ -382,7 +374,7 @@ class _StatCard extends StatelessWidget {
     return _StatCard(
       label: label,
       value: pr.current > 0
-          ? '${pr.current.toStringAsFixed(0)} ${pr.unit}'
+          ? (pr.display ?? '${pr.current.toStringAsFixed(0)} ${pr.unit}')
           : '—',
       change: pr.changeText,
       changeColor: pr.changeColor,

@@ -443,6 +443,10 @@ class LoggingTypeRepairMigrator {
     Map<String, dynamic> row,
     String stored,
   ) {
+    // OI-389 (W16): a stored cardio / distance row is left alone. Its shape
+    // (minutes, no weight, reps cleared) reads as `timed` to the guess below,
+    // and `timed` would clear its km. 1a now writes custom cardio rows.
+    if (stored == 'cardio' || stored == 'distance') return false;
     final reps = (row['reps_completed'] as num?)?.toInt() ?? 0;
     final weight = (row['weight_kg'] as num?)?.toDouble() ?? 0.0;
     final dur = (row['duration_seconds'] as num?)?.toInt() ?? 0;

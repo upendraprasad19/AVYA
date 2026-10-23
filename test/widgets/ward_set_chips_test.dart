@@ -120,4 +120,27 @@ void main() {
       expect(find.byType(Text), findsNothing);
     });
   });
+
+  // OI-389 T4b / T11 / T29: cardio and distance chips read decimal minutes,
+  // metres / km, and the reps a reps-rule set kept; zero parts are omitted.
+  testWidgets('cardio / distance chips: minutes, km, reps (OI-389)',
+      (tester) async {
+    await _pump(
+      tester,
+      const Column(children: [
+        WardSetChips(loggingType: 'cardio', perSetBreakdown: [
+          WardSetChip(durationSeconds: 1800),
+          WardSetChip(durationSeconds: 1200, distanceKm: 5),
+          WardSetChip(durationSeconds: 15, distanceKm: 2),
+        ]),
+        WardSetChips(loggingType: 'distance', perSetBreakdown: [
+          WardSetChip(reps: 40, weightKg: 40),
+        ]),
+      ]),
+    );
+    expect(find.text('30 min'), findsOneWidget);
+    expect(find.text('20 min · 5.0 km'), findsOneWidget);
+    expect(find.text('15s · 2.0 km'), findsOneWidget);
+    expect(find.text('40 reps · 40.0 kg'), findsOneWidget);
+  });
 }

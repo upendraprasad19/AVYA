@@ -13,10 +13,15 @@ class WriteResult {
   final String? logKey;
   final String? errorMessage;
 
+  /// OI-389: a stable machine code for a refusal the user can fix (see
+  /// [WriteResult.invalid]). Null for success and for unexpected failures.
+  final String? code;
+
   const WriteResult({
     required this.success,
     this.logKey,
     this.errorMessage,
+    this.code,
   });
 
   factory WriteResult.ok(String logKey) =>
@@ -24,6 +29,12 @@ class WriteResult {
 
   factory WriteResult.fail(String message) =>
       WriteResult(success: false, errorMessage: message);
+
+  /// OI-389 / OI-382: the input broke a bound, e.g. a set over 6 hours or
+  /// 300 km. [code] is one of `duration_out_of_range` /
+  /// `distance_out_of_range`; UI maps it to copy, never shows it raw.
+  factory WriteResult.invalid(String code, String message) =>
+      WriteResult(success: false, errorMessage: message, code: code);
 
   /// Sentinel result used when [saveMeal] is called after state was already
   /// cleared (e.g. double-tap on the SAVE MEAL button). The UI should show
@@ -36,7 +47,7 @@ class WriteResult {
 
   @override
   String toString() =>
-      'WriteResult(success=$success, logKey=$logKey, error=$errorMessage)';
+      'WriteResult(success=$success, logKey=$logKey, error=$errorMessage, code=$code)';
 }
 
 /// Source identifier for telemetry + future per-source policy.
@@ -110,18 +121,48 @@ class ExerciseSet {
   final int reps;              // 0 for timed exercises
   final int? durationSec;      // null for non-timed; populated for plank/cardio
   final int? loggedAtMs;       // millisecondsSinceEpoch — used for 60s dedup window
+  /// OI-389: per-set distance for `cardio` / `distance` sets. Kept raw here so
+  /// the writer can refuse a negative value (OI-382); [fromMap], the
+  /// normaliser and `exerciseSetFromInput` store a value <= 0 as null, so 0.0
+  /// and "not entered" never differ in dedup or on the push.
+  final double? distanceKm;
 
   const ExerciseSet({
     required this.weightKg,
     required this.reps,
     this.durationSec,
     this.loggedAtMs,
+    this.distanceKm,
   });
+
+  /// A km that means something: null for absent, zero or negative.
+  static double? canonicalKm(double? km) =>
+      (km != null && km > 0) ? km : null;
+
+  /// The one way a writer rebuilds a set (OI-389 U1): a hand copy that lists
+  /// the fields by name silently drops any field added later (6e1b45).
+  ExerciseSet copyWith({
+    double? weightKg,
+    int? reps,
+    int? durationSec,
+    int? loggedAtMs,
+    double? distanceKm,
+    bool clearDuration = false,
+    bool clearDistance = false,
+  }) =>
+      ExerciseSet(
+        weightKg: weightKg ?? this.weightKg,
+        reps: reps ?? this.reps,
+        durationSec: clearDuration ? null : (durationSec ?? this.durationSec),
+        loggedAtMs: loggedAtMs ?? this.loggedAtMs,
+        distanceKm: clearDistance ? null : (distanceKm ?? this.distanceKm),
+      );
 
   Map<String, dynamic> toMap() => {
         'weight_kg': weightKg,
         'reps': reps,
         if (durationSec != null) 'duration_sec': durationSec,
+        if (distanceKm != null) 'distance_km': distanceKm,
         'logged_at_ms': loggedAtMs ?? DateTime.now().millisecondsSinceEpoch,
       };
 
@@ -137,20 +178,25 @@ class ExerciseSet {
   /// null → next persist wrote sets without duration → Train day card
   /// rendered "N sets · 0s" via the WardSetChips fallback (perSetBreakdown
   /// effectively empty of usable duration data).
+  ///
+  /// OI-389: also reads per-set `distance_km` (written by [toMap] and by the
+  /// restore writer, `sync_workout.dart`).
   factory ExerciseSet.fromMap(Map<dynamic, dynamic> m) => ExerciseSet(
         weightKg: (m['weight_kg'] as num?)?.toDouble() ?? 0.0,
         reps: (m['reps'] as num?)?.toInt() ?? 0,
         durationSec: (m['duration_sec'] as num?)?.toInt() ??
             (m['duration_seconds'] as num?)?.toInt(),
         loggedAtMs: (m['logged_at_ms'] as num?)?.toInt(),
+        distanceKm: canonicalKm((m['distance_km'] as num?)?.toDouble()),
       );
 
-  /// True if this set is a (weightKg, reps) duplicate of [other]
-  /// logged within the dedup window (default 60s).
+  /// True if this set is a (weightKg, reps, duration, distance) duplicate of
+  /// [other] logged within the dedup window (default 60s).
   bool isDuplicateWithin(ExerciseSet other, {int windowMs = 60000}) {
     if (weightKg != other.weightKg) return false;
     if (reps != other.reps) return false;
     if (durationSec != other.durationSec) return false;
+    if (distanceKm != other.distanceKm) return false;
     final a = loggedAtMs ?? 0;
     final b = other.loggedAtMs ?? 0;
     return (a - b).abs() <= windowMs;
