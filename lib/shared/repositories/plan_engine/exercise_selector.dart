@@ -5,6 +5,7 @@ import 'package:icanbefitter/core/services/sync_flags.dart';
 import 'package:icanbefitter/core/utils/equipment_vocab.dart';
 
 import '../exercise_repository.dart';
+import 'equipment_capability.dart';
 import 'injury_substitutes.dart';
 import 'models.dart';
 import 'training_history_analyzer.dart';
@@ -502,11 +503,14 @@ class ExerciseSelector {
     // and the new rows go on the END.
     //
     // This is not stylistic. att5 does NOT check equipment_tier -- it resolves a
-    // pool name through repo.search and applies only exclusions, injuries and
-    // (since OI-89) capability. Capability is null ABOVE the bodyweight tier by
-    // decision 1, so for a gym-tier user NOTHING here filters on equipment: the
-    // first pool entry that is not already picked simply wins. Reordering
-    // therefore silently changes what those users are prescribed.
+    // pool name through repo.search and applies capability, exclusions and
+    // injuries. (Corrected B1 Task 1: OI-89 wrote "since OI-89 capability" here,
+    // but the check lived only in the cascade_tracer mirror until B1 Task 1.)
+    // Capability is non-null at EVERY tier since OI-144, so the first pool entry
+    // the user can PERFORM wins; with the floor switched off
+    // (`disable_equipment_capability_floor`) capability is null and the first
+    // unpicked entry wins outright. Either way the ORDER decides the pick, so
+    // reordering silently changes what users are prescribed.
     //
     // The B-pass caught this batch doing exactly that: an earlier draft promoted
     // `Dip (Parallel Bars)` to the head of elbow_extension, and `parallel bars`
@@ -679,9 +683,13 @@ class ExerciseSelector {
   /// derived the way [pickV4] does — a fresh B-variant fill when `slotsB != null`,
   /// else `B == A` (:557-566) — never a collapse.
   ///
-  /// Because this bypasses [pickV4], it re-applies the two HARD constraints
-  /// (safety + explicit-lack) queryV4 attempts 1-4 enforce — but NOT the soft
-  /// equipment-TIER match:
+  /// Because this bypasses [pickV4], it re-applies the three HARD constraints
+  /// (capability + explicit-lack + safety) queryV4 attempts 1-4 enforce — but
+  /// NOT the soft equipment-TIER match:
+  ///  - equipment capability (B1 Task 1) — `EquipmentCapability.canOfferInPicker`
+  ///    against [capability]: a library row must be performable; a user-authored
+  ///    custom with no recorded equipment is kept, one that records kit the
+  ///    user lacks is dropped. Null [capability] = do not enforce.
   ///  - equipment-exclusion    (exercise_repository.dart:282-285) — the user's
   ///    explicit `equipment_exclusions` (items they lack); a HARD constraint the
   ///    cascade keeps even at att4.
@@ -741,8 +749,9 @@ class ExerciseSelector {
         customsCache ??= exerciseRepo.getCustomExercises();
 
     // Resolve a pinned NAME list → built exercises, re-applying the HARD filters the
-    // cascade (queryV4 att1-4) enforces: equipment-EXCLUSION + UNGATED injury. Tier
-    // is NOT re-applied (soft/att4-relaxed; the caller guarantees same-tier). A name
+    // cascade (queryV4 att1-4) enforces: capability + equipment-EXCLUSION + UNGATED
+    // injury. Tier is NOT re-applied (soft/att4-relaxed; the caller guarantees
+    // same-tier). A name
     // absent from BOTH the library and the user's customs is dropped.
     List<PlannedExercise> resolve(List<String> names) {
       final picked = <PlannedExercise>[];
@@ -762,6 +771,15 @@ class ExerciseSelector {
           }
         }
         if (row == null) continue; // absent library + custom → drop the pin.
+        // 0. capability (B1 Task 1). A user-authored custom with no recorded
+        // equipment is kept (the creation sheet stores `[]`); a custom that
+        // records kit the user lacks is dropped like a library row.
+        if (capability != null &&
+            !EquipmentCapability.canOfferInPicker(
+                row['equipment_needed'], capability,
+                isCustom: isCustom)) {
+          continue;
+        }
         // 1. equipment-exclusion (exercise_repository.dart:282-285).
         if (exclusions.isNotEmpty &&
             EquipmentVocab.fromProfile(row['equipment_needed'])
@@ -1184,6 +1202,17 @@ class ExerciseSelector {
           (m) => (m['name'] as String?)?.toLowerCase() == name.toLowerCase(),
           orElse: () => matches.first,
         );
+        // B1 Task 1: the pool picks by NAME, so the capability floor queryV4
+        // applies at attempts 1-4 must be applied here too. OI-89 put this
+        // check in the diagnostic mirror (cascade_tracer) only, which hid the
+        // leak from the scorecard. Same order as the mirror: capability, then
+        // exclusions, then injury. A placeholder (no library row) builds
+        // `['bodyweight']` below and stays allowed.
+        if (capability != null &&
+            !EquipmentCapability.canPerform(
+                resolved['equipment_needed'], capability)) {
+          continue;
+        }
         // ⑥ B1 (mirror the U2 injury skip): the att5 pool bypasses queryV4, so
         // it must apply the equipment-exclusion drop itself — else a pool move
         // requiring excluded equipment (e.g. Pull Up ['pull-up bar'] for a

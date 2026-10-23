@@ -385,9 +385,11 @@ class PlanEngineFlags {
   /// the capability fix each close a hole the other cannot reach.
   ///
   /// **Fail-OPEN on the way in, fail-CLOSED on the way through:**
-  /// `resolveCapability` returns null (do not enforce) on a Hive error, an
-  /// unknown tier, or any tier above `bodyweight` — so a storage fault can never
-  /// empty a plan. `EquipmentCapability.canPerform` then fails CLOSED on an
+  /// `resolveCapability` returns null (do not enforce) only when this flag is
+  /// off or Hive is unreadable — so a storage fault can never empty a plan. It
+  /// answers at EVERY tier since OI-144, and an unknown tier resolves to
+  /// `bodyweight`. Since B1 Task 1 the attempt-5 pool and repeat pins check it
+  /// too (they had been unchecked; only the diagnostic mirror did). `EquipmentCapability.canPerform` then fails CLOSED on an
   /// unreadable requirement, which is why warm-up and finisher moves had to have
   /// `equipmentNeeded` POPULATED before this could be switched on at all.
   ///
