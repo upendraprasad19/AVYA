@@ -1,0 +1,173 @@
+# Closure ledger - oi341-piece-b2b-client (OI-341 Piece B2b: the client half of a stacked trial purchase. Plan
+# docs/plans/oi341-piece-b2b-client.md v3, x2 converged.)
+# Gate 40. One terminal_state per finding; no `deferred:` key.
+# `commit:` on a closed_in_commit row names the branch state until the batch commit exists.
+
+batch: oi341-piece-b2b-client
+plan_review_record: docs/plan-reviews/oi341-piece-b2b-client.md
+total_findings: 28
+closed_count: 28
+
+findings:
+  # ── build ──────────────────────────────────────────────────────────────────
+  - id: B2B-ESTIMATE
+    title: "estimatePaidEndDate replaces _computeEndDate at all four sites (optimistic write, poll and verify fallbacks, retry fallbackEndDate); plan days from the later of now and stacks_after, local ISO"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2b-client (uncommitted)"
+    verification: "test/core/payment_end_estimate_test.dart T1 (literal goldens, local and UTC inputs, 1 ms boundary); wiring pin P4; mutants M1-M5 and M29 red"
+
+  - id: B2B-PARSE
+    title: "parseStacksAfter: an offset-carrying timestamp (offset after the time part) within 3650 days (10 years), else null; total"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2b-client (uncommitted)"
+    verification: "T2 accepts the server shape 2026-11-16T10:00:00.123456+00:00, Z, +05:30 and space forms; refuses offset-less, date-only, non-strings, now+3651 days; mutants M6-M8 red"
+
+  - id: B2B-RECORD
+    title: "PendingCheckouts: {plan, stacksAfter} recorded per ORDER ID (at most 4), resolved by handlePaymentConfirmed before its first await; cleared only on user change (round 2 P2-1)"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2b-client (uncommitted)"
+    verification: "T6 (an earlier order confirmed after a later checkout reads its own record; unknown/null/empty id = today's behaviour; eviction; clear); pins P2, P3, P5; mutants M12-M15, M27, M28, M31, M32 red"
+
+  - id: B2B-PLAN-PAIRING
+    title: "latent hardening: today handlePaymentConfirmed and _pollAndActivate read _pendingPlan after awaits, so a later openCheckout could pair a payment with another checkout's plan; now resolved from the order's own record"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2b-client (uncommitted)"
+    verification: "no observed defect (feat commit, no diagnose-doc); covered by T6 and pin P2 (mutant M27 re-reading _pendingPlan in _pollAndActivate red)"
+
+  - id: B2B-UNMATCHED-EVENT
+    title: "razorpay_checkout_record_unmatched logEvent when records exist but none matches the confirmed order id (no ids logged)"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2b-client (uncommitted)"
+    notes: "observability for live step 4b (native UPI paths can omit the order id); presence in razorpay_service.dart handlePaymentConfirmed"
+
+  - id: B2B-DESCRIPTION
+    title: "checkoutDescription: today's 'PRO Monthly/Yearly Plan', plus the founder's notice when stacks_after is present; buildRazorpayCheckoutOptions takes an optional stacksAfter"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2b-client (uncommitted)"
+    verification: "T4, T5 (the whole map is today's without stacksAfter; with it only the description differs); razorpay_checkout_options_test unchanged and green; mutants M11, M32 red"
+
+  - id: B2B-409
+    title: "classifyOrderConflict on both 409 paths; a trial row's 409 (door shut) keeps _handleAlreadyProResponse's heal, shows PaymentCopy.trialUpgradeUnavailable and calls onFailure"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2b-client (uncommitted)"
+    verification: "T3; pins P1, P6; razorpay_409_already_pro_test repointed (not loosened) to the classifier literal plus the catch path's classifyOrderConflict call; mutants M9, M10, M25, M26, M30, M33 red"
+
+  - id: B2B-PAYWALL-LINE
+    title: "SubscriptionInfoData.isReferralTrial and the paywall line under the price cards (copy only)"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2b-client (uncommitted)"
+    verification: "test/widgets/paywall_trial_stacking_notice_test.dart on the real PaywallSheet (W1 + three W2 states, one per testWidgets); mutants M19-M21 red. M19 first SURVIVED: W2 looped three states in one testWidgets, and the reused ProviderScope kept its first override, so two states were never tested; split one state per testWidgets (known class, memory feedback_own_pins_mirror_mutants_and_stripped_source) and re-run red"
+
+  - id: B2B-EST-SEAL
+    title: "estSealDate (services/est_seal_date.dart): min(expiresAt - planDays, now); ddMmYy moved; lowercase plan compare kept"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2b-client (uncommitted)"
+    verification: "test/features/profile/est_seal_date_test.dart; mutants M22-M24 red"
+
+  - id: B2B-PLAN-PARITY
+    title: "kReferralTrialPlan (lib/core/constants/subscription_plans.dart) pinned to REFERRAL_TRIAL_PLAN and to the latest private.grant_referral_days insert"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2b-client (uncommitted)"
+    verification: "test/contracts/referral_trial_plan_parity_test.dart (comment-stripped, last CREATE OR REPLACE wins); mutants M17, M18 red"
+
+  - id: B2B-DOCS
+    title: "registry concept trial_stacking_client_estimate + door reader + 12 re-derived line ranges + A7 note; naming conventions; payment.md rule 9; functions and nested CLAUDE.md rows; OI-341 Blocked-on (B2a merged not deployed, B2b built); OI-348 A13; B2a plan section 4 step 5 amended and 9.x superseded; B2a ledger B2B-NEXT"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2b-client (uncommitted)"
+    notes: "pre-commit gate loop validates the registry and the ledgers"
+
+  # ── B-pass fixes (docs/reviews/oi341-piece-b2b-client-bpass.md) ─────────────
+  - id: B2B-BP-OUTER-GUARD
+    title: "seat B P2-1: the live 409 path's outer `if (conflict != OrderConflict.other)` was unpinned (a mutant to `== alreadyPro` hid the trial branch)"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2b-client (uncommitted)"
+    verification: "wiring pin P7 (the outer guard directly before the trial branch); mutant N1 red"
+
+  - id: B2B-BP-COPY-SELECTION
+    title: "seat B P2-2: the trial copy selection and text were asserted nowhere; extracted to pure orderConflictMessage"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2b-client (uncommitted)"
+    verification: "T7 (exact trial text; today's 'already PRO' line byte-for-byte); pin P8; mutants N2, N3, N7 red"
+
+  - id: B2B-BP-FALLTHROUGH
+    title: "seat B P3-8: a trial 409 whose heal threw fell through to the server's 'You're already a PRO member.'; now the trial copy, via pure isTrialRefusal"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2b-client (uncommitted)"
+    verification: "T8; pin P7. Mutant N4 (inline condition) first SURVIVED: the pin checked the use of trialRefusal, not its computation; moved into isTrialRefusal, then N4a, N4b, N4c red"
+
+  - id: B2B-BP-RECORD-USER
+    title: "seat B P3-6: an order record could be written after an account switch during the order await; now only for the same signed-in user"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2b-client (uncommitted)"
+    verification: "pin P9; mutant N5 red"
+
+  - id: B2B-BP-SEAL-LOCAL
+    title: "seat B P3-5: the EST seal printed a UTC calendar date for a UTC-stored expiry (a purchase between 00:00 and 05:30 IST showed the previous day) while the clamp printed a local date; both branches now print the local date"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2b-client (uncommitted)"
+    verification: "est_seal_date_test 'a UTC expiry prints the LOCAL date'; mutant N6 red (IST)"
+
+  - id: B2B-BP-GOLDENS-ZONE
+    title: "seat B P3-4: the estimate goldens depended on TZ=Asia/Kolkata"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2b-client (uncommitted)"
+    verification: "instants built from local wall-clock times; the estimate and seal tests pass under TZ=Asia/Kolkata and TZ=UTC"
+
+  - id: B2B-BP-CLAMP
+    title: "seat A P3-5: the 400-day stacks_after clamp could refuse a legitimate long trial (referral credits are uncapped) and drop the checkout notice; widened to 3650 days"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2b-client (uncommitted)"
+    verification: "T2 (now+3649 accepted, now+3651 refused); mutants M8, N8 red"
+
+  - id: B2B-BP-DOCS
+    title: "seat A P2-1 + P3-1..P3-4, P3-6: B2a plan order (lines 17-20, 45, step 4 relabelled 4a/4b, 607) and ledger title; registry ranges re-derived on the final code (handlePaymentConfirmed 508-649, _pollAndActivate 749-961, retry 963-1053, logSleep inline 550, :733 prose); the runbook's poll-fallback cite by symbol; 'overwrites on every path' softened; plan P4 three calls; dartdoc [endLabel]"
+    terminal_state: closed_in_commit
+    commit: "oi341-piece-b2b-client (uncommitted)"
+    notes: "B2a plan lines 79 and 198 cite razorpay_service lines inside its section 1, which is dated 'verified at b8385b6c'; left as dated facts"
+
+  - id: B2B-BP-TIMING
+    title: "seat B P3-3: the unmatched fallback reads _pendingPlan once before the first await instead of after it (and the poll no longer re-reads it)"
+    terminal_state: verified_clean
+    evidence: "same output for the plain no-record case (base now, same string shape); differs only in the racy cases, where the new reading is the order's own plan (B2B-PLAN-PAIRING)"
+
+  - id: B2B-BP-PAYWALL-DOOR
+    title: "seat B P3-7: the paywall line does not read the server door"
+    terminal_state: verified_clean
+    evidence: "by design (plan section 0): the merge happens only after step 4a opens the door; after a door rollback the trial 409 copy explains (R4)"
+
+  # ── verified clean ─────────────────────────────────────────────────────────
+  - id: B2B-REFERRAL-COPY
+    title: "client referral copy stating the old reward timing"
+    terminal_state: verified_clean
+    evidence: "ReferralCopy.inviteDescription says 'a week after their first payment', true once the door is open; no client string states ~14 days (plan F15)"
+
+  - id: B2B-TRIAL-SEAL-BACKCOMPUTE
+    title: "a referral_trial plan back-computes 30 days in the EST seal"
+    terminal_state: verified_clean
+    evidence: "today's behaviour, unchanged by this batch (plan 2.5); approximate display only, no entitlement"
+
+  # ── founder ────────────────────────────────────────────────────────────────
+  - id: B2B-MERGE-AFTER-DOOR
+    title: "merge B2b only in the live session, after B2a step 4a opens the door"
+    terminal_state: blocked_on_user
+    reason: "the merge and every live step need the founder's go (CLAUDE.md 4.3); order fixed 2026-10-21"
+
+  - id: B2B-LIVE-4B
+    title: "live step 4b: the stacked trial purchase through the new web client, then code off, refunds, cancelled rows"
+    terminal_state: blocked_on_user
+    reason: "real payment and live row corrections, each its own founder go"
+
+  - id: B2B-DEVICE-CHECK
+    title: "OI-348 A13: the paywall line, the checkout description, the stacked end and the EST date on the phone build"
+    terminal_state: blocked_on_user
+    reason: "the founder's device check after the AAB with the live key ID"
+
+  - id: B2B-BUILD-APK
+    title: "/build-apk with the live key ID in the VPS .env, then one phone purchase"
+    terminal_state: blocked_on_user
+    reason: "the founder initiates APK builds and copies the live key ID"
+
+  - id: B2B-COPY-SIGNOFF
+    title: "founder sign-off on PaymentCopy.trialUpgradeUnavailable ('Your free PRO days are still running. You can subscribe once they end.')"
+    terminal_state: blocked_on_user
+    reason: "user-visible copy (oi341-purchase-in-trial.md:63 assigns copy review to Piece B); the Wardroom read is done; the wording is the founder's call"

@@ -1201,7 +1201,7 @@ concepts:
           (phases_2_to_12, ai_coach_unlimited, progress_photos) through
           verifyFromServer() with a 5-min cache TTL.
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 365-422
+        line_range: 369-427
         method: SubscriptionInfoNotifier / subscriptionInfoProvider
         semantic: pass-through
         fields_read: [isPro, expiresAt, plan, isVerifying]
@@ -1209,7 +1209,7 @@ concepts:
           Canonical reactive reader; lives in profile_provider.dart (NOT a
           separate file). Build-method callsites must use ref.watch on this
           provider so payment success rebuilds them. Razorpay invalidates it via
-          razorpay_service.dart:668 (_invalidateSubscriptionProviders). Its build() MUST use proStateSnapshot(),
+          razorpay_service.dart:733 (_invalidateSubscriptionProviders). Its build() MUST use proStateSnapshot(),
           never isPro() — pinned by subscription_cqrs_behavioral_test group E.
       - file: lib/features/home/providers/home_provider.dart
         line_range: 512-517
@@ -3742,7 +3742,7 @@ concepts:
           splash-time verify doesn't downgrade an optimistic isPro=true
           before the webhook lands.
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 343-385
+        line_range: 344-390
         method: subscriptionInfoProvider (isVerifying field)
         semantic: flag-check
         fields_read: [isPaymentInFlight]
@@ -3752,7 +3752,7 @@ concepts:
           dossier shows "CONFIRMING ⟳ AWAITING WEBHOOK CONFIRMATION"
           copy.
       - file: lib/core/services/razorpay_service.dart
-        line_range: 455-579
+        line_range: 508-649
         method: RazorpayService.handlePaymentConfirmed
         semantic: pass-through
         fields_read: []
@@ -3764,7 +3764,7 @@ concepts:
           fires. OI-182: the post-checkout session refresh that runs BEFORE
           this is now bounded (SupabaseService.refreshTimeout).
       - file: lib/core/services/razorpay_service.dart
-        line_range: 688-905
+        line_range: 749-961
         method: RazorpayService._pollAndActivate (Phase 1 polls + Phase 2 verify, both bounded; clears the grace on success)
         semantic: pass-through
         fields_read: []
@@ -3775,7 +3775,7 @@ concepts:
           telemetry POST per attempt. The exhausted-phases budget
           (kActivationPhasesBudget) is what kPaymentGraceWindow is derived from.
       - file: lib/core/services/razorpay_service.dart
-        line_range: 908-981
+        line_range: 963-1053
         method: RazorpayService._scheduleVerificationRetry
         semantic: pass-through
         fields_read: []
@@ -5434,7 +5434,7 @@ concepts:
           entry always wins (the block no-ops when a row already exists).
           Consumed by the readiness sheet's SLEEP axis via sleepAxisFromHours.
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 540-548
+        line_range: 545-553
         method: logSleep
         # Was `BiometricNotifier.logSleep`. check_sot_registry_parity's
         # _extractSymbol takes the FIRST identifier of a dotted value, so the
@@ -5449,7 +5449,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 418-475
+        line_range: 423-480
         method: BiometricNotifier.build (biometricProvider)
         semantic: latest
         fields_read: [type, sleep_hours, date]
@@ -5528,7 +5528,7 @@ concepts:
     sync_methods: [_syncSleepLogs]
     restore_methods: [_restoreSleepLogs]
     ist_sites:
-      - { file: lib/features/profile/providers/profile_provider.dart, line: 540, fn: logSleep }
+      - { file: lib/features/profile/providers/profile_provider.dart, line: 550, fn: logSleep }
     telemetry:
       failure_op_types: [upsert_sleep_log]
     class_constraints: |
@@ -5620,7 +5620,7 @@ concepts:
           defect) — closed with a dedicated assertion, verified to fail on
           that same mutation before being accepted.
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 37-42
+        line_range: 38-43
         method: UserProfileNotifier.build
         semantic: pass-through
         fields_read: [full_name]
@@ -5745,7 +5745,7 @@ concepts:
       public URL is identical after a re-upload; the stored `?v=` is what moves.
     writers:
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 109-250
+        line_range: 110-251
         method: uploadAvatar / uploadBanner
         notes: |
           Store ProfileImageUrl.versioned(publicUrl, version: now-millis) into
@@ -7519,7 +7519,7 @@ concepts:
           WeightLogNotifier.logWeight (line 779) calls HealthWriteService.logWeight
           + invalidates the canonical provider set.
       - file: lib/features/profile/providers/profile_provider.dart
-        line_range: 418-510
+        line_range: 423-515
         method: BiometricNotifier (sleep) + logSleep
         semantic: latest
         fields_read: [type, sleep_hours, date]
@@ -8645,7 +8645,7 @@ concepts:
       - { file: lib/core/services/workout_schedule_service.dart, line: 177, method: "WorkoutScheduleService._() constructor → _registerLifecycle()", notes: "All state in workoutBox / userBox; reset hook is a no-op placeholder." }
       - { file: lib/core/services/usage_counter_service.dart, line: 13, method: "UsageCounterService._() constructor → _registerLifecycle()", notes: "Counters live in per-user userBox; reset hook is a no-op placeholder." }
       - { file: lib/core/services/ai_service.dart, line: 54, method: "AiService._() constructor → _registerLifecycle()", notes: "Reset closes + drops the cached http.Client via dispose()." }
-      - { file: lib/core/services/razorpay_service.dart, line: 30, method: "RazorpayService._() constructor → _registerLifecycle()", notes: "Reset nulls _onSuccess / _onFailure / _pendingPlan." }
+      - { file: lib/core/services/razorpay_service.dart, line: 30, method: "RazorpayService._() constructor → _registerLifecycle()", notes: "Reset nulls _onSuccess / _onFailure / _pendingPlan and clears _pendingCheckouts (OI-341 B2b)." }
       - { file: lib/core/services/seed_service.dart, line: 36, method: "SeedService._() constructor → _registerLifecycle()", notes: "Seeds are shared-box; reset is a no-op placeholder." }
       - { file: lib/core/services/prediction_service.dart, line: 1, method: "PredictionService._() constructor → SingletonLifecycleRegistry.register", notes: "Added 2026-09-26 (B-pass round 2, single-owner-a): PredictionService was the one singleton in this family never registered, so a device-level account switch never cleared PredictionAttemptGate's in-flight Future — the new account's own tap could join the old account's stale request via PredictionAttemptGate.run's `if (running != null) return running;`. Reset hook (`_onUserChanged`) calls `_gate.clearInFlightForAccountChange()`, which nulls `_inFlight` so the next call starts fresh rather than joining." }
     reader_manifest_complete: true
@@ -12113,7 +12113,7 @@ concepts:
         fields_read: [enabled]
         notes: self-heals via NotificationPrefsRepository.read() when pushed without `extra`.
       - file: lib/features/profile/screens/profile/screen.dart
-        line_range: 191-212
+        line_range: 192-213
         method: _loadNotificationPreferences
         semantic: display-only
         fields_read: [enabled]
@@ -14290,7 +14290,7 @@ concepts:
       upendra@icanbefitter.com.
     writers:
       - file: lib/features/profile/screens/profile/screen.dart
-        line_range: 305
+        line_range: 299
         method: build (contact card)
         semantic: display-only
       - file: lib/features/profile/screens/delete_account_screen.dart
@@ -16479,8 +16479,59 @@ concepts:
         line_range: 585-754
         method: the insert branch (OFF-branch mismatch alarm)
         semantic: detect-door-on-order-recorded-off
-        notes: Same alarm as the webhook. The client reader of stacks_after (the paid-end estimate) is Piece B2b.
+        notes: Same alarm as the webhook. The client reader of stacks_after is trial_stacking_client_estimate (Piece B2b).
+      - file: lib/core/services/razorpay_service.dart
+        line_range: 1-9999
+        method: RazorpayService.openCheckout (parseStacksAfter, the per-order record; the 409 classification)
+        semantic: estimate-input-only
+        notes: Reads stacks_after into a local estimate and the checkout description, and current_plan of a 409 to tell a trial user's refusal from "already PRO". Concept trial_stacking_client_estimate.
     regression_test: supabase/functions/create-razorpay-order/index_test.ts
+  - concept: trial_stacking_client_estimate
+    domain: subscription
+    behavioral_test_path: test/core/payment_end_estimate_test.dart
+    behavioral_test_path_paywall: test/widgets/paywall_trial_stacking_notice_test.dart
+    behavioral_test_path_seal: test/features/profile/est_seal_date_test.dart
+    description: |
+      OI-341 Piece B2b (plan docs/plans/oi341-piece-b2b-client.md). The client
+      half of a stacked trial purchase. openCheckout parses the door's
+      stacks_after (parseStacksAfter: an offset-carrying timestamp within 3650
+      days (10 years), else null) and records {plan, stacksAfter} under the ORDER ID
+      (PendingCheckouts, at most 4, cleared on user change). The confirmation
+      resolves its own order's record before its first await
+      (resolveConfirmedCheckout; no record = today's behaviour) and every local
+      end-date estimate is estimatePaidEndDate (plan days from the later of now
+      and stacks_after). The server's stored end_date replaces the estimate once
+      the poll, verify-payment, a verify retry (60 s / 5 min / 15 min),
+      refreshFromSupabase or the next launch reads it; until then the estimate
+      stands. A 409 already_pro whose current_plan is referral_trial (the
+      door SHUT) keeps today's state heal and shows
+      PaymentCopy.trialUpgradeUnavailable instead of "already PRO". The paywall
+      shows PaymentCopy.trialStackingNotice when SubscriptionInfoData
+      .isReferralTrial; the EST seal never shows a future date (estSealDate).
+      kReferralTrialPlan is pinned to the server by
+      test/contracts/referral_trial_plan_parity_test.dart.
+    writers:
+      - file: lib/core/services/razorpay_service.dart
+        line_range: 1-9999
+        method: RazorpayService.openCheckout (record) and handlePaymentConfirmed (optimistic estimate)
+        notes: The record per order id; the optimistic writeSubscriptionState expiry; the poll / verify / retry fallbacks close over the captured values.
+      - file: lib/core/services/payment_end_estimate.dart
+        line_range: 1-9999
+        method: parseStacksAfter / estimatePaidEndDate / PendingCheckouts / resolveConfirmedCheckout / classifyOrderConflict / checkoutDescription
+        notes: Pure decisions, behaviourally tested.
+    readers:
+      - file: lib/shared/widgets/paywall_sheet.dart
+        line_range: 1-9999
+        method: _PaywallSheetState.build (the stacking line)
+        semantic: display
+        notes: ref.watch(subscriptionInfoProvider.select((s) => s.isReferralTrial)); copy only, gates nothing.
+      - file: lib/features/profile/services/est_seal_date.dart
+        line_range: 1-9999
+        method: estSealDate
+        semantic: display
+        notes: min(expiresAt - planDays, now); called by ProfileScreen._estSealDate.
+    regression_test: test/core/payment_end_estimate_test.dart
+    regression_test_wiring: test/contracts/trial_stacking_client_wiring_test.dart  # presence-only source pins of the razorpay_service wiring
   - concept: workout_surface_invalidation
     domain: workout
     behavioral_test_path: test/contracts/coach_chat_log_train_refresh_behavioral_test.dart

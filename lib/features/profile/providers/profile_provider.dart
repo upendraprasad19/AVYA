@@ -5,6 +5,7 @@ import 'package:flutter/painting.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:icanbefitter/core/constants/subscription_plans.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/health_sync_service.dart';
 import 'package:icanbefitter/core/services/health_write_service.dart';
@@ -359,6 +360,10 @@ class SubscriptionInfoData {
     this.expiresAt,
     this.isVerifying = false,
   });
+
+  /// OI-341 Piece B2b — the user is on a referral trial (copy only: the
+  /// paywall's stacking line; it gates nothing).
+  bool get isReferralTrial => isPro && plan == kReferralTrialPlan;
 }
 
 class SubscriptionInfoNotifier extends Notifier<SubscriptionInfoData> {

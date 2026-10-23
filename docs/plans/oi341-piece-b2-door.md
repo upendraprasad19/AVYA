@@ -14,10 +14,10 @@ Tier: **catastrophic** (payment writers + a new door on `create-razorpay-order`)
   shut. The unit is therefore SPLIT:
   - **B2a (this plan, branch `oi341-piece-b2-door`):** server only. The door, the switch-mismatch alarm, the switch log
     lines, the webhook alert timeout, the replay window for `payment.captured`, both flips, and the reconcile queries.
-  - **B2b (its own plan and branch, written after B2a's door is ON):** the client. The paywall line, the checkout
+  - **B2b (its own plan and branch; AMENDED 2026-10-22: built BEFORE the live session, merged between steps 4a and 4b, see section 4 step 5):** the client. The paywall line, the checkout
     description, `estimatePaidEndDate` + the retry closure, the trial-409 copy, the EST clamp, `isReferralTrial`, and
     the copy constants. Old sections 2.5-2.7 move there verbatim as its starting point (section 9). It merges to
-    `main` (web + APK) only AFTER B2a step 4, so the line is true from its first deploy.
+    `main` (web + APK) only AFTER B2a step 4a opens the door, so the line is true from its first deploy.
 - Round 3 (on v3): 0 P0, 2 P1, 5 P2, 3 P3 (section 10). Both P1s were in the parts v3 had just added (the notes-based
   alarm, step 3(b)); v4 replaces the alarm with a database check, which a client cannot forge.
 - Round 4 (on v4): **0 P0, 0 P1**, 4 P2, P3s; all plan-text, folded into v4.1 (section 11, `mechanical_only`).
@@ -42,7 +42,8 @@ Tier: **catastrophic** (payment writers + a new door on `create-razorpay-order`)
     that are refunded;
   - the purchases are made on the **web app** (app.icanbefitter.com), assumed to carry the live key ID; no build is
     needed for B2a;
-  - order: B2a live steps, refunds and corrections, then B2b, then the next AAB. Before that `/build-apk`, the VPS `.env`
+  - order (AMENDED 2026-10-22, founder order of 2026-10-21): B2a steps 1-3, 4a (door), the B2b merge, 4b (the stacked
+    purchase through the new web client), refunds and corrections, then the next AAB. Before that `/build-apk`, the VPS `.env`
     `RAZORPAY_KEY_ID` must be the LIVE key ID (today it is `rzp_test_`, and the client opens checkout with its own key,
     `app_constants.dart:193`, so a test key against a live order would fail). Added to OI-348.
 - Testing phase: the app is not live, and every account is a tester (CLAUDE.md section 1).
@@ -421,14 +422,15 @@ when `!alreadyProcessed`.
      inserted=true`, and the row's `end = start + 30`. That proves the WEBHOOK ON path.
    - (b) The founder pauses the app's live webhook in the Razorpay dashboard, and a SECOND, DISTINCT FREE
      tester who has never paid makes one purchase. The 3(a) tester is now PRO and would get 409, and the poll's
-     5-minute same-plan fallback (`razorpay_service.dart` ~:755-770) must not match the 3(a) row.
+     5-minute same-plan fallback (`razorpay_service.dart` `_pollAndActivate`, the `.eq('plan', fallbackPlan)` query; cited by symbol because B2b moved the lines) must not match the 3(a) row.
      - The client polls about 45 s, then calls verify-payment.
      - Pass: the verify-payment log shows `stacking_switch=on` and `stacking=on ... inserted=true`. That proves the
        VERIFY-PAYMENT ON path.
      - Then the webhook is re-enabled.
    - Run the reconcile queries (below): clean.
-4. **Open the door:** set `ENABLE_TRIAL_PURCHASE=true`, then **redeploy `create-razorpay-order` unchanged**. Then one
-   stacked purchase (90% code) by a TRIAL tester:
+4. **4a, open the door:** set `ENABLE_TRIAL_PURCHASE=true`, then **redeploy `create-razorpay-order` unchanged**. Then
+   **merge B2b** (its own founder go; the web app redeploys on the merge). **4b:** one stacked purchase (90% code) by a
+   TRIAL tester through the NEW web client (it shows the paywall line and the checkout notice):
    - the order response has `stacks_after` = the trial end;
    - the paid row's `end_date` = trial end + 30 days and `start_date` = the payment instant;
    - the trial row is unchanged;
@@ -436,12 +438,14 @@ when `!alreadyProcessed`.
 
    Reconcile queries: clean. Then the 90% code is deactivated, every step's payment is refunded, and the tester rows
    are cancelled (not deleted; step 0 (c), (d)), each with its go.
-5. **B2b** (the client) is planned, reviewed and merged after step 4, then `/build-apk` (founder) with the LIVE key ID
-   in the VPS `.env` (section 0; OI-348). Between steps 4 and
-   B2b, a trial tester on the current build can buy:
-   - the old client estimates `now + 30` until the server's stored end replaces it;
-   - its checkout description has no notice.
-   This is accepted in the testing phase, stated against founder decision 4.
+5. **B2b** (the client). AMENDED 2026-10-22 (founder order of 2026-10-21, recorded in
+   `docs/plans/oi341-piece-b2b-client.md` section 0): B2b is planned, reviewed and BUILT before this live session, and
+   NOT merged. Step 4 splits: **4a** opens the door (`ENABLE_TRIAL_PURCHASE=true`, redeploy `create-razorpay-order`);
+   then **B2b merges** (the web app redeploys on the merge); **4b** is the stacked trial purchase made through the NEW
+   web client, so one purchase proves the door and the client together; then the code off, refunds and cancelled rows
+   as above. Then `/build-apk` (founder) with the LIVE key ID in the VPS `.env` (section 0; OI-348) and one phone
+   purchase. B2b must never merge before 4a. Between 4a and the merge (minutes) a trial user on the old web client gets
+   the old `now + 30` estimate until the server's stored end replaces it, and no notice: accepted.
 
 **Rollback (round 1 P1-1).**
 - **Door rollback** (the normal one): unset `ENABLE_TRIAL_PURCHASE` and redeploy `create-razorpay-order`. Stacking
@@ -526,6 +530,13 @@ select id, source, severity, detected_at, context_json->>'payment_id' as payment
 
 ## 9. B2b starting point (moved from v2; its own plan, branch and x2 review after B2a step 4)
 
+> **SUPERSEDED 2026-10-22 by `docs/plans/oi341-piece-b2b-client.md` (v3, x2 converged).** Kept for history. Where
+> they differ the B2b plan wins: the trial 409 KEEPS `_handleAlreadyProResponse`'s state heal (only the message and
+> callback change); the copy is `PaymentCopy.trialUpgradeUnavailable` in `lib/core/copy/payment_copy.dart` (not
+> `kTrialUpgradeUnavailable` under `constants/`); `kReferralTrialPlan` lives in `lib/core/constants/subscription_plans.dart`;
+> the estimate is captured per ORDER ID, not in one `_pendingStacksAfter` field; and B2b is built BEFORE the live
+> session but merged only after step 4a (section 4 step 5).
+
 ### 9.1 Client (`razorpay_service.dart` + `payment_retry_attempt.dart`)
 
 - `_pendingStacksAfter` (`DateTime?`) is parsed from the 200 response's `stacks_after` (malformed parses to null).
@@ -595,7 +606,8 @@ select id, source, severity, detected_at, context_json->>'payment_id' as payment
 
 - Server keys are live; no test secret exists. Step 0 rewritten: live mode, one dedicated 90% code (0 (c)), refunds and
   row clean-up (0 (d)); no secret swap. Steps 1-4 reworded from "test mode" to live; step 1 now proves the web app's
-  checkout key matches. Order B2a live -> refunds -> B2b -> AAB with the live key ID in `.env` (section 0, OI-348).
+  checkout key matches. Order (amended 2026-10-22): B2a steps 1-3 -> 4a -> B2b merge -> 4b -> refunds -> AAB with the live key ID in `.env`
+  (section 0, OI-348).
 - No code, test or design change. The B-pass and hermes briefs include section 4 so this text is reviewed with the code.
 
 ## 13. B-pass and hermes dispositions (v4.2 -> v4.3, 2026-10-21)
