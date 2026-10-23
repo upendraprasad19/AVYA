@@ -5,6 +5,11 @@ import 'package:flutter_test/flutter_test.dart';
 ///
 /// ai-proxy/index.ts had no day-of-week injection in the system prompt,
 /// so Gemini guessed (called Sunday "Monday" + invented "100% skip" stat).
+///
+/// The "100% skip" stat was not invented: its writer was
+/// WorkoutRepository.getDayOfWeekCompletionRates (a weekday with nothing
+/// scheduled read as 0%), fixed by OI-390 (diagnose 132315). See
+/// test/contracts/day_of_week_completion_writer_to_reader_test.dart.
 void main() {
   test('ai-proxy injects IST day-of-week into system prompt', () {
     final source = File(

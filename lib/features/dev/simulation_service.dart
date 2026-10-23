@@ -212,6 +212,7 @@ class SimulationService {
     required WidgetRef ref,
     required int days,
     double adherence = 0.85,
+    Set<int> skipIsoWeekdays = const {},
     void Function(String line)? onProgress,
   }) async {
     final report = SimReport();
@@ -267,7 +268,7 @@ class SimulationService {
         // rank can never clear the SD1(7)/LS(14) streak gates.
         StreakProgressService.instance.refillIfNewWeek();
 
-        await _simulateDay(ref, cursor, adherence, report);
+        await _simulateDay(ref, cursor, adherence, report, skipIsoWeekdays);
 
         // Real phase-rollover path: PRO + expired → generate next phase.
         // Phase gen is local (plan generator + Hive) — no network in-loop.
@@ -348,11 +349,30 @@ class SimulationService {
 
   // ── Per-day simulation ────────────────────────────────────────────
 
+  /// OI-390 U6 — skip vs complete for one scheduled day. A non-empty
+  /// [skipIsoWeekdays] decides alone (skip iff the weekday is in it; the
+  /// streak-break window is ignored), so a seeded account gets an exact
+  /// weekday pattern. An empty set keeps the original rule.
+  @visibleForTesting
+  static bool simSkipsDay({
+    required int isoWeekday,
+    required Set<int> skipIsoWeekdays,
+    required bool inBreakWindow,
+    required double roll,
+    required double adherence,
+  }) {
+    if (skipIsoWeekdays.isNotEmpty) {
+      return skipIsoWeekdays.contains(isoWeekday);
+    }
+    return inBreakWindow || roll >= adherence;
+  }
+
   Future<void> _simulateDay(
     WidgetRef ref,
     DateTime day,
     double adherence,
     SimReport report,
+    Set<int> skipIsoWeekdays,
   ) async {
     final read = ref.read(workoutScheduleReadServiceProvider);
     final dateStr = istDateStr(day);
@@ -363,7 +383,16 @@ class SimulationService {
       final alreadyDone = (sched['status'] as String?) == 'completed';
       if (!alreadyDone) {
         final inBreak = _inStreakBreakWindow(ref, day);
-        final doWorkout = !inBreak && _rng.nextDouble() < adherence;
+        // Draw only where the old `!inBreak && roll < adherence` drew, so a
+        // run with an empty skip set stays byte-identical (OI-390 U6).
+        final roll = skipIsoWeekdays.isEmpty && !inBreak ? _rng.nextDouble() : 1.0;
+        final doWorkout = !simSkipsDay(
+          isoWeekday: DateTime.parse(dateStr).weekday,
+          skipIsoWeekdays: skipIsoWeekdays,
+          inBreakWindow: inBreak,
+          roll: roll,
+          adherence: adherence,
+        );
         if (doWorkout) {
           await _completeScheduledWorkout(ref, day, sched, report);
         } else {

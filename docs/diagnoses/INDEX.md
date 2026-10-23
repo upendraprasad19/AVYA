@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### day_of_week_completion — a weekday's completion counts only days that were due (classifyScheduleDay), and the coach is told a weekday is skipped only when it is genuinely singled out. (1 bugs)
+- 2026-10-23 "132315" — The coach's "Status check" reply told upendra "100% skip rate on Sunday workouts". Sunday is always a rest day on his plan. getDayOfWeekCompletionRates returned 0 for a weekday with nothing scheduled,…
+
 ### payment_record_failed_alert — every captured payment that a writer cannot record pages the founder. (1 bugs)
 - 2026-10-21 c3e7a1 — A CAPTURED Razorpay payment whose amount matches no plan price answered 400 in both payment writers and wrote no subscriptions row and no alert. The usual cause is a promo code deleted or its…
 
@@ -1630,6 +1633,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-10-23 | "132315" | The coach's "Status check" reply told upendra "100% skip rate on Sunday workouts". Sunday is always a rest day on his plan. getDayOfWeekCompletionRates returned 0 for a weekday with nothing scheduled,… | day_of_week_completion — a weekday's completion counts only days that were due (classifyScheduleDay), and the coach is told a weekday is skipped only when it is genuinely singled out. | test/contracts/day_of_week_completion_writer_to_reader_test.dart |
 | 2026-10-21 | c3e7a1 | A CAPTURED Razorpay payment whose amount matches no plan price answered 400 in both payment writers and wrote no subscriptions row and no alert. The usual cause is a promo code deleted or its… | payment_record_failed_alert — every captured payment that a writer cannot record pages the founder. | supabase/functions/razorpay-webhook/index_test.ts |
 | 2026-10-21 | e2a418 | Founder's A12 web walk 2026-10-21 (app.icanbefitter.com): today was already DONE on Train with two exercises logged in Active Workout. A workout logged from the coach chat (`CONFIRM · LOG WORKOUT` on… | workout_surface_invalidation — every coach write path refreshes the same workout surfaces through one helper. | test/contracts/coach_chat_log_train_refresh_behavioral_test.dart |
 | 2026-10-21 | 90a784 | Founder's A12 web walk 2026-10-21 (app.icanbefitter.com, ai_coach_interactions read-only): at 13:19:59 "log bench press" got "Roger. Logged. I need the specifics…" with nothing proposed or written… | coach_write_claim_wording — what the coach is taught about saving, and a log-only label of what it said. | supabase/functions/_shared/write_claim_prompt_test.ts |
