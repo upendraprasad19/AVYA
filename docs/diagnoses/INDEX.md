@@ -11,6 +11,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 - 2026-08-28 d3a8f5 — A user whose stored profile carries no `equipment_access` is treated as a DIFFERENT tier depending on which of 14 code paths reads it — `basic_gym` by six, `full_gym` by three, `home_dumbbells` by…
 - 2026-08-28 a9e3c7 — A home_dumbbells user is offered thirteen "I also have" chips in Profile — pull-up bar, kettlebell, bench, barbell and more — ticks one, is asked "Reschedule Workouts?", accepts, and receives a…
 
+### hive_field_name_exlog — a cardio / distance set's duration (seconds) and km survive every writer and every reader resolves them through WorkoutReadService. (1 bugs)
+- 2026-10-22 e7240a — A cardio exercise logged in the active workout (e.g. "Running (Treadmill)" 30 MIN 4 KM) was stored with 0 minutes and no km: `_normalizeSetsByLoggingType` zeroed `durationSec` for every non-`timed`…
+
 ### exercise_library_schema (5 bugs)
 - 2026-10-22 46fc99 — Seven bundled library rows duplicated a kept twin: the same movement under a second name, usually with the same drawing. E241 Close-Grip Bench Press / E016 Close Grip Bench Press, E240 Overhead Cable…
 - 2026-10-22 2390f5 — E172 Dumbbell Side Bend, a core row, carried target_focus ["Lats"] and nothing else, so queryV4's target-muscle filter never offered it to a Core slot: a Phase-1 home_dumbbells Core/isolation query…
@@ -1640,6 +1643,7 @@ rather than a Hive box. (1 bugs)
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
 | 2026-10-22 | b1c4e7 | The equipment capability floor (OI-89) did not apply on the two pick paths that resolve an exercise by NAME and bypass queryV4: the attempt-5 universal pool and repeat-phase pins. A shoulder-injured… | equipment_capability_floor | test/contracts/universal_pool_capability_behavioral_test.dart |
+| 2026-10-22 | e7240a | A cardio exercise logged in the active workout (e.g. "Running (Treadmill)" 30 MIN 4 KM) was stored with 0 minutes and no km: `_normalizeSetsByLoggingType` zeroed `durationSec` for every non-`timed`… | hive_field_name_exlog — a cardio / distance set's duration (seconds) and km survive every writer and every reader resolves them through WorkoutReadService. | test/contracts/cardio_duration_distance_writer_to_reader_test.dart |
 | 2026-10-22 | 46fc99 | Seven bundled library rows duplicated a kept twin: the same movement under a second name, usually with the same drawing. E241 Close-Grip Bench Press / E016 Close Grip Bench Press, E240 Overhead Cable… | exercise_library_schema | test/contracts/exercise_library_merge_contract_test.dart |
 | 2026-10-22 | c2d5e8 | Five library rows were missing a safety-direction injury tag, so the queryV4 injury filter could hand them to a user with that injury: Renegade Row (E121) to a shoulder- or wrist-injured user, Running… | exercise_injury_tags | test/contracts/injury_safety_tags_v13_behavioral_test.dart |
 | 2026-10-22 | 2390f5 | E172 Dumbbell Side Bend, a core row, carried target_focus ["Lats"] and nothing else, so queryV4's target-muscle filter never offered it to a Core slot: a Phase-1 home_dumbbells Core/isolation query… | exercise_library_schema | test/contracts/library_label_typo_behavioral_test.dart |

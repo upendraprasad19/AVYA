@@ -1804,3 +1804,22 @@ added, false of the flip being performed.
 - **Test shape:** run the REAL command strings as the harness does, from a subdirectory, under dash AND bash, with a stub `dart` on PATH recording cwd, argument and stdin; fixtures for a linked worktree, a nested repo without the script, a decoy `CLAUDE_PROJECT_DIR` and a non-repo directory, all under paths with spaces; one case runs the real guard and sees it block. Mutate the command string (relative form, `|| true`, `&&`, `</dev/null`, unquoted `$r`, common-dir root).
 - **Prior incidents:** the retirement half is the 5th "tool writes into a worktree, retirement refuses" instance, after f2a9c7, b4d7e9, a9c4f2 and the `.gate_failures.log` entry (no id of its own); d7b3e9 is the origin of the exact-match rule all of them were fixed under. The hook half is new.
 - **Regression test:** `test/scripts/claude_hooks_cwd_independent_test.dart`, `test/contracts/git_safety_hook_integration_test.dart` (precheck from a subdirectory), `test/scripts/retire_worktree_lib_test.dart`. Diagnose `8f3e35`.
+
+### 2.114 A per-type normaliser's else-branch silently claims every type added after it (NEW 2026-10-22)
+
+- **Telltale:** a value the user typed reads 0 or vanishes for ONE logging type while the others are fine, and the writer has a two-branch type switch (`if (type == 'timed') ... else ...`) whose else clears that field.
+- **Root-cause shape:** a normaliser written for one bug (a4c7d1: swap left logged sets in the old format) clears a field for "everything else"; a type that legitimately carries the field (cardio minutes, distance km) falls into the else and loses it on every save. The fix it was written for keeps working, so nothing looks broken in review.
+- **Fix pattern:** one table that names every type and what each keeps (`fieldsClearedFor` in `workout_write_service.dart`), read by every writer and the heal: never a second copy. The default case is the weight types, named.
+- **Test shape:** a writer → reader round-trip per type that asserts the field each type KEEPS, not only what it clears; mutate the table entry and watch the round-trip redden.
+- **Prior incidents:** a4c7d1 (the else-branch), `e7240a` (OI-389, the month of zeroed cardio).
+- **Regression test:** `test/contracts/cardio_duration_distance_writer_to_reader_test.dart` (T1, T3, T23).
+
+### 2.115 A lazy `.cast<Map<String, dynamic>>()` over a list read from Hive throws on first touch, and a catch makes the code dead (NEW 2026-10-22)
+
+- **Telltale:** a migrator or heal "never seems to do anything" on real devices, but its unit test (built with `Map<String, dynamic>` literals) passes.
+- **Root-cause shape:** Hive returns `Map<dynamic, dynamic>` for nested maps; `List.cast<T>()` is lazy and throws a `TypeError` when the first element is read; a surrounding `try/catch` (non-fatal by design) swallows it, so the loop ends on the first disk row with any element.
+- **Fix pattern:** convert with `Map<String, dynamic>.from(e)` when the code must run. When its current footprint must be kept (a live heal needs a kill switch first), keep the cast and pin the footprint.
+- **Test shape:** a fixture written as `<dynamic, dynamic>{...}` with nested `<dynamic, dynamic>` sets, the way Hive hands it back, never only typed literals.
+- **Prior incidents:** `e7240a` (`_healMismatchedExerciseLogs` dead on disk rows since written; live heal OI-394).
+- **Regression test:** `test/contracts/cardio_duration_distance_writer_to_reader_test.dart` (T10b).
+

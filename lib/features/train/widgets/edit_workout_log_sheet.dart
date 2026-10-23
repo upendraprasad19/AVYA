@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:icanbefitter/core/copy/set_log_copy.dart';
 import 'package:icanbefitter/core/services/workout_read_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
@@ -11,6 +12,7 @@ import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/features/train/providers/train_provider.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
+import 'package:icanbefitter/features/train/services/log_exercise_logic.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 /// Bottom sheet for editing the aggregate values of a completed workout's
@@ -90,185 +92,24 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
     if (_saving) return;
     setState(() => _saving = true);
 
+    // OI-389 U7: a row that is refused (a bound, or minutes that do not parse)
+    // is named, and the sheet stays open with the typed values instead of
+    // claiming "Workout log updated".
+    final failedNames = <String>[];
+    String? firstCode;
+    String? firstType;
+    String? firstRaw;
+    var savedCount = 0;
     try {
       for (final row in _rows) {
-        final updates = <String, dynamic>{};
-
-        if (row.hasPerSetData) {
-          // ── Per-set data path: recompute aggregates from individual sets ──
-          final setsDetail = <Map<String, dynamic>>[];
-          double maxWeight = 0;
-          int totalReps = 0;
-          int totalDuration = 0;
-          double totalDistance = 0;
-          double volumeKg = 0;
-          int bestSingleSetReps = 0;
-          int bestSingleSetDuration = 0;
-
-          for (int i = 0; i < row.setRows.length; i++) {
-            final setRow = row.setRows[i];
-            final reps = int.tryParse(setRow.repsCtrl.text) ?? 0;
-            final weight = double.tryParse(setRow.weightCtrl.text) ?? 0;
-            final duration = int.tryParse(setRow.durationCtrl.text) ?? 0;
-            final distance = double.tryParse(setRow.distanceCtrl.text) ?? 0;
-
-            final setMap = <String, dynamic>{
-              'set_number': i + 1,
-            };
-            if (weight > 0) setMap['weight_kg'] = weight;
-            if (reps > 0) setMap['reps'] = reps;
-            if (duration > 0) setMap['duration_seconds'] = duration;
-            if (distance > 0) setMap['distance_km'] = distance;
-
-            setsDetail.add(setMap);
-
-            // Aggregate
-            if (weight > maxWeight) maxWeight = weight;
-            totalReps += reps;
-            totalDuration += duration;
-            totalDistance += distance;
-            volumeKg += weight * reps;
-            if (reps > bestSingleSetReps) bestSingleSetReps = reps;
-            if (duration > bestSingleSetDuration) {
-              bestSingleSetDuration = duration;
-            }
-          }
-
-          final sets = row.setRows.length;
-
-          switch (row.loggingType) {
-            case 'weight_reps':
-              updates['sets_completed'] = sets;
-              updates['reps_completed'] = totalReps;
-              updates['weight_kg'] = maxWeight;
-              updates['volume_kg'] = volumeKg;
-              break;
-            case 'bodyweight_reps':
-              updates['sets_completed'] = sets;
-              updates['reps_completed'] = totalReps;
-              updates['volume_kg'] = 0.0;
-              break;
-            case 'weighted_bodyweight':
-              updates['sets_completed'] = sets;
-              updates['reps_completed'] = totalReps;
-              updates['weight_kg'] = maxWeight;
-              updates['volume_kg'] = volumeKg;
-              break;
-            case 'timed':
-              updates['sets_completed'] = sets;
-              updates['duration_seconds'] = totalDuration;
-              updates['volume_kg'] = 0.0;
-              break;
-            case 'cardio':
-              updates['duration_seconds'] = totalDuration;
-              updates['distance_km'] = totalDistance;
-              updates['volume_kg'] = 0.0;
-              break;
-            case 'distance':
-              updates['distance_km'] = totalDistance;
-              updates['weight_kg'] = maxWeight;
-              updates['volume_kg'] = 0.0;
-              break;
-            default:
-              updates['sets_completed'] = sets;
-              updates['reps_completed'] = totalReps;
-              updates['weight_kg'] = maxWeight;
-              updates['volume_kg'] = volumeKg;
-          }
-
-          // Unit 7 / OI-50 round-1 F5 — a RESTORED row can carry `sets[]`
-          // entries with no per-set durations alongside a real top-level
-          // total (`sync_workout.dart:766` writes the aggregate; `:792`
-          // only carries a per-set duration when the cloud row had one).
-          // The computed total is then 0, and writing it over the
-          // surviving aggregate is data loss — visibly so now that the
-          // receipt renders that aggregate: the user would watch the
-          // duration vanish the moment they saved an unrelated edit.
-          // Round-2: `!row.hadPerSetDuration` is load-bearing. Without it a
-          // row carrying BOTH per-set durations and a top-level total could
-          // never be cleared — the user zeroes every box, this guard drops the
-          // write, `editLog` merges (it does not replace), and the stale
-          // top-level value is read back forever.
-          if (totalDuration == 0 &&
-              row.hasAggregateDuration &&
-              !row.hadPerSetDuration) {
-            updates.remove('duration_seconds');
-          }
-
-          updates['sets_detail'] = setsDetail;
-          updates['best_single_set_reps'] = bestSingleSetReps;
-          updates['best_single_set_duration'] = bestSingleSetDuration;
-        } else {
-          // ── Legacy flattened path (old logs without sets_detail) ──
-          final sets = int.tryParse(row.setsCtrl.text) ?? 0;
-          final reps = int.tryParse(row.repsCtrl.text) ?? 0;
-          final weight = double.tryParse(row.weightCtrl.text) ?? 0;
-          final duration = int.tryParse(row.durationCtrl.text) ?? 0;
-          final distance = double.tryParse(row.distanceCtrl.text) ?? 0;
-
-          switch (row.loggingType) {
-            case 'weight_reps':
-              updates['sets_completed'] = sets;
-              updates['reps_completed'] = reps;
-              updates['weight_kg'] = weight;
-              updates['volume_kg'] = weight * reps;
-              break;
-            case 'bodyweight_reps':
-              updates['sets_completed'] = sets;
-              updates['reps_completed'] = reps;
-              updates['volume_kg'] = 0.0;
-              break;
-            case 'weighted_bodyweight':
-              updates['sets_completed'] = sets;
-              updates['reps_completed'] = reps;
-              updates['weight_kg'] = weight;
-              updates['volume_kg'] = weight * reps;
-              break;
-            case 'timed':
-              updates['sets_completed'] = sets;
-              updates['duration_seconds'] = duration;
-              updates['volume_kg'] = 0.0;
-              break;
-            case 'cardio':
-              updates['duration_seconds'] = duration;
-              updates['distance_km'] = distance;
-              updates['volume_kg'] = 0.0;
-              break;
-            case 'distance':
-              updates['distance_km'] = distance;
-              updates['weight_kg'] = weight;
-              updates['volume_kg'] = 0.0;
-              break;
-            default:
-              updates['sets_completed'] = sets;
-              updates['reps_completed'] = reps;
-              updates['weight_kg'] = weight;
-              updates['volume_kg'] = weight * reps;
-          }
-
-          // Unit 7 / OI-50 — never stamp a fabricated `sets_completed: 0`
-          // over a count that was simply ABSENT. `hasAggregateData` is
-          // false only when the row carried no set-count signal at all;
-          // combined with a still-blank box that means "unknown", not
-          // "zero". A user who deliberately types 0 leaves the text
-          // non-empty, so an explicit zero is still written.
-          if (!row.hasAggregateData && row.setsCtrl.text.trim().isEmpty) {
-            updates.remove('sets_completed');
-          }
-          if (!row.hasAggregateDuration &&
-              row.durationCtrl.text.trim().isEmpty) {
-            updates.remove('duration_seconds');
-          }
-          // NOTE (round-1 F5, scoped deliberately): `reps_completed`,
-          // `weight_kg` and `distance_km` are still written as 0 from an
-          // empty box on a row that never carried them. That is cosmetic,
-          // not data loss — unlike sets and duration, no OTHER key holds a
-          // surviving value for them (nothing reads a second source), so a
-          // fabricated 0 destroys nothing. Guarding sets + duration is the
-          // proportionate fix; widening to all five would add three more
-          // flags for no behavioural gain.
+        final built = editSheetUpdatesFor(row);
+        if (built.errorCode != null) {
+          failedNames.add(row.exerciseName);
+          firstCode ??= built.errorCode;
+          firstType ??= row.loggingType;
+          continue;
         }
-
+        final updates = built.updates;
         updates['edited_at'] = DateTime.now().toIso8601String();
 
         final result = await WorkoutWriteService.instance.editLog(
@@ -279,6 +120,14 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
         if (!result.success) {
           debugPrint(
               '[EditWorkoutLogSheet] editLog failed for ${row.logId}: ${result.errorMessage}');
+          failedNames.add(row.exerciseName);
+          if (firstCode == null && firstRaw == null) {
+            firstCode = result.code;
+            firstType = row.loggingType;
+            firstRaw = result.errorMessage;
+          }
+        } else {
+          savedCount++;
         }
       }
     } finally {
@@ -289,13 +138,33 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
 
     // Invalidate every provider the completion flow invalidates. Riverpod
     // batches these within the same frame. Service already fired
-    // syncWorkoutData + pushSnapshot fire-and-forget per row.
+    // syncWorkoutData + pushSnapshot fire-and-forget per row. Runs on a
+    // partial failure too, so the rows that did save show at once.
     ref.invalidate(currentPlanProvider);
     ref.invalidate(workoutStatsProvider);
     ref.invalidate(calendarWeekProvider);
     ref.invalidate(streakProvider);
     ref.invalidate(todayWorkoutProvider);
     ref.invalidate(allExercisePRsProvider);
+
+    if (failedNames.isNotEmpty) {
+      final text = savedCount == 0
+          ? toFailureCopy(firstCode,
+              loggingType: firstType ?? 'cardio', raw: firstRaw)
+          : partialSaveCopy(failedNames,
+              firstCode: firstCode, loggingType: firstType ?? 'cardio');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            text,
+            style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w700),
+          ),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppColors.card,
+        ),
+      );
+      return;
+    }
 
     // Capture the messenger before pop — context becomes invalid after.
     final messenger = ScaffoldMessenger.of(context);
@@ -560,7 +429,9 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
         ];
       case 'cardio':
         return [
-          Expanded(child: _compactField(setRow.durationCtrl)),
+          // OI-389 (D2): decimal minutes.
+          Expanded(
+              child: _compactField(setRow.durationCtrl, allowDecimal: true)),
           const SizedBox(width: 8),
           Expanded(
               child: _compactField(setRow.distanceCtrl, allowDecimal: true)),
@@ -663,19 +534,18 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
           ],
         );
       case 'cardio':
-        return Column(
+        // OI-389 (D2): the restored-row path is in decimal minutes too, and
+        // shows no seconds hint (`_buildDurationHint` reads the text as
+        // seconds: "90" would show "= 1m 30s").
+        return Row(
           children: [
-            Row(
-              children: [
-                Expanded(
-                    child: _numField(row.durationCtrl, 'Duration (s)')),
-                const SizedBox(width: 8),
-                Expanded(
-                    child: _numField(row.distanceCtrl, 'Distance (km)',
-                        allowDecimal: true)),
-              ],
-            ),
-            _buildDurationHint(row.durationCtrl),
+            Expanded(
+                child: _numField(row.durationCtrl, 'Duration (min)',
+                    allowDecimal: true)),
+            const SizedBox(width: 8),
+            Expanded(
+                child: _numField(row.distanceCtrl, 'Distance (km)',
+                    allowDecimal: true)),
           ],
         );
       case 'distance':
@@ -858,7 +728,13 @@ class EditLogSetRow {
   /// Bug 4c (6e1b45). Without this, modern WriteService rows with
   /// `duration_sec` per-set lose their duration when the edit sheet
   /// re-reads them.
-  factory EditLogSetRow.fromSetDetail(Map<String, dynamic> set) {
+  ///
+  /// OI-389 (D2): a `cardio` row's duration box holds decimal minutes
+  /// (750 s → "12.5", 30 s → "0.5"). A `distance` row keeps its hidden
+  /// duration box in seconds (its layout has no duration box), so a 120 s
+  /// distance set round-trips as 120 s.
+  factory EditLogSetRow.fromSetDetail(Map<String, dynamic> set,
+      {String loggingType = ''}) {
     final reps = (set['reps'] as num?)?.toInt() ?? 0;
     final weight = (set['weight_kg'] as num?)?.toDouble() ?? 0;
     final duration = (set['duration_sec'] as num?)?.toInt() ??
@@ -874,7 +750,11 @@ class EditLogSetRow {
       weightCtrl:
           TextEditingController(text: weight > 0 ? fmtDouble(weight) : ''),
       durationCtrl: TextEditingController(
-          text: duration > 0 ? duration.toString() : ''),
+          text: duration > 0
+              ? (loggingType == 'cardio'
+                  ? secondsToMinutesInput(duration)
+                  : duration.toString())
+              : ''),
       distanceCtrl: TextEditingController(
           text: distance > 0 ? fmtDouble(distance) : ''),
     );
@@ -936,6 +816,12 @@ class EditLogExerciseRow {
   /// top-level value is resurrected on the very next read — forever.
   final bool hadPerSetDuration;
 
+  /// OI-389 — the km twins of [hasAggregateDuration] / [hadPerSetDuration]:
+  /// the row carried a km total (per-set or top-level), and the ORIGINAL
+  /// per-set entries carried km.
+  final bool hasAggregateDistance;
+  final bool hadPerSetDistance;
+
   // Per-set rows (populated when per-set array exists on the log)
   final List<EditLogSetRow> setRows;
 
@@ -954,6 +840,8 @@ class EditLogExerciseRow {
     required this.hasAggregateData,
     required this.hasAggregateDuration,
     required this.hadPerSetDuration,
+    required this.hasAggregateDistance,
+    required this.hadPerSetDistance,
     required this.setRows,
     required this.setsCtrl,
     required this.repsCtrl,
@@ -994,13 +882,19 @@ class EditLogExerciseRow {
                     (s['duration_seconds'] as num?)?.toInt() ??
                     0)) >
                 0);
+    final hasAggregateDist = WorkoutReadService.aggregateDistanceKm(log) > 0;
+    final hadPerSetDist = setsListRaw is List &&
+        setsListRaw
+            .whereType<Map>()
+            .any((s) => ((s['distance_km'] as num?)?.toDouble() ?? 0) > 0);
 
     // Check if per-set data exists and is a non-empty list
     if (setsListRaw is List && setsListRaw.isNotEmpty) {
       final setRows = setsListRaw
           .whereType<Map>()
-          .map((s) =>
-              EditLogSetRow.fromSetDetail(Map<String, dynamic>.from(s)))
+          .map((s) => EditLogSetRow.fromSetDetail(
+              Map<String, dynamic>.from(s),
+              loggingType: type))
           .toList();
 
       if (setRows.isNotEmpty) {
@@ -1012,6 +906,8 @@ class EditLogExerciseRow {
           hasAggregateData: hasAggregate,
           hasAggregateDuration: hasAggregateDur,
           hadPerSetDuration: hadPerSetDur,
+          hasAggregateDistance: hasAggregateDist,
+          hadPerSetDistance: hadPerSetDist,
           setRows: setRows,
           // Aggregate controllers unused but need to be initialized
           setsCtrl: TextEditingController(),
@@ -1040,7 +936,9 @@ class EditLogExerciseRow {
     // `setCount <= 1`, so on a restored MULTI-set timed row it returned 0
     // — the box rendered blank and saving then WIPED the real total to 0.
     final duration = WorkoutReadService.aggregateDurationSeconds(log) ?? 0;
-    final distance = (log['distance_km'] as num?)?.toDouble() ?? 0;
+    // OI-389: the reader, never a top-level read (gate
+    // no_top_level_distance_km_reads_test).
+    final distance = WorkoutReadService.aggregateDistanceKm(log);
 
     String fmtDouble(double v) =>
         v == v.truncateToDouble() ? v.toStringAsFixed(0) : v.toString();
@@ -1053,13 +951,21 @@ class EditLogExerciseRow {
       hasAggregateData: hasAggregate,
       hasAggregateDuration: hasAggregateDur,
       hadPerSetDuration: hadPerSetDur,
+      hasAggregateDistance: hasAggregateDist,
+      hadPerSetDistance: hadPerSetDist,
       setRows: [],
       setsCtrl: TextEditingController(text: sets > 0 ? sets.toString() : ''),
       repsCtrl: TextEditingController(text: reps > 0 ? reps.toString() : ''),
       weightCtrl:
           TextEditingController(text: weight > 0 ? fmtDouble(weight) : ''),
+      // OI-389 (D2): a cardio box holds decimal minutes, even under 60 s
+      // (30 s → "0.5"); every other type keeps seconds.
       durationCtrl: TextEditingController(
-          text: duration > 0 ? duration.toString() : ''),
+          text: duration > 0
+              ? (type == 'cardio'
+                  ? secondsToMinutesInput(duration)
+                  : duration.toString())
+              : ''),
       distanceCtrl: TextEditingController(
           text: distance > 0 ? fmtDouble(distance) : ''),
     );
@@ -1077,3 +983,240 @@ class EditLogExerciseRow {
   }
 }
 
+/// The `editLog` update map one sheet row stands for (OI-389 U7), extracted
+/// pure so it is testable without mounting the sheet. `errorCode` is set
+/// (and `updates` must not be written) when a cardio minutes field holds text
+/// that does not parse, or rounds to 0 s: saving it as 0 would erase the
+/// set's minutes under "Workout log updated".
+@visibleForTesting
+({Map<String, dynamic> updates, String? errorCode}) editSheetUpdatesFor(
+    EditLogExerciseRow row) {
+  final updates = <String, dynamic>{};
+  final isCardio = row.loggingType == 'cardio';
+
+  /// A cardio minutes box → seconds (D2). `null` with [bad] set: text that
+  /// is not a number ("12.5.", "."), or a positive value that rounds to 0 s.
+  /// A deliberate "0" still parses to 0 and clears the duration.
+  var bad = false;
+  int minutesBox(String text) {
+    final t = text.trim();
+    if (t.isEmpty) return 0;
+    final minutes = double.tryParse(t);
+    final secs = cardioMinutesToSeconds(t);
+    if (minutes == null || secs == null || (minutes > 0 && secs < 1)) {
+      bad = true;
+      return 0;
+    }
+    return secs;
+  }
+
+  if (row.hasPerSetData) {
+    // ── Per-set data path: recompute aggregates from individual sets ──
+    final setsDetail = <Map<String, dynamic>>[];
+    double maxWeight = 0;
+    int totalReps = 0;
+    int totalDuration = 0;
+    double totalDistance = 0;
+    double volumeKg = 0;
+    int bestSingleSetReps = 0;
+    int bestSingleSetDuration = 0;
+
+    for (int i = 0; i < row.setRows.length; i++) {
+      final setRow = row.setRows[i];
+      final reps = int.tryParse(setRow.repsCtrl.text) ?? 0;
+      final weight = double.tryParse(setRow.weightCtrl.text) ?? 0;
+      final duration = isCardio
+          ? minutesBox(setRow.durationCtrl.text)
+          : int.tryParse(setRow.durationCtrl.text) ?? 0;
+      final distance = double.tryParse(setRow.distanceCtrl.text) ?? 0;
+
+      final setMap = <String, dynamic>{
+        'set_number': i + 1,
+      };
+      if (weight > 0) setMap['weight_kg'] = weight;
+      if (reps > 0) setMap['reps'] = reps;
+      if (duration > 0) setMap['duration_seconds'] = duration;
+      if (distance > 0) setMap['distance_km'] = distance;
+
+      setsDetail.add(setMap);
+
+      // Aggregate
+      if (weight > maxWeight) maxWeight = weight;
+      totalReps += reps;
+      totalDuration += duration;
+      totalDistance += distance;
+      volumeKg += weight * reps;
+      if (reps > bestSingleSetReps) bestSingleSetReps = reps;
+      if (duration > bestSingleSetDuration) {
+        bestSingleSetDuration = duration;
+      }
+    }
+
+    final sets = row.setRows.length;
+
+    switch (row.loggingType) {
+      case 'weight_reps':
+        updates['sets_completed'] = sets;
+        updates['reps_completed'] = totalReps;
+        updates['weight_kg'] = maxWeight;
+        updates['volume_kg'] = volumeKg;
+        break;
+      case 'bodyweight_reps':
+        updates['sets_completed'] = sets;
+        updates['reps_completed'] = totalReps;
+        updates['volume_kg'] = 0.0;
+        break;
+      case 'weighted_bodyweight':
+        updates['sets_completed'] = sets;
+        updates['reps_completed'] = totalReps;
+        updates['weight_kg'] = maxWeight;
+        updates['volume_kg'] = volumeKg;
+        break;
+      case 'timed':
+        updates['sets_completed'] = sets;
+        updates['duration_seconds'] = totalDuration;
+        updates['volume_kg'] = 0.0;
+        break;
+      case 'cardio':
+        updates['duration_seconds'] = totalDuration;
+        updates['distance_km'] = totalDistance;
+        updates['volume_kg'] = 0.0;
+        break;
+      case 'distance':
+        updates['distance_km'] = totalDistance;
+        updates['weight_kg'] = maxWeight;
+        updates['volume_kg'] = 0.0;
+        break;
+      default:
+        updates['sets_completed'] = sets;
+        updates['reps_completed'] = totalReps;
+        updates['weight_kg'] = maxWeight;
+        updates['volume_kg'] = volumeKg;
+    }
+
+    // Unit 7 / OI-50 round-1 F5 — a RESTORED row can carry `sets[]`
+    // entries with no per-set durations alongside a real top-level
+    // total (`sync_workout.dart:766` writes the aggregate; `:792`
+    // only carries a per-set duration when the cloud row had one).
+    // The computed total is then 0, and writing it over the
+    // surviving aggregate is data loss — visibly so now that the
+    // receipt renders that aggregate: the user would watch the
+    // duration vanish the moment they saved an unrelated edit.
+    // Round-2: `!row.hadPerSetDuration` is load-bearing. Without it a
+    // row carrying BOTH per-set durations and a top-level total could
+    // never be cleared — the user zeroes every box, this guard drops the
+    // write, `editLog` merges (it does not replace), and the stale
+    // top-level value is read back forever.
+    if (totalDuration == 0 &&
+        row.hasAggregateDuration &&
+        !row.hadPerSetDuration) {
+      updates.remove('duration_seconds');
+    }
+
+    // OI-389 U7 — the km twin of the duration guard above. The sum > 0 is
+    // sent; a sum of 0 clears the total only when the ORIGINAL per-set
+    // entries carried km (the user cleared them: null, so the cloud gets
+    // NULL); otherwise (an F5 row whose sets lack km beside a top-level
+    // total, or km never entered) the key is left out, so an unrelated save
+    // of the day never erases a total and never writes 0.
+    if (updates.containsKey('distance_km')) {
+      if (totalDistance > 0) {
+        updates['distance_km'] = totalDistance;
+      } else if (row.hadPerSetDistance) {
+        updates['distance_km'] = null;
+      } else {
+        updates.remove('distance_km');
+      }
+    }
+
+    updates['sets_detail'] = setsDetail;
+    updates['best_single_set_reps'] = bestSingleSetReps;
+    updates['best_single_set_duration'] = bestSingleSetDuration;
+  } else {
+    // ── Legacy flattened path (old logs without sets_detail) ──
+    final sets = int.tryParse(row.setsCtrl.text) ?? 0;
+    final reps = int.tryParse(row.repsCtrl.text) ?? 0;
+    final weight = double.tryParse(row.weightCtrl.text) ?? 0;
+    final duration = isCardio
+        ? minutesBox(row.durationCtrl.text)
+        : int.tryParse(row.durationCtrl.text) ?? 0;
+    final distance = double.tryParse(row.distanceCtrl.text) ?? 0;
+
+    switch (row.loggingType) {
+      case 'weight_reps':
+        updates['sets_completed'] = sets;
+        updates['reps_completed'] = reps;
+        updates['weight_kg'] = weight;
+        updates['volume_kg'] = weight * reps;
+        break;
+      case 'bodyweight_reps':
+        updates['sets_completed'] = sets;
+        updates['reps_completed'] = reps;
+        updates['volume_kg'] = 0.0;
+        break;
+      case 'weighted_bodyweight':
+        updates['sets_completed'] = sets;
+        updates['reps_completed'] = reps;
+        updates['weight_kg'] = weight;
+        updates['volume_kg'] = weight * reps;
+        break;
+      case 'timed':
+        updates['sets_completed'] = sets;
+        updates['duration_seconds'] = duration;
+        updates['volume_kg'] = 0.0;
+        break;
+      case 'cardio':
+        updates['duration_seconds'] = duration;
+        updates['distance_km'] = distance;
+        updates['volume_kg'] = 0.0;
+        break;
+      case 'distance':
+        updates['distance_km'] = distance;
+        updates['weight_kg'] = weight;
+        updates['volume_kg'] = 0.0;
+        break;
+      default:
+        updates['sets_completed'] = sets;
+        updates['reps_completed'] = reps;
+        updates['weight_kg'] = weight;
+        updates['volume_kg'] = weight * reps;
+    }
+
+    // Unit 7 / OI-50 — never stamp a fabricated `sets_completed: 0`
+    // over a count that was simply ABSENT. `hasAggregateData` is
+    // false only when the row carried no set-count signal at all;
+    // combined with a still-blank box that means "unknown", not
+    // "zero". A user who deliberately types 0 leaves the text
+    // non-empty, so an explicit zero is still written.
+    if (!row.hasAggregateData && row.setsCtrl.text.trim().isEmpty) {
+      updates.remove('sets_completed');
+    }
+    if (!row.hasAggregateDuration &&
+        row.durationCtrl.text.trim().isEmpty) {
+      updates.remove('duration_seconds');
+    }
+    // OI-389 U7 — the km box follows its duration twin's blank-text rule:
+    // blank on a row that never had a km → left out; an explicit 0, or a box
+    // that was prefilled with a km and then emptied → null (cleared).
+    if (updates.containsKey('distance_km')) {
+      final blank = row.distanceCtrl.text.trim().isEmpty;
+      if (distance > 0) {
+        updates['distance_km'] = distance;
+      } else if (blank && !row.hasAggregateDistance) {
+        updates.remove('distance_km');
+      } else {
+        updates['distance_km'] = null;
+      }
+    }
+    // NOTE (round-1 F5, scoped deliberately): `reps_completed`,
+    // `weight_kg` and `distance_km` are still written as 0 from an
+    // empty box on a row that never carried them. That is cosmetic,
+    // not data loss — unlike sets and duration, no OTHER key holds a
+    // surviving value for them (nothing reads a second source), so a
+    // fabricated 0 destroys nothing. Guarding sets + duration is the
+    // proportionate fix; widening to all five would add three more
+    // flags for no behavioural gain.
+  }
+  if (bad) return (updates: updates, errorCode: kMinutesFormatCode);
+  return (updates: updates, errorCode: null);
+}

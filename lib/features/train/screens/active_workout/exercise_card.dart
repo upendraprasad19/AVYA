@@ -209,8 +209,9 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
             ? ''
             : formatWeightDisplayValue(captured.weight!);
         _repsControllers[s].text = captured.reps?.toString() ?? '';
-        _durationControllers[s].text =
-            captured.durationSeconds?.toString() ?? '';
+        _durationControllers[s].text = captured.durationSeconds == null
+            ? ''
+            : _durationBoxText(captured.durationSeconds!);
         _distanceControllers[s].text = captured.distanceKm?.toString() ?? '';
         continue;
       }
@@ -221,7 +222,8 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
         _repsControllers[s].text = captured.reps.toString();
       }
       if (captured.durationSeconds != null) {
-        _durationControllers[s].text = captured.durationSeconds.toString();
+        _durationControllers[s].text =
+            _durationBoxText(captured.durationSeconds!);
       }
       if (captured.distanceKm != null) {
         _distanceControllers[s].text = captured.distanceKm.toString();
@@ -693,12 +695,24 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard>
     );
   }
 
+  /// OI-389 (D2): `durationSeconds` is true seconds for every type. A cardio
+  /// slot's MIN box is converted here, once, through the shared parser, so
+  /// "12.5" is captured as 750 (an `int.tryParse` read it as null and the set
+  /// saved with no minutes).
   SetInputValues _valuesOf(int setIdx) => SetInputValues(
         weight: double.tryParse(_weightControllers[setIdx].text),
         reps: int.tryParse(_repsControllers[setIdx].text),
-        durationSeconds: int.tryParse(_durationControllers[setIdx].text),
+        durationSeconds: widget.exercise.loggingType == 'cardio'
+            ? cardioMinutesToSeconds(_durationControllers[setIdx].text)
+            : int.tryParse(_durationControllers[setIdx].text),
         distanceKm: double.tryParse(_distanceControllers[setIdx].text),
       );
+
+  /// The duration box text for captured [secs]: decimal minutes for a cardio
+  /// slot (750 → "12.5"), seconds otherwise.
+  String _durationBoxText(int secs) => widget.exercise.loggingType == 'cardio'
+      ? secondsToMinutesInput(secs)
+      : secs.toString();
 
   /// Capture current input values and record them into the provider.
   void _captureSetValues(int setIdx) {

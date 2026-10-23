@@ -379,3 +379,4 @@
   re-derive. → Logged from the `oi189-plan-end-bound` worktree, riding with that batch (the
   founder's next instruction after the compact was to brainstorm OI-189, which became this
   branch) — same one-push rationale as the 2026-08-06 / 08-30 / 09-06 entries.
+- 2026-10-23 IST — trigger: explicit (/strategic-compact) at OI-389 1a complete-but-uncommitted boundary; founder decision pending

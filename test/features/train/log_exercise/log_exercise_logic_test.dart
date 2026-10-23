@@ -63,8 +63,14 @@ void main() {
       expect(v('cardio', d: '').message, kEnterDurationMessage);
     });
 
-    test('cardio "12.5" is outOfRange -> Fix time (validator int-parses)', () {
-      final r = v('cardio', d: '12.5');
+    // OI-389 D2 (founder, 2026-10-22): cardio minutes take decimals.
+    test('cardio "12.5" is ok, and LOG stores 750 s', () {
+      expect(v('cardio', d: '12.5').isOk, isTrue);
+      expect(cardioMinutesToSeconds('12.5'), 750);
+    });
+
+    test('cardio minutes that do not parse are outOfRange -> Fix time', () {
+      final r = v('cardio', d: '12..5');
       expect(r.field, SetField.duration);
       expect(r.kind, SetFailureKind.outOfRange);
       expect(blockedLogLabel(r), WardroomCopy.activeBlockedFixTime);

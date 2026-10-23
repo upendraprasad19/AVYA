@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/features/train/providers/train_provider.dart';
 import 'package:icanbefitter/features/train/screens/active_workout/screen.dart';
+import 'package:icanbefitter/features/train/services/log_exercise_logic.dart';
 
 import 'card_harness.dart';
 
@@ -383,6 +384,43 @@ void main() {
       await pumpNew(tester, type: 'timed', logMode: false);
       await type(tester, 0, '45');
       expect([text(tester, 1), text(tester, 2)], ['', '']);
+    });
+  });
+
+  // OI-389 T32b (D2, founder 2026-10-22): the cardio MIN box takes decimal
+  // minutes; capture converts to seconds once (`_valuesOf`), and a re-init
+  // writes minutes back into the box, never raw seconds.
+  group('T32b: cardio decimal minutes through the real card', () {
+    Future<CardHarness> pumpCardio(WidgetTester tester) => pumpCard(tester,
+        seed: ActiveWorkoutData(
+            exercises: [exercise(name: 'Rowing Machine', type: 'cardio')]),
+        logMode: true,
+        lastPerf: const LastPerformanceData());
+    Future<void> type(WidgetTester tester, int field, String value) async {
+      await tester.enterText(fieldAt(field), value);
+      await tester.pump();
+    }
+
+    testWidgets('"12.5" → LOG stores 750 s; the box reads "12.5" after '
+        're-init; the mirrored set stores 750 s', (tester) async {
+      final h = await pumpCardio(tester);
+      await type(tester, 0, '12.5');
+      expect(controllerAt(tester, 2).text, '12.5', reason: 'mirrored');
+      await tapWithRealIo(tester, find.text('LOG 3 SETS ✓'));
+      expect(h.state.isSetChecked(0, 0), isTrue);
+      expect(h.state.setInputValues['0-0']?.durationSeconds, 750);
+      expect(h.state.setInputValues['0-1']?.durationSeconds, 750);
+
+      await repumpCard(tester, h);
+      expect(controllerAt(tester, 0).text, '12.5');
+    });
+
+    testWidgets('"12.5" typed without LOG: FINISH lists it as typed-not-logged',
+        (tester) async {
+      final h = await pumpCardio(tester);
+      await type(tester, 0, '12.5');
+      expect(h.state.setInputValues['0-0']?.durationSeconds, 750);
+      expect(finishGuard(h.state).typedUnsaved, contains('Rowing Machine'));
     });
   });
 }

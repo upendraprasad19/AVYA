@@ -31,6 +31,7 @@ import 'package:icanbefitter/core/services/health_read_service.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
 import '../repositories/workout_repository.dart';
 import '../services/superset_persist_logic.dart';
+import '../services/log_exercise_logic.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/core/constants/equipment_defaults.dart';
@@ -1456,13 +1457,20 @@ class ActiveWorkoutData {
   }
 
   /// Live total volume (kg) from completed working sets (excludes warm-ups).
+  /// OI-389 U5: through the slot's type, so a cardio set's hidden reps
+  /// prefill never counts as volume.
   double get liveVolumeKg {
     double vol = 0;
     for (final entry in checkedSets.entries) {
       if (warmUpSets.containsKey(entry.key)) continue;
       final vals = setInputValues[entry.key];
       if (vals == null) continue;
-      vol += (vals.weight ?? 0) * (vals.reps ?? 0);
+      final exIdx = int.tryParse(entry.key.split('-').first);
+      final type = (exIdx != null && exIdx >= 0 && exIdx < exercises.length)
+          ? exercises[exIdx].loggingType
+          : 'weight_reps';
+      final set = exerciseSetFromInput(vals, type, 0);
+      vol += set.weightKg * set.reps;
     }
     return vol;
   }
@@ -2219,14 +2227,11 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
               'weight=${vals.weight}');
         }
 
-        exerciseSets.add(ExerciseSet(
-          weightKg: vals.weight ?? 0,
-          reps: vals.reps ?? 0,
-          durationSec: vals.durationSeconds,
-          // Stagger loggedAtMs by set index so dedup never collapses
-          // legitimate consecutive sets typed in the same UI tick.
-          loggedAtMs: nowMs + s * 1000,
-        ));
+        // OI-389 U5: the set the slot's boxes stand for (km kept, minutes
+        // already seconds since capture). Stagger loggedAtMs by set index so
+        // dedup never collapses legitimate consecutive sets typed in the same
+        // UI tick.
+        exerciseSets.add(exerciseSetFromInput(vals, slotType, nowMs + s * 1000));
       }
 
       // Skip exercises with no completed working sets — service rejects
@@ -2239,6 +2244,10 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
         exerciseId: exercise.exerciseId, // W3.3 (Batch 11-A) forward-only id
         sets: exerciseSets,
         source: WriteSource.activeWorkout,
+        // OI-389 U3: the slot's type, so a custom cardio exercise stays cardio
+        // (the writer consults it only when the library misses, and only for
+        // cardio / distance).
+        loggingTypeHint: exercise.loggingType,
         // Don't pass ref here — we trigger our own provider invalidations
         // at the end of completeWorkout (broader than the service default).
       );
@@ -2602,6 +2611,25 @@ class GraduationStatsData {
   });
 }
 
+/// The graduation screen's top-3 PRs (OI-389 T16c). The display shows mixed
+/// types and `ExercisePR.formattedValue` renders each in its own unit; values
+/// in different units are never compared (1800 s would outrank 100 kg), so
+/// the kg PRs come first by value, then the rest fill by date.
+@visibleForTesting
+List<PrRecord> graduationTopPrs(List<ExercisePR> allPrs) {
+  final kgPrs = allPrs.where((p) => p.unit == 'kg').toList()
+    ..sort((a, b) => b.bestValue.compareTo(a.bestValue));
+  final otherPrs = allPrs.where((p) => p.unit != 'kg').toList()
+    ..sort((a, b) => b.date.compareTo(a.date));
+  return [...kgPrs, ...otherPrs]
+      .take(3)
+      .map((pr) => PrRecord(
+            exerciseName: pr.exerciseName,
+            value: pr.formattedValue,
+          ))
+      .toList();
+}
+
 final graduationStatsProvider = Provider<GraduationStatsData>((ref) {
   ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
   final hive = HiveService.instance;
@@ -2641,17 +2669,7 @@ final graduationStatsProvider = Provider<GraduationStatsData>((ref) {
 
   final allPrs = ref.watch(allExercisePRsProvider);
 
-  // Top PRs sorted by bestValue descending. We don't filter by
-  // logging_type — graduation display shows mixed types and
-  // ExercisePR.formattedValue already renders the right unit
-  // (kg / reps / seconds / km).
-  final topPrs = (allPrs.toList()..sort((a, b) => b.bestValue.compareTo(a.bestValue)))
-      .take(3)
-      .map((pr) => PrRecord(
-            exerciseName: pr.exerciseName,
-            value: pr.formattedValue,
-          ))
-      .toList();
+  final topPrs = graduationTopPrs(allPrs);
 
   return GraduationStatsData(
     totalWorkouts: totalWorkouts,

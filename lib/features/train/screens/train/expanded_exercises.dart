@@ -41,60 +41,10 @@ extension _ExpandedExercises on _TrainScreenState {
       // Unit 7 / OI-50 — the 4-source MAX described above now lives in ONE
       // place (WorkoutReadService.aggregateSetCount). Semantics identical;
       // this was the third hand-rolled copy of it.
-      final sets = WorkoutReadService.aggregateSetCount(log);
-      final loggingType = log['logging_type'] as String? ?? 'weight_reps';
       final isPr = log['is_pr'] == true;
-
-      // audit-2026-05-16 reader-side / Obs 3 \u2014 per-set MAX semantics.
-      // Top-level `reps_completed` is SUM and `duration_seconds` is SUM
-      // per Test #6 writer contract. Pre-fix this widget surfaced
-      // cumulative reps (Hanging Leg Raise "7 sets \u00b7 85 reps" when the
-      // user logged 5 sets of 17) and cumulative duration. Same class
-      // as the PR cumulative bug in `loadAllExercisePRs`.
-      //
-      // For non-weighted types we now derive best-per-set from `sets[]`
-      // (canonical per-set array). Top-level fallback applies only for
-      // legacy single-set rows (where SUM == per-set value).
-      // OI-02 / OI-08 — per-set MAX semantic centralised in WorkoutReadService.
-      // closes-diagnose: 2026-05-17-oi-02-read-services
-      final perSetMaxReps = WorkoutReadService.bestPerSetReps(log);
-      final perSetMaxDur = WorkoutReadService.bestPerSetDuration(log);
-      final weight = (log['weight_kg'] as num?)?.toDouble() ?? 0;
-      // For weight_reps the writer's top-level `weight_kg` is already
-      // MAX, so it's safe to use directly.
-      // Unit 7 / OI-50 — this is a TOTAL (the cardio branch below renders it
-      // as "N min · X km"), but it called the per-set MAX helper, which is
-      // both wrong for multi-set rows and returns 0 for a cloud-restored row.
-      // `perSetMaxDur` above is deliberately left as the per-set MAX — the
-      // timed branch labels it "best".
-      final totalDuration = WorkoutReadService.aggregateDurationSeconds(log) ?? 0;
-
-      String detail;
-      if (loggingType == 'timed') {
-        // Unit 7 / OI-50 round-2 \u2014 the label must follow the VALUE. Both arms
-        // used to be the per-set MAX, so "best" was always truthful; once the
-        // fallback became the aggregate TOTAL (for restored rows with no
-        // per-set array) a total would have been rendered as "best".
-        final hasPerSetBest = perSetMaxDur > 0;
-        final secs = hasPerSetBest ? perSetMaxDur : totalDuration;
-        final mins = secs ~/ 60;
-        final tail = secs % 60;
-        final dur = '${mins > 0 ? '${mins}m ' : ''}${tail}s';
-        detail = sets > 1
-            ? '${setCountLabel(sets)}$kDetailSeparator${hasPerSetBest ? 'best' : 'total'} $dur'
-            : dur;
-      } else if (loggingType == 'cardio') {
-        final dist = (log['distance_km'] as num?)?.toDouble() ?? 0;
-        detail = '${totalDuration ~/ 60}${kNbsp}min$kDetailSeparator'
-            '${dist.toStringAsFixed(1)}${kNbsp}km';
-      } else if (weight > 0) {
-        detail = '${setCountLabel(sets)}$kDetailSeparator'
-            '${repCountLabel(perSetMaxReps)}$kDetailSeparator'
-            '${weight.toStringAsFixed(1)}${kNbsp}kg';
-      } else {
-        detail = '${setCountLabel(sets)}$kDetailSeparator'
-            '${repCountLabel(perSetMaxReps)}';
-      }
+      // OI-389 U7: the detail line is the pure `exerciseLogDetail`
+      // (`utils/exercise_log_detail.dart`), so it is testable on its own.
+      final detail = exerciseLogDetail(log);
 
       return ExpandedExerciseLogRow(name: name, detail: detail, isPr: isPr);
     }).toList();

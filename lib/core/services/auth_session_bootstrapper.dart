@@ -16,6 +16,7 @@ import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/utils/injury_vocab.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
+import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/features/profile/services/profile_write_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import '../constants/equipment_defaults.dart';
@@ -1177,12 +1178,58 @@ class AuthSessionBootstrapper {
 
   /// a4c7d1: One-time boot heal for mismatched logged exercise sets.
   ///
+  /// OI-389 U8: retype [log] to [correctType], editing each set map IN PLACE
+  /// and clearing exactly the fields [fieldsClearedFor] lists for the type.
+  /// Clearing a duration writes `duration_sec: 0`, as the heal always did:
+  /// readers resolve `duration_sec ?? duration_seconds`, so a restored
+  /// `duration_seconds` stays but is shadowed. Every other key (`set_number`,
+  /// `duration_seconds`, `logged_at_ms`) is left as it is — never rebuilt
+  /// through `ExerciseSet.toMap`, which would stamp `logged_at_ms = now`.
+  ///
+  /// The `.cast<Map<String, dynamic>>()` is deliberate and load-bearing: it is
+  /// lazy and throws on the first `Map<dynamic, dynamic>` set, which keeps the
+  /// heal off disk rows (pinned by T10b; OI-394 owns making it live).
+  @visibleForTesting
+  static void healedExlog(Map log, String correctType) {
+    final sets = (log['sets'] as List? ?? []).cast<Map<String, dynamic>>();
+    final normalized = sets.map((s) {
+      final dur = ((s['duration_sec'] ?? s['duration_seconds']) as num?) ?? 0;
+      final km = (s['distance_km'] as num?) ?? 0;
+      final cleared = fieldsClearedFor(
+        correctType,
+        hasDuration: dur > 0,
+        hasKm: km > 0,
+      );
+      if (cleared.weight) s['weight_kg'] = 0;
+      if (cleared.reps) s['reps'] = 0;
+      if (cleared.duration) s['duration_sec'] = 0;
+      if (cleared.distance) s.remove('distance_km');
+      return s;
+    }).toList();
+
+    log['sets'] = normalized;
+    log['logging_type'] = correctType;
+  }
+
+  /// The heal as the sign-in runs it, for the footprint pin (OI-389 T10b).
+  @visibleForTesting
+  Future<void> healMismatchedExerciseLogsForTest() =>
+      _healMismatchedExerciseLogs();
+
   /// When an exercise is swapped mid-workout, in-flight logged sets may carry
   /// the OLD logging type's format. This method normalizes any persisted
   /// exlog rows with a type mismatch against the exercise's library definition.
   /// Runs post-login, after cross-account guard passes.
   ///
   /// Non-fatal on error — boot continues even if heal fails.
+  ///
+  /// OI-389 U8: only the per-set rewrite changed — it now reads the writer's
+  /// one table ([fieldsClearedFor]) and no longer zeroes cardio minutes. The
+  /// heal's FOOTPRINT is unchanged on purpose: the `.cast` inside
+  /// [healedExlog] still throws on a set read from disk (Hive hands back
+  /// `Map<dynamic, dynamic>`), so it heals only rows still in memory as
+  /// `Map<String, dynamic>` (a restore in this sign-in). Making it live on
+  /// disk rows needs a kill switch and a full rewrite — OI-394.
   Future<void> _healMismatchedExerciseLogs() async {
     try {
       final workoutBox = _hive.workoutBox;
@@ -1207,19 +1254,7 @@ class AuthSessionBootstrapper {
 
         // If mismatch, normalize the sets
         if (loggedType != correctType) {
-          final sets = (log['sets'] as List? ?? []).cast<Map<String, dynamic>>();
-          final normalized = sets.map((s) {
-            if (correctType == 'timed') {
-              s['weight_kg'] = 0;
-              s['reps'] = 0;
-            } else {
-              s['duration_sec'] = 0;
-            }
-            return s;
-          }).toList();
-
-          log['sets'] = normalized;
-          log['logging_type'] = correctType;
+          healedExlog(log, correctType);
           await workoutBox.put(key, log);
 
           unawaited(ErrorTelemetry.recordNonFatal(
