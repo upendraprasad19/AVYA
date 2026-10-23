@@ -220,9 +220,9 @@ findings:
     reason: "a dashboard look by the founder"
 
   - id: B2B-NEXT
-    title: "Piece B2b (client: paywall line, checkout description, estimatePaidEndDate + the :957 closure, trial-409 copy, EST clamp, isReferralTrial) - its own plan, branch and x2 review after step 4"
+    title: "Piece B2b (client: paywall line, checkout description, estimatePaidEndDate + the retry closure, trial-409 copy, EST clamp, isReferralTrial) - its own plan, branch and x2 review; built ahead, merged between live steps 4a and 4b"
     terminal_state: blocked_on_user
-    reason: "sequenced after the door opens (step 4), which needs the founder's gos; plan section 9 holds its starting point"
+    reason: "built ahead (plan docs/plans/oi341-piece-b2b-client.md v3, branch oi341-piece-b2b-client, founder order 2026-10-21) and merged only in the live session after step 4a opens the door (plan section 4 step 5, amended 2026-10-22); the merge needs the founder's go"
 
   - id: B2A-KEY-ID-BUILD
     title: "before the next /build-apk the VPS .env RAZORPAY_KEY_ID must be the live key ID (today rzp_test_ against live server keys)"

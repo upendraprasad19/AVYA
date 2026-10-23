@@ -39,6 +39,7 @@ import 'package:icanbefitter/features/ai_coach/widgets/prediction_card.dart';
 import '../../providers/profile_provider.dart';
 import '../../providers/referral_eligibility_provider.dart';
 import '../../utils/profile_image_url.dart';
+import '../../services/est_seal_date.dart';
 import '../apply_referral_sheet.dart';
 import '../../widgets/profile_identity.dart';
 import '../../widgets/profile_row.dart';
@@ -234,31 +235,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
 
   static String _monthName(int m) => const ['', 'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m];
 
-  /// "EST" seal date for the PRO subscription card corner — shows when
-  /// the user became a member. SubscriptionInfoData carries `expiresAt`
-  /// but no dedicated `startedAt`, so we back-compute from plan duration
-  /// (annual = 365d, monthly = 30d). DD/MM/YY format matches the
-  /// Wardroom handoff brand motif (see welcome.jsx `EST · 2026`).
-  static String _estSealDate(SubscriptionInfoData subInfo) {
-    if (subInfo.expiresAt == null) {
-      final now = DateTime.now();
-      return _ddMmYy(now);
-    }
-    final planDays = (subInfo.plan?.toLowerCase() == 'yearly' ||
-            subInfo.plan?.toLowerCase() == 'annual')
-        ? 365
-        : 30;
-    final startedAt =
-        subInfo.expiresAt!.subtract(Duration(days: planDays));
-    return _ddMmYy(startedAt);
-  }
-
-  static String _ddMmYy(DateTime d) {
-    final dd = d.day.toString().padLeft(2, '0');
-    final mm = d.month.toString().padLeft(2, '0');
-    final yy = (d.year % 100).toString().padLeft(2, '0');
-    return '$dd/$mm/$yy';
-  }
+  /// "EST" seal date for the PRO subscription card corner (see welcome.jsx
+  /// `EST · 2026`). The rule lives in `services/est_seal_date.dart`.
+  static String _estSealDate(SubscriptionInfoData subInfo) => estSealDate(
+        expiresAt: subInfo.expiresAt,
+        plan: subInfo.plan,
+        now: DateTime.now(),
+      );
 
   /// PRO-card "MANAGE SUBSCRIPTION →" tap target. No self-service
   /// cancel/upgrade flow exists in-app yet (Razorpay subscriptions are

@@ -45,9 +45,20 @@ void main() {
         () {
       // Ensures the catch path reaches the same handler the (now dead)
       // try-block path called.
-      expect(razorpaySource, contains("'already_pro'"),
+      // OI-341 Piece B2b: the error_code check moved into the pure
+      // classifyOrderConflict (payment_end_estimate.dart), which BOTH 409
+      // paths of the service now call. Repointed, not loosened: the literal
+      // must be in the classifier, and the catch path must call it.
+      final classifier = File('lib/core/services/payment_end_estimate.dart')
+          .readAsStringSync();
+      expect(classifier, contains("'already_pro'"),
           reason:
               'Must check error_code == "already_pro" inside FunctionException details');
+      expect(
+          RegExp(r'status == 409 && details is Map\)[\s\S]{0,200}?classifyOrderConflict\(')
+              .hasMatch(razorpaySource),
+          isTrue,
+          reason: 'The FunctionException 409 path must call classifyOrderConflict');
       expect(razorpaySource, contains('_handleAlreadyProResponse'),
           reason: 'Must invoke shared handler so try + catch paths agree');
     });
