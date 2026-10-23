@@ -99,6 +99,11 @@ const List<String> childEnvStrippedNames = <String>[
   'USDA_API_KEY',
   '_SKIP_RENDER_CHECK',
   'ANDROID_DEVICE_ID',
+  // Test fixture / report re-record switches: a child inheriting one would rewrite a fixture.
+  'RECORD_GENERATOR_GOLDEN',
+  'RECORD_LIBRARY_REFERENCE',
+  'RECORD_LIBRARY_REFERENCE_IDS',
+  'WRITE_CORE_LIST_REPORT',
 ];
 
 /// Variables read by an EXTERNAL tool (not by any repo script), stripped because a

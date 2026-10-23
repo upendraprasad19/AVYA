@@ -55,6 +55,19 @@ EXPECTED_VIEWBOX = "0 0 512 512"
 SRC = sys.argv[1] if len(sys.argv) > 1 else "vendor/workout-guide/packages/workout-guide/assets"
 OUT = "assets/exercise_plates"
 
+# Upstream draws these pairs END-first: its frame 1 is where the rep finishes
+# and frame 3 where it starts (founder review 2026-10-21, Batch A). Their frames
+# are written swapped, so <slug>-1.svg is always START. The crop is the union
+# of both frames either way, so a swap only changes which file holds which.
+# Pinned by test/contracts/exercise_plate_swap_record_test.dart.
+SWAP_FRAMES = {
+    "arm-circles", "band-pull-apart", "banded-lateral-walk", "cable-curl",
+    "cable-kickback", "donkey-kick", "feet-elevated-pike-push-up", "frog-pump",
+    "hanging-leg-raise", "jumping-jack", "landmine-press", "machine-row",
+    "meadows-row", "pike-push-up", "prone-y-raise", "pull-up", "rowing",
+    "spider-curl", "v-up",
+}
+
 NUM = re.compile(r"[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?")
 CMD = re.compile(r"([MmZzLlHhVvCcSsQqTtAa])")
 NON_PATH = re.compile(r"<(circle|rect|ellipse|polygon|polyline|use|image|text)\b")
@@ -253,7 +266,8 @@ def crop_svg(text, view_box, where):
 
 def main():
     lib = json.load(io.open("assets/data/exercise_library.json", encoding="utf-8"))
-    # 165 exercises share 153 slugs -- dedupe, carrying the shape with each.
+    # 156 exercises share 152 slugs (library v12) -- dedupe, carrying the shape
+    # with each.
     slugs = {}
     for e in lib:
         s = e.get("demo_slug")
@@ -279,6 +293,8 @@ def main():
                 raise SystemExit("missing upstream frame: %s" % f)
         vb = union([ink_bbox(f) for f in srcs])
         for src, f in zip(srcs, frames):
+            if pair and slug in SWAP_FRAMES:
+                f = {"1": "3", "3": "1"}[f]
             name = "%s-%s.svg" % (slug, f)
             io.open(os.path.join(OUT, name), "w", encoding="utf-8").write(
                 crop_svg(io.open(src, encoding="utf-8").read(), vb, name))

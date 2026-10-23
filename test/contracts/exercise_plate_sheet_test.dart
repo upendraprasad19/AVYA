@@ -42,6 +42,16 @@ Future<void> _ensureHive() async {
           .cast<Map<String, dynamic>>();
   await HiveService.instance.exerciseBox
       .putAll({for (final e in lib) e['id'] as String: e});
+  // Since the OI-149 repair (Batch A, 2026-10-22) no bundled row carries a
+  // numeric breathing_cue, so the guard is exercised on a synthetic copy of
+  // Surya Namaskar that differs ONLY in that field.
+  final surya = lib.firstWhere((e) => e['name'] == 'Surya Namaskar');
+  await HiveService.instance.exerciseBox.put('TEST_NUMERIC_BREATHING', {
+    ...surya,
+    'id': 'TEST_NUMERIC_BREATHING',
+    'name': 'Synthetic Numeric Breathing',
+    'breathing_cue': '12',
+  });
 }
 
 List<Map<String, dynamic>> _library() =>
@@ -144,10 +154,21 @@ void main() {
   });
 
   testWidgets('a NUMERIC breathing_cue is suppressed', (t) async {
-    // Surya Namaskar's breathing_cue is the string "12" — one of the 136 rows
-    // where a spreadsheet column shift put met_value into the field (OI-149).
-    await open(t, 'Surya Namaskar');
+    // A synthetic copy of Surya Namaskar whose breathing_cue is "12" — the shape
+    // the 136 shifted rows had before the OI-149 repair (met_value pushed into
+    // the field). Only the number differs from the real row below.
+    await open(t, 'Synthetic Numeric Breathing');
+    // Positive control: the synthetic row resolved (its cue renders), so the
+    // missing heading is the guard's doing, not a failed lookup.
+    expect(find.text('12 positions with coordinated breath'), findsOneWidget);
     expect(find.text('BREATHING'), findsNothing);
+  });
+
+  testWidgets("Surya Namaskar's repaired breathing cue renders", (t) async {
+    // The mirror of the test above: the same row with its repaired text shows
+    // BREATHING, so the suppression is caused by the number and nothing else.
+    await open(t, 'Surya Namaskar');
+    expect(find.text('BREATHING'), findsOneWidget);
   });
 
   testWidgets('the sheet scrolls rather than overflowing at 320x480', (t) async {

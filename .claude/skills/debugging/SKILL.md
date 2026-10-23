@@ -234,8 +234,9 @@ Per CLAUDE.md rules 21 + 22:
 | 2.110 | `TextField.selectAllOnFocus` does not select on a user TAP | a plan says a tap on a prefilled value selects it, and on the device typing appends mid-number | test/features/train/log_exercise/log_exercise_card_flip_test.dart |
 | 2.111 | A test compares `FileSystemEntity.path` to a `/`-literal: red only on Windows, invisible to Linux CI | a local Windows full suite fails with Expected/Actual differing only by `\` vs `/`, while CI is green | test/contracts/lapse_gap_policy_writer_to_reader_test.dart |
 | 2.112 | A floating version in a dependency we do not own (a plugin x.y.+, a POM LATEST) fails builds and silently changes the shipped bytes | Build Check fails with "Could not find any matches for ...:x.y.+" on a commit that touched no build file, and a re-run passes | test/contracts/android_dynamic_dependency_pin_test.dart |
-| 2.113 | A per-type normaliser's else-branch silently claims every type added after it | one logging type reads 0 for a value the user typed; a two-branch type switch whose else clears that field | test/contracts/cardio_duration_distance_writer_to_reader_test.dart |
-| 2.114 | A lazy `.cast<Map<String, dynamic>>()` over Hive data throws on first touch; a catch makes the code dead | a heal or migrator never changes a disk row, but its typed-literal unit test passes | test/contracts/cardio_duration_distance_writer_to_reader_test.dart (T10b) |
+| 2.113 | A harness hook that cannot start reads as a hook that allowed the call (relative script path vs the session's moving cwd) | a guard did not block and printed nothing; a stray `<subdir>/.dart_tool/` blocks worktree retirement | test/scripts/claude_hooks_cwd_independent_test.dart |
+| 2.114 | A per-type normaliser's else-branch silently claims every type added after it | one logging type reads 0 for a value the user typed; a two-branch type switch whose else clears that field | test/contracts/cardio_duration_distance_writer_to_reader_test.dart |
+| 2.115 | A lazy `.cast<Map<String, dynamic>>()` over Hive data throws on first touch; a catch makes the code dead | a heal or migrator never changes a disk row, but its typed-literal unit test passes | test/contracts/cardio_duration_distance_writer_to_reader_test.dart (T10b) |
 
 ---
 
@@ -271,8 +272,8 @@ Borrowing from `superpowers:using-superpowers`, `superpowers:systematic-debuggin
 - **"The trigger only renames the key on INSERT — the upsert will still find its row."** It will not: BEFORE INSERT row triggers run before the ON CONFLICT arbiter, so a rewritten key column never conflicts. Test the writer's real upsert against an EXISTING row, not only against an empty key. See §2.4 mode C (`bd79b1`).
 - **"An AFTER trigger will clean up the superseded row on every push."** Not on an identical re-push: migration 149's `trg_suppress_redundant_updates` cancels the UPDATE and an AFTER trigger never fires on a suppressed update. Use BEFORE INSERT, which fires on every PostgREST upsert. See §2.4 mode C (`4b5c38`).
 - **"I'll bump `restoreCompletedTick` so the UI refreshes after my restore change."** STOP — until b4e7a1 it also gated streak decay; that gate is now the per-account `SyncService.restoreSettledForCurrentUser`. Grep every reader of a tick before reusing it, and never use a process-wide counter as an "this account is ready" gate. See §2.88, §2.91.
-- **"The else-branch covers the rest — new types will be fine."** It will not: a type added later inherits whatever the else clears (§2.113, OI-389). Name every type.
-- **"`.cast<Map<String, dynamic>>()` makes the Hive list typed."** Only lazily: it throws on the first `Map<dynamic, dynamic>` and a catch hides it (§2.114). Use `Map<String, dynamic>.from(e)` or test with a `<dynamic, dynamic>` fixture.
+- **"The else-branch covers the rest — new types will be fine."** It will not: a type added later inherits whatever the else clears (§2.114, OI-389). Name every type.
+- **"`.cast<Map<String, dynamic>>()` makes the Hive list typed."** Only lazily: it throws on the first `Map<dynamic, dynamic>` and a catch hides it (§2.115). Use `Map<String, dynamic>.from(e)` or test with a `<dynamic, dynamic>` fixture.
 - **"This bug class is novel — I don't need to update the catalog."** Wrong. §5 self-evolution rule below applies.
 
 ---
@@ -331,7 +332,7 @@ Append-only by default. If you must REWRITE an existing entry (e.g. the fix patt
 
 ## Changelog
 
-- **2026-10-22 (cardio-duration-distance, OI-389 1a, e7240a)** — Self-evolution. §2.113 NEW — a per-type normaliser's else-branch claims later types (cardio minutes zeroed); §2.114 NEW — a lazy `.cast` over Hive maps throws and a catch makes the heal dead. Two red flags added.
+- **2026-10-22 (cardio-duration-distance, OI-389 1a, e7240a)** — Self-evolution. §2.114 NEW — a per-type normaliser's else-branch claims later types (cardio minutes zeroed); §2.115 NEW — a lazy `.cast` over Hive maps throws and a catch makes the heal dead. Two red flags added.
 - **2026-10-06 (coach-history-correctness-sync, L1a-1)** — Self-evolution. §2.4 mode C NEW — a BEFORE INSERT trigger rewriting an ON CONFLICT key column defeats the arbiter (OI-312, `bd79b1`, recurrence of `e1c8b4`), and a key column that changes on edit leaves superseded rows live (OI-307, `4b5c38`). Two red flags in §3. Regression tests: `test/sql/workout_log_exercises_delete_final_rename_live_verify.sql` (C5), `test/sql/wle_single_live_summary_live_verify.sql`, harness `test/sql/wle_single_live_summary_dryrun_harness.sql`; 10 mutants, all caught (local PG 17.6).
 - **2026-10-07 (issue #78 close-out, d7b2e5)** — Self-evolution. §2.94 NEW — a shared in-flight flag is its own mirror (round 1's `ref.listen` fix created round 2's double-call finding; round 2's `static bool` created round 3's "second screen never wakes + no timeout" finding). Class rule: when a finding is fixed by ADDING a caller/trigger, list every path that now reaches the guarded call and ask when the guard's state is written. Written at batch close-out rather than in the discovering commit (§5.1 asks for the same commit); the close-out itself had been skipped and was corrected by the founder, see `memory/feedback_section5_closeout_is_discipline.md`. Regression test: `test/contracts/weekly_report_video_and_refresh_issue78_test.dart`.
 

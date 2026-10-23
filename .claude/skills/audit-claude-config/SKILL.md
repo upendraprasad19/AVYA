@@ -66,6 +66,14 @@ For each entry under `hooks`:
 - If the script doesn't exist → **P0**.
 - If the script is unreadable / non-executable → **P0**.
 - If the command pattern has obvious injection risk (env-var interpolation into unquoted shell) → **P0**.
+  The repo's own hook template (`docs/architecture/hooks.md`, OI-384) interpolates `$r` and
+  `${CLAUDE_PROJECT_DIR:-.}` inside DOUBLE QUOTES: that is the expected form, not a finding.
+  An UNQUOTED `$r` / `$CLAUDE_PROJECT_DIR` is still P0 (a path with a space breaks it).
+- If a command runs a script by a path RELATIVE to the shell's cwd (e.g. bare
+  `dart run scripts/<x>.dart`, no root resolution first) → **P0**: the harness runs hooks in the
+  session's CURRENT directory, so from any subdirectory the hook exits non-2 and silently does not
+  run (diagnose `8f3e35`). The script path to resolve is the one after `cd "$r"`, i.e. relative to
+  the checkout root.
 
 **2.5 env vars**
 

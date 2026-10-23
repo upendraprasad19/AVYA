@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**245 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**250 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -69,187 +69,192 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-146 | three duplicate exercise rows, two of them dead, one skewing selection… | nothing. Needs a decision on whether the… | 2026-08-29 — name-normalised (case,… | [:2326](open_issues.md#L2326) |
 | OI-147 | remove Donkey Calf Raise: a one-row deletion that touches the cloud seed,… | nothing technical. Needs the… | 2026-08-29 — every claim below… | [:2382](open_issues.md#L2382) |
 | OI-148 | 23 equipment-variant exercises the plate mapping surfaced, blocked on a… | the selection-skew question below. Not… | 2026-08-29 — each named row checked… | [:2444](open_issues.md#L2444) |
-| OI-149 | breathing_cue holds a bare number on 136 of 292 rows; the original text is… | the founder** — 136 replacement cues… | 2026-08-29 — counted, and the recovery… | [:2474](open_issues.md#L2474) |
-| OI-152 | six-plus call sites fire `syncX()` and `pushSnapshot()` back to back,… | nothing technical. Bounded, mechanical… | 2026-08-30 — every call site below read… | [:2506](open_issues.md#L2506) |
-| OI-154 | a cleared profile field silently reverts on the next sign-in (P3, was P1) | FOUNDER — product choice (below).… | 2026-09-29 — re-traced against `main` @… | [:2548](open_issues.md#L2548) |
-| OI-156 | CLAUDE.md numeric claims drift because nothing re-derives them (P2) | nothing — mechanical | 2026-09-03 — each count re-measured | [:2608](open_issues.md#L2608) |
-| OI-157 | no SAST and no SCA run anywhere in CI (P1) | founder call on Semgrep scope | 2026-09-03 — grep, 0 hits | [:2633](open_issues.md#L2633) |
-| OI-158 | tests and gates that cannot fail (P2) | TEST-1 needs one device run to establish… | 2026-09-03 — source-verified | [:2653](open_issues.md#L2653) |
-| OI-159 | sync and Edge Function correctness residue (P2) | nothing — but see OI-154 for the ARCH-1… | 2026-09-03 — source-verified | [:2676](open_issues.md#L2676) |
-| OI-160 | dependency + build-toolchain hygiene (P2) | DEP-7 needs a founder unpin decision | 2026-09-03 — versions read from files | [:2696](open_issues.md#L2696) |
-| OI-161 | two blind spots in our own observability and discipline gates (P3) | INFRA-13 is platform-tier, needs its own… | 2026-09-03 — live query + grep | [:2719](open_issues.md#L2719) |
-| OI-163 | the four-tag migration header has NO gate, and two places claimed it did… | nothing — needs a gate written,… | 2026-09-05 — repo-wide grep + the live… | [:2761](open_issues.md#L2761) |
-| OI-164 | the shared QA account caps CI at ~3 runs per IST day (P2) | a founder decision on test-account… | 2026-09-05 — live `usage_counters` + the… | [:2785](open_issues.md#L2785) |
-| OI-166 | regeneration RESTARTS the periodization wave instead of continuing it, so… | OI-175 (the window-alignment half —… | 2026-09-06 — every citation below… | [:2807](open_issues.md#L2807) |
-| OI-167 | the debugging skill's bug-class numbers collide 9×, every one is cited by… | nothing technical — needs a per-citation… | 2026-09-07 — `grep -oE '^### 2\.[0-9]+'… | [:2914](open_issues.md#L2914) |
-| OI-169 | a local run of `test/edge_functions/` reports "All tests passed" having… | nothing — needs a decision on which… | 2026-09-07 — `flutter test… | [:2965](open_issues.md#L2965) |
-| OI-173 | no cold-start weight estimate: a brand-new user, every free user, and any… | none — founder approved 2026-09-06 as… | 2026-09-06 — `plan_generator.dart:234`… | [:2854](open_issues.md#L2854) |
-| OI-174 | schedule rows written past `plan_end` are never pruned, and they delay the… | none — NARROWED 2026-09-13 by OI-189… | 2026-09-13 — re-derived while closing… | [:2872](open_issues.md#L2872) |
-| OI-175 | a regeneration past the phase's 4th week (`rawWeek > 4`) has no… | FOUNDER — what a regeneration should DO… | 2026-09-06 — `getCurrentWeekNumber()`… | [:2897](open_issues.md#L2897) |
-| OI-177 | the live-cron snapshot that gives Gate 31 its only fileless-migration… | none | 2026-09-10 —… | [:2982](open_issues.md#L2982) |
-| OI-179 | `alert_cron_function_dead` cannot fire across 100% of its range, and never… | none — one-line predicate fix; the value… | 2026-09-26 — the R2-11 PRECONDITION is… | [:2995](open_issues.md#L2995) |
-| OI-180 | `check_sot_registry_parity` silently skips every single-number… | none | 2026-09-10 —… | [:3028](open_issues.md#L3028) |
-| OI-184 | 4 tables rely on RLS-zero-policy default-deny alone; the raw grants under… | none — mechanically straightforward (a… | 2026-09-11 — LIVE, via the Management… | [:3041](open_issues.md#L3041) |
-| OI-185 | `check_schema_column_refs.dart` validates only the FIRST line of a… | none — carried out of OI-162 (closed… | 2026-09-03 — by the audit (a prototype… | [:3115](open_issues.md#L3115) |
-| OI-186 | the AI coach cannot replace ONE day with a different workout: the only… | founder product decision on tier (see… | 2026-09-10 — full census of… | [:3141](open_issues.md#L3141) |
-| OI-187 | the AI coach has no read path to the 292-exercise library: the WRITE path… | nothing technical — needs a design… | 2026-09-10 — every claim below re-read… | [:3182](open_issues.md#L3182) |
-| OI-188 | no re-entry path for a returning user: the free path hands them a DELOAD… | founder product decision on the… | 2026-09-10 — app behaviour read from… | [:3229](open_issues.md#L3229) |
-| OI-190 | Unit 1's §4.11 gate `check_single_schedule_row_builder.dart` is WARN-only… | none — needs a plan. Input is already… | 2026-09-12 — `dart run… | [:3285](open_issues.md#L3285) |
-| OI-191 | target_weight_kg can contradict the chosen goal's direction, making the… | none — bounded, no… | 2026-09-13 — reproduced live on the… | [:3299](open_issues.md#L3299) |
-| OI-192 | the orphan-sync dedupe can never match a photo turn: client writes… | none — pick ONE placeholder shape (or… | 2026-09-13 — source only:… | [:3358](open_issues.md#L3358) |
-| OI-193 | Gate 31 treats a COMMENTED `cron.unschedule('X')` as a real unschedule, so… | none — strip `--` comments before the… | 2026-09-12 —… | [:3368](open_issues.md#L3368) |
-| OI-194 | `compute_admin_metrics_daily` (jobid 30) skipped its 2026-09-11 18:15Z… | none for the code (repair (d) below is a… | 2026-09-12 — `select function_name,… | [:3379](open_issues.md#L3379) |
-| OI-196 | `morning-alert`'s Telegram sender logs the raw fetch error, whose message… | none — one-line change in one function;… | 2026-09-13 — read… | [:3410](open_issues.md#L3410) |
-| OI-197 | Founder observability gaps: payment-flow alerting dormant, EF auth-outage… | none — no schema/migration/payment/auth… | never — this is a gap analysis surfaced… | [:3422](open_issues.md#L3422) |
-| OI-199 | cleanup_cron_call_log() spares only TWO global rows, not each function's… | none | 2026-09-14, live read of the function… | [:3468](open_issues.md#L3468) |
-| OI-200 | founder_metrics_ops().client_errors_today counts benign event-coded… | none | 2026-09-14, B-pass on migration 135… | [:3533](open_issues.md#L3533) |
-| OI-201 | alert_cron_function_dead can burst-dispatch many critical alerts at once;… | none | 2026-09-14, Hermes lens L31… | [:3571](open_issues.md#L3571) |
-| OI-205 | Already-authenticated user opening a valid /reset link is silently… | none | 2026-09-16, B-pass on the… | [:3613](open_issues.md#L3613) |
-| OI-207 | sot_registry.yaml: hold-weeks line_range citations (762-847, 890-915)… | none | 2026-09-26 — real cause is NOT an… | [:3684](open_issues.md#L3684) |
-| OI-208 | AuthNotifier._teardown() swallows internal failures with no signal to… | none | 2026-09-16, B-pass on the… | [:3731](open_issues.md#L3731) |
-| OI-210 | future-prediction Edge Function has no live caller anywhere in the shipped… | landing L4 of… | 2026-09-16, B-pass on the… | [:3764](open_issues.md#L3764) |
-| OI-211 | Custom exercise equipment field + [] to ['none'] backfill of existing rows… | founder batch scheduling | never | [:3833](open_issues.md#L3833) |
-| OI-212 | Custom foods unsearchable from the main food search bar (search never… | founder product decision (separate Your… | never | [:3841](open_issues.md#L3841) |
-| OI-213 | Razorpay auto-renew subscriptions (web): mandates, subscription.charged… | founder product decision on timing… | 2026-09-17 — claims traced from the… | [:3849](open_issues.md#L3849) |
-| OI-214 | Diet plan Option A: curated Indian meal-template layer (recipe-first… | none | never | [:3870](open_issues.md#L3870) |
-| OI-215 | Device verification expansion: Patrol flows for the UI-bug cluster,… | none | never | [:3877](open_issues.md#L3877) |
-| OI-216 | snapshot-contract gate: per-entry slack mechanism for shift-sensitive… | none | never | [:3895](open_issues.md#L3895) |
-| OI-217 | telemetry v2: aggregate plan-review findings by class… | none | never | [:3910](open_issues.md#L3910) |
-| OI-218 | Restore-recreated terminal schedule rows lose… | none | never | [:3969](open_issues.md#L3969) |
-| OI-219 | is_pr not rescanned across moveExerciseLogs — collision merge can drop a… | none | never | [:4005](open_issues.md#L4005) |
-| OI-220 | Contract-sweep gate: pre-push targeted SoT contract testing | one clean batch under `--warn-only`… | 2026-09-19 — shipped on `gate-integrity`… | [:3926](open_issues.md#L3926) |
-| OI-221 | tool_dispatcher defensive date-parse fallbacks can clobber the wrong date… | none | never | [:4024](open_issues.md#L4024) |
-| OI-222 | Document versionCode-bump-via-merge CI gap in CLAUDE.md §4.9 | none | never | [:4042](open_issues.md#L4042) |
-| OI-227 | Telegram coach connect is broken (no linking token, bot says no user… | none — UI removal is self-contained; the… | 2026-09-21 — founder tapped "Connect… | [:4068](open_issues.md#L4068) |
-| OI-228 | AI coach shortenWorkout tool calls get stuck at status:queued with no… | none — Bug A is CLOSED; Bug B's "stuck… | 2026-09-22 (Batch B) — live-traced the… | [:4143](open_issues.md#L4143) |
-| OI-229 | AI coach chat replies violate captain_manual.ts hard rules: 100-word cap… | none — both are prompt-adherence gaps in… | 2026-09-21 — both cited… | [:4286](open_issues.md#L4286) |
-| OI-231 | AI coach addressed a promoted user by their OLD rank term (Recruit instead… | none — live verification DONE (Batch B,… | 2026-09-22 (Batch B) — settled via the… | [:4398](open_issues.md#L4398) |
-| OI-233 | user_daily_snapshots' 4 cron/client writers are not atomic against each… | none — scope and fix shape are already… | 2026-09-21 — explicitly scoped out in | [:4518](open_issues.md#L4518) |
-| OI-236 | 12 of 14 Supabase advisor-flagged unused indexes (idx_scan=0) left… | none | never | [:4564](open_issues.md#L4564) |
-| OI-239 | Acknowledging an alert re-arms its dedup window instead of waiting out the… | none | never | [:4571](open_issues.md#L4571) |
-| OI-240 | _getNextRankFromLadder's remaining/binding_constraint is inaccurate for 3… | none — bounded work, but a genuinely… | 2026-09-22 — every claim below re-read… | [:4598](open_issues.md#L4598) |
-| OI-241 | Cross-worktree concurrency: no lock prevents multiple sessions running… | none | never | [:4673](open_issues.md#L4673) |
-| OI-244 | Confirm-link tap left auth.one_time_tokens unconsumed — unexplained low… | (1) Vercel deploy authorization for BOTH… | 2026-09-23 — reproduced live on 2 real… | [:4700](open_issues.md#L4700) |
-| OI-247 | db_maintenance_nightly (jobid 41) fails every run: VACUUM cannot run… | the first nightly run after the fix… | 2026-09-26 — FIX APPLIED: migration 144… | [:4818](open_issues.md#L4818) |
-| OI-248 | client_errors_spike trips on one device's offline telemetry-queue replay… | none — scheduled: batch B. | 2026-09-26 — LIVE: the spike rows came… | [:4828](open_issues.md#L4828) |
-| OI-249 | 45 s restore-op timeouts on tiny tables on builds +45 to +47 | none — P2, unscheduled. | 2026-09-26 — LIVE client telemetry:… | [:4837](open_issues.md#L4837) |
-| OI-250 | pg_cron self/correlated silence has no out-of-band watcher (146 cannot see… | none | never | [:4846](open_issues.md#L4846) |
-| OI-251 | Retention/vacuum effect is unobserved: return_message '1 row' hides DELETE… | none | never | [:4868](open_issues.md#L4868) |
-| OI-252 | Workout templates: one stable identity (delete/rename propagation, unit… | founder on-device verification only.… | 2026-09-28 (superseding the 2026-09-27… | [:4889](open_issues.md#L4889) |
-| OI-253 | PendingTemplateDeletes queued delete lost on logout/offline sign-out… | a durable, cross-session delete queue… | never | [:4917](open_issues.md#L4917) |
-| OI-256 | Profile field-level conflict resolution: per-field merge instead of… | none | never | [:4938](open_issues.md#L4938) |
-| OI-257 | Onboarding diet_preference default 'veg' doesn't match Edit Profile's chip… | a product decision — change onboarding's… | `lib/features/onboarding/screens/plan_sc… | [:4969](open_issues.md#L4969) |
-| OI-259 | check_plan_review_record_exists.dart cannot parse hand-authored… | none (false-positive class, not a… | 2026-09-28 — confirmed live on GitHub… | [:4979](open_issues.md#L4979) |
-| OI-260 | 4 sibling reportGeminiExhaustion-wiring tests… | none — fixable any time by whoever's own… | never | [:5107](open_issues.md#L5107) |
-| OI-261 | displaced_<date> swap backups are local-only: never in plan_json or any… | none | 2026-09-28 — `git grep displaced --… | [:5046](open_issues.md#L5046) |
-| OI-262 | check_sot_registry_parity only checks N-M line_ranges: bare :NNNN… | none | 2026-09-28 — measured against the gate's… | [:5073](open_issues.md#L5073) |
-| OI-264 | docs/sot_registry.yaml is not valid YAML (35 parse errors); every gate… | none | 2026-09-28 — PyYAML safe_load, iterated… | [:5127](open_issues.md#L5127) |
-| OI-265 | Boot-time healer needed for pre-existing exlog rows corrupted by the… | none — needs its own writer/reader-chain… | never | [:5158](open_issues.md#L5158) |
-| OI-266 | _resolveLoggingType never consults customBox/user_custom_exercises for a… | none — fixable any time by whoever's own… | never | [:5185](open_issues.md#L5185) |
-| OI-267 | weeklyReportDataProvider has no write-time invalidation across… | none — fixable any time; needs a… | never | [:5213](open_issues.md#L5213) |
-| OI-268 | contract_sweep sets TZ=Asia/Kolkata for its flutter child; on Windows the… | none | 2026-09-29 — same test, TZ unset PASS vs… | [:5257](open_issues.md#L5257) |
-| OI-269 | workout_log_exercises readers don't filter deleted_at (weekly-recalc +… | none | never | [:5290](open_issues.md#L5290) |
-| OI-270 | PendingTemplateDeletes shares PendingExlogDeletes' fixed const-list… | none | never | [:5338](open_issues.md#L5338) |
-| OI-271 | Edit Profile: emptying the Body fat % box does not clear the stored value… | none — nothing external; founder… | 2026-09-29 — read… | [:5362](open_issues.md#L5362) |
-| OI-272 | Reconcile live prod migrations against the applied-migrations ledger… | none | 2026-09-29 — data below re-derived by… | [:5390](open_issues.md#L5390) |
-| OI-273 | Branch sweep for merged branches that never had a worktree here… | none — this unit's exclusion from its… | 2026-09-29 — every constraint below was… | [:5428](open_issues.md#L5428) |
-| OI-274 | Vercel Flutter SDK re-clone on every build wastes ~1/3 of build time (no… | none — fixable any time; needs… | 2026-09-30 — confirmed live via Vercel's… | [:5448](open_issues.md#L5448) |
-| OI-276 | Chat video analysis feature: nothing in the client uploads video (no… | founder prioritisation… | 2026-10-01 — `grep -rn pickVideo lib/`… | [:5493](open_issues.md#L5493) |
-| OI-277 | Free-tier chat cost exposure after the Gemini 3.1 Flash-Lite move:… | no real PRO/volume data yet — PRO only… | 2026-10-01 — inputs: measured avg chat… | [:5504](open_issues.md#L5504) |
-| OI-278 | Telegram bot chat cap parity: bot is disabled; when re-enabled its cap… | the Telegram bot (separate OpenClaw VPS… | 2026-10-01 —… | [:5515](open_issues.md#L5515) |
-| OI-279 | Phase 1b: pull-on-resume - a backgrounded device refreshes itself (7-day… | Phase 1 (e5b2a9) merged to `main`; needs… | 2026-10-02 - read on the branch: the… | [:5526](open_issues.md#L5526) |
-| OI-280 | Phase 2 multi-device delta sync: updated_at+deleted_at on every synced… | Phase 1b (OI-279) merged; needs the… | 2026-10-02 - read… | [:5547](open_issues.md#L5547) |
-| OI-281 | Meal deletes never reach the cloud: NutritionWriteService.deleteLog is… | needs a cloud tombstone (`deleted_at`)… | 2026-10-02 - code read, NOT reproduced… | [:5562](open_issues.md#L5562) |
-| OI-283 | Live-DB SQL harness runners (check_onconflict_live_arbiter,… | founder decision: provision a CI secret… | 2026-10-02: both runners work by hand… | [:5573](open_issues.md#L5573) |
-| OI-284 | Completed day-swap row keeps its pre-swap title after a cross-device… | the founder's on-device check (an APK… | 2026-10-03 - live rows (user d7a67a37):… | [:5582](open_issues.md#L5582) |
-| OI-285 | mergeScheduleBundleIntoHive decides snapshot winners once before the loop… | its own plan + review; touches the… | 2026-10-03 - code read:… | [:5589](open_issues.md#L5589) |
-| OI-286 | Replaced-swap notice: a device whose local swap loses to a newer… | OI-285 (the notice needs the per-week… | 2026-10-03 - code read: L3… | [:5596](open_issues.md#L5596) |
-| OI-287 | Day-swap allowance is per-device: a swap on web leaves the phone showing… | founder go on the read path:… | 2026-10-03 - live: phone daily snapshot… | [:5603](open_issues.md#L5603) |
-| OI-288 | Discipline: accepted-residual wording in tests pinned a defect as correct… | its own L-tier branch (root CLAUDE.md +… | 2026-10-03 -… | [:5610](open_issues.md#L5610) |
-| OI-289 | Nutrition cross-device probe: verify meal add/edit/delete converge… | the founder running the two-device walk… | never - asked by the founder 2026-10-01… | [:5617](open_issues.md#L5617) |
-| OI-290 | DaySwapRules leaves week_number unclassified (travels as content); hygiene… | founder call - close as no-symptom… | 2026-10-03 - `day_swap_rules.dart:17-28`… | [:5624](open_issues.md#L5624) |
-| OI-292 | morning-alert push names a workout from YESTERDAY's snapshot: the 02:00… | a design decision on the date-correct… | 2026-10-03 -… | [:5631](open_issues.md#L5631) |
-| OI-293 | Restore outcomes are unobservable on a release Android device:… | its own plan: the outcome must… | 2026-10-03 -… | [:5638](open_issues.md#L5638) |
-| OI-294 | A cold-start restore that never returns (killed or hung mid-restore)… | its own plan (split out of… | 2026-10-04 - code read, NOT reproduced… | [:5645](open_issues.md#L5645) |
-| OI-295 | Schedule writers that pass no WidgetRef (deload_evaluator lift via… | an audit of every ref-less schedule… | 2026-10-03 - code read, not reproduced:… | [:5652](open_issues.md#L5652) |
-| OI-296 | Coach progress tools read long windows unpaginated: getProgressSummary's… | founder-owned checks only. The code… | 2026-10-03 by source read + live SQL:… | [:5841](open_issues.md#L5841) |
-| OI-297 | Body measurements have no input UI, no history view and no cadence prompt:… | none (L2a, the merge-safe push and one… | 2026-10-03:… | [:5850](open_issues.md#L5850) |
-| OI-298 | No effort capture (RIR/RPE): workout_logs.rpe is never written (0 rows… | founder — DECIDED 2026-10-06: left out… | 2026-10-03:… | [:5861](open_issues.md#L5861) |
-| OI-299 | No computed athlete-state digest: the coach has no deterministic… | OI-296 (landing L1); landing L3 of the… | 2026-10-03: the coach assembles history… | [:5870](open_issues.md#L5870) |
-| OI-300 | Progress Review: a grounded, coach-generated multi-month review (new… | OI-299 (same landing, L3) of the… | 2026-10-03: the only multi-period report… | [:5880](open_issues.md#L5880) |
-| OI-301 | No gate stops a stray file at the repo root: existsSync (14 bytes of junk)… | its own plan + review (a new… | 2026-10-03 - `git ls-files` at the repo… | [:5659](open_issues.md#L5659) |
-| OI-302 | Restore keeps the OLDEST cloud workout_logs row for a date completed twice… | a decision: pick the NEWEST row per date… | 2026-10-04 - code read:… | [:5667](open_issues.md#L5667) |
-| OI-303 | Delete the disable_completed_title_heal kill switch and its closed-path… | the founder's on-device check of OI-284… | 2026-10-04 - code read: the kill switch… | [:5674](open_issues.md#L5674) |
-| OI-304 | InsightCard and DeepAnalysisCard are never mounted: PatternDetector's… | founder decision D2 (L2b plan v3.1,… | 2026-10-04 by grep at `4fef03a7`:… | [:5889](open_issues.md#L5889) |
-| OI-305 | Date-of-birth floor is inconsistent (onboarding allows age 10, Edit… | founder — DECIDED 2026-10-06: keep the… | 2026-10-04: `identity_screen.dart:82`… | [:5898](open_issues.md#L5898) |
-| OI-306 | primary_goal_updated_at has zero writers and goal_changed_at is Hive-only… | none | 2026-10-04: `goal_changed_at` is written… | [:5909](open_issues.md#L5909) |
-| OI-307 | workout_log_exercises keeps a second LIVE summary row when a log's set… | founder-owned checks only. All three… | 2026-10-04. Writer:… | [:5918](open_issues.md#L5918) |
-| OI-308 | getExerciseHistory computes total_volume_kg = weight x reps x sets… | founder-owned check only. Fixed in L1b… | 2026-10-04: `getExerciseHistory.ts:88`… | [:5927](open_issues.md#L5927) |
-| OI-309 | Merge-conflict treadmill: every >=account PR conflicts with main again and… | a plan (it changes hooks and the… | 2026-10-05 - measured on PR #73… | [:5695](open_issues.md#L5695) |
-| OI-310 | App links (sign-up, welcome, Profile) open the icanbefitter.com blog… | the code half only — the policy was… | 2026-10-06. The app opens… | [:5936](open_issues.md#L5936) |
-| OI-311 | A spawned `dart run` exited 254 in CI with no stderr in the log (run… | none for diagnosis - the second and… | 2026-10-06 - read from… | [:5705](open_issues.md#L5705) |
-| OI-312 | Exercise-log deletes never reach the cloud: migration 151's BEFORE INSERT… | founder-owned device check. Fixed… | 2026-10-06, live, inside a DO block that… | [:5946](open_issues.md#L5946) |
-| OI-313 | Installed-APK residuals of L1a: APKs without the L1a-2 client fixes keep… | upstream — no minimum-version /… | 2026-10-06 — writers:… | [:5955](open_issues.md#L5955) |
-| OI-315 | ProgressPhotoRepository.cleanupOrphanedStorage has zero callers, and the… | a plan: a server-side per-day cap is a… | 2026-10-06 - `git grep -n… | [:5720](open_issues.md#L5720) |
-| OI-316 | The progress-photos bucket and its SELECT/DELETE/INSERT policies have no… | a plan for a recurring catalog check (a… | 2026-10-06 - the B1 live evidence (E10)… | [:5729](open_issues.md#L5729) |
-| OI-318 | A 127 s cold-start restore on 2026-10-06 (per-op 9-41 s, two 45 s… | a recurrence: a restore over 60 s on any… | 2026-10-06 - `client_errors` for the… | [:5681](open_issues.md#L5681) |
-| OI-319 | current_streak_weeks is a lifetime counter that never resets when the… | a founder product decision (not… | 2026-10-06 - code read: no code path… | [:5688](open_issues.md#L5688) |
-| OI-323 | weekly-report has no server-side per-day cap for PRO: consume_quota runs… | a FOUNDER product decision: cap PRO… | 2026-10-08 - read… | [:5738](open_issues.md#L5738) |
-| OI-324 | SupabaseService.callFunction has no timeout of its own… | none - an engineering choice (a default… | 2026-10-08 - read… | [:5747](open_issues.md#L5747) |
-| OI-325 | Profile weekly-report card still says 'Weekly AI Report'… | a FOUNDER copy decision: the one name… | 2026-10-08 - `grep -rn "Weekly AI… | [:5756](open_issues.md#L5756) |
-| OI-326 | Restore-after-sign-in cost with the paged Edge Function (v10) is… | the founder: one sign-out/in on the… | 2026-10-09 - read the closure ledger… | [:5765](open_issues.md#L5765) |
-| OI-327 | Weekly streak never resets when the daily streak breaks:… | a founder product decision: should a… | 2026-10-09 - read… | [:5773](open_issues.md#L5773) |
-| OI-328 | One-off production credit of the 2026-09-14 week for user d7a67a37… | an explicit founder go: it is a live… | 2026-10-09 - read the plan… | [:5781](open_issues.md#L5781) |
-| OI-329 | water_logs still takes about 54 updates per day after the sync-load batch… | none, fixable now; start by reading… | 2026-10-09 - live `pg_stat_user_tables`… | [:5790](open_issues.md#L5790) |
-| OI-330 | workout_log_exercises updates rose from about 5 to about 62 per day across… | none, but it needs a diagnosis first… | 2026-10-09 - live `pg_stat_user_tables`… | [:5806](open_issues.md#L5806) |
-| OI-331 | No detector for leftover background processes: a helper agent's unbounded… | none | 2026-10-09 - found live: two bash… | [:5817](open_issues.md#L5817) |
-| OI-332 | weight_logs and sleep_logs pushes send explicit nulls for notes, quality,… | none today; becomes a defect the day any… | 2026-10-11 - live read-only counts on… | [:5828](open_issues.md#L5828) |
-| OI-333 | daily-snapshot/index_test.ts leaks DISABLE_GEMINI_FAILURE_ALERT into the… | none | 2026-10-11 -… | [:5964](open_issues.md#L5964) |
-| OI-334 | deploy_via_api.js rollback gaps: the pre-deploy cloud snapshot writes 0… | none - an engineering choice (see the… | 2026-10-11 - two measurements during the… | [:5975](open_issues.md#L5975) |
-| OI-335 | Gate 50 (check_reader_manifest_complete) never evaluates a SoT concept… | none for the registry wording; making… | 2026-10-11 by reading:… | [:5988](open_issues.md#L5988) |
-| OI-336 | Referral reward UX: the referrer's counts surface (friends joined /… | the founder: (1) the commit/merge go for… | 2026-10-12 - by reading the repo:… | [:5999](open_issues.md#L5999) |
-| OI-337 | The commit-time gates read staged paths with a plain git diff --cached… | none - an engineering choice; a… | 2026-10-12 - by reading and by… | [:6012](open_issues.md#L6012) |
-| OI-338 | delete_account_purges_all_user_buckets_test.dart reads USER_OWNED_BUCKETS… | none - a test-only edit… | 2026-10-12 - by reading… | [:6025](open_issues.md#L6025) |
-| OI-339 | A Razorpay refund made only in the dashboard is invisible to the referral… | the founder's decision on how refunds… | 2026-10-13 - by reading.… | [:6041](open_issues.md#L6041) |
-| OI-340 | A chargeback or UPI dispute after the referral reward vested has no… | the founder's decision: accept the loss,… | 2026-10-13 - by reading.… | [:6054](open_issues.md#L6054) |
-| OI-341 | A friend on the 7-day referral trial cannot buy: create-razorpay-order… | Piece A: nothing (live, switch unset;… | 2026-10-13 - by reading.… | [:6067](open_issues.md#L6067) |
-| OI-343 | Referral abuse by throwaway accounts: email confirmation is on but… | the founder's decision: accept the… | 2026-10-13 - by reading the live auth… | [:6082](open_issues.md#L6082) |
-| OI-345 | Remove the enable_body_measurements OFF path (flag checks, kill switch,… | founder-owned check of the RELEASE build… | 2026-10-16:… | [:6095](open_issues.md#L6095) |
-| OI-346 | Existing accounts accepted the v1 (blog) policy; nothing asks them to… | store launch (upstream_blocked;… | 2026-10-16: `AppConstants.termsVersion`… | [:6104](open_issues.md#L6104) |
-| OI-347 | Free-access codes: the founder wants to give out codes that grant PRO for… | none (a plan is the next step; the… | 2026-10-16 - by reading… | [:6113](open_issues.md#L6113) |
-| OI-348 | Post-build check list: every founder-owned device, signed-in and… | the final AAB/APK build… | 2026-10-17 - by reading every… | [:6126](open_issues.md#L6126) |
-| OI-349 | Onboarding welcome screen overflows at 2x system text on a 640-dp phone:… | the founder's call on whether 2x system… | 2026-10-17 - by running the screen under… | [:6177](open_issues.md#L6177) |
-| OI-350 | verify-payment captures an authorized payment and echoes its Razorpay… | none | 2026-10-17 - by reading… | [:6186](open_issues.md#L6186) |
-| OI-351 | razorpay-webhook: after a payment.authorized auto-capture, a failed insert… | none | 2026-10-17 - by reading… | [:6193](open_issues.md#L6193) |
-| OI-352 | Active Workout meta line prints hard-coded '0kg' for every scheduled lift | none (pick up after the… | 2026-10-18 - by code read only, NOT on… | [:6201](open_issues.md#L6201) |
-| OI-353 | Plan suggested_weight (ProgressionResolver) is never read by the Active… | none (pick up after the… | 2026-10-18 - by code read: the plan… | [:6214](open_issues.md#L6214) |
-| OI-354 | Active Workout hero tile + full-screen viewer (animated WEBP) blocked on… | the animated-WEBP asset pipeline and its… | 2026-10-18 - design locked in… | [:6227](open_issues.md#L6227) |
-| OI-355 | Active Workout _persistActiveState reads the build-time widget.data, so… | none (pick up after the… | 2026-10-18 - by code read (plan review… | [:6238](open_issues.md#L6238) |
-| OI-357 | Active Workout U2: per-set last values, new-user weight mirror, faded… | the flip batch landing (branch… | never | [:6251](open_issues.md#L6251) |
-| OI-358 | Active Workout: adding an exercise already in the session crashes the… | none | never | [:6264](open_issues.md#L6264) |
-| OI-359 | verify-payment calls Razorpay capture before the payment-owner check… | none | 2026-10-20 - by code read (hermes pass… | [:6273](open_issues.md#L6273) |
-| OI-360 | verify-payment and razorpay-webhook log whole PostgREST error objects and… | none | 2026-10-20 - by code read (hermes pass… | [:6282](open_issues.md#L6282) |
-| OI-362 | Active Workout: remove the per-set (OFF) path and the… | OI-348 row A12 (the release-build device… | never | [:6291](open_issues.md#L6291) |
-| OI-363 | Active Workout: the FINISH/CANCEL button row overflows sideways at 320 dp… | none | never | [:6302](open_issues.md#L6302) |
-| OI-364 | Remove the disable_lapse_gap_policy kill switch (client Hive key + server… | founder device check of the PRO gap… | 2026-10-21 - by code read: only READERS… | [:6317](open_issues.md#L6317) |
-| OI-365 | Coach tools and app features do the same jobs through separate code (first… | none (founder 2026-10-21: this audit is… | 2026-10-21 - by code read at… | [:6328](open_issues.md#L6328) |
-| OI-366 | create-razorpay-order has no rate limit and honours expired or exhausted… | none for the code; the founder's call on… | 2026-10-21 - by reading (hermes pass… | [:6362](open_issues.md#L6362) |
-| OI-367 | Referral reward can be farmed once the purchase door is open: no minimum… | the founder's product call before store… | 2026-10-21 - by reading (hermes pass… | [:6371](open_issues.md#L6371) |
-| OI-368 | Coach chat: the coach replies 'Roger. Logged.' when nothing was logged (no… | the `ai-proxy` + `ai-media-proxy` deploy… | never | [:6380](open_issues.md#L6380) |
-| OI-369 | Coach chat: the coach says 'Logged' while the LOG SET card still waits for… | the `ai-proxy` + `ai-media-proxy` deploy… | never | [:6395](open_issues.md#L6395) |
-| OI-372 | Weekday exercise swap has no UI: the engine takes any date, but only the… | none | 2026-10-21 (code read on… | [:6408](open_issues.md#L6408) |
-| OI-373 | Coach: one workout request can produce either a typed logSet card (APPLY)… | none | never | [:6439](open_issues.md#L6439) |
-| OI-374 | Coach: remove the DISABLE_WRITE_CLAIM_RULE kill switch once the… | the `coach-log-truth` batch shipping and… | never | [:6450](open_issues.md#L6450) |
-| OI-375 | Coach: the FC2 queued acknowledgement hard-codes 'Recruit' instead of the… | none | never | [:6461](open_issues.md#L6461) |
-| OI-376 | Workout invalidation: WorkoutWriteService.onInvalidate is a dead hook and… | none | never | [:6472](open_issues.md#L6472) |
-| OI-377 | Train: WorkoutRepository.getExerciseLogsForDate duplicates the canonical… | none | never | [:6483](open_issues.md#L6483) |
-| OI-378 | Riverpod 3.2.1: debug assertion actualPausedCount == expectedPausedCount… | upstream: riverpod above 3.2.1… | never | [:6494](open_issues.md#L6494) |
-| OI-379 | Coach-logged workouts never add to total_workouts_done or run the rank… | none | never | [:6505](open_issues.md#L6505) |
-| OI-381 | Set counts read '1 sets' in the remaining renderers (prescriptions,… | none | never | [:6516](open_issues.md#L6516) |
-| OI-383 | Razorpay Android SDK is pinned (checkout 1.6.41, standard-core 1.7.19) and… | none | 2026-10-21 (Maven Central: checkout… | [:6527](open_issues.md#L6527) |
-| OI-389 | Cardio logs lose their minutes and distance: logExercise zeroes… | Batch 1b (coach paths; plan to be… | never | [:6550](open_issues.md#L6550) |
-| OI-390 | Coach and Home say 'You skip Sunday workouts 100% of the time' for a rest… | founder scheduling: pick up after the… | never | [:6571](open_issues.md#L6571) |
-| OI-391 | Cardio duration cap: workout_log_sets duration_secs CHECK widened from… | founder go for the live migration apply… | never | [:6590](open_issues.md#L6590) |
-| OI-392 | Coach logCardio tool: a dedicated AI-coach tool for cardio minutes and km… | founder go for the ai-proxy deploy… | never | [:6598](open_issues.md#L6598) |
-| OI-393 | A set logged or moved on top of a restore-shaped or F5 exlog row resets… | founder-sequenced follow-on (D10,… | never | [:6606](open_issues.md#L6606) |
-| OI-394 | Exlog type heal is dead on disk rows: fix the cast in… | founder-sequenced follow-on (D10,… | never | [:6614](open_issues.md#L6614) |
+| OI-152 | six-plus call sites fire `syncX()` and `pushSnapshot()` back to back,… | nothing technical. Bounded, mechanical… | 2026-08-30 — every call site below read… | [:2474](open_issues.md#L2474) |
+| OI-154 | a cleared profile field silently reverts on the next sign-in (P3, was P1) | FOUNDER — product choice (below).… | 2026-09-29 — re-traced against `main` @… | [:2516](open_issues.md#L2516) |
+| OI-156 | CLAUDE.md numeric claims drift because nothing re-derives them (P2) | nothing — mechanical | 2026-09-03 — each count re-measured | [:2576](open_issues.md#L2576) |
+| OI-157 | no SAST and no SCA run anywhere in CI (P1) | founder call on Semgrep scope | 2026-09-03 — grep, 0 hits | [:2601](open_issues.md#L2601) |
+| OI-158 | tests and gates that cannot fail (P2) | TEST-1 needs one device run to establish… | 2026-09-03 — source-verified | [:2621](open_issues.md#L2621) |
+| OI-159 | sync and Edge Function correctness residue (P2) | nothing — but see OI-154 for the ARCH-1… | 2026-09-03 — source-verified | [:2644](open_issues.md#L2644) |
+| OI-160 | dependency + build-toolchain hygiene (P2) | DEP-7 needs a founder unpin decision | 2026-09-03 — versions read from files | [:2664](open_issues.md#L2664) |
+| OI-161 | two blind spots in our own observability and discipline gates (P3) | INFRA-13 is platform-tier, needs its own… | 2026-09-03 — live query + grep | [:2687](open_issues.md#L2687) |
+| OI-163 | the four-tag migration header has NO gate, and two places claimed it did… | nothing — needs a gate written,… | 2026-09-05 — repo-wide grep + the live… | [:2729](open_issues.md#L2729) |
+| OI-164 | the shared QA account caps CI at ~3 runs per IST day (P2) | a founder decision on test-account… | 2026-09-05 — live `usage_counters` + the… | [:2753](open_issues.md#L2753) |
+| OI-166 | regeneration RESTARTS the periodization wave instead of continuing it, so… | OI-175 (the window-alignment half —… | 2026-09-06 — every citation below… | [:2775](open_issues.md#L2775) |
+| OI-167 | the debugging skill's bug-class numbers collide 9×, every one is cited by… | nothing technical — needs a per-citation… | 2026-09-07 — `grep -oE '^### 2\.[0-9]+'… | [:2882](open_issues.md#L2882) |
+| OI-169 | a local run of `test/edge_functions/` reports "All tests passed" having… | nothing — needs a decision on which… | 2026-09-07 — `flutter test… | [:2933](open_issues.md#L2933) |
+| OI-173 | no cold-start weight estimate: a brand-new user, every free user, and any… | none — founder approved 2026-09-06 as… | 2026-09-06 — `plan_generator.dart:234`… | [:2822](open_issues.md#L2822) |
+| OI-174 | schedule rows written past `plan_end` are never pruned, and they delay the… | none — NARROWED 2026-09-13 by OI-189… | 2026-09-13 — re-derived while closing… | [:2840](open_issues.md#L2840) |
+| OI-175 | a regeneration past the phase's 4th week (`rawWeek > 4`) has no… | FOUNDER — what a regeneration should DO… | 2026-09-06 — `getCurrentWeekNumber()`… | [:2865](open_issues.md#L2865) |
+| OI-177 | the live-cron snapshot that gives Gate 31 its only fileless-migration… | none | 2026-09-10 —… | [:2950](open_issues.md#L2950) |
+| OI-179 | `alert_cron_function_dead` cannot fire across 100% of its range, and never… | none — one-line predicate fix; the value… | 2026-09-26 — the R2-11 PRECONDITION is… | [:2963](open_issues.md#L2963) |
+| OI-180 | `check_sot_registry_parity` silently skips every single-number… | none | 2026-09-10 —… | [:2996](open_issues.md#L2996) |
+| OI-184 | 4 tables rely on RLS-zero-policy default-deny alone; the raw grants under… | none — mechanically straightforward (a… | 2026-09-11 — LIVE, via the Management… | [:3009](open_issues.md#L3009) |
+| OI-185 | `check_schema_column_refs.dart` validates only the FIRST line of a… | none — carried out of OI-162 (closed… | 2026-09-03 — by the audit (a prototype… | [:3083](open_issues.md#L3083) |
+| OI-186 | the AI coach cannot replace ONE day with a different workout: the only… | founder product decision on tier (see… | 2026-09-10 — full census of… | [:3109](open_issues.md#L3109) |
+| OI-187 | the AI coach has no read path to the 292-exercise library: the WRITE path… | nothing technical — needs a design… | 2026-09-10 — every claim below re-read… | [:3150](open_issues.md#L3150) |
+| OI-188 | no re-entry path for a returning user: the free path hands them a DELOAD… | founder product decision on the… | 2026-09-10 — app behaviour read from… | [:3197](open_issues.md#L3197) |
+| OI-190 | Unit 1's §4.11 gate `check_single_schedule_row_builder.dart` is WARN-only… | none — needs a plan. Input is already… | 2026-09-12 — `dart run… | [:3253](open_issues.md#L3253) |
+| OI-191 | target_weight_kg can contradict the chosen goal's direction, making the… | none — bounded, no… | 2026-09-13 — reproduced live on the… | [:3267](open_issues.md#L3267) |
+| OI-192 | the orphan-sync dedupe can never match a photo turn: client writes… | none — pick ONE placeholder shape (or… | 2026-09-13 — source only:… | [:3326](open_issues.md#L3326) |
+| OI-193 | Gate 31 treats a COMMENTED `cron.unschedule('X')` as a real unschedule, so… | none — strip `--` comments before the… | 2026-09-12 —… | [:3336](open_issues.md#L3336) |
+| OI-194 | `compute_admin_metrics_daily` (jobid 30) skipped its 2026-09-11 18:15Z… | none for the code (repair (d) below is a… | 2026-09-12 — `select function_name,… | [:3347](open_issues.md#L3347) |
+| OI-196 | `morning-alert`'s Telegram sender logs the raw fetch error, whose message… | none — one-line change in one function;… | 2026-09-13 — read… | [:3378](open_issues.md#L3378) |
+| OI-197 | Founder observability gaps: payment-flow alerting dormant, EF auth-outage… | none — no schema/migration/payment/auth… | never — this is a gap analysis surfaced… | [:3390](open_issues.md#L3390) |
+| OI-199 | cleanup_cron_call_log() spares only TWO global rows, not each function's… | none | 2026-09-14, live read of the function… | [:3436](open_issues.md#L3436) |
+| OI-200 | founder_metrics_ops().client_errors_today counts benign event-coded… | none | 2026-09-14, B-pass on migration 135… | [:3501](open_issues.md#L3501) |
+| OI-201 | alert_cron_function_dead can burst-dispatch many critical alerts at once;… | none | 2026-09-14, Hermes lens L31… | [:3539](open_issues.md#L3539) |
+| OI-205 | Already-authenticated user opening a valid /reset link is silently… | none | 2026-09-16, B-pass on the… | [:3581](open_issues.md#L3581) |
+| OI-207 | sot_registry.yaml: hold-weeks line_range citations (762-847, 890-915)… | none | 2026-09-26 — real cause is NOT an… | [:3652](open_issues.md#L3652) |
+| OI-208 | AuthNotifier._teardown() swallows internal failures with no signal to… | none | 2026-09-16, B-pass on the… | [:3699](open_issues.md#L3699) |
+| OI-210 | future-prediction Edge Function has no live caller anywhere in the shipped… | landing L4 of… | 2026-09-16, B-pass on the… | [:3732](open_issues.md#L3732) |
+| OI-211 | Custom exercise equipment field + [] to ['none'] backfill of existing rows… | founder batch scheduling | never | [:3801](open_issues.md#L3801) |
+| OI-212 | Custom foods unsearchable from the main food search bar (search never… | founder product decision (separate Your… | never | [:3809](open_issues.md#L3809) |
+| OI-213 | Razorpay auto-renew subscriptions (web): mandates, subscription.charged… | founder product decision on timing… | 2026-09-17 — claims traced from the… | [:3817](open_issues.md#L3817) |
+| OI-214 | Diet plan Option A: curated Indian meal-template layer (recipe-first… | none | never | [:3838](open_issues.md#L3838) |
+| OI-215 | Device verification expansion: Patrol flows for the UI-bug cluster,… | none | never | [:3845](open_issues.md#L3845) |
+| OI-216 | snapshot-contract gate: per-entry slack mechanism for shift-sensitive… | none | never | [:3863](open_issues.md#L3863) |
+| OI-217 | telemetry v2: aggregate plan-review findings by class… | none | never | [:3878](open_issues.md#L3878) |
+| OI-218 | Restore-recreated terminal schedule rows lose… | none | never | [:3937](open_issues.md#L3937) |
+| OI-219 | is_pr not rescanned across moveExerciseLogs — collision merge can drop a… | none | never | [:3973](open_issues.md#L3973) |
+| OI-220 | Contract-sweep gate: pre-push targeted SoT contract testing | one clean batch under `--warn-only`… | 2026-09-19 — shipped on `gate-integrity`… | [:3894](open_issues.md#L3894) |
+| OI-221 | tool_dispatcher defensive date-parse fallbacks can clobber the wrong date… | none | never | [:3992](open_issues.md#L3992) |
+| OI-222 | Document versionCode-bump-via-merge CI gap in CLAUDE.md §4.9 | none | never | [:4010](open_issues.md#L4010) |
+| OI-227 | Telegram coach connect is broken (no linking token, bot says no user… | none — UI removal is self-contained; the… | 2026-09-21 — founder tapped "Connect… | [:4036](open_issues.md#L4036) |
+| OI-228 | AI coach shortenWorkout tool calls get stuck at status:queued with no… | none — Bug A is CLOSED; Bug B's "stuck… | 2026-09-22 (Batch B) — live-traced the… | [:4111](open_issues.md#L4111) |
+| OI-229 | AI coach chat replies violate captain_manual.ts hard rules: 100-word cap… | none — both are prompt-adherence gaps in… | 2026-09-21 — both cited… | [:4254](open_issues.md#L4254) |
+| OI-231 | AI coach addressed a promoted user by their OLD rank term (Recruit instead… | none — live verification DONE (Batch B,… | 2026-09-22 (Batch B) — settled via the… | [:4366](open_issues.md#L4366) |
+| OI-233 | user_daily_snapshots' 4 cron/client writers are not atomic against each… | none — scope and fix shape are already… | 2026-09-21 — explicitly scoped out in | [:4486](open_issues.md#L4486) |
+| OI-236 | 12 of 14 Supabase advisor-flagged unused indexes (idx_scan=0) left… | none | never | [:4532](open_issues.md#L4532) |
+| OI-239 | Acknowledging an alert re-arms its dedup window instead of waiting out the… | none | never | [:4539](open_issues.md#L4539) |
+| OI-240 | _getNextRankFromLadder's remaining/binding_constraint is inaccurate for 3… | none — bounded work, but a genuinely… | 2026-09-22 — every claim below re-read… | [:4566](open_issues.md#L4566) |
+| OI-241 | Cross-worktree concurrency: no lock prevents multiple sessions running… | none | never | [:4641](open_issues.md#L4641) |
+| OI-244 | Confirm-link tap left auth.one_time_tokens unconsumed — unexplained low… | (1) Vercel deploy authorization for BOTH… | 2026-09-23 — reproduced live on 2 real… | [:4668](open_issues.md#L4668) |
+| OI-247 | db_maintenance_nightly (jobid 41) fails every run: VACUUM cannot run… | the first nightly run after the fix… | 2026-09-26 — FIX APPLIED: migration 144… | [:4786](open_issues.md#L4786) |
+| OI-248 | client_errors_spike trips on one device's offline telemetry-queue replay… | none — scheduled: batch B. | 2026-09-26 — LIVE: the spike rows came… | [:4796](open_issues.md#L4796) |
+| OI-249 | 45 s restore-op timeouts on tiny tables on builds +45 to +47 | none — P2, unscheduled. | 2026-09-26 — LIVE client telemetry:… | [:4805](open_issues.md#L4805) |
+| OI-250 | pg_cron self/correlated silence has no out-of-band watcher (146 cannot see… | none | never | [:4814](open_issues.md#L4814) |
+| OI-251 | Retention/vacuum effect is unobserved: return_message '1 row' hides DELETE… | none | never | [:4836](open_issues.md#L4836) |
+| OI-252 | Workout templates: one stable identity (delete/rename propagation, unit… | founder on-device verification only.… | 2026-09-28 (superseding the 2026-09-27… | [:4857](open_issues.md#L4857) |
+| OI-253 | PendingTemplateDeletes queued delete lost on logout/offline sign-out… | a durable, cross-session delete queue… | never | [:4885](open_issues.md#L4885) |
+| OI-256 | Profile field-level conflict resolution: per-field merge instead of… | none | never | [:4906](open_issues.md#L4906) |
+| OI-257 | Onboarding diet_preference default 'veg' doesn't match Edit Profile's chip… | a product decision — change onboarding's… | `lib/features/onboarding/screens/plan_sc… | [:4937](open_issues.md#L4937) |
+| OI-259 | check_plan_review_record_exists.dart cannot parse hand-authored… | none (false-positive class, not a… | 2026-09-28 — confirmed live on GitHub… | [:4947](open_issues.md#L4947) |
+| OI-260 | 4 sibling reportGeminiExhaustion-wiring tests… | none — fixable any time by whoever's own… | never | [:5075](open_issues.md#L5075) |
+| OI-261 | displaced_<date> swap backups are local-only: never in plan_json or any… | none | 2026-09-28 — `git grep displaced --… | [:5014](open_issues.md#L5014) |
+| OI-262 | check_sot_registry_parity only checks N-M line_ranges: bare :NNNN… | none | 2026-09-28 — measured against the gate's… | [:5041](open_issues.md#L5041) |
+| OI-264 | docs/sot_registry.yaml is not valid YAML (35 parse errors); every gate… | none | 2026-09-28 — PyYAML safe_load, iterated… | [:5095](open_issues.md#L5095) |
+| OI-265 | Boot-time healer needed for pre-existing exlog rows corrupted by the… | none — needs its own writer/reader-chain… | never | [:5126](open_issues.md#L5126) |
+| OI-266 | _resolveLoggingType never consults customBox/user_custom_exercises for a… | none — fixable any time by whoever's own… | never | [:5153](open_issues.md#L5153) |
+| OI-267 | weeklyReportDataProvider has no write-time invalidation across… | none — fixable any time; needs a… | never | [:5181](open_issues.md#L5181) |
+| OI-268 | contract_sweep sets TZ=Asia/Kolkata for its flutter child; on Windows the… | none | 2026-09-29 — same test, TZ unset PASS vs… | [:5225](open_issues.md#L5225) |
+| OI-269 | workout_log_exercises readers don't filter deleted_at (weekly-recalc +… | none | never | [:5258](open_issues.md#L5258) |
+| OI-270 | PendingTemplateDeletes shares PendingExlogDeletes' fixed const-list… | none | never | [:5306](open_issues.md#L5306) |
+| OI-271 | Edit Profile: emptying the Body fat % box does not clear the stored value… | none — nothing external; founder… | 2026-09-29 — read… | [:5330](open_issues.md#L5330) |
+| OI-272 | Reconcile live prod migrations against the applied-migrations ledger… | none | 2026-09-29 — data below re-derived by… | [:5358](open_issues.md#L5358) |
+| OI-273 | Branch sweep for merged branches that never had a worktree here… | none — this unit's exclusion from its… | 2026-09-29 — every constraint below was… | [:5396](open_issues.md#L5396) |
+| OI-274 | Vercel Flutter SDK re-clone on every build wastes ~1/3 of build time (no… | none — fixable any time; needs… | 2026-09-30 — confirmed live via Vercel's… | [:5416](open_issues.md#L5416) |
+| OI-276 | Chat video analysis feature: nothing in the client uploads video (no… | founder prioritisation… | 2026-10-01 — `grep -rn pickVideo lib/`… | [:5461](open_issues.md#L5461) |
+| OI-277 | Free-tier chat cost exposure after the Gemini 3.1 Flash-Lite move:… | no real PRO/volume data yet — PRO only… | 2026-10-01 — inputs: measured avg chat… | [:5472](open_issues.md#L5472) |
+| OI-278 | Telegram bot chat cap parity: bot is disabled; when re-enabled its cap… | the Telegram bot (separate OpenClaw VPS… | 2026-10-01 —… | [:5483](open_issues.md#L5483) |
+| OI-279 | Phase 1b: pull-on-resume - a backgrounded device refreshes itself (7-day… | Phase 1 (e5b2a9) merged to `main`; needs… | 2026-10-02 - read on the branch: the… | [:5494](open_issues.md#L5494) |
+| OI-280 | Phase 2 multi-device delta sync: updated_at+deleted_at on every synced… | Phase 1b (OI-279) merged; needs the… | 2026-10-02 - read… | [:5515](open_issues.md#L5515) |
+| OI-281 | Meal deletes never reach the cloud: NutritionWriteService.deleteLog is… | needs a cloud tombstone (`deleted_at`)… | 2026-10-02 - code read, NOT reproduced… | [:5530](open_issues.md#L5530) |
+| OI-283 | Live-DB SQL harness runners (check_onconflict_live_arbiter,… | founder decision: provision a CI secret… | 2026-10-02: both runners work by hand… | [:5541](open_issues.md#L5541) |
+| OI-284 | Completed day-swap row keeps its pre-swap title after a cross-device… | the founder's on-device check (an APK… | 2026-10-03 - live rows (user d7a67a37):… | [:5550](open_issues.md#L5550) |
+| OI-285 | mergeScheduleBundleIntoHive decides snapshot winners once before the loop… | its own plan + review; touches the… | 2026-10-03 - code read:… | [:5557](open_issues.md#L5557) |
+| OI-286 | Replaced-swap notice: a device whose local swap loses to a newer… | OI-285 (the notice needs the per-week… | 2026-10-03 - code read: L3… | [:5564](open_issues.md#L5564) |
+| OI-287 | Day-swap allowance is per-device: a swap on web leaves the phone showing… | founder go on the read path:… | 2026-10-03 - live: phone daily snapshot… | [:5571](open_issues.md#L5571) |
+| OI-288 | Discipline: accepted-residual wording in tests pinned a defect as correct… | its own L-tier branch (root CLAUDE.md +… | 2026-10-03 -… | [:5578](open_issues.md#L5578) |
+| OI-289 | Nutrition cross-device probe: verify meal add/edit/delete converge… | the founder running the two-device walk… | never - asked by the founder 2026-10-01… | [:5585](open_issues.md#L5585) |
+| OI-290 | DaySwapRules leaves week_number unclassified (travels as content); hygiene… | founder call - close as no-symptom… | 2026-10-03 - `day_swap_rules.dart:17-28`… | [:5592](open_issues.md#L5592) |
+| OI-292 | morning-alert push names a workout from YESTERDAY's snapshot: the 02:00… | a design decision on the date-correct… | 2026-10-03 -… | [:5599](open_issues.md#L5599) |
+| OI-293 | Restore outcomes are unobservable on a release Android device:… | its own plan: the outcome must… | 2026-10-03 -… | [:5606](open_issues.md#L5606) |
+| OI-294 | A cold-start restore that never returns (killed or hung mid-restore)… | its own plan (split out of… | 2026-10-04 - code read, NOT reproduced… | [:5613](open_issues.md#L5613) |
+| OI-295 | Schedule writers that pass no WidgetRef (deload_evaluator lift via… | an audit of every ref-less schedule… | 2026-10-03 - code read, not reproduced:… | [:5620](open_issues.md#L5620) |
+| OI-296 | Coach progress tools read long windows unpaginated: getProgressSummary's… | founder-owned checks only. The code… | 2026-10-03 by source read + live SQL:… | [:5809](open_issues.md#L5809) |
+| OI-297 | Body measurements have no input UI, no history view and no cadence prompt:… | none (L2a, the merge-safe push and one… | 2026-10-03:… | [:5818](open_issues.md#L5818) |
+| OI-298 | No effort capture (RIR/RPE): workout_logs.rpe is never written (0 rows… | founder — DECIDED 2026-10-06: left out… | 2026-10-03:… | [:5829](open_issues.md#L5829) |
+| OI-299 | No computed athlete-state digest: the coach has no deterministic… | OI-296 (landing L1); landing L3 of the… | 2026-10-03: the coach assembles history… | [:5838](open_issues.md#L5838) |
+| OI-300 | Progress Review: a grounded, coach-generated multi-month review (new… | OI-299 (same landing, L3) of the… | 2026-10-03: the only multi-period report… | [:5848](open_issues.md#L5848) |
+| OI-301 | No gate stops a stray file at the repo root: existsSync (14 bytes of junk)… | its own plan + review (a new… | 2026-10-03 - `git ls-files` at the repo… | [:5627](open_issues.md#L5627) |
+| OI-302 | Restore keeps the OLDEST cloud workout_logs row for a date completed twice… | a decision: pick the NEWEST row per date… | 2026-10-04 - code read:… | [:5635](open_issues.md#L5635) |
+| OI-303 | Delete the disable_completed_title_heal kill switch and its closed-path… | the founder's on-device check of OI-284… | 2026-10-04 - code read: the kill switch… | [:5642](open_issues.md#L5642) |
+| OI-304 | InsightCard and DeepAnalysisCard are never mounted: PatternDetector's… | founder decision D2 (L2b plan v3.1,… | 2026-10-04 by grep at `4fef03a7`:… | [:5857](open_issues.md#L5857) |
+| OI-305 | Date-of-birth floor is inconsistent (onboarding allows age 10, Edit… | founder — DECIDED 2026-10-06: keep the… | 2026-10-04: `identity_screen.dart:82`… | [:5866](open_issues.md#L5866) |
+| OI-306 | primary_goal_updated_at has zero writers and goal_changed_at is Hive-only… | none | 2026-10-04: `goal_changed_at` is written… | [:5877](open_issues.md#L5877) |
+| OI-307 | workout_log_exercises keeps a second LIVE summary row when a log's set… | founder-owned checks only. All three… | 2026-10-04. Writer:… | [:5886](open_issues.md#L5886) |
+| OI-308 | getExerciseHistory computes total_volume_kg = weight x reps x sets… | founder-owned check only. Fixed in L1b… | 2026-10-04: `getExerciseHistory.ts:88`… | [:5895](open_issues.md#L5895) |
+| OI-309 | Merge-conflict treadmill: every >=account PR conflicts with main again and… | a plan (it changes hooks and the… | 2026-10-05 - measured on PR #73… | [:5663](open_issues.md#L5663) |
+| OI-310 | App links (sign-up, welcome, Profile) open the icanbefitter.com blog… | the code half only — the policy was… | 2026-10-06. The app opens… | [:5904](open_issues.md#L5904) |
+| OI-311 | A spawned `dart run` exited 254 in CI with no stderr in the log (run… | none for diagnosis - the second and… | 2026-10-06 - read from… | [:5673](open_issues.md#L5673) |
+| OI-312 | Exercise-log deletes never reach the cloud: migration 151's BEFORE INSERT… | founder-owned device check. Fixed… | 2026-10-06, live, inside a DO block that… | [:5914](open_issues.md#L5914) |
+| OI-313 | Installed-APK residuals of L1a: APKs without the L1a-2 client fixes keep… | upstream — no minimum-version /… | 2026-10-06 — writers:… | [:5923](open_issues.md#L5923) |
+| OI-315 | ProgressPhotoRepository.cleanupOrphanedStorage has zero callers, and the… | a plan: a server-side per-day cap is a… | 2026-10-06 - `git grep -n… | [:5688](open_issues.md#L5688) |
+| OI-316 | The progress-photos bucket and its SELECT/DELETE/INSERT policies have no… | a plan for a recurring catalog check (a… | 2026-10-06 - the B1 live evidence (E10)… | [:5697](open_issues.md#L5697) |
+| OI-318 | A 127 s cold-start restore on 2026-10-06 (per-op 9-41 s, two 45 s… | a recurrence: a restore over 60 s on any… | 2026-10-06 - `client_errors` for the… | [:5649](open_issues.md#L5649) |
+| OI-319 | current_streak_weeks is a lifetime counter that never resets when the… | a founder product decision (not… | 2026-10-06 - code read: no code path… | [:5656](open_issues.md#L5656) |
+| OI-323 | weekly-report has no server-side per-day cap for PRO: consume_quota runs… | a FOUNDER product decision: cap PRO… | 2026-10-08 - read… | [:5706](open_issues.md#L5706) |
+| OI-324 | SupabaseService.callFunction has no timeout of its own… | none - an engineering choice (a default… | 2026-10-08 - read… | [:5715](open_issues.md#L5715) |
+| OI-325 | Profile weekly-report card still says 'Weekly AI Report'… | a FOUNDER copy decision: the one name… | 2026-10-08 - `grep -rn "Weekly AI… | [:5724](open_issues.md#L5724) |
+| OI-326 | Restore-after-sign-in cost with the paged Edge Function (v10) is… | the founder: one sign-out/in on the… | 2026-10-09 - read the closure ledger… | [:5733](open_issues.md#L5733) |
+| OI-327 | Weekly streak never resets when the daily streak breaks:… | a founder product decision: should a… | 2026-10-09 - read… | [:5741](open_issues.md#L5741) |
+| OI-328 | One-off production credit of the 2026-09-14 week for user d7a67a37… | an explicit founder go: it is a live… | 2026-10-09 - read the plan… | [:5749](open_issues.md#L5749) |
+| OI-329 | water_logs still takes about 54 updates per day after the sync-load batch… | none, fixable now; start by reading… | 2026-10-09 - live `pg_stat_user_tables`… | [:5758](open_issues.md#L5758) |
+| OI-330 | workout_log_exercises updates rose from about 5 to about 62 per day across… | none, but it needs a diagnosis first… | 2026-10-09 - live `pg_stat_user_tables`… | [:5774](open_issues.md#L5774) |
+| OI-331 | No detector for leftover background processes: a helper agent's unbounded… | none | 2026-10-09 - found live: two bash… | [:5785](open_issues.md#L5785) |
+| OI-332 | weight_logs and sleep_logs pushes send explicit nulls for notes, quality,… | none today; becomes a defect the day any… | 2026-10-11 - live read-only counts on… | [:5796](open_issues.md#L5796) |
+| OI-333 | daily-snapshot/index_test.ts leaks DISABLE_GEMINI_FAILURE_ALERT into the… | none | 2026-10-11 -… | [:5932](open_issues.md#L5932) |
+| OI-334 | deploy_via_api.js rollback gaps: the pre-deploy cloud snapshot writes 0… | none - an engineering choice (see the… | 2026-10-11 - two measurements during the… | [:5943](open_issues.md#L5943) |
+| OI-335 | Gate 50 (check_reader_manifest_complete) never evaluates a SoT concept… | none for the registry wording; making… | 2026-10-11 by reading:… | [:5956](open_issues.md#L5956) |
+| OI-336 | Referral reward UX: the referrer's counts surface (friends joined /… | the founder: (1) the commit/merge go for… | 2026-10-12 - by reading the repo:… | [:5967](open_issues.md#L5967) |
+| OI-337 | The commit-time gates read staged paths with a plain git diff --cached… | none - an engineering choice; a… | 2026-10-12 - by reading and by… | [:5980](open_issues.md#L5980) |
+| OI-338 | delete_account_purges_all_user_buckets_test.dart reads USER_OWNED_BUCKETS… | none - a test-only edit… | 2026-10-12 - by reading… | [:5993](open_issues.md#L5993) |
+| OI-339 | A Razorpay refund made only in the dashboard is invisible to the referral… | the founder's decision on how refunds… | 2026-10-13 - by reading.… | [:6009](open_issues.md#L6009) |
+| OI-340 | A chargeback or UPI dispute after the referral reward vested has no… | the founder's decision: accept the loss,… | 2026-10-13 - by reading.… | [:6022](open_issues.md#L6022) |
+| OI-341 | A friend on the 7-day referral trial cannot buy: create-razorpay-order… | Piece A: nothing (live, switch unset;… | 2026-10-13 - by reading.… | [:6035](open_issues.md#L6035) |
+| OI-343 | Referral abuse by throwaway accounts: email confirmation is on but… | the founder's decision: accept the… | 2026-10-13 - by reading the live auth… | [:6050](open_issues.md#L6050) |
+| OI-345 | Remove the enable_body_measurements OFF path (flag checks, kill switch,… | founder-owned check of the RELEASE build… | 2026-10-16:… | [:6063](open_issues.md#L6063) |
+| OI-346 | Existing accounts accepted the v1 (blog) policy; nothing asks them to… | store launch (upstream_blocked;… | 2026-10-16: `AppConstants.termsVersion`… | [:6072](open_issues.md#L6072) |
+| OI-347 | Free-access codes: the founder wants to give out codes that grant PRO for… | none (a plan is the next step; the… | 2026-10-16 - by reading… | [:6081](open_issues.md#L6081) |
+| OI-348 | Post-build check list: every founder-owned device, signed-in and… | the final AAB/APK build… | 2026-10-17 - by reading every… | [:6094](open_issues.md#L6094) |
+| OI-349 | Onboarding welcome screen overflows at 2x system text on a 640-dp phone:… | the founder's call on whether 2x system… | 2026-10-17 - by running the screen under… | [:6149](open_issues.md#L6149) |
+| OI-350 | verify-payment captures an authorized payment and echoes its Razorpay… | none | 2026-10-17 - by reading… | [:6158](open_issues.md#L6158) |
+| OI-351 | razorpay-webhook: after a payment.authorized auto-capture, a failed insert… | none | 2026-10-17 - by reading… | [:6165](open_issues.md#L6165) |
+| OI-352 | Active Workout meta line prints hard-coded '0kg' for every scheduled lift | none (pick up after the… | 2026-10-18 - by code read only, NOT on… | [:6173](open_issues.md#L6173) |
+| OI-353 | Plan suggested_weight (ProgressionResolver) is never read by the Active… | none (pick up after the… | 2026-10-18 - by code read: the plan… | [:6186](open_issues.md#L6186) |
+| OI-354 | Active Workout hero tile + full-screen viewer (animated WEBP) blocked on… | the animated-WEBP asset pipeline and its… | 2026-10-18 - design locked in… | [:6199](open_issues.md#L6199) |
+| OI-355 | Active Workout _persistActiveState reads the build-time widget.data, so… | none (pick up after the… | 2026-10-18 - by code read (plan review… | [:6210](open_issues.md#L6210) |
+| OI-357 | Active Workout U2: per-set last values, new-user weight mirror, faded… | the flip batch landing (branch… | never | [:6223](open_issues.md#L6223) |
+| OI-358 | Active Workout: adding an exercise already in the session crashes the… | none | never | [:6236](open_issues.md#L6236) |
+| OI-359 | verify-payment calls Razorpay capture before the payment-owner check… | none | 2026-10-20 - by code read (hermes pass… | [:6245](open_issues.md#L6245) |
+| OI-360 | verify-payment and razorpay-webhook log whole PostgREST error objects and… | none | 2026-10-20 - by code read (hermes pass… | [:6254](open_issues.md#L6254) |
+| OI-362 | Active Workout: remove the per-set (OFF) path and the… | OI-348 row A12 (the release-build device… | never | [:6263](open_issues.md#L6263) |
+| OI-363 | Active Workout: the FINISH/CANCEL button row overflows sideways at 320 dp… | none | never | [:6274](open_issues.md#L6274) |
+| OI-364 | Remove the disable_lapse_gap_policy kill switch (client Hive key + server… | founder device check of the PRO gap… | 2026-10-21 - by code read: only READERS… | [:6289](open_issues.md#L6289) |
+| OI-365 | Coach tools and app features do the same jobs through separate code (first… | none (founder 2026-10-21: this audit is… | 2026-10-21 - by code read at… | [:6300](open_issues.md#L6300) |
+| OI-366 | create-razorpay-order has no rate limit and honours expired or exhausted… | none for the code; the founder's call on… | 2026-10-21 - by reading (hermes pass… | [:6334](open_issues.md#L6334) |
+| OI-367 | Referral reward can be farmed once the purchase door is open: no minimum… | the founder's product call before store… | 2026-10-21 - by reading (hermes pass… | [:6343](open_issues.md#L6343) |
+| OI-368 | Coach chat: the coach replies 'Roger. Logged.' when nothing was logged (no… | the `ai-proxy` + `ai-media-proxy` deploy… | never | [:6352](open_issues.md#L6352) |
+| OI-369 | Coach chat: the coach says 'Logged' while the LOG SET card still waits for… | the `ai-proxy` + `ai-media-proxy` deploy… | never | [:6367](open_issues.md#L6367) |
+| OI-372 | Weekday exercise swap has no UI: the engine takes any date, but only the… | none | 2026-10-21 (code read on… | [:6380](open_issues.md#L6380) |
+| OI-373 | Coach: one workout request can produce either a typed logSet card (APPLY)… | none | never | [:6411](open_issues.md#L6411) |
+| OI-374 | Coach: remove the DISABLE_WRITE_CLAIM_RULE kill switch once the… | the `coach-log-truth` batch shipping and… | never | [:6422](open_issues.md#L6422) |
+| OI-375 | Coach: the FC2 queued acknowledgement hard-codes 'Recruit' instead of the… | none | never | [:6433](open_issues.md#L6433) |
+| OI-376 | Workout invalidation: WorkoutWriteService.onInvalidate is a dead hook and… | none | never | [:6444](open_issues.md#L6444) |
+| OI-377 | Train: WorkoutRepository.getExerciseLogsForDate duplicates the canonical… | none | never | [:6455](open_issues.md#L6455) |
+| OI-378 | Riverpod 3.2.1: debug assertion actualPausedCount == expectedPausedCount… | upstream: riverpod above 3.2.1… | never | [:6466](open_issues.md#L6466) |
+| OI-379 | Coach-logged workouts never add to total_workouts_done or run the rank… | none | never | [:6477](open_issues.md#L6477) |
+| OI-381 | Set counts read '1 sets' in the remaining renderers (prescriptions,… | none | never | [:6488](open_issues.md#L6488) |
+| OI-383 | Razorpay Android SDK is pinned (checkout 1.6.41, standard-core 1.7.19) and… | none | 2026-10-21 (Maven Central: checkout… | [:6499](open_issues.md#L6499) |
+| OI-385 | Generator: 27 library rows in slot patterns are unreachable on attempts… | the flip of `enable_core_list_pool`… | 2026-10-23 — with the flag ON,… | [:6522](open_issues.md#L6522) |
+| OI-386 | Generator: 11 of 13 attempt-1 sub-focus strings match 0 rows (slot… | the flip of `enable_core_list_pool`… | 2026-10-23 — with the flag ON,… | [:6533](open_issues.md#L6533) |
+| OI-387 | Library: 6 kept bodyweight rows (E272 E273 E276 E277 E289 E290) invisible… | the flip of `enable_core_list_pool`… | 2026-10-23 — with the flag ON,… | [:6544](open_issues.md#L6544) |
+| OI-388 | Generator: gym plans serve bodyweight-only self-resisted curls and triceps… | the flip of `enable_core_list_pool`… | 2026-10-23 — with the flag ON,… | [:6557](open_issues.md#L6557) |
+| OI-389 | Cardio logs lose their minutes and distance: logExercise zeroes… | Batch 1b (coach paths; plan to be… | never | [:6568](open_issues.md#L6568) |
+| OI-390 | Coach and Home say 'You skip Sunday workouts 100% of the time' for a rest… | founder scheduling: pick up after the… | never | [:6589](open_issues.md#L6589) |
+| OI-391 | Cardio duration cap: workout_log_sets duration_secs CHECK widened from… | founder go for the live migration apply… | never | [:6634](open_issues.md#L6634) |
+| OI-392 | Coach logCardio tool: a dedicated AI-coach tool for cardio minutes and km… | founder go for the ai-proxy deploy… | never | [:6642](open_issues.md#L6642) |
+| OI-393 | A set logged or moved on top of a restore-shaped or F5 exlog row resets… | founder-sequenced follow-on (D10,… | never | [:6650](open_issues.md#L6650) |
+| OI-394 | Exlog type heal is dead on disk rows: fix the cast in… | founder-sequenced follow-on (D10,… | never | [:6658](open_issues.md#L6658) |
+| OI-395 | beat-my-coach: challenge query filters on capitalised categories, so every… | founder decision between (a) and (b)… | 2026-10-23 —… | [:6608](open_issues.md#L6608) |
+| OI-396 | Cardio finisher is generated but no screen shows it | Batch B1 and B2 landing first (founder… | 2026-10-23 — `CardioFinisher.attach`… | [:6621](open_issues.md#L6621) |

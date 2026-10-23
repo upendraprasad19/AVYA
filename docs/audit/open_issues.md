@@ -2471,38 +2471,6 @@ times. Answer it before any of these ship.
 **Not blocking the plates feature.** `Barbell Curl` keeps its name and its `ez-bar-curl` drawing
 (founder, 2026-08-29), so nothing in the shipping 165 depends on this.
 
-## OI-149 — breathing_cue holds a bare number on 136 of 292 rows; the original text is unrecoverable (P2)
-
-- **Status**: OPEN
-- **Blocked on**: **the founder** — 136 replacement cues have to be authored, because the original
-  text exists nowhere. This is a copy-writing task, not an engineering one.
-- **Verified**: 2026-08-29 — counted, and the recovery paths exhausted (below).
-
-**The defect, measured:** exactly **136** of 292 rows match `^\d+(\.\d+)?$` in `breathing_cue`,
-and exactly **136** carry a null `met_value`. The intersection is 136 and neither side has a
-row the other lacks — a spreadsheet column shift dropped `met_value` into `breathing_cue` and left
-its own column empty. `met_value` is read nowhere in `lib/`, so only the breathing copy was lost.
-
-**Both recovery paths were checked and both are dead:**
-
-1. **The cloud seed migrations do not carry the field.** `074_seed_exercise_library.sql` and
-   `125_reseed_exercise_library.sql` insert **20 columns**, and `breathing_cue` is not among them —
-   `125`'s own header comment lists it under *"JSON-only fields"*.
-2. **Git history never had it.** All **19** revisions of `assets/data/exercise_library.json` back to
-   2026-04-14 carry `Lateral Raise` with `breathing_cue: "5"`. The shift predates the file's entry
-   into the repo, so `git show <rev>:` recovers nothing.
-
-**Shipped state after `exercise-plates`:** BOTH surfaces that render this field now suppress a
-numeric value rather than printing "BREATHING / 5" —
-`lib/shared/widgets/exercise_plate/exercise_plate_sheet.dart` and
-`lib/features/train/screens/active_workout/coaching_content_panel.dart`, pinned together by
-`test/contracts/breathing_cue_numeric_suppressed_test.dart`. So the symptom is gone and 136
-exercises simply show no BREATHING section.
-
-⚠ **That makes this LESS likely to be noticed, not more** — which is exactly why it is filed rather
-than left to the guards. The fix is 136 lines of coaching copy.
-
-
 ## OI-152 — six-plus call sites fire `syncX()` and `pushSnapshot()` back to back, doubling round-trips per user action (P3)
 
 - **Status**: OPEN
@@ -6132,7 +6100,7 @@ Fix options (to be planned, not decided): (a) a `free_access_codes` table (code,
 
 **Before the build (added 2026-10-21, OI-341 B2a):** the VPS `.env` `RAZORPAY_KEY_ID` must hold the LIVE key ID (`rzp_live_...`, the public half of the pair, from the Razorpay dashboard). Today it holds a `rzp_test_` ID while the server's secrets are the live pair, and the client opens checkout with its own build-time key (`app_constants.dart:193`), so an AAB built as-is would fail at checkout. After the build, also run one real purchase from the phone (90% code, refunded) as part of the B2b checks.
 
-How to use: build once from the last merged `main`, install on the phone, sign in with one FREE and one PRO account (plus one throwaway or lapsed account where a row says so), then walk the sections in order. Section A needs the phone, B needs a signed-in session or JWT (a dev build or test account), C needs no build and can be run any time with the founder's go for live reads.
+How to use: build once from the last merged `main`, install on the phone, sign in with one FREE and one PRO account (plus one throwaway or lapsed account where a row says so), then walk the sections in order. Section A needs the phone, B needs a signed-in session or JWT (a dev build or test account), C needs no build and can be run any time with the founder's go for live reads. W runs on the founder's Windows clone, no build.
 
 ### A. On the phone (release build)
 
@@ -6165,6 +6133,10 @@ How to use: build once from the last merged `main`, install on the phone, sign i
 - C5 `referral-pay-on-conversion` N6: look in the Razorpay dashboard for any payment flow where the payer controls the notes (a Payment Page or Button with a custom field, or a website checkout), at one of the plan amounts.
 - C6 `coach-measurement-bounds` REJECTION-REVIEW: after the build is in use, read live `client_errors` for the rejection rows and adjust the bounds table (D5) if needed.
 - C7 `oi341-purchase-in-trial` (Piece A, PR #124; `verify-payment` v25, `razorpay-webhook` v29; `ENABLE_SUBSCRIPTION_STACKING` unset): after the next real payment, read its `subscriptions` row: `start_date` = the payment time and `end_date` = `start_date` + 30 or 365 days (the unstacked value, since the switch is off); the function logs carry no `reconcile` line. Needs no build.
+
+### W. On the founder's Windows clone (no build)
+
+- W1 `hook-cwd-fail-open` OI-384 WINDOWS-HOOKS: on the Windows clone, after pulling the merge, start a Claude Code session, `cd supabase/functions` in one Bash call, then run `git commit --dry-run -m probe` in the next. PASS = `[git-safety] BLOCKED`. A non-blocking hook error instead means Claude Code fell back to PowerShell (Git Bash not found): install Git for Windows or set `CLAUDE_CODE_GIT_BASH_PATH`. The hook commands need a POSIX shell (`docs/architecture/hooks.md`, diagnose `8f3e35`).
 
 ### Flips (OIs and rows that close or unblock when their checks are recorded)
 
@@ -6547,6 +6519,52 @@ example a dated audit row, or Dependabot's gradle ecosystem limited to these coo
 founder decides the review cadence. Each bump: change the pin map and `_expectedPins`, run a test
 payment on a device, and record the new version.
 
+## OI-385 — Generator: 27 library rows in slot patterns are unreachable on attempts 1-2 (exercise_type has neither compound nor isolation)
+
+- **Status**: OPEN
+- **Blocked on**: the flip of `enable_core_list_pool` (Batch B1, branch `library-batch-b`, ship-dark DEFAULT OFF; flip criteria in `docs/ship_dark_pending_review.yaml`). The fix is built behind that flag; OFF plans are unchanged (generator golden).
+- **Verified**: 2026-10-23 — with the flag ON, `test/contracts/core_list_pool_behavioral_test.dart` `OI-385: a calisthenics-typed compound row is typed compound` (E264 Table Row, `["calisthenics","compound"]`, fills a bodyweight beginner compound slot typed `compound`); the ON-world gate `test/plan_generator/core_list_pool_gate_test.dart` holds 0 equipment, level and improvised-pick violations over 998 personas.
+- **Identified**: 2026-10-22 · filed via mint_oi.sh from branch `library-data-repair`
+
+**The defect.** `queryV4` matches `exercise_type` exactly against the slot's `compound` / `isolation` on attempts 1-2 (`lib/shared/repositories/exercise_repository.dart` ~:365), and every `MuscleSlot` in `split_resolver.dart` asks for one of those two. 27 rows in the 11 slot patterns carry neither: 25 are typed only `calisthenics`, 4 include `cardio`. They include E022 Pull Up, E020, E054, E055, E064, E066, E069, E071-E073, E075, E077, E101-E103, E134-E136, E143, E177, E179, E180 and E193-E197. They are reachable only through the attempt-3 pattern-only fallback. (Counted 2026-10-22; an earlier figure of 57 also included rows outside the slot patterns.)
+
+**Done when.** Batch B's pool selects by `discipline` / core lists, and a behavioural test shows a calisthenics-typed core row filling an on-target slot.
+
+## OI-386 — Generator: 11 of 13 attempt-1 sub-focus strings match 0 rows (slot long_head vs data 'Long Head')
+
+- **Status**: OPEN
+- **Blocked on**: the flip of `enable_core_list_pool` (Batch B1, branch `library-batch-b`, ship-dark DEFAULT OFF; flip criteria in `docs/ship_dark_pending_review.yaml`). The fix is built behind that flag; OFF plans are unchanged (generator golden).
+- **Verified**: 2026-10-23 — with the flag ON, `test/contracts/core_list_pool_behavioral_test.dart` `OI-386 unit: a Triceps (Long Head) row ranks first for Triceps / long_head` and `OI-386 real data: a Core / obliques slot picks an obliques row`; the ON-world gate `test/plan_generator/core_list_pool_gate_test.dart` holds 0 equipment, level and improvised-pick violations over 998 personas.
+- **Identified**: 2026-10-22 · filed via mint_oi.sh from branch `library-data-repair`
+
+**The defect.** Attempt 1 builds the string "<targetMuscle> (<subFocus>)" (`exercise_selector.dart:1088-1090`) from snake_case slot tokens (`long_head`, `short_head`, `lateral_head`…), while the data says "Long Head". Only "Lats (width)" (5 rows) and "Mid Back (thickness)" (16) can ever match, so 11 of 13 attempt-1 strings fall straight through to attempt 2. Humanising the tokens would make attempt 1 live and reshape many plans, which needs the generator batch's review.
+
+**Done when.** Slot sub-focus and row `target_focus` share one vocabulary, attempt 1 matches for every sub-focus that has rows, and the scorecard pick diff is reviewed.
+
+## OI-387 — Library: 6 kept bodyweight rows (E272 E273 E276 E277 E289 E290) invisible to their slot label
+
+- **Status**: OPEN
+- **Blocked on**: the flip of `enable_core_list_pool` (Batch B1, branch `library-batch-b`, ship-dark DEFAULT OFF; flip criteria in `docs/ship_dark_pending_review.yaml`). The fix is built behind that flag; OFF plans are unchanged (generator golden).
+- **Verified**: 2026-10-23 — with the flag ON, `test/contracts/core_list_pool_behavioral_test.dart` `OI-387 gym tiers after phase 1 pick no improvised shoulder row when the pool has an implement row` and `OI-387 bodyweight beginner phase 2, 5 days: Lateral Delts gets a raise`; the ON-world gate `test/plan_generator/core_list_pool_gate_test.dart` holds 0 equipment, level and improvised-pick violations over 998 personas.
+- **Identified**: 2026-10-22 · filed via mint_oi.sh from branch `library-data-repair`
+
+**The defect.** E272, E273, E289 and E290 carry `target_focus: ["Shoulders"]`, and E276 and E277 carry "Upper Back". Neither is a slot label, and their `primary_muscles` ("Side/Rear Deltoid", "Rhomboids") contain none, so attempts 1-2 never return them. A bodyweight Lateral Delts slot is empty today.
+
+Batch A did NOT relabel them. `_preferNovel` (`exercise_selector.dart:1054-1066`) walks past the first sorted entries whenever `avoidNames` is non-empty, so a Phase 2+ home user's Lateral Delts pool would become [E013, E273, E289] and flip from Lateral Raise to Towel Lateral Raise. E276/E277 would stay inert anyway, because every Mid Back slot is `compound`.
+
+**Done when.** Batch B's equipment-aware pool offers these rows to no-equipment users only, their `target_focus` carries the slot label, and a behavioural test covers the bodyweight hit and the home/gym miss with `previousPhaseByDay` set.
+
+## OI-388 — Generator: gym plans serve bodyweight-only self-resisted curls and triceps extensions (150 of 165 full_gym and 140 of 150 basic_gym matrix plans)
+
+- **Status**: OPEN
+- **Blocked on**: the flip of `enable_core_list_pool` (Batch B1, branch `library-batch-b`, ship-dark DEFAULT OFF; flip criteria in `docs/ship_dark_pending_review.yaml`). The fix is built behind that flag; OFF plans are unchanged (generator golden).
+- **Verified**: 2026-10-23 — with the flag ON, `test/contracts/core_list_pool_behavioral_test.dart` `OI-388: a full_gym beginner gets no self-resisted curl or extension` and `owned equipment turns the implement preference on`; the ON-world gate `test/plan_generator/core_list_pool_gate_test.dart` holds 0 equipment, level and improvised-pick violations over 998 personas.
+- **Identified**: 2026-10-22 · filed via mint_oi.sh from branch `library-data-repair`
+
+**The defect.** E268 Self-Resisted Bicep Curl and E270 Self-Resisted Triceps Extension (OI-89 wave 1, `equipment_needed: ["bodyweight"]`) carry `priority_tier: 1`, `is_foundational: true` and every `equipment_tier`, so they sort ahead of Barbell Curl (E031, `priority_tier: 2`) and the cable/dumbbell rows. In the matrix, 150 of 165 full_gym plans and 140 of 150 basic_gym plans hold a bodyweight-only E262+ row: Self-Resisted Bicep Curl 290 picks, Self-Resisted Triceps Extension 234, Single Leg Glute Bridge 28, Standing Single Leg Hinge 16, Prone Y Raise 1 (gym tiers). `test/plan_generator/sample_plans_output.md` shows it for build_muscle full_gym (Pull day: Self-Resisted Bicep Curl, then Barbell Curl).
+
+**Done when.** A gym user's arm slots draw equipment rows first (bodyweight-only rows only when nothing else fits), bodyweight users with no implement keep their current picks, and a behavioural test covers both sides on the real generator. Under the core-list pool the preference is keyed on CAPABILITY, not the tier label, so home_dumbbells users (who have dumbbells) and bodyweight users who OWN an implement also leave the improvised rows wherever an implement row fits (amended 2026-10-23, Batch B1).
+
 ## OI-389 — Cardio logs lose their minutes and distance: logExercise zeroes durationSec for every non-timed type and never writes distance_km
 
 - **Status**: OPEN
@@ -6586,6 +6604,32 @@ Who gets it: the default day patterns never schedule Sunday (`lib/core/services/
 Class: writer/reader drift on a value's meaning (`0` = "no data" to the writer, "0% done" to the reader). Not a recurrence of an indexed bug (`docs/diagnoses/INDEX.md` has no day-of-week or skip-rate entry).
 
 To plan (tier M: Train + coach files): the rate map omits weekdays with nothing scheduled (or carries the counts), the pattern needs a minimum sample (about 3 scheduled sessions on that weekday) before it can fire, and the window ends yesterday (today is never a miss). Behavioural tests: a 6-day plan over 8 weeks never names Sunday; a 3-day plan never names Tuesday/Thursday/Saturday/Sunday; a real 0-of-4 Monday still fires; today's unfinished workout is not counted. Check the other readers of `getDayOfWeekCompletionRates` (none today besides the pattern) and the weekend-nutrition pattern for the same "empty means zero" shape while there.
+
+## OI-395 — beat-my-coach: challenge query filters on capitalised categories, so every challenge comes from the fallback list
+
+- **Status**: OPEN
+- **Blocked on**: founder decision between (a) and (b) below (blocked_on_user; Batch B1 plan Ruling 8).
+- **Verified**: 2026-10-23 — `supabase/functions/beat-my-coach/index.ts:195` filters `.or("category.eq.Calisthenics,category.eq.Cardio")`; the shipped library's categories are lowercase (`cardio` 12 rows, no `calisthenics` category at all), and the live table was read-only queried lowercase during the B1 review.
+- **Identified**: 2026-10-23 · filed via mint_oi.sh from branch `library-batch-b`
+
+**The defect.** The query never matches, so every challenge is drawn from the hardcoded fallback list (`index.ts:244-258`: Push-ups, Squats, Burpees, …). Nothing errors, so nothing reports it.
+
+**Options.** (a) Make the query work (lowercase `cardio`, and decide what stands in for "Calisthenics", e.g. `discipline` once the cloud carries it) — this CHANGES the challenges users get. (b) Delete the dead query and keep the fallback list as the intended content.
+
+**Done when.** The founder picks (a) or (b), and an Edge Function test pins the chosen source.
+
+## OI-396 — Cardio finisher is generated but no screen shows it
+
+- **Status**: OPEN
+- **Blocked on**: Batch B1 and B2 landing first (founder 2026-10-22), then the founder's rule-14 OK to edit `plan_generator.dart` (CLAUDE.md §4.4 rule 14).
+- **Verified**: 2026-10-23 — `CardioFinisher.attach` (`lib/shared/repositories/plan_engine/cardio_finisher.dart:17`, called from `plan_generator.dart:324`) writes `WorkoutDay.finisher`; `workout_schedule_read_service.dart:301-303` carries it, and no screen renders it (found in the B2 plan review).
+- **Identified**: 2026-10-23 · filed via mint_oi.sh from branch `library-batch-b`
+
+**The defect.** Every generated day may carry a cardio finisher that the user never sees. `CardioFinisher.attach` also takes no injuries, so the finisher is not injury-filtered.
+
+**Founder decision (2026-10-22).** Show it after the main lifts, injury-safe: an injured user gets Stationary Bike Sprints in a gym and no finisher at home.
+
+**Done when.** The finisher renders after the main lifts; `CardioFinisher.attach` receives the user's injuries through a `plan_generator.dart` pass-through (needs the rule-14 OK) and applies the rule above; B2's `SessionBudgetContext.finisherSeconds` is set from the finisher it attaches (B2 reserves 0 today, Ruling 6); a behavioural test covers an injured gym user, an injured home user and an uninjured user.
 
 ## OI-391 — Cardio duration cap: workout_log_sets duration_secs CHECK widened from 3600 to 21600 and the push clamp aligned (OI-389 Batch 2; needs founder go for the live migration apply)
 

@@ -8,7 +8,7 @@
 |---|---|
 | coverage | 94.6 |
 | balance | 67.3 |
-| volume | 69.6 |
+| volume | 69.2 |
 | progression | 100.0 |
 | personalization | 100.0 |
 | safety | 100.0 |
@@ -111,7 +111,7 @@
 
 ---
 ### strength | full_gym | 4d | advanced | p2 | inj:none
-`coverage 90.0 · balance 55.0 · volume 68.1 · progression 100.0 · personalization 100.0 · safety 100.0 · realism 97.2 · **overall 85.1**`
+`coverage 90.0 · balance 55.0 · volume 67.6 · progression 100.0 · personalization 100.0 · safety 100.0 · realism 97.2 · **overall 85.0**`
 
 **Squat Day** (Squat + accessories)
 | Slot | Exercise | Source | Muscles | Equip |
@@ -123,7 +123,7 @@
 | Calves/knee_dominant | Standing Calf Raise | attempt1Exact | Calves (Gastrocnemius) | barbell |
 | Core/core | Hanging Leg Raise | attempt1Exact | Core, Obliques | pull-up bar |
 | Quads/knee_dominant | Leg Extension | attempt2DropSubFocus | Quads | machines |
-| Hip/hip_isolation | Hip Abductor Machine | attempt1Exact | Glutes | machines |
+| Hip/hip_isolation | Hip Abduction Machine | attempt1Exact | Abductors, Glutes (medius), Glutes | machines |
 | Calves/knee_dominant | Seated Calf Raise | attempt2DropSubFocus | Calves (Soleus) | machines |
 
 **Bench Day** (Bench + upper push)
@@ -335,7 +335,7 @@
 | Calves/knee_dominant | Standing Calf Raise | attempt1Exact | Calves (Gastrocnemius) | barbell |
 | Core/core | Cable Crunch | attempt1Exact | Abs | cables |
 | Hamstrings/knee_dominant | Leg Curl (Lying) | attempt1Exact | Hamstrings | machines |
-| Hip/hip_isolation | Hip Abductor Machine | attempt1Exact | Glutes | machines |
+| Hip/hip_isolation | Hip Abduction Machine | attempt1Exact | Abductors, Glutes (medius), Glutes | machines |
 | Calves/knee_dominant | Seated Calf Raise | attempt2DropSubFocus | Calves (Soleus) | machines |
 
 **Upper** (Shoulders, back, arms)
