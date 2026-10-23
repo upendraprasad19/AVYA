@@ -111,6 +111,27 @@ class CoreListSelector {
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
 
+  /// Sort key b (OI-386): does [row] serve [slot]'s sub-focus? `cable` means
+  /// the canonical `cables` token; `isolation` the exercise type; otherwise a
+  /// label in `(slot_focus ?? target_focus) ∪ primary_muscles` whose normalised
+  /// form contains the normalised "$targetMuscle $subFocus". False when the
+  /// slot has no sub-focus.
+  static bool subFocusMatches(Map<String, dynamic> row, MuscleSlot slot) {
+    final sub = slot.subFocus;
+    if (sub == null) return false;
+    if (sub == 'cable') {
+      return _strs(row['equipment_needed']).contains('cables');
+    }
+    if (sub == 'isolation') {
+      return _strs(row['exercise_type']).contains('isolation');
+    }
+    final needle = _norm('${slot.targetMuscle} $sub');
+    return [
+      ..._strs(row['slot_focus'] ?? row['target_focus']),
+      ..._strs(row['primary_muscles']),
+    ].any((l) => _norm(l).contains(needle));
+  }
+
   /// The ranked candidate list for one slot (plan Task 3, "The rankedPool
   /// algorithm"). `ordered` is empty iff `source == 'drop'`. [anyCoreLevel]
   /// admits core rows of any level and skips family fill (the empty-day
@@ -235,27 +256,13 @@ class CoreListSelector {
 
     // 5. Order: L6 partition, soft avoid, then keys a-e, ties by id.
     final sub = slot.subFocus;
-    final subNeedle = sub == null ? null : _norm('${slot.targetMuscle} $sub');
-    bool subMatch(Map<String, dynamic> r) {
-      if (sub == 'cable') {
-        return _strs(r['equipment_needed']).contains('cables');
-      }
-      if (sub == 'isolation') {
-        return _strs(r['exercise_type']).contains('isolation');
-      }
-      return [
-        ..._strs(r['slot_focus'] ?? r['target_focus']),
-        ..._strs(r['primary_muscles']),
-      ].any((l) => _norm(l).contains(subNeedle!));
-    }
-
     final type = slot.exerciseType.toLowerCase();
     bool foundational(Map<String, dynamic> r) => r['is_foundational'] == true;
     List<int> keys(Map<String, dynamic> r) => [
           demotedNames.contains(r['name']) ? 1 : 0,
           softAvoidNames.contains(r['name']) ? 1 : 0,
           phase == 1 && !foundational(r) ? 1 : 0,
-          sub != null && !subMatch(r) ? 1 : 0,
+          sub != null && !subFocusMatches(r, slot) ? 1 : 0,
           _strs(r['exercise_type']).any((t) => t.toLowerCase() == type) ? 0 : 1,
           (r['priority_tier'] as num?)?.toInt() ?? 3,
           foundational(r) ? 0 : 1,

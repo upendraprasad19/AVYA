@@ -93,6 +93,13 @@ Phase _withCustom(Phase Function() body) {
   }
 }
 
+/// Owned-equipment personas: `'<tier>|<level>'` → the `equipment_owned` written
+/// to the profile for the run (the core-list gate rebuilds capability from it).
+const goldenOwnedEquipment = {
+  'bodyweight|beginner': ['dumbbells', 'pull-up bar'],
+  'home_dumbbells|intermediate': ['pull-up bar', 'bench'],
+};
+
 List<GoldenPersona> generatorGoldenPersonas() {
   final out = <GoldenPersona>[];
   for (final tier in goldenTiers) {
@@ -151,11 +158,7 @@ List<GoldenPersona> generatorGoldenPersonas() {
       ));
     }
   }
-  const owned = {
-    'bodyweight|beginner': ['dumbbells', 'pull-up bar'],
-    'home_dumbbells|intermediate': ['pull-up bar', 'bench'],
-  };
-  for (final entry in owned.entries) {
+  for (final entry in goldenOwnedEquipment.entries) {
     final parts = entry.key.split('|');
     for (final phase in [1, 3]) {
       out.add(GoldenPersona(
