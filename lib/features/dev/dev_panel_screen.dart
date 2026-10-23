@@ -17,6 +17,7 @@ import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.d
 import 'package:icanbefitter/features/train/providers/train_provider.dart';
 import 'package:icanbefitter/features/train/services/log_exercise_flags.dart';
 import 'package:icanbefitter/features/dev/simulation_service.dart';
+import 'package:icanbefitter/features/ai_coach/services/pattern_detector.dart';
 import 'package:icanbefitter/features/dev/plan_xls.dart';
 
 /// Debug-only developer panel — fast-forward the IST calendar, run the
@@ -179,10 +180,18 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
     _toast('Journey reset to day-0 baseline');
   }
 
-  Future<void> _runSim(int days) async {
+  Future<void> _runSim(int days, {Set<int> skipIsoWeekdays = const {}}) async {
     if (SimulationService.instance.isBusy) return;
     setState(() => _simStatus = 'running $days days…');
-    final report = await SimulationService.instance.run(ref: ref, days: days);
+    final report = await SimulationService.instance
+        .run(ref: ref, days: days, skipIsoWeekdays: skipIsoWeekdays);
+    if (skipIsoWeekdays.isNotEmpty) {
+      // OI-390 U6 recipe: the full insight list, in case the top-5 notice cap
+      // crowds the day-of-week notice out of coach_notices.
+      for (final i in PatternDetector.instance.analyze()) {
+        debugPrint('[sim-dow] ${i.patternId} ${i.severity.name}: ${i.coachNotice}');
+      }
+    }
     if (!mounted) return;
     setState(() {
       _simStatus = 'done — clock now at ${istTodayStr()}';
@@ -592,6 +601,8 @@ class _DevPanelScreenState extends ConsumerState<DevPanelScreen> {
                   _btn('Reset cursor', _resetSim, outlined: true),
                   _btn('Sim +1 week', () => _runSim(7)),
                   _btn('Sim +4 weeks', () => _runSim(28)),
+                  _btn('Sim +4 wk, skip Mondays',
+                      () => _runSim(28, skipIsoWeekdays: {1})),
                   _btn('Sim +12 weeks', () => _runSim(84)),
                   _btn('Sim +1 year', () => _runSim(365)),
                   _btn('Sim → Lieutenant (130wk)', () => _runSim(910)),

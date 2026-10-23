@@ -6586,25 +6586,6 @@ Impact: every cardio exercise saved from the active workout or the coach keeps i
 
 To plan (full diagnose template, recurrence class): keep `durationSec` for `cardio` in the normaliser and decide `distance`; give a set or the row a distance path and write `distance_km` from `logExercise`; a behavioural test that logs a library cardio exercise through `logExercise` and reads minutes and km back from Hive and from the expanded row; a tier-4 audit query on `exercise_logs` for cardio rows with zero duration to size the damage and decide whether stored rows can be repaired (the minutes are not recoverable from the row itself); correct the `train/CLAUDE.md` field list.
 
-## OI-390 — Coach and Home say 'You skip Sunday workouts 100% of the time' for a rest day: getDayOfWeekCompletionRates returns 0 for a weekday with nothing scheduled and the day-of-week pattern reads it as 0% completion
-
-- **Status**: OPEN
-- **Blocked on**: founder scheduling: pick up after the current batch (coach-log-truth deploy and live check) completes (founder, 2026-10-22)
-- **Verified**: never
-- **Identified**: 2026-10-22 · filed via mint_oi.sh from branch `dow-skip-oi`
-
-Found by the founder on 2026-10-22 (web, PRO test account): the coach's reply to `Status check.` (the coach-log-truth S0 smoke) listed under "Notices": "You have a 100% skip rate on Sunday workouts". Sunday is a rest day on that plan, so there is no Sunday workout to skip.
-
-Writer: `WorkoutRepository.getDayOfWeekCompletionRates` (`lib/features/train/repositories/workout_repository.dart:1246`) walks the last 8 weeks, counts `schedule['type'] == 'workout'` days per weekday and the `completed` ones, and returns `rates[name] = total > 0 ? done / total : 0;` (`:1283-1287`). A weekday with NOTHING scheduled gets `0`, the same value as "scheduled and never done". The walk starts at `i = 0`, today, so a workout planned for today and not yet done also counts as missed (`:1267-1268`).
-
-Reader: `PatternDetector._dayOfWeekPattern` (`lib/features/ai_coach/services/pattern_detector.dart:405-428`) picks the worst day with a rate `< 0.5` and emits `coachNotice` "Skips <day> workouts <100-pct>% of the time." and `userMessage` "You tend to skip <day> workouts (only <pct>% completion). Consider swapping that day." Its own comment says "with enough data (at least some scheduled)", but the rate map cannot say "none scheduled". Severity medium, so `AiSnapshotBuilder._getCoachNotices` (`lib/features/ai_coach/services/ai_snapshot_builder.dart:998-1005`, drops only low, top 5) sends it to the model, and the Home insight card (`lib/features/home/widgets/insight_card.dart:84`) and the deep-analysis card (`lib/features/ai_coach/widgets/deep_analysis_card.dart:48`) can show the user message.
-
-Who gets it: the default day patterns never schedule Sunday (`lib/core/services/workout_schedule_read_service.dart:2189-2201`: 3/4/5/6 days), so every user below 7 days a week has at least one weekday with nothing scheduled, and the pattern fires on the first such day in Monday-to-Sunday order (a 3-day user is told they skip Tuesday). It shows whenever no higher-severity insight crowds it out of the top 5. A user who chose their own days (`preferredDays`) or swapped a workout onto a weekday gets real rates for that day.
-
-Class: writer/reader drift on a value's meaning (`0` = "no data" to the writer, "0% done" to the reader). Not a recurrence of an indexed bug (`docs/diagnoses/INDEX.md` has no day-of-week or skip-rate entry).
-
-To plan (tier M: Train + coach files): the rate map omits weekdays with nothing scheduled (or carries the counts), the pattern needs a minimum sample (about 3 scheduled sessions on that weekday) before it can fire, and the window ends yesterday (today is never a miss). Behavioural tests: a 6-day plan over 8 weeks never names Sunday; a 3-day plan never names Tuesday/Thursday/Saturday/Sunday; a real 0-of-4 Monday still fires; today's unfinished workout is not counted. Check the other readers of `getDayOfWeekCompletionRates` (none today besides the pattern) and the weekend-nutrition pattern for the same "empty means zero" shape while there.
-
 ## OI-395 — beat-my-coach: challenge query filters on capitalised categories, so every challenge comes from the fallback list
 
 - **Status**: OPEN
@@ -6662,3 +6643,30 @@ To plan (tier M: Train + coach files): the rate map omits weekdays with nothing 
 - **Verified**: never
 - **Identified**: 2026-10-22 · filed via mint_oi.sh from branch `cardio-duration-distance`
 - **Notes**: Split out of OI-389 Batch 1a under §4.12.1 (plan rev 6). `.cast<Map<String, dynamic>>()` at `auth_session_bootstrapper.dart:1210` throws on Hive maps, so the heal never runs on disk rows. Making it live needs: kill switch `disable_exlog_type_heal` with a pinned off-state no-op, aggregate recompute, `sets_detail` rewrite, `updated_at_ms`, `keys.toList()`, and a SoT writer entry. Footprint today: 0 cloud-backed mismatched rows.
+
+## OI-397 — Batch B: IST-throughout for workout dates (OI-390 §1 'Not changed' inventory: streak anchor, _earliestUserAnchor, lapseFacts walk, _getPlanStatus, getDaysSinceLastWorkout, generator keys, DateTime.now() sites, blankGapBeforePlan)
+
+- **Status**: OPEN
+- **Blocked on**: OI-390 landing first (founder order 2026-10-23: planned and ×2-reviewed on its own, right after OI-390)
+- **Verified**: never
+- **Identified**: 2026-10-23 · filed via mint_oi.sh from branch `dow-skip-rate`
+
+Class (b) of OI-390: a workout date derived outside IST. Inventory (OI-390 plan `docs/plans/dow-skip-rate.md` §1 "Not changed"): streak anchor stop `workout_repository.dart:387-389`; `_earliestUserAnchor` `wlog_` source parsed as local midnight `:174-186`; `lapseFacts` walk `workout_schedule_read_service.dart:2155-2159`; `_getPlanStatus` `since`/`sinceStart` `ai_snapshot_builder.dart:1361-1376`; `getDaysSinceLastWorkout` `workout_repository.dart:1298-1322`; generator keys local midnights through `istDateStr` `workout_schedule_read_service.dart:238,271-276` → `workout_write_service.dart:1600`; `DateTime.now()` at `workout_repository.dart:1024,1118,1218,1328` and `pattern_detector.dart:84,118,168,359`; `blankGapBeforePlan` local `inDays`. Exposure today: none (users in IST, pre-launch). Acceptance case: DOW notice weekday under `TZ=Asia/Tokyo` with device-generated rows.
+
+## OI-398 — rolling-context re-embeds the same coach interaction on several nights (no dedupe on original_interaction_id; 31 repeats in the week of 10-12)
+
+- **Status**: OPEN
+- **Blocked on**: its own plan + catastrophic-tier review and a separate EF deploy go (§4.3)
+- **Verified**: never
+- **Identified**: 2026-10-23 · filed via mint_oi.sh from branch `dow-skip-rate`
+
+`rolling-context` re-embeds the same `ai_coach_interactions` row on several nights: no dedupe on `original_interaction_id` (31 repeats in the week of 10-12, found during OI-390). Catastrophic-tier Edge Function; not OI-390's class.
+
+## OI-399 — getProgressSummary adherence_pct reports 0 when nothing planned, counts today before done, counts travel days (getProgressSummary.ts:63-65,138-140)
+
+- **Status**: OPEN
+- **Blocked on**: its own L-tier batch (Edge Function) and a deploy go (§4.3)
+- **Verified**: never
+- **Identified**: 2026-10-23 · filed via mint_oi.sh from branch `dow-skip-rate`
+
+Server coach tool `supabase/functions/_shared/tools/progress/getProgressSummary.ts:63-65,138-140` `adherence_pct`: reports 0 when nothing was planned (OI-390 class (a), empty means zero), counts today before it is done, counts travel days (`_shared/workout_statuses.ts`). FREE tool answering "how am I tracking". Live exposure: none of 357 interactions mention adherence. Found by the sweep `(adherence|rate)_?(pct|percent)` with `> 0 ? … : 0` (OI-390 round 4 B P2-1).

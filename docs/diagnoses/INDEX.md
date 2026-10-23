@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### day_of_week_completion — a weekday's completion counts only days that were due (classifyScheduleDay), and the coach is told a weekday is skipped only when it is genuinely singled out. (1 bugs)
+- 2026-10-23 "132315" — The coach's "Status check" reply told upendra "100% skip rate on Sunday workouts". Sunday is always a rest day on his plan. getDayOfWeekCompletionRates returned 0 for a weekday with nothing scheduled,…
+
 ### equipment_capability_floor (3 bugs)
 - 2026-10-22 b1c4e7 — The equipment capability floor (OI-89) did not apply on the two pick paths that resolve an exercise by NAME and bypass queryV4: the attempt-5 universal pool and repeat-phase pins. A shoulder-injured…
 - 2026-08-28 d3a8f5 — A user whose stored profile carries no `equipment_access` is treated as a DIFFERENT tier depending on which of 14 code paths reads it — `basic_gym` by six, `full_gym` by three, `home_dumbbells` by…
@@ -1642,6 +1645,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-10-23 | "132315" | The coach's "Status check" reply told upendra "100% skip rate on Sunday workouts". Sunday is always a rest day on his plan. getDayOfWeekCompletionRates returned 0 for a weekday with nothing scheduled,… | day_of_week_completion — a weekday's completion counts only days that were due (classifyScheduleDay), and the coach is told a weekday is skipped only when it is genuinely singled out. | test/contracts/day_of_week_completion_writer_to_reader_test.dart |
 | 2026-10-22 | b1c4e7 | The equipment capability floor (OI-89) did not apply on the two pick paths that resolve an exercise by NAME and bypass queryV4: the attempt-5 universal pool and repeat-phase pins. A shoulder-injured… | equipment_capability_floor | test/contracts/universal_pool_capability_behavioral_test.dart |
 | 2026-10-22 | e7240a | A cardio exercise logged in the active workout (e.g. "Running (Treadmill)" 30 MIN 4 KM) was stored with 0 minutes and no km: `_normalizeSetsByLoggingType` zeroed `durationSec` for every non-`timed`… | hive_field_name_exlog — a cardio / distance set's duration (seconds) and km survive every writer and every reader resolves them through WorkoutReadService. | test/contracts/cardio_duration_distance_writer_to_reader_test.dart |
 | 2026-10-22 | 46fc99 | Seven bundled library rows duplicated a kept twin: the same movement under a second name, usually with the same drawing. E241 Close-Grip Bench Press / E016 Close Grip Bench Press, E240 Overhead Cable… | exercise_library_schema | test/contracts/exercise_library_merge_contract_test.dart |

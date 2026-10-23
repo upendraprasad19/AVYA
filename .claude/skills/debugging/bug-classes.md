@@ -1823,3 +1823,12 @@ added, false of the flip being performed.
 - **Prior incidents:** `e7240a` (`_healMismatchedExerciseLogs` dead on disk rows since written; live heal OI-394).
 - **Regression test:** `test/contracts/cardio_duration_distance_writer_to_reader_test.dart` (T10b).
 
+### 2.116 An absent denominator reported as 0%: a bucket with nothing due reads as "never done" (NEW 2026-10-23)
+
+- **Telltale:** the coach or a card states a 0% / 100%-skipped figure about something the user never had scheduled (a rest weekday, an empty window); the writer has `total > 0 ? done / total : 0` or `rate_percent: planned > 0 ? … : 0`.
+- **Root-cause shape:** the writer emits a value for every bucket, including empty ones, and fills the empty ones with 0; a reader that ranks or thresholds rates (`rate < 0.5`, "lowest wins") then picks the empty bucket first. Repeated live as a coach "fabrication" (Bug C, APK Test #3; OBS-3, APK Test #4) that was fixed prompt-side twice while the writer kept emitting it through `coach_notices`.
+- **Fix pattern:** omit the key (or return null) when the denominator is 0, and count only what was due (`classifyScheduleDay`); a reader that names a bucket needs a minimum sample and a "singled out" rule, not just the lowest rate.
+- **Test shape:** a fixture where the bucket is genuinely empty (Sunday always rest) asserting the key is ABSENT, plus a positive case that still fires; mutate the omission back to `: 0` and watch it redden.
+- **Prior incidents:** Bug C (APK Test #3), OBS-3 (APK Test #4), `132315` (OI-390).
+- **Regression test:** `test/contracts/day_of_week_completion_writer_to_reader_test.dart` (T1, T2, T14b).
+

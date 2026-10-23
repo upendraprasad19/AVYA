@@ -117,6 +117,23 @@ DateTime mondayOfIst(DateTime t) {
   return ist.subtract(Duration(days: daysFromMonday));
 }
 
+/// Monday (`YYYY-MM-DD`) of the IST Mon–Sun week holding the IST date string
+/// [istDate] (OI-390). UTC calendar arithmetic on the date parts, so it is the
+/// same in every device zone — never `mondayOfIst(DateTime.parse(istDate))`,
+/// which parses to local midnight and shifts the week east of IST. Returns null
+/// when [istDate] does not start with `YYYY-MM-DD`.
+String? istWeekMondayOf(String istDate) {
+  final m = RegExp(r'^(\d{4})-(\d{2})-(\d{2})').firstMatch(istDate);
+  if (m == null) return null;
+  final day = DateTime.utc(
+      int.parse(m[1]!), int.parse(m[2]!), int.parse(m[3]!));
+  final monday = day.subtract(Duration(days: day.weekday - 1));
+  final y = monday.year.toString().padLeft(4, '0');
+  final mo = monday.month.toString().padLeft(2, '0');
+  final d = monday.day.toString().padLeft(2, '0');
+  return '$y-$mo-$d';
+}
+
 /// Sunday of the IST calendar week containing [t]. Time component
 /// is 00:00:00 (the Sunday's IST midnight).
 DateTime sundayOfIst(DateTime t) {

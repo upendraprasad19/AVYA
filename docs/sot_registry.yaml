@@ -4009,6 +4009,16 @@ concepts:
       - { file: lib/core/services/scheduled_workouts_resync_migrator.dart, reason: "one-shot resync sweep over schedule_* keys" }
       - { file: lib/core/services/sync/sync_workout.dart, reason: "cloud sync writer scans schedule_* prefix" }
       - { file: lib/core/services/template_identity_migrator.dart, reason: "OI-252 one-shot migrator excludes schedule_*/displaced_* keys while rekeying legacy tmpl_* Hive keys to the new stable-uuid form" }
+      - file: lib/core/utils/schedule_day_eligibility.dart
+        line_range: 1-9999
+        method: classifyScheduleDay (OI-390 U1)
+        semantic: status-aware
+        notes: |
+          "Was this day due, and was it done": completed (any type, incl.
+          custom_template and logged) / pending / excluded (rest, off, travel,
+          paused, moved, dropped, pre_onboarding, un-completed logged). Read by
+          WorkoutRepository's day-of-week stats and getWorkoutAdherence.
+          Behavioral test/contracts/day_of_week_completion_writer_to_reader_test.dart (T12).
     regression_test: test/sync/restore_ordering_and_sweep_test.dart
     hive:
       box: workoutBox
@@ -5056,7 +5066,7 @@ concepts:
     reader_manifest_complete: false
     readers:
       - file: lib/features/train/repositories/workout_repository.dart
-        line_range: 274-295
+        line_range: 334-355
         method: reckonStreakDecayAndPersist
         semantic: flag-check
         fields_read: [restoreSettledForCurrentUser]
@@ -5140,7 +5150,7 @@ concepts:
         fields_read: [schedule_<date> presence]
         notes: a rowless day before today ends the chain (no freeze spent); today is tolerated.
       - file: lib/features/train/repositories/workout_repository.dart
-        line_range: 492-540
+        line_range: 574-622
         method: completionRateOverWindow
         semantic: flag-check
         fields_read: [schedule_<date> presence]
@@ -5989,6 +5999,19 @@ concepts:
           onboarding_completed_at (a mid-day instant) would otherwise exclude the
           onboarding-day workout from the date-granular walk. istMidnight only
           moves the anchor EARLIER, never dropping a completed day.
+      - file: lib/features/train/repositories/workout_repository.dart
+        line_range: 1-9999
+        method: _earliestUserAnchorKey (OI-390 U2a)
+        semantic: latest
+        fields_read: [onboarding_completed_at]
+        behavioral_test_path: test/contracts/day_of_week_completion_writer_to_reader_test.dart
+        notes: |
+          IST date KEY of the onboarding instant, or the earliest wlog_ `date`
+          string verbatim (already an IST key); never istMidnight. Anchors the
+          day-of-week / adherence walk (T10, T10b). Coexists with
+          _earliestUserAnchor above, whose wlog_ source parsed as local
+          midnight is wrong east of IST; the streak moves over in Batch B
+          (OI-397).
       - file: lib/features/auth/providers/auth_provider.dart
         line_range: 360-480
         method: _ensureLocalUser (mid-onboarding resume)
@@ -16653,3 +16676,61 @@ concepts:
         method: snapshotLoggedExercise (duration_min / distance_km, D4; kill switch disable_snapshot_cardio_fields)
         semantic: aggregated
     regression_test: test/contracts/cardio_duration_distance_writer_to_reader_test.dart
+
+  - concept: day_of_week_completion
+    domain: workout
+    behavioral_test_path: test/contracts/day_of_week_completion_writer_to_reader_test.dart
+    description: |
+      OI-390 (diagnose 132315). A weekday's completion counts only days that
+      were DUE (classifyScheduleDay), walked in IST from yesterday back
+      (_eligibleDaysBack, anchored by _earliestUserAnchorKey). A weekday with
+      nothing scheduled has NO entry (the old map reported it as 0, read as
+      "skips Sunday workouts 100% of the time"). The coach is told a weekday is
+      skipped only when it is singled out: eligible >= 3, rate < 0.5, >= 2
+      isolated misses (in IST weeks whose other walked eligible days number
+      >= 2 and are >= 2/3 done), and an eligible day in the last 14 walked days.
+      getWorkoutAdherence shares the walk and omits rate_percent when nothing
+      was eligible.
+    writers:
+      - file: lib/features/train/repositories/workout_repository.dart
+        line_range: 1-9999
+        method: getDayOfWeekCompletionStats / _eligibleDaysBack / getWorkoutAdherence
+        semantic: aggregated
+        notes: Replaces getDayOfWeekCompletionRates (no other callers).
+      - file: lib/core/utils/ist_date.dart
+        line_range: 1-9999
+        method: istWeekMondayOf
+        semantic: pure
+        notes: UTC calendar arithmetic on the IST date parts; zone-independent.
+    readers:
+      - file: lib/features/ai_coach/services/pattern_detector.dart
+        line_range: 1-9999
+        method: _dayOfWeekPattern / dayOfWeekInsight
+        semantic: derived
+        notes: '"Missed N of M scheduled <Day> workouts since <date>." into coach_notices (medium).'
+      - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
+        line_range: 1-9999
+        method: _getCoachNotices / workout_adherence (90 d)
+        semantic: pass-through
+    regression_test: test/contracts/day_of_week_completion_writer_to_reader_test.dart
+
+  - concept: schedule_day_eligibility
+    domain: workout
+    behavioral_test_path: test/contracts/day_of_week_completion_writer_to_reader_test.dart
+    description: |
+      OI-390 U1. classifyScheduleDay(row) → excluded / pending / completed from
+      type + status + reason; the status-aware layer above isTrainingDayType
+      (phase_completion.dart), which it calls for the rest/off line. Callers:
+      the day-of-week stats and getWorkoutAdherence; lapseFacts adopts it in
+      Batch B (OI-397). Behavioral legs: T12 (the table) and T7 (live rows).
+    writers:
+      - file: lib/core/utils/schedule_day_eligibility.dart
+        line_range: 1-9999
+        method: classifyScheduleDay
+        semantic: pure
+    readers:
+      - file: lib/features/train/repositories/workout_repository.dart
+        line_range: 1-9999
+        method: _eligibleDaysBack
+        semantic: status-aware
+    regression_test: test/contracts/day_of_week_completion_writer_to_reader_test.dart

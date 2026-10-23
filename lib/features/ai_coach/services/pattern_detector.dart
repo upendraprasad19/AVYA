@@ -6,6 +6,7 @@ import 'package:icanbefitter/shared/repositories/plan_engine/training_history_an
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
+import 'package:icanbefitter/core/utils/schedule_day_eligibility.dart';
 
 /// Severity level for a coaching insight.
 enum InsightSeverity { high, medium, low }
@@ -401,30 +402,88 @@ class PatternDetector {
 
   // ── 10. Day-of-Week Pattern ──────────────────────────────── MEDIUM
 
-  /// IF any day has <50% completion rate over 8 weeks.
-  CoachingInsight? _dayOfWeekPattern() {
-    final rates = _workouts.getDayOfWeekCompletionRates(weeks: 8);
+  /// OI-390 U3: fires for weekday D only when D is genuinely singled out:
+  /// (1) `eligible >= 3`; (2) `completed / eligible < 0.5`; (3) at least 2
+  /// ISOLATED misses, a pending D in an IST Mon–Sun week whose other walked
+  /// eligible days number at least 2 with at least 2/3 of them completed;
+  /// (4) an eligible D in the last 14 walked days. Choice: most isolated
+  /// misses, then lowest rate, then Mon→Sun. A weekday with nothing scheduled
+  /// has no entry, so it can never read as "skipped 100%". A week is judged on
+  /// its WALKED days only: the window's first week and the current week
+  /// (Monday to yesterday) can hide a miss until enough of the week is walked,
+  /// which errs toward silence (T3f).
+  CoachingInsight? _dayOfWeekPattern() =>
+      dayOfWeekInsight(_workouts.getDayOfWeekCompletionStats(weeks: 8),
+          recentFromIstDate: istDateStr(nowWall().subtract(
+              const Duration(days: 14))));
 
-    // Find the worst day with enough data (at least some scheduled).
-    String? worstDay;
-    double worstRate = 1.0;
+  static const _dayNames = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
+  ];
 
-    for (final entry in rates.entries) {
-      if (entry.value < 0.5 && entry.value < worstRate) {
-        worstRate = entry.value;
-        worstDay = entry.key;
+  /// Pure core of [_dayOfWeekPattern]. [recentFromIstDate] is the oldest IST
+  /// date inside the last 14 walked days (condition 4).
+  @visibleForTesting
+  static CoachingInsight? dayOfWeekInsight(DayOfWeekStats stats,
+      {required String recentFromIstDate}) {
+    final byWeek = <String, List<EligibleScheduleDay>>{};
+    for (final d in stats.days) {
+      (byWeek[d.weekMondayIstDate] ??= []).add(d);
+    }
+    final isolated = <int, int>{};
+    final recent = <int>{};
+    for (final d in stats.days) {
+      if (d.istDate.compareTo(recentFromIstDate) >= 0) recent.add(d.isoWeekday);
+      if (d.kind != ScheduleDayKind.pending) continue;
+      final others = byWeek[d.weekMondayIstDate]!
+          .where((o) => o.istDate != d.istDate)
+          .toList();
+      final done =
+          others.where((o) => o.kind == ScheduleDayKind.completed).length;
+      if (others.length >= 2 && 3 * done >= 2 * others.length) {
+        isolated[d.isoWeekday] = (isolated[d.isoWeekday] ?? 0) + 1;
       }
     }
 
-    if (worstDay == null) return null;
+    int? pick;
+    for (var w = 1; w <= 7; w++) {
+      final c = stats.byIsoWeekday[w];
+      if (c == null) continue;
+      final misses = isolated[w] ?? 0;
+      if (c.eligible < 3 ||
+          c.completed / c.eligible >= 0.5 ||
+          misses < 2 ||
+          !recent.contains(w)) {
+        continue;
+      }
+      if (pick == null) {
+        pick = w;
+        continue;
+      }
+      final p = stats.byIsoWeekday[pick]!;
+      final pMisses = isolated[pick] ?? 0;
+      final rate = c.completed / c.eligible;
+      final pRate = p.completed / p.eligible;
+      if (misses > pMisses || (misses == pMisses && rate < pRate)) pick = w;
+    }
+    if (pick == null) return null;
 
-    final pct = (worstRate * 100).round();
-
+    final c = stats.byIsoWeekday[pick]!;
+    final day = _dayNames[pick - 1];
+    final missed = c.eligible - c.completed;
+    final pct = (c.completed * 100 / c.eligible).round();
     return CoachingInsight(
       patternId: 'day_of_week_pattern',
       severity: InsightSeverity.medium,
-      coachNotice: "Skips $worstDay workouts ${100 - pct}% of the time.",
-      userMessage: 'You tend to skip $worstDay workouts '
+      coachNotice: 'Missed $missed of ${c.eligible} scheduled $day workouts '
+          'since ${c.firstIstDate}.',
+      userMessage: 'You tend to skip $day workouts '
           '(only $pct% completion). Consider swapping that day.',
     );
   }

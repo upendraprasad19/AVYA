@@ -17,6 +17,7 @@ import 'package:icanbefitter/core/utils/date_utils.dart';
 import 'package:icanbefitter/core/utils/equipment_vocab.dart';
 import 'package:icanbefitter/core/utils/gap_policy.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
+import 'package:icanbefitter/core/utils/schedule_day_eligibility.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:uuid/uuid.dart';
 
@@ -210,6 +211,65 @@ class WorkoutRepository {
     consider(earliestWlogDate);
 
     return earliest;
+  }
+
+  /// OI-390 U2a — the IST date key (`YYYY-MM-DD`) before which a user could
+  /// not have had a due workout: the smaller of the onboarding instant's IST
+  /// date and the earliest `wlog_` `date` string (already an IST key, taken
+  /// verbatim). Never `istMidnight` (local midnight shifts it east of IST).
+  /// Null when neither source exists, meaning no anchor. Every writer stores
+  /// the onboarding instant as UTC with `Z` (`toUtc().toIso8601String()`), and
+  /// the cloud timestamptz restores with an offset, so the parse is zone-free. The streak keeps
+  /// [_earliestUserAnchor] until Batch B (OI-397).
+  String? _earliestUserAnchorKey() {
+    String? earliest;
+    void consider(String? key) {
+      if (key == null) return;
+      if (earliest == null || key.compareTo(earliest!) < 0) earliest = key;
+    }
+
+    final profile = _hive.userBox.get('profile') as Map?;
+    final onboarded = DateTime.tryParse(
+        (profile?['onboarding_completed_at'] as String?) ?? '');
+    if (onboarded != null) consider(istDateStr(onboarded));
+
+    final keyShape = RegExp(r'^\d{4}-\d{2}-\d{2}');
+    for (final key in _hive.workoutBox.keys) {
+      if (!key.toString().startsWith('wlog_')) continue;
+      final log = _hive.workoutBox.get(key);
+      if (log is! Map) continue;
+      final d = log['date'];
+      if (d is! String || d.length < 10 || !keyShape.hasMatch(d)) continue;
+      consider(d.substring(0, 10));
+    }
+    return earliest;
+  }
+
+  /// OI-390 U2 — the one walk behind [getDayOfWeekCompletionStats] and
+  /// [getWorkoutAdherence]: IST days 1..[days] before today (today itself only
+  /// when [includeTodayIfCompleted] and it is completed), oldest first, minus
+  /// days before the anchor and days [classifyScheduleDay] excludes. Reads go
+  /// through `getScheduleForDate` (hides moved/dropped).
+  List<EligibleScheduleDay> _eligibleDaysBack(int days,
+      {bool includeTodayIfCompleted = false}) {
+    final now = nowWall();
+    final anchorKey = _earliestUserAnchorKey();
+    final out = <EligibleScheduleDay>[];
+    for (var i = includeTodayIfCompleted ? 0 : 1; i <= days; i++) {
+      final t = now.subtract(Duration(days: i));
+      final kind = classifyScheduleDay(_schedule.getScheduleForDate(t));
+      if (kind == ScheduleDayKind.excluded) continue;
+      if (i == 0 && kind != ScheduleDayKind.completed) continue;
+      final istDate = istDateStr(t);
+      if (anchorKey != null && istDate.compareTo(anchorKey) < 0) continue;
+      out.add((
+        istDate: istDate,
+        isoWeekday: istDateOf(t).weekday,
+        weekMondayIstDate: istWeekMondayOf(istDate)!,
+        kind: kind,
+      ));
+    }
+    return out.reversed.toList();
   }
 
   /// Pure read of the current workout streak. Walks the schedule
@@ -1213,38 +1273,22 @@ class WorkoutRepository {
 
   // ── Workout Adherence ────────────────────────────────────────────
 
-  /// Workout adherence stats for a date range.
+  /// Workout adherence stats for a date range (OI-390 U4).
   ///
-  /// Counts schedule entries (planned, completed, skipped/missed).
-  /// Returns `{planned: X, completed: Y, missed: Z, rate_percent: N}`.
+  /// One walk with the day-of-week stats ([_eligibleDaysBack]): eligible days
+  /// are `planned`, completed ones `completed`, the rest `missed`. Today counts
+  /// only once it is completed. `rate_percent` is OMITTED when nothing was
+  /// eligible: an absent denominator is not 0% (OI-390 class (a)).
   Map<String, int> getWorkoutAdherence({int days = 30}) {
-    final now = DateTime.now();
-    int planned = 0;
-    int completed = 0;
-    int missed = 0;
-
-    for (int i = 0; i < days; i++) {
-      final date = now.subtract(Duration(days: i));
-      final schedule = _schedule.getScheduleForDate(date);
-      if (schedule == null) continue;
-      if (schedule['type'] != 'workout') continue;
-
-      planned++;
-      final status = schedule['status'] as String? ?? 'planned';
-      if (status == 'completed') {
-        completed++;
-      } else if (date.isBefore(DateTime(now.year, now.month, now.day))) {
-        // Past workout days that are not completed count as missed.
-        missed++;
-      }
-    }
-
-    final rate = planned > 0 ? (completed * 100 ~/ planned) : 0;
+    final walked = _eligibleDaysBack(days, includeTodayIfCompleted: true);
+    final planned = walked.length;
+    final completed =
+        walked.where((d) => d.kind == ScheduleDayKind.completed).length;
     return {
       'planned': planned,
       'completed': completed,
-      'missed': missed,
-      'rate_percent': rate,
+      'missed': planned - completed,
+      if (planned > 0) 'rate_percent': completed * 100 ~/ planned,
     };
   }
 
@@ -1277,57 +1321,35 @@ class WorkoutRepository {
     return weekCounts;
   }
 
-  // ── Day-of-Week Completion Rates ─────────────────────────────────
+  // ── Day-of-Week Completion Stats ─────────────────────────────────
 
-  /// Day-of-week completion rates over last [weeks] weeks.
-  ///
-  /// For each day of the week, counts total scheduled workouts vs completed.
-  /// Returns `{Monday: 0.85, Friday: 0.40, ...}`.
-  Map<String, double> getDayOfWeekCompletionRates({int weeks = 8}) {
-    final now = DateTime.now();
-    final cutoff = now.subtract(Duration(days: weeks * 7));
-    final dayNames = [
-      'Monday',
-      'Tuesday',
-      'Wednesday',
-      'Thursday',
-      'Friday',
-      'Saturday',
-      'Sunday',
-    ];
-
-    final scheduled = <String, int>{};
-    final completedMap = <String, int>{};
-    for (final name in dayNames) {
-      scheduled[name] = 0;
-      completedMap[name] = 0;
-    }
-
-    // Walk each day in the range.
-    for (int i = 0; i < weeks * 7; i++) {
-      final date = now.subtract(Duration(days: i));
-      if (date.isBefore(cutoff)) break;
-
-      final schedule = _schedule.getScheduleForDate(date);
-      if (schedule == null) continue;
-      if (schedule['type'] != 'workout') continue;
-
-      final dayName = dayNames[date.weekday - 1]; // weekday: 1=Mon
-      scheduled[dayName] = (scheduled[dayName] ?? 0) + 1;
-
-      if (schedule['status'] == 'completed') {
-        completedMap[dayName] = (completedMap[dayName] ?? 0) + 1;
+  /// Day-of-week completion over the last [weeks] weeks (OI-390 U2). Replaces
+  /// `getDayOfWeekCompletionRates`, which reported a weekday with nothing
+  /// scheduled as 0% done ("You skip Sunday workouts 100% of the time").
+  /// Only weekdays with at least one eligible day appear.
+  DayOfWeekStats getDayOfWeekCompletionStats({int weeks = 8}) {
+    final days = _eligibleDaysBack(weeks * 7);
+    final eligible = <int, int>{};
+    final completed = <int, int>{};
+    final first = <int, String>{};
+    for (final d in days) {
+      eligible[d.isoWeekday] = (eligible[d.isoWeekday] ?? 0) + 1;
+      if (d.kind == ScheduleDayKind.completed) {
+        completed[d.isoWeekday] = (completed[d.isoWeekday] ?? 0) + 1;
       }
+      first.putIfAbsent(d.isoWeekday, () => d.istDate);
     }
-
-    final rates = <String, double>{};
-    for (final name in dayNames) {
-      final total = scheduled[name] ?? 0;
-      final done = completedMap[name] ?? 0;
-      rates[name] = total > 0 ? done / total : 0;
-    }
-
-    return rates;
+    return DayOfWeekStats(
+      byIsoWeekday: {
+        for (final w in eligible.keys)
+          w: (
+            eligible: eligible[w]!,
+            completed: completed[w] ?? 0,
+            firstIstDate: first[w]!,
+          ),
+      },
+      days: days,
+    );
   }
 
   // ── Days Since Last Workout ──────────────────────────────────────
@@ -1876,3 +1898,24 @@ class CreateTemplateException implements Exception {
   String toString() => 'CreateTemplateException($code): $message';
 }
 
+/// One walked schedule day (OI-390). [weekMondayIstDate] groups IST Mon–Sun
+/// weeks ([istWeekMondayOf]).
+typedef EligibleScheduleDay = ({
+  String istDate,
+  int isoWeekday,
+  String weekMondayIstDate,
+  ScheduleDayKind kind,
+});
+
+/// [WorkoutRepository.getDayOfWeekCompletionStats] result (OI-390).
+class DayOfWeekStats {
+  const DayOfWeekStats({required this.byIsoWeekday, required this.days});
+
+  /// ISO weekday (1 = Monday) → counts; only weekdays with `eligible > 0`.
+  /// [firstIstDate] is that weekday's first counted day.
+  final Map<int, ({int eligible, int completed, String firstIstDate})>
+      byIsoWeekday;
+
+  /// The walk, oldest first.
+  final List<EligibleScheduleDay> days;
+}
