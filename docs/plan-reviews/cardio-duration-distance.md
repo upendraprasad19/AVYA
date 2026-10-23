@@ -5,6 +5,8 @@ blast_radius: account
 review_rounds: 9
 ground_truth_verified: true
 verdict: converged
+bpass: accepted
+bpass_review: docs/reviews/526c47b338f6-review.md
 ---
 
 # Plan-review record: a cardio or distance exercise keeps its minutes and km, and every screen shows them (OI-389 Batch 1a; closes OI-380, OI-382)
@@ -69,3 +71,10 @@ ratified (D10, 2026-10-22); each waits on the founder action its OI names:
 - **OI-393 (d):** a set logged on top of a restore-shaped or F5 exlog row resets its totals. This also covers the move
   merge's mixed shape.
 - **OI-394 (e):** the live exlog type heal (the cast fix plus kill switch `disable_exlog_type_heal`).
+
+## B-pass (2026-10-23)
+
+- `docs/reviews/40a2f00c58d1-review.md` (accepted): 0 P0, 0 P1, 1 P2 (OI-391, known and tracked), 4 P3; F5 fixed.
+- `docs/reviews/526c47b338f6-review.md` (accepted): the founder-D4 delta (coach snapshot cardio fields), 2 P3, both fixed.
+- Founder D4 = yes on 2026-10-23; the snapshot fields shipped in this batch (closure ledger D4-SNAPSHOT-CARDIO-FIELDS).
+
