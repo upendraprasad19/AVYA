@@ -23,6 +23,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/swap_service.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/train/providers/train_provider.dart';
@@ -41,13 +42,14 @@ Map<String, dynamic> _ex(
   int rest, {
   Object? type = 'unset',
   String? repRange,
+  String reps = '8-10',
 }) =>
     {
       'exercise_id': id,
       'exercise_name': name,
       'logging_type': loggingType,
       'sets': sets,
-      'reps': '8-10',
+      'reps': reps,
       'rest_seconds': rest,
       if (type != 'unset') 'exercise_type': type,
       'rep_range': ?repRange,
@@ -202,12 +204,167 @@ void main() {
     });
   });
 
-  group('archetype agreement (the allocator, apply, titration and the display)', () {
-    test('every shipped row prices at the archetype the engine keys by name, whether found by id or not', () {
-      final archetypeByName = {
-        for (final r in library) (r['name'] as String).toLowerCase(): SessionBudget.archetypeOfRow(r),
+  group('long efforts, corrupt numbers and timed parsing (B-pass R3)', () {
+    double only(Map<String, dynamic> e, {Map<String, Map<String, dynamic>>? byName}) =>
+        SessionBudget.estimateDaySecondsFromPlanDay(
+            {'exercises': [e], 'warmup': <dynamic>[], 'cooldown': <dynamic>[]}, rowsById,
+            rowsByName: byName ?? const {});
+
+    test('P2-1: a cardio or timed row prescribed in MINUTES works that long per set', () {
+      // Running (Treadmill): cardio -> B, one set of 20-40 min = 30 min = 1800 s, no rest.
+      expect(only(_ex('E061', 'Running (Treadmill)', 'cardio', 1, 60, reps: '20-40 min')),
+          closeTo(1.2 * (30 + 1800), 1e-9));
+      // Jump Rope: timed, 3 rounds of 3 min, 30 s rest.
+      expect(only(_ex('E063', 'Jump Rope', 'timed', 3, 30, reps: '3 min rounds')),
+          closeTo(1.2 * (30 + 3 * 180 + 2 * 30), 1e-9));
+    });
+
+    test('P2-1: seconds, metres and rep prescriptions keep the table (Ruling 2: B works 40 s a set)', () {
+      // Plank 30-60 sec and Farmers Carry 40 meters: B at 40 s a set, as before.
+      expect(only(_ex('E054', 'Plank', 'timed', 3, 30, reps: '30-60 sec')),
+          closeTo(1.2 * (30 + 3 * 40 + 2 * 30), 1e-9));
+      expect(only(_ex('E089', 'Farmers Carry', 'distance', 4, 60, reps: '40 meters')),
+          closeTo(1.2 * (30 + 4 * 40 + 3 * 60), 1e-9));
+      // A rep-based row never takes the long-effort rule, whatever its text says.
+      expect(only(_ex('E001', 'Barbell Bench Press', 'weight_reps', 4, 150, reps: '20 min')),
+          closeTo(794.4, 1e-9));
+    });
+
+    test('P2-1: the long-effort rule itself', () {
+      int? w(String lt, String reps) =>
+          SessionBudget.longEffortWorkSeconds(loggingType: lt, reps: reps);
+      expect(w('cardio', '20-40 min'), 1800);
+      expect(w('cardio', '10 minutes'), 600);
+      expect(w('timed', '3 min rounds'), 180);
+      expect(w('cardio', '30s'), isNull);
+      expect(w('cardio', 'min'), isNull); // no number
+      expect(w('cardio', 'minimum effort'), isNull); // not the unit
+      expect(w('weight_reps', '20 min'), isNull);
+      expect(w('cardio', '99999999999999999999 min'), isNull); // no number survives the parse
+      expect(w('cardio', '9999999 min'), 7200); // capped
+    });
+
+    test('P3-3: a template-built day (no exercise_id) is priced at its library row, found by exact name', () {
+      final bench = rowsById['E001']!;
+      final entry = {
+        'exercise_name': 'Barbell Bench Press',
+        'logging_type': 'weight_reps',
+        'sets': 4,
+        'reps': '8-10',
+        'rest_seconds': 150,
+        'exercise_type': 'compound', // a template stores one type and no rep_range
       };
-      var multiType = 0;
+      // By name the row is H (compound, 5-8): 794.4 s. On its own fields it reads
+      // as M (no rep range): 1.2 x (90 + 4 x 35 + 3 x 150) = 816 s.
+      expect(only(entry, byName: {'barbell bench press': bench}), closeTo(794.4, 1e-9));
+      expect(only(entry), closeTo(816.0, 1e-9));
+    });
+
+    test('P3-3: budgetedDayMinutes resolves a name-only entry through the library (flag ON)', () async {
+      await flagOn();
+      final entry = {
+        'exercise_name': 'Barbell Bench Press',
+        'logging_type': 'weight_reps',
+        'sets': 4,
+        'reps': '8-10',
+        'rest_seconds': 150,
+        'exercise_type': 'compound',
+      };
+      // 794.4 s -> 13 min (H); an unresolved name would be 816 s -> 14 min (M).
+      expect(
+          budgetedDayMinutes({'exercises': [entry], 'warmup': <dynamic>[], 'cooldown': <dynamic>[]}),
+          13);
+    });
+
+    test('P3-1: corrupt numbers never throw and are bounded', () {
+      Map<String, dynamic> raw({Object? sets, Object? rest}) => {
+            'exercise_id': 'x',
+            'exercise_name': 'X',
+            'logging_type': 'weight_reps',
+            'exercise_type': ['isolation'],
+            'sets': ?sets,
+            'rest_seconds': ?rest,
+          };
+      double i(int sets, int rest) => 1.2 * (45 + sets * 47 + (sets - 1) * rest);
+      // A digit run too long for an int is junk (75), not a FormatException.
+      expect(only(raw(sets: 3, rest: '99999999999999999999 s')), closeTo(i(3, 75), 1e-9));
+      expect(only(raw(sets: 3, rest: 5000)), closeTo(i(3, 3600), 1e-9));
+      expect(only(raw(sets: 1000000000, rest: 60)), closeTo(i(100, 60), 1e-9));
+      expect(only(raw(sets: -4, rest: 60)), 0.0);
+      // A timed warm-up item whose reps is a 20-digit run has no usable number: the
+      // 30 s floor, and no throw.
+      final d = {
+        'exercises': <dynamic>[],
+        'warmup': [
+          {'logging_type': 'timed', 'reps': '99999999999999999999'},
+        ],
+        'cooldown': <dynamic>[],
+      };
+      expect(SessionBudget.estimateDaySecondsFromPlanDay(d, rowsById), 30.0);
+    });
+
+    test('P3-1: a day whose exercise name is not text is still priced, not thrown on', () async {
+      await flagOn();
+      expect(
+          budgetedDayMinutes({
+            'exercises': [
+              {'exercise_name': 42, 'sets': 3},
+            ],
+          }),
+          isA<int>());
+    });
+
+    test('P3-2: timedItemSeconds reads a timed item exactly as the Train screen does', () {
+      final cases = <Map<String, dynamic>>[
+        {'reps': '30-60 sec'},
+        {'reps': '60 sec'},
+        {'reps': '3 min rounds'},
+        {'reps': '5-10 sec'},
+        {'reps': '45-60 sec each'},
+        {'reps': 'varies'},
+        {'reps': ''},
+        {'reps': '300s'},
+        {'prescribed_reps': '20-30s'},
+        {'default_reps': '2 min'},
+        {'prescribed_time_secs': 75, 'reps': '10'},
+        {'default_duration_secs': 90.0},
+        {'default_duration_seconds': 120},
+        <String, dynamic>{},
+        // every timed row of the shipped library, as the library stores it
+        for (final r in library)
+          if (r['logging_type'] == 'timed') {'default_reps': r['default_reps']},
+      ];
+      for (final m in cases) {
+        expect(SessionBudget.timedItemSeconds(m), parseTimedDurationSecs(m), reason: '$m');
+      }
+      // The plan writer's own key is read too (the Train screen ignores it).
+      expect(SessionBudget.timedItemSeconds({'duration_seconds': 90}), 90);
+    });
+  });
+
+  group('archetype agreement (the allocator, apply, titration and the display)', () {
+    // An oracle written from the rule, not from the code under test: logged timed /
+    // cardio / distance is B; otherwise compound (also when no type) is H at a rep
+    // range starting <= 6 and M above; isolation is I; calisthenics is M at <= 10, else B.
+    String oracle(Map<String, dynamic> r) {
+      final lt = (r['logging_type'] as String?) ?? 'weight_reps';
+      if (const {'timed', 'cardio', 'distance'}.contains(lt)) return 'B';
+      final types = {
+        for (final t in (r['exercise_type'] as List? ?? const [])) '$t'.trim().toLowerCase(),
+      };
+      final lower =
+          int.tryParse(RegExp(r'^\s*(\d+)').firstMatch('${r['rep_range']}')?.group(1) ?? '');
+      if (types.isEmpty || types.contains('compound')) {
+        return (lower != null && lower <= 6) ? 'H' : 'M';
+      }
+      if (types.contains('isolation')) return 'I';
+      if (types.contains('calisthenics')) return (lower != null && lower <= 10) ? 'M' : 'B';
+      return 'B';
+    }
+
+    test('every shipped row prices at the oracle archetype, found by id, by name or from its own fields', () {
+      final byName = {for (final r in library) (r['name'] as String).toLowerCase(): r};
+      expect(byName.length, library.length, reason: 'names are unique, so by-name is by-row');
       for (final r in library) {
         final types = (r['exercise_type'] as List?) ?? const [];
         final e = _ex(
@@ -216,21 +373,40 @@ void main() {
           (r['logging_type'] as String?) ?? 'weight_reps',
           3,
           75,
-          type: types.isEmpty ? null : types.first,
+          type: types, // the whole list: what a stored library pick carries
           repRange: r['rep_range'] as String?,
         );
-        final byId = SessionBudget.archetypeOfPlanDayExercise(e, rowsById);
-        expect(byId, archetypeByName[(r['name'] as String).toLowerCase()],
-            reason: 'by id: ${r['id']} ${r['name']}');
-        if (types.length > 1) {
-          multiType++;
-          continue; // a custom stores ONE type; a multi-type row is read whole by id
-        }
-        final noRow = SessionBudget.archetypeOfPlanDayExercise(e, const {});
-        expect(noRow, byId, reason: 'fallback without a row: ${r['id']} ${r['name']}');
+        final want = oracle(r);
+        final tag = '${r['id']} ${r['name']}';
+        expect(SessionBudget.archetypeOfPlanDayExercise(e, rowsById), want, reason: 'by id: $tag');
+        final noId = {...e}..remove('exercise_id');
+        expect(SessionBudget.archetypeOfPlanDayExercise(noId, const {}, rowsByName: byName), want,
+            reason: 'by name: $tag');
+        expect(SessionBudget.archetypeOfPlanDayExercise(e, const {}), want,
+            reason: 'from its own fields: $tag');
       }
-      // ignore: avoid_print
-      print('archetype agreement: ${library.length} rows, $multiType multi-type');
+    });
+  });
+
+  group('the coach\'s shortenDay prices a day with the same model (B-pass R3 P2-2)', () {
+    // The day() fixture is 1557.6 s = 26 min under the budget model. The old estimate
+    // (sets x 60 + sets x rest, exercises only) says 4 x 210 + 3 x 135 = 1245 s = 21 min.
+    const date = '2026-10-26';
+
+    Future<ShortenDayResult> shorten() async {
+      await HiveService.instance.workoutBox.put('schedule_$date', {...day(), 'date': date});
+      // ignore: deprecated_member_use
+      return SwapService.instance.shortenDay(date: date, targetMinutes: 90);
+    }
+
+    test('flag OFF: the old exercises-only estimate, 21 min', () async {
+      expect((await shorten()).estimatedOriginalMinutes, 21);
+    });
+
+    test('flag ON: the same 26 min Train and Home show for that day', () async {
+      await flagOn();
+      expect((await shorten()).estimatedOriginalMinutes, 26);
+      expect(budgetedDayMinutes(day()), 26);
     });
   });
 

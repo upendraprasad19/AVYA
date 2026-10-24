@@ -311,11 +311,7 @@ class PeriodizationEngine {
           d,
           g,
           budgeted ? ex.sets : 0,
-          SessionBudget.exerciseSeconds(
-            archetype: SessionBudget.archetypeOfPlanned(ex, budget),
-            sets: ex.sets,
-            restSeconds: rest,
-          ),
+          SessionBudget.plannedExerciseSeconds(ex, budget, sets: ex.sets, restSeconds: rest),
         );
         if (budgeted) {
           ranked[d].add(i);
@@ -329,10 +325,9 @@ class PeriodizationEngine {
     void tryGain(int d, int i, {required bool budgeted}) {
       final ex = (useB ? populated[d].exercisesB : populated[d].exercisesA)[i];
       if (budgeted && ex.sets >= SessionBudget.maxSetsPerExercise) return;
-      final arch = SessionBudget.archetypeOfPlanned(ex, budget);
       final rest = restOf[(d, i)]!;
-      final dt = SessionBudget.exerciseSeconds(archetype: arch, sets: ex.sets + 1, restSeconds: rest) -
-          SessionBudget.exerciseSeconds(archetype: arch, sets: ex.sets, restSeconds: rest);
+      final dt = SessionBudget.plannedExerciseSeconds(ex, budget, sets: ex.sets + 1, restSeconds: rest) -
+          SessionBudget.plannedExerciseSeconds(ex, budget, sets: ex.sets, restSeconds: rest);
       if (!ledger.fits(d, groups[(d, i)]!, 1, dt)) return;
       ledger.add(d, groups[(d, i)]!, budgeted ? 1 : 0, dt);
       gained.add((d, i));

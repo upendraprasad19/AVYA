@@ -197,10 +197,8 @@ class VolumeTitration {
     Set<String> groupsOf(PlannedExercise e) => SessionBudget.isBudgeted(e, budget)
         ? BudgetMuscleGroups.of(e.primaryMuscles ?? const [])
         : const <String>{};
-    double seconds(PlannedExercise e, int sets) => SessionBudget.exerciseSeconds(
-        archetype: SessionBudget.archetypeOfPlanned(e, budget),
-        sets: sets,
-        restSeconds: e.restSeconds);
+    double seconds(PlannedExercise e, int sets) =>
+        SessionBudget.plannedExerciseSeconds(e, budget, sets: sets, restSeconds: e.restSeconds);
 
     for (var di = 0; di < dayExercises.length; di++) {
       for (final e in dayExercises[di]) {

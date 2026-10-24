@@ -806,6 +806,24 @@ void main() {
       expect(statsA().firstLifts.single.groups, {'Chest'});
     });
 
+    test('R3 P2-1: a cardio row prescribed in minutes spends those minutes, so the lift shrinks', () {
+      // 60 minutes = 3000 s. A 20-40 min treadmill row costs 1.2 x (30 + 1800) = 2196 s,
+      // leaving 804 s: the bench gets 3 sets (594 s) and cannot grow (the 4th costs 816 s).
+      // The same row prescribed "30s" costs 84 s and leaves the bench its 4, then the floor
+      // pass grows it to 5.
+      Map<String, int> benchSets(String reps) {
+        final f = Fx();
+        f.row('bench', ['Chest']);
+        f.row('run', ['Core'], type: 'cardio', reps: '20-30', logging: 'cardio');
+        final run = f.ex('run', sets: 1, logging: 'cardio', rest: 60).copyWith(reps: reps);
+        final out = f.run([f.day('strength', [run, f.ex('bench')])], minutes: 60);
+        return {for (final (n, s) in setsOf(out[0])) n: s};
+      }
+
+      expect(benchSets('20-40 min')['bench'], 3);
+      expect(benchSets('30s')['bench'], 5);
+    });
+
     test('R1 P2-2: a lead lift that does not fit is dropped while a cheaper lift stays; the stat says so', () {
       // The policy: the lead lift is protected from the WEEK (reservation) and from an
       // EMPTY day (guard), not from the day's clock. When 2 sets of it cost more than the

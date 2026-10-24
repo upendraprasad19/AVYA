@@ -195,7 +195,8 @@ class SessionSetAllocator {
         if (!SessionBudget.isBudgeted(ex, ctx)) {
           // Ruling 8: a timed row at its OWN rest, a rep-based custom at the day's.
           final rest = SessionBudget.isRepBased(ex.loggingType) ? dayRest : ex.restSeconds;
-          ledger.add(d, const {}, 0, SessionBudget.exerciseSeconds(archetype: arch, sets: ex.sets, restSeconds: rest));
+          ledger.add(d, const {}, 0,
+              SessionBudget.plannedExerciseSeconds(ex, ctx, sets: ex.sets, restSeconds: rest));
           entries[d].add((ex, null));
         } else {
           final slot = _Slot(

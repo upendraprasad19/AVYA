@@ -73,15 +73,76 @@ class SessionBudget {
 
   /// Seconds one exercise takes: `1.20 x (overhead + sets x work + (sets - 1) x
   /// rest)`. An unknown [archetype] is timed as `B`. Zero sets cost nothing.
+  /// [workSeconds] replaces the archetype's per-set work for a long effort
+  /// ([longEffortWorkSeconds]); null (every other row) keeps the table.
   static double exerciseSeconds({
     required String archetype,
     required int sets,
     required int restSeconds,
+    int? workSeconds,
   }) {
     if (sets <= 0) return 0.0;
-    final work = _workSeconds[archetype] ?? _workSeconds['B']!;
+    final work = workSeconds ?? _workSeconds[archetype] ?? _workSeconds['B']!;
     final overhead = _overheadSeconds[archetype] ?? _overheadSeconds['B']!;
     return timeFactor * (overhead + sets * work + (sets - 1) * restSeconds);
+  }
+
+  /// Seconds of work per set for a row whose prescription is a LONG effort, else
+  /// null (B-pass R3 P2-1). A `cardio`, `distance` or `timed` row whose `reps` text
+  /// names minutes ("20-40 min", "3 min rounds") works that long per set (the
+  /// average of a range), instead of the archetype B's 40 s: a user-added treadmill
+  /// run is half an hour, not a minute. A prescription in seconds or metres keeps
+  /// the table (Ruling 2: a typical hold or carry is about 40 s a set). Rep-based
+  /// rows never take it.
+  static int? longEffortWorkSeconds({required String loggingType, required String reps}) {
+    if (loggingType != 'cardio' && loggingType != 'distance' && loggingType != 'timed') {
+      return null;
+    }
+    final lower = reps.toLowerCase();
+    if (!_minutesUnit.hasMatch(lower)) return null;
+    final numbers = _numbersIn(lower);
+    if (numbers.isEmpty) return null;
+    final minutes = numbers.reduce((a, b) => a + b) ~/ numbers.length;
+    return (minutes * 60).clamp(1, 7200);
+  }
+
+  static final RegExp _minutesUnit = RegExp(r'\bmin(?:ute)?s?\b');
+
+  /// The positive integers in [text], in order, each capped at 100000 so a corrupt
+  /// digit run can neither overflow a sum nor price a set at years.
+  static List<int> _numbersIn(String text) => [
+        for (final m in RegExp(r'\d+').allMatches(text))
+          if ((int.tryParse(m.group(0)!) ?? 0) > 0)
+            int.parse(m.group(0)!).clamp(1, 100000),
+      ];
+
+  /// The seconds of one set of a `timed` item: the same rules as the Train screen's
+  /// `parseTimedDurationSecs` (pinned equal by `session_estimate_display_test.dart`),
+  /// plus the plan writer's own `duration_seconds`. Explicit numeric fields first
+  /// (`prescribed_time_secs`, `default_duration_secs`, `default_duration_seconds`,
+  /// `duration_seconds`), then the digits of `reps` / `prescribed_reps` /
+  /// `default_reps` (a range averages, "min" multiplies by 60), else 30.
+  static int timedItemSeconds(Map<dynamic, dynamic> m) {
+    for (final key in const [
+      'prescribed_time_secs',
+      'default_duration_secs',
+      'default_duration_seconds',
+      'duration_seconds',
+    ]) {
+      final v = m[key];
+      if (v is num && v.isFinite && v > 0) return v.toInt().clamp(1, 7200);
+    }
+    final raw = [m['reps'], m['prescribed_reps'], m['default_reps']]
+            .whereType<String>()
+            .firstOrNull ??
+        '';
+    if (raw.isEmpty) return 30;
+    final lower = raw.toLowerCase();
+    final numbers = _numbersIn(lower);
+    if (numbers.isEmpty) return 30;
+    final avg = numbers.reduce((a, b) => a + b) ~/ numbers.length;
+    if (lower.contains('min') || lower.contains('m ')) return (avg * 60).clamp(1, 7200);
+    return avg > 0 ? avg.clamp(1, 7200) : 30;
   }
 
   /// Warm-up plus cool-down minutes for a session of [minutes] (Ruling 3):
@@ -182,19 +243,41 @@ class SessionBudget {
       loggingType == 'weighted_bodyweight' ||
       loggingType == 'reps_only';
 
+  /// Seconds [ex] takes at [sets] sets and [restSeconds] rest: [exerciseSeconds] at
+  /// its archetype ([archetypeOfPlanned]), with the per-set work of a long effort
+  /// ([longEffortWorkSeconds]) for a cardio, distance or timed row prescribed in
+  /// minutes. The ONE pricing of a planned exercise for the allocator's
+  /// not-budgeted rows, `PeriodizationEngine.apply` week 2 and titration.
+  static double plannedExerciseSeconds(
+    PlannedExercise ex,
+    SessionBudgetContext ctx, {
+    required int sets,
+    required int restSeconds,
+  }) =>
+      exerciseSeconds(
+        archetype: archetypeOfPlanned(ex, ctx),
+        sets: sets,
+        restSeconds: restSeconds,
+        workSeconds: longEffortWorkSeconds(loggingType: ex.loggingType, reps: ex.reps),
+      );
+
   // ── Display estimate (Ruling 13) ─────────────────────────────────────────
 
   /// The archetype of one exercise map of a STORED plan day (a `schedule_*` row's
-  /// `exercises` entry): its library row's, found by `exercise_id`, else derived
+  /// `exercises` entry): its library row's, found by `exercise_id`, else by its
+  /// exact name in [rowsByName] (a template-built day carries no id), else derived
   /// from the entry's own `exercise_type` (a List, a String or absent, which is
   /// read as `['compound']`), `rep_range` and `logging_type`, as for a custom.
   /// The same answer [archetypeOfPlanned] gives the engine for the same exercise.
   static String archetypeOfPlanDayExercise(
     Map<dynamic, dynamic> e,
-    Map<String, Map<String, dynamic>> rowsById,
-  ) {
+    Map<String, Map<String, dynamic>> rowsById, {
+    Map<String, Map<String, dynamic>> rowsByName = const {},
+  }) {
     final id = e['exercise_id'];
-    final row = id is String ? rowsById[id] : null;
+    final name = e['exercise_name'] ?? e['name'];
+    final row = (id is String ? rowsById[id] : null) ??
+        (name is String ? rowsByName[name.toLowerCase()] : null);
     if (row != null) return archetypeOfRow(row);
     return archetypeOfRow(e);
   }
@@ -204,24 +287,37 @@ class SessionBudget {
   /// seconds of the warm-up and cool-down items. This is what Train and Home
   /// DISPLAY under the budget flag; both call it, so they cannot disagree.
   ///
-  /// - **Sets:** `sets`, else `prescribed_sets`, else `default_sets`, else 3.
+  /// - **Sets:** `sets`, else `prescribed_sets`, else `default_sets`, else 3
+  ///   (clamped to 0..100).
   /// - **Rest:** `rest_seconds` (a number, or the digits of a string such as
-  ///   `90s`); absent is 60 (the display parser's default); anything else is 75.
-  /// - **Warm-up / cool-down item:** a `timed` item is its own seconds (the digits
-  ///   of `reps`, `300s` -> 300, else `duration_seconds`, else 30); any other item
-  ///   is priced as archetype `B` at its own sets and rest.
+  ///   `90s`; clamped to 0..3600); absent is 60 (the display parser's default);
+  ///   anything else is 75.
+  /// - **Long efforts:** a cardio / distance / timed exercise whose `reps` names
+  ///   minutes works that long per set ([longEffortWorkSeconds]).
+  /// - **Warm-up / cool-down item:** a `timed` item is its own seconds
+  ///   ([timedItemSeconds]); any other item is priced as archetype `B` at its own
+  ///   sets and rest.
   ///
-  /// Never throws: a non-map entry is skipped and a missing list counts as none.
+  /// Never throws: a non-map entry is skipped, a missing list counts as none and a
+  /// corrupt number lands on a default.
   static double estimateDaySecondsFromPlanDay(
     Map<dynamic, dynamic> planDay,
-    Map<String, Map<String, dynamic>> rowsById,
-  ) {
+    Map<String, Map<String, dynamic>> rowsById, {
+    Map<String, Map<String, dynamic>> rowsByName = const {},
+  }) {
     var total = 0.0;
     for (final e in _mapsOf(planDay['exercises'])) {
       total += exerciseSeconds(
-        archetype: archetypeOfPlanDayExercise(e, rowsById),
-        sets: _intOf(e['sets'] ?? e['prescribed_sets'] ?? e['default_sets']) ?? 3,
+        archetype: archetypeOfPlanDayExercise(e, rowsById, rowsByName: rowsByName),
+        sets: _setsOf(e['sets'] ?? e['prescribed_sets'] ?? e['default_sets']),
         restSeconds: _restSecondsOf(e['rest_seconds']),
+        workSeconds: longEffortWorkSeconds(
+          loggingType: '${e['logging_type'] ?? 'weight_reps'}',
+          reps: [e['reps'], e['prescribed_reps'], e['default_reps']]
+                  .whereType<String>()
+                  .firstOrNull ??
+              '',
+        ),
       );
     }
     for (final key in const ['warmup', 'cooldown']) {
@@ -235,9 +331,10 @@ class SessionBudget {
   /// [estimateDaySecondsFromPlanDay] rounded to whole minutes.
   static int estimateDayMinutesFromPlanDay(
     Map<dynamic, dynamic> planDay,
-    Map<String, Map<String, dynamic>> rowsById,
-  ) =>
-      (estimateDaySecondsFromPlanDay(planDay, rowsById) / 60).round();
+    Map<String, Map<String, dynamic>> rowsById, {
+    Map<String, Map<String, dynamic>> rowsByName = const {},
+  }) =>
+      (estimateDaySecondsFromPlanDay(planDay, rowsById, rowsByName: rowsByName) / 60).round();
 
   static Iterable<Map<dynamic, dynamic>> _mapsOf(Object? raw) =>
       raw is List ? raw.whereType<Map<dynamic, dynamic>>() : const [];
@@ -248,25 +345,28 @@ class SessionBudget {
     return null;
   }
 
+  /// A stored set count: absent or unreadable is 3, and 0..100 bounds a corrupt value.
+  static int _setsOf(Object? raw) => (_intOf(raw) ?? 3).clamp(0, 100);
+
+  /// A stored rest in seconds, bounded to 0..3600: absent is 60, a number or the
+  /// first digit run of a string is itself, anything else (and a digit run too
+  /// long to be a number) is 75.
   static int _restSecondsOf(Object? raw) {
     if (raw == null) return 60;
-    if (raw is num) return raw.isFinite ? (raw < 0 ? 0 : raw.toInt()) : 75;
+    if (raw is num) return raw.isFinite ? raw.toInt().clamp(0, 3600) : 75;
     if (raw is String) {
       final digits = RegExp(r'\d+').firstMatch(raw)?.group(0);
-      return digits == null ? 75 : int.parse(digits);
+      final v = digits == null ? null : int.tryParse(digits);
+      return v == null ? 75 : v.clamp(0, 3600);
     }
     return 75;
   }
 
   static double _itemSeconds(Map<dynamic, dynamic> item) {
-    if (item['logging_type'] == 'timed') {
-      final digits = RegExp(r'\d+').firstMatch('${item['reps'] ?? ''}')?.group(0);
-      if (digits != null) return int.parse(digits).toDouble();
-      return (_intOf(item['duration_seconds']) ?? 30).toDouble();
-    }
+    if (item['logging_type'] == 'timed') return timedItemSeconds(item).toDouble();
     return exerciseSeconds(
       archetype: 'B',
-      sets: _intOf(item['sets']) ?? 1,
+      sets: (_intOf(item['sets']) ?? 1).clamp(0, 100),
       restSeconds: _restSecondsOf(item['rest_seconds'] ?? 0),
     );
   }

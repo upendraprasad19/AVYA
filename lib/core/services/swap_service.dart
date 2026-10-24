@@ -35,6 +35,7 @@ import 'write_result.dart';
 import '../utils/date_utils.dart';
 import '../utils/ist_date.dart';
 import '../../shared/repositories/plan_engine/equipment_capability.dart';
+import '../../shared/repositories/plan_engine/session_estimate.dart' show budgetedDaySeconds;
 import '../../shared/repositories/plan_engine/training_history_analyzer.dart';
 
 /// Result returned by [SwapService.swapExerciseInDay].
@@ -603,7 +604,7 @@ class SwapService {
         : <Map<String, dynamic>>[];
 
     final originalCount = exercises.length;
-    final originalEstimateSec = _estimateExerciseListSeconds(exercises);
+    final originalEstimateSec = _estimateSeconds(scheduleMap, exercises);
     final originalMinutes = (originalEstimateSec / 60).ceil();
 
     if (originalMinutes <= targetMinutes) {
@@ -634,8 +635,8 @@ class SwapService {
 
     final droppedNames = <String>[];
     while (indexed.length > 2) {
-      final estimateSec = _estimateExerciseListSeconds(
-          indexed.map((e) => e.entry).toList(growable: false));
+      final estimateSec = _estimateSeconds(
+          scheduleMap, indexed.map((e) => e.entry).toList(growable: false));
       if ((estimateSec / 60).ceil() <= targetMinutes) break;
       final dropped = indexed.removeLast();
       final name = (dropped.entry['exercise_name'] as String?) ??
@@ -645,7 +646,7 @@ class SwapService {
     }
 
     final keptEntries = indexed.map((e) => e.entry).toList(growable: false);
-    final keptEstimateSec = _estimateExerciseListSeconds(keptEntries);
+    final keptEstimateSec = _estimateSeconds(scheduleMap, keptEntries);
     final keptMinutes = (keptEstimateSec / 60).ceil();
     if (keptMinutes > targetMinutes) {
       throw ShortenDayException(
@@ -714,6 +715,17 @@ class SwapService {
   }
 
   // ── Helpers ─────────────────────────────────────────────────────
+
+  /// Seconds [exercises] take on the day stored in [scheduleMap]. With the session
+  /// set budget ON it is the SAME model Train and Home show (every exercise at its
+  /// archetype plus the day's warm-up and cool-down items), so "shorten to 45
+  /// minutes" lands on about 45 minutes where the user reads it; OFF it is the old
+  /// sets x (60 + rest) sum, verbatim (B-pass R3 P2-2).
+  int _estimateSeconds(
+      Map<String, dynamic> scheduleMap, List<Map<String, dynamic>> exercises) {
+    final budgeted = budgetedDaySeconds({...scheduleMap, 'exercises': exercises});
+    return budgeted?.round() ?? _estimateExerciseListSeconds(exercises);
+  }
 
   int _estimateExerciseListSeconds(List<Map<String, dynamic>> exercises) {
     int total = 0;
