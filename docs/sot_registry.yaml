@@ -14361,7 +14361,7 @@ concepts:
         fields_read: [type]
         notes: whitelist shape, widened to include 'logged' by this batch
       - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
-        line_range: 537-542
+        line_range: 552-557
         method: isRestDayConsideringLogged
         semantic: flag-check
         fields_read: [type]

@@ -501,6 +501,21 @@ class PlanEngineFlags {
     }
   }
 
+  /// Batch B2 (docs/plans/2026-10-22-session-set-budget.md): size a generated
+  /// session by the user's minutes and evidence-based set caps instead of a fixed
+  /// exercise count, a 4-set minimum and a phase multiplier. Ship-dark DEFAULT OFF
+  /// (§4.6 — changes what is prescribed); OFF → `generateV4` runs verbatim, reads
+  /// no profile minutes, and the generator golden proves it. Set
+  /// `configBox['enable_session_set_budget'] = true` to enable.
+  static bool get sessionSetBudgetEnabled {
+    try {
+      return HiveService.instance.configBox.get('enable_session_set_budget') ==
+          true;
+    } catch (_) {
+      return false; // no Hive (pure unit test) → default: OFF
+    }
+  }
+
   /// OI-126: a `type: 'logged'` schedule row (AI-coach-only log, or a
   /// cloud-restore synthesize row) currently counts as a training day for the
   /// weekly streak (`isTrainingDayType`, exclusion-shaped) but as REST for
