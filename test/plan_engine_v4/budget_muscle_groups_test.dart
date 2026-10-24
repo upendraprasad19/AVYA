@@ -59,7 +59,10 @@ void main() {
       expect(of(['Quadriceps']), {'Quads'});
       expect(of(['Hamstrings']), {'Hamstrings'});
       expect(of(['Gluteus Medius']), {'Glutes'});
-      expect(of(['Abs', 'Obliques', 'Transverse Abdominis']), {'Core'});
+      // One token each: a union would let one keyword mask another's removal.
+      expect(of(['Abs']), {'Core'});
+      expect(of(['Obliques']), {'Core'});
+      expect(of(['Transverse Abdominis']), {'Core'});
       expect(of(['Core']), {'Core'});
       expect(of(['Soleus']), {'Calves'});
       expect(of(['Calf']), {'Calves'});

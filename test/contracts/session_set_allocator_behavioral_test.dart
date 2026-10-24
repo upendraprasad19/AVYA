@@ -1,0 +1,619 @@
+// B2 Task 3 (docs/plans/2026-10-22-session-set-budget.md): the session set
+// allocator. Pure Dart over crafted fixtures, plus a seeded invariant sweep over
+// the shipped library.
+//
+// Every literal in the crafted tests was computed first with an independent
+// reference model of the plan's algorithm (written from the plan text, not from
+// the Dart code), then checked by hand where it was small enough to.
+import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
+
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:icanbefitter/shared/repositories/plan_engine/budget_muscle_groups.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/session_budget.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/session_set_allocator.dart';
+
+/// Crafted library rows, keyed by lowercased name like the production map.
+class Fx {
+  final rows = <String, Map<String, dynamic>>{};
+
+  void row(String name, List<String> muscles,
+      {String type = 'compound', String reps = '8-12', String logging = 'weight_reps'}) {
+    rows[name.toLowerCase()] = {
+      'name': name,
+      'primary_muscles': muscles,
+      'exercise_type': [type],
+      'rep_range': reps,
+      'logging_type': logging,
+    };
+  }
+
+  /// A planned exercise as the selector emits it (sets = the library default).
+  PlannedExercise ex(String name,
+      {int sets = 3, String logging = 'weight_reps', int rest = 75, String? customOrigin}) {
+    final r = rows[name.toLowerCase()];
+    return PlannedExercise(
+      exerciseId: name.toLowerCase(),
+      exerciseName: name,
+      loggingType: logging,
+      sets: sets,
+      reps: '10',
+      restSeconds: rest,
+      exerciseType: r == null ? 'compound' : (r['exercise_type'] as List).first as String,
+      repRange: r?['rep_range'] as String?,
+      primaryMuscles: r == null ? null : List<String>.from(r['primary_muscles'] as List),
+      customOrigin: customOrigin,
+    );
+  }
+
+  PopulatedDay day(String intensity, List<PlannedExercise> a, {List<PlannedExercise>? b}) =>
+      PopulatedDay(
+        name: 'D',
+        focus: 'F',
+        dayType: 'push',
+        intensity: intensity,
+        exercisesA: a,
+        exercisesB: b ?? a,
+      );
+
+  SessionBudgetContext ctx(
+    List<PopulatedDay> days, {
+    int minutes = 60,
+    String goal = 'build_muscle',
+    String level = 'intermediate',
+    bool lighter = false,
+    Set<String> focus = const {},
+  }) =>
+      SessionBudgetContext(
+        minutes: minutes,
+        planGoal: goal,
+        level: level,
+        lighterPhase: lighter,
+        focusGroups: focus,
+        archetypeByName: {
+          for (final e in rows.entries) e.key: SessionBudget.archetypeOfRow(e.value),
+        },
+        dayIntensities: [for (final d in days) d.intensity],
+      );
+
+  List<PopulatedDay> run(
+    List<PopulatedDay> days, {
+    int minutes = 60,
+    String goal = 'build_muscle',
+    String level = 'intermediate',
+    bool lighter = false,
+    Set<String> focus = const {},
+    bool is6Day = true,
+  }) =>
+      SessionSetAllocator.allocate(
+        days: days,
+        ctx: ctx(days,
+            minutes: minutes, goal: goal, level: level, lighter: lighter, focus: focus),
+        rowsByName: rows,
+        is6Day: is6Day,
+      );
+}
+
+/// (name, sets) of a variant's exercises, in order.
+List<(String, int)> setsOf(PopulatedDay d, {bool b = false}) => [
+      for (final e in (b ? d.exercisesB : d.exercisesA)) (e.exerciseName, e.sets),
+    ];
+
+AllocationStats statsA() => SessionSetAllocator.debugLastStats!['A']!;
+AllocationStats statsB() => SessionSetAllocator.debugLastStats!['B']!;
+
+void main() {
+  group('priority-rank admission', () {
+    test('priority: a day of 4 chest exercises is [4, 4, removed, removed], never [2, 2, 2, 2]', () {
+      final f = Fx();
+      for (final n in ['c1', 'c2', 'c3', 'c4']) {
+        f.row(n, ['Chest']);
+      }
+      final days = [f.day('strength', [for (final n in ['c1', 'c2', 'c3', 'c4']) f.ex(n)])];
+      final out = f.run(days, minutes: 90);
+      expect(setsOf(out[0]), [('c1', 4), ('c2', 4)]);
+      expect(statsA().weekly['Chest'], 8);
+    });
+
+    test('round-robin by rank: 4 days of Back lead lifts all keep 4 sets', () {
+      final f = Fx();
+      f.row('row', ['Lats']);
+      f.row('pulldown', ['Lats']);
+      final days = [
+        for (var i = 0; i < 4; i++) f.day('strength', [f.ex('row'), f.ex('pulldown')]),
+      ];
+      final out = f.run(days, minutes: 90);
+      for (final d in out) {
+        expect(setsOf(d), [('row', 4)]);
+      }
+      expect(statsA().capForcedFirst, 0);
+      expect(statsA().timeForcedFirst, 0);
+      expect(statsA().weekly['Back'], 16);
+    });
+
+    test('rank-0 reservation: every lead lift keeps >= 2 sets when the group top binds', () {
+      // general_fitness beginner: Chest top 10, cap 6. Days desire 4 / 3 / 2 / 2.
+      final f = Fx();
+      f.row('bench', ['Chest']);
+      f.row('press', ['Triceps'], type: 'isolation', reps: '10-15');
+      final days = [
+        for (final i in ['strength', 'hypertrophy', 'endurance', 'endurance'])
+          f.day(i, [f.ex('bench'), f.ex('press')]),
+      ];
+      final out = f.run(days, minutes: 90, goal: 'general_fitness', level: 'beginner');
+      expect([for (final d in out) d.exercisesA.first.sets], [4, 2, 2, 2]);
+      expect(statsA().capForcedFirst, 0);
+      expect(statsA().weekly['Chest'], 10);
+      // Day 2 wanted 3 and got 2 because the reservation protected days 3 and 4;
+      // the stats name the group that bound it.
+      final lead = statsA().firstLifts.where((l) => l.rank == 0).toList();
+      expect(lead.length, 4);
+      expect(lead[1].sets, 2);
+      expect(lead[1].desired, 3);
+      expect(lead[1].boundBy, 'Chest');
+    });
+  });
+
+  group('time', () {
+    List<(String, String)> eight() => [
+          ('chest', 'Chest'), ('back', 'Lats'), ('delts', 'Lateral Delts'), ('bi', 'Biceps'),
+          ('tri', 'Triceps'), ('quad', 'Quads'), ('ham', 'Hamstrings'), ('glute', 'Glutes'),
+        ];
+
+    (List<PopulatedDay>, Fx) dayOf(String intensity) {
+      final f = Fx();
+      for (final (n, m) in eight()) {
+        f.row(n, [m]);
+      }
+      return ([f.day(intensity, [for (final (n, _) in eight()) f.ex(n)])], f);
+    }
+
+    double secondsOf(PopulatedDay d, Fx f, String intensity) => [
+          for (final e in d.exercisesA)
+            SessionBudget.exerciseSeconds(
+              archetype: SessionBudget.archetypeOfRow(f.rows[e.exerciseName.toLowerCase()]!),
+              sets: e.sets,
+              restSeconds: SessionBudget.restFor(intensity),
+            ),
+        ].fold(0.0, (a, b) => a + b);
+
+    test('no cap binds (one exercise per group): only time does, and the day fits', () {
+      final budget = (30 - SessionBudget.warmCoolMinutes(30)) * 60;
+      final (hyp, fh) = dayOf('hypertrophy');
+      final (str, fs) = dayOf('strength');
+      final outH = fh.run(hyp, minutes: 30);
+      final outS = fs.run(str, minutes: 30);
+      expect(setsOf(outH[0]), [('chest', 4), ('back', 3), ('delts', 3)]);
+      expect(setsOf(outS[0]), [('chest', 4), ('back', 3)]);
+      expect(secondsOf(outH[0], fh, 'hypertrophy'), lessThanOrEqualTo(budget));
+      expect(secondsOf(outS[0], fs, 'strength'), lessThanOrEqualTo(budget));
+      // The same exercise list holds fewer sets on a strength day (150 s rests).
+      int total(PopulatedDay d) => d.exercisesA.fold(0, (a, e) => a + e.sets);
+      expect(total(outS[0]), lessThan(total(outH[0])));
+    });
+  });
+
+  group('caps and tops', () {
+    test('session cap: intermediate 8 per muscle, focus 12', () {
+      final f = Fx();
+      for (var i = 0; i < 6; i++) {
+        f.row('c$i', ['Chest']);
+      }
+      List<PopulatedDay> mk() => [f.day('strength', [for (var i = 0; i < 6; i++) f.ex('c$i')])];
+      final plain = f.run(mk(), minutes: 90);
+      expect(setsOf(plain[0]), [('c0', 4), ('c1', 4)]);
+      final focus = f.run(mk(), minutes: 90, focus: {'Chest'});
+      expect(setsOf(focus[0]), [('c0', 4), ('c1', 4), ('c2', 4)]);
+    });
+
+    test('weekly top: a non-focus group stays at 16 (intermediate build_muscle)', () {
+      final f = Fx();
+      final days = <PopulatedDay>[];
+      for (var d = 0; d < 5; d++) {
+        f.row('c${d}0', ['Chest']);
+        f.row('c${d}1', ['Chest']);
+        days.add(f.day('strength', [f.ex('c${d}0'), f.ex('c${d}1')]));
+      }
+      final out = f.run(days, minutes: 90);
+      expect([for (final d in out) d.exercisesA.first.sets], [4, 4, 4, 2, 2]);
+      expect(statsA().weekly['Chest'], 16);
+      expect([for (final d in out) d.exercisesA.length], [1, 1, 1, 1, 1]);
+    });
+
+    test('lighter phase: every weekly total stays at the band bottom, focus included', () {
+      final f = Fx();
+      final days = <PopulatedDay>[];
+      for (var d = 0; d < 4; d++) {
+        final names = [for (var j = 0; j < 3; j++) 'c$d$j'];
+        for (final n in names) {
+          f.row(n, ['Chest']);
+        }
+        days.add(f.day('hypertrophy', [for (final n in names) f.ex(n)]));
+      }
+      f.run(days, minutes: 90, lighter: true, focus: {'Chest'});
+      expect(statsA().weekly['Chest'], 12);
+    });
+
+    test('focus reaches past the ordinary top (16) and stops at 25', () {
+      final f = Fx();
+      final days = <PopulatedDay>[];
+      for (var d = 0; d < 4; d++) {
+        f.row('c${d}0', ['Chest']);
+        f.row('c${d}1', ['Chest']);
+        days.add(f.day('strength', [f.ex('c${d}0'), f.ex('c${d}1')]));
+      }
+      f.run(days, minutes: 90, focus: {'Chest'});
+      expect(statsA().weekly['Chest'], 25);
+    });
+
+    test('terminates: every focus exercise at 5 sets with time left returns', () {
+      final f = Fx();
+      for (var i = 0; i < 3; i++) {
+        f.row('c$i', ['Chest']);
+      }
+      final days = [for (var i = 0; i < 3; i++) f.day('strength', [f.ex('c$i')])];
+      final out = f.run(days, minutes: 90, focus: {'Chest'});
+      expect([for (final d in out) d.exercisesA.first.sets], [5, 5, 5]);
+      expect(statsA().weekly['Chest'], 15); // short of 25, and it stopped
+    });
+  });
+
+  group('rows that are not budgeted', () {
+    test('no-group exercise: a Burpee is checked against time only and never throws', () {
+      final f = Fx();
+      f.row('burpee', ['Full Body'], type: 'calisthenics', reps: '10-20', logging: 'bodyweight_reps');
+      f.row('sq', ['Quads', 'Glutes']);
+      expect(BudgetMuscleGroups.of(['Full Body']), isEmpty);
+      final out = f.run(
+        [f.day('hypertrophy', [f.ex('sq'), f.ex('burpee', logging: 'bodyweight_reps')])],
+        minutes: 60,
+        goal: 'lose_fat',
+      );
+      expect(out[0].exercisesA.map((e) => e.exerciseName), ['sq', 'burpee']);
+      expect(out[0].exercisesA.last.sets, 3); // the day's desired, no group to cap it
+    });
+
+    test('not budgeted: a repeat pin and a timed plank keep their sets; a budgeted row is trimmed', () {
+      final f = Fx();
+      f.row('plank', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
+      f.row('pin', ['Chest']);
+      f.row('b1', ['Chest']);
+      f.row('b2', ['Lats']);
+      f.row('b3', ['Quads']);
+      final day = f.day('hypertrophy', [
+        f.ex('pin', sets: 6, customOrigin: 'repeat_pin'),
+        f.ex('plank', sets: 3, logging: 'timed', rest: 30),
+        f.ex('b1'),
+        f.ex('b2'),
+        f.ex('b3'),
+      ]);
+      final out = f.run([day], minutes: 30);
+      expect(setsOf(out[0]), [('pin', 6), ('plank', 3), ('b1', 2)]);
+    });
+
+    test('guard: a day whose not-budgeted rows spend the budget still gets one lift at 2 sets', () {
+      final f = Fx();
+      f.row('plank', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
+      f.row('c1', ['Chest']);
+      f.row('c2', ['Lats']);
+      List<PlannedExercise> list() => [
+            f.ex('plank', sets: 4, logging: 'timed', rest: 60),
+            f.ex('plank', sets: 4, logging: 'timed', rest: 60),
+            f.ex('c1'),
+            f.ex('c2'),
+          ];
+      final days = [f.day('hypertrophy', list())];
+      // Precondition: the two planks alone already overspend the 20-minute day,
+      // so pass A admits nothing and only the guard can put a lift on it.
+      final ledger = BudgetLedger(f.ctx(days, minutes: 20), 1);
+      final plank = SessionBudget.exerciseSeconds(archetype: 'B', sets: 4, restSeconds: 60);
+      ledger.add(0, const {}, 0, plank * 2);
+      expect(ledger.secondsLeft(0), lessThan(0));
+
+      final out = f.run(days, minutes: 20);
+      expect(setsOf(out[0]), [('plank', 4), ('plank', 4), ('c1', 2)]);
+      expect(statsA().timeForcedFirst, 1);
+      expect(statsA().capForcedFirst, 0);
+    });
+
+    test('not-budgeted rest: a timed row is timed at its OWN rest, not the strength day 150 s', () {
+      final f = Fx();
+      f.row('plank', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
+      f.row('sq', ['Quads']);
+      final days = [
+        f.day('strength', [
+          f.ex('plank', sets: 3, logging: 'timed', rest: 30),
+          f.ex('plank', sets: 3, logging: 'timed', rest: 30),
+          f.ex('sq'),
+        ]),
+      ];
+      final out = f.run(days, minutes: 30);
+      expect(out[0].exercisesA.last.sets, 4);
+      // 1440 s - 2 x 252 s (planks at 30 s rest) - 816 s (4 sets at 150 s) = 120 s.
+      expect(statsA().firstLifts.single.secondsLeft, closeTo(120.0, 1e-6));
+    });
+  });
+
+  group('B variant', () {
+    test('a B list equal to A is copied, not re-allocated, so those days match exactly', () {
+      final f = Fx();
+      for (final (n, m) in [
+        ('a1', 'Chest'), ('a2', 'Lats'), ('b1', 'Quads'), ('s1', 'Hamstrings'), ('s2', 'Glutes'),
+      ]) {
+        f.row(n, [m]);
+      }
+      final shared1 = [f.ex('s1'), f.ex('s2')];
+      final days = [
+        f.day('hypertrophy', [f.ex('a1'), f.ex('a2')], b: [f.ex('b1'), f.ex('a2')]),
+        f.day('hypertrophy', shared1), // B is the SAME list as A
+        f.day('hypertrophy', [f.ex('a1'), f.ex('s1')], b: [f.ex('b1'), f.ex('s2')]),
+        f.day('hypertrophy', [f.ex('a2'), f.ex('s2')], b: [f.ex('a2'), f.ex('s2')]), // equal names
+      ];
+      final out = f.run(days, is6Day: false);
+      expect(setsOf(out[1]), setsOf(out[1], b: true));
+      expect(setsOf(out[3]), setsOf(out[3], b: true));
+      expect(setsOf(out[0], b: true), [('b1', 5), ('a2', 5)]);
+      expect(setsOf(out[2], b: true), [('b1', 5), ('s2', 3)]);
+      expect(statsB().weekly['Glutes'], 13); // 5 + 5 copied from A, then 3
+    });
+
+    test('a 6-day plan allocates A only and gives B the same sets', () {
+      final f = Fx();
+      f.row('x', ['Chest']);
+      f.row('y', ['Quads']);
+      final days = [f.day('hypertrophy', [f.ex('x'), f.ex('y')])];
+      final out = f.run(days, is6Day: true);
+      expect(setsOf(out[0], b: true), setsOf(out[0]));
+      expect(SessionSetAllocator.debugLastStats!.containsKey('B'), isFalse);
+    });
+  });
+
+  group('floor labels', () {
+    test('cap_limited: every crediting exercise is at its own session cap', () {
+      final f = Fx();
+      f.row('c1', ['Chest']);
+      f.row('c2', ['Chest']);
+      f.run([f.day('strength', [f.ex('c1'), f.ex('c2')])], minutes: 90);
+      expect(statsA().belowFloor['Chest'], 'cap_limited');
+    });
+
+    test('not_trained_by_split: no exercise in the week credits the group', () {
+      final f = Fx();
+      f.row('c1', ['Chest']);
+      f.run([f.day('strength', [f.ex('c1')])], minutes: 90);
+      expect(statsA().belowFloor['Calves'], 'not_trained_by_split');
+    });
+
+    test('co_group_limited: the group is below its floor only because a co-group is at its top', () {
+      final f = Fx();
+      f.row('squat', ['Quads', 'Glutes']);
+      for (final n in ['ht1', 'ht2', 'ht3']) {
+        f.row(n, ['Glutes']);
+      }
+      final days = [
+        for (final n in ['squat', 'ht1', 'ht2', 'ht3']) f.day('strength', [f.ex(n)]),
+      ];
+      f.run(days, minutes: 90);
+      expect(statsA().weekly['Glutes'], 16);
+      expect(statsA().weekly['Quads'], 4);
+      expect(statsA().belowFloor['Quads'], 'co_group_limited');
+    });
+
+    test('time_limited: a crediting exercise was removed for time alone', () {
+      final f = Fx();
+      f.row('a', ['Chest']);
+      f.row('b', ['Chest']);
+      f.row('c', ['Biceps'], type: 'isolation', reps: '10-15');
+      f.run([f.day('hypertrophy', [f.ex('a'), f.ex('b'), f.ex('c')])], minutes: 30);
+      expect(statsA().belowFloor['Biceps'], 'time_limited');
+    });
+
+    test('time_limited wins over cap_limited when one crediting exercise is removed for time '
+        'and another sits at its cap', () {
+      final f = Fx();
+      f.row('y1', ['Triceps']);
+      f.row('y2', ['Triceps']);
+      f.row('x', ['Triceps']);
+      f.row('plank', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
+      final d1 = f.day('strength', [f.ex('y1'), f.ex('y2')]);
+      final d2 = f.day('strength', [
+        f.ex('plank', sets: 4, logging: 'timed', rest: 60),
+        f.ex('plank', sets: 4, logging: 'timed', rest: 60),
+        f.ex('x'),
+      ]);
+      f.run([d1, d2], minutes: 30);
+      expect(statsA().belowFloor['Triceps'], 'time_limited');
+    });
+  });
+
+  group('contract', () {
+    test('the input days are not mutated and the output keeps the exercise order', () {
+      final f = Fx();
+      for (final n in ['a', 'b', 'c']) {
+        f.row(n, ['Chest']);
+      }
+      final a = [f.ex('a'), f.ex('b'), f.ex('c')];
+      final days = [f.day('strength', a)];
+      final before = a.map((e) => e.sets).toList();
+      final out = f.run(days, minutes: 90);
+      expect(a.map((e) => e.sets).toList(), before);
+      expect(out[0].exercisesA.map((e) => e.exerciseName).toList(), ['a', 'b']);
+    });
+
+    test('an empty plan and an all-custom day do not crash', () {
+      final f = Fx();
+      expect(f.run(const [], minutes: 60), isEmpty);
+      f.row('pin', ['Chest']);
+      final out = f.run(
+        [f.day('hypertrophy', [f.ex('pin', sets: 5, customOrigin: 'repeat_pin')])],
+        minutes: 30,
+      );
+      expect(setsOf(out[0]), [('pin', 5)]);
+      expect(statsA().timeForcedFirst, 0);
+    });
+
+    test('a day with no budgeted exercise is left as is (no forced lift)', () {
+      final f = Fx();
+      f.row('plank', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
+      final out = f.run(
+        [f.day('hypertrophy', [f.ex('plank', sets: 3, logging: 'timed', rest: 30)])],
+        minutes: 30,
+      );
+      expect(setsOf(out[0]), [('plank', 3)]);
+      expect(statsA().timeForcedFirst, 0);
+      expect(statsA().capForcedFirst, 0);
+    });
+  });
+
+  group('invariants over the shipped library (seeded sweep)', () {
+    final rows = (jsonDecode(File('assets/data/exercise_library.json').readAsStringSync())
+            as List)
+        .cast<Map<String, dynamic>>();
+    final byName = {for (final r in rows) (r['name'] as String).toLowerCase(): r};
+    final strengthRows = [
+      for (final r in rows)
+        if (const {'weight_reps', 'bodyweight_reps'}.contains(r['logging_type']) &&
+            BudgetMuscleGroups.of([
+              for (final m in (r['primary_muscles'] as List)) '$m',
+            ]).isNotEmpty)
+          r,
+    ];
+
+    test('220 random plans: every cap, top and time budget holds unless the guard fired', () {
+      final rnd = Random(20261024);
+      const intensities = ['strength', 'hypertrophy', 'endurance'];
+      const goals = ['build_muscle', 'strength', 'lose_fat', 'general_fitness'];
+      const levels = ['beginner', 'intermediate', 'advanced'];
+      var guarded = 0;
+      for (var plan = 0; plan < 220; plan++) {
+        final nDays = 3 + rnd.nextInt(4);
+        final is6 = nDays == 6;
+        final minutes = const [30, 45, 60, 75, 90][rnd.nextInt(5)];
+        final goal = goals[rnd.nextInt(4)];
+        final level = levels[rnd.nextInt(3)];
+        final lighter = rnd.nextInt(6) == 0;
+        final focus = rnd.nextBool()
+            ? <String>{BudgetMuscleGroups.groups[rnd.nextInt(10)]}
+            : <String>{};
+        final days = <PopulatedDay>[];
+        for (var d = 0; d < nDays; d++) {
+          List<PlannedExercise> pick() {
+            final n = 3 + rnd.nextInt(7);
+            final chosen = <String>{};
+            while (chosen.length < n) {
+              chosen.add(strengthRows[rnd.nextInt(strengthRows.length)]['name'] as String);
+            }
+            return [
+              for (final name in chosen)
+                PlannedExercise(
+                  exerciseId: name.toLowerCase(),
+                  exerciseName: name,
+                  loggingType: byName[name.toLowerCase()]!['logging_type'] as String,
+                  sets: 3,
+                  reps: '10',
+                  restSeconds: 75,
+                ),
+            ];
+          }
+
+          final a = pick();
+          days.add(PopulatedDay(
+            name: 'D$d',
+            focus: 'F',
+            dayType: 'push',
+            intensity: intensities[rnd.nextInt(3)],
+            exercisesA: a,
+            exercisesB: is6 || rnd.nextBool() ? a : pick(),
+          ));
+        }
+        final ctx = SessionBudgetContext(
+          minutes: minutes,
+          planGoal: goal,
+          level: level,
+          lighterPhase: lighter,
+          focusGroups: focus,
+          archetypeByName: {
+            for (final e in byName.entries) e.key: SessionBudget.archetypeOfRow(e.value),
+          },
+          dayIntensities: [for (final d in days) d.intensity],
+        );
+        final out = SessionSetAllocator.allocate(
+            days: days, ctx: ctx, rowsByName: byName, is6Day: is6);
+        expect(out.length, nDays);
+
+        for (final variant in is6 ? ['A'] : ['A', 'B']) {
+          final stats = SessionSetAllocator.debugLastStats![variant]!;
+          final forced = stats.timeForcedFirst + stats.capForcedFirst;
+          if (forced > 0) guarded++;
+          final ledger = BudgetLedger(ctx, nDays);
+          for (var d = 0; d < nDays; d++) {
+            final src = variant == 'A' ? days[d].exercisesA : days[d].exercisesB;
+            final got = variant == 'A' ? out[d].exercisesA : out[d].exercisesB;
+            // Order preserved; only removals.
+            final srcNames = src.map((e) => e.exerciseName).toList();
+            var cursor = 0;
+            for (final e in got) {
+              cursor = srcNames.indexOf(e.exerciseName, cursor);
+              expect(cursor, greaterThanOrEqualTo(0), reason: 'plan $plan day $d order');
+              cursor++;
+            }
+            for (final e in got) {
+              expect(e.sets, inInclusiveRange(2, SessionBudget.maxSetsPerExercise),
+                  reason: 'plan $plan day $d ${e.exerciseName}');
+              ledger.add(
+                d,
+                BudgetMuscleGroups.of(e.primaryMuscles ??
+                    [for (final m in (byName[e.exerciseName.toLowerCase()]!['primary_muscles']
+                        as List)) '$m']),
+                e.sets,
+                SessionBudget.exerciseSeconds(
+                  archetype: ctx.archetypeByName[e.exerciseName.toLowerCase()]!,
+                  sets: e.sets,
+                  restSeconds: SessionBudget.restFor(days[d].intensity),
+                ),
+              );
+            }
+          }
+          if (forced == 0) {
+            for (var d = 0; d < nDays; d++) {
+              expect(ledger.secondsLeft(d), greaterThanOrEqualTo(-1e-6),
+                  reason: 'plan $plan $variant day $d time');
+            }
+          }
+          for (final g in BudgetMuscleGroups.groups) {
+            if (forced == 0) {
+              expect(ledger.week(g), lessThanOrEqualTo(ledger.weeklyTop(g)),
+                  reason: 'plan $plan $variant $g weekly');
+            }
+            for (var d = 0; d < nDays; d++) {
+              if (forced == 0) {
+                expect(ledger.session(d, g), lessThanOrEqualTo(ledger.cap(g)),
+                    reason: 'plan $plan $variant $g day $d session');
+              }
+            }
+          }
+        }
+      }
+      // `guarded` is reported, not asserted: random picks seldom empty a whole day,
+      // and the guard itself is pinned by the crafted 'guard' test above.
+      // ignore: avoid_print
+      print('seeded sweep: $guarded variant(s) needed the empty-day guard');
+    });
+
+    test('deterministic: the same input gives the same output', () {
+      final f = Fx();
+      for (final n in ['a', 'b', 'c', 'd']) {
+        f.row(n, ['Chest']);
+      }
+      List<PopulatedDay> mk() => [
+            f.day('strength', [for (final n in ['a', 'b', 'c', 'd']) f.ex(n)]),
+          ];
+      final one = f.run(mk(), minutes: 45);
+      final two = f.run(mk(), minutes: 45);
+      expect(setsOf(one[0]), setsOf(two[0]));
+    });
+  });
+}
