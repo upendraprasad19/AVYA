@@ -15,7 +15,8 @@
 //  - lighter phase: a phase-4 weekly total over the band bottom;
 //  - empty days:  a day with no exercises;
 //  - forced:      `capForcedFirst` above 0;
-//  - lead lift:   a day's lead lift holding < 2 sets while >= 5 minutes are unused.
+//  - lead lift:   a day's lead lift holding < 2 sets while >= 5 minutes are unused;
+//  - lost lifts:  a day the allocator saw with budgeted exercises ends with none.
 //
 // The oracle below shares NOTHING with `SessionBudget`: its constants, its
 // archetype rule, its muscle-group mapper and its band tables are restated here
@@ -320,6 +321,20 @@ void main() {
     }
     lead.forEach((g, n) {
       if (2 * n > p.top(g)) fail('precondition', '$g leads $n days, 2 x $n > weekly top ${p.top(g)}');
+    });
+
+    // Lost lifts: a day the allocator saw with budgeted exercises must still carry
+    // one in the final plan (the empty-day guard's job). Variant A is week 1, B is
+    // week 2; a 6-day plan has A only.
+    (stats ?? const <String, AllocationStats>{}).forEach((variant, s) {
+      final w = variant == 'A' ? 0 : 1;
+      if (w >= plan.weekPlans.length) return;
+      final days = plan.weekPlans[w].workoutDays;
+      for (final f in s.firstLifts) {
+        if (f.day < days.length && !days[f.day].exercises.any(budgeted)) {
+          fail('lost lifts', '$variant day ${f.day} ${days[f.day].name} had budgeted exercises, the plan carries none');
+        }
+      }
     });
 
     for (final s in (stats ?? const <String, AllocationStats>{}).values) {
