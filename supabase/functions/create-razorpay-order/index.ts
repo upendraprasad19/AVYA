@@ -51,8 +51,9 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { encode as base64Encode } from "https://deno.land/std@0.177.0/encoding/base64.ts";
-import { isStackingEnabled, isTrialPurchaseEnabled } from "../_shared/subscription_stacking.ts";
+import { isEnvExactlyTrue, isStackingEnabled, isTrialPurchaseEnabled } from "../_shared/subscription_stacking.ts";
 import { boundedText, pgErrorCode, razorpayErrorSummary } from "../_shared/payment_log_safe.ts";
+import { promoUsableAt } from "../_shared/promo_rules.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -68,6 +69,14 @@ const REFERRAL_TRIAL_PLAN = "referral_trial";
 // verify-payment + AppConstants in Flutter.
 const MONTHLY_PAISE = 34900; // ₹349
 const YEARLY_PAISE = 299900; // ₹2,999
+
+// OI-366 (payment-hardening U3): at most ORDER_QUOTA_LIMIT order attempts per user per fixed 1-hour UTC bucket
+// (a sub-day bucket, like delete-account's: only its duration is observable, through Retry-After), and a promo
+// code must be usable NOW (promo_rules.ts) to price an order. Kill switch: exactly "true" turns both off.
+const ORDER_QUOTA_KEY = "create_order";
+const ORDER_QUOTA_LIMIT = 30;
+const ORDER_RATE_WINDOW_MS = 60 * 60 * 1000;
+export const ORDER_ABUSE_GUARDS_DISABLE_ENV = "DISABLE_ORDER_ABUSE_GUARDS";
 
 function newRequestId(): string {
   return crypto.randomUUID().split("-")[0];
@@ -103,6 +112,12 @@ function alreadyPro(row: ActiveRow) {
   );
 }
 
+/** The wait in whole minutes for the order limit's refusal ("1 minute", "37 minutes"). */
+export function retryMinutes(retryAfterSeconds: number): string {
+  const m = Math.max(1, Math.ceil(retryAfterSeconds / 60));
+  return m === 1 ? "1 minute" : `${m} minutes`;
+}
+
 export async function handler(req: Request): Promise<Response> {
   const RAZORPAY_KEY_ID = Deno.env.get("RAZORPAY_KEY_ID")!;
   const RAZORPAY_KEY_SECRET = Deno.env.get("RAZORPAY_KEY_SECRET")!;
@@ -125,6 +140,63 @@ export async function handler(req: Request): Promise<Response> {
     );
     if (authError || !user) return err(401, "Invalid or expired token");
     const userId = user.id;
+
+    // ── OI-366: per-user order limit (fails CLOSED), before any other read ──
+    // Read once per request; logged so a flip is visible (the write_claim_rule precedent).
+    const guardsOn = !isEnvExactlyTrue(ORDER_ABUSE_GUARDS_DISABLE_ENV);
+    console.log(`[create-razorpay-order] order_abuse_guards=${guardsOn ? "on" : "off"}`);
+    if (guardsOn) {
+      const bucketStartMs = Math.floor(Date.now() / ORDER_RATE_WINDOW_MS) * ORDER_RATE_WINDOW_MS;
+      const bucketStart = new Date(bucketStartMs).toISOString();
+      const { data: usedCount, error: rateErr } = await supabase.rpc("consume_quota", {
+        p_user_id: userId,
+        p_quota_key: ORDER_QUOTA_KEY,
+        p_window_start: bucketStart,
+        p_limit: ORDER_QUOTA_LIMIT,
+      });
+      if (rateErr) {
+        const requestId = newRequestId();
+        console.error(
+          `[create-razorpay-order] request_id=${requestId} order limit check failed (fail-closed) code=${pgErrorCode(rateErr)}`,
+        );
+        return err(429, "Could not start payment right now. Try again shortly.", {
+          error_code: "rate_limit_unavailable",
+          request_id: requestId,
+        });
+      }
+      // consume_quota answers -1 or a count >= 1; anything else is an unreadable counter (fail CLOSED too).
+      if (!Number.isInteger(usedCount) || (usedCount < 1 && usedCount !== -1)) {
+        const requestId = newRequestId();
+        console.error(
+          `[create-razorpay-order] request_id=${requestId} order limit check failed (fail-closed) code=bad_result`,
+        );
+        return err(429, "Could not start payment right now. Try again shortly.", {
+          error_code: "rate_limit_unavailable",
+          request_id: requestId,
+        });
+      }
+      if (usedCount === -1) {
+        const retryAfterSeconds = Math.max(
+          1,
+          Math.ceil((bucketStartMs + ORDER_RATE_WINDOW_MS - Date.now()) / 1000),
+        );
+        console.warn(
+          `[create-razorpay-order] user=${userId} rate-limited (quota_key=${ORDER_QUOTA_KEY}, limit=${ORDER_QUOTA_LIMIT})`,
+        );
+        return new Response(
+          JSON.stringify({
+            // A fixed 1-hour bucket: the wait can be up to an hour, so say how long (B-pass beee28f0d9f2 finding 2).
+            error: `Too many payment attempts. Try again in ${retryMinutes(retryAfterSeconds)}.`,
+            error_code: "rate_limited",
+            retry_after_seconds: retryAfterSeconds,
+          }),
+          {
+            status: 429,
+            headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": String(retryAfterSeconds) },
+          },
+        );
+      }
+    }
 
     // ── APK Test #12.2 / Task #6 — server-side double-payment guard ──
     //
@@ -194,7 +266,37 @@ export async function handler(req: Request): Promise<Response> {
     let appliedPromoCode: string | null = null;
     let discountPct = 0;
 
-    if (promoCode) {
+    if (promoCode && guardsOn) {
+      // OI-366: STRICT at order time. A read error is an outage, never "this code is dead"; an unknown or
+      // unusable code gets no order at all (it used to give a silent full-price order). The payment writers
+      // stay tolerant (docs/architecture/payment.md rule 2), so a payment made here can always be recorded.
+      const { data: promo, error: promoErr } = await supabase
+        .from("promo_codes")
+        .select("discount_pct, is_active, valid_until, max_uses, used_count")
+        .eq("code", promoCode)
+        .maybeSingle();
+      if (promoErr) {
+        const requestId = newRequestId();
+        console.error(
+          `[create-razorpay-order] request_id=${requestId} promo read failed code=${pgErrorCode(promoErr)}`,
+        );
+        return err(500, "Could not check the promo code. Try again.", {
+          error_code: "promo_check_unavailable",
+          request_id: requestId,
+        });
+      }
+      const usable = promo ? promoUsableAt(promo) : "unknown";
+      if (usable !== "ok") {
+        console.log(`[create-razorpay-order] promo ${boundedText(promoCode)} refused: ${usable}`);
+        return err(400, "This promo code can no longer be used. Reopen the upgrade screen to pay without it.", {
+          error_code: "promo_invalid",
+        });
+      }
+      discountPct = promo!.discount_pct as number;
+      amountPaise = Math.round(amountPaise * (100 - discountPct) / 100);
+      appliedPromoCode = promoCode;
+    } else if (promoCode) {
+      // Kill switch ON: the pre-OI-366 tolerant path, verbatim (its logs bound the client-supplied code).
       const { data: promo } = await supabase
         .from("promo_codes")
         .select("discount_pct, is_active, valid_until, max_uses, used_count")

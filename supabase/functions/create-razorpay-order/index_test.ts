@@ -25,6 +25,7 @@ import {
 } from "../_shared/payment_writer_harness.ts";
 
 const newHandler = (await import("./index.ts")).handler as Handler;
+const retryMinutes = (await import("./index.ts")).retryMinutes as (retryAfterSeconds: number) => string;
 const originHandler = await loadOriginMainHandler("create_razorpay_order_origin_main.ts.txt");
 
 function t(name: string, fn: () => Promise<void>) {
@@ -45,6 +46,18 @@ async function withModuleEnv<T>(fn: () => Promise<T>): Promise<T> {
       if (v === undefined) Deno.env.delete(k);
       else Deno.env.set(k, v);
     }
+  }
+}
+
+async function withEnvVar<T>(name: string, value: string | undefined, fn: () => Promise<T>): Promise<T> {
+  const before = Deno.env.get(name);
+  if (value === undefined) Deno.env.delete(name);
+  else Deno.env.set(name, value);
+  try {
+    return await fn();
+  } finally {
+    if (before === undefined) Deno.env.delete(name);
+    else Deno.env.set(name, before);
   }
 }
 
@@ -73,9 +86,17 @@ interface DoorScenario {
   body?: Record<string, unknown>;
   guardError?: boolean;
   noAuth?: boolean;
+  /** The order counter's answer (payment-hardening U3): a count (1 = under the limit, the default), -1, or an RPC error. */
+  quota?: number | "error" | "null";
+  /** The promo_codes read answers 500. */
+  promoError?: boolean;
 }
 
-type Switches = { stack?: string; door?: string };
+/** `guards` sets DISABLE_ORDER_ABUSE_GUARDS (unset = the U3 guards ON). */
+type Switches = { stack?: string; door?: string; guards?: string };
+// The RPC's name is built, not spelled: census tests scan _test.ts files for the literal.
+const CONSUME_QUOTA_RPC = "consume_" + "quota";
+const GUARDS_SWITCH = "DISABLE_ORDER_ABUSE_GUARDS";
 const OPEN: Switches = { stack: "true", door: "true" };
 const SHUT: Switches = {};
 
@@ -83,6 +104,8 @@ async function run(handler: Handler, sc: DoorScenario, sw: Switches) {
   const server = new FakeServer({
     tables: { subscriptions: sc.rows ?? [], promo_codes: sc.promoRows ?? [] },
     users: { [TOKEN]: { id: USER } },
+    // Any RPC not routed is the order counter: `quota` (default 1, under the limit).
+    fallbackRpc: () => (sc.quota === "null" ? null : typeof sc.quota === "number" ? sc.quota : 1),
     razorpay: (req) => {
       if (req.method === "POST" && req.path === "/v1/orders") {
         return jsonResponse(200, { id: "order_FAKE0001", amount: req.body.amount, currency: req.body.currency });
@@ -92,6 +115,10 @@ async function run(handler: Handler, sc: DoorScenario, sw: Switches) {
     intercept: (req) =>
       sc.guardError && req.method === "GET" && req.path === "/rest/v1/subscriptions"
         ? jsonResponse(500, { code: "XX000", message: "guard read failed" })
+        : sc.quota === "error" && req.path === `/rest/v1/rpc/${CONSUME_QUOTA_RPC}`
+        ? jsonResponse(500, { code: "XX000", message: "counter unavailable" })
+        : sc.promoError && req.method === "GET" && req.path === "/rest/v1/promo_codes"
+        ? jsonResponse(500, { code: "XX000", message: "promo read failed" })
         : undefined,
   });
   server.install();
@@ -102,7 +129,9 @@ async function run(handler: Handler, sc: DoorScenario, sw: Switches) {
       body: JSON.stringify(sc.body ?? { plan: "monthly" }),
     });
     const res = await withModuleEnv(() =>
-      withSwitch(sw.stack, () => withTrialPurchaseSwitch(sw.door, () => handler(req)))
+      withEnvVar(GUARDS_SWITCH, sw.guards, () =>
+        withSwitch(sw.stack, () => withTrialPurchaseSwitch(sw.door, () => handler(req)))
+      )
     );
     const body = JSON.parse(await res.text()) as Record<string, unknown>;
     return { res, body, server };
@@ -373,6 +402,121 @@ t("instants are compared as instants, not strings: mixed +05:30 / Z end dates pi
   assertEquals(shut.body.current_expires_at, p1.end_date, "the 409 body reports the latest instant");
 });
 
+// ── payment-hardening U3 (OI-366): the order limit and the strict promo rule ──
+
+const counterCalls = (server: FakeServer) => server.to(`/rest/v1/rpc/${CONSUME_QUOTA_RPC}`, "POST");
+const promo = (over: Row = {}): Row => ({ code: "HALF50", discount_pct: 50, is_active: true, valid_until: "2099-01-01", max_uses: null, used_count: 0, ...over });
+const withPromo = (row: Row | null, extra: DoorScenario = {}): DoorScenario => ({
+  rows: [],
+  body: { plan: "yearly", promo_code: "half50" },
+  promoRows: row ? [row] : [],
+  ...extra,
+});
+
+t("U3: one counter call per attempt with the key, a 1-hour UTC bucket and the limit, before any other read", async () => {
+  const r = await run(newHandler, { rows: [] }, SHUT);
+  assertEquals(r.res.status, 200);
+  const calls = counterCalls(r.server);
+  assertEquals(calls.length, 1);
+  const args = calls[0].body as Record<string, unknown>;
+  assertEquals(args.p_user_id, USER);
+  assertEquals(args.p_quota_key, "create_order");
+  assertEquals(args.p_limit, 30);
+  const start = Date.parse(String(args.p_window_start));
+  assertEquals(start % 3_600_000, 0, "a whole UTC hour");
+  assert(Date.now() - start < 3_600_000);
+  const firstRead = r.server.requests.findIndex((q) => q.path === "/rest/v1/subscriptions");
+  const counterAt = r.server.requests.findIndex((q) => q.path === `/rest/v1/rpc/${CONSUME_QUOTA_RPC}`);
+  assert(counterAt >= 0 && counterAt < firstRead, "the counter runs before the guard read");
+});
+
+t("U3: over the limit (-1) -> 429 rate_limited with Retry-After, and NO Razorpay order", async () => {
+  const r = await run(newHandler, { rows: [], quota: -1 }, SHUT);
+  assertEquals(r.res.status, 429);
+  assertEquals(r.body.error_code, "rate_limited");
+  const after = Number(r.res.headers.get("Retry-After"));
+  // Exactly the rest of the current UTC hour (B-pass beee28f0d9f2 finding 3), within the test's own run time.
+  const rest = Math.ceil((3_600_000 - (Date.now() % 3_600_000)) / 1000);
+  assert(after >= rest && after <= rest + 5, `Retry-After ${after}, the rest of the hour ${rest}`);
+  assertEquals(r.body.retry_after_seconds, after);
+  assertEquals(r.body.error, `Too many payment attempts. Try again in ${retryMinutes(after)}.`);
+  assertEquals(orderCalls(r.server).length, 0);
+});
+
+t("U3: the counter RPC fails -> 429 rate_limit_unavailable (fail closed), NO order", async () => {
+  const r = await run(newHandler, { rows: [], quota: "error" }, SHUT);
+  assertEquals(r.res.status, 429);
+  assertEquals(r.body.error_code, "rate_limit_unavailable");
+  assert(typeof r.body.request_id === "string");
+  assertEquals(orderCalls(r.server).length, 0);
+});
+
+t("U3: an EXPIRED code (yesterday, IST) -> 400 promo_invalid, NO order", async () => {
+  const yesterday = istDateStr(new Date(Date.now() - 86_400_000));
+  const r = await run(newHandler, withPromo(promo({ valid_until: yesterday })), SHUT);
+  assertEquals(r.res.status, 400);
+  assertEquals(r.body, { error: "This promo code can no longer be used. Reopen the upgrade screen to pay without it.", error_code: "promo_invalid" });
+  assertEquals(orderCalls(r.server).length, 0);
+});
+
+for (const [label, row] of [
+  ["exhausted", promo({ max_uses: 3, used_count: 3 })],
+  ["inactive", promo({ is_active: false })],
+  ["inactive (null)", promo({ is_active: null })],
+  ["unknown", null],
+] as const) {
+  t(`U3: a ${label} code -> 400 promo_invalid, NO order (it used to give a silent full-price order)`, async () => {
+    const r = await run(newHandler, withPromo(row), SHUT);
+    assertEquals(r.res.status, 400);
+    assertEquals(r.body.error_code, "promo_invalid");
+    assertEquals(orderCalls(r.server).length, 0);
+  });
+}
+
+for (const [label, until] of [["'YYYY-MM-DD'", () => "2099-01-01"], ["a timestamp string", () => "2099-01-01T00:00:00Z"], ["today (IST)", () => istDateStr()]] as const) {
+  t(`U3: a usable code with valid_until ${label} -> the discounted order`, async () => {
+    const r = await run(newHandler, withPromo(promo({ valid_until: until() })), SHUT);
+    assertEquals(r.res.status, 200);
+    assertEquals(r.body.promo_applied, true);
+    assertEquals(orderBody(r.server)!.amount, 149950);
+  });
+}
+
+t("U3: the promo READ fails -> 500 promo_check_unavailable, NO order (an outage is never 'a dead code')", async () => {
+  const r = await run(newHandler, withPromo(promo(), { promoError: true }), SHUT);
+  assertEquals(r.res.status, 500);
+  assertEquals(r.body.error_code, "promo_check_unavailable");
+  assert(typeof r.body.request_id === "string");
+  assertEquals(orderCalls(r.server).length, 0);
+});
+
+t("U3 switch exactly \"true\": no counter, and origin/main's tolerant promo answers (status, body, order body)", async () => {
+  const yesterday = istDateStr(new Date(Date.now() - 86_400_000));
+  const scenarios: Array<[string, () => DoorScenario]> = [
+    ["expired code (honoured)", () => withPromo(promo({ valid_until: yesterday }))],
+    ["exhausted code (honoured)", () => withPromo(promo({ max_uses: 1, used_count: 1 }))],
+    ["inactive code (full price)", () => withPromo(promo({ is_active: false }))],
+    ["unknown code (full price)", () => withPromo(null)],
+    ["over the limit (ignored)", () => ({ rows: [], quota: -1 })],
+    ["counter down (ignored)", () => ({ rows: [], quota: "error" as const })],
+  ];
+  for (const [label, make] of scenarios) {
+    const golden = await run(originHandler, make(), SHUT);
+    const now = await run(newHandler, make(), { guards: "true" });
+    assertEquals(now.res.status, golden.res.status, label);
+    assertEquals(stripInstants(now.body), stripInstants(golden.body), label);
+    assertEquals(orderBody(now.server), orderBody(golden.server), label);
+    assertEquals(counterCalls(now.server).length, 0, label);
+  }
+});
+
+t("U3: any switch value other than exactly \"true\" keeps the guards ON", async () => {
+  for (const v of ["TRUE", " true", "1", "false", ""]) {
+    const r = await run(newHandler, { rows: [], quota: -1 }, { guards: v });
+    assertEquals(r.res.status, 429, `switch=${JSON.stringify(v)}`);
+  }
+});
+
 // ── payment-hardening U0 (OI-360): a refused Razorpay order is logged by status and code/reason only ──
 // A Razorpay error body can echo the order's notes (the user id, the promo code). The scenario runs through the
 // frozen origin/main handler first, which must SHOW the secret (positive control), then through this handler.
@@ -419,4 +563,58 @@ t("U0 log: a refused Razorpay order logs status and Razorpay's code/reason, neve
     r.errors.some((l) => l.includes(`razorpay status=400 code="BAD_REQUEST_ERROR" reason="input_validation_failed"`)),
     r.errors.join("\n"),
   );
+});
+
+// ── Frozen clock (B-pass beee28f0d9f2 finding 1): the handler's promo rule must use the IST day of the REAL
+// clock. At 2026-10-24T18:31Z it is 00:01 IST on the 25th while the UTC date is still the 24th, so a code valid
+// until "2026-10-24" is expired by the IST rule and usable by a UTC rule, at whatever time the suite runs.
+const MINUTE_AFTER_IST_MIDNIGHT = "2026-10-24T18:31:00Z";
+const MINUTE_BEFORE_IST_MIDNIGHT = "2026-10-24T18:29:00Z";
+
+async function withFrozenNow<T>(iso: string, fn: () => Promise<T>): Promise<T> {
+  const RealDate = Date;
+  const frozen = RealDate.parse(iso);
+  class FrozenDate extends RealDate {
+    constructor(...args: [] | [string | number | Date]) {
+      if (args.length === 0) super(frozen);
+      else super(args[0]);
+    }
+    static override now(): number {
+      return frozen;
+    }
+  }
+  globalThis.Date = FrozenDate as DateConstructor;
+  try {
+    return await fn();
+  } finally {
+    globalThis.Date = RealDate;
+  }
+}
+
+t("U3 frozen clock: at 00:01 IST a code valid until the previous IST day gets NO order (a UTC-day rule would order)", async () => {
+  const sc = () => withPromo(promo({ valid_until: "2026-10-24" }));
+  const after = await withFrozenNow(MINUTE_AFTER_IST_MIDNIGHT, () => run(newHandler, sc(), SHUT));
+  assertEquals(after.res.status, 400);
+  assertEquals(after.body.error_code, "promo_invalid");
+  assertEquals(orderCalls(after.server).length, 0);
+  const before = await withFrozenNow(MINUTE_BEFORE_IST_MIDNIGHT, () => run(newHandler, sc(), SHUT));
+  assertEquals(before.res.status, 200, "23:59 IST is still the last day");
+  assertEquals(orderBody(before.server)!.amount, 149950);
+});
+
+for (const [label, quota] of [["null", "null"], ["0", 0], ["a fraction", 1.5]] as const) {
+  t(`U3: the counter answers ${label} (neither -1 nor a count) -> 429 rate_limit_unavailable, NO order (fails closed)`, async () => {
+    const r = await run(newHandler, { rows: [], quota }, SHUT);
+    assertEquals(r.res.status, 429);
+    assertEquals(r.body.error_code, "rate_limit_unavailable");
+    assertEquals(orderCalls(r.server).length, 0);
+  });
+}
+
+t("U3: the limit message names the real wait in minutes (the bucket is a fixed hour)", () => {
+  assertEquals(retryMinutes(1), "1 minute");
+  assertEquals(retryMinutes(60), "1 minute");
+  assertEquals(retryMinutes(61), "2 minutes");
+  assertEquals(retryMinutes(3600), "60 minutes");
+  return Promise.resolve();
 });

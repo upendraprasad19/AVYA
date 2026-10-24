@@ -84,9 +84,10 @@ paths:
   # signal). A change to it alone is under `_shared/**` (platform) and would skip hermes while changing whether that failure
   # is seen. One glob for the module and its Deno test.
   - { glob: "supabase/functions/_shared/payment_alert*.ts", tier: catastrophic }
-  # payment-hardening (OI-360, 2026-10-24): what a payment-path log may carry. Alone it sits under `_shared/**`
-  # (platform) and would skip hermes while changing every payment function's logs.
+  # payment-hardening (OI-360, OI-366, 2026-10-24): what a payment-path log may carry, and the strict promo rule that
+  # prices an order. Each alone sits under `_shared/**` (platform) and would skip hermes while changing a payment path.
   - { glob: "supabase/functions/_shared/payment_log_safe*.ts", tier: catastrophic }
+  - { glob: "supabase/functions/_shared/promo_rules*.ts", tier: catastrophic }
   - { glob: "supabase/migrations/*pseudonymize*.sql", tier: catastrophic }
   - { glob: "supabase/migrations/*rls*.sql", tier: catastrophic }
   - { glob: "supabase/migrations/*security_definer*.sql", tier: catastrophic }

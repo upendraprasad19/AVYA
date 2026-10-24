@@ -4,7 +4,8 @@
 // bounded value (supabase/functions/_shared/payment_log_safe.ts), never a whole object: a PostgREST error's
 // `details` echoes the failing row (the Razorpay signature included), a Razorpay body or the notes can carry
 // customer data, and a raw client string can forge a line. Writer: the helpers. Readers: every console call in
-// the three payment functions and the payment alert module they call. Behaviour: each writer's "U0 log:" Deno
+// the three payment functions, validate-promo (payment-hardening U3 gave it new log lines) and the payment alert
+// module they call. Behaviour: each writer's "U0 log:" Deno
 // tests (origin/main must SHOW the secret, the new handler must not) and _shared/payment_log_safe_test.ts.
 //
 // This file pins the SHAPE of every console call in source (any method: error, warn, log, info, debug, ...):
@@ -39,13 +40,17 @@ const _functions = [
 /// Scanned too: the payment functions call it on the money path (it predates this batch and logs ids only).
 const _alertModule = 'supabase/functions/_shared/payment_alert.ts';
 
-const _scanned = [..._functions, _alertModule];
+/// Scanned since payment-hardening U3, which added its rate-limit and promo-read log lines.
+const _promoFunctions = ['supabase/functions/validate-promo/index.ts'];
+
+const _scanned = [..._functions, ..._promoFunctions, _alertModule];
 
 /// The outer catch-all calls kept with a second argument (plan section 3, "Unchanged, with reason").
 const _allowedTwoArg = {
   'console.error(`[verify-payment] request_id=\${requestId}`, err)',
   'console.error(`[create-razorpay-order] request_id=\${requestId}`, e)',
   'console.error(`[razorpay-webhook] request_id=\${requestId}`, err)',
+  'console.error(`[validate-promo] request_id=\${requestId}`, err)',
 };
 
 /// Per file, every `${...}` a console call may interpolate. Classes: a payment_log_safe.ts helper call (a code,
@@ -109,11 +114,26 @@ const Map<String, Set<String>> _allowed = {
   },
   'supabase/functions/create-razorpay-order/index.ts': {
     r'requestId', // checked or generated id
+    r'userId', // checked or generated id
     r'boundedText(promoCode)', // helper
     r'guardError ? pgErrorCode(guardError) : "no_rows_array"', // helper
+    r'pgErrorCode(promoErr)', // helper
+    r'pgErrorCode(rateErr)', // helper
     r'razorpayErrorSummary(orderResp.status, body)', // helper
+    r'ORDER_QUOTA_KEY', // number / boolean / constant / derived value
+    r'ORDER_QUOTA_LIMIT', // number / boolean / constant / derived value
+    r'guardsOn ? "on" : "off"', // number / boolean / constant / derived value
     r'isExhausted', // number / boolean / constant / derived value
     r'isExpired', // number / boolean / constant / derived value
+    r'usable', // number / boolean / constant / derived value
+  },
+  'supabase/functions/validate-promo/index.ts': {
+    r'user.id', // checked or generated id
+    r'pgErrorCode(error)', // helper
+    r'pgErrorCode(rateErr)', // helper
+    r'PROMO_QUOTA_KEY', // number / boolean / constant / derived value
+    r'PROMO_QUOTA_LIMIT', // number / boolean / constant / derived value
+    r'guardsOn ? "on" : "off"', // number / boolean / constant / derived value
   },
   'supabase/functions/_shared/payment_alert.ts': {
     r'a.paymentId', // checked or generated id
@@ -545,7 +565,7 @@ void main() {
     });
 
     test('the allowed catch-alls still exist exactly as listed (no silent widening of the list)', () {
-      final all = [for (final f in _functions) ..._consoleCalls(_code(File(f).readAsStringSync())).map((c) => c.text)];
+      final all = [for (final f in _scanned) ..._consoleCalls(_code(File(f).readAsStringSync())).map((c) => c.text)];
       for (final a in _allowedTwoArg) {
         expect(all.contains(a), isTrue, reason: 'allowed call not found: $a');
       }
@@ -592,7 +612,7 @@ void main() {
     });
 
     test('each payment function imports the helpers, and the module has no imports (pure)', () {
-      for (final f in _functions) {
+      for (final f in [..._functions, ..._promoFunctions]) {
         expect(File(f).readAsStringSync(), contains('from "../_shared/payment_log_safe.ts"'), reason: f);
       }
       final helper = File('supabase/functions/_shared/payment_log_safe.ts').readAsStringSync();

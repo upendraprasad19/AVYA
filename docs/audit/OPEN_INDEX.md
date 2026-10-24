@@ -267,4 +267,4 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-404 | Retiring 7 duplicate library rows (ad896b42) lowered the uninjured… | none | 2026-10-24 - regenerated… | [:6747](open_issues.md#L6747) |
 | OI-405 | deploy_via_api.js leaves a dirty tree after EVERY deploy: the… | the track-or-ignore choice for the… | 2026-10-24 - by reading and measuring in… | [:6762](open_issues.md#L6762) |
 | OI-406 | promo_codes is readable with the public anon key: every active promo code… | the founder's signed-in promo check in… | 2026-10-24 - live, not inferred.… | [:6781](open_issues.md#L6781) |
-| OI-407 | Remove the two payment-hardening kill switches… | the live check of the webhook switch's… | 2026-10-24 - by reading the branch:… | [:6798](open_issues.md#L6798) |
+| OI-407 | Remove the two payment-hardening kill switches… | the live checks of both switches' new… | 2026-10-24 - by reading the branch:… | [:6798](open_issues.md#L6798) |

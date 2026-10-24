@@ -7,10 +7,20 @@
  *
  * Does NOT increment used_count — that happens on payment success
  * in the razorpay-webhook Edge Function.
+ *
+ * OI-366 (payment-hardening U3): at most PROMO_QUOTA_LIMIT checks per user per fixed 1-hour UTC bucket, and the
+ * one usability rule shared with create-razorpay-order (`_shared/promo_rules.ts`, the IST day). Every refusal is
+ * an HTTP 200 `{valid: false, reason}`: the paywall shows any non-2xx as "Network error", and installed builds
+ * read this shape. Kill switch DISABLE_ORDER_ABUSE_GUARDS (exactly "true", shared with create-razorpay-order)
+ * restores the pre-OI-366 path verbatim. `handler` is exported and `serve()` runs only as the entrypoint, so a
+ * test imports it without binding a port; env is read inside the handler.
  */
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { isEnvExactlyTrue } from "../_shared/subscription_stacking.ts";
+import { pgErrorCode } from "../_shared/payment_log_safe.ts";
+import { promoUsableAt } from "../_shared/promo_rules.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -19,32 +29,39 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const PROMO_QUOTA_KEY = "promo_validate";
+const PROMO_QUOTA_LIMIT = 20;
+const PROMO_RATE_WINDOW_MS = 60 * 60 * 1000;
+/** The same switch create-razorpay-order reads (its ORDER_ABUSE_GUARDS_DISABLE_ENV). */
+export const PROMO_GUARDS_DISABLE_ENV = "DISABLE_ORDER_ABUSE_GUARDS";
 
-serve(async (req: Request) => {
+export const RATE_LIMITED_REASON = "Too many attempts. Try again in an hour.";
+export const CHECK_UNAVAILABLE_REASON = "Couldn't check the code right now. Try again shortly.";
+
+function answer(payload: Record<string, unknown>, status = 200): Response {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+export async function handler(req: Request): Promise<Response> {
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   if (req.method !== "POST") {
-    return new Response(JSON.stringify({ error: "Method not allowed" }), {
-      status: 405,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return answer({ error: "Method not allowed" }, 405);
   }
 
   try {
     // Validate JWT — prevent unauthenticated promo code enumeration
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Missing authorization header" }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+      return answer({ error: "Missing authorization header" }, 401);
     }
 
     const supabaseAuth = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -55,29 +72,78 @@ serve(async (req: Request) => {
     } = await supabaseAuth.auth.getUser(token);
 
     if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: "Invalid or expired token" }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+      return answer({ error: "Invalid or expired token" }, 401);
+    }
+
+    // ── OI-366: per-user check limit, before the body and the lookup ──
+    const guardsOn = !isEnvExactlyTrue(PROMO_GUARDS_DISABLE_ENV);
+    console.log(`[validate-promo] order_abuse_guards=${guardsOn ? "on" : "off"}`);
+    if (guardsOn) {
+      const bucketStartMs = Math.floor(Date.now() / PROMO_RATE_WINDOW_MS) * PROMO_RATE_WINDOW_MS;
+      const bucketStart = new Date(bucketStartMs).toISOString();
+      const { data: usedCount, error: rateErr } = await supabaseAuth.rpc("consume_quota", {
+        p_user_id: user.id,
+        p_quota_key: PROMO_QUOTA_KEY,
+        p_window_start: bucketStart,
+        p_limit: PROMO_QUOTA_LIMIT,
+      });
+      if (rateErr) {
+        console.error(`[validate-promo] check limit unavailable (fail-closed) code=${pgErrorCode(rateErr)}`);
+        return answer({ valid: false, reason: CHECK_UNAVAILABLE_REASON });
+      }
+      // consume_quota answers -1 or a count >= 1; anything else is an unreadable counter (fail CLOSED too).
+      if (!Number.isInteger(usedCount) || (usedCount < 1 && usedCount !== -1)) {
+        console.error(`[validate-promo] check limit unavailable (fail-closed) code=bad_result`);
+        return answer({ valid: false, reason: CHECK_UNAVAILABLE_REASON });
+      }
+      if (usedCount === -1) {
+        console.warn(`[validate-promo] user=${user.id} rate-limited (quota_key=${PROMO_QUOTA_KEY}, limit=${PROMO_QUOTA_LIMIT})`);
+        return answer({ valid: false, reason: RATE_LIMITED_REASON });
+      }
     }
 
     const body = await req.json();
     const code = (body?.code ?? "").trim().toUpperCase();
 
     if (!code) {
-      return new Response(
-        JSON.stringify({ valid: false, reason: "No code provided" }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+      return answer({ valid: false, reason: "No code provided" });
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    if (guardsOn) {
+      // One rule with the order (promo_rules.ts); a read error is an outage, not "Invalid promo code".
+      const { data: promo, error } = await supabase
+        .from("promo_codes")
+        .select("*")
+        .eq("code", code)
+        .maybeSingle();
+      if (error) {
+        console.error(`[validate-promo] promo read failed code=${pgErrorCode(error)}`);
+        return answer({ valid: false, reason: CHECK_UNAVAILABLE_REASON });
+      }
+      if (!promo) return answer({ valid: false, reason: "Invalid promo code" });
+      const usability = promoUsableAt(promo);
+      switch (usability) {
+        case "inactive":
+          return answer({ valid: false, reason: "This code is no longer active" });
+        case "expired":
+          return answer({ valid: false, reason: "This code has expired" });
+        case "exhausted":
+          return answer({ valid: false, reason: "This code has reached its maximum uses" });
+        case "ok":
+          return answer({ valid: true, discount_pct: promo.discount_pct as number });
+        default: {
+          // A new PromoUsability member is answered here (refused), never by the tolerant path below.
+          const unhandled: never = usability;
+          void unhandled;
+          console.error(`[validate-promo] unhandled promo usability (fail-closed)`);
+          return answer({ valid: false, reason: CHECK_UNAVAILABLE_REASON });
+        }
+      }
+    }
+
+    // ── Kill switch ON: the pre-OI-366 path, verbatim ──
 
     // Look up the promo code.
     const { data: promo, error } = await supabase
@@ -87,24 +153,12 @@ serve(async (req: Request) => {
       .single();
 
     if (error || !promo) {
-      return new Response(
-        JSON.stringify({ valid: false, reason: "Invalid promo code" }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+      return answer({ valid: false, reason: "Invalid promo code" });
     }
 
     // Check if active.
     if (!promo.is_active) {
-      return new Response(
-        JSON.stringify({ valid: false, reason: "This code is no longer active" }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+      return answer({ valid: false, reason: "This code is no longer active" });
     }
 
     // Check expiry date.
@@ -113,13 +167,7 @@ serve(async (req: Request) => {
     today.setHours(0, 0, 0, 0);
 
     if (validUntil < today) {
-      return new Response(
-        JSON.stringify({ valid: false, reason: "This code has expired" }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+      return answer({ valid: false, reason: "This code has expired" });
     }
 
     // Check max uses.
@@ -127,39 +175,24 @@ serve(async (req: Request) => {
       promo.max_uses !== null &&
       (promo.used_count as number) >= (promo.max_uses as number)
     ) {
-      return new Response(
-        JSON.stringify({
-          valid: false,
-          reason: "This code has reached its maximum uses",
-        }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+      return answer({
+        valid: false,
+        reason: "This code has reached its maximum uses",
+      });
     }
 
     // Valid!
-    return new Response(
-      JSON.stringify({
-        valid: true,
-        discount_pct: promo.discount_pct as number,
-      }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      },
-    );
+    return answer({
+      valid: true,
+      discount_pct: promo.discount_pct as number,
+    });
   } catch (err) {
     // Sanitised 5xx: never leak raw exception / SQL text.
     const requestId = crypto.randomUUID().split("-")[0];
     console.error(`[validate-promo] request_id=${requestId}`, err);
-    return new Response(
-      JSON.stringify({ error: "Internal server error", request_id: requestId }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      },
-    );
+    return answer({ error: "Internal server error", request_id: requestId }, 500);
   }
-});
+}
+
+// `serve()` only when run as the entrypoint, so tests can import `handler` without binding a port.
+if (import.meta.main) serve(handler);

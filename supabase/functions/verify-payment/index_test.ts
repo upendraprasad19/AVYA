@@ -701,3 +701,21 @@ t("U0 log: a failed rate-limit counter logs its code, never its message (control
   assert(!anyLine(r.all, SECRET), r.all.join("\n"));
   assert(anyLine(r.errors, `[verify-payment] ${COUNTER_RPC} FAILED for user=${USER} (fail-closed): code=XX000`), r.errors.join("\n"));
 });
+
+// B-pass beee28f0d9f2 finding 6: a counter answer that is neither -1 nor a count fails CLOSED like an error.
+for (const [label, value] of [["null", null], ["0", 0], ["a fraction", 1.5]] as const) {
+  t(`the rate-limit counter answers ${label} -> 429 and a code-only line (control: origin went on)`, async () => {
+    const sc = (): Scenario => ({
+      rows: [],
+      intercept: (req) =>
+        req.method === "POST" && req.path === `/rest/v1/rpc/${COUNTER_RPC}`
+          ? new Response(JSON.stringify(value), { status: 200, headers: { "Content-Type": "application/json" } })
+          : undefined,
+    });
+    const before = await run(originHandler, sc(), undefined);
+    assert(before.res.status !== 429, `positive control: origin answered ${before.res.status}`);
+    const r = await run(newHandler, sc(), undefined);
+    assertEquals(r.res.status, 429);
+    assert(anyLine(r.errors, `[verify-payment] ${COUNTER_RPC} FAILED for user=${USER} (fail-closed): code=bad_result`), r.errors.join("\n"));
+  });
+}

@@ -283,6 +283,21 @@ export async function handler(req: Request): Promise<Response> {
       );
     }
 
+    // consume_quota answers -1 or a count >= 1; anything else is an unreadable counter (fail CLOSED too;
+    // payment-hardening B-pass beee28f0d9f2 finding 6).
+    if (!Number.isInteger(usedCount) || (usedCount < 1 && usedCount !== -1)) {
+      console.error(
+        `[verify-payment] consume_quota FAILED for user=${userId} (fail-closed): code=bad_result`,
+      );
+      return new Response(
+        JSON.stringify({ error: "Rate limit check failed. Try again shortly." }),
+        {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
     if (usedCount === -1) {
       const retryAfterSeconds = Math.max(
         1,
