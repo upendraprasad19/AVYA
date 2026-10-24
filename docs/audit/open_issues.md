@@ -6126,6 +6126,7 @@ How to use: build once from the last merged `main`, install on the phone, sign i
 - B2 `coach-measurement-entry` PROBE: a live REST probe of PostgREST omit-key semantics with a test user.
 - B3 `gemini3-limits-caching` A5-SMOKE: one FREE and one PRO account chat in the app (or hand over a test account); the agent reads the counters.
 - B4 `coach-history-correctness-tools` D1: authenticated coach-tool smoke on ai-proxy v93 showing the corrected volume and `total_reps`.
+- B5 `promo-codes-server-only` PROMO-CHECK (migration 163, applied live 2026-10-24): signed in (any build, web is fine), open the paywall and enter a known active promo code; it must show the discount, and an unknown code must show "Invalid promo code". This proves validate-promo's service-role read still works after the client grants were revoked (the database side is proven: live verify P10 and P13).
 
 ### C. Live-state reads and dashboard looks (no build; need the founder's go for live reads)
 
@@ -6144,7 +6145,7 @@ How to use: build once from the last merged `main`, install on the phone, sign i
 
 ### Flips (OIs and rows that close or unblock when their checks are recorded)
 
-OI-312 after A4; OI-307 after A4 and C1/B4 (D1-D5); OI-308 after B4 (D1); OI-296 after C1; OI-269 after C1 and the D6 decision; OI-284 and OI-303 after A5 (OI-303 then deletes the `disable_completed_title_heal` kill switch); OI-345 after A3 (then removes the measurements OFF path); the LOG-per-exercise OFF-path removal OI after A12; OI-336 after A10 and B1; OI-341 after C8, A13 and the AAB purchase (then the OI closes); OI-349 gets the founder's decision after A11; the `referral-hardening-migration-160` row PX after B1.
+OI-312 after A4; OI-307 after A4 and C1/B4 (D1-D5); OI-308 after B4 (D1); OI-296 after C1; OI-269 after C1 and the D6 decision; OI-284 and OI-303 after A5 (OI-303 then deletes the `disable_completed_title_heal` kill switch); OI-345 after A3 (then removes the measurements OFF path); the LOG-per-exercise OFF-path removal OI after A12; OI-336 after A10 and B1; OI-341 after C8, A13 and the AAB purchase (then the OI closes); OI-406 after B5 and its merge (then the OI closes); OI-349 gets the founder's decision after A11; the `referral-hardening-migration-160` row PX after B1.
 
 ### Decided 2026-10-17, so NOT a check
 
@@ -6776,3 +6777,20 @@ Past `user_daily_snapshots` stay (nothing reads a past day's `coach_notices`). D
 **Done when.** The choice is recorded; the chosen option is built; a spawn or temp-repo test shows `git status --porcelain` is EMPTY after a `--dry-run`-free simulated `archivePayload` plus `emit_payload` run (option A) or that the deploy exits non-zero with files unstaged (option B); `retire_worktree.dart` has a test that a `_payload_*.json` and an archive file do NOT block retirement (A) while an unrelated ignored file still does; OI-334's second gap and OI-142 are closed or re-pointed in the same batch. Blast radius estimate: `platform` (`.claude/deploy_via_api.js`, `scripts/retire_worktree_lib.dart`, `.gitignore`); a retire-tool gate change ships mutation-proven (rule 24).
 
 **Related.** OI-142 (uncommitted archives, opposite remedy), OI-334 (deploy rollback gaps; second gap = `_payload_*` vs `regenerableIgnoredPaths`), OI-400 (another path that makes a worktree unretirable), `/build-apk` Gate 1.
+
+## OI-406 — promo_codes is readable with the public anon key: every active promo code and its discount can be listed without signing in
+
+- **Status**: OPEN
+- **Blocked on**: the founder's signed-in promo check in the app (validate-promo answers after the apply; OI-348 item B5) and the merge to `main` with CI green. The live apply is DONE (2026-10-24).
+- **Verified**: 2026-10-24 - live, not inferred. `aclexplode(relacl)` on `public.promo_codes`: `anon` and `authenticated` each hold DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE, every one granted by `postgres`; no PUBLIC entry; no column grants; `pg_policies` has one row, "Anyone can read active promo codes" (SELECT, roles public, `is_active = true`, from `20260330_create_promo_codes.sql:28`). A count-only request with the anon key answered 206 `content-range: */3`. The pre-apply run of `test/sql/promo_codes_no_client_access_live_verify.sql` read `SUMMARY ok=10 fail=6` (P1 anon read and P2 authenticated read both `VERIFY_UNEXPECTED_OK 3`; P3-P5 and P14 the grants and the policy).
+- **Identified**: 2026-10-24 · filed via mint_oi.sh from branch `promo-codes-server-only`
+
+**The defect.** Anyone with the app's public anon key (it ships in the web bundle and the APK) can list every active promo code with its discount, expiry and use counts, without signing in. No client reads the table (`lib/` and `web/` never name it); the four payment Edge Functions read it through the service role. The policy's comment ("needed for client validation") is stale: validation moved to the JWT-authenticated `validate-promo`.
+
+**The fix (branch `promo-codes-server-only`, diagnose `a6c2e9`).** Migration 163 `promo_codes_server_only_access`: `DROP POLICY IF EXISTS` that policy and `REVOKE ALL ON TABLE public.promo_codes FROM PUBLIC, anon, authenticated`; RLS stays enabled; `service_role` keeps its grant. File `supabase/migrations/163_promo_codes_server_only_access.sql` (drafted under `docs/plans/promo-codes-server-only/` because Gate 14 fails an unledgered file in `supabase/migrations/`; moved with its ledger entry after the apply). Pins: `test/contracts/promo_codes_server_only_writer_to_reader_test.dart` (10 tests, 23 mutants red), the live verify above (16 cases) and the rehearsal `test/sql/promo_codes_server_only_rehearsal.sql` (the verify plus the migration, one aborting statement). Plan: `docs/plans/2026-10-24-payment-hardening.md` section 3 U4.
+
+**Done when.** The migration is applied live with the founder's go; the rehearsal reads 16 `ok` and leaves nothing behind; the live verify then reads `SUMMARY ok=16 fail=0`; an anon-key count-only request answers 401/403 instead of `*/3`; a signed-in `validate-promo` call still answers; the file and its `backups/applied_migrations.json` entry are merged to `main` with CI green. Blast radius: `platform`.
+
+**Update 2026-10-24 (live apply, the founder's go).** Rehearsal 16 of 16 ok, nothing persisted, 0 locks on `promo_codes`. Applied via MCP `apply_migration` (cloud version `20261024121637`). Post-apply verify `ok=16 fail=0` (run as three self-contained chunks: `execute_sql` refused the whole block). Anon-key `GET /rest/v1/promo_codes`: 401, code 42501 (was 206 `*/3`). `service_role` reads 3 of 3 rows (P13). Still open: the signed-in app check and the merge.
+
+**Related.** OI-366 (order-time promo rules, the payment-hardening branch), c9b3e2 (the same class: server-only objects reachable by the client roles through default privileges).
