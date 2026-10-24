@@ -16,12 +16,14 @@
 @Timeout(Duration(minutes: 3))
 library;
 
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/swap_service.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
@@ -54,6 +56,18 @@ Map<String, dynamic> _ex(
       if (type != 'unset') 'exercise_type': type,
       'rep_range': ?repRange,
     };
+
+/// A stored list that cannot be read: iterating it throws.
+class _Unreadable extends ListBase<dynamic> {
+  @override
+  int get length => throw StateError('unreadable');
+  @override
+  set length(int _) => throw UnsupportedError('read-only');
+  @override
+  dynamic operator [](int index) => throw StateError('unreadable');
+  @override
+  void operator []=(int index, dynamic value) => throw UnsupportedError('read-only');
+}
 
 /// The shape `WarmupCooldownSelector._timedExercise` stores: one timed set whose
 /// `reps` is the duration in seconds, no rest.
@@ -276,6 +290,25 @@ void main() {
           13);
     });
 
+    test("P3-3: a name that is only another exercise's alias is not that exercise's row (flag ON)", () async {
+      await flagOn();
+      final row = Map<String, dynamic>.from(rowsById['E001']!)..['name_aliases'] = ['Template Bench'];
+      await HiveService.instance.exerciseBox.put('E001', row);
+      final entry = {
+        'exercise_name': 'Template Bench',
+        'logging_type': 'weight_reps',
+        'sets': 4,
+        'reps': '8-10',
+        'rest_seconds': 150,
+        'exercise_type': 'compound',
+      };
+      // Found through the alias it would be bench's H row (794.4 s -> 13 min). It is
+      // not bench: it is priced on its own fields as M (816 s -> 14 min).
+      expect(
+          budgetedDayMinutes({'exercises': [entry], 'warmup': <dynamic>[], 'cooldown': <dynamic>[]}),
+          14);
+    });
+
     test('P3-1: corrupt numbers never throw and are bounded', () {
       Map<String, dynamic> raw({Object? sets, Object? rest}) => {
             'exercise_id': 'x',
@@ -289,6 +322,7 @@ void main() {
       // A digit run too long for an int is junk (75), not a FormatException.
       expect(only(raw(sets: 3, rest: '99999999999999999999 s')), closeTo(i(3, 75), 1e-9));
       expect(only(raw(sets: 3, rest: 5000)), closeTo(i(3, 3600), 1e-9));
+      expect(only(raw(sets: 3, rest: '99999 s')), closeTo(i(3, 3600), 1e-9));
       expect(only(raw(sets: 1000000000, rest: 60)), closeTo(i(100, 60), 1e-9));
       expect(only(raw(sets: -4, rest: 60)), 0.0);
       // A timed warm-up item whose reps is a 20-digit run has no usable number: the
@@ -312,6 +346,24 @@ void main() {
             ],
           }),
           isA<int>());
+    });
+
+    test('P3-1: a pricing failure is reported once and degrades to null (flag ON)', () async {
+      await flagOn();
+      final reasons = <String>[];
+      ErrorTelemetry.debugOnRecordNonFatalForTests =
+          (error, stack, {required reason, extra}) => reasons.add(reason);
+      addTearDown(() => ErrorTelemetry.debugOnRecordNonFatalForTests = null);
+      final unreadable = {
+        'exercises': [bench()],
+        'warmup': _Unreadable(),
+        'cooldown': <dynamic>[],
+      };
+      expect(budgetedDayMinutes(unreadable), isNull);
+      expect(reasons, ['session_estimate_day_minutes']);
+      // A day that reads fine reports nothing.
+      expect(budgetedDayMinutes(day()), isNotNull);
+      expect(reasons, hasLength(1));
     });
 
     test('P3-2: timedItemSeconds reads a timed item exactly as the Train screen does', () {
@@ -492,8 +544,13 @@ void main() {
           .map((l) => l.replaceFirst(RegExp(r'//.*'), ''))
           .join(' ');
       final src = code('lib/features/home/screens/home_screen.dart');
-      expect(src.contains('homeCardMinutes(schedule)'), isTrue);
       expect(src.contains('totalSets * 2.5'), isFalse);
+      // The value reaches the card: assigned from the shared call, then handed to
+      // the card as its minutes (a constant in its place stays red here). The two
+      // other `durationMin:` sites are the completed and the rest-day cards.
+      expect(RegExp(r'final estDuration = homeCardMinutes\(schedule\);').allMatches(src), hasLength(1));
+      expect(RegExp(r'durationMin: estDuration,').allMatches(src), hasLength(1));
+      expect(RegExp(r'durationMin:').allMatches(src), hasLength(3));
       final train = code('lib/features/train/providers/train_provider.dart');
       expect(RegExp(r'budgetMinutes: budgetedDayMinutes\(row\)').hasMatch(train), isTrue);
     });

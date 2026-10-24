@@ -203,8 +203,8 @@ class VolumeTitration {
     for (var di = 0; di < dayExercises.length; di++) {
       for (final e in dayExercises[di]) {
         final sets = current(e);
-        final budgeted = SessionBudget.isBudgeted(e, budget);
-        ledger.add(di, groupsOf(e), budgeted ? sets : 0, seconds(e, sets));
+        // A row that is not budgeted has no groups: only its time is spent.
+        ledger.add(di, groupsOf(e), sets, seconds(e, sets));
       }
     }
 

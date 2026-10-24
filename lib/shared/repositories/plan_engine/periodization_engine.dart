@@ -307,10 +307,11 @@ class PeriodizationEngine {
             ? BudgetMuscleGroups.of(ex.primaryMuscles ?? const [])
             : const <String>{};
         groups[(d, i)] = g;
+        // A row that is not budgeted has no groups: only its time is spent.
         ledger.add(
           d,
           g,
-          budgeted ? ex.sets : 0,
+          ex.sets,
           SessionBudget.plannedExerciseSeconds(ex, budget, sets: ex.sets, restSeconds: rest),
         );
         if (budgeted) {
@@ -329,7 +330,7 @@ class PeriodizationEngine {
       final dt = SessionBudget.plannedExerciseSeconds(ex, budget, sets: ex.sets + 1, restSeconds: rest) -
           SessionBudget.plannedExerciseSeconds(ex, budget, sets: ex.sets, restSeconds: rest);
       if (!ledger.fits(d, groups[(d, i)]!, 1, dt)) return;
-      ledger.add(d, groups[(d, i)]!, budgeted ? 1 : 0, dt);
+      ledger.add(d, groups[(d, i)]!, 1, dt);
       gained.add((d, i));
     }
 

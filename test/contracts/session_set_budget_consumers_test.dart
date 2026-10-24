@@ -166,6 +166,19 @@ void main() {
       expect([for (final e in six[3].workoutDays[0].exercises) e.workingSets], [4, 2]);
     });
 
+    test('week 4 keeps a one-set exercise at one (floor(0.6 x 1) would be 0)', () {
+      final (f, _) = chestDay();
+      final days = [f.day('hypertrophy', [f.ex('bench', sets: 1), f.ex('fly', sets: 2)])];
+      final weeks = PeriodizationEngine.apply(
+        populated: days,
+        phase: 1,
+        is6Day: true,
+        effectiveExp: 'intermediate',
+        budget: f.ctx(days, minutes: 90),
+      );
+      expect(setsIn(weeks, 3, 0), [1, 1]); // 1 stays 1; floor(0.6 x 2) = 1
+    });
+
     test('the physique bring-up +1 is absent with a budget', () {
       final (f, days) = chestDay();
       final on = PeriodizationEngine.apply(
@@ -717,6 +730,47 @@ void main() {
       expect(grid(VolumeTitration.applyToWeeks([week], {'Chest': 0}, budget: ctx).single),
           [[4, 4], [5]]);
       expect(grid(VolumeTitration.applyToWeeks([week], {'Chest': 0}).single), [[4, 4], [5]]);
+    });
+
+    test('a zero delta does not use up an exercise another group wants (B-pass R2 P3-1)', () {
+      // X credits Chest and Triceps. Chest asks for nothing; Triceps asks for +1 and X is
+      // its first candidate. Were the zero treated as a trim, X would count as adjusted
+      // and the Triceps +1 would land on the next exercise instead.
+      final f = Fx()
+        ..row('x', ['Chest', 'Triceps'])
+        ..row('b', ['Triceps'])
+        ..row('c1', ['Chest'])
+        ..row('c2', ['Chest'])
+        ..row('c3', ['Chest'])
+        ..row('d', ['Triceps'])
+        ..row('e', ['Triceps']);
+      final (week, ctx) = setup(f, [
+        [f.ex('x', sets: 3), f.ex('b', sets: 4)],
+        [f.ex('c1', sets: 4), f.ex('c2', sets: 4)],
+        [f.ex('c3', sets: 3), f.ex('d', sets: 5), f.ex('e', sets: 1)],
+      ]); // Chest 14, Triceps 13: both above the band bottom of 12
+      final out = VolumeTitration.applyToWeeks([week], {'Chest': 0, 'Triceps': 1}, budget: ctx);
+      expect(grid(out.single), [
+        [4, 4],
+        [4, 4],
+        [3, 5, 1],
+      ]);
+    });
+
+    test('a delta of +2 or -3 moves ONE exercise by ONE set (B-pass R2 P3-1)', () {
+      final f = chestRows();
+      final (up, ctxUp) = setup(f, [
+        [f.ex('c1', sets: 3), f.ex('c2', sets: 3)],
+        [f.ex('c3', sets: 3), f.ex('c4', sets: 3)],
+      ]); // 12: room to grow
+      expect(grid(VolumeTitration.applyToWeeks([up], {'Chest': 2}, budget: ctxUp).single),
+          [[4, 3], [3, 3]]);
+      final (down, ctxDown) = setup(f, [
+        [f.ex('c1', sets: 4), f.ex('c2', sets: 4)],
+        [f.ex('c3', sets: 5)],
+      ]); // 13: one set above the bottom
+      expect(grid(VolumeTitration.applyToWeeks([down], {'Chest': -3}, budget: ctxDown).single),
+          [[3, 4], [5]]);
     });
   });
 

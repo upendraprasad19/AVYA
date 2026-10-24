@@ -54,6 +54,7 @@ void main() {
       // `back` keyword would otherwise give it; quadratus lumborum is not Quads.
       for (final t in [
         'Low Back', 'lower-back', 'Lower_Back', 'LowerBack', 'Lumbar Spine', 'Quadratus Lumborum',
+        'Quadratus', // the bare muscle name must not fall through to the `quad` keyword
       ]) {
         expect(of([t]), <String>{}, reason: t);
       }
