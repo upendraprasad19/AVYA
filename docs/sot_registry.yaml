@@ -8295,11 +8295,11 @@ concepts:
       functions; pinned by test/contracts/migration_152_drop_subscription_mirror_test.dart.
     writers:
       - file: supabase/functions/razorpay-webhook/index.ts
-        line_range: 759-771
+        line_range: 770-782
         method: subscriptions insert (the ONLY entitlement write)
         notes: The users.update mirror write this handler used to make was removed; the insert is the whole write.
       - file: supabase/functions/verify-payment/index.ts
-        line_range: 672-749
+        line_range: 678-755
         method: subscriptions insert / canonical end_date
         notes: Same — no users mirror write; the response reports the canonical row's end_date.
       - file: supabase/migrations/038_redeem_referral_atomic.sql
@@ -8326,12 +8326,12 @@ concepts:
         semantic: derived-latest-end-per-user
         fields_read: [subscriptions.user_id, subscriptions.end_date, subscriptions.status]
       - file: supabase/functions/_shared/founder_digest_content.ts
-        line_range: 956-982
+        line_range: 971-997
         method: gatherDigestInput latestEndRead + expiringSoon
         semantic: one-shared-read-two-sections
         fields_read: [subscriptions.user_id, subscriptions.end_date]
       - file: supabase/functions/_shared/founder_digest_content.ts
-        line_range: 1068-1080
+        line_range: 1083-1095
         method: gatherDigestInput lapsedYesterday
         semantic: half-open-yesterday-window
         fields_read: [subscriptions.user_id, subscriptions.end_date]
@@ -13588,7 +13588,7 @@ concepts:
          .maybeSingle() then synthesises PGRST116 and strips PRO.
     writers:
       - file: supabase/functions/verify-payment/index.ts
-        line_range: 675-687
+        line_range: 681-693
         method: payment confirmation handler — subscription insert
         semantic: cloud-write
         notes: |
@@ -13596,7 +13596,7 @@ concepts:
           for an existing active row, so a renewal bought before the old
           end_date lapses leaves TWO active rows for one user.
       - file: supabase/functions/razorpay-webhook/index.ts
-        line_range: 759-782
+        line_range: 770-793
         method: webhook handler — subscription insert
         semantic: cloud-write
         notes: |
@@ -16416,11 +16416,11 @@ concepts:
         method: isEnvExactlyTrue / isStackingEnabled / isTrialPurchaseEnabled / plainEndDate
         notes: The ONE strict "true" switch rule for both secrets (read once per request) and the OFF-branch arithmetic (setDate, byte-identical to origin/main).
       - file: supabase/functions/verify-payment/index.ts
-        line_range: 613-749
+        line_range: 619-755
         method: the insert branch (stackingOn)
         notes: ON assigns canonicalEndDateIso and weInsertedTheRow from the RPC answer; OFF is today's insert and 23505 arms, and sets offInserted only on its own successful insert (the alarm's precondition, consumed after the promo).
       - file: supabase/functions/razorpay-webhook/index.ts
-        line_range: 701-801
+        line_range: 712-812
         method: the insert branch (stackingOn)
         notes: ON assigns endDate (returned as expires_at) and alreadyProcessed = !inserted; OFF is today's insert and 23505 arms, and sets offInserted only on its own successful insert (the alarm's precondition, consumed after the promo).
     readers:
@@ -16488,17 +16488,17 @@ concepts:
       base, subscription_end_date_stacking).
     writers:
       - file: supabase/functions/create-razorpay-order/index.ts
-        line_range: 121-409
+        line_range: 118-407
         method: handler (the guard block, doorOpen, stacksAfter)
         notes: The one guard read, the shut/open decision, and the stacks_after response field and order note.
     readers:
       - file: supabase/functions/razorpay-webhook/index.ts
-        line_range: 701-841
+        line_range: 712-852
         method: the insert branch (OFF-branch mismatch alarm)
         semantic: detect-door-on-order-recorded-off
         notes: Does NOT read stacks_after (payment notes come from the client's checkout options); it reads the database for an active referral_trial row after its own OFF insert.
       - file: supabase/functions/verify-payment/index.ts
-        line_range: 613-785
+        line_range: 619-791
         method: the insert branch (OFF-branch mismatch alarm)
         semantic: detect-door-on-order-recorded-off
         notes: Same alarm as the webhook. The client reader of stacks_after is trial_stacking_client_estimate (Piece B2b).
@@ -16863,12 +16863,12 @@ concepts:
       test/contracts/verify_payment_owner_before_capture_writer_to_reader_test.dart.
     writers:
       - file: supabase/functions/verify-payment/index.ts
-        line_range: 422-456
+        line_range: 428-462
         method: handler — the 400 / 403 ownership guards directly after the Razorpay GET
         semantic: guard
     readers:
       - file: supabase/functions/verify-payment/index.ts
-        line_range: 458-510
+        line_range: 464-516
         method: handler — the capture POST and the status echo, reachable only past the guards
         semantic: cloud-write
       - file: lib/core/services/razorpay_service.dart
@@ -16888,7 +16888,7 @@ concepts:
   - concept: payment_log_safety
     domain: subscription
     behavioral_test_path: supabase/functions/_shared/payment_log_safe_test.ts
-    behavioral_test_path_writers: supabase/functions/razorpay-webhook/index_test.ts
+    regression_test: test/contracts/payment_log_safety_writer_to_reader_test.dart
     description: |
       The payment functions log a short error CODE (pgErrorCode), an Error's NAME (errorName), the SHAPE of
       the Razorpay notes (notesShape), a Razorpay refusal's status + error.code/reason (razorpayErrorSummary)
@@ -16897,25 +16897,36 @@ concepts:
       insert failure in both writers logs the reconcile fields (ids, plan, amount) and the code under its own
       prefix: money is captured and no row exists there. redeemPromo checks the RETURNED errors of
       increment_promo_used_count and the promo_code_uses insert (R-6) and logs a labelled code-only line.
+      The outer catch-all of each function logs the error's name and up to three stack frames (stackFrames),
+      never the error itself: a req.json() SyntaxError quotes the request body in its message (hermes H10).
       Behaviour: each writer's "U0 log:" tests run the scenario through the frozen origin/main handler first
-      (the secret must be VISIBLE there) and then require it absent; the "U0 R-6:" tests per twin.
+      (the secret must be VISIBLE there) and then require it absent; the "U0 R-6:" tests per twin (writers:
+      razorpay-webhook/index_test.ts, verify-payment/index_test.ts, create-razorpay-order/index_test.ts).
     writers:
       - file: supabase/functions/_shared/payment_log_safe.ts
-        line_range: 1-79
-        method: pgErrorCode / errorName / boundedText / razorpayErrorSummary / notesShape / codeToken
+        line_range: 1-107
+        method: pgErrorCode / errorName / boundedText / razorpayErrorSummary / notesShape / codeToken / stackFrames
         semantic: pure
     readers:
       - file: supabase/functions/verify-payment/index.ts
-        line_range: 1-815
+        line_range: 1-822
         method: every log site on the payment path (insert failure, capture refusal, plan mismatch, pre-SELECT, promo)
         semantic: log
       - file: supabase/functions/razorpay-webhook/index.ts
-        line_range: 1-871
+        line_range: 1-883
         method: every log site on the payment path (insert failure, notes, user_id, capture, plan, promo)
         semantic: log
       - file: supabase/functions/create-razorpay-order/index.ts
-        line_range: 1-413
+        line_range: 1-411
         method: the Razorpay order refusal, the counter and promo failures
+        semantic: log
+      - file: supabase/functions/validate-promo/index.ts
+        line_range: 1-204
+        method: the counter and promo-read failures, the catch-all (scanned by the log contract since U3)
+        semantic: log
+      - file: supabase/functions/_shared/payment_alert.ts
+        line_range: 1-252
+        method: the payment_record_failed alert's own log lines (ids only; scanned by the log contract)
         semantic: log
     hive:
       box: "n/a — server-side logging"
@@ -16941,12 +16952,12 @@ concepts:
       to "U2 (15c)".
     writers:
       - file: supabase/functions/razorpay-webhook/index.ts
-        line_range: 257-303
+        line_range: 263-309
         method: rereadIsCaptured
         semantic: cloud-read
     readers:
       - file: supabase/functions/razorpay-webhook/index.ts
-        line_range: 499-559
+        line_range: 546-606
         method: handler — captureRefused branch (recover, or 502)
         semantic: guard
     hive:
@@ -16967,14 +16978,22 @@ concepts:
       an RPC error -> 429 rate_limit_unavailable (fails CLOSED, like verify_payment_rate_limit). Kill switch
       DISABLE_ORDER_ABUSE_GUARDS (exactly "true", shared with validate-promo) skips it; each request logs
       order_abuse_guards=<on|off>. The client shows the error text of any non-409 non-2xx (_extractServerError).
+      The switch name and the wait wording live in _shared/order_abuse_guards.ts (hermes H3), read by both doors
+      and by the founder digest, which marks both keys UNMETERED while the switch is on (H2) and keeps both out
+      of the Top users ranking (H6). A refused Razorpay order answers 500 with the guards on (H1): the client
+      retries 502/503/504, and each retry would spend a unit.
     writers:
       - file: supabase/functions/create-razorpay-order/index.ts
-        line_range: 144-199
+        line_range: 141-193
         method: handler — consume_quota('create_order', bucketStart, ORDER_QUOTA_LIMIT)
         semantic: cloud-write
+      - file: supabase/functions/_shared/order_abuse_guards.ts
+        line_range: 1-19
+        method: ORDER_ABUSE_GUARDS_DISABLE_ENV / retryMinutes / secondsLeftInBucket
+        semantic: pure
     readers:
       - file: supabase/functions/create-razorpay-order/index.ts
-        line_range: 157-199
+        line_range: 154-193
         method: handler — usedCount === -1 / rateErr refusals
         semantic: guard
       - file: lib/core/services/razorpay_service.dart
@@ -16982,8 +17001,12 @@ concepts:
         method: createOrder — non-409 non-2xx -> _extractServerError(details) shown verbatim
         semantic: cloud-read
       - file: supabase/functions/_shared/founder_digest_content.ts
-        line_range: 87-136
+        line_range: 88-137
         method: DIGEST_KEYS create_order (subday, no cap)
+        semantic: aggregate
+      - file: supabase/functions/_shared/founder_digest_content.ts
+        line_range: 289-309
+        method: NON_ACTIVITY_KEYS + QUOTA_KILL_SWITCHES (create_order, promo_validate)
         semantic: aggregate
     hive:
       box: "n/a — server-side gate"
@@ -16999,13 +17022,13 @@ concepts:
     behavioral_test_path: supabase/functions/validate-promo/index_test.ts
     description: |
       consume_quota('promo_validate', <1-hour UTC bucket>, 20) right after the JWT check in validate-promo,
-      before the body and the lookup. -1 -> HTTP 200 {valid:false, reason:"Too many attempts. Try again in an
-      hour."}; an RPC error -> HTTP 200 {valid:false, reason:"Couldn't check the code right now. Try again
+      before the body and the lookup. -1 -> HTTP 200 {valid:false, reason:"Too many attempts. Try again in N
+      minutes."} (N = the rest of the UTC hour, rateLimitedReason; hermes H3); an RPC error -> HTTP 200 {valid:false, reason:"Couldn't check the code right now. Try again
       shortly."} (200 because the paywall shows any non-2xx as "Network error"). Same kill switch as the order
       limit; switch "true" = the pre-OI-366 path verbatim (golden against the frozen origin/main fixture).
     writers:
       - file: supabase/functions/validate-promo/index.ts
-        line_range: 78-103
+        line_range: 82-108
         method: handler — consume_quota('promo_validate', bucketStart, PROMO_QUOTA_LIMIT)
         semantic: cloud-write
     readers:
@@ -17014,7 +17037,7 @@ concepts:
         method: _validatePromoCode — valid == true, else shows data['reason']
         semantic: cloud-read
       - file: supabase/functions/_shared/founder_digest_content.ts
-        line_range: 87-136
+        line_range: 88-137
         method: DIGEST_KEYS promo_validate (subday, no cap)
         semantic: aggregate
     hive:
@@ -17044,11 +17067,11 @@ concepts:
         semantic: pure
     readers:
       - file: supabase/functions/create-razorpay-order/index.ts
-        line_range: 269-297
+        line_range: 263-292
         method: handler — strict promo at order time
         semantic: guard
       - file: supabase/functions/validate-promo/index.ts
-        line_range: 114-144
+        line_range: 119-149
         method: handler — the four answers
         semantic: guard
     hive:

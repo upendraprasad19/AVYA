@@ -30,6 +30,34 @@ export function errorName(err: unknown): string {
 // Unicode line and paragraph separators and the format characters (bidi overrides, zero-width marks) raw: a log
 // viewer can break a line on the first ones and visually reorder or hide text with the others.
 const UNESCAPED_LINE_BREAKS = /[\u007f-\u009f\u2028\u2029\p{Cf}]/gu;
+/** Every character a frame may not carry raw: the C0 controls as well, since a frame is not JSON-quoted. */
+const FRAME_UNSAFE = /[\u0000-\u001f\u007f-\u009f\u2028\u2029\p{Cf}]/gu;
+
+/**
+ * Up to [n] stack frames of a thrown Error (`at fn (file:line:col)`), joined by " | ", each escaped and at most
+ * 200 characters, WITHOUT the message: a SyntaxError from `req.json()` quotes the request body in its message, and
+ * that text can hold a newline followed by "at ", so the stack is read only AFTER the end of the message (B-pass
+ * bfaeb6fb79da finding 1). A non-empty message the stack does not contain gives `no_stack` (fail closed), as does
+ * an error without frames.
+ */
+export function stackFrames(err: unknown, n = 3): string {
+  // Called inside the catch-alls, so it never throws (a throwing `stack` or `message` getter is `no_stack`), and a
+  // non-string message is `no_stack`: its text in the stack header cannot be located (B-pass aabb2b0dbdbb).
+  try {
+    if (!(err instanceof Error)) return "no_stack";
+    const stack: unknown = err.stack;
+    const msg: unknown = err.message;
+    if (typeof stack !== "string" || typeof msg !== "string") return "no_stack";
+    const at = msg === "" ? 0 : stack.indexOf(msg);
+    if (at < 0) return "no_stack";
+    const frames = stack.slice(at + msg.length).split("\n").map((l) => l.trim()).filter((l) => l.startsWith("at "))
+      .slice(0, n)
+      .map((l) => l.slice(0, 200).replace(FRAME_UNSAFE, (c) => "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0")));
+    return frames.length > 0 ? frames.join(" | ") : "no_stack";
+  } catch {
+    return "no_stack";
+  }
+}
 
 /** A client- or upstream-supplied value as a quoted, escaped string of at most `n` characters of the value. */
 export function boundedText(v: unknown, n = 40): string {

@@ -645,6 +645,21 @@ t("U0 log: a failed idempotency pre-SELECT logs its code, never its message (con
   assert(anyLine(r.all, "[verify-payment] idempotency pre-SELECT failed (continuing to insert): code=XX000"), r.all.join("\n"));
 });
 
+// B-pass bfaeb6fb79da findings 1 and 2: the catch-all logs the error's name and frames, never body text.
+t("catch-all: an unparseable body -> 500 and one 'unhandled SyntaxError at' line with no body text", async () => {
+  const req = new Request("https://fn.test/verify-payment", {
+    method: "POST",
+    headers: { Authorization: "Bearer user-jwt-1", "Content-Type": "application/json" },
+    body: '{"payment_id":\n at SECRETBODY jane.doe@example.com',
+  });
+  const r = await runRequest(newHandler, { rows: [] }, req);
+  assertEquals(r.res.status, 500);
+  const lines = r.all.filter((l) => l.includes("unhandled"));
+  assertEquals(lines.length, 1, r.all.join("\n"));
+  assert(/^\[verify-payment\] request_id=[0-9a-f]{8} unhandled SyntaxError at at /.test(lines[0]), lines[0]);
+  assert(!r.all.some((l) => l.includes("SECRETB") || l.includes("jane")), r.all.join("\n"));
+});
+
 // R-6: redeemPromo now checks the RETURNED errors (supabase-js does not throw them). Log only: the response,
 // the row and the request sequence are those of a redemption that succeeded.
 for (const [label, path, expectLine] of [
@@ -664,6 +679,22 @@ for (const [label, path, expectLine] of [
   });
 }
 
+// hermes H9: a 23505 on the audit insert is UNIQUE(code, user_id) (migration 025), a repeat use by this user whose
+// audit row exists. An info line, not an error; any other code stays an error (the R-6 test above, P0001).
+t("H9: a repeat-use 23505 on promo_code_uses answers as before and logs an info line, no error line", async () => {
+  const path = "/rest/v1/promo_code_uses";
+  const sc: Scenario = { ...promoScenario([]), intercept: (req) => (req.method === "POST" && req.path === path ? pgError(409, "23505") : undefined) };
+  const ok = await run(newHandler, promoScenario([]), undefined);
+  const r = await run(newHandler, sc, undefined);
+  assertEquals(r.res.status, ok.res.status);
+  assertEquals(stripInstants(r.body), stripInstants(ok.body));
+  assertEquals(subscriptionInserts(r.server).length, 1);
+  assertEquals(r.server.to(path, "POST").length, 1);
+  // No ERROR-level line about the redemption at all (the info line must not be logged at error level).
+  assert(!anyLine(r.errors, "promo redemption"), r.errors.join("\n"));
+  assertEquals(r.all.filter((l) => l === "[verify-payment] promo redemption: repeat use by this user, audit row already exists").length, 1, r.all.join("\n"));
+});
+
 // B-pass of commit 2: the two remaining sites that logged client text or a database message.
 const FORGED_PROMO = "HALF50\n[verify-payment] FORGED-LINE " + "Z".repeat(300);
 // Built, not spelled: a census test requires every file naming the counter RPC to be a known caller.
@@ -677,7 +708,7 @@ t("U0 log: an unmatched amount logs the checkout's promo code bounded and quoted
   assertEquals(r.res.status, before.res.status);
   assert(!anyLine(r.all, "\n[verify-payment] FORGED-LINE") && !anyLine(r.all, "Z".repeat(50)), r.all.join("\n"));
   assert(
-    anyLine(r.errors, `Amount mismatch: 12345 paise does not match any plan (promo: ${JSON.stringify(FORGED_PROMO.slice(0, 40))})`),
+    anyLine(r.errors, `Amount mismatch: 12345 paise does not match any plan payment_id=${PAY} (promo: ${JSON.stringify(FORGED_PROMO.slice(0, 40))})`),
     r.errors.join("\n"),
   );
 });

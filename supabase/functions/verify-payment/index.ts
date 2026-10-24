@@ -44,7 +44,7 @@ import {
   recordPaidSubscription,
 } from "../_shared/subscription_stacking.ts";
 import { checkStackingMismatch, reportPaymentRecordFailure } from "../_shared/payment_alert.ts";
-import { boundedText, codeToken, errorName, pgErrorCode, razorpayErrorSummary } from "../_shared/payment_log_safe.ts";
+import { boundedText, codeToken, errorName, pgErrorCode, razorpayErrorSummary, stackFrames } from "../_shared/payment_log_safe.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -164,7 +164,13 @@ async function redeemPromo(
       final_amount: finalPaise,
     });
     if (useErr) {
-      console.error(`[verify-payment] promo redemption: promo_code_uses insert failed code=${pgErrorCode(useErr)}`);
+      // 23505 = UNIQUE(code, user_id) (migration 025): this user used the code before and the audit row exists.
+      // Expected on a repeat purchase, so not an error line (hermes H9).
+      if (pgErrorCode(useErr) === "23505") {
+        console.log(`[verify-payment] promo redemption: repeat use by this user, audit row already exists`);
+      } else {
+        console.error(`[verify-payment] promo redemption: promo_code_uses insert failed code=${pgErrorCode(useErr)}`);
+      }
     }
   } catch (e) {
     console.error(`[verify-payment] promo redemption threw (non-fatal): ${errorName(e)} code=${pgErrorCode(e)}`);
@@ -516,7 +522,7 @@ export async function handler(req: Request): Promise<Response> {
     const derived = await derivePlanFromAmount(actualPaise, promoCode, supabase);
     if (!derived) {
       console.error(
-        `Amount mismatch: ${actualPaise} paise does not match any plan` +
+        `Amount mismatch: ${actualPaise} paise does not match any plan payment_id=${paymentId}` +
           (promoCode ? ` (promo: ${boundedText(promoCode)})` : ""),
       );
       // OI-341 Piece B2a (hermes seat 4 F4): a captured payment of this caller
@@ -799,7 +805,8 @@ export async function handler(req: Request): Promise<Response> {
   } catch (err) {
     // Sanitised 5xx: never leak raw exception / Razorpay API response.
     const requestId = crypto.randomUUID().split("-")[0];
-    console.error(`[verify-payment] request_id=${requestId}`, err);
+    // Name and frames only (hermes H10): a req.json() SyntaxError's message quotes the request body.
+    console.error(`[verify-payment] request_id=${requestId} unhandled ${errorName(err)} at ${stackFrames(err)}`);
     return new Response(
       JSON.stringify({ error: "Internal server error", request_id: requestId }),
       {

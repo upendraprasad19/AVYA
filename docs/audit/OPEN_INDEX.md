@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**260 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**261 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -268,3 +268,4 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-405 | deploy_via_api.js leaves a dirty tree after EVERY deploy: the… | the track-or-ignore choice for the… | 2026-10-24 - by reading and measuring in… | [:6769](open_issues.md#L6769) |
 | OI-406 | promo_codes is readable with the public anon key: every active promo code… | the founder's signed-in promo check in… | 2026-10-24 - live, not inferred.… | [:6788](open_issues.md#L6788) |
 | OI-407 | Remove the two payment-hardening kill switches… | the live checks of both switches' new… | 2026-10-24 - by reading the branch:… | [:6805](open_issues.md#L6805) |
+| OI-409 | Both payment writers capture an authorized payment before checking that… | the founder: one look in the Razorpay… | 2026-10-25 - by reading the branch:… | [:6816](open_issues.md#L6816) |

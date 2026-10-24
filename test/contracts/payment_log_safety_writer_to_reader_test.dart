@@ -10,9 +10,9 @@
 //
 // This file pins the SHAPE of every console call in source (any method: error, warn, log, info, debug, ...):
 //   1. ONE argument, built only from string/template literals joined by `+` (or `(x ? literal : literal)`), so a
-//      message assembled in a variable, a concatenated value or a second argument cannot carry an object;
-//      the outer catch-alls the plan leaves unchanged are the only exceptions (their reachable throws carry
-//      no row data);
+//      message assembled in a variable, a concatenated value or a second argument cannot carry an object.
+//      No exceptions: the outer catch-alls log the error's name and stack frames, never the error (hermes H10:
+//      a req.json() SyntaxError quotes the request body in its message);
 //   2. every `${...}` in those literals is a value CLASSIFIED for that file in [_allowed], and no entry is stale;
 //   3. a line held in a variable until the branch is known ([_messageVariables]) is checked where it is BUILT:
 //      every assignment to it obeys 1 and 2, and every other mention of the name is one of those assignments
@@ -45,12 +45,16 @@ const _promoFunctions = ['supabase/functions/validate-promo/index.ts'];
 
 const _scanned = [..._functions, ..._promoFunctions, _alertModule];
 
-/// The outer catch-all calls kept with a second argument (plan section 3, "Unchanged, with reason").
-const _allowedTwoArg = {
-  'console.error(`[verify-payment] request_id=\${requestId}`, err)',
-  'console.error(`[create-razorpay-order] request_id=\${requestId}`, e)',
-  'console.error(`[razorpay-webhook] request_id=\${requestId}`, err)',
-  'console.error(`[validate-promo] request_id=\${requestId}`, err)',
+/// The outer catch-all line of each function: name and frames only (hermes H10, payment-hardening).
+const _catchAlls = {
+  'supabase/functions/verify-payment/index.ts':
+      'console.error(`[verify-payment] request_id=\${requestId} unhandled \${errorName(err)} at \${stackFrames(err)}`)',
+  'supabase/functions/create-razorpay-order/index.ts':
+      'console.error(`[create-razorpay-order] request_id=\${requestId} unhandled \${errorName(e)} at \${stackFrames(e)}`)',
+  'supabase/functions/razorpay-webhook/index.ts':
+      'console.error(`[razorpay-webhook] request_id=\${requestId} unhandled \${errorName(err)} at \${stackFrames(err)}`)',
+  'supabase/functions/validate-promo/index.ts':
+      'console.error(`[validate-promo] request_id=\${requestId} unhandled \${errorName(err)} at \${stackFrames(err)}`)',
 };
 
 /// Per file, every `${...}` a console call may interpolate. Classes: a payment_log_safe.ts helper call (a code,
@@ -65,6 +69,7 @@ const Map<String, Set<String>> _allowed = {
     r'razorpayResponse.status', // HTTP status
     r'failId', // checked or generated id
     r'paymentId', // checked or generated id
+    r'requestId', // checked or generated id
     r'stackFailId', // checked or generated id
     r'userId', // checked or generated id
     r'boundedText(clientClaimedPlan)', // helper
@@ -72,6 +77,7 @@ const Map<String, Set<String>> _allowed = {
     r'boundedText(razorpayResponse.statusText)', // helper
     r'codeToken(rec.code)', // helper
     r'errorName(e)', // helper
+    r'errorName(err)', // helper
     r'pgErrorCode(e)', // helper
     r'pgErrorCode(incErr)', // helper
     r'pgErrorCode(insertError)', // helper
@@ -79,6 +85,7 @@ const Map<String, Set<String>> _allowed = {
     r'pgErrorCode(rateErr)', // helper
     r'pgErrorCode(useErr)', // helper
     r'razorpayErrorSummary(captureResp.status, body)', // helper
+    r'stackFrames(err)', // helper
     r'RATE_LIMIT_MAX', // number / boolean / constant / derived value
     r'RATE_LIMIT_QUOTA_KEY', // number / boolean / constant / derived value
     r'actualPaise', // number / boolean / constant / derived value
@@ -90,18 +97,21 @@ const Map<String, Set<String>> _allowed = {
   'supabase/functions/razorpay-webhook/index.ts': {
     r'paymentEntity.id', // checked or generated id
     r'razorpayPaymentId', // checked or generated id
+    r'requestId', // checked or generated id
     r'stackFailId', // checked or generated id
     r'userId', // checked or generated id
     r'boundedText(clientClaimedPlan)', // helper
     r'boundedText(promoCode)', // helper
     r'codeToken(rec.code)', // helper
     r'errorName(e)', // helper
+    r'errorName(err)', // helper
     r'notesShape(notes)', // helper
     r'pgErrorCode(e)', // helper
     r'pgErrorCode(incErr)', // helper
     r'pgErrorCode(insertError)', // helper
     r'pgErrorCode(useErr)', // helper
     r'razorpayErrorSummary(captureResp.status, body)', // helper
+    r'stackFrames(err)', // helper
     r'Math.round(ageSec)', // number / boolean / constant / derived value
     r'String(userId).length', // number / boolean / constant / derived value
     r'actualPaise', // number / boolean / constant / derived value
@@ -116,21 +126,27 @@ const Map<String, Set<String>> _allowed = {
     r'requestId', // checked or generated id
     r'userId', // checked or generated id
     r'boundedText(promoCode)', // helper
+    r'errorName(e)', // helper
     r'guardError ? pgErrorCode(guardError) : "no_rows_array"', // helper
     r'pgErrorCode(promoErr)', // helper
     r'pgErrorCode(rateErr)', // helper
     r'razorpayErrorSummary(orderResp.status, body)', // helper
+    r'stackFrames(e)', // helper
     r'ORDER_QUOTA_KEY', // number / boolean / constant / derived value
     r'ORDER_QUOTA_LIMIT', // number / boolean / constant / derived value
     r'guardsOn ? "on" : "off"', // number / boolean / constant / derived value
     r'isExhausted', // number / boolean / constant / derived value
     r'isExpired', // number / boolean / constant / derived value
+    r'promoCode.length', // number / boolean / constant / derived value
     r'usable', // number / boolean / constant / derived value
   },
   'supabase/functions/validate-promo/index.ts': {
+    r'requestId', // checked or generated id
     r'user.id', // checked or generated id
+    r'errorName(err)', // helper
     r'pgErrorCode(error)', // helper
     r'pgErrorCode(rateErr)', // helper
+    r'stackFrames(err)', // helper
     r'PROMO_QUOTA_KEY', // number / boolean / constant / derived value
     r'PROMO_QUOTA_LIMIT', // number / boolean / constant / derived value
     r'guardsOn ? "on" : "off"', // number / boolean / constant / derived value
@@ -469,7 +485,6 @@ void main() {
         }
         for (final c in calls) {
           seen++;
-          if (_allowedTwoArg.contains(c.text)) continue;
           if (c.args.length != 1 || _literalsOf(c.args.single) == null) offenders.add('$f: ${c.text}');
         }
       }
@@ -492,7 +507,6 @@ void main() {
         }
 
         for (final c in _consoleCalls(code)) {
-          if (_allowedTwoArg.contains(c.text)) continue;
           for (final arg in c.args) {
             for (final lit in _literalsOf(arg) ?? const <String>[]) {
               for (final e in _interpolations(lit)) {
@@ -564,10 +578,15 @@ void main() {
           reason: 'an alias, a bracket lookup or a global lookup reaches the console where the scan cannot see it');
     });
 
-    test('the allowed catch-alls still exist exactly as listed (no silent widening of the list)', () {
-      final all = [for (final f in _scanned) ..._consoleCalls(_code(File(f).readAsStringSync())).map((c) => c.text)];
-      for (final a in _allowedTwoArg) {
-        expect(all.contains(a), isTrue, reason: 'allowed call not found: $a');
+    test('each outer catch-all logs the name and frames only, inside its catch (hermes H10)', () {
+      for (final e in _catchAlls.entries) {
+        final code = _code(File(e.key).readAsStringSync());
+        final calls = _consoleCalls(code).map((c) => c.text).toList();
+        expect(calls.where((t) => t == e.value).length, 1, reason: '${e.key}: catch-all line not found exactly once');
+        final at = code.indexOf(e.value);
+        final catchAt = code.lastIndexOf('} catch (', at);
+        expect(catchAt, greaterThan(0), reason: e.key);
+        expect(code.substring(catchAt, at).contains('const requestId'), isTrue, reason: '${e.key}: not in the outer catch');
       }
     });
 

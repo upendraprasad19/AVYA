@@ -50,7 +50,7 @@ import {
   recordPaidSubscription,
 } from "../_shared/subscription_stacking.ts";
 import { checkStackingMismatch, reportPaymentRecordFailure } from "../_shared/payment_alert.ts";
-import { boundedText, codeToken, errorName, notesShape, pgErrorCode, razorpayErrorSummary } from "../_shared/payment_log_safe.ts";
+import { boundedText, codeToken, errorName, notesShape, pgErrorCode, razorpayErrorSummary, stackFrames } from "../_shared/payment_log_safe.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -247,7 +247,13 @@ async function redeemPromo(
       final_amount: finalPaise,
     });
     if (useErr) {
-      console.error(`[razorpay-webhook] promo redemption: promo_code_uses insert failed code=${pgErrorCode(useErr)}`);
+      // 23505 = UNIQUE(code, user_id) (migration 025): this user used the code before and the audit row exists.
+      // Expected on a repeat purchase, so not an error line (hermes H9).
+      if (pgErrorCode(useErr) === "23505") {
+        console.log(`[razorpay-webhook] promo redemption: repeat use by this user, audit row already exists`);
+      } else {
+        console.error(`[razorpay-webhook] promo redemption: promo_code_uses insert failed code=${pgErrorCode(useErr)}`);
+      }
     }
   } catch (e) {
     console.error(`[razorpay-webhook] promo redemption threw (non-fatal): ${errorName(e)} code=${pgErrorCode(e)}`);
@@ -476,6 +482,47 @@ export async function handler(req: Request): Promise<Response> {
       );
     }
 
+    // hermes H12 (payment-hardening): the notes.user_id refusals run BEFORE the capture below. A payment with no
+    // user_id, or one that is not a UUID, is refused while it is still only authorized, so Razorpay's auto-refund
+    // of uncaptured payments returns the money; capturing first took it with no row to write (diagnose c7e3b1).
+    // Only these two refusals moved: an amount that matches no plan is still found after the capture (the B2a
+    // amount_no_match alert): OI-409, with the shared-account question.
+    // Extract user_id and promo from notes (set during checkout creation).
+    // NOTE: notes.plan is intentionally NOT used for entitlement — plan is
+    // derived server-side from the on-wire amount via derivePlanFromAmount
+    // per docs/architecture/payment.md rule 1. A client that spoofs notes.plan cannot
+    // claim a different plan than what the amount actually paid for.
+    const notes = paymentEntity.notes ?? {};
+    const userId = notes.user_id;
+    const promoCode = notes.promo_code as string | undefined;
+
+    if (!userId) {
+      console.error(`[razorpay-webhook] Missing user_id in payment notes: ${notesShape(notes)}`);
+      return new Response(
+        JSON.stringify({ error: "Missing user_id in payment notes" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    // Validate userId is a proper UUID to prevent injection / spoofing.
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(userId)) {
+      console.error(
+        `[razorpay-webhook] Invalid user_id format in payment notes: type=${typeof userId} length=${String(userId).length}`,
+      );
+      return new Response(
+        JSON.stringify({ error: "Invalid user_id format" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
     // If this is a payment.authorized event, capture the payment now so
     // it becomes final. Razorpay will fire a second payment.captured
     // event after our capture call, which we handle idempotently above
@@ -559,42 +606,6 @@ export async function handler(req: Request): Promise<Response> {
       }
     }
 
-    // Extract user_id and promo from notes (set during checkout creation).
-    // NOTE: notes.plan is intentionally NOT used for entitlement — plan is
-    // derived server-side from the on-wire amount via derivePlanFromAmount
-    // per docs/architecture/payment.md rule 1. A client that spoofs notes.plan cannot
-    // claim a different plan than what the amount actually paid for.
-    const notes = paymentEntity.notes ?? {};
-    const userId = notes.user_id;
-    const promoCode = notes.promo_code as string | undefined;
-
-    if (!userId) {
-      console.error(`[razorpay-webhook] Missing user_id in payment notes: ${notesShape(notes)}`);
-      return new Response(
-        JSON.stringify({ error: "Missing user_id in payment notes" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
-
-    // Validate userId is a proper UUID to prevent injection / spoofing.
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(userId)) {
-      console.error(
-        `[razorpay-webhook] Invalid user_id format in payment notes: type=${typeof userId} length=${String(userId).length}`,
-      );
-      return new Response(
-        JSON.stringify({ error: "Invalid user_id format" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
-
     // ── Derive plan from amount (primary — docs/architecture/payment.md rule 1) ───────────
     // Plan is determined from the actual payment amount, NOT from
     // client-supplied notes.plan. This prevents a ₹349 monthly payment
@@ -603,7 +614,7 @@ export async function handler(req: Request): Promise<Response> {
     const derived = await derivePlanFromAmount(actualPaise, promoCode, supabaseClient);
     if (!derived) {
       console.error(
-        `[razorpay-webhook] amount ${actualPaise} paise does not match any plan` +
+        `[razorpay-webhook] amount ${actualPaise} paise does not match any plan payment_id=${razorpayPaymentId}` +
           (promoCode ? ` (promo: ${boundedText(promoCode)})` : ""),
       );
       // OI-341 Piece B2a (hermes seat 4 F4): the money is captured and no row
@@ -855,7 +866,8 @@ export async function handler(req: Request): Promise<Response> {
   } catch (err) {
     // Sanitised 5xx: never leak raw exception / SQL / signature text.
     const requestId = crypto.randomUUID().split("-")[0];
-    console.error(`[razorpay-webhook] request_id=${requestId}`, err);
+    // Name and frames only (hermes H10): an error message can quote the event body.
+    console.error(`[razorpay-webhook] request_id=${requestId} unhandled ${errorName(err)} at ${stackFrames(err)}`);
     return new Response(
       JSON.stringify({ error: "Internal server error", request_id: requestId }),
       {

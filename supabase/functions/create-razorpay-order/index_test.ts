@@ -90,6 +90,8 @@ interface DoorScenario {
   quota?: number | "error" | "null";
   /** The promo_codes read answers 500. */
   promoError?: boolean;
+  /** A raw request body (not JSON-encoded), for the catch-all test. */
+  rawBody?: string;
 }
 
 /** `guards` sets DISABLE_ORDER_ABUSE_GUARDS (unset = the U3 guards ON). */
@@ -126,7 +128,7 @@ async function run(handler: Handler, sc: DoorScenario, sw: Switches) {
     const req = new Request("https://fn.test/create-razorpay-order", {
       method: "POST",
       headers: { ...(sc.noAuth ? {} : { Authorization: `Bearer ${TOKEN}` }), "Content-Type": "application/json" },
-      body: JSON.stringify(sc.body ?? { plan: "monthly" }),
+      body: sc.rawBody ?? JSON.stringify(sc.body ?? { plan: "monthly" }),
     });
     const res = await withModuleEnv(() =>
       withEnvVar(GUARDS_SWITCH, sw.guards, () =>
@@ -522,7 +524,7 @@ t("U3: any switch value other than exactly \"true\" keeps the guards ON", async 
 // frozen origin/main handler first, which must SHOW the secret (positive control), then through this handler.
 const LOG_SECRET = "SIGf3b1c2d4e5a6978812345678abcdef00112233";
 
-async function refusedOrder(handler: Handler) {
+async function refusedOrder(handler: Handler, guards?: string) {
   const server = new FakeServer({
     tables: { subscriptions: [], promo_codes: [] },
     users: { [TOKEN]: { id: USER } },
@@ -544,7 +546,9 @@ async function refusedOrder(handler: Handler) {
       body: JSON.stringify({ plan: "monthly" }),
     });
     const { result: res, errors, all } = await captureConsole(() =>
-      withModuleEnv(() => withSwitch(undefined, () => withTrialPurchaseSwitch(undefined, () => handler(req))))
+      withModuleEnv(() =>
+        withEnvVar(GUARDS_SWITCH, guards, () => withSwitch(undefined, () => withTrialPurchaseSwitch(undefined, () => handler(req))))
+      )
     );
     return { res, errors, all, server };
   } finally {
@@ -556,13 +560,47 @@ t("U0 log: a refused Razorpay order logs status and Razorpay's code/reason, neve
   const before = await refusedOrder(originHandler);
   assert(before.all.some((l) => l.includes(LOG_SECRET)), "positive control: the origin handler logged the body");
   const r = await refusedOrder(newHandler);
-  assertEquals(r.res.status, before.res.status);
+  assertEquals(before.res.status, 502);
+  assertEquals(r.res.status, 500, "hermes H1: not a status the client retries");
   assertEquals(orderCalls(r.server).length, 1);
   assert(!r.all.some((l) => l.includes(LOG_SECRET) || l.includes(USER)), r.all.join("\n"));
   assert(
     r.errors.some((l) => l.includes(`razorpay status=400 code="BAD_REQUEST_ERROR" reason="input_validation_failed"`)),
     r.errors.join("\n"),
   );
+});
+
+// hermes H1: callFunction retries 502/503/504 (supabase_service.dart), and each retry spends an order-limit unit,
+// so with the guards on a refused order answers 500. The switch keeps the origin's 502.
+t("H1: a refused Razorpay order answers 500 with the guards on, the origin's 502 with the switch set", async () => {
+  const on = await refusedOrder(newHandler);
+  assertEquals(on.res.status, 500);
+  assertEquals(counterCalls(on.server).length, 1);
+  const off = await refusedOrder(newHandler, "true");
+  const golden = await refusedOrder(originHandler);
+  assertEquals(off.res.status, 502);
+  assertEquals(off.res.status, golden.res.status);
+  assertEquals(counterCalls(off.server).length, 0);
+});
+
+const CATCH_ALL_BODY = '{"code":\n at SECRETBODY jane.doe@example.com';
+// B-pass bfaeb6fb79da findings 1 and 2: the catch-all logs the error's name and frames, never body text.
+t("catch-all: an unparseable body -> 500 and one 'unhandled SyntaxError at' line with no body text", async () => {
+  const { result: r, errors } = await captureConsole(() => run(newHandler, { rows: [], rawBody: CATCH_ALL_BODY }, SHUT));
+  assertEquals(r.res.status, 500);
+  const lines = errors.filter((l) => l.includes("unhandled"));
+  assertEquals(lines.length, 1, errors.join("\n"));
+  assert(/^\[create-razorpay-order\] request_id=[0-9a-f]{8} unhandled SyntaxError at at /.test(lines[0]), lines[0]);
+  assert(!errors.some((l) => l.includes("SECRETB") || l.includes("jane")), errors.join("\n"));
+});
+
+// hermes H11: an unknown code is client text; the refusal logs its usability and length, never the code.
+t("H11: a refused promo logs the usability and the code length, never the code", async () => {
+  const code = "leakme1";
+  const { result: r, all } = await captureConsole(() => run(newHandler, withPromo(null, { body: { plan: "yearly", promo_code: code } }), SHUT));
+  assertEquals(r.body.error_code, "promo_invalid");
+  assert(!all.some((l) => l.toUpperCase().includes("LEAKME")), all.join("\n"));
+  assert(all.includes("[create-razorpay-order] promo refused: unknown code_length=7"), all.join("\n"));
 });
 
 // ── Frozen clock (B-pass beee28f0d9f2 finding 1): the handler's promo rule must use the IST day of the REAL

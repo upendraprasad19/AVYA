@@ -19,8 +19,9 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { isEnvExactlyTrue } from "../_shared/subscription_stacking.ts";
-import { pgErrorCode } from "../_shared/payment_log_safe.ts";
+import { errorName, pgErrorCode, stackFrames } from "../_shared/payment_log_safe.ts";
 import { promoUsableAt } from "../_shared/promo_rules.ts";
+import { ORDER_ABUSE_GUARDS_DISABLE_ENV, retryMinutes, secondsLeftInBucket } from "../_shared/order_abuse_guards.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -32,10 +33,13 @@ const corsHeaders = {
 const PROMO_QUOTA_KEY = "promo_validate";
 const PROMO_QUOTA_LIMIT = 20;
 const PROMO_RATE_WINDOW_MS = 60 * 60 * 1000;
-/** The same switch create-razorpay-order reads (its ORDER_ABUSE_GUARDS_DISABLE_ENV). */
-export const PROMO_GUARDS_DISABLE_ENV = "DISABLE_ORDER_ABUSE_GUARDS";
+/** The same switch create-razorpay-order reads: one constant, in _shared/order_abuse_guards.ts. */
+export const PROMO_GUARDS_DISABLE_ENV = ORDER_ABUSE_GUARDS_DISABLE_ENV;
 
-export const RATE_LIMITED_REASON = "Too many attempts. Try again in an hour.";
+/** The limit's refusal names the real wait: the bucket is a fixed UTC hour, so it can be a minute (hermes H3). */
+export function rateLimitedReason(retryAfterSeconds: number): string {
+  return `Too many attempts. Try again in ${retryMinutes(retryAfterSeconds)}.`;
+}
 export const CHECK_UNAVAILABLE_REASON = "Couldn't check the code right now. Try again shortly.";
 
 function answer(payload: Record<string, unknown>, status = 200): Response {
@@ -98,7 +102,8 @@ export async function handler(req: Request): Promise<Response> {
       }
       if (usedCount === -1) {
         console.warn(`[validate-promo] user=${user.id} rate-limited (quota_key=${PROMO_QUOTA_KEY}, limit=${PROMO_QUOTA_LIMIT})`);
-        return answer({ valid: false, reason: RATE_LIMITED_REASON });
+        const retryAfterSeconds = secondsLeftInBucket(bucketStartMs, PROMO_RATE_WINDOW_MS);
+        return answer({ valid: false, reason: rateLimitedReason(retryAfterSeconds) });
       }
     }
 
@@ -189,7 +194,8 @@ export async function handler(req: Request): Promise<Response> {
   } catch (err) {
     // Sanitised 5xx: never leak raw exception / SQL text.
     const requestId = crypto.randomUUID().split("-")[0];
-    console.error(`[validate-promo] request_id=${requestId}`, err);
+    // Name and frames only (hermes H10): a req.json() SyntaxError's message quotes the request body.
+    console.error(`[validate-promo] request_id=${requestId} unhandled ${errorName(err)} at ${stackFrames(err)}`);
     return answer({ error: "Internal server error", request_id: requestId }, 500);
   }
 }

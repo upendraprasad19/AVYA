@@ -34,7 +34,7 @@ void main() {
     });
 
     test('every refusal is an HTTP 200 {valid:false, reason}, never a non-2xx the paywall would hide', () {
-      expect(code, contains('return answer({ valid: false, reason: RATE_LIMITED_REASON });'));
+      expect(code, contains('return answer({ valid: false, reason: rateLimitedReason(retryAfterSeconds) });'));
       expect(code, contains('return answer({ valid: false, reason: CHECK_UNAVAILABLE_REASON });'));
       expect(code, contains('function answer(payload: Record<string, unknown>, status = 200): Response {'));
     });

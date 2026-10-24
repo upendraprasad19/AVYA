@@ -1,6 +1,6 @@
 // Tests for _shared/payment_log_safe.ts (OI-360, payment-hardening U0): each helper against hostile input.
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { boundedText, codeToken, errorName, notesShape, pgErrorCode, razorpayErrorSummary } from "./payment_log_safe.ts";
+import { boundedText, codeToken, errorName, notesShape, pgErrorCode, razorpayErrorSummary, stackFrames } from "./payment_log_safe.ts";
 
 const SIG = "f3b1c2d4e5a6978812345678abcdef0011223344556677889900aabbccddeeff";
 
@@ -102,4 +102,85 @@ Deno.test("codeToken: a short plain token passes; anything else is no_code", () 
   assertEquals(codeToken(`code ${SIG}`), "no_code");
   assertEquals(codeToken(undefined), "no_code");
   assertEquals(codeToken({ code: "23505" }), "no_code");
+});
+
+// hermes H10: the catch-alls log name + frames; the message (which can quote the request body) never appears.
+Deno.test("stackFrames: up to n frames, never the message line", () => {
+  let err: unknown;
+  try {
+    JSON.parse('{"payment_id":"pay_SECRETBODY');
+  } catch (e) {
+    err = e;
+  }
+  const s = stackFrames(err);
+  assert(!s.includes("SECRETBODY"), s);
+  assert(!s.includes("SyntaxError"), s);
+  const frames = s.split(" | ");
+  assert(frames.length >= 1 && frames.length <= 3, s);
+  for (const f of frames) assert(f.startsWith("at "), s);
+  assertEquals(stackFrames(err, 1).split(" | ").length, 1);
+});
+
+// B-pass bfaeb6fb79da finding 1: a message holding a newline and "at " used to come out as a frame.
+Deno.test("stackFrames: a message with a newline and 'at ' never becomes a frame", () => {
+  let err: unknown;
+  try {
+    JSON.parse('{"a":\n at SECRETPAY pay_123 and more');
+  } catch (e) {
+    err = e;
+  }
+  assert((err as Error).message.includes("\n at SECRETP"), "precondition: the message quotes the body across a newline");
+  const s = stackFrames(err);
+  assert(!s.includes("SECRET"), s);
+  assert(s.startsWith("at "), s);
+  const forged = new Error("boom\n    at SECRETFRAME (forged.ts:1:1)");
+  const f = stackFrames(forged);
+  assert(!f.includes("SECRETFRAME"), f);
+  assert(f.startsWith("at "), f);
+});
+
+Deno.test("stackFrames: each frame is escaped and bounded; a message the stack lacks is no_stack", () => {
+  const e = new Error("m");
+  e.stack = "Error: m\n    at f (file\u2028x\u0007.ts:1:1)\n    at " + "g".repeat(400);
+  const s = stackFrames(e);
+  assert(!s.includes("\u2028") && !s.includes("\u0007"), JSON.stringify(s));
+  assert(s.includes("\\u2028") && s.includes("\\u0007"), s);
+  assertEquals(s.split(" | ")[1].length, 200);
+  const lost = new Error("not in the stack");
+  lost.stack = "Error: something else\n    at f (a.ts:1:1)";
+  assertEquals(stackFrames(lost), "no_stack");
+  const empty = new Error();
+  empty.stack = "Error\n    at f (a.ts:1:1)";
+  assertEquals(stackFrames(empty), "at f (a.ts:1:1)");
+});
+
+// B-pass aabb2b0dbdbb findings 2 and 5: the C1 and format characters are escaped too; a hostile Error never
+// makes stackFrames throw inside a catch-all, and a non-string message (whose text cannot be located) is no_stack.
+Deno.test("stackFrames: C1 and format characters are escaped in a frame", () => {
+  const e = new Error("m");
+  e.stack = "Error: m\n    at f (a\u0085b\u202ec\u200bd.ts:1:1)";
+  const s = stackFrames(e);
+  for (const raw of ["\u0085", "\u202e", "\u200b"]) assert(!s.includes(raw), JSON.stringify(s));
+  for (const esc of ["\\u0085", "\\u202e", "\\u200b"]) assert(s.includes(esc), s);
+});
+
+Deno.test("stackFrames: throwing getters and a non-string message give no_stack, never a throw", () => {
+  const badStack = new Error("m");
+  Object.defineProperty(badStack, "stack", { get() { throw new Error("boom"); } });
+  assertEquals(stackFrames(badStack), "no_stack");
+  const badMessage = new Error("m");
+  Object.defineProperty(badMessage, "message", { get() { throw new Error("boom"); } });
+  assertEquals(stackFrames(badMessage), "no_stack");
+  const odd = new Error("x");
+  (odd as unknown as { message: unknown }).message = { toString: () => "x\n at SECRETFRAME" };
+  odd.stack = "Error: x\n at SECRETFRAME (forged.ts:1:1)\n    at f (a.ts:1:1)";
+  assertEquals(stackFrames(odd), "no_stack");
+});
+
+Deno.test("stackFrames: a non-Error, or an Error without frames, is no_stack", () => {
+  assertEquals(stackFrames("pay_SECRETBODY"), "no_stack");
+  assertEquals(stackFrames({ stack: "at x" }), "no_stack");
+  const e = new Error("pay_SECRETBODY");
+  e.stack = "Error: pay_SECRETBODY";
+  assertEquals(stackFrames(e), "no_stack");
 });

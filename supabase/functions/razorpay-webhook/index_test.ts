@@ -23,6 +23,7 @@ import {
   paymentServer,
   recordPaidCalls,
   type Scenario,
+  signedRawWebhookRequest,
   stripInstants,
   subscriptionInserts,
   trialRow,
@@ -765,7 +766,7 @@ t("U0 log: notes.plan is bounded and quoted: no forged line, no unbounded text (
 const FORGED_PROMO = "HALF50\n[razorpay-webhook] FORGED-LINE " + "Z".repeat(300);
 for (const [label, amount, expectLine] of [
   ["the full-price cross-check (code not found)", 34900, `Promo code ${JSON.stringify(FORGED_PROMO.slice(0, 40))} not found`],
-  ["an amount that matches no plan", 12345, `[razorpay-webhook] amount 12345 paise does not match any plan (promo: ${JSON.stringify(FORGED_PROMO.slice(0, 40))})`],
+  ["an amount that matches no plan", 12345, `[razorpay-webhook] amount 12345 paise does not match any plan payment_id=${PAY} (promo: ${JSON.stringify(FORGED_PROMO.slice(0, 40))})`],
 ] as const) {
   t(`U0 log: ${label} logs notes.promo_code bounded and quoted (control: origin printed it raw)`, async () => {
     const sc = (): Scenario => ({ rows: [], amount, notes: { promo_code: FORGED_PROMO } });
@@ -794,6 +795,88 @@ for (const [label, path, expectLine] of [
     assert(!anyLine(r.all, SECRET), r.all.join("\n"));
   });
 }
+
+// hermes H9: a 23505 on the audit insert is UNIQUE(code, user_id) (migration 025), a repeat use by this user whose
+// audit row exists. An info line, not an error; any other code stays an error (the R-6 test above, P0001).
+t("H9: a repeat-use 23505 on promo_code_uses answers as before and logs an info line, no error line", async () => {
+  const path = "/rest/v1/promo_code_uses";
+  const sc: Scenario = { ...promoScenario([]), intercept: (req) => (req.method === "POST" && req.path === path ? pgError(409, "23505") : undefined) };
+  const ok = await run(newHandler, promoScenario([]), undefined);
+  const r = await run(newHandler, sc, undefined);
+  assertEquals(r.res.status, ok.res.status);
+  assertEquals(stripInstants(r.body), stripInstants(ok.body));
+  assertEquals(subscriptionInserts(r.server).length, 1);
+  assertEquals(r.server.to(path, "POST").length, 1);
+  // No ERROR-level line about the redemption at all (the info line must not be logged at error level).
+  assert(!anyLine(r.errors, "promo redemption"), r.errors.join("\n"));
+  assertEquals(r.all.filter((l) => l === "[razorpay-webhook] promo redemption: repeat use by this user, audit row already exists").length, 1, r.all.join("\n"));
+});
+
+// ── hermes H12: an authorized payment with no usable notes.user_id is refused BEFORE the capture ──
+// The origin captured first, then answered 400 for a missing or malformed notes.user_id: the money was taken and no
+// row could ever be written. Refused while only authorized, Razorpay's auto-refund of uncaptured payments returns it.
+for (const [label, userId] of [["a missing", ""], ["a malformed", "not-a-uuid"]] as const) {
+  t(`H12: an authorized payment with ${label} notes.user_id is refused with 400 and NOT captured (control: origin captured it)`, async () => {
+    let captures = 0;
+    const sc = (): Scenario => ({
+      rows: [],
+      notes: { user_id: userId },
+      intercept: (req) => {
+        if (req.host !== "https://api.razorpay.com") return undefined;
+        if (req.method === "POST" && req.path === `/v1/payments/${PAY}/capture`) {
+          captures++;
+          return new Response(JSON.stringify({ id: PAY, amount: 34900, captured: true, status: "captured" }), { status: 200 });
+        }
+        return undefined;
+      },
+    });
+    const before = await runAuthorized(originHandler, sc());
+    assertEquals(before.res.status, 400);
+    assertEquals(captures, 1, "positive control: the origin captured before refusing");
+    captures = 0;
+    const r = await runAuthorized(newHandler, sc());
+    assertEquals(r.res.status, 400);
+    assertEquals(captures, 0, r.all.join("\n"));
+    assertEquals(subscriptionInserts(r.server).length, 0);
+  });
+}
+
+t("H12: an authorized payment with a valid notes.user_id is still captured and recorded", async () => {
+  let captures = 0;
+  const sc: Scenario = {
+    rows: [],
+    intercept: (req) => {
+      if (req.host !== "https://api.razorpay.com") return undefined;
+      if (req.method === "POST" && req.path === `/v1/payments/${PAY}/capture`) {
+        captures++;
+        return new Response(JSON.stringify({ id: PAY, amount: 34900, captured: true, status: "captured" }), { status: 200 });
+      }
+      return undefined;
+    },
+  };
+  const r = await runAuthorized(newHandler, sc);
+  assertEquals(r.res.status, 200, r.all.join("\n"));
+  assertEquals(captures, 1);
+  assertEquals(subscriptionInserts(r.server).length + recordPaidCalls(r.server).length, 1);
+});
+
+// B-pass aabb2b0dbdbb finding 3: the webhook's catch-all, reached by a SIGNED body that is not JSON (the parse
+// runs after the HMAC check), logs the error's name and frames, never body text.
+t("catch-all: a signed, unparseable body -> 500 and one 'unhandled SyntaxError at' line with no body text", async () => {
+  const { server } = paymentServer({ rows: [] });
+  server.install();
+  try {
+    const req = await signedRawWebhookRequest('{"event":\n at SECRETBODY jane.doe@example.com');
+    const { result: res, errors, all } = await withSwitch(undefined, () => captureConsole(() => newHandler(req)));
+    assertEquals(res.status, 500);
+    const lines = errors.filter((l) => l.includes("unhandled"));
+    assertEquals(lines.length, 1, all.join("\n"));
+    assert(/^\[razorpay-webhook\] request_id=[0-9a-f]{8} unhandled SyntaxError at at /.test(lines[0]), lines[0]);
+    assert(!all.some((l) => l.includes("SECRETB") || l.includes("jane")), all.join("\n"));
+  } finally {
+    server.restore();
+  }
+});
 
 // ── payment-hardening U2 (OI-351): a refused capture of an ALREADY-captured payment records the row ──
 // Before U2 every replay of a payment.authorized event whose first delivery captured the payment and then

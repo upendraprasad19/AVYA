@@ -268,6 +268,18 @@ async function hmacHex(body: string, secret: string): Promise<string> {
   return [...sig].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+/** A delivery whose raw body (any text, valid JSON or not) carries a VALID signature: it passes the HMAC check. */
+export async function signedRawWebhookRequest(body: string): Promise<Request> {
+  return new Request("https://fn.test/razorpay-webhook", {
+    method: "POST",
+    headers: {
+      "x-razorpay-signature": await hmacHex(body, MODULE_ENV.RAZORPAY_KEY_SECRET),
+      "Content-Type": "application/json",
+    },
+    body,
+  });
+}
+
 export function webhookRequest(s: Scenario = {}): Promise<Request> {
   return signedWebhookRequest(s, "payment.captured");
 }

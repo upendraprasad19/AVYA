@@ -6,6 +6,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### payment_log_safety, create_order_rate_limit, webhook_already_captured_recovery — the hermes-pass corrections to the batch's three new contracts. (1 bugs)
+- 2026-10-25 c7e3b1 — The end-of-batch hermes pass (four Sonnet seats, lenses L1 L2 L21 L22 L23 L29 L40) found, in the five payment-hardening commits and the code they sit in: (H12, P2) razorpay-webhook CAPTURED an…
+
 ### git_hook_install_atomicity (1 bugs)
 - 2026-10-24 c5e1a8 — Two latent hazards in the git-hook install path, found while planning the merge-conflict-treadmill fix. (1) scripts/setup-hooks.sh overwrote the installed hooks IN PLACE with a plain cp, into one…
 
@@ -1664,6 +1667,7 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-10-25 | c7e3b1 | The end-of-batch hermes pass (four Sonnet seats, lenses L1 L2 L21 L22 L23 L29 L40) found, in the five payment-hardening commits and the code they sit in: (H12, P2) razorpay-webhook CAPTURED an… | payment_log_safety, create_order_rate_limit, webhook_already_captured_recovery — the hermes-pass corrections to the batch's three new contracts. | test/contracts/payment_log_safety_writer_to_reader_test.dart |
 | 2026-10-24 | c5e1a8 | Two latent hazards in the git-hook install path, found while planning the merge-conflict-treadmill fix. (1) scripts/setup-hooks.sh overwrote the installed hooks IN PLACE with a plain cp, into one… | git_hook_install_atomicity | test/scripts/setup_hooks_atomic_install_e2e_test.dart |
 | 2026-10-24 | f2c9a8 | create-razorpay-order had no per-user limit, so a signed-in caller could create Razorpay orders without bound, and it priced an order with ANY active code even when the code had expired or run out… | create_order_rate_limit, promo_validate_rate_limit, promo_usable_rule — bounded attempts and one strict rule where a code is accepted for a new purchase. | test/contracts/promo_usable_rule_writer_to_reader_test.dart |
 | 2026-10-24 | d1a4f6 | The payment functions logged whole objects. verify-payment and razorpay-webhook printed the PostgREST error of a failed non-23505 subscriptions insert as an object (its `details` echoes the failing… | payment_log_safety — a payment-path log line carries a code, a type, a shape or a bounded value, never a whole object. | test/contracts/payment_log_safety_writer_to_reader_test.dart |

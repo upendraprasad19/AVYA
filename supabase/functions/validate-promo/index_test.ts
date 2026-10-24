@@ -5,9 +5,10 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { FakeServer, jsonResponse, type Row } from "../_shared/postgrest_fake_fetch.ts";
 import { istDateStr } from "../_shared/ist_date.ts";
-import { type Handler, loadOriginMainHandler, MODULE_ENV, TOKEN, USER } from "../_shared/payment_writer_harness.ts";
-import { CHECK_UNAVAILABLE_REASON, PROMO_GUARDS_DISABLE_ENV, RATE_LIMITED_REASON } from "./index.ts";
+import { captureConsole, type Handler, loadOriginMainHandler, MODULE_ENV, TOKEN, USER } from "../_shared/payment_writer_harness.ts";
+import { CHECK_UNAVAILABLE_REASON, PROMO_GUARDS_DISABLE_ENV, rateLimitedReason } from "./index.ts";
 import { ORDER_ABUSE_GUARDS_DISABLE_ENV } from "../create-razorpay-order/index.ts";
+import { secondsLeftInBucket } from "../_shared/order_abuse_guards.ts";
 
 const newHandler = (await import("./index.ts")).handler as Handler;
 const originHandler = await loadOriginMainHandler("validate_promo_origin_main.ts.txt");
@@ -25,6 +26,8 @@ interface Sc {
   quota?: number | "error" | "null";
   promoError?: boolean;
   noAuth?: boolean;
+  /** A raw request body (not JSON-encoded), for the catch-all tests. */
+  rawBody?: string;
 }
 
 async function withEnv<T>(vars: Record<string, string | undefined>, fn: () => Promise<T>): Promise<T> {
@@ -61,7 +64,7 @@ async function run(handler: Handler, sc: Sc, guardsSwitch?: string) {
     const req = new Request("https://fn.test/validate-promo", {
       method: "POST",
       headers: { ...(sc.noAuth ? {} : { Authorization: `Bearer ${TOKEN}` }), "Content-Type": "application/json" },
-      body: JSON.stringify({ code: sc.code ?? "half50" }),
+      body: sc.rawBody ?? JSON.stringify({ code: sc.code ?? "half50" }),
     });
     const res = await withEnv({ ...MODULE_ENV, [PROMO_GUARDS_DISABLE_ENV]: guardsSwitch }, () => handler(req));
     const body = JSON.parse(await res.text()) as Record<string, unknown>;
@@ -74,6 +77,24 @@ async function run(handler: Handler, sc: Sc, guardsSwitch?: string) {
 const promo = (over: Row = {}): Row => ({ code: "HALF50", discount_pct: 50, is_active: true, valid_until: "2099-01-01", max_uses: null, used_count: 0, ...over });
 const promoReads = (server: FakeServer) => server.to("/rest/v1/promo_codes", "GET");
 const counterCalls = (server: FakeServer) => server.to(`/rest/v1/rpc/${CONSUME_QUOTA_RPC}`, "POST");
+
+const HOUR_MS = 3_600_000;
+/** The rate reason for the rest of the current UTC hour, read before and after the call (a minute can turn). */
+function rateReasonsAround(t0: number, t1: number): string[] {
+  return [t0, t1].map((now) => rateLimitedReason(secondsLeftInBucket(Math.floor(now / HOUR_MS) * HOUR_MS, HOUR_MS, now)));
+}
+async function runRateLimited(sw?: string) {
+  const t0 = Date.now();
+  const r = await run(newHandler, { promoRows: [promo()], quota: -1 }, sw);
+  return { r, expected: rateReasonsAround(t0, Date.now()) };
+}
+
+t("hermes H3: the rate reason names the wait in minutes, never 'an hour' for a bucket that ends in one minute", () => {
+  assertEquals(rateLimitedReason(2220), "Too many attempts. Try again in 37 minutes.");
+  assertEquals(rateLimitedReason(30), "Too many attempts. Try again in 1 minute.");
+  assertEquals(rateLimitedReason(3600), "Too many attempts. Try again in 60 minutes.");
+  return Promise.resolve();
+});
 
 t("the switch name is the one create-razorpay-order reads (one switch turns both off)", () => {
   assertEquals(PROMO_GUARDS_DISABLE_ENV, ORDER_ABUSE_GUARDS_DISABLE_ENV);
@@ -110,9 +131,11 @@ t("one counter call per check: the key, a 1-hour UTC bucket and the limit of 20"
 });
 
 t("over the limit (the 21st check) -> 200 valid:false with the rate reason, and NO promo_codes read", async () => {
-  const r = await run(newHandler, { promoRows: [promo()], quota: -1 });
+  const { r, expected } = await runRateLimited();
   assertEquals(r.res.status, 200);
-  assertEquals(r.body, { valid: false, reason: RATE_LIMITED_REASON });
+  assertEquals(r.body.valid, false);
+  assert(expected.includes(String(r.body.reason)), `${r.body.reason} not in ${expected}`);
+  assertEquals(Object.keys(r.body).sort(), ["reason", "valid"]);
   assertEquals(promoReads(r.server).length, 0);
 });
 
@@ -154,9 +177,22 @@ t("switch exactly \"true\": origin/main's answer for every scenario, and no coun
 
 t("any switch value other than exactly \"true\" keeps the throttle ON", async () => {
   for (const v of ["TRUE", " true", "1", "false", ""]) {
-    const r = await run(newHandler, { promoRows: [promo()], quota: -1 }, v);
-    assertEquals(r.body, { valid: false, reason: RATE_LIMITED_REASON }, `switch=${JSON.stringify(v)}`);
+    const { r, expected } = await runRateLimited(v);
+    assertEquals(r.body.valid, false, `switch=${JSON.stringify(v)}`);
+    assert(expected.includes(String(r.body.reason)), `switch=${JSON.stringify(v)}: ${r.body.reason}`);
   }
+});
+
+const CATCH_ALL_BODY = '{"code":\n at SECRETBODY jane.doe@example.com';
+// B-pass bfaeb6fb79da findings 1 and 2: the catch-all logs the error's name and frames, never body text, even when
+// the body holds a newline followed by "at ".
+t("catch-all: an unparseable body -> 500 and one 'unhandled SyntaxError at' line with no body text", async () => {
+  const { result: r, errors } = await captureConsole(() => run(newHandler, { promoRows: [promo()], rawBody: CATCH_ALL_BODY }));
+  assertEquals(r.res.status, 500);
+  const lines = errors.filter((l) => l.includes("unhandled"));
+  assertEquals(lines.length, 1, errors.join("\n"));
+  assert(/^\[validate-promo\] request_id=[0-9a-f]{8} unhandled SyntaxError at at /.test(lines[0]), lines[0]);
+  assert(!errors.some((l) => l.includes("SECRETB") || l.includes("jane")), errors.join("\n"));
 });
 
 t("no JWT -> 401 before the counter is touched", async () => {
