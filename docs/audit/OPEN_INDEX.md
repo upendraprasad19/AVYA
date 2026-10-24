@@ -217,51 +217,51 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-346 | Existing accounts accepted the v1 (blog) policy; nothing asks them to… | store launch (upstream_blocked;… | 2026-10-16: `AppConstants.termsVersion`… | [:6072](open_issues.md#L6072) |
 | OI-347 | Free-access codes: the founder wants to give out codes that grant PRO for… | none (a plan is the next step; the… | 2026-10-16 - by reading… | [:6081](open_issues.md#L6081) |
 | OI-348 | Post-build check list: every founder-owned device, signed-in and… | the final AAB/APK build… | 2026-10-17 - by reading every… | [:6094](open_issues.md#L6094) |
-| OI-349 | Onboarding welcome screen overflows at 2x system text on a 640-dp phone:… | the founder's call on whether 2x system… | 2026-10-17 - by running the screen under… | [:6150](open_issues.md#L6150) |
-| OI-350 | verify-payment captures an authorized payment and echoes its Razorpay… | none | 2026-10-17 - by reading… | [:6159](open_issues.md#L6159) |
-| OI-351 | razorpay-webhook: after a payment.authorized auto-capture, a failed insert… | none | 2026-10-17 - by reading… | [:6166](open_issues.md#L6166) |
-| OI-352 | Active Workout meta line prints hard-coded '0kg' for every scheduled lift | none (pick up after the… | 2026-10-18 - by code read only, NOT on… | [:6174](open_issues.md#L6174) |
-| OI-353 | Plan suggested_weight (ProgressionResolver) is never read by the Active… | none (pick up after the… | 2026-10-18 - by code read: the plan… | [:6187](open_issues.md#L6187) |
-| OI-354 | Active Workout hero tile + full-screen viewer (animated WEBP) blocked on… | the animated-WEBP asset pipeline and its… | 2026-10-18 - design locked in… | [:6200](open_issues.md#L6200) |
-| OI-355 | Active Workout _persistActiveState reads the build-time widget.data, so… | none (pick up after the… | 2026-10-18 - by code read (plan review… | [:6211](open_issues.md#L6211) |
-| OI-357 | Active Workout U2: per-set last values, new-user weight mirror, faded… | the flip batch landing (branch… | never | [:6224](open_issues.md#L6224) |
-| OI-358 | Active Workout: adding an exercise already in the session crashes the… | none | never | [:6237](open_issues.md#L6237) |
-| OI-359 | verify-payment calls Razorpay capture before the payment-owner check… | none | 2026-10-20 - by code read (hermes pass… | [:6246](open_issues.md#L6246) |
-| OI-360 | verify-payment and razorpay-webhook log whole PostgREST error objects and… | none | 2026-10-20 - by code read (hermes pass… | [:6255](open_issues.md#L6255) |
-| OI-362 | Active Workout: remove the per-set (OFF) path and the… | OI-348 row A12 (the release-build device… | never | [:6264](open_issues.md#L6264) |
-| OI-363 | Active Workout: the FINISH/CANCEL button row overflows sideways at 320 dp… | none | never | [:6275](open_issues.md#L6275) |
-| OI-364 | Remove the disable_lapse_gap_policy kill switch (client Hive key + server… | founder device check of the PRO gap… | 2026-10-21 - by code read: only READERS… | [:6290](open_issues.md#L6290) |
-| OI-365 | Coach tools and app features do the same jobs through separate code (first… | none (founder 2026-10-21: this audit is… | 2026-10-21 - by code read at… | [:6301](open_issues.md#L6301) |
-| OI-366 | create-razorpay-order has no rate limit and honours expired or exhausted… | none for the code; the founder's call on… | 2026-10-21 - by reading (hermes pass… | [:6335](open_issues.md#L6335) |
-| OI-367 | Referral reward can be farmed once the purchase door is open: no minimum… | the founder's product call before store… | 2026-10-21 - by reading (hermes pass… | [:6344](open_issues.md#L6344) |
-| OI-368 | Coach chat: the coach replies 'Roger. Logged.' when nothing was logged (no… | the `ai-proxy` + `ai-media-proxy` deploy… | never | [:6353](open_issues.md#L6353) |
-| OI-369 | Coach chat: the coach says 'Logged' while the LOG SET card still waits for… | the `ai-proxy` + `ai-media-proxy` deploy… | never | [:6368](open_issues.md#L6368) |
-| OI-372 | Weekday exercise swap has no UI: the engine takes any date, but only the… | none | 2026-10-21 (code read on… | [:6381](open_issues.md#L6381) |
-| OI-373 | Coach: one workout request can produce either a typed logSet card (APPLY)… | none | never | [:6412](open_issues.md#L6412) |
-| OI-374 | Coach: remove the DISABLE_WRITE_CLAIM_RULE kill switch once the… | the `coach-log-truth` batch shipping and… | never | [:6423](open_issues.md#L6423) |
-| OI-375 | Coach: the FC2 queued acknowledgement hard-codes 'Recruit' instead of the… | none | never | [:6434](open_issues.md#L6434) |
-| OI-376 | Workout invalidation: WorkoutWriteService.onInvalidate is a dead hook and… | none | never | [:6445](open_issues.md#L6445) |
-| OI-377 | Train: WorkoutRepository.getExerciseLogsForDate duplicates the canonical… | none | never | [:6456](open_issues.md#L6456) |
-| OI-378 | Riverpod 3.2.1: debug assertion actualPausedCount == expectedPausedCount… | upstream: riverpod above 3.2.1… | never | [:6467](open_issues.md#L6467) |
-| OI-379 | Coach-logged workouts never add to total_workouts_done or run the rank… | none | never | [:6478](open_issues.md#L6478) |
-| OI-381 | Set counts read '1 sets' in the remaining renderers (prescriptions,… | none | never | [:6489](open_issues.md#L6489) |
-| OI-383 | Razorpay Android SDK is pinned (checkout 1.6.41, standard-core 1.7.19) and… | none | 2026-10-21 (Maven Central: checkout… | [:6500](open_issues.md#L6500) |
-| OI-385 | Generator: 27 library rows in slot patterns are unreachable on attempts… | the flip of `enable_core_list_pool`… | 2026-10-23 — with the flag ON,… | [:6523](open_issues.md#L6523) |
-| OI-386 | Generator: 11 of 13 attempt-1 sub-focus strings match 0 rows (slot… | the flip of `enable_core_list_pool`… | 2026-10-23 — with the flag ON,… | [:6534](open_issues.md#L6534) |
-| OI-387 | Library: 6 kept bodyweight rows (E272 E273 E276 E277 E289 E290) invisible… | the flip of `enable_core_list_pool`… | 2026-10-23 — with the flag ON,… | [:6545](open_issues.md#L6545) |
-| OI-388 | Generator: gym plans serve bodyweight-only self-resisted curls and triceps… | the flip of `enable_core_list_pool`… | 2026-10-23 — with the flag ON,… | [:6558](open_issues.md#L6558) |
-| OI-389 | Cardio logs lose their minutes and distance: logExercise zeroes… | Batch 1b (coach paths; plan to be… | never | [:6569](open_issues.md#L6569) |
-| OI-391 | Cardio duration cap: workout_log_sets duration_secs CHECK widened from… | founder go for the live migration apply… | never | [:6616](open_issues.md#L6616) |
-| OI-392 | Coach logCardio tool: a dedicated AI-coach tool for cardio minutes and km… | founder go for the ai-proxy deploy… | never | [:6624](open_issues.md#L6624) |
-| OI-393 | A set logged or moved on top of a restore-shaped or F5 exlog row resets… | founder-sequenced follow-on (D10,… | never | [:6632](open_issues.md#L6632) |
-| OI-394 | Exlog type heal is dead on disk rows: fix the cast in… | founder-sequenced follow-on (D10,… | never | [:6640](open_issues.md#L6640) |
-| OI-395 | beat-my-coach: challenge query filters on capitalised categories, so every… | founder decision between (a) and (b)… | 2026-10-23 —… | [:6590](open_issues.md#L6590) |
-| OI-396 | Cardio finisher is generated but no screen shows it | Batch B1 and B2 landing first (founder… | 2026-10-23 — `CardioFinisher.attach`… | [:6603](open_issues.md#L6603) |
-| OI-397 | Batch B: IST-throughout for workout dates (OI-390 §1 'Not changed'… | OI-390 landing first (founder order… | never | [:6648](open_issues.md#L6648) |
-| OI-398 | rolling-context re-embeds the same coach interaction on several nights (no… | its own plan + catastrophic-tier review… | never | [:6657](open_issues.md#L6657) |
-| OI-399 | getProgressSummary adherence_pct reports 0 when nothing planned, counts… | its own L-tier batch (Edge Function) and… | never | [:6666](open_issues.md#L6666) |
-| OI-400 | retire_worktree: a nested dartdev-only .dart_tool/ (native_assets.yaml, no… | none | 2026-10-23 —… | [:6700](open_issues.md#L6700) |
-| OI-401 | Thin-day top-up: a generated day left with fewer than 3 exercises by… | the v14 injury re-check… | 2026-10-23 —… | [:6713](open_issues.md#L6713) |
-| OI-402 | Delete the stale 'you skip <weekday> 100%' coach claims from live tables… | the fixed build (OI-390, merged… | never | [:6675](open_issues.md#L6675) |
-| OI-403 | Coach injury swap picks a substitute by muscle only and never reads… | none | 2026-10-24 - read… | [:6728](open_issues.md#L6728) |
-| OI-404 | Retiring 7 duplicate library rows (ad896b42) lowered the uninjured… | none | 2026-10-24 - regenerated… | [:6743](open_issues.md#L6743) |
+| OI-349 | Onboarding welcome screen overflows at 2x system text on a 640-dp phone:… | the founder's call on whether 2x system… | 2026-10-17 - by running the screen under… | [:6151](open_issues.md#L6151) |
+| OI-350 | verify-payment captures an authorized payment and echoes its Razorpay… | none | 2026-10-17 - by reading… | [:6160](open_issues.md#L6160) |
+| OI-351 | razorpay-webhook: after a payment.authorized auto-capture, a failed insert… | none | 2026-10-17 - by reading… | [:6167](open_issues.md#L6167) |
+| OI-352 | Active Workout meta line prints hard-coded '0kg' for every scheduled lift | none (pick up after the… | 2026-10-18 - by code read only, NOT on… | [:6175](open_issues.md#L6175) |
+| OI-353 | Plan suggested_weight (ProgressionResolver) is never read by the Active… | none (pick up after the… | 2026-10-18 - by code read: the plan… | [:6188](open_issues.md#L6188) |
+| OI-354 | Active Workout hero tile + full-screen viewer (animated WEBP) blocked on… | the animated-WEBP asset pipeline and its… | 2026-10-18 - design locked in… | [:6201](open_issues.md#L6201) |
+| OI-355 | Active Workout _persistActiveState reads the build-time widget.data, so… | none (pick up after the… | 2026-10-18 - by code read (plan review… | [:6212](open_issues.md#L6212) |
+| OI-357 | Active Workout U2: per-set last values, new-user weight mirror, faded… | the flip batch landing (branch… | never | [:6225](open_issues.md#L6225) |
+| OI-358 | Active Workout: adding an exercise already in the session crashes the… | none | never | [:6238](open_issues.md#L6238) |
+| OI-359 | verify-payment calls Razorpay capture before the payment-owner check… | none | 2026-10-20 - by code read (hermes pass… | [:6247](open_issues.md#L6247) |
+| OI-360 | verify-payment and razorpay-webhook log whole PostgREST error objects and… | none | 2026-10-20 - by code read (hermes pass… | [:6256](open_issues.md#L6256) |
+| OI-362 | Active Workout: remove the per-set (OFF) path and the… | OI-348 row A12 (the release-build device… | never | [:6265](open_issues.md#L6265) |
+| OI-363 | Active Workout: the FINISH/CANCEL button row overflows sideways at 320 dp… | none | never | [:6276](open_issues.md#L6276) |
+| OI-364 | Remove the disable_lapse_gap_policy kill switch (client Hive key + server… | founder device check of the PRO gap… | 2026-10-21 - by code read: only READERS… | [:6291](open_issues.md#L6291) |
+| OI-365 | Coach tools and app features do the same jobs through separate code (first… | none (founder 2026-10-21: this audit is… | 2026-10-21 - by code read at… | [:6302](open_issues.md#L6302) |
+| OI-366 | create-razorpay-order has no rate limit and honours expired or exhausted… | none for the code; the founder's call on… | 2026-10-21 - by reading (hermes pass… | [:6336](open_issues.md#L6336) |
+| OI-367 | Referral reward can be farmed once the purchase door is open: no minimum… | the founder's product call before store… | 2026-10-21 - by reading (hermes pass… | [:6345](open_issues.md#L6345) |
+| OI-368 | Coach chat: the coach replies 'Roger. Logged.' when nothing was logged (no… | the `ai-proxy` + `ai-media-proxy` deploy… | never | [:6354](open_issues.md#L6354) |
+| OI-369 | Coach chat: the coach says 'Logged' while the LOG SET card still waits for… | the `ai-proxy` + `ai-media-proxy` deploy… | never | [:6369](open_issues.md#L6369) |
+| OI-372 | Weekday exercise swap has no UI: the engine takes any date, but only the… | none | 2026-10-21 (code read on… | [:6382](open_issues.md#L6382) |
+| OI-373 | Coach: one workout request can produce either a typed logSet card (APPLY)… | none | never | [:6413](open_issues.md#L6413) |
+| OI-374 | Coach: remove the DISABLE_WRITE_CLAIM_RULE kill switch once the… | the `coach-log-truth` batch shipping and… | never | [:6424](open_issues.md#L6424) |
+| OI-375 | Coach: the FC2 queued acknowledgement hard-codes 'Recruit' instead of the… | none | never | [:6435](open_issues.md#L6435) |
+| OI-376 | Workout invalidation: WorkoutWriteService.onInvalidate is a dead hook and… | none | never | [:6446](open_issues.md#L6446) |
+| OI-377 | Train: WorkoutRepository.getExerciseLogsForDate duplicates the canonical… | none | never | [:6457](open_issues.md#L6457) |
+| OI-378 | Riverpod 3.2.1: debug assertion actualPausedCount == expectedPausedCount… | upstream: riverpod above 3.2.1… | never | [:6468](open_issues.md#L6468) |
+| OI-379 | Coach-logged workouts never add to total_workouts_done or run the rank… | none | never | [:6479](open_issues.md#L6479) |
+| OI-381 | Set counts read '1 sets' in the remaining renderers (prescriptions,… | none | never | [:6490](open_issues.md#L6490) |
+| OI-383 | Razorpay Android SDK is pinned (checkout 1.6.41, standard-core 1.7.19) and… | none | 2026-10-21 (Maven Central: checkout… | [:6501](open_issues.md#L6501) |
+| OI-385 | Generator: 27 library rows in slot patterns are unreachable on attempts… | the flip of `enable_core_list_pool`… | 2026-10-23 — with the flag ON,… | [:6524](open_issues.md#L6524) |
+| OI-386 | Generator: 11 of 13 attempt-1 sub-focus strings match 0 rows (slot… | the flip of `enable_core_list_pool`… | 2026-10-23 — with the flag ON,… | [:6535](open_issues.md#L6535) |
+| OI-387 | Library: 6 kept bodyweight rows (E272 E273 E276 E277 E289 E290) invisible… | the flip of `enable_core_list_pool`… | 2026-10-23 — with the flag ON,… | [:6546](open_issues.md#L6546) |
+| OI-388 | Generator: gym plans serve bodyweight-only self-resisted curls and triceps… | the flip of `enable_core_list_pool`… | 2026-10-23 — with the flag ON,… | [:6559](open_issues.md#L6559) |
+| OI-389 | Cardio logs lose their minutes and distance: logExercise zeroes… | Batch 1b (coach paths; plan to be… | never | [:6570](open_issues.md#L6570) |
+| OI-391 | Cardio duration cap: workout_log_sets duration_secs CHECK widened from… | founder go for the live migration apply… | never | [:6617](open_issues.md#L6617) |
+| OI-392 | Coach logCardio tool: a dedicated AI-coach tool for cardio minutes and km… | founder go for the ai-proxy deploy… | never | [:6625](open_issues.md#L6625) |
+| OI-393 | A set logged or moved on top of a restore-shaped or F5 exlog row resets… | founder-sequenced follow-on (D10,… | never | [:6633](open_issues.md#L6633) |
+| OI-394 | Exlog type heal is dead on disk rows: fix the cast in… | founder-sequenced follow-on (D10,… | never | [:6641](open_issues.md#L6641) |
+| OI-395 | beat-my-coach: challenge query filters on capitalised categories, so every… | founder decision between (a) and (b)… | 2026-10-23 —… | [:6591](open_issues.md#L6591) |
+| OI-396 | Cardio finisher is generated but no screen shows it | Batch B1 and B2 landing first (founder… | 2026-10-23 — `CardioFinisher.attach`… | [:6604](open_issues.md#L6604) |
+| OI-397 | Batch B: IST-throughout for workout dates (OI-390 §1 'Not changed'… | OI-390 landing first (founder order… | never | [:6649](open_issues.md#L6649) |
+| OI-398 | rolling-context re-embeds the same coach interaction on several nights (no… | its own plan + catastrophic-tier review… | never | [:6658](open_issues.md#L6658) |
+| OI-399 | getProgressSummary adherence_pct reports 0 when nothing planned, counts… | its own L-tier batch (Edge Function) and… | never | [:6667](open_issues.md#L6667) |
+| OI-400 | retire_worktree: a nested dartdev-only .dart_tool/ (native_assets.yaml, no… | none | 2026-10-23 —… | [:6701](open_issues.md#L6701) |
+| OI-401 | Thin-day top-up: a generated day left with fewer than 3 exercises by… | the v14 injury re-check… | 2026-10-23 —… | [:6714](open_issues.md#L6714) |
+| OI-402 | Delete the stale 'you skip <weekday> 100%' coach claims from live tables… | the fixed build (OI-390, merged… | never | [:6676](open_issues.md#L6676) |
+| OI-403 | Coach injury swap picks a substitute by muscle only and never reads… | none | 2026-10-24 - read… | [:6729](open_issues.md#L6729) |
+| OI-404 | Retiring 7 duplicate library rows (ad896b42) lowered the uninjured… | none | 2026-10-24 - regenerated… | [:6744](open_issues.md#L6744) |

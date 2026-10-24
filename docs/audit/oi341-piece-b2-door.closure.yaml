@@ -5,8 +5,8 @@
 
 batch: oi341-piece-b2-door
 plan_review_record: docs/plan-reviews/oi341-piece-b2-door.md
-total_findings: 67
-closed_count: 67
+total_findings: 68
+closed_count: 68
 
 findings:
   # ── build ──────────────────────────────────────────────────────────────────
@@ -181,28 +181,37 @@ findings:
 
   - id: L1-DOOR-DEPLOY
     title: "deploy create-razorpay-order (verify_jwt false), switches unset; probes: no auth 401, a free tester's order opens the web checkout (no payment), a trial tester gets 409"
-    terminal_state: blocked_on_user
-    reason: "a live deploy needs its own founder go (CLAUDE.md 4.3), after the merge"
+    terminal_state: closed_in_commit
+    commit: "live 2026-10-23, deployed v15 from 87a0d8d1 (supabase/functions identical to 0b9f86aa) with the founder's go"
+    verification: "no-auth probe 401 'Missing authorization header'; anon-key bearer 401 'Invalid or expired token' (the module's own answer, so it booted). The two TESTER probes (a free tester's checkout opens on the live key; a trial tester's 409) were not run and are folded into L-TESTER-PROBES"
 
   - id: L2-WRITERS-DEPLOY
     title: "deploy razorpay-webhook and verify-payment (switches unset); stacking_switch=off in the logs"
-    terminal_state: blocked_on_user
-    reason: "a live deploy needs its own founder go"
+    terminal_state: closed_in_commit
+    commit: "live 2026-10-23, webhook v31 and verify-payment v27 deployed from 87a0d8d1 with the founder's go; verify_jwt unchanged (false / true)"
+    verification: "smoke 400 / 401 from the modules; the stacking_switch=off log line was not read because the switch was flipped minutes later in the same session (no payment ran in between)"
 
   - id: L2-DRILL
     title: "alarm drill, once per writer: a free tester opens checkout, the founder redeems a referral code mid-checkout, the tester pays (90% code); expect a stacking_switch_mismatch alert; the verify-payment run with the app's live webhook paused; then each row corrected"
     terminal_state: blocked_on_user
-    reason: "needs the founder: a referral redeem mid-checkout, two real payments, a webhook pause in the Razorpay dashboard, and a go per row correction"
+    reason: "NOT RUN, and it can no longer run as designed: the drill exercises the OFF-branch alarm and stacking is now ON (2026-10-23, founder go). It would need ENABLE_SUBSCRIPTION_STACKING temporarily unset, two real payments, a referral redeem mid-checkout and a webhook pause. It only matters for a later writer rollback; the founder decides whether to run it"
 
   - id: L3-STACKING-FLIP
-    title: "set ENABLE_SUBSCRIPTION_STACKING=true, redeploy both writers unchanged; 3(a) a free tester's purchase proves the webhook ON path; 3(b) the webhook paused and a second never-paid tester proves the verify-payment ON path; reconcile R1/R2 clean"
-    terminal_state: blocked_on_user
-    reason: "a secret change and redeploys (each its own go), two real payments and a dashboard webhook pause by the founder"
+    title: "set ENABLE_SUBSCRIPTION_STACKING=true, redeploy both writers unchanged; reconcile R1/R2 clean (3(a) and 3(b) purchases: L-TESTER-PROBES)"
+    terminal_state: closed_in_commit
+    commit: "live 2026-10-23: secret set via the Management API (value true, not a secret), webhook v33 and verify-payment v29 redeployed with the founder's go"
+    verification: "secret name present; both redeploys smoke-OK; reconcile R1 = 0 and R2 = 0 read after the door opened"
 
   - id: L4-DOOR-FLIP
-    title: "set ENABLE_TRIAL_PURCHASE=true, redeploy the door unchanged; a trial tester's stacked purchase: stacks_after = trial end, paid end = trial end + 30, start = payment instant, trial row unchanged; reconcile R1/R2 clean"
+    title: "set ENABLE_TRIAL_PURCHASE=true, redeploy the door unchanged (the stacked purchase itself: L-TESTER-PROBES); reconcile R1/R2 clean"
+    terminal_state: closed_in_commit
+    commit: "live 2026-10-23: door OPEN (create-razorpay-order v18) with the founder's go, then B2b merged as 87a0d8d1"
+    verification: "secret names ENABLE_SUBSCRIPTION_STACKING and ENABLE_TRIAL_PURCHASE present; anon-key probe 401 from the module; reconcile R1 = 0, R2 = 0"
+
+  - id: L-TESTER-PROBES
+    title: "the proof payments, now against the OPEN door with stacking ON: (1) a free tester's order opens the web checkout on the live key; (2) a trial tester's order returns 200 with stacks_after = the trial end; (3) 3(a) a free tester's purchase shows stacking_switch=on and the end = start + 30 on the webhook; (4) 3(b) with the live webhook paused, a second never-paid tester proves the verify-payment ON path; (5) 4b a trial tester's stacked purchase through the new web client: paid end = trial end + 30, start = the payment instant, trial row unchanged, the paywall line and checkout notice shown"
     terminal_state: blocked_on_user
-    reason: "a secret change and a redeploy (each its own go) and a real payment by a trial tester"
+    reason: "real payments with a 90% code (L0C-PROMO), testers who have never paid, a webhook pause and refunds in the Razorpay dashboard: the founder, 'later' (2026-10-23)"
 
   - id: L-RECON-24H
     title: "reconcile R1 and R2 again 24 h after step 4 (and after any rollback)"
