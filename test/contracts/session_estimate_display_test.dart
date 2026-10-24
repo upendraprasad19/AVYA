@@ -19,10 +19,12 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/utils/date_utils.dart';
+import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/train/providers/train_provider.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/session_budget.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/session_estimate.dart';
@@ -257,10 +259,67 @@ void main() {
       expect(homeCardMinutes(d), 26);
     });
 
+    /// A week whose Monday is the plan start, today's row being [d]: the shape
+    /// `CurrentPlanNotifier.build` walks to build the Train week list.
+    Future<void> seedWeekWith(Map<String, dynamic> d) async {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final monday = today.subtract(Duration(days: today.weekday - 1));
+      final wb = HiveService.instance.workoutBox;
+      await HiveService.instance.userBox.put('plan_start_date', formatDateKey(monday));
+      await wb.put('current_plan', {'focus': 'Test focus', 'name': 'Foundation'});
+      for (var i = 0; i < 7; i++) {
+        final date = monday.add(Duration(days: i));
+        final isToday = formatDateKey(date) == formatDateKey(today);
+        await wb.put('schedule_${formatDateKey(date)}', {
+          ...(isToday
+              ? d
+              : {'type': 'rest', 'workout_name': 'Rest Day', 'exercises': <dynamic>[]}),
+          'date': formatDateKey(date),
+          'week': 1,
+          'day_of_week': i,
+          'status': 'planned',
+        });
+      }
+    }
+
+    WorkoutDayData weekListDay() {
+      final c = ProviderContainer(overrides: [authUserIdTokenProvider.overrideWithValue('u')]);
+      addTearDown(c.dispose);
+      final plan = c.read(currentPlanProvider);
+      expect(plan.hasPlan, isTrue);
+      return plan.weeks.first.firstWhere((x) => x.name == 'PUSH A');
+    }
+
+    test('flag OFF: the Train week list keeps 7 sets x 2.5 = 18 min', () async {
+      await seedWeekWith(day());
+      expect(weekListDay().estimatedDuration, '18 min');
+    });
+
+    test('flag ON: the Train week list reads the same 26 min as the day card and Home', () async {
+      await flagOn();
+      await seedWeekWith(day());
+      expect(weekListDay().estimatedDuration, '26 min');
+    });
+
     test('flag ON: a day with no exercises falls back to the old numbers (Home 45)', () async {
       await flagOn();
       expect(budgetedDayMinutes({'exercises': <dynamic>[]}), isNull);
       expect(homeCardMinutes({'exercises': <dynamic>[]}), 45);
+    });
+
+    test('PRESENCE ONLY: the Home Today card takes its minutes from the shared function', () {
+      // The card is built inside a screen, so its call site is pinned by source:
+      // comments stripped, the shared call present, the old inline sum gone.
+      String code(String path) => File(path)
+          .readAsLinesSync()
+          .map((l) => l.replaceFirst(RegExp(r'//.*'), ''))
+          .join(' ');
+      final src = code('lib/features/home/screens/home_screen.dart');
+      expect(src.contains('homeCardMinutes(schedule)'), isTrue);
+      expect(src.contains('totalSets * 2.5'), isFalse);
+      final train = code('lib/features/train/providers/train_provider.dart');
+      expect(RegExp(r'budgetMinutes: budgetedDayMinutes\(row\)').hasMatch(train), isTrue);
     });
 
     test('a rest day shows no estimate', () {
