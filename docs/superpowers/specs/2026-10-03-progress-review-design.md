@@ -6,7 +6,7 @@
 **OIs:** L1 = OI-296, OI-307, OI-308 (+ OI-312, OI-313, OI-218, OI-269 found while planning, §9) · L2 = OI-297, OI-304 (sibling pushes, latent: OI-332) · L3 = OI-299, OI-300, OI-306 · L4 = OI-210 · decided, kept open by the founder: OI-298 (§8), OI-305 (§7) · gate on L3's migration apply: OI-310 (privacy policy).
 **Status:** umbrella design; the landing order was approved by the founder on 2026-10-06. **L1 merged:** L1a-1 (PR #92; migration 155 applied live 2026-10-07), L1a-2 (PR #96), L1a-3 (PR #97), L1b (PR #93; five Edge Functions deployed 2026-10-09). **L2a merged:** PR #99, 2026-10-11. **Not started:** L2b (sheet, flag, entry points), L3, L4. The checks still open on the board and in the closure ledgers (device checks, deploy checks) are founder-owned.
 **Blast radius:** every landing is at least `platform` (`blast_radius.yaml:54-63,421`); L3's migration is `catastrophic` by filename (§3). Each landing classifies its real diff with `scripts/blast_radius_from_diff.dart` (fails open on paths that do not exist yet — write first, then classify).
-**Format:** the founder's 7-section Feature Spec Template (`SPEC_TEMPLATE_BRAINSTORM.md`, untracked in the shared main folder; its hook is undeployed) + this repo's spec header.
+**Format:** the founder's 7-section Feature Spec Template (`docs/superpowers/specs/2026-08-26-spec-template-brainstorm.md`, committed 2026-10-24; the blocking hook that would enforce it was never deployed and is not in the repo) + this repo's spec header.
 
 ---
 
