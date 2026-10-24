@@ -78,14 +78,15 @@ For a slot (pattern + target muscle) the candidate pool is: rows whose `core_lev
 | Beginner | any: none / home DB+bands / gym | every pattern covered in every setup (pike push-up closes the last gap) |
 | Intermediate, Advanced | standard gym | every pattern covered; home gaps accepted (D6) |
 
-## 5. Session size (new rule)
+## 5. Session size (shipped in Batch B2, ship-dark `enable_session_set_budget`)
 
-Today: 8 exercises/day fixed; phase 4 for the founder = 32–46 working sets/session (6 days, 90 min).
-**Proposed rule** (calibrated in Batch B's plan, evidence-based):
-- **Per muscle per week:** 10–20 hard sets for hypertrophy goals (Schoenfeld, Ogborn & Krieger 2017 dose-response meta-analysis), fewer for beginners.
-- **Per muscle per session:** cap around 8–10 hard sets; benefit per session plateaus beyond roughly that range (Remmert, Pelland et al. 2025, SportRxiv preprint).
-- **Per session:** the set budget comes from the user's minutes: ≈ (minutes − warm-up − cool-down) ÷ (average set time + rest). Exercises are added until the budget is spent, not to a fixed count.
-- Customs never count (D8).
+Today (flag OFF): 8 exercises/day fixed; phase 4 for the founder = 32–46 working sets/session (6 days, 90 min).
+**The rule** as calibrated and built in `docs/plans/2026-10-22-session-set-budget.md` (the numbers live in `SessionBudget`; evidence: Schoenfeld, Ogborn & Krieger 2017, J Sports Sci; Pelland et al. 2026, Sports Med 56(2):481-505; Remmert, Pelland et al. 2025, SportRxiv preprint, not peer reviewed, whose per-session plateau of about 11 fractional sets the caps stay under):
+- **Per session, from the user's minutes.** An exercise takes `1.20 × (overhead + sets × work + (sets − 1) × rest)` seconds: work 23 / 35 / 47 / 40 s a set and overhead 120 / 90 / 45 / 30 s for a heavy compound / other compound / isolation / everything else; the day's budget is the minutes less the warm-up and cool-down (6 minutes at 30 minutes, 14 at 90). Exercises are admitted in the split's priority order until the minutes, the caps and the weekly tops are spent, not to a fixed count. An empty `session_duration_minutes` means 60 (F2).
+- **Per muscle per week** (ten budget groups): build_muscle 10–12 / 12–16 / 14–20 hard sets for beginner / intermediate / advanced; strength and lose_fat 10–12 / 10–14 / 12–16; general_fitness 10 / 10–12 / 12–14. A lighter (deload-archetype) phase pins every group's top to the band bottom. A focus muscle may reach 25 (F3).
+- **Per muscle per session:** cap 6 / 8 / 10 (lose_fat and general_fitness advanced 8); a focus muscle 12 (F5). No exercise is grown past 5 sets.
+- **The lead lift** of each day is protected from the week (a reservation) and from an empty day (a guard), not from the clock.
+- **Customs never count** (D8, F4): a user-added exercise is never trimmed or counted in a band; a repeat pin of a library exercise is budgeted. Timed / cardio / distance rows keep their sets and only spend time (a prescription in minutes is priced at those minutes).
 
 ## 6. Equipment UX
 - **Setup question** keeps today's tiers; a short **gym-extras checklist** (6–8 items: hack squat, T-bar row, hip abduction/adduction, preacher bench, back-extension bench, landmine/trap bar, kettlebells, cable crossover) adds well-equipped items. Specialty kit appears only if ticked.

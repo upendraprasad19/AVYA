@@ -22,6 +22,7 @@ import '../providers/home_provider.dart';
 import '../../train/providers/train_provider.dart';
 import 'package:icanbefitter/core/utils/hold_week_labels.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/session_estimate.dart';
 import '../../train/widgets/readiness_sheet.dart';
 import '../widgets/weekly_calendar.dart';
 import '../widgets/day_detail_sheet.dart';
@@ -905,18 +906,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       );
     }
 
-    // Estimate duration: ~2.5 min per set
-    int totalSets = 0;
-    for (final ex in exercises) {
-      if (ex is Map) {
-        final sets = (ex['sets'] as int?) ??
-            (ex['prescribed_sets'] as int?) ??
-            (ex['default_sets'] as int?) ??
-            3;
-        totalSets += sets;
-      }
-    }
-    final estDuration = totalSets > 0 ? (totalSets * 2.5).round() : 45;
+    // Estimate duration: ~2.5 min per set, or the budget model's minutes when
+    // `enable_session_set_budget` is ON (B2 Task 6b; same function as Train's).
+    final estDuration = homeCardMinutes(schedule);
 
     return TodayWorkoutCard(
       workoutTag: 'PHASE $currentPhase',

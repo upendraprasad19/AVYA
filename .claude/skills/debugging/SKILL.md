@@ -243,6 +243,7 @@ Per CLAUDE.md rules 21 + 22:
 | 2.119 | A server-only TABLE stays readable by the anon key: the platform's default grants plus one permissive policy | a table no client code names still answers a count-only PostgREST request made with only the public anon key (`content-range: */N`) | test/contracts/promo_codes_server_only_writer_to_reader_test.dart |
 | 2.120 | A filter that drops a slot leaves a short day: safe omission with no refill | an injured user's generated day holds one or two exercises, or none, while the uninjured plan is full | test/contracts/thin_day_topup_behavioral_test.dart |
 | 2.121 | A service-role path performs its side effect BEFORE the authorization check that should gate it | a refusal (403 / 400 "not yours") is answered correctly, yet a capture, a status echo or an external write already happened for the caller before it; after a fix in one writer, its TWIN writer (c7e3b1: the webhook) | test/contracts/verify_payment_owner_before_capture_writer_to_reader_test.dart, test/contracts/webhook_already_captured_recovery_writer_to_reader_test.dart |
+| 2.122 | A user-visible quantity has more producers than the model that was changed | two screens show one number and a third surface (the coach's estimate, a card) still computes it the old way; the same stored day reads 21 on one and 26 on another | test/contracts/session_estimate_display_test.dart, test/plan_generator/session_set_budget_gate_test.dart |
 
 ---
 

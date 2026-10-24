@@ -1,6 +1,8 @@
 import 'dart:math';
 
+import 'budget_muscle_groups.dart';
 import 'models.dart';
+import 'session_budget.dart';
 
 /// Stage 4: Periodization — 4 cycling archetypes + volume wave.
 ///
@@ -72,7 +74,23 @@ class PeriodizationEngine {
     // Resolved upstream from PlanEngineFlags.triggeredDeloadEnabled (ship-dark OFF)
     // so this stage stays pure (no Hive read).
     bool stashWorkingBase = false,
+    // B2 (session set budget): when non-null each exercise's baseline is the sets
+    // the allocator gave it (no cycle multiplier, no 4-set minimum, no physique
+    // +1), week 2 adds a set only where the ledger allows, and week 4 is
+    // floor(0.6 x that exercise's own baseline). null -> everything below verbatim.
+    SessionBudgetContext? budget,
   }) {
+    if (budget != null) {
+      return _applyBudgeted(
+        populated: populated,
+        phase: phase,
+        is6Day: is6Day,
+        effectiveExp: effectiveExp,
+        previousWeights: previousWeights,
+        stashWorkingBase: stashWorkingBase,
+        budget: budget,
+      );
+    }
     final archetype = archetypeForPhase(phase);
     final multiplier = cycleMultiplier(phase);
     final isBeginner = effectiveExp == 'beginner';
@@ -167,6 +185,170 @@ class PeriodizationEngine {
     });
   }
 
+  // -- B2: the budgeted path ---------------------------------------------------
+
+  /// `apply` under a [SessionBudgetContext]. The reps, rest, cue and note logic is
+  /// `_applyWave`'s, untouched; only the SETS differ, because the allocator has
+  /// already sized every exercise by the user's minutes:
+  /// - weeks 1 and 3: the allocated sets;
+  /// - week 2: +1 where the ledger allows (see [_weekTwoGains]); an exercise that
+  ///   gained nothing carries week 1's cue, and the week keeps week 1's note when
+  ///   nothing gained (Ruling 11);
+  /// - week 4: `max(1, floor(0.6 x that exercise's own allocated sets))`;
+  /// - the stash (`workingSets`) is that same exercise's allocated sets.
+  /// Body focus is already inside the allocator (the focus groups), so the
+  /// physique +1 is not applied here.
+  static List<WeekPlan> _applyBudgeted({
+    required List<PopulatedDay> populated,
+    required int phase,
+    required bool is6Day,
+    required String effectiveExp,
+    required Map<String, double>? previousWeights,
+    required bool stashWorkingBase,
+    required SessionBudgetContext budget,
+  }) {
+    final archetype = archetypeForPhase(phase);
+    final isBeginner = effectiveExp == 'beginner';
+    final isDeload = archetype == 'deload';
+
+    return List.generate(4, (weekIdx) {
+      final useB = !is6Day && (weekIdx == 1 || weekIdx == 3);
+      final gains = weekIdx == 1 ? _weekTwoGains(populated, useB, budget) : const <(int, int)>{};
+
+      final workoutDays = <WorkoutDay>[];
+      for (int d = 0; d < populated.length; d++) {
+        final day = populated[d];
+        final baseExercises = useB ? day.exercisesB : day.exercisesA;
+        final profile = _profileParams[day.intensity] ?? _profileParams['hypertrophy']!;
+        final baseSets = profile[0];
+        final baseReps = profile[1];
+        final baseRest = profile[2];
+
+        final adjusted = <PlannedExercise>[];
+        for (int i = 0; i < baseExercises.length; i++) {
+          final ex = baseExercises[i];
+          var exercise = _applyWave(
+            ex, weekIdx, baseSets, baseReps, baseRest, day.intensity,
+            isBeginner: isBeginner, isDeload: isDeload, multiplier: 1.0,
+            archetype: archetype,
+          );
+          final gained = gains.contains((d, i));
+          final sets = switch (weekIdx) {
+            1 => ex.sets + (gained ? 1 : 0),
+            3 => max(1, (ex.sets * 0.6).floor()),
+            _ => ex.sets,
+          };
+          exercise = exercise.copyWith(sets: sets);
+          if (weekIdx == 1 && !gained) exercise = exercise.copyWith(weightCue: _waveCues[0]);
+
+          if (previousWeights != null && previousWeights.containsKey(exercise.exerciseName)) {
+            exercise = exercise.copyWith(
+              suggestedWeight: previousWeights[exercise.exerciseName],
+              weightCue: '${previousWeights[exercise.exerciseName]!.toStringAsFixed(1)} kg (from last phase + progression)',
+            );
+          }
+
+          if (weekIdx == 3 && stashWorkingBase) {
+            final peak = _applyWave(
+              ex, 2, baseSets, baseReps, baseRest, day.intensity,
+              isBeginner: isBeginner, isDeload: isDeload, multiplier: 1.0,
+              archetype: archetype,
+            );
+            exercise = exercise.copyWith(workingSets: ex.sets, workingReps: peak.reps);
+          }
+          adjusted.add(exercise);
+        }
+
+        workoutDays.add(WorkoutDay(
+          dayNumber: d + 1,
+          name: day.name,
+          focus: day.focus,
+          exercises: adjusted,
+        ));
+      }
+
+      return WeekPlan(
+        weekNumber: (phase - 1) * 4 + weekIdx + 1,
+        weekInPhase: weekIdx + 1,
+        overloadNotes: weekIdx == 1 && gains.isEmpty ? _waveNotes[0] : _waveNotes[weekIdx],
+        weekCharacter: _waveNames[weekIdx],
+        workoutDays: workoutDays,
+      );
+    });
+  }
+
+  /// Which exercises get week 2's extra set, as (day, index in that day's list).
+  ///
+  /// A fresh ledger is seeded with the week's baseline: every exercise's sets (a
+  /// not-budgeted row spends time only, at its own rest when timed and at the
+  /// day's rest when rep-based). Then budgeted exercises are visited rank-major
+  /// across the days, as the allocator's pass A does, and each gains a set when
+  /// the ledger says it fits and it is under the per-exercise limit. Not-budgeted
+  /// rows come last (they are not part of the priority order) and gain a set only
+  /// when the day's time allows (Ruling 8).
+  static Set<(int, int)> _weekTwoGains(
+      List<PopulatedDay> populated, bool useB, SessionBudgetContext budget) {
+    final n = populated.length;
+    final ledger = BudgetLedger(budget, n);
+    final ranked = List.generate(n, (_) => <int>[]);
+    final unranked = <(int, int)>[];
+    final groups = <(int, int), Set<String>>{};
+    final restOf = <(int, int), int>{};
+
+    for (var d = 0; d < n; d++) {
+      final list = useB ? populated[d].exercisesB : populated[d].exercisesA;
+      final dayRest = SessionBudget.restFor(populated[d].intensity);
+      for (var i = 0; i < list.length; i++) {
+        final ex = list[i];
+        final budgeted = SessionBudget.isBudgeted(ex, budget);
+        final rest = budgeted || SessionBudget.isRepBased(ex.loggingType) ? dayRest : ex.restSeconds;
+        restOf[(d, i)] = rest;
+        final g = budgeted
+            ? BudgetMuscleGroups.of(ex.primaryMuscles ?? const [])
+            : const <String>{};
+        groups[(d, i)] = g;
+        // A row that is not budgeted has no groups: only its time is spent.
+        ledger.add(
+          d,
+          g,
+          ex.sets,
+          SessionBudget.plannedExerciseSeconds(ex, budget, sets: ex.sets, restSeconds: rest),
+        );
+        if (budgeted) {
+          ranked[d].add(i);
+        } else {
+          unranked.add((d, i));
+        }
+      }
+    }
+
+    final gained = <(int, int)>{};
+    void tryGain(int d, int i, {required bool budgeted}) {
+      final ex = (useB ? populated[d].exercisesB : populated[d].exercisesA)[i];
+      if (budgeted && ex.sets >= SessionBudget.maxSetsPerExercise) return;
+      final rest = restOf[(d, i)]!;
+      final dt = SessionBudget.plannedExerciseSeconds(ex, budget, sets: ex.sets + 1, restSeconds: rest) -
+          SessionBudget.plannedExerciseSeconds(ex, budget, sets: ex.sets, restSeconds: rest);
+      if (!ledger.fits(d, groups[(d, i)]!, 1, dt)) return;
+      ledger.add(d, groups[(d, i)]!, 1, dt);
+      gained.add((d, i));
+    }
+
+    var maxRank = 0;
+    for (final r in ranked) {
+      if (r.length > maxRank) maxRank = r.length;
+    }
+    for (var rank = 0; rank < maxRank; rank++) {
+      for (var d = 0; d < n; d++) {
+        if (rank < ranked[d].length) tryGain(d, ranked[d][rank], budgeted: true);
+      }
+    }
+    for (final (d, i) in unranked) {
+      tryGain(d, i, budgeted: false);
+    }
+    return gained;
+  }
+
   /// Apply DUP profile + volume wave to a single exercise.
   ///
   /// V3: Applies 4-set minimum for intermediate+, cycle multiplier.
@@ -180,9 +362,7 @@ class PeriodizationEngine {
     required double multiplier,
     required String archetype,
   }) {
-    final lt = ex.loggingType;
-    final isRepBased = lt == 'weight_reps' || lt == 'bodyweight_reps' ||
-        lt == 'weighted_bodyweight' || lt == 'reps_only';
+    final isRepBased = SessionBudget.isRepBased(ex.loggingType);
 
     if (!isRepBased) {
       final waveSets = _waveSets(ex.sets, weekIdx);

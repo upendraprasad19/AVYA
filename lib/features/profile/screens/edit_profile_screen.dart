@@ -32,6 +32,7 @@ import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import '../providers/profile_provider.dart';
 import '../providers/profile_completeness_provider.dart';
 import 'package:icanbefitter/core/constants/equipment_defaults.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/session_budget.dart';
 
 class EditProfileScreen extends ConsumerStatefulWidget {
   const EditProfileScreen({super.key});
@@ -84,8 +85,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   //   exercise-selector exclusion masks. physique_focus drives +1 set on
   //   matching exercises via PeriodizationEngine (⑤ Batch 4, LIVE since
   //   2026-09-16 — OI-53 batch 2, kill-switch disable_physique_focus_bringup).
-  //   session_duration_minutes is collected but NOT yet consumed by the engine
-  //   (③ deferred). ALL must trigger reschedule on change.
+  //   session_duration_minutes is consumed by the engine only under
+  //   enable_session_set_budget (B2, ship-dark, default OFF); until that flips it
+  //   is collected, not applied. ALL must trigger reschedule on change.
   late int _originalDaysPerWeek;
   late String _originalGoal;
   late String _originalEquipment;
@@ -233,10 +235,12 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     // implicit default which already writes 'veg' for new users.
     _dietPreference = (profile['diet_preference'] as String?) ?? 'veg';
     _pacePreference = (profile['pace_preference'] as String?) ?? 'balanced'; // Bug #24
-    // Theme C · Test #8 — 90 min matches the user's actual saved value
-    // from Supabase ground-truth check; legacy/restored profiles missing
-    // the field land here.
-    _sessionDuration = (profile['session_duration_minutes'] as int?) ?? 90;
+    // A legacy/restored profile missing the field lands on the engine's own
+    // default (60, B2 Ruling 7; it was 90 under Theme C · Test #8). The saved
+    // value is read through the same resolution the generator uses, so a JSON
+    // double such as 90.0 is a number here and not a cast error. The nine live
+    // rows already stamped 90 keep 90.
+    _sessionDuration = SessionBudget.initialSessionDuration(profile);
     _physiqueFocus = (profile['physique_focus'] as String?) ?? 'balanced';
     _fitnessExperience = (profile['fitness_experience'] as String?) ?? 'intermediate';
     final rawInjuries = profile['injuries'];
@@ -1933,8 +1937,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       // physique_focus drives +1 set on matching exercises via PeriodizationEngine
       // (⑤ Batch 4, LIVE since 2026-09-16 — OI-53 batch 2, kill-switch
       // disable_physique_focus_bringup); injuries drive exclusion masks in the
-      // exercise selector. session_duration_minutes is collected but NOT yet
-      // consumed by the engine (③ deferred). ALL must trigger reschedule on
+      // exercise selector. session_duration_minutes is consumed by the engine
+      // only under enable_session_set_budget (B2, ship-dark, default OFF); until
+      // that flips it is collected, not applied. ALL must trigger reschedule on
       // change to keep today's schedule consistent with the saved profile.
       final planChanged = computePlanChanged(
         daysPerWeek: _daysPerWeek,
