@@ -1,0 +1,32 @@
+-- Intent: Add public.weight_logs to the supabase_realtime publication so the PRO Telegram->app instant-sync stream (sync_realtime.dart `.from('weight_logs').stream()`) stops erroring. The publication was empty, so the stream channelError'd on every subscribe and the feature silently fell back to the 24h batch pull.
+-- Destructive?: no   -- additive: ALTER PUBLICATION ADD TABLE only; no table/data/constraint change; replica identity unchanged (default PK is sufficient for INSERT delivery).
+-- Rollback strategy: migration 080   -- ALTER PUBLICATION supabase_realtime DROP TABLE public.weight_logs; (reverse DDL also inlined commented at file end).
+-- Linked diagnose-doc: e3f1a7
+--
+-- 079_enable_weight_logs_realtime.sql
+--
+-- Diagnose: 2026-05-30-weight-logs-realtime-publication-empty (e3f1a7)
+-- Blast radius: feature (PRO realtime cross-device / Telegram-relay instant sync).
+--
+-- BUG: the supabase_realtime publication contained ZERO tables. The client's
+-- PRO realtime sync (lib/core/services/sync/sync_realtime.dart:42) opens
+--   _supabase.client.from('weight_logs').stream(primaryKey:['id']).eq('user_id', uid)
+-- which requires weight_logs to be a member of supabase_realtime. With the
+-- publication empty the channel raised RealtimeSubscribeException(channelError)
+-- on every subscribe. The onError reconnect path only handles "token expired",
+-- so the error recurred indefinitely (observed 3x in 14 min on live web) and the
+-- Telegram->app instant-sync silently degraded to the 24h batch pull.
+--
+-- FIX: add public.weight_logs to supabase_realtime. RLS is already enabled with
+-- weight_logs_select_own (auth.uid() = user_id), so Realtime only delivers each
+-- user their own rows. Replica identity 'd' (default / primary key) is
+-- sufficient: the feature consumes INSERTs (new weights relayed from Telegram),
+-- which Realtime delivers with the PK under default replica identity. FULL is
+-- only needed to receive OLD values on UPDATE/DELETE, which this stream ignores.
+--
+-- Verified: SELECT from pg_publication_tables before -> 0 rows; after -> weight_logs present.
+
+ALTER PUBLICATION supabase_realtime ADD TABLE public.weight_logs;
+
+-- Rollback (inline, commented — author migration 080 to apply):
+-- ALTER PUBLICATION supabase_realtime DROP TABLE public.weight_logs;
