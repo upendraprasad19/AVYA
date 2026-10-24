@@ -9,6 +9,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### git_hook_install_atomicity (1 bugs)
 - 2026-10-24 c5e1a8 — Two latent hazards in the git-hook install path, found while planning the merge-conflict-treadmill fix. (1) scripts/setup-hooks.sh overwrote the installed hooks IN PLACE with a plain cp, into one…
 
+### payment_log_safety — a payment-path log line carries a code, a type, a shape or a bounded value, never a whole object. (1 bugs)
+- 2026-10-24 d1a4f6 — The payment functions logged whole objects. verify-payment and razorpay-webhook printed the PostgREST error of a failed non-23505 subscriptions insert as an object (its `details` echoes the failing…
+
 ### promo_codes_server_only — promo codes and their discounts are read only by the payment Edge Functions, through the service role. (1 bugs)
 - 2026-10-24 a6c2e9 — Anyone holding the app's public anon key (it ships inside the web bundle and the APK) could list every active promo code with its discount percentage, expiry and use counts without signing in.…
 
@@ -1656,6 +1659,7 @@ rather than a Hive box. (1 bugs)
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
 | 2026-10-24 | c5e1a8 | Two latent hazards in the git-hook install path, found while planning the merge-conflict-treadmill fix. (1) scripts/setup-hooks.sh overwrote the installed hooks IN PLACE with a plain cp, into one… | git_hook_install_atomicity | test/scripts/setup_hooks_atomic_install_e2e_test.dart |
+| 2026-10-24 | d1a4f6 | The payment functions logged whole objects. verify-payment and razorpay-webhook printed the PostgREST error of a failed non-23505 subscriptions insert as an object (its `details` echoes the failing… | payment_log_safety — a payment-path log line carries a code, a type, a shape or a bounded value, never a whole object. | test/contracts/payment_log_safety_writer_to_reader_test.dart |
 | 2026-10-24 | a6c2e9 | Anyone holding the app's public anon key (it ships inside the web bundle and the APK) could list every active promo code with its discount percentage, expiry and use counts without signing in.… | promo_codes_server_only — promo codes and their discounts are read only by the payment Edge Functions, through the service role. | test/contracts/promo_codes_server_only_writer_to_reader_test.dart |
 | 2026-10-24 | b5e8d2 | verify-payment (any signed-in caller, the account's Razorpay credentials) fetched the payment named in the request and, BEFORE checking that it belonged to the caller, captured it when it was… | verify_payment_owner_before_capture — verify-payment proves the caller owns the payment before it captures it or says anything about it. | supabase/functions/verify-payment/index_test.ts |
 | 2026-10-23 | "132315" | The coach's "Status check" reply told upendra "100% skip rate on Sunday workouts". Sunday is always a rest day on his plan. getDayOfWeekCompletionRates returned 0 for a weekday with nothing scheduled,… | day_of_week_completion — a weekday's completion counts only days that were due (classifyScheduleDay), and the coach is told a weekday is skipped only when it is genuinely singled out. | test/contracts/day_of_week_completion_writer_to_reader_test.dart |

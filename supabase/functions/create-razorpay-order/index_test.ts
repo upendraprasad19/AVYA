@@ -12,6 +12,7 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 import { FakeServer, jsonResponse, type RecordedRequest, type Row } from "../_shared/postgrest_fake_fetch.ts";
 import { istDateStr } from "../_shared/ist_date.ts";
 import {
+  captureConsole,
   type Handler,
   iso,
   loadOriginMainHandler,
@@ -370,4 +371,52 @@ t("instants are compared as instants, not strings: mixed +05:30 / Z end dates pi
   const shut = await run(newHandler, { rows: [p2, p1] }, SHUT);
   assertEquals(shut.res.status, 409);
   assertEquals(shut.body.current_expires_at, p1.end_date, "the 409 body reports the latest instant");
+});
+
+// ── payment-hardening U0 (OI-360): a refused Razorpay order is logged by status and code/reason only ──
+// A Razorpay error body can echo the order's notes (the user id, the promo code). The scenario runs through the
+// frozen origin/main handler first, which must SHOW the secret (positive control), then through this handler.
+const LOG_SECRET = "SIGf3b1c2d4e5a6978812345678abcdef00112233";
+
+async function refusedOrder(handler: Handler) {
+  const server = new FakeServer({
+    tables: { subscriptions: [], promo_codes: [] },
+    users: { [TOKEN]: { id: USER } },
+    // Any counter call (the order limit, from U3 on) is under the limit.
+    fallbackRpc: () => 1,
+    razorpay: () => jsonResponse(404, { error: { description: "unrouted" } }),
+    intercept: (req) =>
+      req.host === "https://api.razorpay.com" && req.method === "POST" && req.path === "/v1/orders"
+        ? jsonResponse(400, {
+          error: { code: "BAD_REQUEST_ERROR", description: `notes ${LOG_SECRET}`, reason: "input_validation_failed", metadata: { user_id: USER } },
+        })
+        : undefined,
+  });
+  server.install();
+  try {
+    const req = new Request("https://fn.test/create-razorpay-order", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ plan: "monthly" }),
+    });
+    const { result: res, errors, all } = await captureConsole(() =>
+      withModuleEnv(() => withSwitch(undefined, () => withTrialPurchaseSwitch(undefined, () => handler(req))))
+    );
+    return { res, errors, all, server };
+  } finally {
+    server.restore();
+  }
+}
+
+t("U0 log: a refused Razorpay order logs status and Razorpay's code/reason, never the body (control: origin logged the body)", async () => {
+  const before = await refusedOrder(originHandler);
+  assert(before.all.some((l) => l.includes(LOG_SECRET)), "positive control: the origin handler logged the body");
+  const r = await refusedOrder(newHandler);
+  assertEquals(r.res.status, before.res.status);
+  assertEquals(orderCalls(r.server).length, 1);
+  assert(!r.all.some((l) => l.includes(LOG_SECRET) || l.includes(USER)), r.all.join("\n"));
+  assert(
+    r.errors.some((l) => l.includes(`razorpay status=400 code="BAD_REQUEST_ERROR" reason="input_validation_failed"`)),
+    r.errors.join("\n"),
+  );
 });

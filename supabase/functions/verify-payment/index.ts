@@ -44,6 +44,7 @@ import {
   recordPaidSubscription,
 } from "../_shared/subscription_stacking.ts";
 import { checkStackingMismatch, reportPaymentRecordFailure } from "../_shared/payment_alert.ts";
+import { boundedText, codeToken, errorName, pgErrorCode, razorpayErrorSummary } from "../_shared/payment_log_safe.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -110,7 +111,7 @@ async function derivePlanFromAmount(
 
       if (isExpired || isExhausted || isInactive) {
         console.warn(
-          `Promo '${promoCode}' ${isInactive ? 'inactive' : isExpired ? 'expired' : 'exhausted'} ` +
+          `Promo ${boundedText(promoCode)} ${isInactive ? 'inactive' : isExpired ? 'expired' : 'exhausted'} ` +
           `— honoring anyway (was valid at checkout time)`
         );
       }
@@ -145,11 +146,16 @@ async function redeemPromo(
   finalPaise: number,
 ) {
   try {
-    // Atomically increment used_count
-    await supabase.rpc("increment_promo_used_count", { p_code: promoCode });
+    // Atomically increment used_count. supabase-js RETURNS its errors (it does not throw them), so each
+    // call's error is checked and logged by label and code (R-6, payment-hardening U0): used_count gates
+    // promo exhaustion at order time (U3), so a silent failure here is a promo that never runs out.
+    const { error: incErr } = await supabase.rpc("increment_promo_used_count", { p_code: promoCode });
+    if (incErr) {
+      console.error(`[verify-payment] promo redemption: increment_promo_used_count failed code=${pgErrorCode(incErr)}`);
+    }
 
     // Audit trail
-    await supabase.from("promo_code_uses").insert({
+    const { error: useErr } = await supabase.from("promo_code_uses").insert({
       code: promoCode,
       user_id: userId,
       plan_purchased: plan,
@@ -157,8 +163,11 @@ async function redeemPromo(
       discount_applied: originalPaise - finalPaise,
       final_amount: finalPaise,
     });
+    if (useErr) {
+      console.error(`[verify-payment] promo redemption: promo_code_uses insert failed code=${pgErrorCode(useErr)}`);
+    }
   } catch (e) {
-    console.error("Non-fatal: promo redemption failed:", e);
+    console.error(`[verify-payment] promo redemption threw (non-fatal): ${errorName(e)} code=${pgErrorCode(e)}`);
   }
 }
 
@@ -263,8 +272,7 @@ export async function handler(req: Request): Promise<Response> {
 
     if (rateErr) {
       console.error(
-        `[verify-payment] consume_quota FAILED for user=${userId} (fail-closed):`,
-        rateErr.message,
+        `[verify-payment] consume_quota FAILED for user=${userId} (fail-closed): code=${pgErrorCode(rateErr)}`,
       );
       return new Response(
         JSON.stringify({ error: "Rate limit check failed. Try again shortly." }),
@@ -380,7 +388,7 @@ export async function handler(req: Request): Promise<Response> {
 
     if (!razorpayResponse.ok) {
       console.error(
-        `Razorpay API error: ${razorpayResponse.status} ${razorpayResponse.statusText}`,
+        `Razorpay API error: ${razorpayResponse.status} ${boundedText(razorpayResponse.statusText)}`,
       );
       return new Response(
         JSON.stringify({
@@ -455,7 +463,7 @@ export async function handler(req: Request): Promise<Response> {
       if (!captureResp.ok) {
         const body = await captureResp.text();
         console.error(
-          `[verify-payment] capture failed for ${paymentId}: ${captureResp.status} ${body}`,
+          `[verify-payment] capture failed for ${paymentId}: ${razorpayErrorSummary(captureResp.status, body)}`,
         );
         return new Response(
           JSON.stringify({
@@ -494,7 +502,7 @@ export async function handler(req: Request): Promise<Response> {
     if (!derived) {
       console.error(
         `Amount mismatch: ${actualPaise} paise does not match any plan` +
-          (promoCode ? ` (promo: ${promoCode})` : ""),
+          (promoCode ? ` (promo: ${boundedText(promoCode)})` : ""),
       );
       // OI-341 Piece B2a (hermes seat 4 F4): a captured payment of this caller
       // (ownership is checked above) that no row can record: page it. The
@@ -525,7 +533,7 @@ export async function handler(req: Request): Promise<Response> {
     // Log if client-claimed plan disagrees with derived plan
     if (clientClaimedPlan && clientClaimedPlan !== plan) {
       console.warn(
-        `Plan mismatch: client claimed '${clientClaimedPlan}', derived '${plan}' from amount ${actualPaise}`,
+        `Plan mismatch: client claimed ${boundedText(clientClaimedPlan)}, derived '${plan}' from amount ${actualPaise}`,
       );
     }
 
@@ -582,7 +590,7 @@ export async function handler(req: Request): Promise<Response> {
       .maybeSingle();
     if (preSelectError) {
       console.warn(
-        `[verify-payment] idempotency pre-SELECT failed (continuing to insert): ${preSelectError.message}`,
+        `[verify-payment] idempotency pre-SELECT failed (continuing to insert): code=${pgErrorCode(preSelectError)}`,
       );
     }
 
@@ -613,7 +621,7 @@ export async function handler(req: Request): Promise<Response> {
         const stackFailId = crypto.randomUUID().split("-")[0];
         console.error(
           `[verify-payment] stacking read failed request_id=${stackFailId} ` +
-            `payment_id=${paymentId} user_id=${userId} plan=${plan} amount_paise=${actualPaise} code=${rec.code}`,
+            `payment_id=${paymentId} user_id=${userId} plan=${plan} amount_paise=${actualPaise} code=${codeToken(rec.code)}`,
         );
         await reportPaymentRecordFailure(supabase, {
           fn: "verify-payment",
@@ -685,9 +693,12 @@ export async function handler(req: Request): Promise<Response> {
           // vanished on the next cold start (no row to restore). Return
           // verified:false + 500 so the client retries instead of trusting it.
           const failId = crypto.randomUUID().split("-")[0];
+          // The reconcile fields of the stacking line above under this branch's OWN prefix (money is captured
+          // and no row exists, so the ids stay); never the error object, whose `details` echoes the row.
           console.error(
-            `[verify-payment] subscription insert failed (non-23505) request_id=${failId}`,
-            insertError,
+            `[verify-payment] subscription insert failed (non-23505) request_id=${failId} ` +
+              `payment_id=${paymentId} user_id=${userId} plan=${plan} amount_paise=${actualPaise} ` +
+              `code=${pgErrorCode(insertError)}`,
           );
           return new Response(
             JSON.stringify({

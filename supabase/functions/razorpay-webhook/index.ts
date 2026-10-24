@@ -49,6 +49,7 @@ import {
   recordPaidSubscription,
 } from "../_shared/subscription_stacking.ts";
 import { checkStackingMismatch, reportPaymentRecordFailure } from "../_shared/payment_alert.ts";
+import { boundedText, codeToken, errorName, notesShape, pgErrorCode, razorpayErrorSummary } from "../_shared/payment_log_safe.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -138,7 +139,7 @@ async function derivePlanFromAmount(
 
       if (isExpired || isExhausted || isInactive) {
         console.warn(
-          `[razorpay-webhook] Promo '${promoCode}' ${isInactive ? 'inactive' : isExpired ? 'expired' : 'exhausted'} ` +
+          `[razorpay-webhook] Promo ${boundedText(promoCode)} ${isInactive ? 'inactive' : isExpired ? 'expired' : 'exhausted'} ` +
           `— honoring anyway (was valid at checkout time)`
         );
       }
@@ -186,7 +187,7 @@ async function computeExpectedAmount(
     .maybeSingle();
 
   if (!promo) {
-    console.warn(`Promo code '${promoCode}' not found — using full price`);
+    console.warn(`Promo code ${boundedText(promoCode)} not found — using full price`);
     return { expectedPaise: fullPrice, promoApplied: false, discountPct: 0 };
   }
 
@@ -203,7 +204,7 @@ async function computeExpectedAmount(
 
   if (isExpired || isExhausted || isInactive) {
     console.warn(
-      `Promo '${promoCode}' ${isInactive ? 'inactive' : isExpired ? 'expired' : 'exhausted'} ` +
+      `Promo ${boundedText(promoCode)} ${isInactive ? 'inactive' : isExpired ? 'expired' : 'exhausted'} ` +
       `— honoring anyway (was valid at checkout time)`
     );
   }
@@ -227,11 +228,16 @@ async function redeemPromo(
   finalPaise: number,
 ) {
   try {
-    // Atomically increment used_count
-    await supabaseClient.rpc("increment_promo_used_count", { p_code: promoCode });
+    // Atomically increment used_count. supabase-js RETURNS its errors (it does not throw them), so each
+    // call's error is checked and logged by label and code (R-6, payment-hardening U0): used_count gates
+    // promo exhaustion at order time (U3), so a silent failure here is a promo that never runs out.
+    const { error: incErr } = await supabaseClient.rpc("increment_promo_used_count", { p_code: promoCode });
+    if (incErr) {
+      console.error(`[razorpay-webhook] promo redemption: increment_promo_used_count failed code=${pgErrorCode(incErr)}`);
+    }
 
     // Audit trail
-    await supabaseClient.from("promo_code_uses").insert({
+    const { error: useErr } = await supabaseClient.from("promo_code_uses").insert({
       code: promoCode,
       user_id: userId,
       plan_purchased: plan,
@@ -239,8 +245,11 @@ async function redeemPromo(
       discount_applied: originalPaise - finalPaise,
       final_amount: finalPaise,
     });
+    if (useErr) {
+      console.error(`[razorpay-webhook] promo redemption: promo_code_uses insert failed code=${pgErrorCode(useErr)}`);
+    }
   } catch (e) {
-    console.error("Non-fatal: promo redemption failed:", e);
+    console.error(`[razorpay-webhook] promo redemption threw (non-fatal): ${errorName(e)} code=${pgErrorCode(e)}`);
   }
 }
 
@@ -459,7 +468,7 @@ export async function handler(req: Request): Promise<Response> {
         if (!captureResp.ok) {
           const body = await captureResp.text();
           console.error(
-            `[razorpay-webhook] capture failed for ${razorpayPaymentId}: ${captureResp.status} ${body}`,
+            `[razorpay-webhook] capture failed for ${razorpayPaymentId}: ${razorpayErrorSummary(captureResp.status, body)}`,
           );
           // Don't fail the whole webhook — Razorpay will retry
           // payment.authorized; next try may succeed. Return 5xx so
@@ -479,7 +488,7 @@ export async function handler(req: Request): Promise<Response> {
         // send payment.captured later — that call will hit the UNIQUE
         // constraint and be a no-op (idempotent).
       } catch (e) {
-        console.error(`[razorpay-webhook] capture threw for ${razorpayPaymentId}:`, e);
+        console.error(`[razorpay-webhook] capture threw for ${razorpayPaymentId}: ${errorName(e)}`);
         return new Response(
           JSON.stringify({ error: "Capture failed, will retry" }),
           {
@@ -500,7 +509,7 @@ export async function handler(req: Request): Promise<Response> {
     const promoCode = notes.promo_code as string | undefined;
 
     if (!userId) {
-      console.error("[razorpay-webhook] Missing user_id in payment notes:", notes);
+      console.error(`[razorpay-webhook] Missing user_id in payment notes: ${notesShape(notes)}`);
       return new Response(
         JSON.stringify({ error: "Missing user_id in payment notes" }),
         {
@@ -514,7 +523,9 @@ export async function handler(req: Request): Promise<Response> {
     const uuidRegex =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(userId)) {
-      console.error("[razorpay-webhook] Invalid user_id format in payment notes:", userId);
+      console.error(
+        `[razorpay-webhook] Invalid user_id format in payment notes: type=${typeof userId} length=${String(userId).length}`,
+      );
       return new Response(
         JSON.stringify({ error: "Invalid user_id format" }),
         {
@@ -533,7 +544,7 @@ export async function handler(req: Request): Promise<Response> {
     if (!derived) {
       console.error(
         `[razorpay-webhook] amount ${actualPaise} paise does not match any plan` +
-          (promoCode ? ` (promo: ${promoCode})` : ""),
+          (promoCode ? ` (promo: ${boundedText(promoCode)})` : ""),
       );
       // OI-341 Piece B2a (hermes seat 4 F4): the money is captured and no row
       // can be written (the promo was edited or deleted between order and
@@ -563,7 +574,7 @@ export async function handler(req: Request): Promise<Response> {
     const clientClaimedPlan = notes.plan as string | undefined;
     if (clientClaimedPlan && clientClaimedPlan !== plan) {
       console.warn(
-        `[razorpay-webhook] notes.plan mismatch: client claimed '${clientClaimedPlan}', derived '${plan}' from amount ${actualPaise} — using derived`,
+        `[razorpay-webhook] notes.plan mismatch: client claimed ${boundedText(clientClaimedPlan)}, derived '${plan}' from amount ${actualPaise} — using derived`,
       );
     }
 
@@ -656,7 +667,7 @@ export async function handler(req: Request): Promise<Response> {
         const stackFailId = crypto.randomUUID().split("-")[0];
         console.error(
           `[razorpay-webhook] stacking read failed request_id=${stackFailId} ` +
-            `payment_id=${razorpayPaymentId} user_id=${userId} plan=${plan} amount_paise=${actualPaise} code=${rec.code}`,
+            `payment_id=${razorpayPaymentId} user_id=${userId} plan=${plan} amount_paise=${actualPaise} code=${codeToken(rec.code)}`,
         );
         await reportPaymentRecordFailure(supabaseClient, {
           fn: "razorpay-webhook",
@@ -713,7 +724,12 @@ export async function handler(req: Request): Promise<Response> {
         offInserted = { start: now.toISOString(), end: endDate.toISOString() };
       }
       if (insertError && insertError.code !== "23505") {
-        console.error("Failed to insert subscription:", insertError);
+        // Never the error object (its `details` echoes the row, signature included). Money is captured and no
+        // row exists on this OFF-path branch, so the ids stay. No request_id: this 500's body carries none.
+        console.error(
+          `[razorpay-webhook] subscription insert failed (non-23505) payment_id=${razorpayPaymentId} ` +
+            `user_id=${userId} plan=${plan} amount_paise=${actualPaise} code=${pgErrorCode(insertError)}`,
+        );
         return new Response(
           JSON.stringify({ error: "Failed to create subscription record" }),
           {

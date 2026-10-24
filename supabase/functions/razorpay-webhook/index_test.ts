@@ -5,6 +5,7 @@
 // Sanitizers are off: createClient() starts an auth refresh timer.
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
+  authorizedWebhookRequest,
   captureConsole,
   EVENT_CREATED_AT,
   type Handler,
@@ -664,3 +665,132 @@ t("no-match control: a matching promo payment records the row and writes no aler
   assertEquals(r.res.status, 200);
   assertEquals(alertInserts(r.server).length, 0);
 });
+
+// ── payment-hardening U0 (OI-360): a log line carries a code, a type or a bounded value, never a whole object ──
+// Each leak test first runs the scenario through the frozen origin/main handler and requires the secret to be
+// VISIBLE there (captureConsole prints objects through JSON.stringify), then requires it absent here.
+
+const SECRET = "SIGf3b1c2d4e5a6978812345678abcdef00112233";
+const pgError = (status: number, code: string) =>
+  new Response(JSON.stringify({ code, message: "insert or update violates a constraint", details: `Key (razorpay_signature)=(${SECRET})`, hint: SECRET }), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+const anyLine = (all: string[], needle: string) => all.some((l) => l.includes(needle));
+
+async function runAuthorized(handler: Handler, sc: Scenario) {
+  const { server, promoIncrements } = paymentServer(sc);
+  server.install();
+  try {
+    const req = await authorizedWebhookRequest(sc);
+    const { result: res, errors, all } = await withSwitch(undefined, () => captureConsole(() => handler(req)));
+    const text = await res.text();
+    return { res, text, server, promoIncrements, errors, all };
+  } finally {
+    server.restore();
+  }
+}
+
+t("U0 log: a non-23505 insert failure logs the reconcile fields and the code, never the error's details (control: origin logged them)", async () => {
+  const sc: Scenario = {
+    rows: [],
+    intercept: (req) => (req.method === "POST" && req.path === "/rest/v1/subscriptions" ? pgError(409, "23503") : undefined),
+  };
+  const before = await run(originHandler, sc, undefined);
+  assert(anyLine(before.all, SECRET), "positive control: the origin handler must show the secret");
+  const r = await run(newHandler, sc, undefined);
+  assertEquals(r.res.status, 500);
+  assert(!anyLine(r.all, SECRET), r.all.join("\n"));
+  assert(
+    r.errors.includes(`[razorpay-webhook] subscription insert failed (non-23505) payment_id=${PAY} user_id=${USER} plan=monthly amount_paise=34900 code=23503`),
+    r.errors.join("\n"),
+  );
+});
+
+t("U0 log: missing user_id logs the SHAPE of the notes, never a value (control: origin logged the notes)", async () => {
+  const sc: Scenario = { rows: [], notes: { user_id: "", card_token: SECRET } };
+  const before = await run(originHandler, sc, undefined);
+  assert(anyLine(before.all, SECRET), "positive control");
+  const r = await run(newHandler, sc, undefined);
+  assertEquals(r.res.status, 400);
+  assert(!anyLine(r.all, SECRET) && !anyLine(r.all, "card_token"), r.all.join("\n"));
+  assert(r.errors.includes("[razorpay-webhook] Missing user_id in payment notes: keys=[user_id] other=1"), r.errors.join("\n"));
+});
+
+t("U0 log: a malformed user_id logs its type and length, never the value (control: origin logged it)", async () => {
+  const bad = `not-a-uuid ${SECRET}`;
+  const sc: Scenario = { rows: [], notes: { user_id: bad } };
+  const before = await run(originHandler, sc, undefined);
+  assert(anyLine(before.all, SECRET), "positive control");
+  const r = await run(newHandler, sc, undefined);
+  assertEquals(r.res.status, 400);
+  assert(!anyLine(r.all, SECRET), r.all.join("\n"));
+  assert(r.errors.includes(`[razorpay-webhook] Invalid user_id format in payment notes: type=string length=${bad.length}`), r.errors.join("\n"));
+});
+
+t("U0 log: a refused capture of an authorized payment logs status and Razorpay's code/reason only (control: origin logged the body)", async () => {
+  const sc: Scenario = {
+    rows: [],
+    // The recovery GET (U2) must see the payment still authorized, so the refusal stands and is logged.
+    intercept: (req) =>
+      req.host !== "https://api.razorpay.com"
+        ? undefined
+        : req.method === "POST" && req.path === `/v1/payments/${PAY}/capture`
+        ? new Response(JSON.stringify({ error: { code: "BAD_REQUEST_ERROR", description: `card ${SECRET}`, reason: "capture_failed" } }), { status: 400 })
+        : req.method === "GET"
+        ? new Response(JSON.stringify({ id: PAY, amount: 34900, captured: false, status: "authorized" }), { status: 200 })
+        : undefined,
+  };
+  const before = await runAuthorized(originHandler, sc);
+  assert(anyLine(before.all, SECRET), "positive control");
+  const r = await runAuthorized(newHandler, sc);
+  assertEquals(r.res.status, 502);
+  assert(!anyLine(r.all, SECRET), r.all.join("\n"));
+  assert(anyLine(r.errors, `capture failed for ${PAY}: status=400 code="BAD_REQUEST_ERROR" reason="capture_failed"`), r.errors.join("\n"));
+});
+
+t("U0 log: notes.plan is bounded and quoted: no forged line, no unbounded text (control: origin printed it raw)", async () => {
+  const forged = "yearly\n[razorpay-webhook] FORGED-LINE " + "Z".repeat(300);
+  // A fresh scenario per run: the fake server inserts into the scenario's own `rows` array.
+  const sc = (): Scenario => ({ rows: [], notes: { plan: forged } });
+  const before = await run(originHandler, sc(), undefined);
+  assert(anyLine(before.all, "\n[razorpay-webhook] FORGED-LINE"), "positive control");
+  const r = await run(newHandler, sc(), undefined);
+  assertEquals(r.res.status, 200);
+  assert(!anyLine(r.all, "\n[razorpay-webhook] FORGED-LINE") && !anyLine(r.all, "Z".repeat(50)), r.all.join("\n"));
+  assert(anyLine(r.all, `client claimed ${JSON.stringify(forged.slice(0, 40))}`), r.all.join("\n"));
+});
+
+// B-pass of commit 2: notes.promo_code is checkout-supplied and logged BEFORE any database match.
+const FORGED_PROMO = "HALF50\n[razorpay-webhook] FORGED-LINE " + "Z".repeat(300);
+for (const [label, amount, expectLine] of [
+  ["the full-price cross-check (code not found)", 34900, `Promo code ${JSON.stringify(FORGED_PROMO.slice(0, 40))} not found`],
+  ["an amount that matches no plan", 12345, `[razorpay-webhook] amount 12345 paise does not match any plan (promo: ${JSON.stringify(FORGED_PROMO.slice(0, 40))})`],
+] as const) {
+  t(`U0 log: ${label} logs notes.promo_code bounded and quoted (control: origin printed it raw)`, async () => {
+    const sc = (): Scenario => ({ rows: [], amount, notes: { promo_code: FORGED_PROMO } });
+    const before = await run(originHandler, sc(), undefined);
+    assert(anyLine(before.all, "\n[razorpay-webhook] FORGED-LINE"), "positive control");
+    const r = await run(newHandler, sc(), undefined);
+    assertEquals(r.res.status, before.res.status);
+    assert(!anyLine(r.all, "\n[razorpay-webhook] FORGED-LINE") && !anyLine(r.all, "Z".repeat(50)), r.all.join("\n"));
+    assert(anyLine(r.all, expectLine), r.all.join("\n"));
+  });
+}
+
+for (const [label, path, expectLine] of [
+  ["increment_promo_used_count", "/rest/v1/rpc/increment_promo_used_count", "[razorpay-webhook] promo redemption: increment_promo_used_count failed code=P0001"],
+  ["promo_code_uses insert", "/rest/v1/promo_code_uses", "[razorpay-webhook] promo redemption: promo_code_uses insert failed code=P0001"],
+] as const) {
+  t(`U0 R-6: a failed ${label} answers as before and logs one labelled, code-only line`, async () => {
+    const sc: Scenario = { ...promoScenario([]), intercept: (req) => (req.method === "POST" && req.path === path ? pgError(400, "P0001") : undefined) };
+    const ok = await run(newHandler, promoScenario([]), undefined);
+    const r = await run(newHandler, sc, undefined);
+    assertEquals(r.res.status, ok.res.status);
+    assertEquals(stripInstants(r.body), stripInstants(ok.body));
+    assertEquals(subscriptionInserts(r.server).length, 1);
+    assertEquals(r.server.to(path, "POST").length, 1);
+    assertEquals(r.errors.filter((l) => l === expectLine).length, 1, r.errors.join("\n"));
+    assert(!anyLine(r.all, SECRET), r.all.join("\n"));
+  });
+}

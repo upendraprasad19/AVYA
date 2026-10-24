@@ -52,6 +52,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { encode as base64Encode } from "https://deno.land/std@0.177.0/encoding/base64.ts";
 import { isStackingEnabled, isTrialPurchaseEnabled } from "../_shared/subscription_stacking.ts";
+import { boundedText, pgErrorCode, razorpayErrorSummary } from "../_shared/payment_log_safe.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -157,7 +158,7 @@ export async function handler(req: Request): Promise<Response> {
         const requestId = newRequestId();
         console.error(
           `[create-razorpay-order] request_id=${requestId} subscription guard read failed code=${
-            (guardError as { code?: string } | null)?.code || "no_rows_array"
+            guardError ? pgErrorCode(guardError) : "no_rows_array"
           }`,
         );
         return err(500, "Could not verify your subscription. Please try again.", {
@@ -218,11 +219,11 @@ export async function handler(req: Request): Promise<Response> {
         // tolerant verification. Full reject only if code doesn't exist or
         // is marked inactive.
         if (!isActive) {
-          console.log(`[create-order] promo ${promoCode} is inactive — rejecting`);
+          console.log(`[create-order] promo ${boundedText(promoCode)} is inactive — rejecting`);
         } else {
           if (isExpired || isExhausted) {
             console.log(
-              `[create-order] promo ${promoCode} race-condition (expired=${isExpired}, exhausted=${isExhausted}) — honouring anyway`,
+              `[create-order] promo ${boundedText(promoCode)} race-condition (expired=${isExpired}, exhausted=${isExhausted}) — honouring anyway`,
             );
           }
           discountPct = promo.discount_pct as number;
@@ -273,7 +274,7 @@ export async function handler(req: Request): Promise<Response> {
       const requestId = newRequestId();
       const body = await orderResp.text();
       console.error(
-        `[create-razorpay-order] request_id=${requestId} razorpay ${orderResp.status}: ${body}`,
+        `[create-razorpay-order] request_id=${requestId} razorpay ${razorpayErrorSummary(orderResp.status, body)}`,
       );
       return err(502, "Could not create payment order. Please try again.", {
         request_id: requestId,
