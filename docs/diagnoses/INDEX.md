@@ -9,6 +9,9 @@ Re-run: `dart run scripts/build_bug_index.dart`
 ### git_hook_install_atomicity (1 bugs)
 - 2026-10-24 c5e1a8 — Two latent hazards in the git-hook install path, found while planning the merge-conflict-treadmill fix. (1) scripts/setup-hooks.sh overwrote the installed hooks IN PLACE with a plain cp, into one…
 
+### promo_codes_server_only — promo codes and their discounts are read only by the payment Edge Functions, through the service role. (1 bugs)
+- 2026-10-24 a6c2e9 — Anyone holding the app's public anon key (it ships inside the web bundle and the APK) could list every active promo code with its discount percentage, expiry and use counts without signing in.…
+
 ### thin_day_topup (1 bugs)
 - 2026-10-24 2d04d7 — An injured user's generated day could hold one or two exercises, or none. After the v14 injury tags (d30de7) the real generator, flag OFF, produced 74 thin days (under 3 exercises) and 19 one-exercise…
 
@@ -1653,6 +1656,7 @@ rather than a Hive box. (1 bugs)
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
 | 2026-10-24 | c5e1a8 | Two latent hazards in the git-hook install path, found while planning the merge-conflict-treadmill fix. (1) scripts/setup-hooks.sh overwrote the installed hooks IN PLACE with a plain cp, into one… | git_hook_install_atomicity | test/scripts/setup_hooks_atomic_install_e2e_test.dart |
+| 2026-10-24 | a6c2e9 | Anyone holding the app's public anon key (it ships inside the web bundle and the APK) could list every active promo code with its discount percentage, expiry and use counts without signing in.… | promo_codes_server_only — promo codes and their discounts are read only by the payment Edge Functions, through the service role. | test/contracts/promo_codes_server_only_writer_to_reader_test.dart |
 | 2026-10-24 | 2d04d7 | An injured user's generated day could hold one or two exercises, or none. After the v14 injury tags (d30de7) the real generator, flag OFF, produced 74 thin days (under 3 exercises) and 19 one-exercise… | thin_day_topup | test/contracts/thin_day_topup_behavioral_test.dart |
 | 2026-10-23 | "132315" | The coach's "Status check" reply told upendra "100% skip rate on Sunday workouts". Sunday is always a rest day on his plan. getDayOfWeekCompletionRates returned 0 for a weekday with nothing scheduled,… | day_of_week_completion — a weekday's completion counts only days that were due (classifyScheduleDay), and the coach is told a weekday is skipped only when it is genuinely singled out. | test/contracts/day_of_week_completion_writer_to_reader_test.dart |
 | 2026-10-23 | d30de7 | 104 of the 285 library rows loaded a joint with no matching injury_contraindications token, so the injury filter handed them to an injured user. The founder named the cases: a bicycle crunch, a V-up… | exercise_injury_tags | test/contracts/injury_recheck_v14_contract_test.dart |

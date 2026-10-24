@@ -240,7 +240,8 @@ Per CLAUDE.md rules 21 + 22:
 | 2.116 | An absent denominator reported as 0% (a rate map entry for a bucket with nothing due) | the coach or a card states "100% skipped" / "0%" about something the user never had scheduled; a `total > 0 ? done / total : 0` in the writer | test/contracts/day_of_week_completion_writer_to_reader_test.dart |
 | 2.117 | An injury filter that drops a row only when it CONTAINS the user's token under-protects every row nobody tagged (5th batch) | an injured user's plan, warm-up or swap holds a movement that loads the injured joint and the library row's tag list is empty or lacks the token | test/contracts/injury_recheck_v14_contract_test.dart |
 | 2.118 | A shared-state installer or regenerator that overwrites in place, runs from whatever tree it was started in, and adds an ignored path with a plain `git add` | a git process reports a hook script that changed mid-run, every worktree's hooks silently go back to an older version after one session ran the installer, or a commit dies on `git add` of an ignored index file | test/scripts/setup_hooks_atomic_install_e2e_test.dart |
-| 2.119 | A filter that drops a slot leaves a short day: safe omission with no refill | an injured user's generated day holds one or two exercises, or none, while the uninjured plan is full | test/contracts/thin_day_topup_behavioral_test.dart |
+| 2.119 | A server-only TABLE stays readable by the anon key: the platform's default grants plus one permissive policy | a table no client code names still answers a count-only PostgREST request made with only the public anon key (`content-range: */N`) | test/contracts/promo_codes_server_only_writer_to_reader_test.dart |
+| 2.120 | A filter that drops a slot leaves a short day: safe omission with no refill | an injured user's generated day holds one or two exercises, or none, while the uninjured plan is full | test/contracts/thin_day_topup_behavioral_test.dart |
 
 ---
 

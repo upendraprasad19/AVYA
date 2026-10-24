@@ -1851,7 +1851,16 @@ added, false of the flip being performed.
 - **Prior incidents:** `c5e1a8` (merge-conflict-treadmill landing A0; its first pushed version failed two cases in CI on git 2.55.0).
 - **Regression test:** `test/scripts/setup_hooks_atomic_install_e2e_test.dart`, `test/scripts/pre_commit_index_add_e2e_test.dart`. Diagnose `c5e1a8`.
 
-### 2.119 A filter that drops a slot leaves a short day: safe omission with no refill (NEW 2026-10-24)
+### 2.119 A server-only TABLE stays readable by the anon key: the platform's default grants plus one permissive policy (NEW 2026-10-24)
+
+- **Telltale:** a table no client code names (`grep -rn <table> lib/ web/` empty) still answers a count-only PostgREST request made with only the public anon key (`content-range: */N`). Typical trace: a policy commented "needed for client validation" from before the check moved into an Edge Function.
+- **Root-cause shape:** Supabase's default privileges give `anon` and `authenticated` every table privilege at CREATE time (grantor `postgres`); RLS is the only door, and one `FOR SELECT ... TO public` policy opens it. Moving the readers to a service-role Edge Function removes the NEED, not the access.
+- **Fix pattern:** `DROP POLICY` + `REVOKE ALL ON TABLE ... FROM PUBLIC, anon, authenticated` (name PUBLIC too, the 2.36 / c9b3e2 lesson), RLS left ENABLED with no policy, service_role untouched. Read the ACL with `aclexplode(relacl)` AND `aclexplode(attacl)` first: a grant by another grantor survives a REVOKE run as `postgres`.
+- **Test shape:** a live verify that SWITCHES ROLE (`SET LOCAL ROLE anon`) and requires the TABLE's 42501 message (a refused role switch is also 42501), checks `has_table_privilege` for every privilege (membership routes), scans definer functions and views that could read past the grants, and proves service_role still reads every row under RLS; run it BEFORE the apply (it must fail where predicted) and after.
+- **Prior incidents:** c9b3e2 (definer functions anon-executable), 7ad054 (the sibling `promo_code_uses` policy cleanup that left this table open), a6c2e9 (OI-406, `promo_codes`).
+- **Regression test:** `test/sql/promo_codes_no_client_access_live_verify.sql`, `test/contracts/promo_codes_server_only_writer_to_reader_test.dart`.
+
+### 2.120 A filter that drops a slot leaves a short day: safe omission with no refill (NEW 2026-10-24)
 
 - **Telltale:** an injured user's generated day holds one or two exercises, or none, while the same plan for an uninjured user is full. The injury sweep (`test/plan_generator/injury_floor_sweep_test.dart`) counts them; the scorecard cannot, because its mirrors never call the selector.
 - **Root-cause shape:** `_cascadeFill` drops a slot when no safe candidate exists (the safe-omission rule, correct on its own) and nothing refills the day. A repeat phase drops now-contraindicated pins and refills a variant only when it is EMPTY, so a variant with one or two survivors stays thin. Safety tightened in `d30de7` (104 rows, 148 tags) exposed it: the omission was always possible, it became common. The cost of a correct safety filter is a short day, and a filter change needs a floor on what is left.

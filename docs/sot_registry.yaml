@@ -16808,6 +16808,44 @@ concepts:
         semantic: status-aware
     regression_test: test/contracts/day_of_week_completion_writer_to_reader_test.dart
 
+  # OI-406 (diagnose a6c2e9, 2026-10-24) — promo codes and their discounts are read ONLY by the payment Edge
+  # Functions through the service role; the anon and authenticated API roles hold no grant and no policy.
+  - concept: promo_codes_server_only
+    domain: subscription
+    presence_only: true  # the access rule lives in the catalog; behaviour is proven by the live-verify SQL test/sql/promo_codes_no_client_access_live_verify.sql (16 cases, run before and after the apply) and its rehearsal test/sql/promo_codes_server_only_rehearsal.sql, the Dart pins are source-grep (test/contracts/promo_codes_server_only_writer_to_reader_test.dart)
+    description: |
+      public.promo_codes holds the founder's discount codes. Migration 20260330 gave it the SELECT policy
+      "Anyone can read active promo codes" and the platform's default grants gave anon and authenticated every
+      privilege, so the public anon key listed every active code (live 2026-10-24: count-only 206 `*/3`).
+      Migration 163 drops the policy and revokes ALL from PUBLIC, anon and authenticated; RLS stays enabled
+      with no policy. A client checks a code only through validate-promo (JWT-authenticated, service-role read).
+      A NEW reader must be an Edge Function on the service role; a client reader would get 42501.
+    writers:
+      - file: supabase/migrations/163_promo_codes_server_only_access.sql
+        method: DROP POLICY IF EXISTS + REVOKE ALL FROM PUBLIC, anon, authenticated (applied live 2026-10-24, cloud version 20261024121637)
+        semantic: cloud-write
+    readers:
+      - file: supabase/functions/validate-promo/index.ts
+        method: handler — promo_codes read (service role)
+        semantic: cloud-read
+      - file: supabase/functions/create-razorpay-order/index.ts
+        method: handler — promo_codes read that prices the order (service role)
+        semantic: cloud-read
+      - file: supabase/functions/verify-payment/index.ts
+        method: tolerant promo read deriving the plan from the amount (service role)
+        semantic: cloud-read
+      - file: supabase/functions/razorpay-webhook/index.ts
+        method: tolerant promo reads deriving the plan from the amount (service role)
+        semantic: cloud-read
+    hive:
+      box: "n/a — server-side only, no Hive surface"
+      key_prefix: "n/a"
+    cloud:
+      table: promo_codes
+      columns: [code, discount_pct, valid_until, max_uses, used_count, is_active, created_at]
+    sync_methods: []
+    regression_test: test/contracts/promo_codes_server_only_writer_to_reader_test.dart
+
   - concept: thin_day_topup
     domain: workout
     behavioral_test_path: test/contracts/thin_day_topup_behavioral_test.dart
