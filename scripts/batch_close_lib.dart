@@ -218,7 +218,7 @@ BatchCloseVerdict evaluateBatchClose(BatchCloseInputs i) {
     i.reviewsAdded.isEmpty
         ? 'UNVERIFIED — no review added, but §5.1 also covers a NEW bug-class, '
             'red flag or trigger phrase in ANY skill. Only you can answer that.'
-        : 'code-review tuning entry enforced by check_skill_tuning_history; '
+        : 'code-review `## Tuning entry` section enforced by check_skill_tuning_history; '
             'still consider whether any OTHER skill needs an entry',
   ));
 

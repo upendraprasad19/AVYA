@@ -99,7 +99,7 @@ Total gates: **111** (48 numbered, 63 by filename only).
 | 23 | `check_secrets_gitignored.dart` | assert that Android signing artifacts and other sensitive secret patterns are never tracked | grandfathered |
 | — | `check_single_schedule_row_builder.dart` | Asserts that only the allowlisted files construct a `schedule_<date>` Hive | mutation_proven |
 | 46 | `check_singleton_provider_migration.dart` | assert the 7 singleton services targeted by A7 have: | grandfathered |
-| — | `check_skill_tuning_history.dart` | a commit that ADDS a `docs/reviews/<x>-review.md` must also append a | mutation_proven |
+| — | `check_skill_tuning_history.dart` | a commit that ADDS a `docs/reviews/<x>.md` must carry that review's tuning | mutation_proven |
 | — | `check_skipped_discipline_budget.dart` | assert that no `regression-test-skipped:` waiver entry in `docs/skipped-discipline.md` | grandfathered |
 | — | `check_snapshot_contract.dart` | OI-03 gate — enforces the snapshot contract in docs/snapshot_contract.yaml. | grandfathered |
 | 42 | `check_sot_behavioral_test_paths.dart` | assert every SoT registry concept entry carries either: - `behavioral_test_path:` (cite a real behavioral contract test) | mutation_proven |

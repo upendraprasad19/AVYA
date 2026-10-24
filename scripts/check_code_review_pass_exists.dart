@@ -135,6 +135,12 @@ Future<String> stagedDiffHash() async {
   // mechanically required to edit closes the loop the same way OI-72 closed
   // it for the review file itself.
   //
+  // A1 (2026-10-24): the required tuning entry now lives INSIDE the review file, a
+  // path this hash already excludes, so a new review no longer stages any other file
+  // for §5.1. All three exclusions stay (they are pinned by
+  // review_gate_staged_content_not_working_tree_test.dart) because a legacy-shaped
+  // commit and a SKILL.md template edit can still touch them.
+  //
   // f4d1b7: capture the diff as RAW BYTES (`stdoutEncoding: null`) and feed them
   // verbatim. Pre-fix it decoded stdout to a String (via SystemEncoding — the
   // system code page, cp1252 on Windows) then hashed `.codeUnits` (UTF-16);

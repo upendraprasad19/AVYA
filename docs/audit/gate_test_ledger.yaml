@@ -815,11 +815,14 @@ check_skill_tuning_history.dart:
     matters because the fixture's 2026-08-20 entry mentions 2026-08-25 in its
     PROSE, so contains() lets an OLD entry satisfy a NEW review and the gate goes
     permanently inert.
-    (2) COLLAPSE THE FAIL-OPEN - return satisfied instead of undetermined when the
-    skill file cannot be read -> 3 red, including the explicit "undetermined is
-    NOT reported as satisfied" case. That test is why the predicate returns an
-    enum rather than a bool: a caller handed false cannot tell "nothing to check"
-    from "could not check" and would claim a PASS it never established.
+    (2) COLLAPSE THE VERDICT - return satisfied instead of undetermined for a
+    review with no parseable reviewed_at -> red, including the explicit
+    "undetermined is NOT reported as satisfied" case. That test is why the
+    predicate returns an enum rather than a bool: a caller handed false cannot
+    tell "nothing to check" from "could not check" and would claim a PASS it never
+    established. (Until 2026-10-24 an unreadable archive was also undetermined;
+    it now only means "no legacy entries", see A1 below, and the old test
+    "FAILS OPEN when the skill file cannot be read" was flipped to missingEntry.)
     (3) NARROW THE FILE FILTER back to -review.md only -> 2 red. Review round 1
     measured the input set: of 164 files in docs/reviews/, 81 end -bpass.md and
     only 79 end -review.md, and the skill's own Tuning history cites -bpass.md for
@@ -837,6 +840,44 @@ check_skill_tuning_history.dart:
     SCOPE, so the pass is not read as wider than it is: code-review only.
     /hermes-pass writes to the same directory but keeps its own tuning section;
     wiring that needs its own decision and is not assumed here.
+    A1, 2026-10-24 (merge-conflict-treadmill): the entry moved INSIDE the review
+    file (a "## Tuning entry" section) and the archive is FROZEN on non-merge
+    commits, because the shared archive conflicted on 35 of 52 main syncs. TWENTY
+    new mutants, each applied with a grep -c match of 1, run against both test
+    files and restored byte-identical; every one reddened at least one test:
+    date equality dropped; heading requirement dropped; fence detection dropped;
+    comment tracking dropped; comment content made non-inert (fence opener inside a
+    comment); comment decided BEFORE the fence opener; fence closer any length;
+    tier check dropped; whole-value tier comparison with no known-tier guard;
+    known-tier guard dropped alone; archive-first evaluation (null archive ->
+    undetermined); last heading wins; freeze applied during merges; freeze skipped
+    when no review was added; shrink fails (<= becomes ==); HEAD-absent counted as
+    zero; --no-renames always on; --no-renames never on; MERGE_HEAD hardcoded to
+    .git/MERGE_HEAD (the linked-worktree fixture); freeze exit code dropped from
+    the combine. Two mutants survived or died of a compile error the first time
+    and changed the design: (a) the scanner decided a comment opener before a fence
+    opener, so a fence whose info string held "<!--" opened a comment the closing
+    fence could not end (reordered; test added); (b) the whole-value tier mutant was
+    shielded by the known-tier guard (a test for a non-tier header word such as n/a
+    now pins the guard). Residual, stated: the freeze is local-only and
+    transitional (a pre-A1 branch merged on GitHub can still grow the archive), and
+    a later edit that deletes a review's section is unchecked (the gate judges
+    additions).
+    A1 B-pass (2026-10-24, 7 findings, all fixed): 24 MORE mutants, 44 in all, each
+    applied with a grep -c match of 1 and restored byte-identical (sha256 of both
+    scripts checked), every one red. The reviewer's 12 surviving mutants and two
+    unpinned staged reads became cases: review body and freeze archive read from the
+    working tree; backtick info string; 3-space fence indent (opener and closer);
+    upper-case header tier; frontmatter scan past the closing ---; modified review
+    is not an add; a merge still judges reviews; duplicated header counts as one
+    added entry; list capped at 5; warn sink on stdout. Design fixes the review
+    forced: comment openers in inline code spans or after an odd run of backslashes
+    are literal (otherwise one quoted opener hid the section and blocked the
+    commit), BOM / leading blank lines / `blast-radius:` colon no longer switch the
+    tier or date reads off. One mutant (BOM before the key) survived the first
+    time because the test put the BOM before the frontmatter fence, not before the
+    key; it is pinned now. Known limit, stated: the count-based freeze does not see
+    an un-date-one-add-one swap.
 
 check_single_schedule_row_builder.dart:
   mutation_proven: true
