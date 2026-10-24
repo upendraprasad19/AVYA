@@ -396,6 +396,42 @@ export async function handler(req: Request): Promise<Response> {
 
     let payment = await razorpayResponse.json();
 
+    // OI-350 / OI-359 (payment-hardening U1, 2026-10-24): the ownership guards run FIRST, directly
+    // after the GET and before the capture and the status echo. Before this, another user's AUTHORIZED
+    // payment was captured by this caller and any payment's status was echoed with a 200; the 403
+    // only came once the payment was captured. The GET above is a read; nothing before this point
+    // touches anything that is not the caller's.
+    // OI-29 (audit-2026-05-17 Hermes F4) — ownership check is now two-step.
+    // Pre-fix `if (notesUserId && notesUserId !== userId)` was fail-open when
+    // `notes.user_id` was absent — attacker who knows a captured payment_id
+    // without notes could claim entitlement under their own JWT. Now we
+    // require notes.user_id to be present AND to match.
+    const notesUserId = payment.notes?.user_id;
+    if (!notesUserId) {
+      return new Response(
+        JSON.stringify({
+          verified: false,
+          error: "Missing user_id in payment notes",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+    if (notesUserId !== userId) {
+      return new Response(
+        JSON.stringify({
+          verified: false,
+          error: "Payment does not belong to this user",
+        }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
     // If the payment is authorized but not captured (UPI test VPAs,
     // orders created without payment_capture: 1, rare live-mode wallet
     // delays), capture it now from the server side. Same capability the
@@ -445,37 +481,6 @@ export async function handler(req: Request): Promise<Response> {
         }),
         {
           status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
-
-    // OI-29 (audit-2026-05-17 Hermes F4) — ownership check is now two-step.
-    // Pre-fix `if (notesUserId && notesUserId !== userId)` was fail-open when
-    // `notes.user_id` was absent — attacker who knows a captured payment_id
-    // without notes could claim entitlement under their own JWT. Now we
-    // require notes.user_id to be present AND to match.
-    const notesUserId = payment.notes?.user_id;
-    if (!notesUserId) {
-      return new Response(
-        JSON.stringify({
-          verified: false,
-          error: "Missing user_id in payment notes",
-        }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
-    if (notesUserId !== userId) {
-      return new Response(
-        JSON.stringify({
-          verified: false,
-          error: "Payment does not belong to this user",
-        }),
-        {
-          status: 403,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         },
       );

@@ -8299,7 +8299,7 @@ concepts:
         method: subscriptions insert (the ONLY entitlement write)
         notes: The users.update mirror write this handler used to make was removed; the insert is the whole write.
       - file: supabase/functions/verify-payment/index.ts
-        line_range: 526-625
+        line_range: 531-630
         method: subscriptions insert / canonical end_date
         notes: Same — no users mirror write; the response reports the canonical row's end_date.
       - file: supabase/migrations/038_redeem_referral_atomic.sql
@@ -13588,7 +13588,7 @@ concepts:
          .maybeSingle() then synthesises PGRST116 and strips PRO.
     writers:
       - file: supabase/functions/verify-payment/index.ts
-        line_range: 505-517
+        line_range: 510-522
         method: payment confirmation handler — subscription insert
         semantic: cloud-write
         notes: |
@@ -16416,7 +16416,7 @@ concepts:
         method: isEnvExactlyTrue / isStackingEnabled / isTrialPurchaseEnabled / plainEndDate
         notes: The ONE strict "true" switch rule for both secrets (read once per request) and the OFF-branch arithmetic (setDate, byte-identical to origin/main).
       - file: supabase/functions/verify-payment/index.ts
-        line_range: 585-718
+        line_range: 590-723
         method: the insert branch (stackingOn)
         notes: ON assigns canonicalEndDateIso and weInsertedTheRow from the RPC answer; OFF is today's insert and 23505 arms, and sets offInserted only on its own successful insert (the alarm's precondition, consumed after the promo).
       - file: supabase/functions/razorpay-webhook/index.ts
@@ -16498,7 +16498,7 @@ concepts:
         semantic: detect-door-on-order-recorded-off
         notes: Does NOT read stacks_after (payment notes come from the client's checkout options); it reads the database for an active referral_trial row after its own OFF insert.
       - file: supabase/functions/verify-payment/index.ts
-        line_range: 585-754
+        line_range: 590-759
         method: the insert branch (OFF-branch mismatch alarm)
         semantic: detect-door-on-order-recorded-off
         notes: Same alarm as the webhook. The client reader of stacks_after is trial_stacking_client_estimate (Piece B2b).
@@ -16845,3 +16845,41 @@ concepts:
       columns: [code, discount_pct, valid_until, max_uses, used_count, is_active, created_at]
     sync_methods: []
     regression_test: test/contracts/promo_codes_server_only_writer_to_reader_test.dart
+
+  # payment-hardening U1 (OI-350 / OI-359, diagnose b5e8d2, 2026-10-24) — verify-payment proves the caller
+  # owns the payment BEFORE it captures it or tells the caller anything about it.
+  - concept: verify_payment_owner_before_capture
+    domain: subscription
+    behavioral_test_path: supabase/functions/verify-payment/index_test.ts
+    description: |
+      verify-payment (JWT caller, service-role Razorpay credentials) GETs the payment and then, FIRST,
+      requires payment.notes.user_id to be present (400 "Missing user_id in payment notes") and equal to
+      the caller (403 "Payment does not belong to this user"). Only then may it capture an authorized
+      payment or answer with its status. Before U1 the two guards sat after the capture and after the
+      status echo: a caller holding another user's authorized payment id made this function capture it,
+      and any payment's status came back in a 200. Behaviour: the "U1:" tests in
+      supabase/functions/verify-payment/index_test.ts (Scenario.intercept answers the Razorpay GET and
+      the capture; no capture request may be recorded on a refusal). Order pin:
+      test/contracts/verify_payment_owner_before_capture_writer_to_reader_test.dart.
+    writers:
+      - file: supabase/functions/verify-payment/index.ts
+        line_range: 399-433
+        method: handler — the 400 / 403 ownership guards directly after the Razorpay GET
+        semantic: guard
+    readers:
+      - file: supabase/functions/verify-payment/index.ts
+        line_range: 435-487
+        method: handler — the capture POST and the status echo, reachable only past the guards
+        semantic: cloud-write
+      - file: lib/core/services/razorpay_service.dart
+        line_range: 900-1030
+        method: verify fallback — status==200 && verified==true; any non-200 is a soft failure
+        semantic: cloud-read
+    hive:
+      box: "n/a — server-side guard, no Hive surface"
+      key_prefix: "n/a"
+    cloud:
+      table: subscriptions
+      columns: [user_id, razorpay_payment_id]
+    sync_methods: []
+    regression_test: test/contracts/verify_payment_owner_before_capture_writer_to_reader_test.dart

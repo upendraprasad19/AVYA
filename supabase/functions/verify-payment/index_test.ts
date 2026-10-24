@@ -18,6 +18,7 @@ import {
   iso,
   loadOriginMainHandler,
   normalizeRequests,
+  OTHER_USER,
   PAY,
   paymentServer,
   recordPaidCalls,
@@ -473,3 +474,87 @@ t("no-match control: a matching promo payment records the row and writes no aler
   assertEquals(r.res.status, 200);
   assertEquals(alertInserts(r.server).length, 0);
 });
+
+// ── payment-hardening U1 (OI-350 / OI-359): ownership before any side effect ──
+// The harness's Razorpay route always answers a CAPTURED payment, so these tests answer the GET (and the
+// capture) through `intercept`, which runs first; every request, the intercepted ones included, is recorded.
+
+/** Answers GET /v1/payments/PAY with `entity`, and the capture POST with the same entity, captured. */
+function razorpayEntity(entity: Record<string, unknown>): Scenario["intercept"] {
+  return (req) => {
+    if (req.host !== "https://api.razorpay.com") return undefined;
+    if (req.method === "GET" && req.path === `/v1/payments/${PAY}`) {
+      return new Response(JSON.stringify(entity), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    if (req.method === "POST" && req.path === `/v1/payments/${PAY}/capture`) {
+      const captured = { ...entity, status: "captured", captured: true };
+      return new Response(JSON.stringify(captured), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    return undefined;
+  };
+}
+
+function entity(status: string, notes: unknown): Record<string, unknown> {
+  return { id: PAY, status, captured: status === "captured", amount: 34900, currency: "INR", order_id: "order_TEST0001", notes };
+}
+
+const captures = (r: { server: { to: (p: string, m?: string) => unknown[] } }) => r.server.to("/v1/payments/", "POST");
+
+t("U1: ANOTHER user's AUTHORIZED payment: 403, and no capture request is sent", async () => {
+  const r = await run(newHandler, { rows: [], intercept: razorpayEntity(entity("authorized", { user_id: OTHER_USER })) }, undefined);
+  assertEquals(r.res.status, 403);
+  assertEquals(r.body, { verified: false, error: "Payment does not belong to this user" });
+  assertEquals(captures(r).length, 0);
+  assertEquals(subscriptionInserts(r.server).length, 0);
+});
+
+t("U1: ANOTHER user's CREATED payment: 403, and its status is not echoed", async () => {
+  const r = await run(newHandler, { rows: [], intercept: razorpayEntity(entity("created", { user_id: OTHER_USER })) }, undefined);
+  assertEquals(r.res.status, 403);
+  assert(!r.text.includes("Payment status is"), r.text);
+  assert(!r.text.includes("created"), r.text);
+  assertEquals(captures(r).length, 0);
+});
+
+for (const [label, notes] of [["no user_id key", { plan: "monthly" }], ["Razorpay's empty-notes array", []]] as const) {
+  t(`U1: an AUTHORIZED payment with ${label}: 400, and no capture request is sent`, async () => {
+    const r = await run(newHandler, { rows: [], intercept: razorpayEntity(entity("authorized", notes)) }, undefined);
+    assertEquals(r.res.status, 400);
+    assertEquals(r.body, { verified: false, error: "Missing user_id in payment notes" });
+    assertEquals(captures(r).length, 0);
+  });
+}
+
+t("U1 control: the caller's OWN authorized payment is still captured once and recorded (200)", async () => {
+  const r = await run(newHandler, { rows: [], intercept: razorpayEntity(entity("authorized", { user_id: USER })) }, undefined);
+  assertEquals(r.res.status, 200);
+  assertEquals(r.body.verified, true);
+  const posts = captures(r) as Array<{ path: string; body: Record<string, unknown> }>;
+  assertEquals(posts.length, 1);
+  assertEquals(posts[0].path, `/v1/payments/${PAY}/capture`);
+  assertEquals(posts[0].body, { amount: 34900, currency: "INR" });
+  assertEquals(subscriptionInserts(r.server).length, 1);
+});
+
+// The 403 is a STRICT compare: a notes.user_id of another TYPE that a loose `!=` would equate with the caller
+// (an array holding the id coerces to the same string) must still be refused, before any capture.
+for (const [label, userId] of [["an array holding the caller's id", [USER]], ["a number", 123], ["an object", { id: USER }]] as const) {
+  t(`U1: an AUTHORIZED payment whose notes.user_id is ${label}: 403, and no capture request is sent`, async () => {
+    const r = await run(newHandler, { rows: [], intercept: razorpayEntity(entity("authorized", { user_id: userId })) }, undefined);
+    assertEquals(r.res.status, 403);
+    assertEquals(r.body, { verified: false, error: "Payment does not belong to this user" });
+    assertEquals(captures(r).length, 0);
+  });
+}
+
+// Mirror of the foreign-payment refusals: the caller's OWN payment that is neither captured nor authorized
+// still gets today's 200 status echo (the client polls on it), with no capture request.
+for (const status of ["created", "failed"]) {
+  t(`U1 control: the caller's OWN ${status.toUpperCase()} payment: 200 with its status echoed, no capture`, async () => {
+    const r = await run(newHandler, { rows: [], intercept: razorpayEntity(entity(status, { user_id: USER })) }, undefined);
+    assertEquals(r.res.status, 200);
+    assertEquals(r.body, { verified: false, error: `Payment status is '${status}', not 'captured'` });
+    assertEquals(captures(r).length, 0);
+    assertEquals(subscriptionInserts(r.server).length, 0);
+  });
+}
