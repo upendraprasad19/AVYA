@@ -124,6 +124,29 @@ void main() {
       expect(first.desired, 3);
       expect(first.boundBy, isNull);
     });
+
+    test('boundBy is null when only TIME held the lead lift below its desired sets (B-pass R1 P2-1)', () {
+      // general_fitness beginner (Chest cap 6, top 10), one strength day (150 s rests,
+      // desired 4) on 30 minutes = 1440 s. A 6-set timed row at 70 s rest costs 744 s,
+      // leaving 696 s: three sets of the Chest lift fit (594 s), four do not (816 s).
+      // The ledger already holds the 3 granted sets when the allocator asks what stopped
+      // the 4th, so the question is "would ONE more fit?" (3 + 1 <= 6): only time says no.
+      final f = Fx();
+      f.row('cl', ['Chest']);
+      f.row('plank', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
+      expect(SessionBudget.exerciseSeconds(archetype: 'B', sets: 6, restSeconds: 70), closeTo(744.0, 1e-6));
+      expect(SessionBudget.exerciseSeconds(archetype: 'M', sets: 3, restSeconds: 150), closeTo(594.0, 1e-6));
+      expect(SessionBudget.exerciseSeconds(archetype: 'M', sets: 4, restSeconds: 150), closeTo(816.0, 1e-6));
+      final days = [
+        f.day('strength', [f.ex('plank', sets: 6, logging: 'timed', rest: 70), f.ex('cl')]),
+      ];
+      final out = f.run(days, minutes: 30, goal: 'general_fitness', level: 'beginner');
+      expect(setsOf(out[0]).where((e) => e.$1 == 'cl'), [('cl', 3)]);
+      final first = statsA().firstLifts.single;
+      expect(first.sets, 3);
+      expect(first.desired, 4);
+      expect(first.boundBy, isNull);
+    });
   });
 
   group('time', () {
@@ -408,6 +431,11 @@ void main() {
       expect(setsOf(out[0], b: true), [('ch', 5)]);
       expect(setsOf(out[1], b: true), [('e1', 4)]);
       expect(statsB().weekly['Biceps'], 4);
+      // The label says WHY it stays short: a frozen copy day, not a cap or a top
+      // (B-pass R1 P3-3). Nothing else in B credits Biceps and the day could take a set.
+      expect(statsB().belowFloor['Biceps'], 'copy_day_limited');
+      // In A the same group is not limited by a copy day: A has no copy days.
+      expect(statsA().belowFloor['Biceps'], isNot('copy_day_limited'));
     });
 
     test('a 6-day plan allocates A only and gives B the same sets', () {
@@ -627,7 +655,6 @@ void main() {
           archetypeByName: {
             for (final e in byName.entries) e.key: SessionBudget.archetypeOfRow(e.value),
           },
-          dayIntensities: [for (final d in days) d.intensity],
         );
         final out = SessionSetAllocator.allocate(
             days: days, ctx: ctx, rowsByName: byName, is6Day: is6);
@@ -703,6 +730,104 @@ void main() {
       final one = f.run(mk(), minutes: 45);
       final two = f.run(mk(), minutes: 45);
       expect(setsOf(one[0]), setsOf(two[0]));
+    });
+  });
+
+  group('B-pass fixes (docs/reviews/session-set-budget-bpass.md)', () {
+    test('R2 P3-8: the muscles an exercise CARRIES win over its row', () {
+      final f = Fx();
+      f.row('x', ['Chest']);
+      final carried = f.ex('x').copyWith(primaryMuscles: ['Lats']);
+      f.run([f.day('hypertrophy', [carried])], minutes: 90);
+      expect(statsA().weekly['Back'], greaterThan(0));
+      expect(statsA().weekly.containsKey('Chest'), isFalse);
+    });
+
+    test('R2 P3-8: a primary_muscles value that is not a list reads as no muscle, it does not throw', () {
+      final f = Fx();
+      final e = f.ex('x'); // built before the row exists, so it carries no muscles
+      f.rows['x'] = {
+        'name': 'x',
+        'primary_muscles': 'Chest',
+        'exercise_type': ['compound'],
+        'rep_range': '8-12',
+        'logging_type': 'weight_reps',
+      };
+      final out = f.run([f.day('hypertrophy', [e])], minutes: 90);
+      expect(setsOf(out[0]), [('x', 3)]); // sized by time only: the day's desired sets
+      expect(statsA().weekly, isEmpty);
+    });
+
+    test('R1 P3-2: a row the context does not know is NOT budgeted, however many rows the caller passes', () {
+      // SessionBudget.isBudgeted (ctx.archetypeByName) is the one rule: a name that is in
+      // rowsByName but not in the context keeps its 9 sets, as apply and titration see it.
+      final f = Fx();
+      f.row('a', ['Chest']);
+      final days = [f.day('strength', [f.ex('a'), f.ex('ghost', sets: 9)])];
+      final out = SessionSetAllocator.allocate(
+        days: days,
+        ctx: f.ctx(days, minutes: 90),
+        rowsByName: {
+          ...f.rows,
+          'ghost': {
+            'name': 'ghost',
+            'primary_muscles': ['Lats'],
+            'exercise_type': ['compound'],
+            'rep_range': '8-12',
+            'logging_type': 'weight_reps',
+          },
+        },
+        is6Day: true,
+      );
+      expect(out[0].exercisesA.firstWhere((e) => e.exerciseName == 'ghost').sets, 9);
+      expect(statsA().weekly.containsKey('Back'), isFalse);
+    });
+
+    test('R1 P3-7: two A/B lists whose names only JOIN alike are not the same day', () {
+      // ['x, y', 'z'] and ['x', 'y, z'] both print as "[x, y, z]". B must be allocated
+      // on its own: its 6-set timed row leaves 270 s, so 'y, z' gets the guard's 2 sets,
+      // not the 4 that A's first exercise got.
+      final f = Fx();
+      f.row('x, y', ['Chest']);
+      f.row('z', ['Lats']);
+      f.row('x', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
+      f.row('y, z', ['Hamstrings']);
+      final days = [
+        f.day(
+          'strength',
+          [f.ex('x, y'), f.ex('z')],
+          b: [f.ex('x', sets: 6, logging: 'timed', rest: 141), f.ex('y, z')],
+        ),
+      ];
+      final out = f.run(days, minutes: 30, is6Day: false);
+      expect(setsOf(out[0]), [('x, y', 4), ('z', 3)]);
+      expect(setsOf(out[0], b: true), [('x', 6), ('y, z', 2)]);
+      expect(statsB().timeForcedFirst, 1);
+      expect(statsA().firstLifts.single.groups, {'Chest'});
+    });
+
+    test('R1 P2-2: a lead lift that does not fit is dropped while a cheaper lift stays; the stat says so', () {
+      // The policy: the lead lift is protected from the WEEK (reservation) and from an
+      // EMPTY day (guard), not from the day's clock. When 2 sets of it cost more than the
+      // time left and a 2-set isolation costs less, the isolation is kept and the day's
+      // firstLifts entry reads sets 0. The gate counts these days in the report.
+      final f = Fx();
+      f.row('cl', ['Chest']);
+      f.row('bi', ['Biceps'], type: 'isolation', reps: '10-15');
+      f.row('plank', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
+      final days = [
+        f.day('hypertrophy', [
+          f.ex('plank', sets: 6, logging: 'timed', rest: 141),
+          f.ex('cl'),
+          f.ex('bi'),
+        ]),
+      ];
+      final out = f.run(days, minutes: 30, goal: 'general_fitness', level: 'beginner');
+      expect(setsOf(out[0]).where((e) => e.$1 != 'plank'), [('bi', 2)]);
+      final lead = statsA().firstLifts.single;
+      expect(lead.sets, 0);
+      expect(lead.groups, {'Chest'});
+      expect(statsA().timeForcedFirst, 0);
     });
   });
 }

@@ -277,10 +277,13 @@ class PlanGenerator {
     // with no library match) keep their sets and only spend time.
     SessionBudgetContext? budget;
     if (budgetOn) {
-      final rowsByName = <String, Map<String, dynamic>>{
-        for (final r in ExerciseRepository.instance.getAll())
-          if (r['name'] is String) (r['name'] as String).toLowerCase(): r,
-      };
+      // The FIRST row of a name wins, as `getByExactName` does: a community row and
+      // a bundled row can share a name, and the two must price one exercise alike.
+      final rowsByName = <String, Map<String, dynamic>>{};
+      for (final r in ExerciseRepository.instance.getAll()) {
+        final name = r['name'];
+        if (name is String) rowsByName.putIfAbsent(name.toLowerCase(), () => r);
+      }
       budget = SessionBudgetContext(
         minutes: SessionBudget.resolveMinutes(
           param: sessionDuration,
@@ -293,7 +296,6 @@ class PlanGenerator {
         archetypeByName: {
           for (final e in rowsByName.entries) e.key: SessionBudget.archetypeOfRow(e.value),
         },
-        dayIntensities: [for (final d in populated) d.intensity],
       );
       populated = SessionSetAllocator.allocate(
         days: populated,

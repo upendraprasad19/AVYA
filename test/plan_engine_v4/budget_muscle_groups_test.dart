@@ -49,6 +49,22 @@ void main() {
       expect(of(['Lateral Stabilisers']), <String>{});
     });
 
+    test('spelling variants a future row could carry (B-pass R1 P3-4)', () {
+      // The lower back in every spelling is the erectors, never the Back group the
+      // `back` keyword would otherwise give it; quadratus lumborum is not Quads.
+      for (final t in [
+        'Low Back', 'lower-back', 'Lower_Back', 'LowerBack', 'Lumbar Spine', 'Quadratus Lumborum',
+      ]) {
+        expect(of([t]), <String>{}, reason: t);
+      }
+      expect(of(['Latissimus Dorsi']), {'Back'});
+      expect(of(['Abdominals']), {'Core'});
+      expect(of(['Rectus Abdominis']), {'Core'});
+      expect(of(['Upper Abs']), {'Core'});
+      // `abs` stays a whole word: no substring of another word credits Core.
+      expect(of(['Absorption']), <String>{});
+    });
+
     test('every group has its keywords', () {
       expect(of(['Pectorals']), {'Chest'});
       expect(of(['Rear Delts', 'Front Delts']), {'Shoulders'});

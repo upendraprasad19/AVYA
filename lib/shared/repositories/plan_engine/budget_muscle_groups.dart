@@ -21,24 +21,28 @@ class BudgetMuscleGroups {
 
   static final RegExp _parenthetical = RegExp(r'\([^)]*\)');
 
-  /// Ruling 12: `lower back`, `erector` and `spinal` name the erectors, not the
-  /// lats and upper back, so they map to NO group. Deadlift therefore stops
-  /// spending the Back allowance. (A bare "thoracic" / "spine" is not matched
-  /// by the Back keywords either.)
-  static final RegExp _erectors = RegExp(r'lower back|erector|spinal');
+  /// Ruling 12: the lower back (`lower back`, `low back`, `lower-back`, `lumbar`,
+  /// `quadratus lumborum`), `erector` and `spinal` name the erectors, not the lats
+  /// and upper back, so they map to NO group. Deadlift therefore stops spending the
+  /// Back allowance. (A bare "thoracic" / "spine" is not matched by the Back
+  /// keywords either.) Tested first, so "Quadratus Lumborum" is never read as Quads.
+  static final RegExp _erectors =
+      RegExp(r'\blow(er)?[\s_-]*back\b|erector|spinal|lumbar|lumborum|quadratus');
 
   /// Keyword -> group, checked in this order on a token that is not an erector.
-  /// `lat` matches only as a whole word (M6): "Lateral Delts" is Shoulders.
+  /// `lat` matches only as a whole word (M6): "Lateral Delts" is Shoulders;
+  /// "Latissimus Dorsi" is Back. `abs` is a whole word too, and `abdomin` covers
+  /// "Abdominals", "Rectus Abdominis" and "Transverse Abdominis".
   static final List<(String, RegExp)> _rules = [
     ('Chest', RegExp(r'chest|pec')),
-    ('Back', RegExp(r'\blats?\b|back|trap|rhomboid')),
+    ('Back', RegExp(r'\blats?\b|latissimus|back|trap|rhomboid')),
     ('Shoulders', RegExp(r'delt|shoulder')),
     ('Biceps', RegExp(r'bicep|brachialis')),
     ('Triceps', RegExp(r'tricep')),
     ('Quads', RegExp(r'quad')),
     ('Hamstrings', RegExp(r'hamstring')),
     ('Glutes', RegExp(r'glute')),
-    ('Core', RegExp(r'abs|oblique|core|transverse')),
+    ('Core', RegExp(r'\babs\b|abdomin|oblique|core|transverse')),
     ('Calves', RegExp(r'calf|calves|gastrocnemius|soleus')),
   ];
 

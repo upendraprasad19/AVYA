@@ -344,7 +344,6 @@ void main() {
             archetypeByName: {
               for (final e in byName.entries) e.key: SessionBudget.archetypeOfRow(e.value),
             },
-            dayIntensities: [for (final d in days) d.intensity],
           );
           final out = SessionSetAllocator.allocate(
               days: days, ctx: ctx, rowsByName: byName, is6Day: is6);

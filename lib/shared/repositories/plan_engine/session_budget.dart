@@ -131,17 +131,21 @@ class SessionBudget {
   /// `exercise_type` and `rep_range` too). `exercise_type` may be a List, a
   /// String or null; null or empty is read as `['compound']` (the same rule the
   /// display uses, Task 6b), and a missing `logging_type` as rep-based.
-  static String archetypeOfRow(Map<dynamic, dynamic> row) {
-    final raw = row['exercise_type'];
-    var types = <String>[
-      if (raw is List) for (final t in raw) '$t' else if (raw is String) raw,
-    ].where((t) => t.trim().isNotEmpty).toList();
-    if (types.isEmpty) types = const ['compound'];
-    return archetypeOf(
-      exerciseTypes: types,
-      reps: '${row['rep_range'] ?? ''}',
-      loggingType: '${row['logging_type'] ?? 'weight_reps'}',
-    );
+  static String archetypeOfRow(Map<dynamic, dynamic> row) => archetypeOf(
+        exerciseTypes: _typesOf(row['exercise_type']),
+        reps: '${row['rep_range'] ?? ''}',
+        loggingType: '${row['logging_type'] ?? 'weight_reps'}',
+      );
+
+  /// The exercise types in a stored `exercise_type` value: a List (a null element
+  /// is skipped, never read as the string "null"), a String or absent; empty or
+  /// blank entries are dropped and nothing left reads as `['compound']`.
+  static List<String> _typesOf(Object? raw) {
+    final Iterable<String> all = raw is List
+        ? [for (final t in raw) if (t != null) '$t']
+        : [if (raw is String) raw];
+    final types = all.where((t) => t.trim().isNotEmpty).toList();
+    return types.isEmpty ? const ['compound'] : types;
   }
 
   /// The archetype of a planned exercise: its library row's (`archetypeByName`
@@ -160,10 +164,23 @@ class SessionBudget {
   /// (`customOrigin != null`), nor logged timed / cardio / distance, and the
   /// library has a row for it. Everything else keeps its sets and only spends
   /// the day's time.
+  ///
+  /// The ONE place that decides it: the allocator, `PeriodizationEngine.apply` and
+  /// titration all ask here, so they cannot disagree about which rows are sized.
   static bool isBudgeted(PlannedExercise ex, SessionBudgetContext ctx) =>
       ex.customOrigin == null &&
       !const {'timed', 'cardio', 'distance'}.contains(ex.loggingType) &&
       ctx.archetypeByName.containsKey(ex.exerciseName.toLowerCase());
+
+  /// Whether [loggingType] is one the engine progresses by reps (it takes the
+  /// day's rest and a rep prescription): `weight_reps`, `bodyweight_reps`,
+  /// `weighted_bodyweight`, `reps_only`. The ONE set: the allocator, the week-2
+  /// gains and `PeriodizationEngine._applyWave` all read it.
+  static bool isRepBased(String loggingType) =>
+      loggingType == 'weight_reps' ||
+      loggingType == 'bodyweight_reps' ||
+      loggingType == 'weighted_bodyweight' ||
+      loggingType == 'reps_only';
 
   // ── Display estimate (Ruling 13) ─────────────────────────────────────────
 
@@ -179,16 +196,7 @@ class SessionBudget {
     final id = e['exercise_id'];
     final row = id is String ? rowsById[id] : null;
     if (row != null) return archetypeOfRow(row);
-    final raw = e['exercise_type'];
-    var types = <String>[
-      if (raw is List) for (final t in raw) '$t' else if (raw is String) raw,
-    ].where((t) => t.trim().isNotEmpty).toList();
-    if (types.isEmpty) types = const ['compound'];
-    return archetypeOf(
-      exerciseTypes: types,
-      reps: '${e['rep_range'] ?? ''}',
-      loggingType: '${e['logging_type'] ?? 'weight_reps'}',
-    );
+    return archetypeOfRow(e);
   }
 
   /// Modelled seconds of a stored plan day: [exerciseSeconds] over every exercise
@@ -352,10 +360,8 @@ class SessionBudgetContext {
     required Set<String> focusGroups,
     this.finisherSeconds = 0,
     required Map<String, String> archetypeByName,
-    required List<String> dayIntensities,
   })  : focusGroups = Set.unmodifiable(focusGroups),
-        archetypeByName = Map.unmodifiable(archetypeByName),
-        dayIntensities = List.unmodifiable(dayIntensities);
+        archetypeByName = Map.unmodifiable(archetypeByName);
 
   /// The session length, already resolved ([SessionBudget.resolveMinutes]).
   final int minutes;
@@ -376,9 +382,6 @@ class SessionBudgetContext {
 
   /// Lowercased exercise name -> archetype, computed once from the library rows.
   final Map<String, String> archetypeByName;
-
-  /// Per day index, the day's intensity (strength / hypertrophy / endurance).
-  final List<String> dayIntensities;
 }
 
 /// The one headroom predicate shared by the allocator, `PeriodizationEngine.apply`

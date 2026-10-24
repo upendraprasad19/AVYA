@@ -301,7 +301,7 @@ class PeriodizationEngine {
       for (var i = 0; i < list.length; i++) {
         final ex = list[i];
         final budgeted = SessionBudget.isBudgeted(ex, budget);
-        final rest = budgeted || _isRepBased(ex.loggingType) ? dayRest : ex.restSeconds;
+        final rest = budgeted || SessionBudget.isRepBased(ex.loggingType) ? dayRest : ex.restSeconds;
         restOf[(d, i)] = rest;
         final g = budgeted
             ? BudgetMuscleGroups.of(ex.primaryMuscles ?? const [])
@@ -353,12 +353,6 @@ class PeriodizationEngine {
     return gained;
   }
 
-  static bool _isRepBased(String loggingType) =>
-      loggingType == 'weight_reps' ||
-      loggingType == 'bodyweight_reps' ||
-      loggingType == 'weighted_bodyweight' ||
-      loggingType == 'reps_only';
-
   /// Apply DUP profile + volume wave to a single exercise.
   ///
   /// V3: Applies 4-set minimum for intermediate+, cycle multiplier.
@@ -372,9 +366,7 @@ class PeriodizationEngine {
     required double multiplier,
     required String archetype,
   }) {
-    final lt = ex.loggingType;
-    final isRepBased = lt == 'weight_reps' || lt == 'bodyweight_reps' ||
-        lt == 'weighted_bodyweight' || lt == 'reps_only';
+    final isRepBased = SessionBudget.isRepBased(ex.loggingType);
 
     if (!isRepBased) {
       final waveSets = _waveSets(ex.sets, weekIdx);

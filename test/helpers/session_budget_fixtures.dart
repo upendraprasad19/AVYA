@@ -64,7 +64,6 @@ class Fx {
         archetypeByName: {
           for (final e in rows.entries) e.key: SessionBudget.archetypeOfRow(e.value),
         },
-        dayIntensities: [for (final d in days) d.intensity],
       );
 
   List<PopulatedDay> run(

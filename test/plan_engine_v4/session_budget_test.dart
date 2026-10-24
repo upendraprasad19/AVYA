@@ -18,7 +18,6 @@ SessionBudgetContext ctx({
   bool lighterPhase = false,
   Set<String> focusGroups = const {},
   int finisherSeconds = 0,
-  List<String> dayIntensities = const ['hypertrophy', 'hypertrophy', 'hypertrophy'],
 }) =>
     SessionBudgetContext(
       minutes: minutes,
@@ -28,7 +27,6 @@ SessionBudgetContext ctx({
       focusGroups: focusGroups,
       finisherSeconds: finisherSeconds,
       archetypeByName: const {},
-      dayIntensities: dayIntensities,
     );
 
 void main() {
@@ -164,6 +162,22 @@ void main() {
           'I');
     });
 
+    test('a null element of the type list is skipped, never read as the type "null" (B-pass R1 P3-4)', () {
+      // [null] is "no type" = compound, so a 5-8 row is H, not the B a "null" string
+      // type would give it.
+      expect(
+          SessionBudget.archetypeOfRow(
+              {'exercise_type': [null], 'rep_range': '5-8', 'logging_type': 'weight_reps'}),
+          'H');
+      expect(
+          SessionBudget.archetypeOfRow({
+            'exercise_type': [null, 'isolation'],
+            'rep_range': '10-15',
+            'logging_type': 'weight_reps'
+          }),
+          'I');
+    });
+
     test('over the shipped library: Bench Press is H, a timed hold is B, all rows map', () {
       final rows = (jsonDecode(File('assets/data/exercise_library.json').readAsStringSync())
               as List)
@@ -175,6 +189,17 @@ void main() {
       for (final r in rows) {
         expect({'H', 'M', 'I', 'B'}, contains(SessionBudget.archetypeOfRow(r)),
             reason: r['name'] as String);
+      }
+    });
+  });
+
+  group('isRepBased (the one rep-based set, B-pass R1 P3-9)', () {
+    test('the four rep-progressed logging types, and nothing else', () {
+      for (final t in ['weight_reps', 'bodyweight_reps', 'weighted_bodyweight', 'reps_only']) {
+        expect(SessionBudget.isRepBased(t), isTrue, reason: t);
+      }
+      for (final t in ['timed', 'cardio', 'distance', '', 'unknown']) {
+        expect(SessionBudget.isRepBased(t), isFalse, reason: t);
       }
     });
   });
@@ -259,7 +284,6 @@ void main() {
     test('changing the inputs after construction does not change the context', () {
       final focus = <String>{'Chest'};
       final arche = <String, String>{'bench press': 'H'};
-      final days = <String>['strength'];
       final c = SessionBudgetContext(
         minutes: 60,
         planGoal: 'build_muscle',
@@ -267,20 +291,16 @@ void main() {
         lighterPhase: false,
         focusGroups: focus,
         archetypeByName: arche,
-        dayIntensities: days,
       );
       focus.add('Back');
       arche['squat'] = 'H';
-      days.add('endurance');
       expect(c.focusGroups, {'Chest'});
       expect(c.archetypeByName, {'bench press': 'H'});
-      expect(c.dayIntensities, ['strength']);
     });
 
     test('its collections reject writes', () {
       final c = ctx(focusGroups: {'Chest'});
       expect(() => c.focusGroups.add('Back'), throwsUnsupportedError);
-      expect(() => c.dayIntensities.add('x'), throwsUnsupportedError);
       expect(() => c.archetypeByName['x'] = 'H', throwsUnsupportedError);
     });
 

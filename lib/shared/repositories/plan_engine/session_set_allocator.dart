@@ -8,8 +8,9 @@ import 'session_budget.dart';
 /// the report (plan Task 3 / Task 7). Read through
 /// [SessionSetAllocator.debugLastStats].
 class AllocationStats {
-  /// Days whose lead lift was put on by the empty-day guard because the day's
-  /// time was already spent (the day had budgeted exercises and admitted none).
+  /// Days the empty-day guard filled although the day's time was already spent
+  /// (the day had budgeted exercises and admitted none): the lead lift, or, when
+  /// a group of the lead lift had no weekly room, the first exercise that did.
   int timeForcedFirst = 0;
 
   /// Days where the guard had to put the lead lift on even though a group's weekly
@@ -23,12 +24,16 @@ class AllocationStats {
   final Map<String, int> weekly = {};
 
   /// For each group still below its weekly floor: `cap_limited`,
-  /// `co_group_limited`, `time_limited` or `not_trained_by_split`.
+  /// `co_group_limited`, `time_limited`, `copy_day_limited` (variant B only: the
+  /// exercises that could take a set sit on a day copied from A, which B never
+  /// grows) or `not_trained_by_split`.
   final Map<String, String> belowFloor = {};
 
   /// One entry per allocated day that has a budgeted exercise: its lead lift
   /// (rank 0). [boundBy] names the group whose cap or top stopped it below
-  /// [desired], or null when time (or nothing) did.
+  /// [desired], or null when time (or nothing) did. [sets] is 0 when the lead
+  /// lift was not kept (another exercise of the day was), and [groups] are the
+  /// budget groups it credits.
   final List<FirstLift> firstLifts = [];
 }
 
@@ -39,10 +44,12 @@ typedef FirstLift = ({
   int desired,
   double secondsLeft,
   String? boundBy,
+  Set<String> groups,
 });
 
-/// Why a grant was refused, per group.
-enum _Why { time, coGroup, cap }
+/// Why a grant was refused, per group. [frozen] is only ever a floor label: the
+/// slot could take a set but sits on a day variant B copied from A.
+enum _Why { time, coGroup, cap, frozen }
 
 /// One budgeted exercise in one variant of one day.
 class _Slot {
@@ -74,8 +81,17 @@ class _Slot {
 /// for variant A, 2/4 for B) with removed exercises dropped; the periodization
 /// stage reads them as-is.
 ///
-/// Pure: no Hive, no flag read. Runs before the superset pairer, so no superset
-/// time credit (Ruling 5).
+/// The lead lift's protection (B-pass R1 P2-2): it is protected from the WEEK (the
+/// rank-0 reservation keeps 2 sets for every later day that leads with the same
+/// group) and from an EMPTY day (the guard), but not from the day's clock. When 2
+/// sets of it cost more than the time left and a cheaper lift still fits, the cheaper
+/// lift stays and the lead lift is dropped; its [AllocationStats.firstLifts] entry
+/// then reads `sets: 0`, and the gate counts such days in the report.
+///
+/// Pure: no Hive, no flag read. Runs after the exercises are picked and BEFORE
+/// `PeriodizationEngine.apply`, titration, sequencing and the superset pairer, so
+/// the rank is the split's slot-priority order (not the compound-first order the
+/// sequencer gives later) and there is no superset time credit (Ruling 5).
 class SessionSetAllocator {
   SessionSetAllocator._();
 
@@ -85,11 +101,11 @@ class SessionSetAllocator {
   @visibleForTesting
   static Map<String, AllocationStats>? debugLastStats;
 
-  static const _repBased = {'weight_reps', 'bodyweight_reps', 'weighted_bodyweight', 'reps_only'};
-
-  /// Allocate [days]. [rowsByName] maps a lowercased exercise name to its library
-  /// row; a planned exercise with no row is not budgeted. [ctx.dayIntensities]
-  /// must describe [days] in order.
+  /// Allocate [days]. Which exercises are budgeted is [SessionBudget.isBudgeted]
+  /// (a custom, a timed / cardio / distance row and one with no library match keep
+  /// their sets). A budgeted exercise's muscles are the ones it carries
+  /// (`PlannedExercise.primaryMuscles`, copied from the row that was picked), else
+  /// those of its row in [rowsByName] (lowercased name -> library row).
   static List<PopulatedDay> allocate({
     required List<PopulatedDay> days,
     required SessionBudgetContext ctx,
@@ -109,11 +125,7 @@ class SessionSetAllocator {
       // rest are allocated (P2-7).
       final copy = <int, List<_Slot>>{};
       for (var d = 0; d < days.length; d++) {
-        final sameList = identical(days[d].exercisesB, days[d].exercisesA);
-        final sameNames = days[d].exercisesB.length == days[d].exercisesA.length &&
-            [for (final e in days[d].exercisesB) e.exerciseName].toString() ==
-                [for (final e in days[d].exercisesA) e.exerciseName].toString();
-        if (sameList || sameNames) copy[d] = a.byDay[d];
+        if (_sameNames(days[d].exercisesA, days[d].exercisesB)) copy[d] = a.byDay[d];
       }
       final b = _variant([for (final d in days) d.exercisesB], days, ctx, rowsByName, copy,
           stats['B'] = AllocationStats());
@@ -131,6 +143,30 @@ class SessionSetAllocator {
           exercisesB: bOut[d],
         ),
     ];
+  }
+
+  /// Whether two lists name the same exercises in the same order (the same list
+  /// object counts). Compared name by name, not by `List.toString()`, which would
+  /// run two names that contain ", " together.
+  static bool _sameNames(List<PlannedExercise> a, List<PlannedExercise> b) {
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].exerciseName != b[i].exerciseName) return false;
+    }
+    return true;
+  }
+
+  /// The budget-group tokens of [ex]: the muscles it carries (copied from the row
+  /// that was actually picked), else those of [row]. A value that is not a list
+  /// reads as none, never throws.
+  static Set<String> _groupsOf(PlannedExercise ex, Map<String, dynamic>? row) {
+    final raw = ex.primaryMuscles ?? row?['primary_muscles'];
+    return BudgetMuscleGroups.of([
+      if (raw is List)
+        for (final m in raw)
+          if (m != null) '$m',
+    ]);
   }
 
   // ── One variant ──────────────────────────────────────────────────────────
@@ -155,16 +191,10 @@ class SessionSetAllocator {
       final dayRest = SessionBudget.restFor(days[d].intensity);
       var rank = 0;
       for (final ex in lists[d]) {
-        final row = rows[ex.exerciseName.toLowerCase()];
         final arch = SessionBudget.archetypeOfPlanned(ex, ctx);
-        final notBudgeted = ex.customOrigin != null ||
-            ex.loggingType == 'timed' ||
-            ex.loggingType == 'cardio' ||
-            ex.loggingType == 'distance' ||
-            row == null;
-        if (notBudgeted) {
+        if (!SessionBudget.isBudgeted(ex, ctx)) {
           // Ruling 8: a timed row at its OWN rest, a rep-based custom at the day's.
-          final rest = _repBased.contains(ex.loggingType) ? dayRest : ex.restSeconds;
+          final rest = SessionBudget.isRepBased(ex.loggingType) ? dayRest : ex.restSeconds;
           ledger.add(d, const {}, 0, SessionBudget.exerciseSeconds(archetype: arch, sets: ex.sets, restSeconds: rest));
           entries[d].add((ex, null));
         } else {
@@ -172,7 +202,7 @@ class SessionSetAllocator {
             d,
             rank++,
             ex,
-            BudgetMuscleGroups.of([for (final m in (row['primary_muscles'] as List? ?? const [])) '$m']),
+            _groupsOf(ex, rows[ex.exerciseName.toLowerCase()]),
             arch,
             dayRest,
             SessionBudget.desiredFor(days[d].intensity),
@@ -246,7 +276,9 @@ class SessionSetAllocator {
             ..admitted = true;
           ledger.add(d, s.groups, granted, seconds(s, granted));
           if (r == 0 && granted < s.desired) {
-            s.boundBy = _firstBlockingGroup(ledger, d, s, granted + 1, r == 0 ? later : null);
+            // The ledger already holds the `granted` sets, so what stopped the NEXT
+            // one is asked of ONE more set, not of granted + 1 (B-pass R1 P2-1).
+            s.boundBy = _firstBlockingGroup(ledger, d, s, 1, later);
           }
         } else {
           s.removed = true;
@@ -319,7 +351,7 @@ class SessionSetAllocator {
     for (final g in BudgetMuscleGroups.groups) {
       final w = ledger.week(g);
       if (w > 0) stats.weekly[g] = w;
-      if (w < bottom) stats.belowFloor[g] = _label(g, all, ledger);
+      if (w < bottom) stats.belowFloor[g] = _label(g, all, ledger, copy?.keys.toSet() ?? const <int>{});
     }
     for (final d in allocateDays) {
       if (byDay[d].isEmpty) continue;
@@ -332,6 +364,7 @@ class SessionSetAllocator {
         desired: lead.desired,
         secondsLeft: ledger.secondsLeft(d),
         boundBy: sets < lead.desired ? lead.boundBy : null,
+        groups: lead.groups,
       ));
     }
 
@@ -409,8 +442,10 @@ class SessionSetAllocator {
   }
 
   /// The label for a group still below its floor: the FIRST that applies, in this
-  /// order (round-4 P2-5).
-  static String _label(String g, List<_Slot> all, BudgetLedger ledger) {
+  /// order (round-4 P2-5). [copyDays] are the days variant B copied from A: a slot
+  /// there that could still take a set is `copy_day_limited`, because B never grows
+  /// a copied day (without this it fell through to `cap_limited`, B-pass R1 P3-3).
+  static String _label(String g, List<_Slot> all, BudgetLedger ledger, Set<int> copyDays) {
     final crediting = [for (final s in all) if (s.groups.contains(g)) s];
     if (crediting.isEmpty) return 'not_trained_by_split';
     final reasons = <_Why>[];
@@ -421,7 +456,11 @@ class SessionSetAllocator {
         } else {
           final dt = SessionBudget.exerciseSeconds(archetype: s.archetype, sets: s.sets + 1, restSeconds: s.rest) -
               SessionBudget.exerciseSeconds(archetype: s.archetype, sets: s.sets, restSeconds: s.rest);
-          reasons.add(_whyFlags(ledger, s.day, s, 1, dt, null)[g]!);
+          if (copyDays.contains(s.day) && ledger.fits(s.day, s.groups, 1, dt)) {
+            reasons.add(_Why.frozen);
+          } else {
+            reasons.add(_whyFlags(ledger, s.day, s, 1, dt, null)[g]!);
+          }
         }
       } else if (s.removed) {
         reasons.add(s.why[g] ?? _Why.cap);
@@ -429,6 +468,7 @@ class SessionSetAllocator {
     }
     if (reasons.contains(_Why.time)) return 'time_limited';
     if (reasons.contains(_Why.coGroup)) return 'co_group_limited';
+    if (reasons.contains(_Why.frozen)) return 'copy_day_limited';
     return 'cap_limited';
   }
 }

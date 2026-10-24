@@ -4,7 +4,9 @@ import 'models.dart';
 /// training frequency (days per week).
 ///
 /// Slots are ordered by priority in the split spec (trainer wisdom).
-/// This filter takes the first N slots where N = f(experience, daysPerWeek).
+/// This filter takes the first N slots where N = f(experience, daysPerWeek),
+/// unless `keepAllSlots` hands the sizing of the day to the session set budget
+/// (see [filter]).
 ///
 /// Inverse scaling: fewer training days → more exercises per session.
 /// More experience → more volume per session.
@@ -41,9 +43,11 @@ class VolumeFilter {
   /// this filter never sees it.)
   /// [daysPerWeek] — training days per week (3-6).
   /// [keepAllSlots] — B2 (session set budget): keep every split slot instead of
-  /// the first [targetCount], so the allocator can size the day by time and
-  /// trim from the END of the priority order. The deload rule above still
-  /// applies. `false` (default) is today's path verbatim.
+  /// the first [targetCount], so the allocator can size the day by time. The
+  /// allocator admits slots in priority order but SKIPS one that does not fit and
+  /// goes on, so a cheaper lower-priority slot can stay where a higher one was
+  /// dropped. The deload rule above still applies. `false` (default) is today's
+  /// path verbatim.
   static List<MuscleSlot> filter(
     List<MuscleSlot> slots, {
     required String experience,
