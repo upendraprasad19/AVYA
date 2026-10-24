@@ -1,0 +1,125 @@
+# Closure ledger — coach-log-truth (OI-368 / OI-369; plan docs/plans/coach-log-truth.md rev 13)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per unit; no `deferred:` key.
+# OI-368 and OI-369 themselves stay OPEN (upstream of this batch: the post-deploy
+# measurement, plan §5.7); this ledger closes the four build units only.
+
+batch: coach-log-truth
+plan_review_record: docs/plan-reviews/coach-log-truth.md
+diagnose_docs:
+  - docs/diagnoses/2026-10-21-coach-false-logged-claim-90a784.md
+
+findings:
+  - id: L1
+    title: "The queued functionResponse says the item is NOT saved yet (tool-loop.ts)"
+    terminal_state: closed_in_commit
+    commit: coach-log-truth@branch
+    verification: "supabase/functions/_shared/tool-loop_write_claim_note_test.ts (5 cases through runToolLoop with the fake Gemini); mutation note_emitted_when_off red."
+  - id: L2
+    title: "Prompt pieces in _shared/write_claim_prompt.ts; OFF byte-identical to origin/main"
+    terminal_state: closed_in_commit
+    commit: coach-log-truth@branch
+    verification: "supabase/functions/_shared/write_claim_prompt_test.ts (golden recorded at 37c7498e by an independent capture script, quoted below); test/contracts/coach_write_claim_wiring_test.dart; body_measurement_sites_parity_test.dart repointed (exactly 2 lists)."
+  - id: DETECTOR
+    title: "Log-only [write-claim-detect] labels; never rewrites; never logs reply text or user id"
+    terminal_state: closed_in_commit
+    commit: coach-log-truth@branch
+    verification: "supabase/functions/_shared/write_claim_detector_test.ts (the three real transcripts, 8 prescribed lines, 35 authored replies, boundaries, never-throw)."
+  - id: DOCS
+    title: "Diagnose doc, SoT concept coach_write_claim_wording, CLAUDE.md rows, glossary, secret inventory, spec note"
+    terminal_state: closed_in_commit
+    commit: coach-log-truth@branch
+    notes: "OI-368/369 'Blocked on' lines are edited once observations-a12-web (which writes the entries) has merged."
+  - id: BPASS_1ed091ce8263
+    title: "B-pass findings (0 P0/P1, 1 P2, 7 P3): detector reads every claim sentence (unsafe_claims), whitespace/apostrophe normalisation, ctx thunk inside the try, the enum comment, citations, plan §5.7 stored-text read, the destructive-sheet risk note"
+    terminal_state: closed_in_commit
+    commit: coach-log-truth@branch
+    verification: "write_claim_detector_test.ts (+4 cases) and coach_write_claim_wiring_test.dart (+2 thunk pins); 7 B-pass mutations below, all red. F6 (the plan-review record) lands in its own commit after triage, as planned."
+  - id: LOCAL_CHECKS
+    title: "Local Deno run through a scratch import map (deno.land / esm.sh blocked by this container's proxy)"
+    terminal_state: verified_clean
+    evidence: "deno test --no-check --allow-all --node-modules-dir=none over supabase/functions/: 1341 passed, 1 failed — create-razorpay-order/index_test.ts 'importing … binds no server', which spawns a child deno that does not inherit the import map and cannot reach deno.land here (file untouched by this batch; CI has the network). deno check of ai-proxy/index.ts and ai-media-proxy/index.ts clean through the same map; CI's deno check is the authority."
+
+mutations:
+  harness: "scratchpad coach/run.py: exact-one-match replace computed before the write, the named Deno (--import-map scratch shim) or Dart test, restore in a finally, byte-compared after"
+  results:
+      - { id: header_not_switched, verdict: RED, evidence: "write_claim_prompt_test.ts: 3 red (ON: the ai-proxy pieces carry the new header and every approved line, ON: the media variant names no tool and none of the tool lines, prompt size: ON adds exact)" }
+      - { id: suffix_separator_when_off, verdict: RED, evidence: "write_claim_prompt_test.ts: 2 red (OFF: the suffix is empty, so the separator never lands, prompt size: ON adds exactly 2189 UTF-16 units to the ai-proxy pieces)" }
+      - { id: media_keeps_tool_lines, verdict: RED, evidence: "write_claim_prompt_test.ts: 1 red (ON: the media variant names no tool and none of the tool lines)" }
+      - { id: note_emitted_when_off, verdict: RED, evidence: "tool-loop_write_claim_note_test.ts: 1 red (rule off: the functionResponse is today's shape, no note key)" }
+      - { id: meal_description_not_swapped, verdict: RED, evidence: "tool-loop_write_claim_note_test.ts: 1 red (meal declaration: APPLY text when on, original bytes when off); write_claim_prompt_test.ts: 1 red (tool descriptions: OFF returns the same array; ON rewrites copies)" }
+      - { id: template_example_not_swapped, verdict: RED, evidence: "tool-loop_write_claim_note_test.ts: 1 red (template declaration (PRO): Queued line when on, Saved! when off); write_claim_prompt_test.ts: 1 red (tool descriptions: OFF returns the same array; ON rewrites copies)" }
+      - { id: reader_accepts_1, verdict: RED, evidence: "write_claim_prompt_test.ts: 1 red (kill-switch reader: only exactly \"true\" disables)" }
+      - { id: ruleOn_not_passed_to_loop, verdict: RED, evidence: "coach_write_claim_wiring_test.dart: 1 red (ai-proxy the tool loop gets the rule)" }
+      - { id: detector_call_removed_ai_proxy, verdict: RED, evidence: "coach_write_claim_wiring_test.dart: 1 red (ai-proxy two detector calls: after extractLogActions and in the replay branch)" }
+      - { id: token_word_boundary_dropped, verdict: RED, evidence: "write_claim_detector_test.ts: 1 red (word boundaries on tokens and on markers)" }
+      - { id: parity_media_list_changed, verdict: RED, evidence: "body_measurement_sites_parity_test.dart: 1 red (Dart constant == the Edge Function prompt lists (as sets))" }
+      - { id: parity_one_block_line_deleted, verdict: RED, evidence: "body_measurement_sites_parity_test.dart: 1 red (Dart constant == the Edge Function prompt lists (as sets))" }
+      - { id: day_swap_narration_not_switched, verdict: RED, evidence: "write_claim_prompt_test.ts: 1 red (ON: the day-swap example says APPLY, not done)" }
+      - { id: day_swap_third_arg_dropped, verdict: RED, evidence: "coach_write_claim_wiring_test.dart: 1 red (ai-proxy the prompt pieces come from the builders)" }
+      - { id: media_ruleOn_hardcoded_true, verdict: RED, evidence: "coach_write_claim_wiring_test.dart: 1 red (ai-media-proxy ruleOn is read once and feeds the authored prompt)" }
+      - { id: detector_misses_a_queued_line, verdict: RED, evidence: "write_claim_detector_test.ts: 1 red (every prescribed line gets its label; a mixed reply gets two, in order)" }
+      - { id: catch_passes_error_to_warn, verdict: RED, evidence: "write_claim_detector_test.ts: 1 red (logWriteClaimDetection: a throwing ctx logs exactly the fixed string)" }
+      - { id: size_log_flag_dropped, verdict: RED, evidence: "coach_write_claim_wiring_test.dart: 1 red (ai-proxy the size log carries the flag)" }
+      - { id: negation_ignored, verdict: RED, evidence: "write_claim_detector_test.ts: 1 red (fixture table: token, safe marker, negation)" }
+      - { id: marker_boundary_dropped, verdict: RED, evidence: "write_claim_detector_test.ts: 1 red (word boundaries on tokens and on markers)" }
+      - { id: reply_text_logged, verdict: RED, evidence: "write_claim_detector_test.ts: 1 red (logWriteClaimDetection: one line, ids passed through, no reply text, no user id)" }
+      - { id: bp_first_hit_only, verdict: RED, evidence: "write_claim_detector_test.ts: 1 red (every claim sentence is read: a later false claim counts in unsafe_claims)" }
+      - { id: bp_no_whitespace_collapse, verdict: RED, evidence: "write_claim_detector_test.ts: 1 red (a wrapped or double-spaced prescribed line still matches; a curly apostrophe negates)" }
+      - { id: bp_no_apostrophe_map, verdict: RED, evidence: "write_claim_detector_test.ts: 1 red (a wrapped or double-spaced prescribed line still matches; a curly apostrophe negates)" }
+      - { id: bp_ctx_outside_try, verdict: RED, evidence: "write_claim_detector_test.ts: 1 red (logWriteClaimDetection: the ctx is built inside the try (a throwing ctx expression))" }
+      - { id: bp_call_site_eager_ctx, verdict: RED, evidence: "coach_write_claim_wiring_test.dart: 1 red (ai-proxy two detector calls: after extractLogActions and in the replay branch)" }
+      - { id: bp_main_call_eager_ctx, verdict: RED, evidence: "coach_write_claim_wiring_test.dart: 1 red (ai-proxy two detector calls: after extractLogActions and in the replay branch)" }
+      - { id: bp_media_call_eager_ctx, verdict: RED, evidence: "coach_write_claim_wiring_test.dart: 1 red (ai-media-proxy one detector call after extractLogActions(rawReply))" }
+
+golden_capture_script: |
+  // One-time capture of the pre-write-claim prompt blocks, read at a recorded
+  // origin/main SHA, independent of the new builders (coach-log-truth plan §3).
+  // Usage: deno run --allow-run --allow-write capture_golden.ts <sha> <out.json>
+  const [sha, out] = Deno.args;
+  async function show(path: string): Promise<string> {
+    const p = new Deno.Command("git", { args: ["show", `${sha}:${path}`], stdout: "piped" });
+    const { stdout, success } = await p.output();
+    if (!success) throw new Error(`git show failed: ${path}`);
+    return new TextDecoder().decode(stdout);
+  }
+  function between(src: string, start: string, end: string): string {
+    const i = src.indexOf(start);
+    if (i < 0) throw new Error(`start not found: ${start}`);
+    const j = src.indexOf(end, i + start.length);
+    if (j < 0) throw new Error(`end not found: ${end}`);
+    return src.slice(i + start.length, j);
+  }
+  async function sha256(s: string): Promise<string> {
+    const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+    return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  }
+  const aiProxySrc = await show("supabase/functions/ai-proxy/index.ts");
+  const tmpl = between(aiProxySrc, "const ICBF_LOG_INSTRUCTIONS = `", "`;");
+  if (tmpl.includes("${")) throw new Error("template has interpolation");
+  // deno-lint-ignore no-eval
+  const aiProxy: string = (0, eval)("`" + tmpl + "`");
+  const mediaSrc = await show("supabase/functions/ai-media-proxy/index.ts");
+  const mediaExpr = between(
+    mediaSrc,
+    `"\\n- For any other photo: relate your analysis to the user's fitness journey." +\n`,
+    ");\n\n    if (snapshot_json)",
+  );
+  // deno-lint-ignore no-eval
+  const media: string = (0, eval)("(" + mediaExpr + ")");
+  if (!media.startsWith("\n\nFITNESS DATA LOGGING — INSTANT:")) throw new Error("media slice start");
+  const swapSrc = await show("supabase/functions/_shared/day_swap_routing.ts");
+  const swapTmpl = between(swapSrc, "const PRO_CAPABLE_BLOCK = `", "`;");
+  // deno-lint-ignore no-eval
+  const daySwapProCapable: string = (0, eval)("`" + swapTmpl + "`");
+  const json = {
+    sha,
+    captured_by: "capture_golden.ts (coach-log-truth plan §3); see the diagnose doc for the command",
+    ai_proxy: aiProxy,
+    media,
+    day_swap_pro_capable: daySwapProCapable,
+    sha256_ai_proxy: await sha256(aiProxy),
+    sha256_media: await sha256(media),
+    sha256_day_swap_pro_capable: await sha256(daySwapProCapable),
+  };
+  await Deno.writeTextFile(out, JSON.stringify(json, null, 2) + "\n");
+  console.log("ok", aiProxy.length, media.length, daySwapProCapable.length);
