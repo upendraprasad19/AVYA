@@ -1,0 +1,64 @@
+# Closure ledger - payment-hardening (OI-350/359, OI-360, OI-351, OI-366, OI-406; plan
+# docs/plans/2026-10-24-payment-hardening.md). Five units, one commit each (U4 landed first as PR #163).
+# Gate 40. One terminal_state per finding; no `deferred:` key. Review findings are listed per review file; every
+# one is in that file with its status.
+
+batch: payment-hardening
+plan_review_record: docs/plan-reviews/payment-hardening.md
+total_findings: 9
+closed_count: 9
+
+findings:
+  # ── units ──────────────────────────────────────────────────────────────────
+  - id: PH-U4
+    title: "promo_codes is server-only: migration 163 drops the public SELECT policy and revokes every client privilege (OI-406, diagnose a6c2e9)"
+    terminal_state: closed_in_commit
+    commit: "36e594c8 (merged as bcb1af2a, PR #163)"
+    verification: "rehearsal 16/16 in three aborting chunks, applied live (cloud 20261024121637), post-apply verify 16/16, anon GET /rest/v1/promo_codes -> 401 42501; the signed-in promo check is OI-348 B5 (OI-406 stays open until it)"
+
+  - id: PH-U1
+    title: "verify-payment checks notes.user_id (400) and its equality with the caller (403) before it captures or echoes a payment (OI-350/359, diagnose b5e8d2)"
+    terminal_state: closed_in_commit
+    commit: "4143cad5"
+    verification: "verify-payment/index_test.ts 'U1:' (foreign payment: refusal and zero capture/echo requests; caller's own created/failed payment: 200 echo); verify_payment_owner_before_capture_writer_to_reader_test.dart (guard index before every side effect); review 9d8fab4e9004, 3 findings fixed"
+
+  - id: PH-U0
+    title: "payment-path logs carry codes, types, shapes and bounded text only, never a whole error, Razorpay body, notes or raw client string; R-6 promo increment/insert errors are logged (OI-360, diagnose d1a4f6)"
+    terminal_state: closed_in_commit
+    commit: "0a8c090b"
+    verification: "_shared/payment_log_safe_test.ts; the 'U0 log:' tests in the three writers, each with a frozen-origin positive control; payment_log_safety_writer_to_reader_test.dart; review 23830821b5bf, 11 findings fixed"
+
+  - id: PH-U2
+    title: "a refused or thrown webhook capture of an already-captured payment re-reads it once and records the row from the signed event when it is captured for the same id and amount; kill switch DISABLE_WEBHOOK_CAPTURE_RECOVERY (OI-351, diagnose a9e2f7)"
+    terminal_state: closed_in_commit
+    commit: "b097d6fe"
+    verification: "razorpay-webhook/index_test.ts 'U2 (1)'..'U2 (17)' (golden for the switch, every clause negative, hang and abort and timer tests); webhook_already_captured_recovery_writer_to_reader_test.dart; log contract rules 3 and 4; review 301b075809d5, 12 findings triaged (11 fixed, 1 kept with reason)"
+
+  - id: PH-U3
+    title: "per-user hourly limits (30 order attempts, 20 promo checks, both fail closed) and the strict promo rule at order time; kill switch DISABLE_ORDER_ABUSE_GUARDS for both functions together (OI-366, diagnose f2c9a8)"
+    terminal_state: closed_in_commit
+    commit: "cbaa2dd9"
+    verification: "_shared/promo_rules_test.ts; create-razorpay-order and validate-promo 'U3:' tests with goldens against the frozen origin handlers; create_order_rate_limit_, promo_validate_rate_limit_, promo_usable_rule_ and usage_quota_ledger_ contracts; review f73e86b09ad0, 9 findings (8 fixed, 1 answered by the docs commit)"
+
+  # ── batch-level items ──────────────────────────────────────────────────────
+  - id: PH-SWITCH-REMOVAL
+    title: "the two kill switches and their old paths are removed after their live checks (CLAUDE.md 4.6 step 4)"
+    terminal_state: upstream_blocked
+    blocker: "the live checks need the founder's deploys and real traffic: the first refused capture recovered, and a week of order_abuse_guards=on with no wrongly refused order"
+    reopen_when: "both live checks are recorded on OI-407"
+
+  - id: PH-REGISTRY-STALE-INSERTS
+    title: "four registry entries named the subscription insert but pointed at other code (stale before this batch; review 6759fb19989f finding 5)"
+    terminal_state: closed_in_commit
+    commit: "b097d6fe"
+    verification: "repointed from code anchors (webhook 759-771 / 759-782, verify-payment 660-672 / 657-734); the delta reviewer read each range in the staged files"
+
+  - id: PH-DEPLOYS
+    title: "deploy the six changed functions (verify-payment, razorpay-webhook, create-razorpay-order, validate-promo, founder-digest, telegram-admin-bot)"
+    terminal_state: blocked_on_user
+    reason: "each live Edge Function deploy needs its own founder go after the merge (CLAUDE.md 4.3)"
+
+  - id: PH-DEVICE-CHECKS
+    title: "the founder's device checks of the new paths (signed-in promo check, a refused or expired promo at order time, the order limit message)"
+    terminal_state: blocked_on_user
+    reason: "founder-only device checks, listed on the OI-348 post-build check list"

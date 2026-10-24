@@ -1859,3 +1859,12 @@ added, false of the flip being performed.
 - **Test shape:** a live verify that SWITCHES ROLE (`SET LOCAL ROLE anon`) and requires the TABLE's 42501 message (a refused role switch is also 42501), checks `has_table_privilege` for every privilege (membership routes), scans definer functions and views that could read past the grants, and proves service_role still reads every row under RLS; run it BEFORE the apply (it must fail where predicted) and after.
 - **Prior incidents:** c9b3e2 (definer functions anon-executable), 7ad054 (the sibling `promo_code_uses` policy cleanup that left this table open), a6c2e9 (OI-406, `promo_codes`).
 - **Regression test:** `test/sql/promo_codes_no_client_access_live_verify.sql`, `test/contracts/promo_codes_server_only_writer_to_reader_test.dart`.
+
+### 2.120 A service-role path performs its side effect BEFORE the authorization check that should gate it (NEW 2026-10-24)
+
+- **Telltale:** a function that holds privileged credentials (service role, a payment provider's secret key) answers a refusal (403 / 400 "not yours") correctly, yet something already happened for the caller before that answer: a capture, a status echo, an external write. The refusal's TEXT is right; its POSITION is wrong.
+- **Root-cause shape:** the guard was added or hardened in place (c8f229 made it fail closed) without asking what runs above it; the handler reads top-down as "fetch, act, then check". A per-response test sees the right 403 and passes.
+- **Fix pattern:** move the guard to the first line after the read that supplies its input, before every side effect and every answer that reveals the object; leave the guard's body untouched. Pin the ORDER (guard index < every side-effect index, comments stripped) and test the side effect's ABSENCE (no capture request recorded), not only the status.
+- **Test shape:** a fake that records every outbound request; for the foreign object assert the refusal AND zero side-effect requests; a mutant that moves the guard below each side effect in turn must redden.
+- **Prior incidents:** c8f229 (OI-29: the same guard, fail-open on absent notes), b5e8d2 (OI-350/359: capture and status echo before it).
+- **Regression test:** `supabase/functions/verify-payment/index_test.ts` ("U1:"), `test/contracts/verify_payment_owner_before_capture_writer_to_reader_test.dart`.
