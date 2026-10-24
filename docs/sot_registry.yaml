@@ -8295,11 +8295,11 @@ concepts:
       functions; pinned by test/contracts/migration_152_drop_subscription_mirror_test.dart.
     writers:
       - file: supabase/functions/razorpay-webhook/index.ts
-        line_range: 566-611
+        line_range: 759-771
         method: subscriptions insert (the ONLY entitlement write)
         notes: The users.update mirror write this handler used to make was removed; the insert is the whole write.
       - file: supabase/functions/verify-payment/index.ts
-        line_range: 539-638
+        line_range: 657-734
         method: subscriptions insert / canonical end_date
         notes: Same — no users mirror write; the response reports the canonical row's end_date.
       - file: supabase/migrations/038_redeem_referral_atomic.sql
@@ -13588,7 +13588,7 @@ concepts:
          .maybeSingle() then synthesises PGRST116 and strips PRO.
     writers:
       - file: supabase/functions/verify-payment/index.ts
-        line_range: 518-530
+        line_range: 660-672
         method: payment confirmation handler — subscription insert
         semantic: cloud-write
         notes: |
@@ -13596,7 +13596,7 @@ concepts:
           for an existing active row, so a renewal bought before the old
           end_date lapses leaves TWO active rows for one user.
       - file: supabase/functions/razorpay-webhook/index.ts
-        line_range: 583-595
+        line_range: 759-782
         method: webhook handler — subscription insert
         semantic: cloud-write
         notes: |
@@ -16420,7 +16420,7 @@ concepts:
         method: the insert branch (stackingOn)
         notes: ON assigns canonicalEndDateIso and weInsertedTheRow from the RPC answer; OFF is today's insert and 23505 arms, and sets offInserted only on its own successful insert (the alarm's precondition, consumed after the promo).
       - file: supabase/functions/razorpay-webhook/index.ts
-        line_range: 641-741
+        line_range: 701-801
         method: the insert branch (stackingOn)
         notes: ON assigns endDate (returned as expires_at) and alreadyProcessed = !inserted; OFF is today's insert and 23505 arms, and sets offInserted only on its own successful insert (the alarm's precondition, consumed after the promo).
     readers:
@@ -16493,7 +16493,7 @@ concepts:
         notes: The one guard read, the shut/open decision, and the stacks_after response field and order note.
     readers:
       - file: supabase/functions/razorpay-webhook/index.ts
-        line_range: 641-781
+        line_range: 701-841
         method: the insert branch (OFF-branch mismatch alarm)
         semantic: detect-door-on-order-recorded-off
         notes: Does NOT read stacks_after (payment notes come from the client's checkout options); it reads the database for an active referral_trial row after its own OFF insert.
@@ -16902,7 +16902,7 @@ concepts:
     writers:
       - file: supabase/functions/_shared/payment_log_safe.ts
         line_range: 1-79
-        method: pgErrorCode / errorName / boundedText / razorpayErrorSummary / notesShape
+        method: pgErrorCode / errorName / boundedText / razorpayErrorSummary / notesShape / codeToken
         semantic: pure
     readers:
       - file: supabase/functions/verify-payment/index.ts
@@ -16910,7 +16910,7 @@ concepts:
         method: every log site on the payment path (insert failure, capture refusal, plan mismatch, pre-SELECT, promo)
         semantic: log
       - file: supabase/functions/razorpay-webhook/index.ts
-        line_range: 1-811
+        line_range: 1-871
         method: every log site on the payment path (insert failure, notes, user_id, capture, plan, promo)
         semantic: log
       - file: supabase/functions/create-razorpay-order/index.ts
@@ -16923,4 +16923,36 @@ concepts:
     cloud:
       table: "n/a — function logs"
       columns: []
+    sync_methods: []
+
+  # payment-hardening U2 (OI-351, diagnose a9e2f7, 2026-10-24) — a refused capture of an already-captured payment.
+  - concept: webhook_already_captured_recovery
+    domain: subscription
+    behavioral_test_path: supabase/functions/razorpay-webhook/index_test.ts
+    description: |
+      On a payment.authorized delivery the webhook captures the payment before recording the row. When Razorpay
+      REFUSES the capture (or the call throws), the webhook re-reads the payment once (rereadIsCaptured: GET
+      /v1/payments/<id>, bounded at 1500 ms by a race with the body read inside it, never throws) and, only if
+      it is a plain object with the same id, a number amount equal to the event's, captured === true and status
+      "captured", records the row from the signed event as on the payment.captured path. Otherwise today's 502.
+      Before this, every replay after a first delivery that captured and then failed to record met "already
+      captured" and answered 502 until the 300 s window closed. Kill switch DISABLE_WEBHOOK_CAPTURE_RECOVERY
+      (exactly "true") = today's 502 (a TRUE golden against the frozen origin/main handler). Tests: "U2 (1)"
+      to "U2 (15c)".
+    writers:
+      - file: supabase/functions/razorpay-webhook/index.ts
+        line_range: 257-303
+        method: rereadIsCaptured
+        semantic: cloud-read
+    readers:
+      - file: supabase/functions/razorpay-webhook/index.ts
+        line_range: 499-559
+        method: handler — captureRefused branch (recover, or 502)
+        semantic: guard
+    hive:
+      box: "n/a — server-side"
+      key_prefix: "n/a"
+    cloud:
+      table: subscriptions
+      columns: [user_id, razorpay_payment_id, plan, start_date, end_date]
     sync_methods: []

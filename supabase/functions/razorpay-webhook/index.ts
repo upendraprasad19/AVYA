@@ -43,6 +43,7 @@ import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-
 import { encode as hexEncode } from "https://deno.land/std@0.177.0/encoding/hex.ts";
 import { encode as base64Encode } from "https://deno.land/std@0.177.0/encoding/base64.ts";
 import {
+  isEnvExactlyTrue,
   isStackingEnabled,
   isValidPaymentId,
   plainEndDate,
@@ -253,6 +254,54 @@ async function redeemPromo(
   }
 }
 
+/** Kill switch for the already-captured recovery (payment-hardening U2, OI-351): exactly "true" = today's 502. */
+export const CAPTURE_RECOVERY_DISABLE_ENV = "DISABLE_WEBHOOK_CAPTURE_RECOVERY";
+/** How long the recovery GET may take; a hang must not hold Razorpay's 5 s delivery clock. */
+export const RECOVERY_GET_TIMEOUT_MS = 1500;
+
+/**
+ * After Razorpay REFUSED our capture of an authorized payment: is it in fact already captured, for exactly
+ * this amount? (It is, when a first delivery captured it and then failed to record the row, so every replay
+ * of the same `payment.authorized` event used to meet "already captured" and answer 502 for up to a day.)
+ * Never throws: a non-OK answer, a malformed body, a network error or a hang past [timeoutMs] is `false`.
+ * The body read sits INSIDE the race, so a hang after the headers is bounded too.
+ */
+export async function rereadIsCaptured(
+  paymentId: string,
+  expectedAmount: unknown,
+  credentials: string,
+  timeoutMs: number = RECOVERY_GET_TIMEOUT_MS,
+): Promise<boolean> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<false>((resolve) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      resolve(false);
+    }, timeoutMs);
+  });
+  const read = (async (): Promise<boolean> => {
+    const resp = await fetch(`https://api.razorpay.com/v1/payments/${paymentId}`, {
+      method: "GET",
+      headers: { "Authorization": `Basic ${credentials}`, "Content-Type": "application/json" },
+      signal: controller.signal,
+    });
+    if (!resp.ok) return false;
+    const p: unknown = await resp.json();
+    if (p === null || typeof p !== "object" || Array.isArray(p)) return false;
+    const e = p as { id?: unknown; amount?: unknown; captured?: unknown; status?: unknown };
+    return e.id === paymentId &&
+      typeof e.amount === "number" && e.amount === expectedAmount &&
+      e.captured === true &&
+      e.status === "captured";
+  })().catch(() => false);
+  try {
+    return await Promise.race([read, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function handler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -447,10 +496,15 @@ export async function handler(req: Request): Promise<Response> {
           },
         );
       }
+      // payment-hardening U2 (OI-351): a REFUSED capture is no longer an immediate 502. The switch is read
+      // once per request; set to exactly "true" it restores today's 502 on every refusal.
+      const recoveryDisabled = isEnvExactlyTrue(CAPTURE_RECOVERY_DISABLE_ENV);
+      const credentials = base64Encode(
+        `${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`,
+      );
+      let captureRefused = false;
+      let refusal = "";
       try {
-        const credentials = base64Encode(
-          `${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`,
-        );
         const captureResp = await fetch(
           `https://api.razorpay.com/v1/payments/${razorpayPaymentId}/capture`,
           {
@@ -467,9 +521,30 @@ export async function handler(req: Request): Promise<Response> {
         );
         if (!captureResp.ok) {
           const body = await captureResp.text();
-          console.error(
-            `[razorpay-webhook] capture failed for ${razorpayPaymentId}: ${razorpayErrorSummary(captureResp.status, body)}`,
+          captureRefused = true;
+          refusal = `capture failed for ${razorpayPaymentId}: ${razorpayErrorSummary(captureResp.status, body)}`;
+        } else {
+          console.log(
+            `[razorpay-webhook] auto-captured authorized payment ${razorpayPaymentId}`,
           );
+          // We continue below to write the subscription. Razorpay will also
+          // send payment.captured later — that call will hit the UNIQUE
+          // constraint and be a no-op (idempotent).
+        }
+      } catch (e) {
+        captureRefused = true;
+        refusal = `capture threw for ${razorpayPaymentId}: ${errorName(e)}`;
+      }
+      if (captureRefused) {
+        // Recovery: the usual refusal on a REPLAY is "already captured" (a first delivery captured it, then
+        // failed to record the row). If Razorpay says it is captured, for this amount, record it now from the
+        // signed event (amount, notes and plan come from the event, as on the payment.captured path).
+        if (!recoveryDisabled && await rereadIsCaptured(razorpayPaymentId, paymentEntity.amount, credentials)) {
+          console.warn(
+            `[razorpay-webhook] capture refused, payment already captured; continuing payment_id=${razorpayPaymentId}`,
+          );
+        } else {
+          console.error(`[razorpay-webhook] ${refusal}`);
           // Don't fail the whole webhook — Razorpay will retry
           // payment.authorized; next try may succeed. Return 5xx so
           // Razorpay keeps retrying.
@@ -481,21 +556,6 @@ export async function handler(req: Request): Promise<Response> {
             },
           );
         }
-        console.log(
-          `[razorpay-webhook] auto-captured authorized payment ${razorpayPaymentId}`,
-        );
-        // We continue below to write the subscription. Razorpay will also
-        // send payment.captured later — that call will hit the UNIQUE
-        // constraint and be a no-op (idempotent).
-      } catch (e) {
-        console.error(`[razorpay-webhook] capture threw for ${razorpayPaymentId}: ${errorName(e)}`);
-        return new Response(
-          JSON.stringify({ error: "Capture failed, will retry" }),
-          {
-            status: 502,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          },
-        );
       }
     }
 

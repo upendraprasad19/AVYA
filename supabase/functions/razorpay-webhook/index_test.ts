@@ -794,3 +794,246 @@ for (const [label, path, expectLine] of [
     assert(!anyLine(r.all, SECRET), r.all.join("\n"));
   });
 }
+
+// ── payment-hardening U2 (OI-351): a refused capture of an ALREADY-captured payment records the row ──
+// Before U2 every replay of a payment.authorized event whose first delivery captured the payment and then
+// failed to record the row met "already captured" and answered 502 until the replay window closed.
+
+const RECOVERY_SWITCH = "DISABLE_WEBHOOK_CAPTURE_RECOVERY";
+const CAPTURE_PATH = `/v1/payments/${PAY}/capture`;
+const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+const alreadyCaptured = () => json(400, { error: { code: "BAD_REQUEST_ERROR", description: "This payment has already been captured", reason: "payment_already_captured" } });
+const capturedEntity = (over: Record<string, unknown> = {}) => ({ id: PAY, amount: 34900, currency: "INR", captured: true, status: "captured", notes: { user_id: USER }, ...over });
+
+type CaptureAnswer = "refused" | "ok" | "throw";
+type GetAnswer = Response | "throw" | "hang" | (() => Response);
+
+function razorpayRoute(capture: CaptureAnswer, get: GetAnswer): Scenario["intercept"] {
+  return (req) => {
+    if (req.host !== "https://api.razorpay.com") return undefined;
+    if (req.method === "POST" && req.path === CAPTURE_PATH) {
+      if (capture === "throw") return "throw";
+      return capture === "ok" ? json(200, capturedEntity()) : alreadyCaptured();
+    }
+    if (req.method === "GET" && req.path === `/v1/payments/${PAY}`) {
+      if (get === "throw") return "throw";
+      if (get === "hang") return new Promise<Response>(() => {});
+      return typeof get === "function" ? get() : get.clone();
+    }
+    return undefined;
+  };
+}
+
+async function withRecoverySwitch<T>(value: string | undefined, fn: () => Promise<T>): Promise<T> {
+  const before = Deno.env.get(RECOVERY_SWITCH);
+  if (value === undefined) Deno.env.delete(RECOVERY_SWITCH);
+  else Deno.env.set(RECOVERY_SWITCH, value);
+  try {
+    return await fn();
+  } finally {
+    if (before === undefined) Deno.env.delete(RECOVERY_SWITCH);
+    else Deno.env.set(RECOVERY_SWITCH, before);
+  }
+}
+
+async function runRecovery(handler: Handler, sc: Scenario, opts: { recovery?: string; stacking?: string } = {}) {
+  const { server, promoIncrements } = paymentServer(sc);
+  server.install();
+  try {
+    const req = await authorizedWebhookRequest(sc);
+    const before = Date.now();
+    const { result: res, errors, all } = await withRecoverySwitch(opts.recovery, () =>
+      withSwitch(opts.stacking, () => captureConsole(() => handler(req)))
+    );
+    const after = Date.now();
+    const text = await res.text();
+    let body: Record<string, unknown> = {};
+    try { body = JSON.parse(text); } catch { /* leave empty */ }
+    return { res, body, text, server, promoIncrements, errors, all, ms: after - before };
+  } finally {
+    server.restore();
+  }
+}
+
+const gets = (server: { to: (p: string, m?: string) => unknown[] }) => server.to(`/v1/payments/${PAY}`, "GET").length;
+const capturePosts = (server: { to: (p: string, m?: string) => unknown[] }) => server.to(CAPTURE_PATH, "POST").length;
+
+t("U2 (1): authorized, capture refused, GET says captured for this amount -> the row is recorded, 200", async () => {
+  const r = await runRecovery(newHandler, { rows: [], intercept: razorpayRoute("refused", json(200, capturedEntity())) });
+  assertEquals(r.res.status, 200);
+  assertEquals(subscriptionInserts(r.server).length, 1);
+  assertEquals(gets(r.server), 1);
+  assert(r.all.some((l) => l === `[razorpay-webhook] capture refused, payment already captured; continuing payment_id=${PAY}`), r.all.join("\n"));
+});
+
+t("U2 (2): capture refused, GET says still authorized -> 502 as today, no row", async () => {
+  const r = await runRecovery(newHandler, { rows: [], intercept: razorpayRoute("refused", json(200, capturedEntity({ captured: false, status: "authorized" }))) });
+  assertEquals(r.res.status, 502);
+  assertEquals(r.body, { error: "Capture failed, will retry" });
+  assertEquals(subscriptionInserts(r.server).length, 0);
+});
+
+t("U2 (3): capture refused, GET answers 500 -> 502, no row", async () => {
+  const r = await runRecovery(newHandler, { rows: [], intercept: razorpayRoute("refused", json(500, { error: { code: "SERVER_ERROR" } })) });
+  assertEquals(r.res.status, 502);
+  assertEquals(subscriptionInserts(r.server).length, 0);
+});
+
+t("U2 (4): the capture call THROWS, GET says captured -> recorded, 200", async () => {
+  const r = await runRecovery(newHandler, { rows: [], intercept: razorpayRoute("throw", json(200, capturedEntity())) });
+  assertEquals(r.res.status, 200);
+  assertEquals(subscriptionInserts(r.server).length, 1);
+});
+
+t("U2 (5): GET says captured but for ANOTHER amount -> 502, no row", async () => {
+  const r = await runRecovery(newHandler, { rows: [], intercept: razorpayRoute("refused", json(200, capturedEntity({ amount: 34800 }))) });
+  assertEquals(r.res.status, 502);
+  assertEquals(subscriptionInserts(r.server).length, 0);
+});
+
+t("U2 (6): happy path (capture OK) -> recorded, and no recovery GET is made", async () => {
+  const r = await runRecovery(newHandler, { rows: [], intercept: razorpayRoute("ok", "throw") });
+  assertEquals(r.res.status, 200);
+  assertEquals(gets(r.server), 0);
+  assertEquals(subscriptionInserts(r.server).length, 1);
+});
+
+t("U2 (7): three replays after a recovery -> H-19 skips each: no capture, no GET, still one row", async () => {
+  const sc: Scenario = { rows: [], notes: { promo_code: "HALF50" }, amount: 17450, promoRows: promoScenario([]).promoRows, intercept: razorpayRoute("refused", json(200, capturedEntity({ amount: 17450 }))) };
+  const first = await runRecovery(newHandler, sc);
+  assertEquals(first.res.status, 200);
+  assertEquals(first.promoIncrements.length, 1);
+  for (let i = 0; i < 3; i++) {
+    const r = await runRecovery(newHandler, sc); // sc.rows now holds the recorded row
+    assertEquals(r.res.status, 200);
+    assertEquals(capturePosts(r.server), 0);
+    assertEquals(gets(r.server), 0);
+    assertEquals(r.promoIncrements.length, 0);
+  }
+  assertEquals(sc.rows!.length, 1);
+});
+
+t("U2 (8): recovery on the stacking-ON path -> exactly one record_paid_subscription call; promo only when inserted", async () => {
+  for (const inserted of [true, false]) {
+    const sc: Scenario = {
+      ...promoScenario([]),
+      recordPaid: { rows: [rpcRow({ out_inserted: inserted })] },
+      intercept: razorpayRoute("refused", json(200, capturedEntity({ amount: 17450 }))),
+    };
+    const r = await runRecovery(newHandler, sc, { stacking: "true" });
+    assertEquals(r.res.status, 200);
+    assertEquals(recordPaidCalls(r.server).length, 1);
+    assertEquals(r.promoIncrements.length, inserted ? 1 : 0);
+  }
+});
+
+t("U2 (9): recovery then a 23505 race on the insert -> 200 and no promo redemption", async () => {
+  const sc: Scenario = {
+    ...promoScenario([]),
+    intercept: (req) =>
+      req.method === "POST" && req.path === "/rest/v1/subscriptions"
+        ? json(409, { code: "23505", message: 'duplicate key value violates unique constraint "unique_razorpay_payment_id"' })
+        : razorpayRoute("refused", json(200, capturedEntity({ amount: 17450 })))!(req),
+  };
+  const r = await runRecovery(newHandler, sc);
+  assertEquals(r.res.status, 200);
+  assertEquals(r.promoIncrements.length, 0);
+});
+
+t("U2 (10): switch exactly \"true\" -> a TRUE golden of origin/main: same status, body and request list", async () => {
+  const sc = (): Scenario => ({ rows: [], intercept: razorpayRoute("refused", json(200, capturedEntity())) });
+  const golden = await runRecovery(originHandler, sc(), { recovery: "true" });
+  const r = await runRecovery(newHandler, sc(), { recovery: "true" });
+  assertEquals(golden.res.status, 502);
+  assertEquals(r.res.status, golden.res.status);
+  assertEquals(r.text, golden.text);
+  assertEquals(normalizeRequests(r.server.requests), normalizeRequests(golden.server.requests));
+  assertEquals(gets(r.server), 0);
+});
+
+t("U2 (10b): any switch value other than exactly \"true\" leaves the recovery ON", async () => {
+  for (const v of ["TRUE", " true", "1", "false", ""]) {
+    const r = await runRecovery(newHandler, { rows: [], intercept: razorpayRoute("refused", json(200, capturedEntity())) }, { recovery: v });
+    assertEquals(r.res.status, 200, `switch=${JSON.stringify(v)}`);
+  }
+});
+
+t("U2 (11): the recovery GET HANGS -> 502 within about 2 s", async () => {
+  const r = await runRecovery(newHandler, { rows: [], intercept: razorpayRoute("refused", "hang") });
+  assertEquals(r.res.status, 502);
+  assert(r.ms >= 1400 && r.ms < 2500, `bounded at 1.5 s, took ${r.ms} ms`);
+});
+
+t("U2 (11b): a GET whose BODY never arrives (headers sent) is bounded too -> 502 within about 2 s", async () => {
+  const neverEnding = () => new Response(new ReadableStream({ start() {} }), { status: 200, headers: { "Content-Type": "application/json" } });
+  const r = await runRecovery(newHandler, { rows: [], intercept: razorpayRoute("refused", neverEnding) });
+  assertEquals(r.res.status, 502);
+  assert(r.ms >= 1400 && r.ms < 2500, `bounded at 1.5 s, took ${r.ms} ms`);
+});
+
+for (const [label, body] of [
+  ["(12) the id differs", capturedEntity({ id: "pay_OTHER000000001" })],
+  ["(13) captured:false with status captured", capturedEntity({ captured: false })],
+  ["(14) captured:true with status authorized", capturedEntity({ status: "authorized" })],
+  ["(15a) a null body", null],
+  ["(15b) an array body", [capturedEntity()]],
+  ["(15c) a string amount", capturedEntity({ amount: "34900" })],
+] as const) {
+  t(`U2 ${label}: the recovery refuses -> 502, no row`, async () => {
+    const r = await runRecovery(newHandler, { rows: [], intercept: razorpayRoute("refused", json(200, body)) });
+    assertEquals(r.res.status, 502);
+    assertEquals(subscriptionInserts(r.server).length, 0);
+  });
+}
+
+// ── U2 (16)/(17): the timeout's own cleanup (B-pass 6759fb19989f finding 6) ──
+// Direct calls of rereadIsCaptured with fetch swapped here only: a hung GET must be ABORTED when the timeout
+// wins (no socket left open in a warm isolate), and when the GET wins no 1.5 s timer may stay pending.
+const reread = (await importWithEnv(() => import("./index.ts"))).rereadIsCaptured as (
+  paymentId: string,
+  expectedAmount: unknown,
+  credentials: string,
+  timeoutMs?: number,
+) => Promise<boolean>;
+
+async function withFetch<T>(fake: typeof fetch, fn: () => Promise<T>): Promise<T> {
+  const real = globalThis.fetch;
+  globalThis.fetch = fake;
+  try {
+    return await fn();
+  } finally {
+    globalThis.fetch = real;
+  }
+}
+
+t("U2 (16): the timeout wins -> the hung GET's signal is ABORTED (live when the GET starts) and the answer is false", async () => {
+  let signal: AbortSignal | null | undefined;
+  let abortedAtCall: boolean | undefined;
+  const hung = ((_url: unknown, init?: RequestInit) => {
+    signal = init?.signal;
+    abortedAtCall = init?.signal?.aborted;
+    return new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+    });
+  }) as typeof fetch;
+  assertEquals(await withFetch(hung, () => reread(PAY, 34900, "x", 30)), false);
+  assert(signal, "the GET must carry an abort signal");
+  assertEquals(abortedAtCall, false, "the signal must be live when the GET starts (aborted only by the timeout)");
+  assertEquals(signal.aborted, true);
+});
+
+for (const [label, answer, expected] of [
+  ["captured for the amount -> true", () => json(200, capturedEntity()), true],
+  ["a 500 -> false", () => json(500, { error: "x" }), false],
+  ["captured:false -> false", () => json(200, capturedEntity({ captured: false })), false],
+] as const) {
+  Deno.test({
+    name: `U2 (17): the GET wins, ${label}, and no timer is left pending (op sanitizer ON)`,
+    sanitizeOps: true,
+    sanitizeResources: true,
+    fn: async () => {
+      const quick = (() => Promise.resolve(answer())) as typeof fetch;
+      assertEquals(await withFetch(quick, () => reread(PAY, 34900, "x", 60_000)), expected);
+    },
+  });
+}

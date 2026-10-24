@@ -6794,3 +6794,14 @@ Past `user_daily_snapshots` stay (nothing reads a past day's `coach_notices`). D
 **Update 2026-10-24 (live apply, the founder's go).** Rehearsal 16 of 16 ok, nothing persisted, 0 locks on `promo_codes`. Applied via MCP `apply_migration` (cloud version `20261024121637`). Post-apply verify `ok=16 fail=0` (run as three self-contained chunks: `execute_sql` refused the whole block). Anon-key `GET /rest/v1/promo_codes`: 401, code 42501 (was 206 `*/3`). `service_role` reads 3 of 3 rows (P13). Still open: the signed-in app check and the merge.
 
 **Related.** OI-366 (order-time promo rules, the payment-hardening branch), c9b3e2 (the same class: server-only objects reachable by the client roles through default privileges).
+
+## OI-407 — Remove the two payment-hardening kill switches (DISABLE_WEBHOOK_CAPTURE_RECOVERY, DISABLE_ORDER_ABUSE_GUARDS) and their old code paths once their live checks pass
+
+- **Status**: OPEN
+- **Blocked on**: the live check of the webhook switch's new path (plan `docs/plans/2026-10-24-payment-hardening.md` section 6): the first real payment that meets a refused capture (the recovery line `capture refused, payment already captured; continuing`). It needs the founder's deploy first. The second switch (unit U3 of the same branch) joins this entry when it lands.
+- **Verified**: 2026-10-24 - by reading the branch: `razorpay-webhook/index.ts` reads `DISABLE_WEBHOOK_CAPTURE_RECOVERY` through `isEnvExactlyTrue`, once per request; the old path sits behind it verbatim (CLAUDE.md 4.6).
+- **Identified**: 2026-10-24 · filed via mint_oi.sh from branch `payment-hardening`
+
+**What.** CLAUDE.md 4.6 step 4: the old path is deleted in the batch that rolls the gate; here the gate defaults ON (founder decision 2026-10-24), so the "roll" is the live check, and the deletion is tracked here instead of as an intention (the OI-374 precedent). Delete: the switch read, the switch-on branch (the 502-without-reread in the webhook), the switch-ON golden, and the `SECRET_INVENTORY.md` row.
+
+**Done when.** The live check above is recorded; the deletion lands with its tests; the secret is not set in the Dashboard. Blast radius: `catastrophic` (payment functions).
