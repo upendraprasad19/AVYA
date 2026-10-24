@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**258 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**259 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -266,3 +266,4 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-403 | Coach injury swap picks a substitute by muscle only and never reads… | none | 2026-10-24 - read… | [:6731](open_issues.md#L6731) |
 | OI-404 | Retiring 7 duplicate library rows (ad896b42) lowered the uninjured… | none | 2026-10-24 - regenerated… | [:6746](open_issues.md#L6746) |
 | OI-405 | deploy_via_api.js leaves a dirty tree after EVERY deploy: the… | the track-or-ignore choice for the… | 2026-10-24 - by reading and measuring in… | [:6761](open_issues.md#L6761) |
+| OI-408 | Bodyweight beginner with shoulder + lower_back injuries has 2-exercise… | upstream, a founder call.… | 2026-10-24 - prototype 2 of the OI-401… | [:6780](open_issues.md#L6780) |
