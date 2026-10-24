@@ -259,7 +259,7 @@ Titles below are condensed. Full original rows (incident, measurements, second-o
 | **Appending `&` to a command the tool ALREADY runs in the background double-backgrounds it** | Never add your own `&` under a background flag; plain `>` to a real path. | 2026-09-22 |
 | **A file whose own SUBJECT is invisible/separator characters (U+2028, U+2029, U+0085, ESC, …)** | Build them from `String.fromCharCode`/hex literals, even in comments; scan for non-ASCII after. | f4a9c2, 125b81 |
 | **After a GitHub-PR merge, PRIMARY's local `main` lags `origin/main` — `retire_worktree.dart` reports `[branch not merged]`** | `git fetch origin main && git merge --ff-only origin/main`, re-run the dry-run. | 2026-09-29 |
-| **A merge of two long-lived branches into a shared self-numbered file (bug-class index, tuning history) can silently produce a numbering COLLISION** | After ANY merge touching such a file: `grep -oE "^### [0-9]+\.[0-9]+" <file> \| sort \| uniq -d` vs each parent. | 2026-09-29 |
+| **A merge of two long-lived branches into a shared self-numbered file (bug-class index; the tuning archive was one until it was frozen) can silently produce a numbering COLLISION** | After ANY merge touching such a file: `grep -oE "^### [0-9]+\.[0-9]+" <file> \| sort \| uniq -d` vs each parent. | 2026-09-29 |
 | **A Claude Code hook with a relative script path silently does not run after the shell `cd`s into a subdirectory** (exit 255 = non-blocking) | Use the root-resolving hook template (`docs/architecture/hooks.md`); a guard that "did not fire" may never have STARTED. | 8f3e35 |
 
 ---
@@ -295,7 +295,7 @@ Titles below are condensed. Full original rows (incident, measurements, second-o
 
 ### 5.1 Skill self-evolution
 
-**GATED for the code-review skill** by `scripts/check_skill_tuning_history.dart`: a commit that ADDS `docs/reviews/<x>-review.md` must also append a same-dated entry to the code-review Tuning history in `.claude/skills/code-review/tuning-history.md` (`SKILL.md` keeps its `## 7` heading and a pointer), or the commit is blocked. Scope: code-review only (`/hermes-pass` keeps its own tuning section); a new bug-class in ANY skill is unenforceable by script and prompted by the §5 Stop hook.
+**GATED for the code-review skill** by `scripts/check_skill_tuning_history.dart`: a commit that ADDS `docs/reviews/<x>.md` must carry a dated `## Tuning entry` section INSIDE that review file (template: `.claude/skills/code-review/SKILL.md` §1), or the commit is blocked; the old archive `.claude/skills/code-review/tuning-history.md` is FROZEN (a non-merge commit that adds an entry to it is blocked). Re-run `dart run scripts/check_skill_tuning_history.dart` on the staged state to read a block message (the pre-commit loop hides it). Scope: code-review only (`/hermes-pass` keeps its own tuning section); a new bug-class in ANY skill is unenforceable by script and prompted by the §5 Stop hook.
 
 After a batch that surfaced a new bug-class, red flag, or anti-pattern: (1) check whether a skill's "Bug classes"/"Red flags" table covers it, else add an entry; (2) cite bug ID + one-line trigger + regression test path; (3) commit skill edits in the SAME commit as the discovering fix; (4) add a new `.claude/skills/<topic>/SKILL.md` when 3+ batches share a pattern.
 
@@ -348,11 +348,11 @@ Every diagnose-doc lists tiers with status `verified` / `fixed_in_this_batch` / 
 | Audit lens registry / closure ledgers | `docs/audit/LENS_REGISTRY.md`, `docs/audit/<YYYY_MM_DD>_audit_closures.yaml` |
 | **Open-issues backlog — READ THE INDEX FIRST** | `docs/audit/OPEN_INDEX.md` (generated; `wc -c` it) → `docs/audit/open_issues.md` at the cited line; closed history `docs/audit/closed_issues.md`; numbers minted ONLY by `scripts/mint_oi.sh` |
 | Blast-radius registry; ADRs; handbook; incidents | `docs/blast_radius.yaml`, `docs/adr/`, `docs/handbook/`, `docs/incidents/` |
-| Review / debug / e2e skills (long history on demand) | `.claude/skills/{code-review,hermes-pass,debugging,e2e-sim-testing}/SKILL.md`; `code-review/tuning-history.md`, `debugging/bug-classes.md`; `docs/reviews/` |
+| Review / debug / e2e skills (long history on demand) | `.claude/skills/{code-review,hermes-pass,debugging,e2e-sim-testing}/SKILL.md`; `code-review/tuning-history.md` (frozen legacy archive), `debugging/bug-classes.md`; `docs/reviews/` |
 | Device-CI, cron registry, secrets, fresh clone | `docs/operations/{DEVICE_TESTING,CRON_REGISTRY,SECRET_INVENTORY}.md`, `docs/onboarding/FRESH_CLONE.md` |
 | Subagent brief preamble; end-of-batch skill | `docs/agent_brief_preamble.md`; `/update-docs` |
 | Discipline / `Stop` (§5) / memory write-guard hooks | `scripts/discipline_hook.dart`, `scripts/batch_close_hook.dart`, `scripts/memory_write_guard_hook.dart` |
-| Skill self-evolution gate (§5.1) | `scripts/check_skill_tuning_history.dart`; entries in `.claude/skills/code-review/tuning-history.md` |
+| Skill self-evolution gate (§5.1) | `scripts/check_skill_tuning_history.dart`; entries live in each `docs/reviews/*.md` (`## Tuning entry`); legacy archive `.claude/skills/code-review/tuning-history.md` is frozen |
 | Worktree enforcement / retirement / config integrity (§4.13) | `scripts/check_commit_from_worktree.dart`, `scripts/retire_worktree.dart`, `scripts/check_worktree_config_integrity.dart` |
 | Gate registry + rule-24 ledger | `docs/audit/GATE_INDEX.md` (generated), `docs/audit/gate_test_ledger.yaml` |
 | OI allocator; Dart resolution; merge prechecks; contract sweep; AST debt gates | `scripts/mint_oi.sh`, `scripts/_dart_bin.sh`, `scripts/safe_merge.sh`, `scripts/contract_sweep.dart`, `scripts/check_hive_first_pattern.dart` |

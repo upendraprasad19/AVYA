@@ -1,10 +1,12 @@
 # Code-review skill - Tuning history
 
-Append new dated entries to THIS file (not `SKILL.md`), under the heading below, in the same
-bullet shape as before: `- **YYYY-MM-DD** - blast-radius ...` (optionally `**YYYY-MM-DD (b)**`
-for a second same-day review). The entry's block must name the review file's basename.
-`scripts/check_skill_tuning_history.dart` gates this file (CLAUDE.md section 5.1). Moved verbatim
-out of `SKILL.md` section 7 by the context-lean batch (2026-09-29).
+FROZEN (2026-10-24, merge-conflict-treadmill A1): do NOT add entries here. A review now carries its
+own `## Tuning entry` section inside the review file (see `SKILL.md` section 1), so parallel PRs no
+longer edit the same line of this file. A non-merge commit that makes this file hold more dated
+bullets than its HEAD blob is blocked by `scripts/check_skill_tuning_history.dart` (CLAUDE.md
+section 5.1); shrinking or editing in place is fine. The entries below are LEGACY and still satisfy
+a review whose block names it. Moved verbatim out of `SKILL.md` section 7 by the context-lean batch
+(2026-09-29).
 
 ## 7. Tuning history
 

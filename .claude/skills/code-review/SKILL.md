@@ -54,7 +54,12 @@ verdict: pending  # → accepted | rejected (after founder triage)
 
 ## Founder triage notes
 <filled in by founder during triage>
+
+## Tuning entry
+- **YYYY-MM-DD** - blast-radius <tier> - N findings; M false_alarm; tuning: <what changed, or none>.
 ```
+
+The `## Tuning entry` section is REQUIRED (gate `scripts/check_skill_tuning_history.dart`): the heading at column 0 outside any code fence or HTML comment, and its FIRST non-blank line the dated bullet. The date equals this file's `reviewed_at`, and the blast-radius word equals the frontmatter `blast_radius` (when both are one of feature, account, platform, catastrophic). The tuning entry lives INSIDE the review file so two parallel PRs never edit the same line of a shared archive (that archive conflicted on 35 of 52 main-sync merges). `tuning-history.md` is frozen: a non-merge commit that adds a dated entry to it is blocked.
 
 ## 2. Lens set (8 lenses, fast)
 
@@ -196,15 +201,17 @@ When invoked, this skill should:
      without the exclusion, staging it would move the hash and rename the very file it
      is meant to satisfy.
    - `.claude/skills/code-review/tuning-history.md` is **excluded too** (2026-09-29,
-     context-lean batch): the Tuning history moved there out of SKILL.md, so the
-     required same-commit entry is now staged in THAT file. Same reasoning as the next
-     bullet; the command above has FOUR pathspecs and the gate uses the same four.
+     context-lean batch): the Tuning history moved there out of SKILL.md, and a legacy
+     entry staged in THAT file must not move the hash. Since the merge-conflict-treadmill
+     A1 landing the archive is FROZEN and a new review carries its entry inside the review
+     file (`docs/reviews/` is already excluded), so the exclusion stays only for a commit
+     that still touches the archive. Same reasoning as the next bullet; the command above
+     has FOUR pathspecs and the gate uses the same four.
    - `.claude/skills/code-review/SKILL.md` is **also excluded** (OI-162 slice 4
-     addendum, 2026-09-11) — its own §5.1-required tuning-history entry must land in
-     the SAME commit as any new review file, so without this exclusion staging THAT
-     would move the hash exactly the way staging the review itself would have, with no
-     clean iterative fix. Use the four-pathspec command above, not the two-pathspec
-     is meant to satisfy.
+     addendum, 2026-09-11) — a skill-template edit that lands in the SAME commit as a
+     new review file would otherwise move the hash exactly the way staging the review
+     itself would have, with no clean iterative fix. Use the four-pathspec command
+     above, not the older two-pathspec form.
    - **`docs/plan-reviews/` is NOT excluded, and citing this review's filename from
      there is a fourth hash-fixed-point source** (found 2026-09-21,
      `observation-batch-and-digest-redesign` batch, Round 2): the plan-review
@@ -228,8 +235,8 @@ When invoked, this skill should:
    - Explicit instruction: "find bugs, do not validate; if you find nothing, list what you specifically checked and why each lens returned clean"
    - Output schema (the markdown above)
    - An EXHAUSTIVE list of the commands the reviewer may run (read-only `git`, file reads, the named `flutter test` file(s), `flutter analyze lib/`), stated as exhaustive, plus an explicit ban on `dart run scripts/*`, `scripts/*.sh` and every network tool and database statement (§6: a class such as "gates that only read" is not enforceable by its reader). A lens-6 reviewer that must mutate files also gets the exact files it may touch and the backup / restore / sha256 protocol; run it AFTER the fixes from any earlier reviewer, on the post-fix tree.
-5. Subagent returns findings — write to `docs/reviews/<staging-hash>-review.md`, then
-   **`git add` it**. An unstaged review no longer satisfies the catastrophic gate: it
+5. Subagent returns findings — write to `docs/reviews/<staging-hash>-review.md` (including its
+   `## Tuning entry` section, §1), then **`git add` it**. An unstaged review no longer satisfies the catastrophic gate: it
    never enters history, so nothing in the commit records that a review happened.
 6. Surface the file path in the main conversation; instruct founder to triage.
 
@@ -244,7 +251,7 @@ When ALL findings have non-`pending` status, founder sets `verdict: accepted` an
 
 ## 5. False-positive tracking (self-evolution)
 
-After each invocation, count `false_alarm` findings as a percentage of total. If > 30% on a single pass, that lens is too noisy. Update the lens prompt OR remove the lens entirely. Document the tuning by appending an entry to `tuning-history.md` (same directory) under its `## 7. Tuning history` heading.
+After each invocation, count `false_alarm` findings as a percentage of total. If > 30% on a single pass, that lens is too noisy. Update the lens prompt OR remove the lens entirely. Document the tuning in the review file's own `## Tuning entry` section (see §1). Do NOT append to `tuning-history.md`: it is frozen (legacy entries only).
 
 ## 6. Anti-patterns (DO NOT)
 
@@ -256,8 +263,11 @@ After each invocation, count `false_alarm` findings as a percentage of total. If
 
 ## 7. Tuning history
 
-The full history lives in [`tuning-history.md`](tuning-history.md) (moved out of this file
-2026-09-29 to keep the skill's per-invocation load small). **Append new dated entries there**, as
-`- **YYYY-MM-DD** - blast-radius ...` bullets under its `## 7. Tuning history` heading, naming the
-review file's basename in the entry. Read it on demand (grep the branch or lens name); do not load
-it whole. Gate: `scripts/check_skill_tuning_history.dart`.
+Since 2026-10-24 each review carries its OWN `## Tuning entry` section (template in §1). The older
+history lives in [`tuning-history.md`](tuning-history.md) (moved out of this file 2026-09-29 to keep
+the skill's per-invocation load small), now FROZEN: do not append to it. Read the current entries on
+demand with `grep -h -A3 '^## Tuning entry' docs/reviews/*.md | grep '^- \*\*'`, and the legacy ones
+by grepping that file for a branch or lens name; do not load either whole. Gate:
+`scripts/check_skill_tuning_history.dart`. When a commit is blocked, re-run
+`dart run scripts/check_skill_tuning_history.dart` on the staged state to read its message (the
+pre-commit loop hides it).

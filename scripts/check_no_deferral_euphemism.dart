@@ -149,6 +149,10 @@ List<String> _governingDocs() {
       // bug-classes.md / tuning-history.md: skill bodies moved out of SKILL.md by
       // the 2026-09-29 context-lean batch. They were swept while inline; moving
       // them must not silently shrink the sweep (B-pass finding 3).
+      // tuning-history.md is FROZEN since 2026-10-24 (merge-conflict-treadmill A1) and
+      // new tuning entries live inside each docs/reviews/*.md. Those reviews are scanned
+      // ONCE, at add time (staged *.md additions) and never re-swept, so an entry there is
+      // judged on the commit that adds it.
       if (e is File &&
           (p.endsWith('/SKILL.md') ||
               p.endsWith('/bug-classes.md') ||

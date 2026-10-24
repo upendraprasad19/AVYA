@@ -15,6 +15,21 @@ Frontmatter fields:
 - `findings_count`
 - `verdict` — `pending` | `accepted` | `rejected`
 
+## The tuning entry (required)
+
+Every review carries a `## Tuning entry` section (heading at column 0, outside code fences and HTML
+comments) whose first non-blank line is a dated bullet:
+`- **<reviewed_at date>** - blast-radius <tier> - N findings; M false_alarm; tuning: <what changed, or none>`.
+The date equals `reviewed_at`; the tier equals `blast_radius` when both are a known tier. Gate:
+`scripts/check_skill_tuning_history.dart` (CLAUDE.md section 5.1). Read the current entries with
+`grep -h -A3 '^## Tuning entry' docs/reviews/*.md | grep '^- \*\*'`. The older archive
+`.claude/skills/code-review/tuning-history.md` is frozen.
+
+Two edge rules to know. A literal comment opener in prose must sit in backticks (or be backslash-escaped),
+or the scanner reads an unclosed comment and ignores everything after it. A pure `git mv` of an existing
+review outside a merge counts as a NEW review (git's rename detection could otherwise hide a copied-in
+add), so the moved file needs its own section, or the move has to arrive through a merge.
+
 ## Why checked in (vs gitignored)
 
 Audit trail. Future-you in 6 months will want to know: was this commit reviewed? What did the reviewer catch? What did the reviewer miss? Did we learn anything new?

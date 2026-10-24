@@ -1,21 +1,49 @@
 // scripts/check_skill_tuning_history.dart
 //
-// Gate: a commit that ADDS a `docs/reviews/<x>-review.md` must also append a
-// same-dated entry to `.claude/skills/code-review/tuning-history.md` (Tuning history).
+// Gate: a commit that ADDS a `docs/reviews/<x>.md` must carry that review's tuning
+// entry INSIDE the review file, as a `## Tuning entry` section (dated bullet first),
+// and must NOT add new entries to the legacy archive
+// `.claude/skills/code-review/tuning-history.md` (frozen).
 //
-// CLAUDE.md §5.1 (skill self-evolution) and the skill's own §5 both require it.
-// Neither was enforced. On 2026-08-25 a B-pass produced a 4-finding review and
-// the entry was never written; it surfaced only when founder asked whether
-// discipline had been followed. Pure predicate: scripts/skill_tuning_lib.dart.
+// WHY INSIDE THE REVIEW (merge-conflict-treadmill A1, 2026-10-24). The archive was
+// an append-at-EOF file that every parallel review PR edited at the same spot: it
+// conflicted on 35 of 52 main-sync merges, and each conflict meant a hand-merge plus
+// a CI rerun. A review file is unique per PR, so its own section cannot conflict.
+//
+// CLAUDE.md §5.1 (skill self-evolution) and .claude/skills/code-review/SKILL.md §5
+// require the entry.
+// Before the original gate, neither was enforced: on 2026-08-25 a B-pass produced a
+// 4-finding review and the entry was never written; it surfaced only when founder
+// asked whether discipline had been followed. Pure predicate:
+// scripts/skill_tuning_lib.dart.
+//
+// TWO CHECKS, exit codes combined:
+//   1. IN-REVIEW ROUTE (or a legacy archive entry that names the review): every
+//      added review needs one.
+//   2. FREEZE: a non-merge commit that makes the staged archive hold MORE dated
+//      headers than its HEAD blob fails. Exempt: a merge in progress (MERGE_HEAD
+//      path exists, via `git rev-parse --git-path` so a linked worktree works), an
+//      archive with no HEAD blob. LOCAL-ONLY and TRANSITIONAL: CI's audit-gates job
+//      runs every scripts/check_*.dart (this one is not on its skip list) but with
+//      nothing staged, so it passes vacuously there, and a pre-A1 branch merged on
+//      GitHub can still grow the archive. KNOWN LIMIT: the freeze compares COUNTS, so
+//      a commit that un-dates one old header and adds a new dated one is not seen; that
+//      takes deliberate effort and blocks nothing a mistake would produce.
+//   The pre-commit loop hides this gate's output (pre-commit.sh), so on a block
+//   re-run `dart run scripts/check_skill_tuning_history.dart` on the staged state
+//   to read the message.
 //
 // SCOPE, stated so the pass is not read as wider than it is: this gates the
 // code-review (B-pass) skill only. `/hermes-pass` writes to the same directory
 // but keeps its own tuning section, and wiring that needs its own decision about
-// which file a hermes report must update — not assumed here.
+// which file a hermes report must update — not assumed here. Known limit: a later
+// edit that DELETES a review's section is unchecked (the gate judges additions).
 //
-// FAILS OPEN on anything it cannot answer (unreadable skill file, unparseable
-// `reviewed_at:`, git unavailable). A gate that wedges a commit because it could
-// not read its own input is worse than the omission it prevents.
+// FAILS OPEN on anything it cannot answer (unparseable `reviewed_at:`, git
+// unavailable). An unreadable or absent ARCHIVE no longer silences the gate: it only
+// means "no legacy entries", and the in-review route is still judged. A gate that
+// wedges a commit because it could not read its own input is worse than the omission
+// it prevents.
 
 import 'dart:io';
 
@@ -32,9 +60,33 @@ ProcessResult? _git(List<String> args) {
   }
 }
 
+/// True when a merge is in progress: the path `git rev-parse --git-path MERGE_HEAD`
+/// names EXISTS (a file, a directory or an empty file all count, so a present-but-
+/// unresolvable MERGE_HEAD is mid-merge, the `check_oi_numbering_unique.dart`
+/// precedent). `--git-path` and not a hardcoded `.git/MERGE_HEAD`: in a linked
+/// worktree `.git` is a FILE and the state lives under the common dir.
+bool _mergeInProgress() {
+  final r = _git(['rev-parse', '--git-path', 'MERGE_HEAD']);
+  if (r == null || r.exitCode != 0) return false;
+  final path = (r.stdout as String).trim();
+  if (path.isEmpty) return false;
+  return FileSystemEntity.typeSync(path) != FileSystemEntityType.notFound;
+}
+
 /// Staged paths ADDED by this commit (status A), forward-slashed.
-List<String>? _stagedAdded() {
-  final r = _git(['diff', '--cached', '--name-status', '--diff-filter=A']);
+///
+/// `--no-renames` only OUTSIDE a merge: a review renamed on this branch then shows
+/// as D + A and needs its own section (git's default rename detection would hide the
+/// add). Inside a merge, renames from main keep default detection, so a bulk move
+/// on main cannot block every sync.
+List<String>? _stagedAdded({required bool noRenames}) {
+  final r = _git([
+    'diff',
+    '--cached',
+    '--name-status',
+    '--diff-filter=A',
+    if (noRenames) '--no-renames',
+  ]);
   if (r == null || r.exitCode != 0) return null;
   final out = <String>[];
   for (final line in (r.stdout as String).split('\n')) {
@@ -66,10 +118,122 @@ String? _showOrNull(String rev, String path) {
 
 String? _stagedContent(String path) => _showOrNull(':', path);
 
+/// The freeze check. Prints and returns the exit code it contributes.
+int _freeze({
+  required bool midMerge,
+  required List<ReviewClaim> claims,
+  required bool warnOnly,
+}) {
+  if (midMerge) return 0;
+  final staged = _stagedContent(_skillPath);
+  final head = _showOrNull('HEAD:', _skillPath);
+  // HEAD blob absent (the archive is new in this repo) = nothing to compare.
+  if (staged == null || head == null) return 0;
+  if (countDatedHeaders(staged) <= countDatedHeaders(head)) return 0;
+
+  final headLines = datedHeaderLines(head);
+  final added = <String>[];
+  final remaining = [...headLines];
+  for (final l in datedHeaderLines(staged)) {
+    if (!remaining.remove(l)) added.add(l);
+  }
+  final sink = warnOnly ? stdout : stderr;
+  sink.writeln('$_tag ${warnOnly ? "WARN" : "FAIL"}: $_skillPath is FROZEN, but this commit adds '
+      '${added.length} dated entr${added.length == 1 ? "y" : "ies"} to it:');
+  for (final l in added.take(5)) {
+    sink.writeln('  + $l');
+  }
+  sink.writeln('');
+  sink.writeln('  Every parallel review PR appended at the end of that file, so it conflicted on');
+  sink.writeln('  most main syncs. Put the entry INSIDE the review file instead, and restore the');
+  sink.writeln('  archive:');
+  sink.writeln('    git restore --source=HEAD --staged --worktree -- $_skillPath');
+  sink.writeln('  (A dated SUB-bullet counts as an entry too.)');
+  _printSectionTemplate(sink, claims);
+  sink.writeln('  Re-run `dart run scripts/check_skill_tuning_history.dart` on the staged state to');
+  sink.writeln('  read this message; the pre-commit loop hides it. Exempt: a merge in progress.');
+  return warnOnly ? 0 : 1;
+}
+
+/// The exact section text for each added review that has a parseable date.
+void _printSectionTemplate(StringSink sink, List<ReviewClaim> claims) {
+  final dated = claims.where((c) => c.reviewedOn != null).toList();
+  if (dated.isEmpty) {
+    sink.writeln('  Section to put in the review file (docs/reviews/<x>.md):');
+    sink.writeln('    ## Tuning entry');
+    sink.writeln('    - **YYYY-MM-DD** - blast-radius <tier> - N findings; M false_alarm; tuning: <what changed, or none>');
+    return;
+  }
+  for (final c in dated) {
+    final tier = c.body == null ? null : frontmatterBlastRadius(c.body!);
+    sink.writeln('  Section to put in ${c.path}:');
+    sink.writeln('    ## Tuning entry');
+    sink.writeln('    - **${c.reviewedOn}** - blast-radius ${tier ?? "<tier>"} - N findings; M false_alarm; tuning: <what changed, or none>');
+  }
+}
+
+/// The review check. Prints and returns the exit code it contributes.
+int _judgeReviews({
+  required List<ReviewClaim> claims,
+  required int addedCount,
+  required bool warnOnly,
+  required bool freezeFailed,
+}) {
+  if (claims.isEmpty) {
+    // When the freeze already failed, a PASS line here would sit next to its FAIL and
+    // read as a contradiction.
+    if (!freezeFailed) {
+      stdout.writeln('$_tag PASS: no review file added by this commit '
+          '($addedCount added path(s) scanned).');
+    }
+    return 0;
+  }
+
+  // The legacy archive may be staged (edited this commit) or unchanged. Prefer the
+  // staged blob; fall back to HEAD. Null = absent or unreadable = "no legacy
+  // entries" (the in-review route is judged regardless).
+  final archive = _stagedContent(_skillPath) ?? _showOrNull('HEAD:', _skillPath);
+
+  final result = evaluateTuning(addedReviews: claims, skillMarkdown: archive);
+
+  switch (result.verdict) {
+    case TuningVerdict.notApplicable:
+      stdout.writeln('$_tag PASS: ${result.reason}.');
+      return 0;
+    case TuningVerdict.satisfied:
+      stdout.writeln(
+          '$_tag PASS: ${result.reason} (${claims.length} review(s) checked).');
+      return 0;
+    case TuningVerdict.undetermined:
+      stdout.writeln('$_tag SKIPPED: ${result.reason}.');
+      for (final p in result.offendingPaths) {
+        stdout.writeln('  - $p');
+      }
+      return 0;
+    case TuningVerdict.missingEntry:
+      final sink = warnOnly ? stdout : stderr;
+      sink.writeln('$_tag ${warnOnly ? "WARN" : "FAIL"}: ${result.reason}.');
+      for (final p in result.offendingPaths) {
+        sink.writeln('  - $p');
+      }
+      sink.writeln('');
+      sink.writeln('  CLAUDE.md §5.1 and .claude/skills/code-review/SKILL.md §5 require an entry');
+      sink.writeln('  per invocation: date, blast-radius, findings count,');
+      sink.writeln('  false-alarm count, and what was tuned (or that nothing was).');
+      sink.writeln('  Put it INSIDE the review file, as a `## Tuning entry` heading at column 0');
+      sink.writeln('  whose FIRST non-blank line is the dated bullet (date = the review\'s');
+      sink.writeln('  reviewed_at; the blast-radius word must match the frontmatter tier):');
+      _printSectionTemplate(sink, claims);
+      sink.writeln('  Do NOT append to $_skillPath: it is frozen.');
+      return warnOnly ? 0 : 1;
+  }
+}
+
 void main(List<String> args) {
   final warnOnly = args.contains('--warn-only');
 
-  final added = _stagedAdded();
+  final midMerge = _mergeInProgress();
+  final added = _stagedAdded(noRenames: !midMerge);
   if (added == null) {
     stdout.writeln('$_tag SKIPPED: git unavailable — failing OPEN.');
     exit(0);
@@ -94,51 +258,17 @@ void main(List<String> args) {
           p.endsWith('.md') &&
           !notAReview.contains(p.split('/').last))
       .toList();
-  if (reviews.isEmpty) {
-    stdout.writeln('$_tag PASS: no review file added by this commit '
-        '(${added.length} added path(s) scanned).');
-    exit(0);
-  }
 
   final claims = <ReviewClaim>[];
   for (final p in reviews) {
     final body = _stagedContent(p);
-    claims.add(ReviewClaim(p, body == null ? null : reviewedOnFrom(body)));
+    claims.add(ReviewClaim(p, body == null ? null : reviewedOnFrom(body), body: body));
   }
 
-  // The skill file may be staged (edited this commit) or unchanged (edited
-  // earlier). Prefer the staged blob; fall back to HEAD so an unmodified but
-  // already-correct skill file still satisfies the gate.
-  final skill = _stagedContent(_skillPath) ?? _showOrNull('HEAD:', _skillPath);
-
-  final result = evaluateTuning(addedReviews: claims, skillMarkdown: skill);
-
-  switch (result.verdict) {
-    case TuningVerdict.notApplicable:
-      stdout.writeln('$_tag PASS: ${result.reason}.');
-      exit(0);
-    case TuningVerdict.satisfied:
-      stdout.writeln(
-          '$_tag PASS: ${result.reason} (${claims.length} review(s) checked).');
-      exit(0);
-    case TuningVerdict.undetermined:
-      stdout.writeln('$_tag SKIPPED: ${result.reason}.');
-      for (final p in result.offendingPaths) {
-        stdout.writeln('  - $p');
-      }
-      exit(0);
-    case TuningVerdict.missingEntry:
-      final sink = warnOnly ? stdout : stderr;
-      sink.writeln('$_tag ${warnOnly ? "WARN" : "FAIL"}: ${result.reason}.');
-      for (final p in result.offendingPaths) {
-        sink.writeln('  - $p');
-      }
-      sink.writeln('');
-      sink.writeln('  CLAUDE.md §5.1 and $_skillPath\'s own §5 require an entry');
-      sink.writeln('  per invocation: date, blast-radius, findings count,');
-      sink.writeln('  false-alarm count, and what was tuned (or that nothing was).');
-      sink.writeln('  Append a `- **YYYY-MM-DD** — blast-radius …` bullet under');
-      sink.writeln('  "## 7. Tuning history", matching the review\'s reviewed_at.');
-      exit(warnOnly ? 0 : 1);
-  }
+  // Both checks always run and their exit codes combine, so a freeze violation can
+  // never be hidden by a clean review (or the reverse).
+  final freezeCode = _freeze(midMerge: midMerge, claims: claims, warnOnly: warnOnly);
+  final reviewCode = _judgeReviews(
+      claims: claims, addedCount: added.length, warnOnly: warnOnly, freezeFailed: freezeCode != 0);
+  exit(freezeCode != 0 || reviewCode != 0 ? 1 : 0);
 }

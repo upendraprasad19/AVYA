@@ -162,14 +162,15 @@ void main() {
       );
     });
 
-    test('FAILS OPEN when the skill file cannot be read', () {
+    test('an unreadable archive no longer silences the gate (A1)', () {
+      // This used to FAIL OPEN (undetermined). The archive is now only the LEGACY
+      // route: null means "no legacy entries", and a review with no `## Tuning
+      // entry` section of its own is missing its entry.
       final r = evaluateTuning(
         addedReviews: const [ReviewClaim('docs/reviews/x-review.md', '2026-08-25')],
         skillMarkdown: null,
       );
-      expect(r.verdict, TuningVerdict.undetermined,
-          reason: 'a gate that cannot read its own input must not block a '
-              'commit — same contract as check_oi_numbering_unique');
+      expect(r.verdict, TuningVerdict.missingEntry);
     });
 
     test('FAILS OPEN when the review has no parseable date', () {
@@ -293,6 +294,292 @@ void main() {
         isFalse,
         reason: 'neither block names this review, so neither may satisfy it',
       );
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // The in-review route (merge-conflict-treadmill A1): a review carries its own
+  // `## Tuning entry` section, so no two PRs ever edit the same archive line.
+  // ─────────────────────────────────────────────────────────────────────────
+  group('inReviewEntry — the review carries its own tuning entry', () {
+    const fm = '---\nreviewed_at: 2026-10-24T10:00:00+05:30\nblast_radius: platform\n---\n\n# Review\n\n';
+    const bullet = '- **2026-10-24** - blast-radius **platform** - 2 findings; 0 false_alarm; tuning: none.';
+
+    String doc(String body, {String frontmatter = fm}) => '$frontmatter$body';
+    InReviewCheck check(String review, {String date = '2026-10-24', String? tier = 'platform'}) =>
+        inReviewEntry(review, date, tier);
+
+    test('a well-formed section satisfies', () {
+      expect(check(doc('## Tuning entry\n$bullet\n')).ok, isTrue);
+    });
+
+    test('a blank line between the heading and the bullet is fine', () {
+      expect(check(doc('## Tuning entry\n\n\n$bullet\n')).ok, isTrue);
+    });
+
+    test('the date must equal reviewed_at', () {
+      final r = check(doc('## Tuning entry\n- **2026-10-23** - blast-radius **platform** - x.\n'));
+      expect(r.ok, isFalse);
+      expect(r.problem, contains('2026-10-23'));
+      expect(r.problem, contains('2026-10-24'));
+    });
+
+    test('a tier mismatch fails and names both sides', () {
+      final r = check(doc('## Tuning entry\n- **2026-10-24** - blast-radius **account** - x.\n'));
+      expect(r.ok, isFalse);
+      expect(r.problem, allOf(contains('account'), contains('platform')));
+    });
+
+    test('a tier with a suffix passes (first word only)', () {
+      expect(check(doc('## Tuning entry\n- **2026-10-24** - blast-radius **platform** (L tier: auth) - x.\n')).ok,
+          isTrue);
+      expect(check(doc('## Tuning entry\n- **2026-10-24** - blast-radius platform (L tier: auth) - x.\n')).ok,
+          isTrue);
+    });
+
+    test('an unbolded header passes, and the tier word is case-insensitive', () {
+      expect(check(doc('## Tuning entry\n- **2026-10-24** - Blast-Radius PLATFORM - x.\n')).ok, isTrue);
+    });
+
+    test('a template placeholder or free-text frontmatter tier skips the tier check', () {
+      expect(frontmatterBlastRadius('---\nblast_radius: <feature|account|platform|catastrophic>\n---\n'), isNull);
+      expect(frontmatterBlastRadius('---\nblast_radius: "platform"\n---\n'), 'platform');
+      expect(frontmatterBlastRadius("---\nblast_radius: 'Account (L)'\n---\n"), 'account');
+      expect(frontmatterBlastRadius('blast_radius: platform\n'), isNull, reason: 'outside the leading --- block');
+      expect(
+          check(doc('## Tuning entry\n- **2026-10-24** - blast-radius **account** - x.\n'), tier: null).ok, isTrue);
+    });
+
+    test('the dated bullet may carry the same-day (b) disambiguator', () {
+      expect(check(doc('## Tuning entry\n- **2026-10-24 (b)** - blast-radius **platform** - x.\n')).ok, isTrue);
+    });
+
+    for (final fence in ['```', '````', '~~~']) {
+      test('a heading inside a $fence fence does not count', () {
+        final r = check(doc('$fence\n## Tuning entry\n$bullet\n$fence\n'));
+        expect(r.ok, isFalse);
+        expect(r.problem, contains('no `## Tuning entry` heading'));
+      });
+    }
+
+    test('a closing fence must be at least as long as the opener', () {
+      // ```` opened, ``` is NOT a closer, so the heading below stays inside the fence.
+      expect(check(doc('````\n```\n## Tuning entry\n$bullet\n````\n')).ok, isFalse);
+      // ...and a longer closer does close it.
+      expect(check(doc('```\ncode\n`````\n## Tuning entry\n$bullet\n')).ok, isTrue);
+    });
+
+    test('a heading inside an HTML comment does not count', () {
+      expect(check(doc('<!--\n## Tuning entry\n$bullet\n-->\n')).ok, isFalse);
+    });
+
+    test('a fence containing a comment opener stays a fence (the comment is inert)', () {
+      // Two-pass strip-comments-first would eat everything from <!-- to the next --> and
+      // could hide or expose the real heading; the single pass keeps the fence a fence.
+      expect(check(doc('```\n<!--\n```\n## Tuning entry\n$bullet\n')).ok, isTrue);
+    });
+
+    test('a comment containing a fence opener stays a comment (the fence is inert)', () {
+      expect(check(doc('<!--\n```\n-->\n## Tuning entry\n$bullet\n')).ok, isTrue);
+    });
+
+    test('a fence opener whose info string holds a comment opener is still a fence', () {
+      // CommonMark: the info string is opaque. Deciding the comment first would open a
+      // comment that the closing fence cannot end, hiding the real heading below it.
+      expect(check(doc('```<!--\ncode\n```\n## Tuning entry\n$bullet\n')).ok, isTrue);
+      // ...and the heading INSIDE that fence stays inert.
+      expect(check(doc('```<!--\n## Tuning entry\n$bullet\n```\n')).ok, isFalse);
+    });
+
+    test('a header tier that is not one of the four (n/a, free text) skips the check', () {
+      expect(check(doc('## Tuning entry\n- **2026-10-24** - blast-radius n/a - x.\n')).ok, isTrue);
+      expect(check(doc('## Tuning entry\n- **2026-10-24** - blast-radius (see note) - x.\n')).ok, isTrue);
+    });
+
+    test('a comment opened and closed on one line does not swallow the next heading', () {
+      expect(check(doc('<!-- note -->\n## Tuning entry\n$bullet\n')).ok, isTrue);
+    });
+
+    test('an unclosed fence names the line it opened on', () {
+      final r = check(doc('text\n```dart\ncode\n## Tuning entry\n$bullet\n'));
+      expect(r.ok, isFalse);
+      expect(r.problem, contains('fence opened at line'));
+    });
+
+    test('an unclosed comment names the line it opened on', () {
+      final r = check(doc('<!-- never closed\n## Tuning entry\n$bullet\n'));
+      expect(r.ok, isFalse);
+      expect(r.problem, contains('comment opened at line'));
+    });
+
+    test('a heading with trailing words does not count', () {
+      expect(check(doc('## Tuning entry (draft)\n$bullet\n')).ok, isFalse);
+      expect(check(doc('## Tuning entry\t\n$bullet\n')).ok, isTrue, reason: 'trailing whitespace is allowed');
+    });
+
+    test('an indented heading does not count (column 0 only)', () {
+      expect(check(doc('  ## Tuning entry\n$bullet\n')).ok, isFalse);
+    });
+
+    test('a valid dated bullet with no heading fails', () {
+      expect(check(doc('$bullet\n')).ok, isFalse);
+    });
+
+    test('the dated bullet must be the FIRST non-blank line after the heading', () {
+      final r = check(doc('## Tuning entry\nSome prose first.\n$bullet\n'));
+      expect(r.ok, isFalse);
+      expect(r.problem, contains('not a dated bullet'));
+    });
+
+    test('a heading with nothing after it fails', () {
+      expect(check(doc('## Tuning entry\n\n\n')).ok, isFalse);
+    });
+
+    test('the FIRST qualifying heading is judged; a later good one cannot rescue it', () {
+      final r = check(doc('## Tuning entry\nprose\n\n## Tuning entry\n$bullet\n'));
+      expect(r.ok, isFalse);
+    });
+
+    test('an UPPER-CASE header tier is lower-cased before it is compared', () {
+      final r = check(doc('## Tuning entry\n- **2026-10-24** - blast-radius **ACCOUNT** - x.\n'));
+      expect(r.ok, isFalse);
+      expect(r.problem, allOf(contains('account'), contains('platform')));
+    });
+
+    test('a colon after blast-radius is read too', () {
+      final r = check(doc('## Tuning entry\n- **2026-10-24** - blast-radius: account - x.\n'));
+      expect(r.ok, isFalse);
+      expect(r.problem, allOf(contains('account'), contains('platform')));
+      expect(check(doc('## Tuning entry\n- **2026-10-24** - blast-radius: platform - x.\n')).ok, isTrue);
+    });
+
+    test('the frontmatter tier is read from the leading block only, never past its closing ---', () {
+      const noTier = '---\nreviewed_at: 2026-10-24T10:00:00+05:30\n---\n\nblast_radius: account\n\n';
+      expect(frontmatterBlastRadius(noTier), isNull);
+      expect(check(doc('## Tuning entry\n$bullet\n', frontmatter: noTier), tier: frontmatterBlastRadius(noTier)).ok,
+          isTrue);
+    });
+
+    test('a BOM or leading blank lines before the frontmatter do not switch the tier or date reads off', () {
+      final bom = String.fromCharCode(0xFEFF);
+      expect(frontmatterBlastRadius('$bom---\nblast_radius: platform\n---\n'), 'platform');
+      expect(frontmatterBlastRadius('\n\n---\nblast_radius: platform\n---\n'), 'platform');
+      expect(reviewedOnFrom('$bom---\nreviewed_at: 2026-10-24T10:00:00+05:30\n---\n'), '2026-10-24');
+      expect(reviewedOnFrom('${bom}reviewed_at: 2026-10-24T10:00:00+05:30\n'), '2026-10-24',
+          reason: 'the key itself is the first line, so only the BOM stands in front of it');
+      expect(check('$bom${doc('## Tuning entry\n$bullet\n')}').ok, isTrue);
+    });
+
+    test('a backtick fence whose info string holds a backtick is not a fence; a tilde one is', () {
+      expect(check(doc('``` a`b\n## Tuning entry\n$bullet\n')).ok, isTrue);
+      expect(check(doc('~~~ a`b\n## Tuning entry\n$bullet\n~~~\n')).ok, isFalse);
+    });
+
+    test('a fence opener indented 4 spaces is code, not a fence; 3 spaces is a fence', () {
+      expect(check(doc('    ```\n## Tuning entry\n$bullet\n')).ok, isTrue);
+      expect(check(doc('   ```\n## Tuning entry\n$bullet\n   ```\n')).ok, isFalse);
+    });
+
+    test('a closer indented 4 spaces does not close the fence; 3 spaces does', () {
+      final r = check(doc('```\ntext\n    ```\n## Tuning entry\n$bullet\n'));
+      expect(r.ok, isFalse);
+      expect(r.problem, contains('never closed'));
+      expect(check(doc('```\ntext\n   ```\n## Tuning entry\n$bullet\n')).ok, isTrue);
+    });
+
+    test('a comment opener quoted in an inline code span does not open a comment', () {
+      expect(check(doc('The scanner opens on `<!--` anywhere.\n\n## Tuning entry\n$bullet\n')).ok, isTrue);
+      expect(check(doc('Quoted ``a ` <!-- b`` here.\n\n## Tuning entry\n$bullet\n')).ok, isTrue);
+    });
+
+    test('a backslash-escaped opener is literal; an even run of backslashes is not an escape', () {
+      expect(check(doc('Write \\<!-- to quote it.\n\n## Tuning entry\n$bullet\n')).ok, isTrue);
+      expect(check(doc('Write \\\\<!-- opens one.\n\n## Tuning entry\n$bullet\n')).ok, isFalse);
+    });
+
+    test('MIRROR: a real mid-line opener still opens a comment, an unmatched backtick does not hide it', () {
+      final r = check(doc('text <!-- hidden\n\n## Tuning entry\n$bullet\n'));
+      expect(r.ok, isFalse);
+      expect(r.problem, allOf(contains('comment opened at line'), contains('backticks')));
+      expect(check(doc('a ` b <!-- c\n\n## Tuning entry\n$bullet\n')).ok, isFalse,
+          reason: 'a backtick with no closing run is literal text');
+      expect(check(doc('a `x` <!-- c --> d\n\n## Tuning entry\n$bullet\n')).ok, isTrue,
+          reason: 'a comment that closes on its own line hides nothing');
+    });
+
+    test('a CRLF review passes', () {
+      final crlf = doc('## Tuning entry\n$bullet\n').replaceAll('\n', '\r\n');
+      expect(check(crlf).ok, isTrue);
+    });
+  });
+
+  group('evaluateTuning — the two routes', () {
+    const section = '---\nreviewed_at: 2026-10-24T10:00:00+05:30\nblast_radius: platform\n---\n\n'
+        '## Tuning entry\n- **2026-10-24** - blast-radius **platform** - 1 finding.\n';
+    const bare = '---\nreviewed_at: 2026-10-24T10:00:00+05:30\nblast_radius: platform\n---\n\n# no section\n';
+
+    test('a section satisfies with the archive ABSENT (the in-review route does not read it)', () {
+      final r = evaluateTuning(
+        addedReviews: const [ReviewClaim('docs/reviews/x-bpass.md', '2026-10-24', body: section)],
+        skillMarkdown: null,
+      );
+      expect(r.verdict, TuningVerdict.satisfied);
+    });
+
+    test('a review WITHOUT a section and a null archive is missingEntry, never undetermined', () {
+      final r = evaluateTuning(
+        addedReviews: const [ReviewClaim('docs/reviews/x-bpass.md', '2026-10-24', body: bare)],
+        skillMarkdown: null,
+      );
+      expect(r.verdict, TuningVerdict.missingEntry);
+      expect(r.offendingPaths.single, contains('no `## Tuning entry` heading'));
+    });
+
+    test('a legacy archive entry that names the review still satisfies it', () {
+      const archive = '- **2026-10-24** - blast-radius **platform** - 1 finding.\n  Review: docs/reviews/x-bpass.md\n';
+      final r = evaluateTuning(
+        addedReviews: const [ReviewClaim('docs/reviews/x-bpass.md', '2026-10-24', body: bare)],
+        skillMarkdown: archive,
+      );
+      expect(r.verdict, TuningVerdict.satisfied);
+    });
+
+    test('a same-dated archive entry about ANOTHER review does not satisfy it', () {
+      const archive = '- **2026-10-24** - blast-radius **platform** - 1 finding.\n  Review: docs/reviews/other-bpass.md\n';
+      final r = evaluateTuning(
+        addedReviews: const [ReviewClaim('docs/reviews/x-bpass.md', '2026-10-24', body: bare)],
+        skillMarkdown: archive,
+      );
+      expect(r.verdict, TuningVerdict.missingEntry);
+    });
+
+    test('an unreadable staged body cannot satisfy the in-review route', () {
+      final r = evaluateTuning(
+        addedReviews: const [ReviewClaim('docs/reviews/x-bpass.md', '2026-10-24')],
+        skillMarkdown: null,
+      );
+      expect(r.verdict, TuningVerdict.missingEntry);
+    });
+  });
+
+  group('countDatedHeaders — what the freeze counts', () {
+    test('counts bullets, suffixed bullets and indented sub-bullets; ignores prose dates', () {
+      const md = '''
+# Tuning history
+
+- **2026-08-20** - one
+  - **2026-08-21 (b)** - sub-bullet entry
+- **2026-08-22** - two
+Prose mentioning 2026-08-23 and **2026-08-24** inline does not count.
+''';
+      expect(countDatedHeaders(md), 3);
+      expect(datedHeaderLines(md), hasLength(3));
+      expect(isDatedHeaderLine('- **2026-08-20** - x'), isTrue);
+      expect(isDatedHeaderLine('Prose 2026-08-20'), isFalse);
+    });
+
+    test('an in-place edit of a header keeps the count', () {
+      expect(countDatedHeaders('- **2026-08-20** - a\n'), countDatedHeaders('- **2026-08-20** - edited text\n'));
     });
   });
 }
