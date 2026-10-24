@@ -56,7 +56,8 @@ proposed_fix: >-
   its neighbours (ThinDayTopUp.neighbours), rounds until the floor or no progress;
   then core; then stop. Every query is the cascade's own queryV4 (injury,
   capability, exclusions, experience), so no contraindicated or unperformable pick
-  is possible, and phase 1 asks for foundational rows first. The avoid sets are
+  is possible, and phase 1 (and the core stage in every phase) asks for
+  foundational rows first; a skill or olympic row is never added. The avoid sets are
   soft (previous phase, plateau, the other variant) and lower-cased; L6 demoted
   names leave the candidate pool unless they are all that is left.
   Kill-switch disable_thin_day_topup, default ON. Uninjured users get the same
@@ -162,7 +163,9 @@ Class: both are "a new post-pass handles a rule an existing pass enforces": its 
 
 ## Mutation proof
 
-Each mutation was applied once, confirmed applied (the file differed from the saved copy), run against the three new test files (the gate file for M17x; the sweep's singles block as well for M2, M10b and M11), and restored from a saved copy with the sha1 verified; `git status` under `lib/` and `test/` was empty afterwards. 29 of 29 applied, none survived, none was a compile error.
+Each mutation was applied once, confirmed applied (the file differed from the saved copy), run against the three new test files (the gate file for M17x; the sweep's singles block as well for M2, M10b and M11), and restored from a saved copy with the sha1 verified; `git status` under `lib/` and `test/` was empty afterwards. 35 of 35 applied, none survived, none was a compile error.
+
+Two runs, stated so the table is not read as one: the first (29 mutations) ran on `8655a5b0`; the B-pass fix `f9f9b9fd` then changed exactly one hunk of `lib/` (`addFrom`'s query loop in `exercise_selector.dart`), so the mutations that mutate that hunk (M2, M10, M10b, M11, M16), the demoted filter beside it (M5d, M18), the new rules (M19, M19b, M20, M20b, M20c) and the gate (M17a to M17f) were run again on the final code. M1, M3 to M9, M12 to M15 and M5a to M5f mutate code outside that hunk and were not re-run; their rows are the `8655a5b0` counts.
 
 | # | Mutation | Red tests | Sweep singles block |
 |---|---|---|---|
@@ -183,12 +186,18 @@ Each mutation was applied once, confirmed applied (the file differed from the sa
 | M9 | ignore the kill-switch | 10 | - |
 | M10 | capability null and exclusions `{}` | 3 | - |
 | M10b | capability null and `equipmentTier ''` | 8 | 1 red |
-| M11 | drop `excludeNames: picked` | 10 | 1 red |
+| M11 | drop `excludeNames: picked` | 11 | 1 red |
 | M12 | swap the stage order (core first) | 4 | - |
 | M13 | use `slotsA` for B | 2 | - |
 | M14 | drop the length guard | 1 | - |
 | M15 | drop the own-pattern query (neighbours only) | 13 | - |
-| M16 | drop the foundational try-first | 4 | - |
+| M16 | drop the foundational try-first | 5 | - |
+| M19 | the core stage prefers foundational in phase 1 only (the pre-fix rule) | 2 | - |
+| M19b | every stage prefers foundational in every phase | 1 | - |
+| M20 | drop the skill/olympic filter | 1 | - |
+| M20b | filter `calisthenics_skill` only | 1 | - |
+| M20c | filter `olympic` only | 1 | - |
+| M17f | gate: the injured scope is dropped | 1 | - |
 | M18 | demoted filter without the sole-candidate fallback | 1 | - |
 | M17a | gate: ignore the without-top-up attribution | 1 | - |
 | M17b | gate: a skill id the top-up added becomes evidence | 1 | - |

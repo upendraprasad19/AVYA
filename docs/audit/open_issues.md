@@ -6714,21 +6714,6 @@ Past `user_daily_snapshots` stay (nothing reads a past day's `coach_notices`). D
 
 **Done when.** `retire_worktree_lib_test.dart` covers both sides: the dartdev-only shape is regenerable, and a `.dart_tool/` with any other file, or one next to a `pubspec.yaml`, is still kept.
 
-## OI-401 — Thin-day top-up: a generated day left with fewer than 3 exercises by injury filtering gets safe moves for its own muscles, then safe core (founder option b, 2026-10-23)
-
-- **Status**: OPEN
-- **Blocked on**: the v14 injury re-check (`docs/plans/2026-10-23-library-injury-recheck.md`) merging first (founder order 2026-10-23: tags, then this, then B2).
-- **Verified**: 2026-10-23 — `test/plan_generator/injury_floor_sweep_test.dart` over 1,728 single-injury plans (13,824 days, flag OFF): today 28 days have fewer than 3 exercises and none has 1; with the final v14 tags, 74 do and 19 have exactly one (see the measured paragraph below; the first-cut examples are not repeated because they were not re-checked on the final library).
-- **Identified**: 2026-10-23 · filed via mint_oi.sh from branch `library-injury-recheck`
-
-**Measured AFTER the v14 tags (2026-10-24, `test/plan_generator/injury_floor_sweep_test.dart`, flag OFF, final library; empty / thin / one-exercise, BEFORE in brackets):** singles 3 and 5 days 0 / 74 / 19 (0 / 28 / 0); singles 4 and 6 days 1 / 75 / 13 (0 / 24 / 0); pairs of knee, shoulder, lower_back, wrist, elbow, hip at 3 and 5 days 4 / 531 / 197 (2 / 219 / 51); pairs at 4 and 6 days 6 / 647 / 241 (2 / 228 / 66); repeat phase at 3 to 6 days 0 / 768 / 310 (0 / 506 / 147). Shoulder is most of it: 51 of the 74 single-injury thin days, and the bodyweight tier has no safe press left once every push-up variant is shoulder-tagged. The empty days: pairs 3/5 days = knee+hip and knee+lower_back (both empty before) plus lower_back+hip at 3 and 5 days (Deficit Reverse Lunge is now hip-tagged); the 4/6-day empties are bodyweight build_muscle advanced 4-day push or pull days. The sweep holds `kPairsEmptyBaseline` 4, `kPairs46EmptyBaseline` 6 and `kSingles46EmptyBaseline` 1 until this lands, then all three go to 0.
-
-**The defect.** Injury filtering can leave a generated day with one or two exercises. `_cascadeFill` drops a slot when no safe candidate exists (the safe-omission rule), and nothing refills the day afterwards. A repeat phase also drops now-contraindicated pins with no refill (`exercise_selector.dart:994`).
-
-**Founder decision (2026-10-23, option b).** When a day ends up with fewer than 3 exercises, top it up with safe moves for that day's own muscles from a neighbouring movement type, then with safe core moves, then stop. Industry check given at the time: Fitbod sizes a session by duration and fills it with what remains.
-
-**Done when.** Its own plan, ×2 review and PR land. A behavioural sweep then shows 0 one-exercise days and no unsafe pick, for single injuries, pairs and repeat phases. B2's set budget counts the added moves.
-
 ## OI-403 — Coach injury swap picks a substitute by muscle only and never reads injury_contraindications, so it can hand an injured user a tagged exercise
 
 - **Status**: OPEN

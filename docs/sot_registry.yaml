@@ -16856,7 +16856,8 @@ concepts:
       end, the B1 _pickCoreList return, buildPinnedDays end): the day's own (muscle, pattern)
       anchors in slot-priority order, own pattern before its neighbours (ThinDayTopUp.neighbours),
       then core, then stop. Every candidate comes from the cascade's own queryV4 (injury,
-      capability, exclusions, experience), phase 1 asks for foundational rows first, and the avoid
+      capability, exclusions, experience), phase 1 (and the core stage in every phase) asks for
+      foundational rows first, a skill or olympic row is never added, and the avoid
       sets (previous phase, plateau, the other variant) are SOFT and lower-cased; L6 demoted
       names leave the candidate pool unless they are all that is left.
       Injured users only: an uninjured user, the kill-switch (configBox disable_thin_day_topup,
