@@ -255,6 +255,40 @@ void main() {
     });
   });
 
+  group('SessionBudgetContext is immutable', () {
+    test('changing the inputs after construction does not change the context', () {
+      final focus = <String>{'Chest'};
+      final arche = <String, String>{'bench press': 'H'};
+      final days = <String>['strength'];
+      final c = SessionBudgetContext(
+        minutes: 60,
+        planGoal: 'build_muscle',
+        level: 'intermediate',
+        lighterPhase: false,
+        focusGroups: focus,
+        archetypeByName: arche,
+        dayIntensities: days,
+      );
+      focus.add('Back');
+      arche['squat'] = 'H';
+      days.add('endurance');
+      expect(c.focusGroups, {'Chest'});
+      expect(c.archetypeByName, {'bench press': 'H'});
+      expect(c.dayIntensities, ['strength']);
+    });
+
+    test('its collections reject writes', () {
+      final c = ctx(focusGroups: {'Chest'});
+      expect(() => c.focusGroups.add('Back'), throwsUnsupportedError);
+      expect(() => c.dayIntensities.add('x'), throwsUnsupportedError);
+      expect(() => c.archetypeByName['x'] = 'H', throwsUnsupportedError);
+    });
+
+    test('finisherSeconds defaults to 0 (Ruling 6)', () {
+      expect(ctx().finisherSeconds, 0);
+    });
+  });
+
   group('BudgetLedger', () {
     test('the day budget is (minutes - warm-up/cool-down) x 60 - finisher', () {
       expect(BudgetLedger(ctx(minutes: 60), 3).secondsLeft(0), closeTo(3000.0, 1e-6));
