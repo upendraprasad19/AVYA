@@ -40,16 +40,22 @@ class VolumeFilter {
   /// is stamped `working` in the blob, but that happens after generation, so
   /// this filter never sees it.)
   /// [daysPerWeek] — training days per week (3-6).
+  /// [keepAllSlots] — B2 (session set budget): keep every split slot instead of
+  /// the first [targetCount], so the allocator can size the day by time and
+  /// trim from the END of the priority order. The deload rule above still
+  /// applies. `false` (default) is today's path verbatim.
   static List<MuscleSlot> filter(
     List<MuscleSlot> slots, {
     required String experience,
     required String weekCharacter,
     required int daysPerWeek,
+    bool keepAllSlots = false,
   }) {
     // Deload: P1 only regardless of experience/frequency
     if (weekCharacter == 'deload') {
       return slots.where((s) => s.priority == 1).toList();
     }
+    if (keepAllSlots) return slots;
 
     final target = targetCount(experience, daysPerWeek);
     // Slots are already in priority order from split_resolver.
@@ -65,18 +71,21 @@ class VolumeFilter {
     List<MuscleSlotDay> days, {
     required String experience,
     required String weekCharacter,
+    bool keepAllSlots = false,
   }) {
     final daysPerWeek = days.length;
     return days.map((day) {
       final filteredA = filter(day.slotsA,
           experience: experience,
           weekCharacter: weekCharacter,
-          daysPerWeek: daysPerWeek);
+          daysPerWeek: daysPerWeek,
+          keepAllSlots: keepAllSlots);
       final filteredB = day.slotsB != null
           ? filter(day.slotsB!,
               experience: experience,
               weekCharacter: weekCharacter,
-              daysPerWeek: daysPerWeek)
+              daysPerWeek: daysPerWeek,
+              keepAllSlots: keepAllSlots)
           : null;
       return MuscleSlotDay(
         name: day.name,

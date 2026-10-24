@@ -156,12 +156,7 @@ class SessionSetAllocator {
       var rank = 0;
       for (final ex in lists[d]) {
         final row = rows[ex.exerciseName.toLowerCase()];
-        final arch = ctx.archetypeByName[ex.exerciseName.toLowerCase()] ??
-            SessionBudget.archetypeOf(
-              exerciseTypes: [ex.exerciseType ?? 'compound'],
-              reps: ex.repRange ?? '',
-              loggingType: ex.loggingType,
-            );
+        final arch = SessionBudget.archetypeOfPlanned(ex, ctx);
         final notBudgeted = ex.customOrigin != null ||
             ex.loggingType == 'timed' ||
             ex.loggingType == 'cardio' ||

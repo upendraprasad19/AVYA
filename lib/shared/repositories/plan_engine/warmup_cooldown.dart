@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'equipment_capability.dart';
 import 'models.dart';
 import 'plan_engine_flags.dart';
+import 'session_budget.dart';
 import 'superset_pairer.dart';
 
 /// Stage 7: Attaches warm-up and cool-down to every workout day.
@@ -200,8 +201,14 @@ class WarmupCooldownSelector {
     bool? hasGymEquipmentOverride, // ⑥ C2 (WU-2) — generateV4 passes the flag-gated signal; null → old predicate
     // ⑦ OI-89: the user's capability set, or null for "do not enforce".
     Set<String>? capability,
+    // B2 (session set budget, Ruling 3): scales the cardio lead-in and the cool-down
+    // walk with the session's minutes (60 s at 30 min ... 300 s at 90 min). null →
+    // today's fixed 300 s, byte-identical.
+    SessionBudgetContext? budget,
   }) {
     final isAdvanced = effectiveExp != 'beginner';
+    final walkSeconds =
+        budget == null ? 300 : SessionBudget.warmCoolItemSeconds(budget.minutes);
     // ⑥ C2 — on the GENERATED path `equipmentList` is item tokens (never 'gym'/'full')
     // so the old predicate is always-false; generateV4 passes the resolved override.
     // A null override (template_service + tier-string test callers) keeps the old
@@ -243,7 +250,7 @@ class WarmupCooldownSelector {
         final warmup = <PlannedExercise>[];
 
         final cardioName = cardioLead[dayIndex % cardioLead.length];
-        warmup.add(_timedExercise(cardioName, '300', 'warmup'));
+        warmup.add(_timedExercise(cardioName, '$walkSeconds', 'warmup'));
 
         final tier = isAdvanced ? 'advanced' : 'beginner';
         final dynamicMap = _dynamicWarmup[dayType] ?? _dynamicWarmup['upper']!;
@@ -268,7 +275,7 @@ class WarmupCooldownSelector {
 
         // Slow Walking is unconditionally prepended → the cooldown floor always
         // holds (it is universally-safe, never dropped).
-        cooldown.add(_timedExercise('Slow Walking', '300', 'cooldown'));
+        cooldown.add(_timedExercise('Slow Walking', '$walkSeconds', 'cooldown'));
 
         final stretches = _cooldownStretches[dayType] ?? _cooldownStretches['upper']!;
         // ⑦ OI-89: Chest Doorway Stretch needs a doorway, which is baseline but

@@ -30,10 +30,12 @@ import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/utils/readiness.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
 
+import 'budget_muscle_groups.dart';
 import 'e1rm_history.dart';
 import 'models.dart';
 import 'muscle_groups.dart';
 import 'plan_engine_flags.dart';
+import 'session_budget.dart';
 
 class VolumeTitration {
   VolumeTitration._();
@@ -155,11 +157,105 @@ class VolumeTitration {
   /// `workingSets` symmetrically (so a triggered un-deload restores the TITRATED
   /// peak — F1). Clamp: the group's weekly total stays in [MEV,MRV]; one exercise
   /// is adjusted at most once/week (dedup); groups processed in sorted order.
+  ///
+  /// B2 (session set budget, Ruling 10): with a [budget] the clamp is the budget's
+  /// own. The group's MEV is the band's bottom and its MRV the band's top (25 for a
+  /// focus group outside a lighter phase); muscles are counted with
+  /// `BudgetMuscleGroups`; a +1 must also fit the `BudgetLedger` (session cap, every
+  /// co-group's top, the day's time); only budgeted rows are candidates; and a delta
+  /// key that is no budget group (`Forearms`) is skipped. This is the one place a
+  /// plateau +1 (merged into [deltas] by the caller) is refused too.
   static List<WeekPlan> applyToWeeks(
-      List<WeekPlan> weeks, Map<String, int> deltas) {
+      List<WeekPlan> weeks, Map<String, int> deltas,
+      {SessionBudgetContext? budget}) {
     if (deltas.isEmpty) return weeks;
     final sortedGroups = deltas.keys.toList()..sort();
+    if (budget != null) {
+      final known = [
+        for (final g in sortedGroups)
+          if (BudgetMuscleGroups.groups.contains(g)) g,
+      ];
+      if (known.isEmpty) return weeks;
+      return [for (final week in weeks) _titrateWeekBudgeted(week, deltas, known, budget)];
+    }
     return [for (final week in weeks) _titrateWeek(week, deltas, sortedGroups)];
+  }
+
+  static WeekPlan _titrateWeekBudgeted(
+    WeekPlan week,
+    Map<String, int> deltas,
+    List<String> groups,
+    SessionBudgetContext budget,
+  ) {
+    final isDeload = week.weekCharacter == 'deload';
+    final dayExercises = [for (final d in week.workoutDays) [...d.exercises]];
+    final ledger = BudgetLedger(budget, dayExercises.length);
+    final bottom = SessionBudget.weeklyBand(budget.planGoal, budget.level).bottom;
+
+    // The sets this titration reads and writes: the visible sets, or on the deload
+    // week the stashed peak-equivalent `workingSets` (a missing stash counts as 0,
+    // which skips the group exactly as the unbudgeted path does).
+    int current(PlannedExercise e) => isDeload ? (e.workingSets ?? 0) : e.sets;
+    Set<String> groupsOf(PlannedExercise e) => SessionBudget.isBudgeted(e, budget)
+        ? BudgetMuscleGroups.of(e.primaryMuscles ?? const [])
+        : const <String>{};
+    double seconds(PlannedExercise e, int sets) => SessionBudget.exerciseSeconds(
+        archetype: SessionBudget.archetypeOfPlanned(e, budget),
+        sets: sets,
+        restSeconds: e.restSeconds);
+
+    for (var di = 0; di < dayExercises.length; di++) {
+      for (final e in dayExercises[di]) {
+        final sets = current(e);
+        final budgeted = SessionBudget.isBudgeted(e, budget);
+        ledger.add(di, groupsOf(e), budgeted ? sets : 0, seconds(e, sets));
+      }
+    }
+
+    final bumped = <String>{}; // "di:xi" already adjusted this week
+    for (final g in groups) {
+      final delta = deltas[g]!;
+      final matches = <(int, int)>[];
+      for (var di = 0; di < dayExercises.length; di++) {
+        for (var xi = 0; xi < dayExercises[di].length; xi++) {
+          if (groupsOf(dayExercises[di][xi]).contains(g)) matches.add((di, xi));
+        }
+      }
+      if (matches.isEmpty || ledger.week(g) == 0) continue;
+
+      for (final (di, xi) in matches) {
+        if (bumped.contains('$di:$xi')) continue;
+        final e = dayExercises[di][xi];
+        final cur = current(e);
+        final gs = groupsOf(e);
+        if (delta > 0) {
+          if (cur >= SessionBudget.maxSetsPerExercise) continue;
+          if (!ledger.fits(di, gs, 1, seconds(e, cur + 1) - seconds(e, cur))) continue;
+        } else {
+          // The mirror of the +1 check: a trim may not take ANY group the exercise
+          // credits below the band bottom, nor an exercise below 1 set.
+          if (cur - 1 < 1) continue;
+          if (gs.any((x) => ledger.week(x) <= bottom)) continue;
+        }
+        final next = cur + (delta > 0 ? 1 : -1);
+        dayExercises[di][xi] =
+            isDeload ? e.copyWith(workingSets: next) : e.copyWith(sets: next);
+        ledger.add(di, gs, next - cur, seconds(e, next) - seconds(e, cur));
+        bumped.add('$di:$xi');
+        break;
+      }
+    }
+
+    return WeekPlan(
+      weekNumber: week.weekNumber,
+      weekInPhase: week.weekInPhase,
+      overloadNotes: week.overloadNotes,
+      weekCharacter: week.weekCharacter,
+      workoutDays: [
+        for (var di = 0; di < week.workoutDays.length; di++)
+          _rebuildDay(week.workoutDays[di], dayExercises[di]),
+      ],
+    );
   }
 
   static WeekPlan _titrateWeek(

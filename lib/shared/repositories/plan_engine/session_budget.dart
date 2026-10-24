@@ -1,4 +1,4 @@
-import 'models.dart' show parseRepRange;
+import 'models.dart' show PlannedExercise, parseRepRange;
 
 /// Batch B2 (docs/plans/2026-10-22-session-set-budget.md): the session set
 /// budget. Behind `PlanEngineFlags.sessionSetBudgetEnabled` (ship-dark, default
@@ -92,6 +92,12 @@ class SessionBudget {
     return v < 6.0 ? 6.0 : (v > 14.0 ? 14.0 : v);
   }
 
+  /// Seconds of the cardio lead-in and of the cool-down walk for a session of
+  /// [minutes] (Ruling 3): `round(60 x (W+C - 4) / 2)`, which is 60 s at 30
+  /// minutes, 180 s at 60 and 300 s at 90 (today's fixed value).
+  static int warmCoolItemSeconds(int minutes) =>
+      (60 * (warmCoolMinutes(minutes) - 4) / 2).round();
+
   /// The archetype of an exercise: `H` (heavy compound), `M` (other compound, or
   /// moderate calisthenics), `I` (isolation) or `B` (everything else, and every
   /// timed / cardio / distance exercise).
@@ -137,6 +143,27 @@ class SessionBudget {
       loggingType: '${row['logging_type'] ?? 'weight_reps'}',
     );
   }
+
+  /// The archetype of a planned exercise: its library row's (`archetypeByName`
+  /// holds one entry per library row, lowercased), else derived from the
+  /// exercise's own stored type, rep range and logging type, as for a custom.
+  /// The ONE place the allocator, `PeriodizationEngine.apply` and titration ask.
+  static String archetypeOfPlanned(PlannedExercise ex, SessionBudgetContext ctx) =>
+      ctx.archetypeByName[ex.exerciseName.toLowerCase()] ??
+      archetypeOf(
+        exerciseTypes: [ex.exerciseType ?? 'compound'],
+        reps: ex.repRange ?? '',
+        loggingType: ex.loggingType,
+      );
+
+  /// Whether the budget sizes [ex] (Ruling 8): it is neither a custom
+  /// (`customOrigin != null`), nor logged timed / cardio / distance, and the
+  /// library has a row for it. Everything else keeps its sets and only spends
+  /// the day's time.
+  static bool isBudgeted(PlannedExercise ex, SessionBudgetContext ctx) =>
+      ex.customOrigin == null &&
+      !const {'timed', 'cardio', 'distance'}.contains(ex.loggingType) &&
+      ctx.archetypeByName.containsKey(ex.exerciseName.toLowerCase());
 
   // ── Day intensity ────────────────────────────────────────────────────────
   // Mirrors `PeriodizationEngine._profileParams` (sets, rest). The two tables are
