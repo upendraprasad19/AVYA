@@ -1,0 +1,78 @@
+{
+  "pike-push-up": {
+    "1": "268c7ad8d22999a40e178131a2e4850e00aa492bbb7637c2907379bd946148d0",
+    "3": "fdbf524f027d198fb1ec6d943f441c14931d33b1f12c4881df43efc62e50afe7"
+  },
+  "cable-curl": {
+    "1": "6ad68de9be119bae011a45dd13faf7f2a149f44a18e3748f45a93d49ac8abf64",
+    "3": "55c6ae4925d1ff4de65e335e32fa5b72e5bd582eabbdfb1148b5b37b7812da69"
+  },
+  "hanging-leg-raise": {
+    "1": "58ea3c3fb5e739fd30f7ed65b0f48ccd9fae14e547e0b81a37b9329d23ded4c2",
+    "3": "a3a1c676e5590a267e59170f2a6ae40c06dc7ec10db876deb6d7339f24fa08c6"
+  },
+  "rowing": {
+    "1": "1aad046165073655618d2ad4cae927c64f5cdaf04ebb001ba874521ee49188b8",
+    "3": "2ae5b30b30b84e510ddf675716db0c1e67423c04f89b18c91411970172f4dcee"
+  },
+  "band-pull-apart": {
+    "1": "73bf46ded85d3bae8d7c77b700a033c899ac9c1f26f6c8e6254cf40c45de4750",
+    "3": "e97b9e75b58b6e75a9b8c1bbf1a67c155113fc1083ebd6eb05a35888ab7fcd2d"
+  },
+  "pull-up": {
+    "1": "efe7af6cc81c8e4cc4a7d6b60b2da11987610611158d1c8b66cd16f6f79513d8",
+    "3": "6e8e0fda425841576efcab048c84c2ac48f9ca7fd04921598976d63938b276d9"
+  },
+  "cable-kickback": {
+    "1": "ee0309afb615e993c37f8e11ef28c1dd01c52e353ebea403575f174a83fa163a",
+    "3": "5d416c999de18d1665613f489442323cd16686b125653699d3618658e46b1c5f"
+  },
+  "banded-lateral-walk": {
+    "1": "aafb5e293a44ea41aa0bab7d9eaee18776555eaa4a81d3681dbc966d5b84fe78",
+    "3": "483b21ac45559df238148dc7f38e013eb7e9e1bdd45b158d4697a04c7b75c165"
+  },
+  "landmine-press": {
+    "1": "49415900477ecf7871191e016101d03c015c5f7ebb18ba69d87ecc40872de931",
+    "3": "121aa2cda628fa1fb6b79405f39a4879aed24c124abec4ce5cea400d7478bd7a"
+  },
+  "meadows-row": {
+    "1": "3b37331ef33a91efd70345124e0518b69d3e9575b9d5bc6b22a95c891c11f495",
+    "3": "62f3bbfd5c100fe2ce88477023372f11ef445fe9cecee579ac28d96e11e07f13"
+  },
+  "spider-curl": {
+    "1": "83b8a50b2df4dd1977d3d0b11d8031070c41fde0a8cb4c86b6239bdbff74eb86",
+    "3": "81933531e986a7d77a45622c2033f3896a8e5d3c47908180214b898338ad55b2"
+  },
+  "v-up": {
+    "1": "1b28e346864a579e6115cd7b2454a9713f4a16cba748c1cf5d71eeb058489546",
+    "3": "bda29f8b28d75d6efe8ca8ec7dfddb19bfaf0f97f42faa94c02d02fc4a48380d"
+  },
+  "jumping-jack": {
+    "1": "076a412f18c3f6b30bbc2be2a88aa6709cef1bd6b2c2c32bea91410fcd09b696",
+    "3": "4bfb7f9def389910c3547bafc375557830c9f07e66ec169feb606128025e2843"
+  },
+  "arm-circles": {
+    "1": "022ac199d252caa32015f57772924d4ed48f31a8727c8fa0613942d6816397bb",
+    "3": "cf6dca46d3f4286f9961be19d2eb803d6fe29992de7da382c6f91ad414093105"
+  },
+  "frog-pump": {
+    "1": "eed32af7e94ce2e6ca24b26fa895bff36e172238a9f252e091acd0d82bfbb251",
+    "3": "b87e77efcf56cd7d282022ba73088cd80dab99fdc321d0aafde7a71b575dca77"
+  },
+  "machine-row": {
+    "1": "b6bebcde5ca160a75997bd8a302f4ee22cbe954973e9680471f7432a2716268b",
+    "3": "d1f9553bdc715f7c8c9129bc616e23c1c5b03e7b091f3566b10b23c43f41caaf"
+  },
+  "donkey-kick": {
+    "1": "2faa51d382a3f40a4d69bd04fe04fbcd7f558277499c73164a3fa62d58bc623e",
+    "3": "f6db61b80dac5d31c90d1d18d30f0b36f6c050571f14249f9c96e23a84dcd083"
+  },
+  "feet-elevated-pike-push-up": {
+    "1": "5def8d56b193463cf0d411b56562a7d1e168386c3322ac5af9bc0dfc4e35cdae",
+    "3": "2a92dbcd82b30381036d54b7d568aea6e0fe3e165b1fde59c13e69c038d0e6f1"
+  },
+  "prone-y-raise": {
+    "1": "b6a23ef2ac88d87fb4127c1e02b10bfc5ed049a325cbf69ae0c40c93991a2074",
+    "3": "7c166f2504f982dccac75068f7b9f72b0e831262c81a4bc503b7e0ee11d62bfa"
+  }
+}
