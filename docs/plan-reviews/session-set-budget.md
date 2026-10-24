@@ -61,7 +61,7 @@ Settled in the plan before execution: Rulings 1 to 14. Added while executing, ea
 - Mutation proof: 44 mutants this round (35 killed first time, 1 compile error re-run and killed, 8 survivors: 7 pinned by new
   tests and re-run killed, 1 equivalence removed). Earlier cycles: allocator 33, consumers 38, wiring 12 of 12, display 19 of 19,
   gate 10 of 10.
-- Closure ledger `docs/audit/session-set-budget.closure.yaml`: 60 of 60 entries terminal (Gate 40). The `upstream_blocked` ones
+- Closure ledger `docs/audit/session-set-budget.closure.yaml`: 61 of 61 entries terminal (Gate 40). The `upstream_blocked` ones
   are product questions for the `enable_session_set_budget` flip review (floors, forced lead lift, 90-minute leftover, repeat
   phase), Rulings 6 and 7, the migration-017 column comment, the stale `plan_generator.dart` header (rule 14), the two literature
   citations, the core-list picks (`enable_core_list_pool` flip review) and OI-412.

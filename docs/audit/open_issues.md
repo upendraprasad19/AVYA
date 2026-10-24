@@ -6858,3 +6858,16 @@ Past `user_daily_snapshots` stay (nothing reads a past day's `coach_notices`). D
 **Fix.** Add `'scripts/.dart_tool/'` to `regenerableIgnoredPaths` with the same "THIS path only" wording, and a test in the retirement suite that this path is regenerable while `scripts/.dart_tool/other` and `vendor/.dart_tool/` stay precious.
 
 **Done when.** The path is on the list, the retirement test pins it and its nested mirror, and a dry-run on a worktree holding only that file says RETIRE.
+
+## OI-413 — check_code_review_pass_exists.dart has no MERGE_HEAD stand-down: a conflicted merge of main into a branch stages main's already-merged catastrophic files and demands a review of them
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-10-25, live: merging `origin/main` (payment-hardening #165) into the B2 branch conflicted in four shared files; the manual merge commit ran pre-commit and `dart run scripts/check_code_review_pass_exists.dart` failed with `blast-radius=catastrophic requires a STAGED review file at docs/reviews/b128411a05da-review.md`. `git diff --cached --name-only` held 53 paths, all of them main's. `grep -n "MERGE_HEAD" scripts/check_code_review_pass_exists.dart` finds nothing.
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `session-set-budget`
+
+**The defect.** At a merge commit the staged diff is the OTHER side's whole content, so the gate asks for a review of code that was already reviewed and merged, and no content can satisfy it (class 6 of `feedback_gates_unsatisfiable_at_merge`). The PR flow cannot use the old workaround (resolve at the merge to main in the primary): GitHub merges server-side and cannot merge a PR with conflicts. Workaround used for B2, no hook bypassed: save the hand-resolved tree, `git merge --abort`, `git merge -X theirs origin/main` (completes without pre-commit), restore the tree with `git restore --source=<tree> --staged --worktree -- .` and commit normally.
+
+**Fix.** Stand down while `MERGE_HEAD` exists (`git rev-parse -q --verify MERGE_HEAD` through `git rev-parse --git-path`, so it works in a linked worktree), print a SKIP line naming why, and add a negative-control test that the gate still enforces for the same staged paths without a merge in progress. CI's keystone gate derives its inputs from the pushed range, so enforcement stays. A `fix(gates)` commit needs its diagnose-doc.
+
+**Done when.** A conflicted merge of a branch with a main that carries catastrophic paths commits through pre-commit without a review file, and the negative control reddens when the stand-down is made unconditional.

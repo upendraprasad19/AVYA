@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**264 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**265 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -272,3 +272,4 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-410 | verify-payment answers verified:true for a non-active subscription row of… | none | 2026-10-25 - by reading the branch: the… | [:6827](open_issues.md#L6827) |
 | OI-411 | verify-payment's ownership proof is notes.user_id, which the client's… | the founder: one test payment in… | 2026-10-25 - by reading the branch:… | [:6838](open_issues.md#L6838) |
 | OI-412 | retire_worktree.dart keeps any worktree that ran dart run with cwd… | none | 2026-10-24, live: the OI-401 session's… | [:6849](open_issues.md#L6849) |
+| OI-413 | check_code_review_pass_exists.dart has no MERGE_HEAD stand-down: a… | none | 2026-10-25, live: merging `origin/main`… | [:6862](open_issues.md#L6862) |

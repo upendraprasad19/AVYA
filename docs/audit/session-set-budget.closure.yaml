@@ -364,10 +364,16 @@ findings:
     blocker: "Filed as OI-412 on the board (d234f31c); a tooling change in scripts/retire_worktree_lib.dart outside this batch's plan."
     reopen_when: "scripts/retire_worktree_lib.dart is next changed, or the founder picks the OI."
 
+  - id: OI-413
+    title: "check_code_review_pass_exists.dart has no MERGE_HEAD stand-down (class 6 of gates unsatisfiable at a merge); surfaced by the origin/main merge into this branch"
+    terminal_state: upstream_blocked
+    blocker: "Filed as OI-413 on the board (a gate change with its own diagnose-doc and negative-control test, outside this batch's plan). The merge was completed without a hook bypass: the hand-resolved tree was saved, the merge made with -X theirs and the tree restored in the next commit (85fc430a, 32ae232c)."
+    reopen_when: "scripts/check_code_review_pass_exists.dart is next changed, or the founder picks the OI."
+
   - id: REVIEW-ROUNDS
     title: "Four context-blind plan review rounds, three fresh B-pass reviewers, B-pass accepted"
     terminal_state: verified_clean
     evidence: "docs/plan-reviews/session-set-budget.md (review_rounds 4, ground_truth_verified true, verdict converged, bpass accepted); docs/reviews/session-set-budget-bpass.md (36 findings, 0 false alarms, all triaged)."
 
-total_findings: 60
-closed_count: 60
+total_findings: 61
+closed_count: 61
