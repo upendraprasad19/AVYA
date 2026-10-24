@@ -4,6 +4,7 @@ import 'package:icanbefitter/core/utils/injury_vocab.dart';
 import 'plan_engine_flags.dart';
 
 import '../exercise_repository.dart';
+import 'budget_muscle_groups.dart';
 import 'cardio_finisher.dart';
 import 'exercise_selector.dart';
 import 'models.dart';
@@ -11,6 +12,8 @@ import 'periodization_engine.dart';
 import 'plateau_scan.dart';
 import 'progression_resolver.dart';
 import 'sequencing_engine.dart';
+import 'session_budget.dart';
+import 'session_set_allocator.dart';
 import 'split_resolver.dart';
 import 'superset_pairer.dart';
 import 'training_history_analyzer.dart';
@@ -142,8 +145,9 @@ class PlanGenerator {
         flagEnabled: PlanEngineFlags.equipmentExclusionsEnabled);
 
     // ⑦ OI-89: the user's real capability set, or null for "do not enforce".
-    // Null whenever the flag is off OR the tier is not bodyweight (decision 1),
-    // so every drop site downstream is simply `capability != null`.
+    // Derived at EVERY tier since OI-144 (`resolveCapability` no longer gates on
+    // the bodyweight tier). Null only when the flag is off or Hive is unreachable
+    // (fail open), so every drop site downstream is simply `capability != null`.
     final capabilitySet = TrainingHistoryAnalyzer.resolveCapability(
         tier: equipment,
         exclusions: equipmentExclusionSet,
@@ -161,11 +165,19 @@ class PlanGenerator {
     final splitDays = SplitResolver.selectV4(planGoal, daysPerWeek,
         experienceLevel: effectiveExp);
 
-    // Stage 1.5: Volume Filter — trim slots by experience + frequency
+    // B2 (session set budget, ship-dark `enable_session_set_budget`): read ONCE,
+    // here, so every stage below sees the same answer. OFF → every B2 seam below is
+    // inert and this method runs verbatim.
+    final budgetOn = PlanEngineFlags.sessionSetBudgetEnabled;
+
+    // Stage 1.5: Volume Filter — trim slots by experience + frequency. Under the
+    // budget it keeps EVERY split slot: the allocator, not a fixed count, decides
+    // how many of them a session has time for.
     final filteredDays = VolumeFilter.filterDays(
       splitDays,
       experience: effectiveExp,
       weekCharacter: 'baseline', // first-pass uses baseline
+      keepAllSlots: budgetOn,
     );
 
     // Stage 2: Exercise selection with filtered slots. ⑧ 8-A/2-cap: when a pinned
@@ -180,7 +192,7 @@ class PlanGenerator {
         (applyPlateauEscalation && pinnedExercisesByDay == null)
             ? PlateauScan.plateauedExerciseNames(phase: phase)
             : const <String>{};
-    final populated = pinnedExercisesByDay != null
+    var populated = pinnedExercisesByDay != null
         ? ExerciseSelector.buildPinnedDays(
             frames: filteredDays,
             pinnedByDay: pinnedExercisesByDay,
@@ -256,6 +268,41 @@ class PlanGenerator {
       phase: phase,
     );
 
+    // B2: size every session by the user's minutes. One context for the allocator,
+    // `apply`, titration and the warm-up, so they all price time with the same
+    // archetypes and read the same bands. The level is the EFFECTIVE level (a
+    // beginner at phase 5 is budgeted as advanced), the focus groups come from the
+    // same effective body focus the physique bring-up reads, and a deload-archetype
+    // phase is lighter. Not-budgeted rows (customs, timed / cardio / distance, rows
+    // with no library match) keep their sets and only spend time.
+    SessionBudgetContext? budget;
+    if (budgetOn) {
+      final rowsByName = <String, Map<String, dynamic>>{
+        for (final r in ExerciseRepository.instance.getAll())
+          if (r['name'] is String) (r['name'] as String).toLowerCase(): r,
+      };
+      budget = SessionBudgetContext(
+        minutes: SessionBudget.resolveMinutes(
+          param: sessionDuration,
+          profileValue: TrainingHistoryAnalyzer.sessionMinutesFromProfile(),
+        ),
+        planGoal: planGoal,
+        level: effectiveExp,
+        lighterPhase: PeriodizationEngine.archetypeForPhase(phase) == 'deload',
+        focusGroups: BudgetMuscleGroups.of(effectiveBodyFocus),
+        archetypeByName: {
+          for (final e in rowsByName.entries) e.key: SessionBudget.archetypeOfRow(e.value),
+        },
+        dayIntensities: [for (final d in populated) d.intensity],
+      );
+      populated = SessionSetAllocator.allocate(
+        days: populated,
+        ctx: budget,
+        rowsByName: rowsByName,
+        is6Day: daysPerWeek == 6,
+      );
+    }
+
     // Stage 4: Periodization → WeekPlan[]
     var weekPlans = PeriodizationEngine.apply(
       populated: populated,
@@ -264,6 +311,7 @@ class PlanGenerator {
       effectiveExp: effectiveExp,
       bodyFocus: effectiveBodyFocus,
       previousWeights: weights,
+      budget: budget,
       // ⑥ 7-B-1 (W2.4): stash peak-equivalent working sets/reps on the deload week
       // for a lossless triggered-deload lift (ship-dark; flag OFF → no stash →
       // byte-identical). Consumed by the 7-B-2 eval/un-deload.
@@ -289,7 +337,7 @@ class PlanGenerator {
       final deltas = applyPlateauEscalation
           ? PlateauScan.mergePlateauSetDeltas(base, phase: phase)
           : base;
-      weekPlans = VolumeTitration.applyToWeeks(weekPlans, deltas);
+      weekPlans = VolumeTitration.applyToWeeks(weekPlans, deltas, budget: budget);
     }
 
     // Stage 3: Sequencing
@@ -339,6 +387,7 @@ class PlanGenerator {
       injuries: normalizedInjuries, // U3: injury-filter warmup/cooldown moves
       hasGymEquipmentOverride: hasGymOverride, // ⑥ C2 (WU-2)
       capability: capabilitySet, // ⑦ OI-89 seam 11
+      budget: budget, // B2 (Ruling 3): lead-in and walk scale with the minutes
     );
 
     // Build Phase output
