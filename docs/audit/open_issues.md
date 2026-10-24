@@ -3081,6 +3081,8 @@ Do NOT re-propose v1. Verified clean by round 2: sending `''` to `user_profile.c
 - **Related**: OI-162 (parent), diagnose a9d3f1 (the function-EXECUTE
   sibling of this same class), `feedback_revoke_from_public_not_role.md`.
 
+
+**Note 2026-10-25 (payment-hardening hermes pass, seat C, L2).** Also measure `promo_code_uses` and `subscriptions`: no migration revokes their table privileges, so the platform default (all eight privileges, TRUNCATE included, for `anon` and `authenticated`, as migration 163 measured on `promo_codes`) is inferred, not measured. RLS blocks row access on both; TRUNCATE ignores RLS but PostgREST does not expose it.
 ## OI-185 — `check_schema_column_refs.dart` validates only the FIRST line of a multi-line insert/update map (P2, gate gap, pre-existing)
 
 - **Status**: OPEN
@@ -6127,6 +6129,7 @@ How to use: build once from the last merged `main`, install on the phone, sign i
 - B3 `gemini3-limits-caching` A5-SMOKE: one FREE and one PRO account chat in the app (or hand over a test account); the agent reads the counters.
 - B4 `coach-history-correctness-tools` D1: authenticated coach-tool smoke on ai-proxy v93 showing the corrected volume and `total_reps`.
 - B5 `promo-codes-server-only` PROMO-CHECK (migration 163, applied live 2026-10-24): signed in (any build, web is fine), open the paywall and enter a known active promo code; it must show the discount, and an unknown code must show "Invalid promo code". This proves validate-promo's service-role read still works after the client grants were revoked (the database side is proven: live verify P10 and P13).
+- B6 `payment-hardening` PROMO-AND-ORDER (after the deploys of `validate-promo` and `create-razorpay-order`): signed in, open the paywall; (1) a known active code shows the discount and checkout opens at that price; (2) a code that is expired or used up shows "This code has expired" / "This code has reached its maximum uses" and NO checkout opens with it (an unusable code used to be dropped silently at order time); (3) the 21st code check within one hour shows "Too many attempts. Try again in N minutes. (N = the minutes left in the current UTC hour)", not "Network error". The function logs show `order_abuse_guards=on` for each request.
 
 ### C. Live-state reads and dashboard looks (no build; need the founder's go for live reads)
 
@@ -6138,6 +6141,7 @@ How to use: build once from the last merged `main`, install on the phone, sign i
 - C6 `coach-measurement-bounds` REJECTION-REVIEW: after the build is in use, read live `client_errors` for the rejection rows and adjust the bounds table (D5) if needed.
 - C7 `oi341-purchase-in-trial` (superseded 2026-10-23 by C8: the switch is now ON; `verify-payment` v29, `razorpay-webhook` v33): after the next real payment, read its `subscriptions` row. With stacking ON and no active row the paid cycle is `start_date` = the payment time and `end_date` = `start_date` + 30 or 365 days; with an active trial row `end_date` = trial end + 30 or 365 (C8). The function logs carry `stacking_switch=on`. Needs no build.
 - C8 `oi341-live-session` (live 2026-10-23: `create-razorpay-order` v18, `razorpay-webhook` v33, `verify-payment` v29, `ENABLE_SUBSCRIPTION_STACKING` and `ENABLE_TRIAL_PURCHASE` both true; ledger rows `L-TESTER-PROBES`, `L-RECON-24H`, `L-REFUNDS`, `L-PAYMENTS-LIST`, `L0C-PROMO` in `docs/audit/oi341-piece-b2-door.closure.yaml`). Real money, in this order, each its own go: (1) create the one dedicated 90% code; (2) a never-paid free tester buys: the web checkout opens on the live key and the row is start = payment time, end = start + plan days; (3) with the live webhook paused in the Razorpay dashboard, a second never-paid tester pays so `verify-payment` writes the row (the ON path there); (4) a referral-trial tester buys through the new web client: paid end = trial end + plan days, start = payment time, trial row unchanged, the paywall line and checkout notice shown; (5) read-only reconcile R1 (short paid rows = 0) and R2 (unresolved `payment_record_failed` / `stacking_switch_mismatch` = 0) now and again about 24 h after the door opened (2026-10-23 evening); (6) deactivate the code, refund each payment, cancel (never delete) the tester rows. The OFF-branch alarm drill (`L2-DRILL`) cannot run while stacking is ON and is owed only if the writers are ever rolled back. Rollback if a payment misbehaves: unset `ENABLE_TRIAL_PURCHASE` and redeploy `create-razorpay-order`. Needs no build.
+- C9 `payment-hardening` LOGS-AND-RECOVERY (after the deploys of `verify-payment`, `razorpay-webhook`, `create-razorpay-order`, `validate-promo`): after the first real payments, read the four functions' logs: no PostgREST error object, Razorpay body, notes or raw promo code appears, only codes, ids and the bounded forms; a refused capture shows either `capture refused, payment already captured; continuing` (the row is recorded) or the summary line and a 502. These are OI-407's two live checks; record them there too.
 
 ### W. On the founder's Windows clone (no build)
 
@@ -6145,7 +6149,7 @@ How to use: build once from the last merged `main`, install on the phone, sign i
 
 ### Flips (OIs and rows that close or unblock when their checks are recorded)
 
-OI-312 after A4; OI-307 after A4 and C1/B4 (D1-D5); OI-308 after B4 (D1); OI-296 after C1; OI-269 after C1 and the D6 decision; OI-284 and OI-303 after A5 (OI-303 then deletes the `disable_completed_title_heal` kill switch); OI-345 after A3 (then removes the measurements OFF path); the LOG-per-exercise OFF-path removal OI after A12; OI-336 after A10 and B1; OI-341 after C8, A13 and the AAB purchase (then the OI closes); OI-406 after B5 and its merge (then the OI closes); OI-349 gets the founder's decision after A11; the `referral-hardening-migration-160` row PX after B1.
+OI-312 after A4; OI-307 after A4 and C1/B4 (D1-D5); OI-308 after B4 (D1); OI-296 after C1; OI-269 after C1 and the D6 decision; OI-284 and OI-303 after A5 (OI-303 then deletes the `disable_completed_title_heal` kill switch); OI-345 after A3 (then removes the measurements OFF path); the LOG-per-exercise OFF-path removal OI after A12; OI-336 after A10 and B1; OI-341 after C8, A13 and the AAB purchase (then the OI closes); OI-406 after B5 and its merge (then the OI closes); OI-349 gets the founder's decision after A11; the `referral-hardening-migration-160` row PX after B1; OI-350, OI-359, OI-360, OI-351 and OI-366 after B6 and C9; OI-407's removal starts after C9 and a week of `order_abuse_guards=on`.
 
 ### Decided 2026-10-17, so NOT a check
 
@@ -6166,6 +6170,7 @@ Impact: a user with the largest accessibility font on a short phone may see clip
 - **Blocked on**: none
 - **Verified**: 2026-10-17 - by reading `supabase/functions/verify-payment/index.ts` on `origin/main` and on branch `oi341-purchase-in-trial` (found by hermes pass seat 2, L23; the diff does not change it): after the payment-id checks the function calls Razorpay `GET /v1/payments/<id>` with the account credentials, auto-captures an `authorized` payment (POST `.../capture`) and answers `Payment status is '<status>', not 'captured'`, all BEFORE the `payment.notes.user_id !== userId` ownership check (403). Any signed-in user who knows a well-formed `pay_` id can therefore cause the capture of another user's authorized payment or read its Razorpay status. Not exploitable for entitlement (the ownership check still precedes the insert) and ids are not guessable, so impact is low. Fix: move the ownership check above the capture and the status echo (needs the payment fetched first, so fetch, check notes.user_id, then capture). Catastrophic tier (a payment function): plan reviewed twice, B-pass, hermes, own deploy go.
 - **Identified**: 2026-10-17 · filed via mint_oi.sh from branch `oi341-purchase-in-trial`
+- **Update 2026-10-24 (payment-hardening U1, diagnose b5e8d2)**: OI-359 is the SAME defect; one fix closes both. Fixed in code on branch `payment-hardening`: the 400/403 ownership guards now run directly after the Razorpay GET, before the capture and the status echo (Deno 'U1:' tests, `verify_payment_owner_before_capture_writer_to_reader_test.dart`). Stays OPEN until the verify-payment deploy (founder-gated, plan section 6).
 
 ## OI-351 — razorpay-webhook: after a payment.authorized auto-capture, a failed insert (or a failed stacking read) leaves the stale authorized payload retrying a capture that Razorpay refuses as already captured, a 502 loop for up to 24 hours until the separate payment.captured event records the row
 
@@ -6173,6 +6178,7 @@ Impact: a user with the largest accessibility font on a short phone may see clip
 - **Blocked on**: none
 - **Verified**: 2026-10-17 - by reading `supabase/functions/razorpay-webhook/index.ts` (found by hermes pass seats 1 and 4, L21 and L29): a `payment.authorized` event with `captured === false` is captured server-side BEFORE the row insert. If the insert then fails (non-23505), or, with `ENABLE_SUBSCRIPTION_STACKING` on, the stacking read fails, the function returns 500; Razorpay re-delivers the stale `authorized` payload, the handler tries to capture again, Razorpay refuses an already-captured payment, and the handler answers 502 (`Capture failed, will retry`) on every retry until Razorpay gives up (up to 24 hours). Only the SEPARATE `payment.captured` event that follows the first capture can insert the row, so the user is not stranded, but the loop is noise and hides a real failure. Fix: treat a 4xx `already captured` answer from the capture call as success and continue to the insert. Catastrophic tier.
 - **Identified**: 2026-10-17 · filed via mint_oi.sh from branch `oi341-purchase-in-trial`
+- **Update 2026-10-24 (payment-hardening U2, diagnose a9e2f7)**: correction: this runs on the NORMAL flow, not only after a failed insert: `create-razorpay-order` sets `payment_capture: 1`, so Razorpay auto-captures and a later `payment.authorized` delivery has its manual capture refused (502 today) while `payment.captured` records the row. How often is not evidenced (no real payment since the live keys). The 24 h claim holds only if Razorpay re-stamps `created_at` on retries; otherwise retries past 300 s already get 400. Fixed in code: a refused capture re-reads the payment once (1.5 s) and records the row when it is captured for the same id and amount; kill switch `DISABLE_WEBHOOK_CAPTURE_RECOVERY` (removal OI-407). Stays OPEN until the webhook deploy and the first real payment's logs.
 - **Update 2026-10-20 (OI-341 Piece B1)**: once `ENABLE_SUBSCRIPTION_STACKING` is set, a failed `record_paid_subscription` call (for example a 5 s lock timeout, 55P03) after an auto-capture enters the same 502 loop as a failed insert does today. It now also writes a `payment_record_failed` alert (critical on the first failure of that payment), so the loop is visible; the fix above is unchanged.
 
 ## OI-352 — Active Workout meta line prints hard-coded '0kg' for every scheduled lift
@@ -6253,6 +6259,7 @@ Found by the batch-2 plan review (round 1, P2-12, 2026-10-20), verified by readi
 - **Blocked on**: none
 - **Verified**: 2026-10-20 - by code read (hermes pass seat L23 on OI-341 Piece B1, not introduced by it): `supabase/functions/verify-payment/index.ts` runs the `authorized && !captured` capture block (~:404-436) BEFORE the `notes.user_id !== userId` 403 (~:458-482). A signed-in user X who passes user Y's authorized-but-uncaptured payment id makes the service capture Y's payment early; no row is written for X, and the capture amount comes from Razorpay, not the caller. Bounded by the 20-per-10-minute `consume_quota` limit and the strict `pay_` id shape. Impact: only the timing of Y's capture changes.
 - **Identified**: 2026-10-20 · filed via mint_oi.sh from branch `oi341-piece-b-door`
+- **Update 2026-10-24 (payment-hardening U1, diagnose b5e8d2)**: a duplicate of OI-350 (same defect, found again by a later hermes pass); fixed by the same change. Stays OPEN until the verify-payment deploy.
 
 Fix: move the ownership check above the capture call. Not done in Piece B1 because B1 keeps the OFF path byte-identical to `origin/main` (the golden recordings) as its ship-dark proof; the move changes that path, so it needs its own regression test and golden refresh. Catastrophic tier.
 
@@ -6262,6 +6269,7 @@ Fix: move the ownership check above the capture call. Not done in Piece B1 becau
 - **Blocked on**: none
 - **Verified**: 2026-10-20 - by code read (hermes pass seat L40 on OI-341 Piece B1, not introduced by it): `verify-payment/index.ts` (~:663-666) and `razorpay-webhook/index.ts` (~:663) `console.error` the whole PostgREST `insertError`; for a 23502/23503 violation Postgres puts "Failing row contains (...)" in `details`, which carries the user id, order id and `razorpay_signature` (in the webhook, the real HMAC header). `razorpay-webhook` also logs the whole `notes` object when `user_id` is missing (~:484) and the Razorpay capture error body / thrown error (~:442, ~:463); `notes` is free-form. The Piece B1 ON path is clean (it logs only a SQLSTATE or a fixed code).
 - **Identified**: 2026-10-20 · filed via mint_oi.sh from branch `oi341-piece-b-door`
+- **Update 2026-10-24 (payment-hardening U0, diagnose d1a4f6)**: wording correction: in `verify-payment` the stored signature is a sentinel (`verified_via_api:<12 chars>`); what leaked there is the user, order and payment ids in `details`. The webhook's insert failure carried the REAL HMAC header. Fixed in code for every payment-path log site (`_shared/payment_log_safe.ts`, one built string per console call, pinned by `payment_log_safety_writer_to_reader_test.dart`), plus R-6 (redeemPromo now checks the returned errors). Stays OPEN until the three deploys.
 
 Fix: log `code` / `name` and ids only (same rule as the CLAUDE.md pitfall on Telegram errors carrying the bot token). Not done in Piece B1 because it changes the OFF path that B1 keeps byte-identical to `origin/main`. Catastrophic tier.
 
@@ -6342,6 +6350,7 @@ Impact: finding 1 is a visible glitch; finding 2 is a silent product gap (plan l
 - **Blocked on**: none for the code; the founder's call on the rate (proposed: 30 orders per hour per user, fail closed with 429, plus a tighter counter on unmatched promo codes) and on the promo rule (proposed: an order honours a code only while it is active, unexpired and not exhausted; the two writers keep their tolerant read so a paid amount is never stranded). A new quota key must also be added to `_shared/founder_digest_content.ts` `DIGEST_KEYS`, which `test/contracts/founder_digest_caps_mirror_test.dart` pins both ways, so the fix touches the founder digest and redeploys it too. Must land before store launch.
 - **Verified**: 2026-10-21 - by reading (hermes pass seat 4 on branch `oi341-piece-b2-door`, re-read by the coordinator): `create-razorpay-order/index.ts` calls no `consume_quota` after `auth.getUser` and returns `promo_applied` / `discount_pct` for any guessed code; its promo block only LOGS `isExpired || isExhausted` (the order gets the discount); `validate-promo/index.ts` rejects only `!is_active`; `increment_promo_used_count` (migration 012) has no ceiling. So `max_uses` and `valid_until` limit nothing anywhere. Pre-existing; OI-341 Piece B2a did not change it, but its door lets referral-trial users reach the same endpoint.
 - **Identified**: 2026-10-21 · filed via mint_oi.sh from branch `oi341-piece-b2-door`
+- **Update 2026-10-24 (payment-hardening U3, diagnose f2c9a8)**: correction: `validate-promo` DID reject inactive, expired and exhausted codes; the gap was `create-razorpay-order`, which honoured expired/exhausted codes and gave a silent full-price order for an unknown or inactive one, and the missing limits. Its 'unthrottled oracle' was real but moot while `promo_codes` was anon-readable (OI-406). Fixed in code: 30 order attempts and 20 promo checks per user per hour, one strict rule (`_shared/promo_rules.ts`, IST day) at both doors; kill switch `DISABLE_ORDER_ABUSE_GUARDS` (removal OI-407). Stays OPEN until the two deploys.
 
 Impact: one signed-in account can create unlimited orders on the shared LIVE Razorpay account (risking Razorpay API throttling that 502s real buyers) and can guess promo codes without limit; an expired or used-up marketing code keeps working until someone flips `is_active`. Testing phase: testers only. Fix shape: see Blocked on. B2a's live steps work around it (one random 90% code, deactivated right after step 4; plan `docs/plans/oi341-piece-b2-door.md` step 0 (c)).
 
@@ -6780,6 +6789,17 @@ Past `user_daily_snapshots` stay (nothing reads a past day's `coach_notices`). D
 
 **Related.** OI-366 (order-time promo rules, the payment-hardening branch), c9b3e2 (the same class: server-only objects reachable by the client roles through default privileges).
 
+## OI-407 — Remove the two payment-hardening kill switches (DISABLE_WEBHOOK_CAPTURE_RECOVERY, DISABLE_ORDER_ABUSE_GUARDS) and their old code paths once their live checks pass
+
+- **Status**: OPEN
+- **Blocked on**: the live checks of both switches' new paths (plan `docs/plans/2026-10-24-payment-hardening.md` section 6): the first real payment that meets a refused capture (the recovery line `capture refused, payment already captured; continuing`), and a week of `order_abuse_guards=on` traffic with no wrongly refused order. Both need the founder's deploys first.
+- **Verified**: 2026-10-24 - by reading the branch: `razorpay-webhook/index.ts` reads `DISABLE_WEBHOOK_CAPTURE_RECOVERY`, `create-razorpay-order/index.ts` and `validate-promo/index.ts` read `DISABLE_ORDER_ABUSE_GUARDS`, each through `isEnvExactlyTrue`, once per request; the old paths sit behind them verbatim (CLAUDE.md 4.6).
+- **Identified**: 2026-10-24 · filed via mint_oi.sh from branch `payment-hardening`
+
+**What.** CLAUDE.md 4.6 step 4: the old path is deleted in the batch that rolls the gate; here the gates default ON (founder decision 2026-10-24), so the "roll" is the live check, and the deletion is tracked here instead of as an intention (the OI-374 precedent). Delete: the switch reads, the `else` / switch-on branches (the 502-without-reread in the webhook; the tolerant promo path in `create-razorpay-order`; the `.single()` path in `validate-promo`), the switch-ON goldens and the frozen `validate_promo_origin_main.ts.txt` fixture if nothing else reads it, the two `SECRET_INVENTORY.md` rows, and the payment.md mentions.
+
+**Done when.** Both live checks above are recorded; the deletion lands with its tests; neither secret is set in the Dashboard. Blast radius: `catastrophic` (payment functions).
+
 ## OI-408 — Bodyweight beginner with shoulder + lower_back injuries has 2-exercise upper days (Plank, Dead Bug) after the thin-day top-up
 
 - **Status**: OPEN
@@ -6793,15 +6813,35 @@ Past `user_daily_snapshots` stay (nothing reads a past day's `coach_notices`). D
 
 **Done when.** The founder picks one, it is built with a regression test, and `kPairsThinBaseline` and `kPairs46ThinBaseline` in `test/plan_generator/injury_floor_sweep_test.dart` go to 0.
 
-## OI-412 — retire_worktree.dart keeps any worktree that ran dart run with cwd scripts/: scripts/.dart_tool/ is missing from regenerableIgnoredPaths
+## OI-409 — Both payment writers capture an authorized payment before checking that its amount matches a plan, and the webhook cannot tell an app payment from a website payment on the shared Razorpay account
+
+- **Status**: OPEN
+- **Blocked on**: the founder: one look in the Razorpay dashboard at a WEBSITE payment (the website's own orders share the live account, per the comment at `create-razorpay-order/index.ts:355-359`) to see what its notes carry (any `user_id`, and in what form). The design of the app-payment test depends on it.
+- **Verified**: 2026-10-25 - by reading the branch: `razorpay-webhook/index.ts` captures a `payment.authorized` payment at :556 and derives the plan at :614 (the B2a `amount_no_match` alert at :631); `verify-payment/index.ts` captures at :471 and derives at :522 (alert at :538). The hermes H12 fix (diagnose c7e3b1) moved only the webhook's `notes.user_id` refusals ahead of the capture. The order's `source: "AVYA_app"` tag (`create-razorpay-order/index.ts:360`) is on the ORDER's notes, not the payment's.
+- **Identified**: 2026-10-24 · filed via mint_oi.sh from branch `payment-hardening`
+
+**What.** (1) An authorized payment whose amount matches no plan (a promo edited or deleted between order and payment, or a payment that is not the app's) is captured first, and only then refused with the critical `payment_record_failed` / `amount_no_match` alert, so the founder must refund it by hand. Deriving the plan before the capture, in BOTH writers, would leave it authorized and let Razorpay's auto-refund return it; the alert would then mean "refused, refunds itself" rather than "money taken". (2) On the shared live account the webhook receives the website's events too; a website payment with a UUID-shaped `notes.user_id` would pass both refusals. Found by the payment-hardening hermes pass (seat C, L23 finding 1) and the commit-6 B-pass (bfaeb6fb79da finding 4).
+
+**Done when.** The website payment's notes are known; both writers derive the plan before capturing an authorized payment (tests: an unmatched amount gives no capture request, with a frozen-origin positive control); the webhook refuses a payment that is not the app's before any capture; payment.md rule 10/11 updated. Blast radius: `catastrophic` (payment functions).
+
+## OI-410 — verify-payment answers verified:true for a non-active subscription row of the caller's own payment (its second pre-select has no status filter)
 
 - **Status**: OPEN
 - **Blocked on**: none
-- **Verified**: 2026-10-24, live: the OI-401 session's dry-run printed `KEEP thin-day-topup [1 non-regenerable ignored file(s)]`; the one file was `scripts/.dart_tool/native_assets.yaml` (171 B, header "Generated by dartdev", no `pubspec.yaml` in `scripts/`), written by a `dart run` with cwd `scripts/`. `regenerableIgnoredPaths` (`scripts/retire_worktree_lib.dart:238`) lists `supabase/functions/.dart_tool/` and the root `.dart_tool/` only, and `isRegenerableIgnored` is an exact match, so this sibling is treated as precious. After removing that directory by hand the dry-run said `RETIRE ... [merged + clean ...]` and the retirement ran.
-- **Identified**: 2026-10-24 · filed via mint_oi.sh from branch `session-set-budget`
+- **Verified**: 2026-10-25 - by reading the branch: the early read at `verify-payment/index.ts:369-375` filters `status = active`; the idempotency pre-select at `:606` does not; when it finds a row the else arm (`:753`) takes that row's `end_date` and the handler answers 200 `{verified: true, ..., source: "razorpay_api"}` (`:798`). The client trusts `verified == true` (`razorpay_service.dart:915`) and writes local PRO with that end date.
+- **Identified**: 2026-10-24 · filed via mint_oi.sh from branch `payment-hardening`
 
-**The defect.** Any worktree whose session ran `dart run scripts/<x>.dart` with `scripts/` as the working directory (the hooks do it from a subdirectory, diagnose `8f3e35`, OI-384) is unretirable until someone deletes a 171-byte tool cache by hand. The same class as the two `.dart_tool/` entries already on the list; this path was missed.
+**What.** The owner of a payment whose row was cancelled or expired (an operator cancel, a refund) gets `verified: true` and optimistic local PRO until the next server refresh. Pre-existing (outside the payment-hardening diff); found by its hermes pass (seat A, L21 F1, P3). The caller must own the payment and Razorpay must still say `captured`, so no stranger gains anything.
 
-**Fix.** Add `'scripts/.dart_tool/'` to `regenerableIgnoredPaths` with the same "THIS path only" wording, and a test in the retirement suite that this path is regenerable while `scripts/.dart_tool/other` and `vendor/.dart_tool/` stay precious.
+**Done when.** The pre-select (or the else arm) answers a non-active row as not verified, with the same shape the client already treats as a soft failure; a test for a cancelled own row (no `verified: true`, no insert) with a frozen-origin positive control. Blast radius: `catastrophic` (payment function).
 
-**Done when.** The path is on the list, the retirement test pins it and its nested mirror, and a dry-run on a worktree holding only that file says RETIRE.
+## OI-411 — verify-payment's ownership proof is notes.user_id, which the client's checkout options also set: check Razorpay's notes precedence live
+
+- **Status**: OPEN
+- **Blocked on**: the founder: one test payment in Razorpay's test mode with checkout notes that DIFFER from the order's notes, read back with GET /v1/payments/<id>, to see which notes the payment entity carries.
+- **Verified**: 2026-10-25 - by reading the branch: verify-payment's ownership check is `notesUserId !== userId` (`verify-payment/index.ts:438-451`) on the PAYMENT's notes; the app's checkout options set the same keys itself (`razorpay_service.dart:288`, `:292`), alongside the order's notes written by `create-razorpay-order`.
+- **Identified**: 2026-10-24 · filed via mint_oi.sh from branch `payment-hardening`
+
+**What.** If checkout notes override the order's notes on the payment entity, the ownership proof is what the payer typed, not who paid. Found by the payment-hardening hermes pass (seat C, L23 finding 2, P3). No entitlement without paying was found (the plan comes from the amount); the harm is a payer gifting PRO to another account, and a promo named in the notes that the order was not priced with (wrong `used_count` and audit attribution).
+
+**Done when.** The precedence is known; if checkout notes win, ownership is proven from the ORDER (its `user_id` note, read with GET /v1/orders/<order_id>) in both writers, with tests. Blast radius: `catastrophic` (payment functions).

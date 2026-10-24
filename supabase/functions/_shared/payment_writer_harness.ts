@@ -94,16 +94,18 @@ export async function withTrialPurchaseSwitch<T>(value: string | undefined, fn: 
   }
 }
 
-/** Records console.error / console.warn / console.log lines while `fn` runs. */
+/** Records console.error / warn / log / info / debug lines while `fn` runs (a leak through any of them must be visible). */
 export async function captureConsole<T>(fn: () => Promise<T>): Promise<{ result: T; errors: string[]; all: string[] }> {
   const errors: string[] = [];
   const all: string[] = [];
-  const orig = { error: console.error, warn: console.warn, log: console.log };
+  const orig = { error: console.error, warn: console.warn, log: console.log, info: console.info, debug: console.debug };
   const fmt = (args: unknown[]) =>
     args.map((a) => (typeof a === "string" ? a : a instanceof Error ? a.message : JSON.stringify(a))).join(" ");
   console.error = (...a: unknown[]) => { const s = fmt(a); errors.push(s); all.push(s); };
   console.warn = (...a: unknown[]) => { all.push(fmt(a)); };
   console.log = (...a: unknown[]) => { all.push(fmt(a)); };
+  console.info = (...a: unknown[]) => { all.push(fmt(a)); };
+  console.debug = (...a: unknown[]) => { all.push(fmt(a)); };
   try {
     const result = await fn();
     return { result, errors, all };
@@ -111,6 +113,8 @@ export async function captureConsole<T>(fn: () => Promise<T>): Promise<{ result:
     console.error = orig.error;
     console.warn = orig.warn;
     console.log = orig.log;
+    console.info = orig.info;
+    console.debug = orig.debug;
   }
 }
 
@@ -264,9 +268,35 @@ async function hmacHex(body: string, secret: string): Promise<string> {
   return [...sig].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export async function webhookRequest(s: Scenario = {}): Promise<Request> {
+/** A delivery whose raw body (any text, valid JSON or not) carries a VALID signature: it passes the HMAC check. */
+export async function signedRawWebhookRequest(body: string): Promise<Request> {
+  return new Request("https://fn.test/razorpay-webhook", {
+    method: "POST",
+    headers: {
+      "x-razorpay-signature": await hmacHex(body, MODULE_ENV.RAZORPAY_KEY_SECRET),
+      "Content-Type": "application/json",
+    },
+    body,
+  });
+}
+
+export function webhookRequest(s: Scenario = {}): Promise<Request> {
+  return signedWebhookRequest(s, "payment.captured");
+}
+
+/**
+ * A signed `payment.authorized` delivery (entity status `authorized`, `captured: false`): the webhook then calls
+ * Razorpay's capture, which `paymentServer` does not route, so a test answers it through `intercept`
+ * (payment-hardening U0 / U2).
+ */
+export function authorizedWebhookRequest(s: Scenario = {}): Promise<Request> {
+  return signedWebhookRequest(s, "payment.authorized");
+}
+
+async function signedWebhookRequest(s: Scenario, event: "payment.captured" | "payment.authorized"): Promise<Request> {
+  const authorized = event === "payment.authorized";
   const body = JSON.stringify({
-    event: "payment.captured",
+    event,
     created_at: s.eventCreatedAt ?? EVENT_CREATED_AT,
     payload: {
       payment: {
@@ -275,7 +305,8 @@ export async function webhookRequest(s: Scenario = {}): Promise<Request> {
           ...(s.omitOrderId ? {} : { order_id: "order_TEST0001" }),
           amount: s.amount ?? MONTHLY_PAISE,
           currency: "INR",
-          captured: true,
+          ...(authorized ? { status: "authorized" } : {}),
+          captured: !authorized,
           notes: { user_id: USER, ...(s.notes ?? {}) },
         },
       },

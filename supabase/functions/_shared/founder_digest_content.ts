@@ -41,6 +41,7 @@ import {
   envSwitchOn,
   PREDICTION_QUOTA_KILL_SWITCH_ENV,
 } from "./prediction_quota_switch.ts";
+import { ORDER_ABUSE_GUARDS_DISABLE_ENV } from "./order_abuse_guards.ts";
 
 /**
  * A user above this many chat messages in one IST day is surfaced on a read-only
@@ -112,6 +113,12 @@ export const DIGEST_KEYS: readonly DigestKey[] = [
   // 10-minute buckets, totals only. Unaffected by the slop above: 18:30Z is
   // an exact 10-minute boundary, so its buckets never straddle IST midnight.
   { key: "verify_payment", label: "verify-payment", kind: "subday" },
+  // 1-hour UTC buckets, totals only (payment-hardening U3, OI-366): order attempts (limit 30) and promo checks
+  // (limit 20) per user. Same "no cap shown" rule as the two rows above, and the same <=30-min/day slop as
+  // delete_account: the 18:00Z-19:00Z bucket straddles IST midnight (18:30Z), so the first 30 min of an IST day
+  // land on the previous day's digest.
+  { key: "create_order", label: "create-razorpay-order", kind: "subday" },
+  { key: "promo_validate", label: "validate-promo", kind: "subday" },
   // 6h buckets, totals only — daily-snapshot's coaching-notes extraction
   // meter (a2b, single-owner batch, 2026-09-27; OI-162-class recurrence).
   // Same "totals only, no cap shown" precedent as delete_account/
@@ -273,8 +280,19 @@ export function computeNewMrr(
  * total (a user an outage refunded 3 times is not a heavier user). It stays a DIGEST_KEYS
  * line (the founder wants the refund count) and out of the per-user ranking only. Kept
  * beside DIGEST_KEYS: the entries' literal shape is pinned by founder_digest_caps_mirror_test.dart.
+ * The four abuse-limit counters are bookkeeping too (hermes H6, payment-hardening): they count ATTEMPTS against a
+ * limit (a checkout retried, a code re-typed, a deletion re-requested), not use of the product, so a paying user's
+ * checkout must not make them a "top user". Their own DIGEST_KEYS lines still show the totals. The tradeoff:
+ * Top users no longer names an account hammering these limits; the per-refusal `rate-limited` warn line in each
+ * function's log (user id, key, limit) is where that is seen (B-pass bfaeb6fb79da finding 5).
  */
-export const NON_ACTIVITY_KEYS: ReadonlySet<string> = new Set(["refund_budget"]);
+export const NON_ACTIVITY_KEYS: ReadonlySet<string> = new Set([
+  "refund_budget",
+  "delete_account",
+  "verify_payment",
+  "create_order",
+  "promo_validate",
+]);
 
 /**
  * Quota keys whose metering has a kill switch, with the switch's env name.
@@ -285,6 +303,9 @@ export const NON_ACTIVITY_KEYS: ReadonlySet<string> = new Set(["refund_budget"])
  */
 export const QUOTA_KILL_SWITCHES: Readonly<Record<string, string>> = {
   prediction_daily: PREDICTION_QUOTA_KILL_SWITCH_ENV,
+  // One switch, both counters (payment-hardening U3; hermes H2): with it on, "none" is not "no attempts".
+  create_order: ORDER_ABUSE_GUARDS_DISABLE_ENV,
+  promo_validate: ORDER_ABUSE_GUARDS_DISABLE_ENV,
 };
 
 /** The quota keys whose kill switch is on right now. */

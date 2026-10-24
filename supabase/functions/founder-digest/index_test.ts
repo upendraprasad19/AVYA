@@ -1293,3 +1293,16 @@ Deno.test("Part B: refund_budget is bookkeeping, not activity — it never infla
   // The refund count itself is still reported on its own line.
   assertStringIncludes(text, "Refunds (3/day): 3 (1 user) · at cap 3: 1");
 });
+
+// hermes H6 (payment-hardening): the abuse-limit counters count attempts, not use of the product.
+for (const key of ["delete_account", "verify_payment", "create_order", "promo_validate"]) {
+  Deno.test(`hermes H6: ${key} is bookkeeping, not activity: it never inflates the Top users ranking`, () => {
+    // U1 chatted 5 times and retried a limited step 4 times; U2 chatted 6 times.
+    const text = buildDigestText(input({
+      windowed: { rows: [row(U1, "chat_app", 5), row(U1, key, 4), row(U2, "chat_app", 6)] },
+    }));
+    const top = text.split("\n").find((l) => l.includes("Top users")) ?? "";
+    assertNotIncludes(top, "×9");
+    assert(top.indexOf(`${idPrefix(U2)} ×6`) >= 0 && top.indexOf(`${idPrefix(U2)} ×6`) < top.indexOf(`${idPrefix(U1)} ×5`), top);
+  });
+}

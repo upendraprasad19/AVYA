@@ -6,14 +6,29 @@ Re-run: `dart run scripts/build_bug_index.dart`
 
 ## By concept
 
+### payment_log_safety, create_order_rate_limit, webhook_already_captured_recovery — the hermes-pass corrections to the batch's three new contracts. (1 bugs)
+- 2026-10-25 c7e3b1 — The end-of-batch hermes pass (four Sonnet seats, lenses L1 L2 L21 L22 L23 L29 L40) found, in the five payment-hardening commits and the code they sit in: (H12, P2) razorpay-webhook CAPTURED an…
+
 ### git_hook_install_atomicity (1 bugs)
 - 2026-10-24 c5e1a8 — Two latent hazards in the git-hook install path, found while planning the merge-conflict-treadmill fix. (1) scripts/setup-hooks.sh overwrote the installed hooks IN PLACE with a plain cp, into one…
+
+### create_order_rate_limit, promo_validate_rate_limit, promo_usable_rule — bounded attempts and one strict rule where a code is accepted for a new purchase. (1 bugs)
+- 2026-10-24 f2c9a8 — create-razorpay-order had no per-user limit, so a signed-in caller could create Razorpay orders without bound, and it priced an order with ANY active code even when the code had expired or run out…
+
+### payment_log_safety — a payment-path log line carries a code, a type, a shape or a bounded value, never a whole object. (1 bugs)
+- 2026-10-24 d1a4f6 — The payment functions logged whole objects. verify-payment and razorpay-webhook printed the PostgREST error of a failed non-23505 subscriptions insert as an object (its `details` echoes the failing…
 
 ### promo_codes_server_only — promo codes and their discounts are read only by the payment Edge Functions, through the service role. (1 bugs)
 - 2026-10-24 a6c2e9 — Anyone holding the app's public anon key (it ships inside the web bundle and the APK) could list every active promo code with its discount percentage, expiry and use counts without signing in.…
 
 ### thin_day_topup (1 bugs)
 - 2026-10-24 2d04d7 — An injured user's generated day could hold one or two exercises, or none. After the v14 injury tags (d30de7) the real generator, flag OFF, produced 74 thin days (under 3 exercises) and 19 one-exercise…
+
+### verify_payment_owner_before_capture — verify-payment proves the caller owns the payment before it captures it or says anything about it. (1 bugs)
+- 2026-10-24 b5e8d2 — verify-payment (any signed-in caller, the account's Razorpay credentials) fetched the payment named in the request and, BEFORE checking that it belonged to the caller, captured it when it was…
+
+### webhook_already_captured_recovery — a refused capture of an already-captured payment records the row from the signed event. (1 bugs)
+- 2026-10-24 a9e2f7 — On a payment.authorized delivery the webhook captures the payment BEFORE it records the row. If that delivery then failed to record (a non-23505 insert failure, or with stacking ON a failed…
 
 ### day_of_week_completion — a weekday's completion counts only days that were due (classifyScheduleDay), and the coach is told a weekday is skipped only when it is genuinely singled out. (1 bugs)
 - 2026-10-23 "132315" — The coach's "Status check" reply told upendra "100% skip rate on Sunday workouts". Sunday is always a rest day on his plan. getDayOfWeekCompletionRates returned 0 for a weekday with nothing scheduled,…
@@ -1655,9 +1670,14 @@ rather than a Hive box. (1 bugs)
 
 | Date | Bug ID | Symptom | Concept | Test path |
 |---|---|---|---|---|
+| 2026-10-25 | c7e3b1 | The end-of-batch hermes pass (four Sonnet seats, lenses L1 L2 L21 L22 L23 L29 L40) found, in the five payment-hardening commits and the code they sit in: (H12, P2) razorpay-webhook CAPTURED an… | payment_log_safety, create_order_rate_limit, webhook_already_captured_recovery — the hermes-pass corrections to the batch's three new contracts. | test/contracts/payment_log_safety_writer_to_reader_test.dart |
 | 2026-10-24 | c5e1a8 | Two latent hazards in the git-hook install path, found while planning the merge-conflict-treadmill fix. (1) scripts/setup-hooks.sh overwrote the installed hooks IN PLACE with a plain cp, into one… | git_hook_install_atomicity | test/scripts/setup_hooks_atomic_install_e2e_test.dart |
+| 2026-10-24 | f2c9a8 | create-razorpay-order had no per-user limit, so a signed-in caller could create Razorpay orders without bound, and it priced an order with ANY active code even when the code had expired or run out… | create_order_rate_limit, promo_validate_rate_limit, promo_usable_rule — bounded attempts and one strict rule where a code is accepted for a new purchase. | test/contracts/promo_usable_rule_writer_to_reader_test.dart |
+| 2026-10-24 | d1a4f6 | The payment functions logged whole objects. verify-payment and razorpay-webhook printed the PostgREST error of a failed non-23505 subscriptions insert as an object (its `details` echoes the failing… | payment_log_safety — a payment-path log line carries a code, a type, a shape or a bounded value, never a whole object. | test/contracts/payment_log_safety_writer_to_reader_test.dart |
 | 2026-10-24 | a6c2e9 | Anyone holding the app's public anon key (it ships inside the web bundle and the APK) could list every active promo code with its discount percentage, expiry and use counts without signing in.… | promo_codes_server_only — promo codes and their discounts are read only by the payment Edge Functions, through the service role. | test/contracts/promo_codes_server_only_writer_to_reader_test.dart |
 | 2026-10-24 | 2d04d7 | An injured user's generated day could hold one or two exercises, or none. After the v14 injury tags (d30de7) the real generator, flag OFF, produced 74 thin days (under 3 exercises) and 19 one-exercise… | thin_day_topup | test/contracts/thin_day_topup_behavioral_test.dart |
+| 2026-10-24 | b5e8d2 | verify-payment (any signed-in caller, the account's Razorpay credentials) fetched the payment named in the request and, BEFORE checking that it belonged to the caller, captured it when it was… | verify_payment_owner_before_capture — verify-payment proves the caller owns the payment before it captures it or says anything about it. | supabase/functions/verify-payment/index_test.ts |
+| 2026-10-24 | a9e2f7 | On a payment.authorized delivery the webhook captures the payment BEFORE it records the row. If that delivery then failed to record (a non-23505 insert failure, or with stacking ON a failed… | webhook_already_captured_recovery — a refused capture of an already-captured payment records the row from the signed event. | test/contracts/webhook_already_captured_recovery_writer_to_reader_test.dart |
 | 2026-10-23 | "132315" | The coach's "Status check" reply told upendra "100% skip rate on Sunday workouts". Sunday is always a rest day on his plan. getDayOfWeekCompletionRates returned 0 for a weekday with nothing scheduled,… | day_of_week_completion — a weekday's completion counts only days that were due (classifyScheduleDay), and the coach is told a weekday is skipped only when it is genuinely singled out. | test/contracts/day_of_week_completion_writer_to_reader_test.dart |
 | 2026-10-23 | d30de7 | 104 of the 285 library rows loaded a joint with no matching injury_contraindications token, so the injury filter handed them to an injured user. The founder named the cases: a bicycle crunch, a V-up… | exercise_injury_tags | test/contracts/injury_recheck_v14_contract_test.dart |
 | 2026-10-22 | b1c4e7 | The equipment capability floor (OI-89) did not apply on the two pick paths that resolve an exercise by NAME and bypass queryV4: the attempt-5 universal pool and repeat-phase pins. A shoulder-injured… | equipment_capability_floor | test/contracts/universal_pool_capability_behavioral_test.dart |

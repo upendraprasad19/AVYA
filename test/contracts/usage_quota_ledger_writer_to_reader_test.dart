@@ -269,6 +269,12 @@ void main() {
         // SELECT here, so this file belongs ONLY on this allowlist, not the
         // usage_counters one above.
         'supabase/functions/daily-snapshot/index.ts',
+        // payment-hardening U3 (OI-366): an order attempt and a promo check
+        // are HTTP attempts with no row INSERTed when the limit is decided
+        // (the verify-payment / delete-account shape), so each EF calls the
+        // RPC itself with a fixed 1-hour UTC bucket (limits 30 and 20).
+        'supabase/functions/create-razorpay-order/index.ts',
+        'supabase/functions/validate-promo/index.ts',
       };
       final offenders = <String>[];
       for (final e in _appSources()) {
