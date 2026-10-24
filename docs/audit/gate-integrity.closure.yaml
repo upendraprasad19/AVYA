@@ -1,0 +1,173 @@
+# Closure ledger — gate-integrity (Batch A of the 2026-09-19 sequence A → B → C)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per unit; no
+# `deferred:` key. `<branch>@branch` is the in-branch commit form (precedent:
+# unitb-deload-reason.closure.yaml).
+#
+# Four gate fixes with zero file overlap, built by four forks in isolated
+# worktrees and integrated by cherry-pick; the coordinator re-verified one
+# mutation per unit by hand on the integrated branch (§4.4 rule 21). Three
+# context-blind plan-review rounds preceded the build (23 / 19 / 8 findings,
+# round 3 mechanical-only → converged); the B-pass entries are appended below
+# the units, after the review runs against the integrated branch.
+#
+# Two of the four forks were terminated by an API rate limit mid-way through
+# their contention runs — AFTER their commits and mutation cycles. Their
+# ledgers live in the commit messages and diagnose-docs; the contention totals
+# they never reported are produced by the coordinator's own
+# `flutter test test/scripts/` run on the integrated branch (Task 5 Step 11).
+
+batch: gate-integrity
+plan_review_record: docs/plan-reviews/gate-integrity.md
+diagnose_docs:
+  - docs/diagnoses/2026-09-19-six-gates-run-nowhere-allowlist-prose-b3e7a1.md
+  - docs/diagnoses/2026-09-19-gate42-never-resolves-cited-test-path-c7d2e4.md
+  - docs/diagnoses/2026-09-19-safe-merge-silent-on-absent-record-b7e2d4.md
+
+findings:
+  # ── Units ─────────────────────────────────────────────────────────
+  - id: U1
+    title: "OI-220 — contract_sweep: pre-push targeted SoT contract tests (build; warn-only baseline)"
+    terminal_state: closed_in_commit
+    commit: gate-integrity@branch
+    verification: >
+      scripts/contract_sweep.dart + pure scripts/contract_sweep_lib.dart; wired
+      in scripts/pre-push.sh for EVERY tier above run_full_suite() as
+      `"$DART_BIN" run scripts/contract_sweep.dart --warn-only || true`; pinned
+      by test/contracts/contract_sweep_wired_test.dart plus a behavioural
+      assertion in test/scripts/pre_push_analyze_always_e2e_test.dart that the
+      REAL hook reaches the line. Not a check_* gate by design (both loops
+      enumerate check_*; the rule-24 ledger rejects non-check_* keys) — rule-21
+      proof instead: 6 mutations, 9 reds (+2 for un-wiring the line); the
+      coordinator re-ran the null-grep leg by hand (1 red, restored to a
+      0-line diff). Tests: contract_sweep_lib_test (10), contract_sweep_e2e_test
+      (7), contract_sweep_wired_test (1); hermetic env gate 12/12 with the e2e
+      registered. OI-220 stays OPEN, narrowed to the hard-fail flip after one
+      clean batch (batch B is the baseline); measured cost line recorded on the
+      board (1.9 s / 17 tests on 15 files; 18.5 s / 505 on 366).
+
+  - id: U2
+    title: "OI-155 — Gate 33 allowlist is typed + machine-checked; the six dormant gates get truthful runners"
+    terminal_state: closed_in_commit
+    commit: gate-integrity@branch
+    verification: >
+      Diagnose b3e7a1. _allowList → Map<String, List<GateRunner>> (file / loop /
+      manual) checked by scripts/gate_scripts_wired_lib.dart on every commit;
+      wiring inference requires an INVOCATION, not a mention; a stale key is a
+      violation; a `manual:` OI that is CLOSED, absent, or on an unreadable
+      board FAILS. The six: snapshot_contract → both loops (skip lines deleted,
+      passes today); unawaited_has_error_sink → loop(ci); migrations_live →
+      manual(OI-223); onconflict_live_arbiter + two_user_cross_account →
+      manual(OI-165); test_runtime_budget → manual(OI-101). Gate 33 PASS on the
+      real tree; 22 pure tests; 5 lib mutations = 9 reds + two real-gate
+      mutations (OI-9999 / CLOSED target → FAIL exit 1); the coordinator re-ran
+      both real-gate legs and the CLOSED→NEVER lib leg by hand. Ledger promoted
+      out of the grandfathered set. Counts re-derived on the integrated tree:
+      97 check_*, pre-commit loop 84 (13 case-skipped), 86 of 97 + 1 on a
+      merge; test.yml skip 13 → 11. Four of six are `manual:` — a
+      machine-checked, self-reopening statement that the gate runs nowhere and
+      WHY, replacing prose that claimed it ran somewhere it did not (§4.2
+      tension stated in spec D8).
+
+  - id: U3
+    title: "OI-195 — Gate 42 resolves every cited behavioral_test_path / presence_only citation on disk"
+    terminal_state: closed_in_commit
+    commit: gate-integrity@branch
+    verification: >
+      Diagnose c7d2e4. ONE helper (_missingOnDisk) backs both sinks; values are
+      comment-stripped; sibling behavioral_test_path_<suffix> keys,
+      presence_only trailing prose, presence_only_reason block scalars (blank
+      lines kept) and plain scalars are all scanned. Real registry: 138 + 4
+      paths resolved, 0 missing; positive control with 2 injected fakes → exit
+      1 naming exactly those two. Tally now counts every presence_only: true
+      line (17; 10 also behavioral; 7 presence-only). 10 subprocess tests
+      (record field `exitCode`); 5 mutations = 12 reds; the coordinator re-ran
+      the sibling-key leg (1 red) and added the directory-citation hardening
+      (File.existsSync is false for a directory → FileSystemEntity.typeSync;
+      test written RED first, M5 1 red). Ledger promoted out of the
+      grandfathered set. NOT registered in the hermetic env gate (fixture calls
+      no git; registering it would go red).
+
+  - id: U4
+    title: "OI-181 — safe_merge warns BEFORE the merge when a ≥ account branch has no plan-review record"
+    terminal_state: closed_in_commit
+    commit: gate-integrity@branch
+    verification: >
+      Diagnose b7e2d4. scripts/safe_merge.sh:235- classifies the three-dot
+      refs/heads/main...refs/heads/$BRANCH range with the real classifier
+      (bare `-` stdin form) and mirrors the keystone gate's ≥ account threshold
+      (check_plan_review_record_exists.dart:617-620); advisory — one NOTE when
+      the classifier yields no tier for a non-empty path list, every other
+      failure path silent, merge behaviour unchanged; version-bump exemption
+      deliberately NOT mirrored (OI-222). test/scripts/safe_merge_test.dart 12
+      → 15 (all 15 green on the integrated branch, run by the coordinator); 3
+      mutations = 4 reds (block deleted 1, case arm widened 2, three-dot →
+      two-dot 1 — the last re-run by hand). Third instance of
+      merge-without-record closed (2026-08-30, dcb94a93 2026-09-10, 0768a0ce
+      2026-09-19 — the merge landed at 00:34 IST; three documents in this batch
+      said 09-18 from one copy-pasted sentence, caught by the B-pass).
+
+  - id: U5
+    title: "check_migrations_live.dart — cannot pass by construction; retire (Gate 14 owns the concept) or redesign the matcher"
+    terminal_state: closed_in_commit
+    commit: gate-integrity@branch
+    verification: >
+      Founder chose RETIRE (OI-223 closed in place). All six sites done in one
+      commit: scripts/check_migrations_live.dart deleted; its
+      docs/audit/gate_test_ledger.yaml entry removed; its _allowList entry in
+      scripts/check_gate_scripts_wired.dart removed (Gate 33 PASS on the real
+      tree, 96 check_*, down from 97 — the stale-key mirror would have FAILED
+      had the entry survived); the two case-skip lines removed from
+      pre-commit.sh (12 entries, was 13) and test.yml (10, was 11);
+      test/contracts/phase_c_oi_closures_test.dart's OI-34 group INVERTED
+      (asserts absence, not deleted, so a silent reintroduction is caught) —
+      58/58 green; docs/runbooks/restore-drill.md step 5 repointed at Gate 14
+      (check_migrations_applied.dart) with a manual cross-check note. No
+      diagnose-doc (a deletion, not a fix/bug/regression commit).
+
+  # ── Integration findings (coordinator, Task 5) ───────────────────
+  - id: I1
+    title: "Gate 42's _missingOnDisk used File.existsSync, which is FALSE for a directory — a prose citation of `test/sql/` would be flagged missing with a confidently wrong message"
+    terminal_state: closed_in_commit
+    commit: gate-integrity@branch
+    verification: >
+      Coordinator finding while reviewing the OI-195 diff (the regex was spec
+      D11's — the gap was the coordinator's, not the fork's). No live instance
+      (all 4 real prose citations are files). Test written RED first against
+      the fork's helper (`[file-missing] eta: presence_only cites
+      `test/contracts/` which does not exist`), GREEN after switching to
+      FileSystemEntity.typeSync(...) != notFound; mutation M5 (revert to
+      File-only) reddens exactly that test, 9 others green. Recorded in
+      c7d2e4's mutation ledger.
+
+  # ── B-pass (context-blind Sonnet, own worktree, against a566f94c) ──
+  # docs/reviews/gate-integrity-bpass.md — SHIP-WITH-FIXES, 2 findings, 15
+  # lenses otherwise clean with commands shown; the reviewer re-derived every
+  # cross-document count and ran the full pre-commit loop itself.
+  - id: BP-1
+    title: "P2 — invokesGate treated PRINTED text (heredoc body, invoker-less prose) as an invocation — the shape extractCaseSkips was hardened against one function above"
+    terminal_state: closed_in_commit
+    commit: gate-integrity@branch
+    verification: >
+      Reproduced with the reviewer's probe before acting (heredoc body → true;
+      "You should run scripts/x by hand" → true). Not exploited today: all 19
+      live invocation lines are `"$DART_BIN" run …` / `dart run …`. Fixed by
+      requiring an invoker token before `run scripts/<gate>` and skipping
+      heredoc bodies (opener line still counts). Two RED-first tests + two
+      mirror tests (26 in the file); M7 / M8 each redden exactly their own
+      test; Gate 33 still PASS on the real tree; the three Gate 33 test files
+      43/43. Recorded in b3e7a1's mutation ledger.
+
+  - id: BP-2
+    title: "P3 — 0768a0ce dated 2026-09-18 in three authoritative documents; the commit is 2026-09-19 00:34 IST"
+    terminal_state: closed_in_commit
+    commit: gate-integrity@branch
+    notes: >
+      One copy-pasted sentence reached CLAUDE.md §7, the OI-181 board entry
+      and this ledger's U4 while the diagnose-doc, OI-222 and the fix commit
+      message all had it right. Corrected in all three plus the spec and plan
+      (`git grep 0768a0ce | grep 09-18` → 0 afterwards). The lesson is the
+      one this batch keeps teaching: a date typed from memory is a claim;
+      `git show -s --format=%ad` is the source.
+
+total: 8
+closed_count: 8
