@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**259 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**260 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -267,3 +267,4 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-405 | deploy_via_api.js leaves a dirty tree after EVERY deploy: the… | the track-or-ignore choice for the… | 2026-10-24 - by reading and measuring in… | [:6747](open_issues.md#L6747) |
 | OI-406 | promo_codes is readable with the public anon key: every active promo code… | the founder's signed-in promo check in… | 2026-10-24 - live, not inferred.… | [:6766](open_issues.md#L6766) |
 | OI-408 | Bodyweight beginner with shoulder + lower_back injuries has 2-exercise… | upstream, a founder call.… | 2026-10-24 - the OI-401 top-up's FINAL… | [:6783](open_issues.md#L6783) |
+| OI-412 | retire_worktree.dart keeps any worktree that ran dart run with cwd… | none | 2026-10-24, live: the OI-401 session's… | [:6796](open_issues.md#L6796) |
