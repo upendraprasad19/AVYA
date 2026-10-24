@@ -247,9 +247,11 @@ void main(List<String> args) {
       }
       if (content != srcContent) {
         warnings.add('hooks/${h.dst} content does NOT match scripts/${h.src} '
-            '-- STALE installed copy (setup-hooks.sh installs by `cp`, so an '
-            'edited script is inert until re-installed). Fix: '
-            '`sh scripts/setup-hooks.sh`.');
+            '-- STALE installed copy (setup-hooks.sh installs copies, so an '
+            'edited script is inert until re-installed). Fix: in the PRIMARY '
+            'worktree run `git fetch origin main && git merge --ff-only '
+            'origin/main && sh scripts/setup-hooks.sh` (the installed hooks are '
+            'read-only; never chmod or rm them by hand).');
       }
     } else {
       // Fail-open on a missing source, but say so: with no source the
@@ -266,7 +268,9 @@ void main(List<String> args) {
     for (final f in failures) {
       stderr.writeln('  - $f');
     }
-    stderr.writeln('  Fix: run `sh scripts/setup-hooks.sh` (see CLAUDE.md §0).');
+    stderr.writeln('  Fix: in the PRIMARY worktree run `git fetch origin main && '
+        'git merge --ff-only origin/main && sh scripts/setup-hooks.sh` '
+        '(see CLAUDE.md §0).');
     stderr.writeln('  Note hooks live in the COMMON git dir, shared by every '
         'worktree -- installing from one worktree installs for all of them, so '
         'do it when no other session is mid-commit.');

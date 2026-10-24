@@ -189,7 +189,9 @@ if git diff --cached --name-only | grep -q '^docs/diagnoses/'; then
     echo "[pre-commit] FAIL: build_bug_index.dart errored."
     exit 1
   fi
-  git add docs/diagnoses/INDEX.md
+  # -u: stage the regenerated index only if it is TRACKED. A plain `git add` of an
+  # ignored, untracked path exits 1 and would block the commit (A0: copies survive untracking).
+  git add -u -- docs/diagnoses/INDEX.md
 fi
 
 # Regen the open-issues index whenever the board moves.
@@ -206,7 +208,7 @@ if git diff --cached --name-only | grep -q '^docs/audit/open_issues\.md$'; then
     echo "[pre-commit] FAIL: build_oi_index.dart errored."
     exit 1
   fi
-  git add docs/audit/OPEN_INDEX.md
+  git add -u -- docs/audit/OPEN_INDEX.md
 fi
 
 # Regen ADR index if any ADR file was modified (six industry-gap closure 2026-05-28).
