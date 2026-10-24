@@ -5,8 +5,8 @@
 
 batch: payment-hardening
 plan_review_record: docs/plan-reviews/payment-hardening.md
-total_findings: 9
-closed_count: 9
+total_findings: 10
+closed_count: 10
 
 findings:
   # ── units ──────────────────────────────────────────────────────────────────
@@ -39,6 +39,12 @@ findings:
     terminal_state: closed_in_commit
     commit: "cbaa2dd9"
     verification: "_shared/promo_rules_test.ts; create-razorpay-order and validate-promo 'U3:' tests with goldens against the frozen origin handlers; create_order_rate_limit_, promo_validate_rate_limit_, promo_usable_rule_ and usage_quota_ledger_ contracts; review f73e86b09ad0, 9 findings (8 fixed, 1 answered by the docs commit)"
+
+  - id: PH-HERMES
+    title: "the end-of-batch hermes pass (L1 L2 L21 L22 L23 L29 L40): 10 fixes (H1-H3, H6-H12) and their B-pass findings (diagnose c7e3b1); the out-of-diff findings are filed as OI-409, OI-410, OI-411 (report docs/audit/2026-10-25-hermes-payment-hardening.md)"
+    terminal_state: closed_in_commit
+    commit: "1a2f72e9"
+    verification: "the 'H1:'..'H12:', 'hermes' and 'catch-all:' Deno tests; payment_log_safety and webhook_already_captured_recovery contracts; 21 + 12 author mutants all red; review 59f092dc27a9, 10 findings fixed"
 
   # ── batch-level items ──────────────────────────────────────────────────────
   - id: PH-SWITCH-REMOVAL

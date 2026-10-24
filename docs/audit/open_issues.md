@@ -3081,6 +3081,8 @@ Do NOT re-propose v1. Verified clean by round 2: sending `''` to `user_profile.c
 - **Related**: OI-162 (parent), diagnose a9d3f1 (the function-EXECUTE
   sibling of this same class), `feedback_revoke_from_public_not_role.md`.
 
+
+**Note 2026-10-25 (payment-hardening hermes pass, seat C, L2).** Also measure `promo_code_uses` and `subscriptions`: no migration revokes their table privileges, so the platform default (all eight privileges, TRUNCATE included, for `anon` and `authenticated`, as migration 163 measured on `promo_codes`) is inferred, not measured. RLS blocks row access on both; TRUNCATE ignores RLS but PostgREST does not expose it.
 ## OI-185 — `check_schema_column_refs.dart` validates only the FIRST line of a multi-line insert/update map (P2, gate gap, pre-existing)
 
 - **Status**: OPEN
@@ -6823,3 +6825,25 @@ Past `user_daily_snapshots` stay (nothing reads a past day's `coach_notices`). D
 **What.** (1) An authorized payment whose amount matches no plan (a promo edited or deleted between order and payment, or a payment that is not the app's) is captured first, and only then refused with the critical `payment_record_failed` / `amount_no_match` alert, so the founder must refund it by hand. Deriving the plan before the capture, in BOTH writers, would leave it authorized and let Razorpay's auto-refund return it; the alert would then mean "refused, refunds itself" rather than "money taken". (2) On the shared live account the webhook receives the website's events too; a website payment with a UUID-shaped `notes.user_id` would pass both refusals. Found by the payment-hardening hermes pass (seat C, L23 finding 1) and the commit-6 B-pass (bfaeb6fb79da finding 4).
 
 **Done when.** The website payment's notes are known; both writers derive the plan before capturing an authorized payment (tests: an unmatched amount gives no capture request, with a frozen-origin positive control); the webhook refuses a payment that is not the app's before any capture; payment.md rule 10/11 updated. Blast radius: `catastrophic` (payment functions).
+
+## OI-410 — verify-payment answers verified:true for a non-active subscription row of the caller's own payment (its second pre-select has no status filter)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-10-25 - by reading the branch: the early read at `verify-payment/index.ts:369-375` filters `status = active`; the idempotency pre-select at `:606` does not; when it finds a row the else arm (`:753`) takes that row's `end_date` and the handler answers 200 `{verified: true, ..., source: "razorpay_api"}` (`:798`). The client trusts `verified == true` (`razorpay_service.dart:915`) and writes local PRO with that end date.
+- **Identified**: 2026-10-24 · filed via mint_oi.sh from branch `payment-hardening`
+
+**What.** The owner of a payment whose row was cancelled or expired (an operator cancel, a refund) gets `verified: true` and optimistic local PRO until the next server refresh. Pre-existing (outside the payment-hardening diff); found by its hermes pass (seat A, L21 F1, P3). The caller must own the payment and Razorpay must still say `captured`, so no stranger gains anything.
+
+**Done when.** The pre-select (or the else arm) answers a non-active row as not verified, with the same shape the client already treats as a soft failure; a test for a cancelled own row (no `verified: true`, no insert) with a frozen-origin positive control. Blast radius: `catastrophic` (payment function).
+
+## OI-411 — verify-payment's ownership proof is notes.user_id, which the client's checkout options also set: check Razorpay's notes precedence live
+
+- **Status**: OPEN
+- **Blocked on**: the founder: one test payment in Razorpay's test mode with checkout notes that DIFFER from the order's notes, read back with GET /v1/payments/<id>, to see which notes the payment entity carries.
+- **Verified**: 2026-10-25 - by reading the branch: verify-payment's ownership check is `notesUserId !== userId` (`verify-payment/index.ts:438-451`) on the PAYMENT's notes; the app's checkout options set the same keys itself (`razorpay_service.dart:288`, `:292`), alongside the order's notes written by `create-razorpay-order`.
+- **Identified**: 2026-10-24 · filed via mint_oi.sh from branch `payment-hardening`
+
+**What.** If checkout notes override the order's notes on the payment entity, the ownership proof is what the payer typed, not who paid. Found by the payment-hardening hermes pass (seat C, L23 finding 2, P3). No entitlement without paying was found (the plan comes from the amount); the harm is a payer gifting PRO to another account, and a promo named in the notes that the order was not priced with (wrong `used_count` and audit attribution).
+
+**Done when.** The precedence is known; if checkout notes win, ownership is proven from the ORDER (its `user_id` note, read with GET /v1/orders/<order_id>) in both writers, with tests. Blast radius: `catastrophic` (payment functions).
