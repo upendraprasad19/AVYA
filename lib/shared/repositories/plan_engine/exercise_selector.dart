@@ -10,6 +10,7 @@ import 'equipment_capability.dart';
 import 'injury_substitutes.dart';
 import 'models.dart';
 import 'plan_engine_flags.dart';
+import 'thin_day_topup.dart';
 import 'training_history_analyzer.dart';
 
 /// Stage 2: Constraint-based exercise picker.
@@ -583,7 +584,7 @@ class ExerciseSelector {
     if (PlanEngineFlags.coreListPoolEnabled) {
       final rows = exerciseRepo.getAll();
       if (CoreListSelector.hasCoreFields(rows)) {
-        return _pickCoreList(
+        final coreDays = _pickCoreList(
           rows: rows,
           slotDays: slotDays,
           exerciseRepo: exerciseRepo,
@@ -593,6 +594,22 @@ class ExerciseSelector {
           goal: goal,
           injuries: injuries,
           applyInjuryUniversalFilter: applyInjuryUniversalFilter,
+          applyInjurySubstitutePreference: applyInjurySubstitutePreference,
+          exclusions: exclusions,
+          capability: capability,
+          previousPhaseByDay: previousPhaseByDay,
+          plateauAvoidNames: plateauAvoidNames,
+        );
+        // OI-401: the ON path is path-independent for the top-up (Ruling R9).
+        return topUpDays(
+          coreDays,
+          slotDays: slotDays,
+          exerciseRepo: exerciseRepo,
+          equipmentTier: equipmentTier,
+          effectiveExp: effectiveExp,
+          phase: phase,
+          goal: goal,
+          injuries: injuries,
           applyInjurySubstitutePreference: applyInjurySubstitutePreference,
           exclusions: exclusions,
           capability: capability,
@@ -687,7 +704,22 @@ class ExerciseSelector {
         exercisesA: exercisesA, exercisesB: exercisesB,
       ));
     }
-    return result;
+    // OI-401: an injured user's day the filters left under the floor is topped up.
+    return topUpDays(
+      result,
+      slotDays: slotDays,
+      exerciseRepo: exerciseRepo,
+      equipmentTier: equipmentTier,
+      effectiveExp: effectiveExp,
+      phase: phase,
+      goal: goal,
+      injuries: injuries,
+      applyInjurySubstitutePreference: applyInjurySubstitutePreference,
+      exclusions: exclusions,
+      capability: capability,
+      previousPhaseByDay: previousPhaseByDay,
+      plateauAvoidNames: plateauAvoidNames,
+    );
   }
 
   /// Batch B1: the ON path of [pickV4] (plan Task 3). Each slot takes the top
@@ -1051,7 +1083,211 @@ class ExerciseSelector {
       ));
     }
 
-    return result;
+    // OI-401: a variant left with 1 or 2 surviving pins is never refilled above
+    // (only an EMPTY variant is), so the top-up covers it here.
+    return topUpDays(
+      result,
+      slotDays: frames,
+      exerciseRepo: exerciseRepo,
+      equipmentTier: equipmentTier,
+      effectiveExp: effectiveExp,
+      phase: phase,
+      goal: goal,
+      injuries: injuries,
+      applyInjurySubstitutePreference: applyInjurySubstitutePreference,
+      exclusions: exclusions,
+      capability: capability,
+    );
+  }
+
+  // ── OI-401 thin-day top-up ─────────────────────────────────────────
+
+  /// OI-401 (founder option b, 2026-10-23): top up an injured user's thin day.
+  ///
+  /// The injury filter drops a slot when no safe candidate exists (the
+  /// safe-omission rule), and nothing refills the day afterwards, so an injured
+  /// user could get one or two exercises, or none. This post-pass runs on the
+  /// finished [days] at the three places a day list leaves the selector
+  /// ([pickV4]'s cascade, the B1 `_pickCoreList` return, and [buildPinnedDays]).
+  /// Per variant (A and B separately) with fewer than [ThinDayTopUp.floor]
+  /// exercises it adds safe moves through the same `queryV4` filters the cascade
+  /// uses (injury, capability, exclusions, experience): first the day's own
+  /// (muscle, pattern) anchors, own pattern before its neighbours
+  /// ([ThinDayTopUp.neighbours]); then `core`; then it stops, so a day the stages
+  /// cannot lift stays short (OI-408).
+  ///
+  /// Uninjured users get [days] back untouched (the same instance), as does a
+  /// call with the kill-switch `disable_thin_day_topup` set, a length mismatch
+  /// between [days] and [slotDays], or a list in which no day is thin.
+  ///
+  /// The avoid sets are SOFT (a re-order inside [_selectCandidate], never an
+  /// exclusion) and lower-cased here: A avoids the previous phase's picks, the
+  /// plateau names, the L6 demoted names, and B's names; B avoids the same plus
+  /// A's names (A's AFTER its own top-up). Both skip the other variant for
+  /// `strength` goals, and A skips B for an alias day (B IS A).
+  @visibleForTesting
+  static List<PopulatedDay> topUpDays(
+    List<PopulatedDay> days, {
+    required List<MuscleSlotDay> slotDays,
+    required ExerciseRepository exerciseRepo,
+    required String equipmentTier,
+    required String effectiveExp,
+    required int phase,
+    required String goal,
+    required List<String> injuries,
+    required bool applyInjurySubstitutePreference,
+    required Set<String> exclusions,
+    required Set<String>? capability,
+    Map<int, ({List<String> a, List<String> b})>? previousPhaseByDay,
+    Set<String> plateauAvoidNames = const {},
+  }) {
+    if (injuries.isEmpty) return days;
+    if (!PlanEngineFlags.thinDayTopupEnabled) return days;
+    if (days.length != slotDays.length) return days;
+
+    Set<String> lower(Iterable<String> xs) =>
+        {for (final x in xs) x.toLowerCase()};
+    Set<String>? demoted;
+    var anyThin = false;
+    final out = <PopulatedDay>[];
+    for (var i = 0; i < days.length; i++) {
+      final d = days[i];
+      final aThin = ThinDayTopUp.applies(
+          injuries: injuries, count: d.exercisesA.length);
+      final bThin = ThinDayTopUp.applies(
+          injuries: injuries, count: d.exercisesB.length);
+      if (!aThin && !bThin) {
+        out.add(d);
+        continue;
+      }
+      anyThin = true;
+      // Read lazily and once per call: only a thin day in phase 2+ needs it.
+      demoted ??= phase >= 2
+          ? lower(TrainingHistoryAnalyzer.demotedExercises())
+          : const <String>{};
+      final slots = slotDays[i];
+      final alias = identical(d.exercisesA, d.exercisesB);
+      final strength = goal == 'strength';
+      final plateau = lower(plateauAvoidNames);
+      var a = d.exercisesA;
+      var b = d.exercisesB;
+      if (aThin) {
+        a = _topUpVariant(
+          a,
+          slots.slotsA,
+          {
+            ...lower(previousPhaseByDay?[i]?.a ?? const <String>[]),
+            ...plateau,
+            ...demoted,
+            if (!alias && !strength) ...lower(b.map((e) => e.exerciseName)),
+          },
+          exerciseRepo, equipmentTier, effectiveExp, phase, injuries,
+          applyInjurySubstitutePreference, exclusions, capability,
+        );
+      }
+      if (alias) {
+        b = a;
+      } else if (bThin) {
+        b = _topUpVariant(
+          b,
+          slots.slotsB ?? slots.slotsA,
+          {
+            ...lower(previousPhaseByDay?[i]?.b ?? const <String>[]),
+            ...plateau,
+            ...demoted,
+            if (!strength) ...lower(a.map((e) => e.exerciseName)),
+          },
+          exerciseRepo, equipmentTier, effectiveExp, phase, injuries,
+          applyInjurySubstitutePreference, exclusions, capability,
+        );
+      }
+      out.add(PopulatedDay(
+        name: d.name,
+        focus: d.focus,
+        dayType: d.dayType,
+        intensity: d.intensity,
+        exercisesA: a,
+        exercisesB: b,
+      ));
+    }
+    return anyThin ? out : days;
+  }
+
+  /// One variant's top-up (see [topUpDays]). Candidates only ever shrink as moves
+  /// are picked, so a (pattern, muscle) query that returns nothing is never
+  /// repeated for this variant.
+  static List<PlannedExercise> _topUpVariant(
+    List<PlannedExercise> current,
+    List<MuscleSlot> slots,
+    Set<String> softAvoid,
+    ExerciseRepository repo,
+    String equipmentTier,
+    String effectiveExp,
+    int phase,
+    List<String> injuries,
+    bool applyInjurySubstitutePreference,
+    Set<String> exclusions,
+    Set<String>? capability,
+  ) {
+    final out = [...current];
+    final picked = {for (final e in current) e.exerciseName};
+    final exhausted = <String>{};
+
+    bool addFrom(String pattern, String? muscle) {
+      final key = '$pattern|${muscle ?? ''}';
+      if (exhausted.contains(key)) return false;
+      var cands = const <Map<String, dynamic>>[];
+      // Phase 1 asks for foundational rows first (a beginner gets Plank before
+      // Farmers Carry), then relaxes, as the cascade's attempts do one at a time.
+      for (final foundational in [if (phase == 1) true, false]) {
+        cands = repo.queryV4(
+          movementPattern: pattern,
+          targetMuscle: muscle,
+          equipmentTier: equipmentTier,
+          suitableFor: effectiveExp == 'advanced' ? null : effectiveExp,
+          foundationalOnly: foundational,
+          excludeNames: picked,
+          injuryExclusions: injuries,
+          exclusions: exclusions,
+          capability: capability,
+        );
+        if (cands.isNotEmpty) break;
+      }
+      if (cands.isEmpty) {
+        exhausted.add(key);
+        return false;
+      }
+      final chosen = _selectCandidate(cands,
+          injuries: injuries,
+          applyInjurySubstitutePreference: applyInjurySubstitutePreference,
+          avoidNames: softAvoid);
+      out.add(_buildExercise(chosen));
+      picked.add(chosen['name'] as String? ?? '');
+      return true;
+    }
+
+    final anchors = ThinDayTopUp.anchors(slots);
+    var progress = true;
+    while (out.length < ThinDayTopUp.floor && progress) {
+      progress = false;
+      for (final anchor in anchors) {
+        if (out.length >= ThinDayTopUp.floor) break;
+        final order = [
+          anchor.pattern,
+          ...(ThinDayTopUp.neighbours[anchor.pattern] ?? const <String>[]),
+        ];
+        for (final pattern in order) {
+          if (addFrom(pattern, anchor.muscle)) {
+            progress = true;
+            break;
+          }
+        }
+      }
+    }
+    while (out.length < ThinDayTopUp.floor) {
+      if (!addFrom('core', null)) break;
+    }
+    return out;
   }
 
   // ── 2026-05-31 personalization lever L6 ───────────────────────────
