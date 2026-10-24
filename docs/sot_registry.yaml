@@ -16819,7 +16819,8 @@ concepts:
       anchors in slot-priority order, own pattern before its neighbours (ThinDayTopUp.neighbours),
       then core, then stop. Every candidate comes from the cascade's own queryV4 (injury,
       capability, exclusions, experience), phase 1 asks for foundational rows first, and the avoid
-      sets (previous phase, plateau, L6 demoted, the other variant) are SOFT and lower-cased.
+      sets (previous phase, plateau, the other variant) are SOFT and lower-cased; L6 demoted
+      names leave the candidate pool unless they are all that is left.
       Injured users only: an uninjured user, the kill-switch (configBox disable_thin_day_topup,
       default ON), a length mismatch and a list with no thin day all return the same list
       instance. plan_generator.dart is not edited (rule 14). The scorecard mirrors never call the

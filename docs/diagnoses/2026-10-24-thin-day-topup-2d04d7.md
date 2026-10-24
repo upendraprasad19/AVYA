@@ -2,7 +2,7 @@
 bug_id: 2d04d7
 date: 2026-10-24
 batch: thin-day-topup
-status: open
+status: fixed
 blast_radius: platform
 symptom: >-
   An injured user's generated day could hold one or two exercises, or none. After
@@ -57,7 +57,8 @@ proposed_fix: >-
   then core; then stop. Every query is the cascade's own queryV4 (injury,
   capability, exclusions, experience), so no contraindicated or unperformable pick
   is possible, and phase 1 asks for foundational rows first. The avoid sets are
-  soft (previous phase, plateau, L6 demoted, the other variant) and lower-cased.
+  soft (previous phase, plateau, the other variant) and lower-cased; L6 demoted
+  names leave the candidate pool unless they are all that is left.
   Kill-switch disable_thin_day_topup, default ON. Uninjured users get the same
   list instance back. The exercise-seam allowlist moves 16 to 17 (one queryV4
   call site).
@@ -139,6 +140,51 @@ Founder, 2026-10-23, option (b): a day with fewer than 3 exercises is topped up 
 
 Each real-library test first asserts the thin day with `disable_thin_day_topup` set, so a persona that stops being thin fails loudly instead of passing vacuously: shoulder bodyweight advanced 4-day (week-2 "Chest, shoulders, triceps" empty); knee+hip bodyweight intermediate 3-day (week-2 "Quads, hamstrings, glutes" empty); elbow bodyweight lose_fat beginner 6-day repeat (one surviving pin on "Upper pull + conditioning"); shoulder bodyweight beginner 5-day with B1 ON ("Chest focus" thin); wrist bodyweight intermediate 5-day with towel and doorway excluded (the unexcluded top-up adds a towel move); shoulder home_dumbbells beginner 5-day (the core top-up is Plank, not Farmers Carry).
 
+## What the full suite found (2026-10-24)
+
+The complete local `flutter test` on `bb366796` (43 minutes, `TZ=Asia/Kolkata`): 10,707 passed, 27 skipped, 2 failed. The widest generator set had run green apart from the golden's 2 keys; these two were outside it.
+
+1. `core_list_pool_behavioral_test.dart` "injured user keeps the soft avoid and L6". The one-slot day is now topped up to three, which is the feature. It also exposed a real gap in the top-up: with the injury-substitute preference on, `_selectCandidate` narrows the pool to the curated subs before any soft avoid, so a swapped-out curated sub (`Machine Chest Press`) was topped back in while other safe rows existed, after the cascade's own L6 post-pass had run. Fixed by taking demoted names out of the candidate pool unless they are all that is left (plan R11). The original test now pins the pool pick as the first entry and the top-up size; the regression is in `thin_day_topup_behavioral_test.dart` ("demoted + the injury-substitute preference (L6)", control first).
+2. `core_list_pool_gate_test.dart` "ON hard counts are 0: extra". 16 built rows (E234 Floor Press, E261 Bodyweight Rear Delt Raise, E271 Wall Triceps Extension) in shoulder-injured bodyweight and home-dumbbells 4-day personas are retired in B1's sense (no core level, no variant family) because the top-up reads the OFF-path candidates (plan R9). R9 had predicted green and said to record a red as evidence without repointing the gate; a red test cannot merge (rule 20), so plan R12 keeps the gate on the shipped combination, keeps B1's own picks and any skill/olympic row hard, and attributes top-up additions by re-running a flagged persona with the kill-switch set. The three ids are pinned exactly (`_r9TopUpRetired`); the open question (core-list-only under B1?) is on the `enable_core_list_pool` entry of `docs/ship_dark_pending_review.yaml`.
+
+Class: both are "a new post-pass handles a rule an existing pass enforces": its own tests seeded no curated subs and no B1-ON persona with a retired-only safe pool, so only the sibling's tests could see it (`feedback_mistake_guard_without_its_mirror.md`, instance 43).
+
 ## Mutation proof
 
-Recorded in the Task 4 commit (the table of M1 to M16, M5a to M5f and M10b, with how many tests each reddened). The exhausted-key memo is a pure performance cache and the idempotence assertion guards a future change; neither has a mutation.
+Each mutation was applied once, confirmed applied (the file differed from the saved copy), run against the three new test files (the gate file for M17x; the sweep's singles block as well for M2, M10b and M11), and restored from a saved copy with the sha1 verified; `git status` under `lib/` and `test/` was empty afterwards. 29 of 29 applied, none survived, none was a compile error.
+
+| # | Mutation | Red tests | Sweep singles block |
+|---|---|---|---|
+| M1 | floor 3 to 0 | 31 | - |
+| M2 | drop `injuryExclusions` from the query | 8 | 1 red |
+| M3 | delete the early return and the `injuries.isNotEmpty` clause of `applies` | 2 | - |
+| M4 | drop the alias branch (`b = a`) | 2 | - |
+| M5a | drop A's names from B's avoid set | 2 | - |
+| M5a2 | drop the lower-casing of A's names in B's avoid set | 2 | - |
+| M5b | drop previous-phase names | 1 | - |
+| M5c | drop plateau names | 1 | - |
+| M5d | drop the demoted pool filter (L6) | 2 | - |
+| M5e | drop B's names from A's avoid set | 1 | - |
+| M5f | invert the strength check for A only | 2 | - |
+| M6 | drop the core stage | 7 | - |
+| M7 | remove the `buildPinnedDays` call | 3 | - |
+| M8 | remove the `_pickCoreList` call | 1 | - |
+| M9 | ignore the kill-switch | 10 | - |
+| M10 | capability null and exclusions `{}` | 3 | - |
+| M10b | capability null and `equipmentTier ''` | 8 | 1 red |
+| M11 | drop `excludeNames: picked` | 10 | 1 red |
+| M12 | swap the stage order (core first) | 4 | - |
+| M13 | use `slotsA` for B | 2 | - |
+| M14 | drop the length guard | 1 | - |
+| M15 | drop the own-pattern query (neighbours only) | 13 | - |
+| M16 | drop the foundational try-first | 4 | - |
+| M18 | demoted filter without the sole-candidate fallback | 1 | - |
+| M17a | gate: ignore the without-top-up attribution | 1 | - |
+| M17b | gate: a skill id the top-up added becomes evidence | 1 | - |
+| M17c | gate: skip the re-run block entirely | 1 | - |
+| M17d | gate: the re-run does not set the kill-switch | 2 | - |
+| M17e | gate: delete the re-run statement only | 1 | - |
+
+Two of my own mutation-run mistakes, recorded because they would have misled the table: the runner's result parser missed the failure count when a skipped-test marker sat between the pass and fail counts (`+9 ~1 -1`), so M17a and M17b first showed 0 red although each had reddened exactly the test written for it; and M17c (the whole block skipped) was a true survivor until the R9 test also asserted that an attribution re-run happened (`attributionReruns > 0`) and the block gained a fail-closed check for a re-run that built nothing (M17e).
+
+The exhausted-key memo is a pure performance cache and the idempotence assertion guards a future change; neither has a mutation.

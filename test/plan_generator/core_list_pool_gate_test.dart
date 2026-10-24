@@ -135,6 +135,7 @@ void main() {
   final injuredLists = <String, List<int>>{}; // injury key → drops per list
   final topUpRetired = <String>[]; // R9 evidence: persona + id the top-up added
   final topUpRetiredIds = <String>{};
+  var attributionReruns = 0; // personas re-run with the top-up kill-switch set
   var copied = 0;
 
   setUpAll(() async {
@@ -298,12 +299,18 @@ void main() {
     bool flagged(String id) => byId[id] != null && (_retired(byId[id]!) || _skill(byId[id]!));
     var without = <String>{};
     if (builtIds(phase).any(flagged)) {
+      attributionReruns++;
       final config = HiveService.instance.configBox;
       await config.put('disable_thin_day_topup', true);
       try {
         without = builtIds(p.run()).toSet();
       } finally {
         await config.delete('disable_thin_day_topup');
+      }
+      // Fail closed: a re-run that built nothing cannot attribute anything, and
+      // every flagged id would then read as a top-up addition.
+      if (without.isEmpty) {
+        bad.add('attribution: ${p.key} re-run without the top-up built nothing');
       }
     }
     final built = classifyBuilt(
@@ -342,6 +349,9 @@ void main() {
             'top-up under B1 ON (or a recorded one stopped): decide it at the '
             'enable_core_list_pool flip review, then edit _r9TopUpRetired');
     expect(topUpRetired, isNotEmpty);
+    expect(attributionReruns, greaterThan(0),
+        reason: 'the evidence above must come from attributed re-runs, not from '
+            'treating every retired id as a top-up addition');
   });
 
   group('classifyBuilt (the R9 attribution)', () {
