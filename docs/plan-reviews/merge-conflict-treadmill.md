@@ -65,6 +65,27 @@ hashed files is equal to the reviewed diff's (including `docs/blast_radius.yaml`
 unchanged by the run, and the two new e2e files plus the blast-radius contract tests pass (74 cases). The full suite
 runs in CI on the pull request.
 
+## Delta B-pass for the CI finding (2026-10-24)
+
+The pull request's first CI run (head 222fc264, git 2.55.0 on the runner) failed cases 2a and 2b of
+`test/scripts/pre_commit_index_add_e2e_test.dart`: `git add -u -- <path>` exits 128 for an ignored, untracked path on
+2.55.0, while this machine's 2.43.0 exits 0, so no earlier local check could see it. Both regen blocks of
+`scripts/pre-commit.sh` now stage an index only under `git ls-files --error-unmatch` (diagnose `c5e1a8`, section "CI
+finding"). The earlier whole-diff review `docs/reviews/cedb32369c1c-review.md` stays the one cited in the frontmatter; the
+fix has its own review.
+
+`docs/reviews/163a8b689cb3-review.md` (accepted): one fresh seat reviewed only the fix (the two guards, the test as it then
+stood with 11 cases, the doc text). 6 findings (0 P0, 0 P1, 3 P2, 3 P3), all fixed or documented in the batch; the one
+documented residual (`--skip-worktree` / `--assume-unchanged` on an index) behaves identically under origin/main's plain
+`git add`. The test is now 20 cases and runs the hook through a PATH-stub `git` that reproduces the 2.55.0 answer, logs every
+call and refuses any `add` spelling it does not model. 26 mutants (M01-M16, SA1/SA2, SB1/SB2, SC1/SC2, SD, T1, S1, S2) were
+each applied with a match count of 1, run against that file and restored with the sha256 of the hook and the test verified
+equal; every one reddened at least one case (M13/M14 are behaviourally equivalent and redden only through the stub's
+refusal). Gate loop on the final tree: `sh scripts/pre-commit.sh` rc 0 with the staged-diff hash unchanged, and the twelve
+test files that name the hook or the touched docs pass together (182 tests). The complete earlier loop (`flutter analyze
+lib/` clean, 10643 tests passed) ran on the first fix state, whose hook differs from the final one by two comment lines; the
+full suite for the final tree runs in CI on the pull request.
+
 ## Hand-off to the next landing
 
 A2 cannot merge until the installer has been run from a current primary on the VPS and on the founder's Windows clone
