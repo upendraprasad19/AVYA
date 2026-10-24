@@ -245,9 +245,11 @@ class TrainingHistoryAnalyzer {
 
   /// ⑦ OI-89 decision 7 — the effective set for the AI COACH's snapshot.
   ///
-  /// Deliberately NOT [resolveCapabilityFromProfile]. That one is scoped to the
-  /// bodyweight tier because decision 1 makes the hard floor bodyweight-only;
-  /// the coach needs the truth at EVERY tier. A `home_dumbbells` user's coach
+  /// Deliberately NOT [resolveCapabilityFromProfile]. That one feeds the
+  /// generator's enforcement and returns null for "do not enforce"; the coach
+  /// needs the truth at EVERY tier. (It was bodyweight-tier-only until OI-144
+  /// removed that gate; the two now answer the same sets at every tier.) A
+  /// `home_dumbbells` user's coach
   /// should know they have dumbbells and no barbell — before this, it was handed
   /// the tier LABEL and had to guess what the label contained, which is how it
   /// could recommend a barbell row and be perfectly self-consistent doing it.
@@ -287,17 +289,18 @@ class TrainingHistoryAnalyzer {
   /// ⑦ OI-89: the user's real equipment capability, or NULL for "do not
   /// enforce". Mirrors [resolveEquipmentExclusions].
   ///
-  /// Returns null in three cases, each deliberate:
+  /// Returns null in two cases, each deliberate:
   ///   - flag OFF — a genuine SKIP. A "universal set" would NOT be inert:
   ///     `canPerform` fails CLOSED on an unreadable requirement regardless of
   ///     what the set contains, so it would still drop community/custom rows.
-  ///   - tier is not `bodyweight` — founder decision 1 scopes the HARD floor to
-  ///     that tier only; the other three keep queryV4's soft tier curation.
-  ///     Scoping HERE rather than inside the cascade keeps tier logic in one
-  ///     place; every drop site downstream is just `capability != null`.
   ///   - Hive is unreachable — fail OPEN. We cannot know the user's kit, and
   ///     enforcing an unknown set would drop every exercise. Availability wins
   ///     over a guess.
+  ///
+  /// It answers at EVERY tier since OI-144 (founder decision 1 had scoped the hard
+  /// floor to the bodyweight tier; that gate is gone, and an unrecognised tier
+  /// resolves to `bodyweight`). Every drop site downstream is just
+  /// `capability != null`.
   static Set<String>? resolveCapability({
     required String tier,
     required Set<String> exclusions,

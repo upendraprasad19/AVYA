@@ -213,6 +213,8 @@ class VolumeTitration {
     final bumped = <String>{}; // "di:xi" already adjusted this week
     for (final g in groups) {
       final delta = deltas[g]!;
+      // A delta of 0 asks for nothing, as in the unbudgeted path (`d > 0` / `d < 0`).
+      if (delta == 0) continue;
       final matches = <(int, int)>[];
       for (var di = 0; di < dayExercises.length; di++) {
         for (var xi = 0; xi < dayExercises[di].length; xi++) {
@@ -235,7 +237,7 @@ class VolumeTitration {
           if (cur - 1 < 1) continue;
           if (gs.any((x) => ledger.week(x) <= bottom)) continue;
         }
-        final next = cur + (delta > 0 ? 1 : -1);
+        final next = cur + delta.sign;
         dayExercises[di][xi] =
             isDeload ? e.copyWith(workingSets: next) : e.copyWith(sets: next);
         ledger.add(di, gs, next - cur, seconds(e, next) - seconds(e, cur));

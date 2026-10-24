@@ -258,15 +258,35 @@ void main() {
       expect(setsIn(weeks, 1, 1), [5]);
     });
 
-    test('a null budget is today\'s path: the same plan, byte for byte', () {
+    test('a null budget is today\'s V4 wave: the 4-week grids are pinned to recorded literals (B-pass R2 P3-2)', () {
+      // The old version of this test compared apply(...) with apply(..., budget: null),
+      // the same call twice. These are the OFF engine's own sets x reps @ rest for the
+      // chest day, recorded from the engine with the budget stage absent; the
+      // generator golden pins generateV4 as a whole and this pins apply's own branch.
       final (_, days) = chestDay();
+      String grids(int phase, String exp, bool is6) {
+        final weeks = PeriodizationEngine.apply(
+            populated: days, phase: phase, is6Day: is6, effectiveExp: exp);
+        return [
+          for (final w in weeks)
+            [for (final e in w.workoutDays[0].exercises) '${e.sets}x${e.reps}@${e.restSeconds}']
+                .join(','),
+        ].join(' | ');
+      }
+
+      expect(grids(5, 'advanced', false),
+          '4x10@75,4x13@75 | 4x10@75,4x13@75 | 4x8@75,4x11@75 | 1x8@75,1x10@75');
+      expect(grids(1, 'intermediate', true),
+          '4x10@75,4x13@75 | 4x10@75,4x13@75 | 4x8@75,4x11@75 | 1x8@75,1x10@75');
+      expect(grids(9, 'intermediate', true),
+          '4x10@75,4x13@75 | 5x10@75,5x13@75 | 4x8@75,4x11@75 | 2x8@75,2x10@75');
+      // An explicit null is the omitted argument.
       final a = PeriodizationEngine.apply(
           populated: days, phase: 5, is6Day: false, effectiveExp: 'advanced');
       final b = PeriodizationEngine.apply(
           populated: days, phase: 5, is6Day: false, effectiveExp: 'advanced', budget: null);
       expect(jsonEncode([for (final w in a) [for (final d in w.workoutDays) d.toMap()]]),
           jsonEncode([for (final w in b) [for (final d in w.workoutDays) d.toMap()]]));
-      expect(setsIn(a, 0, 0), [4, 4]); // round(3 x 1.1) = 3 -> min 4
     });
 
     group('seeded property: the allocator\'s output through apply stays inside the budget', () {
@@ -604,6 +624,99 @@ void main() {
       final bumped = VolumeTitration.applyToWeeks([room], {'Chest': 1}, budget: ctx2).single;
       expect(workingGrid(bumped), [[4, 4], [5, 2]]);
       expect(grid(bumped), [[2, 2], [2, 2]]);
+    });
+
+    // ── B-pass R2 P3-1 / P3-3: fixtures that isolate each clause ─────────────
+
+    Fx sixChestRows() {
+      final f = chestRows();
+      for (final n in ['c5', 'c6']) {
+        f.row(n, ['Chest']);
+      }
+      return f;
+    }
+
+    test('the WEEKLY top alone refuses a +1: Chest 6 + 6 + 4 = 16, every day under its session cap', () {
+      // No day holds 8 (the session cap), so the weekly top of 16 is the only clause
+      // that can say no. The unbudgeted clamp is 20, so without a budget it bumps.
+      final f = sixChestRows();
+      final (week, ctx) = setup(f, [
+        [f.ex('c1', sets: 3), f.ex('c2', sets: 3)],
+        [f.ex('c3', sets: 3), f.ex('c4', sets: 3)],
+        [f.ex('c5', sets: 2), f.ex('c6', sets: 2)],
+      ]);
+      expect(grid(VolumeTitration.applyToWeeks([week], {'Chest': 1}, budget: ctx).single),
+          [[3, 3], [3, 3], [2, 2]]);
+      expect(grid(VolumeTitration.applyToWeeks([week], {'Chest': 1}).single),
+          [[4, 3], [3, 3], [2, 2]]);
+      // One set under the top, the same fixture bumps: the top really is the clause.
+      final (room, ctx2) = setup(f, [
+        [f.ex('c1', sets: 3), f.ex('c2', sets: 3)],
+        [f.ex('c3', sets: 3), f.ex('c4', sets: 3)],
+        [f.ex('c5', sets: 2), f.ex('c6', sets: 1)],
+      ]);
+      expect(grid(VolumeTitration.applyToWeeks([room], {'Chest': 1}, budget: ctx2).single),
+          [[4, 3], [3, 3], [2, 1]]);
+    });
+
+    test('the DAY\'S TIME alone refuses a +1 (a group with room everywhere)', () {
+      // 30 minutes = 1440 s. The bench costs 414 s at 3 sets and 546 s at 4; the 5-set
+      // timed hold costs 924 s, leaving 102 s: not the 132 s the 4th set needs. Chest
+      // has 3 of its 16 weekly and 3 of its 8 per session, so only the clock refuses.
+      final f = Fx();
+      f.row('bench', ['Chest']);
+      f.row('plank', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
+      List<List<PlannedExercise>> lists() => [
+            [f.ex('bench', sets: 3), f.ex('plank', sets: 5, logging: 'timed', rest: 135)],
+          ];
+      final days = [f.day('hypertrophy', lists().single)];
+      final week = weekOf(lists());
+      final tight = f.ctx(days, minutes: 30);
+      expect(grid(VolumeTitration.applyToWeeks([week], {'Chest': 1}, budget: tight).single),
+          [[3, 5]]);
+      expect(grid(VolumeTitration.applyToWeeks([week], {'Chest': 1}).single), [[4, 5]]);
+      // The same week on a 90-minute day has the time: the clock was the clause.
+      final roomy = f.ctx(days, minutes: 90);
+      expect(grid(VolumeTitration.applyToWeeks([week], {'Chest': 1}, budget: roomy).single),
+          [[4, 5]]);
+    });
+
+    test('a trim on the DELOAD week takes a stashed working set, never a shown one, and stops at the bottom', () {
+      final f = chestRows();
+      PlannedExercise deload(String n, int working) =>
+          f.ex(n, sets: 2).copyWith(workingSets: working);
+      final (above, ctx) = setup(
+        f,
+        [
+          [deload('c1', 4), deload('c2', 4)],
+          [deload('c3', 5)], // 13 working sets: one above the band bottom of 12
+        ],
+        character: 'deload',
+      );
+      final trimmed = VolumeTitration.applyToWeeks([above], {'Chest': -1}, budget: ctx).single;
+      expect(workingGrid(trimmed), [[3, 4], [5]]);
+      expect(grid(trimmed), [[2, 2], [2]]); // the visible deload sets do not move
+      final (atBottom, ctx2) = setup(
+        f,
+        [
+          [deload('c1', 4), deload('c2', 4)],
+          [deload('c3', 4)], // 12: exactly the bottom
+        ],
+        character: 'deload',
+      );
+      final held = VolumeTitration.applyToWeeks([atBottom], {'Chest': -1}, budget: ctx2).single;
+      expect(workingGrid(held), [[4, 4], [4]]);
+    });
+
+    test('a delta of 0 changes nothing, with or without a budget', () {
+      final f = chestRows();
+      final (week, ctx) = setup(f, [
+        [f.ex('c1', sets: 4), f.ex('c2', sets: 4)],
+        [f.ex('c3', sets: 5)], // 13 sets: a trim WOULD be allowed here
+      ]);
+      expect(grid(VolumeTitration.applyToWeeks([week], {'Chest': 0}, budget: ctx).single),
+          [[4, 4], [5]]);
+      expect(grid(VolumeTitration.applyToWeeks([week], {'Chest': 0}).single), [[4, 4], [5]]);
     });
   });
 
