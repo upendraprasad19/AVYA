@@ -163,20 +163,18 @@ class VolumeTitration {
   /// focus group outside a lighter phase); muscles are counted with
   /// `BudgetMuscleGroups`; a +1 must also fit the `BudgetLedger` (session cap, every
   /// co-group's top, the day's time); only budgeted rows are candidates; and a delta
-  /// key that is no budget group (`Forearms`) is skipped. This is the one place a
-  /// plateau +1 (merged into [deltas] by the caller) is refused too.
+  /// key that is no budget group (`Forearms`) finds no candidate, so it is skipped.
+  /// This is the one place a plateau +1 (merged into [deltas] by the caller) is
+  /// refused too.
   static List<WeekPlan> applyToWeeks(
       List<WeekPlan> weeks, Map<String, int> deltas,
       {SessionBudgetContext? budget}) {
     if (deltas.isEmpty) return weeks;
     final sortedGroups = deltas.keys.toList()..sort();
     if (budget != null) {
-      final known = [
-        for (final g in sortedGroups)
-          if (BudgetMuscleGroups.groups.contains(g)) g,
+      return [
+        for (final week in weeks) _titrateWeekBudgeted(week, deltas, sortedGroups, budget),
       ];
-      if (known.isEmpty) return weeks;
-      return [for (final week in weeks) _titrateWeekBudgeted(week, deltas, known, budget)];
     }
     return [for (final week in weeks) _titrateWeek(week, deltas, sortedGroups)];
   }

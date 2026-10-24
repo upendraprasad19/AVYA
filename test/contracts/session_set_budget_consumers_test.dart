@@ -192,12 +192,20 @@ void main() {
       f.row('plank', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
       PlannedExercise plank() => f.ex('plank', sets: 3, logging: 'timed', rest: 30);
       // 30 minutes: 1440 s. One plank is 252 s; six are 1512 s, already over.
+      // Day 2 holds five planks: 1260 s at their OWN rest of 30 s (room for two more
+      // sets, 84 s each), but 1800 s if they were timed at the day's rest of 75 s.
       final days = [
         f.day('hypertrophy', [plank()]),
         f.day('hypertrophy', [for (var i = 0; i < 6; i++) plank()]),
+        f.day('hypertrophy', [for (var i = 0; i < 5; i++) plank()]),
       ];
+      final budget = (30 - SessionBudget.warmCoolMinutes(30)) * 60;
       expect(6 * SessionBudget.exerciseSeconds(archetype: 'B', sets: 3, restSeconds: 30),
-          greaterThan((30 - SessionBudget.warmCoolMinutes(30)) * 60));
+          greaterThan(budget));
+      expect(5 * SessionBudget.exerciseSeconds(archetype: 'B', sets: 3, restSeconds: 30),
+          lessThan(budget));
+      expect(5 * SessionBudget.exerciseSeconds(archetype: 'B', sets: 3, restSeconds: 75),
+          greaterThan(budget));
       final weeks = PeriodizationEngine.apply(
         populated: days,
         phase: 1,
@@ -208,6 +216,46 @@ void main() {
       expect(setsIn(weeks, 0, 0), [3]);
       expect(setsIn(weeks, 1, 0), [4]); // day 0 has the time
       expect(setsIn(weeks, 1, 1), [3, 3, 3, 3, 3, 3]); // day 1 does not
+      // Day 2: 1260 s + 84 + 84 = 1428 fits, a third +1 (1512) does not.
+      expect(setsIn(weeks, 1, 2), [4, 4, 3, 3, 3]);
+    });
+
+    test('week 2 never takes a budgeted exercise past 5 sets', () {
+      final f = Fx();
+      f.row('a', ['Chest']);
+      f.row('b', ['Biceps'], type: 'isolation', reps: '10-15');
+      final days = [f.day('hypertrophy', [f.ex('a', sets: 5), f.ex('b', sets: 3)])];
+      final weeks = PeriodizationEngine.apply(
+        populated: days,
+        phase: 1,
+        is6Day: true,
+        effectiveExp: 'intermediate',
+        budget: f.ctx(days, minutes: 90),
+      );
+      expect(setsIn(weeks, 1, 0), [5, 4]);
+    });
+
+    test('week 2 visits the exercises rank-major across the days, not day by day', () {
+      // general_fitness intermediate: Chest top 12. Baseline 3 + 3 + 4 = 10 leaves
+      // room for exactly two sets. Rank-major gives them to the two rank-0 lifts
+      // (day 0's c1, day 1's c3); a day-major order would give both to day 0.
+      final f = Fx();
+      for (final n in ['c1', 'c2', 'c3']) {
+        f.row(n, ['Chest']);
+      }
+      final days = [
+        f.day('hypertrophy', [f.ex('c1', sets: 3), f.ex('c2', sets: 3)]),
+        f.day('hypertrophy', [f.ex('c3', sets: 4)]),
+      ];
+      final weeks = PeriodizationEngine.apply(
+        populated: days,
+        phase: 1,
+        is6Day: true,
+        effectiveExp: 'intermediate',
+        budget: f.ctx(days, minutes: 90, goal: 'general_fitness'),
+      );
+      expect(setsIn(weeks, 1, 0), [4, 3]);
+      expect(setsIn(weeks, 1, 1), [5]);
     });
 
     test('a null budget is today\'s path: the same plan, byte for byte', () {
@@ -431,6 +479,59 @@ void main() {
       expect(grid(off.single), [[3], [5, 4], [4, 4]]);
     });
 
+    test('a +1 skips an exercise already at 5 sets and rolls to the next', () {
+      final f = chestRows();
+      final (week, ctx) = setup(f, [
+        [f.ex('c1', sets: 5), f.ex('c2', sets: 2)], // 7 of the 8-set session cap
+      ]);
+      expect(grid(VolumeTitration.applyToWeeks([week], {'Chest': 1}, budget: ctx).single),
+          [[5, 3]]);
+      expect(grid(VolumeTitration.applyToWeeks([week], {'Chest': 1}).single), [[6, 2]]);
+    });
+
+    test('a trim skips an exercise already at 1 set and rolls to the next', () {
+      final f = chestRows();
+      final (week, ctx) = setup(f, [
+        [f.ex('c1', sets: 1), f.ex('c2', sets: 5)],
+        [f.ex('c3', sets: 5), f.ex('c4', sets: 5)], // 16 in all, 4 above the bottom
+      ]);
+      expect(grid(VolumeTitration.applyToWeeks([week], {'Chest': -1}, budget: ctx).single),
+          [[1, 4], [5, 5]]);
+    });
+
+    test('one exercise is adjusted at most once a week, even when two groups ask', () {
+      // The squat credits Quads and Glutes. Glutes (asked first, sorted order) takes
+      // it; Quads then has no un-adjusted candidate left, so nothing else moves.
+      final f = Fx();
+      f.row('sq', ['Quads', 'Glutes']);
+      f.row('ht', ['Glutes']);
+      final (week, ctx) = setup(f, [
+        [f.ex('sq', sets: 3)],
+        [f.ex('ht', sets: 3)],
+      ]);
+      final on = VolumeTitration.applyToWeeks([week], {'Glutes': 1, 'Quads': 1}, budget: ctx);
+      expect(grid(on.single), [[4], [3]]);
+    });
+
+    test('an exercise with no library row is not budgeted even when it has no custom stamp', () {
+      final f = chestRows();
+      const ghost = PlannedExercise(
+        exerciseId: 'ghost',
+        exerciseName: 'ghost',
+        loggingType: 'weight_reps',
+        sets: 3,
+        reps: '10',
+        restSeconds: 75,
+        primaryMuscles: ['Chest'],
+      );
+      final (week, ctx) = setup(f, [
+        [ghost, f.ex('c2', sets: 3)],
+      ]);
+      expect(grid(VolumeTitration.applyToWeeks([week], {'Chest': 1}, budget: ctx).single),
+          [[3, 4]]);
+      expect(grid(VolumeTitration.applyToWeeks([week], {'Chest': 1}).single), [[4, 3]]);
+    });
+
     test('Lateral Delts count as Shoulders under a budget, and not without one', () {
       final f = Fx();
       f.row('lr', ['Lateral Delts'], type: 'isolation', reps: '12-15');
@@ -508,7 +609,11 @@ void main() {
           .single;
       expect(off.warmup.first.reps, '300s');
       expect(off.cooldown.first.reps, '300s');
-      for (final (minutes, seconds) in [(30, 60), (45, 120), (60, 180), (75, 240), (90, 300)]) {
+      // 50 min is off the 15-minute grid: 6 + 20 x 2/15 = 8.667, so 140 s (a floor
+      // would give 139). Outside 30..90 minutes the length clamps at 6 and 14.
+      for (final (minutes, seconds) in [
+        (20, 60), (30, 60), (45, 120), (50, 140), (60, 180), (75, 240), (90, 300), (120, 300),
+      ]) {
         final on = WarmupCooldownSelector.attach(
           [week],
           'intermediate',
@@ -558,6 +663,11 @@ void main() {
       expect(all.first.slotsA.length, 10);
       expect(all.first.slotsB!.length, 9);
       expect(all.length, 5);
+      // The deload rule is not a count: it still keeps priority-1 slots only.
+      final deload = VolumeFilter.filterDays(days,
+          experience: 'intermediate', weekCharacter: 'deload', keepAllSlots: true);
+      expect(deload.first.slotsA.length, slots.where((s) => s.priority == 1).length);
+      expect(deload.first.slotsA.every((s) => s.priority == 1), isTrue);
     });
   });
 }
