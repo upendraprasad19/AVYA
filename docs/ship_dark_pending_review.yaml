@@ -301,6 +301,13 @@ pending:
       The flip commit copies slot_focus / slot_pattern into target_focus /
       movement_pattern and deletes them (Ruling 4), and needs the full x2
       review + bpass.
+      OI-401 question for the flip review (docs/plans/2026-10-24-thin-day-topup.md,
+      Ruling R9): the thin-day top-up is path-independent and uses the OFF-path
+      candidate rules even when this pool is ON (it reads queryV4, not rankedPool,
+      and does not apply the core-level rules or the community-row exclusion), so
+      an injured user's topped-up day under B1 can hold a non-core-list row.
+      Decide whether a top-up under B1 should be core-list-only. Terminal state
+      upstream_blocked, reopen_when this flag's flip review.
 
 resolved:
   - flag: ENABLE_SUBSCRIPTION_STACKING
