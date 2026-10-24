@@ -2,7 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Revision:** r5 (2026-10-23). Round 4 returned `converged` (0 P0 / 0 P1). r5 applies its 6 P2 and 8 mechanical items; see "Round-4 resolution".
+**Revision:** r6 (2026-10-24), a rebase onto main `70f1237c` and nothing else (no design change; the rebase notes are Ruling 14). r5 (2026-10-23): Round 4 returned `converged` (0 P0 / 0 P1); r5 applied its 6 P2 and 8 mechanical items; see "Round-4 resolution".
+- **Execution mode (decided at batch start, §4.12.7): inline**, one worktree `session-set-budget`, tasks in order; one push, one PR. Never switched mid-batch.
 - **Round 1:** `not_converged` (7 P1).
 - **Round 2:** `not_converged`: 2 P1 in the allocator's admission rule, 13 P2, 12 mechanical.
 - **r3:** replaces admission with a priority-rank rule, replayed before dispatch (scratchpad `b2r2/sim3.py`, `sim3b.py`).
@@ -130,7 +131,7 @@
    - Repeat pins of library rows are budgeted.
    - Customs (`customOrigin != null`) are never budgeted.
    - Not-budgeted library rows (timed / cardio / distance) keep their sets and their time counts, timed at their **own** rest (`default_rest_secs`, i.e. `PlannedExercise.restSeconds`), not the day's (round-3 P2-1). Rep-based customs are timed at the day's rest, because the wave assigns them that rest (`periodization_engine.dart:238`).
-   - **Custom detection:** a row counts as custom when `customOrigin != null` OR it has no row in `rowsByName`. `customOrigin` is stamped only when `SyncFlags.l2CustomStripEnabled` is on (`exercise_selector.dart:968`), so both checks are needed (M8). Their week-2 +1 applies only when the ledger's day time allows (P2-11c).
+   - **Custom detection:** a row counts as custom when `customOrigin != null` OR it has no row in `rowsByName`. `customOrigin` is stamped only when `SyncFlags.l2CustomStripEnabled` is on (`exercise_selector.dart:1448`, was `:968` before the thin-day top-up), so both checks are needed (M8). Their week-2 +1 applies only when the ledger's day time allows (P2-11c).
 9. **Focus source:** `effectiveBodyFocus` (`plan_generator.dart:254-257`) through `BudgetMuscleGroups`. Tokens that map to no group are ignored.
 10. **Titration under ON.**
     - MEV = band bottom; MRV = band top (25 for focus outside deload phases).
@@ -160,6 +161,14 @@
     Same input, same minutes. User-added exercises are in the map.
 
     OFF keeps both estimators' `totalSets × 2.5` verbatim, as pinned by `regression_logic_test.dart:279-298`.
+14. **Rebase onto the thin-day top-up (r6, 2026-10-24).** Main now carries B1 (PR #150), the injury re-check (#155) and the thin-day top-up (PR #164, `70f1237c`). Checked against the code, not assumed:
+    - **Order.** `ExerciseSelector.topUpDays` runs inside `pickV4` (cascade end and the B1 `_pickCoreList` return) and `buildPinnedDays`, so it runs before the allocator, which sits between `plan_generator.dart:257` and `:260`.
+    - **Rank.** `_topUpVariant` copies the variant list and appends (`out = [...current]`, `out.add(...)`, `exercise_selector.dart:1236`, `:1286`). Added moves therefore rank last and are budgeted like any generated exercise. No allocator change.
+    - **Injured users only.** The top-up returns the same list instance when `injuries` is empty, so every uninjured B2 persona and the OFF golden are unaffected.
+    - **OFF proof.** The OFF golden is `test/fixtures/generator_golden_hashes.json` as re-recorded by the top-up (two injury keys moved); "the B1 golden" in Tasks 0 to 6 means that file at `70f1237c`.
+    - **Citations.** `exercise_selector.dart:968` is now `:1448` (Global ruling 8). `plan_generator.dart` anchors (`:165`, `:254`, `:260`, `:292`, `:299`, `:335`) and `warmup_cooldown.dart:195` (`attach`) are unchanged.
+    - **Task 6 fixture.** The top-up should have filled the knee-injury thin legs day on main (Task 6 Step 1 computes whether it did before asserting anything); the test sets the kill-switch to build the thin day, plus an ON twin (Task 6 Step 1).
+    - **Task 8 docs.** `plan_engine/CLAUDE.md` is at 19,516 B against a recorded 16,986 B (soft band 15%, about 18 B of headroom). The ON lines go to `docs/architecture/plan-engine-detail.md` with a one-line pointer in the nested file, or `check_context_artifact_budget.dart --record` re-baselines it deliberately; either way the §5 budget row is walked.
 
 ---
 
@@ -491,7 +500,7 @@ Test: `test/contracts/session_set_budget_wiring_test.dart`.
   - **`ON with no minutes anywhere budgets 60`.**
   - **`ON level is the effective level`:** a beginner at phase 5 uses the advanced row.
   - **`ON with repeat pins`** (`pinnedExercisesByDay` with a library pin and a custom pin): the library pin is budgeted; the custom pin's sets are untouched (P2-11a).
-  - **`ON with an injury-trimmed day`:** knee injury, a legs day with ≤ 2 exercises → no crash, no empty day (P2-11b).
+  - **`ON with an injury-trimmed day`** (P2-11b, rebased by Ruling 14): the thin-day top-up now fills an injured day to 3 before the allocator runs, so a knee-injury legs day no longer ends with ≤ 2 exercises. Build the thin day with the top-up's kill-switch set (`configBox['disable_thin_day_topup'] = true`, cleared in `finally`) and assert, after computing it first, that a day has ≤ 2 exercises → no crash, no empty day. Add the top-up-ON twin: the day has 3 exercises, the added ones sit last in the list, and they are budgeted (their sets are allocator output, their seconds are in the day's ledger).
 - [ ] **Step 2: Run** → FAIL.
 - [ ] **Step 3: Implement.**
   - Put `final budgetOn = PlanEngineFlags.sessionSetBudgetEnabled;` before `:165` (M1).
