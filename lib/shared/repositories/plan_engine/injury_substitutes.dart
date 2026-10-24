@@ -12,12 +12,15 @@
 /// Keys = `InjuryVocab` canonical tokens. Values = ordered preferred substitute
 /// EXACT library names (foundational / machine / dumbbell variants first =
 /// joint-friendlier), each VERIFIED present + same-pattern + NOT tagged for the
-/// injury against `assets/data/exercise_library.json` (Batch 11-C; 259 rows as of 13-B).
+/// injury against `assets/data/exercise_library.json` (Batch 11-C; re-verified for the v14 tags, 285 rows).
 /// Hive/Flutter-FREE so the pure-Dart cascade tracer can import it.
 ///
-/// Covers 6 of the 9 `InjuryVocab` tokens — `ankle`/`neck`/`hamstring` have no
-/// curated list (1-2 contraindicated rows each) → safe fallthrough by
-/// construction. `Romanian Deadlift` + variants stay EXCLUDED from `lower_back`
+/// Covers 5 of the 9 `InjuryVocab` tokens — `ankle`/`elbow`/`hamstring`/`neck` have no
+/// curated list → safe fallthrough by construction. v14 (founder 2026-10-23) tagged
+/// EVERY elbow_flexion / elbow_extension row for elbow, so an elbow user has no
+/// same-pattern substitute to prefer; the key was removed rather than left dead.
+/// `injury_recheck_v14_contract_test.dart` pins that every name below is a library
+/// row NOT tagged for the injury it is listed under. `Romanian Deadlift` + variants stay EXCLUDED from `lower_back`
 /// subs — as of 13-B they are properly `[lower_back,hamstring]`-tagged, so the
 /// injury filter already removes them for lower_back users (the exclusion is now
 /// moot-but-correct; the safe lower_back subs are the supported/hip-thrust rows).
@@ -26,22 +29,24 @@ class InjurySubstitutes {
 
   static const Map<String, List<String>> _preferred = {
     'shoulder': [
-      // horizontal_push (8 contra / 18 safe)
-      'Machine Chest Press', 'Dumbbell Bench Press', 'Push Up',
-      // vertical_push — Front Raise is now shoulder-tagged (13-B) → removed here;
-      // Kettlebell Goblet Press is the sole shoulder-safe overhead press (founder-kept, 13-B)
-      'Kettlebell Goblet Press',
-      // shoulder_isolation (4 / 4)
+      // horizontal_push — v14 tagged Dumbbell Bench Press and Push Up for shoulder
+      // (founder 2026-10-23), so they are gone; Floor Press and Chest Squeeze Press
+      // are untagged and take their place (plan Ruling 3)
+      'Machine Chest Press', 'Floor Press', 'Chest Squeeze Press',
+      // vertical_push — NO shoulder-safe overhead press remains: Front Raise (13-B) and
+      // Kettlebell Goblet Press (v14) are both shoulder-tagged
+      // shoulder_isolation
       'Face Pull', 'Band Pull Apart',
-      // vertical_pull (4 / 6)
-      'Lat Pulldown', 'Chin Up',
-      // elbow_extension (3 / 6)
+      // vertical_pull — Lat Pulldown is shoulder-tagged (v14); Machine High Row is untagged
+      'Machine High Row', 'Chin Up',
+      // elbow_extension — elbow-tagged only (v14), still shoulder-safe
       'Tricep Pushdown (Cable)',
     ],
     'knee': [
-      // knee_dominant — Wall Sit removed (it is itself [knee]-tagged → was a dead sub, 13-B).
+      // knee_dominant — Wall Sit removed (it is itself [knee]-tagged → was a dead sub, 13-B);
+      // Leg Press removed too (v14: knee + lower_back).
       // Leg Curl (Lying) is now [hamstring]-tagged (13-B) but stays knee-SAFE (hamstring ≠ knee).
-      'Leg Press', 'Leg Curl (Lying)',
+      'Leg Curl (Lying)',
       // hip_isolation (2 / 9)
       'Glute Bridge',
     ],
@@ -56,10 +61,6 @@ class InjurySubstitutes {
       'Machine Chest Press', // horizontal_push (6 / 20)
       'Landmine Press', // vertical_push (2 / 10 — not wrist-tagged)
       'Cable Curl', // elbow_flexion (3 / 10)
-    ],
-    'elbow': [
-      'Tricep Pushdown (Cable)', // elbow_extension (5 / 4)
-      'Cable Curl', // elbow_flexion (4 / 9)
     ],
     'hip': [
       'Leg Press', 'Leg Extension', // knee_dominant (18 / 19)

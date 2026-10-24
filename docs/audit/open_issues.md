@@ -6697,3 +6697,61 @@ Split out of OI-390 (diagnose `132315`, plan `docs/plans/dow-skip-rate.md` §0 a
 5. A day later, re-run the full phrase sweep (not only these ids); any new hits are deleted under the same go.
 
 Past `user_daily_snapshots` stay (nothing reads a past day's `coach_notices`). Done when the sweep returns 0 rows a day after the delete.
+
+## OI-400 — retire_worktree: a nested dartdev-only .dart_tool/ (native_assets.yaml, no pubspec.yaml beside it) makes a worktree unretirable
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-10-23 — `scripts/retire_worktree_lib.dart:248-256` lists only the root `.dart_tool/` and `supabase/functions/.dart_tool/` as regenerable; its comment keeps every other nested `.dart_tool/` precious on purpose (OI-384). The retire dry-run for `library-batch-b` printed KEEP on `lib/shared/repositories/plan_engine/.dart_tool/native_assets.yaml`.
+- **Identified**: 2026-10-23 · filed via mint_oi.sh from branch `library-injury-recheck`
+
+**The defect.** Any `dart run` from a directory without a `pubspec.yaml` writes dartdev's cache (`.dart_tool/native_assets.yaml` plus an empty `native_assets/`) into that directory. Leg 3 of the retire tool then keeps the worktree, and the session has to delete the cache by hand before retiring.
+
+**Fix shape.** Treat a nested `.dart_tool/` as regenerable only when it holds nothing but that dartdev shape and no `pubspec.yaml` sits beside it. `vendor/.dart_tool/` and any nested package's cache stay precious.
+
+**Done when.** `retire_worktree_lib_test.dart` covers both sides: the dartdev-only shape is regenerable, and a `.dart_tool/` with any other file, or one next to a `pubspec.yaml`, is still kept.
+
+## OI-401 — Thin-day top-up: a generated day left with fewer than 3 exercises by injury filtering gets safe moves for its own muscles, then safe core (founder option b, 2026-10-23)
+
+- **Status**: OPEN
+- **Blocked on**: the v14 injury re-check (`docs/plans/2026-10-23-library-injury-recheck.md`) merging first (founder order 2026-10-23: tags, then this, then B2).
+- **Verified**: 2026-10-23 — `test/plan_generator/injury_floor_sweep_test.dart` over 1,728 single-injury plans (13,824 days, flag OFF): today 28 days have fewer than 3 exercises and none has 1; with the final v14 tags, 74 do and 19 have exactly one (see the measured paragraph below; the first-cut examples are not repeated because they were not re-checked on the final library).
+- **Identified**: 2026-10-23 · filed via mint_oi.sh from branch `library-injury-recheck`
+
+**Measured AFTER the v14 tags (2026-10-24, `test/plan_generator/injury_floor_sweep_test.dart`, flag OFF, final library; empty / thin / one-exercise, BEFORE in brackets):** singles 3 and 5 days 0 / 74 / 19 (0 / 28 / 0); singles 4 and 6 days 1 / 75 / 13 (0 / 24 / 0); pairs of knee, shoulder, lower_back, wrist, elbow, hip at 3 and 5 days 4 / 531 / 197 (2 / 219 / 51); pairs at 4 and 6 days 6 / 647 / 241 (2 / 228 / 66); repeat phase at 3 to 6 days 0 / 768 / 310 (0 / 506 / 147). Shoulder is most of it: 51 of the 74 single-injury thin days, and the bodyweight tier has no safe press left once every push-up variant is shoulder-tagged. The empty days: pairs 3/5 days = knee+hip and knee+lower_back (both empty before) plus lower_back+hip at 3 and 5 days (Deficit Reverse Lunge is now hip-tagged); the 4/6-day empties are bodyweight build_muscle advanced 4-day push or pull days. The sweep holds `kPairsEmptyBaseline` 4, `kPairs46EmptyBaseline` 6 and `kSingles46EmptyBaseline` 1 until this lands, then all three go to 0.
+
+**The defect.** Injury filtering can leave a generated day with one or two exercises. `_cascadeFill` drops a slot when no safe candidate exists (the safe-omission rule), and nothing refills the day afterwards. A repeat phase also drops now-contraindicated pins with no refill (`exercise_selector.dart:994`).
+
+**Founder decision (2026-10-23, option b).** When a day ends up with fewer than 3 exercises, top it up with safe moves for that day's own muscles from a neighbouring movement type, then with safe core moves, then stop. Industry check given at the time: Fitbod sizes a session by duration and fills it with what remains.
+
+**Done when.** Its own plan, ×2 review and PR land. A behavioural sweep then shows 0 one-exercise days and no unsafe pick, for single injuries, pairs and repeat phases. B2's set budget counts the added moves.
+
+## OI-403 — Coach injury swap picks a substitute by muscle only and never reads injury_contraindications, so it can hand an injured user a tagged exercise
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-10-24 - read `lib/features/ai_coach/services/injury_swap_planner.dart` `_findSubstitute` (:211-233): it returns the FIRST library row (Hive key order) whose `category` matches and that does not load the affected muscles. A grep over `lib/` for `injury_contraindications` lists seed_service, injury_vocab, exercise_repository and the plan_engine files only; this planner is not among them.
+- **Identified**: 2026-10-24 · filed via mint_oi.sh from branch `library-injury-recheck`
+
+**The defect.** The coach tool `modify_workout_for_injury` (UI: `InjuryModifyDiff`, executed through `tool_dispatcher.dart`, server schema `supabase/functions/_shared/tools/workout/modifyWorkoutForInjury.ts`) swaps upcoming exercises for an injury through `InjurySwapPlanner.plan`. It maps a free-text `bodyPart` to muscles and avoids exercises that load them, then takes the first match. It never consults the exercise's `injury_contraindications`, the one field the generator, the warm-up picker and the curated substitutes all filter on. So a candidate that passes the muscle test is offered even when its tags name the user's injury.
+
+**Reviewer's replay (UNVERIFIED by me; re-run before relying on it).** The d30de7 B-pass replayed the rule over the library: `lower_back` with a `legs` exercise returned Front Squat (tagged `lower_back`), and `shoulder` or `wrist` with a `full_body` exercise returned Surya Namaskar (untagged before the v14 retag, tagged shoulder, wrist and lower_back now). The result depends on Hive key order.
+
+**Why it surfaced now.** The v14 injury re-check (d30de7) made the tags the single source of truth for injury safety (104 rows gained 148 tags, and 33 low-load rows stay untagged on purpose). This planner is the one consumer that still ignores them. It was already this way before v14 and is outside that diff.
+
+**Done when.** `_findSubstitute` skips any candidate whose `injury_contraindications` contains a canonical token for the injury (`InjuryVocab.normalize` of the body part, with the muscle test kept as a second filter). A behavioural test builds a library where the first muscle-safe candidate is tagged for the injury and asserts the planner returns the next untagged row, plus a positive control with no tag. The Edge Function tool's own description of what it swaps is checked for the same claim. Mutation: remove the tag check and the test reddens.
+
+## OI-404 — Retiring 7 duplicate library rows (ad896b42) lowered the uninjured scorecard: 164 personas, volume 69.6 to 69.2, never re-baselined
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-10-24 - regenerated `test/plan_generator/generate_baseline.dart` with the CURRENT engine and only the library file swapped: library at `8ef89153` (the baseline's own commit) reproduces the committed baseline exactly (0 of 606 personas moved); library at `4514cf0c` also 0; library at `ad896b42` moves 165 (164 uninjured; all 165 lower on `volume`, 155 lower on `overall`, none higher). Nothing between those two library commits touches the score.
+- **Identified**: 2026-10-24 · filed via mint_oi.sh from branch `library-injury-recheck`
+
+**The defect.** Commit `ad896b42` (2026-10-22, Batch A: "retire 7 duplicate rows into their twins; aliases, seed prune, v12") lowered the scorecard of uninjured personas and nobody re-baselined. The retired rows (kept twin in brackets): E241 [E016 Close Grip Bench Press], E240 [E097 Overhead Tricep Cable Extension], E225 [E107 Hip Abduction Machine], E249 [E176 V-Up], E165 [E216 Standing Quad Stretch], E167 [E219 Cross-body Shoulder Stretch], E168 [E220 Chest Doorway Stretch].
+
+**Measured (the 165 moved personas, committed baseline vs the library at `ad896b42`).** `volume` mean -1.53 (all 165 lower, none higher); `coverage`, `balance` and `realism` unchanged; `overall` mean -0.26 (worst -0.6, e.g. `build_muscle | home_dumbbells | 3d | beginner | p6`; the moved personas are phases p1, p2 and p6). The aggregate `volume` read 69.6 in the committed baseline and 69.2 fresh.
+
+**Why it was invisible.** `scorecard_gate_test.dart` only enforces no-regression ceilings against the baseline's AGGREGATE (`overall >= baseline - 0.05`, total fallback picks `<=`), and a fall of 0.0 to 0.1 in the aggregate sits under that tolerance. The d30de7 injury re-check refreshed `baseline_scorecard.json` and `baseline_plans.md` (its own effect is 12 injured personas), which also absorbed this older drift. Without this entry the decline would be unrecorded.
+
+**Done when.** (1) Say which of the seven retired rows the generator was picking for the moved personas (re-run the 165 with the pre-retirement library and diff the day lists). (2) Decide, with the founder, whether the volume loss is intended (a twin that fills the same slot with fewer sets or a different `rep_range`) or a defect (restore a twin's `default_sets`/`rep_range`, or carry the retired row's role in the kept twin). (3) If it is a defect, fix it with a test that fails on the library at `ad896b42` and passes after; if it is intended, record that here and in the baseline's header so the next refresh is not a surprise. Batch C's extra core rows may remove it anyway; re-measure after Batch C either way.

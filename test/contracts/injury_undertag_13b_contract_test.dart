@@ -1,9 +1,12 @@
 // Batch 13-B — comprehensive injury tagging. Two-part regression guard:
 //
 //  (A) DATA CONTRACT — pins the EXACT injury_contraindications decision for every
-//      row 13-B tagged (26 new + 2 deepened) AND that the deliberately-kept "safe
-//      pool" stays untagged (variety-first + curated-substitute integrity). A future
-//      edit that drops/adds a tag on any of these rows fails here.
+//      row 13-B tagged (26 new + 2 deepened), as extended by the v14 injury
+//      re-check where the founder's 2026-10-23 table adds to it, AND that the
+//      33-row low-load / rehab safe pool (test/helpers/injury_safe_pool.dart)
+//      stays untagged. A future edit that drops/adds a tag on any of these rows
+//      fails here. (The 13-B "kept safe for variety" list was REJECTED by the
+//      founder on 2026-10-23: only the v14 safe pool is untagged now.)
 //  (B) BEHAVIORAL — drives the REAL generator (Hive + real library seeded) and proves
 //      the new tags actually filter end-to-end: a hamstring / lower_back injured plan
 //      contains ZERO of the newly-contraindicated exercises, with non-vacuity shown by
@@ -26,20 +29,25 @@ import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_generator.dart';
 
+import '../helpers/injury_safe_pool.dart';
+
 /// The 13-B decisions, keyed by exercise id → EXACT expected (sorted) token set.
+/// Five rows carry a v14 extension (founder table 2026-10-23): E057 +hip,
+/// E074 +shoulder, E135 +shoulder, E101 +elbow, E022 +elbow.
 const Map<String, List<String>> k13bExpected = {
   // cardio
   'E064': ['lower_back'], // Rowing Machine
-  // core — advanced / loaded / support / hang (bodyweight crunch+sit-up family kept SAFE)
-  'E057': ['lower_back', 'shoulder'], // Hanging Leg Raise
+  // core — advanced / loaded / support / hang (13-B kept the bodyweight crunch+sit-up
+  // family safe; v14 tagged most of it, pinned in injury_recheck_v14_contract_test.dart)
+  'E057': ['hip', 'lower_back', 'shoulder'], // Hanging Leg Raise (v14 +hip)
   'E071': ['shoulder', 'wrist'], // L-Sit Hold
-  'E074': ['lower_back'], // Dragon Flag
+  'E074': ['lower_back', 'shoulder'], // Dragon Flag (v14 +shoulder)
   'E134': ['hip'], // Copenhagen Plank (correction: NOT wrist)
   'E141': ['shoulder'], // Kettlebell Turkish Get Up
   'E172': ['lower_back'], // Dumbbell Side Bend
   'E199': ['shoulder'], // Half Turkish Get Up
   'E133': ['lower_back'], // Landmine Rotation
-  'E135': ['wrist'], // Bear Crawl
+  'E135': ['shoulder', 'wrist'], // Bear Crawl (v14 +shoulder)
   'E136': ['shoulder', 'wrist'], // Crab Walk
   'E179': ['lower_back', 'shoulder'], // Toes to Bar
   'E180': ['lower_back', 'shoulder'], // Windshield Wiper
@@ -57,26 +65,14 @@ const Map<String, List<String>> k13bExpected = {
   // knee_dominant
   'E049': ['hamstring'], // Leg Curl (Lying)
   // vertical_pull — overhead dead-hang
-  'E101': ['shoulder'], // Chest to Bar Pull Up
-  'E022': ['shoulder'], // Pull Up
-  // vertical_push — front raise (Goblet Press E186 kept shoulder-SAFE per founder)
+  'E101': ['elbow', 'shoulder'], // Chest to Bar Pull Up (v14 +elbow)
+  'E022': ['elbow', 'shoulder'], // Pull Up (v14 +elbow)
+  // vertical_push — front raise (Goblet Press E186 is shoulder-tagged by v14, not here)
   'E015': ['shoulder'], // Front Raise
   // deepened existing rows (retag / union)
   'E178': ['hip', 'lower_back'], // GHD Sit Up — was [hip]
   'E092': ['hamstring', 'lower_back'], // Good Morning — was [lower_back]
 };
-
-/// Rows deliberately kept UNtagged — the deep injury-safe pool that preserves
-/// variety (founder decision) + the curated-substitute integrity.
-const List<String> k13bKeptSafe = [
-  'machine chest press', 'dumbbell bench press', 'cable fly',
-  'kettlebell goblet press', // founder: the one shoulder-safe overhead press
-  'face pull', 'band pull apart', 'reverse fly', 'lat pulldown', 'chin up',
-  'crunches', 'bicycle crunch', 'v-up', 'russian twist', 'hollow body hold',
-  'farmers carry', 'suitcase carry', 'zercher carry',
-  'hip abduction machine', 'hip adduction machine', 'lateral band walk',
-  'glute bridge', 'leg press',
-];
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -117,20 +113,21 @@ void main() {
           reason: 'Copenhagen Plank is a forearm-supported adductor hold — never wrist');
       expect(byName['nordic curl'], {'hamstring', 'knee'},
           reason: 'Nordic Curl is kneeling knee-flexion — not a hip-hinge (no lower_back)');
-      expect(byName['hollow body hold'], isEmpty,
-          reason: 'Hollow Body is a supine core hold kept in the safe pool (never wrist)');
+      expect(byName['hollow body hold'], {'lower_back'},
+          reason: 'Hollow Body is lower_back-tagged by the founder (2026-10-23): if the '
+              'lower back lifts off the floor the hold strains it (never wrist)');
     });
 
-    test('the injury-safe pool stays untagged (variety + curated-sub integrity)', () {
-      for (final n in k13bKeptSafe) {
-        expect(byName[n], isNotNull, reason: 'safe-pool row "$n" missing from library');
-        expect(byName[n], isEmpty,
-            reason: '"$n" must stay injury-safe (deep pool / founder variety decision)');
+    test('the injury-safe pool stays untagged (33 low-load / rehab rows, v14)', () {
+      for (final n in kV14SafePool) {
+        expect(byName[n.toLowerCase()], isNotNull,
+            reason: 'safe-pool row "$n" missing from library');
+        expect(byName[n.toLowerCase()], isEmpty,
+            reason: '"$n" must stay untagged (low-load / rehab, founder table 2026-10-23)');
       }
-      // Push Up is kept SHOULDER-safe (founder's example) but is legitimately
-      // wrist-tagged — pin that it stays wrist-only and never gains shoulder.
-      expect(byName['push up'], {'wrist'},
-          reason: 'Push Up stays wrist-only — closed-chain, shoulder-safe (founder kept it)');
+      // Founder 2026-10-23, "wrist and shoulders": Push Up loads the shoulder too.
+      expect(byName['push up'], {'shoulder', 'wrist'},
+          reason: 'Push Up is wrist AND shoulder (founder 2026-10-23)');
     });
 
     test('vocabulary stays closed to the 9 canonical tokens', () {

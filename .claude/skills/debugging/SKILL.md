@@ -238,6 +238,7 @@ Per CLAUDE.md rules 21 + 22:
 | 2.114 | A per-type normaliser's else-branch silently claims every type added after it | one logging type reads 0 for a value the user typed; a two-branch type switch whose else clears that field | test/contracts/cardio_duration_distance_writer_to_reader_test.dart |
 | 2.115 | A lazy `.cast<Map<String, dynamic>>()` over Hive data throws on first touch; a catch makes the code dead | a heal or migrator never changes a disk row, but its typed-literal unit test passes | test/contracts/cardio_duration_distance_writer_to_reader_test.dart (T10b) |
 | 2.116 | An absent denominator reported as 0% (a rate map entry for a bucket with nothing due) | the coach or a card states "100% skipped" / "0%" about something the user never had scheduled; a `total > 0 ? done / total : 0` in the writer | test/contracts/day_of_week_completion_writer_to_reader_test.dart |
+| 2.117 | An injury filter that drops a row only when it CONTAINS the user's token under-protects every row nobody tagged (5th batch) | an injured user's plan, warm-up or swap holds a movement that loads the injured joint and the library row's tag list is empty or lacks the token | test/contracts/injury_recheck_v14_contract_test.dart |
 
 ---
 

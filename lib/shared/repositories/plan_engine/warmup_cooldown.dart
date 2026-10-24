@@ -15,18 +15,19 @@ class WarmupCooldownSelector {
   ///
   /// - MAIN-cascade-selectable moves (Push Up, Band Pull Apart, Baithak) use
   ///   their EXACT library `injury_contraindications`, so a move is never dropped
-  ///   from warmup while the main plan keeps it (Push Up stays for a shoulder
-  ///   injury in both — the library tags it wrist-only).
-  /// - Warmup/cooldown/cardio-ONLY moves use conservative exercise-science tags,
-  ///   because the library UNDER-tags them (most are `injury_contraindications:
-  ///   []` despite clearly loading an area). This map deliberately supersedes the
-  ///   under-tagged library warmup rows.
+  ///   from warmup while the main plan keeps it (Push Up is dropped for a shoulder
+  ///   injury in both — the library tags it wrist + shoulder since v14).
+  /// - Warmup/cooldown/cardio-ONLY moves use conservative exercise-science tags.
+  ///   The library used to UNDER-tag them (most were `injury_contraindications:
+  ///   []` despite clearly loading an area); the v14 injury re-check (founder
+  ///   2026-10-23) tagged those rows to match this map.
   ///
-  /// The main-move library under-tagging (e.g. Push Up not shoulder-tagged) is a
-  /// separate, deliberate library-audit batch — NOT expanded into this warmup fix.
+  /// EVERY key below now equals the library row's tags, pinned for all 27 by
+  /// `warmup_library_injury_mirror_test.dart`. The main-move library under-tagging
+  /// that used to be left to "a separate library-audit batch" was closed by v14.
   static const _moveInjuries = <String, Set<String>>{
     // main-cascade-selectable → library injury_contraindications (verified)
-    'Push Up': {'wrist'},
+    'Push Up': {'wrist', 'shoulder'},
     'Band Pull Apart': <String>{},
     'Baithak (Hindu Squat)': {'hip', 'knee'},
     // warmup/cooldown/cardio-only → conservative

@@ -107,7 +107,13 @@ class SeedService {
   //   slot_focus, slot_pattern, skill ladder keys); five safety-direction injury
   //   tags (Task 1b). New keys only, read by CoreListSelector behind
   //   enable_core_list_pool; no cloud column (plan Ruling 2).
-  static const int _exerciseLibraryVersion = 13;
+  // v14 (injury re-check, docs/plans/2026-10-23-library-injury-recheck.md, d30de7):
+  //   the founder rejected the 13-B "kept safe for variety" carve-out, so 104 rows
+  //   gained 148 injury_contraindications tokens (additions only; Push Up is now
+  //   wrist + shoulder, Chin Up elbow only). injury_contraindications is NOT a
+  //   cloud column -> no migration. Without this bump the tags are inert for every
+  //   existing install (library_seed_v14_upgrade_behavioral_test.dart).
+  static const int _exerciseLibraryVersion = 14;
   static const String _exerciseVersionKey = 'exercise_library_version';
 
   /// Bump this integer whenever the bundled food_database.json changes

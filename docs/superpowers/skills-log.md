@@ -379,4 +379,11 @@
   re-derive. → Logged from the `oi189-plan-end-bound` worktree, riding with that batch (the
   founder's next instruction after the compact was to brainstorm OI-189, which became this
   branch) — same one-push rationale as the 2026-08-06 / 08-30 / 09-06 entries.
+- **2026-10-23 ~12:50 IST — `library-batch-b` (B1) merged as PR #150 `d93f7e9d`, ACCEPTED
+  (founder ran `/compact` with the offered preserve list) · trigger: BATCH SHIPPED + explicit
+  founder ask.**
+  Boundary stated as CLEAN: `main` CI green on the merge, worktree retired and branch
+  deleted, 0 tracked changes of this session. The preserve list carried the founder answers
+  and the two housekeeping items (this line, and the nested-`.dart_tool` OI).
+  → Logged from the `library-injury-recheck` worktree, riding with that batch (one push).
 - 2026-10-23 IST — trigger: explicit (/strategic-compact) at OI-389 1a complete-but-uncommitted boundary; founder decision pending

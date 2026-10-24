@@ -130,7 +130,9 @@
     "source": "free-exercise-db",
     "is_active": true,
     "is_foundational": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "shoulder"
+    ],
     "is_bilateral": true,
     "cns_demand": 3,
     "target_focus": [
@@ -368,6 +370,7 @@
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
+      "shoulder",
       "wrist"
     ],
     "is_bilateral": true,
@@ -449,7 +452,9 @@
     "source": "free-exercise-db",
     "is_active": true,
     "is_foundational": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "shoulder"
+    ],
     "is_bilateral": true,
     "cns_demand": 2,
     "target_focus": [
@@ -524,7 +529,9 @@
     "indian_alternative": "",
     "source": "free-exercise-db",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "shoulder"
+    ],
     "is_bilateral": true,
     "cns_demand": 2,
     "target_focus": [
@@ -599,6 +606,7 @@
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
+      "elbow",
       "shoulder"
     ],
     "is_bilateral": true,
@@ -842,6 +850,7 @@
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
+      "lower_back",
       "shoulder"
     ],
     "is_bilateral": true,
@@ -1243,7 +1252,8 @@
     "is_foundational": true,
     "injury_contraindications": [
       "elbow",
-      "shoulder"
+      "shoulder",
+      "wrist"
     ],
     "is_bilateral": true,
     "cns_demand": 4,
@@ -1323,7 +1333,9 @@
     "source": "",
     "is_active": true,
     "is_foundational": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "elbow"
+    ],
     "is_bilateral": true,
     "cns_demand": 2,
     "target_focus": [
@@ -1552,6 +1564,7 @@
     "is_foundational": true,
     "injury_contraindications": [
       "elbow",
+      "shoulder",
       "wrist"
     ],
     "is_bilateral": true,
@@ -1640,6 +1653,7 @@
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
+      "hamstring",
       "lower_back"
     ],
     "is_bilateral": true,
@@ -1723,6 +1737,7 @@
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
+      "elbow",
       "shoulder"
     ],
     "is_bilateral": true,
@@ -1966,7 +1981,9 @@
     "source": "free-exercise-db",
     "is_active": true,
     "is_foundational": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "shoulder"
+    ],
     "is_bilateral": true,
     "cns_demand": 3,
     "target_focus": [
@@ -2440,7 +2457,9 @@
     "source": "free-exercise-db",
     "is_active": true,
     "is_foundational": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "elbow"
+    ],
     "is_bilateral": true,
     "cns_demand": 2,
     "target_focus": [
@@ -2516,7 +2535,9 @@
     "source": "free-exercise-db",
     "is_active": true,
     "is_foundational": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "elbow"
+    ],
     "is_bilateral": true,
     "cns_demand": 2,
     "target_focus": [
@@ -2592,7 +2613,9 @@
     "source": "free-exercise-db",
     "is_active": true,
     "is_foundational": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "elbow"
+    ],
     "is_bilateral": false,
     "cns_demand": 2,
     "target_focus": [
@@ -2665,7 +2688,9 @@
     "source": "free-exercise-db",
     "is_active": true,
     "is_foundational": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "elbow"
+    ],
     "is_bilateral": true,
     "cns_demand": 2,
     "target_focus": [
@@ -2990,7 +3015,10 @@
     "source": "free-exercise-db",
     "is_active": true,
     "is_foundational": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "knee",
+      "lower_back"
+    ],
     "is_bilateral": true,
     "cns_demand": 4,
     "target_focus": [
@@ -3865,6 +3893,7 @@
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
+      "hip",
       "lower_back"
     ],
     "is_bilateral": true,
@@ -4328,7 +4357,10 @@
     "source": "free-exercise-db",
     "is_active": true,
     "is_foundational": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "lower_back",
+      "neck"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -4407,6 +4439,7 @@
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
+      "hip",
       "lower_back",
       "shoulder"
     ],
@@ -4490,6 +4523,8 @@
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
+      "lower_back",
+      "shoulder",
       "wrist"
     ],
     "is_bilateral": true,
@@ -4566,7 +4601,9 @@
     "source": "free-exercise-db",
     "is_active": true,
     "is_foundational": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "lower_back"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -4641,7 +4678,9 @@
     "source": "free-exercise-db",
     "is_active": true,
     "is_foundational": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "lower_back"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -4723,6 +4762,7 @@
     "is_foundational": true,
     "injury_contraindications": [
       "ankle",
+      "hip",
       "knee"
     ],
     "is_bilateral": true,
@@ -4881,7 +4921,9 @@
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
-      "ankle"
+      "ankle",
+      "knee",
+      "wrist"
     ],
     "is_bilateral": true,
     "cns_demand": 1,
@@ -5045,7 +5087,10 @@
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
-      "ankle"
+      "ankle",
+      "knee",
+      "shoulder",
+      "wrist"
     ],
     "is_bilateral": true,
     "cns_demand": 2,
@@ -5204,7 +5249,10 @@
     "source": "",
     "is_active": true,
     "is_foundational": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "shoulder",
+      "wrist"
+    ],
     "is_bilateral": true,
     "cns_demand": 2,
     "target_focus": [
@@ -5356,7 +5404,9 @@
     "source": "",
     "is_active": true,
     "injury_contraindications": [
-      "shoulder"
+      "elbow",
+      "shoulder",
+      "wrist"
     ],
     "is_bilateral": true,
     "cns_demand": 4,
@@ -5756,7 +5806,8 @@
     "source": "",
     "is_active": true,
     "injury_contraindications": [
-      "lower_back"
+      "lower_back",
+      "shoulder"
     ],
     "is_bilateral": true,
     "cns_demand": 1,
@@ -5833,6 +5884,7 @@
     "source": "",
     "is_active": true,
     "injury_contraindications": [
+      "elbow",
       "shoulder"
     ],
     "is_bilateral": true,
@@ -5917,6 +5969,8 @@
     "source": "",
     "is_active": true,
     "injury_contraindications": [
+      "lower_back",
+      "shoulder",
       "wrist"
     ],
     "is_bilateral": true,
@@ -6081,7 +6135,11 @@
     "source": "",
     "is_active": true,
     "is_foundational": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "lower_back",
+      "shoulder",
+      "wrist"
+    ],
     "is_bilateral": true,
     "cns_demand": 3,
     "target_focus": [
@@ -6154,7 +6212,9 @@
     "source": "",
     "is_active": true,
     "is_foundational": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "knee"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -6224,7 +6284,10 @@
     "indian_alternative": "",
     "source": "",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "hip",
+      "knee"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -6370,7 +6433,9 @@
     "source": "",
     "is_active": true,
     "is_foundational": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "hip"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -6444,7 +6509,9 @@
     "indian_alternative": "",
     "source": "",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "ankle"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -6590,7 +6657,8 @@
     "source": "",
     "is_active": true,
     "injury_contraindications": [
-      "lower_back"
+      "lower_back",
+      "wrist"
     ],
     "is_bilateral": true,
     "cns_demand": 5,
@@ -6750,6 +6818,7 @@
     "source": "free-exercise-db",
     "is_active": true,
     "injury_contraindications": [
+      "elbow",
       "hip",
       "knee",
       "lower_back"
@@ -6829,7 +6898,9 @@
     "indian_alternative": "",
     "source": "",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "wrist"
+    ],
     "is_bilateral": true,
     "cns_demand": 4,
     "target_focus": [
@@ -6910,7 +6981,9 @@
     "indian_alternative": "",
     "source": "",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "wrist"
+    ],
     "is_bilateral": false,
     "cns_demand": 3,
     "target_focus": [
@@ -7226,7 +7299,10 @@
     "indian_alternative": "",
     "source": "free-exercise-db",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "elbow",
+      "shoulder"
+    ],
     "is_bilateral": true,
     "cns_demand": 2,
     "target_focus": [
@@ -7372,7 +7448,9 @@
     "indian_alternative": "",
     "source": "free-exercise-db",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "elbow"
+    ],
     "is_bilateral": true,
     "cns_demand": 2,
     "target_focus": [
@@ -7602,6 +7680,7 @@
     "source": "free-exercise-db",
     "is_active": true,
     "injury_contraindications": [
+      "elbow",
       "wrist"
     ],
     "is_bilateral": true,
@@ -7673,6 +7752,7 @@
     "source": "free-exercise-db",
     "is_active": true,
     "injury_contraindications": [
+      "elbow",
       "wrist"
     ],
     "is_bilateral": true,
@@ -7748,6 +7828,7 @@
     "source": "",
     "is_active": true,
     "injury_contraindications": [
+      "elbow",
       "shoulder"
     ],
     "is_bilateral": true,
@@ -7823,6 +7904,7 @@
     "source": "",
     "is_active": true,
     "injury_contraindications": [
+      "shoulder",
       "wrist"
     ],
     "is_bilateral": true,
@@ -7907,6 +7989,7 @@
     "source": "",
     "is_active": true,
     "injury_contraindications": [
+      "shoulder",
       "wrist"
     ],
     "is_bilateral": true,
@@ -8148,7 +8231,9 @@
     "source": "",
     "is_active": true,
     "is_foundational": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "neck"
+    ],
     "is_bilateral": true,
     "cns_demand": 2,
     "target_focus": [
@@ -8225,7 +8310,9 @@
     "indian_alternative": "",
     "source": "",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "hip"
+    ],
     "is_bilateral": true,
     "cns_demand": 2,
     "target_focus": [
@@ -8300,7 +8387,9 @@
     "indian_alternative": "",
     "source": "",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "hip"
+    ],
     "is_bilateral": true,
     "cns_demand": 2,
     "target_focus": [
@@ -8372,7 +8461,10 @@
     "indian_alternative": "",
     "source": "",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "hip",
+      "lower_back"
+    ],
     "is_bilateral": true,
     "cns_demand": 2,
     "target_focus": [
@@ -8600,7 +8692,8 @@
     "is_foundational": true,
     "injury_contraindications": [
       "hip",
-      "knee"
+      "knee",
+      "lower_back"
     ],
     "is_bilateral": true,
     "cns_demand": 4,
@@ -8676,7 +8769,9 @@
     "source": "",
     "is_active": true,
     "is_foundational": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "shoulder"
+    ],
     "is_bilateral": false,
     "cns_demand": 3,
     "target_focus": [
@@ -8982,7 +9077,9 @@
     "indian_alternative": "",
     "source": "",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "shoulder"
+    ],
     "is_bilateral": true,
     "cns_demand": 2,
     "target_focus": [
@@ -9055,7 +9152,9 @@
     "indian_alternative": "",
     "source": "",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "shoulder"
+    ],
     "is_bilateral": true,
     "cns_demand": 2,
     "target_focus": [
@@ -9349,7 +9448,9 @@
     "indian_alternative": "",
     "source": "",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "elbow"
+    ],
     "is_bilateral": true,
     "cns_demand": 2,
     "target_focus": [
@@ -9429,7 +9530,9 @@
     "source": "",
     "is_active": true,
     "is_foundational": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "elbow"
+    ],
     "is_bilateral": true,
     "cns_demand": 3,
     "target_focus": [
@@ -9959,6 +10062,7 @@
     "source": "",
     "is_active": true,
     "injury_contraindications": [
+      "hamstring",
       "lower_back"
     ],
     "is_bilateral": true,
@@ -10026,7 +10130,9 @@
     "indian_alternative": "",
     "source": "",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "lower_back"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -10339,6 +10445,7 @@
     "source": "",
     "is_active": true,
     "injury_contraindications": [
+      "shoulder",
       "wrist"
     ],
     "is_bilateral": true,
@@ -11427,7 +11534,8 @@
     "is_active": true,
     "injury_contraindications": [
       "hip",
-      "knee"
+      "knee",
+      "lower_back"
     ],
     "is_bilateral": true,
     "cns_demand": 4,
@@ -11573,7 +11681,12 @@
     "source": "",
     "is_active": true,
     "is_foundational": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "hamstring",
+      "lower_back",
+      "shoulder",
+      "wrist"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -11650,7 +11763,11 @@
     "source": "",
     "is_active": true,
     "is_foundational": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "hip",
+      "knee",
+      "lower_back"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -11721,7 +11838,9 @@
     "indian_alternative": "",
     "source": "",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "ankle"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -11792,7 +11911,11 @@
     "indian_alternative": "",
     "source": "",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "elbow",
+      "shoulder",
+      "wrist"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -11864,7 +11987,9 @@
     "indian_alternative": "",
     "source": "",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "shoulder"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -12015,7 +12140,9 @@
     "indian_alternative": "",
     "source": "",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "hip"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -12084,7 +12211,11 @@
     "indian_alternative": "",
     "source": "",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "lower_back",
+      "shoulder",
+      "wrist"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -12158,7 +12289,9 @@
     "source": "",
     "is_active": true,
     "is_foundational": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "knee"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -12234,7 +12367,10 @@
     "source": "",
     "is_active": true,
     "is_foundational": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "shoulder",
+      "wrist"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -12305,7 +12441,9 @@
     "indian_alternative": "",
     "source": "",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "ankle"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -12378,7 +12516,9 @@
     "indian_alternative": "",
     "source": "",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "hip"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -12589,7 +12729,10 @@
     "indian_alternative": "",
     "source": "",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "hamstring",
+      "lower_back"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -12663,7 +12806,9 @@
     "indian_alternative": "",
     "source": "",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "hip"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -12737,7 +12882,9 @@
     "indian_alternative": "",
     "source": "",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "shoulder"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -13039,7 +13186,10 @@
     "source": "",
     "is_active": true,
     "is_foundational": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "lower_back",
+      "neck"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -13116,7 +13266,10 @@
     "source": "",
     "is_active": true,
     "is_foundational": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "lower_back",
+      "neck"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -13196,7 +13349,10 @@
     "indian_alternative": "",
     "source": "",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "hip",
+      "lower_back"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -13280,7 +13436,9 @@
     "source": "",
     "is_active": true,
     "is_foundational": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "lower_back"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -13578,7 +13736,10 @@
     "indian_alternative": "",
     "source": "",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "elbow",
+      "lower_back"
+    ],
     "is_bilateral": true,
     "cns_demand": 4,
     "target_focus": [
@@ -13937,7 +14098,9 @@
     "indian_alternative": "",
     "source": "",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "shoulder"
+    ],
     "is_bilateral": true,
     "cns_demand": 3,
     "target_focus": [
@@ -14317,7 +14480,10 @@
     "indian_alternative": "",
     "source": "",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "shoulder",
+      "wrist"
+    ],
     "is_bilateral": true,
     "cns_demand": 2,
     "target_focus": [
@@ -14852,7 +15018,8 @@
     "is_active": true,
     "injury_contraindications": [
       "hip",
-      "knee"
+      "knee",
+      "lower_back"
     ],
     "is_bilateral": false,
     "cns_demand": 1,
@@ -15006,7 +15173,11 @@
     "indian_alternative": "Designed as a complete movement practice — blends Surya Namaskar with warrior poses",
     "source": "",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "lower_back",
+      "shoulder",
+      "wrist"
+    ],
     "is_bilateral": true,
     "cns_demand": 3,
     "target_focus": [
@@ -15077,7 +15248,8 @@
     "source": "Standard warm-up exercise",
     "is_active": true,
     "injury_contraindications": [
-      "ankle"
+      "ankle",
+      "knee"
     ],
     "is_bilateral": true,
     "cns_demand": 1,
@@ -15150,7 +15322,10 @@
     "indian_alternative": "",
     "source": "Standard warm-up exercise",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "ankle",
+      "knee"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -15226,7 +15401,11 @@
     "indian_alternative": "",
     "source": "Standard warm-up exercise",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "ankle",
+      "hip",
+      "knee"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -15302,7 +15481,10 @@
     "indian_alternative": "",
     "source": "Standard warm-up exercise",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "hamstring",
+      "knee"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -15523,7 +15705,9 @@
     "indian_alternative": "",
     "source": "Standard warm-up exercise",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "lower_back"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -15597,7 +15781,9 @@
     "indian_alternative": "",
     "source": "Standard warm-up exercise",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "hip"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -15671,7 +15857,10 @@
     "indian_alternative": "",
     "source": "Standard warm-up exercise",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "hamstring",
+      "hip"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -15743,7 +15932,9 @@
     "indian_alternative": "",
     "source": "Standard warm-up exercise",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "wrist"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -15811,7 +16002,9 @@
     "indian_alternative": "",
     "source": "Standard warm-up exercise",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "ankle"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -15882,7 +16075,11 @@
     "indian_alternative": "",
     "source": "Standard warm-up exercise",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "elbow",
+      "shoulder",
+      "wrist"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -15961,7 +16158,11 @@
     "indian_alternative": "",
     "source": "Standard warm-up exercise",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "elbow",
+      "shoulder",
+      "wrist"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -16112,7 +16313,10 @@
     "indian_alternative": "",
     "source": "Standard cool-down exercise",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "hamstring",
+      "lower_back"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -16188,7 +16392,10 @@
     "indian_alternative": "",
     "source": "Standard cool-down exercise",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "ankle",
+      "knee"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -16271,7 +16478,9 @@
     "indian_alternative": "",
     "source": "Standard cool-down exercise",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "shoulder"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -16344,7 +16553,9 @@
     "indian_alternative": "",
     "source": "Standard cool-down exercise",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "lower_back"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -16416,7 +16627,9 @@
     "indian_alternative": "",
     "source": "Standard cool-down exercise",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "shoulder"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -16499,7 +16712,9 @@
     "indian_alternative": "No doorframe? Place hand flat on a wall and rotate body away",
     "source": "Standard cool-down exercise",
     "is_active": true,
-    "injury_contraindications": [],
+    "injury_contraindications": [
+      "shoulder"
+    ],
     "is_bilateral": true,
     "cns_demand": 1,
     "target_focus": [
@@ -16964,6 +17179,7 @@
     "is_active": true,
     "is_foundational": false,
     "injury_contraindications": [
+      "hip",
       "knee"
     ],
     "is_bilateral": false,
@@ -17039,6 +17255,7 @@
     "is_active": true,
     "is_foundational": false,
     "injury_contraindications": [
+      "hip",
       "knee"
     ],
     "is_bilateral": false,
@@ -17784,7 +18001,9 @@
     "is_active": true,
     "is_foundational": true,
     "injury_contraindications": [
-      "shoulder"
+      "elbow",
+      "shoulder",
+      "wrist"
     ],
     "is_bilateral": true,
     "cns_demand": 1,

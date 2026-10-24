@@ -6,9 +6,11 @@
 // kept row's `merged_ids` (read by the seed prune, which deletes it from every
 // install's exerciseBox). Where the twins share a movement_pattern the kept row
 // also carries the retired twin's selection fields, so the slot it used to fill
-// keeps the same movement. Injury tags are NEVER merged: the founder's 13-B
-// carve-out keeps 'v-up' and 'hip abduction machine' untagged
-// (injury_undertag_13b_contract_test.dart, k13bKeptSafe).
+// keeps the same movement. Injury tags are NEVER merged: a kept row keeps its
+// own list. Since v14 (founder table 2026-10-23) those lists come from
+// scripts/data/library_injury_additions_v14.json, not from the retired twin
+// (the 13-B carve-out that kept 'v-up' and 'hip abduction machine' untagged was
+// rejected by the founder; see injury_recheck_v14_contract_test.dart).
 import 'dart:convert';
 import 'dart:io';
 
@@ -110,10 +112,10 @@ void main() {
       }
     });
 
-    test('injury tags are never merged (founder 13-B carve-out)', () {
-      expect(byId['E107']!['injury_contraindications'], isEmpty);
-      expect(byId['E176']!['injury_contraindications'], isEmpty);
-      expect(byId['E016']!['injury_contraindications'], ['elbow', 'shoulder']);
+    test('injury tags are never merged (a kept row keeps its own v14 list)', () {
+      expect(byId['E107']!['injury_contraindications'], ['hip']);
+      expect(byId['E176']!['injury_contraindications'], ['hip', 'lower_back']);
+      expect(byId['E016']!['injury_contraindications'], ['elbow', 'shoulder', 'wrist']);
       expect(byId['E097']!['injury_contraindications'], ['elbow']);
     });
   });

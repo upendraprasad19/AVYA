@@ -1,6 +1,6 @@
 # Open Issues — index (auto-generated)
 
-**253 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
+**257 open.** One line each; full detail in [`open_issues.md`](open_issues.md) at the cited line, so a single entry can be read with `Read(open_issues.md, offset: <line>, limit: 60)` instead of loading the file. Closed history: [`closed_issues.md`](closed_issues.md).
 
 `Blocked on` answers "what can I pick up right now". `Verified` is when the entry was last checked against reality — `never` means the text has not been re-confirmed since it was filed and should be treated as a claim, not a fact. OI-47 read as authoritative for a day while being wrong; that is what this column exists to make visible.
 
@@ -260,4 +260,8 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-397 | Batch B: IST-throughout for workout dates (OI-390 §1 'Not changed'… | OI-390 landing first (founder order… | never | [:6649](open_issues.md#L6649) |
 | OI-398 | rolling-context re-embeds the same coach interaction on several nights (no… | its own plan + catastrophic-tier review… | never | [:6658](open_issues.md#L6658) |
 | OI-399 | getProgressSummary adherence_pct reports 0 when nothing planned, counts… | its own L-tier batch (Edge Function) and… | never | [:6667](open_issues.md#L6667) |
+| OI-400 | retire_worktree: a nested dartdev-only .dart_tool/ (native_assets.yaml, no… | none | 2026-10-23 —… | [:6701](open_issues.md#L6701) |
+| OI-401 | Thin-day top-up: a generated day left with fewer than 3 exercises by… | the v14 injury re-check… | 2026-10-23 —… | [:6714](open_issues.md#L6714) |
 | OI-402 | Delete the stale 'you skip <weekday> 100%' coach claims from live tables… | the fixed build (OI-390, merged… | never | [:6676](open_issues.md#L6676) |
+| OI-403 | Coach injury swap picks a substitute by muscle only and never reads… | none | 2026-10-24 - read… | [:6729](open_issues.md#L6729) |
+| OI-404 | Retiring 7 duplicate library rows (ad896b42) lowered the uninjured… | none | 2026-10-24 - regenerated… | [:6744](open_issues.md#L6744) |
