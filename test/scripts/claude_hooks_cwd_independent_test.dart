@@ -27,6 +27,7 @@ library;
 // merge commit, when pre-commit's regression-catalog walk runs this file
 // (same trap as b7e4c2, `neutralCwd` in git_safety_hook_integration_test).
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -170,6 +171,48 @@ bool get shIsDash {
   }
 }
 
+/// `runSpawnWithInput` for a child that may exit WITHOUT reading its stdin. Mutant M9
+/// redirects the stub's stdin from /dev/null, so the shell can be gone before the harness
+/// writes the payload; the write then fails with a broken pipe, which on a loaded machine
+/// reddened a different, innocent test (the helper deliberately has no try/catch around the
+/// stdin write, its doc sends such a site to `startSpawn`). A closed pipe is the EXPECTED
+/// outcome here: the checks read what the stub recorded, never whether the write landed.
+Future<({int exitCode, String stdout, String stderr})> _runSpawnClosedStdinOk(
+  String exe,
+  List<String> args, {
+  required String why,
+  required String stdin,
+  String? workingDirectory,
+  Set<String> remove = const <String>{},
+  Map<String, String> extraEnv = const <String, String>{},
+  Set<String> allowControl = const <String>{},
+}) async {
+  final process = await startSpawn(
+    exe,
+    args,
+    workingDirectory: workingDirectory,
+    remove: remove,
+    extraEnv: extraEnv,
+    allowControl: allowControl,
+  );
+  Future<List<int>> collect(Stream<List<int>> s) => s.fold<List<int>>(<int>[], (acc, chunk) => acc..addAll(chunk));
+  final outF = collect(process.stdout);
+  final errF = collect(process.stderr);
+  // The sink reports a broken pipe on `done` as well as on `close()`: absorb both.
+  unawaited(process.stdin.done.then<void>((_) {}, onError: (Object _) {}));
+  try {
+    process.stdin.write(stdin);
+    await process.stdin.close();
+  } on SocketException {
+    // The child exited first.
+  }
+  final out = utf8.decode(await outF, allowMalformed: true);
+  final err = utf8.decode(await errF, allowMalformed: true);
+  final code = await process.exitCode;
+  reportSpawn(code, out, err, why, report: (_) {});
+  return (exitCode: code, stdout: out, stderr: err);
+}
+
 /// Runs [command] under [shell] from [cwd] with a FRESH stub `dart` first on
 /// PATH (one stub and record directory per spawn).
 Future<StubRun> runWithStub(
@@ -197,7 +240,7 @@ Future<StubRun> runWithStub(
     final chmod = runSpawn('chmod', ['+x', dart.path], why: 'chmod the stub dart');
     expect(chmod.exitCode, 0, reason: 'chmod of the stub dart failed');
 
-    final r = await runSpawnWithInput(
+    final r = await _runSpawnClosedStdinOk(
       shell,
       ['-c', command],
       why: 'hook command under $shell from $cwd',
@@ -210,7 +253,6 @@ Future<StubRun> runWithStub(
         'CLAUDE_PROJECT_DIR': ?projectDir,
       },
       allowControl: const {'GIT_CEILING_DIRECTORIES'},
-      report: (_) {},
     ).timeout(const Duration(seconds: 60));
 
     String? read(String name) {
@@ -516,6 +558,15 @@ void main() {
         expect(safetyViolations(e.value), isEmpty, reason: e.key);
       }
       expect(safetyViolations(good), isEmpty);
+    });
+
+    test('a hook that never reads stdin is a mutant kill, not a harness error (broken pipe, 8f3e35 flake)', () async {
+      // 4 MiB cannot fit a pipe buffer, so the write is still pending when the shell exits:
+      // deterministic, where the 41-byte payload only lost the race on a loaded machine.
+      final r = await runWithStub(mutants['M9 stdin from /dev/null']!,
+          shell: '/bin/sh', cwd: fx.a, stdin: 'x' * (4 << 20));
+      expect(r.ran, isTrue, reason: 'the stub ran; the closed pipe must not abort the run');
+      expect(r.stdin, isEmpty, reason: 'the stub read /dev/null, so M9 still fails its payload check');
     });
 
     test('the SAFETY rule refuses real programs', () {
