@@ -155,6 +155,59 @@ void main() {
       expect(lead[1].desired, 3);
       expect(lead[1].boundBy, 'Chest');
     });
+
+    test('rank-0 reservation counts only the later days whose lead lift credits the SAME group', () {
+      // Six strength days, six different lead groups. A reservation that counted every
+      // later day would hold 2 x 5 sets of Chest back and refuse the first lead lift.
+      final f = Fx();
+      final names = {
+        'bench': 'Chest', 'row': 'Lats', 'sq': 'Quads', 'rdl': 'Hamstrings', 'ht': 'Glutes',
+        'ohp': 'Shoulders',
+      };
+      names.forEach((n, m) => f.row(n, [m]));
+      final days = [for (final n in names.keys) f.day('strength', [f.ex(n)])];
+      final out = f.run(days, minutes: 90, goal: 'general_fitness', level: 'beginner');
+      expect([for (final d in out) d.exercisesA.first.sets], [5, 5, 5, 5, 5, 5]);
+      expect(statsA().forcedDays, isEmpty);
+      expect(statsA().timeForcedFirst, 0);
+      expect(statsA().capForcedFirst, 0);
+    });
+
+    test('boundBy is reported only while the lead lift is still below its desired sets', () {
+      // Day 0's lead lift gets 2 of its desired 3 because four later days' lead lifts
+      // (Chest, top 10) are protected. Those four are then refused for time (a 270 s
+      // gap fits a 2-set Biceps curl, 257 s, but not a 2-set Chest lift, 282 s), so
+      // the reservation was never needed and the floor pass grows day 0's lift to 5.
+      final f = Fx();
+      f.row('cl', ['Chest']);
+      f.row('bi', ['Biceps'], type: 'isolation', reps: '10-15');
+      f.row('plank', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
+      final gap = (30 - SessionBudget.warmCoolMinutes(30)) * 60 -
+          SessionBudget.exerciseSeconds(archetype: 'B', sets: 6, restSeconds: 141);
+      expect(gap, closeTo(270.0, 1e-6));
+      expect(SessionBudget.exerciseSeconds(archetype: 'M', sets: 2, restSeconds: 75), greaterThan(gap));
+      expect(SessionBudget.exerciseSeconds(archetype: 'I', sets: 2, restSeconds: 75), lessThan(gap));
+      final days = [
+        f.day('hypertrophy', [f.ex('cl')]),
+        for (var i = 0; i < 4; i++)
+          f.day('hypertrophy', [
+            f.ex('plank', sets: 6, logging: 'timed', rest: 141),
+            f.ex('cl'),
+            f.ex('bi'),
+          ]),
+      ];
+      final out = f.run(days, minutes: 30, goal: 'general_fitness', level: 'beginner');
+      expect(setsOf(out[0]), [('cl', 5)]);
+      for (final d in out.skip(1)) {
+        expect(setsOf(d).where((e) => e.$1 != 'plank'), [('bi', 2)]);
+      }
+      expect(statsA().weekly['Chest'], 5);
+      expect(statsA().timeForcedFirst, 0);
+      final first = statsA().firstLifts.firstWhere((l) => l.day == 0);
+      expect(first.sets, 5);
+      expect(first.desired, 3);
+      expect(first.boundBy, isNull);
+    });
   });
 
   group('time', () {
@@ -319,6 +372,52 @@ void main() {
       expect(statsA().capForcedFirst, 0);
     });
 
+    // Days 0 and 1 fill Chest to its weekly top of 16 (4 + 4 each); day 2's six
+    // planks (6 x 444 s) overspend its 2220 s budget, so pass A admits nothing there.
+    (List<PopulatedDay>, Fx) crowdedChestWeek(List<String> afterChest) {
+      final f = Fx();
+      f.row('plank', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
+      f.row('bi', ['Biceps'], type: 'isolation', reps: '10-15');
+      for (var i = 1; i <= 9; i++) {
+        f.row('c$i', ['Chest']);
+      }
+      final days = [
+        f.day('strength', [for (final i in [1, 2, 3, 4]) f.ex('c$i')]),
+        f.day('strength', [for (final i in [5, 6, 7, 8]) f.ex('c$i')]),
+        f.day('strength', [
+          for (var i = 0; i < 6; i++) f.ex('plank', sets: 4, logging: 'timed', rest: 60),
+          f.ex('c9'),
+          for (final n in afterChest) f.ex(n),
+        ]),
+      ];
+      final ledger = BudgetLedger(f.ctx(days, minutes: 45), 3);
+      ledger.add(2, const {}, 0, 6 * SessionBudget.exerciseSeconds(archetype: 'B', sets: 4, restSeconds: 60));
+      expect(ledger.secondsLeft(2), lessThan(0), reason: 'fixture: day 2 must be time-starved');
+      return (days, f);
+    }
+
+    test('guard with no weekly room anywhere: rank 0 is forced anyway and capForcedFirst counts it', () {
+      final (days, f) = crowdedChestWeek(const []);
+      final out = f.run(days, minutes: 45);
+      expect(setsOf(out[0]), [('c1', 4), ('c2', 4)]);
+      expect(setsOf(out[1]), [('c5', 4), ('c6', 4)]);
+      expect(setsOf(out[2]).where((e) => e.$1 == 'c9'), [('c9', 2)]);
+      expect(statsA().weekly['Chest'], 18); // past the top of 16: the one thing the guard may do
+      expect(statsA().capForcedFirst, 1);
+      expect(statsA().timeForcedFirst, 0);
+      expect(statsA().forcedDays, [2]);
+    });
+
+    test('guard: when rank 0 has no weekly room the first exercise that does is the one forced', () {
+      final (days, f) = crowdedChestWeek(const ['bi']);
+      final out = f.run(days, minutes: 45);
+      expect(setsOf(out[2]).where((e) => e.$1 == 'c9' || e.$1 == 'bi'), [('bi', 2)]);
+      expect(statsA().weekly['Chest'], 16);
+      expect(statsA().weekly['Biceps'], 2);
+      expect(statsA().timeForcedFirst, 1);
+      expect(statsA().capForcedFirst, 0);
+    });
+
     test('not-budgeted rest: a timed row is timed at its OWN rest, not the strength day 150 s', () {
       final f = Fx();
       f.row('plank', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
@@ -360,6 +459,27 @@ void main() {
       expect(statsB().weekly['Glutes'], 13); // 5 + 5 copied from A, then 3
     });
 
+    test('a copied day is never grown in B, even when its group is below the floor there', () {
+      final f = Fx();
+      for (final n in ['b1', 'b2', 'e1']) {
+        f.row(n, ['Biceps'], type: 'isolation', reps: '10-15');
+      }
+      f.row('ch', ['Chest']);
+      final shared = [f.ex('e1')];
+      final days = [
+        f.day('hypertrophy', [f.ex('b1'), f.ex('b2')], b: [f.ex('ch')]),
+        f.day('hypertrophy', shared), // B is the SAME list as A
+      ];
+      final out = f.run(days, minutes: 90, is6Day: false);
+      // A: the floor pass takes b1 to 5 and e1 to 4 (Biceps 5 + 3 + 4 = 12).
+      expect(setsOf(out[0]), [('b1', 5), ('b2', 3)]);
+      expect(setsOf(out[1]), [('e1', 4)]);
+      // B: Biceps is only e1's 4, far below 12, but e1 is a copied day and stays put.
+      expect(setsOf(out[0], b: true), [('ch', 5)]);
+      expect(setsOf(out[1], b: true), [('e1', 4)]);
+      expect(statsB().weekly['Biceps'], 4);
+    });
+
     test('a 6-day plan allocates A only and gives B the same sets', () {
       final f = Fx();
       f.row('x', ['Chest']);
@@ -368,6 +488,40 @@ void main() {
       final out = f.run(days, is6Day: true);
       expect(setsOf(out[0], b: true), setsOf(out[0]));
       expect(SessionSetAllocator.debugLastStats!.containsKey('B'), isFalse);
+    });
+  });
+
+  group('floors', () {
+    test('the floor pass gives each +1 to the first exercise in (rank, day) order, and stops AT the floor', () {
+      // Biceps sits at rank 1 on day 0 and at rank 0 on days 1 and 2. Each curl starts
+      // at 3 (total 9) and build_muscle beginner needs 10: the one extra set goes to
+      // day 1's rank-0 curl, not to day 0's earlier-day rank-1 curl, and nothing more.
+      final f = Fx();
+      f.row('ch', ['Chest']);
+      for (final n in ['b0', 'b1', 'b2']) {
+        f.row(n, ['Biceps'], type: 'isolation', reps: '10-15');
+      }
+      final days = [
+        f.day('hypertrophy', [f.ex('ch'), f.ex('b0')]),
+        f.day('hypertrophy', [f.ex('b1')]),
+        f.day('hypertrophy', [f.ex('b2')]),
+      ];
+      final out = f.run(days, minutes: 90, level: 'beginner');
+      expect(setsOf(out[0]), [('ch', 5), ('b0', 3)]);
+      expect(setsOf(out[1]), [('b1', 4)]);
+      expect(setsOf(out[2]), [('b2', 3)]);
+      expect(statsA().weekly['Biceps'], 10);
+    });
+
+    test('a floor of 12 is reached exactly: 5 + 4 + 3, never 13', () {
+      final f = Fx();
+      for (var i = 0; i < 3; i++) {
+        f.row('e$i', ['Biceps'], type: 'isolation', reps: '10-15');
+      }
+      final days = [for (var i = 0; i < 3; i++) f.day('hypertrophy', [f.ex('e$i')])];
+      final out = f.run(days, minutes: 90);
+      expect([for (final d in out) d.exercisesA.first.sets], [5, 4, 3]);
+      expect(statsA().weekly['Biceps'], 12);
     });
   });
 
@@ -414,17 +568,22 @@ void main() {
     test('time_limited wins over cap_limited when one crediting exercise is removed for time '
         'and another sits at its cap', () {
       final f = Fx();
-      f.row('y1', ['Triceps']);
-      f.row('y2', ['Triceps']);
-      f.row('x', ['Triceps']);
+      for (final n in ['t1', 't2', 't3', 'x']) {
+        f.row(n, ['Triceps']);
+      }
       f.row('plank', ['Core'], type: 'isolation', reps: '30-60', logging: 'timed');
-      final d1 = f.day('strength', [f.ex('y1'), f.ex('y2')]);
-      final d2 = f.day('strength', [
-        f.ex('plank', sets: 4, logging: 'timed', rest: 60),
-        f.ex('plank', sets: 4, logging: 'timed', rest: 60),
+      // Day 0 fills its Triceps session cap (3 + 3 + 2 = 8) with time to spare, so
+      // its three exercises are refused by the cap alone. Day 1's three planks spend
+      // its time, so `x` is refused by time alone (and the guard puts it on at 2).
+      final d1 = f.day('hypertrophy', [f.ex('t1'), f.ex('t2'), f.ex('t3')]);
+      final d2 = f.day('hypertrophy', [
+        for (var i = 0; i < 3; i++) f.ex('plank', sets: 4, logging: 'timed', rest: 60),
         f.ex('x'),
       ]);
-      f.run([d1, d2], minutes: 30);
+      final out = f.run([d1, d2], minutes: 30);
+      expect(setsOf(out[0]), [('t1', 3), ('t2', 3), ('t3', 2)]);
+      expect(setsOf(out[1]).last, ('x', 2));
+      expect(statsA().weekly['Triceps'], 10);
       expect(statsA().belowFloor['Triceps'], 'time_limited');
     });
   });

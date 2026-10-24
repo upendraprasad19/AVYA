@@ -265,22 +265,20 @@ class SessionSetAllocator {
     for (final d in allocateDays) {
       if (byDay[d].isEmpty || byDay[d].any((s) => s.admitted)) continue;
       bool room(_Slot s) => s.groups.every((g) => ledger.weeklyTop(g) - ledger.week(g) >= 2);
+      // The first exercise (rank 0 when it can) whose groups all have room; rank 0
+      // regardless when none does.
       _Slot? pick;
-      if (room(byDay[d].first)) {
-        pick = byDay[d].first;
-        stats.timeForcedFirst++;
-      } else {
-        for (final s in byDay[d]) {
-          if (room(s)) {
-            pick = s;
-            stats.timeForcedFirst++;
-            break;
-          }
+      for (final s in byDay[d]) {
+        if (room(s)) {
+          pick = s;
+          break;
         }
       }
       if (pick == null) {
         pick = byDay[d].first;
         stats.capForcedFirst++;
+      } else {
+        stats.timeForcedFirst++;
       }
       stats.forcedDays.add(d);
       pick
@@ -318,9 +316,9 @@ class SessionSetAllocator {
 
     final bottom = SessionBudget.weeklyBand(ctx.planGoal, ctx.level).bottom;
     grow({for (final g in BudgetMuscleGroups.groups) g: bottom});
-    if (!ctx.lighterPhase) {
-      grow({for (final g in ctx.focusGroups) g: SessionBudget.focusWeeklyTop});
-    }
+    // In a lighter phase the ledger's weekly top IS the band bottom for every group,
+    // focus included, so this pass cannot add a set there.
+    grow({for (final g in ctx.focusGroups) g: SessionBudget.focusWeeklyTop});
 
     // 6. Stats.
     for (final g in BudgetMuscleGroups.groups) {
