@@ -479,6 +479,20 @@ void main() {
       expect(grid(off.single), [[3], [5, 4], [4, 4]]);
     });
 
+    test('a deload week with no stash is left alone', () {
+      final f = chestRows();
+      final (week, ctx) = setup(
+        f,
+        [
+          [f.ex('c1', sets: 2), f.ex('c2', sets: 2)],
+        ],
+        character: 'deload',
+      );
+      final out = VolumeTitration.applyToWeeks([week], {'Chest': 1}, budget: ctx).single;
+      expect(workingGrid(out), [[-1, -1]]);
+      expect(grid(out), [[2, 2]]);
+    });
+
     test('a +1 skips an exercise already at 5 sets and rolls to the next', () {
       final f = chestRows();
       final (week, ctx) = setup(f, [
