@@ -182,13 +182,13 @@ findings:
   - id: L1-DOOR-DEPLOY
     title: "deploy create-razorpay-order (verify_jwt false), switches unset; probes: no auth 401, a free tester's order opens the web checkout (no payment), a trial tester gets 409"
     terminal_state: closed_in_commit
-    commit: "live 2026-10-23, deployed v15 from 87a0d8d1 (supabase/functions identical to 0b9f86aa) with the founder's go"
+    commit: "live 2026-10-23, deployed v15 from 0c10c584 (the B2b branch head, before its merge; supabase/functions identical to 0b9f86aa, then main) with the founder's go"
     verification: "no-auth probe 401 'Missing authorization header'; anon-key bearer 401 'Invalid or expired token' (the module's own answer, so it booted). The two TESTER probes (a free tester's checkout opens on the live key; a trial tester's 409) were not run and are folded into L-TESTER-PROBES"
 
   - id: L2-WRITERS-DEPLOY
     title: "deploy razorpay-webhook and verify-payment (switches unset); stacking_switch=off in the logs"
     terminal_state: closed_in_commit
-    commit: "live 2026-10-23, webhook v31 and verify-payment v27 deployed from 87a0d8d1 with the founder's go; verify_jwt unchanged (false / true)"
+    commit: "live 2026-10-23, webhook v31 and verify-payment v27 deployed from 0c10c584 (the B2b branch head, before its merge) with the founder's go; verify_jwt unchanged (false / true)"
     verification: "smoke 400 / 401 from the modules; the stacking_switch=off log line was not read because the switch was flipped minutes later in the same session (no payment ran in between)"
 
   - id: L2-DRILL
