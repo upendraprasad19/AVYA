@@ -18,19 +18,22 @@ library;
 //             exercise_selector.dart buildPinnedDays).
 //
 // GATED in every block: no unsafe main pick, no unsafe warm-up / cool-down
-// pick, and no pick whose name is not a library row (such a pick would be
-// skipped silently by the tag lookup, so `unsafe == 0` could hide it).
-// GATED in singles (3/5 days) and repeat: no empty day. GATED in every block: the scan saw
-// days and picks at all (B-pass F2: a run that generated nothing would otherwise
-// pass every zero above). GATED in pairs: no MORE empty days than
-// kPairsEmptyBaseline (4). Two injuries at once left 2 days empty on the v13
-// library (knee+hip and knee+lower_back, week-2 leg day, bodyweight intermediate)
-// and the v14 tags add 2 (lower_back+hip, same day, 3 and 5 days: Deficit Reverse
-// Lunge is now hip-tagged). The founder accepted that on 2026-10-23 (plan Ruling
-// E5); OI-401 (thin-day top-up) closes all 4 and lowers the ceiling to 0. The 4/6-day
-// blocks (B-pass F3) have their own ratchets, kSingles46EmptyBaseline (1) and
-// kPairs46EmptyBaseline (6), for the same reason and with the same owner.
-// REPORTED, not gated: days under 3 exercises ("thin"); OI-401 owns the top-up.
+// pick, no pick whose name is not a library row (such a pick would be skipped
+// silently by the tag lookup, so `unsafe == 0` could hide it), no main pick the
+// run's equipment tier cannot perform (`unperformable`, EquipmentCapability, read
+// from the library row) and no exercise twice in one day (`duplicates`). GATED in
+// every block: no empty day and no one-exercise day, and the scan saw days and
+// picks at all (B-pass F2: a run that generated nothing would otherwise pass every
+// zero above). GATED in singles (both) and repeat: no day under 3 exercises
+// ("thin"). The thin-day top-up (OI-401, docs/plans/2026-10-24-thin-day-topup.md)
+// is what takes the empty, one-exercise and thin counts to 0; before it, two
+// injuries at once left up to 6 days empty and the founder accepted that for one
+// batch (plan Ruling E5 of the injury re-check, 2026-10-23).
+// RATCHETED in the two pairs blocks: thin days may not exceed kPairsThinBaseline
+// and kPairs46ThinBaseline, and every thin day must belong to ONE persona,
+// shoulder + lower_back (bodyweight, beginner, 5- and 6-day plans), whose day
+// VolumeFilter trims to 4 slots before the selector runs; the top-up leaves
+// `Plank, Dead Bug` there (OI-408).
 // Out of scope: the cardio finisher (WorkoutDay.finisher). It takes no injuries
 // and no screen shows it (OI-396).
 //
@@ -47,6 +50,8 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:icanbefitter/core/services/guarded_box.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
+import 'package:icanbefitter/core/utils/equipment_vocab.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/equipment_capability.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_generator.dart';
 
@@ -61,28 +66,31 @@ const _tiers = ['bodyweight', 'home_dumbbells', 'basic_gym', 'full_gym'];
 const _goals = ['build_muscle', 'lose_fat', 'strength', 'general_fitness'];
 const _levels = ['beginner', 'intermediate', 'advanced'];
 
-/// Empty days in the pairs block with the v14 tags (the AFTER record, 2026-10-23;
-/// it was 2 on the v13 library). A ratchet, not a target: OI-401 takes it to 0.
-const kPairsEmptyBaseline = 4;
+/// Thin days (1 or 2 exercises) left in the 3/5-day pairs block after the top-up.
+/// SCAN days: one day in week 1 or week 2, and the 6-day plans repeat variant A in
+/// both scanned weeks (`useB` is false there), so 2 scan days is one plan day seen
+/// twice. All of them are shoulder + lower_back, bodyweight, beginner (the 5-day
+/// build_muscle plan): OI-408.
+const kPairsThinBaseline = 2;
 
-/// The same ratchet for the 4- and 6-day pairs block, set from its first measurement.
-const kPairs46EmptyBaseline = 6;
+/// The same ratchet for the 4/6-day pairs block: 6 scan days, the 6-day lose_fat,
+/// strength and general_fitness plans for the same persona (OI-408).
+const kPairs46ThinBaseline = 6;
 
-/// Single injuries at 4 and 6 days: one empty day with the push-up variants tagged
-/// (shoulder, bodyweight, build_muscle, advanced, 4-day: Chest, shoulders, triceps;
-/// every bodyweight push-up variant loads the shoulder, so no safe press remains).
-/// The 3/5-day singles block stays at exactly 0. OI-401 takes this to 0.
-const kSingles46EmptyBaseline = 1;
+/// The one persona allowed to be thin after the top-up (the `thinBy` key).
+const kResidualThinKey = 'shoulder+lower_back|shoulder+lower_back';
 
 class _Tally {
   int runs = 0, days = 0, picks = 0, empty = 0, thin = 0, unsafeMain = 0, unsafeWarm = 0;
-  int unresolvedMain = 0, unresolvedWarm = 0;
+  int unresolvedMain = 0, unresolvedWarm = 0, unperformable = 0, duplicates = 0;
   final sizes = <int, int>{};
   final thinBy = <String, int>{};
   final oneExercise = <String>[];
   final emptyDays = <String>[];
   final unsafe = <String>{};
   final unresolved = <String>{};
+  final cannotPerform = <String>{};
+  final duplicated = <String>{};
 }
 
 void main() {
@@ -90,6 +98,7 @@ void main() {
   const testUser = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
   late Directory tempDir;
   final tagsByName = <String, Set<String>>{};
+  final needsByName = <String, Object?>{};
 
   setUpAll(() async {
     tempDir = await Directory.systemTemp.createTemp('injury_floor_sweep');
@@ -113,6 +122,7 @@ void main() {
       tagsByName[(m['name'] as String).toLowerCase()] = {
         if (ic is List) ...ic.map((t) => t.toString().toLowerCase()),
       };
+      needsByName[(m['name'] as String).toLowerCase()] = m['equipment_needed'];
     }
     HiveService.instance.markInitializedForTests();
     await HiveUserSession.openForUser(testUser);
@@ -150,9 +160,25 @@ void main() {
 
   void scan(_Tally t, Phase p, List<String> injuries, String label) {
     t.runs++;
+    // The label is `<injuries>|<tier>|...`; the capability set is what the
+    // generator itself resolves for that tier with no owned items and no exclusions.
+    final capability =
+        EquipmentVocab.effectiveItems(label.split('|')[1], null, null);
     for (final wk in p.weekPlans.take(2)) {
       for (final day in wk.workoutDays) {
         t.days++;
+        final dayNames = [for (final e in day.exercises) e.exerciseName];
+        if (dayNames.toSet().length != dayNames.length) {
+          t.duplicates++;
+          t.duplicated.add('$label|${day.focus}: ${dayNames.join(', ')}');
+        }
+        for (final e in day.exercises) {
+          final needs = needsByName[e.exerciseName.toLowerCase()];
+          if (needs != null && !EquipmentCapability.canPerform(needs, capability)) {
+            t.unperformable++;
+            t.cannotPerform.add('$label: ${e.exerciseName} needs $needs');
+          }
+        }
         final n = day.exercises.length;
         t.sizes[n] = (t.sizes[n] ?? 0) + 1;
         if (n == 0) {
@@ -201,11 +227,14 @@ void main() {
     print('[$block] ${sw.elapsed} runs ${t.runs} days ${t.days} empty ${t.empty} '
         'thin(<3) ${t.thin} one-exercise ${t.oneExercise.length} '
         'unsafe-main ${t.unsafeMain} unsafe-warm/cool ${t.unsafeWarm} '
-        'unresolved-main ${t.unresolvedMain} unresolved-warm/cool ${t.unresolvedWarm}\n'
+        'unresolved-main ${t.unresolvedMain} unresolved-warm/cool ${t.unresolvedWarm} '
+        'unperformable ${t.unperformable} duplicates ${t.duplicates}\n'
         '[$block] sizes $sizes\n'
         '[$block] thin by ${t.thinBy}\n'
         '[$block] unsafe ${(t.unsafe.toList()..sort())}\n'
         '[$block] unresolved ${(t.unresolved.toList()..sort())}\n'
+        '[$block] unperformable ${(t.cannotPerform.toList()..sort())}\n'
+        '[$block] duplicates ${(t.duplicated.toList()..sort())}\n'
         '[$block] EMPTY DAYS ${(t.emptyDays..sort())}\n'
         '[$block] ONE-EXERCISE DAYS\n${(t.oneExercise..sort()).take(60).join('\n')}');
   }
@@ -220,6 +249,27 @@ void main() {
     expect(t.unresolvedMain, 0, reason: 'main picks that are not library rows: ${t.unresolved}');
     expect(t.unresolvedWarm, 0,
         reason: 'warm-up / cool-down picks that are not library rows: ${t.unresolved}');
+    expect(t.unperformable, 0,
+        reason: 'main picks the run\'s equipment tier cannot perform: ${t.cannotPerform}');
+    expect(t.duplicates, 0, reason: 'a name twice in one day: ${t.duplicated}');
+    expect(t.empty, 0, reason: 'a day with no exercise at all: ${t.emptyDays}');
+    expect(t.oneExercise, isEmpty,
+        reason: 'a one-exercise day: ${t.oneExercise.take(10).toList()}');
+  }
+
+  /// Singles and repeat: the top-up leaves no day under 3 exercises.
+  void expectNoThin(_Tally t) {
+    expect(t.thin, 0, reason: 'days under 3 exercises: ${t.thinBy}');
+  }
+
+  /// Pairs: thin days may not exceed [baseline], and all belong to the one persona
+  /// OI-408 owns. A persona that appears here that is not in that set is a new
+  /// finding, not a baseline.
+  void expectOnlyResidualThin(_Tally t, int baseline) {
+    expect(t.thin, lessThanOrEqualTo(baseline),
+        reason: 'more thin days than the baseline: ${t.thinBy}');
+    expect(t.thinBy.keys.toSet().difference({kResidualThinKey}), isEmpty,
+        reason: 'thin days outside the OI-408 persona: ${t.thinBy}');
   }
 
   void runSingles(_Tally t, List<int> days, List<int> phases) {
@@ -298,7 +348,7 @@ void main() {
     report('singles', t, sw);
     expect(t.runs, 1728);
     expectSafe(t);
-    expect(t.empty, 0, reason: 'a day with no exercise at all');
+    expectNoThin(t);
   });
 
   test('singles 4/6 days: 9 injuries x tiers x goals x levels x 4/6 days x phase 1', () {
@@ -308,8 +358,7 @@ void main() {
     report('singles46', t, sw);
     expect(t.runs, 864);
     expectSafe(t);
-    expect(t.empty, lessThanOrEqualTo(kSingles46EmptyBaseline),
-        reason: 'more empty days than the accepted baseline: ${t.emptyDays}');
+    expectNoThin(t);
   });
 
   test('pairs: all 15 pairs of knee/shoulder/lower_back/wrist/elbow/hip, 3/5 days, phase 1', () {
@@ -319,8 +368,7 @@ void main() {
     report('pairs', t, sw);
     expect(t.runs, 1440);
     expectSafe(t);
-    expect(t.empty, lessThanOrEqualTo(kPairsEmptyBaseline),
-        reason: 'more empty days than the accepted baseline: ${t.emptyDays}');
+    expectOnlyResidualThin(t, kPairsThinBaseline);
   });
 
   test('pairs 4/6 days: all 15 pairs of knee/shoulder/lower_back/wrist/elbow/hip, phase 1', () {
@@ -330,8 +378,7 @@ void main() {
     report('pairs46', t, sw);
     expect(t.runs, 1440);
     expectSafe(t);
-    expect(t.empty, lessThanOrEqualTo(kPairs46EmptyBaseline),
-        reason: 'more empty days than the accepted baseline: ${t.emptyDays}');
+    expectOnlyResidualThin(t, kPairs46ThinBaseline);
   });
 
   test('repeat: phase 1 uninjured, then phase 2 with the injury and those pins, 3/4/5/6 days', () {
@@ -341,6 +388,6 @@ void main() {
     report('repeat', t, sw);
     expect(t.runs, 1728);
     expectSafe(t);
-    expect(t.empty, 0, reason: 'a repeat-phase day with no exercise at all');
+    expectNoThin(t);
   });
 }

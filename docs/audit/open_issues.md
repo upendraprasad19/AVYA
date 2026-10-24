@@ -6714,21 +6714,6 @@ Past `user_daily_snapshots` stay (nothing reads a past day's `coach_notices`). D
 
 **Done when.** `retire_worktree_lib_test.dart` covers both sides: the dartdev-only shape is regenerable, and a `.dart_tool/` with any other file, or one next to a `pubspec.yaml`, is still kept.
 
-## OI-401 — Thin-day top-up: a generated day left with fewer than 3 exercises by injury filtering gets safe moves for its own muscles, then safe core (founder option b, 2026-10-23)
-
-- **Status**: OPEN
-- **Blocked on**: the v14 injury re-check (`docs/plans/2026-10-23-library-injury-recheck.md`) merging first (founder order 2026-10-23: tags, then this, then B2).
-- **Verified**: 2026-10-23 — `test/plan_generator/injury_floor_sweep_test.dart` over 1,728 single-injury plans (13,824 days, flag OFF): today 28 days have fewer than 3 exercises and none has 1; with the final v14 tags, 74 do and 19 have exactly one (see the measured paragraph below; the first-cut examples are not repeated because they were not re-checked on the final library).
-- **Identified**: 2026-10-23 · filed via mint_oi.sh from branch `library-injury-recheck`
-
-**Measured AFTER the v14 tags (2026-10-24, `test/plan_generator/injury_floor_sweep_test.dart`, flag OFF, final library; empty / thin / one-exercise, BEFORE in brackets):** singles 3 and 5 days 0 / 74 / 19 (0 / 28 / 0); singles 4 and 6 days 1 / 75 / 13 (0 / 24 / 0); pairs of knee, shoulder, lower_back, wrist, elbow, hip at 3 and 5 days 4 / 531 / 197 (2 / 219 / 51); pairs at 4 and 6 days 6 / 647 / 241 (2 / 228 / 66); repeat phase at 3 to 6 days 0 / 768 / 310 (0 / 506 / 147). Shoulder is most of it: 51 of the 74 single-injury thin days, and the bodyweight tier has no safe press left once every push-up variant is shoulder-tagged. The empty days: pairs 3/5 days = knee+hip and knee+lower_back (both empty before) plus lower_back+hip at 3 and 5 days (Deficit Reverse Lunge is now hip-tagged); the 4/6-day empties are bodyweight build_muscle advanced 4-day push or pull days. The sweep holds `kPairsEmptyBaseline` 4, `kPairs46EmptyBaseline` 6 and `kSingles46EmptyBaseline` 1 until this lands, then all three go to 0.
-
-**The defect.** Injury filtering can leave a generated day with one or two exercises. `_cascadeFill` drops a slot when no safe candidate exists (the safe-omission rule), and nothing refills the day afterwards. A repeat phase also drops now-contraindicated pins with no refill (`exercise_selector.dart:994`).
-
-**Founder decision (2026-10-23, option b).** When a day ends up with fewer than 3 exercises, top it up with safe moves for that day's own muscles from a neighbouring movement type, then with safe core moves, then stop. Industry check given at the time: Fitbod sizes a session by duration and fills it with what remains.
-
-**Done when.** Its own plan, ×2 review and PR land. A behavioural sweep then shows 0 one-exercise days and no unsafe pick, for single injuries, pairs and repeat phases. B2's set budget counts the added moves.
-
 ## OI-403 — Coach injury swap picks a substitute by muscle only and never reads injury_contraindications, so it can hand an injured user a tagged exercise
 
 - **Status**: OPEN
@@ -6794,3 +6779,16 @@ Past `user_daily_snapshots` stay (nothing reads a past day's `coach_notices`). D
 **Update 2026-10-24 (live apply, the founder's go).** Rehearsal 16 of 16 ok, nothing persisted, 0 locks on `promo_codes`. Applied via MCP `apply_migration` (cloud version `20261024121637`). Post-apply verify `ok=16 fail=0` (run as three self-contained chunks: `execute_sql` refused the whole block). Anon-key `GET /rest/v1/promo_codes`: 401, code 42501 (was 206 `*/3`). `service_role` reads 3 of 3 rows (P13). Still open: the signed-in app check and the merge.
 
 **Related.** OI-366 (order-time promo rules, the payment-hardening branch), c9b3e2 (the same class: server-only objects reachable by the client roles through default privileges).
+
+## OI-408 — Bodyweight beginner with shoulder + lower_back injuries has 2-exercise upper days (Plank, Dead Bug) after the thin-day top-up
+
+- **Status**: OPEN
+- **Blocked on**: upstream, a founder call. `VolumeFilter.targetCount('beginner', 5|6)` is 4 (`lib/shared/repositories/plan_engine/volume_filter.dart:19-24`), so `plan_generator.dart` hands the selector a day already trimmed to its first 4 slots, and the arm slots are gone before the top-up runs; the founder's stop rule (OI-401, option b) then ends the stages at the trimmed day's muscles, their neighbour patterns and core. `reopen_when`: the founder asks for anchors from the UNTRIMMED split (an input from `plan_generator.dart`, root CLAUDE.md rule 14) or for a last stage "any safe move".
+- **Verified**: 2026-10-24 - the OI-401 top-up's FINAL code on the real library (`injury_floor_sweep_test.dart`, 7,200 runs, flag OFF; the sweep gates it: `kPairsThinBaseline` 2, `kPairs46ThinBaseline` 6, every thin key must be `shoulder+lower_back|shoulder+lower_back`): after the top-up the only thin days left are 8 scan days = 4 runs with one short day each (5-day build_muscle, and 6-day lose_fat, strength and general_fitness; shoulder + lower_back, bodyweight, beginner), each holding `Plank, Dead Bug`. Under the generator's own bodyweight capability set the library holds about 22 Beginner rows free of shoulder and lower_back tags (a reviewer's count by first movement pattern: 7 knee_dominant, 5 hip_isolation, 2 core, 5 elbow_flexion, 2 elbow_extension, 1 shoulder_isolation; 16 under the narrower `{none, bodyweight}` set), including 5 biceps and 2 triceps rows (the row counts are the plan review's, not re-run on the final code).
+- **Identified**: 2026-10-24 · filed via mint_oi.sh from branch `thin-day-topup`
+
+**The defect.** After the OI-401 top-up (`ExerciseSelector.topUpDays`), a bodyweight beginner with shoulder + lower_back injuries on a 5- or 6-day upper-body day still ends with two exercises, Plank and Dead Bug. The library is not empty for that user; the stages never reach its arm rows.
+
+**Three ways to change it, none decided.** (1) Pass the untrimmed split's anchors to the selector (needs a `plan_generator.dart` change, rule 14, the founder's OK). (2) Add a last stage "any safe move" (an upper-body day would then hold leg work). (3) Batch C rows for the day's own muscles.
+
+**Done when.** The founder picks one, it is built with a regression test, and `kPairsThinBaseline` and `kPairs46ThinBaseline` in `test/plan_generator/injury_floor_sweep_test.dart` go to 0.

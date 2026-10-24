@@ -635,12 +635,20 @@ void main() {
     final d = pick([day([slot('Chest', 'horizontal_push')],
             [slot('Chest', 'horizontal_push')])],
         injuries: ['shoulder'], subPref: true).single;
-    expect(names(d.exercisesA), ['Machine Chest Press']);
-    expect(names(d.exercisesB), ['Floor Press']);
+    // An injured user's one-slot day is thin, so the thin-day top-up (OI-401)
+    // fills it to the floor AFTER the pool pick: the pick this test is about is
+    // the FIRST entry, the rest is top-up from the same chest pattern.
+    expect(names(d.exercisesA).first, 'Machine Chest Press');
+    expect(names(d.exercisesA), hasLength(3));
+    expect(names(d.exercisesB).first, 'Floor Press');
+    expect(names(d.exercisesB), hasLength(3));
     await demote('Machine Chest Press');
     final d2 = pick([day([slot('Chest', 'horizontal_push')])],
         injuries: ['shoulder'], subPref: true, phase: 2).single;
-    expect(names(d2.exercisesA), ['Floor Press']);
+    expect(names(d2.exercisesA).first, 'Floor Press');
+    expect(names(d2.exercisesA), isNot(contains('Machine Chest Press')),
+        reason: 'L6: three other safe rows exist, so the demoted name is not '
+            'topped back in');
   });
 
   test('cables sub-focus', () {

@@ -301,6 +301,20 @@ pending:
       The flip commit copies slot_focus / slot_pattern into target_focus /
       movement_pattern and deletes them (Ruling 4), and needs the full x2
       review + bpass.
+      OI-401 question for the flip review (docs/plans/2026-10-24-thin-day-topup.md,
+      Ruling R9): the thin-day top-up is path-independent and uses the OFF-path
+      candidate rules even when this pool is ON (it reads queryV4, not rankedPool,
+      and does not apply the core-level rules or the community-row exclusion), so
+      an injured user's topped-up day under B1 can hold a non-core-list row.
+      Decide whether a top-up under B1 should be core-list-only. Measured
+      2026-10-24 (core_list_pool_gate_test.dart, 998 personas, B1 ON): the top-up
+      adds three non-core-list strength rows E234 Floor Press, E261 Bodyweight Rear
+      Delt Raise and E271 Wall Triceps Extension to shoulder-injured bodyweight and
+      home-dumbbells 4-day builds (16 build occurrences) and no skill/olympic row.
+      The gate keeps B1's own picks hard, attributes top-up additions by a re-run
+      with the top-up kill-switch set, and pins that three-id set as a ratchet
+      (_r9TopUpRetired): a fourth id fails the gate. Terminal state
+      upstream_blocked, reopen_when this flag's flip review.
 
 resolved:
   - flag: ENABLE_SUBSCRIPTION_STACKING
