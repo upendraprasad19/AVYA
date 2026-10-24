@@ -56,7 +56,7 @@ void main() {
       expect(fn.contains('supabaseClient'), isFalse);
     });
 
-    // hermes H12 (diagnose c7e3b1, bug class 2.120): a payment no row can record (no notes.user_id, or not a UUID)
+    // hermes H12 (diagnose c7e3b1, bug class 2.121): a payment no row can record (no notes.user_id, or not a UUID)
     // is refused while only authorized; capturing it first took the money with nothing to write.
     test('the two notes.user_id refusals precede the capture POST and the authorized branch', () {
       final missing = code.indexOf('if (!userId) {');

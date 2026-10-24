@@ -112,7 +112,7 @@ touched_layers_checked:
   - { tier: 11, name: "External services", status: verified, evidence: "Razorpay auto-refunds a payment left authorized and not captured; the H12 400 leaves it uncaptured (the capture POST is never sent, tested)" }
   - { tier: 12, name: "Client -> server contract", status: verified, evidence: "create-razorpay-order writes notes.user_id = the JWT caller on every order, so the app's own payments pass the webhook's checks before the capture as before" }
 recurrence: >-
-  H12 is a recurrence of bug class 2.120 (a service-role path performs its side effect before the authorization
+  H12 is a recurrence of bug class 2.121 (a service-role path performs its side effect before the authorization
   check that should gate it): b5e8d2 fixed it in verify-payment in this very batch, and the twin writer
   (razorpay-webhook) kept the same "capture, then check notes.user_id" order. The known-good fix is applied as in
   b5e8d2: the checks move, unchanged, ahead of the side effect; the ORDER is pinned in source and the side effect's

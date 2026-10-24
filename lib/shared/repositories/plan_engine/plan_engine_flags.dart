@@ -480,6 +480,27 @@ class PlanEngineFlags {
     }
   }
 
+  /// OI-401 thin-day top-up. Default ON: a generated day left with fewer than 3
+  /// exercises by injury filtering gets safe moves for its own muscles added
+  /// (own pattern, then a neighbouring pattern, then core, then stop). Applies to
+  /// injured users only; an uninjured plan is returned untouched.
+  ///
+  /// Unlike [injuryUniversalFilterEnabled] and [warmupInjuryFilterEnabled], which
+  /// DROP moves, this ADDS them; it ships ON anyway because the thin days are the
+  /// live result of the v14 injury tags and every account is a testing account
+  /// pre-launch (`docs/plans/2026-10-24-thin-day-topup.md`, Ruling R3). Kill-switch
+  /// `configBox['disable_thin_day_topup'] = true` restores the verbatim thin day.
+  /// ⚠ The flag is device-local; there is no remote rollback (OI-95), so reverting
+  /// means shipping a build.
+  static bool get thinDayTopupEnabled {
+    try {
+      return HiveService.instance.configBox.get('disable_thin_day_topup') !=
+          true;
+    } catch (_) {
+      return true; // no Hive (pure unit test) → default: ON
+    }
+  }
+
   /// OI-126: a `type: 'logged'` schedule row (AI-coach-only log, or a
   /// cloud-restore synthesize row) currently counts as a training day for the
   /// weekly streak (`isTrainingDayType`, exclusion-shaped) but as REST for

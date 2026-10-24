@@ -261,13 +261,13 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-398 | rolling-context re-embeds the same coach interaction on several nights (no… | its own plan + catastrophic-tier review… | never | [:6670](open_issues.md#L6670) |
 | OI-399 | getProgressSummary adherence_pct reports 0 when nothing planned, counts… | its own L-tier batch (Edge Function) and… | never | [:6679](open_issues.md#L6679) |
 | OI-400 | retire_worktree: a nested dartdev-only .dart_tool/ (native_assets.yaml, no… | none | 2026-10-23 —… | [:6713](open_issues.md#L6713) |
-| OI-401 | Thin-day top-up: a generated day left with fewer than 3 exercises by… | the v14 injury re-check… | 2026-10-23 —… | [:6726](open_issues.md#L6726) |
 | OI-402 | Delete the stale 'you skip <weekday> 100%' coach claims from live tables… | the fixed build (OI-390, merged… | never | [:6688](open_issues.md#L6688) |
-| OI-403 | Coach injury swap picks a substitute by muscle only and never reads… | none | 2026-10-24 - read… | [:6741](open_issues.md#L6741) |
-| OI-404 | Retiring 7 duplicate library rows (ad896b42) lowered the uninjured… | none | 2026-10-24 - regenerated… | [:6756](open_issues.md#L6756) |
-| OI-405 | deploy_via_api.js leaves a dirty tree after EVERY deploy: the… | the track-or-ignore choice for the… | 2026-10-24 - by reading and measuring in… | [:6771](open_issues.md#L6771) |
-| OI-406 | promo_codes is readable with the public anon key: every active promo code… | the founder's signed-in promo check in… | 2026-10-24 - live, not inferred.… | [:6790](open_issues.md#L6790) |
-| OI-407 | Remove the two payment-hardening kill switches… | the live checks of both switches' new… | 2026-10-24 - by reading the branch:… | [:6807](open_issues.md#L6807) |
-| OI-409 | Both payment writers capture an authorized payment before checking that… | the founder: one look in the Razorpay… | 2026-10-25 - by reading the branch:… | [:6818](open_issues.md#L6818) |
-| OI-410 | verify-payment answers verified:true for a non-active subscription row of… | none | 2026-10-25 - by reading the branch: the… | [:6829](open_issues.md#L6829) |
-| OI-411 | verify-payment's ownership proof is notes.user_id, which the client's… | the founder: one test payment in… | 2026-10-25 - by reading the branch:… | [:6840](open_issues.md#L6840) |
+| OI-403 | Coach injury swap picks a substitute by muscle only and never reads… | none | 2026-10-24 - read… | [:6726](open_issues.md#L6726) |
+| OI-404 | Retiring 7 duplicate library rows (ad896b42) lowered the uninjured… | none | 2026-10-24 - regenerated… | [:6741](open_issues.md#L6741) |
+| OI-405 | deploy_via_api.js leaves a dirty tree after EVERY deploy: the… | the track-or-ignore choice for the… | 2026-10-24 - by reading and measuring in… | [:6756](open_issues.md#L6756) |
+| OI-406 | promo_codes is readable with the public anon key: every active promo code… | the founder's signed-in promo check in… | 2026-10-24 - live, not inferred.… | [:6775](open_issues.md#L6775) |
+| OI-407 | Remove the two payment-hardening kill switches… | the live checks of both switches' new… | 2026-10-24 - by reading the branch:… | [:6792](open_issues.md#L6792) |
+| OI-408 | Bodyweight beginner with shoulder + lower_back injuries has 2-exercise… | upstream, a founder call.… | 2026-10-24 - the OI-401 top-up's FINAL… | [:6803](open_issues.md#L6803) |
+| OI-409 | Both payment writers capture an authorized payment before checking that… | the founder: one look in the Razorpay… | 2026-10-25 - by reading the branch:… | [:6816](open_issues.md#L6816) |
+| OI-410 | verify-payment answers verified:true for a non-active subscription row of… | none | 2026-10-25 - by reading the branch: the… | [:6827](open_issues.md#L6827) |
+| OI-411 | verify-payment's ownership proof is notes.user_id, which the client's… | the founder: one test payment in… | 2026-10-25 - by reading the branch:… | [:6838](open_issues.md#L6838) |

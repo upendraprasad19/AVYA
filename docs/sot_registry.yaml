@@ -11275,7 +11275,7 @@ concepts:
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
         method: pickV4 / _fillSlots / _cascadeFill / buildPinnedDays / _applyHistoryAdjustments
         semantic: hard-filter
-        notes: `required Set<String>? capability` on all five — required-not-defaulted, so the compiler enumerates call sites. The two NAME-resolving paths that bypass queryV4 — _cascadeFill attempt 5 (canPerform) and buildPinnedDays.resolve (canOfferInPicker) — apply it themselves since B1 Task 1 (b1c4e7); before that only the cascade_tracer mirror did. Production-path proof test/contracts/universal_pool_capability_behavioral_test.dart
+        notes: `required Set<String>? capability` on all eight (pickV4, _pickCoreList, buildPinnedDays, _applyHistoryAdjustments, _fillSlots, _cascadeFill, topUpDays, _topUpVariant) — required-not-defaulted, so the compiler enumerates call sites. The two NAME-resolving paths that bypass queryV4 — _cascadeFill attempt 5 (canPerform) and buildPinnedDays.resolve (canOfferInPicker) — apply it themselves since B1 Task 1 (b1c4e7); before that only the cascade_tracer mirror did. Production-path proof test/contracts/universal_pool_capability_behavioral_test.dart
       - file: lib/shared/repositories/plan_engine/warmup_cooldown.dart
         method: attach (all three pools, under the existing injury floor)
         semantic: hard-filter
@@ -14361,7 +14361,7 @@ concepts:
         fields_read: [type]
         notes: whitelist shape, widened to include 'logged' by this batch
       - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
-        line_range: 516-521
+        line_range: 537-542
         method: isRestDayConsideringLogged
         semantic: flag-check
         fields_read: [type]
@@ -16845,6 +16845,46 @@ concepts:
       columns: [code, discount_pct, valid_until, max_uses, used_count, is_active, created_at]
     sync_methods: []
     regression_test: test/contracts/promo_codes_server_only_writer_to_reader_test.dart
+
+  - concept: thin_day_topup
+    domain: workout
+    behavioral_test_path: test/contracts/thin_day_topup_behavioral_test.dart
+    description: |
+      OI-401 (diagnose 2d04d7, founder option b, 2026-10-23). An injured user's generated day with
+      fewer than ThinDayTopUp.floor (3) exercises per variant is topped up by
+      ExerciseSelector.topUpDays at the three places a day list leaves the selector (pickV4 cascade
+      end, the B1 _pickCoreList return, buildPinnedDays end): the day's own (muscle, pattern)
+      anchors in slot-priority order, own pattern before its neighbours (ThinDayTopUp.neighbours),
+      then core, then stop. Every candidate comes from the cascade's own queryV4 (injury,
+      capability, exclusions, experience), phase 1 (and the core stage in every phase) asks for
+      foundational rows first, a skill or olympic row is never added, and the avoid
+      sets (previous phase, plateau, the other variant) are SOFT and lower-cased; L6 demoted
+      names leave the candidate pool unless they are all that is left.
+      Injured users only: an uninjured user, the kill-switch (configBox disable_thin_day_topup,
+      default ON), a length mismatch and a list with no thin day all return the same list
+      instance. plan_generator.dart is not edited (rule 14). The scorecard mirrors never call the
+      selector and cannot see this; the proof is the sweep test/plan_generator/injury_floor_sweep_test.dart
+      plus the behavioural file. The residual (a 5/6-day beginner trimmed by VolumeFilter before the
+      selector) is OI-408.
+    writers:
+      - file: lib/shared/repositories/plan_engine/exercise_selector.dart
+        method: topUpDays and _topUpVariant (three call sites)
+        semantic: post-pass on the finished List<PopulatedDay>; adds PlannedExercise rows built by _buildExercise
+        notes: the ONE new queryV4 call site (exercise-seam allowlist 16 to 17)
+      - file: lib/shared/repositories/plan_engine/thin_day_topup.dart
+        method: ThinDayTopUp floor / neighbours / applies / anchors
+        semantic: pure rules, no library access
+      - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
+        method: thinDayTopupEnabled
+        semantic: configBox disable_thin_day_topup != true, catch returns true
+    readers:
+      - file: lib/shared/repositories/plan_engine/plan_generator.dart
+        method: generateV4 (pickV4 / buildPinnedDays call sites)
+        semantic: consumes the topped-up days unchanged
+      - file: lib/shared/repositories/plan_engine/periodization_engine.dart
+        method: apply (useB reads exercisesB on weeks 2 and 4)
+        semantic: a topped-up B is what weeks 2 and 4 show; the added moves exist before the set budget (B2) counts them
+    contract_test_path: test/contracts/thin_day_topup_behavioral_test.dart
 
   # payment-hardening U1 (OI-350 / OI-359, diagnose b5e8d2, 2026-10-24) — verify-payment proves the caller
   # owns the payment BEFORE it captures it or tells the caller anything about it.

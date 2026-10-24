@@ -325,6 +325,28 @@ The pick goes through `_selectCandidate` with previous-phase, plateau, soft-avoi
 
 **Evidence.** OFF identity: `test/plan_generator/generator_golden_test.dart` (998 personas). Behaviour: `test/contracts/core_list_pool_behavioral_test.dart` (31 tests; 18 mutations, each reddening its named test). ON world: `test/plan_generator/core_list_pool_gate_test.dart`, hard zeros over the 998 personas, report `test/plan_generator/core_list_pool_report.md`. Known cost, accepted by D6 and a flip criterion: promoted bodyweight users get thin ON sessions (intermediate min 1 exercise/day vs 3 OFF; advanced mean 4.67 vs 8.56) until Batch C adds 84 core rows.
 
+## Thin-day top-up (OI-401, live, kill-switch `disable_thin_day_topup`)
+
+Plan `docs/plans/2026-10-24-thin-day-topup.md` (r3, two converged review rounds); diagnose `docs/diagnoses/2026-10-24-thin-day-topup-2d04d7.md`; founder decision 2026-10-23, option (b).
+
+**Why.** The cascade drops a slot when no safe candidate exists (the safe-omission rule), and nothing refills the day. After the v14 injury tags an injured user could get one or two exercises, or none (see the diagnose for the before and after tables). A repeat phase also dropped now-contraindicated pins and refilled a variant only when it was EMPTY.
+
+**Where.** `ExerciseSelector.topUpDays` runs on the finished `List<PopulatedDay>` at three exits: the end of `pickV4`'s cascade, the B1 `_pickCoreList` return, and the end of `buildPinnedDays`. `plan_generator.dart` is not edited (rule 14). The pure rules live in `thin_day_topup.dart` (`ThinDayTopUp.floor` 3, `neighbours`, `applies`, `anchors`); the orchestration stays in the selector because it needs the private `_selectCandidate` and `_buildExercise`.
+
+**What.** Injured users only (`injuries.isEmpty` returns the same list instance). Per variant under the floor: for each of the day's own (muscle, pattern) anchors in slot-priority order, try the anchor's OWN pattern first (B was built with A's names hard-excluded, and a repeat phase drops pins without touching the slot), then its neighbouring patterns, closest first; one move per anchor per round, rounds until the floor or no progress; then `core` with no muscle anchor; then stop. Every candidate is a `queryV4` row with the cascade's own injury, capability, exclusion and experience filters, so the stage cannot hand an injured user a tagged move or one the equipment forbids. Phase 1 asks for `is_foundational` rows first, then relaxes; the `core` stage does so in EVERY phase (without it `queryV4`'s compound-first sort handed an advanced user Dragon Flag from phase 2, plan R13), and a `calisthenics_skill` or `olympic` row is never added at any stage. A `(pattern, muscle)` query that returns nothing is never repeated for that variant. There is ONE new `queryV4` call site (the exercise-seam allowlist moved 16 to 17).
+
+**Avoid sets (soft, lower-cased).** A avoids the previous phase's picks, the plateau names and B's names (not for an alias day, not for `strength`). B avoids the same plus A's names after A's own top-up. Unlike the OFF cascade, which hard-EXCLUDES A's names from B, this is a re-order inside `_selectCandidate`, so a B emptied only by that exclusion can repeat A's moves instead of falling to a neighbour or core. With the curated-substitute preference on, the pool narrows to the curated subs first, so a repeat of a curated sub is possible. The L6 demoted names (phase 2+) are stronger than a soft avoid: they leave the candidate pool unless they are all that is left, because the cascade's L6 post-pass (`_applyHistoryAdjustments`) has already run and a soft avoid loses to the substitute narrowing (found by the full suite, `core_list_pool_behavioral_test.dart`; regression `thin_day_topup_behavioral_test.dart`, "demoted + the injury-substitute preference").
+
+**Aliasing.** `alias = identical(input A, input B)`, computed before anything is rebuilt; an alias day is topped up once and B is that list, so `PeriodizationEngine` (which reads `exercisesB` on weeks 2 and 4) sees the same names. A pinned B that merely equals A in content is not an alias and is topped up on its own.
+
+**Residual (OI-408).** A bodyweight beginner with shoulder + lower_back injuries on a 5- or 6-day upper-body day keeps `Plank, Dead Bug`: `VolumeFilter.targetCount('beginner', 5|6)` is 4, so the day is trimmed before the selector runs, and the founder's "then stop" ends the stages. Three ways to change it, none decided: anchors from the untrimmed split (needs a `plan_generator.dart` input, rule 14), a last stage "any safe move", or Batch C rows.
+
+**Scorecard.** `CascadeTracer`, `QueryV4Mirror` and `generator_matrix.dart` mirror per-slot cascade attempts and never call the selector, and a top-up has no slot, so the scorecard cannot see this feature; the injury sweep and the behavioural file are the proof.
+
+**B1 ON.** The top-up is path-independent and uses the OFF-path candidate rules, also when the core-list pool is ON. Whether a top-up under B1 should be core-list-only belongs to B1's flip review (`docs/ship_dark_pending_review.yaml`, `enable_core_list_pool`).
+
+**Evidence.** `test/contracts/thin_day_topup_behavioral_test.dart` (real `generateV4` personas whose thin day is asserted first with the kill-switch set, plus direct `topUpDays` calls on a seeded library), `test/plan_engine_v4/thin_day_topup_test.dart` (pure rules), `thin_day_topup_flag_test.dart`, the five-block sweep `test/plan_generator/injury_floor_sweep_test.dart`, and the generator golden (2 keys moved).
+
 ## Common pitfalls - full rows
 
 _Moved verbatim from `lib/shared/repositories/plan_engine/CLAUDE.md` (original lines 324-332, context-lean batch 2026-09-29)._
