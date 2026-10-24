@@ -21,7 +21,7 @@ sot_registry_entry: thin_day_topup
 writers:
   - file: lib/shared/repositories/plan_engine/exercise_selector.dart
     method: topUpDays and _topUpVariant, called at the three places a day list leaves the selector (pickV4 cascade end, the B1 _pickCoreList return, buildPinnedDays end)
-    line: 1129
+    line: 1132
   - file: lib/shared/repositories/plan_engine/thin_day_topup.dart
     method: ThinDayTopUp floor, neighbours, applies, anchors (pure rules)
     line: 1
@@ -148,6 +148,17 @@ The complete local `flutter test` on `bb366796` (43 minutes, `TZ=Asia/Kolkata`):
 2. `core_list_pool_gate_test.dart` "ON hard counts are 0: extra". 16 built rows (E234 Floor Press, E261 Bodyweight Rear Delt Raise, E271 Wall Triceps Extension) in shoulder-injured bodyweight and home-dumbbells 4-day personas are retired in B1's sense (no core level, no variant family) because the top-up reads the OFF-path candidates (plan R9). R9 had predicted green and said to record a red as evidence without repointing the gate; a red test cannot merge (rule 20), so plan R12 keeps the gate on the shipped combination, keeps B1's own picks and any skill/olympic row hard, and attributes top-up additions by re-running a flagged persona with the kill-switch set. The three ids are pinned exactly (`_r9TopUpRetired`); the open question (core-list-only under B1?) is on the `enable_core_list_pool` entry of `docs/ship_dark_pending_review.yaml`.
 
 Class: both are "a new post-pass handles a rule an existing pass enforces": its own tests seeded no curated subs and no B1-ON persona with a retired-only safe pool, so only the sibling's tests could see it (`feedback_mistake_guard_without_its_mirror.md`, instance 43).
+
+## What the B-pass found (2026-10-24, fresh read-only Sonnet reviewer)
+
+6 findings: 0 P0, 0 P1, 1 P2, 5 P3. Each was checked against the code by me before acting; none was a false alarm.
+
+1. **P2, the core stage from phase 2.** The cascade types its core slots `isolation` and prefers foundational rows in phase 1 only; the top-up had no slot type and queried `core` with the compound-first sort from phase 2. Confirmed on the real library with a throwaway probe (deleted, not committed): an advanced bodyweight user with an ankle, elbow, hamstring, hip, knee, neck or wrist injury got `Dragon Flag` (`calisthenics_skill`) first from phase 2; a shoulder-injured advanced user got `Lunge with Twist` (a lower-body compound) on an upper-body day; a lower-back advanced user got `L-Sit Hold` (`calisthenics_skill`) third. Phase 1 was fine (Plank, Dead Bug, then Russian Twist or Hollow Body Hold), which is why the phase-1-only sweeps never saw it. Fixed (plan R13): the core stage asks for foundational rows first in EVERY phase, and a `calisthenics_skill` or `olympic` row is never a filler at any stage. The reviewer's first suggestion, isolation-type first as the cascade does, was rejected on the probe: Plank and Dead Bug are typed `calisthenics`, so it would have replaced them with Russian Twist, Reverse Crunch and Crunches in phase 1 too. Regression: `thin_day_topup_behavioral_test.dart` "core stage: the same gentle rows in every phase" (real library, every injury token and level, phases 1 to 3: the adds equal phase 1's and none is a skill row; red on the unfixed code at `shoulder intermediate phase 2`, `['Lunge with Twist', 'Plank']` against `['Plank', 'Dead Bug']`), "a calisthenics_skill or olympic row is never a top-up" (seeded, control first), and a control that a non-core stage keeps the phase-1-only preference. The sweep, golden and gate were re-run on the fixed code: no measured number moved (pairs 0/2/0 and 0/6/0, every other block gated at 0), no golden key changed.
+2. **P3, stale class number.** `bug-classes.md:1842` still said class 2.119 after the merge renumbered this class to 2.120. Fixed.
+3. **P3, two stale citations.** `line: 1129` for `topUpDays` is 1132; "all seven" functions carrying a required `capability` is eight (`_topUpVariant` has one too). Fixed in the nested CLAUDE.md and the SoT note.
+4. **P3, the gate's attribution had no injury scope.** `classifyBuilt` would have filed a retired row the top-up added for an UNINJURED persona as R9 evidence. It now takes `injured:` and an uninjured persona's id absent from the no-top-up run stays a hard failure; synthetic test and mutation M17f.
+5. **P3, the R9 test depended on the group tests having run first.** Results are memoized per persona (`checkOnce`), so `--plain-name "R9:"` alone passes.
+6. **P3, records not yet landed** (the closure ledger, OI-401 closed, the plan-review record): true when reviewed; they land in the records commit.
 
 ## Mutation proof
 

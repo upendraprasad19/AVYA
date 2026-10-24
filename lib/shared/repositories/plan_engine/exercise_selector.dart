@@ -1243,18 +1243,28 @@ class ExerciseSelector {
       var cands = const <Map<String, dynamic>>[];
       // Phase 1 asks for foundational rows first (a beginner gets Plank before
       // Farmers Carry), then relaxes, as the cascade's attempts do one at a time.
-      for (final foundational in [if (phase == 1) true, false]) {
-        cands = repo.queryV4(
-          movementPattern: pattern,
-          targetMuscle: muscle,
-          equipmentTier: equipmentTier,
-          suitableFor: effectiveExp == 'advanced' ? null : effectiveExp,
-          foundationalOnly: foundational,
-          excludeNames: picked,
-          injuryExclusions: injuries,
-          exclusions: exclusions,
-          capability: capability,
-        );
+      // The core stage does so in EVERY phase: the cascade types its core slots
+      // 'isolation', the top-up has no slot type, and queryV4 sorts compound
+      // first, so from phase 2 an advanced user was handed Dragon Flag or L-Sit
+      // Hold (B-pass F1). A skill or olympic row is never a filler at any stage.
+      final foundationalFirst = phase == 1 || pattern == 'core';
+      for (final foundational in [if (foundationalFirst) true, false]) {
+        cands = [
+          for (final c in repo.queryV4(
+            movementPattern: pattern,
+            targetMuscle: muscle,
+            equipmentTier: equipmentTier,
+            suitableFor: effectiveExp == 'advanced' ? null : effectiveExp,
+            foundationalOnly: foundational,
+            excludeNames: picked,
+            injuryExclusions: injuries,
+            exclusions: exclusions,
+            capability: capability,
+          ))
+            if (c['discipline'] != 'calisthenics_skill' &&
+                c['discipline'] != 'olympic')
+              c
+        ];
         if (cands.isNotEmpty) break;
       }
       if (cands.isEmpty) {

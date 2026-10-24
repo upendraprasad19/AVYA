@@ -11275,7 +11275,7 @@ concepts:
       - file: lib/shared/repositories/plan_engine/exercise_selector.dart
         method: pickV4 / _fillSlots / _cascadeFill / buildPinnedDays / _applyHistoryAdjustments
         semantic: hard-filter
-        notes: `required Set<String>? capability` on all seven (pickV4, _pickCoreList, buildPinnedDays, _applyHistoryAdjustments, _fillSlots, _cascadeFill, topUpDays) — required-not-defaulted, so the compiler enumerates call sites. The two NAME-resolving paths that bypass queryV4 — _cascadeFill attempt 5 (canPerform) and buildPinnedDays.resolve (canOfferInPicker) — apply it themselves since B1 Task 1 (b1c4e7); before that only the cascade_tracer mirror did. Production-path proof test/contracts/universal_pool_capability_behavioral_test.dart
+        notes: `required Set<String>? capability` on all eight (pickV4, _pickCoreList, buildPinnedDays, _applyHistoryAdjustments, _fillSlots, _cascadeFill, topUpDays, _topUpVariant) — required-not-defaulted, so the compiler enumerates call sites. The two NAME-resolving paths that bypass queryV4 — _cascadeFill attempt 5 (canPerform) and buildPinnedDays.resolve (canOfferInPicker) — apply it themselves since B1 Task 1 (b1c4e7); before that only the cascade_tracer mirror did. Production-path proof test/contracts/universal_pool_capability_behavioral_test.dart
       - file: lib/shared/repositories/plan_engine/warmup_cooldown.dart
         method: attach (all three pools, under the existing injury floor)
         semantic: hard-filter

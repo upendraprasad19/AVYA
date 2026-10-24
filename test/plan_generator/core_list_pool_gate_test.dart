@@ -71,13 +71,16 @@ const _r9TopUpRetired = {'E234', 'E261', 'E271'};
 ({List<String> hard, List<String> evidence}) classifyBuilt({
   required Iterable<String> built,
   required Set<String> without,
+  required bool injured,
   required bool Function(String id) isRetired,
   required bool Function(String id) isSkill,
 }) {
   final hard = <String>[], evidence = <String>[];
   for (final id in built) {
     if (!isRetired(id) && !isSkill(id)) continue;
-    if (!without.contains(id) && !isSkill(id)) {
+    // The top-up is for injured users only: an uninjured persona's id absent from
+    // the no-top-up run is NOT a top-up addition, it is a leak, so it stays hard.
+    if (injured && !without.contains(id) && !isSkill(id)) {
       evidence.add(id);
     } else {
       hard.add(id);
@@ -316,6 +319,7 @@ void main() {
     final built = classifyBuilt(
       built: builtIds(phase),
       without: without,
+      injured: persona.injury != null,
       isRetired: (id) => byId[id] != null && _retired(byId[id]!),
       isSkill: (id) => byId[id] != null && _skill(byId[id]!),
     );
@@ -331,18 +335,28 @@ void main() {
   }
 
   final personas = generatorGoldenPersonas();
+  // One run per persona however the tests are selected: the R9 test below needs
+  // every persona checked and must not depend on the group tests having run first.
+  final checked = <String, List<String>>{};
+  Future<List<String>> checkOnce(GoldenPersona p) async =>
+      checked[p.key] ??= await check(p);
+
   for (final group in {for (final p in personas) p.group}) {
     test('ON hard counts are 0: $group', () async {
       final bad = <String>[];
       for (final p in personas.where((p) => p.group == group)) {
-        bad.addAll(await check(p));
+        bad.addAll(await checkOnce(p));
       }
       expect(bad, isEmpty,
           reason: '${bad.length} violations; first 10:\n${bad.take(10).join('\n')}');
     });
   }
 
-  test('R9: the retired rows the top-up adds are exactly the recorded set', () {
+  test('R9: the retired rows the top-up adds are exactly the recorded set',
+      () async {
+    for (final p in personas) {
+      await checkOnce(p); // a no-op for every persona the group tests already ran
+    }
     // Exact, not a subset: an empty evidence list (a broken re-run) must fail too.
     expect(topUpRetiredIds, _r9TopUpRetired,
         reason: 'a NEW retired id reached an injured user through the thin-day '
@@ -358,9 +372,20 @@ void main() {
     bool retired(String id) => id.startsWith('R');
     bool skill(String id) => id.startsWith('S');
     ({List<String> hard, List<String> evidence}) run(
-            List<String> built, Set<String> without) =>
+            List<String> built, Set<String> without, {bool injured = true}) =>
         classifyBuilt(
-            built: built, without: without, isRetired: retired, isSkill: skill);
+            built: built,
+            without: without,
+            injured: injured,
+            isRetired: retired,
+            isSkill: skill);
+
+    test('a retired id absent from the no-top-up run of an UNINJURED persona is '
+        'a leak, never evidence', () {
+      final r = run(['R1'], const {}, injured: false);
+      expect(r.hard, ['R1']);
+      expect(r.evidence, isEmpty);
+    });
 
     test('a retired id built ONLY with the top-up on is evidence, not a failure', () {
       final r = run(['R1', 'K1'], {'K1'});

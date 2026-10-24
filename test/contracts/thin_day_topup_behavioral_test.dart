@@ -474,12 +474,75 @@ void main() {
       }
       expect(added, greaterThan(0), reason: 'non-vacuity: some move was added');
     });
+
+    test('core stage: the same gentle rows in every phase, never a skill or '
+        'olympic row, for every injury and level', () async {
+      // An anchor with no rows sends every stage but core to nothing, so the core
+      // stage runs on the real library. Phase 1 asks for foundational rows first
+      // (Plank, Dead Bug, then Russian Twist or Hollow Body Hold). From phase 2 the
+      // top-up used to query core with no preference, and queryV4 sorts compound
+      // first: advanced users got Dragon Flag (calisthenics_skill) or L-Sit Hold,
+      // a shoulder-injured one Lunge with Twist on an upper day (B-pass F1).
+      final byName = {
+        for (final r in realRows) (r['name'] as String).toLowerCase(): r
+      };
+      bool skill(Map<String, dynamic> r) =>
+          r['discipline'] == 'calisthenics_skill' || r['discipline'] == 'olympic';
+      final tokens = <String>{for (final t in tagsByName.values) ...t}
+        ..remove('');
+      final slots = [_slotDay([_slot('No Such Muscle', 'horizontal_push')])];
+      List<String> added(String inj, String level, int phase) => _names(topUp(
+              [_dayOf(['Seed'])], slots,
+              injuries: [inj], phase: phase, level: level)
+          .single
+          .exercisesA)
+          .skip(1)
+          .toList();
+      var total = 0;
+      for (final inj in tokens) {
+        for (final level in ['beginner', 'intermediate', 'advanced']) {
+          final phase1 = added(inj, level, 1);
+          total += phase1.length;
+          for (final phase in [1, 2, 3]) {
+            final names = added(inj, level, phase);
+            final where = '$inj $level phase $phase';
+            for (final n in names) {
+              expect(skill(byName[n.toLowerCase()]!), isFalse,
+                  reason: '$where was topped up with a skill row: $n');
+            }
+            expect(names, phase1,
+                reason: '$where must add what phase 1 adds (the foundational rows '
+                    'first), not the compound-first row');
+          }
+        }
+      }
+      expect(total, greaterThan(0), reason: 'non-vacuity: moves were added');
+    });
   });
 
   // ---------------------------------------------------------------------------
   // Seeded library, topUpDays called directly
   // ---------------------------------------------------------------------------
   group('seeded library, direct', () {
+    test('a calisthenics_skill or olympic row is never a top-up, at any stage '
+        '(control: the same row as plain strength is)', () async {
+      final sds = [_slotDay([_slot('Mid Chest', 'horizontal_push')])];
+      Map<String, dynamic> row(String id, String discipline) => {
+            ..._row(id, 'Lone $id', 'horizontal_push', 'Mid Chest',
+                type: 'compound'),
+            'discipline': discipline,
+          };
+      await seed([row('a1', 'strength')]);
+      expect(_names(topUp([_dayOf(['Seed'])], sds).single.exercisesA),
+          ['Seed', 'Lone a1'],
+          reason: 'control: a strength row of the same shape is topped in');
+      for (final d in ['calisthenics_skill', 'olympic']) {
+        await seed([row('a1', d)]);
+        expect(_names(topUp([_dayOf(['Seed'])], sds).single.exercisesA), ['Seed'],
+            reason: '$d must not be a filler for an injured user');
+      }
+    });
+
     test('uninjured: identical list', () async {
       await seed([..._hp(3), ..._core()]);
       final days = [_dayOf(['HP One'])];
@@ -644,15 +707,31 @@ void main() {
       expect(_names(out.exercisesA), ['HP One', 'CO Easy', 'CO Three']);
     });
 
-    test('phase 1 prefers foundational: the core top-up is the foundational row, '
-        'not the compound that sorts first; later phases take the compound',
-        () async {
+    test('the core top-up is the foundational row in EVERY phase, not the '
+        'compound that sorts first (B-pass F1)', () async {
       await seed(_core());
       final sds = [_slotDay([_slot('Mid Chest', 'horizontal_push')])];
-      final p1 = topUp([_dayOf(['X1', 'X2'])], sds, phase: 1).single;
-      expect(_names(p1.exercisesA).last, 'CO Easy');
-      final p3 = topUp([_dayOf(['X1', 'X2'])], sds, phase: 3).single;
-      expect(_names(p3.exercisesA).last, 'CO Hard');
+      for (final phase in [1, 2, 3]) {
+        final out = topUp([_dayOf(['X1', 'X2'])], sds, phase: phase).single;
+        expect(_names(out.exercisesA).last, 'CO Easy',
+            reason: 'phase $phase: foundational first, as phase 1 always did');
+      }
+    });
+
+    test('only the core stage prefers foundational beyond phase 1: another '
+        'pattern takes the compound that sorts first from phase 2', () async {
+      final sds = [_slotDay([_slot('Mid Chest', 'horizontal_push')])];
+      await seed([
+        _row('hp_e', 'HP Easy', 'horizontal_push', 'Mid Chest'),
+        _row('hp_h', 'HP Hard', 'horizontal_push', 'Mid Chest',
+            type: 'compound', foundational: false),
+      ]);
+      expect(_names(topUp([_dayOf(['Seed'])], sds, phase: 1).single.exercisesA)[1],
+          'HP Easy',
+          reason: 'control: phase 1 asks for foundational rows first');
+      expect(_names(topUp([_dayOf(['Seed'])], sds, phase: 3).single.exercisesA)[1],
+          'HP Hard',
+          reason: 'a non-core stage keeps the phase-1-only preference');
     });
 
     test('B differs from A where the library allows (flag false: a curated sub may '
