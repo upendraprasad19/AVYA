@@ -266,4 +266,4 @@ Re-run: `dart run scripts/build_oi_index.dart`
 | OI-403 | Coach injury swap picks a substitute by muscle only and never reads… | none | 2026-10-24 - read… | [:6731](open_issues.md#L6731) |
 | OI-404 | Retiring 7 duplicate library rows (ad896b42) lowered the uninjured… | none | 2026-10-24 - regenerated… | [:6746](open_issues.md#L6746) |
 | OI-405 | deploy_via_api.js leaves a dirty tree after EVERY deploy: the… | the track-or-ignore choice for the… | 2026-10-24 - by reading and measuring in… | [:6761](open_issues.md#L6761) |
-| OI-408 | Bodyweight beginner with shoulder + lower_back injuries has 2-exercise… | upstream, a founder call.… | 2026-10-24 - prototype 2 of the OI-401… | [:6780](open_issues.md#L6780) |
+| OI-408 | Bodyweight beginner with shoulder + lower_back injuries has 2-exercise… | upstream, a founder call.… | 2026-10-24 - the OI-401 top-up's FINAL… | [:6780](open_issues.md#L6780) |

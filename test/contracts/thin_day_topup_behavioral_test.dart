@@ -724,17 +724,58 @@ void main() {
         expect(_names(out.exercisesA)[1], 'HP Two');
       });
 
-      test('demoted names (a swapped-away-from row in the workout box)', () async {
-        await seed(_hp(3));
+      Future<void> demote(String name) async {
         final date = DateTime.now().toIso8601String().substring(0, 10);
         await HiveService.instance.workoutBox.put('schedule_$date', {
           'date': date,
           'exercises': [
-            {'name': 'Replacement', 'swapped_from': 'HP One', 'swapped_via': 'swap'},
+            {'name': 'Replacement', 'swapped_from': name, 'swapped_via': 'swap'},
           ],
         });
+      }
+
+      test('demoted names (a swapped-away-from row in the workout box)', () async {
+        await seed(_hp(3));
+        await demote('HP One');
         final out = topUp([_dayOf(['Seed'])], sds, phase: 2).single;
         expect(_names(out.exercisesA)[1], 'HP Two');
+      });
+
+      group('demoted + the injury-substitute preference (L6)', () {
+        // The preference narrows the pool to the curated subs BEFORE any soft
+        // avoid is applied, so a swapped-out curated sub leads the top-up unless
+        // the demoted name is taken out of the pool itself.
+        final rows = [
+          _row('c1', 'Machine Chest Press', 'horizontal_push', 'Mid Chest',
+              type: 'compound'),
+          _row('o1', 'Other Press One', 'horizontal_push', 'Mid Chest',
+              type: 'compound'),
+          _row('o2', 'Other Press Two', 'horizontal_push', 'Mid Chest',
+              type: 'compound'),
+        ];
+
+        test('a swapped-out curated sub is not topped back in while another row '
+            'exists', () async {
+          await seed(rows);
+          final control =
+              topUp([_dayOf(['Seed'])], sds, phase: 2, subPref: true).single;
+          expect(_names(control.exercisesA)[1], 'Machine Chest Press',
+              reason: 'control: the preference leads with the curated sub');
+          await demote('Machine Chest Press');
+          final out =
+              topUp([_dayOf(['Seed'])], sds, phase: 2, subPref: true).single;
+          expect(_names(out.exercisesA),
+              ['Seed', 'Other Press One', 'Other Press Two']);
+        });
+
+        test('a demoted row that is the only candidate left is still used '
+            '(a slot is never dropped)', () async {
+          await seed([rows.first]);
+          await demote('Machine Chest Press');
+          final out =
+              topUp([_dayOf(['Seed'])], sds, phase: 2, subPref: true).single;
+          expect(_names(out.exercisesA), ['Seed', 'Machine Chest Press']);
+        });
       });
     });
 

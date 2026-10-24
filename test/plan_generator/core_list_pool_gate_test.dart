@@ -3,7 +3,9 @@
 // Flag ON, the 998 golden personas, the REAL generateV4, provenance from
 // CoreListSelector.debugTrace (written by production, read here). Hard counts
 // below must be 0 over those 998 personas — and only those; the multi-injury
-// sweep in the report is reported, not gated.
+// sweep in the report is reported, not gated. The one carve-out: a retired row
+// the thin-day top-up (OI-401, plan R9) adds for an injured user is recorded
+// evidence, pinned in _r9TopUpRetired; B1's own picks and any skill row stay hard.
 //
 // Report (also runs the OFF comparison and the multi-injury sweep):
 //   WRITE_CORE_LIST_REPORT=1 TZ=Asia/Kolkata flutter test test/plan_generator/core_list_pool_gate_test.dart
@@ -53,6 +55,37 @@ Iterable<String> builtIds(Phase p) => [
           for (final e in d.exercises) e.exerciseId
     ];
 
+/// Rows B1 calls retired that the thin-day top-up (OI-401) adds for an injured
+/// user, measured on the 998 golden personas (2026-10-24): the top-up reads the
+/// OFF-path candidates, not the core list (plan R9). Whether a top-up under B1
+/// should be core-list-only is the `enable_core_list_pool` flip review's
+/// question (`docs/ship_dark_pending_review.yaml`). The set is a ratchet: a NEW
+/// retired id appearing here fails the gate and wants a decision.
+const _r9TopUpRetired = {'E234', 'E261', 'E271'};
+
+/// Splits the built ids that are retired or skill rows into the hard failures
+/// and the R9 evidence. [without] is the same persona's built ids with the
+/// top-up kill-switch set: an id that is ALSO built without the top-up is B1's
+/// own pick (or a leak) and stays hard; an id built ONLY with it ON is a top-up
+/// addition, and only a RETIRED one is evidence, a skill/olympic row never is.
+({List<String> hard, List<String> evidence}) classifyBuilt({
+  required Iterable<String> built,
+  required Set<String> without,
+  required bool Function(String id) isRetired,
+  required bool Function(String id) isSkill,
+}) {
+  final hard = <String>[], evidence = <String>[];
+  for (final id in built) {
+    if (!isRetired(id) && !isSkill(id)) continue;
+    if (!without.contains(id) && !isSkill(id)) {
+      evidence.add(id);
+    } else {
+      hard.add(id);
+    }
+  }
+  return (hard: hard, evidence: evidence);
+}
+
 class _Persona {
   final String kind, tier, level;
   final int phase;
@@ -100,6 +133,8 @@ void main() {
   final disagree = <String, int>{};
   final emergencyKeys = <String>[];
   final injuredLists = <String, List<int>>{}; // injury key → drops per list
+  final topUpRetired = <String>[]; // R9 evidence: persona + id the top-up added
+  final topUpRetiredIds = <String>{};
   var copied = 0;
 
   setUpAll(() async {
@@ -144,7 +179,7 @@ void main() {
       ];
 
   /// Runs [p] ON and returns every hard-count violation it produced.
-  List<String> check(GoldenPersona p) {
+  Future<List<String>> check(GoldenPersona p) async {
     final persona = _Persona(p.key);
     final trace = CoreListTrace();
     CoreListSelector.debugTrace = trace;
@@ -257,9 +292,32 @@ void main() {
     if (trace.emergencyAnyLevel.isNotEmpty) emergencyKeys.add(p.key);
     final sizes = strengthSizes(phase);
     if (sizes.any((n) => n == 0)) bad.add('empty day: ${p.key} $sizes');
-    for (final id in builtIds(phase)) {
-      final r = byId[id];
-      if (r != null && (_retired(r) || _skill(r))) bad.add('built: ${p.key} $id');
+    // The BUILT lists carry the top-up's additions, which the trace never sees.
+    // Re-run only a persona that has a flagged id, with the top-up switched off,
+    // to tell B1's own picks (hard) from top-up additions (R9 evidence).
+    bool flagged(String id) => byId[id] != null && (_retired(byId[id]!) || _skill(byId[id]!));
+    var without = <String>{};
+    if (builtIds(phase).any(flagged)) {
+      final config = HiveService.instance.configBox;
+      await config.put('disable_thin_day_topup', true);
+      try {
+        without = builtIds(p.run()).toSet();
+      } finally {
+        await config.delete('disable_thin_day_topup');
+      }
+    }
+    final built = classifyBuilt(
+      built: builtIds(phase),
+      without: without,
+      isRetired: (id) => byId[id] != null && _retired(byId[id]!),
+      isSkill: (id) => byId[id] != null && _skill(byId[id]!),
+    );
+    for (final id in built.hard) {
+      bad.add('built: ${p.key} $id');
+    }
+    for (final id in built.evidence) {
+      topUpRetired.add('${p.key} $id');
+      topUpRetiredIds.add(id);
     }
     cell.onSizes.addAll(sizes);
     return bad;
@@ -267,14 +325,57 @@ void main() {
 
   final personas = generatorGoldenPersonas();
   for (final group in {for (final p in personas) p.group}) {
-    test('ON hard counts are 0: $group', () {
-      final bad = <String>[
-        for (final p in personas.where((p) => p.group == group)) ...check(p)
-      ];
+    test('ON hard counts are 0: $group', () async {
+      final bad = <String>[];
+      for (final p in personas.where((p) => p.group == group)) {
+        bad.addAll(await check(p));
+      }
       expect(bad, isEmpty,
           reason: '${bad.length} violations; first 10:\n${bad.take(10).join('\n')}');
     });
   }
+
+  test('R9: the retired rows the top-up adds are exactly the recorded set', () {
+    // Exact, not a subset: an empty evidence list (a broken re-run) must fail too.
+    expect(topUpRetiredIds, _r9TopUpRetired,
+        reason: 'a NEW retired id reached an injured user through the thin-day '
+            'top-up under B1 ON (or a recorded one stopped): decide it at the '
+            'enable_core_list_pool flip review, then edit _r9TopUpRetired');
+    expect(topUpRetired, isNotEmpty);
+  });
+
+  group('classifyBuilt (the R9 attribution)', () {
+    bool retired(String id) => id.startsWith('R');
+    bool skill(String id) => id.startsWith('S');
+    ({List<String> hard, List<String> evidence}) run(
+            List<String> built, Set<String> without) =>
+        classifyBuilt(
+            built: built, without: without, isRetired: retired, isSkill: skill);
+
+    test('a retired id built ONLY with the top-up on is evidence, not a failure', () {
+      final r = run(['R1', 'K1'], {'K1'});
+      expect(r.evidence, ['R1']);
+      expect(r.hard, isEmpty);
+    });
+
+    test('a retired id also built WITHOUT the top-up is B1\'s own: hard', () {
+      final r = run(['R1'], {'R1'});
+      expect(r.hard, ['R1']);
+      expect(r.evidence, isEmpty);
+    });
+
+    test('a skill id the top-up added is never evidence: hard', () {
+      final r = run(['S1'], const {});
+      expect(r.hard, ['S1']);
+      expect(r.evidence, isEmpty);
+    });
+
+    test('a clean build yields neither', () {
+      final r = run(['K1', 'K2'], const {});
+      expect(r.hard, isEmpty);
+      expect(r.evidence, isEmpty);
+    });
+  });
 
   test('report', () async {
     // OFF comparison: same personas, flag absent.

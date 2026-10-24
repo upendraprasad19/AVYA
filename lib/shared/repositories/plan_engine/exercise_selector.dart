@@ -1124,9 +1124,10 @@ class ExerciseSelector {
   ///
   /// The avoid sets are SOFT (a re-order inside [_selectCandidate], never an
   /// exclusion) and lower-cased here: A avoids the previous phase's picks, the
-  /// plateau names, the L6 demoted names, and B's names; B avoids the same plus
-  /// A's names (A's AFTER its own top-up). Both skip the other variant for
-  /// `strength` goals, and A skips B for an alias day (B IS A).
+  /// plateau names and B's names; B avoids the same plus A's names (A's AFTER
+  /// its own top-up). Both skip the other variant for `strength` goals, and A
+  /// skips B for an alias day (B IS A). The L6 demoted names are stronger: they
+  /// leave the candidate pool unless they are all that is left.
   @visibleForTesting
   static List<PopulatedDay> topUpDays(
     List<PopulatedDay> days, {
@@ -1180,9 +1181,9 @@ class ExerciseSelector {
           {
             ...lower(previousPhaseByDay?[i]?.a ?? const <String>[]),
             ...plateau,
-            ...demoted,
             if (!alias && !strength) ...lower(b.map((e) => e.exerciseName)),
           },
+          demoted,
           exerciseRepo, equipmentTier, effectiveExp, phase, injuries,
           applyInjurySubstitutePreference, exclusions, capability,
         );
@@ -1196,9 +1197,9 @@ class ExerciseSelector {
           {
             ...lower(previousPhaseByDay?[i]?.b ?? const <String>[]),
             ...plateau,
-            ...demoted,
             if (!strength) ...lower(a.map((e) => e.exerciseName)),
           },
+          demoted,
           exerciseRepo, equipmentTier, effectiveExp, phase, injuries,
           applyInjurySubstitutePreference, exclusions, capability,
         );
@@ -1222,6 +1223,7 @@ class ExerciseSelector {
     List<PlannedExercise> current,
     List<MuscleSlot> slots,
     Set<String> softAvoid,
+    Set<String> demoted,
     ExerciseRepository repo,
     String equipmentTier,
     String effectiveExp,
@@ -1259,7 +1261,15 @@ class ExerciseSelector {
         exhausted.add(key);
         return false;
       }
-      final chosen = _selectCandidate(cands,
+      // L6 (the cascade swaps a swapped-out pick for a same-pattern alternative
+      // when one exists; this runs after that post-pass): a demoted name is
+      // topped back in only when it is the sole candidate left. A soft avoid
+      // would not do: the injury-substitute preference narrows the pool first.
+      final fresh = [
+        for (final c in cands)
+          if (!demoted.contains(((c['name'] as String?) ?? '').toLowerCase())) c
+      ];
+      final chosen = _selectCandidate(fresh.isNotEmpty ? fresh : cands,
           injuries: injuries,
           applyInjurySubstitutePreference: applyInjurySubstitutePreference,
           avoidNames: softAvoid);
