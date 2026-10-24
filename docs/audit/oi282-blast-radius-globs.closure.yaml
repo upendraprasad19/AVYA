@@ -1,0 +1,39 @@
+# Closure ledger - oi282-blast-radius-globs (diagnose f2c8a5)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no `deferred:` key.
+# `<branch>@branch` is the in-branch commit form (the SHA does not exist until the commit).
+# Scope: the founder's 2026-10-03 "go with batch A" (OI-282 plus the stray root file chip). Five units:
+# the coverage gap itself, the dead rule its derivation exposed, two stray root files, and the missing
+# root guard the stray files exposed. The guard is a new platform-tier gate, so it is its own unit.
+
+batch: oi282-blast-radius-globs
+plan_review_record: docs/plan-reviews/oi282-blast-radius-globs.md
+diagnose_docs:
+  - docs/diagnoses/2026-10-03-sync-engine-exempt-from-platform-review-f2c8a5.md
+
+findings:
+  - id: OI-282
+    title: "blast_radius.yaml classified only lib/core/services/sync/** as platform: the sync engine's own core computed account"
+    terminal_state: closed_in_commit
+    commit: oi282-blast-radius-globs@branch
+    verification: "21 exact platform rules (19 in the services layer, 2 for restore merges hosted outside it) + sync_domains/** under one written three-prong boundary; test/contracts/blast_radius_sync_engine_platform_test.dart (completeness derived from import/export/part directives across lib/: 64 files = 43 platform + 21 declined by name, 0 undecided; 29 undecided against the registry as of 4259d0ed; 36 tests, which also pin the two known callers of the engine, auth_session_bootstrapper.dart and sync_state_provider.dart, by name in a _callers map) and the keystone e2e test/scripts/plan_review_record_gate_e2e_test.dart (six arms: an engine-only merge without bpass is rejected for the tier for an exact path, a nested path, the sync_domains/** glob and a path outside the services layer; with bpass it passes; an account control with no engine edge passes); 61-case mutation matrix, 61 killed, 0 survivors (diagnose doc Verification section)"
+  - id: DEAD-RULE
+    title: "The account rule for the profile write service named lib/core/services/profile_write_service.dart, a path that never existed, so it never fired"
+    terminal_state: closed_in_commit
+    commit: oi282-blast-radius-globs@branch
+    verification: "repointed at lib/features/profile/services/profile_write_service.dart (docs/blast_radius.yaml:314); the rot test in blast_radius_sync_engine_platform_test.dart fails on any exact-path rule naming a missing file (111 exact rules, all present and tracked) and a mirror pins the real path to account"
+  - id: STRAY-EXISTSSYNC
+    title: "existsSync: a 14-byte stray file committed at the repo root by an unquoted -> in an echo"
+    terminal_state: closed_in_commit
+    commit: oi282-blast-radius-globs@branch
+    verification: "git rm; git grep finds no reference to the root file (every textual mention is the Dart or Node API); added by 987ce09b (PR #68)"
+  - id: STRAY-BUILDLOG
+    title: "build_log.txt: a 143-byte flutter build console capture committed at the repo root on 2026-03-31, referenced nowhere"
+    terminal_state: closed_in_commit
+    commit: oi282-blast-radius-globs@branch
+    verification: "git rm; git grep build_log finds nothing; added by 0b609654; .gitignore *.log does not match it"
+  - id: OI-301
+    title: "No gate stops a stray file at the repo root (existsSync and build_log.txt both sat on main)"
+    terminal_state: blocked_on_user
+    reason: "Pending founder action: approve its plan. A new scripts/check_*.dart gate is platform tier (two plan-review rounds, rule-24 mutation proof), and the plan must first settle what is legitimate at the root: HEAD tracks node_modules/ (142 files), remotion/, screenshots/, testing/, .preview/ and .opencode/ besides the 21 root files."
+
+closed_count: 5
