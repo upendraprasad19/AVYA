@@ -1,0 +1,2772 @@
+{
+  "_meta": {
+    "source": "session scratchpad tag/merged.json (Batch B1 tagging pass); _decision is the keep/discard authority",
+    "decision_by": {
+      "default": 284,
+      "you": 1
+    },
+    "source_sha256": "7ded3e3e1c11338fe3e0b87157c78f6a1401ca2ef4babbb94a2e6e41d393074f",
+    "keep": 219,
+    "discard": 66,
+    "core_per_level": {
+      "beginner": 73,
+      "intermediate": 91,
+      "advanced": 67
+    },
+    "dropped_links": [
+      "E005.regression_to=Kneeling Push Up",
+      "E008.regression_to=Assisted Chest Dip",
+      "E022.regression_to=Assisted Pull Up",
+      "E022.progression_to=Wide Grip Pull Up",
+      "E069.progression_to=Weighted Muscle Up",
+      "E073.regression_to=Kettlebell Pistol Squat",
+      "E075.regression_to=Assisted Chest Dip",
+      "E101.regression_to=Wide Grip Pull Up",
+      "E102.progression_to=Kneeling Push Up",
+      "E123.regression_to=Assisted Chin Up",
+      "E123.progression_to=Close Grip Chin Up",
+      "E143.progression_to=Single Leg Squat",
+      "E213.progression_to=Assisted Chin Up",
+      "E262.progression_to=Handstand Push Up"
+    ]
+  },
+  "rows": {
+    "E001": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "bench_press"
+    },
+    "E002": {
+      "core_levels": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "bench_press"
+    },
+    "E003": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "incline_press"
+    },
+    "E004": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "bench_press"
+    },
+    "E005": {
+      "core_levels": [
+        "beginner",
+        "intermediate"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "push_up",
+      "skill_track": "push_up",
+      "skill_step": 4,
+      "progression_to": "Decline Push Up"
+    },
+    "E006": {
+      "core_levels": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "chest_fly"
+    },
+    "E007": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "chest_fly"
+    },
+    "E008": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "dip",
+      "skill_track": "dip",
+      "skill_step": 3
+    },
+    "E009": {
+      "core_levels": [
+        "beginner",
+        "intermediate"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "bench_press"
+    },
+    "E010": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "push_up",
+      "skill_track": "handstand_push_up",
+      "skill_step": 1,
+      "progression_to": "Elevated Pike Push Up"
+    },
+    "E011": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "shoulder_press"
+    },
+    "E012": {
+      "core_levels": [
+        "beginner",
+        "intermediate"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "shoulder_press"
+    },
+    "E013": {
+      "core_levels": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "lateral_raise"
+    },
+    "E014": {
+      "core_levels": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "face_pull"
+    },
+    "E015": {
+      "core_levels": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "front_raise",
+      "slot_pattern": [
+        "shoulder_isolation"
+      ]
+    },
+    "E016": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "bench_press"
+    },
+    "E017": {
+      "core_levels": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "triceps_pushdown"
+    },
+    "E018": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "triceps_extension"
+    },
+    "E019": {
+      "core_levels": [
+        "beginner",
+        "intermediate"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "triceps_extension"
+    },
+    "E020": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "push_up",
+      "skill_track": "push_up",
+      "skill_step": 6,
+      "regression_to": "Decline Push Up"
+    },
+    "E021": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "deadlift"
+    },
+    "E022": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "pull_up",
+      "skill_track": "pull_up",
+      "skill_step": 3
+    },
+    "E023": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "row"
+    },
+    "E024": {
+      "core_levels": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "row"
+    },
+    "E025": {
+      "core_levels": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "lat_pulldown"
+    },
+    "E026": {
+      "core_levels": [
+        "beginner",
+        "intermediate"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "row"
+    },
+    "E027": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "well_equipped_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "row"
+    },
+    "E029": {
+      "core_levels": [
+        "beginner",
+        "intermediate"
+      ],
+      "discipline": "strength",
+      "gym_availability": "well_equipped_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "back_extension"
+    },
+    "E030": {
+      "core_levels": [
+        "beginner",
+        "intermediate"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "row"
+    },
+    "E031": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "biceps_curl"
+    },
+    "E032": {
+      "core_levels": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "biceps_curl"
+    },
+    "E033": {
+      "core_levels": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "hammer_curl"
+    },
+    "E034": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "biceps_curl"
+    },
+    "E035": {
+      "core_levels": [
+        "beginner",
+        "intermediate"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "biceps_curl"
+    },
+    "E036": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "squat"
+    },
+    "E037": {
+      "core_levels": [
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "front_squat"
+    },
+    "E038": {
+      "core_levels": [
+        "beginner",
+        "intermediate"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "squat"
+    },
+    "E039": {
+      "core_levels": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "leg_press"
+    },
+    "E040": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "well_equipped_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "hack_squat"
+    },
+    "E041": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "split_squat"
+    },
+    "E042": {
+      "core_levels": [
+        "beginner",
+        "intermediate"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "lunge"
+    },
+    "E043": {
+      "core_levels": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "leg_extension"
+    },
+    "E044": {
+      "core_levels": [
+        "beginner",
+        "intermediate"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "step_up"
+    },
+    "E045": {
+      "core_levels": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "romanian_deadlift"
+    },
+    "E046": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "leg_curl",
+      "slot_pattern": [
+        "knee_dominant"
+      ],
+      "skill_track": "nordic_curl",
+      "skill_step": 2
+    },
+    "E047": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "hip_thrust"
+    },
+    "E048": {
+      "core_levels": [
+        "beginner"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "glute_bridge",
+      "slot_pattern": [
+        "hip_dominant"
+      ]
+    },
+    "E049": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "leg_curl"
+    },
+    "E050": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "deadlift",
+      "slot_pattern": [
+        "hip_dominant"
+      ]
+    },
+    "E051": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "calf_raise"
+    },
+    "E052": {
+      "core_levels": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "calf_raise"
+    },
+    "E053": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "calf_raise"
+    },
+    "E054": {
+      "core_levels": [
+        "beginner",
+        "intermediate"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "plank"
+    },
+    "E055": {
+      "core_levels": [
+        "beginner"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "dead_bug"
+    },
+    "E056": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "crunch"
+    },
+    "E057": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "leg_raise"
+    },
+    "E058": {
+      "core_levels": [
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "well_equipped_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "rollout"
+    },
+    "E059": {
+      "core_levels": [
+        "beginner",
+        "intermediate"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "rotation_core"
+    },
+    "E060": {
+      "core_levels": [
+        "beginner",
+        "intermediate"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "crunch"
+    },
+    "E061": {
+      "core_levels": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "cardio",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "cardio_treadmill"
+    },
+    "E062": {
+      "core_levels": [],
+      "discipline": "cardio",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "cardio_bike"
+    },
+    "E063": {
+      "core_levels": [],
+      "discipline": "cardio",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": true,
+      "variant_family": "cardio_jump_rope"
+    },
+    "E064": {
+      "core_levels": [],
+      "discipline": "cardio",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "cardio_rower",
+      "slot_focus": [
+        "Full Body",
+        "Mid Back"
+      ],
+      "slot_pattern": [
+        "cardio"
+      ]
+    },
+    "E065": {
+      "core_levels": [],
+      "discipline": "conditioning",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": true,
+      "variant_family": "burpee"
+    },
+    "E066": {
+      "core_levels": [
+        "intermediate"
+      ],
+      "discipline": "plyometric",
+      "gym_availability": "well_equipped_gym",
+      "requires_coaching": false,
+      "high_impact": true,
+      "variant_family": "jump"
+    },
+    "E067": {
+      "core_levels": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "conditioning",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "mountain_climber"
+    },
+    "E068": {
+      "core_levels": [],
+      "discipline": "cardio",
+      "gym_availability": "specialty",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "cardio_assault_bike"
+    },
+    "E069": {
+      "core_levels": [],
+      "discipline": "calisthenics_skill",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "muscle_up",
+      "skill_track": "muscle_up",
+      "skill_step": 5
+    },
+    "E070": {
+      "core_levels": [],
+      "discipline": "calisthenics_skill",
+      "gym_availability": "standard_gym",
+      "requires_coaching": true,
+      "high_impact": false,
+      "variant_family": "front_lever",
+      "skill_track": "front_lever",
+      "skill_step": 5
+    },
+    "E071": {
+      "core_levels": [],
+      "discipline": "calisthenics_skill",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "l_sit",
+      "skill_track": "l_sit",
+      "skill_step": 3
+    },
+    "E072": {
+      "core_levels": [],
+      "discipline": "calisthenics_skill",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "handstand",
+      "skill_track": "handstand",
+      "skill_step": 3
+    },
+    "E073": {
+      "core_levels": [],
+      "discipline": "calisthenics_skill",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "pistol_squat",
+      "skill_track": "pistol_squat",
+      "skill_step": 3
+    },
+    "E074": {
+      "core_levels": [],
+      "discipline": "calisthenics_skill",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "leg_raise"
+    },
+    "E075": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "skill_track": "dip",
+      "skill_step": 3
+    },
+    "E076": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "conditioning",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "push_up"
+    },
+    "E077": {
+      "core_levels": [],
+      "discipline": "conditioning",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "squat"
+    },
+    "E078": {
+      "core_levels": [],
+      "discipline": "yoga",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "mobility_full_body"
+    },
+    "E080": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "stretch_hip_flexor"
+    },
+    "E081": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E082": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E083": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "mobility_hip"
+    },
+    "E084": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E085": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "mobility_spine"
+    },
+    "E086": {
+      "core_levels": [],
+      "discipline": "olympic",
+      "gym_availability": "well_equipped_gym",
+      "requires_coaching": true,
+      "high_impact": false,
+      "variant_family": "olympic_clean"
+    },
+    "E087": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "well_equipped_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "deadlift"
+    },
+    "E088": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "squat"
+    },
+    "E089": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "carry"
+    },
+    "E090": {
+      "core_levels": [
+        "beginner",
+        "intermediate"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "carry",
+      "slot_focus": [
+        "Core",
+        "Core/Obliques",
+        "Forearms"
+      ]
+    },
+    "E091": {
+      "core_levels": [
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "romanian_deadlift"
+    },
+    "E092": {
+      "core_levels": [
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "good_morning"
+    },
+    "E093": {
+      "core_levels": [
+        "beginner"
+      ],
+      "discipline": "prehab",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "rear_delt_fly"
+    },
+    "E094": {
+      "core_levels": [
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "biceps_curl"
+    },
+    "E095": {
+      "core_levels": [
+        "intermediate"
+      ],
+      "discipline": "strength",
+      "gym_availability": "well_equipped_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "preacher_curl"
+    },
+    "E096": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "triceps_kickback"
+    },
+    "E097": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "triceps_extension"
+    },
+    "E098": {
+      "core_levels": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "rear_delt_fly"
+    },
+    "E099": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "wrist_curl"
+    },
+    "E100": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "reverse_wrist_curl"
+    },
+    "E101": {
+      "core_levels": [],
+      "discipline": "calisthenics_skill",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "skill_track": "pull_up",
+      "skill_step": 5
+    },
+    "E102": {
+      "core_levels": [
+        "beginner"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "push_up",
+      "skill_track": "push_up",
+      "skill_step": 2,
+      "regression_to": "Wall Push Up"
+    },
+    "E103": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "push_up",
+      "skill_track": "push_up",
+      "skill_step": 5,
+      "regression_to": "Push Up",
+      "progression_to": "Diamond Push Up"
+    },
+    "E104": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "shoulder_press"
+    },
+    "E105": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "upright_row"
+    },
+    "E106": {
+      "core_levels": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "shrug"
+    },
+    "E107": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "well_equipped_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "hip_abduction"
+    },
+    "E108": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "well_equipped_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "hip_adduction"
+    },
+    "E109": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "glute_kickback"
+    },
+    "E110": {
+      "core_levels": [
+        "beginner",
+        "intermediate"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "hip_abduction"
+    },
+    "E111": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E112": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "well_equipped_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "squat"
+    },
+    "E113": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "bench_press"
+    },
+    "E114": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "well_equipped_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "shoulder_press",
+      "slot_focus": [
+        "Shoulders",
+        "Front Delts",
+        "Upper Chest"
+      ]
+    },
+    "E115": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E116": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "well_equipped_gym",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E117": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "chest_fly"
+    },
+    "E118": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "chest_fly",
+      "slot_focus": [
+        "Mid Chest"
+      ]
+    },
+    "E119": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E120": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "chest_fly"
+    },
+    "E121": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "row"
+    },
+    "E122": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "biceps_curl",
+      "slot_focus": [
+        "Biceps (Short Head)"
+      ]
+    },
+    "E123": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "chin_up",
+      "skill_track": "pull_up",
+      "skill_step": 3
+    },
+    "E124": {
+      "core_levels": [
+        "beginner",
+        "intermediate"
+      ],
+      "discipline": "strength",
+      "gym_availability": "well_equipped_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "inverted_row"
+    },
+    "E125": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "well_equipped_gym",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E126": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E127": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "back_extension",
+      "slot_pattern": [
+        "hip_dominant"
+      ]
+    },
+    "E128": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "well_equipped_gym",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E129": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "deadlift"
+    },
+    "E130": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E131": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "sit_up"
+    },
+    "E132": {
+      "core_levels": [
+        "beginner"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "anti_rotation"
+    },
+    "E133": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "well_equipped_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "rotation_core",
+      "slot_focus": [
+        "Core",
+        "Core/Obliques"
+      ]
+    },
+    "E134": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "well_equipped_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "side_plank"
+    },
+    "E135": {
+      "core_levels": [],
+      "discipline": "conditioning",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "crawl"
+    },
+    "E136": {
+      "core_levels": [],
+      "discipline": "conditioning",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "crab_walk"
+    },
+    "E137": {
+      "core_levels": [],
+      "discipline": "conditioning",
+      "gym_availability": "specialty",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E138": {
+      "core_levels": [],
+      "discipline": "conditioning",
+      "gym_availability": "specialty",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E139": {
+      "core_levels": [],
+      "discipline": "conditioning",
+      "gym_availability": "well_equipped_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "battle_ropes"
+    },
+    "E140": {
+      "core_levels": [
+        "intermediate"
+      ],
+      "discipline": "strength",
+      "gym_availability": "well_equipped_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "kettlebell_swing"
+    },
+    "E141": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "well_equipped_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "turkish_get_up"
+    },
+    "E142": {
+      "core_levels": [],
+      "discipline": "conditioning",
+      "gym_availability": "well_equipped_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "slam"
+    },
+    "E143": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "single_leg_squat",
+      "skill_track": "pistol_squat",
+      "skill_step": 1
+    },
+    "E144": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E145": {
+      "core_levels": [
+        "intermediate"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "lunge"
+    },
+    "E146": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E147": {
+      "core_levels": [
+        "beginner"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "squat"
+    },
+    "E148": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E149": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": true,
+      "high_impact": false,
+      "variant_family": "squat"
+    },
+    "E150": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E151": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "mobility_full_body"
+    },
+    "E152": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "mobility_hip"
+    },
+    "E153": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E154": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E155": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "stretch_chest"
+    },
+    "E156": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E157": {
+      "core_levels": [],
+      "discipline": "prehab",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E158": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E159": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "stretch_back"
+    },
+    "E160": {
+      "core_levels": [],
+      "discipline": "yoga",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E161": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "stretch_calf"
+    },
+    "E162": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E163": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E164": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E166": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "stretch_hamstring"
+    },
+    "E169": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E170": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E171": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "pullover"
+    },
+    "E172": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "side_bend",
+      "slot_focus": [
+        "Core/Obliques"
+      ]
+    },
+    "E173": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "sit_up"
+    },
+    "E174": {
+      "core_levels": [
+        "beginner",
+        "intermediate"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "crunch"
+    },
+    "E175": {
+      "core_levels": [
+        "beginner",
+        "intermediate"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "crunch",
+      "slot_focus": [
+        "Core/Obliques"
+      ]
+    },
+    "E176": {
+      "core_levels": [
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "sit_up"
+    },
+    "E177": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "plank"
+    },
+    "E178": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "well_equipped_gym",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E179": {
+      "core_levels": [],
+      "discipline": "calisthenics_skill",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E180": {
+      "core_levels": [],
+      "discipline": "calisthenics_skill",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "leg_raise"
+    },
+    "E181": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "carry"
+    },
+    "E182": {
+      "core_levels": [],
+      "discipline": "conditioning",
+      "gym_availability": "specialty",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "carry"
+    },
+    "E183": {
+      "core_levels": [],
+      "discipline": "conditioning",
+      "gym_availability": "specialty",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E184": {
+      "core_levels": [],
+      "discipline": "conditioning",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E185": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "well_equipped_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "shoulder_press"
+    },
+    "E186": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "well_equipped_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "shoulder_press",
+      "slot_focus": [
+        "Front Delts",
+        "Shoulders",
+        "Mid Chest",
+        "Triceps"
+      ]
+    },
+    "E187": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "well_equipped_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "row"
+    },
+    "E188": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "squat"
+    },
+    "E189": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "hip_thrust"
+    },
+    "E190": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "well_equipped_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "inverted_row"
+    },
+    "E191": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "well_equipped_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "push_up"
+    },
+    "E192": {
+      "core_levels": [],
+      "discipline": "conditioning",
+      "gym_availability": "well_equipped_gym",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E193": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "plyometric",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": true,
+      "variant_family": "jump"
+    },
+    "E194": {
+      "core_levels": [],
+      "discipline": "plyometric",
+      "gym_availability": "well_equipped_gym",
+      "requires_coaching": false,
+      "high_impact": true
+    },
+    "E195": {
+      "core_levels": [],
+      "discipline": "plyometric",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": true
+    },
+    "E196": {
+      "core_levels": [],
+      "discipline": "plyometric",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": true
+    },
+    "E197": {
+      "core_levels": [],
+      "discipline": "plyometric",
+      "gym_availability": "well_equipped_gym",
+      "requires_coaching": false,
+      "high_impact": true
+    },
+    "E198": {
+      "core_levels": [
+        "intermediate"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "lunge",
+      "slot_focus": [
+        "Glutes",
+        "Quads",
+        "Core/Obliques"
+      ],
+      "slot_pattern": [
+        "knee_dominant"
+      ]
+    },
+    "E199": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E200": {
+      "core_levels": [],
+      "discipline": "yoga",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "mobility_full_body"
+    },
+    "E201": {
+      "core_levels": [],
+      "discipline": "cardio",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "cardio_jog"
+    },
+    "E202": {
+      "core_levels": [],
+      "discipline": "cardio",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": true,
+      "variant_family": "jump"
+    },
+    "E203": {
+      "core_levels": [],
+      "discipline": "conditioning",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": true,
+      "variant_family": "warmup_cardio"
+    },
+    "E204": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E205": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "mobility_shoulder"
+    },
+    "E206": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "mobility_neck"
+    },
+    "E207": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "mobility_spine"
+    },
+    "E208": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E209": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "mobility_hip"
+    },
+    "E210": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E211": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E212": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "push_up",
+      "skill_track": "push_up",
+      "skill_step": 1,
+      "progression_to": "Incline Push Up"
+    },
+    "E213": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "dead_hang",
+      "skill_track": "pull_up",
+      "skill_step": 1
+    },
+    "E214": {
+      "core_levels": [],
+      "discipline": "cardio",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "cardio_walk"
+    },
+    "E215": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "stretch_hamstring"
+    },
+    "E216": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "stretch_quad"
+    },
+    "E217": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "stretch_shoulder"
+    },
+    "E218": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E219": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "stretch_shoulder"
+    },
+    "E220": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "stretch_chest"
+    },
+    "E221": {
+      "core_levels": [],
+      "discipline": "mobility",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E222": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "glute_bridge",
+      "slot_pattern": [
+        "hip_dominant"
+      ]
+    },
+    "E223": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E224": {
+      "core_levels": [
+        "beginner"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "pull_through"
+    },
+    "E226": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "glute_bridge"
+    },
+    "E227": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E228": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E229": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "romanian_deadlift"
+    },
+    "E230": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "leg_curl"
+    },
+    "E231": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "bench_press"
+    },
+    "E232": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "chest_fly"
+    },
+    "E233": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E234": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E235": {
+      "core_levels": [
+        "beginner",
+        "intermediate"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "lateral_raise"
+    },
+    "E236": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "front_raise"
+    },
+    "E237": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E238": {
+      "core_levels": [
+        "beginner",
+        "intermediate"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "dip",
+      "skill_track": "dip",
+      "skill_step": 1
+    },
+    "E239": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "triceps_kickback"
+    },
+    "E242": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "hammer_curl"
+    },
+    "E243": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E244": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "row"
+    },
+    "E245": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "lat_pulldown"
+    },
+    "E246": {
+      "core_levels": [
+        "beginner"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "row"
+    },
+    "E247": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "pullover"
+    },
+    "E248": {
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "leg_raise"
+    },
+    "E250": {
+      "core_levels": [
+        "beginner"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "leg_raise"
+    },
+    "E251": {
+      "core_levels": [
+        "beginner",
+        "intermediate"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "side_plank"
+    },
+    "E252": {
+      "core_levels": [
+        "beginner"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "wall_sit"
+    },
+    "E253": {
+      "core_levels": [
+        "beginner"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "good_morning"
+    },
+    "E254": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E255": {
+      "core_levels": [
+        "beginner"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "inverted_row"
+    },
+    "E256": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "skill_track": "pull_up",
+      "skill_step": 2,
+      "progression_to": "Pull Up"
+    },
+    "E257": {
+      "core_levels": [
+        "beginner",
+        "intermediate"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "glute_kickback"
+    },
+    "E258": {
+      "core_levels": [
+        "beginner",
+        "intermediate"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "calf_raise"
+    },
+    "E259": {
+      "core_levels": [
+        "beginner"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "split_squat"
+    },
+    "E260": {
+      "core_levels": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ],
+      "discipline": "strength",
+      "gym_availability": "standard_gym",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "incline_press"
+    },
+    "E261": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E262": {
+      "core_levels": [
+        "advanced",
+        "intermediate"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "shoulder_press",
+      "skill_track": "handstand_push_up",
+      "skill_step": 2,
+      "regression_to": "Pike Push Up"
+    },
+    "E263": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E264": {
+      "core_levels": [
+        "beginner"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "inverted_row",
+      "slot_focus": [
+        "Lats",
+        "Mid Back"
+      ]
+    },
+    "E265": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E266": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "lat_pulldown"
+    },
+    "E267": {
+      "core_levels": [
+        "beginner"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "lat_pulldown"
+    },
+    "E268": {
+      "core_levels": [
+        "beginner"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "biceps_curl"
+    },
+    "E269": {
+      "core_levels": [
+        "beginner"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "biceps_curl"
+    },
+    "E270": {
+      "core_levels": [
+        "beginner"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "triceps_extension"
+    },
+    "E271": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E272": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "y_raise",
+      "slot_focus": [
+        "Shoulders",
+        "Rear Delts"
+      ]
+    },
+    "E273": {
+      "core_levels": [
+        "beginner"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "lateral_raise",
+      "slot_focus": [
+        "Lateral Delts",
+        "Shoulders"
+      ]
+    },
+    "E274": {
+      "core_levels": [
+        "beginner"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "rear_delt_fly",
+      "slot_focus": [
+        "Mid Back",
+        "Rear Delts"
+      ],
+      "slot_pattern": [
+        "shoulder_isolation"
+      ]
+    },
+    "E275": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "row",
+      "slot_focus": [
+        "Lats",
+        "Mid Back"
+      ]
+    },
+    "E276": {
+      "core_levels": [
+        "beginner"
+      ],
+      "discipline": "prehab",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "rear_delt_fly",
+      "slot_focus": [
+        "Rear Delts",
+        "Mid Back"
+      ],
+      "slot_pattern": [
+        "shoulder_isolation"
+      ]
+    },
+    "E277": {
+      "core_levels": [
+        "beginner"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "rotator_cuff",
+      "slot_focus": [
+        "Mid Back",
+        "Rear Delts"
+      ],
+      "slot_pattern": [
+        "shoulder_isolation"
+      ]
+    },
+    "E278": {
+      "core_levels": [
+        "beginner"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "lat_pulldown"
+    },
+    "E279": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E280": {
+      "core_levels": [
+        "beginner"
+      ],
+      "discipline": "prehab",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "lat_pulldown"
+    },
+    "E281": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E282": {
+      "core_levels": [
+        "beginner"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "biceps_curl"
+    },
+    "E283": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "biceps_curl"
+    },
+    "E284": {
+      "core_levels": [
+        "beginner"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "triceps_extension"
+    },
+    "E285": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E286": {
+      "core_levels": [
+        "beginner"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "triceps_extension"
+    },
+    "E287": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E288": {
+      "core_levels": [],
+      "discipline": "prehab",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E289": {
+      "core_levels": [
+        "beginner"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "lateral_raise",
+      "slot_focus": [
+        "Lateral Delts",
+        "Shoulders"
+      ]
+    },
+    "E290": {
+      "core_levels": [],
+      "discipline": "prehab",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "rear_delt_fly",
+      "slot_focus": [
+        "Shoulders",
+        "Rear Delts"
+      ]
+    },
+    "E291": {
+      "core_levels": [
+        "beginner",
+        "intermediate"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "glute_bridge"
+    },
+    "E292": {
+      "core_levels": [
+        "beginner"
+      ],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false,
+      "variant_family": "leg_curl",
+      "slot_pattern": [
+        "knee_dominant"
+      ]
+    },
+    "E293": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    },
+    "E294": {
+      "core_levels": [],
+      "discipline": "strength",
+      "gym_availability": "home",
+      "requires_coaching": false,
+      "high_impact": false
+    }
+  }
+}

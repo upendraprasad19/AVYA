@@ -1,0 +1,393 @@
+# Closure ledger — phase-arc-flip batch (OI-53 flag 3 of 12)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no
+# `deferred:` key. closed_in_commit entries reference the labelled branch state
+# until the batch is committed (precedent: audit-fixwave-2026-07-02).
+#
+# Findings come from three passes: plan-review round 1 (F1-F14, 13 findings +
+# one assessed-not-a-defect), plan-review round 2 on the hardened plan (R1-R20),
+# and a scoped split-verification (Q1-Q4). Round 2's headline was that round 1's
+# own correction was defective — that is R1, and it is why the batch was SPLIT.
+
+batch: phase-arc-flip
+plan_review_record: docs/plan-reviews/phase-arc-flip.md
+bpass_review: docs/reviews/phase-arc-flip-bpass.md
+diagnose_doc: docs/diagnoses/2026-09-05-phase-arc-flip-label-and-length-defects-e3b7d1.md
+
+findings:
+  # ── plan-review round 1 ──────────────────────────────────────────
+  - id: F1
+    title: "Rollback section claimed an in-app kill-switch that no release build can set"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    notes: >
+      Verified: every flag toggle lives in the kDebugMode-gated dev panel and there is no
+      RemoteConfig, so rollback is a code revert plus a store round-trip. Plan §5 rewritten to say
+      so and to cite OI-95, which already records this as accepted risk across all OI-53 flags.
+      ⚠ F1's own EVIDENCE was wrong and was corrected by R8 — see that entry.
+
+  - id: F2
+    title: "liftedAny vs blob-write divergence could render DELOAD above 'Working week'"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    notes: >
+      Real, but the proposed fix was wrong and R1 refuted it. The contradiction is unreachable once
+      the label floor (F6/R10) and the >= 4 length guard (F3/R11) land, and it is moot in Unit A
+      anyway because the reason line is now dark. The genuinely reachable variant is R5, which
+      moved to Unit B with the surface it belongs to.
+
+  - id: F3
+    title: "Node count is untrusted blob data; a third writer (cloud restore) was unnamed"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    verification: >
+      Provider now requires waves.length >= 4 and renders take(4). Behavioral tests cover the
+      3-week (renders nothing) and 5-week (renders first 4) shapes. sync_workout.dart:1108 named
+      in the diagnose-doc's restore_methods.
+
+  - id: F4
+    title: "Proposed contract test pinned the fixture, not the invariant"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    notes: >
+      Superseded by R13, which showed even the producer-level pin is already covered by
+      test/plan_engine_v4/hypertrophy_archetype_test.dart. Resolved by running all three mutations
+      FILE-SCOPED and recording which file reddened, rather than adding a test whose red path
+      other files already own.
+
+  - id: F5
+    title: "Task list omitted bpass_review:, which the keystone CI gate hard-requires"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    verification: >
+      check_plan_review_record_exists.dart:846-866 read directly. The plan-review record carries
+      bpass_review: docs/reviews/phase-arc-flip-bpass.md and that file is committed with a
+      line-anchored `verdict: accepted`.
+
+  - id: F6
+    title: "Sixth state — the empty string — renders a dot with no label"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    verification: >
+      labelFor floors empty to an em dash. R10 then showed the isEmpty-only floor was insufficient
+      for whitespace; the shipped fix normalises once so both branches share it. Behavioral tests
+      cover '', '   ' and '\t'.
+
+  - id: F7
+    title: "Fifth wave token `working` was unmapped, rendering only via the fallback"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    verification: "'working': 'WORKING' added to _labels; behavioral test asserts it."
+
+  - id: F8
+    title: "The now-false four-state enumeration lives in five more places"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    notes: >
+      List re-derived per R15 — F8 had named plan_engine/CLAUDE.md:74, which was the one doc
+      already correct, and missed three others. Six sites swept: plan_engine_flags.dart (both the
+      getter and the triggered-deload note), train_provider.dart, models.dart,
+      phase_arc_strip.dart, workout_schedule_read_service.dart, volume_filter.dart, plus
+      screen.dart's stale flag-name comment.
+
+  - id: F9
+    title: "SoT registry entry goes stale and already carried a wrong writer line"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    verification: >
+      Corrected per R9's re-citation: :7952 (ship-dark claim) and the writer line 129 -> 164.
+      R9 also showed :7975 names the getter (unchanged) and :7986 belongs to an unrelated concept,
+      so neither was touched. check_sot_registry_parity.dart → PASS, 0 errors.
+
+  - id: F10
+    title: "The catch-block half of the getter has a dedicated test file the plan missed"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    verification: >
+      readiness_flag_no_hive_default_test.dart gained phaseArcEnabled (defaults TRUE) and
+      deloadReasonLineEnabled (defaults FALSE). 4/4 green.
+
+  - id: F11
+    title: "Ledger task omitted flip_reviewed: true"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    verification: "resolved: entry carries flip_reviewed: true, flip_commit and flip_review_record."
+
+  - id: F12
+    title: "Label truncation was routed to review when it is arithmetic"
+    terminal_state: verified_clean
+    evidence: >
+      AppTypography.micro → monoXs → JetBrains MONO (typography.dart:118,181), so width is
+      computable. At the widget's fontSize 8 the advance is ~4.8dp; "OVERREACH" (9 chars, +0.3
+      letterSpacing) ≈ 46dp against ~66dp of node width on a 320dp screen. It fits.
+      TextOverflow.clip kept. No device check needed and none claimed.
+
+  - id: F13
+    title: "lib/features/train/CLAUDE.md had no PhaseArcStrip row"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    verification: >
+      Row added covering the five-token vocabulary, the >= 4 render rule, the telemetry
+      asymmetry, the dark reason line and the FOB-8 hold-identity note.
+      check_nested_claude_md_content.dart and Gate 26 both PASS.
+
+  - id: F14
+    title: "Reason line persists for a user clamped at week 4"
+    terminal_state: verified_clean
+    evidence: >
+      Assessed as intended, not a defect: the app already treats clamped-week-4 as end-of-phase
+      and shows the phase-unlock card there. Moot in Unit A regardless — the reason line is dark.
+      Carried to Unit B with the surface it belongs to.
+
+  # ── plan-review round 2 (on the hardened plan) ───────────────────
+  - id: R1
+    title: "Round 1's own correction (Task 4) would have broken live deload behaviour"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    notes: >
+      DROPPED ENTIRELY, not moved. It would have changed shipped enable_triggered_deload behaviour
+      to fix a contradiction Tasks 2+3 already make unreachable, and in the one case it newly
+      covered would have emitted "Recovery week logged — you're recovered" over rows stamped
+      week_character: 'working'. This finding is what triggered the §4.12.1 split.
+
+  - id: R2
+    title: "A single bool cannot carry the three outcomes Task 4 needed"
+    terminal_state: verified_clean
+    evidence: "Moot — Task 4 dropped per R1. _liftWeekFour is unchanged by this batch."
+
+  - id: R3
+    title: "Committing the bpass file trips check_skill_tuning_history.dart"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    verification: >
+      Gate fires on ANY .md added under docs/reviews/ (script :93, its own comment at :78). A
+      same-dated entry naming docs/reviews/phase-arc-flip-bpass.md is appended to
+      .claude/skills/code-review/SKILL.md's Tuning history in this same commit; the gate was run
+      against the staged set and passes.
+      ⚠ This entry ORIGINALLY made that claim in the past tense while none of the three
+      artifacts existed or were staged — the B-pass caught it as a P0 (see B1 below). Corrected
+      rather than quietly re-worded, because the error is the interesting part.
+
+  - id: R4
+    title: "The strip becomes a seventh 'you are in week 4' surface for hold weeks"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    notes: >
+      Not a live bug — enable_hold_weeks is default OFF — so it is recorded as FOB-8 under that
+      flag's flip_on_blockers in docs/ship_dark_pending_review.yaml, and in the train CLAUDE.md
+      row. The strip reads getCurrentWeekNumber() directly rather than weekIdentityProvider.
+
+  - id: R5
+    title: "The stamped deload reason outlives the blob state it describes"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    notes: >
+      The real, reachable, permanent contradiction — deload_reason_phase_<P> is never deleted
+      anywhere in lib/ while a regen re-stamps week 4 as deload and the idempotency flag blocks
+      correction. CLOSED FOR UNIT A by making it unreachable: the reason line ships dark behind
+      the new enable_deload_reason_line. The underlying defect is recorded on that flag's ledger
+      entry and is Unit B's subject, with its own ×2 review. Nothing about it is reachable here.
+
+  - id: R6
+    title: "No diagnose-doc task, though the precedent flip required one"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    verification: "docs/diagnoses/2026-09-05-...-e3b7d1.md written and validator-passing."
+
+  - id: R7
+    title: "No closure ledger, which §4.2 makes mandatory at this finding count"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    verification: "This file."
+
+  - id: R8
+    title: "F1's exclusivity evidence was false — three more dev-panel flag writers exist"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    notes: >
+      Verified: _toggleEquipmentExclusions/_toggleReadiness/_toggleTriggeredDeload write via a
+      local `cfg` binding, which a `configBox.put` grep cannot see. F1's CONCLUSION survives
+      (all are kDebugMode-only); its evidence did not. The new _togglePhaseArc copies
+      _toggleReadiness — delete-key-to-restore-default, the correct shape for a default-ON flag.
+
+  - id: R9
+    title: "Two SoT citations wrong and the gate's mechanism stated backwards"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    verification: >
+      Re-cited to :7952 and the deload_decision_reason block; :7975 and :7986 left alone as R9
+      showed they do not go stale. The line_range trap R9 names was avoided — the writer keeps a
+      bare `line:` rather than becoming line_range: 164-164, which would fail as stale-line-range.
+
+  - id: R10
+    title: "The empty-string floor closes the instance, not the class — whitespace survives it"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    verification: >
+      labelFor normalises ONCE and both the lookup and the fallback read the normalised token, so
+      '  ' floors correctly. Behavioral tests cover '   ' and '\t'. Mutation M2 reverted this and
+      reddened 3 tests.
+
+  - id: R11
+    title: "== 4 guarded a state with no producer and diverged from the evaluator's >= 4"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    verification: >
+      Shipped as >= 4 + take(4), matching deload_evaluator.dart:228. Telemetry corrected per the
+      same finding — logEvent scoped to a truncated 1..3 blob, never recordNonFatal at length 0,
+      which is the ordinary no-plan state.
+
+  - id: R12
+    title: "Plan-review record task omitted branch: and the frontmatter requirement"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    verification: >
+      Record written with --- frontmatter carrying branch: phase-arc-flip, which
+      check_plan_review_record_exists.dart:807-812 checks first.
+
+  - id: R13
+    title: "The producer test is already covered, so its mutation would not discriminate"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    verification: >
+      All three mutations run FILE-SCOPED against phase_arc_reader_behavioral_test.dart, and the
+      diagnose-doc records which file reddened and by how much (4, 3, 1) rather than a suite count.
+
+  - id: R14
+    title: "Task 4 would invalidate four documentation contracts nothing updated"
+    terminal_state: verified_clean
+    evidence: >
+      Moot — Task 4 dropped per R1, so the four liftedAny contracts (plan_engine/CLAUDE.md:82-83,
+      deload_reason.dart:13-15, deload_evaluator.dart:143-147, sot_registry deload_decision_reason)
+      remain accurate as written and were deliberately left untouched.
+
+  - id: R15
+    title: "F8's doc-sweep list named a correct file and missed three wrong ones"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    verification: "List re-derived from grep before editing; see F8."
+
+  - id: R16
+    title: "F11 cited the two August ledger precedents, not the two nearest"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    notes: >
+      The resolved entry follows the 2026-09-01 readiness/triggered-deload shape (same OI-53 wave)
+      rather than the August ones.
+
+  - id: R17
+    title: "F3's 'no node is ever isCurrent' was stated unconditionally"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    notes: >
+      Correct: it holds only when currentWeek > waves.length, so a 3-week blob highlights normally
+      for the first three weeks. Qualified in the plan; the >= 4 guard is still right because the
+      late-phase state is unreachable-by-construction rather than merely rare.
+
+  - id: R18
+    title: "F10 carried stale v1 task numbering in its headline"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    notes: "Corrected in the plan's own finding text."
+
+  - id: R19
+    title: "The line-shift warning said 'by one' and will be read as exact"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    notes: "Reworded to 'by at least one — re-derive, never add one.'"
+
+  - id: R20
+    title: "No task updated the OI board, which this flip makes stale in two places"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    verification: >
+      OI-53 title and body decremented 10 → 9 with a dated founder-decision line and the split
+      recorded. build_oi_index.dart regenerated (81 open issues). OI-53 stays OPEN, so
+      check_closes_oi_cited.dart correctly does not fire.
+
+  # ── B-pass (adversarial, on the staged diff) ─────────────────
+  - id: B1
+    title: "The closure ledger attested to artifacts that did not exist"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    notes: >
+      P0. This file listed plan_review_record: and bpass_review: as existing, and R3 asserted in
+      the PAST TENSE that a SKILL.md tuning entry "was appended in this commit". None of the three
+      existed or were staged; a platform merge would have failed
+      check_plan_review_record_exists.dart in CI AT THE MERGE COMMIT, where the repair is a
+      reset --hard unwind. All three authored and staged; R3 corrected in place. The class — a
+      ledger is a CACHE of artifacts and I wrote the cache first — is the same one
+      ship_dark_pending_review.yaml's own header records for flip_reviewed: on 2026-09-02, three
+      days earlier. Added as a new `self_attesting_artifact` lens to the code-review skill.
+
+  - id: B2
+    title: "Diagnose-doc cited train_provider.dart:903 for a provider that starts at 906"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    verification: "grep -n 'final phaseArcProvider' → 906. Corrected."
+
+  - id: B3
+    title: "flip_commit carried a literal PENDING_COMMIT_SHA placeholder"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    notes: >
+      The sha cannot be known while writing the commit that contains the ledger. Resolved by
+      landing the flip in two commits on this branch — the batch, then a one-line commit filling
+      flip_commit: with the real sha — both reaching main in the same merge. Honest about the
+      ordering rather than encoding a placeholder that reads like a value.
+
+  - id: B4
+    title: "The dev-panel kill-switch would have looked inert"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    verification: >
+      setState rebuilds the DEV screen, not the Train tab, and phaseArcProvider reads the flag
+      non-reactively — so nothing re-ran the gate. Every sibling toggle invalidates via
+      runRolloverNow(ref); this one did neither. Added ref.invalidate(currentPlanProvider), and
+      corrected the diagnose-doc's provider_invalidations field, which said "no new invalidation
+      added". Worth fixing rather than noting: F1 established this flag has no release-build
+      kill-switch at all, so the debug one being observably functional is its only reachability.
+
+  - id: B5
+    title: "FOB-8 tracking confirmed accurate by an independent reader"
+    terminal_state: verified_clean
+    evidence: >
+      The B-pass independently verified the hold-week identity issue is genuinely gated behind
+      enable_hold_weeks (default OFF) and that FOB-8 and R4 describe it correctly. No action.
+
+  # ── scoped split-verification ────────────────────────────────────
+  - id: Q1
+    title: "Is the split clean — can the dark reason line leak into Unit A?"
+    terminal_state: verified_clean
+    evidence: >
+      CLEAN. deloadReasonProvider has exactly one consumer (phase_arc_strip.dart:35),
+      currentDeloadReason one caller chain, no Edge Function / AI-snapshot / report reader, and
+      deload_reason_phase_* is never bundled by sync. Nothing can enable the new flag in a release
+      build. The regen half of R5 does not surface as a contradiction because the regen rewrites
+      both the blob and the week-4 rows, so the DELOAD node matches what is scheduled.
+
+  - id: Q2
+    title: "recordNonFatal on the length guard would fire on every no-plan user"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    verification: >
+      Corrected before implementation: logEvent, scoped to 1 <= length < 4, with the specific
+      reason string phase_arc_truncated_week_plans (Gate 15 bans generic numbered labels).
+
+  - id: Q3
+    title: "Is the label normalisation complete against every producible token?"
+    terminal_state: verified_clean
+    evidence: >
+      CLEAN. Five producible tokens (baseline/overreach/peak/deload from periodization_engine.dart:45,
+      working from deload_evaluator.dart:231) plus the reader-synthesised empty string. All covered,
+      and rendering changes for no producible value — 'working' already rendered WORKING via the
+      fallback, so mapping it is documentative.
+
+  - id: Q4
+    title: "Does the new ship-dark flag create obligations the plan missed?"
+    terminal_state: closed_in_commit
+    commit: phase-arc-flip@branch
+    verification: >
+      No gate scans feature flags (verified across 94 check_*.dart). Two real artifacts were
+      missing and are now done: the deload_decision_reason SoT entry at :8077 (which names
+      enable_phase_arc for the render) and the §5 context-artifact budget row, since this batch
+      edits docs/audit/open_issues.md.

@@ -1,0 +1,119 @@
+# E2E Test: AI Coach
+
+## Setup
+- User must be signed in and onboarded
+- Navigate to AI Coach tab
+- User should be within 30-day free trial period
+
+---
+
+## E16: Send Message (Free Tier)
+
+**Frontend:**
+1. Navigate to AI Coach tab
+2. `preview_snapshot` → verify chat UI loaded (input field visible)
+3. `preview_fill` message input with "Hello, what should I eat today?"
+4. `preview_click` Send button
+5. Wait 5 seconds for Edge Function response
+
+**Backend:**
+```sql
+SELECT user_message, ai_response, model_used, created_at
+FROM ai_coach_interactions
+WHERE user_id = '<USER_ID>'
+ORDER BY created_at DESC
+LIMIT 1;
+```
+- **PASS:** Row exists with user_message containing "eat today" and ai_response non-empty
+- **NOTE:** Interaction may be stored locally in Hive first; Supabase entry depends on sync
+
+---
+
+## E17: Response Renders in Chat
+
+**Frontend:**
+1. After sending message in E16
+2. `preview_snapshot` → look for AI response bubble
+
+- **PASS:** AI response text visible in chat (not just loading indicator)
+- **FAIL:** Shows error message, loading spinner stuck, or empty response
+
+---
+
+## E18: Context Injection — AI Knows User's Goal
+
+**Frontend:**
+1. `preview_fill` message input with "What is my primary fitness goal? Answer in one sentence."
+2. `preview_click` Send
+3. Wait 5 seconds
+4. `preview_snapshot`
+
+- **PASS:** Response mentions "muscle" or "build_muscle" or "strength" (user's goal from onboarding)
+- **FAIL:** Generic response with no reference to user's profile
+
+---
+
+## E19: Daily Limit Check (7 messages/day free, 20/day PRO — forever, no trial)
+
+**NOTE:** This test requires sending 7 messages (free). Run selectively.
+
+The cap is enforced server-side by the `enforce_chat_app_daily_limit` trigger
+(live definition: migration 153), which spends a unit on `usage_counters`
+(`chat_app`) for each `channel='app'` `model_used='pending'` RESERVATION row and
+raises at the tier cap: free 7, PRO 20 (neither tier is unlimited). `ai-proxy`
+inserts the row BEFORE calling Gemini, so a failed generation consumes one UNLESS
+the failure was transport-class: then `refund_quota` gives the unit back (at most
+3 times per user per IST day) and the 200 body says `refunded: true`.
+
+**Frontend:**
+1. Send 6 more quick messages ("hi" x6), for 7 total
+2. After the 7th, send one more
+3. `preview_snapshot`
+
+- **PASS:** PaywallSheet or the "That is 7 messages today, Recruit" copy appears on the 8th
+- **FAIL:** the 8th message goes through without a limit
+
+---
+
+## E20: Prompt Chips Visible
+
+**Frontend:**
+1. Navigate to AI Coach tab (fresh state)
+2. `preview_snapshot` → look for quick prompt chips/suggestions
+
+- **PASS:** Prompt chips visible (e.g., "What should I eat?", "Summarize my week")
+- **FAIL:** No prompt suggestions shown
+
+---
+
+## E21: pgvector Memory Storage (PRO Only)
+
+**NOTE:** Requires PRO subscription. Skip for free users.
+
+**Setup:** Set user as PRO via:
+```sql
+INSERT INTO subscriptions (user_id, plan, status, start_date, end_date)
+VALUES ('<USER_ID>', 'monthly', 'active', NOW(), NOW() + INTERVAL '30 days');
+```
+
+**Frontend:**
+1. Send a distinctive message: "I always workout at 6am and prefer morning sessions"
+2. Wait 5 seconds
+3. Send: "When do I usually workout?"
+4. Wait 5 seconds
+5. `preview_snapshot`
+
+**Backend:**
+```sql
+SELECT content, source_type FROM memory_embeddings
+WHERE user_id = '<USER_ID>'
+ORDER BY created_at DESC
+LIMIT 5;
+```
+- **PASS:** Memory embedding exists containing "morning" or "6am"
+- **PASS (alt):** AI response to second message references morning/6am (memory retrieval working)
+
+**Cleanup:**
+```sql
+DELETE FROM subscriptions WHERE user_id = '<USER_ID>';
+```
