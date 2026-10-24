@@ -568,8 +568,10 @@ lib/shared/repositories/plan_engine/progression_resolver.dart :: exlog_* :: reps
 lib/shared/repositories/plan_engine/training_history_analyzer.dart :: exlog_* :: exercises
 lib/shared/repositories/plan_engine/training_history_analyzer.dart :: exlog_* :: primary_muscles
 lib/shared/repositories/plan_engine/training_history_analyzer.dart :: exlog_* :: reps
+lib/shared/repositories/plan_engine/training_history_analyzer.dart :: exlog_* :: session_duration_minutes
 lib/shared/repositories/plan_engine/training_history_analyzer.dart :: schedule_* :: exercise_name
 lib/shared/repositories/plan_engine/training_history_analyzer.dart :: schedule_* :: primary_muscles
 lib/shared/repositories/plan_engine/training_history_analyzer.dart :: schedule_* :: reps_completed
+lib/shared/repositories/plan_engine/training_history_analyzer.dart :: schedule_* :: session_duration_minutes
 lib/shared/repositories/plan_engine/training_history_analyzer.dart :: schedule_* :: volume_kg
 lib/shared/repositories/plan_engine/training_history_analyzer.dart :: schedule_* :: weight_kg

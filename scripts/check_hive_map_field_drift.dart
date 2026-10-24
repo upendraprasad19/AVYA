@@ -380,12 +380,6 @@ const _alwaysOk = <String>{
   // because they have no generateV4 caller to pass tier down from. NOT an
   // exlog_*/schedule_* field; same heuristic mis-attribution as the two above.
   'equipment_access',
-  // B2 (session set budget) — `session_duration_minutes` is a canonical
-  // userBox['profile'] field read by TrainingHistoryAnalyzer.sessionMinutesFromProfile()
-  // so generateV4 can size a session by the user's minutes. NOT an exlog_*/schedule_*
-  // field (no such writer emits it); same heuristic mis-attribution as the
-  // equipment_* fields above, because training_history_analyzer also reads exlog_* rows.
-  'session_duration_minutes',
   // plan_json cloud-bundle fields — read by _restoreWorkoutPlan +
   // PlanIntegrityReconciler from `user_progress.plan_json`, NOT from a
   // `schedule_*` entry. The prefix heuristic mis-attributes them because both

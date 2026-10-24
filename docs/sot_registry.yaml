@@ -16908,10 +16908,12 @@ concepts:
       (keepAllSlots), SessionSetAllocator.allocate sets each budgeted exercise's sets from a weekly
       band per budget group, a per-session cap and the day's seconds (1.20 x (overhead + sets x work
       + (sets - 1) x rest), archetypes H/M/I/B), and PeriodizationEngine.apply, VolumeTitration
-      .applyToWeeks and WarmupCooldownSelector.attach take the SAME SessionBudgetContext, so one
-      BudgetLedger decides every grant. Customs, timed / cardio / distance rows and rows with no
-      library row are NOT budgeted: they keep their sets and only spend time (Ruling 8). Display:
-      budgetedDayMinutes / homeCardMinutes price a stored plan day with the same model. OFF: every
+      .applyToWeeks take the SAME SessionBudgetContext (WarmupCooldownSelector.attach takes it for
+      its minutes), and each builds its own BudgetLedger over it, so the same predicate decides every
+      grant. Customs, timed / cardio / distance rows and rows with no library row are NOT budgeted:
+      they keep their sets and only spend time (Ruling 8; a cardio / distance / timed row prescribed
+      in minutes spends those minutes). Display: budgetedDayMinutes / homeCardMinutes price a stored
+      plan day with the same model, and the coach's shortenDay prices a day with it. OFF: every
       seam is null / false and generator_golden_test.dart (998 personas) is byte-identical. The proof
       is behavioural: the allocator, the consumers, the wiring, the display and the ON-world gate
       (1,802 real generateV4 runs, an independent time / cap oracle). Open product questions are
@@ -16946,8 +16948,11 @@ concepts:
         method: attach (budget)
         semantic: the cardio lead-in and the cool-down walk scale with the minutes (SessionBudget.warmCoolItemSeconds)
       - file: lib/shared/repositories/plan_engine/session_estimate.dart
-        method: budgetedDayMinutes / homeCardMinutes
-        semantic: the minutes Train and Home display, flag ON only
+        method: budgetedDayMinutes / budgetedDaySeconds / homeCardMinutes
+        semantic: the minutes Train and Home display, flag ON only; budgetedDaySeconds is the unrounded model
+      - file: lib/core/services/swap_service.dart
+        method: shortenDay (_estimateSeconds)
+        semantic: flag ON prices the day with budgetedDaySeconds (the minutes Train shows), OFF the old sets x (60 + rest) sum
       - file: lib/features/train/providers/train_provider.dart
         method: WorkoutDayData.budgetMinutes / estimatedDuration
         semantic: set at the day-card and week-list construction sites; null keeps sets x 2.5
@@ -16968,8 +16973,8 @@ concepts:
       TrainingHistoryAnalyzer.sessionMinutesFromProfile()): a caller-supplied duration in 15..180 wins, then a
       finite stored number that rounds into the range, then 60. The profile is read only while the flag is ON
       (debugReadCount proves OFF reads none). The field is carried to the cloud and back by the onboarding sync,
-      the profile sync and the pending-onboarding replay, and survives the user_repository integer-only column
-      allow-list.
+      the profile sync and the pending-onboarding replay, comes back on a restore through the generic user_profile
+      select merge in hydrateFromCloud, and survives the user_repository integer-only column allow-list.
     writers:
       - file: lib/features/profile/screens/edit_profile_screen.dart
         method: _save
@@ -16983,6 +16988,9 @@ concepts:
       - file: lib/core/services/sync_service.dart
         method: _replayPendingOnboardingSync
         semantic: carries the field in the replayed payload
+      - file: lib/core/services/auth_session_bootstrapper.dart
+        method: hydrateFromCloud (user_profile cloud to Hive merge)
+        semantic: the restore leg: the whole cloud row is merged into the Hive profile, this field included, as a skipSync hydration
     readers:
       - file: lib/shared/repositories/plan_engine/training_history_analyzer.dart
         method: sessionMinutesFromProfile
@@ -16996,4 +17004,10 @@ concepts:
       - file: lib/shared/repositories/user_repository.dart
         method: _integerOnlyColumns
         semantic: the column allow-list that keeps the value an integer
+      - file: lib/features/profile/providers/profile_completeness_provider.dart
+        method: kTier2Fields
+        semantic: the field counts toward profile completeness (a key presence check)
+      - file: lib/features/profile/screens/edit_profile_screen.dart
+        method: initState (SessionBudget.initialSessionDuration)
+        semantic: the picker's initial value, through the same resolution the generator uses
     contract_test_path: test/plan_engine_v4/session_minutes_resolution_test.dart

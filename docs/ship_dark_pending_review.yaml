@@ -328,21 +328,35 @@ pending:
       998 personas, plus test/contracts/session_set_budget_wiring_test.dart which also
       asserts no profile minutes are read). Platform tier. Rule 14 (plan_generator.dart)
       was waived by the founder for this batch's wiring only (F1). Evidence for the
-      flip review: test/plan_generator/session_set_budget_report.md (1,802 real
-      generateV4 runs) and the hard zeros of session_set_budget_gate_test.dart. Open
-      questions the report raises, each terminal in docs/audit/session-set-budget.closure.yaml
-      (upstream_blocked, reopen_when this flag's flip review): (1) the co_group_limited
-      and time_limited floors, e.g. the 6-day 90-minute build_muscle case leaves Quads at
-      8 weekly sets while Glutes sits at its top; (2) a 90-minute user leaves a median
-      27 minutes a day unused because the weekly tops bind first (founder F3: leftover
-      time stays unused); (3) a library timed / distance row keeps its sets (Ruling 8), so
-      on a 30-minute 3-day home_dumbbells day those rows alone can spend the whole budget
-      and the one forced lead lift overruns by up to 2.5 minutes (6 of 1,776 personas);
-      (4) Ruling 6, no time is reserved for the cardio finisher while no screen shows it;
-      (5) Ruling 7, the Edit Profile default is 60 and the 9 live rows at 90 stay 90. The
+      flip review: test/plan_generator/session_set_budget_report.md (1,847 real
+      generateV4 runs, flag ON, and the flag-OFF table for scale) and the hard zeros of
+      session_set_budget_gate_test.dart. Open questions the report raises, each terminal
+      in docs/audit/session-set-budget.closure.yaml (upstream_blocked, reopen_when this
+      flag's flip review): (1) the co_group_limited and time_limited floors, e.g. the
+      6-day 90-minute build_muscle case leaves Quads at 8 weekly sets while Glutes sits
+      at its top; (2) a 90-minute user leaves a median 27.2 minutes a day unused (founder
+      F3: leftover time stays unused; the report does not say which of the exercise
+      count, the 5-set max, the session caps or the weekly tops binds); (3) a library
+      timed / distance row keeps its sets (Ruling 8), so on a 30-minute 3-day
+      home_dumbbells day those rows alone can spend the whole budget and the one forced
+      lead lift runs up to 5.5 minutes over the user's minutes (7 days of 33,204);
+      (4) 12% of days run longer than the minutes by some amount (median 0.7 minutes
+      over): the model reserves warmCoolMinutes while the stored warm-up and cool-down
+      items vary (Ruling 3); (5) the lead-lift policy: protected from the week and from
+      an empty day, not from the clock, so a lead lift the time cannot afford is dropped
+      (0 of 9,966 allocated days in the grid); (6) a repeat phase keeps the previous
+      phase's exercise list, so a user who raises their minutes between phases and repeats
+      keeps the short list; (7) Ruling 6, no time is reserved for the cardio finisher
+      while no screen shows it; (8) Ruling 7, the Edit Profile default is 60 and the 9
+      live rows at 90 stay 90. Flip checklist: a new migration with a COMMENT ON COLUMN
+      for public.user_profile.session_duration_minutes (migration 017's comment says
+      the plan generator no longer reads it, and lists 30/45/60), and confirm the
+      Home card, the coach shortenDay pricing and the Train day card all read the same
+      budgeted minutes once ON. The
       flip commit deletes the OFF paths (CLAUDE.md 4.6 step 4: PeriodizationEngine.apply
       OFF body, VolumeTitration OFF clamp, VolumeFilter.targetCount trim, the sets x 2.5
-      display) and needs the full x2 review + bpass.
+      display, the OFF branch of swap_service.shortenDay) and needs the full x2 review +
+      bpass.
 
 resolved:
   - flag: ENABLE_SUBSCRIPTION_STACKING

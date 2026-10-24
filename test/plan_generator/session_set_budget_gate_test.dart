@@ -9,20 +9,31 @@
 // Hard zeros (every one is asserted; a non-empty list prints the first offenders):
 //  - time:        a day (any of the 4 weeks) whose INDEPENDENT minutes, with its
 //                 warm-up and cool-down, exceed the user's minutes + 2;
-//  - precondition (M6): 2 x (days whose lead lift credits a group) <= that group's
-//                 weekly top. This checks bookkeeping, not the model's truth;
+//  - precondition (M6): 2 x (days whose lead lift, as the allocator ranks it,
+//                 credits a group) <= that group's weekly top. This checks
+//                 bookkeeping, not the model's truth;
 //  - caps:        a group over its session cap or its weekly top, in any week;
 //  - lighter phase: a phase-4 weekly total over the band bottom;
 //  - empty days:  a day with no exercises;
 //  - forced:      `capForcedFirst` above 0;
 //  - lead lift:   a day's lead lift holding < 2 sets while >= 5 minutes are unused;
-//  - lost lifts:  a day the allocator saw with budgeted exercises ends with none.
+//  - lost lifts:  a day (any of the 4 weeks) that ends with no budgeted exercise, and
+//                 a day the allocator saw with budgeted exercises that ends with none;
+//  - allocator ran: `SessionSetAllocator.debugLastStats` is reset before each run and
+//                 must hold the variant(s) afterwards, so no allocator-derived zero
+//                 can pass on a previous run's numbers or on nothing at all;
+//  - display:     `SessionBudget.estimateDaySecondsFromPlanDay`, fed the stored shape
+//                 of the final plan's day (`WorkoutDay.toMap()`), equals the oracle's
+//                 seconds, so what Train and Home show is what the gate priced.
 //
 // The oracle below shares NOTHING with `SessionBudget`: its constants, its
 // archetype rule, its muscle-group mapper and its band tables are restated here
 // from the plan (Q4 section 4.2, Rulings 4 and 12), so a drift in either side
 // reddens the gate. It prices the final plan's sets at each exercise's own
-// `restSeconds` as the plan carries it.
+// `restSeconds` as the plan carries it. It restates only what the generator can
+// reach: a generated plan has no cardio / distance row and no timed row prescribed
+// in minutes (B-pass R3 P2-1 prices those in the engine and the display, and the
+// behavioural tests pin them), so its B rule is the flat 40 s a set.
 //
 // `WRITE_SESSION_BUDGET_REPORT=1` also writes `session_set_budget_report.md`.
 @Timeout(Duration(minutes: 12))
@@ -40,6 +51,7 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/models.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_generator.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/session_budget.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/session_set_allocator.dart';
 
 const _flag = 'enable_session_set_budget';
@@ -134,21 +146,27 @@ const _table = {
 // ── One persona ──────────────────────────────────────────────────────────────
 
 class _P {
-  _P(this.goal, this.tier, this.days, this.level, this.phase, this.minutes, {this.focus = const []});
+  _P(this.goal, this.tier, this.days, this.level, this.phase, this.minutes,
+      {this.focus = const [], this.injuries = const []});
   final String goal, tier, level;
   final int days, phase;
   final int? minutes;
   final List<String> focus;
+  final List<String> injuries;
+
+  /// `recompose` plans as build_muscle (the generator's own mapping).
+  String get planGoal => goal == 'recompose' ? 'build_muscle' : goal;
   int get effMinutes => minutes ?? 60;
   bool get lighter => phase % 4 == 0;
   String get effLevel => PlanGenerator.effectiveLevel(level, phase);
   Set<String> get focusGroups => _groups(focus);
   String get label => '$goal|$tier|${days}d|$level|p$phase|${minutes ?? 'null'}min'
-      '${focus.isEmpty ? '' : '|focus ${focus.join('+')}'}';
-  int get bottom => _table[goal]![effLevel]!.$1;
-  int top(String g) => lighter ? bottom : (focusGroups.contains(g) ? 25 : _table[goal]![effLevel]!.$2);
+      '${focus.isEmpty ? '' : '|focus ${focus.join('+')}'}'
+      '${injuries.isEmpty ? '' : '|injured ${injuries.join('+')}'}';
+  int get bottom => _table[planGoal]![effLevel]!.$1;
+  int top(String g) => lighter ? bottom : (focusGroups.contains(g) ? 25 : _table[planGoal]![effLevel]!.$2);
   int cap(String g) =>
-      (!lighter && focusGroups.contains(g)) ? 12 : _table[goal]![effLevel]!.$3;
+      (!lighter && focusGroups.contains(g)) ? 12 : _table[planGoal]![effLevel]!.$3;
 }
 
 /// What the report keeps from one run.
@@ -160,6 +178,13 @@ class _Agg {
   int timeForced = 0;
   final timeForcedOver = <double>[]; // minutes over the user's minutes, forced lead lifts only
   final timeForcedOverWhere = <String>[];
+  int days = 0; // every day of weeks 1-4 of every run
+  int daysOverMinutes = 0; // days longer than the user's own minutes, by any amount
+  double worstOverMinutes = 0; // the largest such overage, in minutes
+  final overs = <double>[]; // every such overage, in minutes
+  int leadDays = 0; // allocator days with a budgeted exercise (lead lifts)
+  int leadAbsent = 0; // ...whose lead lift was not kept (a cheaper lift filled the day)
+  int displayChecked = 0; // days compared with the display estimate
   final focusWeekly = <String, List<int>>{}; // 'days' -> weekly Chest sets, week 1
   final founder = <String, String>{}; // 'none' / 'Chest' -> markdown
 }
@@ -171,6 +196,7 @@ void main() {
   const testUser = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
   late Directory tempDir;
   late Map<String, Map<String, dynamic>> byName;
+  late Map<String, Map<String, dynamic>> rowsById;
 
   setUpAll(() async {
     tempDir = await Directory.systemTemp.createTemp('session_budget_gate');
@@ -192,6 +218,7 @@ void main() {
       await exBox.put((r['id'] ?? r['name']).toString(), r);
     }
     byName = {for (final r in rows) (r['name'] as String).toLowerCase(): r};
+    rowsById = {for (final r in rows) r['id'] as String: r};
     HiveService.instance.markInitializedForTests();
     await HiveUserSession.openForUser(testUser);
     await HiveService.instance.configBox.put(_flag, true);
@@ -253,7 +280,7 @@ void main() {
         daysPerWeek: p.days,
         phase: p.phase,
         experienceLevel: p.level,
-        injuries: const [],
+        injuries: p.injuries,
         bodyFocus: p.focus,
         sessionDuration: p.minutes,
         previousWeights: const {},
@@ -263,10 +290,16 @@ void main() {
   /// [bad] keyed by the zero's name.
   Phase check(_P p, Map<String, List<String>> bad) {
     void fail(String zero, String why) => (bad[zero] ??= []).add('${p.label}: $why');
+    // Reset, so a stat read below is THIS run's or absent, never a previous run's.
+    SessionSetAllocator.debugLastStats = null;
     final plan = gen(p);
     final stats = SessionSetAllocator.debugLastStats;
     _agg.runs++;
     final limitMin = p.effMinutes + 2;
+    final wantVariants = p.days == 6 ? const ['A'] : const ['A', 'B'];
+    for (final v in wantVariants) {
+      if (stats == null || !stats.containsKey(v)) fail('allocator ran', 'no stats for variant $v');
+    }
 
     for (var w = 0; w < plan.weekPlans.length; w++) {
       final weekGroups = <String, int>{};
@@ -277,7 +310,24 @@ void main() {
       for (var di = 0; di < days.length; di++) {
         final d = days[di];
         if (d.exercises.isEmpty) fail('empty days', 'week ${w + 1} ${d.name}');
+        // Oracle-side: no day may end without a budgeted lift, whatever the allocator says.
+        if (d.exercises.isNotEmpty && !d.exercises.any(budgeted)) {
+          fail('lost lifts', 'week ${w + 1} ${d.name} carries no budgeted exercise');
+        }
         final mins = daySeconds(d) / 60;
+        _agg.days++;
+        if (mins > p.effMinutes + 0.05) {
+          _agg.daysOverMinutes++;
+          _agg.overs.add(mins - p.effMinutes);
+          if (mins - p.effMinutes > _agg.worstOverMinutes) _agg.worstOverMinutes = mins - p.effMinutes;
+        }
+        // The display prices the STORED day (`toMap()`), and must say what the oracle did.
+        final shown = SessionBudget.estimateDaySecondsFromPlanDay(d.toMap(), rowsById);
+        _agg.displayChecked++;
+        if ((shown - daySeconds(d)).abs() > 1e-6) {
+          fail('display', 'week ${w + 1} ${d.name} display ${shown.toStringAsFixed(1)} s, oracle '
+              '${daySeconds(d).toStringAsFixed(1)} s');
+        }
         if (mins > limitMin) {
           // The ONE overage allowed: the day's lead lift, put on by the empty-day
           // guard although the not-budgeted rows (timed, cardio, distance: they keep
@@ -309,18 +359,22 @@ void main() {
       });
     }
 
-    // M6 precondition, read off the final week-1 plan: the first budgeted exercise
-    // of a day is its lead lift (rank 0).
-    final lead = <String, int>{};
-    for (final d in plan.weekPlans.first.workoutDays) {
-      final first = d.exercises.where(budgeted).firstOrNull;
-      if (first == null) continue;
-      for (final g in _groups(byName[first.exerciseName.toLowerCase()]!['primary_muscles'] as List)) {
-        lead[g] = (lead[g] ?? 0) + 1;
+    // M6 precondition, per allocated variant: the lead lift is the allocator's rank 0
+    // (the split's first slot of the day), which the final plan's own order need not
+    // keep (sequencing runs later), so the groups come from the allocator's own
+    // `firstLifts`, not from the first exercise of the finished day.
+    (stats ?? const <String, AllocationStats>{}).forEach((variant, s) {
+      final lead = <String, int>{};
+      for (final f in s.firstLifts) {
+        for (final g in f.groups) {
+          lead[g] = (lead[g] ?? 0) + 1;
+        }
       }
-    }
-    lead.forEach((g, n) {
-      if (2 * n > p.top(g)) fail('precondition', '$g leads $n days, 2 x $n > weekly top ${p.top(g)}');
+      lead.forEach((g, n) {
+        if (2 * n > p.top(g)) {
+          fail('precondition', '$variant: $g leads $n days, 2 x $n > weekly top ${p.top(g)}');
+        }
+      });
     });
 
     // Lost lifts: a day the allocator saw with budgeted exercises must still carry
@@ -345,6 +399,8 @@ void main() {
         _agg.belowFloor['$g:$label'] = (_agg.belowFloor['$g:$label'] ?? 0) + 1;
       });
       for (final f in s.firstLifts) {
+        _agg.leadDays++;
+        if (f.sets == 0) _agg.leadAbsent++;
         if (f.sets < 2 && f.secondsLeft >= 300) {
           fail('lead lift', 'day ${f.day} lead lift ${f.sets} set(s), ${(f.secondsLeft / 60).toStringAsFixed(1)} min unused');
         }
@@ -448,7 +504,39 @@ void main() {
     expectNoZeros(bad, runs, 4 * 3 * 2 + 2);
   });
 
-  test('report', () {
+  test('hard zeros: the recompose goal (plans as build_muscle) and injured users', () async {
+    // The grid's four goal tokens are not the app's five: onboarding also offers
+    // `recompose`, which the generator plans as build_muscle but through its own
+    // cardio path. And an injured user's days are thinner (top-up, exclusions).
+    await HiveService.instance.configBox.put('enable_core_list_pool', true);
+    final bad = <String, List<String>>{};
+    var runs = 0;
+    for (final tier in const ['full_gym', 'home_dumbbells']) {
+      for (final days in const [3, 4, 5]) {
+        for (final minutes in _minutesGrid) {
+          check(_P('recompose', tier, days, 'intermediate', 1, minutes), bad);
+          runs++;
+        }
+      }
+    }
+    for (final injuries in const [
+      ['knee'],
+      ['shoulder'],
+      ['lower_back'],
+    ]) {
+      for (final days in const [3, 4, 6]) {
+        for (final minutes in _minutesGrid) {
+          check(_P('build_muscle', 'full_gym', days, 'intermediate', 1, minutes, injuries: injuries),
+              bad);
+          runs++;
+        }
+      }
+    }
+    await HiveService.instance.configBox.delete('enable_core_list_pool');
+    expectNoZeros(bad, runs, 2 * 3 * 3 + 3 * 3 * 3);
+  });
+
+  test('report', () async {
     if (Platform.environment['WRITE_SESSION_BUDGET_REPORT'] != '1') {
       markTestSkipped('set WRITE_SESSION_BUDGET_REPORT=1 to write the report');
       return;
@@ -507,11 +595,24 @@ void main() {
       b.writeln('| $k | ${_agg.belowFloor[k]} |');
     }
     b
-      ..writeln('\n`timeForcedFirst` (days whose lead lift was put on although the time was spent): '
-          '${_agg.timeForced}')
-      ..writeln('\nDays over minutes + 2 that the forced lead lift explains (the one allowed overage): '
-          '${_agg.timeForcedOver.length}'
+      ..writeln('\n## Time and lead lifts (counts are DAYS of weeks 1-4 of every run, not personas)\n')
+      ..writeln('- Days longer than the user\'s own minutes, by any amount: ${_agg.daysOverMinutes} of '
+          '${_agg.days}, worst ${_agg.worstOverMinutes.toStringAsFixed(2)} min over. '
+          'The gate\'s limit is minutes + 2.')
+      ..writeln('- Of those, median ${median(_agg.overs).toStringAsFixed(2)} min over, '
+          '${_agg.overs.where((o) => o > 1).length} days over by more than 1 min, '
+          '${_agg.overs.where((o) => o > 2).length} by more than 2 (the exempt forced lead lifts). '
+          'The stored warm-up and cool-down items vary by day type while the model reserves '
+          '`warmCoolMinutes`; this is that calibration residual (Ruling 3).')
+      ..writeln('- `timeForcedFirst` (days the empty-day guard filled although the time was already '
+          'spent: the lead lift, or the first exercise that had weekly room): ${_agg.timeForced}')
+      ..writeln('- Days over minutes + 2 that the forced lead lift explains (the gate\'s one '
+          'exemption): ${_agg.timeForcedOver.length}'
           '${_agg.timeForcedOver.isEmpty ? '' : ', worst ${_agg.timeForcedOver.reduce((a, b) => a > b ? a : b).toStringAsFixed(1)} min over the user\'s minutes, e.g. ${_agg.timeForcedOverWhere.first}'}.')
+      ..writeln('- Lead lift not kept (the time left fitted a cheaper lift but not 2 sets of it): '
+          '${_agg.leadAbsent} of ${_agg.leadDays} allocated days (every run, both variants).')
+      ..writeln('- Display agreement: ${_agg.displayChecked} stored days priced by '
+          '`SessionBudget.estimateDaySecondsFromPlanDay` equal the oracle to 1e-6 s.')
       ..writeln('\n## Focus Chest, intermediate, 90 min: week-1 Chest sets by split\n')
       ..writeln('| split | Chest sets |')
       ..writeln('|---|---|');
@@ -522,6 +623,25 @@ void main() {
       ..writeln(_agg.founder['none'] ?? '(not run)')
       ..writeln('\n### Focus Chest')
       ..writeln(_agg.founder['Chest'] ?? '(not run)');
+    // For scale: the same persona shape with the flag OFF (a fixed exercise count),
+    // priced by the same oracle. Phase 1, week 1, build_muscle, full_gym.
+    await HiveService.instance.configBox.put(_flag, false);
+    b
+      ..writeln('\n## For scale: the flag-OFF world (build_muscle, full_gym, phase 1, week 1)\n')
+      ..writeln('Median day in minutes with warm-up and cool-down, priced by the same oracle. '
+          'OFF ignores the user\'s minutes.\n')
+      ..writeln('| days | beginner | intermediate | advanced |')
+      ..writeln('|---|---|---|---|');
+    for (final days in _dayCounts) {
+      final cells = <String>[];
+      for (final level in _levels) {
+        final plan = gen(_P('build_muscle', 'full_gym', days, level, 1, 60));
+        cells.add(median([for (final d in plan.weekPlans.first.workoutDays) daySeconds(d) / 60])
+            .toStringAsFixed(1));
+      }
+      b.writeln('| $days | ${cells.join(' | ')} |');
+    }
+    await HiveService.instance.configBox.put(_flag, true);
     File('test/plan_generator/session_set_budget_report.md').writeAsStringSync(b.toString());
   });
 }
