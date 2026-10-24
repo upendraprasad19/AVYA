@@ -53,8 +53,11 @@ the batch, none deferred. The full gate loop on the final state (base 87a0d8d1):
 **Rebuild and re-key.** The review was first named `df17bd0d780e`. While the branch sat staged, the library-injury-recheck
 landing reached main (1f1ea306) and touched `docs/blast_radius.yaml`, `docs/diagnoses/INDEX.md` and the tuning archive.
 The branch was rebuilt on 1f1ea306 (a 3-way merge of the staged tree; the only conflict was the two appends at the end
-of the tuning archive, resolved by keeping main's entry then this one) rather than merged, because a merge commit of
-that much unrelated platform-tier content would need a review of its own. The staged-diff hash became `cedb32369c1c`
+of the tuning archive, resolved by keeping main's entry then this one) instead of merging main into it. That was a
+choice, not a gate requirement: the commit-time review gate (`scripts/check_code_review_pass_exists.dart`) demands a
+staged review only at catastrophic tier, and what main gained classifies as platform by path and holds no SQL, so a
+merge commit would also have passed it. The rebuild keeps this pull request's diff to the branch's own change. The
+staged-diff hash became `cedb32369c1c`
 and the review file was renamed to it; its `staged_against` line and the archive entry record the old name. The review
 text was not changed. Equivalence proof: the same 15 files are staged, and `git patch-id --stable` of 12 of the 13
 hashed files is equal to the reviewed diff's (including `docs/blast_radius.yaml`, which main also changed);
