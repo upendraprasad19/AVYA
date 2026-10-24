@@ -26,11 +26,11 @@ writers:
     method: install_hook (temp file, cmp, chmod +x / a-w, mv -f, cmp), record_failure, write_readme, EXIT/HUP/INT/TERM traps
     line: 99
   - file: scripts/pre-commit.sh
-    method: diagnose-index regen block (git add -u -- docs/diagnoses/INDEX.md)
-    line: 194
+    method: diagnose-index regen block (tracked-only guard, then git add -u -- docs/diagnoses/INDEX.md)
+    line: 196
   - file: scripts/pre-commit.sh
-    method: open-issues-index regen block (git add -u -- docs/audit/OPEN_INDEX.md)
-    line: 211
+    method: open-issues-index regen block (tracked-only guard, then git add -u -- docs/audit/OPEN_INDEX.md)
+    line: 216
 readers:
   - file: scripts/check_hooks_installed.dart
     method_or_widget: Gate 32 per-hook loop (presence, byte comparison against scripts/<hook>.sh, STALE warning text)
@@ -54,7 +54,7 @@ cross_account_guard: n/a
 forbidden_patterns_checked:
   - { pattern: 'install_hook\s+"', absent: false }   # exactly the five canonical calls; Gate 32 and two tests parse that shape (asserted by case 10)
   - { pattern: '\$\{[A-Za-z_]+:-', absent: true }   # no default-idiom read: test/helpers/spawn_env_scan.dart reads it as an env input
-  - { pattern: 'git add docs/(diagnoses|audit)/(OPEN_)?INDEX\.md', absent: true }   # in scripts/pre-commit.sh: both regen blocks use git add -u -- <path>. check_diagnose_index_fresh.dart:75 still prints the plain hint; it dies with Gate 25 in the A2 landing, which deletes that gate
+  - { pattern: 'git add docs/(diagnoses|audit)/(OPEN_)?INDEX\.md', absent: true }   # in scripts/pre-commit.sh: both regen blocks guard with git ls-files --error-unmatch and then use git add -u -- <path>. check_diagnose_index_fresh.dart:75 still prints the plain hint; it dies with Gate 25 in the A2 landing, which deletes that gate
 proposed_fix: >-
   setup-hooks.sh installs each hook atomically and read-only: copy to a temp
   file next to the hook, cmp it against the source, chmod +x and a-w, rename it
@@ -77,9 +77,11 @@ proposed_fix: >-
   AVYA-HOOKS-README.txt beside the hooks (the one channel that reaches an agent standing
   in a stale tree). A failed chmod +x (unless the temp copy is already executable), a
   failed git config core.sshCommand and a cmp that cannot run are recorded failures
-  instead of silent or aborting ones. pre-commit.sh stages the indexes with
-  git add -u -- <path>, which stages a tracked index and is a no-op for an
-  untracked one. Gate 32's fix text and CLAUDE.md, hooks.md and FRESH_CLONE.md now
+  instead of silent or aborting ones. pre-commit.sh stages each regenerated index
+  only when it is TRACKED (a git ls-files --error-unmatch guard, then
+  git add -u -- <path>): a plain git add of an ignored untracked path exits 1 and,
+  on the CI runner's git 2.55.0, so does git add -u -- <path> (exit 128; this VPS's
+  git 2.43.0 accepts it; found by CI on PR #159, see "CI finding" below). Gate 32's fix text and CLAUDE.md, hooks.md and FRESH_CLONE.md now
   say "install from the primary after git fetch origin main && git merge
   --ff-only origin/main". setup-hooks.sh moves to platform tier in
   docs/blast_radius.yaml (it was DECLINED as fresh-clone-only; it is the only
@@ -100,7 +102,7 @@ recurrence: |
   warns; none of those fixes touched how the hooks are written. This instance
   changes the writer: atomic, read-only, one place that says who may run it.
 touched_layers_checked:
-  - { tier: 1, name: client_code, status: fixed_in_this_batch, evidence: "setup-hooks.sh rewritten (stale-tree refusal, install_hook, record_failure, record_cmp_failure, write_readme, traps); pre-commit.sh git add -u -- at the two regen blocks. Tests: setup_hooks_atomic_install_e2e_test.dart 38/38 and pre_commit_index_add_e2e_test.dart 6/6. Mutation runs (each applied with a match count of 1, run, restored byte-identical; sha256 of both scripts verified equal afterwards): 53 mutants on the final state (46 on setup-hooks.sh, 7 on pre-commit.sh), every one reddened at least one case. The first B-pass (Sonnet, fresh, 110 tool calls) ran 14 more mutants against the FIRST version of these tests and 12 survived; each survivor became a test (chmod before the rename, temp beside the hook, mv -f, numeric foreign temp, pid-less temp names, a Git-Bash-like mv for the u+w retry, a bare git add -u with unrelated unstaged WIP, an installed-line assertion that could not fail because it compared an absolute path to a relative one) and three became installer behaviour (the stale-tree refusal runs BEFORE anything is replaced, a failed git config no longer aborts the summary, a failed chmod +x or an unusable cmp is a recorded failure). Case 13 (SIGTERM) runs only where sh is dash (it is on this VPS); on another sh only case 16 kills the EXIT-trap mutant." }
+  - { tier: 1, name: client_code, status: fixed_in_this_batch, evidence: "setup-hooks.sh rewritten (stale-tree refusal, install_hook, record_failure, record_cmp_failure, write_readme, traps); pre-commit.sh tracked-only guard plus git add -u -- at the two regen blocks. Tests: setup_hooks_atomic_install_e2e_test.dart 38/38 and pre_commit_index_add_e2e_test.dart 20/20. Mutation runs (each applied with a match count of 1, run, restored byte-identical; sha256 of both scripts verified equal afterwards): 53 mutants on the state BEFORE the CI finding (46 on setup-hooks.sh, 7 on pre-commit.sh), every one reddened at least one case. The first B-pass (Sonnet, fresh, 110 tool calls) ran 14 more mutants against the FIRST version of these tests and 12 survived; each survivor became a test (chmod before the rename, temp beside the hook, mv -f, numeric foreign temp, pid-less temp names, a Git-Bash-like mv for the u+w retry, a bare git add -u with unrelated unstaged WIP, an installed-line assertion that could not fail because it compared an absolute path to a relative one) and three became installer behaviour (the stale-tree refusal runs BEFORE anything is replaced, a failed git config no longer aborts the summary, a failed chmod +x or an unusable cmp is a recorded failure). Case 13 (SIGTERM) runs only where sh is dash (it is on this VPS); on another sh only case 16 kills the EXIT-trap mutant. After CI found the git 2.55.0 behaviour (section CI finding) and the delta B-pass of the fix, 26 mutants on the guard and the 20-case test (the 16 of the first round, the reviewer's survivors SA swallow-the-add, SB HEAD-keyed guard, SC ignore-keyed guard and SD diagnose-builder-not-fatal at each site, the stub dropped from the hook's PATH, and two spellings of add the stub does not model): every one reddened at least one case. M13/M14 (git add -- <path> without -u inside the guard) are equivalent in behaviour for a tracked file and are red only because the stub refuses any spelling of add it does not model; both files were restored byte-identical (sha256 equal)." }
   - { tier: 2, name: hive_local_state, status: not_applicable, evidence: "No Hive key or box involved." }
   - { tier: 3, name: postgres_schema, status: not_applicable, evidence: "No DDL." }
   - { tier: 4, name: postgres_data, status: not_applicable, evidence: "No data touched." }
@@ -190,8 +192,58 @@ F13 `git -C` on the sources diff; F14 this section. Two tests were added after t
 independence of the two overrides. The surviving-mutant measure: round 1 found 12 of 14 mutants
 alive, the delta round's own 53-mutant run left none.
 
+## CI finding on PR #159: `git add -u -- <untracked path>` is an error on newer git
+
+The first pushed version of this fix passed everything locally and failed two cases (2a, 2b) in CI
+shard 2/4. The runner has git 2.55.0; this VPS has 2.43.0. Writer: `scripts/pre-commit.sh:196` and
+`:216` (the regen blocks). Reader: git itself.
+
+- **Symptom (CI log):** `error: pathspec 'docs/audit/OPEN_INDEX.md' did not match any file(s) known to git`,
+  hook exit 128, with the index already built and ignored. Cases 2a and 2b (index ignored and untracked).
+- **Cause:** on git 2.43.0 `git add -u -- <path>` is a silent no-op for an existing ignored, untracked
+  path; the plan's "(executed)" measurement and both B-pass seats ran only that git. Git 2.55.0 rejects that
+  shape (the one CI exercised; other versions and other shapes are not measured). The design claim "a no-op
+  for an untracked one" was true on one git version.
+- **Fix:** stage an index only when it is tracked: `git ls-files --error-unmatch -- <index> >/dev/null 2>&1`,
+  then `git add -u -- <index>`. The question asked of git is the same on every version.
+- **Why the local tests could not see it, and what changed:** the e2e hook ran the machine's git. It now runs
+  with a PATH-stub `git` that exits 128 for `add -u -- <path>` on an untracked path, refuses (exit 99) every
+  spelling of `add` it does not model, passes the rest to the real git and LOGS every call; each case asserts
+  from the log that the hook really asked the stub whether the index is tracked and called `add -u` exactly
+  when it is (so dropping the stub from the hook's PATH reddens 15 cases). Case 0 proves the stub.
+  Mixed fixtures (4a-4d: one index tracked, the other ignored) tell the two sites apart; 2a/2b assert that no
+  git noise leaks from the guard (the hook runs with `LC_ALL=C`).
+- **Delta B-pass of the fix** (one fresh Sonnet seat, 0 P0, 0 P1, 3 P2, 3 P3; every finding closed in this
+  batch): the guard is correct in every index state the reviewer built (tracked clean, modified, deleted,
+  intent-to-add, tracked and ignored, merge in progress, linked worktree, bash, bash --posix, busybox); the
+  gaps were in the tests. P2: no case for the UNTRACKING commit (staged deletion, ignored path; a guard keyed
+  on HEAD survived) or for an index untracked and NOT ignored (a guard keyed on `git check-ignore`
+  survived) -> cases 5a/5b/5c; nothing pinned that a failing `git add` inside the guard stays fatal
+  (`|| true` survived) -> cases 6a/6b with a held `.git/index.lock`; case 0 ran the stub by absolute path and
+  nothing proved the hook used it, and the stub matched only the literal `add -u --` -> the call log and the
+  99 tripwire. P3: the version claims were extrapolations ("git >= 2.5x", "any untracked path") -> scoped to
+  2.55.0 versus 2.43.0 in the hook, the test, this doc, the plan and bug class 2.118; a diagnose-builder
+  failure was untested (`exit 1` -> `:` survived) and no case had a tracked index that rebuilds IDENTICAL
+  -> cases 3b and 7a/7b; `--skip-worktree` / `--assume-unchanged` -> Residuals.
+- **Recurrence:** the "green local = this machine's layout" class (memory
+  feedback_green_local_is_this_machines_layout), here a tool VERSION instead of a path layout. CI was the
+  second environment; a reviewer's mutants on the same machine could not have found it.
+
 ## Residuals (stated, not hidden)
 
+- The installer's own git calls (`merge-base --is-ancestor`, `config`, `rev-parse`, `diff`) are not
+  version-specific as far as CI shows: `setup_hooks_atomic_install_e2e_test.dart` ran in shard 3 of the first
+  CI run of PR #159 (git 2.55.0, the log's own `git version`), and that shard passed.
+- `git update-index --skip-worktree` on a regenerated index makes the hook exit 1 with sparse-checkout advice,
+  and `--assume-unchanged` makes it exit 0 without staging a TRACKED regenerated index. Both behave the same
+  under origin/main's plain `git add` and the first A0 hook, so this is not a regression of the fix; no
+  repo doc or workflow sets either flag. Measured on git 2.43.0 only.
+- Once landing A2 untracks the indexes, two printed hints tell the user to `git add` an ignored path
+  (`scripts/check_diagnose_index_fresh.dart:75` and `scripts/pre-merge-commit.sh:183`); both are covered by
+  landing A2 as planned (it deletes Gate 25, which owns the first hint, and suppresses the merge hook's NOTE,
+  which holds the second, when the index is ignored).
+- The cases that touch intent-to-add, unmerged and skip-worktree states delegate to the real git, so how git
+  2.55.0 treats those is not measured here.
 - The Windows retry (`chmod u+w`, `mv` again) cannot be exercised on Linux.
 - A machine whose installed hook is still the OLD one is only fixed when someone
   runs the installer from a current primary. The next landing (A2) therefore
