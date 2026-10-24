@@ -43,12 +43,14 @@ import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-
 import { encode as hexEncode } from "https://deno.land/std@0.177.0/encoding/hex.ts";
 import { encode as base64Encode } from "https://deno.land/std@0.177.0/encoding/base64.ts";
 import {
+  isEnvExactlyTrue,
   isStackingEnabled,
   isValidPaymentId,
   plainEndDate,
   recordPaidSubscription,
 } from "../_shared/subscription_stacking.ts";
 import { checkStackingMismatch, reportPaymentRecordFailure } from "../_shared/payment_alert.ts";
+import { boundedText, codeToken, errorName, notesShape, pgErrorCode, razorpayErrorSummary, stackFrames } from "../_shared/payment_log_safe.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -138,7 +140,7 @@ async function derivePlanFromAmount(
 
       if (isExpired || isExhausted || isInactive) {
         console.warn(
-          `[razorpay-webhook] Promo '${promoCode}' ${isInactive ? 'inactive' : isExpired ? 'expired' : 'exhausted'} ` +
+          `[razorpay-webhook] Promo ${boundedText(promoCode)} ${isInactive ? 'inactive' : isExpired ? 'expired' : 'exhausted'} ` +
           `— honoring anyway (was valid at checkout time)`
         );
       }
@@ -186,7 +188,7 @@ async function computeExpectedAmount(
     .maybeSingle();
 
   if (!promo) {
-    console.warn(`Promo code '${promoCode}' not found — using full price`);
+    console.warn(`Promo code ${boundedText(promoCode)} not found — using full price`);
     return { expectedPaise: fullPrice, promoApplied: false, discountPct: 0 };
   }
 
@@ -203,7 +205,7 @@ async function computeExpectedAmount(
 
   if (isExpired || isExhausted || isInactive) {
     console.warn(
-      `Promo '${promoCode}' ${isInactive ? 'inactive' : isExpired ? 'expired' : 'exhausted'} ` +
+      `Promo ${boundedText(promoCode)} ${isInactive ? 'inactive' : isExpired ? 'expired' : 'exhausted'} ` +
       `— honoring anyway (was valid at checkout time)`
     );
   }
@@ -227,11 +229,16 @@ async function redeemPromo(
   finalPaise: number,
 ) {
   try {
-    // Atomically increment used_count
-    await supabaseClient.rpc("increment_promo_used_count", { p_code: promoCode });
+    // Atomically increment used_count. supabase-js RETURNS its errors (it does not throw them), so each
+    // call's error is checked and logged by label and code (R-6, payment-hardening U0): used_count gates
+    // promo exhaustion at order time (U3), so a silent failure here is a promo that never runs out.
+    const { error: incErr } = await supabaseClient.rpc("increment_promo_used_count", { p_code: promoCode });
+    if (incErr) {
+      console.error(`[razorpay-webhook] promo redemption: increment_promo_used_count failed code=${pgErrorCode(incErr)}`);
+    }
 
     // Audit trail
-    await supabaseClient.from("promo_code_uses").insert({
+    const { error: useErr } = await supabaseClient.from("promo_code_uses").insert({
       code: promoCode,
       user_id: userId,
       plan_purchased: plan,
@@ -239,8 +246,65 @@ async function redeemPromo(
       discount_applied: originalPaise - finalPaise,
       final_amount: finalPaise,
     });
+    if (useErr) {
+      // 23505 = UNIQUE(code, user_id) (migration 025): this user used the code before and the audit row exists.
+      // Expected on a repeat purchase, so not an error line (hermes H9).
+      if (pgErrorCode(useErr) === "23505") {
+        console.log(`[razorpay-webhook] promo redemption: repeat use by this user, audit row already exists`);
+      } else {
+        console.error(`[razorpay-webhook] promo redemption: promo_code_uses insert failed code=${pgErrorCode(useErr)}`);
+      }
+    }
   } catch (e) {
-    console.error("Non-fatal: promo redemption failed:", e);
+    console.error(`[razorpay-webhook] promo redemption threw (non-fatal): ${errorName(e)} code=${pgErrorCode(e)}`);
+  }
+}
+
+/** Kill switch for the already-captured recovery (payment-hardening U2, OI-351): exactly "true" = today's 502. */
+export const CAPTURE_RECOVERY_DISABLE_ENV = "DISABLE_WEBHOOK_CAPTURE_RECOVERY";
+/** How long the recovery GET may take; a hang must not hold Razorpay's 5 s delivery clock. */
+export const RECOVERY_GET_TIMEOUT_MS = 1500;
+
+/**
+ * After Razorpay REFUSED our capture of an authorized payment: is it in fact already captured, for exactly
+ * this amount? (It is, when a first delivery captured it and then failed to record the row, so every replay
+ * of the same `payment.authorized` event used to meet "already captured" and answer 502 for up to a day.)
+ * Never throws: a non-OK answer, a malformed body, a network error or a hang past [timeoutMs] is `false`.
+ * The body read sits INSIDE the race, so a hang after the headers is bounded too.
+ */
+export async function rereadIsCaptured(
+  paymentId: string,
+  expectedAmount: unknown,
+  credentials: string,
+  timeoutMs: number = RECOVERY_GET_TIMEOUT_MS,
+): Promise<boolean> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<false>((resolve) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      resolve(false);
+    }, timeoutMs);
+  });
+  const read = (async (): Promise<boolean> => {
+    const resp = await fetch(`https://api.razorpay.com/v1/payments/${paymentId}`, {
+      method: "GET",
+      headers: { "Authorization": `Basic ${credentials}`, "Content-Type": "application/json" },
+      signal: controller.signal,
+    });
+    if (!resp.ok) return false;
+    const p: unknown = await resp.json();
+    if (p === null || typeof p !== "object" || Array.isArray(p)) return false;
+    const e = p as { id?: unknown; amount?: unknown; captured?: unknown; status?: unknown };
+    return e.id === paymentId &&
+      typeof e.amount === "number" && e.amount === expectedAmount &&
+      e.captured === true &&
+      e.status === "captured";
+  })().catch(() => false);
+  try {
+    return await Promise.race([read, timeout]);
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -418,6 +482,47 @@ export async function handler(req: Request): Promise<Response> {
       );
     }
 
+    // hermes H12 (payment-hardening): the notes.user_id refusals run BEFORE the capture below. A payment with no
+    // user_id, or one that is not a UUID, is refused while it is still only authorized, so Razorpay's auto-refund
+    // of uncaptured payments returns the money; capturing first took it with no row to write (diagnose c7e3b1).
+    // Only these two refusals moved: an amount that matches no plan is still found after the capture (the B2a
+    // amount_no_match alert): OI-409, with the shared-account question.
+    // Extract user_id and promo from notes (set during checkout creation).
+    // NOTE: notes.plan is intentionally NOT used for entitlement — plan is
+    // derived server-side from the on-wire amount via derivePlanFromAmount
+    // per docs/architecture/payment.md rule 1. A client that spoofs notes.plan cannot
+    // claim a different plan than what the amount actually paid for.
+    const notes = paymentEntity.notes ?? {};
+    const userId = notes.user_id;
+    const promoCode = notes.promo_code as string | undefined;
+
+    if (!userId) {
+      console.error(`[razorpay-webhook] Missing user_id in payment notes: ${notesShape(notes)}`);
+      return new Response(
+        JSON.stringify({ error: "Missing user_id in payment notes" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    // Validate userId is a proper UUID to prevent injection / spoofing.
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(userId)) {
+      console.error(
+        `[razorpay-webhook] Invalid user_id format in payment notes: type=${typeof userId} length=${String(userId).length}`,
+      );
+      return new Response(
+        JSON.stringify({ error: "Invalid user_id format" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
     // If this is a payment.authorized event, capture the payment now so
     // it becomes final. Razorpay will fire a second payment.captured
     // event after our capture call, which we handle idempotently above
@@ -438,10 +543,15 @@ export async function handler(req: Request): Promise<Response> {
           },
         );
       }
+      // payment-hardening U2 (OI-351): a REFUSED capture is no longer an immediate 502. The switch is read
+      // once per request; set to exactly "true" it restores today's 502 on every refusal.
+      const recoveryDisabled = isEnvExactlyTrue(CAPTURE_RECOVERY_DISABLE_ENV);
+      const credentials = base64Encode(
+        `${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`,
+      );
+      let captureRefused = false;
+      let refusal = "";
       try {
-        const credentials = base64Encode(
-          `${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`,
-        );
         const captureResp = await fetch(
           `https://api.razorpay.com/v1/payments/${razorpayPaymentId}/capture`,
           {
@@ -458,9 +568,30 @@ export async function handler(req: Request): Promise<Response> {
         );
         if (!captureResp.ok) {
           const body = await captureResp.text();
-          console.error(
-            `[razorpay-webhook] capture failed for ${razorpayPaymentId}: ${captureResp.status} ${body}`,
+          captureRefused = true;
+          refusal = `capture failed for ${razorpayPaymentId}: ${razorpayErrorSummary(captureResp.status, body)}`;
+        } else {
+          console.log(
+            `[razorpay-webhook] auto-captured authorized payment ${razorpayPaymentId}`,
           );
+          // We continue below to write the subscription. Razorpay will also
+          // send payment.captured later — that call will hit the UNIQUE
+          // constraint and be a no-op (idempotent).
+        }
+      } catch (e) {
+        captureRefused = true;
+        refusal = `capture threw for ${razorpayPaymentId}: ${errorName(e)}`;
+      }
+      if (captureRefused) {
+        // Recovery: the usual refusal on a REPLAY is "already captured" (a first delivery captured it, then
+        // failed to record the row). If Razorpay says it is captured, for this amount, record it now from the
+        // signed event (amount, notes and plan come from the event, as on the payment.captured path).
+        if (!recoveryDisabled && await rereadIsCaptured(razorpayPaymentId, paymentEntity.amount, credentials)) {
+          console.warn(
+            `[razorpay-webhook] capture refused, payment already captured; continuing payment_id=${razorpayPaymentId}`,
+          );
+        } else {
+          console.error(`[razorpay-webhook] ${refusal}`);
           // Don't fail the whole webhook — Razorpay will retry
           // payment.authorized; next try may succeed. Return 5xx so
           // Razorpay keeps retrying.
@@ -472,56 +603,7 @@ export async function handler(req: Request): Promise<Response> {
             },
           );
         }
-        console.log(
-          `[razorpay-webhook] auto-captured authorized payment ${razorpayPaymentId}`,
-        );
-        // We continue below to write the subscription. Razorpay will also
-        // send payment.captured later — that call will hit the UNIQUE
-        // constraint and be a no-op (idempotent).
-      } catch (e) {
-        console.error(`[razorpay-webhook] capture threw for ${razorpayPaymentId}:`, e);
-        return new Response(
-          JSON.stringify({ error: "Capture failed, will retry" }),
-          {
-            status: 502,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          },
-        );
       }
-    }
-
-    // Extract user_id and promo from notes (set during checkout creation).
-    // NOTE: notes.plan is intentionally NOT used for entitlement — plan is
-    // derived server-side from the on-wire amount via derivePlanFromAmount
-    // per docs/architecture/payment.md rule 1. A client that spoofs notes.plan cannot
-    // claim a different plan than what the amount actually paid for.
-    const notes = paymentEntity.notes ?? {};
-    const userId = notes.user_id;
-    const promoCode = notes.promo_code as string | undefined;
-
-    if (!userId) {
-      console.error("[razorpay-webhook] Missing user_id in payment notes:", notes);
-      return new Response(
-        JSON.stringify({ error: "Missing user_id in payment notes" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
-
-    // Validate userId is a proper UUID to prevent injection / spoofing.
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(userId)) {
-      console.error("[razorpay-webhook] Invalid user_id format in payment notes:", userId);
-      return new Response(
-        JSON.stringify({ error: "Invalid user_id format" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
     }
 
     // ── Derive plan from amount (primary — docs/architecture/payment.md rule 1) ───────────
@@ -532,8 +614,8 @@ export async function handler(req: Request): Promise<Response> {
     const derived = await derivePlanFromAmount(actualPaise, promoCode, supabaseClient);
     if (!derived) {
       console.error(
-        `[razorpay-webhook] amount ${actualPaise} paise does not match any plan` +
-          (promoCode ? ` (promo: ${promoCode})` : ""),
+        `[razorpay-webhook] amount ${actualPaise} paise does not match any plan payment_id=${razorpayPaymentId}` +
+          (promoCode ? ` (promo: ${boundedText(promoCode)})` : ""),
       );
       // OI-341 Piece B2a (hermes seat 4 F4): the money is captured and no row
       // can be written (the promo was edited or deleted between order and
@@ -563,7 +645,7 @@ export async function handler(req: Request): Promise<Response> {
     const clientClaimedPlan = notes.plan as string | undefined;
     if (clientClaimedPlan && clientClaimedPlan !== plan) {
       console.warn(
-        `[razorpay-webhook] notes.plan mismatch: client claimed '${clientClaimedPlan}', derived '${plan}' from amount ${actualPaise} — using derived`,
+        `[razorpay-webhook] notes.plan mismatch: client claimed ${boundedText(clientClaimedPlan)}, derived '${plan}' from amount ${actualPaise} — using derived`,
       );
     }
 
@@ -656,7 +738,7 @@ export async function handler(req: Request): Promise<Response> {
         const stackFailId = crypto.randomUUID().split("-")[0];
         console.error(
           `[razorpay-webhook] stacking read failed request_id=${stackFailId} ` +
-            `payment_id=${razorpayPaymentId} user_id=${userId} plan=${plan} amount_paise=${actualPaise} code=${rec.code}`,
+            `payment_id=${razorpayPaymentId} user_id=${userId} plan=${plan} amount_paise=${actualPaise} code=${codeToken(rec.code)}`,
         );
         await reportPaymentRecordFailure(supabaseClient, {
           fn: "razorpay-webhook",
@@ -713,7 +795,12 @@ export async function handler(req: Request): Promise<Response> {
         offInserted = { start: now.toISOString(), end: endDate.toISOString() };
       }
       if (insertError && insertError.code !== "23505") {
-        console.error("Failed to insert subscription:", insertError);
+        // Never the error object (its `details` echoes the row, signature included). Money is captured and no
+        // row exists on this OFF-path branch, so the ids stay. No request_id: this 500's body carries none.
+        console.error(
+          `[razorpay-webhook] subscription insert failed (non-23505) payment_id=${razorpayPaymentId} ` +
+            `user_id=${userId} plan=${plan} amount_paise=${actualPaise} code=${pgErrorCode(insertError)}`,
+        );
         return new Response(
           JSON.stringify({ error: "Failed to create subscription record" }),
           {
@@ -779,7 +866,8 @@ export async function handler(req: Request): Promise<Response> {
   } catch (err) {
     // Sanitised 5xx: never leak raw exception / SQL / signature text.
     const requestId = crypto.randomUUID().split("-")[0];
-    console.error(`[razorpay-webhook] request_id=${requestId}`, err);
+    // Name and frames only (hermes H10): an error message can quote the event body.
+    console.error(`[razorpay-webhook] request_id=${requestId} unhandled ${errorName(err)} at ${stackFrames(err)}`);
     return new Response(
       JSON.stringify({ error: "Internal server error", request_id: requestId }),
       {

@@ -316,7 +316,8 @@ Live proof: none possible on demand; the diagnose-doc says "proven by the Deno t
   serve(handler)`, moving `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` reads (`:21-23`) into the
   handler; keep `std@0.224.0`. After the JWT check: `consume_quota` with local `PROMO_QUOTA_KEY =
   "promo_validate"`, 1-hour bucket, `PROMO_QUOTA_LIMIT = 20` (F-1). Over the limit → HTTP 200
-  `{valid: false, reason: "Too many attempts. Try again in an hour."}`; RPC error → HTTP 200
+  `{valid: false, reason: "Too many attempts. Try again in an hour."}` (2026-10-25, hermes H3: shipped as
+  "Try again in N minutes.", N = the minutes left in the UTC hour); RPC error → HTTP 200
   `{valid: false, reason: "Couldn't check the code right now. Try again shortly."}` (200 because the
   paywall maps every non-2xx to "Network error"; installed builds read it). Expiry → `promoUsableAt`;
   the lookup becomes `.maybeSingle()` with `error` read: an error → the same 200 "Couldn't check the

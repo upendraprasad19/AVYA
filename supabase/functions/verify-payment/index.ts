@@ -44,6 +44,7 @@ import {
   recordPaidSubscription,
 } from "../_shared/subscription_stacking.ts";
 import { checkStackingMismatch, reportPaymentRecordFailure } from "../_shared/payment_alert.ts";
+import { boundedText, codeToken, errorName, pgErrorCode, razorpayErrorSummary, stackFrames } from "../_shared/payment_log_safe.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -110,7 +111,7 @@ async function derivePlanFromAmount(
 
       if (isExpired || isExhausted || isInactive) {
         console.warn(
-          `Promo '${promoCode}' ${isInactive ? 'inactive' : isExpired ? 'expired' : 'exhausted'} ` +
+          `Promo ${boundedText(promoCode)} ${isInactive ? 'inactive' : isExpired ? 'expired' : 'exhausted'} ` +
           `— honoring anyway (was valid at checkout time)`
         );
       }
@@ -145,11 +146,16 @@ async function redeemPromo(
   finalPaise: number,
 ) {
   try {
-    // Atomically increment used_count
-    await supabase.rpc("increment_promo_used_count", { p_code: promoCode });
+    // Atomically increment used_count. supabase-js RETURNS its errors (it does not throw them), so each
+    // call's error is checked and logged by label and code (R-6, payment-hardening U0): used_count gates
+    // promo exhaustion at order time (U3), so a silent failure here is a promo that never runs out.
+    const { error: incErr } = await supabase.rpc("increment_promo_used_count", { p_code: promoCode });
+    if (incErr) {
+      console.error(`[verify-payment] promo redemption: increment_promo_used_count failed code=${pgErrorCode(incErr)}`);
+    }
 
     // Audit trail
-    await supabase.from("promo_code_uses").insert({
+    const { error: useErr } = await supabase.from("promo_code_uses").insert({
       code: promoCode,
       user_id: userId,
       plan_purchased: plan,
@@ -157,8 +163,17 @@ async function redeemPromo(
       discount_applied: originalPaise - finalPaise,
       final_amount: finalPaise,
     });
+    if (useErr) {
+      // 23505 = UNIQUE(code, user_id) (migration 025): this user used the code before and the audit row exists.
+      // Expected on a repeat purchase, so not an error line (hermes H9).
+      if (pgErrorCode(useErr) === "23505") {
+        console.log(`[verify-payment] promo redemption: repeat use by this user, audit row already exists`);
+      } else {
+        console.error(`[verify-payment] promo redemption: promo_code_uses insert failed code=${pgErrorCode(useErr)}`);
+      }
+    }
   } catch (e) {
-    console.error("Non-fatal: promo redemption failed:", e);
+    console.error(`[verify-payment] promo redemption threw (non-fatal): ${errorName(e)} code=${pgErrorCode(e)}`);
   }
 }
 
@@ -263,8 +278,22 @@ export async function handler(req: Request): Promise<Response> {
 
     if (rateErr) {
       console.error(
-        `[verify-payment] consume_quota FAILED for user=${userId} (fail-closed):`,
-        rateErr.message,
+        `[verify-payment] consume_quota FAILED for user=${userId} (fail-closed): code=${pgErrorCode(rateErr)}`,
+      );
+      return new Response(
+        JSON.stringify({ error: "Rate limit check failed. Try again shortly." }),
+        {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    // consume_quota answers -1 or a count >= 1; anything else is an unreadable counter (fail CLOSED too;
+    // payment-hardening B-pass beee28f0d9f2 finding 6).
+    if (!Number.isInteger(usedCount) || (usedCount < 1 && usedCount !== -1)) {
+      console.error(
+        `[verify-payment] consume_quota FAILED for user=${userId} (fail-closed): code=bad_result`,
       );
       return new Response(
         JSON.stringify({ error: "Rate limit check failed. Try again shortly." }),
@@ -380,7 +409,7 @@ export async function handler(req: Request): Promise<Response> {
 
     if (!razorpayResponse.ok) {
       console.error(
-        `Razorpay API error: ${razorpayResponse.status} ${razorpayResponse.statusText}`,
+        `Razorpay API error: ${razorpayResponse.status} ${boundedText(razorpayResponse.statusText)}`,
       );
       return new Response(
         JSON.stringify({
@@ -396,60 +425,11 @@ export async function handler(req: Request): Promise<Response> {
 
     let payment = await razorpayResponse.json();
 
-    // If the payment is authorized but not captured (UPI test VPAs,
-    // orders created without payment_capture: 1, rare live-mode wallet
-    // delays), capture it now from the server side. Same capability the
-    // razorpay-webhook gained on 2026-04-17 — keeps verify-payment
-    // in lock-step so the client fallback path recovers too.
-    if (payment.status === "authorized" && payment.captured === false) {
-      const captureResp = await fetch(
-        `https://api.razorpay.com/v1/payments/${paymentId}/capture`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Basic ${credentials}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            amount: payment.amount,
-            currency: payment.currency ?? "INR",
-          }),
-        },
-      );
-      if (!captureResp.ok) {
-        const body = await captureResp.text();
-        console.error(
-          `[verify-payment] capture failed for ${paymentId}: ${captureResp.status} ${body}`,
-        );
-        return new Response(
-          JSON.stringify({
-            verified: false,
-            error: "Payment authorized but capture failed. Please try again.",
-          }),
-          {
-            status: 502,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          },
-        );
-      }
-      payment = await captureResp.json();
-      console.log(`[verify-payment] auto-captured ${paymentId}`);
-    }
-
-    // Verify payment is captured
-    if (payment.status !== "captured") {
-      return new Response(
-        JSON.stringify({
-          verified: false,
-          error: `Payment status is '${payment.status}', not 'captured'`,
-        }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
-
+    // OI-350 / OI-359 (payment-hardening U1, 2026-10-24): the ownership guards run FIRST, directly
+    // after the GET and before the capture and the status echo. Before this, another user's AUTHORIZED
+    // payment was captured by this caller and any payment's status was echoed with a 200; the 403
+    // only came once the payment was captured. The GET above is a read; nothing before this point
+    // touches anything that is not the caller's.
     // OI-29 (audit-2026-05-17 Hermes F4) — ownership check is now two-step.
     // Pre-fix `if (notesUserId && notesUserId !== userId)` was fail-open when
     // `notes.user_id` was absent — attacker who knows a captured payment_id
@@ -481,6 +461,60 @@ export async function handler(req: Request): Promise<Response> {
       );
     }
 
+    // If the payment is authorized but not captured (UPI test VPAs,
+    // orders created without payment_capture: 1, rare live-mode wallet
+    // delays), capture it now from the server side. Same capability the
+    // razorpay-webhook gained on 2026-04-17 — keeps verify-payment
+    // in lock-step so the client fallback path recovers too.
+    if (payment.status === "authorized" && payment.captured === false) {
+      const captureResp = await fetch(
+        `https://api.razorpay.com/v1/payments/${paymentId}/capture`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Basic ${credentials}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            amount: payment.amount,
+            currency: payment.currency ?? "INR",
+          }),
+        },
+      );
+      if (!captureResp.ok) {
+        const body = await captureResp.text();
+        console.error(
+          `[verify-payment] capture failed for ${paymentId}: ${razorpayErrorSummary(captureResp.status, body)}`,
+        );
+        return new Response(
+          JSON.stringify({
+            verified: false,
+            error: "Payment authorized but capture failed. Please try again.",
+          }),
+          {
+            status: 502,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+      payment = await captureResp.json();
+      console.log(`[verify-payment] auto-captured ${paymentId}`);
+    }
+
+    // Verify payment is captured
+    if (payment.status !== "captured") {
+      return new Response(
+        JSON.stringify({
+          verified: false,
+          error: `Payment status is '${payment.status}', not 'captured'`,
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
     // ── Derive plan from payment amount (NOT from body.plan) ────
     const actualPaise = payment.amount as number;
     const promoCode = payment.notes?.promo_code as string | undefined;
@@ -488,8 +522,8 @@ export async function handler(req: Request): Promise<Response> {
     const derived = await derivePlanFromAmount(actualPaise, promoCode, supabase);
     if (!derived) {
       console.error(
-        `Amount mismatch: ${actualPaise} paise does not match any plan` +
-          (promoCode ? ` (promo: ${promoCode})` : ""),
+        `Amount mismatch: ${actualPaise} paise does not match any plan payment_id=${paymentId}` +
+          (promoCode ? ` (promo: ${boundedText(promoCode)})` : ""),
       );
       // OI-341 Piece B2a (hermes seat 4 F4): a captured payment of this caller
       // (ownership is checked above) that no row can record: page it. The
@@ -520,7 +554,7 @@ export async function handler(req: Request): Promise<Response> {
     // Log if client-claimed plan disagrees with derived plan
     if (clientClaimedPlan && clientClaimedPlan !== plan) {
       console.warn(
-        `Plan mismatch: client claimed '${clientClaimedPlan}', derived '${plan}' from amount ${actualPaise}`,
+        `Plan mismatch: client claimed ${boundedText(clientClaimedPlan)}, derived '${plan}' from amount ${actualPaise}`,
       );
     }
 
@@ -577,7 +611,7 @@ export async function handler(req: Request): Promise<Response> {
       .maybeSingle();
     if (preSelectError) {
       console.warn(
-        `[verify-payment] idempotency pre-SELECT failed (continuing to insert): ${preSelectError.message}`,
+        `[verify-payment] idempotency pre-SELECT failed (continuing to insert): code=${pgErrorCode(preSelectError)}`,
       );
     }
 
@@ -608,7 +642,7 @@ export async function handler(req: Request): Promise<Response> {
         const stackFailId = crypto.randomUUID().split("-")[0];
         console.error(
           `[verify-payment] stacking read failed request_id=${stackFailId} ` +
-            `payment_id=${paymentId} user_id=${userId} plan=${plan} amount_paise=${actualPaise} code=${rec.code}`,
+            `payment_id=${paymentId} user_id=${userId} plan=${plan} amount_paise=${actualPaise} code=${codeToken(rec.code)}`,
         );
         await reportPaymentRecordFailure(supabase, {
           fn: "verify-payment",
@@ -680,9 +714,12 @@ export async function handler(req: Request): Promise<Response> {
           // vanished on the next cold start (no row to restore). Return
           // verified:false + 500 so the client retries instead of trusting it.
           const failId = crypto.randomUUID().split("-")[0];
+          // The reconcile fields of the stacking line above under this branch's OWN prefix (money is captured
+          // and no row exists, so the ids stay); never the error object, whose `details` echoes the row.
           console.error(
-            `[verify-payment] subscription insert failed (non-23505) request_id=${failId}`,
-            insertError,
+            `[verify-payment] subscription insert failed (non-23505) request_id=${failId} ` +
+              `payment_id=${paymentId} user_id=${userId} plan=${plan} amount_paise=${actualPaise} ` +
+              `code=${pgErrorCode(insertError)}`,
           );
           return new Response(
             JSON.stringify({
@@ -768,7 +805,8 @@ export async function handler(req: Request): Promise<Response> {
   } catch (err) {
     // Sanitised 5xx: never leak raw exception / Razorpay API response.
     const requestId = crypto.randomUUID().split("-")[0];
-    console.error(`[verify-payment] request_id=${requestId}`, err);
+    // Name and frames only (hermes H10): a req.json() SyntaxError's message quotes the request body.
+    console.error(`[verify-payment] request_id=${requestId} unhandled ${errorName(err)} at ${stackFrames(err)}`);
     return new Response(
       JSON.stringify({ error: "Internal server error", request_id: requestId }),
       {

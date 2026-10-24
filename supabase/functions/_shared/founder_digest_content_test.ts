@@ -316,4 +316,25 @@ Deno.test("unmeteredQuotaKeys reports exactly the keys whose switch is on", () =
     unmeteredQuotaKeys((env) => env === "DISABLE_PREDICTION_QUOTA"),
     ["prediction_daily"],
   );
+  // hermes H2: one switch turns off both payment-path counters.
+  assertEquals(
+    unmeteredQuotaKeys((env) => env === "DISABLE_ORDER_ABUSE_GUARDS"),
+    ["create_order", "promo_validate"],
+  );
+});
+
+Deno.test("hermes H2: with DISABLE_ORDER_ABUSE_GUARDS on, both payment-path lines read UNMETERED, never 'none'", () => {
+  const base: DigestInput = {
+    dayLabel: "2026-09-12",
+    windowed: { rows: [] },
+    lifetime: { rows: [] },
+    alerts: { rows: [] },
+    subscriptions: { rows: [] },
+    expiringSoon: { count7d: 0, count30d: 0 },
+    ...EMPTY_B_EXTRAS,
+  };
+  const text = buildDigestText({ ...base, unmeteredKeys: unmeteredQuotaKeys((env) => env === "DISABLE_ORDER_ABUSE_GUARDS") });
+  assertStringIncludes(text, "create-razorpay-order: ⚠ UNMETERED — DISABLE_ORDER_ABUSE_GUARDS is on");
+  assertStringIncludes(text, "validate-promo: ⚠ UNMETERED — DISABLE_ORDER_ABUSE_GUARDS is on");
+  assert(!text.includes("create-razorpay-order: none") && !text.includes("validate-promo: none"), text);
 });

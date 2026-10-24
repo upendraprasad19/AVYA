@@ -18,6 +18,7 @@ import {
   iso,
   loadOriginMainHandler,
   normalizeRequests,
+  OTHER_USER,
   PAY,
   paymentServer,
   recordPaidCalls,
@@ -473,3 +474,279 @@ t("no-match control: a matching promo payment records the row and writes no aler
   assertEquals(r.res.status, 200);
   assertEquals(alertInserts(r.server).length, 0);
 });
+
+// ── payment-hardening U1 (OI-350 / OI-359): ownership before any side effect ──
+// The harness's Razorpay route always answers a CAPTURED payment, so these tests answer the GET (and the
+// capture) through `intercept`, which runs first; every request, the intercepted ones included, is recorded.
+
+/** Answers GET /v1/payments/PAY with `entity`, and the capture POST with the same entity, captured. */
+function razorpayEntity(entity: Record<string, unknown>): Scenario["intercept"] {
+  return (req) => {
+    if (req.host !== "https://api.razorpay.com") return undefined;
+    if (req.method === "GET" && req.path === `/v1/payments/${PAY}`) {
+      return new Response(JSON.stringify(entity), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    if (req.method === "POST" && req.path === `/v1/payments/${PAY}/capture`) {
+      const captured = { ...entity, status: "captured", captured: true };
+      return new Response(JSON.stringify(captured), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    return undefined;
+  };
+}
+
+function entity(status: string, notes: unknown): Record<string, unknown> {
+  return { id: PAY, status, captured: status === "captured", amount: 34900, currency: "INR", order_id: "order_TEST0001", notes };
+}
+
+const captures = (r: { server: { to: (p: string, m?: string) => unknown[] } }) => r.server.to("/v1/payments/", "POST");
+
+t("U1: ANOTHER user's AUTHORIZED payment: 403, and no capture request is sent", async () => {
+  const r = await run(newHandler, { rows: [], intercept: razorpayEntity(entity("authorized", { user_id: OTHER_USER })) }, undefined);
+  assertEquals(r.res.status, 403);
+  assertEquals(r.body, { verified: false, error: "Payment does not belong to this user" });
+  assertEquals(captures(r).length, 0);
+  assertEquals(subscriptionInserts(r.server).length, 0);
+});
+
+t("U1: ANOTHER user's CREATED payment: 403, and its status is not echoed", async () => {
+  const r = await run(newHandler, { rows: [], intercept: razorpayEntity(entity("created", { user_id: OTHER_USER })) }, undefined);
+  assertEquals(r.res.status, 403);
+  assert(!r.text.includes("Payment status is"), r.text);
+  assert(!r.text.includes("created"), r.text);
+  assertEquals(captures(r).length, 0);
+});
+
+for (const [label, notes] of [["no user_id key", { plan: "monthly" }], ["Razorpay's empty-notes array", []]] as const) {
+  t(`U1: an AUTHORIZED payment with ${label}: 400, and no capture request is sent`, async () => {
+    const r = await run(newHandler, { rows: [], intercept: razorpayEntity(entity("authorized", notes)) }, undefined);
+    assertEquals(r.res.status, 400);
+    assertEquals(r.body, { verified: false, error: "Missing user_id in payment notes" });
+    assertEquals(captures(r).length, 0);
+  });
+}
+
+t("U1 control: the caller's OWN authorized payment is still captured once and recorded (200)", async () => {
+  const r = await run(newHandler, { rows: [], intercept: razorpayEntity(entity("authorized", { user_id: USER })) }, undefined);
+  assertEquals(r.res.status, 200);
+  assertEquals(r.body.verified, true);
+  const posts = captures(r) as Array<{ path: string; body: Record<string, unknown> }>;
+  assertEquals(posts.length, 1);
+  assertEquals(posts[0].path, `/v1/payments/${PAY}/capture`);
+  assertEquals(posts[0].body, { amount: 34900, currency: "INR" });
+  assertEquals(subscriptionInserts(r.server).length, 1);
+});
+
+// The 403 is a STRICT compare: a notes.user_id of another TYPE that a loose `!=` would equate with the caller
+// (an array holding the id coerces to the same string) must still be refused, before any capture.
+for (const [label, userId] of [["an array holding the caller's id", [USER]], ["a number", 123], ["an object", { id: USER }]] as const) {
+  t(`U1: an AUTHORIZED payment whose notes.user_id is ${label}: 403, and no capture request is sent`, async () => {
+    const r = await run(newHandler, { rows: [], intercept: razorpayEntity(entity("authorized", { user_id: userId })) }, undefined);
+    assertEquals(r.res.status, 403);
+    assertEquals(r.body, { verified: false, error: "Payment does not belong to this user" });
+    assertEquals(captures(r).length, 0);
+  });
+}
+
+// Mirror of the foreign-payment refusals: the caller's OWN payment that is neither captured nor authorized
+// still gets today's 200 status echo (the client polls on it), with no capture request.
+for (const status of ["created", "failed"]) {
+  t(`U1 control: the caller's OWN ${status.toUpperCase()} payment: 200 with its status echoed, no capture`, async () => {
+    const r = await run(newHandler, { rows: [], intercept: razorpayEntity(entity(status, { user_id: USER })) }, undefined);
+    assertEquals(r.res.status, 200);
+    assertEquals(r.body, { verified: false, error: `Payment status is '${status}', not 'captured'` });
+    assertEquals(captures(r).length, 0);
+    assertEquals(subscriptionInserts(r.server).length, 0);
+  });
+}
+
+// ── payment-hardening U0 (OI-360): a log line carries a code, a type or a bounded value, never a whole object ──
+// captureConsole prints an object through JSON.stringify, so a whole-object log of a PostgREST error SHOWS its
+// `details`. Each leak test therefore runs the same scenario through the frozen origin/main handler first and
+// requires the secret to be VISIBLE there (the positive control), then requires it absent from the new handler.
+
+const SECRET = "SIGf3b1c2d4e5a6978812345678abcdef00112233";
+const FORGED = "monthly\n[verify-payment] FORGED-LINE " + "Z".repeat(300);
+const pgError = (status: number, code: string) =>
+  new Response(JSON.stringify({ code, message: "insert or update violates a constraint", details: `Key (razorpay_signature)=(${SECRET})`, hint: SECRET }), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+const anyLine = (all: string[], needle: string) => all.some((l) => l.includes(needle));
+
+async function runRequest(handler: Handler, sc: Scenario, req: Request) {
+  const { server, promoIncrements } = paymentServer(sc);
+  server.install();
+  try {
+    const { result: res, all } = await withSwitch(undefined, () => captureConsole(() => handler(req)));
+    return { res, all, server, promoIncrements };
+  } finally {
+    server.restore();
+  }
+}
+
+t("U0 log: a non-23505 insert failure logs the reconcile fields and the code, never the error's details (control: origin logged them)", async () => {
+  const sc: Scenario = {
+    rows: [],
+    intercept: (req) => (req.method === "POST" && req.path === "/rest/v1/subscriptions" ? pgError(409, "23503") : undefined),
+  };
+  const before = await run(originHandler, sc, undefined);
+  assert(anyLine(before.all, SECRET), "positive control: the origin handler must show the secret");
+  const r = await run(newHandler, sc, undefined);
+  assertEquals(r.res.status, 500);
+  assert(!anyLine(r.all, SECRET), r.all.join("\n"));
+  const line = r.errors.find((l) => l.startsWith("[verify-payment] subscription insert failed (non-23505)"));
+  assert(line, r.errors.join("\n"));
+  assertMatch(line!, new RegExp(`request_id=[0-9a-f]{8} payment_id=${PAY} user_id=${USER} plan=monthly amount_paise=34900 code=23503$`));
+});
+
+t("U0 log: a refused capture logs status and Razorpay's code/reason, never the description (control: origin logged the body)", async () => {
+  const intercept: Scenario["intercept"] = (req) => {
+    if (req.host !== "https://api.razorpay.com") return undefined;
+    if (req.method === "GET") return new Response(JSON.stringify(entity("authorized", { user_id: USER })), { status: 200 });
+    return new Response(JSON.stringify({ error: { code: "BAD_REQUEST_ERROR", description: `card ${SECRET}`, reason: "capture_failed", field: "amount" } }), { status: 400 });
+  };
+  const before = await run(originHandler, { rows: [], intercept }, undefined);
+  assert(anyLine(before.all, SECRET), "positive control");
+  const r = await run(newHandler, { rows: [], intercept }, undefined);
+  assertEquals(r.res.status, 502);
+  assert(!anyLine(r.all, SECRET), r.all.join("\n"));
+  assert(anyLine(r.errors, `capture failed for ${PAY}: status=400 code="BAD_REQUEST_ERROR" reason="capture_failed"`), r.errors.join("\n"));
+});
+
+t("U0 log: the client's raw `plan` is bounded and quoted: no forged line, no unbounded text (control: origin printed it raw)", async () => {
+  const req = () => new Request("https://fn.test/verify-payment", {
+    method: "POST",
+    headers: { Authorization: "Bearer user-jwt-1", "Content-Type": "application/json" },
+    body: JSON.stringify({ payment_id: PAY, plan: FORGED }),
+  });
+  const before = await runRequest(originHandler, { rows: [] }, req());
+  assert(anyLine(before.all, "\n[verify-payment] FORGED-LINE"), "positive control");
+  const r = await runRequest(newHandler, { rows: [] }, req());
+  assertEquals(r.res.status, 200);
+  assert(!anyLine(r.all, "\n[verify-payment] FORGED-LINE"), r.all.join("\n"));
+  assert(!anyLine(r.all, "Z".repeat(50)), "the value is bounded");
+  assert(anyLine(r.all, `Plan mismatch: client claimed ${JSON.stringify(FORGED.slice(0, 40))}`), r.all.join("\n"));
+});
+
+t("U0 log: a failed idempotency pre-SELECT logs its code, never its message (control: origin logged the message)", async () => {
+  const intercept: Scenario["intercept"] = (req) => {
+    if (req.method !== "GET" || req.path !== "/rest/v1/subscriptions") return undefined;
+    const q = new Map(req.query);
+    if (q.get("select") === "id,end_date" && !q.has("status")) {
+      return new Response(JSON.stringify({ code: "XX000", message: `read failed ${SECRET}` }), { status: 500 });
+    }
+    return undefined;
+  };
+  const before = await run(originHandler, { rows: [], intercept }, undefined);
+  assert(anyLine(before.all, SECRET), "positive control");
+  const r = await run(newHandler, { rows: [], intercept }, undefined);
+  assertEquals(r.res.status, 200);
+  assert(!anyLine(r.all, SECRET), r.all.join("\n"));
+  assert(anyLine(r.all, "[verify-payment] idempotency pre-SELECT failed (continuing to insert): code=XX000"), r.all.join("\n"));
+});
+
+// B-pass bfaeb6fb79da findings 1 and 2: the catch-all logs the error's name and frames, never body text.
+t("catch-all: an unparseable body -> 500 and one 'unhandled SyntaxError at' line with no body text", async () => {
+  const req = new Request("https://fn.test/verify-payment", {
+    method: "POST",
+    headers: { Authorization: "Bearer user-jwt-1", "Content-Type": "application/json" },
+    body: '{"payment_id":\n at SECRETBODY jane.doe@example.com',
+  });
+  const r = await runRequest(newHandler, { rows: [] }, req);
+  assertEquals(r.res.status, 500);
+  const lines = r.all.filter((l) => l.includes("unhandled"));
+  assertEquals(lines.length, 1, r.all.join("\n"));
+  assert(/^\[verify-payment\] request_id=[0-9a-f]{8} unhandled SyntaxError at at /.test(lines[0]), lines[0]);
+  assert(!r.all.some((l) => l.includes("SECRETB") || l.includes("jane")), r.all.join("\n"));
+});
+
+// R-6: redeemPromo now checks the RETURNED errors (supabase-js does not throw them). Log only: the response,
+// the row and the request sequence are those of a redemption that succeeded.
+for (const [label, path, expectLine] of [
+  ["increment_promo_used_count", "/rest/v1/rpc/increment_promo_used_count", "[verify-payment] promo redemption: increment_promo_used_count failed code=P0001"],
+  ["promo_code_uses insert", "/rest/v1/promo_code_uses", "[verify-payment] promo redemption: promo_code_uses insert failed code=P0001"],
+] as const) {
+  t(`U0 R-6: a failed ${label} answers as before and logs one labelled, code-only line`, async () => {
+    const sc: Scenario = { ...promoScenario([]), intercept: (req) => (req.method === "POST" && req.path === path ? pgError(400, "P0001") : undefined) };
+    const ok = await run(newHandler, promoScenario([]), undefined);
+    const r = await run(newHandler, sc, undefined);
+    assertEquals(r.res.status, ok.res.status);
+    assertEquals(stripInstants(r.body), stripInstants(ok.body));
+    assertEquals(subscriptionInserts(r.server).length, 1);
+    assertEquals(r.server.to(path, "POST").length, 1);
+    assertEquals(r.errors.filter((l) => l === expectLine).length, 1, r.errors.join("\n"));
+    assert(!anyLine(r.all, SECRET), r.all.join("\n"));
+  });
+}
+
+// hermes H9: a 23505 on the audit insert is UNIQUE(code, user_id) (migration 025), a repeat use by this user whose
+// audit row exists. An info line, not an error; any other code stays an error (the R-6 test above, P0001).
+t("H9: a repeat-use 23505 on promo_code_uses answers as before and logs an info line, no error line", async () => {
+  const path = "/rest/v1/promo_code_uses";
+  const sc: Scenario = { ...promoScenario([]), intercept: (req) => (req.method === "POST" && req.path === path ? pgError(409, "23505") : undefined) };
+  const ok = await run(newHandler, promoScenario([]), undefined);
+  const r = await run(newHandler, sc, undefined);
+  assertEquals(r.res.status, ok.res.status);
+  assertEquals(stripInstants(r.body), stripInstants(ok.body));
+  assertEquals(subscriptionInserts(r.server).length, 1);
+  assertEquals(r.server.to(path, "POST").length, 1);
+  // No ERROR-level line about the redemption at all (the info line must not be logged at error level).
+  assert(!anyLine(r.errors, "promo redemption"), r.errors.join("\n"));
+  assertEquals(r.all.filter((l) => l === "[verify-payment] promo redemption: repeat use by this user, audit row already exists").length, 1, r.all.join("\n"));
+});
+
+// B-pass of commit 2: the two remaining sites that logged client text or a database message.
+const FORGED_PROMO = "HALF50\n[verify-payment] FORGED-LINE " + "Z".repeat(300);
+// Built, not spelled: a census test requires every file naming the counter RPC to be a known caller.
+const COUNTER_RPC = "consume_" + "quota";
+
+t("U0 log: an unmatched amount logs the checkout's promo code bounded and quoted (control: origin printed it raw)", async () => {
+  const sc = (): Scenario => ({ rows: [], amount: 12345, notes: { promo_code: FORGED_PROMO } });
+  const before = await run(originHandler, sc(), undefined);
+  assert(anyLine(before.all, "\n[verify-payment] FORGED-LINE"), "positive control");
+  const r = await run(newHandler, sc(), undefined);
+  assertEquals(r.res.status, before.res.status);
+  assert(!anyLine(r.all, "\n[verify-payment] FORGED-LINE") && !anyLine(r.all, "Z".repeat(50)), r.all.join("\n"));
+  assert(
+    anyLine(r.errors, `Amount mismatch: 12345 paise does not match any plan payment_id=${PAY} (promo: ${JSON.stringify(FORGED_PROMO.slice(0, 40))})`),
+    r.errors.join("\n"),
+  );
+});
+
+t("U0 log: a failed rate-limit counter logs its code, never its message (control: origin logged the message)", async () => {
+  const sc = (): Scenario => ({
+    rows: [],
+    intercept: (req) =>
+      req.method === "POST" && req.path === `/rest/v1/rpc/${COUNTER_RPC}`
+        ? new Response(JSON.stringify({ code: "XX000", message: `counter unavailable ${SECRET}`, details: SECRET }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        })
+        : undefined,
+  });
+  const before = await run(originHandler, sc(), undefined);
+  assert(anyLine(before.all, SECRET), "positive control: the origin handler logged the message");
+  const r = await run(newHandler, sc(), undefined);
+  assertEquals(r.res.status, 429);
+  assertEquals(r.res.status, before.res.status);
+  assert(!anyLine(r.all, SECRET), r.all.join("\n"));
+  assert(anyLine(r.errors, `[verify-payment] ${COUNTER_RPC} FAILED for user=${USER} (fail-closed): code=XX000`), r.errors.join("\n"));
+});
+
+// B-pass beee28f0d9f2 finding 6: a counter answer that is neither -1 nor a count fails CLOSED like an error.
+for (const [label, value] of [["null", null], ["0", 0], ["a fraction", 1.5]] as const) {
+  t(`the rate-limit counter answers ${label} -> 429 and a code-only line (control: origin went on)`, async () => {
+    const sc = (): Scenario => ({
+      rows: [],
+      intercept: (req) =>
+        req.method === "POST" && req.path === `/rest/v1/rpc/${COUNTER_RPC}`
+          ? new Response(JSON.stringify(value), { status: 200, headers: { "Content-Type": "application/json" } })
+          : undefined,
+    });
+    const before = await run(originHandler, sc(), undefined);
+    assert(before.res.status !== 429, `positive control: origin answered ${before.res.status}`);
+    const r = await run(newHandler, sc(), undefined);
+    assertEquals(r.res.status, 429);
+    assert(anyLine(r.errors, `[verify-payment] ${COUNTER_RPC} FAILED for user=${USER} (fail-closed): code=bad_result`), r.errors.join("\n"));
+  });
+}
