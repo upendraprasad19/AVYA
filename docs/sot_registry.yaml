@@ -4122,7 +4122,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 2484-2500
+        line_range: 2494-2510
         method: TemplatesNotifier.build
         semantic: pass-through
         fields_read: [type, name, exercises, assigned_days, exercise_count, group_id, group_day_index, group_total_days, last_used_at, created_at, updated_at]
@@ -13035,16 +13035,16 @@ concepts:
         method: validateSetInputs / cardioMinutesToSeconds / exerciseSetFromInput
         notes: OI-389 / OI-382 — cardio MIN takes decimal minutes (founder D2, 2026-10-22), converted to seconds once at capture (exercise_card._valuesOf); bounds 360 MIN / 21600 SEC / 300 KM block LOG; exerciseSetFromInput applies fieldsClearedFor and is what completeWorkout, liveVolumeKg and the receipt save through. Behavioral test/contracts/cardio_duration_distance_writer_to_reader_test.dart (T18, T29, T32), test/features/train/log_exercise/log_exercise_card_test.dart (T32b), test/contracts/cardio_complete_workout_behavioral_test.dart (T5, T28).
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1587-1596
+        line_range: 1597-1606
         method: toggleSet
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1603-1620
+        line_range: 1613-1630
         method: logSets
       - file: lib/features/train/providers/train_provider.dart
         line_range: 1631-1653
         method: unlogSets
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1664-1669
+        line_range: 1674-1679
         method: recordSetValues
       - file: lib/features/train/providers/train_provider.dart
         line_range: 1668-1693
@@ -13063,13 +13063,13 @@ concepts:
         method: _onLogPressed
     readers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1368-1370
+        line_range: 1378-1380
         method: completedSets
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1436-1443
+        line_range: 1446-1453
         method: isExerciseDone
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1459-1468
+        line_range: 1469-1478
         method: liveVolumeKg
       - file: lib/features/train/services/log_exercise_logic.dart
         line_range: 470-551
@@ -13136,7 +13136,7 @@ concepts:
       on the wrong exercise.
     writers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1859-1873
+        line_range: 1869-1883
         method: applyExerciseMove
       - file: lib/features/train/services/exercise_move_logic.dart
         line_range: 51-98

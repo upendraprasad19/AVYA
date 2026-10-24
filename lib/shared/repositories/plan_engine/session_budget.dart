@@ -165,6 +165,104 @@ class SessionBudget {
       !const {'timed', 'cardio', 'distance'}.contains(ex.loggingType) &&
       ctx.archetypeByName.containsKey(ex.exerciseName.toLowerCase());
 
+  // ── Display estimate (Ruling 13) ─────────────────────────────────────────
+
+  /// The archetype of one exercise map of a STORED plan day (a `schedule_*` row's
+  /// `exercises` entry): its library row's, found by `exercise_id`, else derived
+  /// from the entry's own `exercise_type` (a List, a String or absent, which is
+  /// read as `['compound']`), `rep_range` and `logging_type`, as for a custom.
+  /// The same answer [archetypeOfPlanned] gives the engine for the same exercise.
+  static String archetypeOfPlanDayExercise(
+    Map<dynamic, dynamic> e,
+    Map<String, Map<String, dynamic>> rowsById,
+  ) {
+    final id = e['exercise_id'];
+    final row = id is String ? rowsById[id] : null;
+    if (row != null) return archetypeOfRow(row);
+    final raw = e['exercise_type'];
+    var types = <String>[
+      if (raw is List) for (final t in raw) '$t' else if (raw is String) raw,
+    ].where((t) => t.trim().isNotEmpty).toList();
+    if (types.isEmpty) types = const ['compound'];
+    return archetypeOf(
+      exerciseTypes: types,
+      reps: '${e['rep_range'] ?? ''}',
+      loggingType: '${e['logging_type'] ?? 'weight_reps'}',
+    );
+  }
+
+  /// Modelled seconds of a stored plan day: [exerciseSeconds] over every exercise
+  /// (user-added ones included, they are part of the real session) plus the
+  /// seconds of the warm-up and cool-down items. This is what Train and Home
+  /// DISPLAY under the budget flag; both call it, so they cannot disagree.
+  ///
+  /// - **Sets:** `sets`, else `prescribed_sets`, else `default_sets`, else 3.
+  /// - **Rest:** `rest_seconds` (a number, or the digits of a string such as
+  ///   `90s`); absent is 60 (the display parser's default); anything else is 75.
+  /// - **Warm-up / cool-down item:** a `timed` item is its own seconds (the digits
+  ///   of `reps`, `300s` -> 300, else `duration_seconds`, else 30); any other item
+  ///   is priced as archetype `B` at its own sets and rest.
+  ///
+  /// Never throws: a non-map entry is skipped and a missing list counts as none.
+  static double estimateDaySecondsFromPlanDay(
+    Map<dynamic, dynamic> planDay,
+    Map<String, Map<String, dynamic>> rowsById,
+  ) {
+    var total = 0.0;
+    for (final e in _mapsOf(planDay['exercises'])) {
+      total += exerciseSeconds(
+        archetype: archetypeOfPlanDayExercise(e, rowsById),
+        sets: _intOf(e['sets'] ?? e['prescribed_sets'] ?? e['default_sets']) ?? 3,
+        restSeconds: _restSecondsOf(e['rest_seconds']),
+      );
+    }
+    for (final key in const ['warmup', 'cooldown']) {
+      for (final item in _mapsOf(planDay[key])) {
+        total += _itemSeconds(item);
+      }
+    }
+    return total;
+  }
+
+  /// [estimateDaySecondsFromPlanDay] rounded to whole minutes.
+  static int estimateDayMinutesFromPlanDay(
+    Map<dynamic, dynamic> planDay,
+    Map<String, Map<String, dynamic>> rowsById,
+  ) =>
+      (estimateDaySecondsFromPlanDay(planDay, rowsById) / 60).round();
+
+  static Iterable<Map<dynamic, dynamic>> _mapsOf(Object? raw) =>
+      raw is List ? raw.whereType<Map<dynamic, dynamic>>() : const [];
+
+  static int? _intOf(Object? raw) {
+    if (raw is num) return raw.isFinite ? raw.toInt() : null;
+    if (raw is String) return int.tryParse(raw.trim());
+    return null;
+  }
+
+  static int _restSecondsOf(Object? raw) {
+    if (raw == null) return 60;
+    if (raw is num) return raw.isFinite ? (raw < 0 ? 0 : raw.toInt()) : 75;
+    if (raw is String) {
+      final digits = RegExp(r'\d+').firstMatch(raw)?.group(0);
+      return digits == null ? 75 : int.parse(digits);
+    }
+    return 75;
+  }
+
+  static double _itemSeconds(Map<dynamic, dynamic> item) {
+    if (item['logging_type'] == 'timed') {
+      final digits = RegExp(r'\d+').firstMatch('${item['reps'] ?? ''}')?.group(0);
+      if (digits != null) return int.parse(digits).toDouble();
+      return (_intOf(item['duration_seconds']) ?? 30).toDouble();
+    }
+    return exerciseSeconds(
+      archetype: 'B',
+      sets: _intOf(item['sets']) ?? 1,
+      restSeconds: _restSecondsOf(item['rest_seconds'] ?? 0),
+    );
+  }
+
   // ── Day intensity ────────────────────────────────────────────────────────
   // Mirrors `PeriodizationEngine._profileParams` (sets, rest). The two tables are
   // pinned equal by session_budget_test.dart, which drives the real engine.

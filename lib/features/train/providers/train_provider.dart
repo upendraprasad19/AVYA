@@ -29,6 +29,7 @@ import 'package:icanbefitter/core/utils/detraining.dart';
 import 'package:icanbefitter/core/utils/readiness.dart';
 import 'package:icanbefitter/core/services/health_read_service.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/session_estimate.dart';
 import '../repositories/workout_repository.dart';
 import '../services/superset_persist_logic.dart';
 import '../services/log_exercise_logic.dart';
@@ -241,6 +242,11 @@ class WorkoutDayData {
   final List<ExerciseData> warmup;
   final List<ExerciseData> cooldown;
 
+  /// B2 Task 6b: the budget model's minutes for this day, set only while
+  /// `enable_session_set_budget` is ON (`budgetedDayMinutes`, the function Home
+  /// uses too). null keeps the old `totalSets x 2.5` estimate.
+  final int? budgetMinutes;
+
   const WorkoutDayData({
     required this.dayNumber,
     required this.name,
@@ -252,11 +258,13 @@ class WorkoutDayData {
     this.exercises = const [],
     this.warmup = const [],
     this.cooldown = const [],
+    this.budgetMinutes,
   });
 
   int get exerciseCount => exercises.length;
   String get estimatedDuration {
     if (isRest) return '';
+    if (budgetMinutes != null) return '$budgetMinutes min';
     final totalSets =
         exercises.fold<int>(0, (sum, e) => sum + (int.tryParse(e.sets) ?? 3));
     return '${(totalSets * 2.5).round()} min';
@@ -721,6 +729,7 @@ WorkoutDayData? workoutDayForDate(DateTime date) {
     exercises: exercises,
     warmup: _parseExerciseMaps(row['warmup'] as List?),
     cooldown: _parseExerciseMaps(row['cooldown'] as List?),
+    budgetMinutes: budgetedDayMinutes(row),
   );
 }
 
@@ -936,6 +945,7 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
           exercises: exercises,
           warmup: warmup,
           cooldown: cooldown,
+          budgetMinutes: isRest ? null : budgetedDayMinutes(dayMap),
         ));
       }
 
