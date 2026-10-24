@@ -347,6 +347,28 @@ Plan `docs/plans/2026-10-24-thin-day-topup.md` (r3, two converged review rounds)
 
 **Evidence.** `test/contracts/thin_day_topup_behavioral_test.dart` (real `generateV4` personas whose thin day is asserted first with the kill-switch set, plus direct `topUpDays` calls on a seeded library), `test/plan_engine_v4/thin_day_topup_test.dart` (pure rules), `thin_day_topup_flag_test.dart`, the five-block sweep `test/plan_generator/injury_floor_sweep_test.dart`, and the generator golden (2 keys moved).
 
+## Session set budget (Batch B2, ship-dark `enable_session_set_budget`, DEFAULT OFF)
+
+Plan `docs/plans/2026-10-22-session-set-budget.md` (r6). Founder decisions F1 (rule 14 waived for the `generateV4` wiring only), F2 (empty `session_duration_minutes` = 60), F3 (a focus group may reach 25 weekly sets), F4 (user-added exercises are never trimmed or counted; library repeat pins are budgeted), F5 (focus session cap 12).
+
+**Why.** Off, a 4-day intermediate full_gym day reaches about 122 minutes (`VolumeFilter.targetCount` fixes the exercise count, `PeriodizationEngine` forces a 4-set minimum and a phase multiplier, and nothing reads the user's minutes).
+
+**Time model.** `exerciseSeconds = 1.20 x (overhead + sets x work + (sets - 1) x rest)`; archetypes H / M / I / B (work 23 / 35 / 47 / 40 s, overhead 120 / 90 / 45 / 30 s). Rest by day intensity: strength 150, hypertrophy 75, endurance 38. The day's budget is `minutes - warmCoolMinutes(minutes)` (6 to 14 minutes); the lead-in and cool-down walk scale with the minutes (`warmCoolItemSeconds`: 60 s at 30, 180 s at 60, 300 s at 90).
+
+**Bands and caps.** Per budget group (`BudgetMuscleGroups`, ten groups): a weekly (bottom, top) band and a session cap by goal and level (build_muscle intermediate 12 to 16, cap 8). Focus group: top 25, cap 12. A lighter (deload-archetype) phase pins every group's top to the band bottom. Max 5 sets per exercise. The level is the EFFECTIVE level (a beginner at phase 5 is budgeted as advanced).
+
+**Allocator.** Pass A admits by priority rank across the whole week (every day's lead lift first, with a reservation so one group cannot starve another day's lead lift), the empty-day guard puts a day's first exercise on when nothing else fits (`timeForcedFirst` when time was spent, `capForcedFirst` when a weekly room was gone: the gate requires 0), pass C raises groups to their bottom, pass D takes focus groups toward 25. Reasons a group stays below its bottom: `not_trained_by_split`, `time_limited`, `co_group_limited`, `cap_limited`. A day whose B list equals A's is allocated once.
+
+**Consumers.** All take the same `SessionBudgetContext` and one `BudgetLedger`: `PeriodizationEngine.apply` (base sets = the allocation, week 2 +1 where the ledger allows, week 4 `max(1, floor(0.6 x own allocated))`, deload stash = the exercise's own allocation), `VolumeTitration.applyToWeeks` (band bottom as MEV, ledger as MRV), `WarmupCooldownSelector.attach`.
+
+**Not budgeted (Ruling 8).** Customs, timed / cardio / distance rows and rows with no library row keep their sets and only spend time, at their own rest (rep-based customs at the day's rest).
+
+**Display (Ruling 13).** `SessionBudget.estimateDayMinutesFromPlanDay` prices a stored plan day; `budgetedDayMinutes` / `homeCardMinutes` (`session_estimate.dart`) are what Train (`WorkoutDayData.budgetMinutes`) and Home read. OFF keeps `totalSets x 2.5`.
+
+**Known behaviour the ON gate measured (2026-10-25, 1,802 runs).** (a) The one allowed time overage is the forced lead lift: on a 30-minute 3-day home_dumbbells day the library timed / distance rows alone can spend the whole budget, the guard still puts one budgeted exercise on, and the day runs up to 2.5 minutes over (6 of 1,776 personas). (b) A 90-minute user leaves a median 27 minutes a day unused because the weekly tops bind first (F3). (c) The founder case (intermediate build_muscle full_gym 6 days 90 minutes) trains Quads 8 weekly sets while Glutes sits at its top (`co_group_limited`). All three are flip-review questions, terminal in `docs/audit/session-set-budget.closure.yaml`.
+
+**Evidence.** `session_set_allocator_behavioral_test.dart`, `session_set_budget_consumers_test.dart`, `keep_all_slots_selection_test.dart`, `session_set_budget_wiring_test.dart`, `session_estimate_display_test.dart`, `test/plan_engine_v4/session_budget_test.dart`, the ON-world gate `test/plan_generator/session_set_budget_gate_test.dart` (its oracle restates the constants, the archetype rule, the muscle mapper and the band tables; report `session_set_budget_report.md`), and the OFF identity `test/plan_generator/generator_golden_test.dart` (998 personas).
+
 ## Common pitfalls - full rows
 
 _Moved verbatim from `lib/shared/repositories/plan_engine/CLAUDE.md` (original lines 324-332, context-lean batch 2026-09-29)._

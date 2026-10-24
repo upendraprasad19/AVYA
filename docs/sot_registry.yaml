@@ -10410,6 +10410,8 @@ concepts:
       the phase-arc flip: this line still said `enable_triggered_deload` (ship-dark DEFAULT OFF),
       four days after that flag flipped. Not caused by the phase-arc batch.
       7-B-1 only WRITES the stash; the PRODUCTION reader (un-deload) is 7-B-2 (pending).
+      B2 (enable_session_set_budget ON, concept session_set_budget): the stash is the exercise's OWN
+      allocated sets (not a re-derived peak), and titration reads and writes it on a deload week.
     writers:
       - file: lib/shared/repositories/plan_engine/periodization_engine.dart
         method: apply (weekIdx 3 peak-equiv stash)
@@ -10785,6 +10787,9 @@ concepts:
       deload week's stashed workingSets is titrated symmetrically (workingSets!=null
       self-gates the deload flag) so a triggered un-deload restores the titrated peak (F1).
       No migration / no restore entry (Hive-read-only; exlog + readiness already sync+restore).
+      B2 (enable_session_set_budget ON, concept session_set_budget): applyToWeeks(budget:) swaps the
+      [8,20] clamp for the budget's band bottom (MEV) and the BudgetLedger (MRV), counts in
+      BudgetMuscleGroups, and touches only budgeted rows; the evidence side (resolveDeltas) is unchanged.
     writers:
       - file: lib/shared/repositories/plan_engine/volume_titration.dart
         method: VolumeTitration.resolveDeltas / applyToWeeks
@@ -10853,6 +10858,8 @@ concepts:
       phases_2_to_12 gate). No migration / no restore entry (Hive-read-only; exlog +
       readiness already sync+restore). No scorecard/mirror wiring (generator_matrix /
       cascade_tracer untouched → frozen D3 baseline unmoved).
+      B2 (enable_session_set_budget ON, concept session_set_budget): a plateau +1 is refused inside
+      applyToWeeks when the BudgetLedger has no room; mergePlateauSetDeltas is unchanged.
     writers:
       - file: lib/shared/repositories/plan_engine/plateau_scan.dart
         method: PlateauScan.plateauedGroups / mergePlateauSetDeltas / isFlat
@@ -11204,6 +11211,10 @@ concepts:
       bridge — citation corrected 2026-09-19, was stale at :209 pre-dating
       the d6f1b8 muster restructure that also narrowed this bridge to
       ONLY body_part_priorities; see docs/architecture/sync.md).
+      B2 (enable_session_set_budget ON, concept session_set_budget): the same effectiveBodyFocus
+      also feeds the budget's focus groups (BudgetMuscleGroups.of), where a focus group may reach
+      25 weekly sets (cap 12 per session) and the base +1 set is no longer added (the allocation
+      replaces it).
     writers:
       - file: lib/shared/repositories/plan_engine/training_history_analyzer.dart
         method: physiqueFocusMuscles + physiqueFocusToBodyFocus + resolveBodyFocus
@@ -16885,3 +16896,104 @@ concepts:
         method: apply (useB reads exercisesB on weeks 2 and 4)
         semantic: a topped-up B is what weeks 2 and 4 show; the added moves exist before the set budget (B2) counts them
     contract_test_path: test/contracts/thin_day_topup_behavioral_test.dart
+
+  - concept: session_set_budget
+    domain: workout
+    behavioral_test_path: test/contracts/session_set_allocator_behavioral_test.dart
+    description: |
+      Batch B2 (docs/plans/2026-10-22-session-set-budget.md r6, platform tier, ship-dark; rule 14
+      waived for the generateV4 wiring only, founder F1). Behind configBox enable_session_set_budget
+      (PlanEngineFlags.sessionSetBudgetEnabled, DEFAULT OFF, read ONCE at the top of generateV4) a
+      generated session is sized by the user's minutes: VolumeFilter keeps every split slot
+      (keepAllSlots), SessionSetAllocator.allocate sets each budgeted exercise's sets from a weekly
+      band per budget group, a per-session cap and the day's seconds (1.20 x (overhead + sets x work
+      + (sets - 1) x rest), archetypes H/M/I/B), and PeriodizationEngine.apply, VolumeTitration
+      .applyToWeeks and WarmupCooldownSelector.attach take the SAME SessionBudgetContext, so one
+      BudgetLedger decides every grant. Customs, timed / cardio / distance rows and rows with no
+      library row are NOT budgeted: they keep their sets and only spend time (Ruling 8). Display:
+      budgetedDayMinutes / homeCardMinutes price a stored plan day with the same model. OFF: every
+      seam is null / false and generator_golden_test.dart (998 personas) is byte-identical. The proof
+      is behavioural: the allocator, the consumers, the wiring, the display and the ON-world gate
+      (1,802 real generateV4 runs, an independent time / cap oracle). Open product questions are
+      terminal in docs/audit/session-set-budget.closure.yaml and ride the flip review.
+    writers:
+      - file: lib/shared/repositories/plan_engine/session_set_allocator.dart
+        method: SessionSetAllocator.allocate
+        semantic: sets the sets of every budgeted PlannedExercise per variant; debugLastStats records the floor labels and the lead lifts
+      - file: lib/shared/repositories/plan_engine/session_budget.dart
+        method: SessionBudget / SessionBudgetContext / BudgetLedger
+        semantic: the pure constants, bands, caps, time model and the one headroom predicate (fits / add)
+      - file: lib/shared/repositories/plan_engine/budget_muscle_groups.dart
+        method: BudgetMuscleGroups.of
+        semantic: library primary_muscles to the ten budget groups (lower back / erector / spinal map to none)
+      - file: lib/shared/repositories/plan_engine/plan_engine_flags.dart
+        method: sessionSetBudgetEnabled
+        semantic: configBox enable_session_set_budget == true, catch returns false
+      - file: lib/shared/repositories/plan_engine/plan_generator.dart
+        method: generateV4 (budgetOn block)
+        semantic: builds the SessionBudgetContext once and hands it to allocate, apply, applyToWeeks and attach
+      - file: lib/shared/repositories/plan_engine/volume_filter.dart
+        method: filter / filterDays (keepAllSlots)
+        semantic: keeps every split slot when the budget is ON; the deload P1-only rule still applies
+    readers:
+      - file: lib/shared/repositories/plan_engine/periodization_engine.dart
+        method: apply (_applyBudgeted, _weekTwoGains)
+        semantic: base sets are the allocation, week 2 gains +1 where the ledger allows, week 4 is max(1, floor(0.6 x own allocated)), the deload stash is the exercise's own allocation
+      - file: lib/shared/repositories/plan_engine/volume_titration.dart
+        method: applyToWeeks (_titrateWeekBudgeted)
+        semantic: clamps to the band bottom (MEV) and the ledger (MRV); a trim never takes a credited group to or below the band bottom
+      - file: lib/shared/repositories/plan_engine/warmup_cooldown.dart
+        method: attach (budget)
+        semantic: the cardio lead-in and the cool-down walk scale with the minutes (SessionBudget.warmCoolItemSeconds)
+      - file: lib/shared/repositories/plan_engine/session_estimate.dart
+        method: budgetedDayMinutes / homeCardMinutes
+        semantic: the minutes Train and Home display, flag ON only
+      - file: lib/features/train/providers/train_provider.dart
+        method: WorkoutDayData.budgetMinutes / estimatedDuration
+        semantic: set at the day-card and week-list construction sites; null keeps sets x 2.5
+      - file: lib/features/home/screens/home_screen.dart
+        method: Today card (homeCardMinutes)
+        semantic: the same minutes as Train for the same stored day
+    contract_test_path: test/contracts/session_set_allocator_behavioral_test.dart
+    regression_test: test/plan_generator/session_set_budget_gate_test.dart
+
+  - concept: session_duration_minutes
+    domain: auth_profile
+    behavioral_test_path: test/contracts/session_set_budget_wiring_test.dart
+    description: |
+      Batch B2 (Task 0). The profile field session_duration_minutes (Edit Profile offers 30 / 45 / 60 / 90) is the
+      INPUT of the session set budget. Empty means 60 (founder F2; the Edit Profile default was 90 and is now
+      60, unflagged: pre-launch every account is a test account, Ruling 7; the 9 live rows at 90 stay 90).
+      generateV4 resolves its minutes as SessionBudget.resolveMinutes(param: sessionDuration, profileValue:
+      TrainingHistoryAnalyzer.sessionMinutesFromProfile()): a caller-supplied duration in 15..180 wins, then a
+      finite stored number that rounds into the range, then 60. The profile is read only while the flag is ON
+      (debugReadCount proves OFF reads none). The field is carried to the cloud and back by the onboarding sync,
+      the profile sync and the pending-onboarding replay, and survives the user_repository integer-only column
+      allow-list.
+    writers:
+      - file: lib/features/profile/screens/edit_profile_screen.dart
+        method: _save
+        semantic: writes session_duration_minutes from the picker (initial value SessionBudget.initialSessionDuration)
+      - file: lib/features/onboarding/providers/onboarding_provider.dart
+        method: _syncOnboardingToSupabase
+        semantic: carries the field in the onboarding payload
+      - file: lib/core/services/sync/sync_profile.dart
+        method: _syncUserProfile
+        semantic: carries the field as a rounded integer when it is a number
+      - file: lib/core/services/sync_service.dart
+        method: _replayPendingOnboardingSync
+        semantic: carries the field in the replayed payload
+    readers:
+      - file: lib/shared/repositories/plan_engine/training_history_analyzer.dart
+        method: sessionMinutesFromProfile
+        semantic: raw stored value for SessionBudget.resolveMinutes, read only while enable_session_set_budget is ON
+      - file: lib/shared/services/pro_phase_advance.dart
+        method: _runAdvanceWith
+        semantic: passes the stored minutes to generateV4 as sessionDuration
+      - file: lib/features/dev/simulation_service.dart
+        method: autoGenerateNextPhaseIfNeeded call
+        semantic: passes the stored minutes to generateV4 as sessionDuration
+      - file: lib/shared/repositories/user_repository.dart
+        method: _integerOnlyColumns
+        semantic: the column allow-list that keeps the value an integer
+    contract_test_path: test/plan_engine_v4/session_minutes_resolution_test.dart
