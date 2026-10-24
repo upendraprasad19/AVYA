@@ -290,6 +290,20 @@ void main() {
       expect(statsA().weekly['Chest'], 12);
     });
 
+    test('lighter phase: a focus group falls back to the ordinary session cap of 8, not 12', () {
+      final f = Fx();
+      for (var i = 0; i < 6; i++) {
+        f.row('c$i', ['Chest']);
+      }
+      List<PopulatedDay> mk() => [f.day('strength', [for (var i = 0; i < 6; i++) f.ex('c$i')])];
+      // Weekly top is the band bottom (12) here, so a third 4-set lift would fit the
+      // week and the 12-set focus cap; only the ordinary cap of 8 refuses it.
+      final lighter = f.run(mk(), minutes: 90, lighter: true, focus: {'Chest'});
+      expect(setsOf(lighter[0]), [('c0', 4), ('c1', 4)]);
+      final ordinary = f.run(mk(), minutes: 90, focus: {'Chest'});
+      expect(setsOf(ordinary[0]), [('c0', 4), ('c1', 4), ('c2', 4)]);
+    });
+
     test('focus reaches past the ordinary top (16) and stops at 25', () {
       final f = Fx();
       final days = <PopulatedDay>[];
