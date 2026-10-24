@@ -82,6 +82,9 @@ void main() {
   ///                          it. A branch push now relies on the PR's CI
   ///                          (OI-275); neither CI nor the local suite runs the
   ///                          golden-image tests (both exclude the tag).
+  ///   - setup-hooks.sh       the only writer of the hooks every worktree runs;
+  ///                          its atomic, read-only install is what stops an
+  ///                          old tree silently downgrading them (2026-10-24).
   ///   - safe_commit.sh /     the only sanctioned write paths (git_safety_hook
   ///     safe_push.sh         exists purely to force them); zero behavioural
   ///                          coverage of their own verification logic.
@@ -91,6 +94,7 @@ void main() {
   ///     euphemism.dart       local-only, and it fails OPEN on error.
   const enforcementPaths = [
     'scripts/pre-push.sh',
+    'scripts/setup-hooks.sh',
     'scripts/commit-msg.sh',
     'scripts/safe_commit.sh',
     'scripts/safe_push.sh',

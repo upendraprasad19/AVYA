@@ -240,10 +240,14 @@ paths:
   # DECLINED, recorded so the next sweep need not re-derive it:
   #   prepare-commit-msg.sh — its own header says the Blast-radius line it
   #     writes is informational; verified no gate parses it back.
-  #   setup-hooks.sh — affects fresh clones only, and check_hooks_installed.dart
-  #     backstops hook presence.
   #   new-worktree.sh / vercel_build.sh / run-device-tests.sh — not enforcement.
   - { glob: "scripts/pre-push.sh", tier: platform }
+  # The installer for all five hooks (2026-10-24, merge-conflict-treadmill A0). It used to be
+  # DECLINED as "fresh clones only", but it is the only writer of the hooks every worktree runs:
+  # its install is atomic and read-only so an OLD tree's installer fails loudly instead of
+  # silently downgrading the shared hooks. A weakening (in-place cp, dropped chmod, dropped cmp)
+  # would clear no review gate and reopen that hole, so it takes the platform tier.
+  - { glob: "scripts/setup-hooks.sh", tier: platform }
   # The fifth hook source (2026-08-17). It is the ONLY thing git runs for an
   # automatically-created merge commit, which is precisely where two branches'
   # OI boards first coexist and where the number-collision class lands. An edit

@@ -71,7 +71,21 @@ runs the same gates). See §4 process invariants for the no-deferred-failures po
   empty range. Everything else (main/develop, tags, mixed, malformed/empty stdin, unknown tier, `PRE_PUSH_FULL=1`)
   runs the suite as before. Tests: `test/scripts/pre_push_branch_push_skip_e2e_test.dart`, `safe_pr_merge_*_test.dart`.
   The installed hook is a COPY: re-run `sh scripts/setup-hooks.sh` after pulling this change (drift is only a
-  warning in `check_hooks_installed.dart`).
+  warning in `check_hooks_installed.dart`). **Install mechanics (A0, 2026-10-24):** `setup-hooks.sh` installs each hook
+  ATOMICALLY and READ-ONLY (temp file next to the hook, `cmp` before and after, `chmod +x`/`a-w`, `mv -f`), records a
+  failed hook and carries on (exit 1 with the list at the end), and writes `AVYA-HOOKS-README.txt` beside the hooks.
+  The hooks dir is shared by every worktree, so install ONLY from the primary after `git fetch origin main && git merge
+  --ff-only origin/main`; the installer REFUSES (exit 1, nothing replaced) when `origin/main` is not an ancestor of
+  HEAD (behind, diverged or unreadable history, each with its own advice) unless `--allow-stale` is passed, REFUSES
+  a tree that is not on `main` whose hook sources differ from `origin/main` unless `--allow-unmerged` is passed (on
+  `main` that difference is only a WARNING: merged but not yet pushed), and notes when it runs from a linked worktree.
+  A clone with no `origin/main` ref installs silently; an unknown argument exits 2 before anything runs. A failed
+  `chmod +x` (unless the temp copy is already executable), a failed `git config core.sshCommand` and an unusable `cmp`
+  are recorded failures, never silent. A plain `cp` over an installed hook FILE fails with `Permission denied` on
+  purpose (an old tree's installer must not downgrade the shared hooks); the same message on the hooks DIRECTORY means
+  its owner or mode is wrong (for example an install made with sudo). Rollback is `chmod u+w <hooks>/*`, then the
+  installer. Windows: the `u+w` retry is unverified on Git Bash.
+  Tests: `test/scripts/setup_hooks_atomic_install_e2e_test.dart`, `test/scripts/pre_commit_index_add_e2e_test.dart`.
   `flutter analyze --no-fatal-infos` runs **unconditionally**, above every early exit — placement
   is load-bearing, because on a `feature`-tier branch push it is the only compile check that runs
   anywhere (see the CI row).

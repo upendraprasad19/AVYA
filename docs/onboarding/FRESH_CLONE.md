@@ -35,10 +35,16 @@ npm install               # root — package.json carries lint helpers + emit_pa
 sh scripts/setup-hooks.sh
 ```
 
-This installs four hooks (`pre-commit`, `pre-push`, `commit-msg`, `prepare-commit-msg`) as
-**verbatim copies** of the matching `scripts/*.sh` — so editing a script changes nothing until
-you re-run this command. It installs into `git rev-parse --git-common-dir`/hooks, which every
-worktree shares.
+This installs five hooks (`pre-commit`, `pre-push`, `commit-msg`, `prepare-commit-msg`,
+`pre-merge-commit`) as **verbatim, read-only copies** of the matching `scripts/*.sh` — so editing a
+script changes nothing until you re-run this command. Run it from the **primary** worktree after
+`git fetch origin main && git merge --ff-only origin/main`: the hooks folder
+(`git rev-parse --git-common-dir`/hooks) is shared by every worktree, and the installer REFUSES to run
+from a tree that is behind or diverged from `origin/main` (`--allow-stale` overrides it) and from a tree off `main`
+whose hook sources differ from `origin/main` (`--allow-unmerged` overrides it). `AVYA-HOOKS-README.txt` next to
+the hooks repeats this. A `Permission denied` from a plain `cp` over a hook FILE means that tree's installer
+is old; update the tree instead of using chmod. (The same message on the hooks DIRECTORY means its owner or mode is
+wrong, for example after an install made with sudo.)
 
 - **`pre-commit`** blocks the commit on any failing discipline gate, regenerates
   `docs/diagnoses/INDEX.md` and the other indexes when their sources change, and walks the
