@@ -149,8 +149,9 @@ findings:
   # ── founder ────────────────────────────────────────────────────────────────
   - id: B2B-MERGE-AFTER-DOOR
     title: "merge B2b only in the live session, after B2a step 4a opens the door"
-    terminal_state: blocked_on_user
-    reason: "the merge and every live step need the founder's go (CLAUDE.md 4.3); order fixed 2026-10-21"
+    terminal_state: closed_in_commit
+    commit: "87a0d8d1 (PR #154), merged 2026-10-23 with the founder's go AFTER the door opened (create-razorpay-order v18)"
+    verification: "PR CI all required jobs green; safe_pr_merge read back MERGED; the Vercel production deploy follows the merge"
 
   - id: B2B-LIVE-4B
     title: "live step 4b: the stacked trial purchase through the new web client, then code off, refunds, cancelled rows"
