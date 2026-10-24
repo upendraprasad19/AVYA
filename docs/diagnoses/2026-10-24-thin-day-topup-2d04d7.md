@@ -88,7 +88,7 @@ touched_layers_checked:
   - { tier: 9, name: storage_buckets, status: not_applicable, evidence: "No storage object involved." }
   - { tier: 10, name: secrets_api_keys, status: not_applicable, evidence: "No secret involved." }
   - { tier: 11, name: external_services, status: not_applicable, evidence: "No external service involved." }
-  - { tier: 12, name: client_server_contract, status: verified, evidence: "Real PlanGenerator.generateV4, flag OFF (the path users get), the five sweep blocks (7,200 runs); see the measured tables below. The sweep run on the final code is recorded in the Task 3 commit." }
+  - { tier: 12, name: client_server_contract, status: verified, evidence: "Real PlanGenerator.generateV4, flag OFF (the path users get), the five sweep blocks (7,200 runs); see the measured tables below. The final-code sweep is recorded in the measured section below." }
 impact_analysis: >-
   Injured users only. A day under 3 exercises gains safe moves; no existing pick
   is removed or reordered. Uninjured users: topUpDays returns the same list
@@ -127,7 +127,9 @@ Real `PlanGenerator.generateV4`, B1 flag OFF, the five blocks of `test/plan_gene
 - Repeat phase (phase 2, 1,728 runs): 302 runs (17%) get a top-up: 783 own-pattern adds, 189 neighbour, 93 core. 2,055 of 15,552 scanned days sit at exactly 3 after the top-up (13%, against 2.0% in singles): a pinned plan keeps its slots, so its dropped pins are mostly refilled from the same pattern, and 3 is where the floor stops.
 - Generator golden: 2 keys change for both prototypes (`injury|shoulder|bodyweight|build_muscle|4d|intermediate|p1` and `|p2`); the 974 non-injury keys and the 22 other injury keys do not (998 in all).
 - Widest generator test set (46 minutes), prototype 1: 6,562 passed, 4 skipped, 1 failed, the golden's 2 keys.
-- Sweep wall time, five blocks: 10:11 solo on main, 27:02 in the loaded full-suite run, 15:40 solo for prototype 1, 17:21 for prototype 2. Task 3 times main and the final code back to back.
+- **Final code, the same sweep file** (Task 3, 2026-10-24): every block passes. empty / thin / one-exercise: singles 3/5 days 0 / 0 / 0; singles 4/6 days 0 / 0 / 0; pairs 3/5 days 0 / 2 / 0; pairs 4/6 days 0 / 6 / 0; repeat 0 / 0 / 0. Unsafe main 0, unsafe warm-up/cool-down 0, unresolved 0, `unperformable` 0, `duplicates` 0 in every block. All thin days are the OI-408 persona (`shoulder+lower_back|shoulder+lower_back`).
+- **The kill-switch reproduces main exactly.** The same file run with `disable_thin_day_topup` set gives the BEFORE column to the digit (0/74/19, 1/75/13, 4/531/197, 6/647/241, 0/768/310), with `unperformable` 0 and `duplicates` 0, so those two counters were also clean on main.
+- **Time, back to back, solo, same machine state:** five-block sweep 12:02 on the final code against 10:51 with the kill-switch set (the main path), +11%; under the 14-minute split threshold, so the sweep stays one file. Per block (final / switch set): singles 2:52 / 2:17, singles46 1:24 / 1:16, pairs 2:37 / 2:27, pairs46 3:09 / 2:58, repeat 2:00 / 1:53. Heaviest persona (shoulder + lower_back, bodyweight, beginner, 6-day lose_fat, 40 plans each, two rounds): 160 and 165 ms per plan with the switch set, 284 and 285 ms with the top-up, so about +124 ms (+78%) in the worst case on this machine; plan generation runs on the UI isolate (preview and phase advance), so a phone will take a multiple of that. Earlier runs for reference: 10:11 solo on main, 27:02 in the loaded full-suite run, 15:40 prototype 1, 17:21 prototype 2.
 
 ## The decision
 

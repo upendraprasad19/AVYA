@@ -542,7 +542,9 @@ class ExerciseSelector {
   };
 
   /// V4: Pick exercises for MuscleSlotDays using 5-attempt cascading fallback.
-  /// movement_pattern is NEVER dropped across all 5 attempts.
+  /// movement_pattern is NEVER dropped across all 5 attempts. (The thin-day
+  /// top-up post-pass, [topUpDays], may add a neighbouring pattern to an injured
+  /// user's day left under 3 exercises.)
   static List<PopulatedDay> pickV4({
     required List<MuscleSlotDay> slotDays,
     required ExerciseRepository exerciseRepo,
@@ -1522,7 +1524,8 @@ class ExerciseSelector {
     return pool.first;
   }
 
-  /// movement_pattern is NEVER dropped.
+  /// movement_pattern is NEVER dropped (the thin-day top-up, [topUpDays], runs
+  /// after the cascade and may add a neighbouring pattern).
   static PlannedExercise? _cascadeFill(
     MuscleSlot slot,
     ExerciseRepository repo,
