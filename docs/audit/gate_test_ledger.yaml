@@ -79,6 +79,62 @@ check_authed_invoke_fresh_token.dart:
 check_blast_radius_coverage.dart:
   grandfathered: 2026-08-10
 
+check_bug_class_numbers_unique.dart:
+  mutation_proven: true
+  test_path:
+    - test/scripts/bug_class_ids_lib_test.dart
+    - test/scripts/bug_class_numbers_gate_e2e_test.dart
+    - test/scripts/bug_class_renumber_pins_test.dart
+  evidence: >
+    Added 2026-10-25 (landing B of the merge-conflict-treadmill plan, OI-167, diagnose d5b8e3). The gate
+    fails when a bug-class id is used twice in bug-classes.md or in the SKILL.md index, when an id is in
+    one file and not the other, when a major is not 2, when SKILL.md carries a numeric heading, when a
+    line looks like a heading or row but does not parse, when a code fence is never closed, when an id
+    has different titles in the two files (first 16 letters and digits), when an input file or the index
+    section is missing, or when the parse finds no headings or no rows. Baseline (rule 21, run before the
+    renumber on the base files of b0735bb1): exit 1 with exactly the nine duplicate ids as 18 lines (9
+    headings, 9 rows) plus the one 2.93 title mismatch and next free id 2.123; after the renumber and the
+    2.93 row alignment, PASS with headings=131 rows=131. 108 tests in three files (68 lib, 33 end to end
+    through the REAL script on temp catalogs, 7 outcome pins on the real documents). 72 mutants, each
+    applied with an exact-one-match assertion before the write, the three files run, the sources restored
+    and their sha256 re-checked (RESTORE-CHECK OK), and every one reddened at least one test: 47 in a
+    first run, 25 more (N01 to N25) after the B-pass found surviving mutants, and a second run on the
+    final code that left two not proving anything (M06 was a compile error in the harness and M09 survived
+    because a heading with a title parses without the carriage-return strip); M09 now has a title-less
+    CRLF heading assertion and both are red on the rerun. Failed tests per mutant are from the run on the
+    final code. Parser and checker: M01 dedupe headings by id (7), M02 lexical maximum (2), M03 positional
+    last (6), M04 skip heading without row (3), M05 skip row without heading (2), M06 drop fence handling
+    (10), M07 fences at column 0 only (2), M08 any closer closes a fence (1), M09 drop CR strip (1), M10
+    read rows from the whole file (5), M11 drop the rule terminator (2), M12 drop the second-level heading
+    terminator (1), M13 drop the third-level heading terminator (1), M14 a missing index section treated
+    as present (3), M19 an archived heading parsed as an id (1), M23a and M23b drop lookalike reporting
+    for either file (5 and 2), M24a and M24b drop the major-2 pin for headings or rows (2 each), M25 drop
+    title pairing (7), M26 compare 16 characters even for a short title (33), M27 index row title always
+    empty (29), M28a report only the first duplicate heading line (3), M28b zero-based duplicate row
+    lines (2), M36 drop the empty-title finding (1), M37 let a huge number throw (1), M38 drop the
+    fewer-than-four-cells rule (3), M39 drop the numeric-heading-in-SKILL rule (2), M40a and M40b drop the
+    duplicate rule for headings or rows (7 and 3), M41 pair duplicated ids too (10), M42 count the header
+    row as malformed (33). Edge cases added after the B-pass: N01 and N02 compare 15 or 17 characters (2
+    and 3), N03 lookalike without the indent allowance (2), N04 and N05 lookalike levels narrowed (2
+    each), N06 a row needs only three cells (1), N07 trailing bar not stripped (33), N08 a fence opens on
+    two fence characters (1), N09 rule terminator without trim (1), N10 rows matched untrimmed (1), N11 a
+    closer may carry text (1), N12 id cell without end anchor (1), N13 fence indent of two instead of
+    three (1), N14 and N15 normalisation drops digits or keeps underscores (1 each), N16 findings sorted
+    by file only (1), N17 unclosed fence finding dropped (2), N18 separator needs three dashes (1), N19
+    numeric heading rule for every major (1), N20 heading title stops at a line separator (1), N21 next
+    free id printed as null (1), N22 zero-parse findings not printed (1), N23 root not named on a missing
+    file (1), N24 and N25 unclosed fence not tracked in SKILL.md or bug-classes.md (1 and 2). Gate wiring
+    (the end-to-end file proves main is wired): M15 a missing file exits 0 (6), M16 exit 0 on findings
+    (14), M17 print PASS on failure (11), M18 PASS on stderr instead of stdout (4), M20 and M21 next free
+    id from headings only or rows only (1 each), M22 drop the combined zero guard (2), M29 ignore the
+    root flag (2), M30 ignore the current directory default (26). Outcome and citations on the real
+    documents: M31 swap two moved ids in headings only (4), M32 in rows only (3), M33 swap them
+    consistently in both files (2, only the pin file sees it), M34 move the wrong class of a pair (2),
+    M35 leave a red flag on the old id (1), M43 leave an outside citation on the old id (1). SCOPE OF
+    THIS EVIDENCE: all of it is local. CI runs the gate through the existing Audit Gates loop (test.yml,
+    scripts/check_*.dart) on the PR merge ref; the first CI run of the gate and of the three test files
+    is the proof on the runner.
+
 check_bugfix_commits_have_diagnose.dart:
   grandfathered: 2026-08-10
 

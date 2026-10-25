@@ -37,7 +37,7 @@ telemetry_op_types:
   failure: []
 cross_account_guard: not_applicable — no user data.
 forbidden_patterns_checked:
-  - "adding CONTRACT_SWEEP_NESTED to the sweep test's own filter — rejected: it is the NTH hand-copied list (4f2a9e, c3f8e1, d81f3c, d9e4b1 each added names to one list and the next variable was missed); class 2.53 names the pattern (the Nth fix to one file, each a wider guess at the same heuristic)."
+  - "adding CONTRACT_SWEEP_NESTED to the sweep test's own filter — rejected: it is the NTH hand-copied list (4f2a9e, c3f8e1, d81f3c, d9e4b1 each added names to one list and the next variable was missed); class 2.131 names the pattern (the Nth fix to one file, each a wider guess at the same heuristic)."
   - "an ALLOW-list (child sees only PATH, HOME ...) — rejected: the founder also runs these tests on Windows (SystemRoot, PATHEXT, COMSPEC, the Flutter/Dart cache variables) and this VPS cannot verify that, so an allow-list would trade a known gap for an unverifiable break at 126 sites."
   - "`SUPABASE_` as a prefix — rejected (class 2.56's rule: never widen an exact name to a prefix; Supabase owns that namespace). Six exact names are stripped instead."
   - "a hand-picked 'env_readers' lookup as the completeness check — rejected twice in plan review: a lookup is not a census. The check is a DERIVED two-way scan with floors and anchors."

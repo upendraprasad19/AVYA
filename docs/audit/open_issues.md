@@ -2880,57 +2880,6 @@ Do NOT re-propose v1. Verified clean by round 2: sending `''` to `user_profile.c
 - **PARTIALLY RESOLVED 2026-09-11 — a FOURTH candidate behaviour was chosen and shipped, none of the three above**: OI-166 Unit 2 (`docs/audit/oi166-unit2-plan-v10.md`, diagnose `d7f3b2`) implements CYCLING — `contentFlavorIndex((w-1)%4)` repeats the baseline→overreach→peak→deload wave past week 4 rather than freezing on week 4's character (candidate 1), refusing (candidate 2), or handing off to phase advance (candidate 3). This closes the "no well-defined behaviour" complaint for the CONTENT/LABELING half: `rawWeek > 4` now stamps its real week number and picks well-defined content, verbatim, for any `rawWeek`. It does NOT close the WINDOW-ALIGNMENT half this entry also raises — whether `redoWeek4`'s own extension window is week-grid-aligned is untouched (`redoWeek4`/`holdWeek` themselves were explicit out-of-scope for Unit 2). Leaving this OPEN rather than closing it: the founder-blocked question above was "what should a regen DO", and cycling answers it for content but the sequencing-after-OI-174 note and the `redoWeek4` non-alignment concern (candidate 1's own rejection reason) still stand.
 - ⚠ **A THIRD residual surfaced the same day by the Unit 2 B-pass (Finding 2, P1), distinct from window-alignment: the phase-arc strip's "NOW" highlight does not cycle even though content now does.** `getCurrentWeekNumber()` (`workout_schedule_read_service.dart:1334`, unchanged by Unit 2) clamps to `[1,4]`, so past real week 4 the strip permanently highlights index 3 — "deload" per Unit 2's own splice — regardless of which of baseline/overreach/peak/deload the real current week actually cycles to. Reachable TODAY via the live `redoWeek4`, no flag required. Not strictly a NEW regression (pre-fix, `current_plan` was also unconditionally rewritten to the same canonical order every regen, so the clamp already existed against different, frozen content) — but Unit 2 makes the mismatch visible and variable for the first time. A real fix means routing the highlight through a cycle-aware index or otherwise making `hold_week_identity`'s clamp itself past-week-4-aware, which is a redesign of a DIFFERENT SoT concept (`hold_week_identity`, own tests, own explicit "do NOT branch inputs where the clamped 4 is HONEST" warning for its other consumers) — correctly out of scope for the already-9-round-converged Unit 2, tracked here instead of left implied-fixed.
 
-## OI-167 — the debugging skill's bug-class numbers collide 9×, every one is cited by number from elsewhere, and nothing gates them (P3)
-
-- **Status**: OPEN
-- **Blocked on**: nothing technical — needs a per-citation reading, or a decision to stop numbering
-- **Verified**: 2026-09-07 — `grep -oE '^### 2\.[0-9]+' .claude/skills/debugging/SKILL.md | grep -oE '[0-9]+$' | sort -n | uniq -d` → **2.36, 2.37, 2.38, 2.39, 2.40, 2.41, 2.53, 2.54, 2.55** (NINE numbers, each naming TWO unrelated classes). True max is **2.63**. The pairs are genuinely distinct content — `2.36` is both *"a DROP + CREATE on a SECURITY DEFINER function RESETS its ACL"* and *"PostgREST builder is a thenable with NO .catch()"*
-- **Identified**: 2026-09-07 · found by nearly minting a tenth — this session added a `2.61` that already existed, caught it in review, and renumbered to 2.63. **2.61 is therefore NOT in the duplicate list**; it is only how the mechanism was discovered
-- **Symptom**: two unrelated bug classes answer to the same number, so a citation like "debugging skill bug-class 2.38" does not resolve to one entry. A reader following it lands on whichever occurrence they find first, which may be the wrong class entirely.
-
-- **Root cause, worth stating precisely because it will recur**: the numbers are **not monotonic in file order** — 2.61 and 2.62 sit ABOVE 2.53–2.60 in the file. So the natural survey, `grep -nE '^### 2\.[0-9]+' | tail -1`, answers *"the last-positioned entry"* when the question was *"the highest number"*, and returns a number that is already taken. Correct form, now in the section-2 header as a guard:
-
-      grep -oE '^### 2\.[0-9]+' .claude/skills/debugging/SKILL.md | grep -oE '[0-9]+$' | sort -n | tail -1
-
-- **Same class as the OI-number collisions** `scripts/check_oi_numbering_unique.dart` exists to catch (six had shipped by 2026-08-16; `build_oi_index.dart:110-111` records *"OI numbers are minted by eyeballing the board's tail"*). Identical mechanism, identical cause, **no equivalent gate covers `.claude/skills/`**.
-
-- ⚠ **RENUMBERING IS NOT SAFE FOR ANY OF THE NINE.** A first pass at this entry claimed six of them were uncited and "mechanically safe"; a context-blind review disproved it, and the census below is the corrected result. Every one of the nine is cited by number from outside the skill:
-
-      for n in 36 37 38 39 40 41 53 54 55; do echo -n "2.$n -> "; grep -rn "2[.]$n" --include=*.md . | grep -v skills/debugging/SKILL.md | grep -vE 'docs/(audit|reviews|plan-reviews)/' | wc -l; done
-      # every one NON-ZERO. Citing docs span docs/diagnoses/, docs/plans/,
-      # docs/superpowers/, docs/handbook/, docs/adr/ and memory/.
-
-  Deliberately ONE line with no backslash continuations and `2[.]N` rather than `2\.N`: three
-  separate attempts to publish the multi-line form had their escapes eaten in transit, shipping a
-  command with a literal newline inside `printf` and no continuations at all. A guard that
-  prescribes a broken command is worse than no guard, so the form that survives copying wins over
-  the form that reads more nicely.
-
-  ⚠ **The claim is "all nine are non-zero", NOT any particular count** — and the distinction is
-  not pedantry, it is the second defect this entry had to fix. The exact totals are UNSTABLE:
-  2.53 reads 8, 10 or 5 depending purely on which directories the command excludes, and a bare
-  `2.39` also matches version strings and decimals. Worse, the exclusions have to grow as this
-  issue accumulates meta-documentation — the review and plan-review files written FOR this entry
-  quote the same numbers, so the first published command started counting them within minutes
-  (2.36 went 1 → 6). **A count over a corpus that includes the discussion of the count is not a
-  measurement.** Non-zero-ness is the property that survives every exclusion choice, so it is the
-  only thing asserted here.
-
-- ⚠ **Two ways the first pass got this wrong, both worth keeping**:
-  1. Its census filtered to lines also containing `bug.?class|debugging skill`. The real citations mostly do not say that — `docs/diagnoses/2026-06-13-referral-rls-context-d2b9e6.md:80` reads `2.36 (FunctionException not unpacked → masked errors)` and matches no keyword. **A filter narrower than the thing you are counting reports zero and looks like proof.**
-  2. It attributed the citations to "CLAUDE.md, ADRs and diagnose-docs". **No CLAUDE.md cites any of these numbers** — `find . -iname CLAUDE.md -exec grep -Hn "2\.3[789]\|2\.40" {} \;` returns nothing. CLAUDE.md rule 9 cites only 2.35 / 2.31, neither of which is duplicated, so that citation is unaffected.
-
-- ⚠ **The prescribed census must EXCLUDE this board.** This entry names the very numbers it counts, so a naive `grep -rn` scores its own text as citations — the self-matching shape `check_no_deferral_euphemism.dart` handles with a visible `deu-quote` marker. The `grep -v` exclusions above are load-bearing, not decoration.
-
-- **Options**:
-  1. ~~Renumber the uncited duplicates~~ — **there are none**; every one is cited. Any renumber requires reading all citations first, so this is not the cheap option it appears to be.
-  2. Stop numbering new entries and key on the TITLE, the way `GATE_INDEX.md` keys gates on filename with the number as an optional alias — the move CLAUDE.md rule 24 already made, for this exact reason. Existing numbers stay as aliases; the collisions become harmless.
-  3. Gate only, renumber nothing — blocks new collisions, leaves the nine ambiguous.
-
-- **Recommendation**: **option 2 plus a gate.** Rule 24's precedent already exists in this repo — *"the filename is the identity; a number is an optional alias"* — and it is why `GATE_INDEX.md` stopped having this problem. Titles are what readers search for, existing numbers keep resolving as aliases, and no archaeology is needed to stop the bleeding.
-
-- **Not urgent**: this misdirects a reader; it breaks no build and no runtime path. Filed at P3 so it is not lost — the guard now in the section-2 header stops a tenth collision, but a comment is an intention, and this repo's own §4.13 point 6 says intentions decay.
-
 ## OI-169 — a local run of `test/edge_functions/` reports "All tests passed" having executed nothing (P2)
 
 - **Status**: OPEN
@@ -5666,7 +5615,7 @@ The repo root has no allowlist, so a command that writes a file there (a stray s
 ## OI-309 — Merge-conflict treadmill: every >=account PR conflicts with main again and again (shared append-only + generated docs, max+1 numbering) while the 25-minute pre-push full suite re-runs on each docs-only merge; PR #73 needed 4 merge rounds in ~1 day, and its merge then turned main red on a stale plan-review tier
 
 - **Status**: OPEN
-- **Blocked on**: a plan (it changes hooks and the generated-file policy, so CLAUDE.md 4.12 plan review x2 applies) and a founder call on the options below. Interim, in force now: for a push whose new commits are only a merge of `origin/main` with docs-only conflict edits, the founder approved `FOUNDER_APPROVED_NO_VERIFY=1` (chat 2026-10-05, "Approved no verify if that helps"); CI still runs the full suite on the PR. Whether that approval is standing or per-push is the founder's to state.
+- **Blocked on**: a plan (it changes hooks and the generated-file policy, so CLAUDE.md 4.12 plan review x2 applies) and a founder call on the options below. Interim, in force now: for a push whose new commits are only a merge of `origin/main` with docs-only conflict edits, the founder approved `FOUNDER_APPROVED_NO_VERIFY=1` (chat 2026-10-05, "Approved no verify if that helps"); CI still runs the full suite on the PR. Whether that approval is standing or per-push is the founder's to state. Progress 2026-10-25 (plan `docs/plans/merge-conflict-treadmill.md`): landings A0 (#159), A1 (#160) and A2 (#167) are merged, B (the bug-class uniqueness gate and renumber, closes OI-167) is in the PR of branch `bug-class-uniqueness`; C (sync-merge review and resolver) and D (merge train) remain, and this issue stays OPEN until D.
 - **Verified**: 2026-10-05 - measured on PR #73 (OI-284): 4 merge-of-main rounds in about a day (plus a red main: the plan-review record's tier was measured before main's PR #70 promoted two files it touches to platform, so the merge-to-main gate wanted `bpass: accepted`; fixed by the record-correction PR); each round = hand-resolve + gate loop + a ~25-minute pre-push full suite, during which main moved again. Commits touching each file on `origin/main` in 3 days: `OPEN_INDEX.md` 8, `bug-classes.md` 8, `open_issues.md` 8, `sot_registry.yaml` 9, `diagnoses/INDEX.md` 6, `debugging/SKILL.md` 4, `naming_conventions.md` 3. Conflicts seen: bug-class number taken twice by max+1 (2.85 then 2.87), glossary rows appended at the same spot, two generated indexes, the OI board tail, plus one non-textual interaction (PR #70's new engine-completeness test flagged the new file).
 - **Root causes**: (1) every batch is REQUIRED to edit the same shared files, mostly by appending at one spot (bug classes, naming glossary, OI board, SoT registry, diagnose docs); (2) generated files (`OPEN_INDEX.md`, `diagnoses/INDEX.md`, `GATE_INDEX.md`) are committed and regenerated per commit, so they conflict on any overlap although they rebuild in seconds; (3) bug-class numbers are claimed by "max + 1" (OI numbers are not: `mint_oi.sh` reserves atomically; OI-167 already recommends keying classes on the title); (4) the pre-push full suite takes ~25 minutes and re-runs on a docs-only merge, a window in which another PR merges.
 - **Options to plan** (each independent): (a) stop tracking generated indexes (build in CI / on demand) or give them a regenerate merge driver installed by `setup-hooks.sh`; (b) one file per entry for bug classes, glossary terms and diagnose entries with a generated index, so two branches never edit the same lines; (c) an allocator or title-keyed ids for bug classes; (d) pre-push policy: when the new commits are a pure merge of `origin/main` (CI-green) the delta since the last green push is docs-only, verify the delta (gates + analyze) instead of the whole suite, CI stays the full-suite source of truth; (e) a GitHub merge queue (or auto-merge) so each PR is tested on top of current main serially; (f) `git rerere` and `merge=union` for pure-append files.
