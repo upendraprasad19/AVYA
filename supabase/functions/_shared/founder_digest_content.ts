@@ -114,7 +114,7 @@ export const DIGEST_KEYS: readonly DigestKey[] = [
   // an exact 10-minute boundary, so its buckets never straddle IST midnight.
   { key: "verify_payment", label: "verify-payment", kind: "subday" },
   // 1-hour UTC buckets, totals only (payment-hardening U3, OI-366): order attempts (limit 30) and promo checks
-  // (limit 20) per user. Same "no cap shown" rule as the two rows above, and the same <=30-min/day slop as
+  // (limit 7) per user. Same "no cap shown" rule as the two rows above, and the same <=30-min/day slop as
   // delete_account: the 18:00Z-19:00Z bucket straddles IST midnight (18:30Z), so the first 30 min of an IST day
   // land on the previous day's digest.
   { key: "create_order", label: "create-razorpay-order", kind: "subday" },

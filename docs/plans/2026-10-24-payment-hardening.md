@@ -31,7 +31,7 @@ Taken 2026-10-24 ("go"): order limit 30 per hour per user, 429, fail closed on a
 is honoured at order time only while active, unexpired (IST end of the `valid_until` day) and not
 exhausted; the payment writers keep their tolerant read; the `validate-promo` throttle is in scope.
 
-**Ratified by the founder 2026-10-24** (answers to the four questions): F-1 every call at 20/hour;
+**Ratified by the founder 2026-10-24** (answers to the four questions; the promo-check limit of 20/hour was superseded 2026-10-25: 7 per UTC-hour bucket, plan `2026-10-25-promo-check-limit-7.md`): F-1 every call at 20/hour;
 F-2 the no-switch exception for U0/U1 approved; F-3 U4 added; the Telegram bot is deferred (OI-278: the
 bot is disabled), so no out-of-repo reader of `promo_codes` exists. **F-4 (round 2; RATIFIED by the
 founder 2026-10-24: "Default ON, kill switch"):** the U2 and U3 switches are KILL switches that default ON (new path live at

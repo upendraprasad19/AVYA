@@ -1,7 +1,7 @@
 // test/contracts/promo_validate_rate_limit_writer_to_reader_test.dart
 //
 // payment-hardening U3 (OI-366, diagnose f2c9a8). Writer: validate-promo's
-// consume_quota('promo_validate', <1-hour UTC bucket>, 20), right after the JWT check. Readers: its own refusals,
+// consume_quota('promo_validate', <1-hour UTC bucket>, 7), right after the JWT check. Readers: its own refusals,
 // which are HTTP 200 {valid:false, reason}; the paywall, which shows `reason` when `valid` is not true and shows
 // "Network error" for ANY non-2xx (so a 429 would hide the reason); the digest (DIGEST_KEYS promo_validate).
 // Behaviour: supabase/functions/validate-promo/index_test.ts.
@@ -25,7 +25,7 @@ void main() {
 
     test('key, limit, 1-hour bucket; the counter runs before the body and the lookup', () {
       expect(code, contains('const PROMO_QUOTA_KEY = "promo_validate";'));
-      expect(code, contains('const PROMO_QUOTA_LIMIT = 20;'));
+      expect(code, contains('const PROMO_QUOTA_LIMIT = 7;'));
       expect(code, contains('const PROMO_RATE_WINDOW_MS = 60 * 60 * 1000;'));
       final counter = code.indexOf('p_quota_key: PROMO_QUOTA_KEY,');
       expect(counter, greaterThan(0));

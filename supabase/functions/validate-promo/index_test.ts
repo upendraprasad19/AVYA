@@ -5,7 +5,7 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { FakeServer, jsonResponse, type Row } from "../_shared/postgrest_fake_fetch.ts";
 import { istDateStr } from "../_shared/ist_date.ts";
-import { captureConsole, type Handler, loadOriginMainHandler, MODULE_ENV, TOKEN, USER } from "../_shared/payment_writer_harness.ts";
+import { captureConsole, type Handler, loadOriginMainHandler, MODULE_ENV, OTHER_USER, TOKEN, USER } from "../_shared/payment_writer_harness.ts";
 import { CHECK_UNAVAILABLE_REASON, PROMO_GUARDS_DISABLE_ENV, rateLimitedReason } from "./index.ts";
 import { ORDER_ABUSE_GUARDS_DISABLE_ENV } from "../create-razorpay-order/index.ts";
 import { secondsLeftInBucket } from "../_shared/order_abuse_guards.ts";
@@ -15,6 +15,7 @@ const originHandler = await loadOriginMainHandler("validate_promo_origin_main.ts
 
 // The RPC's name is built, not spelled: census tests scan _test.ts files for the literal.
 const CONSUME_QUOTA_RPC = "consume_" + "quota";
+const OTHER_TOKEN = "user-jwt-2";
 
 function t(name: string, fn: () => Promise<void>) {
   Deno.test({ name, fn, sanitizeOps: false, sanitizeResources: false });
@@ -28,6 +29,29 @@ interface Sc {
   noAuth?: boolean;
   /** A raw request body (not JSON-encoded), for the catch-all tests. */
   rawBody?: string;
+  /** A counter shared ACROSS run() calls (a run builds a new server each time): the quota RPC is emulated on it. */
+  counterRows?: Map<string, number>;
+  /** The caller's bearer token; OTHER_TOKEN is OTHER_USER. */
+  token?: string;
+}
+
+/** The counter key the emulator uses: one row per (user, quota key, bucket start), like the table behind the RPC. */
+const counterKey = (userId: string, windowStart: string) => `${userId}|promo_validate|${windowStart}`;
+
+/**
+ * Emulates the quota RPC's contract (migration 128): a missing, non-integer or negative limit RAISES (the handler then
+ * answers "couldn't check"), a limit of 0 or a row at the limit answers -1 WITHOUT counting, else the post-increment count.
+ */
+function emulateCounter(rows: Map<string, number>) {
+  return (_name: string, args: Row): number => {
+    const limit = Number(args.p_limit);
+    if (args.p_limit == null || !Number.isInteger(limit) || limit < 0) throw new Error("emulated counter: the limit must be a non-negative integer");
+    const key = `${args.p_user_id}|${args.p_quota_key}|${args.p_window_start}`;
+    const used = rows.get(key) ?? 0;
+    if (limit === 0 || used >= limit) return -1;
+    rows.set(key, used + 1);
+    return used + 1;
+  };
 }
 
 async function withEnv<T>(vars: Record<string, string | undefined>, fn: () => Promise<T>): Promise<T> {
@@ -50,8 +74,10 @@ async function withEnv<T>(vars: Record<string, string | undefined>, fn: () => Pr
 async function run(handler: Handler, sc: Sc, guardsSwitch?: string) {
   const server = new FakeServer({
     tables: { promo_codes: sc.promoRows ?? [] },
-    users: { [TOKEN]: { id: USER } },
-    fallbackRpc: () => (sc.quota === "null" ? null : typeof sc.quota === "number" ? sc.quota : 1),
+    users: { [TOKEN]: { id: USER }, [OTHER_TOKEN]: { id: OTHER_USER } },
+    fallbackRpc: sc.counterRows
+      ? emulateCounter(sc.counterRows)
+      : () => (sc.quota === "null" ? null : typeof sc.quota === "number" ? sc.quota : 1),
     intercept: (req) =>
       sc.quota === "error" && req.path === `/rest/v1/rpc/${CONSUME_QUOTA_RPC}`
         ? jsonResponse(500, { code: "XX000", message: "counter unavailable" })
@@ -63,7 +89,7 @@ async function run(handler: Handler, sc: Sc, guardsSwitch?: string) {
   try {
     const req = new Request("https://fn.test/validate-promo", {
       method: "POST",
-      headers: { ...(sc.noAuth ? {} : { Authorization: `Bearer ${TOKEN}` }), "Content-Type": "application/json" },
+      headers: { ...(sc.noAuth ? {} : { Authorization: `Bearer ${sc.token ?? TOKEN}` }), "Content-Type": "application/json" },
       body: sc.rawBody ?? JSON.stringify({ code: sc.code ?? "half50" }),
     });
     const res = await withEnv({ ...MODULE_ENV, [PROMO_GUARDS_DISABLE_ENV]: guardsSwitch }, () => handler(req));
@@ -119,18 +145,18 @@ t("the four existing answers are unchanged (valid, inactive, exhausted, unknown)
   }
 });
 
-t("one counter call per check: the key, a 1-hour UTC bucket and the limit of 20", async () => {
+t("one counter call per check: the key, a 1-hour UTC bucket and the configured limit", async () => {
   const r = await run(newHandler, { promoRows: [promo()] });
   const calls = counterCalls(r.server);
   assertEquals(calls.length, 1);
   const args = calls[0].body as Record<string, unknown>;
   assertEquals(args.p_user_id, USER);
   assertEquals(args.p_quota_key, "promo_validate");
-  assertEquals(args.p_limit, 20);
+  assertEquals(args.p_limit, 7);
   assertEquals(Date.parse(String(args.p_window_start)) % 3_600_000, 0);
 });
 
-t("over the limit (the 21st check) -> 200 valid:false with the rate reason, and NO promo_codes read", async () => {
+t("over the limit (the counter answers -1) -> 200 valid:false with the rate reason, and NO promo_codes read", async () => {
   const { r, expected } = await runRateLimited();
   assertEquals(r.res.status, 200);
   assertEquals(r.body.valid, false);
@@ -264,6 +290,46 @@ t("frozen clock: at 00:01 IST a code valid until the previous IST day is EXPIRED
   assertEquals(after.body, { valid: false, reason: "This code has expired" });
   const before = await withFrozenNow(MINUTE_BEFORE_IST_MIDNIGHT, () => run(newHandler, { promoRows: [row] }));
   assertEquals(before.body, { valid: true, discount_pct: 50 }, "23:59 IST is still the last day");
+});
+
+// ── The limit's VALUE (founder 2026-10-25: 7 checks per user per UTC-hour bucket). The older over-limit test
+// answers -1 from a fake that ignores the limit, so only these tests, the p_limit assertion above and the Dart
+// source pin can see the number. The counter is emulated on a Map shared across the calls (an emulator that read a
+// literal 7 instead of args.p_limit would pin nothing).
+const BUCKET_18Z = "2026-10-24T18:00:00.000Z";
+const BUCKET_19Z = "2026-10-24T19:00:00.000Z";
+const FIVE_MINUTES_INTO_NEXT_BUCKET = "2026-10-24T19:05:00Z";
+const windowStartOf = (server: FakeServer) => (counterCalls(server)[0].body as Record<string, unknown>).p_window_start;
+
+t("the limit is 7 per user per UTC-hour bucket: 7 checks pass, the 8th is refused with the wait, another user is unaffected", async () => {
+  const counterRows = new Map<string, number>();
+  await withFrozenNow(MINUTE_AFTER_IST_MIDNIGHT, async () => {
+    for (let i = 1; i <= 7; i++) {
+      const r = await run(newHandler, { promoRows: [promo()], counterRows });
+      assertEquals(r.body, { valid: true, discount_pct: 50 }, `check ${i} of 7`);
+      assertEquals(windowStartOf(r.server), BUCKET_18Z, `check ${i} bucket start`);
+    }
+    // 18:31:00Z: 1740 s left in the 18:00Z bucket -> 29 minutes (a literal, independent of the helper).
+    const eighth = await run(newHandler, { promoRows: [promo()], counterRows });
+    assertEquals(eighth.res.status, 200);
+    assertEquals(eighth.body, { valid: false, reason: "Too many attempts. Try again in 29 minutes." });
+    assertEquals(promoReads(eighth.server).length, 0, "a refused check must not read promo_codes");
+    assertEquals(counterRows.get(counterKey(USER, BUCKET_18Z)), 7, "emulator sanity: a refusal does not count");
+    // Checked AFTER the first user hit the limit: a handler that sent one fixed user id would be refused here.
+    const other = await run(newHandler, { promoRows: [promo()], counterRows, token: OTHER_TOKEN });
+    assertEquals(other.body, { valid: true, discount_pct: 50 }, "the counter is per user");
+  });
+});
+
+t("the bucket is the fixed UTC hour: refused at 18:31Z with 7 used, allowed again at 19:05Z in the next bucket", async () => {
+  const counterRows = new Map<string, number>([[counterKey(USER, BUCKET_18Z), 7]]);
+  const refused = await withFrozenNow(MINUTE_AFTER_IST_MIDNIGHT, () => run(newHandler, { promoRows: [promo()], counterRows }));
+  assertEquals(refused.body, { valid: false, reason: "Too many attempts. Try again in 29 minutes." });
+  assertEquals(windowStartOf(refused.server), BUCKET_18Z);
+  const allowed = await withFrozenNow(FIVE_MINUTES_INTO_NEXT_BUCKET, () => run(newHandler, { promoRows: [promo()], counterRows }));
+  assertEquals(allowed.body, { valid: true, discount_pct: 50 });
+  assertEquals(windowStartOf(allowed.server), BUCKET_19Z);
+  assertEquals(counterRows.get(counterKey(USER, BUCKET_19Z)), 1);
 });
 
 for (const [label, quota] of [["null", "null"], ["0", 0], ["a fraction", 1.5]] as const) {
