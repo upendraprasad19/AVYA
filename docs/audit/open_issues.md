@@ -6870,3 +6870,21 @@ Past `user_daily_snapshots` stay (nothing reads a past day's `coach_notices`). D
 **Fix shape.** Either the paywall's promo call opts out of the 502/504 retry (the wrapper has a per-call option for the 500 case; add the symmetric one), or the spend is made idempotent per tap (a client-generated request id the function de-duplicates). Prefer the opt-out: a failed promo check costs the user one more tap, never a unit.
 
 **Done when.** A behavioural test shows a 502 or 504 from `validate-promo` is NOT retried by the promo call (and the 503 boot-failure retry is unchanged), and `supabase/functions/CLAUDE.md` row `promo_validate_rate_limit` names the rule.
+
+## OI-415 — Two test files are red on a Windows dev machine and green in CI: gate_index_e2e_test (cp1252 decode of an em dash) and discipline_hook_local_indexes_e2e_test (installed shared hooks)
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-10-25 - by running `flutter test test/scripts/gate_index_e2e_test.dart test/scripts/discipline_hook_local_indexes_e2e_test.dart` on a clean checkout of `origin/main` `38f8a064` (a scratch worktree) on the founder's Windows machine: `+28 ~2 -2`, the same two failures the full suite showed on branch `drop-beat-my-coach` (11,157 passed, 35 skipped, 2 failed). CI is green at that SHA (`Test & Analyze`, all four unit-test shards) and on the landing-A2 PR #167, so both are local to this machine. The installed `.git/hooks/pre-commit` is byte-identical to `scripts/pre-commit.sh` (`cmp`).
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `drop-beat-my-coach`
+
+**The defect, two independent ones.**
+
+1. `test/scripts/gate_index_e2e_test.dart:256` expects `PASS — 2 gates, 1 numbered, no collisions.` and the child's stdout arrives as `PASS â€” 2 gates ...`: the em dash (UTF-8 bytes E2 80 94) is decoded as cp1252. `_runBuilder` (`:44`) goes through `runSpawn(..., runInShell: true)` with the default `systemEncoding`. This is the same class as the em-dash `systemEncoding` entries already on this board.
+2. `test/scripts/discipline_hook_local_indexes_e2e_test.dart:289` (`from a LINKED worktree the shared hooks are found: the REAL A2 hooks do not warn`): the fixture's seed commit (`linkedWorktreeOf`, `:278`) goes through a copy of the real `scripts/pre-commit.sh`. Its `Gate-index input touched` stage runs `dart run scripts/build_gate_index.dart`, which the fixture does not have (it copies only the closures of `discipline_hook.dart` and `build_local_indexes.dart`), so the stage prints `Could not find file scripts/build_gate_index.dart` / `FAIL: build_gate_index.dart errored` and the commit exits 1 (`Expected: <0> Actual: <1>`). NOT established: why the same fixture does not also fail on Linux CI.
+
+**Impact.** Every full `flutter test` on a Windows machine ends red with these two, which hides a third failure the day one appears; CI is unaffected. A permanently red local suite is the state the "no pre-existing failures" rule exists to prevent.
+
+**Fix shape.** (1) Decode the child's output as UTF-8 in the shared spawn helper (`stdoutEncoding` / `stderrEncoding`), and check the other `test/scripts` e2e tests that compare non-ASCII output. (2) Find which staged path triggers the stage on this machine (re-run the test with the fixture kept), then either give the fixture the gate-index builder closure or make the seed commit stage no gate-index input. Do not weaken either assertion.
+
+**Done when.** `flutter test test/scripts/` is green on the Windows machine, and a mutation shows each assertion still bites (revert the decode fix, and the fixture fix, and the matching test goes red).
