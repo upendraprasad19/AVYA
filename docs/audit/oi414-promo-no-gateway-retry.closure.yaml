@@ -124,7 +124,7 @@ findings:
     verification: "docs/reviews/eb8fea69c002-review.md (verdict accepted, 15 distinct findings: 0 P0, 0 P1, 2 P2, 13 P3) carries each finding with its disposition; B4 became OI-434; the accepted fixes are in commit 6febc329 with the code (status sweep test T8, retryOn500 independence test T9, polled control test, comment and doc wording, bug-classes 2.5 sentence)."
 
   - id: B8
-    title: "OI-348 post-build line: promo APPLY (valid and invalid code) and one day swap on the build carrying this change"
+    title: "OI-348 row A14: promo APPLY (valid and invalid code) and one day swap on the build carrying this change"
     terminal_state: blocked_on_user
     reason: "The founder's phone check on the build that carries this change (needs the founder's next /build-apk). A gateway error after the handler ran cannot be forced from a device, so the check is only that APPLY and one day swap still behave on normal answers."
 
