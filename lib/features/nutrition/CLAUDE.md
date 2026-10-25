@@ -80,6 +80,6 @@ for `nlog_*` Hive rows + `nutrition_logs` cloud) + `nutrition_read_service.dart`
 
 - `lib/features/ai_coach/CLAUDE.md` — AI breakdown card + tool dispatcher routing.
 - `lib/core/services/CLAUDE.md` — `NutritionWriteService` + sync fan-out + counters.
-- `supabase/functions/CLAUDE.md` — the `ai-proxy` request types `food_text_analysis`, `scan_meal` and `cart_auditor`. All three are `type` values on `ai-proxy`, **not** Edge Functions of their own; all three call sites are in `nutrition_provider.dart` (:733, :1356, :1445).
+- `supabase/functions/CLAUDE.md` — the `ai-proxy` request types `food_text_analysis`, `scan_meal` and `cart_auditor`. All three are `type` values on `ai-proxy`, **not** Edge Functions of their own; all three call sites are in `nutrition_provider.dart` (`AiBreakdownNotifier.analyse`, `ScanMealNotifier.scanImage`, `CartAuditorNotifier.analyseCart`).
 - `docs/architecture/business-rules.md` — calorie/protein formulas.
 - `docs/reference/food-database.md` — Hive food_database box (5K rows).

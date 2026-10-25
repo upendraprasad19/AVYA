@@ -114,8 +114,13 @@ class DaySwapAllowance {
   }
 
   static Future<Map<String, dynamic>?> _callServer(String weekStart) async {
-    final res = await SupabaseService.instance
-        .callFunction('consume-day-swap', body: {'week_start': weekStart});
+    // OI-414: each call spends a swap unit (until the week's limit) and the
+    // phone copy already counts this swap, so a gateway error is not sent
+    // again (a missing answer keeps the phone copy, see [_consume]).
+    final res = await SupabaseService.instance.callFunction(
+        'consume-day-swap',
+        body: {'week_start': weekStart},
+        spendsQuotaPerCall: true);
     if (res.status != 200) return null;
     final data = res.data;
     return data is Map ? Map<String, dynamic>.from(data) : null;
