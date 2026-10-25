@@ -76,5 +76,7 @@ Group A / Group B commit split; delete outright with no 410 stub). Added while e
 - Local gate loop on the final tree: `flutter analyze --no-fatal-infos` (whole project) exit 0 with 0 errors and 0 warnings; full
   `flutter test` 11,157 passed, 35 skipped, 2 failed (OI-415, outside this diff); Deno 1,477 passed. CI on the PR is the
   full-suite gate for `main`; its result goes in the PR description, not here.
-- Not done by this record and held for the founder: the live Edge Function delete (own go), the Group B docs commit, marking the
-  PR ready, and the founder phone check.
+- As of this record (commit 4) the live Edge Function delete, the Group B docs commit, marking the PR ready and the founder phone
+  check were still open. Since then: the founder gave the per-action go and the live function was deleted on 2026-10-25 at
+  12:00:00Z (`list_edge_functions`: 44 functions, none of them this one); the Group B docs-only commit closed OI-395, flipped
+  the ledger rows and filed OI-427. Still the founder's: the phone check of the badge total (14, no Coach Slayer tile).

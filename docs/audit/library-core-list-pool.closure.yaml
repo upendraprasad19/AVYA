@@ -119,8 +119,9 @@ findings:
 
   - id: R8
     title: "beat-my-coach query never matches (filed, not fixed)"
-    terminal_state: blocked_on_user
-    reason: "Founder picks OI-395 option (a) make the query work, changing challenge content, or (b) delete the dead query."
+    terminal_state: closed_in_commit
+    commit: drop-beat-my-coach@branch
+    verification: "The founder picked neither (a) make the query work nor (b) delete the dead query: the whole feature was dropped (OI-395 closed, PR #170, docs/audit/drop-beat-my-coach.closure.yaml). The query no longer exists: supabase/functions/beat-my-coach/ is deleted from git and the live function was deleted on 2026-10-25 at 12:00:00Z (list_edge_functions: 44 functions, none of them this one)."
 
   - id: R9
     title: "ON path gated by real production runs plus a test-only trace (no new mirror)"

@@ -6601,19 +6601,6 @@ Impact: every cardio exercise saved from the active workout or the coach keeps i
 
 To plan (full diagnose template, recurrence class): keep `durationSec` for `cardio` in the normaliser and decide `distance`; give a set or the row a distance path and write `distance_km` from `logExercise`; a behavioural test that logs a library cardio exercise through `logExercise` and reads minutes and km back from Hive and from the expanded row; a tier-4 audit query on `exercise_logs` for cardio rows with zero duration to size the damage and decide whether stored rows can be repaired (the minutes are not recoverable from the row itself); correct the `train/CLAUDE.md` field list.
 
-## OI-395 — beat-my-coach: challenge query filters on capitalised categories, so every challenge comes from the fallback list
-
-- **Status**: OPEN
-- **Blocked on**: founder go for the live Edge Function delete (blocked_on_user; branch `drop-beat-my-coach`, plan `docs/plans/2026-10-25-drop-beat-my-coach.md`). The (a)/(b) decision below is superseded by the founder's drop decision.
-- **Verified**: 2026-10-23 — `supabase/functions/beat-my-coach/index.ts:195` filters `.or("category.eq.Calisthenics,category.eq.Cardio")`; the shipped library's categories are lowercase (`cardio` 12 rows, no `calisthenics` category at all), and the live table was read-only queried lowercase during the B1 review.
-- **Identified**: 2026-10-23 · filed via mint_oi.sh from branch `library-batch-b`
-
-**The defect.** The query never matches, so every challenge is drawn from the hardcoded fallback list (`index.ts:244-258`: Push-ups, Squats, Burpees, …). Nothing errors, so nothing reports it.
-
-**Options.** (a) Make the query work (lowercase `cardio`, and decide what stands in for "Calisthenics", e.g. `discipline` once the cloud carries it) — this CHANGES the challenges users get. (b) Delete the dead query and keep the fallback list as the intended content.
-
-**Done when.** The founder picks (a) or (b), and an Edge Function test pins the chosen source.
-
 ## OI-396 — Cardio finisher is generated but no screen shows it
 
 - **Status**: OPEN
@@ -6888,3 +6875,18 @@ Past `user_daily_snapshots` stay (nothing reads a past day's `coach_notices`). D
 **Fix shape.** (1) Decode the child's output as UTF-8 in the shared spawn helper (`stdoutEncoding` / `stderrEncoding`), and check the other `test/scripts` e2e tests that compare non-ASCII output. (2) Find which staged path triggers the stage on this machine (re-run the test with the fixture kept), then either give the fixture the gate-index builder closure or make the seed commit stage no gate-index input. Do not weaken either assertion.
 
 **Done when.** `flutter test test/scripts/` is green on the Windows machine, and a mutation shows each assertion still bites (revert the decode fix, and the fixture fix, and the matching test goes red).
+
+## OI-427 — The Clean Eater badge (BadgeId.nutritionWeek) has a profile tile but no unlock rule, so it can never be earned
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: 2026-10-25 - by reading and a diff of two lists: `lib/core/services/badge_service.dart` has 13 `tryUnlock(BadgeId.<id>, ...)` rules and `BadgeId` has 14 values; the only value with no rule is `nutritionWeek` (`git grep -n nutritionWeek -- lib test supabase` finds only `lib/shared/models/achievement_badge.dart:11` (the enum value) and `:45` (the profile tile, "Clean Eater", description "Log meals every day for a week")). No test, provider or Edge Function mentions it.
+- **Identified**: 2026-10-25 · filed via mint_oi.sh from branch `drop-beat-my-coach`
+
+**The defect.** The Profile badge grid shows a "Clean Eater" tile that promises a reward for logging meals every day for a week, and nothing can ever unlock it: `checkAll()` computes seven inputs for `checkAndUnlock` and none of them is about food logging. It is the same defect class as `challengeWon` ("Coach Slayer"), which OI-395's removal took out in the same batch; that one was found because its only caller passed the literal `hasBeatCoach: false`, this one has no caller at all, so the unlock-rule count (13) is the only thing that shows it. `beat_my_coach_removed_test.dart` (d) pins the enum against the list, not against the unlock rules, so it cannot see this class.
+
+**Impact.** Testing phase: a locked tile that stays locked, and a Profile total (14) that includes a badge nobody can earn. Before the store launch it is a promise the app cannot keep.
+
+**Fix shape.** Either give the tile its rule (the description already defines it: a meal logged on each of 7 consecutive IST days; read it through the nutrition repository with the IST date helper, not from a widget, and decide whether a food log or a saved meal counts), or remove the tile and the enum value the way `challengeWon` was removed. Whichever is chosen, add the invariant that was missing: a contract test that every `BadgeId` value has exactly one `tryUnlock(BadgeId.<id>, ...)` rule in `badge_service.dart`, so the next never-earnable badge fails a test instead of shipping.
+
+**Done when.** The invariant test exists and is green, and (if the rule is built) a behavioural test earns the badge after 7 consecutive IST days of logs and does not earn it after 6 or after a gap.

@@ -5713,3 +5713,18 @@ To plan (tier M: Train + coach files): the rate map omits weekdays with nothing 
 **Related.** OI-366 (order-time promo rules, the payment-hardening branch), c9b3e2 (the same class: server-only objects reachable by the client roles through default privileges).
 
 **CLOSED 2026-10-25 (branch `promo-limit-7`, the commit carrying `closes-oi: OI-406`).** The last open condition, the founder's signed-in promo check (OI-348 item B5), passed on 2026-10-25: signed in as a free account on app.icanbefitter.com, a known active code showed its discount and an unknown code showed "Invalid promo code", so `validate-promo`'s service-role read works after migration 163 revoked the client grants. Migration 163 is merged to `main` (PR #163, the `promo_codes_server_only_access` entry of `backups/applied_migrations.json`) with CI green, and the post-apply live verify read `ok=16 fail=0`.
+
+## OI-395 — beat-my-coach: challenge query filters on capitalised categories, so every challenge comes from the fallback list
+
+- **Status**: CLOSED · 2026-10-25 · superseded by the founder's drop decision (no diagnose-doc: a removal, nothing was fixed) · branch `drop-beat-my-coach` · the commit carrying `closes-oi: OI-395`
+- **Blocked on**: — (resolved)
+- **Verified**: 2026-10-23 — `supabase/functions/beat-my-coach/index.ts:195` filters `.or("category.eq.Calisthenics,category.eq.Cardio")`; the shipped library's categories are lowercase (`cardio` 12 rows, no `calisthenics` category at all), and the live table was read-only queried lowercase during the B1 review.
+- **Identified**: 2026-10-23 · filed via mint_oi.sh from branch `library-batch-b`
+
+**The defect.** The query never matches, so every challenge is drawn from the hardcoded fallback list (`index.ts:244-258`: Push-ups, Squats, Burpees, …). Nothing errors, so nothing reports it.
+
+**Options.** (a) Make the query work (lowercase `cardio`, and decide what stands in for "Calisthenics", e.g. `discipline` once the cloud carries it) — this CHANGES the challenges users get. (b) Delete the dead query and keep the fallback list as the intended content.
+
+**Outcome (2026-10-25).** The founder chose neither (a) nor (b): drop the whole feature. Removed on branch `drop-beat-my-coach` (PR #170; plan `docs/plans/2026-10-25-drop-beat-my-coach.md`, ledger `docs/audit/drop-beat-my-coach.closure.yaml`): the Edge Function source, the never-mounted `ChallengeCard`, `AppConstants.beatMyCoachFunction` and `beatMyCoachIntervalDays`, and the never-unlockable `challengeWon` ("Coach Slayer") badge, with the registry, test and doc entries that named them. The LIVE function (id `5c436e59-eec6-4e5b-99f5-c226dfc47152`, v15) was deleted on 2026-10-25 at 12:00:00Z after an explicit founder go; `list_edge_functions` then listed 44 functions and not this one. Its last live bundle `index.ts` is byte-identical to git `425bc63f` (sha256 `877823cd797ad4f73a16b4874c8e77f8ded8b22adef2d030037d0d9a914d851e`); rollback: `node .claude/deploy_via_api.js --rollback beat-my-coach 425bc63f --yes`. Guard against the feature coming back unnoticed: `test/contracts/beat_my_coach_removed_test.dart`.
+
+**Done when.** Met: the founder picked a third path (drop), and the source, the badge, the registries and the live function are gone.

@@ -7,8 +7,9 @@
 # `blocked_on_user` on purpose: the live Edge Function delete is a per-action
 # founder go (CLAUDE.md section 4.3), OI-395 may not be closed before that
 # delete exists, and the badge total needs a phone check. Group B, one
-# docs-only commit after the delete, flips the first two to closed_in_commit
-# (and the library-core-list-pool ledger's R8 row, which this batch answers).
+# docs-only commit after the delete (done 2026-10-25), flipped the first two to
+# closed_in_commit, and the library-core-list-pool ledger's R8 row; only RUNTIME
+# (the founder phone check) remains blocked_on_user.
 
 batch: drop-beat-my-coach
 # Added in the commit after the B-pass fixes (it cites the B-pass file by name,
@@ -79,8 +80,9 @@ findings:
 
   - id: U10B
     title: "Close OI-395 (move to closed_issues.md), flip R8 of library-core-list-pool.closure.yaml, and file the nutritionWeek never-earnable-badge OI"
-    terminal_state: blocked_on_user
-    reason: "Closes only after the founder-gated live Edge Function delete (U12). Group B, one docs-only commit after the delete, carries the closes-oi trailer, moves the section to closed_issues.md, flips the R8 row of docs/audit/library-core-list-pool.closure.yaml (its blocked_on_user reason is the OI-395 (a)/(b) choice this batch answers) and mints the nutritionWeek OI with mint_oi.sh. docs/audit/OPEN_INDEX.md is a gitignored local build product since main's landing A2 (rebuild it locally with build_local_indexes.dart --lenient, never stage it)."
+    terminal_state: closed_in_commit
+    commit: drop-beat-my-coach@branch
+    verification: "Group B, one docs-only commit after the delete (the one carrying the closes-oi citation for OI-395): the OI-395 section moved from open_issues.md to closed_issues.md with its outcome; R8 of docs/audit/library-core-list-pool.closure.yaml flipped to closed_in_commit; the nutritionWeek defect filed as OI-427 with mint_oi.sh (13 tryUnlock rules for 14 BadgeId values, the only value without one is nutritionWeek). docs/audit/OPEN_INDEX.md is a gitignored local build product and was not touched."
 
   - id: U11
     title: "Deploy skill: EF-delete recipe (3.4) and bug class 6.14"
@@ -90,8 +92,9 @@ findings:
 
   - id: U12
     title: "Live Edge Function beat-my-coach deleted from project dedsavbjuwgarrhphgnl"
-    terminal_state: blocked_on_user
-    reason: "Founder go for the live delete (CLAUDE.md section 4.3, per action) and a working Supabase token: on this machine the primary .supabase token file is absent and only the legacy file exists, so the read-only identity GET must answer 200 with id 5c436e59-eec6-4e5b-99f5-c226dfc47152 and version 15 before the DELETE runs. Rollback prepared and dry-run: the live bundle index.ts is byte-identical to git 425bc63f (sha256 877823cd797ad4f73a16b4874c8e77f8ded8b22adef2d030037d0d9a914d851e)."
+    terminal_state: closed_in_commit
+    commit: drop-beat-my-coach@branch
+    verification: "Deleted on 2026-10-25 at 12:00:00Z (17:30 IST) after the founder's explicit go (AskUserQuestion answer: Go, delete then finish). Delete-day checks first: token slot is the legacy file and a read-only GET answered HTTP 200 with id 5c436e59-eec6-4e5b-99f5-c226dfc47152, version 15, verify_jwt true; the 24 h edge-log sweep (2026-10-24T12:00Z to 10-25T11:00Z) counted 733 requests over 26 distinct paths and 0 mentioning beat; the live bundle index.ts is 11,732 B with sha256 877823cd797ad4f73a16b4874c8e77f8ded8b22adef2d030037d0d9a914d851e, identical to git 425bc63f, and the live _shared/ist_date.ts (CRLF, 1,551 B) equals the git blob after line-ending normalisation; an unauthenticated POST at 11:59:33Z answered HTTP 401 (the gateway, verify_jwt=true); the rollback dry-run from a checkout of the pushed branch printed ROLLBACK (git) beat-my-coach to 425bc63 with 2 files, verify_jwt=true, All inputs valid. The guarded DELETE (identity GET re-run immediately before; project dedsavbjuwgarrhphgnl only) answered HTTP 200; list_edge_functions then listed 44 functions, counted by hand, and none is beat-my-coach. Rollback: node .claude/deploy_via_api.js --rollback beat-my-coach 425bc63f --yes. What the evidence does not cover: callers older than the log retention, and an out-of-repo caller that never produced a snapshot row (stated to the founder after the go; the rollback is the mitigation)."
 
   - id: RUNTIME
     title: "Section 5 runtime verification: Profile badge total shows 14 and no Coach Slayer tile"
